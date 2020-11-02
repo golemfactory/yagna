@@ -2,7 +2,8 @@
 use futures::StreamExt;
 use metrics::{counter, value};
 
-use crate::db::model::{DisplayVec, Offer, SubscriptionId};
+use crate::db::model::{Offer, SubscriptionId};
+use crate::utils::display::EnableDisplay;
 
 use crate::matcher::error::ModifyOfferError;
 use crate::protocol::discovery::{
@@ -61,7 +62,7 @@ pub(super) async fn receive_remote_offers(
     log::info!(
         "Received new Offers from [{}]: \n{}",
         caller,
-        DisplayVec(&added_offers_ids)
+        added_offers_ids.display(),
     );
     Ok(added_offers_ids)
 }
@@ -136,7 +137,7 @@ pub(super) async fn receive_remote_offer_unsubscribes(
         log::info!(
             "Received new Offers to unsubscribe from [{}]: \n{}",
             caller,
-            DisplayVec(&new_unsubscribes)
+            new_unsubscribes.display()
         );
     }
     Ok(new_unsubscribes)

@@ -14,7 +14,7 @@ use crate::matcher::error::{
 };
 use crate::matcher::{store::SubscriptionStore, Matcher};
 use crate::negotiation::error::{AgreementError, NegotiationError, NegotiationInitError};
-use crate::negotiation::{ProviderBroker, RequestorBroker};
+use crate::negotiation::{EventNotifier, ProviderBroker, RequestorBroker};
 use crate::rest_api;
 
 use ya_client::model::market::{Agreement, Demand, Offer};
@@ -84,10 +84,25 @@ impl MarketService {
         db.apply_migration(crate::db::migrations::run_with_output)?;
 
         let store = SubscriptionStore::new(db.clone(), config.clone());
-        let (matcher, listeners) = Matcher::new(store.clone(), identity_api, config)?;
-        let provider_engine = ProviderBroker::new(db.clone(), store.clone())?;
-        let requestor_engine =
-            RequestorBroker::new(db.clone(), store.clone(), listeners.proposal_receiver)?;
+        let (matcher, listeners) = Matcher::new(store.clone(), identity_api, config.clone())?;
+
+        // We need the same notifier for both Provider and Requestor implementation since we have
+        // single endpoint and both implementations are able to add events.
+        let agreement_notifier = EventNotifier::<Option<String>>::new();
+
+        let provider_engine = ProviderBroker::new(
+            db.clone(),
+            store.clone(),
+            agreement_notifier.clone(),
+            config.clone(),
+        )?;
+        let requestor_engine = RequestorBroker::new(
+            db.clone(),
+            store.clone(),
+            listeners.proposal_receiver,
+            agreement_notifier,
+            config.clone(),
+        )?;
         let cleaner_db = db.clone();
         tokio::spawn(async move {
             crate::db::dao::cleaner::clean_forever(cleaner_db).await;

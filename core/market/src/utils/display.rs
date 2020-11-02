@@ -1,0 +1,62 @@
+use crate::db::model::{AgreementId, SubscriptionId};
+use itertools::Itertools;
+use std::fmt::{Error, Formatter};
+
+/// Pretty display vector, as list with all elements in separate row.
+/// Implementation uses Display trait for all elements (not Debug) to make
+/// them more readable.
+
+pub struct DisplayEnabler<'a, Type>(pub &'a Type);
+
+pub trait EnableDisplay<Type> {
+    fn display(&self) -> DisplayEnabler<Type>;
+}
+
+impl<Type> EnableDisplay<Type> for Type {
+    fn display(&self) -> DisplayEnabler<Type> {
+        DisplayEnabler(self)
+    }
+}
+
+impl<'a> std::fmt::Display for DisplayEnabler<'a, SubscriptionId> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        self.0.fmt(f)
+    }
+}
+
+impl<'a> std::fmt::Display for DisplayEnabler<'a, AgreementId> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        self.0.fmt(f)
+    }
+}
+
+impl<'a, Type> std::fmt::Display for DisplayEnabler<'a, Option<Type>>
+where
+    Type: std::fmt::Display,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        match &self.0 {
+            Some(id) => id.fmt(f),
+            // TODO: Someone funny could set appSessionId to "None" string.
+            None => write!(f, "None"),
+        }
+    }
+}
+
+impl<'a, Nested> std::fmt::Display for DisplayEnabler<'a, Vec<Nested>>
+where
+    Nested: std::fmt::Display,
+{
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        if self.0.is_empty() {
+            write!(f, "[]")?;
+        } else {
+            let data_formatter = self
+                .0
+                .iter()
+                .format_with("\n", |elt, f| f(&format_args!(" {}", elt)));
+            write!(f, "[\n{}\n]", data_formatter)?;
+        }
+        Ok(())
+    }
+}

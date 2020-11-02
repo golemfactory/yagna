@@ -19,6 +19,7 @@ use crate::db::model::{OwnerType, Proposal, ProposalId, SubscriptionId};
 use crate::db::schema::market_agreement;
 
 pub type AgreementId = ProposalId;
+pub type AppSessionId = Option<String>;
 
 /// TODO: Could we avoid having separate enum type for database
 ///  and separate for client?

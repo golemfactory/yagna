@@ -120,6 +120,14 @@ pub enum QueryEventsError {
 }
 
 #[derive(Error, Debug)]
+pub enum AgreementEventsError {
+    #[error("Invalid maxEvents '{0}', should be greater from 0.")]
+    InvalidMaxEvents(i32),
+    #[error("Internal error while querying Agreement events. Error: {0}.")]
+    Internal(String),
+}
+
+#[derive(Error, Debug)]
 pub enum GetProposalError {
     #[error("Proposal [{0}] not found (subscription [{1:?}]).")]
     NotFound(ProposalId, Option<SubscriptionId>),

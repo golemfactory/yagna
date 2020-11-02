@@ -53,6 +53,17 @@ table! {
 }
 
 table! {
+    market_agreement_event (id) {
+        id -> Integer,
+        agreement_id -> Text,
+        session_id -> Nullable<Text>,
+        event_type -> Integer,
+        timestamp -> Timestamp,
+        reason -> Nullable<Text>,
+    }
+}
+
+table! {
     market_proposal_state (id) {
         id -> Integer,
         state -> Text,

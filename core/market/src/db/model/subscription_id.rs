@@ -4,14 +4,11 @@ use diesel::deserialize::{FromSql, Result as DeserializeResult};
 use diesel::serialize::{Output, Result as SerializeResult, ToSql};
 use diesel::sql_types::Text;
 use digest::Digest;
-use itertools::Itertools;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use sha3::Sha3_256;
 use std::io::Write;
 use std::str::FromStr;
 use uuid::Uuid;
-
-use std::fmt::{Display, Error, Formatter};
 use ya_client::model::{ErrorMessage, NodeId};
 
 const RANDOM_PREFIX_LEN: usize = 32;
@@ -172,29 +169,6 @@ impl<'de> Deserialize<'de> for SubscriptionId {
 impl From<SubscriptionParseError> for ErrorMessage {
     fn from(e: SubscriptionParseError) -> Self {
         ErrorMessage::new(e.to_string())
-    }
-}
-
-/// Pretty display vector, as list with all elements in separate row.
-/// Implementation uses Display trait for all elements (not Debug) to make
-/// them more readable.
-pub struct DisplayVec<'a, T>(pub &'a Vec<T>);
-
-impl<'a, T> Display for DisplayVec<'a, T>
-where
-    T: Display,
-{
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        if self.0.is_empty() {
-            write!(f, "[]")?;
-        } else {
-            let data_formatter = self
-                .0
-                .iter()
-                .format_with("\n", |elt, f| f(&format_args!(" {}", elt)));
-            write!(f, "[\n{}\n]", data_formatter)?;
-        }
-        Ok(())
     }
 }
 

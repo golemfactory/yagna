@@ -1,6 +1,8 @@
+use chrono::{DateTime, Utc};
 use metrics::counter;
 use std::fmt;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ya_client::model::market::proposal::Proposal as ClientProposal;
@@ -9,14 +11,17 @@ use ya_market_resolver::{match_demand_offer, Match};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
-use crate::db::dao::{EventsDao, ProposalDao, SaveProposalError};
-use crate::db::model::{IssuerType, MarketEvent, OwnerType, Proposal};
+use crate::config::Config;
+use crate::db::dao::{AgreementEventsDao, NegotiationEventsDao, ProposalDao, SaveProposalError};
+use crate::db::model::{
+    AgreementEvent, AppSessionId, IssuerType, MarketEvent, OwnerType, Proposal,
+};
 use crate::db::model::{ProposalId, SubscriptionId};
 use crate::matcher::{
     error::{DemandError, QueryOfferError},
     store::SubscriptionStore,
 };
-use crate::negotiation::error::GetProposalError;
+use crate::negotiation::error::{AgreementEventsError, GetProposalError};
 use crate::negotiation::notifier::NotifierError;
 use crate::negotiation::{
     error::{MatchValidationError, ProposalError, QueryEventsError},
@@ -32,6 +37,8 @@ pub struct CommonBroker {
     pub(super) db: DbExecutor,
     pub(super) store: SubscriptionStore,
     pub(super) notifier: EventNotifier<SubscriptionId>,
+    pub(super) agreement_notifier: EventNotifier<AppSessionId>,
+    pub(super) config: Arc<Config>,
 }
 
 impl CommonBroker {
@@ -111,7 +118,7 @@ impl CommonBroker {
         loop {
             let events = self
                 .db
-                .as_dao::<EventsDao>()
+                .as_dao::<NegotiationEventsDao>()
                 .take_events(subscription_id, max_events, owner)
                 .await?;
 
@@ -137,6 +144,60 @@ impl CommonBroker {
             // Ok result means, that event with required subscription id was added.
             // We can go to next loop to get this event from db. But still we aren't sure
             // that list won't be empty, because other query_events calls can wait for the same event.
+        }
+    }
+
+    pub async fn query_agreement_events(
+        &self,
+        session_id: &AppSessionId,
+        timeout: f32,
+        max_events: Option<i32>,
+        after_timestamp: DateTime<Utc>,
+    ) -> Result<Vec<AgreementEvent>, AgreementEventsError> {
+        let mut timeout = Duration::from_secs_f32(timeout.max(0.0));
+        let stop_time = Instant::now() + timeout;
+        let max_events = max_events.unwrap_or(self.config.events.max_agreement_events);
+
+        if max_events <= 0 {
+            Err(AgreementEventsError::InvalidMaxEvents(max_events))?
+        };
+
+        let mut agreement_notifier = self.agreement_notifier.listen(session_id);
+        loop {
+            let events = self
+                .db
+                .as_dao::<AgreementEventsDao>()
+                .select(session_id, max_events, after_timestamp.naive_utc())
+                .await
+                .map_err(|e| AgreementEventsError::Internal(e.to_string()))?;
+
+            if events.len() > 0 {
+                return Ok(events);
+            }
+
+            // Solves panic 'supplied instant is later than self'.
+            if stop_time < Instant::now() {
+                return Ok(vec![]);
+            }
+            timeout = stop_time - Instant::now();
+
+            if let Err(error) = agreement_notifier
+                .wait_for_event_with_timeout(timeout)
+                .await
+            {
+                return match error {
+                    NotifierError::Timeout(_) => Ok(vec![]),
+                    NotifierError::ChannelClosed(_) => {
+                        Err(AgreementEventsError::Internal(error.to_string()))
+                    }
+                    NotifierError::Unsubscribed(_) => Err(AgreementEventsError::Internal(format!(
+                        "Code logic error. Shouldn't get Unsubscribe in Agreement events notifier."
+                    ))),
+                };
+            }
+            // Ok result means, that event with required sessionId id was added.
+            // We can go to next loop to get this event from db. But still we aren't sure
+            // that list won't be empty, because other query_agreement_events calls can wait for the same event.
         }
     }
 
@@ -245,7 +306,7 @@ impl CommonBroker {
         let subscription_id = proposal.negotiation.subscription_id.clone();
         let proposal = self
             .db
-            .as_dao::<EventsDao>()
+            .as_dao::<NegotiationEventsDao>()
             .add_proposal_event(proposal, owner)
             .await
             .map_err(|e| {

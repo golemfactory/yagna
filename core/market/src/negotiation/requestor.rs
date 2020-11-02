@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use futures::stream::StreamExt;
 use metrics::counter;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 
@@ -10,8 +11,8 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::db::{
-    dao::{AgreementDao, EventsDao, ProposalDao, SaveAgreementError, StateError},
-    model::{Agreement, AgreementId, AgreementState},
+    dao::{AgreementDao, NegotiationEventsDao, ProposalDao, SaveAgreementError, StateError},
+    model::{Agreement, AgreementId, AgreementState, AppSessionId},
     model::{Demand, IssuerType, OwnerType, Proposal, ProposalId, SubscriptionId},
     DbResult,
 };
@@ -19,6 +20,7 @@ use crate::matcher::{store::SubscriptionStore, RawProposal};
 use crate::protocol::negotiation::{error::*, messages::*, requestor::NegotiationApi};
 
 use super::{common::*, error::*, notifier::NotifierError, EventNotifier};
+use crate::config::Config;
 
 #[derive(Clone, derive_more::Display, Debug)]
 pub enum ApprovalStatus {
@@ -42,6 +44,8 @@ impl RequestorBroker {
         db: DbExecutor,
         store: SubscriptionStore,
         proposal_receiver: UnboundedReceiver<RawProposal>,
+        agrmnt_events_notifier: EventNotifier<AppSessionId>,
+        config: Arc<Config>,
     ) -> Result<RequestorBroker, NegotiationInitError> {
         let agreement_notifier = EventNotifier::new();
         let notifier = EventNotifier::new();
@@ -49,6 +53,8 @@ impl RequestorBroker {
             store,
             db: db.clone(),
             notifier: notifier.clone(),
+            agreement_notifier: agrmnt_events_notifier,
+            config,
         };
 
         let broker1 = broker.clone();
@@ -114,7 +120,7 @@ impl RequestorBroker {
         let _ = self
             .common
             .db
-            .as_dao::<EventsDao>()
+            .as_dao::<NegotiationEventsDao>()
             .remove_events(demand_id)
             .await
             .map_err(|e| {
@@ -484,7 +490,7 @@ pub async fn proposal_receiver_thread(
 
             // Create Proposal Event and add it to queue (database).
             let subscription_id = proposal.negotiation.subscription_id.clone();
-            db.as_dao::<EventsDao>()
+            db.as_dao::<NegotiationEventsDao>()
                 .add_proposal_event(proposal, OwnerType::Requestor)
                 .await?;
 

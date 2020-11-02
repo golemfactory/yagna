@@ -7,6 +7,7 @@ use std::time::Duration;
 pub struct Config {
     pub discovery: DiscoveryConfig,
     pub subscription: SubscriptionConfig,
+    pub events: EventsConfig,
 }
 
 pub struct DiscoveryConfig {
@@ -18,6 +19,10 @@ pub struct DiscoveryConfig {
 
 pub struct SubscriptionConfig {
     pub default_ttl: chrono::Duration,
+}
+
+pub struct EventsConfig {
+    pub max_agreement_events: i32,
 }
 
 impl Default for DiscoveryConfig {
@@ -35,6 +40,14 @@ impl Default for SubscriptionConfig {
     fn default() -> Self {
         SubscriptionConfig {
             default_ttl: chrono::Duration::hours(24),
+        }
+    }
+}
+
+impl Default for EventsConfig {
+    fn default() -> Self {
+        EventsConfig {
+            max_agreement_events: 20,
         }
     }
 }

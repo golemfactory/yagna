@@ -2,6 +2,7 @@ use chrono::Utc;
 use futures::stream::StreamExt;
 use metrics::counter;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use ya_client::model::market::{event::ProviderEvent, Proposal as ClientProposal};
 use ya_client::model::NodeId;
@@ -9,8 +10,8 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::db::{
-    dao::{AgreementDao, EventsDao, ProposalDao, SaveAgreementError},
-    model::{Agreement, AgreementId, AgreementState},
+    dao::{AgreementDao, NegotiationEventsDao, ProposalDao, SaveAgreementError},
+    model::{Agreement, AgreementId, AgreementState, AppSessionId},
     model::{IssuerType, Offer, OwnerType, Proposal, ProposalId, SubscriptionId},
 };
 use crate::matcher::{error::QueryOfferError, store::SubscriptionStore};
@@ -19,6 +20,7 @@ use crate::protocol::negotiation::{error::*, messages::*, provider::NegotiationA
 use super::common::{CommonBroker, DisplayIdentity};
 use super::error::*;
 use super::notifier::EventNotifier;
+use crate::config::Config;
 
 /// Provider part of negotiation logic.
 #[derive(Clone)]
@@ -31,12 +33,16 @@ impl ProviderBroker {
     pub fn new(
         db: DbExecutor,
         store: SubscriptionStore,
+        agreement_notifier: EventNotifier<AppSessionId>,
+        config: Arc<Config>,
     ) -> Result<ProviderBroker, NegotiationInitError> {
         let notifier = EventNotifier::new();
         let broker = CommonBroker {
             store,
             db,
             notifier,
+            agreement_notifier,
+            config,
         };
 
         let broker1 = broker.clone();
@@ -347,7 +353,7 @@ async fn agreement_received(
     // TODO: will never approve Agreement. Solve problem when Event API will be available.
     broker
         .db
-        .as_dao::<EventsDao>()
+        .as_dao::<NegotiationEventsDao>()
         .add_agreement_event(&agreement)
         .await
         .map_err(|e| RemoteProposeAgreementError::Unexpected {

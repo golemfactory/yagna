@@ -29,17 +29,17 @@ pub enum TakeEventsError {
     DatabaseError(DbError),
 }
 
-pub struct EventsDao<'c> {
+pub struct NegotiationEventsDao<'c> {
     pool: &'c PoolType,
 }
 
-impl<'c> AsDao<'c> for EventsDao<'c> {
+impl<'c> AsDao<'c> for NegotiationEventsDao<'c> {
     fn as_dao(pool: &'c PoolType) -> Self {
         Self { pool }
     }
 }
 
-impl<'c> EventsDao<'c> {
+impl<'c> NegotiationEventsDao<'c> {
     pub async fn add_proposal_event(
         &self,
         proposal: Proposal,

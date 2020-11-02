@@ -158,7 +158,7 @@ where
     fn from_sql(bytes: Option<&DB::RawValue>) -> deserialize::Result<Self> {
         let enum_value = i32::from_sql(bytes)?;
         Ok(FromPrimitive::from_i32(enum_value).ok_or(anyhow::anyhow!(
-            "Invalid conversion from {} (i32) to EventType.",
+            "Invalid conversion from {} (i32) to Proposal EventType.",
             enum_value
         ))?)
     }
