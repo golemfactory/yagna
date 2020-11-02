@@ -31,8 +31,8 @@ pub(super) async fn bcast_offers(matcher: Matcher) {
             let all_ids = matcher.store.get_active_offer_ids(None).await?;
             let our_and_random_ids = randomize_ids(our_ids, all_ids, num_to_bcast as usize);
 
-            log::debug!(
-                "Cyclic bcast: Sending {} Offers including {} ours.",
+            log::trace!(
+                "Broadcasted {} Offers including {} ours.",
                 our_and_random_ids.len(),
                 num_our_offers
             );
@@ -74,8 +74,8 @@ pub(super) async fn bcast_unsubscribes(matcher: Matcher) {
             let all_ids = matcher.store.get_unsubscribed_offer_ids(None).await?;
             let our_and_random_ids = randomize_ids(our_ids, all_ids, max_bcast);
 
-            log::debug!(
-                "Cyclic bcast: Sending {} unsubscribes including {} ours.",
+            log::trace!(
+                "Broadcasted {} unsubscribed Offers including {} ours.",
                 our_and_random_ids.len(),
                 num_our_unsubscribes
             );
