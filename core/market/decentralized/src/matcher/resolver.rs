@@ -7,9 +7,9 @@ use crate::db::model::{Demand, Offer, SubscriptionId};
 
 #[derive(Clone, Debug, derive_more::Display)]
 pub enum Subscription {
-    #[display(fmt = "Offer({})", _0)]
+    #[display(fmt = "Offer [{}]", _0)]
     Offer(SubscriptionId),
-    #[display(fmt = "Demand({})", _0)]
+    #[display(fmt = "Demand [{}]", _0)]
     Demand(SubscriptionId),
 }
 
@@ -61,9 +61,9 @@ impl Resolver {
         mut subscription_rx: UnboundedReceiver<Subscription>,
     ) {
         while let Some(s) = subscription_rx.recv().await {
-            log::debug!("Resolving incoming subscription {}", s);
+            log::debug!("Resolving incoming {}", s);
             if let Err(e) = self.process_single_subscription(&s).await {
-                log::warn!("Failed resolve subscription [{:?}]. Error: {}", s, e);
+                log::warn!("Failed resolve [{}]. Error: {}", s, e);
             }
         }
     }
