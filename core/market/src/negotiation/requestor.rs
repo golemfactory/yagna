@@ -473,7 +473,7 @@ pub async fn proposal_receiver_thread(
         let db = db.clone();
         let notifier = notifier.clone();
         match async move {
-            log::info!("Got matching Offer. Emitting new Proposal to Requestor.");
+            log::info!("Got matching Offer-Demand pair; emitting as Proposal to Requestor.");
 
             // Add proposal to database together with Negotiation record.
             let proposal = Proposal::new_requestor(proposal.demand, proposal.offer);
@@ -481,6 +481,13 @@ pub async fn proposal_receiver_thread(
                 .as_dao::<ProposalDao>()
                 .save_initial_proposal(proposal)
                 .await?;
+
+            log::debug!(
+                "New Proposal [{}] (Offer [{}], Demand [{}])",
+                proposal.body.id,
+                proposal.negotiation.offer_id,
+                proposal.negotiation.demand_id
+            );
 
             // Create Proposal Event and add it to queue (database).
             let subscription_id = proposal.negotiation.subscription_id.clone();

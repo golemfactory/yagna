@@ -134,7 +134,7 @@ impl Discovery {
     async fn on_bcast_offers(self, caller: String, msg: OffersBcast) -> Result<(), ()> {
         let num_ids_received = msg.offer_ids.len();
         if !msg.offer_ids.is_empty() {
-            log::debug!("Received {} Offers from [{}].", num_ids_received, &caller);
+            log::trace!("Received {} Offers from [{}].", num_ids_received, &caller);
         }
 
         // We should do filtering and getting Offers in single transaction. Otherwise multiple
@@ -191,7 +191,7 @@ impl Discovery {
         caller: String,
         msg: RetrieveOffers,
     ) -> Result<Vec<ModelOffer>, DiscoveryRemoteError> {
-        log::info!("[{}] asks for {} Offers.", &caller, msg.offer_ids.len());
+        log::trace!("[{}] asks for {} Offers.", &caller, msg.offer_ids.len());
         let get_local_offers = self.inner.get_local_offers_handler.clone();
         Ok(get_local_offers.call(caller, msg).await?)
     }
@@ -203,7 +203,7 @@ impl Discovery {
     ) -> Result<(), ()> {
         let num_received_ids = msg.offer_ids.len();
         if !msg.offer_ids.is_empty() {
-            log::debug!(
+            log::trace!(
                 "Received {} unsubscribed Offers from [{}].",
                 num_received_ids,
                 &caller,
@@ -215,7 +215,7 @@ impl Discovery {
 
         if !unsubscribed_offer_ids.is_empty() {
             log::info!(
-                "Propagating further {} unsubscribed Offers from {} received from [{}].",
+                "Propagating {}/{} unsubscribed Offers received from [{}].",
                 unsubscribed_offer_ids.len(),
                 num_received_ids,
                 &caller,

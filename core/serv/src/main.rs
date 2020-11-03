@@ -380,7 +380,13 @@ async fn main() -> Result<()> {
             args.log_level()
         )),
     );
-    env_logger::init();
+    env_logger::builder()
+        .filter_module("actix_http::response", log::LevelFilter::Off)
+        .filter_module("tokio_core", log::LevelFilter::Info)
+        .filter_module("tokio_reactor", log::LevelFilter::Info)
+        .filter_module("hyper", log::LevelFilter::Info)
+        .filter_module("web3", log::LevelFilter::Info)
+        .init();
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
 

@@ -115,7 +115,11 @@ impl ResponseError for Error {
             Error::Timeout => {
                 HttpResponse::RequestTimeout().json(ErrorMessage::new(self.to_string()))
             }
-            _ => HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string())),
+            _ => {
+                let e = self.to_string();
+                log::error!("Activity API server error: {}", e);
+                HttpResponse::InternalServerError().json(ErrorMessage::new(e))
+            }
         }
     }
 }

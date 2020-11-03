@@ -569,7 +569,7 @@ impl Router {
             slot.streaming_forward(caller, addr, msg).left_stream()
         } else {
             //use futures::StreamExt;
-            log::debug!("call remote (stream) {}", addr);
+            log::trace!("call remote (stream) {}", addr);
             let body = crate::serialization::to_vec(&msg).unwrap();
             let (reply, tx) = futures::channel::mpsc::channel(16);
             let call = RpcRawStreamCall {
@@ -580,7 +580,7 @@ impl Router {
             };
             let _ = Arbiter::spawn(async move {
                 let v = RemoteRouter::from_registry().send(call).await;
-                log::debug!("call result={:?}", v);
+                log::trace!("call result={:?}", v);
             });
 
             tx.filter(|s| future::ready(s.as_ref().map(|s| !s.is_eos()).unwrap_or(true)))
