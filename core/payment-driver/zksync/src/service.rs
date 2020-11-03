@@ -3,7 +3,7 @@
 */
 
 // Workspace uses
-use ya_payment_driver::{account::Accounts, bus};
+use ya_payment_driver::bus;
 
 // Local uses
 use crate::driver::ZksyncDriver;
@@ -14,8 +14,7 @@ impl ZksyncService {
     pub async fn gsb<Context>(_context: &Context) -> anyhow::Result<()> {
         log::debug!("Connecting ZksyncService to gsb...");
 
-        let accounts = Accounts::new_rc();
-        let driver = ZksyncDriver::new(accounts);
+        let driver = ZksyncDriver::new();
 
         bus::bind_service(driver).await;
 

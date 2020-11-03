@@ -8,6 +8,7 @@ edition = "2018"
 default = []
 
 [dependencies]
+actix = "0.9"
 async-trait = "0.1"
 anyhow = "1.0"
 awc = "2.0.0"

@@ -5,7 +5,6 @@
 */
 
 // Extrernal crates
-use actix::Arbiter;
 use std::sync::Arc;
 
 // Workspace uses
@@ -94,27 +93,24 @@ pub async fn sign(node_id: NodeId, payload: Vec<u8>) -> Result<Vec<u8>, GenericE
     Ok(signature)
 }
 
-pub fn notify_payment(
-    driver: &(dyn PaymentDriver),
+pub async fn notify_payment(
+    driver_name: &str,
     order_id: &str,
     details: &PaymentDetails,
     confirmation: Vec<u8>,
-) {
+) -> Result<(), GenericError> {
     let msg = payment_srv::NotifyPayment {
-        driver: driver.get_name(),
+        driver: driver_name.to_string(),
         amount: details.amount.clone(),
         sender: details.sender.clone(),
         recipient: details.recipient.clone(),
         order_ids: vec![order_id.to_string()],
         confirmation: PaymentConfirmation { confirmation },
     };
-
-    // Spawned because calling payment service while handling a call from payment service
-    // would result in a deadlock.
-    Arbiter::spawn(async move {
-        let _ = service(payment_srv::BUS_ID)
-            .send(msg)
-            .await
-            .map_err(|e| log::error!("{}", e));
-    });
+    service(payment_srv::BUS_ID)
+        .send(msg)
+        .await
+        .map_err(GenericError::new)?
+        .map_err(GenericError::new)?;
+    Ok(())
 }

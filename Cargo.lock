@@ -7527,7 +7527,6 @@ dependencies = [
 name = "ya-payment-driver"
 version = "0.1.0"
 dependencies = [
- "actix",
  "async-trait",
  "bigdecimal",
  "chrono",
@@ -7928,6 +7927,7 @@ dependencies = [
 name = "ya-zksync-driver"
 version = "0.1.0"
 dependencies = [
+ "actix",
  "anyhow",
  "async-trait",
  "awc 2.0.0",

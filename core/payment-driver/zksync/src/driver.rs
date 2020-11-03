@@ -4,13 +4,14 @@
     Please limit the logic in this file, use local mods to handle the calls.
 */
 // Extrnal crates
+use actix::Arbiter;
 use chrono::Utc;
 use serde_json;
 use uuid::Uuid;
 
 // Workspace uses
 use ya_payment_driver::{
-    account::AccountsRc,
+    account::{Accounts, AccountsRc},
     bus,
     driver::{async_trait, BigDecimal, IdentityError, IdentityEvent, PaymentDriver},
     model::{
@@ -28,9 +29,9 @@ pub struct ZksyncDriver {
 }
 
 impl ZksyncDriver {
-    pub fn new(accounts: AccountsRc) -> Self {
+    pub fn new() -> Self {
         Self {
-            active_accounts: accounts,
+            active_accounts: Accounts::new_rc(),
         }
     }
 }
@@ -114,14 +115,24 @@ impl PaymentDriver for ZksyncDriver {
         // TODO: move to database / background task
         wallet::make_transfer(&details).await?;
         let order_id = Uuid::new_v4().to_string();
-        bus::notify_payment(self, &order_id, &details, confirmation);
+        let driver_name = self.get_name();
+        // Make a clone of order_id as return values
+        let result = order_id.clone();
 
         log::info!(
             "Scheduled payment with success. order_id={}, details={:?}",
             &order_id,
-            details
+            &details
         );
-        Ok(order_id)
+
+        // Spawned because calling payment service while handling a call from payment service
+        // would result in a deadlock.
+        Arbiter::spawn(async move {
+            let _ = bus::notify_payment(&driver_name, &order_id, &details, confirmation)
+                .await
+                .map_err(|e| log::error!("{}", e));
+        });
+        Ok(result)
     }
 
     async fn verify_payment(
