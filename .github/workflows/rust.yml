@@ -112,6 +112,13 @@ jobs:
           command: build
           args: -p ya-sb-router --example ya_sb_router
 
+      - name: cargo build exe-unit (sgx)
+        uses: actions-rs/cargo@v1
+        if: matrix.os != 'Windows'
+        with:
+          command: build
+          args: --manifest-path exe-unit/Cargo.toml --features sgx
+
       - name: Copy binaries Unix
         if: runner.os != 'Windows'
         run: |
