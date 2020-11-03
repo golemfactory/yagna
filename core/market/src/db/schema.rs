@@ -56,7 +56,6 @@ table! {
     market_agreement_event (id) {
         id -> Integer,
         agreement_id -> Text,
-        session_id -> Nullable<Text>,
         event_type -> Integer,
         timestamp -> Timestamp,
         reason -> Nullable<Text>,
@@ -121,6 +120,8 @@ table! {
         provider_id -> Text,
         requestor_id -> Text,
 
+        session_id -> Nullable<Text>,
+
         creation_ts -> Timestamp,
         valid_to -> Timestamp,
         approved_date -> Nullable<Timestamp>,
@@ -134,7 +135,9 @@ table! {
 
 allow_tables_to_appear_in_same_query!(market_demand, market_offer, market_offer_unsubscribed);
 allow_tables_to_appear_in_same_query!(market_proposal, market_negotiation);
+allow_tables_to_appear_in_same_query!(market_agreement, market_agreement_event);
 
+joinable!(market_agreement_event -> market_agreement (agreement_id));
 joinable!(market_negotiation -> market_agreement (agreement_id));
 joinable!(market_offer -> market_offer_unsubscribed (id));
 joinable!(market_proposal -> market_proposal_state (state));

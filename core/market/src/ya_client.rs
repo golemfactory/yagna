@@ -2,9 +2,9 @@
 /// Since we don't won't to make incompatible changes to ya-client, all client events will be defined here
 /// until they can be moved.
 
-mod model {
-    mod market {
-        mod event {
+pub mod model {
+    pub mod market {
+        pub mod event {
 
             use chrono::{DateTime, Utc};
             use serde::{Deserialize, Serialize};
@@ -12,25 +12,39 @@ mod model {
             #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
             #[serde(tag = "eventType")]
             pub enum AgreementEvent {
-                #[serde(rename = "AgreementApproved")]
-                AgreementApproved {
+                #[serde(rename = "AgreementApprovedEvent")]
+                AgreementApprovedEvent {
                     #[serde(rename = "eventDate")]
                     event_date: DateTime<Utc>,
+                    #[serde(rename = "agreementId")]
+                    agreement_id: String,
                 },
-                #[serde(rename = "AgreementRejected")]
-                AgreementRejected {
+                #[serde(rename = "AgreementRejectedEvent")]
+                AgreementRejectedEvent {
                     #[serde(rename = "eventDate")]
                     event_date: DateTime<Utc>,
+                    #[serde(rename = "agreementId")]
+                    agreement_id: String,
+                    #[serde(rename = "reason")]
+                    reason: Option<String>,
                 },
-                #[serde(rename = "AgreementCancelled")]
-                AgreementCancelled {
+                #[serde(rename = "AgreementCancelledEvent")]
+                AgreementCancelledEvent {
                     #[serde(rename = "eventDate")]
                     event_date: DateTime<Utc>,
+                    #[serde(rename = "agreementId")]
+                    agreement_id: String,
+                    #[serde(rename = "reason")]
+                    reason: Option<String>,
                 },
-                #[serde(rename = "AgreementTerminated")]
-                AgreementTerminated {
+                #[serde(rename = "AgreementTerminatedEvent")]
+                AgreementTerminatedEvent {
                     #[serde(rename = "eventDate")]
                     event_date: DateTime<Utc>,
+                    #[serde(rename = "agreementId")]
+                    agreement_id: String,
+                    #[serde(rename = "reason")]
+                    reason: Option<String>,
                 },
             }
         }

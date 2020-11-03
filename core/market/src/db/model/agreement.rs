@@ -73,6 +73,8 @@ pub struct Agreement {
     pub provider_id: NodeId,
     pub requestor_id: NodeId,
 
+    pub session_id: AppSessionId,
+
     /// End of validity period.
     /// Agreement needs to be accepted, rejected or cancelled before this date; otherwise will expire.
     pub creation_ts: NaiveDateTime,
@@ -129,6 +131,7 @@ impl Agreement {
             demand_proposal_id: demand_proposal.body.id,
             provider_id: offer_proposal.negotiation.provider_id, // TODO: should be == demand_proposal.negotiation.provider_id
             requestor_id: demand_proposal.negotiation.requestor_id,
+            session_id: None,
             creation_ts,
             valid_to,
             approved_date: None,

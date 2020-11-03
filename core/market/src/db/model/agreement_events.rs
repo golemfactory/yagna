@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::backend::Backend;
 use diesel::deserialize;
 use diesel::serialize::Output;
@@ -7,9 +7,9 @@ use diesel::types::{FromSql, ToSql};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use crate::db::model::agreement::AppSessionId;
 use crate::db::model::AgreementId;
 use crate::db::schema::market_agreement_event;
+use crate::ya_client::model::market::event::AgreementEvent as ClientEvent;
 
 #[derive(FromPrimitive, AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy)]
 #[sql_type = "Integer"]
@@ -17,7 +17,6 @@ pub enum AgreementEventType {
     AgreementApproved,
     AgreementRejected,
     AgreementCancelled,
-    AgreementTimeout,
     AgreementTerminated,
 }
 
@@ -25,7 +24,6 @@ pub enum AgreementEventType {
 pub struct AgreementEvent {
     pub id: i32,
     pub agreement_id: AgreementId,
-    pub session_id: AppSessionId,
     pub event_type: AgreementEventType,
     pub timestamp: NaiveDateTime,
     pub reason: Option<String>,
@@ -35,9 +33,38 @@ pub struct AgreementEvent {
 #[table_name = "market_agreement_event"]
 pub struct NewAgreementEvent {
     pub agreement_id: AgreementId,
-    pub session_id: AppSessionId,
     pub event_type: AgreementEventType,
     pub reason: Option<String>,
+}
+
+impl AgreementEvent {
+    pub fn into_client(self) -> ClientEvent {
+        let agreement_id = self.agreement_id.into_client();
+        let event_date = DateTime::<Utc>::from_utc(self.timestamp, Utc);
+        let reason = self.reason;
+
+        match self.event_type {
+            AgreementEventType::AgreementApproved => ClientEvent::AgreementApprovedEvent {
+                agreement_id,
+                event_date,
+            },
+            AgreementEventType::AgreementCancelled => ClientEvent::AgreementCancelledEvent {
+                agreement_id,
+                event_date,
+                reason,
+            },
+            AgreementEventType::AgreementRejected => ClientEvent::AgreementRejectedEvent {
+                agreement_id,
+                event_date,
+                reason,
+            },
+            AgreementEventType::AgreementTerminated => ClientEvent::AgreementTerminatedEvent {
+                agreement_id,
+                event_date,
+                reason,
+            },
+        }
+    }
 }
 
 /// TODO: Find way to implement this trait for all enums at once.

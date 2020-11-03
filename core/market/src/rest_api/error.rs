@@ -3,6 +3,7 @@ use actix_web::{HttpResponse, ResponseError};
 use ya_client::model::ErrorMessage;
 
 use crate::db::dao::SaveProposalError;
+use crate::negotiation::error::AgreementEventsError;
 use crate::{
     db::dao::TakeEventsError,
     market::MarketError,
@@ -202,6 +203,16 @@ impl ResponseError for WaitForApprovalError {
             WaitForApprovalError::Internal(_) | WaitForApprovalError::Get(..) => {
                 HttpResponse::InternalServerError().json(msg)
             }
+        }
+    }
+}
+
+impl ResponseError for AgreementEventsError {
+    fn error_response(&self) -> HttpResponse {
+        let msg = ErrorMessage::new(self.to_string());
+        match self {
+            AgreementEventsError::InvalidMaxEvents(_) => HttpResponse::BadRequest().json(msg),
+            AgreementEventsError::Internal(_) => HttpResponse::InternalServerError().json(msg),
         }
     }
 }

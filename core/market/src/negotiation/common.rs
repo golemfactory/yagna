@@ -11,11 +11,12 @@ use ya_market_resolver::{match_demand_offer, Match};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
+// TODO: Use real ya-client, when we will move all structures there.
+use crate::ya_client::model::market::event::AgreementEvent as ClientAgreementEvent;
+
 use crate::config::Config;
 use crate::db::dao::{AgreementEventsDao, NegotiationEventsDao, ProposalDao, SaveProposalError};
-use crate::db::model::{
-    AgreementEvent, AppSessionId, IssuerType, MarketEvent, OwnerType, Proposal,
-};
+use crate::db::model::{AppSessionId, IssuerType, MarketEvent, OwnerType, Proposal};
 use crate::db::model::{ProposalId, SubscriptionId};
 use crate::matcher::{
     error::{DemandError, QueryOfferError},
@@ -153,7 +154,8 @@ impl CommonBroker {
         timeout: f32,
         max_events: Option<i32>,
         after_timestamp: DateTime<Utc>,
-    ) -> Result<Vec<AgreementEvent>, AgreementEventsError> {
+        id: &Identity,
+    ) -> Result<Vec<ClientAgreementEvent>, AgreementEventsError> {
         let mut timeout = Duration::from_secs_f32(timeout.max(0.0));
         let stop_time = Instant::now() + timeout;
         let max_events = max_events.unwrap_or(self.config.events.max_agreement_events);
@@ -167,14 +169,22 @@ impl CommonBroker {
             let events = self
                 .db
                 .as_dao::<AgreementEventsDao>()
-                .select(session_id, max_events, after_timestamp.naive_utc())
+                .select(
+                    &id.identity,
+                    session_id,
+                    max_events,
+                    after_timestamp.naive_utc(),
+                )
                 .await
                 .map_err(|e| AgreementEventsError::Internal(e.to_string()))?;
 
             if events.len() > 0 {
-                return Ok(events);
+                counter!("market.agreements.events.queried", events.len() as u64);
+                return Ok(events
+                    .into_iter()
+                    .map(|event| event.into_client())
+                    .collect());
             }
-
             // Solves panic 'supplied instant is later than self'.
             if stop_time < Instant::now() {
                 return Ok(vec![]);
