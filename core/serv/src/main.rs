@@ -14,14 +14,14 @@ use url::Url;
 use ya_activity::service::Activity as ActivityService;
 use ya_identity::service::Identity as IdentityService;
 use ya_market::MarketService;
-use ya_metrics::MetricsService;
+use ya_metrics::{pusher as metrics_pusher, MetricsService};
 use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
 use ya_sgx::SgxService;
 
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
-use ya_service_api::{CliCtx, CommandOutput};
+use ya_service_api::{CliCtx, CommandOutput, MetricsCtx};
 use ya_service_api_interfaces::Provider;
 use ya_service_api_web::{
     middleware::{auth, Identity},
@@ -79,6 +79,19 @@ struct CliArgs {
     #[cfg_attr(not(feature = "tos"), structopt(hidden = true))]
     accept_terms: bool,
 
+    /// Disable metrics pushing
+    #[structopt(long, set=clap::ArgSettings::Global)]
+    disable_metrics_push: bool,
+
+    /// Metrics push host url
+    #[structopt(
+        long,
+        env = "YAGNA_METRICS_URL",
+        default_value = "http://metrics.golem.network:9091/",
+        set=clap::ArgSettings::Global,
+    )]
+    metrics_push_url: Url,
+
     /// Enter interactive mode
     #[structopt(short, long)]
     interactive: bool,
@@ -128,6 +141,10 @@ impl TryFrom<&CliArgs> for CliCtx {
                 true
             },
             interactive: args.interactive,
+            metrics: MetricsCtx {
+                push_enabled: !args.disable_metrics_push,
+                push_host_url: Some(args.metrics_push_url.clone()),
+            },
         })
     }
 }
@@ -207,6 +224,14 @@ async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<()> {
         PaymentDriverService::gsb(&db_executor).await?;
     }
     Ok(())
+}
+
+fn start_metrics_pusher(metrics_ctx: &MetricsCtx) {
+    if !metrics_ctx.push_enabled {
+        log::info!("Metrics pusher disabled");
+        return;
+    }
+    metrics_pusher::spawn(metrics_ctx.push_host_url.clone().unwrap());
 }
 
 #[derive(StructOpt, Debug)]
@@ -307,6 +332,8 @@ impl ServiceCommand {
                 payment_accounts::init_accounts(&ctx.data_dir)
                     .await
                     .unwrap_or_else(|e| log::error!("Initializing payment accounts failed: {}", e));
+
+                start_metrics_pusher(&ctx.metrics);
 
                 let api_host_port = rest_api_host_port(api_url.clone());
 
