@@ -1,6 +1,7 @@
 use chrono::Utc;
 use futures::stream::StreamExt;
 use metrics::counter;
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 use ya_client::model::market::{event::ProviderEvent, DemandOfferBase};
@@ -19,6 +20,12 @@ use crate::protocol::negotiation::{error::*, messages::*, provider::NegotiationA
 use super::common::{CommonBroker, DisplayIdentity};
 use super::error::*;
 use super::notifier::EventNotifier;
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum ApprovalStatus {
+    Approved,
+    Cancelled,
+}
 
 /// Provider part of negotiation logic.
 #[derive(Clone)]
@@ -180,7 +187,7 @@ impl ProviderBroker {
         id: Identity,
         agreement_id: &AgreementId,
         timeout: f32,
-    ) -> Result<(), AgreementError> {
+    ) -> Result<ApprovalStatus, AgreementError> {
         let dao = self.common.db.as_dao::<AgreementDao>();
         let agreement = match dao
             .select(agreement_id, None, Utc::now().naive_utc())
@@ -208,7 +215,7 @@ impl ProviderBroker {
                     DisplayIdentity(&id),
                     &agreement_id,
                 );
-                return Ok(());
+                return Ok(ApprovalStatus::Approved);
             }
             AgreementState::Cancelled => AgreementStateError::Cancelled(agreement.id),
             AgreementState::Rejected => AgreementStateError::Rejected(agreement.id),

@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use futures::stream::StreamExt;
 use metrics::counter;
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 
@@ -20,13 +21,10 @@ use crate::protocol::negotiation::{error::*, messages::*, requestor::Negotiation
 
 use super::{common::*, error::*, notifier::NotifierError, EventNotifier};
 
-#[derive(Clone, derive_more::Display, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum ApprovalStatus {
-    #[display(fmt = "Approved")]
     Approved,
-    #[display(fmt = "Cancelled")]
     Cancelled,
-    #[display(fmt = "Rejected")]
     Rejected,
 }
 

@@ -63,7 +63,7 @@ async fn unsubscribe(
         .unsubscribe_demand(&subscription_id, &id)
         .await
         .log_err()
-        .map(|_| HttpResponse::Ok().json("Ok"))
+        .map(|_| HttpResponse::NoContent())
 }
 
 #[actix_web::get("/demands/{subscription_id}/events")]
@@ -188,7 +188,7 @@ async fn wait_for_approval(
         .wait_for_approval(&agreement_id, timeout)
         .await
         .log_err()
-        .map(|status| HttpResponse::Ok().json(status.to_string()))
+        .map(|status| HttpResponse::Ok().json(status))
 }
 
 #[actix_web::delete("/agreements/{agreement_id}")]

@@ -177,9 +177,7 @@ async fn test_rest_subscribe_unsubscribe_offer() -> anyhow::Result<()> {
     // when unsubscribe
     let resp = test::call_service(&mut app, req).await;
     // then
-    assert_eq!(resp.status(), StatusCode::OK);
-    let result: String = read_response_json(resp).await;
-    assert_eq!("Ok", result);
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
     // given
     let req = test::TestRequest::delete()
@@ -246,9 +244,7 @@ async fn test_rest_subscribe_unsubscribe_demand() -> anyhow::Result<()> {
     // when
     let resp = test::call_service(&mut app, req).await;
     // then
-    assert_eq!(resp.status(), StatusCode::OK);
-    let result: String = read_response_json(resp).await;
-    assert_eq!("Ok", result);
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
     // given
     let req = test::TestRequest::delete()
