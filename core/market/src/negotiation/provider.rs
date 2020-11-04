@@ -1,7 +1,6 @@
 use chrono::Utc;
 use futures::stream::StreamExt;
 use metrics::counter;
-use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 use ya_client::model::market::{event::ProviderEvent, DemandOfferBase};
@@ -21,9 +20,11 @@ use super::common::{CommonBroker, DisplayIdentity};
 use super::error::*;
 use super::notifier::EventNotifier;
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, derive_more::Display)]
 pub enum ApprovalStatus {
+    #[display(fmt = "Approved")]
     Approved,
+    #[display(fmt = "Cancelled")]
     Cancelled,
 }
 

@@ -153,7 +153,7 @@ async fn approve_agreement(
         .approve_agreement(id, &agreement_id, timeout)
         .await
         .log_err()
-        .map(|result| HttpResponse::Ok().json(result))
+        .map(|status| HttpResponse::Ok().json(status.to_string()))
 }
 
 #[actix_web::post("/agreements/{agreement_id}/reject")]

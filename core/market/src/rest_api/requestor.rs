@@ -188,7 +188,7 @@ async fn wait_for_approval(
         .wait_for_approval(&agreement_id, timeout)
         .await
         .log_err()
-        .map(|status| HttpResponse::Ok().json(status))
+        .map(|status| HttpResponse::Ok().json(status.to_string()))
 }
 
 #[actix_web::delete("/agreements/{agreement_id}")]
