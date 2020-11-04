@@ -1,15 +1,16 @@
 use actix_web::web::{Data, Path};
 use actix_web::{HttpResponse, Responder, Scope};
+use chrono::{TimeZone, Utc};
 use std::sync::Arc;
 
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::LogErr;
 
 use super::PathAgreement;
-use crate::db::model::{AppSessionId, OwnerType};
+use crate::db::model::OwnerType;
 use crate::market::MarketService;
 use crate::negotiation::error::AgreementError;
-use chrono::Utc;
+use crate::rest_api::QueryAgreementEvents;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -48,18 +49,24 @@ async fn get_agreement(
 #[actix_web::get("/agreements/events")]
 async fn collect_agreement_events(
     market: Data<Arc<MarketService>>,
+    path: Path<QueryAgreementEvents>,
     id: Identity,
 ) -> impl Responder {
-    // TODO: Should come from parameters
-    let session_id: AppSessionId = None;
-    let timeout: f32 = 0.0;
-    let max_events = Some(10);
-    let after_timestamp = Utc::now();
+    let timeout: f32 = path.timeout;
+    let after_timestamp = path
+        .after_timestamp
+        .unwrap_or(Utc.ymd(1970, 1, 1).and_hms(0, 0, 0));
 
     market
         .provider_engine
         .common
-        .query_agreement_events(&session_id, timeout, max_events, after_timestamp, &id)
+        .query_agreement_events(
+            &path.app_session_id,
+            timeout,
+            path.max_events,
+            after_timestamp,
+            &id,
+        )
         .await
         .log_err()
         .map(|events| HttpResponse::Ok().json(events))

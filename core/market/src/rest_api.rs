@@ -10,6 +10,7 @@ use serde::Deserialize;
 use ya_client::model::ErrorMessage;
 
 use crate::db::model::{AgreementId, OwnerType, ProposalId, ProposalIdParseError, SubscriptionId};
+use chrono::{DateTime, Utc};
 
 pub(crate) mod common;
 mod error;
@@ -67,6 +68,20 @@ pub struct QueryTimeoutMaxEvents {
     /// maximum count of events to return
     #[serde(rename = "maxEvents")]
     pub max_events: Option<i32>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct QueryAgreementEvents {
+    /// number of seconds to wait
+    #[serde(rename = "timeout", default = "default_event_timeout")]
+    pub timeout: f32,
+    /// maximum count of events to return
+    #[serde(rename = "maxEvents")]
+    pub max_events: Option<i32>,
+    #[serde(rename = "appSessionId")]
+    pub app_session_id: Option<String>,
+    #[serde(rename = "afterTimestamp")]
+    pub after_timestamp: Option<DateTime<Utc>>,
 }
 
 #[inline(always)]
