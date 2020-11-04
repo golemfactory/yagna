@@ -12,7 +12,7 @@
   "offer": {
     "properties.golem.inf": {
       "mem.gib": 0.5,
-      "storage.gib": 5
+      "storage.gib": 50.0
     },
     "properties.golem.com.usage.vector": [
       "golem.usage.duration_sec",

@@ -6,10 +6,10 @@ use serde::{Deserialize, Serialize};
 
 use ya_client_model::activity::{
     ActivityState, ActivityUsage, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
+    RuntimeEvent,
 };
-use ya_service_bus::RpcMessage;
-
 use ya_client_model::NodeId;
+use ya_service_bus::{RpcMessage, RpcStreamMessage};
 
 /// Public Activity bus address.
 ///
@@ -25,6 +25,8 @@ pub mod exeunit {
         format!("/public/exeunit/{}", activity_id)
     }
 }
+
+// --------
 
 /// Create activity. Returns `activity_id`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -187,6 +189,19 @@ pub struct GetExecBatchResults {
 impl RpcMessage for GetExecBatchResults {
     const ID: &'static str = "GetExecBatchResults";
     type Item = Vec<ExeScriptCommandResult>;
+    type Error = RpcMessageError;
+}
+
+/// Stream script execution events.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct StreamExecBatchResults {
+    pub activity_id: String,
+    pub batch_id: String,
+}
+
+impl RpcStreamMessage for StreamExecBatchResults {
+    const ID: &'static str = "StreamExecBatchResults";
+    type Item = RuntimeEvent;
     type Error = RpcMessageError;
 }
 

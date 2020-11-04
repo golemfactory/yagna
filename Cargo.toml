@@ -10,10 +10,8 @@ license = "GPL-3.0"
 edition = "2018"
 
 [features]
-default = ['market-decentralized', 'gnt-driver', 'gftp/bin']
+default = ['gnt-driver', 'gftp/bin']
 static-openssl = ["openssl/vendored"]
-market-forwarding = ['ya-market-forwarding']
-market-decentralized = ['ya-market-decentralized', 'gftp/bin']
 dummy-driver = ['ya-dummy-driver']
 gnt-driver = ['ya-gnt-driver']
 zksync-driver = ['ya-zksync-driver']
@@ -31,8 +29,7 @@ ya-dummy-driver = { version = "0.1", optional = true }
 ya-gnt-driver = { version = "0.1", optional = true }
 ya-zksync-driver = { version = "0.1", optional = true }
 ya-identity = "0.2"
-ya-market-decentralized = { version = "0.1", optional = true }
-ya-market-forwarding = { version = "0.1", optional = true }
+ya-market = "0.2"
 ya-net = { version = "0.1", features = ["service"] }
 ya-payment = "0.1"
 ya-persistence = "0.2"
@@ -101,12 +98,10 @@ assets = [
 members = [
     "agent/provider",
     "agent/requestor",
-    "agent/requestor-sdk",
     "core/activity",
     "core/gftp",
     "core/identity",
-    "core/market/decentralized",
-    "core/market/forwarding",
+    "core/market",
     "core/market/resolver",
     "core/model",
     "core/net",
@@ -148,8 +143,7 @@ ya-dummy-driver = { path = "core/payment-driver/dummy" }
 ya-gnt-driver = { path = "core/payment-driver/gnt" }
 ya-zksync-driver = { path = "core/payment-driver/zksync" }
 ya-identity = { path = "core/identity" }
-ya-market-decentralized = { path = "core/market/decentralized" }
-ya-market-forwarding = { path = "core/market/forwarding" }
+ya-market = { path = "core/market" }
 ya-market-resolver = { path = "core/market/resolver" }
 ya-net = { path = "core/net" }
 ya-payment = { path = "core/payment" }
@@ -171,8 +165,8 @@ ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "e7a293bef1a5f2b7d9a26801ed2b7e8590828bc3" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "e7a293bef1a5f2b7d9a26801ed2b7e8590828bc3" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "442d2dc64a11231dd3a931abe512ad858f998605"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "442d2dc64a11231dd3a931abe512ad858f998605"}
 
 ## OTHERS
 gftp = { path = "core/gftp" }
