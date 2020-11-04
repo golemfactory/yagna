@@ -59,14 +59,18 @@ async fn get_default_id() -> anyhow::Result<String> {
 
 async fn try_get_default_id() -> anyhow::Result<String> {
     let mut interval = time::interval(Duration::from_secs(10));
+    let mut last_error = None;
     for _ in 0..3 {
         interval.tick().await;
         match get_default_id().await {
             Ok(node_id) => return Ok(node_id),
-            Err(e) => log::debug!("Couldn't determine node_id. {:?}", e),
+            Err(e) => {
+                log::debug!("Couldn't determine node_id. {:?}", e);
+                last_error = Some(e);
+            }
         }
     }
-    Err(anyhow::Error::msg("Couldn't determine node_id. Giving up."))
+    Err(last_error.unwrap_or(anyhow::anyhow!("Undefined error")))
 }
 
 async fn get_push_url(host_url: &str, instance: &str) -> anyhow::Result<String> {
@@ -81,7 +85,7 @@ async fn push_forever() {
     let node_id = match try_get_default_id().await {
         Ok(node_id) => node_id,
         Err(e) => {
-            log::warn!("{}", e);
+            log::warn!("Couldn't determine node_id. Giving up. Err({})", e);
             return;
         }
     };
