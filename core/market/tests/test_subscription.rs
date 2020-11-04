@@ -18,17 +18,19 @@ async fn test_subscribe_offer() -> Result<(), anyhow::Error> {
     let market1 = network.get_market("Node-1");
     let identity1 = network.get_default_id("Node-1");
 
-    let mut offer = sample_offer();
+    let offer = sample_offer();
     let subscription_id = market1.subscribe_offer(&offer, &identity1).await?;
-
-    // Fill expected values for further comparison.
-    offer.provider_id = Some(identity1.identity.to_string());
-    offer.offer_id = Some(subscription_id.to_string());
-    offer.properties = flatten_json(&offer.properties).unwrap();
 
     // Offer should be available in database after subscribe.
     let got_offer = market1.get_offer(&subscription_id).await?;
-    assert_eq!(got_offer.into_client_offer().unwrap(), offer);
+    let client_offer = got_offer.into_client_offer().unwrap();
+    assert_eq!(client_offer.offer_id, subscription_id.to_string());
+    assert_eq!(client_offer.provider_id, identity1.identity);
+    assert_eq!(client_offer.constraints, offer.constraints);
+    assert_eq!(
+        client_offer.properties,
+        flatten_json(&offer.properties).unwrap()
+    );
 
     // Unsubscribe should fail on not existing subscription id.
     let not_existent_subscription_id = "00000000000000000000000000000001-0000000000000000000000000000000000000000000000000000000000000002".parse().unwrap();
@@ -64,18 +66,19 @@ async fn test_subscribe_demand() -> Result<(), anyhow::Error> {
     let market1 = network.get_market("Node-1");
     let identity1 = network.get_default_id("Node-1");
 
-    let mut demand = sample_demand();
+    let demand = sample_demand();
     let subscription_id = market1.subscribe_demand(&demand, &identity1).await?;
-
-    // Fill expected values for further comparison.
-    demand.requestor_id = Some(identity1.identity.to_string());
-    demand.demand_id = Some(subscription_id.to_string());
-    demand.properties = flatten_json(&demand.properties).unwrap();
 
     // Offer should be available in database after subscribe.
     let got_demand = market1.get_demand(&subscription_id).await?;
-    assert_eq!(got_demand.into_client_demand().unwrap(), demand);
-
+    let client_demand = got_demand.into_client_demand().unwrap();
+    assert_eq!(client_demand.demand_id, subscription_id.to_string());
+    assert_eq!(client_demand.requestor_id, identity1.identity);
+    assert_eq!(client_demand.constraints, demand.constraints);
+    assert_eq!(
+        client_demand.properties,
+        flatten_json(&demand.properties).unwrap()
+    );
     // Unsubscribe should fail on not existing subscription id.
     let not_existent_subscription_id = "00000000000000000000000000000002-0000000000000000000000000000000000000000000000000000000000000003".parse().unwrap();
     assert!(market1

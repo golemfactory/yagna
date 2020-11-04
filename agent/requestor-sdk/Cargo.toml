@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 gftp = "0.1"
 ya-agreement-utils = "0.1"
-ya-client = "0.3"
+ya-client = "0.4"
 
 actix = "0.9"
 actix-rt = "1.0"

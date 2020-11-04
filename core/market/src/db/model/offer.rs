@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json;
 
@@ -9,6 +9,7 @@ use ya_service_api_web::middleware::Identity;
 use super::SubscriptionId;
 use crate::db::model::subscription_id::SubscriptionValidationError;
 use crate::db::schema::{market_offer, market_offer_unsubscribed};
+use ya_client::model::market::DemandOfferBase;
 
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable, Deserialize, Serialize)]
 #[table_name = "market_offer"]
@@ -47,7 +48,7 @@ impl Offer {
     /// Creates new model offer. If ClientOffer has id already assigned,
     /// it will be ignored and regenerated.
     pub fn from_new(
-        offer: &ClientOffer,
+        offer: &DemandOfferBase,
         id: &Identity,
         creation_ts: NaiveDateTime,
         expiration_ts: NaiveDateTime,
@@ -79,8 +80,8 @@ impl Offer {
 
     pub fn into_client_offer(&self) -> Result<ClientOffer, ErrorMessage> {
         Ok(ClientOffer {
-            offer_id: Some(self.id.to_string()),
-            provider_id: Some(self.node_id.to_string()), // TODO: use NodeId in client: issue #352
+            offer_id: self.id.to_string(),
+            provider_id: self.node_id.clone(),
             constraints: self.constraints.clone(),
             properties: serde_json::from_str(&self.properties).map_err(|e| {
                 format!(
@@ -88,6 +89,7 @@ impl Offer {
                     self.id, e
                 )
             })?,
+            timestamp: Utc.from_utc_datetime(&self.creation_ts),
         })
     }
 

@@ -1,7 +1,7 @@
 // TODO: This is only temporary
 #![allow(dead_code)]
 
-use chrono::{Duration, NaiveDateTime, Utc};
+use chrono::{Duration, NaiveDateTime, TimeZone, Utc};
 use diesel::backend::Backend;
 use diesel::deserialize;
 use diesel::serialize::Output;
@@ -21,6 +21,7 @@ use crate::db::model::Demand as ModelDemand;
 use crate::db::model::Offer as ModelOffer;
 use crate::db::schema::{market_negotiation, market_proposal};
 use crate::protocol::negotiation::messages::ProposalContent;
+use ya_client::model::market::DemandOfferBase;
 use ya_market_resolver::flatten::{flatten_json, JsonObjectExpected};
 
 /// TODO: Could we avoid having separate enum type for database
@@ -192,7 +193,7 @@ impl Proposal {
         }
     }
 
-    pub fn from_client(&self, proposal: &ClientProposal) -> Result<Proposal, JsonObjectExpected> {
+    pub fn from_client(&self, proposal: &DemandOfferBase) -> Result<Proposal, JsonObjectExpected> {
         let owner = self.body.id.owner();
         let creation_ts = Utc::now().naive_utc();
         // TODO: How to set expiration? Config?
@@ -234,9 +235,10 @@ impl Proposal {
         Ok(ClientProposal {
             properties,
             constraints: self.body.constraints,
-            proposal_id: Some(self.body.id.to_string()),
-            issuer_id: Some(issuer.to_string()),
-            state: Some(State::from(self.body.state)),
+            proposal_id: self.body.id.to_string(),
+            issuer_id: issuer,
+            state: State::from(self.body.state),
+            timestamp: Utc.from_utc_datetime(&self.body.creation_ts),
             prev_proposal_id: self.body.prev_proposal_id.map(|id| id.to_string()),
         })
     }

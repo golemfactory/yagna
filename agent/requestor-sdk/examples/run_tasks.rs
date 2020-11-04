@@ -3,6 +3,7 @@ use futures::future::{select, FutureExt};
 use std::collections::HashMap;
 
 use ya_agreement_utils::{constraints, ConstraintKey, Constraints};
+use ya_client::model::NodeId;
 use ya_requestor_sdk::{commands, CommandList, Image::WebAssembly, Package::Archive, Requestor};
 
 #[actix_rt::main]
@@ -27,7 +28,7 @@ async fn main() -> Result<()> {
             download("/workdir/output.txt", format!("output-{}.txt", i))
         }
     }))
-    .on_completed(|outputs: HashMap<String, String>| {
+    .on_completed(|outputs: HashMap<NodeId, String>| {
         for (prov_id, output) in outputs {
             println!("{} => {}", prov_id, output);
         }

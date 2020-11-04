@@ -1,7 +1,7 @@
 use serde_json;
 use std::{thread, time::Duration};
 
-use ya_client::model::market::{AgreementProposal, Demand, RequestorEvent};
+use ya_client::model::market::{AgreementProposal, DemandOfferBase, RequestorEvent};
 use ya_client::{market::MarketRequestorApi, web::WebClient, Error, Result};
 
 async fn query_events(
@@ -40,7 +40,7 @@ async fn wait_for_approval(client: &MarketRequestorApi, proposal_id: &str) {
 }
 
 async fn simulate_requestor(client: MarketRequestorApi) -> Result<()> {
-    let demand = Demand::new(serde_json::json!({}), "(&(cpu.architecture=wasm32))".into());
+    let demand = DemandOfferBase::new(serde_json::json!({}), "(&(cpu.architecture=wasm32))".into());
     let subscription_id = client.subscribe(&demand).await?;
 
     println!("Demand created. Subscription_id {}.", &subscription_id);
@@ -52,7 +52,7 @@ async fn simulate_requestor(client: MarketRequestorApi) -> Result<()> {
             event_date: _,
             proposal,
         } => {
-            let proposal_id = proposal.proposal_id().unwrap();
+            let proposal_id = &proposal.proposal_id;
 
             println!("Received offer {}. Sending agreeement.", &proposal_id);
 
@@ -62,7 +62,7 @@ async fn simulate_requestor(client: MarketRequestorApi) -> Result<()> {
 
             println!("Confirm agreement {}.", &agreement_proposal.proposal_id);
             let _res = client
-                .confirm_agreement(&agreement_proposal.proposal_id)
+                .confirm_agreement(&agreement_proposal.proposal_id, None)
                 .await?;
 
             println!(
@@ -73,7 +73,17 @@ async fn simulate_requestor(client: MarketRequestorApi) -> Result<()> {
             wait_for_approval(&client, &agreement_proposal.proposal_id).await;
             client.unsubscribe(&subscription_id).await?;
         }
-        RequestorEvent::PropertyQueryEvent { event_date: _ } => {
+        RequestorEvent::ProposalRejectedEvent {
+            proposal_id,
+            reason,
+            ..
+        } => {
+            println!(
+                "Proposal rejected [{}], reason: '{:?}'",
+                proposal_id, reason
+            );
+        }
+        RequestorEvent::PropertyQueryEvent { .. } => {
             println!("Unsupported PropertyQueryEvent.");
         }
     }
