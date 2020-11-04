@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::ops::Not;
 
 #[allow(dead_code)]
 #[derive(PartialEq)]
@@ -11,10 +12,7 @@ pub enum Status {
 
 impl Status {
     pub fn is_implemented(&self) -> bool {
-        match self {
-            Status::NotImplemented => false,
-            _ => true,
-        }
+        matches!(self, Status::NotImplemented).not()
     }
 
     pub fn problem(&self) -> Option<&str> {

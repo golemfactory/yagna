@@ -17,7 +17,7 @@ pub enum RpcMessageError {
 pub mod local {
     use super::*;
     use crate::driver::{AccountMode, PaymentConfirmation};
-    use bigdecimal::BigDecimal;
+    use bigdecimal::{BigDecimal, Zero};
     use chrono::{DateTime, Utc};
     use std::fmt::Display;
     use ya_client_model::NodeId;
@@ -200,11 +200,48 @@ pub mod local {
         pub outgoing: StatusNotes,
         pub incoming: StatusNotes,
     }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, Default)]
+    #[serde(rename_all = "camelCase")]
+    pub struct StatValue {
+        pub total_amount: BigDecimal,
+        pub agreements_count: u64,
+    }
+
+    impl StatValue {
+        pub fn new(v: impl Into<BigDecimal>) -> Self {
+            let total_amount = v.into();
+            let agreements_count = if total_amount.is_zero() { 0 } else { 1 };
+            Self {
+                total_amount,
+                agreements_count,
+            }
+        }
+    }
+
+    impl std::ops::Add for StatValue {
+        type Output = Self;
+
+        fn add(self, rhs: Self) -> Self::Output {
+            Self {
+                agreements_count: self.agreements_count + rhs.agreements_count,
+                total_amount: self.total_amount + rhs.total_amount,
+            }
+        }
+    }
+
+    impl std::ops::AddAssign for StatValue {
+        fn add_assign(&mut self, rhs: Self) {
+            self.agreements_count += rhs.agreements_count;
+            self.total_amount += rhs.total_amount;
+        }
+    }
+
     #[derive(Clone, Debug, Serialize, Deserialize, Default)]
     pub struct StatusNotes {
-        pub requested: BigDecimal,
-        pub accepted: BigDecimal,
-        pub confirmed: BigDecimal,
+        pub requested: StatValue,
+        pub accepted: StatValue,
+        pub confirmed: StatValue,
     }
 
     impl std::ops::Add for StatusNotes {
@@ -241,6 +278,50 @@ pub mod local {
         const ID: &'static str = "GetAccounts";
         type Item = Vec<Account>;
         type Error = GenericError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[non_exhaustive]
+    pub struct GetInvoiceStats {
+        pub node_id: NodeId,
+        pub requestor: bool,
+        pub provider: bool,
+        pub since: DateTime<Utc>,
+    }
+
+    impl GetInvoiceStats {
+        pub fn new(node_id: NodeId, since: DateTime<Utc>) -> Self {
+            Self {
+                node_id,
+                requestor: true,
+                provider: true,
+                since,
+            }
+        }
+    }
+
+    impl RpcMessage for GetInvoiceStats {
+        const ID: &'static str = "GetInvoiceStats";
+        type Item = InvoiceStats;
+        type Error = GenericError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, Default)]
+    #[non_exhaustive]
+    pub struct InvoiceStatusNotes {
+        pub issued: StatValue,
+        pub received: StatValue,
+        pub accepted: StatValue,
+        pub rejected: StatValue,
+        pub failed: StatValue,
+        pub settled: StatValue,
+        pub cancelled: StatValue,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, Default)]
+    pub struct InvoiceStats {
+        pub requestor: InvoiceStatusNotes,
+        pub provider: InvoiceStatusNotes,
     }
 }
 

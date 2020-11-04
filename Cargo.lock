@@ -2095,6 +2095,7 @@ dependencies = [
  "tokio 0.2.22",
  "url 2.1.1",
  "ya-compile-time-utils",
+ "ya-core-model 0.2.1",
 ]
 
 [[package]]
@@ -6465,6 +6466,7 @@ dependencies = [
  "ethsign",
  "futures 0.3.6",
  "hex",
+ "humantime 2.0.1",
  "lazy_static",
  "libsqlite3-sys",
  "log 0.4.11",
@@ -6859,7 +6861,7 @@ dependencies = [
 
 [[package]]
 name = "yagna"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "actix-rt",
  "actix-service",

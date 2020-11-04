@@ -24,8 +24,32 @@ fn handle_ctrl_c(result: io::Result<()>) -> Result<()> {
 struct AbortableChild(Option<oneshot::Sender<oneshot::Sender<io::Result<ExitStatus>>>>);
 
 impl AbortableChild {
-    fn new(child: Child, mut kill_cmd: mpsc::Sender<()>, name: &'static str) -> Self {
+    fn new(
+        child: Child,
+        mut kill_cmd: mpsc::Sender<()>,
+        name: &'static str,
+        send_term: bool,
+    ) -> Self {
         let (tx, rx) = oneshot::channel();
+
+        #[allow(unused)]
+        async fn wait_and_kill(child: Child, send_term: bool) -> io::Result<ExitStatus> {
+            #[cfg(target_os = "linux")]
+            if send_term {
+                use ::nix::sys::signal::*;
+                use ::nix::unistd::Pid;
+
+                let pid = child.id() as i32;
+                let _ret = ::nix::sys::signal::kill(Pid::from_raw(pid), SIGTERM);
+            }
+            match future::select(tokio::time::delay_for(Duration::from_secs(2)), child).await {
+                future::Either::Left((_, mut child)) => {
+                    child.kill()?;
+                    child.await
+                }
+                future::Either::Right((r, _)) => r,
+            }
+        }
 
         tokio::task::spawn_local(async move {
             match future::select(child, rx).await {
@@ -37,19 +61,12 @@ impl AbortableChild {
                 }
                 future::Either::Right((
                     Ok::<oneshot::Sender<io::Result<ExitStatus>>, oneshot::Canceled>(tx),
-                    mut child,
+                    child,
                 )) => {
-                    if let Err(e) = child.kill() {
-                        log::error!("unable to kill {}: {:?}", name, e);
-                        let _ = tx.send(Err(e));
-                    } else {
-                        let exit_status = child.await;
-                        let _ = tx.send(exit_status);
-                    }
+                    let _ = tx.send(wait_and_kill(child, send_term).await);
                 }
-                future::Either::Right((Err(_), mut child)) => {
-                    let _ = child.kill();
-                    let _ = child.await;
+                future::Either::Right((Err(_), child)) => {
+                    let _ = wait_and_kill(child, send_term).await;
                 }
             }
         });
@@ -109,8 +126,8 @@ pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
     log::info!("Golem provider is running");
 
     let (event_tx, mut event_rx) = mpsc::channel(1);
-    let mut service = AbortableChild::new(service, event_tx.clone(), "yagna");
-    let mut provider = AbortableChild::new(provider, event_tx, "provider");
+    let mut service = AbortableChild::new(service, event_tx.clone(), "yagna", true);
+    let mut provider = AbortableChild::new(provider, event_tx, "provider", false);
 
     futures::pin_mut!(ctrl_c);
     //futures::pin_mut!(event_rx);

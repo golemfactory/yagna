@@ -6,7 +6,8 @@ pub mod activity;
 #[cfg(feature = "appkey")]
 pub mod appkey;
 
-#[cfg(feature = "driver")]
+// `payment` won't compile without `driver`
+#[cfg(any(feature = "driver", feature = "payment"))]
 pub mod driver;
 
 #[cfg(feature = "identity")]

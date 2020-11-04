@@ -16,7 +16,10 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
 mod local {
     use super::*;
     use crate::dao::*;
+    use std::collections::BTreeMap;
+    use ya_client_model::payment::DocumentStatus;
     use ya_core_model::payment::local::*;
+    use ya_persistence::types::Role;
 
     pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
         log::debug!("Binding payment local service to service bus");
@@ -27,6 +30,7 @@ mod local {
             .bind_with_processor(unregister_account)
             .bind_with_processor(notify_payment)
             .bind_with_processor(get_status)
+            .bind_with_processor(get_invoice_stats)
             .bind_with_processor(get_accounts);
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
@@ -142,6 +146,58 @@ mod local {
             outgoing,
             incoming,
         })
+    }
+
+    async fn get_invoice_stats(
+        db: DbExecutor,
+        processor: PaymentProcessor,
+        _caller: String,
+        msg: GetInvoiceStats,
+    ) -> Result<InvoiceStats, GenericError> {
+        let stats: BTreeMap<(Role, DocumentStatus), StatValue> = async {
+            db.as_dao::<InvoiceDao>()
+                .last_invoice_stats(msg.node_id, msg.since)
+                .await
+        }
+        .map_err(GenericError::new)
+        .await?;
+        let mut output_stats = InvoiceStats::default();
+
+        fn aggregate(
+            iter: impl Iterator<Item = (DocumentStatus, StatValue)>,
+        ) -> InvoiceStatusNotes {
+            let mut notes = InvoiceStatusNotes::default();
+            for (status, value) in iter {
+                match status {
+                    DocumentStatus::Issued => notes.issued += value,
+                    DocumentStatus::Received => notes.received += value,
+                    DocumentStatus::Accepted => notes.accepted += value,
+                    DocumentStatus::Rejected => notes.rejected += value,
+                    DocumentStatus::Failed => notes.failed += value,
+                    DocumentStatus::Settled => notes.settled += value,
+                    DocumentStatus::Cancelled => notes.cancelled += value,
+                }
+            }
+            notes
+        }
+
+        if msg.provider {
+            output_stats.provider = aggregate(
+                stats
+                    .iter()
+                    .filter(|((role, _), _)| matches!(role, Role::Provider))
+                    .map(|((_, status), value)| (*status, value.clone())),
+            );
+        }
+        if msg.requestor {
+            output_stats.requestor = aggregate(
+                stats
+                    .iter()
+                    .filter(|((role, _), _)| matches!(role, Role::Requestor))
+                    .map(|((_, status), value)| (*status, value.clone())),
+            );
+        }
+        Ok(output_stats)
     }
 }
 

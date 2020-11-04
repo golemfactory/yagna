@@ -2,7 +2,7 @@ use crate::command::UsageDef;
 use crate::terminal::clear_stdin;
 use anyhow::Result;
 use directories::ProjectDirs;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use std::fs;
@@ -95,7 +95,25 @@ pub async fn setup(run_config: &mut RunConfig, force: bool) -> Result<i32> {
         cmd.ya_provider()?.set_config(&config).await?;
     }
 
-    if force && !run_config.prices_configured {
+    let is_configured = {
+        let runtimes: HashSet<String> = cmd
+            .ya_provider()?
+            .list_runtimes()
+            .await?
+            .into_iter()
+            .map(|r| r.name)
+            .collect();
+        let presets: HashMap<String, String> = cmd
+            .ya_provider()?
+            .list_presets()
+            .await?
+            .into_iter()
+            .map(|p| (p.name, p.exeunit_name))
+            .collect();
+        runtimes.iter().all(|r| presets.get(r) == Some(r))
+    };
+
+    if !is_configured {
         let runtimes = cmd.ya_provider()?.list_runtimes().await?;
         let presets: HashSet<String> = cmd
             .ya_provider()?
