@@ -107,17 +107,15 @@ jobs:
 
       - name: cargo build router
         uses: actions-rs/cargo@v1
-        if: matrix.os != 'Windows'
+        if: matrix.os == 'ubuntu-latest'
         with:
           command: build
           args: -p ya-sb-router --example ya_sb_router
 
       - name: cargo build exe-unit (sgx)
-        uses: actions-rs/cargo@v1
-        if: matrix.os != 'Windows'
-        with:
-          command: build
-          args: --manifest-path exe-unit/Cargo.toml --features sgx
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: exe-unit
+        run: cargo build --features sgx
 
       - name: Copy binaries Unix
         if: runner.os != 'Windows'
