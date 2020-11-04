@@ -24,3 +24,8 @@ pub mod payment;
 
 #[cfg(feature = "gftp")]
 pub mod gftp;
+
+#[cfg(feature = "sgx")]
+pub mod sgx;
+
+pub use ya_client_model::NodeId;

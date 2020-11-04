@@ -1,9 +1,9 @@
 use crate::events::Event;
-use crate::execution::{GetExeUnit, TaskRunner, UpdateActivity};
+use crate::execution::{GetExeUnit, GetOfferTemplates, TaskRunner, UpdateActivity};
 use crate::hardware;
 use crate::market::provider_market::{OfferKind, Unsubscribe, UpdateMarket};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
-use crate::payments::{LinearPricingOffer, Payments};
+use crate::payments::{LinearPricingOffer, Payments, PricingOffer};
 use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RunConfig};
 use crate::task_manager::{InitializeTaskManager, TaskManager};
 use actix::prelude::*;
@@ -16,8 +16,10 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::{fs, io};
+use ya_agreement_utils::agreement::TypedArrayPointer;
 use ya_agreement_utils::*;
 use ya_client::cli::ProviderApi;
+use ya_client_model::payment::Account;
 use ya_utils_actix::actix_handler::send_message;
 use ya_utils_path::SwapSave;
 
@@ -28,6 +30,7 @@ pub struct ProviderAgent {
     task_manager: Addr<TaskManager>,
     presets: PresetManager,
     hardware: hardware::Manager,
+    accounts: Vec<Account>,
 }
 
 struct GlobalsManager {
@@ -114,6 +117,11 @@ impl ProviderAgent {
     pub async fn new(args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
         let data_dir = config.data_dir.get_or_create()?.as_path().to_path_buf();
         let api = ProviderApi::try_from(&args.api)?;
+
+        log::info!("Loading payment accounts...");
+        let accounts: Vec<Account> = api.payment.get_accounts().await?;
+        log::info!("Payment accounts: {:#?}", accounts);
+
         let registry = config.registry()?;
         registry.validate()?;
 
@@ -136,6 +144,7 @@ impl ProviderAgent {
             task_manager,
             presets,
             hardware,
+            accounts,
         })
     }
 
@@ -145,6 +154,7 @@ impl ProviderAgent {
         inf_node_info: InfNodeInfo,
         runner: Addr<TaskRunner>,
         market: Addr<ProviderMarket>,
+        accounts: Vec<Account>,
     ) -> anyhow::Result<()> {
         if presets.is_empty() {
             return Err(anyhow!("No Presets were selected. Can't create offers."));
@@ -152,24 +162,26 @@ impl ProviderAgent {
 
         let preset_names = presets.iter().map(|p| &p.name).collect::<Vec<_>>();
         log::debug!("Preset names: {:?}", preset_names);
+        let offer_templates = runner.send(GetOfferTemplates(presets.clone())).await??;
+        let subnet = &node_info.subnet;
 
         for preset in presets {
-            let com_info = match preset.pricing_model.as_str() {
-                "linear" => LinearPricingOffer::from_preset(&preset)?
-                    .interval(6.0)
-                    .build(),
-                _ => {
-                    return Err(anyhow!(
-                        "Unsupported pricing model: {}.",
-                        preset.pricing_model
-                    ))
-                }
+            let pricing_model: Box<dyn PricingOffer> = match preset.pricing_model.as_str() {
+                "linear" => Box::new(LinearPricingOffer::default()),
+                other => return Err(anyhow!("Unsupported pricing model: {}", other)),
             };
+            let mut offer: OfferTemplate = offer_templates
+                .get(&preset.name)
+                .ok_or_else(|| anyhow!("Offer template not found for preset [{}]", preset.name))?
+                .clone();
 
-            let msg = GetExeUnit {
-                name: preset.exeunit_name.clone(),
-            };
-            let exeunit_desc = runner.send(msg).await?.map_err(|error| {
+            let (initial_price, prices) = get_prices(&pricing_model, &preset, &offer)?;
+            offer.set_property("golem.com.usage.vector", get_usage_vector_value(&prices));
+            offer.add_constraints(Self::build_constraints(subnet.clone())?);
+
+            let com_info = pricing_model.build(&accounts, initial_price, prices)?;
+            let name = preset.exeunit_name.clone();
+            let exeunit_desc = runner.send(GetExeUnit { name }).await?.map_err(|error| {
                 anyhow!(
                     "Failed to create offer for preset [{}]. Error: {}",
                     preset.name,
@@ -184,9 +196,10 @@ impl ProviderAgent {
                     node_info: node_info.clone(),
                     service: ServiceInfo::new(inf_node_info.clone(), exeunit_desc.build()),
                     com_info,
-                    constraints: Self::build_constraints(node_info.subnet.clone())?,
+                    offer,
                 },
             };
+
             market.send(create_offer_message).await??;
         }
         Ok(())
@@ -219,6 +232,51 @@ impl ProviderAgent {
         }
         node_info
     }
+}
+
+fn get_prices(
+    pricing_model: &Box<dyn PricingOffer>,
+    preset: &Preset,
+    offer: &OfferTemplate,
+) -> Result<(f64, Vec<(String, f64)>), Error> {
+    let pointer = offer.property("golem.com.usage.vector");
+    let offer_usage_vec = pointer
+        .as_typed_array(serde_json::Value::as_str)
+        .unwrap_or_else(|_| Vec::new());
+
+    let initial_price = preset
+        .get_initial_price()
+        .ok_or_else(|| anyhow!("Preset [{}] is missing the initial price", preset.name))?;
+    let prices = pricing_model
+        .prices(&preset)
+        .into_iter()
+        .filter_map(|(c, v)| match c.to_property() {
+            Some(prop) => match offer_usage_vec.contains(&prop) {
+                true => Some((prop.to_string(), v)),
+                false => None,
+            },
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+
+    if prices.is_empty() {
+        return Err(anyhow!(
+            "Unsupported coefficients [{:?}] in preset {} [{}]",
+            preset.usage_coeffs,
+            preset.name,
+            preset.exeunit_name
+        ));
+    }
+
+    Ok((initial_price, prices))
+}
+
+fn get_usage_vector_value(prices: &Vec<(String, f64)>) -> serde_json::Value {
+    let vec = prices
+        .iter()
+        .map(|(p, _)| serde_json::Value::String(p.clone()))
+        .collect::<Vec<_>>();
+    serde_json::Value::Array(vec)
 }
 
 impl Actor for ProviderAgent {
@@ -329,6 +387,7 @@ impl Handler<CreateOffers> for ProviderAgent {
         let runner = self.runner.clone();
         let market = self.market.clone();
         let node_info = self.create_node_info();
+        let accounts = self.accounts.clone();
         let inf_node_info = InfNodeInfo::from(self.hardware.capped());
         let preset_names = match msg.0 {
             OfferKind::Any => self.presets.active(),
@@ -336,8 +395,10 @@ impl Handler<CreateOffers> for ProviderAgent {
         };
 
         let presets = self.presets.list_matching(&preset_names);
-        async move { Self::create_offers(presets?, node_info, inf_node_info, runner, market).await }
-            .boxed_local()
+        async move {
+            Self::create_offers(presets?, node_info, inf_node_info, runner, market, accounts).await
+        }
+        .boxed_local()
     }
 }
 

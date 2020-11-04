@@ -579,7 +579,7 @@ impl TransactionSender {
             let blocks = client.blocks().await.unwrap();
             blocks
                 .try_for_each(|b| {
-                    log::debug!("new block: {:?}", b);
+                    log::trace!("new block: {:?}", b);
                     future::ok(())
                 })
                 .await
@@ -592,7 +592,7 @@ impl TransactionSender {
     fn start_payment_job(&mut self, ctx: &mut Context<Self>) {
         let _ = ctx.run_interval(Duration::from_secs(30), |act, ctx| {
             for address in act.active_accounts.borrow().list_accounts() {
-                log::debug!("payment job for: {:?}", address);
+                log::trace!("payment job for: {:?}", address);
                 match act.active_accounts.borrow().get_node_id(address.as_str()) {
                     None => continue,
                     Some(node_id) => {
@@ -836,7 +836,10 @@ async fn process_payments(
             e
         ),
         Ok(payments) => {
-            log::debug!("Payments: {:?}", payments);
+            if !payments.is_empty() {
+                log::info!("Processing {} Payments", payments.len());
+                log::debug!("Payments details: {:?}", payments);
+            }
             for payment in payments {
                 let _ = process_payment(
                     payment.clone(),
