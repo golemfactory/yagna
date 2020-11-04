@@ -1552,19 +1552,6 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aafcde04e90a5226a6443b7aabdb016ba2f8307c847d524724bd9b346dd1a2d3"
-dependencies = [
- "atty",
- "humantime 1.3.0",
- "log 0.4.11",
- "regex",
- "termcolor",
-]
-
-[[package]]
-name = "env_logger"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "44533bbbb3bb3c1fa17d9f2e4e38bbbaf8396ba82193c4cb1b6445d711445d36"
@@ -6596,30 +6583,6 @@ dependencies = [
  "ya-agreement-utils",
  "ya-client 0.3.1",
  "ya-compile-time-utils",
-]
-
-[[package]]
-name = "ya-requestor-sdk"
-version = "0.1.0"
-dependencies = [
- "actix",
- "actix-rt",
- "anyhow",
- "bigdecimal",
- "chrono",
- "dotenv",
- "env_logger 0.6.2",
- "futures 0.3.6",
- "gftp",
- "log 0.4.11",
- "semver 0.10.0",
- "serde_json",
- "sha3 0.9.1",
- "structopt",
- "tokio 0.2.22",
- "url 2.1.1",
- "ya-agreement-utils",
- "ya-client 0.3.1",
 ]
 
 [[package]]

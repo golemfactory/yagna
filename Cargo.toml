@@ -96,7 +96,6 @@ assets = [
 members = [
     "agent/provider",
     "agent/requestor",
-    "agent/requestor-sdk",
     "core/activity",
     "core/gftp",
     "core/identity",
