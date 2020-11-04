@@ -53,6 +53,12 @@ table! {
 }
 
 table! {
+    market_agreement_event_type (event_type) {
+        event_type -> Text,
+    }
+}
+
+table! {
     market_agreement_event (id) {
         id -> Integer,
         agreement_id -> Text,
