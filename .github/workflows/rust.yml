@@ -85,6 +85,11 @@ jobs:
           command: test
           args: --workspace
 
+      - name: cargo test sgx
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: exe-unit
+        run: cargo test --features sgx
+
       - name: decentralized market test suite
         uses: actions-rs/cargo@v1
         if: startsWith( github.head_ref, 'market/' )
@@ -107,15 +112,10 @@ jobs:
 
       - name: cargo build router
         uses: actions-rs/cargo@v1
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os != 'Windows'
         with:
           command: build
           args: -p ya-sb-router --example ya_sb_router
-
-      - name: cargo build exe-unit (sgx)
-        if: matrix.os == 'ubuntu-latest'
-        working-directory: exe-unit
-        run: cargo build --features sgx
 
       - name: Copy binaries Unix
         if: runner.os != 'Windows'
