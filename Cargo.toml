@@ -28,19 +28,19 @@ ya-dummy-driver = { version = "0.1", optional = true }
 ya-gnt-driver = { version = "0.1", optional = true }
 ya-identity = "0.2"
 ya-market = "0.2"
+ya-metrics = "0.1"
 ya-net = { version = "0.1", features = ["service"] }
 ya-payment = "0.1"
 ya-persistence = "0.2"
 ya-sb-proto = "0.1"
 ya-sb-router = "0.1"
-ya-sgx = "0.1"
 ya-service-api = "0.1"
 ya-service-api-derive = "0.1"
 ya-service-api-interfaces = "0.1"
 ya-service-api-web = "0.1"
 ya-service-bus = "0.2"
+ya-sgx = "0.1"
 ya-utils-path = "0.1"
-ya-metrics = "0.1"
 
 actix-rt = "1.0"
 actix-service = "1.0"
@@ -96,7 +96,6 @@ assets = [
 members = [
     "agent/provider",
     "agent/requestor",
-    "agent/requestor-sdk",
     "core/activity",
     "core/gftp",
     "core/identity",
