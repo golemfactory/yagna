@@ -85,13 +85,13 @@ where
     }
 
     pub fn connect<B: Sink<M, Error = E> + Send + 'static>(&mut self, addr: A, sink: B) {
-        log::debug!("Accepted connection from {}", addr);
+        log::trace!("Accepted connection from {}", addr);
         self.dispatcher.register(addr.clone(), sink).unwrap();
         self.last_seen.insert(addr, Utc::now().naive_utc());
     }
 
     pub fn disconnect(&mut self, addr: &A) {
-        log::debug!("Closing connection with {}", addr);
+        log::trace!("Closing connection with {}", addr);
         self.last_seen.remove(addr);
 
         // IDs of all endpoints registered by this server
@@ -101,7 +101,7 @@ where
             .unwrap_or(HashSet::new());
 
         for service_id in service_ids.iter() {
-            log::debug!("unregistering service: {}", service_id);
+            log::trace!("unregistering service: {}", service_id);
             self.registered_endpoints.remove(service_id);
         }
 
@@ -182,16 +182,20 @@ where
             }
         } else {
             match self.registered_endpoints.entry(msg.service_id.clone()) {
-                Entry::Occupied(_) => RegisterReply {
-                    code: RegisterReplyCode::RegisterConflict as i32,
-                    message: format!("Service ID '{}' already registered", msg.service_id),
-                },
+                Entry::Occupied(_) => {
+                    log::warn!("Service '{}' already registered", msg.service_id);
+                    RegisterReply {
+                        code: RegisterReplyCode::RegisterConflict as i32,
+                        message: format!("Service ID '{}' already registered", msg.service_id),
+                    }
+                }
                 Entry::Vacant(entry) => {
                     entry.insert(addr.clone());
                     self.reversed_endpoints
                         .entry(addr.clone())
                         .or_insert_with(|| HashSet::new())
                         .insert(msg.service_id.clone());
+                    log::trace!("Service successfully registered");
                     RegisterReply {
                         code: RegisterReplyCode::RegisteredOk as i32,
                         message: format!("Service ID '{}' successfully registered", msg.service_id),
@@ -204,11 +208,8 @@ where
     }
 
     fn unregister_endpoint(&mut self, addr: &A, msg: UnregisterRequest) -> anyhow::Result<()> {
-        log::debug!(
-            "Received UnregisterRequest from {}. service_id = {}",
-            addr,
-            &msg.service_id
-        );
+        log::trace!("{} is unregistering endpoint {}", addr, &msg.service_id);
+
         let msg = match self.registered_endpoints.entry(msg.service_id.clone()) {
             Entry::Occupied(entry) if entry.get() == addr => {
                 entry.remove();
@@ -216,7 +217,7 @@ where
                     .get_mut(addr)
                     .ok_or(anyhow::anyhow!("Address not found: {}", addr))?
                     .remove(&msg.service_id);
-                log::debug!("Service successfully unregistered");
+                log::trace!("Service successfully unregistered");
                 UnregisterReply {
                     code: UnregisterReplyCode::UnregisteredOk as i32,
                 }
@@ -232,10 +233,10 @@ where
     }
 
     fn call(&mut self, caller_addr: &A, msg: CallRequest) -> anyhow::Result<()> {
-        log::debug!(
-            "Received CallRequest from {}. caller = {}, address = {}, request_id = {}",
-            caller_addr,
+        log::trace!(
+            "{} ({}) is calling {}, request_id = {}",
             &msg.caller,
+            caller_addr,
             &msg.address,
             &msg.request_id
         );
@@ -265,7 +266,7 @@ where
         };
         match server_addr {
             Ok(server_addr) => {
-                log::debug!("Forwarding CallRequest to {}", server_addr);
+                log::trace!("Forwarding CallRequest to {}", server_addr);
                 self.send_message(&server_addr, msg)
             }
             Err(err) => {
@@ -282,7 +283,7 @@ where
     }
 
     fn reply(&mut self, server_addr: &A, msg: CallReply) -> anyhow::Result<()> {
-        log::debug!(
+        log::trace!(
             "Received CallReply from {} request_id = {}",
             server_addr,
             &msg.request_id
@@ -318,7 +319,7 @@ where
     }
 
     fn subscribe(&mut self, addr: &A, msg: SubscribeRequest) -> anyhow::Result<()> {
-        log::debug!(
+        log::trace!(
             "Received SubscribeRequest from {} topic = {}",
             addr,
             &msg.topic
@@ -339,6 +340,7 @@ where
                     .entry(addr.clone())
                     .or_insert_with(|| HashSet::new())
                     .insert(msg.topic);
+                log::trace!("Successfully subscribed");
                 SubscribeReply {
                     code: SubscribeReplyCode::SubscribedOk as i32,
                     message: "Successfully subscribed to topic".to_string(),
@@ -355,7 +357,7 @@ where
     }
 
     fn unsubscribe(&mut self, addr: &A, msg: UnsubscribeRequest) -> anyhow::Result<()> {
-        log::debug!(
+        log::trace!(
             "Received UnsubscribeRequest from {} topic = {}",
             addr,
             &msg.topic
@@ -370,7 +372,7 @@ where
                 .get_mut(addr)
                 .ok_or(anyhow::anyhow!("Address not found: {}", addr))?
                 .remove(&msg.topic);
-            log::debug!("Successfully unsubscribed");
+            log::trace!("Successfully unsubscribed");
             UnsubscribeReply {
                 code: UnsubscribeReplyCode::UnsubscribedOk as i32,
             }
@@ -384,7 +386,7 @@ where
     }
 
     fn broadcast(&mut self, addr: &A, msg: BroadcastRequest) -> anyhow::Result<()> {
-        log::debug!(
+        log::trace!(
             "Received BroadcastRequest from {} topic = {} caller = {}",
             addr,
             &msg.topic,
@@ -396,6 +398,7 @@ where
                 message: "OK".to_string(),
             }
         } else {
+            log::warn!("Invalid topic ID: {} for broadcast", msg.topic);
             BroadcastReply {
                 code: BroadcastReplyCode::BroadcastBadRequest as i32,
                 message: format!("Invalid topic ID: {}", msg.topic),
