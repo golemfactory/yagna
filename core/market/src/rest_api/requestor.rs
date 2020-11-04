@@ -3,7 +3,7 @@ use actix_web::{HttpResponse, Responder, Scope};
 use std::str::FromStr;
 use std::sync::Arc;
 
-use ya_client::model::market::{AgreementProposal, Demand, Proposal};
+use ya_client::model::market::{AgreementProposal, DemandOfferBase};
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::LogErr;
 
@@ -34,7 +34,7 @@ pub fn register_endpoints(scope: Scope) -> Scope {
 #[actix_web::post("/demands")]
 async fn subscribe(
     market: Data<Arc<MarketService>>,
-    body: Json<Demand>,
+    body: Json<DemandOfferBase>,
     id: Identity,
 ) -> impl Responder {
     market
@@ -88,7 +88,7 @@ async fn collect(
 async fn counter_proposal(
     market: Data<Arc<MarketService>>,
     path: Path<PathSubscriptionProposal>,
-    body: Json<Proposal>,
+    body: Json<DemandOfferBase>,
     id: Identity,
 ) -> impl Responder {
     let PathSubscriptionProposal {

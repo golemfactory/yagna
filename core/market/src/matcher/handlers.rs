@@ -3,8 +3,6 @@ use futures::StreamExt;
 use metrics::{counter, value};
 
 use crate::db::model::{Offer, SubscriptionId};
-use crate::utils::display::EnableDisplay;
-
 use crate::matcher::error::ModifyOfferError;
 use crate::protocol::discovery::{
     error::DiscoveryRemoteError,
@@ -59,10 +57,10 @@ pub(super) async fn receive_remote_offers(
         .await;
 
     counter!("market.offers.incoming", added_offers_ids.len() as u64);
-    log::info!(
-        "Received new Offers from [{}]: \n{}",
-        caller,
-        added_offers_ids.display(),
+    log::trace!(
+        "Received {} new Offers from [{}]",
+        added_offers_ids.len(),
+        caller
     );
     Ok(added_offers_ids)
 }
@@ -134,10 +132,10 @@ pub(super) async fn receive_remote_offer_unsubscribes(
             "market.offers.unsubscribes.incoming",
             new_unsubscribes.len() as u64
         );
-        log::info!(
-            "Received new Offers to unsubscribe from [{}]: \n{}",
+        log::trace!(
+            "Received {} new Offers to unsubscribe from [{}]",
+            new_unsubscribes.len(),
             caller,
-            new_unsubscribes.display()
         );
     }
     Ok(new_unsubscribes)

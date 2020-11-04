@@ -24,6 +24,7 @@ pub fn generate_agreement(unifier: i64, valid_to: NaiveDateTime) -> Agreement {
         demand_proposal_id: id,
         provider_id: NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap(),
         requestor_id: NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap(),
+        session_id: None,
         creation_ts: Utc::now().naive_utc(),
         valid_to,
         approved_date: None,

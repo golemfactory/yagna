@@ -10,6 +10,7 @@ use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 
 use crate::dao::Result;
 use crate::db::{models::ActivityEventType, schema};
+use ya_client_model::NodeId;
 
 pub const MAX_EVENTS: u32 = 100;
 
@@ -52,7 +53,7 @@ impl<'c> EventDao<'c> {
     pub async fn create(
         &self,
         activity_id: &str,
-        identity_id: &str,
+        identity_id: &NodeId,
         event_type: ActivityEventType,
         requestor_pub_key: Option<Vec<u8>>,
     ) -> Result<i32> {

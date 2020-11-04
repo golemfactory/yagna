@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, TimeZone, Utc};
 use serde_json;
 
 use ya_client::model::{market::Demand as ClientDemand, ErrorMessage, NodeId};
@@ -7,6 +7,7 @@ use ya_service_api_web::middleware::Identity;
 
 use super::SubscriptionId;
 use crate::db::schema::market_demand;
+use ya_client::model::market::DemandOfferBase;
 
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable)]
 #[table_name = "market_demand"]
@@ -28,7 +29,7 @@ impl Demand {
     /// Creates new model demand. If ClientDemand has id already assigned,
     /// it will be ignored and regenerated.
     pub fn from_new(
-        demand: &ClientDemand,
+        demand: &DemandOfferBase,
         id: &Identity,
         creation_ts: NaiveDateTime,
         expiration_ts: NaiveDateTime,
@@ -58,8 +59,8 @@ impl Demand {
 
     pub fn into_client_demand(&self) -> Result<ClientDemand, ErrorMessage> {
         Ok(ClientDemand {
-            demand_id: Some(self.id.to_string()),
-            requestor_id: Some(self.node_id.to_string()), // TODO: use NodeId in client: issue #352
+            demand_id: self.id.to_string(),
+            requestor_id: self.node_id.clone(),
             constraints: self.constraints.clone(),
             properties: serde_json::from_str(&self.properties).map_err(|e| {
                 format!(
@@ -67,6 +68,7 @@ impl Demand {
                     e
                 )
             })?,
+            timestamp: Utc.from_utc_datetime(&self.creation_ts),
         })
     }
 }

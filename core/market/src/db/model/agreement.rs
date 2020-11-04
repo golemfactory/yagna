@@ -1,4 +1,4 @@
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use diesel::backend::Backend;
 use diesel::deserialize;
 use diesel::serialize::Output;
@@ -151,14 +151,16 @@ impl Agreement {
         let demand = ClientDemand {
             properties: demand_properties,
             constraints: self.demand_constraints,
-            requestor_id: Some(self.requestor_id.to_string()),
-            demand_id: None, // Using self.demand_id would be misleading because properties and constraints were taken from latest proposal.
+            requestor_id: self.requestor_id,
+            demand_id: self.demand_id.to_string(),
+            timestamp: Utc.from_utc_datetime(&self.creation_ts),
         };
         let offer = ClientOffer {
             properties: offer_properties,
             constraints: self.offer_constraints,
-            provider_id: Some(self.provider_id.to_string()),
-            offer_id: None, // Using self.offer_id would be misleading because properties and constraints were taken from latest proposal.
+            provider_id: self.provider_id,
+            offer_id: self.offer_id.to_string(),
+            timestamp: Utc.from_utc_datetime(&self.creation_ts),
         };
         Ok(ClientAgreement {
             agreement_id: self.id.into_client(),
@@ -169,6 +171,7 @@ impl Agreement {
                 .approved_date
                 .map(|d| DateTime::<Utc>::from_utc(d, Utc)),
             state: self.state.into(),
+            timestamp: Utc.from_utc_datetime(&self.creation_ts),
             proposed_signature: self.proposed_signature,
             approved_signature: self.approved_signature,
             committed_signature: self.committed_signature,

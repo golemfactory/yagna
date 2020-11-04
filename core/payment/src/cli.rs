@@ -1,5 +1,6 @@
 use crate::accounts::{init_account, Account};
 use crate::{DEFAULT_PAYMENT_DRIVER, DEFAULT_PAYMENT_PLATFORM};
+use chrono::Utc;
 use structopt::*;
 use ya_core_model::{identity as id_api, payment::local as pay};
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
@@ -23,6 +24,19 @@ pub enum PaymentCli {
         platform: Option<String>,
     },
     Accounts,
+    Invoice {
+        address: Option<String>,
+        #[structopt(subcommand)]
+        command: InvoiceCommand,
+    },
+}
+
+#[derive(StructOpt, Debug)]
+pub enum InvoiceCommand {
+    Status {
+        #[structopt(long)]
+        last: Option<humantime::Duration>,
+    },
 }
 
 impl PaymentCli {
@@ -82,6 +96,21 @@ impl PaymentCli {
                         .collect(),
                 }
                 .into())
+            }
+            PaymentCli::Invoice {
+                address,
+                command: InvoiceCommand::Status { last },
+            } => {
+                let seconds = last.map(|d| d.as_secs() as i64).unwrap_or(3600);
+                let address = resolve_address(address).await?;
+                CommandOutput::object(
+                    bus::service(pay::BUS_ID)
+                        .call(pay::GetInvoiceStats::new(
+                            address.parse()?,
+                            Utc::now() + chrono::Duration::seconds(-seconds),
+                        ))
+                        .await??,
+                )
             }
         }
     }

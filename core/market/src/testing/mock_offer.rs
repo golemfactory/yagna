@@ -76,11 +76,11 @@ pub fn generate_demand(id: &str, expiration_ts: NaiveDateTime) -> Demand {
 
 pub mod client {
     use ya_agreement_utils::{constraints, ConstraintKey, Constraints};
-    use ya_client::model::market::{Demand, Offer};
+    use ya_client::model::market::DemandOfferBase;
 
     #[allow(unused)]
-    pub fn sample_offer() -> Offer {
-        Offer::new(
+    pub fn sample_offer() -> DemandOfferBase {
+        DemandOfferBase::new(
             serde_json::json!({
                 "golem": {
                     "node.id.name": "its-test-provider",
@@ -97,8 +97,8 @@ pub mod client {
     }
 
     #[allow(unused)]
-    pub fn not_matching_offer() -> Offer {
-        Offer::new(
+    pub fn not_matching_offer() -> DemandOfferBase {
+        DemandOfferBase::new(
             serde_json::json!({
                 "golem": {
                     "node.id.name": "its-test-provider",
@@ -116,8 +116,8 @@ pub mod client {
     }
 
     #[allow(unused)]
-    pub fn sample_demand() -> Demand {
-        Demand::new(
+    pub fn sample_demand() -> DemandOfferBase {
+        DemandOfferBase::new(
             serde_json::json!({
                 "golem": {
                     "node.id.name": "its-test-requestor",
@@ -135,8 +135,8 @@ pub mod client {
     }
 
     #[allow(unused)]
-    pub fn not_matching_demand() -> Demand {
-        Demand::new(
+    pub fn not_matching_demand() -> DemandOfferBase {
+        DemandOfferBase::new(
             serde_json::json!({
                 "golem": {
                     "node.id.name": "its-test-requestor",

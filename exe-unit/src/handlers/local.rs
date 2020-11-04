@@ -66,7 +66,12 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
                 credentials,
             ),
         );
-        ctx.spawn(fut.into_actor(self));
+        ctx.spawn(
+            async move {
+                fut.await;
+            }
+            .into_actor(self),
+        );
     }
 }
 

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 
-use ya_client::model::market::{event::RequestorEvent, proposal::Proposal as ClientProposal};
+use ya_client::model::market::{event::RequestorEvent, DemandOfferBase};
 use ya_client::model::{node_id::ParseError, NodeId};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
@@ -139,7 +139,7 @@ impl RequestorBroker {
         &self,
         demand_id: &SubscriptionId,
         prev_proposal_id: &ProposalId,
-        proposal: &ClientProposal,
+        proposal: &DemandOfferBase,
         id: &Identity,
     ) -> Result<ProposalId, ProposalError> {
         let (new_proposal, is_first) = self
@@ -480,7 +480,7 @@ pub async fn proposal_receiver_thread(
         let db = db.clone();
         let notifier = notifier.clone();
         match async move {
-            log::info!("Got matching Offer. Emitting new Proposal to Requestor.");
+            log::info!("Got matching Offer-Demand pair; emitting as Proposal to Requestor.");
 
             // Add proposal to database together with Negotiation record.
             let proposal = Proposal::new_requestor(proposal.demand, proposal.offer);
@@ -488,6 +488,13 @@ pub async fn proposal_receiver_thread(
                 .as_dao::<ProposalDao>()
                 .save_initial_proposal(proposal)
                 .await?;
+
+            log::debug!(
+                "New Proposal [{}] (Offer [{}], Demand [{}])",
+                proposal.body.id,
+                proposal.negotiation.offer_id,
+                proposal.negotiation.demand_id
+            );
 
             // Create Proposal Event and add it to queue (database).
             let subscription_id = proposal.negotiation.subscription_id.clone();

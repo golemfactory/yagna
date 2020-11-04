@@ -43,14 +43,8 @@ async fn test_gsb_get_agreement() -> Result<()> {
         })
         .await??;
     assert_eq!(agreement.agreement_id, agreement_id.into_client());
-    assert_eq!(
-        agreement.demand.requestor_id.unwrap(),
-        req_id.identity.to_string()
-    );
-    assert_eq!(
-        agreement.offer.provider_id.unwrap(),
-        prov_id.identity.to_string()
-    );
+    assert_eq!(agreement.demand.requestor_id, req_id.identity);
+    assert_eq!(agreement.offer.provider_id, prov_id.identity);
     Ok(())
 }
 
@@ -79,14 +73,8 @@ async fn test_get_agreement() -> Result<()> {
 
     let agreement = req_market.get_agreement(&agreement_id, &req_id).await?;
     assert_eq!(agreement.agreement_id, agreement_id.into_client());
-    assert_eq!(
-        agreement.demand.requestor_id.unwrap(),
-        req_id.identity.to_string()
-    );
-    assert_eq!(
-        agreement.offer.provider_id.unwrap(),
-        prov_id.identity.to_string()
-    );
+    assert_eq!(agreement.demand.requestor_id, req_id.identity);
+    assert_eq!(agreement.offer.provider_id, prov_id.identity);
     Ok(())
 }
 
@@ -785,7 +773,6 @@ async fn cant_promote_requestor_proposal() -> Result<()> {
         .await?;
 
     let NegotiationHelper {
-        proposal,
         proposal_id,
         demand_id,
         ..
@@ -795,7 +782,7 @@ async fn cant_promote_requestor_proposal() -> Result<()> {
     let req_engine = &req_market.requestor_engine;
     let req_id = network.get_default_id(REQ_NAME);
 
-    let our_proposal = proposal.counter_demand(sample_demand())?;
+    let our_proposal = sample_demand();
     let our_proposal_id = req_market
         .requestor_engine
         .counter_proposal(&demand_id, &proposal_id, &our_proposal, &req_id)
@@ -873,7 +860,6 @@ async fn cant_promote_not_last_proposal() -> Result<()> {
         .await?;
 
     let NegotiationHelper {
-        proposal,
         proposal_id,
         demand_id,
         ..
@@ -883,7 +869,7 @@ async fn cant_promote_not_last_proposal() -> Result<()> {
     let req_engine = &req_market.requestor_engine;
     let req_id = network.get_default_id(REQ_NAME);
 
-    let our_proposal = proposal.counter_demand(sample_demand())?;
+    let our_proposal = sample_demand();
     req_market
         .requestor_engine
         .counter_proposal(&demand_id, &proposal_id, &our_proposal, &req_id)
