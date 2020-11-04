@@ -38,3 +38,11 @@ impl MetricsService {
 pub async fn expose_metrics(metrics: web::Data<Arc<Mutex<Metrics>>>) -> impl Responder {
     metrics.lock().await.export()
 }
+
+pub async fn push(push_url: String) {
+    let current_metrics = METRICS.clone().lock().await.export();
+    let client = reqwest::Client::new();
+    let res = client.put(push_url.as_str())
+        .body(current_metrics).send().await;
+    log::trace!("Pushed current metrics {:#?}", res);
+}
