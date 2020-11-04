@@ -5,8 +5,8 @@ use chrono::Utc;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 
-use ya_client::model::market::Agreement;
-use ya_client::model::{market::Demand, market::Offer, market::Proposal, ErrorMessage};
+use ya_client::model::market::{Agreement, Demand, DemandOfferBase, Offer, Proposal};
+use ya_client::model::ErrorMessage;
 use ya_market::testing::{
     client::{sample_demand, sample_offer},
     mock_node::{wait_for_bcast, MarketServiceExt},
@@ -33,9 +33,9 @@ async fn test_rest_get_offers() -> Result<(), anyhow::Error> {
     let identity_local = network.get_default_id("Node-1");
     let identity_remote = network.get_default_id("Node-2");
 
-    let offer_local = Offer::new(json!({}), "()".to_string());
-    let offer_local_unsubscribed = Offer::new(json!({}), "()".to_string());
-    let offer_remote = Offer::new(json!({}), "()".to_string());
+    let offer_local = DemandOfferBase::new(json!({}), "()".to_string());
+    let offer_local_unsubscribed = DemandOfferBase::new(json!({}), "()".to_string());
+    let offer_remote = DemandOfferBase::new(json!({}), "()".to_string());
     let subscription_id_local = market_local
         .subscribe_offer(&offer_local, &identity_local)
         .await?;
@@ -77,7 +77,7 @@ async fn test_rest_get_demands() -> Result<(), anyhow::Error> {
 
     let market_local = network.get_market("Node-1");
     let identity_local = network.get_default_id("Node-1");
-    let demand_local = Demand::new(json!({}), "()".to_string());
+    let demand_local = DemandOfferBase::new(json!({}), "()".to_string());
     let subscription_id = market_local
         .subscribe_demand(&demand_local, &identity_local)
         .await?;
@@ -140,7 +140,7 @@ async fn test_rest_subscribe_unsubscribe_offer() -> anyhow::Result<()> {
         .await?;
     let mut app = network.get_rest_app("Node-1").await;
 
-    let mut client_offer = sample_offer();
+    let client_offer = sample_offer();
 
     let req = test::TestRequest::post()
         .uri("/market-api/v1/offers")
@@ -157,14 +157,18 @@ async fn test_rest_subscribe_unsubscribe_offer() -> anyhow::Result<()> {
 
     // given
     let id = network.get_default_id("Node-1");
-    client_offer.offer_id = Some(subscription_id.to_string());
-    client_offer.provider_id = Some(id.identity.to_string());
-    client_offer.properties = flatten_json(&client_offer.properties).unwrap();
     let market = network.get_market("Node-1");
     // when get from subscription store
-    let offer = market.get_offer(&subscription_id).await.unwrap();
+    let stored_offer = market.get_offer(&subscription_id).await.unwrap();
     // then
-    assert_eq!(offer.into_client_offer(), Ok(client_offer));
+    let got_offer = stored_offer.into_client_offer().unwrap();
+    assert_eq!(got_offer.offer_id, subscription_id.to_string());
+    assert_eq!(got_offer.provider_id, id.identity);
+    assert_eq!(&got_offer.constraints, &client_offer.constraints);
+    assert_eq!(
+        got_offer.properties,
+        flatten_json(&client_offer.properties).unwrap()
+    );
 
     // given
     let req = test::TestRequest::delete()
@@ -205,7 +209,7 @@ async fn test_rest_subscribe_unsubscribe_demand() -> anyhow::Result<()> {
         .await?;
     let mut app = network.get_rest_app("Node-1").await;
 
-    let mut client_demand = sample_demand();
+    let client_demand = sample_demand();
 
     let req = test::TestRequest::post()
         .uri("/market-api/v1/demands")
@@ -222,14 +226,18 @@ async fn test_rest_subscribe_unsubscribe_demand() -> anyhow::Result<()> {
 
     // given
     let id = network.get_default_id("Node-1");
-    client_demand.demand_id = Some(subscription_id.to_string());
-    client_demand.requestor_id = Some(id.identity.to_string());
-    client_demand.properties = flatten_json(&client_demand.properties).unwrap();
     let market = network.get_market("Node-1");
     // when
-    let demand = market.get_demand(&subscription_id).await.unwrap();
+    let stored_demand = market.get_demand(&subscription_id).await.unwrap();
     // then
-    assert_eq!(demand.into_client_demand(), Ok(client_demand));
+    let got_demand = stored_demand.into_client_demand().unwrap();
+    assert_eq!(got_demand.demand_id, subscription_id.to_string());
+    assert_eq!(got_demand.requestor_id, id.identity);
+    assert_eq!(&got_demand.constraints, &client_demand.constraints);
+    assert_eq!(
+        got_demand.properties,
+        flatten_json(&client_demand.properties).unwrap()
+    );
 
     // given
     let req = test::TestRequest::delete()
@@ -279,7 +287,7 @@ async fn test_rest_get_proposal() -> anyhow::Result<()> {
     // Not really remote, but in this scenario will treat it as remote
     let identity_local = network.get_default_id("Provider");
     let offers = prov_mkt.get_offers(Some(identity_local)).await?;
-    let subscription_id = offers.first().unwrap().offer_id()?;
+    let subscription_id = &offers.first().unwrap().offer_id;
     let proposal = prov_mkt
         .get_proposal(&proposal_id)
         .await
@@ -352,14 +360,8 @@ async fn test_rest_get_agreement() -> anyhow::Result<()> {
 
     let agreement: Agreement = read_response_json(resp).await;
     assert_eq!(agreement.agreement_id, agreement_id.into_client());
-    assert_eq!(
-        agreement.demand.requestor_id.unwrap(),
-        req_id.identity.to_string()
-    );
-    assert_eq!(
-        agreement.offer.provider_id.unwrap(),
-        prov_id.identity.to_string()
-    );
+    assert_eq!(agreement.demand.requestor_id, req_id.identity);
+    assert_eq!(agreement.offer.provider_id, prov_id.identity);
     Ok(())
 }
 

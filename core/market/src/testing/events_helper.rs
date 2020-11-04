@@ -91,6 +91,6 @@ pub trait ClientProposalHelper {
 
 impl ClientProposalHelper for Proposal {
     fn get_proposal_id(&self) -> anyhow::Result<ProposalId> {
-        Ok(ProposalId::from_str(self.proposal_id()?)?)
+        Ok(ProposalId::from_str(&self.proposal_id)?)
     }
 }

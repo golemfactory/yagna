@@ -210,7 +210,6 @@ mod public {
 
     use crate::error::processor::VerifyPaymentError;
     use ya_client_model::payment::*;
-    use ya_client_model::NodeId;
     use ya_core_model::payment::public::*;
     use ya_persistence::types::Role;
 
@@ -256,20 +255,13 @@ mod public {
             Ok(Some(agreement)) => agreement,
         };
 
-        let offeror_id = agreement.offer.provider_id.clone().unwrap(); // FIXME: provider_id shouldn't be an Option
+        let offeror_id = agreement.offer.provider_id.to_string();
         let issuer_id = debit_note.issuer_id.to_string();
         if sender_id != offeror_id || sender_id != issuer_id {
             return Err(SendError::BadRequest("Invalid sender node ID".to_owned()));
         }
 
-        // FIXME: requestor_id should be non-optional NodeId field
-        let node_id: NodeId = agreement
-            .demand
-            .requestor_id
-            .clone()
-            .unwrap()
-            .parse()
-            .unwrap();
+        let node_id = agreement.requestor_id().clone();
         match async move {
             db.as_dao::<AgreementDao>()
                 .create_if_not_exists(agreement, node_id, Role::Requestor)
@@ -401,20 +393,13 @@ mod public {
             }
         }
 
-        let offeror_id = agreement.offer.provider_id.clone().unwrap(); // FIXME: provider_id shouldn't be an Option
+        let offeror_id = agreement.offer.provider_id.to_string();
         let issuer_id = invoice.issuer_id.to_string();
         if sender_id != offeror_id || sender_id != issuer_id {
             return Err(SendError::BadRequest("Invalid sender node ID".to_owned()));
         }
 
-        // FIXME: requestor_id should be non-optional NodeId field
-        let node_id: NodeId = agreement
-            .demand
-            .requestor_id
-            .clone()
-            .unwrap()
-            .parse()
-            .unwrap();
+        let node_id = agreement.requestor_id().clone();
         match async move {
             db.as_dao::<AgreementDao>()
                 .create_if_not_exists(agreement, node_id, Role::Requestor)

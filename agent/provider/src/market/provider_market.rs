@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use ya_agreement_utils::{AgreementView, OfferDefinition};
 use ya_client::market::MarketProviderApi;
-use ya_client_model::market::{Agreement, Offer, Proposal, ProviderEvent};
+use ya_client_model::market::{Agreement, DemandOfferBase, Proposal, ProviderEvent};
 use ya_utils_actix::{
     actix_handler::ResultTypeGetter,
     actix_signal::{SignalSlot, Subscribe},
@@ -66,7 +66,7 @@ pub struct AgreementApproved {
 struct Subscription {
     id: String,
     preset: Preset,
-    offer: Offer,
+    offer: DemandOfferBase,
 }
 
 #[derive(Message)]
@@ -206,7 +206,7 @@ impl ProviderMarket {
 async fn subscribe(
     market: Addr<ProviderMarket>,
     api: Arc<MarketProviderApi>,
-    offer: Offer,
+    offer: DemandOfferBase,
     preset: Preset,
 ) -> Result<()> {
     let id = api.subscribe(&offer).await?;
@@ -280,32 +280,31 @@ async fn process_proposal(
     subscription: Subscription,
     demand: &Proposal,
 ) -> Result<()> {
-    let proposal_id = demand.proposal_id()?;
-    let subscription_id = subscription.id.clone();
-    let offer = subscription.offer.clone();
+    let proposal_id = &demand.proposal_id;
 
     log::info!(
         "Got proposal [{}] from Requestor [{}] for subscription [{}].",
         proposal_id,
-        demand.issuer_id()?,
+        demand.issuer_id,
         subscription.preset.name,
     );
 
     match market
-        .send(GotProposal::new(subscription, demand.clone()))
+        .send(GotProposal::new(subscription.clone(), demand.clone()))
         .await?
     {
         Ok(action) => match action {
             ProposalResponse::CounterProposal { offer } => {
-                api.counter_proposal(&offer, &subscription_id).await?;
+                api.counter_proposal(&offer, &subscription.id, proposal_id)
+                    .await?;
             }
             ProposalResponse::AcceptProposal => {
-                let offer = demand.counter_offer(offer)?;
-                api.counter_proposal(&offer, &subscription_id).await?;
+                api.counter_proposal(&subscription.offer, &subscription.id, proposal_id)
+                    .await?;
             }
             ProposalResponse::IgnoreProposal => log::info!("Ignoring proposal {:?}", proposal_id),
             ProposalResponse::RejectProposal => {
-                api.reject_proposal(&subscription_id, proposal_id).await?;
+                api.reject_proposal(&subscription.id, proposal_id).await?;
             }
         },
         Err(error) => log::error!(
@@ -326,10 +325,7 @@ async fn process_agreement(
     log::info!(
         "Got agreement [{}] from Requestor [{}] for subscription [{}].",
         agreement.agreement_id,
-        agreement
-            .demand
-            .requestor_id()
-            .unwrap_or(&"None".to_string()),
+        agreement.demand.requestor_id,
         subscription.preset.name,
     );
 
@@ -345,7 +341,7 @@ async fn process_agreement(
                 // TODO: We should retry approval, but only a few times, than we should
                 //       give up since it's better to take another agreement.
                 let result = api
-                    .approve_agreement(&agreement.agreement_id, Some(10.0))
+                    .approve_agreement(&agreement.agreement_id, None, Some(10.0))
                     .await;
 
                 if let Err(error) = result {
