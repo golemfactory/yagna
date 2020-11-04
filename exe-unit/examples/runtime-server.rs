@@ -1,6 +1,8 @@
 use actix::Arbiter;
 use anyhow::Result;
 use futures::{SinkExt, StreamExt};
+use rand::distributions::Alphanumeric;
+use rand::Rng;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::time::Duration;
@@ -8,9 +10,10 @@ use structopt::StructOpt;
 use tokio::io::AsyncWriteExt;
 use tokio::time::delay_for;
 use tokio_util::codec::{FramedRead, FramedWrite};
-use ya_runtime_api::deploy::{DeployResult, StartMode};
+use ya_runtime_api::deploy::{ContainerVolume, DeployResult, StartMode};
 use ya_runtime_api::server::proto::{request, response, Request, Response};
 use ya_runtime_api::server::{Codec, ErrorResponse};
+use ya_utils_path::normalize_path;
 
 // Running this example:
 //
@@ -38,18 +41,45 @@ enum Commands {
 #[structopt(rename_all = "kebab-case")]
 struct CmdArgs {
     #[structopt(short, long)]
-    workdir: Option<PathBuf>,
+    workdir: PathBuf,
     #[structopt(short, long)]
     task_package: Option<PathBuf>,
     #[structopt(subcommand)]
     command: Commands,
 }
 
-async fn deploy() -> Result<()> {
-    delay_for(Duration::from_secs(1)).await;
+fn rand_name() -> String {
+    rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(30)
+        .collect()
+}
+
+async fn deploy(cmdargs: &CmdArgs) -> Result<()> {
+    let vols = vec![
+        ContainerVolume {
+            name: format!("vol-{}", rand_name()),
+            path: "/golem/output".to_string(),
+        },
+        ContainerVolume {
+            name: format!("vol-{}", rand_name()),
+            path: "/golem/resource".to_string(),
+        },
+        ContainerVolume {
+            name: format!("vol-{}", rand_name()),
+            path: "/golem/work".to_string(),
+        },
+    ];
+
+    let workdir = normalize_path(&cmdargs.workdir)?;
+    tokio::fs::create_dir_all(&workdir).await?;
+    for vol in vols.iter() {
+        tokio::fs::create_dir_all(workdir.join(&vol.name)).await?;
+    }
+
     let res = DeployResult {
         valid: Ok(Default::default()),
-        vols: Default::default(),
+        vols,
         start_mode: StartMode::Blocking,
     };
 
@@ -151,8 +181,8 @@ async fn write(res: Response) {
 #[actix_rt::main]
 async fn main() -> Result<()> {
     let cmdargs = CmdArgs::from_args();
-    match cmdargs.command {
-        Commands::Deploy { .. } => deploy().await?,
+    match &cmdargs.command {
+        Commands::Deploy { .. } => deploy(&cmdargs).await?,
         Commands::Start { .. } => start().await?,
     }
 

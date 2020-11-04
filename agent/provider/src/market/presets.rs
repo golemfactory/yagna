@@ -68,6 +68,12 @@ pub struct Preset {
     pub usage_coeffs: HashMap<Coefficient, f64>,
 }
 
+impl Preset {
+    pub fn get_initial_price(&self) -> Option<f64> {
+        self.usage_coeffs.get(&Coefficient::Initial).cloned()
+    }
+}
+
 /// Responsible for presets management.
 pub struct PresetManager {
     pub(crate) state: Arc<Mutex<Presets>>,

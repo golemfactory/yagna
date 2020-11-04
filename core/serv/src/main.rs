@@ -11,21 +11,14 @@ use std::{
 };
 use structopt::{clap, StructOpt};
 use url::Url;
-
-#[cfg(all(feature = "market-forwarding", feature = "market-decentralized"))]
-compile_error!("To use `market-decentralized` pls do `--no-default-features`.");
-#[cfg(all(feature = "market-decentralized", not(feature = "market-forwarding")))]
-use ya_market_decentralized::MarketService;
-#[cfg(feature = "market-forwarding")]
-use ya_market_forwarding::MarketService;
-#[cfg(not(any(feature = "market-forwarding", feature = "market-decentralized")))]
-compile_error!("Either feature \"market-forwarding\" or \"market-decentralized\" must be enabled.");
-
 use ya_activity::service::Activity as ActivityService;
 use ya_identity::service::Identity as IdentityService;
+use ya_market::MarketService;
 use ya_metrics::MetricsService;
 use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
+use ya_sgx::SgxService;
+
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
@@ -196,6 +189,8 @@ enum Services {
     Activity(ActivityService),
     #[enable(gsb, rest, cli)]
     Payment(PaymentService),
+    #[enable(gsb)]
+    SgxDriver(SgxService),
 }
 
 #[allow(unused)]
@@ -385,7 +380,13 @@ async fn main() -> Result<()> {
             args.log_level()
         )),
     );
-    env_logger::init();
+    env_logger::builder()
+        .filter_module("actix_http::response", log::LevelFilter::Off)
+        .filter_module("tokio_core", log::LevelFilter::Info)
+        .filter_module("tokio_reactor", log::LevelFilter::Info)
+        .filter_module("hyper", log::LevelFilter::Info)
+        .filter_module("web3", log::LevelFilter::Info)
+        .init();
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
 

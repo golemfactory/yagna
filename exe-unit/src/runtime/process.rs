@@ -1,19 +1,16 @@
 use crate::error::Error;
-use crate::message::{
-    RuntimeCommand, RuntimeCommandResult, SetRuntimeMode, SetTaskPackagePath, Shutdown,
-};
-#[cfg(feature = "sgx")]
+use crate::message::{ExecuteCommand, SetRuntimeMode, SetTaskPackagePath, Shutdown};
+use crate::output::{forward_output, vec_to_string};
 use crate::process::kill;
-#[cfg(not(feature = "sgx"))]
 use crate::process::ProcessTree;
 use crate::process::SystemError;
 use crate::runtime::event::EventMonitor;
 use crate::runtime::{Runtime, RuntimeArgs, RuntimeMode};
 use crate::ExeUnitContext;
 use actix::prelude::*;
-use futures::future::LocalBoxFuture;
+use futures::future::{self, LocalBoxFuture};
 use futures::prelude::*;
-use futures::FutureExt;
+use futures::{FutureExt, SinkExt, TryFutureExt};
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::hash::{Hash, Hasher};
@@ -21,7 +18,8 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 use tokio::process::Command;
-use ya_client_model::activity::{CommandResult, ExeScriptCommand};
+use ya_agreement_utils::agreement::OfferTemplate;
+use ya_client_model::activity::{CommandOutput, ExeScriptCommand, RuntimeEvent};
 use ya_runtime_api::server::{spawn, ProcessControl, RunProcess, RuntimeService};
 
 const PROCESS_KILL_TIMEOUT_SECONDS_ENV_VAR: &str = "PROCESS_KILL_TIMEOUT_SECONDS";
@@ -46,30 +44,395 @@ pub struct RuntimeProcess {
     monitor: Option<EventMonitor>,
 }
 
+impl RuntimeProcess {
+    pub fn new(ctx: &ExeUnitContext, binary: PathBuf) -> Self {
+        Self {
+            binary,
+            runtime_args: ctx.runtime_args.clone(),
+            task_package_path: None,
+            mode: RuntimeMode::default(),
+            children: HashSet::new(),
+            service: None,
+            monitor: None,
+        }
+    }
+
+    pub fn offer_template(binary: PathBuf) -> Result<OfferTemplate, Error> {
+        let current_path = std::env::current_dir();
+        let args = vec![OsString::from("offer-template")];
+
+        log::info!(
+            "Executing {:?} with {:?} from path {:?}",
+            binary,
+            args,
+            current_path
+        );
+
+        let child = std::process::Command::new(binary.clone())
+            .args(args)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()?;
+
+        let result = child.wait_with_output()?;
+        match result.status.success() {
+            true => {
+                let stdout = vec_to_string(result.stdout).unwrap_or_else(String::new);
+                Ok(serde_json::from_str(&stdout)?)
+            }
+            false => {
+                log::warn!(
+                    "Cannot read offer template from runtime; using defaults [{}]",
+                    binary.display()
+                );
+                Ok(OfferTemplate::default())
+            }
+        }
+    }
+
+    fn args(&self, cmd_args: Vec<OsString>) -> Result<Vec<OsString>, Error> {
+        let pkg_path = self
+            .task_package_path
+            .clone()
+            .ok_or(Error::runtime("missing task package path"))?;
+
+        let mut args = self.runtime_args.to_command_line(&pkg_path);
+        args.extend(cmd_args);
+        Ok(args)
+    }
+}
+
+impl RuntimeProcess {
+    fn handle_process_command<'f>(
+        &self,
+        cmd: ExecuteCommand,
+        address: Addr<Self>,
+    ) -> LocalBoxFuture<'f, Result<i32, Error>> {
+        let idx = cmd.idx;
+        let evt_tx = cmd.tx.clone();
+
+        let cmd_args = match cmd.command {
+            ExeScriptCommand::Deploy {} => {
+                let cmd_args = vec![OsString::from("deploy")];
+                cmd_args
+            }
+            ExeScriptCommand::Start { args } => {
+                let mut cmd_args = vec![OsString::from("start"), OsString::from("--")];
+                cmd_args.extend(args.into_iter().map(OsString::from));
+                cmd_args
+            }
+            ExeScriptCommand::Run {
+                entry_point, args, ..
+            } => {
+                let mut cmd_args = vec![
+                    OsString::from("run"),
+                    OsString::from("--entrypoint"),
+                    OsString::from(entry_point),
+                    OsString::from("--"),
+                ];
+                cmd_args.extend(args.into_iter().map(OsString::from));
+                cmd_args
+            }
+            _ => return future::ok(0).boxed_local(),
+        };
+        let binary = self.binary.clone();
+        let args = self.args(cmd_args);
+
+        log::info!(
+            "Executing {:?} with {:?} from path {:?}",
+            binary,
+            args,
+            std::env::current_dir()
+        );
+
+        let batch_id = cmd.batch_id.clone();
+        async move {
+            let mut child = Command::new(binary)
+                .kill_on_drop(true)
+                .args(args?)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()?;
+
+            let id = batch_id.clone();
+            forward_output(child.stdout.take().unwrap(), &evt_tx, move |out| {
+                RuntimeEvent::stdout(id.clone(), idx, CommandOutput::Bin(out))
+            });
+            let id = batch_id.clone();
+            forward_output(child.stderr.take().unwrap(), &evt_tx, move |out| {
+                RuntimeEvent::stderr(id.clone(), idx, CommandOutput::Bin(out))
+            });
+
+            let proc = if cfg!(feature = "sgx") {
+                ChildProcess::from(child.id())
+            } else {
+                let tree = ProcessTree::try_new(child.id()).map_err(Error::runtime)?;
+                ChildProcess::from(tree)
+            };
+
+            let _guard = ChildProcessGuard::new(proc, address.clone());
+            let result = child.await?;
+            Ok(result.code().unwrap_or(-1))
+        }
+        .boxed_local()
+    }
+
+    fn handle_service_command<'f>(
+        &mut self,
+        cmd: ExecuteCommand,
+        address: Addr<Self>,
+    ) -> LocalBoxFuture<'f, Result<i32, Error>> {
+        let binary = self.binary.clone();
+        match cmd.command {
+            ExeScriptCommand::Start { args } => {
+                let mut cmd_args = vec![OsString::from("start")];
+                cmd_args.extend(args.into_iter().map(OsString::from));
+                let args = match self.args(cmd_args) {
+                    Ok(args) => args,
+                    Err(error) => {
+                        let msg = format!("invalid START arguments: {:?}", error);
+                        return future::err(Error::runtime(msg)).boxed_local();
+                    }
+                };
+
+                log::info!("Executing {:?} with {:?}", binary, args);
+
+                let monitor = self.monitor.get_or_insert_with(Default::default).clone();
+                let mut command = Command::new(binary);
+                command.args(args);
+
+                async move {
+                    let service = spawn(command, monitor).map_err(Error::runtime).await?;
+                    service
+                        .hello(SERVICE_PROTOCOL_VERSION)
+                        .map_err(|e| Error::runtime(format!("service hello error: {:?}", e)))
+                        .await?;
+                    address
+                        .send(SetProcessService(ProcessService::new(service)))
+                        .await?;
+                    Ok(0)
+                }
+                .boxed_local()
+            }
+            ExeScriptCommand::Run {
+                entry_point,
+                mut args,
+                capture: _,
+            } => {
+                let service = match self.service.as_ref() {
+                    Some(svc) => svc.service.clone(),
+                    None => {
+                        return future::err(Error::runtime("START command not run")).boxed_local()
+                    }
+                };
+
+                log::info!("Executing {:?} with {} {:?}", binary, entry_point, args);
+
+                let mut monitor = self.monitor.get_or_insert_with(Default::default).clone();
+                let batch_id = cmd.batch_id.clone();
+                let idx = cmd.idx;
+                let mut tx = cmd.tx.clone();
+
+                async move {
+                    let name = Path::new(&entry_point)
+                        .file_name()
+                        .ok_or_else(|| Error::runtime("Invalid binary name"))?;
+                    args.insert(0, name.to_string_lossy().to_string());
+
+                    let mut run_process = RunProcess::default();
+                    run_process.bin = entry_point;
+                    run_process.args = args;
+
+                    let process = match service.run_process(run_process).await {
+                        Ok(result) => result,
+                        Err(error) => return Err(Error::RuntimeError(format!("{:?}", error))),
+                    };
+                    let mut events = match monitor.events(process.pid) {
+                        Some(events) => events,
+                        _ => return Err(Error::runtime("Process already monitored")),
+                    };
+
+                    while let Some(status) = events.rx.next().await {
+                        if !status.stdout.is_empty() {
+                            let batch_id = batch_id.clone();
+                            let evt = RuntimeEvent::stdout(
+                                batch_id,
+                                idx,
+                                CommandOutput::Bin(status.stdout),
+                            );
+                            let _ = tx.send(evt).await;
+                        }
+                        if !status.stderr.is_empty() {
+                            let batch_id = batch_id.clone();
+                            let evt = RuntimeEvent::stderr(
+                                batch_id,
+                                idx,
+                                CommandOutput::Bin(status.stderr),
+                            );
+                            let _ = tx.send(evt).await;
+                        }
+                        if !status.running {
+                            return Ok(status.return_code);
+                        }
+                    }
+                    Ok(0)
+                }
+                .boxed_local()
+            }
+            _ => future::ok(0).boxed_local(),
+        }
+    }
+}
+
+impl Runtime for RuntimeProcess {}
+
+impl Actor for RuntimeProcess {
+    type Context = Context<Self>;
+
+    fn started(&mut self, _: &mut Self::Context) {
+        log::info!("Runtime handler started");
+    }
+
+    fn stopped(&mut self, _: &mut Self::Context) {
+        log::info!("Runtime handler stopped");
+    }
+}
+
+impl Handler<ExecuteCommand> for RuntimeProcess {
+    type Result = ResponseFuture<<ExecuteCommand as Message>::Result>;
+
+    fn handle(&mut self, cmd: ExecuteCommand, ctx: &mut Self::Context) -> Self::Result {
+        let address = ctx.address();
+        match &cmd.command {
+            ExeScriptCommand::Deploy {} => self.handle_process_command(cmd, address),
+            _ => match &self.mode {
+                RuntimeMode::ProcessPerCommand => self.handle_process_command(cmd, address),
+                RuntimeMode::Service => self.handle_service_command(cmd, address),
+            },
+        }
+    }
+}
+
+impl Handler<SetTaskPackagePath> for RuntimeProcess {
+    type Result = <SetTaskPackagePath as Message>::Result;
+
+    fn handle(&mut self, msg: SetTaskPackagePath, _: &mut Self::Context) -> Self::Result {
+        self.task_package_path = Some(msg.0);
+    }
+}
+
+impl Handler<SetRuntimeMode> for RuntimeProcess {
+    type Result = <SetRuntimeMode as Message>::Result;
+
+    fn handle(&mut self, msg: SetRuntimeMode, _: &mut Self::Context) -> Self::Result {
+        log::info!("Setting runtime mode to: {:?}", msg.0);
+        self.mode = msg.0;
+        Ok(())
+    }
+}
+
+impl Handler<SetProcessService> for RuntimeProcess {
+    type Result = <SetProcessService as Message>::Result;
+
+    fn handle(&mut self, msg: SetProcessService, ctx: &mut Self::Context) -> Self::Result {
+        let add_child = AddChildProcess(ChildProcess::from(msg.0.clone()));
+        ctx.address().do_send(add_child);
+        self.service = Some(msg.0);
+    }
+}
+
+impl Handler<AddChildProcess> for RuntimeProcess {
+    type Result = <AddChildProcess as Message>::Result;
+
+    fn handle(&mut self, msg: AddChildProcess, _: &mut Self::Context) -> Self::Result {
+        self.children.insert(msg.0);
+    }
+}
+
+impl Handler<RemoveChildProcess> for RuntimeProcess {
+    type Result = <RemoveChildProcess as Message>::Result;
+
+    fn handle(&mut self, msg: RemoveChildProcess, _: &mut Self::Context) -> Self::Result {
+        self.children.remove(&msg.0);
+    }
+}
+
+impl Handler<Shutdown> for RuntimeProcess {
+    type Result = ResponseFuture<Result<(), Error>>;
+
+    fn handle(&mut self, _: Shutdown, _: &mut Self::Context) -> Self::Result {
+        let timeout = process_kill_timeout_seconds();
+        let service = self.service.take();
+        let mut children = std::mem::replace(&mut self.children, HashSet::new());
+
+        async move {
+            if let Some(svc) = service {
+                let _ = svc.service.shutdown().await;
+            }
+            let _ = future::join_all(children.drain().map(move |t| t.kill(timeout))).await;
+            Ok(())
+        }
+        .boxed_local()
+    }
+}
+
 #[derive(Clone, Hash, Eq, PartialEq)]
 enum ChildProcess {
-    #[cfg(feature = "sgx")]
-    Single {
-        pid: u32,
-    },
-    #[cfg(not(feature = "sgx"))]
+    Single { pid: u32 },
     Tree(ProcessTree),
     Service(ProcessService),
 }
 
 impl ChildProcess {
-    pub fn kill<'f>(self, timeout: i64) -> LocalBoxFuture<'f, Result<(), SystemError>> {
+    fn kill<'f>(self, timeout: i64) -> LocalBoxFuture<'f, Result<(), SystemError>> {
         match self {
             ChildProcess::Service(service) => async move {
                 service.control.kill();
                 Ok(())
             }
             .boxed_local(),
-            #[cfg(not(feature = "sgx"))]
             ChildProcess::Tree(tree) => tree.kill(timeout).boxed_local(),
-            #[cfg(feature = "sgx")]
             ChildProcess::Single { pid } => kill(pid as i32, timeout).boxed_local(),
         }
+    }
+}
+
+impl From<ProcessTree> for ChildProcess {
+    fn from(process: ProcessTree) -> Self {
+        ChildProcess::Tree(process)
+    }
+}
+
+impl From<ProcessService> for ChildProcess {
+    fn from(service: ProcessService) -> Self {
+        ChildProcess::Service(service)
+    }
+}
+
+impl From<u32> for ChildProcess {
+    fn from(pid: u32) -> Self {
+        ChildProcess::Single { pid }
+    }
+}
+
+struct ChildProcessGuard {
+    inner: ChildProcess,
+    addr: Addr<RuntimeProcess>,
+}
+
+impl ChildProcessGuard {
+    fn new(inner: ChildProcess, addr: Addr<RuntimeProcess>) -> Self {
+        addr.do_send(AddChildProcess(inner.clone()));
+        ChildProcessGuard {
+            inner,
+            addr: addr.clone(),
+        }
+    }
+}
+
+impl Drop for ChildProcessGuard {
+    fn drop(&mut self) {
+        self.addr.do_send(RemoveChildProcess(self.inner.clone()));
     }
 }
 
@@ -105,305 +468,6 @@ impl PartialEq for ProcessService {
 
 impl Eq for ProcessService {}
 
-impl RuntimeProcess {
-    pub fn new(ctx: &ExeUnitContext, binary: PathBuf) -> Self {
-        Self {
-            binary,
-            runtime_args: ctx.runtime_args.clone(),
-            task_package_path: None,
-            mode: RuntimeMode::default(),
-            children: HashSet::new(),
-            service: None,
-            monitor: None,
-        }
-    }
-
-    fn args(&self, cmd_args: Vec<OsString>) -> Result<Vec<OsString>, Error> {
-        let pkg_path = self
-            .task_package_path
-            .clone()
-            .ok_or(Error::RuntimeError("Missing task package path".to_owned()))?;
-
-        let mut args = self.runtime_args.to_command_line(&pkg_path);
-        args.extend(cmd_args);
-        Ok(args)
-    }
-}
-
-impl RuntimeProcess {
-    fn handle_process_command<'f>(
-        &self,
-        command: ExeScriptCommand,
-        address: Addr<Self>,
-    ) -> LocalBoxFuture<'f, Result<RuntimeCommandResult, Error>> {
-        let cmd_args = match command {
-            ExeScriptCommand::Deploy {} => {
-                let cmd_args = vec![OsString::from("deploy")];
-                cmd_args
-            }
-            ExeScriptCommand::Start { args } => {
-                let mut cmd_args = vec![OsString::from("start"), OsString::from("--")];
-                cmd_args.extend(args.into_iter().map(OsString::from));
-                cmd_args
-            }
-            ExeScriptCommand::Run { entry_point, args } => {
-                let mut cmd_args = vec![
-                    OsString::from("run"),
-                    OsString::from("--entrypoint"),
-                    OsString::from(entry_point),
-                    OsString::from("--"),
-                ];
-                cmd_args.extend(args.into_iter().map(OsString::from));
-                cmd_args
-            }
-            _ => return futures::future::ok(RuntimeCommandResult::ok()).boxed_local(),
-        };
-
-        let binary = self.binary.clone();
-        let args = self.args(cmd_args);
-        let current_path = std::env::current_dir();
-        log::info!(
-            "Executing {:?} with {:?} from path {:?}",
-            binary,
-            args,
-            current_path
-        );
-
-        async move {
-            let child = Command::new(binary)
-                .kill_on_drop(true)
-                .args(args?)
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()?;
-
-            #[cfg(not(feature = "sgx"))]
-            let result = {
-                let tree = ProcessTree::try_new(child.id())
-                    .map_err(|e| Error::RuntimeError(e.to_string()))?;
-                address.do_send(AddChildProcess::from(tree.clone()));
-                let result = child.wait_with_output().await;
-                address.do_send(RemoveChildProcess::from(tree));
-                result
-            };
-            #[cfg(feature = "sgx")]
-            let result = {
-                let single_child = child.id();
-                address.do_send(AddChildProcess::from(single_child));
-                let result = child.wait_with_output().await;
-                address.do_send(RemoveChildProcess::from(single_child));
-                result
-            };
-
-            let output = result?;
-
-            Ok(RuntimeCommandResult {
-                result: match output.status.success() {
-                    true => CommandResult::Ok,
-                    _ => CommandResult::Error,
-                },
-                stdout: vec_to_string(output.stdout),
-                stderr: vec_to_string(output.stderr),
-            })
-        }
-        .boxed_local()
-    }
-
-    fn handle_service_command<'f>(
-        &mut self,
-        command: ExeScriptCommand,
-        addr: Addr<Self>,
-    ) -> LocalBoxFuture<'f, Result<RuntimeCommandResult, Error>> {
-        let binary = self.binary.clone();
-        match command {
-            ExeScriptCommand::Start { args } => {
-                let monitor = self.monitor.get_or_insert_with(Default::default).clone();
-                let mut cmd_args = vec![OsString::from("start")];
-                cmd_args.extend(args.into_iter().map(OsString::from));
-                let args = self.args(cmd_args).unwrap_or_else(|_| Vec::new());
-
-                log::info!("Executing {:?} with {:?}", binary, args);
-
-                let mut command = Command::new(binary);
-                command.args(args);
-
-                async move {
-                    let service = spawn(command, monitor)
-                        .map_err(|e| Error::RuntimeError(e.to_string()))
-                        .await?;
-                    service
-                        .hello(SERVICE_PROTOCOL_VERSION)
-                        .map_err(|e| Error::RuntimeError(format!("{:?}", e)))
-                        .await?;
-                    addr.send(SetProcessService(ProcessService::new(service)))
-                        .await?;
-                    Ok(RuntimeCommandResult::ok())
-                }
-                .boxed_local()
-            }
-            ExeScriptCommand::Run {
-                entry_point,
-                mut args,
-            } => {
-                log::info!("Executing {:?} with {} {:?}", binary, entry_point, args);
-
-                let service = self.service.as_ref().unwrap().service.clone();
-                let mut monitor = self.monitor.as_ref().unwrap().clone();
-
-                async move {
-                    let name = Path::new(&entry_point)
-                        .file_name()
-                        .ok_or_else(|| Error::RuntimeError("Invalid binary name".into()))?;
-                    args.insert(0, name.to_string_lossy().to_string());
-
-                    let mut run_process = RunProcess::default();
-                    run_process.bin = entry_point;
-                    run_process.args = args;
-
-                    let process = match service.run_process(run_process).await {
-                        Ok(result) => result,
-                        Err(error) => return Err(Error::RuntimeError(format!("{:?}", error))),
-                    };
-                    let mut events = match monitor.events(process.pid) {
-                        Some(events) => events,
-                        _ => return Err(Error::RuntimeError("Process handled elsewhere".into())),
-                    };
-
-                    let mut stdout = Vec::<u8>::new();
-                    let mut stderr = Vec::<u8>::new();
-                    let result = loop {
-                        let status = match events.rx.next().await {
-                            Some(status) => status,
-                            _ => continue,
-                        };
-
-                        stdout.extend(status.stdout);
-                        stderr.extend(status.stderr);
-                        if status.running {
-                            continue;
-                        }
-
-                        break RuntimeCommandResult {
-                            result: match status.return_code {
-                                0 => CommandResult::Ok,
-                                _ => CommandResult::Error,
-                            },
-                            stdout: vec_to_string(stdout),
-                            stderr: vec_to_string(stderr),
-                        };
-                    };
-                    Ok(result)
-                }
-                .boxed_local()
-            }
-            _ => futures::future::ok(RuntimeCommandResult::ok()).boxed_local(),
-        }
-    }
-}
-
-impl Runtime for RuntimeProcess {}
-
-impl Actor for RuntimeProcess {
-    type Context = Context<Self>;
-
-    fn started(&mut self, _: &mut Self::Context) {
-        log::info!("Runtime handler started");
-    }
-
-    fn stopped(&mut self, _: &mut Self::Context) {
-        log::info!("Runtime handler stopped");
-    }
-}
-
-impl Handler<RuntimeCommand> for RuntimeProcess {
-    type Result = ResponseFuture<<RuntimeCommand as Message>::Result>;
-
-    fn handle(&mut self, msg: RuntimeCommand, ctx: &mut Self::Context) -> Self::Result {
-        let address = ctx.address();
-        match &msg.0 {
-            ExeScriptCommand::Deploy {} => self.handle_process_command(msg.0, address),
-            _ => match &self.mode {
-                RuntimeMode::ProcessPerCommand => self.handle_process_command(msg.0, address),
-                RuntimeMode::Service => self.handle_service_command(msg.0, address),
-            },
-        }
-    }
-}
-
-impl Handler<SetTaskPackagePath> for RuntimeProcess {
-    type Result = <SetTaskPackagePath as Message>::Result;
-
-    fn handle(&mut self, msg: SetTaskPackagePath, _: &mut Self::Context) -> Self::Result {
-        self.task_package_path = Some(msg.0);
-    }
-}
-
-impl Handler<SetRuntimeMode> for RuntimeProcess {
-    type Result = <SetRuntimeMode as Message>::Result;
-
-    fn handle(&mut self, msg: SetRuntimeMode, _: &mut Self::Context) -> Self::Result {
-        log::info!("Setting runtime mode to: {:?}", msg.0);
-        self.mode = msg.0;
-        Ok(())
-    }
-}
-
-impl Handler<SetProcessService> for RuntimeProcess {
-    type Result = <SetProcessService as Message>::Result;
-
-    fn handle(&mut self, msg: SetProcessService, ctx: &mut Self::Context) -> Self::Result {
-        ctx.address().do_send(AddChildProcess::from(msg.0.clone()));
-        self.service = Some(msg.0);
-    }
-}
-
-impl Handler<AddChildProcess> for RuntimeProcess {
-    type Result = <AddChildProcess as Message>::Result;
-
-    fn handle(&mut self, msg: AddChildProcess, _: &mut Self::Context) -> Self::Result {
-        self.children.insert(msg.0);
-    }
-}
-
-impl Handler<RemoveChildProcess> for RuntimeProcess {
-    type Result = <RemoveChildProcess as Message>::Result;
-
-    fn handle(&mut self, msg: RemoveChildProcess, _: &mut Self::Context) -> Self::Result {
-        self.children.remove(&msg.0);
-    }
-}
-
-impl Handler<Shutdown> for RuntimeProcess {
-    type Result = ResponseFuture<Result<(), Error>>;
-
-    fn handle(&mut self, _: Shutdown, _: &mut Self::Context) -> Self::Result {
-        let timeout = process_kill_timeout_seconds();
-        let futs = self.children.drain().map(move |t| t.kill(timeout));
-
-        self.mode = RuntimeMode::default();
-        self.service.take();
-
-        futures::future::join_all(futs)
-            .map(|_| Ok(()))
-            .boxed_local()
-    }
-}
-
-fn vec_to_string(vec: Vec<u8>) -> Option<String> {
-    if vec.is_empty() {
-        return None;
-    }
-    let string = match String::from_utf8(vec) {
-        Ok(utf8) => utf8.to_owned(),
-        Err(error) => error
-            .as_bytes()
-            .into_iter()
-            .map(|&c| c as char)
-            .collect::<String>(),
-    };
-    Some(string)
-}
-
 #[derive(Message)]
 #[rtype("()")]
 struct SetProcessService(ProcessService);
@@ -412,46 +476,6 @@ struct SetProcessService(ProcessService);
 #[rtype("()")]
 struct AddChildProcess(ChildProcess);
 
-#[cfg(not(feature = "sgx"))]
-impl From<ProcessTree> for AddChildProcess {
-    fn from(process: ProcessTree) -> Self {
-        AddChildProcess(ChildProcess::Tree(process))
-    }
-}
-
-impl From<ProcessService> for AddChildProcess {
-    fn from(service: ProcessService) -> Self {
-        AddChildProcess(ChildProcess::Service(service))
-    }
-}
-
-#[cfg(feature = "sgx")]
-impl From<u32> for AddChildProcess {
-    fn from(pid: u32) -> Self {
-        AddChildProcess(ChildProcess::Single { pid })
-    }
-}
-
 #[derive(Message)]
 #[rtype("()")]
 struct RemoveChildProcess(ChildProcess);
-
-#[cfg(not(feature = "sgx"))]
-impl From<ProcessTree> for RemoveChildProcess {
-    fn from(process: ProcessTree) -> Self {
-        RemoveChildProcess(ChildProcess::Tree(process))
-    }
-}
-
-impl From<ProcessService> for RemoveChildProcess {
-    fn from(service: ProcessService) -> Self {
-        RemoveChildProcess(ChildProcess::Service(service))
-    }
-}
-
-#[cfg(feature = "sgx")]
-impl From<u32> for RemoveChildProcess {
-    fn from(pid: u32) -> Self {
-        RemoveChildProcess(ChildProcess::Single { pid })
-    }
-}

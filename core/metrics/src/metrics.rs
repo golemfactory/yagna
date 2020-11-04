@@ -71,7 +71,9 @@ async fn try_get_default_id() -> anyhow::Result<String> {
 
 async fn get_push_url(host_url: &str, instance: &str) -> anyhow::Result<String> {
     let base = url::Url::parse(host_url)?;
-    let url = base.join("/metrics/job/community.1/instance/")?.join(instance)?;
+    let url = base
+        .join("/metrics/job/community.1/instance/")?
+        .join(instance)?;
     Ok(String::from(url.as_str()))
 }
 
@@ -80,11 +82,11 @@ async fn push_forever() {
         Ok(node_id) => node_id,
         Err(e) => {
             log::warn!("{}", e);
-            return
-        },
+            return;
+        }
     };
     let push_url = get_push_url(PUSH_HOST_URL, node_id.as_str()).await.unwrap();
-       
+
     let mut interval = time::interval(Duration::from_secs(5));
     loop {
         interval.tick().await;

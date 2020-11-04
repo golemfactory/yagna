@@ -5,7 +5,9 @@ use structopt::{clap, StructOpt};
 
 use crate::execution::{ExeUnitsRegistry, TaskRunnerConfig};
 use crate::hardware::{Resources, UpdateResources};
+use directories::UserDirs;
 use futures::channel::oneshot;
+
 use std::sync::mpsc;
 use std::time::Duration;
 use ya_client::cli::ApiOpts;
@@ -13,6 +15,8 @@ use ya_utils_path::data_dir::DataDir;
 
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
+
+    static ref DEFAULT_PLUGINS_DIR : PathBuf = default_plugins();
 }
 
 /// Common configuration for all Provider commands.
@@ -23,7 +27,8 @@ pub struct ProviderConfig {
         long,
         set = clap::ArgSettings::Global,
         env = "EXE_UNIT_PATH",
-        default_value = "/usr/lib/yagna/plugins/ya-runtime-*.json",
+        default_value_os = DEFAULT_PLUGINS_DIR.as_ref(),
+        required = false,
         hide_env_values = true,
     )]
     pub exe_unit_path: PathBuf,
@@ -302,4 +307,12 @@ where
         .find('=')
         .ok_or_else(|| format!("invalid KEY=value: no `=` found in `{}`", s))?;
     Ok((s[..pos].parse()?, s[pos + 1..].parse()?))
+}
+
+fn default_plugins() -> PathBuf {
+    UserDirs::new()
+        .map(|u| u.home_dir().join(".local/lib/yagna/plugins"))
+        .filter(|d| d.exists())
+        .map(|p| p.join("ya-runtime-*.json"))
+        .unwrap_or("/usr/lib/yagna/plugins/ya-runtime-*.json".into())
 }
