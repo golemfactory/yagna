@@ -33,17 +33,10 @@ impl ProviderBroker {
     pub fn new(
         db: DbExecutor,
         store: SubscriptionStore,
-        agreement_notifier: EventNotifier<AppSessionId>,
+        session_notifier: EventNotifier<AppSessionId>,
         config: Arc<Config>,
     ) -> Result<ProviderBroker, NegotiationInitError> {
-        let notifier = EventNotifier::new();
-        let broker = CommonBroker {
-            store,
-            db,
-            notifier,
-            agreement_notifier,
-            config,
-        };
+        let broker = CommonBroker::new(db.clone(), store, session_notifier, config);
 
         let broker1 = broker.clone();
         let broker2 = broker.clone();
@@ -97,7 +90,10 @@ impl ProviderBroker {
         &self,
         offer_id: &SubscriptionId,
     ) -> Result<(), NegotiationError> {
-        self.common.notifier.stop_notifying(offer_id).await;
+        self.common
+            .negotiation_notifier
+            .stop_notifying(offer_id)
+            .await;
         Ok(())
     }
 
@@ -362,7 +358,7 @@ async fn agreement_received(
         })?;
 
     // Send channel message to wake all query_events waiting for proposals.
-    broker.notifier.notify(&offer_id).await;
+    broker.negotiation_notifier.notify(&offer_id).await;
 
     counter!("market.agreements.provider.proposed", 1);
     log::info!(

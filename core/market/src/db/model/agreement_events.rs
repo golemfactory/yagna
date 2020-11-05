@@ -1,23 +1,24 @@
 use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::backend::Backend;
-use diesel::deserialize;
-use diesel::serialize::Output;
-use diesel::sql_types::Integer;
-use diesel::types::{FromSql, ToSql};
-use num_derive::FromPrimitive;
-use num_traits::FromPrimitive;
+use diesel::deserialize::{FromSql, Result as DeserializeResult};
+use diesel::serialize::{Output, Result as SerializeResult, ToSql};
+use diesel::sql_types::Text;
+use std::io::Write;
+use strum_macros::EnumString;
 
 use crate::db::model::AgreementId;
 use crate::db::schema::market_agreement_event;
 use crate::ya_client::model::market::event::AgreementEvent as ClientEvent;
 
-#[derive(FromPrimitive, AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy)]
-#[sql_type = "Integer"]
+#[derive(
+    EnumString, derive_more::Display, AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy,
+)]
+#[sql_type = "Text"]
 pub enum AgreementEventType {
-    AgreementApproved,
-    AgreementRejected,
-    AgreementCancelled,
-    AgreementTerminated,
+    Approved,
+    Rejected,
+    Cancelled,
+    Terminated,
 }
 
 #[derive(Clone, Debug, Queryable)]
@@ -44,21 +45,21 @@ impl AgreementEvent {
         let reason = self.reason;
 
         match self.event_type {
-            AgreementEventType::AgreementApproved => ClientEvent::AgreementApprovedEvent {
+            AgreementEventType::Approved => ClientEvent::AgreementApprovedEvent {
                 agreement_id,
                 event_date,
             },
-            AgreementEventType::AgreementCancelled => ClientEvent::AgreementCancelledEvent {
-                agreement_id,
-                event_date,
-                reason,
-            },
-            AgreementEventType::AgreementRejected => ClientEvent::AgreementRejectedEvent {
+            AgreementEventType::Cancelled => ClientEvent::AgreementCancelledEvent {
                 agreement_id,
                 event_date,
                 reason,
             },
-            AgreementEventType::AgreementTerminated => ClientEvent::AgreementTerminatedEvent {
+            AgreementEventType::Rejected => ClientEvent::AgreementRejectedEvent {
+                agreement_id,
+                event_date,
+                reason,
+            },
+            AgreementEventType::Terminated => ClientEvent::AgreementTerminatedEvent {
                 agreement_id,
                 event_date,
                 reason,
@@ -67,26 +68,22 @@ impl AgreementEvent {
     }
 }
 
-/// TODO: Find way to implement this trait for all enums at once.
-impl<DB: Backend> ToSql<Integer, DB> for AgreementEventType
+impl<DB> ToSql<Text, DB> for AgreementEventType
 where
-    i32: ToSql<Integer, DB>,
+    DB: Backend,
+    String: ToSql<Text, DB>,
 {
-    fn to_sql<W: std::io::Write>(&self, out: &mut Output<W, DB>) -> diesel::serialize::Result {
-        (*self as i32).to_sql(out)
+    fn to_sql<W: Write>(&self, out: &mut Output<W, DB>) -> SerializeResult {
+        self.to_string().to_sql(out)
     }
 }
 
-impl<DB> FromSql<Integer, DB> for AgreementEventType
+impl<DB> FromSql<Text, DB> for AgreementEventType
 where
-    i32: FromSql<Integer, DB>,
     DB: Backend,
+    String: FromSql<Text, DB>,
 {
-    fn from_sql(bytes: Option<&DB::RawValue>) -> deserialize::Result<Self> {
-        let enum_value = i32::from_sql(bytes)?;
-        Ok(FromPrimitive::from_i32(enum_value).ok_or(anyhow::anyhow!(
-            "Invalid conversion from {} (i32) to Agreement EventType.",
-            enum_value
-        ))?)
+    fn from_sql(bytes: Option<&DB::RawValue>) -> DeserializeResult<Self> {
+        Ok(String::from_sql(bytes)?.parse()?)
     }
 }

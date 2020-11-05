@@ -2,11 +2,11 @@ use chrono::NaiveDateTime;
 use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl, RunQueryDsl};
 
 use ya_client::model::NodeId;
-use ya_persistence::executor::readonly_transaction;
+use ya_persistence::executor::{do_with_transaction, readonly_transaction};
 use ya_persistence::executor::{AsDao, PoolType};
 
-use crate::db::model::AgreementEvent;
-use crate::db::model::AppSessionId;
+use crate::db::model::{AgreementEvent, AgreementEventType, AgreementId};
+use crate::db::model::{AppSessionId, NewAgreementEvent};
 use crate::db::schema::market_agreement::dsl as agreement;
 use crate::db::schema::market_agreement::dsl::market_agreement;
 use crate::db::schema::market_agreement_event::dsl as event;
@@ -24,6 +24,26 @@ impl<'c> AsDao<'c> for AgreementEventsDao<'c> {
 }
 
 impl<'c> AgreementEventsDao<'c> {
+    pub async fn new_event(
+        &self,
+        id: &AgreementId,
+        event_type: AgreementEventType,
+        reason: Option<String>,
+    ) -> DbResult<()> {
+        let event = NewAgreementEvent {
+            agreement_id: id.clone(),
+            reason,
+            event_type,
+        };
+        do_with_transaction(self.pool, move |conn| {
+            diesel::insert_into(market_agreement_event)
+                .values(&event)
+                .execute(conn)?;
+            Ok(())
+        })
+        .await
+    }
+
     pub async fn select(
         &self,
         node_id: &NodeId,

@@ -62,7 +62,7 @@ table! {
     market_agreement_event (id) {
         id -> Integer,
         agreement_id -> Text,
-        event_type -> Integer,
+        event_type -> Text,
         timestamp -> Timestamp,
         reason -> Nullable<Text>,
     }

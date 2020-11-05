@@ -6379,6 +6379,8 @@ dependencies = [
  "serial_test 0.5.0",
  "sha3 0.8.2",
  "structopt",
+ "strum",
+ "strum_macros",
  "thiserror",
  "tokio 0.2.22",
  "uuid 0.8.1",

@@ -17,7 +17,9 @@ use crate::ya_client::model::market::event::AgreementEvent as ClientAgreementEve
 
 use crate::config::Config;
 use crate::db::dao::{AgreementEventsDao, NegotiationEventsDao, ProposalDao, SaveProposalError};
-use crate::db::model::{AppSessionId, IssuerType, MarketEvent, OwnerType, Proposal};
+use crate::db::model::{
+    Agreement, AgreementId, AppSessionId, IssuerType, MarketEvent, OwnerType, Proposal,
+};
 use crate::db::model::{ProposalId, SubscriptionId};
 use crate::matcher::{
     error::{DemandError, QueryOfferError},
@@ -38,12 +40,29 @@ type IsFirst = bool;
 pub struct CommonBroker {
     pub(super) db: DbExecutor,
     pub(super) store: SubscriptionStore,
-    pub(super) notifier: EventNotifier<SubscriptionId>,
-    pub(super) agreement_notifier: EventNotifier<AppSessionId>,
+    pub(super) negotiation_notifier: EventNotifier<SubscriptionId>,
+    pub(super) session_notifier: EventNotifier<AppSessionId>,
+    pub(super) agreement_notifier: EventNotifier<AgreementId>,
     pub(super) config: Arc<Config>,
 }
 
 impl CommonBroker {
+    pub fn new(
+        db: DbExecutor,
+        store: SubscriptionStore,
+        session_notifier: EventNotifier<AppSessionId>,
+        config: Arc<Config>,
+    ) -> CommonBroker {
+        CommonBroker {
+            store,
+            db: db.clone(),
+            negotiation_notifier: EventNotifier::new(),
+            session_notifier,
+            agreement_notifier: EventNotifier::new(),
+            config,
+        }
+    }
+
     pub async fn counter_proposal(
         &self,
         subscription_id: &SubscriptionId,
@@ -116,7 +135,7 @@ impl CommonBroker {
             return Ok(vec![]);
         }
 
-        let mut notifier = self.notifier.listen(subscription_id);
+        let mut notifier = self.negotiation_notifier.listen(subscription_id);
         loop {
             let events = self
                 .db
@@ -165,7 +184,7 @@ impl CommonBroker {
             Err(AgreementEventsError::InvalidMaxEvents(max_events))?
         };
 
-        let mut agreement_notifier = self.agreement_notifier.listen(session_id);
+        let mut agreement_notifier = self.session_notifier.listen(session_id);
         loop {
             let events = self
                 .db
@@ -327,7 +346,7 @@ impl CommonBroker {
             })?;
 
         // Send channel message to wake all query_events waiting for proposals.
-        self.notifier.notify(&subscription_id).await;
+        self.negotiation_notifier.notify(&subscription_id).await;
 
         match owner {
             OwnerType::Requestor => counter!("market.proposals.requestor.received", 1),
@@ -365,6 +384,21 @@ impl CommonBroker {
             };
         }
         Ok(())
+    }
+
+    pub async fn notify_agreement(&self, agreement: &Agreement) {
+        let session_notifier = self.session_notifier.clone();
+
+        // Notify everyone waiting on Agreement events endpoint.
+        if let Some(_) = &agreement.session_id {
+            session_notifier.notify(&agreement.session_id.clone()).await;
+        }
+        // Even if session_id was not None, we want to notify everyone else,
+        // that waits without specifying session_id.
+        session_notifier.notify(&None).await;
+
+        // This notifies wait_for_agreement endpoint.
+        self.agreement_notifier.notify(&agreement.id).await;
     }
 }
 

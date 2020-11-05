@@ -21,6 +21,8 @@ use crate::protocol::negotiation::{error::*, messages::*, requestor::Negotiation
 
 use super::{common::*, error::*, notifier::NotifierError, EventNotifier};
 use crate::config::Config;
+use crate::db::dao::AgreementEventsDao;
+use crate::db::model::AgreementEventType;
 
 #[derive(Clone, derive_more::Display, Debug)]
 pub enum ApprovalStatus {
@@ -36,7 +38,6 @@ pub enum ApprovalStatus {
 pub struct RequestorBroker {
     pub(crate) common: CommonBroker,
     api: NegotiationApi,
-    agreement_notifier: EventNotifier<AgreementId>,
 }
 
 impl RequestorBroker {
@@ -44,22 +45,15 @@ impl RequestorBroker {
         db: DbExecutor,
         store: SubscriptionStore,
         proposal_receiver: UnboundedReceiver<RawProposal>,
-        agrmnt_events_notifier: EventNotifier<AppSessionId>,
+        session_notifier: EventNotifier<AppSessionId>,
         config: Arc<Config>,
     ) -> Result<RequestorBroker, NegotiationInitError> {
-        let agreement_notifier = EventNotifier::new();
-        let notifier = EventNotifier::new();
-        let broker = CommonBroker {
-            store,
-            db: db.clone(),
-            notifier: notifier.clone(),
-            agreement_notifier: agrmnt_events_notifier,
-            config,
-        };
+        let broker = CommonBroker::new(db.clone(), store, session_notifier, config);
 
         let broker1 = broker.clone();
         let broker2 = broker.clone();
-        let agreement_notifier2 = agreement_notifier.clone();
+        let notifier = broker.negotiation_notifier.clone();
+
         let api = NegotiationApi::new(
             move |caller: String, msg: ProposalReceived| {
                 broker1
@@ -68,7 +62,7 @@ impl RequestorBroker {
             },
             move |_caller: String, _msg: ProposalRejected| async move { unimplemented!() },
             move |caller: String, msg: AgreementApproved| {
-                on_agreement_approved(broker2.clone(), caller, msg, agreement_notifier2.clone())
+                on_agreement_approved(broker2.clone(), caller, msg)
             },
             move |_caller: String, _msg: AgreementRejected| async move { unimplemented!() },
         );
@@ -76,7 +70,6 @@ impl RequestorBroker {
         let engine = RequestorBroker {
             api,
             common: broker,
-            agreement_notifier,
         };
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
@@ -114,7 +107,10 @@ impl RequestorBroker {
         &self,
         demand_id: &SubscriptionId,
     ) -> Result<(), NegotiationError> {
-        self.common.notifier.stop_notifying(demand_id).await;
+        self.common
+            .negotiation_notifier
+            .stop_notifying(demand_id)
+            .await;
 
         // We can ignore error, if removing events failed, because they will be never
         // queried again and don't collide with other subscriptions.
@@ -299,7 +295,7 @@ impl RequestorBroker {
         // TODO: What to do with 2 simultaneous calls to wait_for_approval??
         //  should we reject one? And if so, how to discover, that two calls were made?
         let timeout = Duration::from_secs_f32(timeout.max(0.0));
-        let mut notifier = self.agreement_notifier.listen(id);
+        let mut notifier = self.common.agreement_notifier.listen(id);
 
         // Loop will wait for events notifications only one time. It doesn't have to be loop at all,
         // but it spares us doubled getting agreement and mapping statuses to return results.
@@ -404,7 +400,6 @@ async fn on_agreement_approved(
     broker: CommonBroker,
     caller: String,
     msg: AgreementApproved,
-    notifier: EventNotifier<AgreementId>,
 ) -> Result<(), ApproveAgreementError> {
     let caller: NodeId =
         caller
@@ -414,14 +409,13 @@ async fn on_agreement_approved(
                 caller,
                 id: msg.agreement_id.clone(),
             })?;
-    Ok(agreement_approved(broker, caller, msg, notifier).await?)
+    Ok(agreement_approved(broker, caller, msg).await?)
 }
 
 async fn agreement_approved(
     broker: CommonBroker,
     caller: NodeId,
     msg: AgreementApproved,
-    notifier: EventNotifier<AgreementId>,
 ) -> Result<(), RemoteAgreementError> {
     let agreement = broker
         .db
@@ -461,8 +455,17 @@ async fn agreement_approved(
             }
         })?;
 
-    notifier.notify(&msg.agreement_id).await;
+    broker
+        .db
+        .as_dao::<AgreementEventsDao>()
+        .new_event(&agreement.id, AgreementEventType::Approved, None)
+        .await
+        .map_err(|e| {
+            log::warn!("Internal error while adding Agreement event. Error: {}", e);
+            RemoteAgreementError::InternalError(msg.agreement_id.clone())
+        })?;
 
+    broker.notify_agreement(&agreement).await;
     log::info!(
         "Agreement [{}] approved by [{}].",
         &msg.agreement_id,
