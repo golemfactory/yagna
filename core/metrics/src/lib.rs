@@ -57,6 +57,8 @@ pub mod pusher {
         let base = url::Url::parse(host_url)?;
         let url = base
             .join("/metrics/job/community.1/instance/")?
+            .join(format!("{}/", instance).as_str())?
+            .join("hostname/")?
             .join(instance)?;
         Ok(String::from(url.as_str()))
     }
