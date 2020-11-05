@@ -14,7 +14,7 @@ use url::Url;
 use ya_activity::service::Activity as ActivityService;
 use ya_identity::service::Identity as IdentityService;
 use ya_market::MarketService;
-use ya_metrics::{pusher as metrics_pusher, MetricsService};
+use ya_metrics::MetricsService;
 use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
 use ya_sgx::SgxService;
@@ -231,7 +231,7 @@ fn start_metrics_pusher(metrics_ctx: &MetricsCtx) {
         log::info!("Metrics pusher disabled");
         return;
     }
-    metrics_pusher::spawn(metrics_ctx.push_host_url.clone().unwrap());
+    ya_metrics::spawn(metrics_ctx.push_host_url.clone().unwrap());
 }
 
 #[derive(StructOpt, Debug)]
