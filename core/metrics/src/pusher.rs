@@ -59,6 +59,17 @@ async fn push_forever(host_url: &str) {
     let mut interval = time::interval(Duration::from_secs(5));
     loop {
         interval.tick().await;
-        crate::service::push(push_url.clone()).await;
+        push(push_url.clone()).await;
     }
+}
+
+pub async fn push(push_url: String) {
+    let current_metrics = crate::service::expose_metrics().await;
+    let client = reqwest::Client::new();
+    let res = client
+        .put(push_url.as_str())
+        .body(current_metrics)
+        .send()
+        .await;
+    log::trace!("Pushed current metrics {:#?}", res);
 }

@@ -1,4 +1,3 @@
-use actix_web::{web, Responder, Scope};
 use futures::lock::Mutex;
 use lazy_static::lazy_static;
 use std::sync::Arc;
@@ -27,25 +26,12 @@ impl MetricsService {
     }
 
     pub fn rest<C: Provider<Self, ()>>(_ctx: &C) -> actix_web::Scope {
-        Scope::new("metrics-api/v1")
+        actix_web::Scope::new("metrics-api/v1")
             // TODO:: add wrapper injecting Bearer to avoid hack in auth middleware
-            .data(METRICS.clone())
-            .service(expose_metrics)
+            .route("/expose", actix_web::web::get().to(expose_metrics))
     }
 }
 
-#[actix_web::get("/expose")]
-pub async fn expose_metrics(metrics: web::Data<Arc<Mutex<Metrics>>>) -> impl Responder {
-    metrics.lock().await.export()
-}
-
-pub async fn push(push_url: String) {
-    let current_metrics = METRICS.clone().lock().await.export();
-    let client = reqwest::Client::new();
-    let res = client
-        .put(push_url.as_str())
-        .body(current_metrics)
-        .send()
-        .await;
-    log::trace!("Pushed current metrics {:#?}", res);
+pub async fn expose_metrics() -> String {
+    METRICS.lock().await.export()
 }
