@@ -1,8 +1,15 @@
+use actix_web::client::Client;
+use lazy_static::lazy_static;
 use std::time::Duration;
 use tokio::time;
 
 use ya_core_model::identity::{self, IdentityInfo};
 use ya_service_bus::typed as bus;
+
+lazy_static! {
+    static ref PUSH_INTERVAL: Duration = Duration::from_secs(5);
+    static ref CLIENT_TIMEOUT: Duration = Duration::from_secs(4);
+}
 
 pub fn spawn(host_url: url::Url) {
     log::debug!("Starting metrics pusher");
@@ -58,20 +65,19 @@ async fn push_forever(host_url: &str) {
     };
     let push_url = get_push_url(host_url, node_identity).await.unwrap();
 
-    let mut interval = time::interval(Duration::from_secs(5));
+    let mut interval = time::interval(*PUSH_INTERVAL);
+    let client = Client::build().timeout(*CLIENT_TIMEOUT).finish();
     loop {
         interval.tick().await;
-        push(push_url.clone()).await;
+        push(&client, push_url.clone()).await;
     }
 }
 
-pub async fn push(push_url: String) {
-    let current_metrics = crate::service::expose_metrics().await;
-    let client = reqwest::Client::new();
+pub async fn push(client: &Client, push_url: String) {
+    let current_metrics = crate::service::export_metrics().await;
     let res = client
         .put(push_url.as_str())
-        .body(current_metrics)
-        .send()
+        .send_body(current_metrics)
         .await;
     log::trace!("Pushed current metrics {:#?}", res);
 }

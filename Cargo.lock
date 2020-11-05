@@ -6440,7 +6440,6 @@ dependencies = [
  "metrics",
  "metrics-core",
  "metrics-runtime",
- "reqwest",
  "tokio 0.2.22",
  "url 2.1.1",
  "ya-core-model",

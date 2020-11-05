@@ -23,6 +23,5 @@ log = "0.4"
 metrics = "0.12"
 metrics-core = "0.5.2"
 metrics-runtime = "0.13.1"
-reqwest = "0.10.8"
 tokio = { version = "0.2", features = ["time", "sync"] }
 url = "2.1.1"

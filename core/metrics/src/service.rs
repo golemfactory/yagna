@@ -28,10 +28,10 @@ impl MetricsService {
     pub fn rest<C: Provider<Self, ()>>(_ctx: &C) -> actix_web::Scope {
         actix_web::Scope::new("metrics-api/v1")
             // TODO:: add wrapper injecting Bearer to avoid hack in auth middleware
-            .route("/expose", actix_web::web::get().to(expose_metrics))
+            .route("/expose", actix_web::web::get().to(export_metrics))
     }
 }
 
-pub async fn expose_metrics() -> String {
+pub async fn export_metrics() -> String {
     METRICS.lock().await.export()
 }
