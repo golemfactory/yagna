@@ -2003,21 +2003,6 @@ dependencies = [
 
 [[package]]
 name = "ethabi"
-version = "9.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "965126c64662832991f5a748893577630b558e47fa94e7f35aefcd20d737cef7"
-dependencies = [
- "error-chain",
- "ethereum-types 0.8.0",
- "rustc-hex",
- "serde",
- "serde_derive",
- "serde_json",
- "tiny-keccak 1.5.0",
-]
-
-[[package]]
-name = "ethabi"
 version = "12.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "052a565e3de82944527d6d10a465697e6bb92476b772ca7141080c901f6a63c6"
@@ -2038,19 +2023,6 @@ checksum = "3932e82d64d347a045208924002930dc105a138995ccdc1479d0f05f0359f17c"
 dependencies = [
  "crunchy",
  "fixed-hash 0.3.2",
- "impl-rlp",
- "impl-serde 0.2.3",
- "tiny-keccak 1.5.0",
-]
-
-[[package]]
-name = "ethbloom"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32cfe1c169414b709cf28aa30c74060bdb830a03a8ba473314d079ac79d80a5f"
-dependencies = [
- "crunchy",
- "fixed-hash 0.5.2",
  "impl-rlp",
  "impl-serde 0.2.3",
  "tiny-keccak 1.5.0",
@@ -2094,20 +2066,6 @@ dependencies = [
  "impl-serde 0.2.3",
  "primitive-types 0.3.0",
  "uint 0.7.1",
-]
-
-[[package]]
-name = "ethereum-types"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba744248e3553a393143d5ebb68939fc3a4ec0c22a269682535f5ffe7fed728c"
-dependencies = [
- "ethbloom 0.8.1",
- "fixed-hash 0.5.2",
- "impl-rlp",
- "impl-serde 0.2.3",
- "primitive-types 0.6.2",
- "uint 0.8.5",
 ]
 
 [[package]]
@@ -2248,18 +2206,6 @@ dependencies = [
  "rand 0.5.6",
  "rustc-hex",
  "static_assertions 0.2.5",
-]
-
-[[package]]
-name = "fixed-hash"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3367952ceb191f4ab95dd5685dc163ac539e36202f9fcfd0cb22f9f9c542fefc"
-dependencies = [
- "byteorder",
- "rand 0.7.3",
- "rustc-hex",
- "static_assertions 1.1.0",
 ]
 
 [[package]]
@@ -4363,19 +4309,6 @@ dependencies = [
  "impl-rlp",
  "impl-serde 0.2.3",
  "uint 0.7.1",
-]
-
-[[package]]
-name = "primitive-types"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4336f4f5d5524fa60bcbd6fe626f9223d8142a50e7053e979acdf0da41ab975"
-dependencies = [
- "fixed-hash 0.5.2",
- "impl-codec 0.4.2",
- "impl-rlp",
- "impl-serde 0.3.1",
- "uint 0.8.5",
 ]
 
 [[package]]
@@ -6910,35 +6843,6 @@ dependencies = [
 
 [[package]]
 name = "web3"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0631c83208cf420eeb2ed9b6cb2d5fc853aa76a43619ccec2a3d52d741f1261"
-dependencies = [
- "arrayvec 0.5.2",
- "base64 0.11.0",
- "derive_more 0.99.11",
- "ethabi 9.0.1",
- "ethereum-types 0.8.0",
- "futures 0.1.30",
- "hyper 0.12.35",
- "hyper-tls 0.3.2",
- "jsonrpc-core 14.2.0",
- "log 0.4.11",
- "native-tls",
- "parking_lot 0.10.2",
- "rustc-hex",
- "serde",
- "serde_json",
- "tokio-core",
- "tokio-io",
- "tokio-timer 0.1.2",
- "tokio-uds 0.1.7",
- "url 2.1.1",
- "websocket",
-]
-
-[[package]]
-name = "web3"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "50d03f64be59921dbc5791f05af61a87594bb454518fe4e97d827405422279a0"
@@ -7600,6 +7504,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-payment-driver"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bigdecimal",
+ "chrono",
+ "log 0.4.11",
+ "ya-client-model 0.2.0",
+ "ya-core-model 0.2.1",
+ "ya-service-bus",
+]
+
+[[package]]
 name = "ya-persistence"
 version = "0.2.0"
 dependencies = [
@@ -7984,10 +7901,8 @@ dependencies = [
  "tiny-keccak 1.5.0",
  "tokio 0.2.22",
  "uuid 0.8.1",
- "web3 0.10.0",
  "ya-client-model 0.2.0",
- "ya-core-model 0.2.1",
- "ya-service-bus",
+ "ya-payment-driver",
  "zksync",
  "zksync_eth_signer",
 ]

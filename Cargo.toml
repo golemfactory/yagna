@@ -106,6 +106,7 @@ members = [
     "core/model",
     "core/net",
     "core/payment",
+    "core/payment-driver/base",
     "core/payment-driver/dummy",
     "core/payment-driver/gnt",
     "core/payment-driver/zksync",
@@ -139,6 +140,7 @@ members = [
 [patch.crates-io]
 ## SERVICES
 ya-activity = { path = "core/activity" }
+ya-payment-driver = { path = "core/payment-driver/base" }
 ya-dummy-driver = { path = "core/payment-driver/dummy" }
 ya-gnt-driver = { path = "core/payment-driver/gnt" }
 ya-zksync-driver = { path = "core/payment-driver/zksync" }

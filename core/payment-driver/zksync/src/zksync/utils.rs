@@ -1,43 +1,21 @@
+/*
+    Zksync related utilities.
+*/
+
 // External uses
 use bigdecimal::BigDecimal;
-use futures3::{Future, FutureExt};
 use lazy_static::lazy_static;
 use num::bigint::ToBigInt;
 use num::pow::pow;
 use num::{BigInt, BigUint};
-use std::pin::Pin;
-use tokio::task;
 use zksync::utils::{closest_packable_token_amount, is_token_amount_packable};
-use zksync_eth_signer::error::SignerError;
 
 // Workspace uses
-use ya_client_model::NodeId;
-use ya_core_model::driver::GenericError;
-use ya_core_model::identity;
-use ya_service_bus::{typed as bus, RpcEndpoint};
+use ya_payment_driver::model::GenericError;
 
 lazy_static! {
     // TODO: Get token decimals from zksync-provider / wallet
-    static ref PRECISION: BigDecimal = BigDecimal::from(1_000_000_000_000_000_000u64);
-}
-
-pub fn sign_tx(
-    node_id: NodeId,
-    payload: Vec<u8>,
-) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, SignerError>> + Send>> {
-    let fut = task::spawn_local(async move {
-        let signature = bus::service(identity::BUS_ID)
-            .send(identity::Sign { node_id, payload })
-            .await
-            .map_err(|e| SignerError::SigningFailed(format!("{:?}", e)))?
-            .map_err(|e| SignerError::SigningFailed(format!("{:?}", e)))?;
-        Ok(signature)
-    });
-    let fut = fut.map(|res| match res {
-        Ok(res) => res,
-        Err(e) => Err(SignerError::SigningFailed(e.to_string())),
-    });
-    Box::pin(fut)
+    pub static ref PRECISION: BigDecimal = BigDecimal::from(1_000_000_000_000_000_000u64);
 }
 
 pub fn big_dec_to_big_uint(v: BigDecimal) -> Result<BigUint, GenericError> {
