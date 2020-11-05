@@ -1,6 +1,6 @@
 use actix_web::Scope;
 use chrono::{DateTime, Utc};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use ya_client_model::payment::PAYMENT_API_PATH;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::scope::ExtendableScope;
@@ -68,4 +68,21 @@ pub struct EventParams {
     pub timeout: f64,
     #[serde(rename = "laterThan")]
     pub later_than: Option<DateTime<Utc>>,
+}
+
+#[derive(Deserialize)]
+pub struct AllocationIds {
+    #[serde(
+        rename = "allocationIds",
+        deserialize_with = "deserialize_comma_separated"
+    )]
+    pub allocation_ids: Vec<String>,
+}
+
+fn deserialize_comma_separated<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: &str = Deserialize::deserialize(deserializer)?;
+    Ok(s.split(",").map(str::to_string).collect())
 }
