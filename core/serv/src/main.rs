@@ -141,7 +141,7 @@ impl TryFrom<&CliArgs> for CliCtx {
                 true
             },
             interactive: args.interactive,
-            metrics: MetricsCtx {
+            metrics_ctx: MetricsCtx {
                 push_enabled: !args.disable_metrics_push,
                 push_host_url: Some(args.metrics_push_url.clone()),
             },
@@ -151,6 +151,7 @@ impl TryFrom<&CliArgs> for CliCtx {
 
 #[derive(Clone)]
 struct ServiceContext {
+    ctx: CliCtx,
     dbs: HashMap<TypeId, DbExecutor>,
     default_db: DbExecutor,
 }
@@ -164,6 +165,12 @@ impl<S: 'static> Provider<S, DbExecutor> for ServiceContext {
     }
 }
 
+impl<S: 'static> Provider<S, CliCtx> for ServiceContext {
+    fn component(&self) -> CliCtx {
+        self.ctx.clone()
+    }
+}
+
 impl<S: 'static> Provider<S, ()> for ServiceContext {
     fn component(&self) -> () {
         ()
@@ -174,19 +181,28 @@ impl ServiceContext {
     fn make_entry<S: 'static>(path: &PathBuf, name: &str) -> Result<(TypeId, DbExecutor)> {
         Ok((TypeId::of::<S>(), DbExecutor::from_data_dir(path, name)?))
     }
+}
 
-    fn from_data_dir(path: &PathBuf, name: &str) -> Result<Self> {
-        let default_db = DbExecutor::from_data_dir(path, name)?;
+impl TryFrom<CliCtx> for ServiceContext {
+    type Error = anyhow::Error;
+
+    fn try_from(ctx: CliCtx) -> Result<Self, Self::Error> {
+        let default_name = clap::crate_name!();
+        let default_db = DbExecutor::from_data_dir(&ctx.data_dir, default_name)?;
         let dbs = [
-            Self::make_entry::<MarketService>(path, "market")?,
-            Self::make_entry::<ActivityService>(path, "activity")?,
-            Self::make_entry::<PaymentService>(path, "payment")?,
+            Self::make_entry::<MarketService>(&ctx.data_dir, "market")?,
+            Self::make_entry::<ActivityService>(&ctx.data_dir, "activity")?,
+            Self::make_entry::<PaymentService>(&ctx.data_dir, "payment")?,
         ]
         .iter()
         .cloned()
         .collect();
 
-        Ok(ServiceContext { default_db, dbs })
+        Ok(ServiceContext {
+            ctx,
+            dbs,
+            default_db,
+        })
     }
 }
 
@@ -224,14 +240,6 @@ async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<()> {
         PaymentDriverService::gsb(&db_executor).await?;
     }
     Ok(())
-}
-
-fn start_metrics_pusher(metrics_ctx: &MetricsCtx) {
-    if !metrics_ctx.push_enabled {
-        log::info!("Metrics pusher disabled");
-        return;
-    }
-    ya_metrics::spawn(metrics_ctx.push_host_url.clone().unwrap());
 }
 
 #[derive(StructOpt, Debug)]
@@ -313,14 +321,13 @@ impl ServiceCommand {
         }
         match self {
             Self::Run(ServiceCommandOpts { api_url }) => {
-                let name = clap::crate_name!();
-                log::info!("Starting {} service!", name);
+                log::info!("Starting {} service!", clap::crate_name!());
 
                 ya_sb_router::bind_gsb_router(ctx.gsb_url.clone())
                     .await
                     .context("binding service bus router")?;
 
-                let context = ServiceContext::from_data_dir(&ctx.data_dir, name)?;
+                let context: ServiceContext = ctx.clone().try_into()?;
                 Services::gsb(&context).await?;
                 start_payment_drivers(&ctx.data_dir).await?;
 
@@ -332,8 +339,6 @@ impl ServiceCommand {
                 payment_accounts::init_accounts(&ctx.data_dir)
                     .await
                     .unwrap_or_else(|e| log::error!("Initializing payment accounts failed: {}", e));
-
-                start_metrics_pusher(&ctx.metrics);
 
                 let api_host_port = rest_api_host_port(api_url.clone());
 
@@ -350,11 +355,8 @@ impl ServiceCommand {
 
                 future::try_join(server.run(), sd_notify(false, "READY=1")).await?;
 
-                log::info!("{} service finished!", name);
-                Ok(CommandOutput::object(format!(
-                    "\n{} daemon successfully finished.",
-                    name
-                ))?)
+                log::info!("{} daemon successfully finished!", clap::crate_name!());
+                Ok(CommandOutput::NoOutput)
             }
             _ => anyhow::bail!("command service {:?} is not implemented yet", self),
         }

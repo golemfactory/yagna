@@ -1,9 +1,8 @@
 mod exporter;
 mod metrics;
-mod pusher;
+pub(crate) mod pusher;
 mod service;
 
-pub use pusher::spawn;
 pub use service::MetricsService;
 
 pub mod utils {

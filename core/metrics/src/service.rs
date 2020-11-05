@@ -2,6 +2,7 @@ use futures::lock::Mutex;
 use lazy_static::lazy_static;
 use std::sync::Arc;
 
+use ya_service_api::CliCtx;
 use ya_service_api_interfaces::Provider;
 
 use crate::metrics::Metrics;
@@ -18,10 +19,11 @@ lazy_static! {
 // }
 
 impl MetricsService {
-    // currently just to produce log entry that service is activated
-    pub async fn gsb<C: Provider<Self, ()>>(_ctx: &C) -> anyhow::Result<()> {
+    pub async fn gsb<C: Provider<Self, CliCtx>>(context: &C) -> anyhow::Result<()> {
         // This should initialize Metrics. We need to do this before all other services will start.
         let _ = METRICS.clone();
+
+        crate::pusher::spawn(context.component().metrics_ctx);
         Ok(())
     }
 

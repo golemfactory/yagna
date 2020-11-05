@@ -6443,6 +6443,7 @@ dependencies = [
  "tokio 0.2.22",
  "url 2.1.1",
  "ya-core-model",
+ "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-bus",
 ]
