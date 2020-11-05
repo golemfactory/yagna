@@ -85,25 +85,24 @@ jobs:
           command: test
           args: --workspace
 
-      - name: cargo test bins with decentralized market
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --bins --workspace --features market-decentralized --no-default-features
+      - name: cargo test sgx
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: exe-unit
+        run: cargo test --features sgx
 
       - name: decentralized market test suite
         uses: actions-rs/cargo@v1
-        if: startsWith( github.head_ref, 'market-decentralized/' )
+        if: startsWith( github.head_ref, 'market/' )
         with:
           command: test
           # Due to cargo quirks it is more efficient to run all tests from workspace as:
           #   --tests --workspace
           # than just:
-          #   --tests -p ya-market-decentralized
+          #   --tests -p ya-market
           # because the latter needs separate compilation of lots of dependant crates again.
           #
           # we use single thread (via macro), because GSB Router is a singleton shared among tests
-          args: --tests --workspace --features ya-market-decentralized/market-test-suite --features market-decentralized --no-default-features
+          args: --tests --workspace --features ya-market/test-suite
 
       - name: cargo build
         uses: actions-rs/cargo@v1
@@ -113,7 +112,7 @@ jobs:
 
       - name: cargo build router
         uses: actions-rs/cargo@v1
-        if: matrix.os != 'Windows'
+        if: runner.os != 'Windows'
         with:
           command: build
           args: -p ya-sb-router --example ya_sb_router

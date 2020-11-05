@@ -6,6 +6,7 @@ use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use metrics::counter;
 use serde_json::value::Value::Null;
+use ya_agreement_utils::{ClauseOperator, ConstraintKey, Constraints};
 use ya_client_model::payment::*;
 use ya_core_model::payment::local::{GetAccounts, SchedulePayment, BUS_ID as LOCAL_SERVICE};
 use ya_core_model::payment::public::{
@@ -54,6 +55,7 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .route("/payments", get().to(get_payments))
         .route("/payments/{payment_id}", get().to(get_payment))
         .route("/accounts", get().to(get_accounts))
+        .route("/decorateDemand", get().to(decorate_demand))
 }
 
 // ************************** DEBIT NOTE **************************
@@ -488,4 +490,43 @@ async fn get_accounts(id: Identity) -> HttpResponse {
         })
         .collect();
     response::ok(recv_accounts)
+}
+
+// **************************** MARKET *****************************
+
+async fn decorate_demand(
+    db: Data<DbExecutor>,
+    path: Query<AllocationIds>,
+    id: Identity,
+) -> HttpResponse {
+    let allocation_ids = path.allocation_ids.clone();
+    let node_id = id.identity;
+    let dao: AllocationDao = db.as_dao();
+    let allocations = match dao.get_many(allocation_ids, node_id).await {
+        Ok(allocations) => allocations,
+        Err(e) => return response::server_error(&e),
+    };
+    if allocations.len() != path.allocation_ids.len() {
+        return response::not_found();
+    }
+
+    let properties: Vec<MarketProperty> = allocations
+        .into_iter()
+        .map(|allocation| MarketProperty {
+            key: format!(
+                "golem.com.payment.platform.{}.address",
+                allocation.payment_platform
+            ),
+            value: allocation.address,
+        })
+        .collect();
+    let constraints = properties
+        .iter()
+        .map(|property| ConstraintKey::new(property.key.as_str()).equal_to(ConstraintKey::new("*")))
+        .collect();
+    let constraints = vec![Constraints::new_clause(ClauseOperator::Or, constraints).to_string()];
+    response::ok(MarketDecoration {
+        properties,
+        constraints,
+    })
 }
