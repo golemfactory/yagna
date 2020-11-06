@@ -182,13 +182,10 @@ where
             }
         } else {
             match self.registered_endpoints.entry(msg.service_id.clone()) {
-                Entry::Occupied(_) => {
-                    log::warn!("Service '{}' already registered", msg.service_id);
-                    RegisterReply {
-                        code: RegisterReplyCode::RegisterConflict as i32,
-                        message: format!("Service ID '{}' already registered", msg.service_id),
-                    }
-                }
+                Entry::Occupied(_) => RegisterReply {
+                    code: RegisterReplyCode::RegisterConflict as i32,
+                    message: format!("Service ID '{}' already registered", msg.service_id),
+                },
                 Entry::Vacant(entry) => {
                     entry.insert(addr.clone());
                     self.reversed_endpoints
