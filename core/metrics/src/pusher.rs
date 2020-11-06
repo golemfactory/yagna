@@ -2,6 +2,7 @@ use actix_web::client::Client;
 use std::time::Duration;
 use tokio::time;
 
+use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use ya_core_model::identity::{self, IdentityInfo};
 use ya_service_api::MetricsCtx;
 use ya_service_bus::typed as bus;
@@ -23,11 +24,25 @@ pub async fn push_forever(host_url: &str) {
     let node_identity = match try_get_default_id().await {
         Ok(default_id) => default_id,
         Err(e) => {
-            log::warn!("Couldn't determine node_id. Giving up. Err({})", e);
+            log::warn!(
+                "Metrics pusher init failure: Couldn't determine node_id: {}",
+                e
+            );
             return;
         }
     };
-    let push_url = get_push_url(host_url, node_identity).await.unwrap();
+    let push_url = match get_push_url(host_url, &node_identity) {
+        Ok(url) => url,
+        Err(e) => {
+            log::warn!(
+                "Metrics pusher init failure: Parsing URL: {} with {:?}: {}",
+                host_url,
+                node_identity,
+                e
+            );
+            return;
+        }
+    };
 
     let mut push_interval = time::interval(Duration::from_secs(5));
     let client = Client::build().timeout(Duration::from_secs(4)).finish();
@@ -71,14 +86,53 @@ async fn try_get_default_id() -> anyhow::Result<IdentityInfo> {
     Err(last_error.unwrap_or(anyhow::anyhow!("Undefined error")))
 }
 
-async fn get_push_url(host_url: &str, id: IdentityInfo) -> anyhow::Result<String> {
+fn get_push_url(host_url: &str, id: &IdentityInfo) -> anyhow::Result<String> {
     let base = url::Url::parse(host_url)?;
     let url = base
         .join("/metrics/job/community.1/")?
-        .join(&format!("instance/{}/", id.node_id))?
+        .join(&format!("instance/{}/", &id.node_id))?
         .join(&format!(
             "hostname/{}",
-            id.alias.unwrap_or(id.node_id.to_string())
+            id.alias
+                .as_ref()
+                .map(|alias| utf8_percent_encode(alias, NON_ALPHANUMERIC).to_string())
+                .unwrap_or(id.node_id.to_string())
         ))?;
     Ok(String::from(url.as_str()))
+}
+
+#[cfg(test)]
+mod test {
+    use crate::pusher::get_push_url;
+    use ya_core_model::identity::IdentityInfo;
+
+    #[test]
+    fn test_get_push_url_with_slashes() {
+        let url = get_push_url(
+            "http://a",
+            &IdentityInfo {
+                alias: Some("ala/ma/kota".into()),
+                node_id: Default::default(),
+                is_locked: false,
+                is_default: false,
+            },
+        )
+        .unwrap();
+        assert_eq!("http://a/metrics/job/community.1/instance/0x0000000000000000000000000000000000000000/hostname/ala%2Fma%2Fkota", url);
+    }
+
+    #[test]
+    fn test_get_push_url_with_pletters() {
+        let url = get_push_url(
+            "http://a",
+            &IdentityInfo {
+                alias: Some("zażółć?gęślą!jaźń=".into()),
+                node_id: Default::default(),
+                is_locked: false,
+                is_default: false,
+            },
+        )
+        .unwrap();
+        assert_eq!("http://a/metrics/job/community.1/instance/0x0000000000000000000000000000000000000000/hostname/za%C5%BC%C3%B3%C5%82%C4%87%3Fg%C4%99%C5%9Bl%C4%85%21ja%C5%BA%C5%84%3D", url);
+    }
 }
