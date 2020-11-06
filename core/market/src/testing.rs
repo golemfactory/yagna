@@ -8,6 +8,7 @@ pub use super::db::model::*;
 pub use super::matcher::{error::*, *};
 pub use super::negotiation::{error::*, *};
 pub use super::protocol::*;
+pub use super::ya_client;
 
 pub mod backtrace_util;
 pub mod bcast;

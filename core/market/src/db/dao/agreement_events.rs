@@ -24,26 +24,6 @@ impl<'c> AsDao<'c> for AgreementEventsDao<'c> {
 }
 
 impl<'c> AgreementEventsDao<'c> {
-    pub async fn new_event(
-        &self,
-        id: &AgreementId,
-        event_type: AgreementEventType,
-        reason: Option<String>,
-    ) -> DbResult<()> {
-        let event = NewAgreementEvent {
-            agreement_id: id.clone(),
-            reason,
-            event_type,
-        };
-        do_with_transaction(self.pool, move |conn| {
-            diesel::insert_into(market_agreement_event)
-                .values(&event)
-                .execute(conn)?;
-            Ok(())
-        })
-        .await
-    }
-
     pub async fn select(
         &self,
         node_id: &NodeId,

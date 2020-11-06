@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use metrics::counter;
-use std::fmt;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -12,13 +11,11 @@ use ya_market_resolver::{match_demand_offer, Match};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
-// TODO: Use real ya-client, when we will move all structures there.
-use crate::ya_client::model::market::event::AgreementEvent as ClientAgreementEvent;
-
 use crate::config::Config;
 use crate::db::dao::{AgreementEventsDao, NegotiationEventsDao, ProposalDao, SaveProposalError};
 use crate::db::model::{
-    Agreement, AgreementId, AppSessionId, IssuerType, MarketEvent, OwnerType, Proposal,
+    Agreement, AgreementEvent, AgreementId, AppSessionId, IssuerType, MarketEvent, OwnerType,
+    Proposal,
 };
 use crate::db::model::{ProposalId, SubscriptionId};
 use crate::matcher::{
@@ -175,7 +172,7 @@ impl CommonBroker {
         max_events: Option<i32>,
         after_timestamp: DateTime<Utc>,
         id: &Identity,
-    ) -> Result<Vec<ClientAgreementEvent>, AgreementEventsError> {
+    ) -> Result<Vec<AgreementEvent>, AgreementEventsError> {
         let mut timeout = Duration::from_secs_f32(timeout.max(0.0));
         let stop_time = Instant::now() + timeout;
         let max_events = max_events.unwrap_or(self.config.events.max_agreement_events);
@@ -200,10 +197,7 @@ impl CommonBroker {
 
             if events.len() > 0 {
                 counter!("market.agreements.events.queried", events.len() as u64);
-                return Ok(events
-                    .into_iter()
-                    .map(|event| event.into_client())
-                    .collect());
+                return Ok(events);
             }
             // Solves panic 'supplied instant is later than self'.
             if stop_time < Instant::now() {
@@ -424,13 +418,5 @@ pub fn validate_match(
                 prev: prev_proposal.body.id.clone(),
             })
         }
-    }
-}
-
-pub struct DisplayIdentity<'a>(pub &'a Identity);
-
-impl<'a> fmt::Display for DisplayIdentity<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "'{}' [{}]", &self.0.name, &self.0.identity)
     }
 }

@@ -1,6 +1,8 @@
-use crate::db::model::{AgreementId, SubscriptionId};
 use itertools::Itertools;
 use std::fmt::{Error, Formatter};
+
+use crate::db::model::{AgreementId, SubscriptionId};
+use ya_service_api_web::middleware::Identity;
 
 /// Pretty display vector, as list with all elements in separate row.
 /// Implementation uses Display trait for all elements (not Debug) to make
@@ -27,6 +29,12 @@ impl<'a> std::fmt::Display for DisplayEnabler<'a, SubscriptionId> {
 impl<'a> std::fmt::Display for DisplayEnabler<'a, AgreementId> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         self.0.fmt(f)
+    }
+}
+
+impl<'a> std::fmt::Display for DisplayEnabler<'a, Identity> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "'{}' [{}]", &self.0.name, &self.0.identity)
     }
 }
 

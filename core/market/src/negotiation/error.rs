@@ -71,7 +71,7 @@ pub enum AgreementError {
     Get(AgreementId, DbError),
     #[error("Failed to update Agreement [{0}]. Error: {1}")]
     Update(AgreementId, DbError),
-    #[error("Invalid state {0}")]
+    #[error("Invalid state. {0}")]
     InvalidState(#[from] AgreementStateError),
     #[error("Invalid Agreement id. {0}")]
     InvalidId(#[from] ProposalIdParseError),

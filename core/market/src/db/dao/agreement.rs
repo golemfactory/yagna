@@ -6,8 +6,12 @@ use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
 
 use crate::db::dao::proposal::{has_counter_proposal, set_proposal_accepted};
 use crate::db::dao::sql_functions::datetime;
-use crate::db::model::{Agreement, AgreementId, AgreementState, OwnerType, ProposalId};
+use crate::db::model::{
+    Agreement, AgreementEventType, AgreementId, AgreementState, NewAgreementEvent, OwnerType,
+    ProposalId,
+};
 use crate::db::schema::market_agreement::dsl;
+use crate::db::schema::market_agreement_event::dsl::market_agreement_event;
 use crate::db::{DbError, DbResult};
 use crate::market::EnvConfig;
 
@@ -47,6 +51,8 @@ pub enum StateError {
     },
     #[error("Failed to update state. Error: {0}")]
     DbError(DbError),
+    #[error("Failed to add event. Error: {0}")]
+    EventError(DbError),
 }
 
 impl<'c> AgreementDao<'c> {
@@ -128,7 +134,19 @@ impl<'c> AgreementDao<'c> {
 
             diesel::update(dsl::market_agreement.filter(dsl::id.eq(&id)))
                 .set(dsl::state.eq(AgreementState::Approved))
-                .execute(conn)?;
+                .execute(conn)
+                .map_err(|e| StateError::DbError(e.into()))?;
+
+            let event = NewAgreementEvent {
+                agreement_id: id.clone(),
+                reason: None,
+                event_type: AgreementEventType::Approved,
+            };
+
+            diesel::insert_into(market_agreement_event)
+                .values(&event)
+                .execute(conn)
+                .map_err(|e| StateError::EventError(e.into()))?;
             Ok(())
         })
         .await

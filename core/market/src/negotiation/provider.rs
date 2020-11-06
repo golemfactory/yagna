@@ -17,10 +17,11 @@ use crate::db::{
 use crate::matcher::{error::QueryOfferError, store::SubscriptionStore};
 use crate::protocol::negotiation::{error::*, messages::*, provider::NegotiationApi};
 
-use super::common::{CommonBroker, DisplayIdentity};
+use super::common::CommonBroker;
 use super::error::*;
 use super::notifier::EventNotifier;
 use crate::config::Config;
+use crate::utils::display::EnableDisplay;
 
 /// Provider part of negotiation logic.
 #[derive(Clone)]
@@ -118,7 +119,7 @@ impl ProviderBroker {
         counter!("market.proposals.provider.countered", 1);
         log::info!(
             "Provider {} countered Proposal [{}] with [{}]",
-            DisplayIdentity(id),
+            id.display(),
             &prev_proposal_id,
             &proposal_id
         );
@@ -144,7 +145,7 @@ impl ProviderBroker {
         counter!("market.proposals.provider.rejected", 1);
         log::info!(
             "Provider {} rejected Proposal [{}]",
-            DisplayIdentity(id),
+            id.display(),
             &proposal_id,
         );
         Ok(())
@@ -207,7 +208,7 @@ impl ProviderBroker {
                 counter!("market.agreements.provider.approved", 1);
                 log::info!(
                     "Provider {} approved Agreement [{}].",
-                    DisplayIdentity(&id),
+                    id.display(),
                     &agreement_id,
                 );
                 return Ok(());

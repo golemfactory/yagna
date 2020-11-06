@@ -10,6 +10,9 @@ use ya_client::model::{node_id::ParseError, NodeId};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
+// TODO: Use real ya-client, when we will move all structures there.
+use crate::ya_client::model::market::event::AgreementEvent as ClientAgreementEvent;
+
 use crate::db::{
     dao::{AgreementDao, NegotiationEventsDao, ProposalDao, SaveAgreementError, StateError},
     model::{Agreement, AgreementId, AgreementState, AppSessionId},
@@ -21,8 +24,7 @@ use crate::protocol::negotiation::{error::*, messages::*, requestor::Negotiation
 
 use super::{common::*, error::*, notifier::NotifierError, EventNotifier};
 use crate::config::Config;
-use crate::db::dao::AgreementEventsDao;
-use crate::db::model::AgreementEventType;
+use crate::utils::display::EnableDisplay;
 
 #[derive(Clone, derive_more::Display, Debug)]
 pub enum ApprovalStatus {
@@ -156,7 +158,7 @@ impl RequestorBroker {
         counter!("market.proposals.requestor.countered", 1);
         log::info!(
             "Requestor {} countered Proposal [{}] with [{}]",
-            DisplayIdentity(id),
+            id.display(),
             &prev_proposal_id,
             &proposal_id
         );
@@ -182,7 +184,7 @@ impl RequestorBroker {
         counter!("market.proposals.requestor.rejected", 1);
         log::info!(
             "Requestor {} rejected Proposal [{}]",
-            DisplayIdentity(id),
+            id.display(),
             &proposal_id,
         );
         Ok(())
@@ -213,6 +215,23 @@ impl RequestorBroker {
 
         counter!("market.events.requestor.queried", events.len() as u64);
         Ok(events)
+    }
+
+    pub async fn query_agreement_events(
+        &self,
+        session_id: &AppSessionId,
+        timeout: f32,
+        max_events: Option<i32>,
+        after_timestamp: DateTime<Utc>,
+        id: &Identity,
+    ) -> Result<Vec<ClientAgreementEvent>, AgreementEventsError> {
+        Ok(self
+            .common
+            .query_agreement_events(session_id, timeout, max_events, after_timestamp, id)
+            .await?
+            .into_iter()
+            .map(|event| event.into_client())
+            .collect())
     }
 
     /// Initiates the Agreement handshake phase.
@@ -279,7 +298,7 @@ impl RequestorBroker {
         counter!("market.agreements.requestor.created", 1);
         log::info!(
             "Requestor {} created Agreement [{}] from Proposal [{}].",
-            DisplayIdentity(&id),
+            id.display(),
             &agreement_id,
             &proposal_id
         );
@@ -381,7 +400,7 @@ impl RequestorBroker {
                 counter!("market.agreements.requestor.confirmed", 1);
                 log::info!(
                     "Requestor {} confirmed Agreement [{}] and sent to Provider.",
-                    DisplayIdentity(&id),
+                    id.display(),
                     &agreement_id,
                 );
                 return Ok(());
@@ -401,6 +420,7 @@ async fn on_agreement_approved(
     caller: String,
     msg: AgreementApproved,
 ) -> Result<(), ApproveAgreementError> {
+    let id = msg.agreement_id.clone();
     let caller: NodeId =
         caller
             .parse()
@@ -409,7 +429,9 @@ async fn on_agreement_approved(
                 caller,
                 id: msg.agreement_id.clone(),
             })?;
-    Ok(agreement_approved(broker, caller, msg).await?)
+    Ok(agreement_approved(broker, caller, msg)
+        .await
+        .map_err(|e| ApproveAgreementError::Remote(e, id))?)
 }
 
 async fn agreement_approved(
@@ -436,7 +458,7 @@ async fn agreement_approved(
         .as_dao::<AgreementDao>()
         .approve(&msg.agreement_id)
         .await
-        .map_err(|e| match e {
+        .map_err(|err| match err {
             StateError::InvalidTransition { id, from, .. } => {
                 match from {
                     // Expired Agreement could be InvalidState either, but we want to explicit
@@ -445,24 +467,15 @@ async fn agreement_approved(
                     _ => RemoteAgreementError::InvalidState(id, from),
                 }
             }
-            StateError::DbError(e) => {
+            e => {
                 // Log our internal error, but don't reveal error message to Provider.
                 log::warn!(
-                    "Internal error while updating Agreement state. Error: {}",
+                    "Approve Agreement [{}] internal error: {}",
+                    &msg.agreement_id,
                     e
                 );
                 RemoteAgreementError::InternalError(msg.agreement_id.clone())
             }
-        })?;
-
-    broker
-        .db
-        .as_dao::<AgreementEventsDao>()
-        .new_event(&agreement.id, AgreementEventType::Approved, None)
-        .await
-        .map_err(|e| {
-            log::warn!("Internal error while adding Agreement event. Error: {}", e);
-            RemoteAgreementError::InternalError(msg.agreement_id.clone())
         })?;
 
     broker.notify_agreement(&agreement).await;
