@@ -475,6 +475,7 @@ impl Handler<AddVolumes> for TransferService {
     type Result = Result<()>;
 
     fn handle(&mut self, msg: AddVolumes, _ctx: &mut Self::Context) -> Self::Result {
+        log::info!("Adding volumes: {:?}", msg.0);
         let container_transfer_provider =
             ContainerTransferProvider::new(self.work_dir.clone(), msg.0);
         self.providers

@@ -86,7 +86,7 @@ pub(crate) fn agreement_provider_service(
     agreement: &Agreement,
 ) -> Result<Endpoint, Error> {
     Ok(ya_net::from(id.identity)
-        .to(agreement.provider_id()?.parse()?)
+        .to(agreement.provider_id().clone())
         .service(activity::BUS_ID))
 }
 
@@ -151,9 +151,8 @@ pub(crate) async fn authorize_agreement_initiator(
     agreement_id: &str,
 ) -> Result<(), Error> {
     let agreement = get_agreement(agreement_id).await?;
-    let initiator_id = agreement.requestor_id()?.parse()?;
 
-    authorize_caller(caller.to_string().parse()?, initiator_id)
+    authorize_caller(&caller.to_string().parse()?, agreement.requestor_id())
 }
 
 pub(crate) async fn authorize_agreement_executor(
@@ -161,13 +160,12 @@ pub(crate) async fn authorize_agreement_executor(
     agreement_id: &str,
 ) -> Result<(), Error> {
     let agreement = get_agreement(agreement_id).await?;
-    let executor_id = agreement.provider_id()?.parse()?;
 
-    authorize_caller(caller.to_string().parse()?, executor_id)
+    authorize_caller(&caller.to_string().parse()?, agreement.provider_id())
 }
 
 #[inline(always)]
-pub(crate) fn authorize_caller(caller: NodeId, authorized: NodeId) -> Result<(), Error> {
+pub(crate) fn authorize_caller(caller: &NodeId, authorized: &NodeId) -> Result<(), Error> {
     let msg = format!("caller: {} is not authorized: {}", caller, authorized);
     match caller == authorized {
         true => Ok(()),

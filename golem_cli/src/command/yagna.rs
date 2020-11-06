@@ -6,8 +6,9 @@ use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::process::Stdio;
-use std::str::FromStr;
+
 use tokio::process::{Child, Command};
+use ya_core_model::payment::local::{InvoiceStats, InvoiceStatusNotes, StatusNotes, StatusResult};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -15,22 +16,9 @@ pub struct Id {
     pub node_id: String,
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PaymentStatus {
-    pub amount: String,
-    pub incoming: PaymentSummary,
-}
-
-#[derive(Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct PaymentSummary {
-    #[serde(default)]
-    accepted: Option<String>,
-    #[serde(default)]
-    confirmed: Option<String>,
-    #[serde(default)]
-    requested: Option<String>,
+pub trait PaymentSummary {
+    fn total_pending(&self) -> (BigDecimal, u64);
+    fn unconfirmed(&self) -> (BigDecimal, u64);
 }
 
 #[derive(Deserialize, Default)]
@@ -60,29 +48,31 @@ impl ActivityStatus {
         self.total.get("Terminated").copied().unwrap_or_default()
     }
 }
-
-impl PaymentSummary {
-    pub fn total_pending(&self) -> BigDecimal {
-        let accepted = self
-            .accepted
-            .as_ref()
-            .and_then(|v| BigDecimal::from_str(&v).ok())
-            .unwrap_or_default();
-        let confirmed = self
-            .confirmed
-            .as_ref()
-            .and_then(|v| BigDecimal::from_str(&v).ok())
-            .unwrap_or_default();
-        //let requested = self.requested.as_ref().and_then(|v| BigDecimal::from_str(&v).ok()).unwrap_or_default();
-
-        accepted + confirmed
+impl PaymentSummary for StatusNotes {
+    fn total_pending(&self) -> (BigDecimal, u64) {
+        (
+            &self.accepted.total_amount - &self.confirmed.total_amount,
+            self.accepted.agreements_count - self.confirmed.agreements_count,
+        )
     }
 
-    pub fn unconfirmed(&self) -> BigDecimal {
-        self.requested
-            .as_ref()
-            .and_then(|v| BigDecimal::from_str(v).ok())
-            .unwrap_or_default()
+    fn unconfirmed(&self) -> (BigDecimal, u64) {
+        (
+            &self.requested.total_amount - &self.accepted.total_amount,
+            self.requested.agreements_count - self.accepted.agreements_count,
+        )
+    }
+}
+
+impl PaymentSummary for InvoiceStatusNotes {
+    fn total_pending(&self) -> (BigDecimal, u64) {
+        let value = self.accepted.clone();
+        (value.total_amount, value.agreements_count)
+    }
+
+    fn unconfirmed(&self) -> (BigDecimal, u64) {
+        let value = self.issued.clone() + self.received.clone();
+        (value.total_amount.clone(), value.agreements_count)
     }
 }
 
@@ -115,8 +105,13 @@ impl YagnaCommand {
         output.map_err(anyhow::Error::msg)
     }
 
-    pub async fn payment_status(mut self) -> anyhow::Result<PaymentStatus> {
+    pub async fn payment_status(mut self) -> anyhow::Result<StatusResult> {
         self.cmd.args(&["--json", "payment", "status"]);
+        self.run().await
+    }
+
+    pub async fn invoice_status(mut self) -> anyhow::Result<InvoiceStats> {
+        self.cmd.args(&["--json", "payment", "invoice", "status"]);
         self.run().await
     }
 
@@ -132,6 +127,19 @@ impl YagnaCommand {
         cmd.stdin(Stdio::null())
             .stderr(Stdio::inherit())
             .stdout(Stdio::inherit());
+
+        #[cfg(target_os = "linux")]
+        unsafe {
+            use ::nix::libc::{prctl, PR_SET_PDEATHSIG};
+            use ::nix::sys::signal::*;
+            use std::io;
+
+            cmd.pre_exec(|| {
+                ::nix::unistd::setsid().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                let _ = prctl(PR_SET_PDEATHSIG, SIGTERM);
+                Ok(())
+            });
+        }
 
         let mut tracker = tracker::Tracker::new(&mut cmd)?;
         cmd.kill_on_drop(true);

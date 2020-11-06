@@ -11,18 +11,9 @@ use std::{
 };
 use structopt::{clap, StructOpt};
 use url::Url;
-
-#[cfg(all(feature = "market-forwarding", feature = "market-decentralized"))]
-compile_error!("To use `market-decentralized` pls do `--no-default-features`.");
-#[cfg(all(feature = "market-decentralized", not(feature = "market-forwarding")))]
-use ya_market_decentralized::MarketService;
-#[cfg(feature = "market-forwarding")]
-use ya_market_forwarding::MarketService;
-#[cfg(not(any(feature = "market-forwarding", feature = "market-decentralized")))]
-compile_error!("Either feature \"market-forwarding\" or \"market-decentralized\" must be enabled.");
-
 use ya_activity::service::Activity as ActivityService;
 use ya_identity::service::Identity as IdentityService;
+use ya_market::MarketService;
 use ya_metrics::MetricsService;
 use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
@@ -30,7 +21,7 @@ use ya_sgx::SgxService;
 
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
-use ya_service_api::{CliCtx, CommandOutput};
+use ya_service_api::{CliCtx, CommandOutput, MetricsCtx};
 use ya_service_api_interfaces::Provider;
 use ya_service_api_web::{
     middleware::{auth, Identity},
@@ -88,6 +79,19 @@ struct CliArgs {
     #[cfg_attr(not(feature = "tos"), structopt(hidden = true))]
     accept_terms: bool,
 
+    /// Disable metrics pushing
+    #[structopt(long, set=clap::ArgSettings::Global)]
+    disable_metrics_push: bool,
+
+    /// Metrics push host url
+    #[structopt(
+        long,
+        env = "YAGNA_METRICS_URL",
+        default_value = "http://metrics.golem.network:9091/",
+        set=clap::ArgSettings::Global,
+    )]
+    metrics_push_url: Url,
+
     /// Enter interactive mode
     #[structopt(short, long)]
     interactive: bool,
@@ -137,12 +141,17 @@ impl TryFrom<&CliArgs> for CliCtx {
                 true
             },
             interactive: args.interactive,
+            metrics_ctx: MetricsCtx {
+                push_enabled: !args.disable_metrics_push,
+                push_host_url: Some(args.metrics_push_url.clone()),
+            },
         })
     }
 }
 
 #[derive(Clone)]
 struct ServiceContext {
+    ctx: CliCtx,
     dbs: HashMap<TypeId, DbExecutor>,
     default_db: DbExecutor,
 }
@@ -156,6 +165,12 @@ impl<S: 'static> Provider<S, DbExecutor> for ServiceContext {
     }
 }
 
+impl<S: 'static> Provider<S, CliCtx> for ServiceContext {
+    fn component(&self) -> CliCtx {
+        self.ctx.clone()
+    }
+}
+
 impl<S: 'static> Provider<S, ()> for ServiceContext {
     fn component(&self) -> () {
         ()
@@ -166,19 +181,28 @@ impl ServiceContext {
     fn make_entry<S: 'static>(path: &PathBuf, name: &str) -> Result<(TypeId, DbExecutor)> {
         Ok((TypeId::of::<S>(), DbExecutor::from_data_dir(path, name)?))
     }
+}
 
-    fn from_data_dir(path: &PathBuf, name: &str) -> Result<Self> {
-        let default_db = DbExecutor::from_data_dir(path, name)?;
+impl TryFrom<CliCtx> for ServiceContext {
+    type Error = anyhow::Error;
+
+    fn try_from(ctx: CliCtx) -> Result<Self, Self::Error> {
+        let default_name = clap::crate_name!();
+        let default_db = DbExecutor::from_data_dir(&ctx.data_dir, default_name)?;
         let dbs = [
-            Self::make_entry::<MarketService>(path, "market")?,
-            Self::make_entry::<ActivityService>(path, "activity")?,
-            Self::make_entry::<PaymentService>(path, "payment")?,
+            Self::make_entry::<MarketService>(&ctx.data_dir, "market")?,
+            Self::make_entry::<ActivityService>(&ctx.data_dir, "activity")?,
+            Self::make_entry::<PaymentService>(&ctx.data_dir, "payment")?,
         ]
         .iter()
         .cloned()
         .collect();
 
-        Ok(ServiceContext { default_db, dbs })
+        Ok(ServiceContext {
+            ctx,
+            dbs,
+            default_db,
+        })
     }
 }
 
@@ -297,14 +321,13 @@ impl ServiceCommand {
         }
         match self {
             Self::Run(ServiceCommandOpts { api_url }) => {
-                let name = clap::crate_name!();
-                log::info!("Starting {} service!", name);
+                log::info!("Starting {} service!", clap::crate_name!());
 
                 ya_sb_router::bind_gsb_router(ctx.gsb_url.clone())
                     .await
                     .context("binding service bus router")?;
 
-                let context = ServiceContext::from_data_dir(&ctx.data_dir, name)?;
+                let context: ServiceContext = ctx.clone().try_into()?;
                 Services::gsb(&context).await?;
                 start_payment_drivers(&ctx.data_dir).await?;
 
@@ -332,11 +355,8 @@ impl ServiceCommand {
 
                 future::try_join(server.run(), sd_notify(false, "READY=1")).await?;
 
-                log::info!("{} service finished!", name);
-                Ok(CommandOutput::object(format!(
-                    "\n{} daemon successfully finished.",
-                    name
-                ))?)
+                log::info!("{} daemon successfully finished!", clap::crate_name!());
+                Ok(CommandOutput::NoOutput)
             }
             _ => anyhow::bail!("command service {:?} is not implemented yet", self),
         }
@@ -389,7 +409,13 @@ async fn main() -> Result<()> {
             args.log_level()
         )),
     );
-    env_logger::init();
+    env_logger::builder()
+        .filter_module("actix_http::response", log::LevelFilter::Off)
+        .filter_module("tokio_core", log::LevelFilter::Info)
+        .filter_module("tokio_reactor", log::LevelFilter::Info)
+        .filter_module("hyper", log::LevelFilter::Info)
+        .filter_module("web3", log::LevelFilter::Info)
+        .init();
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
 

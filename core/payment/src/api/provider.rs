@@ -70,16 +70,7 @@ async fn issue_debit_note(
     let agreement_id = agreement.agreement_id.clone();
 
     let node_id = id.identity;
-    if node_id
-        != agreement
-            .offer
-            .provider_id
-            .clone()
-            .unwrap()
-            .parse()
-            .unwrap()
-    {
-        // FIXME: provider_id shouldn't be an Option
+    if &node_id != agreement.provider_id() {
         return response::unauthorized();
     }
 
@@ -234,16 +225,7 @@ async fn issue_invoice(db: Data<DbExecutor>, body: Json<NewInvoice>, id: Identit
     }
 
     let node_id = id.identity;
-    if node_id
-        != agreement
-            .offer
-            .provider_id
-            .clone()
-            .unwrap()
-            .parse()
-            .unwrap()
-    {
-        // FIXME: provider_id shouldn't be an Option
+    if &node_id != agreement.provider_id() {
         return response::unauthorized();
     }
 

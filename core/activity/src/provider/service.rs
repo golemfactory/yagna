@@ -19,6 +19,7 @@ use crate::common::{
 use crate::dao::*;
 use crate::db::models::ActivityEventType;
 use crate::error::Error;
+use ya_client_model::NodeId;
 use ya_core_model::activity::local::Credentials;
 
 const INACTIVITY_LIMIT_SECONDS_ENV_VAR: &str = "INACTIVITY_LIMIT_SECONDS";
@@ -81,7 +82,7 @@ async fn create_activity_gsb(
 
     let activity_id = generate_id();
     let agreement = get_agreement(&msg.agreement_id).await?;
-    let provider_id = agreement.provider_id().map_err(Error::from)?.to_string();
+    let provider_id = agreement.provider_id().clone();
 
     db.as_dao::<ActivityDao>()
         .create_if_not_exists(&activity_id, &msg.agreement_id)
@@ -102,12 +103,13 @@ async fn create_activity_gsb(
 
     counter!("activity.provider.created", 1);
 
-    let credentials = activity_credentials(db.clone(), &activity_id, &provider_id, msg.timeout)
-        .await
-        .map_err(|e| {
-            Arbiter::spawn(enqueue_destroy_evt(db.clone(), &activity_id, &provider_id));
-            Error::from(e)
-        })?;
+    let credentials =
+        activity_credentials(db.clone(), &activity_id, provider_id.clone(), msg.timeout)
+            .await
+            .map_err(|e| {
+                Arbiter::spawn(enqueue_destroy_evt(db.clone(), &activity_id, provider_id));
+                Error::from(e)
+            })?;
 
     Ok(if credentials.is_none() {
         activity::CreateResponseCompat::ActivityId(activity_id)
@@ -123,7 +125,7 @@ async fn create_activity_gsb(
 async fn activity_credentials(
     db: DbExecutor,
     activity_id: &String,
-    provider_id: &String,
+    provider_id: NodeId,
     timeout: Option<f32>,
 ) -> Result<Option<Credentials>, Error> {
     db.as_dao::<ActivityStateDao>()
@@ -137,7 +139,7 @@ async fn activity_credentials(
     Arbiter::spawn(monitor_activity(
         db.clone(),
         activity_id.clone(),
-        provider_id.clone(),
+        provider_id,
     ));
 
     let credentials = db
@@ -166,7 +168,7 @@ async fn destroy_activity_gsb(
     db.as_dao::<EventDao>()
         .create(
             &msg.activity_id,
-            agreement.provider_id().map_err(Error::from)?,
+            agreement.provider_id(),
             ActivityEventType::DestroyActivity,
             None,
         )
@@ -221,10 +223,9 @@ async fn get_activity_progress(
 fn enqueue_destroy_evt(
     db: DbExecutor,
     activity_id: impl ToString,
-    provider_id: impl ToString,
+    provider_id: NodeId,
 ) -> LocalBoxFuture<'static, ()> {
     let activity_id = activity_id.to_string();
-    let provider_id = provider_id.to_string();
 
     log::debug!("Enqueueing a Destroy event for activity {}", activity_id);
 
@@ -249,9 +250,8 @@ fn enqueue_destroy_evt(
     .boxed_local()
 }
 
-async fn monitor_activity(db: DbExecutor, activity_id: impl ToString, provider_id: impl ToString) {
+async fn monitor_activity(db: DbExecutor, activity_id: impl ToString, provider_id: NodeId) {
     let activity_id = activity_id.to_string();
-    let provider_id = provider_id.to_string();
     let limit_s = inactivity_limit_seconds();
     let unresp_s = unresponsive_limit_seconds();
     let delay = Duration::from_secs_f64(1.);
@@ -268,7 +268,7 @@ async fn monitor_activity(db: DbExecutor, activity_id: impl ToString, provider_i
             let dt = (Utc::now().timestamp() - usage.timestamp) as f64;
             if dt > limit_s {
                 log::warn!("activity {} inactive for {}s, destroying", activity_id, dt);
-                enqueue_destroy_evt(db, &activity_id, &provider_id).await;
+                enqueue_destroy_evt(db, &activity_id, provider_id).await;
 
                 counter!("activity.provider.destroyed.unresponsive", 1);
                 break;
