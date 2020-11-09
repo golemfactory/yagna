@@ -16,7 +16,10 @@ pub enum ProposalResponse {
         offer: DemandOfferBase,
     },
     AcceptProposal,
-    RejectProposal,
+    #[display(fmt = "RejectProposal( reason: {:?})", reason)]
+    RejectProposal {
+        reason: Option<String>,
+    },
     ///< Don't send any message to requestor. Could be useful to wait for other offers.
     IgnoreProposal,
 }
@@ -26,7 +29,10 @@ pub enum ProposalResponse {
 #[allow(dead_code)]
 pub enum AgreementResponse {
     ApproveAgreement,
-    RejectAgreement,
+    #[display(fmt = "RejectAgreement( reason: {:?})", reason)]
+    RejectAgreement {
+        reason: Option<String>,
+    },
 }
 
 /// Result of agreement execution.
