@@ -20,9 +20,10 @@ use ya_service_bus::{
 };
 
 // Local uses
+use crate::dao::DbExecutor;
 use crate::driver::PaymentDriver;
 
-pub async fn bind_service<D: PaymentDriver + 'static>(driver: D) {
+pub async fn bind_service<Driver: PaymentDriver + 'static>(db: &DbExecutor, driver: Driver) {
     log::debug!("Binding payment driver service to service bus");
     let driver = Arc::new(driver);
     let bus_id = driver_bus_id(driver.get_name());
@@ -34,7 +35,7 @@ pub async fn bind_service<D: PaymentDriver + 'static>(driver: D) {
         m = message
     */
     #[rustfmt::skip] // Keep move's neatly alligned
-    ServiceBinder::new(&bus_id, &(), driver)
+    ServiceBinder::new(&bus_id, db, driver)
         .bind_with_processor(
             move |db, dr, c, m| async move { dr.init(db, c, m).await }
         )
