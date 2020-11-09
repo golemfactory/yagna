@@ -128,13 +128,28 @@ async fn activity_credentials(
     provider_id: NodeId,
     timeout: Option<f32>,
 ) -> Result<Option<Credentials>, Error> {
-    db.as_dao::<ActivityStateDao>()
+    let activity_state = db
+        .as_dao::<ActivityStateDao>()
         .get_state_wait(
             &activity_id,
             vec![State::Initialized.into(), State::Terminated.into()],
         )
         .timeout(timeout)
         .await??;
+
+    if !activity_state.state.alive() {
+        let reason = activity_state
+            .reason
+            .unwrap_or_else(|| "<unspecified>".into());
+        let error = activity_state
+            .error_message
+            .unwrap_or_else(|| "<none>".into());
+        let msg = format!(
+            "Activity {} was abruptly terminated. Reason: {}, message: {}",
+            activity_id, reason, error
+        );
+        return Err(Error::Service(msg));
+    }
 
     Arbiter::spawn(monitor_activity(
         db.clone(),
