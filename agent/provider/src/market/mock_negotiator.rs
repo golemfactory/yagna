@@ -87,7 +87,12 @@ impl Negotiator for LimitAgreementsNegotiator {
                 "Negotiator: Reject proposal [{:?}] due to expiration limits.",
                 demand.proposal_id
             );
-            Ok(ProposalResponse::RejectProposal)
+            Ok(ProposalResponse::RejectProposal {
+                reason: Some(format!(
+                    "proposal expired at: {} which is less than 5 min or more than 30 min from now",
+                    expiration
+                )),
+            })
         } else if self.has_free_slot() {
             Ok(ProposalResponse::AcceptProposal)
         } else {
@@ -95,7 +100,12 @@ impl Negotiator for LimitAgreementsNegotiator {
                 "Negotiator: Reject proposal [{:?}] due to limit.",
                 demand.proposal_id
             );
-            Ok(ProposalResponse::RejectProposal)
+            Ok(ProposalResponse::RejectProposal {
+                reason: Some(format!(
+                    "available agreements limit: {} reached",
+                    self.max_agreements
+                )),
+            })
         }
     }
 
@@ -109,7 +119,12 @@ impl Negotiator for LimitAgreementsNegotiator {
                 "Negotiator: Reject agreement proposal [{}] due to limit.",
                 agreement.agreement_id
             );
-            Ok(AgreementResponse::RejectAgreement)
+            Ok(AgreementResponse::RejectAgreement {
+                reason: Some(format!(
+                    "available agreements limit: {} reached",
+                    self.max_agreements
+                )),
+            })
         }
     }
 }
