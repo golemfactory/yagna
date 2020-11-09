@@ -89,7 +89,7 @@ impl Negotiator for LimitAgreementsNegotiator {
             );
             Ok(ProposalResponse::RejectProposal {
                 reason: Some(format!(
-                    "proposal expired at: {} which is less than 5 min or more than 30 min from now",
+                    "Proposal expires at: {} which is less than 5 min or more than 30 min from now",
                     expiration
                 )),
             })
@@ -102,7 +102,7 @@ impl Negotiator for LimitAgreementsNegotiator {
             );
             Ok(ProposalResponse::RejectProposal {
                 reason: Some(format!(
-                    "available agreements limit: {} reached",
+                    "No capacity available. Reached Agreements limit: {}",
                     self.max_agreements
                 )),
             })
@@ -121,7 +121,7 @@ impl Negotiator for LimitAgreementsNegotiator {
             );
             Ok(AgreementResponse::RejectAgreement {
                 reason: Some(format!(
-                    "available agreements limit: {} reached",
+                    "No capacity available. Reached Agreements limit: {}",
                     self.max_agreements
                 )),
             })
