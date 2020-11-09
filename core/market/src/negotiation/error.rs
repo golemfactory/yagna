@@ -3,6 +3,7 @@ use thiserror::Error;
 
 use ya_market_resolver::flatten::JsonObjectExpected;
 
+use crate::db::dao::StateError;
 use crate::db::model::{
     AgreementId, ProposalId, ProposalIdParseError, SubscriptionId, SubscriptionParseError,
 };
@@ -69,8 +70,8 @@ pub enum AgreementError {
     Save(ProposalId, DbError),
     #[error("Failed to get Agreement [{0}]. Error: {1}")]
     Get(AgreementId, DbError),
-    #[error("Failed to update Agreement [{0}]. Error: {1}")]
-    Update(AgreementId, DbError),
+    #[error("Agreement [{0}]. Error: {1}")]
+    UpdateState(AgreementId, StateError),
     #[error("Invalid state. {0}")]
     InvalidState(#[from] AgreementStateError),
     #[error("Invalid Agreement id. {0}")]

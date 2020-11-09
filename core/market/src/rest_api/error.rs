@@ -181,7 +181,7 @@ impl ResponseError for AgreementError {
             AgreementError::GetProposal(..)
             | AgreementError::Save(..)
             | AgreementError::Get(..)
-            | AgreementError::Update(..)
+            | AgreementError::UpdateState(..)
             | AgreementError::Gsb(_)
             | AgreementError::ProtocolCreate(_)
             | AgreementError::ProtocolApprove(_)

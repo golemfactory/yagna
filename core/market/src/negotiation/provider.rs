@@ -197,13 +197,14 @@ impl ProviderBroker {
         Err(match agreement.state {
             AgreementState::Proposal => AgreementStateError::Proposed(agreement.id),
             AgreementState::Pending => {
-                // TODO : possible race condition here ISSUE#430
+                // TODO: possible race condition here ISSUE#430
                 // 1. this state check should be also `db.update_state`
                 // 2. `db.update_state` must be invoked after successful propose_agreement
+                // TODO: if dao.approve fails, Provider and Requestor have inconsistent state.
                 self.api.approve_agreement(agreement, timeout).await?;
-                dao.update_state(agreement_id, AgreementState::Approved)
+                dao.approve(agreement_id)
                     .await
-                    .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?;
+                    .map_err(|e| AgreementError::UpdateState(agreement_id.clone(), e))?;
 
                 counter!("market.agreements.provider.approved", 1);
                 log::info!(
