@@ -7507,12 +7507,19 @@ dependencies = [
 name = "ya-payment-driver"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "bigdecimal",
  "chrono",
+ "diesel",
+ "diesel_migrations",
  "log 0.4.11",
+ "r2d2",
+ "thiserror",
+ "tokio 0.2.22",
  "ya-client-model 0.2.0",
  "ya-core-model 0.2.1",
+ "ya-persistence",
  "ya-service-bus",
 ]
 
@@ -7891,6 +7898,7 @@ dependencies = [
  "chrono",
  "dotenv",
  "env_logger 0.7.1",
+ "ethereum-types 0.6.0",
  "ethkey",
  "futures 0.3.7",
  "hex",
@@ -7903,6 +7911,7 @@ dependencies = [
  "uuid 0.8.1",
  "ya-client-model 0.2.0",
  "ya-payment-driver",
+ "ya-service-api-interfaces",
  "zksync",
  "zksync_eth_signer",
 ]
