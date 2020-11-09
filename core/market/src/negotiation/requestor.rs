@@ -26,7 +26,7 @@ use super::{common::*, error::*, notifier::NotifierError, EventNotifier};
 use crate::config::Config;
 use crate::utils::display::EnableDisplay;
 
-#[derive(Clone, derive_more::Display, Debug)]
+#[derive(Clone, derive_more::Display, Debug, PartialEq)]
 pub enum ApprovalStatus {
     #[display(fmt = "Approved")]
     Approved,

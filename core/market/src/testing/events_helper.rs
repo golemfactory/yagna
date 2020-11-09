@@ -35,6 +35,7 @@ pub fn generate_event(id: i32, timestamp: NaiveDateTime) -> TestMarketEvent {
 
 pub mod requestor {
     use super::*;
+    use crate::ya_client::model::market::event::AgreementEvent;
     use ya_client::model::market::event::RequestorEvent;
 
     pub fn expect_proposal(events: Vec<RequestorEvent>, i: u8) -> anyhow::Result<Proposal> {
@@ -56,6 +57,15 @@ pub mod requestor {
             .query_events(&demand_id, 2.2, Some(5))
             .await?;
         expect_proposal(events, i)
+    }
+
+    pub fn expect_approve(events: Vec<AgreementEvent>, i: u8) -> anyhow::Result<String> {
+        assert_eq!(events.len(), 1, "{}: Expected one event: {:?}.", i, events);
+
+        Ok(match events[0].clone() {
+            AgreementEvent::AgreementApprovedEvent { agreement_id, .. } => agreement_id,
+            _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
+        })
     }
 }
 
