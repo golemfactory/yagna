@@ -27,6 +27,7 @@ async fn test_agreement_approved_event() -> Result<()> {
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
     let req_id = network.get_default_id(REQ_NAME);
+    let prov_id = network.get_default_id(PROV_NAME);
     let prov_market = network.get_market(PROV_NAME);
 
     let agreement_id = req_engine
@@ -44,6 +45,7 @@ async fn test_agreement_approved_event() -> Result<()> {
 
     // Provider will approve agreement after some delay.
     let agr_id = agreement_id.clone();
+    let from_timestamp = confirm_timestamp.clone();
     let query_handle = tokio::task::spawn_local(async move {
         tokio::time::delay_for(std::time::Duration::from_millis(20)).await;
         prov_market
@@ -54,6 +56,22 @@ async fn test_agreement_approved_event() -> Result<()> {
                 0.1,
             )
             .await?;
+
+        // We expect, that both Provider and Requestor will get event.
+        let events = prov_market
+            .requestor_engine
+            .query_agreement_events(&None, 0.1, Some(2), from_timestamp, &prov_id)
+            .await?;
+
+        // Expect single event
+        assert_eq!(events.len(), 1);
+
+        match &events[0] {
+            AgreementEvent::AgreementApprovedEvent { agreement_id, .. } => {
+                assert_eq!(agreement_id, &agr_id.into_client())
+            }
+            _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
+        };
         Result::<(), anyhow::Error>::Ok(())
     });
 
