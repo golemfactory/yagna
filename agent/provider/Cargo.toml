@@ -10,7 +10,7 @@ ya-agreement-utils = "0.1"
 ya-client = { version = "0.4", features = ['cli'] }
 ya-client-model = "0.2"
 ya-compile-time-utils = "0.1"
-ya-core-model = { version = "0.1", features = ['activity'] }
+ya-core-model = { version = "0.2", features = ['activity'] }
 ya-utils-actix = "0.1"
 ya-utils-path = "0.1"
 ya-utils-process = "0.1"

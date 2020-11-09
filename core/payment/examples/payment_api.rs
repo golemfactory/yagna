@@ -238,6 +238,7 @@ async fn main() -> anyhow::Result<()> {
         approved_date: None,
         state: market::agreement::State::Proposal,
         timestamp: Utc::now(),
+        app_session_id: None,
         proposed_signature: None,
         approved_signature: None,
         committed_signature: None,

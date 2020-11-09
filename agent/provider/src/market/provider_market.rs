@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use ya_agreement_utils::{AgreementView, OfferDefinition};
 use ya_client::market::MarketProviderApi;
-use ya_client_model::market::{Agreement, DemandOfferBase, Proposal, ProviderEvent};
+use ya_client_model::market::{Agreement, DemandOfferBase, Proposal, ProviderEvent, Reason};
 use ya_utils_actix::{
     actix_handler::ResultTypeGetter,
     actix_signal::{SignalSlot, Subscribe},
@@ -303,8 +303,13 @@ async fn process_proposal(
                     .await?;
             }
             ProposalResponse::IgnoreProposal => log::info!("Ignoring proposal {:?}", proposal_id),
-            ProposalResponse::RejectProposal => {
-                api.reject_proposal(&subscription.id, proposal_id).await?;
+            ProposalResponse::RejectProposal { reason } => {
+                api.reject_proposal_with_reason(
+                    &subscription.id,
+                    proposal_id,
+                    reason.map(|r| Reason::new(r)),
+                )
+                .await?;
             }
         },
         Err(error) => log::error!(
@@ -366,8 +371,9 @@ async fn process_agreement(
 
                 let _ = market.send(message).await?;
             }
-            AgreementResponse::RejectAgreement => {
-                api.reject_agreement(&agreement.agreement_id).await?;
+            AgreementResponse::RejectAgreement { reason } => {
+                api.reject_agreement(&agreement.agreement_id, reason.map(|r| Reason::new(r)))
+                    .await?;
             }
         },
         Err(error) => log::error!(
