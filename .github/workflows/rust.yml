@@ -157,10 +157,10 @@ jobs:
           repository: 'golemfactory/yagna-integration'
           token: ${{ secrets.YAGNA_WORKFLOW_TOKEN }}
 
-      - name: Configure python 3.7
+      - name: Configure python 3.8
         uses: actions/setup-python@v2
         with:
-          python-version: '3.7'
+          python-version: '3.8'
 
       - name: Run setuptools
         run: python setup.py develop
