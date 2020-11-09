@@ -1,5 +1,3 @@
-
-
 #[derive(thiserror::Error, Debug)]
 pub enum DbError {
     #[error("Database connection error: {0}")]

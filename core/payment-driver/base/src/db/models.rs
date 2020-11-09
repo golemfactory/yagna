@@ -2,8 +2,8 @@ use chrono::NaiveDateTime;
 
 use crate::db::schema::*;
 
-const TX_CREATED: i32 = 1;
-const TX_SENT: i32 = 2;
+pub const TX_CREATED: i32 = 1;
+pub const TX_SENT: i32 = 2;
 pub const TX_CONFIRMED: i32 = 3;
 pub const TX_FAILED: i32 = 0;
 
@@ -12,7 +12,6 @@ pub const PAYMENT_STATUS_OK: i32 = 2;
 pub const PAYMENT_STATUS_NOT_ENOUGH_FUNDS: i32 = 3;
 pub const PAYMENT_STATUS_NOT_ENOUGH_GAS: i32 = 4;
 pub const PAYMENT_STATUS_FAILED: i32 = 5;
-
 
 pub enum TransactionStatus {
     Created,

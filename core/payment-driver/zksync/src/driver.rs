@@ -4,7 +4,6 @@
     Please limit the logic in this file, use local mods to handle the calls.
 */
 // Extrnal crates
-use actix::Arbiter;
 use chrono::Utc;
 use serde_json;
 use uuid::Uuid;
@@ -13,48 +12,93 @@ use uuid::Uuid;
 use ya_payment_driver::{
     account::{Accounts, AccountsRc},
     bus,
+    cron::PaymentDriverCron,
+    dao::DbExecutor,
+    db::models::PaymentEntity,
     driver::{async_trait, BigDecimal, IdentityError, IdentityEvent, PaymentDriver},
     model::{
         Ack, GenericError, GetAccountBalance, GetTransactionBalance, Init, PaymentConfirmation,
         PaymentDetails, SchedulePayment, VerifyPayment,
     },
-    utils as driver_utils,
+    utils,
 };
 
 // Local uses
-use crate::{zksync::wallet, DRIVER_NAME, PLATFORM_NAME};
+use crate::{dao::ZksyncDao, zksync::wallet, DRIVER_NAME, PLATFORM_NAME};
 
 pub struct ZksyncDriver {
     active_accounts: AccountsRc,
+    dao: ZksyncDao,
 }
 
 impl ZksyncDriver {
-    pub fn new() -> Self {
+    pub fn new(db: DbExecutor) -> Self {
         Self {
             active_accounts: Accounts::new_rc(),
+            dao: ZksyncDao::new(db),
         }
     }
+
     pub async fn load_active_accounts(&self) {
         log::debug!("load_active_accounts");
         let mut accounts = self.active_accounts.borrow_mut();
         let unlocked_accounts = bus::list_unlocked_identities().await.unwrap();
         for account in unlocked_accounts {
-            log::debug!("account={}",account);
+            log::debug!("account={}", account);
             accounts.add_account(account)
         }
     }
 
     fn is_account_active(&self, address: &str) -> bool {
-        self.active_accounts.as_ref().borrow().get_node_id(address).is_some()
+        self.active_accounts
+            .as_ref()
+            .borrow()
+            .get_node_id(address)
+            .is_some()
     }
 
+    async fn process_payments_for_account(&self, node_id: &str) {
+        log::trace!("Processing payments for node_id={}", node_id);
+        let payments: Vec<PaymentEntity> = self.dao.get_pending_payments(node_id).await;
+        if !payments.is_empty() {
+            log::info!(
+                "Processing {} Payments for node_id={}",
+                payments.len(),
+                node_id
+            );
+            log::debug!("Payments details: {:?}", payments);
+        }
+        for payment in payments {
+            self.handle_payment(payment).await;
+        }
+    }
+
+    async fn handle_payment(&self, payment: PaymentEntity) {
+        let details = utils::db_to_payment_details(&payment);
+        let tx_id = self.dao.insert_transaction(&details, Utc::now()).await;
+
+        match wallet::make_transfer(&details).await {
+            Ok(tx_hash) => {
+                self.dao
+                    .transaction_success(&tx_id, &tx_hash, &payment.order_id)
+                    .await;
+            }
+            Err(e) => {
+                self.dao
+                    .transaction_failed(&tx_id, &e, &payment.order_id)
+                    .await;
+                log::error!("NGNT transfer failed: {}", e);
+                //return Err(e);
+            }
+        };
+    }
 }
 
 #[async_trait(?Send)]
 impl PaymentDriver for ZksyncDriver {
     async fn account_event(
         &self,
-        _db: (),
+        _db: DbExecutor,
         _caller: String,
         msg: IdentityEvent,
     ) -> Result<(), IdentityError> {
@@ -64,7 +108,7 @@ impl PaymentDriver for ZksyncDriver {
 
     async fn get_account_balance(
         &self,
-        _db: (),
+        _db: DbExecutor,
         _caller: String,
         msg: GetAccountBalance,
     ) -> Result<BigDecimal, GenericError> {
@@ -86,7 +130,7 @@ impl PaymentDriver for ZksyncDriver {
 
     async fn get_transaction_balance(
         &self,
-        _db: (),
+        _db: DbExecutor,
         _caller: String,
         msg: GetTransactionBalance,
     ) -> Result<BigDecimal, GenericError> {
@@ -96,7 +140,7 @@ impl PaymentDriver for ZksyncDriver {
         Ok(BigDecimal::from(1_000_000_000_000_000_000u64))
     }
 
-    async fn init(&self, _db: (), _caller: String, msg: Init) -> Result<Ack, GenericError> {
+    async fn init(&self, _db: DbExecutor, _caller: String, msg: Init) -> Result<Ack, GenericError> {
         log::debug!("init: {:?}", msg);
         let address = msg.address().clone();
 
@@ -122,53 +166,77 @@ impl PaymentDriver for ZksyncDriver {
 
     async fn schedule_payment(
         &self,
-        _db: (),
+        _db: DbExecutor,
         _caller: String,
         msg: SchedulePayment,
     ) -> Result<String, GenericError> {
         log::debug!("schedule_payment: {:?}", msg);
 
-        if !self.is_account_active(&msg.sender().clone()) {
-            return Err(GenericError::new("Can not init, account not active"));
+        let sender = msg.sender().to_owned();
+        if !self.is_account_active(&sender) {
+            return Err(GenericError::new(
+                "Can not schedule_payment, account not active",
+            ));
         }
 
-        let date = Utc::now();
-        let details = driver_utils::to_payment_details(msg, Some(date));
-        let confirmation = to_confirmation(&details)?;
-        // TODO: move to database / background task
-        wallet::make_transfer(&details).await?;
         let order_id = Uuid::new_v4().to_string();
-        let driver_name = self.get_name();
-        // Make a clone of order_id as return values
-        let result = order_id.clone();
-
-        log::info!(
-            "Scheduled payment with success. order_id={}, details={:?}",
-            &order_id,
-            &details
-        );
-
-        // Spawned because calling payment service while handling a call from payment service
-        // would result in a deadlock.
-        Arbiter::spawn(async move {
-            let _ = bus::notify_payment(&driver_name, &order_id, &details, confirmation)
-                .await
-                .map_err(|e| log::error!("{}", e));
-        });
-        Ok(result)
+        self.dao.insert_payment(&order_id, &msg).await;
+        Ok(order_id)
     }
 
     async fn verify_payment(
         &self,
-        _db: (),
+        _db: DbExecutor,
         _caller: String,
         msg: VerifyPayment,
     ) -> Result<PaymentDetails, GenericError> {
         log::debug!("verify_payment: {:?}", msg);
-        // todo!()
-        // wallet::verify_transfer(msg).await?
-        let details = from_confirmation(msg.confirmation())?;
-        Ok(details)
+        // TODO: Get transaction details from zksync
+        // let tx_hash = hex::encode(msg.confirmation().confirmation);
+        // match wallet::check_tx(&tx_hash).await {
+        //     Some(true) => Ok(wallet::build_payment_details(tx_hash)),
+        //     Some(false) => Err(GenericError::new("Payment did not succeed")),
+        //     None => Err(GenericError::new("Payment not ready to be checked")),
+        // }
+        from_confirmation(msg.confirmation())
+    }
+}
+
+#[async_trait(?Send)]
+impl PaymentDriverCron for ZksyncDriver {
+    async fn confirm_payments(&self) {
+        let txs = self.dao.get_unconfirmed_txs().await;
+        log::trace!("confirm_payments {:?}", txs);
+
+        for tx in txs {
+            log::trace!("checking tx {:?}", &tx);
+            let tx_hash = match &tx.tx_hash {
+                None => continue,
+                Some(a) => a,
+            };
+            // Check_tx returns None when the result is unknown
+            if let Some(result) = wallet::check_tx(&tx_hash).await {
+                let payments = self.dao.transaction_confirmed(&tx.tx_id, result).await;
+                let driver_name = self.get_name();
+                for pay in payments {
+                    let details = utils::db_to_payment_details(&pay);
+                    // TODO: Provider needs method to fetch details based on hash
+                    // let tx_hash = hex::decode(&tx_hash).unwrap();
+                    let tx_hash = to_confirmation(&details).unwrap();
+                    if let Err(e) =
+                        bus::notify_payment(&driver_name, &pay.order_id, &details, tx_hash).await
+                    {
+                        log::error!("{}", e)
+                    };
+                }
+            }
+        }
+    }
+
+    async fn process_payments(&self) {
+        for node_id in self.active_accounts.borrow().list_accounts() {
+            self.process_payments_for_account(&node_id).await;
+        }
     }
 }
 

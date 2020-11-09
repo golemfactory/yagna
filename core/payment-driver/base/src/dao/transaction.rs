@@ -20,10 +20,8 @@ impl<'c> AsDao<'c> for TransactionDao<'c> {
 impl<'c> TransactionDao<'c> {
     pub async fn get(&self, tx_id: String) -> DbResult<Option<TransactionEntity>> {
         do_with_transaction(self.pool, move |conn| {
-            let tx: Option<TransactionEntity> = dsl::transaction
-                .find(tx_id)
-                .first(conn)
-                .optional()?;
+            let tx: Option<TransactionEntity> =
+                dsl::transaction.find(tx_id).first(conn).optional()?;
             match tx {
                 Some(tx) => Ok(Some(tx)),
                 None => Ok(None),
@@ -39,6 +37,16 @@ impl<'c> TransactionDao<'c> {
                     .values(tx)
                     .execute(conn)?;
             }
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn insert_transaction(&self, tx: TransactionEntity) -> DbResult<()> {
+        do_with_transaction(self.pool, move |conn| {
+            diesel::insert_into(dsl::transaction)
+                .values(tx)
+                .execute(conn)?;
             Ok(())
         })
         .await
@@ -61,9 +69,8 @@ impl<'c> TransactionDao<'c> {
 
     pub async fn get_by_status(&self, status: i32) -> DbResult<Vec<TransactionEntity>> {
         do_with_transaction(self.pool, move |conn| {
-            let txs: Vec<TransactionEntity> = dsl::transaction
-                .filter(dsl::status.eq(status))
-                .load(conn)?;
+            let txs: Vec<TransactionEntity> =
+                dsl::transaction.filter(dsl::status.eq(status)).load(conn)?;
             Ok(txs)
         })
         .await

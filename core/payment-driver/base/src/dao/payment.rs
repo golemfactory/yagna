@@ -1,6 +1,6 @@
 use diesel::{self, ExpressionMethods, QueryDsl, RunQueryDsl};
 
-use crate::db::models::{PaymentEntity, PAYMENT_STATUS_OK, PAYMENT_STATUS_NOT_YET};
+use crate::db::models::{PaymentEntity, PAYMENT_STATUS_NOT_YET, PAYMENT_STATUS_OK};
 use crate::db::schema::payment::dsl;
 
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
@@ -63,9 +63,8 @@ impl<'c> PaymentDao<'c> {
 
     pub async fn get_by_tx_id(&self, tx_id: String) -> DbResult<Vec<PaymentEntity>> {
         readonly_transaction(self.pool, move |conn| {
-            let payments: Vec<PaymentEntity> = dsl::payment
-                .filter(dsl::tx_id.eq(tx_id))
-                .load(conn)?;
+            let payments: Vec<PaymentEntity> =
+                dsl::payment.filter(dsl::tx_id.eq(tx_id)).load(conn)?;
             Ok(payments)
         })
         .await

@@ -10,7 +10,7 @@ use num::BigUint;
 use std::env;
 use std::str::FromStr;
 use zksync::types::BlockStatus;
-use zksync::zksync_types::Address;
+use zksync::zksync_types::{tx::TxHash, Address};
 use zksync::{Network, Provider, Wallet, WalletCredentials};
 use zksync_eth_signer::EthereumSigner;
 
@@ -99,6 +99,43 @@ pub async fn make_transfer(details: &PaymentDetails) -> Result<String, GenericEr
     log::info!("Created zksync transaction with hash={}", tx_hash);
     Ok(tx_hash)
 }
+
+pub async fn check_tx(tx_hash: &str) -> Option<bool> {
+    let provider = get_provider();
+    let tx_hash = format!("sync-tx:{}", tx_hash);
+    let tx_hash = TxHash::from_str(&tx_hash).unwrap();
+    let tx_info = provider.tx_info(tx_hash).await.unwrap();
+    log::debug!("tx_info: {:?}", tx_info);
+    // Check success
+    match tx_info.success {
+        None => None,
+        Some(result) => {
+            if result {
+                // Only wait for verified blocks on mainnet
+                if *NETWORK != Network::Mainnet || tx_info.is_verified() {
+                    return Some(true);
+                }
+                return None;
+            }
+            log::error!("Transaction failed! {:?}", tx_info.fail_reason);
+            return Some(false);
+        }
+    }
+}
+//  TODO: Get Transfer object from zksync
+// pub async fn build_payment_details(tx_hash: &str) -> PaymentDetails {
+//     let provider = get_provider();
+//     let tx_hash = format!("sync-tx:{}", tx_hash);
+//     let tx_hash = TxHash::from_str(&tx_hash).unwrap();
+//     let tx_info = provider.tx_info(tx_hash).await.unwrap();
+//
+//     PaymentDetails {
+//         recipient: tx_info.,
+//         sender,
+//         amount,
+//         date
+//     }
+// }
 
 fn get_provider() -> Provider {
     (*PROVIDER).clone()

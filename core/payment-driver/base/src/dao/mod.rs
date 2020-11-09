@@ -1,9 +1,7 @@
-use crate::dao::error::DbError;
-
+mod error;
+pub use error::DbError;
 pub mod payment;
 pub mod transaction;
-pub mod error;
-
 
 pub use ya_persistence::executor::DbExecutor;
 

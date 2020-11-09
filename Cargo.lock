@@ -7522,12 +7522,23 @@ dependencies = [
 name = "ya-payment-driver"
 version = "0.1.0"
 dependencies = [
+ "actix",
+ "anyhow",
  "async-trait",
  "bigdecimal",
  "chrono",
+ "diesel",
+ "diesel_migrations",
+ "ethereum-types 0.6.0",
+ "hex",
  "log 0.4.11",
+ "num",
+ "r2d2",
+ "thiserror",
+ "tokio 0.2.22",
  "ya-client-model 0.2.0",
  "ya-core-model",
+ "ya-persistence",
  "ya-service-bus",
 ]
 
@@ -7898,7 +7909,6 @@ dependencies = [
 name = "ya-zksync-driver"
 version = "0.1.0"
 dependencies = [
- "actix",
  "anyhow",
  "async-trait",
  "awc 2.0.1",
@@ -7918,6 +7928,7 @@ dependencies = [
  "uuid 0.8.1",
  "ya-client-model 0.2.0",
  "ya-payment-driver",
+ "ya-service-api-interfaces",
  "zksync",
  "zksync_eth_signer",
 ]

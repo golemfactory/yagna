@@ -1,74 +1,57 @@
+// Extrernal crates
+use actix::Arbiter;
+use actix::AsyncContext;
+use actix::{
+    prelude::{Addr, Context},
+    Actor,
+};
+use std::sync::Arc;
+use std::time::Duration;
 
-use crate::driver::PaymentDriver;
+pub use async_trait::async_trait;
 
-
-pub struct PaymentDriverCron {
-    driver : Box<dyn PaymentDriver>
+#[async_trait(?Send)]
+pub trait PaymentDriverCron {
+    async fn confirm_payments(&self);
+    async fn process_payments(&self);
 }
 
+pub struct Cron {
+    driver: Arc<dyn PaymentDriverCron>,
+}
 
-impl PaymentDriverCron {
-    pub fn new(
-        driver : Box<dyn PaymentDriver>
-    ) -> Addr<Self> {
-        let me = Self {
-            driver
-            // active_accounts,
-            // ethereum_client,
-            // gnt_contract,
-            // db,
-            // nonces: Default::default(),
-            // next_reservation_id: 0,
-            // pending_reservations: Default::default(),
-            // pending_confirmations: Default::default(),
-            // receipt_queue: Default::default(),
-            // reservation: None,
-            // required_confirmations: env.required_confirmations,
-        };
-
+impl Cron {
+    pub fn new(driver: Arc<dyn PaymentDriverCron>) -> Addr<Self> {
+        let me = Self { driver };
         me.start()
     }
 
+    fn start_confirmation_job(&mut self, ctx: &mut Context<Self>) {
+        let _ = ctx.run_interval(Duration::from_secs(10), |act, _ctx| {
+            log::debug!("Spawning confirmation job.");
+            let driver = act.driver.clone();
+            Arbiter::spawn(async move {
+                driver.confirm_payments().await;
+            });
+        });
+    }
+
     fn start_payment_job(&mut self, ctx: &mut Context<Self>) {
-        let _ = ctx.run_interval(Duration::from_secs(30), |act, ctx| {
-            act.driver.process_payments().await;
-            // for address in act.active_accounts.borrow().list_accounts() {
-            //     log::trace!("payment job for: {:?}", address);
-            //     match act.active_accounts.borrow().get_node_id(address.as_str()) {
-            //         None => continue,
-            //         Some(node_id) => {
-            //             let account = address.clone();
-            //             let client = act.ethereum_client.clone();
-            //             let gnt_contract = act.gnt_contract.clone();
-            //             let tx_sender = ctx.address();
-            //             let db = act.db.clone();
-            //             let sign_tx = utils::get_sign_tx(node_id);
-            //             Arbiter::spawn(async move {
-            //                 process_payments(
-            //                     account,
-            //                     client,
-            //                     gnt_contract,
-            //                     tx_sender,
-            //                     db,
-            //                     &sign_tx,
-            //                 )
-            //                 .await;
-            //             });
-            //         }
-            //     }
-            // }
+        let _ = ctx.run_interval(Duration::from_secs(30), |act, _ctx| {
+            log::debug!("Spawning payment job.");
+            let driver = act.driver.clone();
+            Arbiter::spawn(async move {
+                driver.process_payments().await;
+            });
         });
     }
 }
 
-
-impl Actor for PaymentDriverCron {
+impl Actor for Cron {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        // self.start_confirmation_job(ctx);
-        // self.start_block_traces(ctx);
-        // self.load_txs(ctx);
+        self.start_confirmation_job(ctx);
         self.start_payment_job(ctx);
     }
 }
