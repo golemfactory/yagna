@@ -32,6 +32,7 @@ pub fn register_endpoints(scope: Scope) -> Scope {
 }
 
 #[actix_web::post("/demands")]
+#[ya_api_macros::log_api_call(name = "SubscribeDemand", body = "body", id = "id")]
 async fn subscribe(
     market: Data<Arc<MarketService>>,
     body: Json<DemandOfferBase>,
@@ -45,6 +46,7 @@ async fn subscribe(
 }
 
 #[actix_web::get("/demands")]
+#[ya_api_macros::log_api_call(name = "GetDemands", id = "id")]
 async fn get_demands(market: Data<Arc<MarketService>>, id: Identity) -> impl Responder {
     market
         .get_demands(Some(id))
@@ -53,6 +55,7 @@ async fn get_demands(market: Data<Arc<MarketService>>, id: Identity) -> impl Res
 }
 
 #[actix_web::delete("/demands/{subscription_id}")]
+#[ya_api_macros::log_api_call(name = "UnsubscribeDemand", path = "path", id = "id")]
 async fn unsubscribe(
     market: Data<Arc<MarketService>>,
     path: Path<PathSubscription>,
@@ -67,6 +70,7 @@ async fn unsubscribe(
 }
 
 #[actix_web::get("/demands/{subscription_id}/events")]
+#[ya_api_macros::log_api_call(name = "CollectOffers", path = "path", query = "query", id = "_id")]
 async fn collect(
     market: Data<Arc<MarketService>>,
     path: Path<PathSubscription>,
@@ -85,6 +89,12 @@ async fn collect(
 }
 
 #[actix_web::post("/demands/{subscription_id}/proposals/{proposal_id}")]
+#[ya_api_macros::log_api_call(
+    name = "CounterProposalDemand",
+    path = "path",
+    body = "body",
+    id = "id"
+)]
 async fn counter_proposal(
     market: Data<Arc<MarketService>>,
     path: Path<PathSubscriptionProposal>,
@@ -105,6 +115,7 @@ async fn counter_proposal(
 }
 
 #[actix_web::get("/demands/{subscription_id}/proposals/{proposal_id}")]
+#[ya_api_macros::log_api_call(name = "GetProposalOffer", path = "path", id = "_id")]
 async fn get_proposal(
     market: Data<Arc<MarketService>>,
     path: Path<PathSubscriptionProposal>,
@@ -125,6 +136,7 @@ async fn get_proposal(
 }
 
 #[actix_web::delete("/demands/{subscription_id}/proposals/{proposal_id}")]
+#[ya_api_macros::log_api_call(name = "RejectProposalOffer", path = "path", id = "id")]
 async fn reject_proposal(
     market: Data<Arc<MarketService>>,
     path: Path<PathSubscriptionProposal>,
@@ -144,6 +156,7 @@ async fn reject_proposal(
 }
 
 #[actix_web::post("/agreements")]
+#[ya_api_macros::log_api_call(name = "CreateAgreement", body = "body", id = "id")]
 async fn create_agreement(
     market: Data<Arc<MarketService>>,
     body: Json<AgreementProposal>,
@@ -160,6 +173,7 @@ async fn create_agreement(
 }
 
 #[actix_web::post("/agreements/{agreement_id}/confirm")]
+#[ya_api_macros::log_api_call(name = "ConfirmAgreement", path = "path", id = "id")]
 async fn confirm_agreement(
     market: Data<Arc<MarketService>>,
     path: Path<PathAgreement>,
@@ -175,6 +189,7 @@ async fn confirm_agreement(
 }
 
 #[actix_web::post("/agreements/{agreement_id}/wait")]
+#[ya_api_macros::log_api_call(name = "WaitForApproval", path = "path", query = "query", id = "_id")]
 async fn wait_for_approval(
     market: Data<Arc<MarketService>>,
     path: Path<PathAgreement>,
@@ -192,6 +207,7 @@ async fn wait_for_approval(
 }
 
 #[actix_web::delete("/agreements/{agreement_id}")]
+#[ya_api_macros::log_api_call(name = "CancelAgreement", path = "_path", id = "_id")]
 async fn cancel_agreement(
     _market: Data<Arc<MarketService>>,
     _path: Path<PathAgreement>,
@@ -201,6 +217,7 @@ async fn cancel_agreement(
 }
 
 #[actix_web::post("/agreements/{agreement_id}/terminate")]
+#[ya_api_macros::log_api_call(name = "TerminateAgreement", path = "_path", id = "_id")]
 async fn terminate_agreement(
     _market: Data<Arc<MarketService>>,
     _path: Path<PathAgreement>,

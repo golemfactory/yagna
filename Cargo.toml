@@ -124,6 +124,7 @@ members = [
     "service-bus/util",
     "utils/actix_utils",
     "utils/agreement-utils",
+    "utils/api-macros",
     "utils/compile-time-utils",
     "utils/path",
     "utils/process",
@@ -168,6 +169,7 @@ ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev =
 gftp = { path = "core/gftp" }
 tokio-process-ns = { path = "exe-unit/tokio-process-ns" }
 ya-agreement-utils = { path = "utils/agreement-utils" }
+ya-api-macros = { path = "utils/api-macros" }
 ya-std-utils = { path = "utils/std-utils" }
 ya-compile-time-utils = { path = "utils/compile-time-utils" }
 ya-exe-unit = { path = "exe-unit" }

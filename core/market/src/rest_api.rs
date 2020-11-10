@@ -5,7 +5,7 @@
 //! No market logic is allowed here.
 
 use actix_web::{error::InternalError, http::StatusCode, web::PathConfig};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use ya_client::model::ErrorMessage;
 
@@ -29,29 +29,29 @@ pub fn path_config() -> PathConfig {
     })
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct PathAgreement {
     pub agreement_id: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct PathSubscription {
     pub subscription_id: SubscriptionId,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct PathSubscriptionProposal {
     pub subscription_id: SubscriptionId,
     pub proposal_id: ProposalId,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct QueryTimeout {
     #[serde(rename = "timeout", default = "default_query_timeout")]
     pub timeout: f32,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct QueryTimeoutCommandIndex {
     #[serde(rename = "timeout")]
     pub timeout: Option<f32>,
@@ -59,7 +59,7 @@ pub struct QueryTimeoutCommandIndex {
     pub command_index: Option<usize>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct QueryTimeoutMaxEvents {
     /// number of seconds to wait
     #[serde(rename = "timeout", default = "default_event_timeout")]

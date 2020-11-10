@@ -15,6 +15,7 @@ pub fn register_endpoints(scope: Scope) -> Scope {
 }
 
 #[actix_web::get("/agreements/{agreement_id}")]
+#[ya_api_macros::log_api_call(name = "GetAgreement", path = "path", id = "id")]
 async fn get_agreement(
     market: Data<Arc<MarketService>>,
     path: Path<PathAgreement>,
