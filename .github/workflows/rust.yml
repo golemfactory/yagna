@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - master
-      - mwu/default-test
+      - mwu/multi-flags
   pull_request:
     branches:
       - master
@@ -109,7 +109,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --workspace
+          args: --workspace --features gnt-driver
 
       - name: cargo build router
         uses: actions-rs/cargo@v1
