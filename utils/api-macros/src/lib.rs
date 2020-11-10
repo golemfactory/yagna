@@ -16,6 +16,7 @@ use quote::quote;
 /// }
 /// ```
 #[proc_macro_attribute]
+#[cfg(not(test))] // Work around for rust-lang/rust#62127
 pub fn log_api_call(attributes: TokenStream, item: TokenStream) -> TokenStream {
     let mut input = syn::parse_macro_input!(item as syn::ItemFn);
     let attrs = &input.attrs;
