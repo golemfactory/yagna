@@ -1,11 +1,21 @@
+/*
+    Data access object for payment, linking `PaymentEntity` with `payment`
+*/
+
+// External crates
 use diesel::{self, ExpressionMethods, QueryDsl, RunQueryDsl};
 
-use crate::db::models::{PaymentEntity, PAYMENT_STATUS_NOT_YET, PAYMENT_STATUS_OK};
-use crate::db::schema::payment::dsl;
-
+// Workspace uses
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
-use crate::dao::DbResult;
+// Local uses
+use crate::{
+    dao::DbResult,
+    db::{
+        models::{PaymentEntity, PAYMENT_STATUS_NOT_YET, PAYMENT_STATUS_OK},
+        schema::payment::dsl,
+    },
+};
 
 #[allow(unused)]
 pub struct PaymentDao<'c> {

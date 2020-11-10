@@ -1,6 +1,12 @@
+/*
+    Database Access Object, all you need to interact with the database.
+*/
+
+// Extrernal crates
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+// Workspace uses
 use ya_payment_driver::{
     dao::{payment::PaymentDao, transaction::TransactionDao, DbExecutor},
     db::models::{

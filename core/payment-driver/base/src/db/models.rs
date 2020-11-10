@@ -1,5 +1,11 @@
+/*
+    Raw database models.
+*/
+
+// External crates
 use chrono::NaiveDateTime;
 
+// Local uses
 use crate::db::schema::*;
 
 pub const TX_CREATED: i32 = 1;

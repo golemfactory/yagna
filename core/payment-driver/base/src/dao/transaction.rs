@@ -1,10 +1,21 @@
+/*
+    Data access object for transaction, linking `TransactionEntity` with `transaction`
+*/
+
+// External crates
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
-use crate::db::models::{TransactionEntity, TransactionStatus};
-use crate::db::schema::transaction::dsl;
-
-use crate::dao::DbResult;
+// Workspace uses
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
+
+// Local uses
+use crate::{
+    dao::DbResult,
+    db::{
+        models::{TransactionEntity, TransactionStatus},
+        schema::transaction::dsl,
+    },
+};
 
 #[allow(unused)]
 pub struct TransactionDao<'c> {
