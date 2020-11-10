@@ -73,6 +73,22 @@ impl<'c> AllocationDao<'c> {
         .await
     }
 
+    pub async fn get_many(
+        &self,
+        allocation_ids: Vec<String>,
+        owner_id: NodeId,
+    ) -> DbResult<Vec<Allocation>> {
+        readonly_transaction(self.pool, move |conn| {
+            let allocations: Vec<ReadObj> = dsl::pay_allocation
+                .filter(dsl::owner_id.eq(owner_id))
+                .filter(dsl::released.eq(false))
+                .filter(dsl::id.eq_any(allocation_ids))
+                .load(conn)?;
+            Ok(allocations.into_iter().map(Into::into).collect())
+        })
+        .await
+    }
+
     pub async fn get_for_owner(&self, owner_id: NodeId) -> DbResult<Vec<Allocation>> {
         readonly_transaction(self.pool, move |conn| {
             let allocations: Vec<ReadObj> = dsl::pay_allocation

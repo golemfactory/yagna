@@ -20,10 +20,11 @@ async fn main() -> anyhow::Result<()> {
         .issue_invoice(&NewInvoice {
             agreement_id: "agreement_id".to_string(),
             activity_ids: None,
-            amount: BigDecimal::from(1u64),
+            amount: BigDecimal::from(1.230028519070000),
             payment_due_date: Utc::now(),
         })
         .await?;
+    log::debug!("invoice={:?}", invoice);
     log::info!("Invoice issued.");
 
     log::info!("Sending invoice...");
@@ -40,6 +41,7 @@ async fn main() -> anyhow::Result<()> {
             make_deposit: false,
         })
         .await?;
+    log::debug!("allocation={:?}", allocation);
     log::info!("Allocation created.");
 
     log::info!("Accepting invoice...");
