@@ -16,7 +16,13 @@ pub enum ProposalResponse {
         offer: DemandOfferBase,
     },
     AcceptProposal,
-    RejectProposal,
+    #[display(
+        fmt = "RejectProposal{}",
+        "reason.as_ref().map(|r| format!(\" (reason: {})\", r)).unwrap_or(\"\".into())"
+    )]
+    RejectProposal {
+        reason: Option<String>,
+    },
     ///< Don't send any message to requestor. Could be useful to wait for other offers.
     IgnoreProposal,
 }
@@ -26,7 +32,13 @@ pub enum ProposalResponse {
 #[allow(dead_code)]
 pub enum AgreementResponse {
     ApproveAgreement,
-    RejectAgreement,
+    #[display(
+        fmt = "RejectAgreement{}",
+        "reason.as_ref().map(|r| format!(\" (reason: {})\", r)).unwrap_or(\"\".into())"
+    )]
+    RejectAgreement {
+        reason: Option<String>,
+    },
 }
 
 /// Result of agreement execution.
@@ -54,4 +66,31 @@ pub trait Negotiator {
         demand: &Proposal,
     ) -> Result<ProposalResponse>;
     fn react_to_agreement(&mut self, agreement: &AgreementView) -> Result<AgreementResponse>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_proposal_response_display() {
+        let reason = ProposalResponse::RejectProposal {
+            reason: Some("zima".into()),
+        };
+        let no_reason = ProposalResponse::RejectProposal { reason: None };
+
+        assert_eq!(reason.to_string(), "RejectProposal (reason: zima)");
+        assert_eq!(no_reason.to_string(), "RejectProposal");
+    }
+
+    #[test]
+    fn test_agreement_response_display() {
+        let reason = AgreementResponse::RejectAgreement {
+            reason: Some("lato".into()),
+        };
+        let no_reason = AgreementResponse::RejectAgreement { reason: None };
+
+        assert_eq!(reason.to_string(), "RejectAgreement (reason: lato)");
+        assert_eq!(no_reason.to_string(), "RejectAgreement");
+    }
 }
