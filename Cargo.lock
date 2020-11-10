@@ -5166,6 +5166,7 @@ checksum = "2932dc07acd2066ff2e3921a4419606b220ba6cd03a9935123856cc534877056"
 dependencies = [
  "rand 0.6.5",
  "secp256k1-sys 0.1.2",
+ "serde",
 ]
 
 [[package]]
@@ -5176,7 +5177,6 @@ checksum = "c6179428c22c73ac0fbb7b5579a56353ce78ba29759b3b8575183336ea74cdfb"
 dependencies = [
  "rand 0.6.5",
  "secp256k1-sys 0.3.0",
- "serde",
 ]
 
 [[package]]
@@ -7135,7 +7135,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=fe426adc89682be018d65504c0bfb8ab9580fcae#fe426adc89682be018d65504c0bfb8ab9580fcae"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=6f419f0c64c4064e2482d3d83eb60f3afcff7b88#6f419f0c64c4064e2482d3d83eb60f3afcff7b88"
 dependencies = [
  "awc 1.0.1",
  "bytes 0.5.6",
@@ -7172,7 +7172,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=fe426adc89682be018d65504c0bfb8ab9580fcae#fe426adc89682be018d65504c0bfb8ab9580fcae"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=6f419f0c64c4064e2482d3d83eb60f3afcff7b88#6f419f0c64c4064e2482d3d83eb60f3afcff7b88"
 dependencies = [
  "bigdecimal",
  "chrono",
@@ -7180,7 +7180,7 @@ dependencies = [
  "hex",
  "openssl",
  "rand 0.7.3",
- "secp256k1 0.19.0",
+ "secp256k1 0.17.2",
  "serde",
  "serde_json",
  "thiserror",
@@ -8024,7 +8024,7 @@ dependencies = [
 [[package]]
 name = "zksync"
 version = "0.1.0"
-source = "git+https://github.com/matter-labs/zksync?branch=master#62acd7f0713138df37d5094d5125441fa3f448af"
+source = "git+https://github.com/matter-labs/zksync#62acd7f0713138df37d5094d5125441fa3f448af"
 dependencies = [
  "bellman_ce",
  "ethabi 12.0.0",
@@ -8050,7 +8050,7 @@ dependencies = [
 [[package]]
 name = "zksync_basic_types"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?branch=master#62acd7f0713138df37d5094d5125441fa3f448af"
+source = "git+https://github.com/matter-labs/zksync#62acd7f0713138df37d5094d5125441fa3f448af"
 dependencies = [
  "web3 0.13.0",
 ]
@@ -8058,7 +8058,7 @@ dependencies = [
 [[package]]
 name = "zksync_contracts"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?branch=master#62acd7f0713138df37d5094d5125441fa3f448af"
+source = "git+https://github.com/matter-labs/zksync#62acd7f0713138df37d5094d5125441fa3f448af"
 dependencies = [
  "ethabi 12.0.0",
  "serde_json",
@@ -8067,7 +8067,7 @@ dependencies = [
 [[package]]
 name = "zksync_crypto"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?branch=master#62acd7f0713138df37d5094d5125441fa3f448af"
+source = "git+https://github.com/matter-labs/zksync#62acd7f0713138df37d5094d5125441fa3f448af"
 dependencies = [
  "anyhow",
  "fnv",
@@ -8084,7 +8084,7 @@ dependencies = [
 [[package]]
 name = "zksync_eth_client"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?branch=master#62acd7f0713138df37d5094d5125441fa3f448af"
+source = "git+https://github.com/matter-labs/zksync#62acd7f0713138df37d5094d5125441fa3f448af"
 dependencies = [
  "anyhow",
  "ethabi 12.0.0",
@@ -8099,7 +8099,7 @@ dependencies = [
 [[package]]
 name = "zksync_eth_signer"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?branch=master#62acd7f0713138df37d5094d5125441fa3f448af"
+source = "git+https://github.com/matter-labs/zksync#62acd7f0713138df37d5094d5125441fa3f448af"
 dependencies = [
  "async-trait",
  "hex",
@@ -8117,7 +8117,7 @@ dependencies = [
 [[package]]
 name = "zksync_types"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?branch=master#62acd7f0713138df37d5094d5125441fa3f448af"
+source = "git+https://github.com/matter-labs/zksync#62acd7f0713138df37d5094d5125441fa3f448af"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8136,7 +8136,7 @@ dependencies = [
 [[package]]
 name = "zksync_utils"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?branch=master#62acd7f0713138df37d5094d5125441fa3f448af"
+source = "git+https://github.com/matter-labs/zksync#62acd7f0713138df37d5094d5125441fa3f448af"
 dependencies = [
  "anyhow",
  "bigdecimal",
