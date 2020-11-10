@@ -5,16 +5,16 @@ use proc_macro::TokenStream;
 
 use quote::quote;
 
-/// Marks async function to be wrapped in logging calls.
-///
-/// ## Usage
-///
-/// ```rust
-/// #[api_macros::log_api_call]
-/// async fn api_method(serv, body, identity) {
-///     ...method body...
-/// }
-/// ```
+// Marks async function to be wrapped in logging calls.
+//
+// ## Usage
+//
+// ```rust
+// #[api_macros::log_api_call]
+// async fn api_method(serv, body, identity) {
+//     ...method body...
+// }
+// ```
 #[proc_macro_attribute]
 #[cfg(not(test))] // Work around for rust-lang/rust#62127
 pub fn log_api_call(attributes: TokenStream, item: TokenStream) -> TokenStream {
