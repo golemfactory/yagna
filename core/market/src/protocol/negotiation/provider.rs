@@ -170,7 +170,7 @@ impl NegotiationApi {
         caller: String,
         msg: ProposalReceived,
     ) -> Result<(), CounterProposalError> {
-        log::debug!(
+        log::trace!(
             "Negotiation API: Received proposal [{}] from [{}].",
             &msg.proposal.proposal_id,
             &caller
