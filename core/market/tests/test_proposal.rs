@@ -30,9 +30,9 @@ async fn test_get_proposal() -> Result<(), anyhow::Error> {
     assert!(result.is_ok());
     let proposal = result.unwrap().into_client()?;
 
-    assert_eq!(proposal.state()?, &State::Draft);
-    assert_eq!(proposal.proposal_id()?, &proposal_id.to_string());
-    assert_eq!(proposal.issuer_id()?, &prov_id.identity.to_string());
+    assert_eq!(proposal.state, State::Draft);
+    assert_eq!(proposal.proposal_id, proposal_id.to_string());
+    assert_eq!(proposal.issuer_id, prov_id.identity);
     assert!(proposal.prev_proposal_id().is_ok());
 
     // Provider side
@@ -42,9 +42,9 @@ async fn test_get_proposal() -> Result<(), anyhow::Error> {
     assert!(result.is_ok());
     let proposal = result.unwrap().into_client()?;
 
-    assert_eq!(proposal.state()?, &State::Draft);
-    assert_eq!(proposal.proposal_id()?, &proposal_id.to_string());
-    assert_eq!(proposal.issuer_id()?, &prov_id.identity.to_string());
+    assert_eq!(proposal.state, State::Draft);
+    assert_eq!(proposal.proposal_id, proposal_id.to_string());
+    assert_eq!(proposal.issuer_id, prov_id.identity);
     assert!(proposal.prev_proposal_id().is_ok());
     Ok(())
 }

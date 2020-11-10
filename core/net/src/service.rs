@@ -41,7 +41,7 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
         if let Some(prefix) = prefix {
             // replaces  /net/<dest_node_id>/test/1 --> /public/test/1
             let local_addr: String = addr.replacen(prefix, net::PUBLIC_PREFIX, 1);
-            log::debug!(
+            log::trace!(
                 "Incoming msg from = {}, to = {}, fwd to local addr = {}, request_id: {}",
                 caller,
                 addr,
@@ -90,7 +90,7 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
     // bind /net on my local bus and forward all calls to remote bus under /net
     {
         let log_message = |caller: &str, addr: &str, label: &str| {
-            log::debug!(
+            log::trace!(
                 "Sending {} message to hub. Called by: {}, addr: {}.",
                 label,
                 net_service(&caller),
@@ -133,7 +133,7 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
                 Ok(v) => v,
                 Err(e) => return future::err(Error::GsbBadRequest(e.to_string())).left_future(),
             };
-            log::debug!("{} is calling (rpc) {}", from_node, to_addr);
+            log::trace!("{} is calling (rpc) {}", from_node, to_addr);
             if !nodes_rpc.contains(&from_node) {
                 return future::err(Error::GsbBadRequest(format!(
                     "caller: {:?} is not on src list: {:?}",
@@ -160,7 +160,7 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
                         .left_stream();
                 }
             };
-            log::debug!("{} is calling (stream) {}", from_node, to_addr);
+            log::trace!("{} is calling (stream) {}", from_node, to_addr);
             if !nodes_stream.contains(&from_node) {
                 let err = Error::GsbBadRequest(format!(
                     "caller: {:?} is not on src list: {:?}",

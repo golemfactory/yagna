@@ -4,6 +4,7 @@ use std::str::FromStr;
 use std::time::{Duration, Instant};
 
 use ya_client::model::market::proposal::Proposal as ClientProposal;
+use ya_client::model::market::DemandOfferBase;
 use ya_client::model::NodeId;
 use ya_market_resolver::{match_demand_offer, Match};
 use ya_persistence::executor::DbExecutor;
@@ -39,7 +40,7 @@ impl CommonBroker {
         &self,
         subscription_id: &SubscriptionId,
         prev_proposal_id: &ProposalId,
-        proposal: &ClientProposal,
+        proposal: &DemandOfferBase,
         owner: OwnerType,
     ) -> Result<(Proposal, IsFirst), ProposalError> {
         // Check if subscription is still active.

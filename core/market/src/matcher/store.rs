@@ -1,7 +1,7 @@
 use chrono::{NaiveDateTime, Utc};
 use std::sync::Arc;
 
-use ya_client::model::market::{Demand as ClientDemand, Offer as ClientOffer};
+use ya_client::model::market::{Demand as ClientDemand, DemandOfferBase, Offer as ClientOffer};
 use ya_client::model::NodeId;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
@@ -30,7 +30,7 @@ impl SubscriptionStore {
     pub async fn create_offer(
         &self,
         id: &Identity,
-        offer: &ClientOffer,
+        offer: &DemandOfferBase,
     ) -> Result<Offer, SaveOfferError> {
         let creation_ts = Utc::now().naive_utc();
         // TODO: provider agent should set expiration.
@@ -231,7 +231,7 @@ impl SubscriptionStore {
     pub async fn create_demand(
         &self,
         id: &Identity,
-        demand: &ClientDemand,
+        demand: &DemandOfferBase,
     ) -> Result<Demand, DemandError> {
         let creation_ts = Utc::now().naive_utc();
         // TODO: requestor agent should set expiration.

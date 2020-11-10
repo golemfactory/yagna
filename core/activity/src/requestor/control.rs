@@ -84,7 +84,7 @@ async fn create_activity(
     let agreement = get_agreement(&agreement_id).await?;
     log::debug!("agreement: {:#?}", agreement);
 
-    let provider_id = agreement.provider_id()?.parse()?;
+    let provider_id = agreement.provider_id().clone();
     let msg = activity::Create {
         provider_id,
         agreement_id: agreement_id.to_string(),
@@ -176,7 +176,7 @@ async fn exec(
     };
 
     ya_net::from(id.identity)
-        .to(agreement.provider_id()?.parse()?)
+        .to(agreement.provider_id().clone())
         .service(&activity::exeunit::bus_id(&path.activity_id))
         .send(msg)
         .timeout(query.timeout)
@@ -221,7 +221,7 @@ async fn await_results(
     };
 
     let results = ya_net::from(id.identity)
-        .to(agreement.provider_id()?.parse()?)
+        .to(agreement.provider_id().clone())
         .service(&activity::exeunit::bus_id(&path.activity_id))
         .send(msg)
         .timeout(query.timeout)
@@ -243,7 +243,7 @@ fn stream_results(
 
     let seq = AtomicU64::new(0);
     let stream = ya_net::from(id.identity)
-        .to(agreement.provider_id()?.parse()?)
+        .to(agreement.provider_id().clone())
         .service(&activity::exeunit::bus_id(&path.activity_id))
         .call_streaming(msg)
         .inspect(move |entry| match entry {
@@ -328,7 +328,7 @@ async fn encrypted(
     };
 
     let result = ya_net::from(id.identity)
-        .to(agreement.provider_id()?.parse()?)
+        .to(agreement.provider_id().clone())
         .service(&activity::exeunit::bus_id(&path.activity_id))
         .send(msg)
         .timeout(query.timeout)

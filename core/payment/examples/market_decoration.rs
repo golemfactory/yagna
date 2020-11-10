@@ -1,8 +1,8 @@
 use bigdecimal::BigDecimal;
+use futures::StreamExt;
 use ya_client::payment::PaymentRequestorApi;
 use ya_client::web::WebClient;
 use ya_client_model::payment::NewAllocation;
-use futures::StreamExt;
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
@@ -31,12 +31,14 @@ async fn main() -> anyhow::Result<()> {
                         timeout: None,
                         make_deposit: false,
                     })
-                    .await.unwrap();
+                    .await
+                    .unwrap();
                 log::info!("Allocation created.");
                 allocation.allocation_id
             }
         })
-        .collect().await;
+        .collect()
+        .await;
 
     log::info!("Decorating demand...");
     let requestor: PaymentRequestorApi = client.interface()?;

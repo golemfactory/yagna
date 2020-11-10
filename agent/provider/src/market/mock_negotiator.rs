@@ -1,6 +1,6 @@
 use ya_agreement_utils::AgreementView;
 use ya_agreement_utils::OfferDefinition;
-use ya_client_model::market::{Offer, Proposal};
+use ya_client_model::market::{DemandOfferBase, Proposal};
 
 use super::negotiator::Negotiator;
 use crate::market::negotiator::{AgreementResponse, AgreementResult, ProposalResponse};
@@ -14,7 +14,7 @@ use ya_agreement_utils::agreement::expand;
 pub struct AcceptAllNegotiator;
 
 impl Negotiator for AcceptAllNegotiator {
-    fn create_offer(&mut self, offer: &OfferDefinition) -> Result<Offer> {
+    fn create_offer(&mut self, offer: &OfferDefinition) -> Result<DemandOfferBase> {
         Ok(offer_definition_to_offer(offer.clone()))
     }
 
@@ -24,7 +24,7 @@ impl Negotiator for AcceptAllNegotiator {
 
     fn react_to_proposal(
         &mut self,
-        _offer: &Offer,
+        _offer: &DemandOfferBase,
         _demand: &Proposal,
     ) -> Result<ProposalResponse> {
         Ok(ProposalResponse::AcceptProposal)
@@ -61,7 +61,7 @@ impl LimitAgreementsNegotiator {
 }
 
 impl Negotiator for LimitAgreementsNegotiator {
-    fn create_offer(&mut self, offer: &OfferDefinition) -> Result<Offer> {
+    fn create_offer(&mut self, offer: &OfferDefinition) -> Result<DemandOfferBase> {
         Ok(offer_definition_to_offer(offer.clone()))
     }
 
@@ -73,7 +73,11 @@ impl Negotiator for LimitAgreementsNegotiator {
         Ok(())
     }
 
-    fn react_to_proposal(&mut self, _offer: &Offer, demand: &Proposal) -> Result<ProposalResponse> {
+    fn react_to_proposal(
+        &mut self,
+        _offer: &DemandOfferBase,
+        demand: &Proposal,
+    ) -> Result<ProposalResponse> {
         let expiration = proposal_expiration_from(&demand)?;
         let min_expiration = Utc::now() + Duration::minutes(5);
         let max_expiration = Utc::now() + Duration::minutes(30);
@@ -83,7 +87,12 @@ impl Negotiator for LimitAgreementsNegotiator {
                 "Negotiator: Reject proposal [{:?}] due to expiration limits.",
                 demand.proposal_id
             );
-            Ok(ProposalResponse::RejectProposal)
+            Ok(ProposalResponse::RejectProposal {
+                reason: Some(format!(
+                    "proposal expired at: {} which is less than 5 min or more than 30 min from now",
+                    expiration
+                )),
+            })
         } else if self.has_free_slot() {
             Ok(ProposalResponse::AcceptProposal)
         } else {
@@ -91,7 +100,12 @@ impl Negotiator for LimitAgreementsNegotiator {
                 "Negotiator: Reject proposal [{:?}] due to limit.",
                 demand.proposal_id
             );
-            Ok(ProposalResponse::RejectProposal)
+            Ok(ProposalResponse::RejectProposal {
+                reason: Some(format!(
+                    "available agreements limit: {} reached",
+                    self.max_agreements
+                )),
+            })
         }
     }
 
@@ -105,7 +119,12 @@ impl Negotiator for LimitAgreementsNegotiator {
                 "Negotiator: Reject agreement proposal [{}] due to limit.",
                 agreement.agreement_id
             );
-            Ok(AgreementResponse::RejectAgreement)
+            Ok(AgreementResponse::RejectAgreement {
+                reason: Some(format!(
+                    "available agreements limit: {} reached",
+                    self.max_agreements
+                )),
+            })
         }
     }
 }
@@ -120,7 +139,7 @@ fn proposal_expiration_from(proposal: &Proposal) -> Result<DateTime<Utc>> {
     Ok(Utc.timestamp_millis(timestamp))
 }
 
-fn offer_definition_to_offer(offer_def: OfferDefinition) -> Offer {
+fn offer_definition_to_offer(offer_def: OfferDefinition) -> DemandOfferBase {
     let constraints = offer_def.offer.constraints.clone();
-    Offer::new(offer_def.into_json(), constraints)
+    DemandOfferBase::new(offer_def.into_json(), constraints)
 }

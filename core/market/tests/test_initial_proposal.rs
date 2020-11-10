@@ -1,11 +1,11 @@
 use ya_client::model::market::event::{ProviderEvent, RequestorEvent};
 use ya_client::model::market::proposal::State;
+use ya_market::testing::events_helper::ClientProposalHelper;
 use ya_market::testing::mock_offer::client::{sample_demand, sample_offer};
-use ya_market::testing::{MarketServiceExt, MarketsNetwork, OwnerType, ProposalId};
+use ya_market::testing::{MarketServiceExt, MarketsNetwork, OwnerType};
 use ya_market::testing::{QueryEventsError, TakeEventsError};
 use ya_market::MarketService;
 
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -62,7 +62,7 @@ async fn test_query_initial_proposal() -> Result<(), anyhow::Error> {
     };
 
     assert_eq!(proposal.prev_proposal_id, None);
-    assert_eq!(proposal.state()?, &State::Initial);
+    assert_eq!(proposal.state, State::Initial);
 
     // We expect that, the same event won't be available again.
     let events = market1.query_events(&demand_id, 0.2, Some(5)).await?;
@@ -103,7 +103,7 @@ async fn test_query_multiple_events() -> Result<(), anyhow::Error> {
         match event {
             RequestorEvent::ProposalEvent { proposal, .. } => {
                 assert_eq!(proposal.prev_proposal_id, None);
-                assert_eq!(proposal.state()?, &State::Initial);
+                assert_eq!(proposal.state, State::Initial);
             }
             _ => panic!("ProposalEvent expected, but got {:?}", event),
         };
@@ -344,7 +344,7 @@ async fn test_simultaneous_query_events() -> Result<(), anyhow::Error> {
     let ids = events1
         .into_iter()
         .map(|event| match event {
-            RequestorEvent::ProposalEvent { proposal, .. } => proposal.proposal_id.unwrap(),
+            RequestorEvent::ProposalEvent { proposal, .. } => proposal.proposal_id,
             _ => panic!("Expected ProposalEvents"),
         })
         .collect::<Vec<String>>();
@@ -358,7 +358,7 @@ async fn test_simultaneous_query_events() -> Result<(), anyhow::Error> {
 
 /// Run two query events in the same time.
 /// The same event shouldn't be returned twice.
-#[cfg_attr(not(feature = "market-test-suite"), ignore)]
+#[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
 async fn test_unsubscribe_demand_while_query_events_for_other() -> Result<(), anyhow::Error> {
@@ -432,9 +432,9 @@ async fn test_counter_initial_proposal() -> Result<(), anyhow::Error> {
         RequestorEvent::ProposalEvent { proposal, .. } => proposal,
         _ => panic!("Invalid event Type. ProposalEvent expected"),
     };
-    let init_proposal_id = ProposalId::from_str(&init_proposal.proposal_id()?)?;
+    let init_proposal_id = init_proposal.get_proposal_id()?;
 
-    let counter_proposal = init_proposal.counter_demand(sample_demand())?;
+    let counter_proposal = sample_demand();
     let new_proposal_id = market1
         .requestor_engine
         .counter_proposal(
@@ -458,9 +458,9 @@ async fn test_counter_initial_proposal() -> Result<(), anyhow::Error> {
         ProviderEvent::ProposalEvent { proposal, .. } => proposal,
         _ => panic!("Invalid event Type. ProposalEvent expected"),
     };
-    assert_eq!(proposal.issuer_id()?, &identity1.identity.to_string());
-    assert_eq!(proposal.proposal_id()?, &new_proposal_id.to_string());
-    assert_eq!(proposal.state()?, &State::Draft);
+    assert_eq!(proposal.issuer_id, identity1.identity);
+    assert_eq!(proposal.proposal_id, new_proposal_id.to_string());
+    assert_eq!(proposal.state, State::Draft);
 
     // Provider creates internally Proposal corresponding to initial Proposal
     // on Requestor, but id will be different.

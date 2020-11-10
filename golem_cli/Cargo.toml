@@ -29,6 +29,7 @@ crossterm="0.18.0"
 rustyline="6.3.0"
 prettytable-rs = "0.8.0"
 ansi_term="0.12.1"
+ya-core-model = { version = "0.2.1", path="../core/model", features=["payment"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libc="0.2.73"
