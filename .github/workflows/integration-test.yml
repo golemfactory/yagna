@@ -3,7 +3,7 @@ name: Integration test
 on:
   workflow_run:
     workflows: ["CI"]
-    types: 
+    types:
       - completed
 
 jobs:
@@ -15,6 +15,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           repository: 'golemfactory/yagna-integration'
+          branch: 'mwu/multi-payment'
           token: ${{ secrets.YAGNA_WORKFLOW_TOKEN }}
 
       - name: Configure python 3.7
@@ -34,7 +35,7 @@ jobs:
       - name: Run test suite
         env:
           GITHUB_API_TOKEN: ${{ secrets.YAGNA_WORKFLOW_TOKEN }}
-        run: python -m pytest test/yagna/e2e -svx --log-cli-level=DEBUG
+        run: python -m pytest test/yagna/module/payments -svx --log-cli-level=DEBUG
 
       - name: Upload test logs
         uses: actions/upload-artifact@v2
@@ -42,4 +43,3 @@ jobs:
         with:
           name: goth-logs
           path: /tmp/yagna-tests
-
