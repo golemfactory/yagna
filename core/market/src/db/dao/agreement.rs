@@ -11,6 +11,7 @@ use crate::db::model::{
     ProposalId,
 };
 use crate::db::schema::market_agreement::dsl;
+use crate::db::schema::market_agreement_event::dsl as event;
 use crate::db::schema::market_agreement_event::dsl::market_agreement_event;
 use crate::db::{DbError, DbResult};
 use crate::market::EnvConfig;
@@ -154,21 +155,26 @@ impl<'c> AgreementDao<'c> {
 
     pub async fn clean(&self) -> DbResult<()> {
         // FIXME use grace time from config file when #460 is merged
-        log::debug!("Clean market agreements: start");
+        log::trace!("Clean market agreements: start");
         let interval_days = AGREEMENT_STORE_DAYS.get_value();
-        let num_deleted = do_with_transaction(self.pool, move |conn| {
-            let nd = diesel::delete(
-                dsl::market_agreement
-                    .filter(dsl::valid_to.lt(datetime("NOW", format!("-{} days", interval_days)))),
-            )
-            .execute(conn)?;
-            Result::<usize, DbError>::Ok(nd)
+        let (num_agreements, num_events) = do_with_transaction(self.pool, move |conn| {
+            let agreements_to_clean = dsl::market_agreement
+                .filter(dsl::valid_to.lt(datetime("NOW", format!("-{} days", interval_days))));
+
+            let related_events = market_agreement_event
+                .filter(event::agreement_id.eq_any(agreements_to_clean.clone().select(dsl::id)));
+
+            let num_agreements = diesel::delete(agreements_to_clean).execute(conn)?;
+            let num_events = diesel::delete(related_events).execute(conn)?;
+            Result::<(usize, usize), DbError>::Ok((num_agreements, num_events))
         })
         .await?;
-        if num_deleted > 0 {
-            log::info!("Clean market agreements: {} cleaned", num_deleted);
+
+        if num_agreements > 0 {
+            log::info!("Clean market agreements: {} cleaned", num_agreements);
+            log::info!("Clean market agreement events: {} cleaned", num_events);
         }
-        log::debug!("Clean market agreements: done");
+        log::trace!("Clean market agreements: done");
         Ok(())
     }
 }
