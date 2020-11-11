@@ -51,6 +51,7 @@ humantime="2.0.1"
 ya-client = "0.4"
 ya-dummy-driver = "0.1"
 ya-gnt-driver = "0.1"
+ya-zksync-driver = "0.1"
 ya-net = { version = "0.1", features = ["service"] }
 ya-sb-router = "0.1"
 
