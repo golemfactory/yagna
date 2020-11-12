@@ -20,12 +20,12 @@ pub trait PaymentDriverCron {
     async fn process_payments(&self);
 }
 
-pub struct Cron {
-    driver: Arc<dyn PaymentDriverCron>,
+pub struct Cron<D: PaymentDriverCron> {
+    driver: Arc<D>,
 }
 
-impl Cron {
-    pub fn new(driver: Arc<dyn PaymentDriverCron>) -> Addr<Self> {
+impl<D: PaymentDriverCron + 'static> Cron<D> {
+    pub fn new(driver: Arc<D>) -> Addr<Self> {
         log::trace!("Creating Cron for PaymentDriver.");
         let me = Self { driver };
         me.start()
@@ -52,7 +52,7 @@ impl Cron {
     }
 }
 
-impl Actor for Cron {
+impl<D: PaymentDriverCron + 'static> Actor for Cron<D> {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
