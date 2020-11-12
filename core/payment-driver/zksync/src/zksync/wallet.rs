@@ -105,22 +105,8 @@ pub async fn check_tx(tx_hash: &str) -> Option<bool> {
     let tx_hash = format!("sync-tx:{}", tx_hash);
     let tx_hash = TxHash::from_str(&tx_hash).unwrap();
     let tx_info = provider.tx_info(tx_hash).await.unwrap();
-    log::debug!("tx_info: {:?}", tx_info);
-    // Check success
-    match tx_info.success {
-        None => None,
-        Some(result) => {
-            if result {
-                // Only wait for verified blocks on mainnet
-                if *NETWORK != Network::Mainnet || tx_info.is_verified() {
-                    return Some(true);
-                }
-                return None;
-            }
-            log::error!("Transaction failed! {:?}", tx_info.fail_reason);
-            return Some(false);
-        }
-    }
+    log::trace!("tx_info: {:?}", tx_info);
+    tx_info.success
 }
 //  TODO: Get Transfer object from zksync
 // pub async fn build_payment_details(tx_hash: &str) -> PaymentDetails {

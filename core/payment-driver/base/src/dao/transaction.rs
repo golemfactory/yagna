@@ -6,7 +6,7 @@
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 // Workspace uses
-use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
+use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
 // Local uses
 use crate::{
@@ -30,13 +30,10 @@ impl<'c> AsDao<'c> for TransactionDao<'c> {
 
 impl<'c> TransactionDao<'c> {
     pub async fn get(&self, tx_id: String) -> DbResult<Option<TransactionEntity>> {
-        do_with_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, move |conn| {
             let tx: Option<TransactionEntity> =
                 dsl::transaction.find(tx_id).first(conn).optional()?;
-            match tx {
-                Some(tx) => Ok(Some(tx)),
-                None => Ok(None),
-            }
+            Ok(tx)
         })
         .await
     }
@@ -64,10 +61,11 @@ impl<'c> TransactionDao<'c> {
     }
 
     pub async fn get_used_nonces(&self, address: String) -> DbResult<Vec<String>> {
-        do_with_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, move |conn| {
             let nonces: Vec<String> = dsl::transaction
                 .filter(dsl::sender.eq(address))
                 .select(dsl::nonce)
+                .order(dsl::nonce.asc())
                 .load(conn)?;
             Ok(nonces)
         })
@@ -79,7 +77,7 @@ impl<'c> TransactionDao<'c> {
     }
 
     pub async fn get_by_status(&self, status: i32) -> DbResult<Vec<TransactionEntity>> {
-        do_with_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, move |conn| {
             let txs: Vec<TransactionEntity> =
                 dsl::transaction.filter(dsl::status.eq(status)).load(conn)?;
             Ok(txs)
@@ -98,7 +96,8 @@ impl<'c> TransactionDao<'c> {
         .await
     }
 
-    pub async fn update_tx_status(&self, tx_id: String, status: i32) -> DbResult<()> {
+    pub async fn update_tx_status(&self, tx_id: String, status: TransactionStatus) -> DbResult<()> {
+        let status: i32 = status.into();
         do_with_transaction(self.pool, move |conn| {
             diesel::update(dsl::transaction.find(tx_id))
                 .set(dsl::status.eq(status))

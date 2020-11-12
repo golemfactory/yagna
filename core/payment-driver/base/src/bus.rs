@@ -72,13 +72,11 @@ pub async fn list_unlocked_identities() -> Result<Vec<NodeId>, GenericError> {
         .await
         .map_err(GenericError::new)?
         .map_err(GenericError::new)?;
-    let mut unlocked_list = vec![];
-
-    for node in result {
-        if !node.is_locked {
-            unlocked_list.push(node.node_id);
-        }
-    }
+    let unlocked_list = result
+        .iter()
+        .filter(|n| !n.is_locked)
+        .map(|n| n.node_id)
+        .collect();
     log::debug!(
         "list_unlocked_identities completed. result={:?}",
         unlocked_list

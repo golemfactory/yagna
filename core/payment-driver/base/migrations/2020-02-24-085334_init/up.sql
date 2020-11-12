@@ -65,7 +65,7 @@ CREATE TABLE `transaction`
 	tx_type INTEGER NOT NULL,
 	encoded VARCHAR (8000) NOT NULL,
 	signature VARCHAR (130) NOT NULL,
-	tx_hash VARCHAR(64),
+	tx_hash VARCHAR(64) NULL UNIQUE,
 	FOREIGN KEY(status) REFERENCES transaction_status (status_id),
 	FOREIGN KEY(tx_type) REFERENCES transaction_type (type_id)
 );
