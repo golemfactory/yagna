@@ -168,6 +168,7 @@ impl Agreement {
                 .map(|d| DateTime::<Utc>::from_utc(d, Utc)),
             state: self.state.into(),
             timestamp: Utc.from_utc_datetime(&self.creation_ts),
+            app_session_id: None,
             proposed_signature: self.proposed_signature,
             approved_signature: self.approved_signature,
             committed_signature: self.committed_signature,
