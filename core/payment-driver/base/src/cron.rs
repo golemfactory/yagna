@@ -37,6 +37,7 @@ impl<D: PaymentDriverCron + 'static> Cron<D> {
             let driver = act.driver.clone();
             Arbiter::spawn(async move {
                 driver.confirm_payments().await;
+                log::trace!("Confirmation job finished.");
             });
         });
     }
@@ -47,6 +48,7 @@ impl<D: PaymentDriverCron + 'static> Cron<D> {
             let driver = act.driver.clone();
             Arbiter::spawn(async move {
                 driver.process_payments().await;
+                log::trace!("Payment job finished.");
             });
         });
     }
