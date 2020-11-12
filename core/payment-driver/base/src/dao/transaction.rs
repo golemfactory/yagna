@@ -50,16 +50,6 @@ impl<'c> TransactionDao<'c> {
         .await
     }
 
-    pub async fn insert_transaction(&self, tx: TransactionEntity) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
-            diesel::insert_into(dsl::transaction)
-                .values(tx)
-                .execute(conn)?;
-            Ok(())
-        })
-        .await
-    }
-
     pub async fn get_used_nonces(&self, address: String) -> DbResult<Vec<String>> {
         readonly_transaction(self.pool, move |conn| {
             let nonces: Vec<String> = dsl::transaction

@@ -98,7 +98,7 @@ impl ZksyncDao {
             tx_hash: None,
         };
 
-        if let Err(e) = self.transaction().insert_transaction(tx).await {
+        if let Err(e) = self.transaction().insert_transactions(vec![tx]).await {
             log::error!("Failed to store transaction for {:?} : {:?}", details, e)
             // TO CHECK: Should it continue or stop the process...
         }

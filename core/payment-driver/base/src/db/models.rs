@@ -4,8 +4,10 @@
 
 // External crates
 use chrono::NaiveDateTime;
+use std::convert::TryFrom;
 
 // Local uses
+use crate::dao::{DbError, DbResult};
 use crate::db::schema::*;
 
 pub const TX_CREATED: i32 = 1;
@@ -26,14 +28,19 @@ pub enum TransactionStatus {
     Failed,
 }
 
-impl From<i32> for TransactionStatus {
-    fn from(status: i32) -> Self {
+impl TryFrom<i32> for TransactionStatus {
+    type Error = DbError;
+
+    fn try_from(status: i32) -> DbResult<Self> {
         match status {
-            TX_CREATED => TransactionStatus::Created,
-            TX_SENT => TransactionStatus::Sent,
-            TX_CONFIRMED => TransactionStatus::Confirmed,
-            TX_FAILED => TransactionStatus::Failed,
-            _ => panic!("Unknown tx status"),
+            TX_CREATED => Ok(TransactionStatus::Created),
+            TX_SENT => Ok(TransactionStatus::Sent),
+            TX_CONFIRMED => Ok(TransactionStatus::Confirmed),
+            TX_FAILED => Ok(TransactionStatus::Failed),
+            _ => Err(DbError::InvalidData(format!(
+                "Unknown tx status. {}",
+                status
+            ))),
         }
     }
 }
