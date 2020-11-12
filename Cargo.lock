@@ -7286,7 +7286,7 @@ dependencies = [
  "actix-http 1.0.1",
  "actix-rt",
  "anyhow",
- "awc 1.0.1",
+ "awc 2.0.1",
  "bigdecimal",
  "bitflags 1.2.1",
  "chrono",
