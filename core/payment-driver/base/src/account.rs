@@ -1,19 +1,5 @@
 /*
     Helper to store active accounts in the driver by <NodeId.to_string(), NodeId>.
-
-    To use Accounts on your driver:
-    - Add type AccountsRc to the struct, for example:
-        struct SomePaymentDriver {
-            active_accounts: AccountsRc,
-        }
-    - Implement get_accounts:
-        fn get_accounts(&self) -> AccountsRefMut {
-            self.active_accounts.borrow_mut()
-        }
-    - Make sure your "DriverService" subscribes to identity events
-        bus::subscribe_to_identity_events(driver).await;
-    - The PaymentDriver trait will keep the list updated
-
 */
 
 // External crates
@@ -65,7 +51,7 @@ impl Accounts {
         }
     }
 
-    fn add_account(&mut self, account: NodeId) {
+    pub fn add_account(&mut self, account: NodeId) {
         self.accounts.insert(account.to_string(), account);
         log::info!("Account: {:?} is unlocked", account.to_string());
     }
