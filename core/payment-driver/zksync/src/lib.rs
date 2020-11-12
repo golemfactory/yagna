@@ -15,6 +15,7 @@ pub use service::ZksyncService as PaymentDriverService;
 #[macro_use]
 extern crate log;
 
+mod dao;
 mod driver;
 mod service;
 mod zksync;
