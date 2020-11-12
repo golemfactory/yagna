@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - master
-      - mwu/multi-test
+      - mwu/default-test
   pull_request:
     branches:
       - master
