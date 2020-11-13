@@ -10,7 +10,7 @@ license = "GPL-3.0"
 edition = "2018"
 
 [features]
-default = ['zksync-driver', 'gftp/bin']
+default = ['zksync-driver', 'gnt-driver', 'gftp/bin']
 static-openssl = ["openssl/vendored"]
 dummy-driver = ['ya-dummy-driver']
 gnt-driver = ['ya-gnt-driver']

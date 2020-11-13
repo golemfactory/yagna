@@ -25,12 +25,12 @@ You can enable multiple drivers at the same time, use this table for the require
 
 ### Examples:
 
-Build with only zksync driver:
+Build with zksync + ngnt driver:
 ```
 cargo build --release
 ```
 
-Build with ngnt + zksync
+Build with only zksync ( not recommended )
 ```
-cargo build --release --features gnt-driver
+cargo build --release --no-default-features --features zksync-driver
 ```

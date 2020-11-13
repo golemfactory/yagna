@@ -108,7 +108,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --workspace --features gnt-driver
+          args: --workspace
 
       - name: cargo build router
         uses: actions-rs/cargo@v1
