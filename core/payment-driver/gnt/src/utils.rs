@@ -100,7 +100,7 @@ pub fn raw_tx_to_entity(
 // that could be calculated easily from RawTransaction data
 // Explanation: RawTransaction::hash() can produce the same output (sender does not have any impact)
 pub fn prepare_tx_id(raw_tx: &RawTransaction, chain_id: u64, sender: Address) -> String {
-    let mut bytes = raw_tx.hash(chain_id);
+    let mut bytes = crate::eth_hacks::get_tx_hash(raw_tx, chain_id);
     let mut address = sender.as_bytes().to_vec();
     bytes.append(&mut address);
     format!("{:x}", Sha3_512::digest(&bytes))

@@ -66,8 +66,8 @@ impl From<DbError> for GNTDriverError {
     }
 }
 
-impl From<uint::FromDecStrErr> for GNTDriverError {
-    fn from(e: uint::FromDecStrErr) -> Self {
+impl From<ethereum_types::FromDecStrErr> for GNTDriverError {
+    fn from(e: ethereum_types::FromDecStrErr) -> Self {
         Self::Conversion(format!("{:?}", e))
     }
 }
