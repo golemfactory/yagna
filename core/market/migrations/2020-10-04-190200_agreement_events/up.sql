@@ -14,7 +14,9 @@ CREATE TABLE market_agreement_event(
     agreement_id INTEGER NOT NULL,
     event_type VARCHAR(10) NOT NULL,
     timestamp DATETIME NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
+    issuer VARCHAR(1) NOT NULL CHECK (issuer in ('P', 'R')),
     reason TEXT,
+    signature TEXT,
 
     FOREIGN KEY(event_type) REFERENCES market_agreement_event_type (event_type),
     FOREIGN KEY(agreement_id) REFERENCES market_agreement (id),

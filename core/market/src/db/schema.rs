@@ -65,6 +65,8 @@ table! {
         event_type -> Text,
         timestamp -> Timestamp,
         reason -> Nullable<Text>,
+        issuer -> Text,
+        signature -> Nullable<Text>,
     }
 }
 

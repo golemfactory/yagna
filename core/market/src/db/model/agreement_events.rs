@@ -6,7 +6,7 @@ use diesel::sql_types::Text;
 use std::io::Write;
 use strum_macros::EnumString;
 
-use crate::db::model::AgreementId;
+use crate::db::model::{AgreementId, OwnerType};
 use crate::db::schema::market_agreement_event;
 use crate::ya_client::model::market::event::AgreementEvent as ClientEvent;
 
@@ -27,7 +27,9 @@ pub struct AgreementEvent {
     pub agreement_id: AgreementId,
     pub event_type: AgreementEventType,
     pub timestamp: NaiveDateTime,
+    pub issuer: OwnerType,
     pub reason: Option<String>,
+    pub signature: Option<String>,
 }
 
 #[derive(Clone, Debug, Insertable)]
@@ -35,6 +37,7 @@ pub struct AgreementEvent {
 pub struct NewAgreementEvent {
     pub agreement_id: AgreementId,
     pub event_type: AgreementEventType,
+    pub issuer: OwnerType,
     pub reason: Option<String>,
 }
 

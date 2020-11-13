@@ -142,6 +142,7 @@ impl<'c> AgreementDao<'c> {
                 agreement_id: id.clone(),
                 reason: None,
                 event_type: AgreementEventType::Approved,
+                issuer: OwnerType::Provider, // Always Provider approves.
             };
 
             diesel::insert_into(market_agreement_event)
