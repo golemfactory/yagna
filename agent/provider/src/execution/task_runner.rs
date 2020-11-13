@@ -15,7 +15,7 @@ use structopt::StructOpt;
 
 use ya_agreement_utils::{AgreementView, OfferTemplate};
 use ya_client::activity::ActivityProviderApi;
-use ya_client_model::activity::{ActivityState, ProviderEvent, State, StatePair};
+use ya_client_model::activity::{ActivityState, ProviderEvent, State};
 use ya_core_model::activity;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
@@ -312,9 +312,27 @@ impl TaskRunner {
             // If it was brutal termination than ExeUnit probably didn't set state.
             // We must do it instead of him. Repeat until it will succeed.
             match &status {
-                ExeUnitExitStatus::Aborted { .. } | ExeUnitExitStatus::Error { .. } => {
-                    log::warn!("ExeUnit [{}] have not finished cleanly. Setting activity [{}] state to Terminated", exeunit_name, activity_id);
-                    set_activity_terminated(api, &activity_id, state_retry_interval).await;
+                ExeUnitExitStatus::Aborted(exit_status) => {
+                    log::warn!(
+                        "ExeUnit [{}] execution aborted. Setting activity [{}] state to Terminated",
+                        exeunit_name,
+                        activity_id
+                    );
+
+                    let reason = "execution aborted";
+                    let msg = format!("exit code {:?}", exit_status.code());
+                    set_activity_terminated(api, &activity_id, reason, msg, state_retry_interval)
+                        .await;
+                }
+                ExeUnitExitStatus::Error(error) => {
+                    log::warn!(
+                        "ExeUnit [{}] execution failed: {}. Setting activity [{}] state to Terminated",
+                        error, exeunit_name, activity_id
+                    );
+
+                    let reason = "execution error";
+                    set_activity_terminated(api, &activity_id, reason, error, state_retry_interval)
+                        .await;
                 }
                 _ => (),
             }
@@ -489,9 +507,15 @@ fn exe_unit_name_from(agreement: &AgreementView) -> Result<String> {
 async fn set_activity_terminated(
     api: Arc<ActivityProviderApi>,
     activity_id: &str,
+    reason: impl ToString,
+    message: impl ToString,
     retry_interval: Duration,
 ) {
-    let state = ActivityState::from(StatePair(State::Terminated, None));
+    let state = ActivityState {
+        state: State::Terminated.into(),
+        reason: Some(reason.to_string()),
+        error_message: Some(message.to_string()),
+    };
 
     // Potentially infinite loop. This is done intentionally.
     // Possible fail reasons:
@@ -600,15 +624,22 @@ impl Handler<CreateActivity> for TaskRunner {
         let state_retry_interval = self.config.exeunit_state_retry_interval.clone();
 
         let result = self.on_create_activity(msg, ctx);
-
-        let on_error_future = async move {
-            set_activity_terminated(api, &activity_id, state_retry_interval).await;
-        }
-        .into_actor(self);
-
         match result {
             Ok(_) => ActorResponse::reply(result),
-            Err(error) => ActorResponse::r#async(on_error_future.map(|_, _, _| Err(error))),
+            Err(error) => ActorResponse::r#async(
+                async move {
+                    set_activity_terminated(
+                        api,
+                        &activity_id,
+                        "creation failed",
+                        &error,
+                        state_retry_interval,
+                    )
+                    .await;
+                    Err(error)
+                }
+                .into_actor(self),
+            ),
         }
     }
 }
