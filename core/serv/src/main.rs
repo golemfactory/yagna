@@ -242,7 +242,8 @@ async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<()> {
     #[cfg(feature = "zksync-driver")]
     {
         use ya_zksync_driver::PaymentDriverService;
-        PaymentDriverService::gsb(&()).await?;
+        let db_executor = DbExecutor::from_data_dir(data_dir, "zksync-driver")?;
+        PaymentDriverService::gsb(&db_executor).await?;
     }
     Ok(())
 }

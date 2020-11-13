@@ -7,6 +7,7 @@
 // Workspace uses
 
 // Local uses
+use crate::dao::DbExecutor;
 use crate::model::{
     Ack, GenericError, GetAccountBalance, GetTransactionBalance, Init, PaymentDetails,
     SchedulePayment, VerifyPayment,
@@ -22,14 +23,14 @@ pub use ya_core_model::identity::{event::Event as IdentityEvent, Error as Identi
 pub trait PaymentDriver {
     async fn account_event(
         &self,
-        _db: (),
+        _db: DbExecutor,
         _caller: String,
         msg: IdentityEvent,
     ) -> Result<(), IdentityError>;
 
     async fn get_account_balance(
         &self,
-        db: (),
+        db: DbExecutor,
         caller: String,
         msg: GetAccountBalance,
     ) -> Result<BigDecimal, GenericError>;
@@ -40,23 +41,23 @@ pub trait PaymentDriver {
 
     async fn get_transaction_balance(
         &self,
-        db: (),
+        db: DbExecutor,
         caller: String,
         msg: GetTransactionBalance,
     ) -> Result<BigDecimal, GenericError>;
 
-    async fn init(&self, db: (), caller: String, msg: Init) -> Result<Ack, GenericError>;
+    async fn init(&self, db: DbExecutor, caller: String, msg: Init) -> Result<Ack, GenericError>;
 
     async fn schedule_payment(
         &self,
-        db: (),
+        db: DbExecutor,
         caller: String,
         msg: SchedulePayment,
     ) -> Result<String, GenericError>;
 
     async fn verify_payment(
         &self,
-        db: (),
+        db: DbExecutor,
         caller: String,
         msg: VerifyPayment,
     ) -> Result<PaymentDetails, GenericError>;
