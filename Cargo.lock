@@ -5165,17 +5165,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2932dc07acd2066ff2e3921a4419606b220ba6cd03a9935123856cc534877056"
 dependencies = [
  "rand 0.6.5",
- "secp256k1-sys 0.1.2",
-]
-
-[[package]]
-name = "secp256k1"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6179428c22c73ac0fbb7b5579a56353ce78ba29759b3b8575183336ea74cdfb"
-dependencies = [
- "rand 0.6.5",
- "secp256k1-sys 0.3.0",
+ "secp256k1-sys",
  "serde",
 ]
 
@@ -5184,15 +5174,6 @@ name = "secp256k1-sys"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ab2c26f0d3552a0f12e639ae8a64afc2e3db9c52fe32f5fc6c289d38519f220"
-dependencies = [
- "cc",
-]
-
-[[package]]
-name = "secp256k1-sys"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11553d210db090930f4432bea123b31f70bbf693ace14504ea2a35e796c28dd2"
 dependencies = [
  "cc",
 ]
@@ -7135,7 +7116,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=103beac31f563c72d8c9c52f7f2f4f84176eab1f#103beac31f563c72d8c9c52f7f2f4f84176eab1f"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=80221a38c4cf8f4700da36598316fc8048e5c535#80221a38c4cf8f4700da36598316fc8048e5c535"
 dependencies = [
  "awc 1.0.1",
  "bytes 0.5.6",
@@ -7172,7 +7153,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=103beac31f563c72d8c9c52f7f2f4f84176eab1f#103beac31f563c72d8c9c52f7f2f4f84176eab1f"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=80221a38c4cf8f4700da36598316fc8048e5c535#80221a38c4cf8f4700da36598316fc8048e5c535"
 dependencies = [
  "bigdecimal",
  "chrono",
@@ -7180,7 +7161,7 @@ dependencies = [
  "hex",
  "openssl",
  "rand 0.7.3",
- "secp256k1 0.19.0",
+ "secp256k1 0.17.2",
  "serde",
  "serde_json",
  "thiserror",
@@ -7253,7 +7234,7 @@ dependencies = [
  "rand 0.6.5",
  "regex",
  "reqwest",
- "secp256k1 0.19.0",
+ "secp256k1 0.17.2",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -8035,7 +8016,7 @@ dependencies = [
 [[package]]
 name = "zksync"
 version = "0.1.0"
-source = "git+https://github.com/matter-labs/zksync?branch=master#62acd7f0713138df37d5094d5125441fa3f448af"
+source = "git+https://github.com/matter-labs/zksync#62acd7f0713138df37d5094d5125441fa3f448af"
 dependencies = [
  "bellman_ce",
  "ethabi 12.0.0",
@@ -8061,7 +8042,7 @@ dependencies = [
 [[package]]
 name = "zksync_basic_types"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?branch=master#62acd7f0713138df37d5094d5125441fa3f448af"
+source = "git+https://github.com/matter-labs/zksync#62acd7f0713138df37d5094d5125441fa3f448af"
 dependencies = [
  "web3 0.13.0",
 ]
@@ -8069,7 +8050,7 @@ dependencies = [
 [[package]]
 name = "zksync_contracts"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?branch=master#62acd7f0713138df37d5094d5125441fa3f448af"
+source = "git+https://github.com/matter-labs/zksync#62acd7f0713138df37d5094d5125441fa3f448af"
 dependencies = [
  "ethabi 12.0.0",
  "serde_json",
@@ -8078,7 +8059,7 @@ dependencies = [
 [[package]]
 name = "zksync_crypto"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?branch=master#62acd7f0713138df37d5094d5125441fa3f448af"
+source = "git+https://github.com/matter-labs/zksync#62acd7f0713138df37d5094d5125441fa3f448af"
 dependencies = [
  "anyhow",
  "fnv",
@@ -8095,7 +8076,7 @@ dependencies = [
 [[package]]
 name = "zksync_eth_client"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?branch=master#62acd7f0713138df37d5094d5125441fa3f448af"
+source = "git+https://github.com/matter-labs/zksync#62acd7f0713138df37d5094d5125441fa3f448af"
 dependencies = [
  "anyhow",
  "ethabi 12.0.0",
@@ -8110,7 +8091,7 @@ dependencies = [
 [[package]]
 name = "zksync_eth_signer"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?branch=master#62acd7f0713138df37d5094d5125441fa3f448af"
+source = "git+https://github.com/matter-labs/zksync#62acd7f0713138df37d5094d5125441fa3f448af"
 dependencies = [
  "async-trait",
  "hex",
@@ -8128,7 +8109,7 @@ dependencies = [
 [[package]]
 name = "zksync_types"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?branch=master#62acd7f0713138df37d5094d5125441fa3f448af"
+source = "git+https://github.com/matter-labs/zksync#62acd7f0713138df37d5094d5125441fa3f448af"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8147,7 +8128,7 @@ dependencies = [
 [[package]]
 name = "zksync_utils"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?branch=master#62acd7f0713138df37d5094d5125441fa3f448af"
+source = "git+https://github.com/matter-labs/zksync#62acd7f0713138df37d5094d5125441fa3f448af"
 dependencies = [
  "anyhow",
  "bigdecimal",
