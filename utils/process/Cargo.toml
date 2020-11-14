@@ -4,6 +4,10 @@ version = "0.1.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
+[features]
+default = []
+lock = ["fs2"]
+
 [dependencies]
 actix = "0.9"
 anyhow = "1.0"
@@ -13,6 +17,8 @@ futures-util = "0.3.4"
 libc = "0.2"
 shared_child = "0.3.4"
 tokio = { version = "0.2.10", features = ["process", "signal"] }
+
+fs2 = { version = "0.4.3", optional = true }
 
 [target.'cfg(target_family = "unix")'.dependencies]
 nix = "0.17.0"
