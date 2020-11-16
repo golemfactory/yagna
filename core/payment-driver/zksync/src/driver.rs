@@ -16,10 +16,7 @@ use ya_payment_driver::{
     dao::DbExecutor,
     db::models::PaymentEntity,
     driver::{async_trait, BigDecimal, IdentityError, IdentityEvent, PaymentDriver},
-    model::{
-        Ack, GenericError, GetAccountBalance, GetTransactionBalance, Init, PaymentConfirmation,
-        PaymentDetails, SchedulePayment, VerifyPayment,
-    },
+    model::*,
     utils,
 };
 use ya_utils_futures::timeout::IntoTimeoutFuture;
@@ -203,6 +200,21 @@ impl PaymentDriver for ZksyncDriver {
         //     None => Err(GenericError::new("Payment not ready to be checked")),
         // }
         from_confirmation(msg.confirmation())
+    }
+
+    async fn validate_allocation(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        msg: ValidateAllocation,
+    ) -> Result<bool, GenericError> {
+        let account_balance = wallet::account_balance(&msg.address).await?;
+        let total_allocated_amount: BigDecimal = msg
+            .existing_allocations
+            .into_iter()
+            .map(|allocation| allocation.remaining_amount)
+            .sum();
+        Ok(msg.amount <= (account_balance - total_allocated_amount))
     }
 }
 
