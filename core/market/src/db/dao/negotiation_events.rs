@@ -9,7 +9,7 @@ use crate::db::dao::demand::{demand_status, DemandState};
 use crate::db::dao::offer::{query_state, OfferState};
 use crate::db::dao::sql_functions::datetime;
 use crate::db::model::{Agreement, MarketEvent, OwnerType, Proposal, SubscriptionId};
-use crate::db::schema::market_event::dsl;
+use crate::db::schema::market_negotiation_event::dsl;
 use crate::db::{DbError, DbResult};
 use crate::market::EnvConfig;
 
@@ -47,7 +47,7 @@ impl<'c> NegotiationEventsDao<'c> {
     ) -> DbResult<Proposal> {
         do_with_transaction(self.pool, move |conn| {
             let event = MarketEvent::from_proposal(&proposal, owner);
-            diesel::insert_into(dsl::market_event)
+            diesel::insert_into(dsl::market_negotiation_event)
                 .values(event)
                 .execute(conn)?;
             Ok(proposal)
@@ -58,7 +58,7 @@ impl<'c> NegotiationEventsDao<'c> {
     pub async fn add_agreement_event(&self, agreement: &Agreement) -> DbResult<()> {
         let event = MarketEvent::from_agreement(agreement);
         do_with_transaction(self.pool, move |conn| {
-            diesel::insert_into(dsl::market_event)
+            diesel::insert_into(dsl::market_negotiation_event)
                 .values(event)
                 .execute(conn)?;
             Ok(())
@@ -77,7 +77,7 @@ impl<'c> NegotiationEventsDao<'c> {
             // Check subscription wasn't unsubscribed or expired.
             validate_subscription(conn, &subscription_id, owner)?;
 
-            let events = dsl::market_event
+            let events = dsl::market_negotiation_event
                 .filter(dsl::subscription_id.eq(&subscription_id))
                 .order_by(dsl::timestamp.asc())
                 .limit(max_events as i64)
@@ -86,7 +86,8 @@ impl<'c> NegotiationEventsDao<'c> {
             // Remove returned events from queue.
             if !events.is_empty() {
                 let ids = events.iter().map(|event| event.id).collect::<Vec<_>>();
-                diesel::delete(dsl::market_event.filter(dsl::id.eq_any(ids))).execute(conn)?;
+                diesel::delete(dsl::market_negotiation_event.filter(dsl::id.eq_any(ids)))
+                    .execute(conn)?;
             }
 
             Ok(events)
@@ -97,8 +98,10 @@ impl<'c> NegotiationEventsDao<'c> {
     pub async fn remove_events(&self, subscription_id: &SubscriptionId) -> DbResult<()> {
         let subscription_id = subscription_id.clone();
         do_with_transaction(self.pool, move |conn| {
-            diesel::delete(dsl::market_event.filter(dsl::subscription_id.eq(&subscription_id)))
-                .execute(conn)?;
+            diesel::delete(
+                dsl::market_negotiation_event.filter(dsl::subscription_id.eq(&subscription_id)),
+            )
+            .execute(conn)?;
             Ok(())
         })
         .await
@@ -109,7 +112,7 @@ impl<'c> NegotiationEventsDao<'c> {
         let interval_days = EVENT_STORE_DAYS.get_value();
         let num_deleted = do_with_transaction(self.pool, move |conn| {
             let nd = diesel::delete(
-                dsl::market_event
+                dsl::market_negotiation_event
                     .filter(dsl::timestamp.lt(datetime("NOW", format!("-{} days", interval_days)))),
             )
             .execute(conn)?;
