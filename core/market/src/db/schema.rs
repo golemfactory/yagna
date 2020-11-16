@@ -64,8 +64,8 @@ table! {
         agreement_id -> Text,
         event_type -> Text,
         timestamp -> Timestamp,
-        reason -> Nullable<Text>,
         issuer -> Text,
+        reason -> Nullable<Text>,
         signature -> Nullable<Text>,
     }
 }

@@ -1,17 +1,23 @@
 use chrono::{DateTime, NaiveDateTime, Utc};
-use diesel::backend::Backend;
-use diesel::deserialize::{FromSql, Result as DeserializeResult};
-use diesel::serialize::{Output, Result as SerializeResult, ToSql};
 use diesel::sql_types::Text;
-use std::io::Write;
-use strum_macros::EnumString;
+use std::fmt::Debug;
 
 use crate::db::model::{AgreementId, OwnerType};
 use crate::db::schema::market_agreement_event;
 use crate::ya_client::model::market::event::AgreementEvent as ClientEvent;
 
+use ya_diesel_utils::DatabaseTextField;
+
 #[derive(
-    EnumString, derive_more::Display, AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy,
+    DatabaseTextField,
+    strum_macros::EnumString,
+    derive_more::Display,
+    AsExpression,
+    FromSqlRow,
+    PartialEq,
+    Debug,
+    Clone,
+    Copy,
 )]
 #[sql_type = "Text"]
 pub enum AgreementEventType {
@@ -68,25 +74,5 @@ impl AgreementEvent {
                 reason,
             },
         }
-    }
-}
-
-impl<DB> ToSql<Text, DB> for AgreementEventType
-where
-    DB: Backend,
-    String: ToSql<Text, DB>,
-{
-    fn to_sql<W: Write>(&self, out: &mut Output<W, DB>) -> SerializeResult {
-        self.to_string().to_sql(out)
-    }
-}
-
-impl<DB> FromSql<Text, DB> for AgreementEventType
-where
-    DB: Backend,
-    String: FromSql<Text, DB>,
-{
-    fn from_sql(bytes: Option<&DB::RawValue>) -> DeserializeResult<Self> {
-        Ok(String::from_sql(bytes)?.parse()?)
     }
 }

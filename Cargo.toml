@@ -134,6 +134,7 @@ members = [
     "utils/std-utils",
     "utils/scheduler",
     "utils/transfer",
+    "utils/diesel-utils",
     "core/metrics"
 ]
 
@@ -181,4 +182,5 @@ ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
 ya-utils-path = { path = "utils/path"}
 ya-utils-process = { path = "utils/process"}
+ya-diesel-utils = { path = "utils/diesel-utils"}
 ya-metrics = { path = "core/metrics" }

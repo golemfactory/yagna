@@ -7210,6 +7210,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-diesel-utils"
+version = "0.1.0"
+dependencies = [
+ "diesel",
+ "proc-macro-hack",
+ "proc-macro2 1.0.24",
+ "quote 1.0.7",
+ "syn 1.0.48",
+]
+
+[[package]]
 name = "ya-dummy-driver"
 version = "0.1.0"
 dependencies = [
@@ -7401,6 +7412,7 @@ dependencies = [
  "ya-agreement-utils",
  "ya-client 0.4.0",
  "ya-core-model",
+ "ya-diesel-utils",
  "ya-market",
  "ya-market-resolver",
  "ya-net",

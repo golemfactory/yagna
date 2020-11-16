@@ -1,15 +1,13 @@
 use chrono::NaiveDateTime;
-use diesel::backend::Backend;
-use diesel::deserialize::{FromSql, Result as DeserializeResult};
-use diesel::serialize::{Output, Result as SerializeResult, ToSql};
 use diesel::sql_types::Text;
 use digest::Digest;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use sha3::Sha3_256;
-use std::io::Write;
 use std::str::FromStr;
 use uuid::Uuid;
+
 use ya_client::model::{ErrorMessage, NodeId};
+use ya_diesel_utils::DatabaseTextField;
 
 const RANDOM_PREFIX_LEN: usize = 32;
 const HASH_SUFFIX_LEN: usize = 64;
@@ -32,7 +30,17 @@ pub enum SubscriptionParseError {
 #[error("Subscription id [{0}] doesn't match content hash [{1}].")]
 pub struct SubscriptionValidationError(SubscriptionId, String);
 
-#[derive(derive_more::Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq)]
+#[derive(
+    DatabaseTextField,
+    derive_more::Display,
+    Debug,
+    Clone,
+    AsExpression,
+    FromSqlRow,
+    Hash,
+    PartialEq,
+    Eq,
+)]
 #[display(fmt = "{}-{}", random_id, hash)]
 #[sql_type = "Text"]
 pub struct SubscriptionId {
@@ -125,26 +133,6 @@ impl FromStr for SubscriptionId {
             random_id: elements[0].to_string(),
             hash: elements[1].to_string(),
         })
-    }
-}
-
-impl<DB> ToSql<Text, DB> for SubscriptionId
-where
-    DB: Backend,
-    String: ToSql<Text, DB>,
-{
-    fn to_sql<W: Write>(&self, out: &mut Output<W, DB>) -> SerializeResult {
-        self.to_string().to_sql(out)
-    }
-}
-
-impl<DB> FromSql<Text, DB> for SubscriptionId
-where
-    DB: Backend,
-    String: FromSql<Text, DB>,
-{
-    fn from_sql(bytes: Option<&DB::RawValue>) -> DeserializeResult<Self> {
-        Ok(String::from_sql(bytes)?.parse()?)
     }
 }
 
