@@ -16,7 +16,8 @@ pub fn bind_service() {
         .bind(get_account_balance)
         .bind(get_transaction_balance)
         .bind(schedule_payment)
-        .bind(verify_payment);
+        .bind(verify_payment)
+        .bind(validate_allocation);
 
     log::debug!("Successfully bound payment driver service to service bus");
 }
@@ -110,4 +111,12 @@ async fn verify_payment(
     let json_str = std::str::from_utf8(confirmation.confirmation.as_slice()).unwrap();
     let details = serde_json::from_str(&json_str).unwrap();
     Ok(details)
+}
+
+async fn validate_allocation(
+    _db: (),
+    _caller: String,
+    _msg: ValidateAllocation,
+) -> Result<bool, GenericError> {
+    Ok(true)
 }
