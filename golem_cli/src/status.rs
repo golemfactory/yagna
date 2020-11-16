@@ -1,3 +1,4 @@
+use crate::command::PaymentSummary as _;
 use crate::command::YaCommand;
 use crate::platform::Status as KvmStatus;
 use crate::utils::is_yagna_running;
@@ -56,8 +57,12 @@ pub async fn run() -> Result</*exit code*/ i32> {
 
     if is_running {
         let payments = {
-            let (id, payment_status) =
-                future::try_join(cmd.yagna()?.default_id(), cmd.yagna()?.payment_status()).await?;
+            let (id, payment_status, invoice_status) = future::try_join3(
+                cmd.yagna()?.default_id(),
+                cmd.yagna()?.payment_status(),
+                cmd.yagna()?.invoice_status(),
+            )
+            .await?;
 
             let mut table = Table::new();
             let format = format::FormatBuilder::new().padding(1, 1).build();
@@ -69,13 +74,18 @@ pub async fn run() -> Result</*exit code*/ i32> {
             table.add_empty_row();
             table.add_row(row!["address", &id.node_id]);
             table.add_row(row!["amount", format!("{} NGNT", &payment_status.amount)]);
+            table.add_empty_row();
+            {
+                let (pending, pending_cnt) = invoice_status.provider.total_pending();
+                table.add_row(row![
+                    "pending",
+                    format!("{} NGNT ({})", pending, pending_cnt)
+                ]);
+            }
+            let (unconfirmed, unconfirmed_cnt) = invoice_status.provider.unconfirmed();
             table.add_row(row![
-                "pending",
-                format!("{} NGNT", &payment_status.incoming.total_pending())
-            ]);
-            table.add_row(row![
-                "unconfirmed",
-                format!("{} NGNT", &payment_status.incoming.unconfirmed())
+                "issued",
+                format!("{} NGNT ({})", unconfirmed, unconfirmed_cnt)
             ]);
 
             table

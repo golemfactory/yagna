@@ -119,7 +119,7 @@ where
     }
 }
 
-#[derive(Debug, Clone, AsExpression, FromSqlRow)]
+#[derive(Debug, Clone, Ord, Eq, PartialOrd, PartialEq, AsExpression, FromSqlRow)]
 #[sql_type = "Text"]
 pub enum Role {
     Provider,
