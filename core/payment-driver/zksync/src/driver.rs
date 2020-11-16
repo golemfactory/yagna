@@ -24,6 +24,7 @@ use ya_payment_driver::{
 };
 
 // Local uses
+use crate::util::IntoTimeoutFuture;
 use crate::{dao::ZksyncDao, zksync::wallet, DRIVER_NAME, PLATFORM_NAME};
 
 pub struct ZksyncDriver {
@@ -149,7 +150,7 @@ impl PaymentDriver for ZksyncDriver {
         //     return Err(GenericError::new("Can not init, account not active"));
         // }
 
-        wallet::init_wallet(&msg).await?;
+        wallet::init_wallet(&msg).timeout(Some(180)).await.map_err(GenericError::new)??;
 
         let mode = msg.mode();
         bus::register_account(self, &address, mode).await?;
