@@ -18,5 +18,4 @@ extern crate log;
 mod dao;
 mod driver;
 mod service;
-mod util;
 mod zksync;

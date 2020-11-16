@@ -7898,6 +7898,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-utils-futures"
+version = "0.1.0"
+dependencies = [
+ "futures 0.3.8",
+ "tokio 0.2.22",
+]
+
+[[package]]
 name = "ya-utils-path"
 version = "0.1.0"
 dependencies = [
@@ -7953,6 +7961,7 @@ dependencies = [
  "ya-client-model 0.2.0",
  "ya-payment-driver",
  "ya-service-api-interfaces",
+ "ya-utils-futures",
  "zksync",
  "zksync_eth_signer",
 ]
@@ -7994,6 +8003,7 @@ dependencies = [
  "ya-service-api-web",
  "ya-service-bus",
  "ya-sgx",
+ "ya-utils-futures",
  "ya-utils-path",
  "ya-utils-process",
  "ya-zksync-driver",

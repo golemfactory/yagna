@@ -1,15 +1,8 @@
-/*
-    Utility functions.
-*/
-
-// Extrnal crates
 use futures3::future::{Either, Future, Map};
 use futures3::FutureExt;
 use std::time::Duration;
 use tokio::time::{timeout, Elapsed, Timeout};
 
-
-// COPIED FROM `ya-service-bus/bus/src/timeout.rs` Upgraded to futures3
 pub trait IntoDuration {
     fn into_duration(self) -> Duration;
 }
@@ -86,5 +79,3 @@ where
         }
     }
 }
-
-// END COPY
