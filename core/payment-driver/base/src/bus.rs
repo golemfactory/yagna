@@ -52,6 +52,9 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(db: &DbExecutor, driv
         )
         .bind_with_processor(
             move |db, dr, c, m| async move { dr.verify_payment(db, c, m).await }
+        )
+        .bind_with_processor(
+            move |db, dr, c, m| async move { dr.validate_allocation(db, c, m).await }
         );
 
     log::debug!("Successfully bound payment driver service to service bus");
