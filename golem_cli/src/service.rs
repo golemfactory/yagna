@@ -152,15 +152,20 @@ pub async fn stop() -> Result<i32> {
     let provider_dir = DataDir::new("ya-provider")
         .get_or_create()
         .expect("unable to get ya-provider data dir");
-
     let provider_pid = ProcLock::new("ya-provider", &provider_dir)?.read_pid()?;
-    kill_pid(provider_pid as i32, 5).await?;
+
+    kill_pid(provider_pid as i32, 5)
+        .await
+        .context("failed to stop provider")?;
 
     let yagna_dir = DataDir::new("yagna")
         .get_or_create()
         .expect("unable to get yagna data dir");
     let yagna_pid = ProcLock::new("yagna", &yagna_dir)?.read_pid()?;
-    let _ = kill_pid(yagna_pid as i32, 5).await;
+
+    kill_pid(yagna_pid as i32, 5)
+        .await
+        .context("failed to stop yagna")?;
 
     Ok(0)
 }
@@ -172,11 +177,11 @@ async fn kill_pid(pid: i32, timeout: i64) -> Result<()> {
     use nix::unistd::Pid;
     use std::time::Instant;
 
-    fn alive(pid: Pid) -> Result<bool> {
-        Ok(match waitpid(pid, Some(WaitPidFlag::WNOHANG))? {
-            WaitStatus::Exited(_, _) | WaitStatus::Signaled(_, _, _) => false,
-            _ => true,
-        })
+    fn alive(pid: Pid) -> bool {
+        match waitpid(pid, Some(WaitPidFlag::WNOHANG)) {
+            Ok(WaitStatus::Exited(_, _)) | Ok(WaitStatus::Signaled(_, _, _)) | Err(_) => false,
+            Ok(_) => true,
+        }
     }
 
     let pid = Pid::from_raw(pid);
@@ -184,13 +189,12 @@ async fn kill_pid(pid: i32, timeout: i64) -> Result<()> {
     let started = Instant::now();
 
     kill(pid, Signal::SIGTERM)?;
-    log::info!("Sent SIGTERM to {:?}", pid);
-    loop {
-        if !alive(pid)? {
-            break;
-        }
+    log::debug!("Sent SIGTERM to {:?}", pid);
+
+    while alive(pid) {
         if Instant::now() >= started + delay {
-            log::info!("Sending SIGKILL to {:?}", pid);
+            log::debug!("Sending SIGKILL to {:?}", pid);
+
             kill(pid, Signal::SIGKILL)?;
             waitpid(pid, None)?;
             break;
