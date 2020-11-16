@@ -33,6 +33,9 @@ enum Commands {
     /// Run the golem provider
     Run(setup::RunConfig),
 
+    /// Stop the golem provider
+    Stop,
+
     /// Manage settings
     ///
     /// This can be used regardless of whether golem is running or not.
@@ -69,6 +72,7 @@ async fn my_main() -> Result</*exit code*/ i32> {
     match cli_args.commands {
         Commands::Setup(mut run_config) => setup::setup(&mut run_config, true).await,
         Commands::Run(run_config) => service::run(run_config).await,
+        Commands::Stop => service::stop().await,
         Commands::Settings(command) => match command {
             SettingsCommand::Set(set) => settings::run(set).await,
             SettingsCommand::Show => settings_show::run().await,
@@ -97,7 +101,7 @@ async fn main() {
     std::process::exit(match my_main().await {
         Ok(code) => code,
         Err(e) => {
-            log::error!("Error: {:?}", e);
+            log::error!("{:?}", e);
             1
         }
     });

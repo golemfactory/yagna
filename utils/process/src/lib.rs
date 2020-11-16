@@ -7,6 +7,9 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+#[cfg(feature = "lock")]
+pub mod lock;
+
 #[cfg(unix)]
 use {
     actix::prelude::*,

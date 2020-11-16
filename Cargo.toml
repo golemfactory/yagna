@@ -10,10 +10,11 @@ license = "GPL-3.0"
 edition = "2018"
 
 [features]
-default = ['gnt-driver', 'gftp/bin']
+default = ['zksync-driver', 'gnt-driver', 'gftp/bin']
 static-openssl = ["openssl/vendored"]
 dummy-driver = ['ya-dummy-driver']
 gnt-driver = ['ya-gnt-driver']
+zksync-driver = ['ya-zksync-driver']
 tos = []
 
 [[bin]]
@@ -26,6 +27,7 @@ ya-activity = "0.2"
 ya-compile-time-utils = "0.1"
 ya-dummy-driver = { version = "0.1", optional = true }
 ya-gnt-driver = { version = "0.1", optional = true }
+ya-zksync-driver = { version = "0.1", optional = true }
 ya-identity = "0.2"
 ya-market = "0.2"
 ya-metrics = "0.1"
@@ -41,6 +43,8 @@ ya-service-api-web = "0.1"
 ya-service-bus = "0.2"
 ya-sgx = "0.1"
 ya-utils-path = "0.1"
+ya-utils-futures = "0.1"
+ya-utils-process = { version = "0.1", features = ["lock"] }
 
 actix-rt = "1.0"
 actix-service = "1.0"
@@ -104,8 +108,10 @@ members = [
     "core/model",
     "core/net",
     "core/payment",
+    "core/payment-driver/base",
     "core/payment-driver/dummy",
     "core/payment-driver/gnt",
+    "core/payment-driver/zksync",
     "core/persistence",
     "core/serv-api",
     "core/serv-api/cache",
@@ -125,6 +131,7 @@ members = [
     "utils/actix_utils",
     "utils/agreement-utils",
     "utils/compile-time-utils",
+    "utils/futures",
     "utils/path",
     "utils/process",
     "utils/std-utils",
@@ -136,8 +143,10 @@ members = [
 [patch.crates-io]
 ## SERVICES
 ya-activity = { path = "core/activity" }
+ya-payment-driver = { path = "core/payment-driver/base" }
 ya-dummy-driver = { path = "core/payment-driver/dummy" }
 ya-gnt-driver = { path = "core/payment-driver/gnt" }
+ya-zksync-driver = { path = "core/payment-driver/zksync" }
 ya-identity = { path = "core/identity" }
 ya-market = { path = "core/market" }
 ya-market-resolver = { path = "core/market/resolver" }
@@ -161,8 +170,8 @@ ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "2e745dbc2056c8064a62f80cf51c5d6fc03411cb"}
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "2e745dbc2056c8064a62f80cf51c5d6fc03411cb"}
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "80221a38c4cf8f4700da36598316fc8048e5c535"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "80221a38c4cf8f4700da36598316fc8048e5c535"}
 
 ## OTHERS
 gftp = { path = "core/gftp" }
@@ -173,6 +182,7 @@ ya-compile-time-utils = { path = "utils/compile-time-utils" }
 ya-exe-unit = { path = "exe-unit" }
 ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
+ya-utils-futures = { path = "utils/futures"}
 ya-utils-path = { path = "utils/path"}
 ya-utils-process = { path = "utils/process"}
 ya-metrics = { path = "core/metrics" }

@@ -1,5 +1,6 @@
 mod exporter;
 mod metrics;
+pub(crate) mod pusher;
 mod service;
 
 pub use service::MetricsService;

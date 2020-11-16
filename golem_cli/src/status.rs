@@ -36,6 +36,8 @@ pub async fn run() -> Result</*exit code*/ i32> {
                 Style::new().fg(Colour::Red).paint("is not running")
             ]);
         }
+        table.add_row(row!["Version", version()]);
+
         table.add_empty_row();
         table.add_row(row!["Node Name", &config.node_name.unwrap_or_default()]);
         table.add_row(row!["Subnet", &config.subnet.unwrap_or_default()]);
@@ -50,6 +52,7 @@ pub async fn run() -> Result</*exit code*/ i32> {
             };
             table.add_row(row!["VM", status]);
         }
+
         table
     };
     let mut table = Table::new();
@@ -123,4 +126,25 @@ pub async fn run() -> Result</*exit code*/ i32> {
         println!("\n VM problem: {}", msg);
     }
     Ok(0)
+}
+
+pub fn version() -> String {
+    let mut version = option_env!("GITHUB_REF").unwrap_or(env!("CARGO_PKG_VERSION"));
+    if let Some(pos) = version.rfind('/') {
+        version = &version[pos + 1..];
+    }
+
+    // convert tag to a semantic version
+    for prefix in ["v", "pre-rel-"].iter() {
+        if version.starts_with(prefix) {
+            version = &version[prefix.len()..];
+            break;
+        }
+    }
+    // create optional build metadata
+    let build = option_env!("GITHUB_RUN_NUMBER")
+        .map(|b| format!("+b{}", b))
+        .unwrap_or_else(String::new);
+
+    format!("{}{} ({})", version, build, env!("VERGEN_SHA_SHORT"))
 }

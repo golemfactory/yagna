@@ -3,6 +3,7 @@ use bitflags::bitflags;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
+use ya_client_model::payment::Allocation;
 use ya_service_bus::RpcMessage;
 
 pub fn driver_bus_id<T: Display>(driver_name: T) -> String {
@@ -208,5 +209,30 @@ impl GetTransactionBalance {
 impl RpcMessage for GetTransactionBalance {
     const ID: &'static str = "GetTransactionBalance";
     type Item = BigDecimal;
+    type Error = GenericError;
+}
+
+// ************************** VALIDATE ALLOCATION **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ValidateAllocation {
+    pub address: String,
+    pub amount: BigDecimal,
+    pub existing_allocations: Vec<Allocation>,
+}
+
+impl ValidateAllocation {
+    pub fn new(address: String, amount: BigDecimal, existing: Vec<Allocation>) -> Self {
+        ValidateAllocation {
+            address,
+            amount,
+            existing_allocations: existing,
+        }
+    }
+}
+
+impl RpcMessage for ValidateAllocation {
+    const ID: &'static str = "ValidateAllocation";
+    type Item = bool;
     type Error = GenericError;
 }
