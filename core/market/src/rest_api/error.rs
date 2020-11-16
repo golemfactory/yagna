@@ -184,6 +184,7 @@ impl ResponseError for AgreementError {
             | AgreementError::Gsb(_)
             | AgreementError::ProtocolCreate(_)
             | AgreementError::ProtocolApprove(_)
+            | AgreementError::ProtocolTerminate(_)
             | AgreementError::Internal(_) => HttpResponse::InternalServerError().json(msg),
         }
     }

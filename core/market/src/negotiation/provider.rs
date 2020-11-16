@@ -42,6 +42,7 @@ impl ProviderBroker {
         let broker1 = broker.clone();
         let broker2 = broker.clone();
         let broker3 = broker.clone();
+        let broker_terminated = broker.clone();
 
         let api = NegotiationApi::new(
             move |caller: String, msg: InitialProposalReceived| {
@@ -57,6 +58,9 @@ impl ProviderBroker {
                 on_agreement_received(broker3.clone(), caller, msg)
             },
             move |_caller: String, _msg: AgreementCancelled| async move { unimplemented!() },
+            move |caller: String, msg: AgreementTerminated| {
+                broker_terminated.clone().on_agreement_terminated(caller, msg, OwnerType::Provider)
+            },
         );
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
@@ -216,6 +220,15 @@ impl ProviderBroker {
             AgreementState::Expired => AgreementStateError::Expired(agreement.id),
             AgreementState::Terminated => AgreementStateError::Terminated(agreement.id),
         })?
+    }
+
+    pub async fn terminate_agreement(
+        &self,
+        id: Identity,
+        agreement_id: &AgreementId,
+        reason: Option<String>,
+    ) -> Result<(), AgreementError> {
+        self.common.terminate_agreement(id, agreement_id, reason, OwnerType::Provider).await
     }
 }
 

@@ -1,3 +1,4 @@
+use chrono::Utc;
 use metrics::counter;
 use std::fmt;
 use std::str::FromStr;
@@ -6,11 +7,15 @@ use std::time::{Duration, Instant};
 use ya_client::model::market::proposal::Proposal as ClientProposal;
 use ya_client::model::market::DemandOfferBase;
 use ya_client::model::NodeId;
+use ya_core_model::market::BUS_ID;
 use ya_market_resolver::{match_demand_offer, Match};
+use ya_net::{self as net, RemoteEndpoint};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
+use ya_service_bus::RpcEndpoint;
 
-use crate::db::dao::{EventsDao, ProposalDao, SaveProposalError};
+use crate::db::dao::{AgreementDao, EventsDao, ProposalDao, SaveProposalError};
+use crate::db::model::{Agreement, AgreementId, AgreementState, };
 use crate::db::model::{IssuerType, MarketEvent, OwnerType, Proposal};
 use crate::db::model::{ProposalId, SubscriptionId};
 use crate::matcher::{
@@ -20,11 +25,11 @@ use crate::matcher::{
 use crate::negotiation::error::GetProposalError;
 use crate::negotiation::notifier::NotifierError;
 use crate::negotiation::{
-    error::{MatchValidationError, ProposalError, QueryEventsError},
+    error::{AgreementError, AgreementStateError, MatchValidationError, ProposalError, QueryEventsError},
     EventNotifier,
 };
-use crate::protocol::negotiation::error::{CounterProposalError, RemoteProposalError};
-use crate::protocol::negotiation::messages::ProposalReceived;
+use crate::protocol::negotiation::error::{GsbAgreementError, TerminateAgreementError, CounterProposalError, RemoteAgreementError, RemoteProposalError};
+use crate::protocol::negotiation::messages::{provider, requestor, AgreementTerminated, ProposalReceived,};
 
 type IsFirst = bool;
 
@@ -187,6 +192,141 @@ impl CommonBroker {
                     .into_client()
                     .map_err(|e| GetProposalError::Internal(id.clone(), None, e.to_string()))
             })
+    }
+
+    // Called locally via REST
+    pub async fn terminate_agreement(
+        &self,
+        id: Identity,
+        agreement_id: &AgreementId,
+        reason: Option<String>,
+        owner_type: OwnerType,
+    ) -> Result<(), AgreementError> {
+        let dao = self.db.as_dao::<AgreementDao>();
+        let mut agreement = match dao
+            .select(
+                agreement_id,
+                Some(id.identity.clone()),
+                Utc::now().naive_utc(),
+            )
+            .await
+            .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
+        {
+            None => return Err(AgreementError::NotFound(agreement_id.clone())),
+            Some(agreement) => agreement,
+        };
+
+        Err(match agreement.state {
+            AgreementState::Proposal => AgreementStateError::Proposed(agreement.id),
+            AgreementState::Pending => AgreementStateError::Confirmed(agreement.id),
+            AgreementState::Cancelled => AgreementStateError::Cancelled(agreement.id),
+            AgreementState::Rejected => AgreementStateError::Rejected(agreement.id),
+            AgreementState::Approved => {
+                agreement.state = AgreementState::Terminated;
+                self
+                    .propagate_terminate_agreement(
+                        &agreement,
+                        id.identity.clone(),
+                        agreement.provider_id,
+                        reason.clone(),
+                        owner_type,
+                    )
+                    .await?;
+                dao.terminate(agreement_id, reason)
+                    .await
+                    .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?;
+
+                counter!("market.agreements.requestor.terminated", 1);
+                log::info!(
+                    "Requestor {} terminated Agreement [{}] and sent to Provider.",
+                    DisplayIdentity(&id),
+                    &agreement_id,
+                );
+                return Ok(());
+            }
+            AgreementState::Expired => AgreementStateError::Expired(agreement.id),
+            AgreementState::Terminated => AgreementStateError::Terminated(agreement.id),
+        })?
+    }
+    /// Sent to notify other side about termination.
+    pub async fn propagate_terminate_agreement(
+        &self,
+        agreement: &Agreement,
+        sender: NodeId,
+        receiver: NodeId,
+        reason: Option<String>,
+        owner_type: OwnerType,
+    ) -> Result<(), TerminateAgreementError> {
+        let msg = AgreementTerminated {
+            agreement_id: agreement.id.clone(),
+            reason,
+        };
+        let provider_service = &provider::agreement_addr(BUS_ID);
+        let requestor_service = &requestor::agreement_addr(BUS_ID);
+        let service = match owner_type {
+                OwnerType::Requestor => provider_service,
+                OwnerType::Provider => requestor_service,
+        };
+        net::from(sender)
+            .to(receiver)
+            .service(service)
+            .send(msg)
+            .await
+            .map_err(|e| GsbAgreementError(e.to_string(), agreement.id.clone()))??;
+        Ok(())
+    }
+
+    // Called remotely via GSB
+    pub async fn on_agreement_terminated(
+        self,
+        caller: String,
+        msg: AgreementTerminated,
+        owner_type: OwnerType,
+    ) -> Result<(), TerminateAgreementError> {
+        let caller: NodeId =
+            caller
+                .parse()
+                .map_err(|e: ya_client::model::node_id::ParseError| TerminateAgreementError::CallerParseError {
+                    e: e.to_string(),
+                    caller,
+                    id: msg.agreement_id.clone(),
+                })?;
+        Ok(self.on_agreement_terminated_inner(caller, msg, owner_type).await?)
+    }
+
+    async fn on_agreement_terminated_inner(
+        self,
+        caller: NodeId,
+        msg: AgreementTerminated,
+        owner_type: OwnerType,
+    ) -> Result<(), RemoteAgreementError> {
+        let err_msg = msg.clone();
+        let dao = self.db.as_dao::<AgreementDao>();
+        let agreement = dao
+            .select(&msg.agreement_id, None, Utc::now().naive_utc())
+            .await
+            .map_err(|_e| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
+            .ok_or(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
+
+        match owner_type {
+            OwnerType::Requestor => {
+                if agreement.provider_id != caller {
+                    // Don't reveal, that we know this Agreement id.
+                    Err(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
+                }
+            },
+            OwnerType::Provider => {
+                if agreement.requestor_id != caller {
+                    // Don't reveal, that we know this Agreement id.
+                    Err(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
+                }
+            },
+        }
+
+        dao.terminate(&msg.agreement_id, msg.reason)
+            .await
+            .map_err(|_e| RemoteAgreementError::InternalError(err_msg.agreement_id.clone()))?;
+        Ok(())
     }
 
     // TODO: We need more elegant solution than this. This function still returns

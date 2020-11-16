@@ -167,9 +167,16 @@ async fn reject_agreement(
 
 #[actix_web::post("/agreements/{agreement_id}/terminate")]
 async fn terminate_agreement(
-    _market: Data<Arc<MarketService>>,
-    _path: Path<PathAgreement>,
-    _id: Identity,
-) -> HttpResponse {
-    HttpResponse::NotImplemented().finish()
+    market: Data<Arc<MarketService>>,
+    path: Path<PathAgreement>,
+    id: Identity,
+    reason: Option<String>,
+) -> impl Responder {
+    let agreement_id = path.into_inner().to_id(OwnerType::Provider)?;
+    market
+        .provider_engine
+        .terminate_agreement(id, &agreement_id, reason)
+        .await
+        .log_err()
+        .map(|_| HttpResponse::Ok().finish())
 }

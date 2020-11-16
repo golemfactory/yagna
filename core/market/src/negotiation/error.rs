@@ -9,7 +9,7 @@ use crate::db::model::{
 use crate::db::{dao::SaveProposalError, dao::TakeEventsError, DbError};
 use crate::protocol::negotiation::error::{
     ApproveAgreementError, CounterProposalError as ProtocolProposalError, GsbAgreementError,
-    NegotiationApiInitError, ProposeAgreementError,
+    NegotiationApiInitError, ProposeAgreementError, TerminateAgreementError,
 };
 
 #[derive(Error, Debug)]
@@ -81,6 +81,8 @@ pub enum AgreementError {
     ProtocolCreate(#[from] ProposeAgreementError),
     #[error("Protocol error while approving: {0}")]
     ProtocolApprove(#[from] ApproveAgreementError),
+    #[error("Protocol error while terminating: {0}")]
+    ProtocolTerminate(#[from] TerminateAgreementError),
     #[error("Internal error: {0}")]
     Internal(String),
 }

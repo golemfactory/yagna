@@ -88,6 +88,11 @@ impl<'c> AgreementDao<'c> {
         do_with_transaction(self.pool, move |conn| update_state(conn, &id, &state)).await
     }
 
+    pub async fn terminate(&self, id: &AgreementId, reason: Option<String>) -> DbResult<bool> {
+        let id = id.clone();
+        do_with_transaction(self.pool, move |conn| terminate(conn, &id, reason)).await
+    }
+
     pub async fn save(&self, agreement: Agreement) -> Result<Agreement, SaveAgreementError> {
         // Agreement is always created for last Provider Proposal.
         let proposal_id = agreement.offer_proposal_id.clone();
@@ -180,6 +185,23 @@ impl<ErrorType: Into<DbError>> From<ErrorType> for SaveAgreementError {
 fn update_state(conn: &ConnType, id: &AgreementId, state: &AgreementState) -> DbResult<bool> {
     let num_updated = diesel::update(dsl::market_agreement.find(id))
         .set(dsl::state.eq(state))
+        .execute(conn)?;
+    Ok(num_updated > 0)
+}
+
+fn terminate(conn: &ConnType, id: &AgreementId, reason: Option<String>) -> DbResult<bool> {
+    log::debug!("Termination reason: {:?}", reason);
+    // TODO: Uncomment after https://github.com/golemfactory/yagna/pull/754
+    /*
+    let num_updated = diesel::update(dsl::market_agreement.find(id))
+        .set((
+            dsl::state.eq(AgreementState::Terminated),
+            dsl::reason.eq(reason),
+            ))
+        .execute(conn)?;
+    */
+    let num_updated = diesel::update(dsl::market_agreement.find(id))
+        .set(dsl::state.eq(AgreementState::Terminated))
         .execute(conn)?;
     Ok(num_updated > 0)
 }
