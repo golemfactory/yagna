@@ -1,5 +1,7 @@
 use crate::events::Event;
-use crate::execution::{GetExeUnit, GetOfferTemplates, TaskRunner, UpdateActivity};
+use crate::execution::{
+    GetExeUnit, GetOfferTemplates, Shutdown as ShutdownExecution, TaskRunner, UpdateActivity,
+};
 use crate::hardware;
 use crate::market::provider_market::{OfferKind, Unsubscribe, UpdateMarket};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
@@ -371,8 +373,11 @@ impl Handler<Shutdown> for ProviderAgent {
 
     fn handle(&mut self, _: Shutdown, _: &mut Context<Self>) -> Self::Result {
         let market = self.market.clone();
+        let runner = self.runner.clone();
+
         async move {
             market.send(Unsubscribe(OfferKind::Any)).await??;
+            runner.send(ShutdownExecution).await??;
             Ok(())
         }
         .boxed_local()
