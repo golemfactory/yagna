@@ -11,7 +11,7 @@ ya-persistence = "0.2"
 ya-service-api-interfaces = "0.1"
 ya-service-bus = "0.2"
 
-actix = "0.9"
+actix = { version = "0.9", default-features = false }
 actix-connect="1.0.1"
 actix-http="1.0.1"
 actix-rt = "1.0"

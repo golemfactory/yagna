@@ -6,7 +6,6 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4af87564ff659dee8f9981540cac9418c45e910c8072fdedd643a262a38fcaf"
 dependencies = [
- "actix-http 1.0.1",
  "actix-rt",
  "actix_derive",
  "bitflags 1.2.1",
@@ -21,8 +20,6 @@ dependencies = [
  "smallvec 1.4.2",
  "tokio 0.2.22",
  "tokio-util 0.2.0",
- "trust-dns-proto 0.18.0-alpha.2",
- "trust-dns-resolver 0.18.0-alpha.2",
 ]
 
 [[package]]
@@ -104,7 +101,7 @@ checksum = "193b22cb1f7b4ff12a4eb2415d6d19e47e44ea93e05930b30d05375ea29d3529"
 dependencies = [
  "actix-http 1.0.1",
  "actix-service",
- "actix-web",
+ "actix-web 2.0.0",
  "bitflags 1.2.1",
  "bytes 0.5.6",
  "derive_more 0.99.11",
@@ -114,7 +111,27 @@ dependencies = [
  "mime 0.3.16",
  "mime_guess",
  "percent-encoding 2.1.0",
- "v_htmlescape",
+ "v_htmlescape 0.4.5",
+]
+
+[[package]]
+name = "actix-files"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fc0a9181e93c91dc7eb401a0debaed5c8294e12019c307c72fd7a1731b672fc"
+dependencies = [
+ "actix-service",
+ "actix-web 3.2.0",
+ "bitflags 1.2.1",
+ "bytes 0.5.6",
+ "derive_more 0.99.11",
+ "futures-core",
+ "futures-util",
+ "log 0.4.11",
+ "mime 0.3.16",
+ "mime_guess",
+ "percent-encoding 2.1.0",
+ "v_htmlescape 0.10.4",
 ]
 
 [[package]]
@@ -128,7 +145,7 @@ dependencies = [
  "actix-rt",
  "actix-service",
  "actix-threadpool",
- "actix-tls",
+ "actix-tls 1.0.0",
  "actix-utils 1.0.6",
  "base64 0.11.0",
  "bitflags 1.2.1",
@@ -328,6 +345,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "actix-tls"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24789b7d7361cf5503a504ebe1c10806896f61e96eca9a7350e23001aca715fb"
+dependencies = [
+ "actix-codec 0.3.0",
+ "actix-service",
+ "actix-utils 2.0.0",
+ "futures-util",
+]
+
+[[package]]
 name = "actix-utils"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -380,9 +409,9 @@ dependencies = [
  "actix-service",
  "actix-testing",
  "actix-threadpool",
- "actix-tls",
+ "actix-tls 1.0.0",
  "actix-utils 1.0.6",
- "actix-web-codegen",
+ "actix-web-codegen 0.2.2",
  "awc 1.0.1",
  "bytes 0.5.6",
  "derive_more 0.99.11",
@@ -402,6 +431,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "actix-web"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88344b7a5ef27e5e09e73565379f69273dd3e2d29e82afc381b84d170d0a5631"
+dependencies = [
+ "actix-codec 0.3.0",
+ "actix-http 2.1.0",
+ "actix-macros",
+ "actix-router",
+ "actix-rt",
+ "actix-server",
+ "actix-service",
+ "actix-testing",
+ "actix-threadpool",
+ "actix-tls 2.0.0",
+ "actix-utils 2.0.0",
+ "actix-web-codegen 0.4.0",
+ "awc 2.0.1",
+ "bytes 0.5.6",
+ "derive_more 0.99.11",
+ "encoding_rs",
+ "futures-channel",
+ "futures-core",
+ "futures-util",
+ "fxhash",
+ "log 0.4.11",
+ "mime 0.3.16",
+ "pin-project 1.0.1",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "socket2",
+ "time 0.2.22",
+ "tinyvec 1.0.1",
+ "url 2.2.0",
+]
+
+[[package]]
 name = "actix-web-codegen"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -413,13 +481,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "actix-web-httpauth"
-version = "0.4.2"
+name = "actix-web-codegen"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ea25b3a3e113d04ae74bfbc3ba617f6254437dbd03576d9b479e8e8df894285"
+checksum = "ad26f77093333e0e7c6ffe54ebe3582d908a104e448723eec6d43d08b07143fb"
+dependencies = [
+ "proc-macro2 1.0.24",
+ "quote 1.0.7",
+ "syn 1.0.48",
+]
+
+[[package]]
+name = "actix-web-httpauth"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "536a75d767c5c2b3e64d3f569621f38ed7609359a0c82d149c88290a6ba41b22"
 dependencies = [
  "actix-service",
- "actix-web",
+ "actix-web 3.2.0",
  "base64 0.12.3",
  "bytes 0.5.6",
  "futures-util",
@@ -1113,6 +1192,15 @@ dependencies = [
  "memchr",
  "regex-automata",
  "serde",
+]
+
+[[package]]
+name = "buf-min"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6ae7069aad07c7cdefe6a22a671f00650728bd2331a4cc62e1e5d0becdf9ca4"
+dependencies = [
+ "bytes 0.5.6",
 ]
 
 [[package]]
@@ -5969,6 +6057,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "238ce071d267c5710f9d31451efec16c5ee22de34df17cc05e56cbc92e967117"
 
 [[package]]
+name = "tinyvec"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b78a366903f506d2ad52ca8dc552102ffdd3e937ba8a227f024dc1d1eae28575"
+dependencies = [
+ "tinyvec_macros",
+]
+
+[[package]]
+name = "tinyvec_macros"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
+
+[[package]]
 name = "tokio"
 version = "0.1.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6531,7 +6634,7 @@ version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6fb19cf769fa8c6a80a162df694621ebeb4dafb606470b2b2fce0be40a98a977"
 dependencies = [
- "tinyvec",
+ "tinyvec 0.3.4",
 ]
 
 [[package]]
@@ -6650,7 +6753,17 @@ version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "660b101c07b5d0863deb9e7fb3138777e858d6d2a79f9e6049a27d1cc77c6da6"
 dependencies = [
- "v_escape_derive",
+ "v_escape_derive 0.5.6",
+]
+
+[[package]]
+name = "v_escape"
+version = "0.13.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "039a44473286eb84e4e74f90165feff67c802dbeced7ee4c5b00d719b0d0475e"
+dependencies = [
+ "buf-min",
+ "v_escape_derive 0.8.4",
 ]
 
 [[package]]
@@ -6666,13 +6779,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "v_escape_derive"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c860ad1273f4eee7006cee05db20c9e60e5d24cba024a32e1094aa8e574f3668"
+dependencies = [
+ "nom 4.2.3",
+ "proc-macro2 1.0.24",
+ "quote 1.0.7",
+ "syn 1.0.48",
+]
+
+[[package]]
 name = "v_htmlescape"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e33e939c0d8cf047514fb6ba7d5aac78bc56677a6938b2ee67000b91f2e97e41"
 dependencies = [
  "cfg-if 0.1.10",
- "v_escape",
+ "v_escape 0.7.4",
+]
+
+[[package]]
+name = "v_htmlescape"
+version = "0.10.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11d7c2a33ed7cf0dc1b42bcf39e01b6512f9df08f09e1cd8a49d9dc49a6a9482"
+dependencies = [
+ "cfg-if 1.0.0",
+ "v_escape 0.13.2",
 ]
 
 [[package]]
@@ -7087,7 +7222,7 @@ name = "ya-activity"
 version = "0.2.1"
 dependencies = [
  "actix-rt",
- "actix-web",
+ "actix-web 3.2.0",
  "anyhow",
  "bytes 0.5.6",
  "chrono",
@@ -7255,9 +7390,9 @@ name = "ya-exe-unit"
 version = "0.1.0"
 dependencies = [
  "actix",
- "actix-files",
+ "actix-files 0.4.0",
  "actix-rt",
- "actix-web",
+ "actix-web 3.2.0",
  "anyhow",
  "async-trait",
  "chrono",
@@ -7351,7 +7486,7 @@ version = "0.2.0"
 dependencies = [
  "actix-rt",
  "actix-service",
- "actix-web",
+ "actix-web 3.2.0",
  "anyhow",
  "appdirs",
  "awc 1.0.1",
@@ -7388,10 +7523,10 @@ dependencies = [
 name = "ya-market"
 version = "0.2.0"
 dependencies = [
- "actix-http 1.0.1",
+ "actix-http 2.1.0",
  "actix-rt",
  "actix-service",
- "actix-web",
+ "actix-web 3.2.0",
  "anyhow",
  "async-trait",
  "backtrace",
@@ -7453,7 +7588,7 @@ dependencies = [
 name = "ya-metrics"
 version = "0.1.0"
 dependencies = [
- "actix-web",
+ "actix-web 3.2.0",
  "anyhow",
  "bigdecimal",
  "futures 0.3.8",
@@ -7497,7 +7632,7 @@ name = "ya-payment"
 version = "0.1.0"
 dependencies = [
  "actix-rt",
- "actix-web",
+ "actix-web 3.2.0",
  "anyhow",
  "base64 0.12.3",
  "bigdecimal",
@@ -7752,7 +7887,7 @@ version = "0.1.0"
 dependencies = [
  "actix-rt",
  "actix-service",
- "actix-web",
+ "actix-web 2.0.0",
  "anyhow",
  "lazy_static",
  "log 0.4.11",
@@ -7770,7 +7905,7 @@ dependencies = [
 name = "ya-service-api-interfaces"
 version = "0.1.0"
 dependencies = [
- "actix-web",
+ "actix-web 3.2.0",
  "anyhow",
  "futures 0.3.8",
 ]
@@ -7781,7 +7916,7 @@ version = "0.1.1"
 dependencies = [
  "actix-rt",
  "actix-service",
- "actix-web",
+ "actix-web 3.2.0",
  "actix-web-httpauth",
  "anyhow",
  "awc 1.0.1",
@@ -7850,10 +7985,10 @@ dependencies = [
 name = "ya-transfer"
 version = "0.1.0"
 dependencies = [
- "actix-files",
+ "actix-files 0.2.2",
  "actix-http 1.0.1",
  "actix-rt",
- "actix-web",
+ "actix-web 3.2.0",
  "anyhow",
  "async-compression",
  "awc 1.0.1",
@@ -7968,11 +8103,11 @@ dependencies = [
 
 [[package]]
 name = "yagna"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "actix-rt",
  "actix-service",
- "actix-web",
+ "actix-web 3.2.0",
  "anyhow",
  "directories",
  "dotenv",
