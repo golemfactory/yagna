@@ -17,6 +17,8 @@ CREATE TABLE market_agreement_event(
 
 -- Add session_id. Will drop all Agreements.
 DROP TABLE market_agreement;
+DROP TABLE agreement_state;
+
 CREATE TABLE market_agreement(
     id VARCHAR(100) NOT NULL PRIMARY KEY,
 
@@ -48,8 +50,8 @@ CREATE TABLE market_agreement(
 );
 
 -- Change Proposal state from enum to Text value for better database introspection.
-DROP TABLE market_proposal_state;
 DROP TABLE market_proposal;
+DROP TABLE market_proposal_state;
 
 CREATE TABLE market_proposal(
     id VARCHAR(100) NOT NULL PRIMARY KEY,

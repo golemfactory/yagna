@@ -2,6 +2,22 @@
 
 DROP TABLE market_agreement_event;
 
+CREATE TABLE agreement_state(
+    id INTEGER NOT NULL PRIMARY KEY,
+    name VARCHAR(50) NOT NULL
+);
+
+INSERT INTO agreement_state(id, name)
+values
+    (0, 'Proposal'),
+    (1, 'Pending'),
+    (2, 'Cancelled'),
+    (3, 'Rejected'),
+    (4, 'Approved'),
+    (5, 'Expired'),
+    (6, 'Terminated');
+
+
 -- Restore Agreement without session_id
 -- Will drop all existing Agreements
 DROP TABLE market_agreement;
