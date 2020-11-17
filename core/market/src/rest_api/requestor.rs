@@ -14,6 +14,7 @@ use super::{
     PathAgreement, PathSubscription, PathSubscriptionProposal, ProposalId, QueryTimeout,
     QueryTimeoutMaxEvents,
 };
+use crate::rest_api::QueryAppSessionId;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -163,12 +164,13 @@ async fn create_agreement(
 async fn confirm_agreement(
     market: Data<Arc<MarketService>>,
     path: Path<PathAgreement>,
+    query: Query<QueryAppSessionId>,
     id: Identity,
 ) -> impl Responder {
     let agreement_id = path.into_inner().to_id(OwnerType::Requestor)?;
     market
         .requestor_engine
-        .confirm_agreement(id, &agreement_id)
+        .confirm_agreement(id, &agreement_id, query.into_inner().app_session_id)
         .await
         .log_err()
         .map(|_| HttpResponse::NoContent().finish())

@@ -7,10 +7,11 @@ use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
 use crate::db::dao::proposal::{has_counter_proposal, set_proposal_accepted};
 use crate::db::dao::sql_functions::datetime;
 use crate::db::model::{
-    Agreement, AgreementEventType, AgreementId, AgreementState, NewAgreementEvent, OwnerType,
-    ProposalId,
+    Agreement, AgreementEventType, AgreementId, AgreementState, AppSessionId, NewAgreementEvent,
+    OwnerType, ProposalId,
 };
-use crate::db::schema::market_agreement::dsl;
+use crate::db::schema::market_agreement::dsl as agreement;
+use crate::db::schema::market_agreement::dsl::market_agreement;
 use crate::db::schema::market_agreement_event::dsl as event;
 use crate::db::schema::market_agreement_event::dsl::market_agreement_event;
 use crate::db::{DbError, DbResult};
@@ -52,6 +53,8 @@ pub enum StateError {
     },
     #[error("Failed to update state. Error: {0}")]
     DbError(DbError),
+    #[error("Failed to set AppSessionId. Error: {0}")]
+    SessionId(DbError),
     #[error("Failed to add event. Error: {0}")]
     EventError(DbError),
 }
@@ -65,12 +68,12 @@ impl<'c> AgreementDao<'c> {
     ) -> DbResult<Option<Agreement>> {
         let id = id.clone();
         do_with_transaction(self.pool, move |conn| {
-            let mut query = dsl::market_agreement.filter(dsl::id.eq(&id)).into_boxed();
+            let mut query = market_agreement.filter(agreement::id.eq(&id)).into_boxed();
 
             if let Some(node_id) = node_id {
                 query = match id.owner() {
-                    OwnerType::Provider => query.filter(dsl::provider_id.eq(node_id)),
-                    OwnerType::Requestor => query.filter(dsl::requestor_id.eq(node_id)),
+                    OwnerType::Provider => query.filter(agreement::provider_id.eq(node_id)),
+                    OwnerType::Requestor => query.filter(agreement::requestor_id.eq(node_id)),
                 }
             };
 
@@ -110,7 +113,7 @@ impl<'c> AgreementDao<'c> {
                 ));
             }
 
-            diesel::insert_into(dsl::market_agreement)
+            diesel::insert_into(market_agreement)
                 .values(&agreement)
                 .execute(conn)?;
 
@@ -120,10 +123,48 @@ impl<'c> AgreementDao<'c> {
         .await
     }
 
+    pub async fn confirm(
+        &self,
+        id: &AgreementId,
+        session: &AppSessionId,
+    ) -> Result<(), StateError> {
+        let id = id.clone();
+        let session = session.clone();
+
+        do_with_transaction(self.pool, move |conn| {
+            let agreement: Agreement =
+                market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
+
+            if agreement.state != AgreementState::Proposal {
+                Err(StateError::InvalidTransition {
+                    id: id.clone(),
+                    from: agreement.state,
+                    to: AgreementState::Pending,
+                })?
+            }
+
+            diesel::update(market_agreement.filter(agreement::id.eq(&id)))
+                .set(agreement::state.eq(AgreementState::Pending))
+                .execute(conn)
+                .map_err(|e| StateError::DbError(e.into()))?;
+
+            if let Some(session) = session {
+                diesel::update(market_agreement.filter(agreement::id.eq(&id)))
+                    .set(agreement::session_id.eq(session))
+                    .execute(conn)
+                    .map_err(|e| StateError::SessionId(e.into()))?;
+            }
+
+            Ok(())
+        })
+        .await
+    }
+
     pub async fn approve(&self, id: &AgreementId) -> Result<(), StateError> {
         let id = id.clone();
         do_with_transaction(self.pool, move |conn| {
-            let agreement: Agreement = dsl::market_agreement.filter(dsl::id.eq(&id)).first(conn)?;
+            let agreement: Agreement =
+                market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
 
             if agreement.state != AgreementState::Pending {
                 Err(StateError::InvalidTransition {
@@ -133,8 +174,8 @@ impl<'c> AgreementDao<'c> {
                 })?
             }
 
-            diesel::update(dsl::market_agreement.filter(dsl::id.eq(&id)))
-                .set(dsl::state.eq(AgreementState::Approved))
+            diesel::update(market_agreement.filter(agreement::id.eq(&id)))
+                .set(agreement::state.eq(AgreementState::Approved))
                 .execute(conn)
                 .map_err(|e| StateError::DbError(e.into()))?;
 
@@ -159,11 +200,13 @@ impl<'c> AgreementDao<'c> {
         log::trace!("Clean market agreements: start");
         let interval_days = AGREEMENT_STORE_DAYS.get_value();
         let (num_agreements, num_events) = do_with_transaction(self.pool, move |conn| {
-            let agreements_to_clean = dsl::market_agreement
-                .filter(dsl::valid_to.lt(datetime("NOW", format!("-{} days", interval_days))));
+            let agreements_to_clean = market_agreement.filter(
+                agreement::valid_to.lt(datetime("NOW", format!("-{} days", interval_days))),
+            );
 
-            let related_events = market_agreement_event
-                .filter(event::agreement_id.eq_any(agreements_to_clean.clone().select(dsl::id)));
+            let related_events = market_agreement_event.filter(
+                event::agreement_id.eq_any(agreements_to_clean.clone().select(agreement::id)),
+            );
 
             let num_agreements = diesel::delete(agreements_to_clean).execute(conn)?;
             let num_events = diesel::delete(related_events).execute(conn)?;
@@ -184,8 +227,8 @@ fn find_agreement_for_proposal(
     conn: &ConnType,
     proposal_id: &ProposalId,
 ) -> DbResult<Option<Agreement>> {
-    Ok(dsl::market_agreement
-        .filter(dsl::offer_proposal_id.eq(&proposal_id))
+    Ok(market_agreement
+        .filter(agreement::offer_proposal_id.eq(&proposal_id))
         .first::<Agreement>(conn)
         .optional()?)
 }
@@ -203,8 +246,8 @@ impl<ErrorType: Into<DbError>> From<ErrorType> for SaveAgreementError {
 }
 
 fn update_state(conn: &ConnType, id: &AgreementId, state: &AgreementState) -> DbResult<bool> {
-    let num_updated = diesel::update(dsl::market_agreement.find(id))
-        .set(dsl::state.eq(state))
+    let num_updated = diesel::update(market_agreement.find(id))
+        .set(agreement::state.eq(state))
         .execute(conn)?;
     Ok(num_updated > 0)
 }

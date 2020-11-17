@@ -41,7 +41,7 @@ async fn test_agreement_approved_event() -> Result<()> {
 
     let confirm_timestamp = Utc::now();
     req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await?;
 
     // Provider will approve agreement after some delay.
@@ -126,7 +126,7 @@ async fn test_agreement_events_and_wait_for_approval() -> Result<()> {
 
     let confirm_timestamp = Utc::now();
     req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await?;
 
     let agr_id = agreement_id.clone();

@@ -150,7 +150,7 @@ async fn full_market_interaction_aka_happy_path() -> Result<()> {
 
     // Confirms it immediately
     req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await?;
 
     // And starts waiting for Agreement approval by Provider
@@ -252,12 +252,12 @@ async fn second_confirmation_should_fail() -> Result<()> {
 
     // than: first try to confirm agreement should pass
     req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await?;
 
     // but second should fail
     let result = req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await;
     assert_eq!(
         result.unwrap_err().to_string(),
@@ -295,7 +295,7 @@ async fn agreement_expired_before_confirmation() -> Result<()> {
 
     // than: a try to confirm agreement...
     let result = req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await;
 
     // results with Expired error
@@ -336,7 +336,7 @@ async fn agreement_expired_before_approval() -> Result<()> {
 
     // than: immediate confirm agreement should pass
     req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await?;
 
     tokio::time::delay_for(Duration::milliseconds(50).to_std()?).await;
@@ -466,7 +466,7 @@ async fn approval_without_waiting_should_pass() -> Result<()> {
 
     // Confirms it immediately
     req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await?;
 
     // Provider successfully approves the Agreement
@@ -514,7 +514,7 @@ async fn waiting_after_approval_should_pass() -> Result<()> {
 
     // Confirms it immediately
     req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await?;
 
     // Provider successfully approves the Agreement
@@ -568,7 +568,7 @@ async fn second_approval_should_fail() -> Result<()> {
 
     // Confirms it immediately
     req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await?;
 
     // Provider successfully approves the Agreement
@@ -630,7 +630,7 @@ async fn second_waiting_should_pass() -> Result<()> {
 
     // Confirms it immediately
     req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await?;
 
     // Provider successfully approves the Agreement
@@ -694,7 +694,7 @@ async fn net_err_while_confirming() -> Result<()> {
 
     // then confirm should
     let result = req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await;
     match result.unwrap_err() {
         AgreementError::ProtocolCreate(_) => (),
@@ -733,7 +733,7 @@ async fn net_err_while_approving() -> Result<()> {
 
     // Confirms it immediately
     req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await?;
 
     // when

@@ -369,6 +369,7 @@ impl RequestorBroker {
         &self,
         id: Identity,
         agreement_id: &AgreementId,
+        app_session_id: AppSessionId,
     ) -> Result<(), AgreementError> {
         let dao = self.common.db.as_dao::<AgreementDao>();
 
@@ -392,9 +393,9 @@ impl RequestorBroker {
         // 2. `db.update_state` must be invoked after successful propose_agreement
         agreement.state = AgreementState::Pending;
         self.api.propose_agreement(&agreement).await?;
-        dao.update_state(agreement_id, AgreementState::Pending)
+        dao.confirm(agreement_id, &app_session_id)
             .await
-            .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?;
+            .map_err(|e| AgreementError::UpdateState(agreement_id.clone(), e))?;
 
         counter!("market.agreements.requestor.confirmed", 1);
         log::info!(

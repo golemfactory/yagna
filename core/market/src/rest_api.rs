@@ -9,7 +9,9 @@ use serde::Deserialize;
 
 use ya_client::model::ErrorMessage;
 
-use crate::db::model::{AgreementId, OwnerType, ProposalId, ProposalIdParseError, SubscriptionId};
+use crate::db::model::{
+    AgreementId, AppSessionId, OwnerType, ProposalId, ProposalIdParseError, SubscriptionId,
+};
 use chrono::{DateTime, Utc};
 
 pub(crate) mod common;
@@ -44,6 +46,12 @@ pub struct PathSubscription {
 pub struct PathSubscriptionProposal {
     pub subscription_id: SubscriptionId,
     pub proposal_id: ProposalId,
+}
+
+#[derive(Deserialize)]
+pub struct QueryAppSessionId {
+    #[serde(rename = "appSessionId")]
+    pub app_session_id: AppSessionId,
 }
 
 #[derive(Deserialize)]
