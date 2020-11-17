@@ -21,6 +21,7 @@ use super::common::CommonBroker;
 use super::error::*;
 use super::notifier::EventNotifier;
 use crate::config::Config;
+use crate::negotiation::common::expect_state;
 use crate::utils::display::EnableDisplay;
 
 /// Provider part of negotiation logic.
@@ -194,32 +195,24 @@ impl ProviderBroker {
             Some(agreement) => agreement,
         };
 
-        Err(match agreement.state {
-            AgreementState::Proposal => AgreementStateError::Proposed(agreement.id),
-            AgreementState::Pending => {
-                // TODO: possible race condition here ISSUE#430
-                // 1. this state check should be also `db.update_state`
-                // 2. `db.update_state` must be invoked after successful propose_agreement
-                // TODO: if dao.approve fails, Provider and Requestor have inconsistent state.
-                self.api.approve_agreement(agreement, timeout).await?;
-                dao.approve(agreement_id)
-                    .await
-                    .map_err(|e| AgreementError::UpdateState(agreement_id.clone(), e))?;
+        expect_state(&agreement, AgreementState::Pending)?;
 
-                counter!("market.agreements.provider.approved", 1);
-                log::info!(
-                    "Provider {} approved Agreement [{}].",
-                    id.display(),
-                    &agreement_id,
-                );
-                return Ok(());
-            }
-            AgreementState::Cancelled => AgreementStateError::Cancelled(agreement.id),
-            AgreementState::Rejected => AgreementStateError::Rejected(agreement.id),
-            AgreementState::Approved => AgreementStateError::Approved(agreement.id),
-            AgreementState::Expired => AgreementStateError::Expired(agreement.id),
-            AgreementState::Terminated => AgreementStateError::Terminated(agreement.id),
-        })?
+        // TODO: possible race condition here ISSUE#430
+        // 1. this state check should be also `db.update_state`
+        // 2. `db.update_state` must be invoked after successful propose_agreement
+        // TODO: if dao.approve fails, Provider and Requestor have inconsistent state.
+        self.api.approve_agreement(agreement, timeout).await?;
+        dao.approve(agreement_id)
+            .await
+            .map_err(|e| AgreementError::UpdateState(agreement_id.clone(), e))?;
+
+        counter!("market.agreements.provider.approved", 1);
+        log::info!(
+            "Provider {} approved Agreement [{}].",
+            id.display(),
+            &agreement_id,
+        );
+        return Ok(());
     }
 }
 

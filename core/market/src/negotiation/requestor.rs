@@ -385,32 +385,24 @@ impl RequestorBroker {
             Some(agreement) => agreement,
         };
 
-        Err(match agreement.state {
-            AgreementState::Proposal => {
-                // TODO : possible race condition here ISSUE#430
-                // 1. this state check should be also `db.update_state`
-                // 2. `db.update_state` must be invoked after successful propose_agreement
-                agreement.state = AgreementState::Pending;
-                self.api.propose_agreement(&agreement).await?;
-                dao.update_state(agreement_id, AgreementState::Pending)
-                    .await
-                    .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?;
+        expect_state(&agreement, AgreementState::Proposal)?;
 
-                counter!("market.agreements.requestor.confirmed", 1);
-                log::info!(
-                    "Requestor {} confirmed Agreement [{}] and sent to Provider.",
-                    id.display(),
-                    &agreement_id,
-                );
-                return Ok(());
-            }
-            AgreementState::Pending => AgreementStateError::Confirmed(agreement.id),
-            AgreementState::Cancelled => AgreementStateError::Cancelled(agreement.id),
-            AgreementState::Rejected => AgreementStateError::Rejected(agreement.id),
-            AgreementState::Approved => AgreementStateError::Approved(agreement.id),
-            AgreementState::Expired => AgreementStateError::Expired(agreement.id),
-            AgreementState::Terminated => AgreementStateError::Terminated(agreement.id),
-        })?
+        // TODO : possible race condition here ISSUE#430
+        // 1. this state check should be also `db.update_state`
+        // 2. `db.update_state` must be invoked after successful propose_agreement
+        agreement.state = AgreementState::Pending;
+        self.api.propose_agreement(&agreement).await?;
+        dao.update_state(agreement_id, AgreementState::Pending)
+            .await
+            .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?;
+
+        counter!("market.agreements.requestor.confirmed", 1);
+        log::info!(
+            "Requestor {} confirmed Agreement [{}] and sent to Provider.",
+            id.display(),
+            &agreement_id,
+        );
+        return Ok(());
     }
 }
 

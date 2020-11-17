@@ -14,15 +14,15 @@ use ya_service_api_web::middleware::Identity;
 use crate::config::Config;
 use crate::db::dao::{AgreementEventsDao, NegotiationEventsDao, ProposalDao, SaveProposalError};
 use crate::db::model::{
-    Agreement, AgreementEvent, AgreementId, AppSessionId, IssuerType, MarketEvent, OwnerType,
-    Proposal,
+    Agreement, AgreementEvent, AgreementId, AgreementState, AppSessionId, IssuerType, MarketEvent,
+    OwnerType, Proposal,
 };
 use crate::db::model::{ProposalId, SubscriptionId};
 use crate::matcher::{
     error::{DemandError, QueryOfferError},
     store::SubscriptionStore,
 };
-use crate::negotiation::error::{AgreementEventsError, GetProposalError};
+use crate::negotiation::error::{AgreementEventsError, AgreementStateError, GetProposalError};
 use crate::negotiation::notifier::NotifierError;
 use crate::negotiation::{
     error::{MatchValidationError, ProposalError, QueryEventsError},
@@ -419,4 +419,23 @@ pub fn validate_match(
             })
         }
     }
+}
+
+pub fn expect_state(
+    agreement: &Agreement,
+    state: AgreementState,
+) -> Result<(), AgreementStateError> {
+    if agreement.state == state {
+        return Ok(());
+    }
+
+    Err(match agreement.state {
+        AgreementState::Proposal => AgreementStateError::Proposed(agreement.id.clone()),
+        AgreementState::Pending => AgreementStateError::Confirmed(agreement.id.clone()),
+        AgreementState::Cancelled => AgreementStateError::Cancelled(agreement.id.clone()),
+        AgreementState::Rejected => AgreementStateError::Rejected(agreement.id.clone()),
+        AgreementState::Approved => AgreementStateError::Approved(agreement.id.clone()),
+        AgreementState::Expired => AgreementStateError::Expired(agreement.id.clone()),
+        AgreementState::Terminated => AgreementStateError::Terminated(agreement.id.clone()),
+    })?
 }
