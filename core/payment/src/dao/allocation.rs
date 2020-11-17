@@ -44,8 +44,14 @@ pub fn spend_from_allocation(
 }
 
 impl<'c> AllocationDao<'c> {
-    pub async fn create(&self, allocation: NewAllocation, owner_id: NodeId) -> DbResult<String> {
-        let allocation = WriteObj::new(allocation, owner_id);
+    pub async fn create(
+        &self,
+        allocation: NewAllocation,
+        owner_id: NodeId,
+        payment_platform: String,
+        address: String,
+    ) -> DbResult<String> {
+        let allocation = WriteObj::new(allocation, owner_id, payment_platform, address);
         let allocation_id = allocation.id.clone();
         do_with_transaction(self.pool, move |conn| {
             diesel::insert_into(dsl::pay_allocation)
@@ -93,6 +99,22 @@ impl<'c> AllocationDao<'c> {
         readonly_transaction(self.pool, move |conn| {
             let allocations: Vec<ReadObj> = dsl::pay_allocation
                 .filter(dsl::owner_id.eq(owner_id))
+                .filter(dsl::released.eq(false))
+                .load(conn)?;
+            Ok(allocations.into_iter().map(Into::into).collect())
+        })
+        .await
+    }
+
+    pub async fn get_for_address(
+        &self,
+        payment_platform: String,
+        address: String,
+    ) -> DbResult<Vec<Allocation>> {
+        readonly_transaction(self.pool, move |conn| {
+            let allocations: Vec<ReadObj> = dsl::pay_allocation
+                .filter(dsl::payment_platform.eq(payment_platform))
+                .filter(dsl::address.eq(address))
                 .filter(dsl::released.eq(false))
                 .load(conn)?;
             Ok(allocations.into_iter().map(Into::into).collect())

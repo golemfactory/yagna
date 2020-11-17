@@ -28,6 +28,7 @@ use ya_service_api_web::{
     rest_api_host_port, DEFAULT_YAGNA_API_URL, YAGNA_API_URL_ENV_VAR,
 };
 use ya_utils_path::data_dir::DataDir;
+use ya_utils_process::lock::ProcLock;
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
@@ -242,7 +243,8 @@ async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<()> {
     #[cfg(feature = "zksync-driver")]
     {
         use ya_zksync_driver::PaymentDriverService;
-        PaymentDriverService::gsb(&()).await?;
+        let db_executor = DbExecutor::from_data_dir(data_dir, "zksync-driver")?;
+        PaymentDriverService::gsb(&db_executor).await?;
     }
     Ok(())
 }
@@ -327,6 +329,7 @@ impl ServiceCommand {
         match self {
             Self::Run(ServiceCommandOpts { api_url }) => {
                 log::info!("Starting {} service!", clap::crate_name!());
+                let _lock = ProcLock::new("yagna", &ctx.data_dir)?.lock(std::process::id())?;
 
                 ya_sb_router::bind_gsb_router(ctx.gsb_url.clone())
                     .await

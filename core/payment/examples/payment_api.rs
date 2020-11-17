@@ -94,12 +94,15 @@ pub async fn start_gnt_driver(
     Ok(())
 }
 
-pub async fn start_zksync_driver(requestor_account: Box<EthAccount>) -> anyhow::Result<()> {
+pub async fn start_zksync_driver(
+    db: &DbExecutor,
+    requestor_account: Box<EthAccount>,
+) -> anyhow::Result<()> {
     let requestor = NodeId::from(requestor_account.address().as_ref());
     fake_list_identities(vec![requestor]);
     fake_subscribe_to_events();
 
-    zksync::PaymentDriverService::gsb(&()).await?;
+    zksync::PaymentDriverService::gsb(db).await?;
     let requestor_sign_tx = get_sign_tx(requestor_account);
     fake_sign_tx(Box::new(requestor_sign_tx));
     Ok(())
@@ -202,7 +205,7 @@ async fn main() -> anyhow::Result<()> {
             (gnt::DRIVER_NAME, gnt::PLATFORM_NAME)
         }
         Driver::Zksync => {
-            start_zksync_driver(requestor_account).await?;
+            start_zksync_driver(&db, requestor_account).await?;
             (zksync::DRIVER_NAME, zksync::PLATFORM_NAME)
         }
     };

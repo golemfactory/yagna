@@ -457,6 +457,12 @@ where
     H: CallRequestHandler + 'static,
 {
     fn handle(&mut self, item: Result<GsbMessage, ProtocolError>, ctx: &mut Self::Context) {
+        if let Err(e) = item.as_ref() {
+            log::error!("protocol error {}", e);
+            ctx.stop();
+            return;
+        }
+
         match item.unwrap() {
             GsbMessage::RegisterReply(r) => {
                 if let Some(code) = register_reply_code(r.code) {

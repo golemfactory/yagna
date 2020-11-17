@@ -2323,6 +2323,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs2"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213"
+dependencies = [
+ "libc",
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "fsevent"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2658,8 +2668,11 @@ dependencies = [
  "structopt",
  "tokio 0.2.22",
  "url 2.2.0",
+ "vergen",
  "ya-compile-time-utils",
  "ya-core-model",
+ "ya-utils-path",
+ "ya-utils-process",
 ]
 
 [[package]]
@@ -6681,6 +6694,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 
 [[package]]
+name = "vergen"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ce50d8996df1f85af15f2cd8d33daae6e479575123ef4314a51a70a230739cb"
+dependencies = [
+ "bitflags 1.2.1",
+ "chrono",
+]
+
+[[package]]
 name = "version_check"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7135,7 +7158,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=fe426adc89682be018d65504c0bfb8ab9580fcae#fe426adc89682be018d65504c0bfb8ab9580fcae"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=80221a38c4cf8f4700da36598316fc8048e5c535#80221a38c4cf8f4700da36598316fc8048e5c535"
 dependencies = [
  "awc 1.0.1",
  "bytes 0.5.6",
@@ -7172,7 +7195,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=fe426adc89682be018d65504c0bfb8ab9580fcae#fe426adc89682be018d65504c0bfb8ab9580fcae"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=80221a38c4cf8f4700da36598316fc8048e5c535#80221a38c4cf8f4700da36598316fc8048e5c535"
 dependencies = [
  "bigdecimal",
  "chrono",
@@ -7297,7 +7320,7 @@ dependencies = [
  "actix-http 1.0.1",
  "actix-rt",
  "anyhow",
- "awc 1.0.1",
+ "awc 2.0.1",
  "bigdecimal",
  "bitflags 1.2.1",
  "chrono",
@@ -7536,12 +7559,23 @@ dependencies = [
 name = "ya-payment-driver"
 version = "0.1.0"
 dependencies = [
+ "actix",
+ "anyhow",
  "async-trait",
  "bigdecimal",
  "chrono",
+ "diesel",
+ "diesel_migrations",
+ "ethereum-types 0.6.0",
+ "hex",
  "log 0.4.11",
+ "num",
+ "r2d2",
+ "thiserror",
+ "tokio 0.2.22",
  "ya-client-model 0.2.0",
  "ya-core-model",
+ "ya-persistence",
  "ya-service-bus",
 ]
 
@@ -7878,6 +7912,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-utils-futures"
+version = "0.1.0"
+dependencies = [
+ "futures 0.3.8",
+ "tokio 0.2.22",
+]
+
+[[package]]
 name = "ya-utils-path"
 version = "0.1.0"
 dependencies = [
@@ -7893,6 +7935,7 @@ dependencies = [
  "actix",
  "anyhow",
  "derive_more 0.99.11",
+ "fs2",
  "futures 0.3.8",
  "futures-util",
  "libc",
@@ -7912,7 +7955,6 @@ dependencies = [
 name = "ya-zksync-driver"
 version = "0.1.0"
 dependencies = [
- "actix",
  "anyhow",
  "async-trait",
  "awc 2.0.1",
@@ -7932,6 +7974,8 @@ dependencies = [
  "uuid 0.8.1",
  "ya-client-model 0.2.0",
  "ya-payment-driver",
+ "ya-service-api-interfaces",
+ "ya-utils-futures",
  "zksync",
  "zksync_eth_signer",
 ]
@@ -7973,7 +8017,9 @@ dependencies = [
  "ya-service-api-web",
  "ya-service-bus",
  "ya-sgx",
+ "ya-utils-futures",
  "ya-utils-path",
+ "ya-utils-process",
  "ya-zksync-driver",
 ]
 

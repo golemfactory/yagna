@@ -72,7 +72,7 @@ pub async fn save_default_account(data_dir: &Path) -> anyhow::Result<()> {
     let default_account = vec![Account {
         driver: DEFAULT_PAYMENT_DRIVER.to_string(),
         address: default_node_id.to_string(),
-        send: false,
+        send: true,
         receive: true,
     }];
     let text = serde_json::to_string(&default_account)?;

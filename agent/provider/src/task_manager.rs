@@ -1,5 +1,5 @@
 use actix::prelude::*;
-use anyhow::{bail, Error, Result};
+use anyhow::{anyhow, bail, Error, Result};
 use chrono::{DateTime, TimeZone, Utc};
 use futures::future::TryFutureExt;
 
@@ -313,22 +313,38 @@ impl Handler<ActivityCreated> for TaskManager {
     fn handle(&mut self, msg: ActivityCreated, _ctx: &mut Context<Self>) -> Self::Result {
         // TODO: Consider different flow: TaskRunner sends us request for creating activity
         //       and TaskManager is responsible for sending CreateActivity to runner.
-        let result: Result<(), anyhow::Error> = (|| {
-            let agreement_id = msg.agreement_id.clone();
-            self.tasks
-                .start_transition(&agreement_id, AgreementState::Computing)?;
-            // Forward information to Payments for cost computing.
-            self.payments.do_send(msg);
-            self.tasks
-                .finish_transition(&agreement_id, AgreementState::Computing)?;
-            Ok(())
-        })();
-
-        if let Err(error) = result {
-            log::error!("{}", error);
+        let listener = self.tasks.changes_listener(&msg.agreement_id);
+        let future = async move {
+            // ActivityCreated event can come, before Task initialization will be finished.
+            // In this case we must wait, because otherwise transition to Computing will fail.
+            let mut state = listener?;
+            state.transition_finished().await
         }
+        .into_actor(self)
+        .map(move |result, myself, _| {
+            // Return, if waiting for transition failed.
+            // This indicates, that State was already dropped.
+            result
+                .map_err(|e| anyhow!("[ActivityCreated] Can't change state to Computing. {}", e))?;
+            let agreement_id = msg.agreement_id.clone();
 
-        ActorResponse::reply(Ok(()))
+            myself
+                .tasks
+                .start_transition(&agreement_id, AgreementState::Computing)?;
+
+            // Forward information to Payments for cost computing.
+            myself.payments.do_send(msg);
+            myself
+                .tasks
+                .finish_transition(&agreement_id, AgreementState::Computing)?;
+            anyhow::Result::<()>::Ok(())
+        })
+        .map(|result, _, _| match result {
+            Err(e) => Ok(log::error!("[ActivityCreated] {}", e)),
+            Ok(()) => Ok(()),
+        });
+
+        ActorResponse::r#async(future)
     }
 }
 
