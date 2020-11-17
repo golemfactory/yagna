@@ -57,7 +57,7 @@ impl AgreementEvent {
             .map(|reason| serde_json::from_str::<JsonReason>(&reason))
             .map(|result| result.map_err(|e| {
                 log::warn!(
-                    "Agreement Event with not parsable Reason in database. Error: {}. Shouldn't happen\
+                    "Agreement Event with not parsable Reason in database. Error: {}. Shouldn't happen \
                      because market is responsible for rejecting invalid Reasons.", e
                 )
             }).ok())
@@ -87,7 +87,7 @@ impl AgreementEvent {
                 event_date: event_date.to_rfc3339(), // TODO: this is bug in ya-client.
                 reason,
                 signature: self.signature.unwrap_or_else(|| {
-                    log::warn!("AgreementTerminatedEvent without signature in database. This shouldn't happen, because\
+                    log::warn!("AgreementTerminatedEvent without signature in database. This shouldn't happen, because \
                     Market is responsible for signing events and rejecting invalid signatures from other markets.");
                     "".to_string()
                 }),
