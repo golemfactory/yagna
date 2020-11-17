@@ -183,6 +183,7 @@ impl ProviderBroker {
         &self,
         id: Identity,
         agreement_id: &AgreementId,
+        app_session_id: AppSessionId,
         timeout: f32,
     ) -> Result<(), AgreementError> {
         let dao = self.common.db.as_dao::<AgreementDao>();
@@ -202,7 +203,7 @@ impl ProviderBroker {
         // 2. `db.update_state` must be invoked after successful propose_agreement
         // TODO: if dao.approve fails, Provider and Requestor have inconsistent state.
         self.api.approve_agreement(agreement, timeout).await?;
-        dao.approve(agreement_id)
+        dao.approve(agreement_id, &app_session_id)
             .await
             .map_err(|e| AgreementError::UpdateState(agreement_id.clone(), e))?;
 
@@ -212,6 +213,13 @@ impl ProviderBroker {
             id.display(),
             &agreement_id,
         );
+        if let Some(session) = app_session_id {
+            log::info!(
+                "AppSession id [{}] set for Agreement [{}].",
+                &session,
+                &agreement_id
+            );
+        }
         return Ok(());
     }
 }

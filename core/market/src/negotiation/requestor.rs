@@ -403,6 +403,13 @@ impl RequestorBroker {
             id.display(),
             &agreement_id,
         );
+        if let Some(session) = app_session_id {
+            log::info!(
+                "AppSession id [{}] set for Agreement [{}].",
+                &session,
+                &agreement_id
+            );
+        }
         return Ok(());
     }
 }
@@ -445,10 +452,12 @@ async fn agreement_approved(
     }
 
     // TODO: Validate agreement signature.
+    // Note: session must be None, because either we already set this value in ConfirmAgreement,
+    // or we purposely left it None.
     broker
         .db
         .as_dao::<AgreementDao>()
-        .approve(&msg.agreement_id)
+        .approve(&msg.agreement_id, &None)
         .await
         .map_err(|err| match err {
             StateError::InvalidTransition { id, from, .. } => {

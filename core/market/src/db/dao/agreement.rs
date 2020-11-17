@@ -154,14 +154,20 @@ impl<'c> AgreementDao<'c> {
                     .execute(conn)
                     .map_err(|e| StateError::SessionId(e.into()))?;
             }
-
             Ok(())
         })
         .await
     }
 
-    pub async fn approve(&self, id: &AgreementId) -> Result<(), StateError> {
+    /// Function won't change appSessionId, if session parameter is None.
+    pub async fn approve(
+        &self,
+        id: &AgreementId,
+        session: &AppSessionId,
+    ) -> Result<(), StateError> {
         let id = id.clone();
+        let session = session.clone();
+
         do_with_transaction(self.pool, move |conn| {
             let agreement: Agreement =
                 market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
@@ -178,6 +184,16 @@ impl<'c> AgreementDao<'c> {
                 .set(agreement::state.eq(AgreementState::Approved))
                 .execute(conn)
                 .map_err(|e| StateError::DbError(e.into()))?;
+
+            // It's important, that if None AppSessionId comes, we shouldn't update Agreement
+            // appSessionId field to None. This function can be called in different context, for example
+            // on Requestor, when appSessionId is already set.
+            if let Some(session) = session {
+                diesel::update(market_agreement.filter(agreement::id.eq(&id)))
+                    .set(agreement::session_id.eq(session))
+                    .execute(conn)
+                    .map_err(|e| StateError::SessionId(e.into()))?;
+            }
 
             let event = NewAgreementEvent {
                 agreement_id: id.clone(),

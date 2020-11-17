@@ -54,6 +54,7 @@ async fn test_agreement_approved_event() -> Result<()> {
             .approve_agreement(
                 network.get_default_id(PROV_NAME),
                 &agr_id.clone().translate(OwnerType::Provider),
+                None,
                 0.1,
             )
             .await?;
@@ -150,6 +151,7 @@ async fn test_agreement_events_and_wait_for_approval() -> Result<()> {
             .approve_agreement(
                 network.get_default_id(PROV_NAME),
                 &agr_id.clone().translate(OwnerType::Provider),
+                None,
                 0.1,
             )
             .await?;

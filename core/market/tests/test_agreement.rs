@@ -175,6 +175,7 @@ async fn full_market_interaction_aka_happy_path() -> Result<()> {
         .approve_agreement(
             network.get_default_id(PROV_NAME),
             &agreement_id.clone().translate(OwnerType::Provider),
+            None,
             0.1,
         )
         .await?;
@@ -423,7 +424,7 @@ async fn approval_before_confirmation_should_fail() -> Result<()> {
     let result = network
         .get_market(PROV_NAME)
         .provider_engine
-        .approve_agreement(prov_id.clone(), &agreement_id, 0.1)
+        .approve_agreement(prov_id.clone(), &agreement_id, None, 0.1)
         .await;
 
     // ... which results in not found error, bc there was no confirmation
@@ -477,6 +478,7 @@ async fn approval_without_waiting_should_pass() -> Result<()> {
         .approve_agreement(
             prov_id.clone(),
             &agreement_id.translate(OwnerType::Provider),
+            None,
             0.1,
         )
         .await?;
@@ -524,6 +526,7 @@ async fn waiting_after_approval_should_pass() -> Result<()> {
         .approve_agreement(
             prov_id.clone(),
             &agreement_id.clone().translate(OwnerType::Provider),
+            None,
             0.1,
         )
         .await?;
@@ -580,6 +583,7 @@ async fn second_approval_should_fail() -> Result<()> {
         .approve_agreement(
             prov_id.clone(),
             &agreement_id.clone().translate(OwnerType::Provider),
+            None,
             0.1,
         )
         .await?;
@@ -589,6 +593,7 @@ async fn second_approval_should_fail() -> Result<()> {
         .approve_agreement(
             prov_id.clone(),
             &agreement_id.clone().translate(OwnerType::Provider),
+            None,
             0.1,
         )
         .await;
@@ -641,6 +646,7 @@ async fn second_waiting_should_pass() -> Result<()> {
         .approve_agreement(
             prov_id.clone(),
             &agreement_id.clone().translate(OwnerType::Provider),
+            None,
             0.1,
         )
         .await?;
@@ -747,6 +753,7 @@ async fn net_err_while_approving() -> Result<()> {
         .approve_agreement(
             prov_id.clone(),
             &agreement_id.clone().translate(OwnerType::Provider),
+            None,
             0.1,
         )
         .await;

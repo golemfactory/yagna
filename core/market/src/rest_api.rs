@@ -55,6 +55,14 @@ pub struct QueryAppSessionId {
 }
 
 #[derive(Deserialize)]
+pub struct QueryTimeoutAppSessionId {
+    #[serde(rename = "appSessionId")]
+    pub app_session_id: AppSessionId,
+    #[serde(rename = "timeout", default = "default_query_timeout")]
+    pub timeout: f32,
+}
+
+#[derive(Deserialize)]
 pub struct QueryTimeout {
     #[serde(rename = "timeout", default = "default_query_timeout")]
     pub timeout: f32,
