@@ -3,9 +3,10 @@ use chrono::{Duration, Utc};
 
 use ya_market::testing::events_helper::requestor::expect_approve;
 use ya_market::testing::proposal_util::exchange_draft_proposals;
-use ya_market::testing::ya_client::model::market::event::AgreementEvent;
 use ya_market::testing::MarketsNetwork;
 use ya_market::testing::{ApprovalStatus, OwnerType};
+
+use ya_client::model::market::AgreementOperationEvent as AgreementEvent;
 
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";

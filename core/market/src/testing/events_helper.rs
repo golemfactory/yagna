@@ -16,6 +16,7 @@ pub struct TestMarketEvent {
     pub timestamp: NaiveDateTime,
     pub event_type: EventType,
     pub artifact_id: ProposalId,
+    pub reason: Option<String>,
 }
 
 pub fn generate_event(id: i32, timestamp: NaiveDateTime) -> TestMarketEvent {
@@ -30,6 +31,7 @@ pub fn generate_event(id: i32, timestamp: NaiveDateTime) -> TestMarketEvent {
                 OwnerType::Requestor,
         ),
         timestamp,
+        reason: None,
     }
 }
 
