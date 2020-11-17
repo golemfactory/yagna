@@ -77,8 +77,9 @@ CREATE TABLE market_negotiation_event(
     id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     subscription_id VARCHAR(100) NOT NULL,
     timestamp DATETIME NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
-    event_type TEXT NOT NULL,
+    event_type VARCHAR(20) NOT NULL,
     artifact_id VARCHAR(100) NOT NULL,
+    reason TEXT,
 
     CHECK (event_type in ('P-NewProposal', 'P-ProposalRejected', 'P-Agreement', 'P-PropertyQuery', 'R-NewProposal', 'R-ProposalRejected', 'R-PropertyQuery'))
 );

@@ -64,6 +64,7 @@ pub struct MarketEvent {
     /// It can be Proposal, Agreement or structure,
     /// that will represent PropertyQuery.
     pub artifact_id: ProposalId,
+    pub reason: Option<String>,
 }
 
 #[derive(Clone, Debug, Insertable)]

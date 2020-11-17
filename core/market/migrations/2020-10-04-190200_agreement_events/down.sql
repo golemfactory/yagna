@@ -36,9 +36,7 @@ CREATE TABLE market_agreement(
 
 -- Restore market_proposal due to changes to state enum.
 
-DROP TABLE market_proposal_state;
 DROP TABLE market_proposal;
-
 CREATE TABLE market_proposal_state(
     id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     state VARCHAR(10) NOT NULL UNIQUE

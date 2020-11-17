@@ -41,6 +41,7 @@ table! {
         timestamp -> Timestamp,
         event_type -> Text,
         artifact_id -> Text,
+        reason -> Nullable<Text>,
     }
 }
 
