@@ -1,4 +1,4 @@
-use actix_web::web::{Data, Path};
+use actix_web::web::{Data, Path, Query};
 use actix_web::{HttpResponse, Responder, Scope};
 use chrono::{TimeZone, Utc};
 use std::sync::Arc;
@@ -49,20 +49,20 @@ async fn get_agreement(
 #[actix_web::get("/agreements/events")]
 async fn collect_agreement_events(
     market: Data<Arc<MarketService>>,
-    path: Path<QueryAgreementEvents>,
+    query: Query<QueryAgreementEvents>,
     id: Identity,
 ) -> impl Responder {
-    let timeout: f32 = path.timeout;
-    let after_timestamp = path
+    let timeout: f32 = query.timeout;
+    let after_timestamp = query
         .after_timestamp
         .unwrap_or(Utc.ymd(1970, 1, 1).and_hms(0, 0, 0));
 
     market
         .requestor_engine
         .query_agreement_events(
-            &path.app_session_id,
+            &query.app_session_id,
             timeout,
-            path.max_events,
+            query.max_events,
             after_timestamp,
             &id,
         )
