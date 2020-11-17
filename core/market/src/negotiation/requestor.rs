@@ -10,8 +10,7 @@ use ya_client::model::{node_id::ParseError, NodeId};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
-// TODO: Use real ya-client, when we will move all structures there.
-use crate::ya_client::model::market::event::AgreementEvent as ClientAgreementEvent;
+use ya_client::model::market::AgreementOperationEvent as ClientAgreementEvent;
 
 use crate::db::{
     dao::{AgreementDao, NegotiationEventsDao, ProposalDao, SaveAgreementError, StateError},
