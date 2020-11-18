@@ -1,6 +1,7 @@
 use anyhow::Result;
 use chrono::{Duration, Utc};
 
+use ya_market::testing::agreement_utils::negotiate_agreement;
 use ya_market::testing::proposal_util::exchange_proposals_exclusive;
 use ya_market::testing::MarketsNetwork;
 use ya_market::testing::OwnerType;
@@ -165,5 +166,122 @@ async fn test_session_events_filtering() -> Result<()> {
 
     // Protect from eternal waiting.
     tokio::time::timeout(Duration::milliseconds(600).to_std()?, query_handle).await???;
+    Ok(())
+}
+
+/// AppSessionId isn't propagated to Provider and vice versa.
+/// They are completely independent and this test checks this.
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[actix_rt::test]
+#[serial_test::serial]
+async fn test_session_should_be_independent_on_bot_sides() -> Result<()> {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+
+    let req_market = network.get_market(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME);
+    let prov_id = network.get_default_id(PROV_NAME);
+    let prov_market = network.get_market(PROV_NAME);
+
+    let negotiation = negotiate_agreement(
+        &network,
+        REQ_NAME,
+        PROV_NAME,
+        "negotiation",
+        "r-session",
+        "p-session",
+    )
+    .await
+    .unwrap();
+
+    let confirm_timestamp = negotiation.confirm_timestamp;
+    let p_events = prov_market
+        .requestor_engine
+        .query_agreement_events(
+            &Some("p-session".to_string()),
+            1.0,
+            Some(10),
+            confirm_timestamp,
+            &prov_id,
+        )
+        .await
+        .unwrap();
+
+    let r_events = req_market
+        .requestor_engine
+        .query_agreement_events(
+            &Some("r-session".to_string()),
+            0.5,
+            Some(10),
+            confirm_timestamp,
+            &req_id,
+        )
+        .await
+        .unwrap();
+
+    // Each side gets only his own event.
+    assert_eq!(p_events.len(), 1);
+    assert_eq!(r_events.len(), 1);
+    Ok(())
+}
+
+/// Test case, when Provider and Requestor is on the same node.
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[actix_rt::test]
+#[serial_test::serial]
+async fn test_session_negotiation_on_the_same_node() -> Result<()> {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance("Node")
+        .await?;
+
+    let req_market = network.get_market("Node");
+    let req_id = network.get_default_id("Node");
+    let prov_id = network.get_default_id("Node");
+    let prov_market = network.get_market("Node");
+
+    let negotiation = negotiate_agreement(
+        &network,
+        "Node",
+        "Node",
+        "negotiation",
+        "r-session",
+        "p-session",
+    )
+    .await
+    .unwrap();
+
+    let confirm_timestamp = negotiation.confirm_timestamp;
+    let p_events = prov_market
+        .requestor_engine
+        .query_agreement_events(
+            &Some("p-session".to_string()),
+            1.0,
+            Some(10),
+            confirm_timestamp,
+            &prov_id,
+        )
+        .await
+        .unwrap();
+
+    let r_events = req_market
+        .requestor_engine
+        .query_agreement_events(
+            &Some("r-session".to_string()),
+            0.5,
+            Some(10),
+            confirm_timestamp,
+            &req_id,
+        )
+        .await
+        .unwrap();
+
+    // Each side gets only his own event.
+    assert_eq!(p_events.len(), 1);
+    assert_eq!(r_events.len(), 1);
     Ok(())
 }

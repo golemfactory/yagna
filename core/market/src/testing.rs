@@ -10,6 +10,7 @@ pub use super::negotiation::{error::*, *};
 pub use super::protocol::*;
 pub use super::ya_client;
 
+pub mod agreement_utils;
 pub mod backtrace_util;
 pub mod bcast;
 pub mod dao;
