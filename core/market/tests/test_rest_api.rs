@@ -5,7 +5,7 @@ use chrono::Utc;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 
-use ya_client::model::market::{Agreement, Demand, DemandOfferBase, Offer, Proposal};
+use ya_client::model::market::{Agreement, Demand, NewDemand, NewOffer, Offer, Proposal};
 use ya_client::model::ErrorMessage;
 use ya_market::testing::{
     client::{sample_demand, sample_offer},
@@ -33,9 +33,9 @@ async fn test_rest_get_offers() -> Result<(), anyhow::Error> {
     let identity_local = network.get_default_id("Node-1");
     let identity_remote = network.get_default_id("Node-2");
 
-    let offer_local = DemandOfferBase::new(json!({}), "()".to_string());
-    let offer_local_unsubscribed = DemandOfferBase::new(json!({}), "()".to_string());
-    let offer_remote = DemandOfferBase::new(json!({}), "()".to_string());
+    let offer_local = NewOffer::new(json!({}), "()".to_string());
+    let offer_local_unsubscribed = NewOffer::new(json!({}), "()".to_string());
+    let offer_remote = NewOffer::new(json!({}), "()".to_string());
     let subscription_id_local = market_local
         .subscribe_offer(&offer_local, &identity_local)
         .await?;
@@ -77,7 +77,7 @@ async fn test_rest_get_demands() -> Result<(), anyhow::Error> {
 
     let market_local = network.get_market("Node-1");
     let identity_local = network.get_default_id("Node-1");
-    let demand_local = DemandOfferBase::new(json!({}), "()".to_string());
+    let demand_local = NewDemand::new(json!({}), "()".to_string());
     let subscription_id = market_local
         .subscribe_demand(&demand_local, &identity_local)
         .await?;
