@@ -52,10 +52,12 @@ pub async fn account_balance(address: &str) -> Result<BigDecimal, GenericError> 
         .map(|x| x.0.clone())
         .unwrap_or(BigUint::zero());
     let balance = utils::big_uint_to_big_dec(balance_com);
+    log::debug!("account_balance. address={}, balance={}", address, &balance);
     Ok(balance)
 }
 
 pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
+    log::debug!("init_wallet. network={}, msg={:?}", *NETWORK, msg);
     let mode = msg.mode();
     let address = msg.address().clone();
 
