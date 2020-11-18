@@ -1,3 +1,4 @@
+use all_asserts::*;
 use anyhow::Result;
 use chrono::{Duration, Utc};
 
@@ -6,7 +7,7 @@ use ya_market::testing::proposal_util::exchange_proposals_exclusive;
 use ya_market::testing::MarketsNetwork;
 use ya_market::testing::OwnerType;
 
-//use ya_client::model::market::{AgreementOperationEvent as AgreementEvent, Proposal};
+use ya_client::model::market::AgreementOperationEvent as AgreementEvent;
 
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";
@@ -276,5 +277,196 @@ async fn test_session_negotiation_on_the_same_node() -> Result<()> {
     // Each side gets only his own event.
     assert_eq!(p_events.len(), 1);
     assert_eq!(r_events.len(), 1);
+    Ok(())
+}
+
+/// We expect to get only events after specified timestamp.
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[actix_rt::test]
+#[serial_test::serial]
+async fn test_session_timestamp_filtering() -> Result<()> {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+
+    let req_market = network.get_market(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME);
+    let prov_id = network.get_default_id(PROV_NAME);
+    let prov_market = network.get_market(PROV_NAME);
+
+    let num_before = 4;
+    let num_after = 2;
+    let timestamp_before = Utc::now();
+
+    let mut agreements = vec![];
+    for i in 0..num_before {
+        let negotiation = negotiate_agreement(
+            &network,
+            REQ_NAME,
+            PROV_NAME,
+            &format!("negotiation{}", i),
+            "r-session",
+            "p-session",
+        )
+        .await
+        .unwrap();
+        agreements.push(negotiation.r_agreement);
+    }
+
+    let timestamp_after = Utc::now();
+    for i in 0..num_after {
+        let negotiation = negotiate_agreement(
+            &network,
+            REQ_NAME,
+            PROV_NAME,
+            &format!("negotiation{}", i + num_before),
+            "r-session",
+            "p-session",
+        )
+        .await
+        .unwrap();
+        agreements.push(negotiation.r_agreement);
+    }
+
+    let timestamp_last = Utc::now();
+
+    // Query events using oldest timestamp. We expect to get all available events.
+    let p_events = prov_market
+        .query_agreement_events(
+            &Some("p-session".to_string()),
+            0.5,
+            Some(10),
+            timestamp_before,
+            &prov_id,
+        )
+        .await
+        .unwrap();
+
+    let r_events = req_market
+        .query_agreement_events(
+            &Some("r-session".to_string()),
+            0.5,
+            Some(10),
+            timestamp_before,
+            &req_id,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(p_events.len(), num_before + num_after);
+    assert_eq!(r_events.len(), num_before + num_after);
+
+    // Check if we got events for correct agreement ids.
+    p_events
+        .iter()
+        .enumerate()
+        .for_each(|(i, event)| match event {
+            AgreementEvent::AgreementApprovedEvent {
+                event_date,
+                agreement_id,
+            } => {
+                assert_eq!(agreement_id, &agreements[i].into_client());
+                assert_ge!(event_date, &timestamp_before);
+            }
+            _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
+        });
+
+    r_events
+        .iter()
+        .enumerate()
+        .for_each(|(i, event)| match event {
+            AgreementEvent::AgreementApprovedEvent {
+                event_date,
+                agreement_id,
+            } => {
+                assert_eq!(agreement_id, &agreements[i].into_client());
+                assert_ge!(event_date, &timestamp_before);
+            }
+            _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
+        });
+
+    // Query events using newer timestamp. We expect to get only new events
+    let p_events = prov_market
+        .query_agreement_events(
+            &Some("p-session".to_string()),
+            0.5,
+            Some(10),
+            timestamp_after,
+            &prov_id,
+        )
+        .await
+        .unwrap();
+
+    let r_events = req_market
+        .query_agreement_events(
+            &Some("r-session".to_string()),
+            0.5,
+            Some(10),
+            timestamp_after,
+            &req_id,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(p_events.len(), num_after);
+    assert_eq!(r_events.len(), num_after);
+
+    // Check if we got events for correct agreement ids.
+    p_events
+        .iter()
+        .enumerate()
+        .for_each(|(i, event)| match event {
+            AgreementEvent::AgreementApprovedEvent {
+                event_date,
+                agreement_id,
+            } => {
+                assert_eq!(agreement_id, &agreements[num_before + i].into_client());
+                assert_ge!(event_date, &timestamp_before);
+            }
+            _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
+        });
+
+    r_events
+        .iter()
+        .enumerate()
+        .for_each(|(i, event)| match event {
+            AgreementEvent::AgreementApprovedEvent {
+                event_date,
+                agreement_id,
+            } => {
+                assert_eq!(agreement_id, &agreements[num_before + i].into_client());
+                assert_ge!(event_date, &timestamp_before);
+            }
+            _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
+        });
+
+    // Query events using newer last timestamp. We expect to get no events.
+    let p_events = prov_market
+        .query_agreement_events(
+            &Some("p-session".to_string()),
+            0.5,
+            Some(10),
+            timestamp_last,
+            &prov_id,
+        )
+        .await
+        .unwrap();
+
+    let r_events = req_market
+        .query_agreement_events(
+            &Some("r-session".to_string()),
+            0.5,
+            Some(10),
+            timestamp_last,
+            &req_id,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(p_events.len(), 0);
+    assert_eq!(r_events.len(), 0);
     Ok(())
 }
