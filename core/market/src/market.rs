@@ -1,4 +1,4 @@
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
 use metrics::counter;
 use std::sync::{Arc, Mutex};
@@ -6,17 +6,20 @@ use thiserror::Error;
 
 use crate::config::Config;
 use crate::db::dao::AgreementDao;
-use crate::db::model::{AgreementId, SubscriptionId};
+use crate::db::model::{AgreementId, AppSessionId, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityGSB};
 use crate::matcher::error::{
     DemandError, MatcherError, MatcherInitError, QueryDemandsError, QueryOfferError,
     QueryOffersError,
 };
 use crate::matcher::{store::SubscriptionStore, Matcher};
-use crate::negotiation::error::{AgreementError, NegotiationError, NegotiationInitError};
+use crate::negotiation::error::{
+    AgreementError, AgreementEventsError, NegotiationError, NegotiationInitError,
+};
 use crate::negotiation::{EventNotifier, ProviderBroker, RequestorBroker};
 use crate::rest_api;
 
+use ya_client::model::market::AgreementOperationEvent as ClientAgreementEvent;
 use ya_client::model::market::{Agreement, Demand, DemandOfferBase, Offer};
 use ya_core_model::market::{local, BUS_ID};
 use ya_persistence::executor::DbExecutor;
@@ -247,6 +250,24 @@ impl MarketService {
                 .map_err(|e| AgreementError::Internal(e.to_string()))?),
             None => Err(AgreementError::NotFound(agreement_id.clone())),
         }
+    }
+
+    pub async fn query_agreement_events(
+        &self,
+        session_id: &AppSessionId,
+        timeout: f32,
+        max_events: Option<i32>,
+        after_timestamp: DateTime<Utc>,
+        id: &Identity,
+    ) -> Result<Vec<ClientAgreementEvent>, AgreementEventsError> {
+        Ok(self
+            .requestor_engine
+            .common
+            .query_agreement_events(session_id, timeout, max_events, after_timestamp, id)
+            .await?
+            .into_iter()
+            .map(|event| event.into_client())
+            .collect())
     }
 }
 

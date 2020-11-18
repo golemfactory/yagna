@@ -61,7 +61,6 @@ async fn test_agreement_approved_event() -> Result<()> {
 
         // We expect, that both Provider and Requestor will get event.
         let events = prov_market
-            .requestor_engine
             .query_agreement_events(&None, 0.1, Some(2), from_timestamp, &prov_id)
             .await?;
 
@@ -77,7 +76,7 @@ async fn test_agreement_approved_event() -> Result<()> {
         Result::<(), anyhow::Error>::Ok(())
     });
 
-    let events = req_engine
+    let events = req_market
         .query_agreement_events(&None, 0.5, Some(2), confirm_timestamp, &req_id)
         .await?;
 
@@ -158,7 +157,7 @@ async fn test_agreement_events_and_wait_for_approval() -> Result<()> {
         Result::<(), anyhow::Error>::Ok(())
     });
 
-    let events = req_engine
+    let events = req_market
         .query_agreement_events(&None, 0.5, Some(2), confirm_timestamp, &req_id)
         .await
         .unwrap();

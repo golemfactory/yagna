@@ -87,13 +87,11 @@ async fn test_session_events_filtering() -> Result<()> {
         }
 
         let events_none = prov_market
-            .requestor_engine
             .query_agreement_events(&None, 0.0, Some(10), confirm_timestamp, &prov_id)
             .await
             .unwrap();
 
         let events_ses1 = prov_market
-            .requestor_engine
             .query_agreement_events(
                 &Some("session-1".to_string()),
                 0.0,
@@ -105,7 +103,6 @@ async fn test_session_events_filtering() -> Result<()> {
             .unwrap();
 
         let events_ses2 = prov_market
-            .requestor_engine
             .query_agreement_events(
                 &Some("session-2".to_string()),
                 0.0,
@@ -132,12 +129,12 @@ async fn test_session_events_filtering() -> Result<()> {
     }
 
     // All events should be ready.
-    let events_none = req_engine
+    let events_none = req_market
         .query_agreement_events(&None, 0.0, Some(10), confirm_timestamp, &req_id)
         .await
         .unwrap();
 
-    let events_ses1 = req_engine
+    let events_ses1 = req_market
         .query_agreement_events(
             &Some("session-1".to_string()),
             0.0,
@@ -148,7 +145,7 @@ async fn test_session_events_filtering() -> Result<()> {
         .await
         .unwrap();
 
-    let events_ses2 = req_engine
+    let events_ses2 = req_market
         .query_agreement_events(
             &Some("session-2".to_string()),
             0.0,
@@ -200,7 +197,6 @@ async fn test_session_should_be_independent_on_bot_sides() -> Result<()> {
 
     let confirm_timestamp = negotiation.confirm_timestamp;
     let p_events = prov_market
-        .requestor_engine
         .query_agreement_events(
             &Some("p-session".to_string()),
             1.0,
@@ -212,7 +208,6 @@ async fn test_session_should_be_independent_on_bot_sides() -> Result<()> {
         .unwrap();
 
     let r_events = req_market
-        .requestor_engine
         .query_agreement_events(
             &Some("r-session".to_string()),
             0.5,
@@ -257,7 +252,6 @@ async fn test_session_negotiation_on_the_same_node() -> Result<()> {
 
     let confirm_timestamp = negotiation.confirm_timestamp;
     let p_events = prov_market
-        .requestor_engine
         .query_agreement_events(
             &Some("p-session".to_string()),
             1.0,
@@ -269,7 +263,6 @@ async fn test_session_negotiation_on_the_same_node() -> Result<()> {
         .unwrap();
 
     let r_events = req_market
-        .requestor_engine
         .query_agreement_events(
             &Some("r-session".to_string()),
             0.5,

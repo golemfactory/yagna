@@ -10,8 +10,6 @@ use ya_client::model::{node_id::ParseError, NodeId};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
-use ya_client::model::market::AgreementOperationEvent as ClientAgreementEvent;
-
 use crate::db::{
     dao::{AgreementDao, NegotiationEventsDao, ProposalDao, SaveAgreementError, StateError},
     model::{Agreement, AgreementId, AgreementState, AppSessionId},
@@ -214,23 +212,6 @@ impl RequestorBroker {
 
         counter!("market.events.requestor.queried", events.len() as u64);
         Ok(events)
-    }
-
-    pub async fn query_agreement_events(
-        &self,
-        session_id: &AppSessionId,
-        timeout: f32,
-        max_events: Option<i32>,
-        after_timestamp: DateTime<Utc>,
-        id: &Identity,
-    ) -> Result<Vec<ClientAgreementEvent>, AgreementEventsError> {
-        Ok(self
-            .common
-            .query_agreement_events(session_id, timeout, max_events, after_timestamp, id)
-            .await?
-            .into_iter()
-            .map(|event| event.into_client())
-            .collect())
     }
 
     /// Initiates the Agreement handshake phase.

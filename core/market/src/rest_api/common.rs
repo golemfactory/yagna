@@ -58,7 +58,6 @@ async fn collect_agreement_events(
         .unwrap_or(Utc.ymd(1970, 1, 1).and_hms(0, 0, 0));
 
     market
-        .requestor_engine
         .query_agreement_events(
             &query.app_session_id,
             timeout,
