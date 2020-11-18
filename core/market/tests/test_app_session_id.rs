@@ -470,3 +470,80 @@ async fn test_session_timestamp_filtering() -> Result<()> {
     assert_eq!(r_events.len(), 0);
     Ok(())
 }
+
+/// In the most common flow, user of the API queries events, saves timestamp
+/// of the newest event and uses this timestamp in next calls.
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[actix_rt::test]
+#[serial_test::serial]
+async fn test_common_event_flow() -> Result<()> {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+
+    let req_market = network.get_market(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME);
+
+    let num: i32 = 10;
+    let timestamp_before = Utc::now();
+
+    let mut agreements = vec![];
+    for i in 0..num {
+        let negotiation = negotiate_agreement(
+            &network,
+            REQ_NAME,
+            PROV_NAME,
+            &format!("negotiation{}", i),
+            "r-session",
+            "p-session",
+        )
+        .await
+        .unwrap();
+        agreements.push(negotiation.r_agreement);
+    }
+
+    // Use max_events to query one event at the time.
+    let mut current_timestamp = timestamp_before;
+    for i in 0..agreements.len() {
+        let events = req_market
+            .query_agreement_events(
+                &Some("r-session".to_string()),
+                0.1,
+                Some(1),
+                current_timestamp,
+                &req_id,
+            )
+            .await
+            .unwrap();
+        assert_eq!(events.len(), 1);
+
+        match &events[0] {
+            AgreementEvent::AgreementApprovedEvent {
+                event_date,
+                agreement_id,
+            } => {
+                assert_eq!(agreement_id, &agreements[i].into_client());
+                current_timestamp = event_date.clone();
+            }
+            _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
+        }
+    }
+
+    // We don't expect any events anymore.
+    let events = req_market
+        .query_agreement_events(
+            &Some("r-session".to_string()),
+            0.0,
+            Some(1),
+            current_timestamp,
+            &req_id,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(events.len(), 0);
+    Ok(())
+}
