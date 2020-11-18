@@ -96,6 +96,28 @@ pub mod client {
         )
     }
 
+    /// Use this Offer, if you want to negotiate with only subset of nodes.
+    /// Set match_on parameter to unique string for this subset.
+    #[allow(unused)]
+    pub fn exclusive_offer(match_on: &str) -> DemandOfferBase {
+        DemandOfferBase::new(
+            serde_json::json!({
+                "golem": {
+                    "node.id.name": "its-test-provider",
+                    "node.debug.subnet": "blaa",
+                    "com.pricing.model": "linear",
+                },
+                "subnodes": match_on
+            }),
+            constraints![
+                "golem.node.debug.subnet" == "blaa",
+                "golem.srv.comp.expiration" > 0,
+                "subnodes" == match_on
+            ]
+            .to_string(),
+        )
+    }
+
     #[allow(unused)]
     pub fn not_matching_offer() -> DemandOfferBase {
         DemandOfferBase::new(
@@ -129,6 +151,29 @@ pub mod client {
             constraints![
                 "golem.node.debug.subnet" == "blaa",
                 "golem.com.pricing.model" == "linear"
+            ]
+            .to_string(),
+        )
+    }
+
+    /// Use this Demand, if you want to negotiate with only subset of nodes.
+    /// Set match_on parameter to unique string for this subset.
+    #[allow(unused)]
+    pub fn exclusive_demand(match_on: &str) -> DemandOfferBase {
+        DemandOfferBase::new(
+            serde_json::json!({
+                "golem": {
+                    "node.id.name": "its-test-requestor",
+                    "node.debug.subnet": "blaa",
+                    "srv.comp.expiration": 3,
+                    "srv.comp.task_package": "test-package",
+                },
+                "subnodes": match_on
+            }),
+            constraints![
+                "golem.node.debug.subnet" == "blaa",
+                "golem.com.pricing.model" == "linear",
+                "subnodes" == match_on
             ]
             .to_string(),
         )
