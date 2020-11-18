@@ -169,7 +169,7 @@ impl Discovery {
         };
 
         if !new_offer_ids.is_empty() {
-            log::info!(
+            log::debug!(
                 "Propagating {}/{} Offers received from [{}].",
                 new_offer_ids.len(),
                 num_ids_received,
@@ -214,7 +214,7 @@ impl Discovery {
         let unsubscribed_offer_ids = offer_unsubscribe_handler.call(caller.clone(), msg).await?;
 
         if !unsubscribed_offer_ids.is_empty() {
-            log::info!(
+            log::debug!(
                 "Propagating {}/{} unsubscribed Offers received from [{}].",
                 unsubscribed_offer_ids.len(),
                 num_received_ids,
