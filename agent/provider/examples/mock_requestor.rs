@@ -1,7 +1,7 @@
 use serde_json;
 use std::{thread, time::Duration};
 
-use ya_client::model::market::{AgreementProposal, DemandOfferBase, RequestorEvent};
+use ya_client::model::market::{AgreementProposal, NewDemand, RequestorEvent};
 use ya_client::{market::MarketRequestorApi, web::WebClient, Error, Result};
 
 async fn query_events(
@@ -40,7 +40,7 @@ async fn wait_for_approval(client: &MarketRequestorApi, proposal_id: &str) {
 }
 
 async fn simulate_requestor(client: MarketRequestorApi) -> Result<()> {
-    let demand = DemandOfferBase::new(serde_json::json!({}), "(&(cpu.architecture=wasm32))".into());
+    let demand = NewDemand::new(serde_json::json!({}), "(&(cpu.architecture=wasm32))".into());
     let subscription_id = client.subscribe(&demand).await?;
 
     println!("Demand created. Subscription_id {}.", &subscription_id);

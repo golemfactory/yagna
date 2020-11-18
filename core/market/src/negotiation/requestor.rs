@@ -4,7 +4,7 @@ use metrics::counter;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 
-use ya_client::model::market::{event::RequestorEvent, DemandOfferBase};
+use ya_client::model::market::{event::RequestorEvent, NewProposal};
 use ya_client::model::{node_id::ParseError, NodeId};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
@@ -132,7 +132,7 @@ impl RequestorBroker {
         &self,
         demand_id: &SubscriptionId,
         prev_proposal_id: &ProposalId,
-        proposal: &DemandOfferBase,
+        proposal: &NewProposal,
         id: &Identity,
     ) -> Result<ProposalId, ProposalError> {
         let (new_proposal, is_first) = self

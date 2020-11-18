@@ -1,6 +1,6 @@
 use ya_agreement_utils::AgreementView;
 use ya_agreement_utils::OfferDefinition;
-use ya_client_model::market::{DemandOfferBase, Proposal};
+use ya_client_model::market::{NewOffer, Proposal};
 
 use super::negotiator::Negotiator;
 use crate::market::negotiator::{AgreementResponse, AgreementResult, ProposalResponse};
@@ -14,7 +14,7 @@ use ya_agreement_utils::agreement::expand;
 pub struct AcceptAllNegotiator;
 
 impl Negotiator for AcceptAllNegotiator {
-    fn create_offer(&mut self, offer: &OfferDefinition) -> Result<DemandOfferBase> {
+    fn create_offer(&mut self, offer: &OfferDefinition) -> Result<NewOffer> {
         Ok(offer_definition_to_offer(offer.clone()))
     }
 
@@ -24,7 +24,7 @@ impl Negotiator for AcceptAllNegotiator {
 
     fn react_to_proposal(
         &mut self,
-        _offer: &DemandOfferBase,
+        _offer: &NewOffer,
         _demand: &Proposal,
     ) -> Result<ProposalResponse> {
         Ok(ProposalResponse::AcceptProposal)
@@ -61,7 +61,7 @@ impl LimitAgreementsNegotiator {
 }
 
 impl Negotiator for LimitAgreementsNegotiator {
-    fn create_offer(&mut self, offer: &OfferDefinition) -> Result<DemandOfferBase> {
+    fn create_offer(&mut self, offer: &OfferDefinition) -> Result<NewOffer> {
         Ok(offer_definition_to_offer(offer.clone()))
     }
 
@@ -75,7 +75,7 @@ impl Negotiator for LimitAgreementsNegotiator {
 
     fn react_to_proposal(
         &mut self,
-        _offer: &DemandOfferBase,
+        _offer: &NewOffer,
         demand: &Proposal,
     ) -> Result<ProposalResponse> {
         let expiration = proposal_expiration_from(&demand)?;
@@ -139,7 +139,7 @@ fn proposal_expiration_from(proposal: &Proposal) -> Result<DateTime<Utc>> {
     Ok(Utc.timestamp_millis(timestamp))
 }
 
-fn offer_definition_to_offer(offer_def: OfferDefinition) -> DemandOfferBase {
+fn offer_definition_to_offer(offer_def: OfferDefinition) -> NewOffer {
     let constraints = offer_def.offer.constraints.clone();
-    DemandOfferBase::new(offer_def.into_json(), constraints)
+    NewOffer::new(offer_def.into_json(), constraints)
 }

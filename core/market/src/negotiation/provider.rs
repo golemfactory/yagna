@@ -3,7 +3,7 @@ use futures::stream::StreamExt;
 use metrics::counter;
 use std::str::FromStr;
 
-use ya_client::model::market::{event::ProviderEvent, DemandOfferBase};
+use ya_client::model::market::{event::ProviderEvent, NewProposal};
 use ya_client::model::NodeId;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
@@ -99,7 +99,7 @@ impl ProviderBroker {
         &self,
         offer_id: &SubscriptionId,
         prev_proposal_id: &ProposalId,
-        proposal: &DemandOfferBase,
+        proposal: &NewProposal,
         id: &Identity,
     ) -> Result<ProposalId, ProposalError> {
         let (new_proposal, _) = self
