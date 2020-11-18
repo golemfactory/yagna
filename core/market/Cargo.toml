@@ -12,7 +12,7 @@ testing = ["actix-http", "actix-rt", "actix-service", "env_logger"]
 
 [dependencies]
 ya-agreement-utils = "0.1"
-ya-diesel-utils = { version = "0.1", path = "../../utils/diesel-utils" }
+ya-diesel-utils = { version = "0.1" }
 ya-std-utils = "0.1"
 ya-client = "0.4"
 ya-core-model = { version = "0.2", features = ["market", "net"] }

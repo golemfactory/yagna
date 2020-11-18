@@ -92,12 +92,6 @@ impl<'c> AgreementDao<'c> {
         .await
     }
 
-    pub async fn update_state(&self, id: &AgreementId, state: AgreementState) -> DbResult<bool> {
-        let id = id.clone();
-        // TODO: sanity check state before changing it
-        do_with_transaction(self.pool, move |conn| update_state(conn, &id, &state)).await
-    }
-
     pub async fn save(&self, agreement: Agreement) -> Result<Agreement, SaveAgreementError> {
         // Agreement is always created for last Provider Proposal.
         let proposal_id = agreement.offer_proposal_id.clone();
@@ -143,9 +137,7 @@ impl<'c> AgreementDao<'c> {
                 })?
             }
 
-            diesel::update(market_agreement.filter(agreement::id.eq(&id)))
-                .set(agreement::state.eq(AgreementState::Pending))
-                .execute(conn)
+            update_state(conn, &id, &AgreementState::Pending)
                 .map_err(|e| StateError::DbError(e.into()))?;
 
             if let Some(session) = session {
@@ -180,9 +172,7 @@ impl<'c> AgreementDao<'c> {
                 })?
             }
 
-            diesel::update(market_agreement.filter(agreement::id.eq(&id)))
-                .set(agreement::state.eq(AgreementState::Approved))
-                .execute(conn)
+            update_state(conn, &id, &AgreementState::Approved)
                 .map_err(|e| StateError::DbError(e.into()))?;
 
             // It's important, that if None AppSessionId comes, we shouldn't update Agreement
