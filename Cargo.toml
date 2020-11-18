@@ -43,6 +43,8 @@ ya-service-api-web = "0.1"
 ya-service-bus = "0.2"
 ya-sgx = "0.1"
 ya-utils-path = "0.1"
+ya-utils-futures = "0.1"
+ya-utils-process = { version = "0.1", features = ["lock"] }
 
 actix-rt = "1.0"
 actix-service = "1.0"
@@ -129,6 +131,7 @@ members = [
     "utils/actix_utils",
     "utils/agreement-utils",
     "utils/compile-time-utils",
+    "utils/futures",
     "utils/path",
     "utils/process",
     "utils/std-utils",
@@ -179,6 +182,7 @@ ya-compile-time-utils = { path = "utils/compile-time-utils" }
 ya-exe-unit = { path = "exe-unit" }
 ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
+ya-utils-futures = { path = "utils/futures"}
 ya-utils-path = { path = "utils/path"}
 ya-utils-process = { path = "utils/process"}
 ya-metrics = { path = "core/metrics" }

@@ -1,7 +1,7 @@
-use crate::dao::{ActivityDao, AgreementDao, OrderDao, PaymentDao};
+use crate::dao::{ActivityDao, AgreementDao, AllocationDao, OrderDao, PaymentDao};
 use crate::error::processor::{
     AccountNotRegistered, DriverNotRegistered, GetStatusError, NotifyPaymentError,
-    OrderValidationError, SchedulePaymentError, VerifyPaymentError,
+    OrderValidationError, SchedulePaymentError, ValidateAllocationError, VerifyPaymentError,
 };
 use crate::models::order::ReadObj as DbOrder;
 use bigdecimal::{BigDecimal, Zero};
@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use ya_client_model::payment::{ActivityPayment, AgreementPayment, Payment};
 use ya_core_model::driver::{
-    self, driver_bus_id, AccountMode, PaymentConfirmation, PaymentDetails,
+    self, driver_bus_id, AccountMode, PaymentConfirmation, PaymentDetails, ValidateAllocation,
 };
 use ya_core_model::payment::local::{
     Account, NotifyPayment, RegisterAccount, RegisterAccountError, SchedulePayment,
@@ -386,5 +386,30 @@ impl PaymentProcessor {
             .send(driver::GetAccountBalance::from(address))
             .await??;
         Ok(amount)
+    }
+
+    pub async fn validate_allocation(
+        &self,
+        platform: String,
+        address: String,
+        amount: BigDecimal,
+    ) -> Result<bool, ValidateAllocationError> {
+        let existing_allocations = self
+            .db_executor
+            .as_dao::<AllocationDao>()
+            .get_for_address(platform.clone(), address.clone())
+            .await?;
+        let driver =
+            self.registry
+                .lock()
+                .await
+                .driver(&platform, &address, AccountMode::empty())?;
+        let msg = ValidateAllocation {
+            address,
+            amount,
+            existing_allocations,
+        };
+        let result = driver_endpoint(&driver).send(msg).await??;
+        Ok(result)
     }
 }

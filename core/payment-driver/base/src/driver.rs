@@ -8,10 +8,7 @@
 
 // Local uses
 use crate::dao::DbExecutor;
-use crate::model::{
-    Ack, GenericError, GetAccountBalance, GetTransactionBalance, Init, PaymentDetails,
-    SchedulePayment, VerifyPayment,
-};
+use crate::model::*;
 
 // Public revealed uses, required to implement this trait
 pub use async_trait::async_trait;
@@ -61,4 +58,11 @@ pub trait PaymentDriver {
         caller: String,
         msg: VerifyPayment,
     ) -> Result<PaymentDetails, GenericError>;
+
+    async fn validate_allocation(
+        &self,
+        db: DbExecutor,
+        caller: String,
+        msg: ValidateAllocation,
+    ) -> Result<bool, GenericError>;
 }

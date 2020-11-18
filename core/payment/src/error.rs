@@ -1,4 +1,4 @@
-use ya_core_model::payment::local::GenericError;
+use ya_core_model::payment::local::{GenericError, ValidateAllocationError};
 use ya_core_model::payment::public::{AcceptRejectError, CancelError, SendError};
 use ya_core_model::payment::RpcMessageError;
 
@@ -100,6 +100,12 @@ impl From<GenericError> for Error {
     }
 }
 
+impl From<ValidateAllocationError> for Error {
+    fn from(e: ValidateAllocationError) -> Self {
+        Into::<RpcMessageError>::into(e).into()
+    }
+}
+
 pub mod processor {
     use super::DbError;
     use crate::models::activity::ReadObj as Activity;
@@ -108,7 +114,9 @@ pub mod processor {
     use bigdecimal::BigDecimal;
     use std::fmt::Display;
     use ya_core_model::driver::AccountMode;
-    use ya_core_model::payment::local::GenericError;
+    use ya_core_model::payment::local::{
+        GenericError, ValidateAllocationError as GsbValidateAllocationError,
+    };
     use ya_core_model::payment::public::SendError;
 
     #[derive(thiserror::Error, Debug)]
@@ -333,5 +341,28 @@ pub mod processor {
         ServiceBus(#[from] ya_service_bus::error::Error),
         #[error("Error while sending payment: {0}")]
         Driver(#[from] ya_core_model::driver::GenericError),
+    }
+
+    #[derive(thiserror::Error, Debug)]
+    pub enum ValidateAllocationError {
+        #[error("{0}")]
+        AccountNotRegistered(#[from] AccountNotRegistered),
+        #[error("Service bus error: {0}")]
+        ServiceBus(#[from] ya_service_bus::error::Error),
+        #[error("Error while sending payment: {0}")]
+        Driver(#[from] ya_core_model::driver::GenericError),
+        #[error("Database error: {0}")]
+        Database(#[from] DbError),
+    }
+
+    impl From<ValidateAllocationError> for GsbValidateAllocationError {
+        fn from(e: ValidateAllocationError) -> Self {
+            match e {
+                ValidateAllocationError::AccountNotRegistered(e) => {
+                    GsbValidateAllocationError::AccountNotRegistered
+                }
+                e => GsbValidateAllocationError::Other(e.to_string()),
+            }
+        }
     }
 }

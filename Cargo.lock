@@ -2323,6 +2323,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs2"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213"
+dependencies = [
+ "libc",
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "fsevent"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2658,8 +2668,11 @@ dependencies = [
  "structopt",
  "tokio 0.2.22",
  "url 2.2.0",
+ "vergen",
  "ya-compile-time-utils",
  "ya-core-model",
+ "ya-utils-path",
+ "ya-utils-process",
 ]
 
 [[package]]
@@ -6681,6 +6694,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 
 [[package]]
+name = "vergen"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ce50d8996df1f85af15f2cd8d33daae6e479575123ef4314a51a70a230739cb"
+dependencies = [
+ "bitflags 1.2.1",
+ "chrono",
+]
+
+[[package]]
 name = "version_check"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7875,6 +7898,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-utils-futures"
+version = "0.1.0"
+dependencies = [
+ "futures 0.3.8",
+ "tokio 0.2.22",
+]
+
+[[package]]
 name = "ya-utils-path"
 version = "0.1.0"
 dependencies = [
@@ -7890,6 +7921,7 @@ dependencies = [
  "actix",
  "anyhow",
  "derive_more 0.99.11",
+ "fs2",
  "futures 0.3.8",
  "futures-util",
  "libc",
@@ -7929,6 +7961,7 @@ dependencies = [
  "ya-client-model 0.2.0",
  "ya-payment-driver",
  "ya-service-api-interfaces",
+ "ya-utils-futures",
  "zksync",
  "zksync_eth_signer",
 ]
@@ -7970,7 +8003,9 @@ dependencies = [
  "ya-service-api-web",
  "ya-service-bus",
  "ya-sgx",
+ "ya-utils-futures",
  "ya-utils-path",
+ "ya-utils-process",
  "ya-zksync-driver",
 ]
 

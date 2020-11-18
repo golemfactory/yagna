@@ -22,6 +22,7 @@ use provider_agent::ProviderAgent;
 use startup_config::{
     Commands, ConfigConfig, ExeUnitsConfig, PresetsConfig, ProfileConfig, StartupConfig,
 };
+use ya_utils_process::lock::ProcLock;
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
@@ -43,6 +44,7 @@ async fn main() -> anyhow::Result<()> {
             log::info!("Starting {}...", app_name);
             log::info!("Data directory: {}", data_dir.display());
 
+            let _lock = ProcLock::new("ya-provider", &data_dir)?.lock(std::process::id())?;
             let agent = ProviderAgent::new(args, config).await?.start();
             agent.send(Initialize).await??;
 
