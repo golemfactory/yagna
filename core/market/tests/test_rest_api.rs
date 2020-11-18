@@ -5,8 +5,11 @@ use chrono::Utc;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 
-use ya_client::model::market::{Agreement, Demand, DemandOfferBase, Offer, Proposal};
+use ya_client::model::market::{
+    Agreement, AgreementOperationEvent, Demand, DemandOfferBase, Offer, Proposal,
+};
 use ya_client::model::ErrorMessage;
+use ya_market::testing::agreement_utils::negotiate_agreement;
 use ya_market::testing::{
     client::{sample_demand, sample_offer},
     mock_node::{wait_for_bcast, MarketServiceExt},
@@ -362,6 +365,57 @@ async fn test_rest_get_agreement() -> anyhow::Result<()> {
     assert_eq!(agreement.agreement_id, agreement_id.into_client());
     assert_eq!(agreement.demand.requestor_id, req_id.identity);
     assert_eq!(agreement.offer.provider_id, prov_id.identity);
+    Ok(())
+}
+
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[actix_rt::test]
+#[serial_test::serial]
+async fn test_rest_query_agreement_events() -> anyhow::Result<()> {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance("Node-1")
+        .await?
+        .add_market_instance("Node-2")
+        .await?;
+
+    let negotiation = negotiate_agreement(
+        &network,
+        "Node-1",
+        "Node-2",
+        "negotiation",
+        "r-session",
+        "p-session",
+    )
+    .await
+    .unwrap();
+
+    let confirm_timestamp = negotiation.confirm_timestamp;
+
+    let mut app = network.get_rest_app("Node-1").await;
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/market-api/v1/agreements/events{}",
+            confirm_timestamp.to_rfc3339()
+        ))
+        .to_request();
+
+    let resp = test::call_service(&mut app, req).await;
+
+    // Uncomment to see bug
+    // let result: ErrorMessage = read_response_json(resp).await;
+    // log::info!("Response: {:?}", result);
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    let events: Vec<AgreementOperationEvent> = read_response_json(resp).await;
+
+    assert_eq!(events.len(), 1);
+    match &events[0] {
+        AgreementOperationEvent::AgreementApprovedEvent { agreement_id, .. } => {
+            assert_eq!(agreement_id, &negotiation.r_agreement.into_client());
+        }
+        _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
+    }
     Ok(())
 }
 
