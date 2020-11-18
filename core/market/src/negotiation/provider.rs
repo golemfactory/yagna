@@ -202,10 +202,12 @@ impl ProviderBroker {
         // 1. this state check should be also `db.update_state`
         // 2. `db.update_state` must be invoked after successful propose_agreement
         // TODO: if dao.approve fails, Provider and Requestor have inconsistent state.
-        self.api.approve_agreement(agreement, timeout).await?;
+        self.api.approve_agreement(&agreement, timeout).await?;
         dao.approve(agreement_id, &app_session_id)
             .await
             .map_err(|e| AgreementError::UpdateState(agreement_id.clone(), e))?;
+
+        self.common.notify_agreement(&agreement).await;
 
         counter!("market.agreements.provider.approved", 1);
         log::info!(

@@ -104,7 +104,7 @@ impl NegotiationApi {
     /// TODO: pass agreement signature.
     pub async fn approve_agreement(
         &self,
-        agreement: Agreement,
+        agreement: &Agreement,
         timeout: f32,
     ) -> Result<(), ApproveAgreementError> {
         let timeout = Duration::from_secs_f32(timeout.max(0.0));
@@ -118,7 +118,7 @@ impl NegotiationApi {
         tokio::time::timeout(timeout, net_send_fut)
             .await
             .map_err(|_| ApproveAgreementError::Timeout(agreement.id.clone()))?
-            .map_err(|e| GsbAgreementError(e.to_string(), agreement.id))??;
+            .map_err(|e| GsbAgreementError(e.to_string(), agreement.id.clone()))??;
         Ok(())
     }
 
