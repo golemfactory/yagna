@@ -19,8 +19,7 @@ use crate::negotiation::error::{
 use crate::negotiation::{EventNotifier, ProviderBroker, RequestorBroker};
 use crate::rest_api;
 
-use ya_client::model::market::AgreementOperationEvent as ClientAgreementEvent;
-use ya_client::model::market::{Agreement, Demand, DemandOfferBase, Offer};
+use ya_client::model::market::{Agreement, Demand, NewDemand, NewOffer, Offer, AgreementOperationEvent as ClientAgreementEvent};
 use ya_core_model::market::{local, BUS_ID};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
@@ -184,7 +183,7 @@ impl MarketService {
 
     pub async fn subscribe_offer(
         &self,
-        offer: &DemandOfferBase,
+        offer: &NewOffer,
         id: &Identity,
     ) -> Result<SubscriptionId, MarketError> {
         let offer = self.matcher.subscribe_offer(offer, id).await?;
@@ -209,7 +208,7 @@ impl MarketService {
 
     pub async fn subscribe_demand(
         &self,
-        demand: &DemandOfferBase,
+        demand: &NewDemand,
         id: &Identity,
     ) -> Result<SubscriptionId, MarketError> {
         let demand = self.matcher.subscribe_demand(demand, id).await?;

@@ -1,11 +1,8 @@
-// TODO: This is only temporary
-#![allow(dead_code)]
-
 use chrono::{Duration, NaiveDateTime, TimeZone, Utc};
 use diesel::sql_types::Text;
 
 use ya_client::model::market::proposal::{Proposal as ClientProposal, State};
-use ya_client::model::market::DemandOfferBase;
+use ya_client::model::market::NewProposal;
 use ya_client::model::{ErrorMessage, NodeId};
 use ya_diesel_utils::DatabaseTextField;
 use ya_market_resolver::flatten::{flatten_json, JsonObjectExpected};
@@ -208,7 +205,7 @@ impl Proposal {
         }
     }
 
-    pub fn from_client(&self, proposal: &DemandOfferBase) -> Result<Proposal, JsonObjectExpected> {
+    pub fn from_client(&self, proposal: &NewProposal) -> Result<Proposal, JsonObjectExpected> {
         let owner = self.body.id.owner();
         let creation_ts = Utc::now().naive_utc();
         // TODO: How to set expiration? Config?
