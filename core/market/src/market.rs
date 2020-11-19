@@ -19,7 +19,9 @@ use crate::negotiation::error::{
 use crate::negotiation::{EventNotifier, ProviderBroker, RequestorBroker};
 use crate::rest_api;
 
-use ya_client::model::market::{Agreement, Demand, NewDemand, NewOffer, Offer, AgreementOperationEvent as ClientAgreementEvent};
+use ya_client::model::market::{
+    Agreement, AgreementOperationEvent as ClientAgreementEvent, Demand, NewDemand, NewOffer, Offer,
+};
 use ya_core_model::market::{local, BUS_ID};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};

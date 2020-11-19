@@ -13,6 +13,5 @@ mod rest_api;
 #[cfg(feature = "testing")]
 pub mod testing;
 mod utils;
-pub mod ya_client;
 
 pub use market::MarketService;
