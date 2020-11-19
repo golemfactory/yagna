@@ -9,6 +9,7 @@ use ya_client::model::market::{
     Agreement, AgreementOperationEvent, Demand, DemandOfferBase, Offer, Proposal,
 };
 use ya_client::model::ErrorMessage;
+use ya_client::web::QueryParamsBuilder;
 use ya_market::testing::agreement_utils::negotiate_agreement;
 use ya_market::testing::{
     client::{sample_demand, sample_offer},
@@ -379,6 +380,19 @@ async fn test_rest_query_agreement_events() -> anyhow::Result<()> {
         .add_market_instance("Node-2")
         .await?;
 
+    // Will produce events to be ignored.
+    let _ = negotiate_agreement(
+        &network,
+        "Node-1",
+        "Node-2",
+        "not-important",
+        "not-important-session",
+        "not-important-session",
+    )
+    .await
+    .unwrap();
+
+    // Will produce events to query.
     let negotiation = negotiate_agreement(
         &network,
         "Node-1",
@@ -390,21 +404,19 @@ async fn test_rest_query_agreement_events() -> anyhow::Result<()> {
     .await
     .unwrap();
 
-    let confirm_timestamp = negotiation.confirm_timestamp;
+    let after_timestamp = negotiation.confirm_timestamp;
 
     let mut app = network.get_rest_app("Node-1").await;
-    let req = test::TestRequest::get()
-        .uri(&format!(
-            "/market-api/v1/agreements/events{}",
-            confirm_timestamp.to_rfc3339()
-        ))
-        .to_request();
-
+    let url = format!(
+        "/market-api/v1/agreementEvents?{}",
+        QueryParamsBuilder::new()
+            .put("afterTimestamp", Some(after_timestamp))
+            .put("appSessionId", Some("r-session"))
+            .put("maxEvents", Some(10))
+            .build()
+    );
+    let req = test::TestRequest::get().uri(&url).to_request();
     let resp = test::call_service(&mut app, req).await;
-
-    // Uncomment to see bug
-    // let result: ErrorMessage = read_response_json(resp).await;
-    // log::info!("Response: {:?}", result);
 
     assert_eq!(resp.status(), StatusCode::OK);
     let events: Vec<AgreementOperationEvent> = read_response_json(resp).await;

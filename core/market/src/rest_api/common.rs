@@ -14,8 +14,8 @@ use crate::rest_api::QueryAgreementEvents;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
-        .service(get_agreement)
         .service(collect_agreement_events)
+        .service(get_agreement)
 }
 
 #[actix_web::get("/agreements/{agreement_id}")]
@@ -46,7 +46,7 @@ async fn get_agreement(
     }
 }
 
-#[actix_web::get("/agreements/events")]
+#[actix_web::get("/agreementEvents")]
 async fn collect_agreement_events(
     market: Data<Arc<MarketService>>,
     query: Query<QueryAgreementEvents>,

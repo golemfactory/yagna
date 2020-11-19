@@ -25,6 +25,7 @@ use ya_core_model::market::{local, BUS_ID};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
 use ya_service_api_web::middleware::Identity;
+
 use ya_service_api_web::scope::ExtendableScope;
 
 pub mod agreement;
