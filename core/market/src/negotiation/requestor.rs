@@ -478,7 +478,7 @@ pub async fn proposal_receiver_thread(
         let db = db.clone();
         let notifier = notifier.clone();
         match async move {
-            log::info!("Got matching Offer-Demand pair; emitting as Proposal to Requestor.");
+            log::debug!("Got matching Offer-Demand pair; emitting as Proposal to Requestor.");
 
             // Add proposal to database together with Negotiation record.
             let proposal = Proposal::new_requestor(proposal.demand, proposal.offer);
@@ -487,7 +487,7 @@ pub async fn proposal_receiver_thread(
                 .save_initial_proposal(proposal)
                 .await?;
 
-            log::debug!(
+            log::info!(
                 "New Proposal [{}] (Offer [{}], Demand [{}])",
                 proposal.body.id,
                 proposal.negotiation.offer_id,
