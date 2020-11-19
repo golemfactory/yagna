@@ -2756,7 +2756,6 @@ dependencies = [
  "structopt",
  "tokio 0.2.23",
  "url 2.2.0",
- "vergen",
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-utils-path",
@@ -7353,6 +7352,7 @@ name = "ya-compile-time-utils"
 version = "0.1.0"
 dependencies = [
  "git-version",
+ "vergen",
 ]
 
 [[package]]
