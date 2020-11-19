@@ -10,8 +10,9 @@ use ya_utils_actix::forward_actix_handler;
 
 use crate::execution::{ActivityCreated, ActivityDestroyed, TaskRunner};
 use crate::market::provider_market::{AgreementApproved, ProviderMarket};
+use crate::market::termination_reason::BreakReason;
 use crate::payments::Payments;
-use crate::task_state::{AgreementState, BreakReason, TasksStates};
+use crate::task_state::{AgreementState, TasksStates};
 
 // =========================================== //
 // Messages modifying agreement state

@@ -5,7 +5,7 @@ use ya_client_model::market::{NewOffer, Proposal};
 use anyhow::Result;
 use derive_more::Display;
 
-use crate::task_state::BreakReason;
+use crate::market::termination_reason::BreakReason;
 
 /// Response for requestor proposals.
 #[derive(Debug, Display)]
@@ -43,7 +43,7 @@ pub enum AgreementResponse {
 
 /// Result of agreement execution.
 pub enum AgreementResult {
-    /// Failed to approve agreement.
+    /// Failed to approve agreement. (Agreement even wasn't created)
     ApprovalFailed,
     /// Agreement was finished with success.
     Closed,
@@ -57,7 +57,7 @@ pub trait Negotiator {
     fn create_offer(&mut self, node_info: &OfferDefinition) -> Result<NewOffer>;
 
     /// Agreement notifications. Negotiator can adjust his strategy based on it.
-    fn agreement_finalized(&mut self, agreement_id: &str, result: AgreementResult) -> Result<()>;
+    fn agreement_finalized(&mut self, agreement_id: &str, result: &AgreementResult) -> Result<()>;
 
     /// Reactions to events from market. These function make market decisions.
     fn react_to_proposal(

@@ -18,7 +18,11 @@ impl Negotiator for AcceptAllNegotiator {
         Ok(offer_definition_to_offer(offer.clone()))
     }
 
-    fn agreement_finalized(&mut self, _agreement_id: &str, _result: AgreementResult) -> Result<()> {
+    fn agreement_finalized(
+        &mut self,
+        _agreement_id: &str,
+        _result: &AgreementResult,
+    ) -> Result<()> {
         Ok(())
     }
 
@@ -65,7 +69,7 @@ impl Negotiator for LimitAgreementsNegotiator {
         Ok(offer_definition_to_offer(offer.clone()))
     }
 
-    fn agreement_finalized(&mut self, agreement_id: &str, _result: AgreementResult) -> Result<()> {
+    fn agreement_finalized(&mut self, agreement_id: &str, _result: &AgreementResult) -> Result<()> {
         self.active_agreements.remove(agreement_id);
 
         let free_slots = self.max_agreements as usize - self.active_agreements.len();

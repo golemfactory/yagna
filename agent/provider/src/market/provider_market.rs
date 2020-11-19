@@ -19,7 +19,9 @@ use super::mock_negotiator::AcceptAllNegotiator;
 use super::negotiator::{AgreementResponse, AgreementResult, Negotiator, ProposalResponse};
 use super::Preset;
 use crate::market::mock_negotiator::LimitAgreementsNegotiator;
+use crate::market::termination_reason::GolemReason;
 use crate::task_manager::{AgreementBroken, AgreementClosed};
+use backoff::backoff::Backoff;
 
 // =========================================== //
 // Public exposed messages
@@ -541,13 +543,48 @@ impl Handler<AgreementFinalized> for ProviderMarket {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: AgreementFinalized, ctx: &mut Context<Self>) -> Self::Result {
-        if let Err(error) = self.negotiator.agreement_finalized(&msg.id, msg.result) {
+        if let Err(error) = self.negotiator.agreement_finalized(&msg.id, &msg.result) {
             log::warn!(
                 "Negotiator failed while handling agreement [{}] finalize. Error: {}",
                 &msg.id,
                 error,
             );
         }
+
+        let api = self.api.clone();
+        ctx.spawn(async move {
+            let id = msg.id;
+            let reason = match &msg.result {
+                AgreementResult::Closed => GolemReason::success(),
+                AgreementResult::Broken { reason } => GolemReason::new(reason),
+                // No need to terminate since we didn't have Agreement with Requestor.
+                AgreementResult::ApprovalFailed => return (),
+            };
+
+            let mut repeats = get_backoff();
+            while let Err(e) = api.terminate_agreement(&id, Some(reason.clone())).await {
+                let delay = match repeats.next_backoff() {
+                    Some(delay) => delay,
+                    None => {
+                        log::error!(
+                            "Failed to terminate agreement [{}]. Error: {}. Max time {:#?} elapsed. No more retries.",
+                            &id,
+                            e,
+                            repeats.max_elapsed_time,
+                        );
+                        return ()
+                    }
+                };
+
+                log::warn!(
+                    "Failed to terminate agreement [{}]. Error: {}. Retry after {:#?}",
+                    &id,
+                    e,
+                    &delay,
+                );
+                tokio::time::delay_for(delay).await;
+            }
+        }.into_actor(self));
 
         log::info!("Re-subscribing all active offers to get fresh proposals from the Market");
 
@@ -643,6 +680,17 @@ forward_actix_handler!(ProviderMarket, GotAgreement, on_agreement);
 forward_actix_handler!(ProviderMarket, Subscription, on_subscription);
 forward_actix_handler!(ProviderMarket, Subscribe<AgreementApproved>, on_subscribe);
 forward_actix_handler!(ProviderMarket, AgreementApproved, on_agreement_approved);
+
+fn get_backoff() -> backoff::ExponentialBackoff {
+    // TODO: We could have config for Market actor to be able to set at least initial interval.
+    let mut backoff = backoff::ExponentialBackoff::default();
+    backoff.current_interval = std::time::Duration::from_secs(5);
+    backoff.initial_interval = std::time::Duration::from_secs(5);
+    backoff.multiplier = 1.5f64;
+    backoff.max_interval = std::time::Duration::from_secs(60 * 60);
+    backoff.max_elapsed_time = Some(std::time::Duration::from_secs(u64::max_value()));
+    backoff
+}
 
 // =========================================== //
 // Negotiators factory

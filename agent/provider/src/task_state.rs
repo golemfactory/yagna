@@ -5,11 +5,7 @@ use std::fmt;
 use thiserror;
 use tokio::sync::watch;
 
-#[derive(Display, Debug, Clone, PartialEq)]
-pub enum BreakReason {
-    InitializationError { error: String },
-    Expired,
-}
+use crate::market::termination_reason::BreakReason;
 
 // =========================================== //
 // Agreement state
