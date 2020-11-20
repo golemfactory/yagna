@@ -1,7 +1,7 @@
 use std::str;
 
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
-use decimal::d128;
 use regex::Regex;
 use semver::Version;
 use std::collections::HashMap;
@@ -9,6 +9,9 @@ use std::collections::HashMap;
 use super::error::ParseError;
 use super::prop_parser;
 use super::prop_parser::Literal;
+
+#[allow(non_camel_case_types)]
+type d128 = BigDecimal;
 
 // #region PropertyValue
 #[derive(Debug, Clone, PartialEq)]
@@ -18,7 +21,7 @@ pub enum PropertyValue<'a> {
     //Int(i32),
     //Long(i64),
     Number(f64),
-    Decimal(d128),
+    Decimal(BigDecimal),
     DateTime(DateTime<Utc>),
     Version(Version),
     List(Vec<Box<PropertyValue<'a>>>),
@@ -33,7 +36,7 @@ impl<'a> PropertyValue<'a> {
                 Ok(parsed_value) => parsed_value == *value,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::Decimal(value) => match val.parse::<d128>() {
+            PropertyValue::Decimal(value) => match val.parse::<BigDecimal>() {
                 Ok(parsed_value) => parsed_value == *value,
                 _ => false,
             }, // ignore parsing error, assume false
@@ -248,16 +251,7 @@ impl<'a> PropertyValue<'a> {
                 ))),
             },
             Literal::Decimal(val) => match val.parse::<d128>() {
-                Ok(parsed_val) => {
-                    if parsed_val.is_nan() {
-                        Err(ParseError::new(&format!(
-                            "Error parsing as Decimal: '{}'",
-                            val
-                        )))
-                    } else {
-                        Ok(PropertyValue::Decimal(parsed_val))
-                    }
-                }
+                Ok(parsed_val) => Ok(PropertyValue::Decimal(parsed_val)),
                 Err(_err) => Err(ParseError::new(&format!(
                     "Error parsing as Decimal: '{}'",
                     val
