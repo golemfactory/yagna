@@ -155,11 +155,11 @@ impl RuntimeProcess {
                 .spawn()?;
 
             let id = batch_id.clone();
-            forward_output(child.stdout.take().unwrap(), &evt_tx, move |out| {
+            let stdout = forward_output(child.stdout.take().unwrap(), &evt_tx, move |out| {
                 RuntimeEvent::stdout(id.clone(), idx, CommandOutput::Bin(out))
             });
             let id = batch_id.clone();
-            forward_output(child.stderr.take().unwrap(), &evt_tx, move |out| {
+            let stderr = forward_output(child.stderr.take().unwrap(), &evt_tx, move |out| {
                 RuntimeEvent::stderr(id.clone(), idx, CommandOutput::Bin(out))
             });
 
@@ -169,10 +169,10 @@ impl RuntimeProcess {
                 let tree = ProcessTree::try_new(child.id()).map_err(Error::runtime)?;
                 ChildProcess::from(tree)
             };
-
             let _guard = ChildProcessGuard::new(proc, address.clone());
-            let result = child.await?;
-            Ok(result.code().unwrap_or(-1))
+
+            let result = future::join3(child, stdout, stderr).await;
+            Ok(result.0?.code().unwrap_or(-1))
         }
         .boxed_local()
     }
@@ -254,18 +254,16 @@ impl RuntimeProcess {
 
                     while let Some(status) = events.rx.next().await {
                         if !status.stdout.is_empty() {
-                            let batch_id = batch_id.clone();
                             let evt = RuntimeEvent::stdout(
-                                batch_id,
+                                batch_id.clone(),
                                 idx,
                                 CommandOutput::Bin(status.stdout),
                             );
                             let _ = tx.send(evt).await;
                         }
                         if !status.stderr.is_empty() {
-                            let batch_id = batch_id.clone();
                             let evt = RuntimeEvent::stderr(
-                                batch_id,
+                                batch_id.clone(),
                                 idx,
                                 CommandOutput::Bin(status.stderr),
                             );
