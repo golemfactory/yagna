@@ -990,10 +990,21 @@ version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1374191e2dd25f9ae02e3aa95041ed5d747fc77b3c102b49fe2dd9a8117a6244"
 dependencies = [
- "num-bigint",
+ "num-bigint 0.2.6",
  "num-integer",
  "num-traits",
  "serde",
+]
+
+[[package]]
+name = "bigdecimal"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc403c26e6b03005522e6e8053384c4e881dfe5b2bf041c0c2c49be33d64a539"
+dependencies = [
+ "num-bigint 0.3.1",
+ "num-integer",
+ "num-traits",
 ]
 
 [[package]]
@@ -1733,20 +1744,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "decimal"
-version = "2.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6458723bc760383275fbc02f4c769b2e5f3de782abaf5e7e0b9b7f0368a63ed"
-dependencies = [
- "bitflags 1.2.1",
- "cc",
- "libc",
- "ord_subset",
- "rustc-serialize",
- "serde",
-]
-
-[[package]]
 name = "derivative"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1799,7 +1796,7 @@ version = "1.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e2de9deab977a153492a1468d1b1c0662c1cf39e5ea87d0c060ecd59ef18d8c"
 dependencies = [
- "bigdecimal",
+ "bigdecimal 0.1.2",
  "byteorder",
  "chrono",
  "diesel_derives",
@@ -2273,7 +2270,7 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7543567f0c51910363eb5706ee2f5368a64e79a8ae607d0332aa60bae03a1bb1"
 dependencies = [
- "num-bigint",
+ "num-bigint 0.2.6",
  "num-integer",
  "num-traits",
  "proc-macro2 1.0.24",
@@ -2400,7 +2397,7 @@ dependencies = [
  "byteorder",
  "digest 0.7.6",
  "hmac 0.7.1",
- "num-bigint",
+ "num-bigint 0.2.6",
  "num-integer",
  "num-traits",
  "rand 0.4.6",
@@ -2735,7 +2732,7 @@ dependencies = [
  "actix-rt",
  "ansi_term 0.12.1",
  "anyhow",
- "bigdecimal",
+ "bigdecimal 0.1.2",
  "byte-unit",
  "chrono",
  "crossterm",
@@ -3880,7 +3877,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8536030f9fea7127f841b45bb6243b27255787fb4eb83958aa1ef9d2fdc0c36"
 dependencies = [
- "num-bigint",
+ "num-bigint 0.2.6",
  "num-complex",
  "num-integer",
  "num-iter",
@@ -3898,6 +3895,17 @@ dependencies = [
  "num-integer",
  "num-traits",
  "serde",
+]
+
+[[package]]
+name = "num-bigint"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e9a41747ae4633fce5adffb4d2e81ffc5e89593cb19917f8fb2cc5ff76507bf"
+dependencies = [
+ "autocfg 1.0.1",
+ "num-integer",
+ "num-traits",
 ]
 
 [[package]]
@@ -3950,7 +3958,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c000134b5dbf44adc5cb772486d335293351644b801551abe8f75c84cfa4aef"
 dependencies = [
  "autocfg 1.0.1",
- "num-bigint",
+ "num-bigint 0.2.6",
  "num-integer",
  "num-traits",
  "serde",
@@ -4051,12 +4059,6 @@ dependencies = [
  "pkg-config",
  "vcpkg",
 ]
-
-[[package]]
-name = "ord_subset"
-version = "3.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7ce14664caf5b27f5656ff727defd68ae1eb75ef3c4d95259361df1eb376bef"
 
 [[package]]
 name = "pairing_ce"
@@ -7323,7 +7325,7 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b325b7e2de2ad52bc85bce0f1fb491023cf7e41991202597c09854371df99f3"
 dependencies = [
- "bigdecimal",
+ "bigdecimal 0.1.2",
  "chrono",
  "serde",
  "serde_json",
@@ -7335,7 +7337,7 @@ name = "ya-client-model"
 version = "0.2.0"
 source = "git+https://github.com/golemfactory/ya-client.git?rev=80221a38c4cf8f4700da36598316fc8048e5c535#80221a38c4cf8f4700da36598316fc8048e5c535"
 dependencies = [
- "bigdecimal",
+ "bigdecimal 0.1.2",
  "chrono",
  "diesel",
  "hex",
@@ -7359,7 +7361,7 @@ dependencies = [
 name = "ya-core-model"
 version = "0.2.1"
 dependencies = [
- "bigdecimal",
+ "bigdecimal 0.1.2",
  "bitflags 1.2.1",
  "chrono",
  "graphene-sgx",
@@ -7377,7 +7379,7 @@ version = "0.1.0"
 dependencies = [
  "actix",
  "anyhow",
- "bigdecimal",
+ "bigdecimal 0.1.2",
  "chrono",
  "futures 0.3.8",
  "log 0.4.11",
@@ -7449,7 +7451,7 @@ dependencies = [
  "actix-rt",
  "anyhow",
  "awc 2.0.1",
- "bigdecimal",
+ "bigdecimal 0.1.2",
  "bitflags 1.2.1",
  "chrono",
  "diesel",
@@ -7464,7 +7466,7 @@ dependencies = [
  "lazy_static",
  "libsqlite3-sys",
  "log 0.4.11",
- "num-bigint",
+ "num-bigint 0.2.6",
  "r2d2",
  "secp256k1 0.15.5",
  "serde",
@@ -7577,8 +7579,8 @@ name = "ya-market-resolver"
 version = "0.2.0"
 dependencies = [
  "asnom",
+ "bigdecimal 0.2.0",
  "chrono",
- "decimal",
  "env_logger 0.7.1",
  "log 0.4.11",
  "nom 2.2.1",
@@ -7594,7 +7596,7 @@ version = "0.1.0"
 dependencies = [
  "actix-web 3.2.0",
  "anyhow",
- "bigdecimal",
+ "bigdecimal 0.1.2",
  "futures 0.3.8",
  "lazy_static",
  "log 0.4.11",
@@ -7639,7 +7641,7 @@ dependencies = [
  "actix-web 3.2.0",
  "anyhow",
  "base64 0.12.3",
- "bigdecimal",
+ "bigdecimal 0.1.2",
  "chrono",
  "diesel",
  "diesel_migrations",
@@ -7654,7 +7656,7 @@ dependencies = [
  "libsqlite3-sys",
  "log 0.4.11",
  "metrics",
- "num-bigint",
+ "num-bigint 0.2.6",
  "r2d2",
  "serde",
  "serde_json",
@@ -7687,7 +7689,7 @@ dependencies = [
  "actix",
  "anyhow",
  "async-trait",
- "bigdecimal",
+ "bigdecimal 0.1.2",
  "chrono",
  "diesel",
  "diesel_migrations",
@@ -7709,7 +7711,7 @@ name = "ya-persistence"
 version = "0.2.0"
 dependencies = [
  "anyhow",
- "bigdecimal",
+ "bigdecimal 0.1.2",
  "chrono",
  "diesel",
  "dotenv",
@@ -7731,7 +7733,7 @@ dependencies = [
  "actix-rt",
  "actix_derive",
  "anyhow",
- "bigdecimal",
+ "bigdecimal 0.1.2",
  "chrono",
  "derive_more 0.99.11",
  "dialoguer",
@@ -8083,7 +8085,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "awc 2.0.1",
- "bigdecimal",
+ "bigdecimal 0.1.2",
  "chrono",
  "dotenv",
  "env_logger 0.7.1",
@@ -8324,7 +8326,7 @@ version = "1.0.0"
 source = "git+https://github.com/matter-labs/zksync?rev=899ca93052420c33583755cd2162143f461f36b3#899ca93052420c33583755cd2162143f461f36b3"
 dependencies = [
  "anyhow",
- "bigdecimal",
+ "bigdecimal 0.1.2",
  "futures 0.3.8",
  "num",
  "serde",
