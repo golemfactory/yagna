@@ -482,7 +482,7 @@ async fn test_rest_query_agreement_events() -> anyhow::Result<()> {
 //     Ok(())
 // }
 
-pub async fn read_response_json<B: MessageBody, T: DeserializeOwned>(
+pub async fn read_response_json<B: MessageBody + std::marker::Unpin, T: DeserializeOwned>(
     resp: ServiceResponse<B>,
 ) -> T {
     serde_json::from_slice(&test::read_body(resp).await).unwrap()
