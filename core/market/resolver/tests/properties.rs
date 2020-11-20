@@ -1,7 +1,6 @@
 use std::collections::*;
 
 use chrono::*;
-use decimal::*;
 
 use ya_market_resolver::resolver::error::ParseError;
 use ya_market_resolver::resolver::properties::*;
@@ -56,7 +55,10 @@ fn from_value_number_float_ok() {
 fn from_value_decimal_ok() {
     let prop_value = PropertyValue::from_value("d\"123\"");
 
-    assert_eq!(prop_value, Ok(PropertyValue::Decimal(d128!(123.0))));
+    assert_eq!(
+        prop_value,
+        Ok(PropertyValue::Decimal("123.0".parse().unwrap()))
+    );
 }
 
 #[test]
@@ -66,9 +68,11 @@ fn from_value_decimal_long_ok() {
 
     assert_eq!(
         prop_value,
-        Ok(PropertyValue::Decimal(d128!(
-            123456789123456789123456789.123456789123456789
-        )))
+        Ok(PropertyValue::Decimal(
+            "123456789123456789123456789.123456789123456789"
+                .parse()
+                .unwrap()
+        ))
     );
 }
 
