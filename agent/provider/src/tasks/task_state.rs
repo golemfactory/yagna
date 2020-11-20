@@ -61,7 +61,7 @@ pub struct StateWaiter {
     changed_receiver: watch::Receiver<StateChange>,
 }
 
-/// Responsible for state of single task.
+/// Responsible for state of single tasks.
 struct TaskState {
     agreement_id: String,
     state: Transition,

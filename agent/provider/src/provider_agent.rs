@@ -7,7 +7,7 @@ use crate::market::provider_market::{OfferKind, Unsubscribe, UpdateMarket};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{LinearPricingOffer, Payments, PricingOffer};
 use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RunConfig};
-use crate::task_manager::{InitializeTaskManager, TaskManager};
+use crate::tasks::task_manager::{InitializeTaskManager, TaskManager};
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
 use anyhow::{anyhow, Error};

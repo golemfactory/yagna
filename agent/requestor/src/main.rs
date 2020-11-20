@@ -42,7 +42,7 @@ struct AppSettings {
     task_package: String,
     #[structopt(long, default_value = "100")]
     allocation_size: i64,
-    /// Estimated time limit for requested task completion. All agreements will expire
+    /// Estimated time limit for requested tasks completion. All agreements will expire
     /// after specified time counted from demand subscription. All activities will
     /// be destroyed, when agreement expires.
     ///

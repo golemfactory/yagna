@@ -12,7 +12,7 @@ use crate::execution::{ActivityCreated, ActivityDestroyed, TaskRunner};
 use crate::market::provider_market::{AgreementApproved, ProviderMarket};
 use crate::market::termination_reason::BreakReason;
 use crate::payments::Payments;
-use crate::task_state::{AgreementState, TasksStates};
+use crate::tasks::task_state::{AgreementState, TasksStates};
 
 // =========================================== //
 // Messages modifying agreement state

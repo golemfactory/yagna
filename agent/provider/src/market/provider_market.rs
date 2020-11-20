@@ -20,7 +20,7 @@ use super::negotiator::{AgreementResponse, AgreementResult, Negotiator, Proposal
 use super::Preset;
 use crate::market::mock_negotiator::LimitAgreementsNegotiator;
 use crate::market::termination_reason::GolemReason;
-use crate::task_manager::{AgreementBroken, AgreementClosed};
+use crate::tasks::{AgreementBroken, AgreementClosed};
 use backoff::backoff::Backoff;
 
 // =========================================== //
@@ -539,6 +539,74 @@ impl Handler<CreateOffer> for ProviderMarket {
     }
 }
 
+async fn terminate_agreement(api: Arc<MarketProviderApi>, msg: AgreementFinalized) {
+    let id = msg.id;
+    let reason = match &msg.result {
+        AgreementResult::Closed => GolemReason::success(),
+        AgreementResult::Broken { reason } => GolemReason::new(reason),
+        // No need to terminate since we didn't have Agreement with Requestor.
+        AgreementResult::ApprovalFailed => return (),
+    };
+
+    log::info!(
+        "Terminating agreement [{}]. Reason: [{}] {}",
+        &id,
+        &reason.code,
+        &reason.message,
+    );
+
+    let mut repeats = get_backoff();
+    while let Err(e) = api.terminate_agreement(&id, Some(reason.clone())).await {
+        let delay = match repeats.next_backoff() {
+            Some(delay) => delay,
+            None => {
+                log::error!(
+                    "Failed to terminate agreement [{}]. Error: {}. Max time {:#?} elapsed. No more retries.",
+                    &id,
+                    e,
+                    repeats.max_elapsed_time,
+                );
+                return ();
+            }
+        };
+
+        log::warn!(
+            "Failed to terminate agreement [{}]. Error: {}. Retry after {:#?}",
+            &id,
+            e,
+            &delay,
+        );
+        tokio::time::delay_for(delay).await;
+    }
+
+    log::info!("Agreement [{}] terminated successfully.", &id);
+}
+
+async fn resubscribe_offers(
+    market: Addr<ProviderMarket>,
+    api: Arc<MarketProviderApi>,
+    subscriptions: HashMap<String, Subscription>,
+) {
+    let subscription_ids = subscriptions.keys().cloned().collect::<Vec<_>>();
+    if let Err(e) = unsubscribe_all(api.clone(), subscription_ids).await {
+        log::warn!("Failed to unsubscribe offers from the market: {:?}", e);
+    }
+
+    for (_, sub) in subscriptions {
+        let offer = sub.offer;
+        let preset = sub.preset;
+        let preset_name = preset.name.clone();
+
+        if let Err(e) = subscribe(market.clone(), api.clone(), offer, preset).await {
+            log::warn!(
+                "Unable to create subscription for preset {:?}: {:?}",
+                preset_name,
+                e
+            );
+        }
+    }
+}
+
 impl Handler<AgreementFinalized> for ProviderMarket {
     type Result = ActorResponse<Self, (), Error>;
 
@@ -551,68 +619,14 @@ impl Handler<AgreementFinalized> for ProviderMarket {
             );
         }
 
-        let api = self.api.clone();
-        ctx.spawn(async move {
-            let id = msg.id;
-            let reason = match &msg.result {
-                AgreementResult::Closed => GolemReason::success(),
-                AgreementResult::Broken { reason } => GolemReason::new(reason),
-                // No need to terminate since we didn't have Agreement with Requestor.
-                AgreementResult::ApprovalFailed => return (),
-            };
-
-            let mut repeats = get_backoff();
-            while let Err(e) = api.terminate_agreement(&id, Some(reason.clone())).await {
-                let delay = match repeats.next_backoff() {
-                    Some(delay) => delay,
-                    None => {
-                        log::error!(
-                            "Failed to terminate agreement [{}]. Error: {}. Max time {:#?} elapsed. No more retries.",
-                            &id,
-                            e,
-                            repeats.max_elapsed_time,
-                        );
-                        return ()
-                    }
-                };
-
-                log::warn!(
-                    "Failed to terminate agreement [{}]. Error: {}. Retry after {:#?}",
-                    &id,
-                    e,
-                    &delay,
-                );
-                tokio::time::delay_for(delay).await;
-            }
-        }.into_actor(self));
+        ctx.spawn(terminate_agreement(self.api.clone(), msg).into_actor(self));
 
         log::info!("Re-subscribing all active offers to get fresh proposals from the Market");
 
-        let myself = ctx.address();
         let subscriptions = std::mem::replace(&mut self.subscriptions, HashMap::new());
-        let subscription_ids = subscriptions.keys().cloned().collect::<Vec<_>>();
-        let api = self.api.clone();
-
-        let fut = async move {
-            if let Err(e) = unsubscribe_all(api.clone(), subscription_ids).await {
-                log::warn!("Failed to unsubscribe offers from the market: {:?}", e);
-            }
-
-            for (_, sub) in subscriptions {
-                let offer = sub.offer;
-                let preset = sub.preset;
-                let preset_name = preset.name.clone();
-
-                if let Err(e) = subscribe(myself.clone(), api.clone(), offer, preset).await {
-                    log::warn!(
-                        "Unable to create subscription for preset {:?}: {:?}",
-                        preset_name,
-                        e
-                    );
-                }
-            }
-        };
-        ctx.spawn(fut.into_actor(self));
+        ctx.spawn(
+            resubscribe_offers(ctx.address(), self.api.clone(), subscriptions).into_actor(self),
+        );
 
         // Don't forward error.
         ActorResponse::reply(Ok(()))
