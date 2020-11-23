@@ -612,7 +612,7 @@ fn send_cmd_async<A: Actor, W: Sink<GsbMessage, Error = ProtocolError> + Unpin +
         ActorResponse::reply(Err(Error::GsbFailure(e.to_string())))
     } else {
         ActorResponse::r#async(fut::wrap_future(async move {
-            rx.await??;
+            rx.await.map_err(|_| Error::Cancelled)??;
             Ok(())
         }))
     }

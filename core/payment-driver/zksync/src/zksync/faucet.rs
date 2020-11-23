@@ -16,6 +16,7 @@ use ya_payment_driver::model::GenericError;
 use crate::zksync::wallet::account_balance;
 
 const DEFAULT_FAUCET_ADDR: &str = "http://3.249.139.167:5778/zk/donatex";
+const MAX_FAUCET_REQUESTS: u32 = 6;
 
 lazy_static! {
     static ref FAUCET_ADDR: String =
@@ -34,19 +35,31 @@ pub async fn request_ngnt(address: &str) -> Result<(), GenericError> {
         "Requesting NGNT from zkSync faucet... address = {}",
         address
     );
-    let client = awc::Client::new();
-    let response = client
-        .get(format!("{}/{}", *FAUCET_ADDR, address))
-        .send()
-        .await
-        .map_err(GenericError::new)?
-        .body()
-        .await
-        .map_err(GenericError::new)?;
-    let response = String::from_utf8_lossy(response.as_ref());
-    log::info!("Funds requested. Response = {}", response);
-    // TODO: Verify tx hash
 
+    for i in 0..MAX_FAUCET_REQUESTS {
+        match faucet_donate(address).await {
+            Ok(()) => break,
+            Err(e) => {
+                // Do not warn nor sleep at the last try.
+                if i >= MAX_FAUCET_REQUESTS - 1 {
+                    log::error!(
+                        "Failed to request NGNT from Faucet, tried {} times.: {:?}",
+                        MAX_FAUCET_REQUESTS,
+                        e
+                    );
+                    return Err(e);
+                } else {
+                    log::warn!(
+                        "Retrying ({}/{}) to request NGNT from Faucet after failure: {:?}",
+                        i + 1,
+                        MAX_FAUCET_REQUESTS,
+                        e
+                    );
+                    delay_for(time::Duration::from_secs(10)).await;
+                }
+            }
+        }
+    }
     wait_for_ngnt(address).await?;
     Ok(())
 }
@@ -64,4 +77,20 @@ async fn wait_for_ngnt(address: &str) -> Result<(), GenericError> {
     let msg = "Waiting for NGNT timed out.";
     log::error!("{}", msg);
     Err(GenericError::new(msg))
+}
+
+async fn faucet_donate(address: &str) -> Result<(), GenericError> {
+    let client = awc::Client::new();
+    let response = client
+        .get(format!("{}/{}", *FAUCET_ADDR, address))
+        .send()
+        .await
+        .map_err(GenericError::new)?
+        .body()
+        .await
+        .map_err(GenericError::new)?;
+    let response = String::from_utf8_lossy(response.as_ref());
+    log::debug!("Funds requested. Response = {}", response);
+    // TODO: Verify tx hash
+    Ok(())
 }

@@ -52,7 +52,7 @@ enum Commands {
 #[structopt(about = clap::crate_description!())]
 #[structopt(global_setting = clap::AppSettings::ColoredHelp)]
 #[structopt(global_setting = clap::AppSettings::DeriveDisplayOrder)]
-#[structopt(version = ya_compile_time_utils::crate_version_commit!())]
+#[structopt(version = ya_compile_time_utils::version_describe!())]
 struct StartupConfig {
     #[structopt(flatten)]
     commands: Commands,
@@ -82,16 +82,12 @@ async fn my_main() -> Result</*exit code*/ i32> {
 }
 
 pub fn banner() {
-    let mut ref_string = option_env!("GITHUB_REF").unwrap_or(env!("CARGO_PKG_VERSION"));
-    if let Some(pos) = ref_string.rfind('/') {
-        ref_string = &ref_string[pos + 1..];
-    }
-
     terminal::fade_in(&format!(
         include_str!("banner.txt"),
-        version = ref_string,
-        git_commit = option_env!("GITHUB_SHA").unwrap_or("-"),
-        build = option_env!("GITHUB_RUN_NUMBER").unwrap_or("-")
+        version = ya_compile_time_utils::semver(),
+        git_commit = ya_compile_time_utils::git_rev(),
+        build = ya_compile_time_utils::build_number().unwrap_or("-"),
+        date = ya_compile_time_utils::build_date()
     ))
     .unwrap();
 }
