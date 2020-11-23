@@ -7,10 +7,10 @@ use crate::db::schema::market_agreement_event;
 
 use ya_client::model::market::agreement_event::AgreementTerminator;
 use ya_client::model::market::{AgreementOperationEvent as ClientEvent, JsonReason};
-use ya_diesel_utils::DatabaseTextField;
+use ya_diesel_utils::DbTextField;
 
 #[derive(
-    DatabaseTextField,
+    DbTextField,
     strum_macros::EnumString,
     derive_more::Display,
     AsExpression,

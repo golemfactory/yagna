@@ -400,7 +400,6 @@ async fn on_agreement_approved(
     caller: String,
     msg: AgreementApproved,
 ) -> Result<(), ApproveAgreementError> {
-    let id = msg.agreement_id.clone();
     let caller: NodeId =
         caller
             .parse()
@@ -411,7 +410,7 @@ async fn on_agreement_approved(
             })?;
     Ok(agreement_approved(broker, caller, msg)
         .await
-        .map_err(|e| ApproveAgreementError::Remote(e, id))?)
+        .map_err(|e| ApproveAgreementError::Remote(e))?)
 }
 
 async fn agreement_approved(

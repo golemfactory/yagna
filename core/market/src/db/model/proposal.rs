@@ -4,7 +4,7 @@ use diesel::sql_types::Text;
 use ya_client::model::market::proposal::{Proposal as ClientProposal, State};
 use ya_client::model::market::NewProposal;
 use ya_client::model::{ErrorMessage, NodeId};
-use ya_diesel_utils::DatabaseTextField;
+use ya_diesel_utils::DbTextField;
 use ya_market_resolver::flatten::{flatten_json, JsonObjectExpected};
 
 use super::{generate_random_id, SubscriptionId};
@@ -20,7 +20,7 @@ use crate::protocol::negotiation::messages::ProposalContent;
 ///  and separate for client?
 #[derive(
     strum_macros::EnumString,
-    DatabaseTextField,
+    DbTextField,
     derive_more::Display,
     AsExpression,
     FromSqlRow,
@@ -44,7 +44,7 @@ pub enum ProposalState {
 }
 
 #[derive(
-    DatabaseTextField,
+    DbTextField,
     strum_macros::EnumString,
     derive_more::Display,
     AsExpression,

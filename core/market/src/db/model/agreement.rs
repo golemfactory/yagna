@@ -8,7 +8,7 @@ use ya_client::model::market::agreement::{
 use ya_client::model::market::demand::Demand as ClientDemand;
 use ya_client::model::market::offer::Offer as ClientOffer;
 use ya_client::model::{ErrorMessage, NodeId};
-use ya_diesel_utils::DatabaseTextField;
+use ya_diesel_utils::DbTextField;
 
 use crate::db::model::{OwnerType, Proposal, ProposalId, SubscriptionId};
 use crate::db::schema::market_agreement;
@@ -20,7 +20,7 @@ pub type AppSessionId = Option<String>;
 ///  and separate for client?
 #[derive(
     strum_macros::EnumString,
-    DatabaseTextField,
+    DbTextField,
     derive_more::Display,
     AsExpression,
     FromSqlRow,

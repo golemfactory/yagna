@@ -7,7 +7,7 @@ use std::str::FromStr;
 use uuid::Uuid;
 
 use ya_client::model::{ErrorMessage, NodeId};
-use ya_diesel_utils::DatabaseTextField;
+use ya_diesel_utils::DbTextField;
 
 const RANDOM_PREFIX_LEN: usize = 32;
 const HASH_SUFFIX_LEN: usize = 64;
@@ -31,15 +31,7 @@ pub enum SubscriptionParseError {
 pub struct SubscriptionValidationError(SubscriptionId, String);
 
 #[derive(
-    DatabaseTextField,
-    derive_more::Display,
-    Debug,
-    Clone,
-    AsExpression,
-    FromSqlRow,
-    Hash,
-    PartialEq,
-    Eq,
+    DbTextField, derive_more::Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq,
 )]
 #[display(fmt = "{}-{}", random_id, hash)]
 #[sql_type = "Text"]

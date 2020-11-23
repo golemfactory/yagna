@@ -7,12 +7,12 @@ use sha3::Sha3_256;
 use std::str::FromStr;
 use thiserror::Error;
 
-use ya_diesel_utils::DatabaseTextField;
+use ya_diesel_utils::DbTextField;
 
 use crate::db::model::SubscriptionId;
 
 #[derive(
-    DatabaseTextField,
+    DbTextField,
     Display,
     Debug,
     Clone,
@@ -51,9 +51,7 @@ pub enum ProposalIdParseError {
 #[error("Proposal id [{0}] has unexpected hash [{1}].")]
 pub struct ProposalIdValidationError(ProposalId, String);
 
-#[derive(
-    DatabaseTextField, Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq,
-)]
+#[derive(DbTextField, Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq)]
 #[display(fmt = "{}-{}", owner, id)]
 #[sql_type = "Text"]
 pub struct ProposalId {

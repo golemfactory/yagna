@@ -5,7 +5,7 @@ use thiserror::Error;
 use ya_client::model::market::event::{ProviderEvent, RequestorEvent};
 use ya_client::model::market::{Agreement as ClientAgreement, Proposal as ClientProposal};
 use ya_client::model::ErrorMessage;
-use ya_diesel_utils::DatabaseTextField;
+use ya_diesel_utils::DbTextField;
 use ya_persistence::executor::DbExecutor;
 
 use super::SubscriptionId;
@@ -27,7 +27,7 @@ pub enum EventError {
 }
 
 #[derive(
-    DatabaseTextField,
+    DbTextField,
     strum_macros::EnumString,
     strum_macros::ToString,
     AsExpression,

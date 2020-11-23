@@ -3,7 +3,7 @@ use proc_macro2::Span;
 use quote::quote;
 use syn::Error;
 
-#[proc_macro_derive(DatabaseTextField)]
+#[proc_macro_derive(DbTextField)]
 pub fn database_text_field(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let name = match syn::parse_macro_input!(item as syn::Item) {
         syn::Item::Enum(item) => item.ident,

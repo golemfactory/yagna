@@ -72,7 +72,9 @@ async fn test_session_events_filtering() -> Result<()> {
     }
 
     let ids = agreements.clone();
-    let session_ids = sessions.clone();
+    let mut session_ids = sessions.clone();
+    session_ids[0] = "session-2".to_string();
+
     let query_handle = tokio::task::spawn_local(async move {
         for (agreement_id, session_id) in ids.iter().zip(session_ids.iter()) {
             prov_market
@@ -114,10 +116,22 @@ async fn test_session_events_filtering() -> Result<()> {
             .await
             .unwrap();
 
+        let events_ses3 = prov_market
+            .query_agreement_events(
+                &Some("session-3".to_string()),
+                0.0,
+                Some(10),
+                confirm_timestamp,
+                &prov_id,
+            )
+            .await
+            .unwrap();
+
         // We expect to get all events if we set None AppSessionId.
         assert_eq!(events_none.len(), num);
-        assert_eq!(events_ses1.len(), num - 1);
-        assert_eq!(events_ses2.len(), 1);
+        assert_eq!(events_ses1.len(), num - 2);
+        assert_eq!(events_ses2.len(), 2);
+        assert_eq!(events_ses3.len(), 0);
 
         Result::<(), anyhow::Error>::Ok(())
     });
@@ -157,10 +171,22 @@ async fn test_session_events_filtering() -> Result<()> {
         .await
         .unwrap();
 
+    let events_ses3 = req_market
+        .query_agreement_events(
+            &Some("session-3".to_string()),
+            0.0,
+            Some(10),
+            confirm_timestamp,
+            &req_id,
+        )
+        .await
+        .unwrap();
+
     // We expect to get all events if we set None AppSessionId.
     assert_eq!(events_none.len(), num);
     assert_eq!(events_ses1.len(), num - 1);
     assert_eq!(events_ses2.len(), 1);
+    assert_eq!(events_ses3.len(), 0);
 
     // Protect from eternal waiting.
     tokio::time::timeout(Duration::milliseconds(600).to_std()?, query_handle).await???;
@@ -329,7 +355,8 @@ async fn test_session_negotiation_on_the_same_node_same_session() -> Result<()> 
         .await
         .unwrap();
 
-    // Each side gets only his own event.
+    // Because we don't distinguish between Provider and Requestor,
+    // we will get events for both. Note that we use the same Identity for both.
     assert_eq!(p_events.len(), 2);
     assert_eq!(r_events.len(), 2);
     Ok(())
