@@ -37,17 +37,16 @@ impl<'c> AgreementEventsDao<'c> {
             // We will get only one Agreement, by using this filter.
             // There will be no way to get Requestor'a Agreement, when being Provider, and vice versa,
             // because AgreementId for Provider and Requestor in Agreement Event table is different.
-            let filter_out_not_my_agreements = agreement::provider_id
+            let filter_my_agreements = agreement::provider_id
                 .eq(node_id)
                 .or(agreement::requestor_id.eq(node_id));
 
             let mut select_corresponding_agreement = market_agreement
                 .select(agreement::id)
-                .filter(filter_out_not_my_agreements)
+                .filter(filter_my_agreements)
                 .into_boxed();
 
-            // If AppSessionId is None, we just select all events, independent from AppSessionId
-            // set in Agreement. If AppSessionId is not None we get select only events for this id.
+            // Optionally filter by `AppSessionId`.
             if let Some(session_id) = session_id {
                 select_corresponding_agreement =
                     select_corresponding_agreement.filter(agreement::session_id.eq(session_id));

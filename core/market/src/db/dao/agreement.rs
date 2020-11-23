@@ -141,10 +141,7 @@ impl<'c> AgreementDao<'c> {
                 .map_err(|e| StateError::DbError(e.into()))?;
 
             if let Some(session) = session {
-                diesel::update(market_agreement.filter(agreement::id.eq(&id)))
-                    .set(agreement::session_id.eq(session))
-                    .execute(conn)
-                    .map_err(|e| StateError::SessionId(e.into()))?;
+                update_session(conn, &id, &session).map_err(|e| StateError::SessionId(e.into()))?;
             }
             Ok(())
         })
@@ -179,10 +176,7 @@ impl<'c> AgreementDao<'c> {
             // appSessionId field to None. This function can be called in different context, for example
             // on Requestor, when appSessionId is already set.
             if let Some(session) = session {
-                diesel::update(market_agreement.filter(agreement::id.eq(&id)))
-                    .set(agreement::session_id.eq(session))
-                    .execute(conn)
-                    .map_err(|e| StateError::SessionId(e.into()))?;
+                update_session(conn, &id, &session).map_err(|e| StateError::SessionId(e.into()))?;
             }
 
             let event = NewAgreementEvent {
@@ -221,8 +215,8 @@ impl<'c> AgreementDao<'c> {
         .await?;
 
         if num_agreements > 0 {
-            log::info!("Clean market agreements: {} cleaned", num_agreements);
-            log::info!("Clean market agreement events: {} cleaned", num_events);
+            log::info!("Cleaned {} market agreements", num_agreements);
+            log::info!("Cleaned {} market agreement events", num_events);
         }
         log::trace!("Clean market agreements: done");
         Ok(())
@@ -254,6 +248,13 @@ impl<ErrorType: Into<DbError>> From<ErrorType> for SaveAgreementError {
 fn update_state(conn: &ConnType, id: &AgreementId, state: &AgreementState) -> DbResult<bool> {
     let num_updated = diesel::update(market_agreement.find(id))
         .set(agreement::state.eq(state))
+        .execute(conn)?;
+    Ok(num_updated > 0)
+}
+
+fn update_session(conn: &ConnType, id: &AgreementId, session: &str) -> DbResult<bool> {
+    let num_updated = diesel::update(market_agreement.find(id))
+        .set(agreement::session_id.eq(session))
         .execute(conn)?;
     Ok(num_updated > 0)
 }

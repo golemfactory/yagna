@@ -381,7 +381,7 @@ impl CommonBroker {
     }
 
     pub async fn notify_agreement(&self, agreement: &Agreement) {
-        let session_notifier = self.session_notifier.clone();
+        let session_notifier = &self.session_notifier;
 
         // Notify everyone waiting on Agreement events endpoint.
         if let Some(_) = &agreement.session_id {

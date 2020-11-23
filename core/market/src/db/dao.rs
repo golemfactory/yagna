@@ -1,4 +1,5 @@
 mod agreement;
+mod agreement_events;
 pub mod cleaner;
 mod demand;
 mod negotiation_events;
@@ -10,7 +11,6 @@ pub mod sql_functions {
         fn coalesce_id(column: sql_types::Nullable<sql_types::Text>, default: sql_types::Text) -> sql_types::Text
     );
 }
-mod agreement_events;
 mod offer;
 mod proposal;
 

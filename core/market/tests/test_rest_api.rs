@@ -421,13 +421,7 @@ async fn test_rest_query_agreement_events() -> anyhow::Result<()> {
     assert_eq!(resp.status(), StatusCode::OK);
     let events: Vec<AgreementOperationEvent> = read_response_json(resp).await;
 
-    assert_eq!(events.len(), 1);
-    match &events[0] {
-        AgreementOperationEvent::AgreementApprovedEvent { agreement_id, .. } => {
-            assert_eq!(agreement_id, &negotiation.r_agreement.into_client());
-        }
-        _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
-    }
+    expect_approve(events, 0)
     Ok(())
 }
 

@@ -172,7 +172,7 @@ async fn test_session_events_filtering() -> Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_session_should_be_independent_on_bot_sides() -> Result<()> {
+async fn test_session_should_be_independent_on_both_sides() -> Result<()> {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
@@ -237,8 +237,8 @@ async fn test_session_negotiation_on_the_same_node() -> Result<()> {
 
     let req_market = network.get_market("Node");
     let req_id = network.get_default_id("Node");
-    let prov_id = network.get_default_id("Node");
-    let prov_market = network.get_market("Node");
+    let prov_id = req_id.clone();
+    let prov_market = req_market.clone();
 
     let negotiation = negotiate_agreement(
         &network,

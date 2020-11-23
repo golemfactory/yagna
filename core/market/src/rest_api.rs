@@ -95,7 +95,7 @@ pub struct QueryAgreementEvents {
     #[serde(rename = "maxEvents")]
     pub max_events: Option<i32>,
     #[serde(rename = "appSessionId")]
-    pub app_session_id: Option<String>,
+    pub app_session_id: AppSessionId,
     #[serde(rename = "afterTimestamp")]
     pub after_timestamp: Option<DateTime<Utc>>,
 }

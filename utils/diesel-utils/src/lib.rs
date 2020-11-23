@@ -9,7 +9,7 @@ pub fn database_text_field(item: proc_macro::TokenStream) -> proc_macro::TokenSt
         syn::Item::Enum(item) => item.ident,
         syn::Item::Struct(item) => item.ident,
         _ => {
-            return Error::new(Span::call_site(), "Should be enum or struct.")
+            return Error::new(Span::call_site(), "May only be applied to structs or enums.")
                 .to_compile_error()
                 .into()
         }
