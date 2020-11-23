@@ -1,5 +1,5 @@
-use zksync::types::network::Network;
 use zksync::zksync_types::Address;
+use zksync::Network;
 use zksync::Provider;
 
 use std::str::FromStr;
