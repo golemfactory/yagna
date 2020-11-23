@@ -3,7 +3,7 @@ use crate::execution::{
     GetExeUnit, GetOfferTemplates, Shutdown as ShutdownExecution, TaskRunner, UpdateActivity,
 };
 use crate::hardware;
-use crate::market::provider_market::{OfferKind, Unsubscribe, UpdateMarket};
+use crate::market::provider_market::{OfferKind, Unsubscribe};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{LinearPricingOffer, Payments, PricingOffer};
 use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RunConfig};
@@ -218,7 +218,6 @@ impl ProviderAgent {
 
     fn schedule_jobs(&mut self, _ctx: &mut Context<Self>) {
         send_message(self.runner.clone(), UpdateActivity);
-        send_message(self.market.clone(), UpdateMarket);
     }
 
     fn create_node_info(&self) -> NodeInfo {

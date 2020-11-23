@@ -1,5 +1,6 @@
 use actix::prelude::*;
 use anyhow::{anyhow, Error, Result};
+use backoff::backoff::Backoff;
 use derive_more::Display;
 use futures::prelude::*;
 use std::collections::HashMap;
@@ -21,7 +22,6 @@ use super::Preset;
 use crate::market::mock_negotiator::LimitAgreementsNegotiator;
 use crate::market::termination_reason::GolemReason;
 use crate::tasks::{AgreementBroken, AgreementClosed};
-use backoff::backoff::Backoff;
 
 // =========================================== //
 // Public exposed messages
@@ -397,7 +397,7 @@ async fn run_step(
         let api = api.clone();
         let market = market.clone();
         async move {
-            match api.collect(&id, Some(2.0), Some(2)).await {
+            match api.collect(&id, Some(20.0), Some(5)).await {
                 Err(error) => {
                     log::error!("Can't query market events. Error: {}", error);
                     match error {
@@ -474,17 +474,23 @@ impl Handler<ReSubscribe> for ProviderMarket {
 
 impl Actor for ProviderMarket {
     type Context = Context<Self>;
+
+    fn started(&mut self, context: &mut Context<Self>) {
+        context.address().do_send(UpdateMarket {});
+    }
 }
 
 impl Handler<UpdateMarket> for ProviderMarket {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, _msg: UpdateMarket, ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: UpdateMarket, ctx: &mut Context<Self>) -> Self::Result {
         let client = self.api.clone();
         let myself = ctx.address();
 
-        let fut = run_step(myself, client, self.subscriptions.clone());
-        ActorResponse::r#async(fut.into_actor(self))
+        let fut = run_step(myself, client, self.subscriptions.clone())
+            .into_actor(self)
+            .map(|_, _, ctx| Ok(ctx.address().do_send(msg)));
+        ActorResponse::r#async(fut)
     }
 }
 
