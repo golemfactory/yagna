@@ -2759,7 +2759,6 @@ dependencies = [
  "structopt",
  "tokio 0.2.23",
  "url 2.2.0",
- "vergen",
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-utils-path",
@@ -7361,6 +7360,7 @@ name = "ya-compile-time-utils"
 version = "0.1.0"
 dependencies = [
  "git-version",
+ "vergen",
 ]
 
 [[package]]
@@ -8230,23 +8230,19 @@ dependencies = [
 
 [[package]]
 name = "zksync"
-version = "0.1.0"
-source = "git+https://github.com/matter-labs/zksync?rev=899ca93052420c33583755cd2162143f461f36b3#899ca93052420c33583755cd2162143f461f36b3"
+version = "0.1.1"
+source = "git+https://github.com/matter-labs/zksync?rev=9b4263c883c0f57c75068a0cc6339d051157a306#9b4263c883c0f57c75068a0cc6339d051157a306"
 dependencies = [
- "bellman_ce",
  "ethabi 12.0.0",
- "futures 0.3.8",
  "jsonrpc-core 14.2.0",
  "num",
  "reqwest",
  "serde",
- "serde_derive",
  "serde_json",
  "sha2 0.8.2",
  "thiserror",
  "tokio 0.2.23",
  "web3 0.13.0",
- "zksync_contracts",
  "zksync_crypto",
  "zksync_eth_client",
  "zksync_eth_signer",
@@ -8257,24 +8253,15 @@ dependencies = [
 [[package]]
 name = "zksync_basic_types"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?rev=899ca93052420c33583755cd2162143f461f36b3#899ca93052420c33583755cd2162143f461f36b3"
+source = "git+https://github.com/matter-labs/zksync?rev=9b4263c883c0f57c75068a0cc6339d051157a306#9b4263c883c0f57c75068a0cc6339d051157a306"
 dependencies = [
  "web3 0.13.0",
 ]
 
 [[package]]
-name = "zksync_contracts"
-version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?rev=899ca93052420c33583755cd2162143f461f36b3#899ca93052420c33583755cd2162143f461f36b3"
-dependencies = [
- "ethabi 12.0.0",
- "serde_json",
-]
-
-[[package]]
 name = "zksync_crypto"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?rev=899ca93052420c33583755cd2162143f461f36b3#899ca93052420c33583755cd2162143f461f36b3"
+source = "git+https://github.com/matter-labs/zksync?rev=9b4263c883c0f57c75068a0cc6339d051157a306#9b4263c883c0f57c75068a0cc6339d051157a306"
 dependencies = [
  "anyhow",
  "fnv",
@@ -8291,7 +8278,7 @@ dependencies = [
 [[package]]
 name = "zksync_eth_client"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?rev=899ca93052420c33583755cd2162143f461f36b3#899ca93052420c33583755cd2162143f461f36b3"
+source = "git+https://github.com/matter-labs/zksync?rev=9b4263c883c0f57c75068a0cc6339d051157a306#9b4263c883c0f57c75068a0cc6339d051157a306"
 dependencies = [
  "anyhow",
  "ethabi 12.0.0",
@@ -8306,7 +8293,7 @@ dependencies = [
 [[package]]
 name = "zksync_eth_signer"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?rev=899ca93052420c33583755cd2162143f461f36b3#899ca93052420c33583755cd2162143f461f36b3"
+source = "git+https://github.com/matter-labs/zksync?rev=9b4263c883c0f57c75068a0cc6339d051157a306#9b4263c883c0f57c75068a0cc6339d051157a306"
 dependencies = [
  "async-trait",
  "hex",
@@ -8324,7 +8311,7 @@ dependencies = [
 [[package]]
 name = "zksync_types"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?rev=899ca93052420c33583755cd2162143f461f36b3#899ca93052420c33583755cd2162143f461f36b3"
+source = "git+https://github.com/matter-labs/zksync?rev=9b4263c883c0f57c75068a0cc6339d051157a306#9b4263c883c0f57c75068a0cc6339d051157a306"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8343,7 +8330,7 @@ dependencies = [
 [[package]]
 name = "zksync_utils"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?rev=899ca93052420c33583755cd2162143f461f36b3#899ca93052420c33583755cd2162143f461f36b3"
+source = "git+https://github.com/matter-labs/zksync?rev=9b4263c883c0f57c75068a0cc6339d051157a306#9b4263c883c0f57c75068a0cc6339d051157a306"
 dependencies = [
  "anyhow",
  "bigdecimal 0.1.2",
