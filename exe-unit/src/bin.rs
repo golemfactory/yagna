@@ -2,7 +2,6 @@ use actix::{Actor, System};
 use anyhow::bail;
 use flexi_logger::{DeferredNow, Record};
 use std::convert::TryFrom;
-use std::env;
 use std::path::PathBuf;
 use structopt::{clap, StructOpt};
 use ya_core_model::activity;
@@ -19,7 +18,7 @@ use ya_utils_path::normalize_path;
 
 #[derive(structopt::StructOpt, Debug)]
 #[structopt(global_setting = clap::AppSettings::ColoredHelp)]
-#[structopt(version = ya_compile_time_utils::crate_version_commit!())]
+#[structopt(version = ya_compile_time_utils::version_describe!())]
 struct Cli {
     /// Runtime binary path
     #[structopt(long, short)]
