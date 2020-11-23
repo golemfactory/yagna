@@ -76,7 +76,7 @@ pub struct Agreement {
     pub creation_ts: NaiveDateTime,
     pub valid_to: NaiveDateTime,
 
-    pub approved_date: Option<NaiveDateTime>,
+    pub approved_ts: Option<NaiveDateTime>,
     pub state: AgreementState,
 
     pub proposed_signature: Option<String>,
@@ -130,7 +130,7 @@ impl Agreement {
             session_id: None,
             creation_ts,
             valid_to,
-            approved_date: None,
+            approved_ts: None,
             state: AgreementState::Proposal,
             proposed_signature: None,
             approved_signature: None,
@@ -163,9 +163,7 @@ impl Agreement {
             demand,
             offer,
             valid_to: DateTime::<Utc>::from_utc(self.valid_to, Utc),
-            approved_date: self
-                .approved_date
-                .map(|d| DateTime::<Utc>::from_utc(d, Utc)),
+            approved_date: self.approved_ts.map(|d| DateTime::<Utc>::from_utc(d, Utc)),
             state: self.state.into(),
             timestamp: Utc.from_utc_datetime(&self.creation_ts),
             app_session_id: None,

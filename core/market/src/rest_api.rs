@@ -19,8 +19,8 @@ mod error;
 pub(crate) mod provider;
 pub(crate) mod requestor;
 
-const DEFAULT_EVENT_TIMEOUT: f32 = 0.0; // seconds
-const DEFAULT_QUERY_TIMEOUT: f32 = 12.0;
+const DEFAULT_EVENT_TIMEOUT: f32 = 5.0; // seconds
+const DEFAULT_QUERY_TIMEOUT: f32 = 5.0;
 
 pub fn path_config() -> PathConfig {
     PathConfig::default().error_handler(|err, _req| {

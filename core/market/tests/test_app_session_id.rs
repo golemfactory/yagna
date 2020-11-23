@@ -280,6 +280,61 @@ async fn test_session_negotiation_on_the_same_node() -> Result<()> {
     Ok(())
 }
 
+/// Test case, when Provider and Requestor is on the same node and use the same session.
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[actix_rt::test]
+#[serial_test::serial]
+async fn test_session_negotiation_on_the_same_node_same_session() -> Result<()> {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance("Node")
+        .await?;
+
+    let req_market = network.get_market("Node");
+    let req_id = network.get_default_id("Node");
+    let prov_id = req_id.clone();
+    let prov_market = req_market.clone();
+
+    let negotiation = negotiate_agreement(
+        &network,
+        "Node",
+        "Node",
+        "negotiation",
+        "same-session",
+        "same-session",
+    )
+    .await
+    .unwrap();
+
+    let confirm_timestamp = negotiation.confirm_timestamp;
+    let p_events = prov_market
+        .query_agreement_events(
+            &Some("same-session".to_string()),
+            1.0,
+            Some(10),
+            confirm_timestamp,
+            &prov_id,
+        )
+        .await
+        .unwrap();
+
+    let r_events = req_market
+        .query_agreement_events(
+            &Some("same-session".to_string()),
+            0.5,
+            Some(10),
+            confirm_timestamp,
+            &req_id,
+        )
+        .await
+        .unwrap();
+
+    // Each side gets only his own event.
+    assert_eq!(p_events.len(), 2);
+    assert_eq!(r_events.len(), 2);
+    Ok(())
+}
+
 /// We expect to get only events after specified timestamp.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]

@@ -1,4 +1,3 @@
-use itertools::Itertools;
 use std::fmt::{Error, Formatter};
 
 use crate::db::model::{AgreementId, SubscriptionId};
@@ -48,23 +47,5 @@ where
             // TODO: Someone funny could set appSessionId to "None" string.
             None => write!(f, "None"),
         }
-    }
-}
-
-impl<'a, Nested> std::fmt::Display for DisplayEnabler<'a, Vec<Nested>>
-where
-    Nested: std::fmt::Display,
-{
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        if self.0.is_empty() {
-            write!(f, "[]")?;
-        } else {
-            let data_formatter = self
-                .0
-                .iter()
-                .format_with("\n", |elt, f| f(&format_args!(" {}", elt)));
-            write!(f, "[\n{}\n]", data_formatter)?;
-        }
-        Ok(())
     }
 }

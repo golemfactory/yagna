@@ -7561,7 +7561,6 @@ dependencies = [
  "digest 0.8.1",
  "env_logger 0.7.1",
  "futures 0.3.8",
- "itertools 0.9.0",
  "lazy_static",
  "libsqlite3-sys",
  "log 0.4.11",

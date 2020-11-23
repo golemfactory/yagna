@@ -124,12 +124,13 @@ impl CommonBroker {
     ) -> Result<Vec<MarketEvent>, QueryEventsError> {
         let mut timeout = Duration::from_secs_f32(timeout.max(0.0));
         let stop_time = Instant::now() + timeout;
-        let max_events = max_events.unwrap_or(i32::max_value());
+        let max_events = max_events.unwrap_or(self.config.events.max_events_default);
 
-        if max_events < 0 {
-            Err(QueryEventsError::InvalidMaxEvents(max_events))?
-        } else if max_events == 0 {
-            return Ok(vec![]);
+        if max_events <= 0 || max_events > self.config.events.max_events_max {
+            Err(QueryEventsError::InvalidMaxEvents(
+                max_events,
+                self.config.events.max_events_max,
+            ))?
         }
 
         let mut notifier = self.negotiation_notifier.listen(subscription_id);
@@ -175,11 +176,14 @@ impl CommonBroker {
     ) -> Result<Vec<AgreementEvent>, AgreementEventsError> {
         let mut timeout = Duration::from_secs_f32(timeout.max(0.0));
         let stop_time = Instant::now() + timeout;
-        let max_events = max_events.unwrap_or(self.config.events.max_agreement_events);
+        let max_events = max_events.unwrap_or(self.config.events.max_events_default);
 
-        if max_events <= 0 {
-            Err(AgreementEventsError::InvalidMaxEvents(max_events))?
-        };
+        if max_events <= 0 || max_events > self.config.events.max_events_max {
+            Err(AgreementEventsError::InvalidMaxEvents(
+                max_events,
+                self.config.events.max_events_max,
+            ))?
+        }
 
         let mut agreement_notifier = self.session_notifier.listen(session_id);
         loop {
@@ -221,7 +225,9 @@ impl CommonBroker {
             }
             // Ok result means, that event with required sessionId id was added.
             // We can go to next loop to get this event from db. But still we aren't sure
-            // that list won't be empty, because other query_agreement_events calls can wait for the same event.
+            // that list won't be empty, because we could get notification for the same appSessionId,
+            // but for different identity. Of course we don't return events for other identities,
+            // so we will go to sleep again.
         }
     }
 

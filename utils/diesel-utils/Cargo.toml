@@ -3,7 +3,7 @@ name = "ya-diesel-utils"
 version = "0.1.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
-
+description="Utilities helping using diesel."
 
 [lib]
 proc-macro = true

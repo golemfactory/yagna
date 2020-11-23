@@ -114,16 +114,16 @@ pub enum QueryEventsError {
     InvalidSubscriptionId(#[from] SubscriptionParseError),
     #[error(transparent)]
     TakeEvents(#[from] TakeEventsError),
-    #[error("Invalid maxEvents '{0}', should be greater from 0.")]
-    InvalidMaxEvents(i32),
+    #[error("Invalid maxEvents '{0}', should be between 1 and {1}.")]
+    InvalidMaxEvents(i32, i32),
     #[error("Can't query events. Error: {0}.")]
     Internal(String),
 }
 
 #[derive(Error, Debug)]
 pub enum AgreementEventsError {
-    #[error("Invalid maxEvents '{0}', should be greater from 0.")]
-    InvalidMaxEvents(i32),
+    #[error("Invalid maxEvents '{0}', should be between 1 and {1}.")]
+    InvalidMaxEvents(i32, i32),
     #[error("Internal error while querying Agreement events. Error: {0}.")]
     Internal(String),
 }

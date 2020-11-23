@@ -11,6 +11,7 @@ use ya_client::model::market::{
 use ya_client::model::ErrorMessage;
 use ya_client::web::QueryParamsBuilder;
 use ya_market::testing::agreement_utils::negotiate_agreement;
+use ya_market::testing::events_helper::requestor::expect_approve;
 use ya_market::testing::{
     client::{sample_demand, sample_offer},
     mock_node::{wait_for_bcast, MarketServiceExt},
@@ -421,7 +422,7 @@ async fn test_rest_query_agreement_events() -> anyhow::Result<()> {
     assert_eq!(resp.status(), StatusCode::OK);
     let events: Vec<AgreementOperationEvent> = read_response_json(resp).await;
 
-    expect_approve(events, 0)
+    expect_approve(events, 0).unwrap();
     Ok(())
 }
 

@@ -125,7 +125,7 @@ impl ResponseError for QueryEventsError {
             | QueryEventsError::TakeEvents(TakeEventsError::SubscriptionExpired(_)) => {
                 HttpResponse::NotFound().json(msg)
             }
-            QueryEventsError::InvalidSubscriptionId(_) | QueryEventsError::InvalidMaxEvents(_) => {
+            QueryEventsError::InvalidSubscriptionId(_) | QueryEventsError::InvalidMaxEvents(..) => {
                 HttpResponse::BadRequest().json(msg)
             }
             _ => HttpResponse::InternalServerError().json(msg),
@@ -211,7 +211,7 @@ impl ResponseError for AgreementEventsError {
     fn error_response(&self) -> HttpResponse {
         let msg = ErrorMessage::new(self.to_string());
         match self {
-            AgreementEventsError::InvalidMaxEvents(_) => HttpResponse::BadRequest().json(msg),
+            AgreementEventsError::InvalidMaxEvents(..) => HttpResponse::BadRequest().json(msg),
             AgreementEventsError::Internal(_) => HttpResponse::InternalServerError().json(msg),
         }
     }

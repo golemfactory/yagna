@@ -112,7 +112,7 @@ table! {
 
         creation_ts -> Timestamp,
         valid_to -> Timestamp,
-        approved_date -> Nullable<Timestamp>,
+        approved_ts -> Nullable<Timestamp>,
         state -> Text,
 
         proposed_signature -> Nullable<Text>,

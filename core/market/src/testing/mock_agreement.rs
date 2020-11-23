@@ -27,7 +27,7 @@ pub fn generate_agreement(unifier: i64, valid_to: NaiveDateTime) -> Agreement {
         session_id: None,
         creation_ts: Utc::now().naive_utc(),
         valid_to,
-        approved_date: None,
+        approved_ts: None,
         state: AgreementState::Proposal,
         proposed_signature: None,
         approved_signature: None,
