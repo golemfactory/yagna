@@ -7770,6 +7770,7 @@ dependencies = [
  "log-derive",
  "nix 0.17.0",
  "notify",
+ "num-bigint 0.2.6",
  "num_cpus",
  "path-clean",
  "semver 0.10.0",
