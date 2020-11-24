@@ -1,7 +1,7 @@
 use actix::prelude::*;
 use chrono::Utc;
 use futures::channel::{mpsc, oneshot};
-use futures::{FutureExt, SinkExt, TryFutureExt};
+use futures::{FutureExt, SinkExt};
 use std::path::PathBuf;
 use std::time::Duration;
 
