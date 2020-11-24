@@ -3,6 +3,7 @@ use thiserror::Error;
 
 use ya_market_resolver::flatten::JsonObjectExpected;
 
+use crate::db::dao::StateError;
 use crate::db::model::{
     AgreementId, ProposalId, ProposalIdParseError, SubscriptionId, SubscriptionParseError,
 };
@@ -69,9 +70,9 @@ pub enum AgreementError {
     Save(ProposalId, DbError),
     #[error("Failed to get Agreement [{0}]. Error: {1}")]
     Get(AgreementId, DbError),
-    #[error("Failed to update Agreement [{0}]. Error: {1}")]
-    Update(AgreementId, DbError),
-    #[error("Invalid state {0}")]
+    #[error("Agreement [{0}]. Error: {1}")]
+    UpdateState(AgreementId, StateError),
+    #[error("Invalid state. {0}")]
     InvalidState(#[from] AgreementStateError),
     #[error("Invalid Agreement id. {0}")]
     InvalidId(#[from] ProposalIdParseError),
@@ -113,9 +114,17 @@ pub enum QueryEventsError {
     InvalidSubscriptionId(#[from] SubscriptionParseError),
     #[error(transparent)]
     TakeEvents(#[from] TakeEventsError),
-    #[error("Invalid maxEvents '{0}', should be greater from 0.")]
-    InvalidMaxEvents(i32),
+    #[error("Invalid maxEvents '{0}', should be between 1 and {1}.")]
+    InvalidMaxEvents(i32, i32),
     #[error("Can't query events. Error: {0}.")]
+    Internal(String),
+}
+
+#[derive(Error, Debug)]
+pub enum AgreementEventsError {
+    #[error("Invalid maxEvents '{0}', should be between 1 and {1}.")]
+    InvalidMaxEvents(i32, i32),
+    #[error("Internal error while querying Agreement events. Error: {0}.")]
     Internal(String),
 }
 

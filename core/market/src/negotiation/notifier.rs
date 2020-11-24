@@ -1,18 +1,21 @@
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::broadcast::{channel, Receiver, Sender};
 
+use crate::utils::display::{DisplayEnabler, EnableDisplay};
+
 #[derive(Error, Debug)]
 pub enum NotifierError<Type>
 where
-    Type: Debug + PartialEq + Clone + Display,
+    Type: Debug + PartialEq + Clone + EnableDisplay<Type> + 'static,
+    for<'a> DisplayEnabler<'a, Type>: std::fmt::Display,
 {
-    #[error("Timeout while waiting for events for subscription [{0}]")]
+    #[error("Timeout while waiting for events for subscription [{}]", .0.display())]
     Timeout(Type),
-    #[error("Unsubscribed [{0}]")]
+    #[error("Unsubscribed [{}]", .0.display())]
     Unsubscribed(Type),
-    #[error("Channel closed while waiting for events for subscription [{0}]")]
+    #[error("Channel closed while waiting for events for subscription [{}]", .0.display())]
     ChannelClosed(Type),
 }
 
@@ -20,7 +23,8 @@ where
 #[derive(Clone)]
 pub struct EventNotifier<Type>
 where
-    Type: Debug + PartialEq + Clone + Display,
+    Type: Debug + PartialEq + Clone + EnableDisplay<Type> + 'static,
+    for<'a> DisplayEnabler<'a, Type>: std::fmt::Display,
 {
     sender: Sender<Notification<Type>>,
 }
@@ -30,7 +34,8 @@ where
 /// losing events.
 pub struct EventNotifierListener<Type>
 where
-    Type: Debug + PartialEq + Clone + Display,
+    Type: Debug + PartialEq + Clone + EnableDisplay<Type> + 'static,
+    for<'a> DisplayEnabler<'a, Type>: std::fmt::Display,
 {
     receiver: Receiver<Notification<Type>>,
     subscription_id: Type,
@@ -39,7 +44,8 @@ where
 #[derive(Clone)]
 enum Notification<Type>
 where
-    Type: Debug + PartialEq + Clone + Display,
+    Type: Debug + PartialEq + Clone + EnableDisplay<Type> + 'static,
+    for<'a> DisplayEnabler<'a, Type>: std::fmt::Display,
 {
     NewEvent(Type),
     StopEvents(Type),
@@ -47,7 +53,8 @@ where
 
 impl<Type> EventNotifier<Type>
 where
-    Type: Debug + PartialEq + Clone + Display,
+    Type: Debug + PartialEq + Clone + EnableDisplay<Type> + 'static,
+    for<'a> DisplayEnabler<'a, Type>: std::fmt::Display,
 {
     pub fn new() -> EventNotifier<Type> {
         // We will create receivers later, when someone needs it.
@@ -79,7 +86,8 @@ where
 
 impl<Type> EventNotifierListener<Type>
 where
-    Type: Debug + PartialEq + Clone + Display,
+    Type: Debug + PartialEq + Clone + EnableDisplay<Type> + 'static,
+    for<'a> DisplayEnabler<'a, Type>: std::fmt::Display,
 {
     pub async fn wait_for_event(&mut self) -> Result<(), NotifierError<Type>> {
         while let Ok(value) = self.receiver.recv().await {
