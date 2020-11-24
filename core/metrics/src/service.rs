@@ -22,7 +22,7 @@ pub struct MetricsPusherOpts {
     #[structopt(
         long,
         env = YAGNA_METRICS_URL_ENV_VAR,
-        default_value = DEFAULT_YAGNA_METRICS_URL
+        default_value = DEFAULT_YAGNA_METRICS_URL,
     )]
     pub metrics_push_url: Url,
 }

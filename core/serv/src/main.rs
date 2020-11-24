@@ -62,6 +62,7 @@ struct CliArgs {
         env = "YAGNA_DATADIR",
         default_value = &*DEFAULT_DATA_DIR,
         hide_env_values = true,
+        set = clap::ArgSettings::Global,
     )]
     data_dir: DataDir,
 
@@ -72,6 +73,7 @@ struct CliArgs {
         env = GSB_URL_ENV_VAR,
         default_value = DEFAULT_GSB_URL,
         hide_env_values = true,
+        set = clap::ArgSettings::Global,
     )]
     gsb_url: Url,
 
