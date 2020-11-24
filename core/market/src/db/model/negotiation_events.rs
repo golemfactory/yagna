@@ -1,22 +1,17 @@
 use chrono::{DateTime, NaiveDateTime, Utc};
-use diesel::backend::Backend;
-use diesel::deserialize;
-use diesel::serialize::Output;
-use diesel::sql_types::Integer;
-use diesel::types::{FromSql, ToSql};
-use num_derive::FromPrimitive;
-use num_traits::FromPrimitive;
+use diesel::sql_types::Text;
 use thiserror::Error;
 
 use ya_client::model::market::event::{ProviderEvent, RequestorEvent};
 use ya_client::model::market::{Agreement as ClientAgreement, Proposal as ClientProposal};
 use ya_client::model::ErrorMessage;
+use ya_diesel_utils::DbTextField;
 use ya_persistence::executor::DbExecutor;
 
 use super::SubscriptionId;
 use crate::db::dao::{AgreementDao, ProposalDao};
 use crate::db::model::{Agreement, AgreementId, OwnerType, Proposal, ProposalId};
-use crate::db::schema::market_event;
+use crate::db::schema::market_negotiation_event;
 use crate::db::DbError;
 
 #[derive(Error, Debug)]
@@ -31,14 +26,33 @@ pub enum EventError {
     InternalError(#[from] ErrorMessage),
 }
 
-#[derive(FromPrimitive, AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy)]
-#[sql_type = "Integer"]
+#[derive(
+    DbTextField,
+    strum_macros::EnumString,
+    strum_macros::ToString,
+    AsExpression,
+    FromSqlRow,
+    PartialEq,
+    Debug,
+    Clone,
+    Copy,
+)]
+#[sql_type = "Text"]
 pub enum EventType {
-    ProviderProposal = 1001,
-    ProviderAgreement = 1002,
-    ProviderPropertyQuery = 1003,
-    RequestorProposal = 2001,
-    RequestorPropertyQuery = 2002,
+    #[strum(serialize = "P-NewProposal")]
+    ProviderNewProposal,
+    #[strum(serialize = "P-ProposalRejected")]
+    ProviderProposalRejected,
+    #[strum(serialize = "P-Agreement")]
+    ProviderAgreement,
+    #[strum(serialize = "P-PropertyQuery")]
+    ProviderPropertyQuery,
+    #[strum(serialize = "R-NewProposal")]
+    RequestorNewProposal,
+    #[strum(serialize = "R-ProposalRejected")]
+    RequestorProposalRejected,
+    #[strum(serialize = "R-PropertyQuery")]
+    RequestorPropertyQuery,
 }
 
 #[derive(Clone, Debug, Queryable)]
@@ -50,10 +64,11 @@ pub struct MarketEvent {
     /// It can be Proposal, Agreement or structure,
     /// that will represent PropertyQuery.
     pub artifact_id: ProposalId,
+    pub reason: Option<String>,
 }
 
 #[derive(Clone, Debug, Insertable)]
-#[table_name = "market_event"]
+#[table_name = "market_negotiation_event"]
 pub struct NewMarketEvent {
     pub subscription_id: SubscriptionId,
     pub event_type: EventType,
@@ -65,8 +80,8 @@ impl MarketEvent {
         NewMarketEvent {
             subscription_id: proposal.negotiation.subscription_id.clone(),
             event_type: match role {
-                OwnerType::Requestor => EventType::RequestorProposal,
-                OwnerType::Provider => EventType::ProviderProposal,
+                OwnerType::Requestor => EventType::RequestorNewProposal,
+                OwnerType::Provider => EventType::ProviderNewProposal,
             },
             artifact_id: proposal.body.id.clone(),
         }
@@ -85,7 +100,7 @@ impl MarketEvent {
         db: &DbExecutor,
     ) -> Result<RequestorEvent, EventError> {
         match self.event_type {
-            EventType::RequestorProposal => Ok(RequestorEvent::ProposalEvent {
+            EventType::RequestorNewProposal => Ok(RequestorEvent::ProposalEvent {
                 event_date: DateTime::<Utc>::from_utc(self.timestamp, Utc),
                 proposal: self.into_client_proposal(db.clone()).await?,
             }),
@@ -124,7 +139,7 @@ impl MarketEvent {
         db: &DbExecutor,
     ) -> Result<ProviderEvent, EventError> {
         match self.event_type {
-            EventType::ProviderProposal => Ok(ProviderEvent::ProposalEvent {
+            EventType::ProviderNewProposal => Ok(ProviderEvent::ProposalEvent {
                 event_date: DateTime::<Utc>::from_utc(self.timestamp, Utc),
                 proposal: self.into_client_proposal(db.clone()).await?,
             }),
@@ -138,28 +153,5 @@ impl MarketEvent {
                 self.id
             )))?,
         }
-    }
-}
-
-impl<DB: Backend> ToSql<Integer, DB> for EventType
-where
-    i32: ToSql<Integer, DB>,
-{
-    fn to_sql<W: std::io::Write>(&self, out: &mut Output<W, DB>) -> diesel::serialize::Result {
-        (*self as i32).to_sql(out)
-    }
-}
-
-impl<DB> FromSql<Integer, DB> for EventType
-where
-    i32: FromSql<Integer, DB>,
-    DB: Backend,
-{
-    fn from_sql(bytes: Option<&DB::RawValue>) -> deserialize::Result<Self> {
-        let enum_value = i32::from_sql(bytes)?;
-        Ok(FromPrimitive::from_i32(enum_value).ok_or(anyhow::anyhow!(
-            "Invalid conversion from {} (i32) to EventType.",
-            enum_value
-        ))?)
     }
 }

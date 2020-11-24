@@ -1,4 +1,4 @@
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
 use metrics::counter;
 use std::sync::{Arc, Mutex};
@@ -6,22 +6,27 @@ use thiserror::Error;
 
 use crate::config::Config;
 use crate::db::dao::AgreementDao;
-use crate::db::model::{AgreementId, SubscriptionId};
+use crate::db::model::{AgreementId, AppSessionId, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityGSB};
 use crate::matcher::error::{
     DemandError, MatcherError, MatcherInitError, QueryDemandsError, QueryOfferError,
     QueryOffersError,
 };
 use crate::matcher::{store::SubscriptionStore, Matcher};
-use crate::negotiation::error::{AgreementError, NegotiationError, NegotiationInitError};
-use crate::negotiation::{ProviderBroker, RequestorBroker};
+use crate::negotiation::error::{
+    AgreementError, AgreementEventsError, NegotiationError, NegotiationInitError,
+};
+use crate::negotiation::{EventNotifier, ProviderBroker, RequestorBroker};
 use crate::rest_api;
 
-use ya_client::model::market::{Agreement, Demand, NewDemand, NewOffer, Offer};
+use ya_client::model::market::{
+    Agreement, AgreementOperationEvent as ClientAgreementEvent, Demand, NewDemand, NewOffer, Offer,
+};
 use ya_core_model::market::{local, BUS_ID};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
 use ya_service_api_web::middleware::Identity;
+
 use ya_service_api_web::scope::ExtendableScope;
 
 pub mod agreement;
@@ -84,10 +89,25 @@ impl MarketService {
         db.apply_migration(crate::db::migrations::run_with_output)?;
 
         let store = SubscriptionStore::new(db.clone(), config.clone());
-        let (matcher, listeners) = Matcher::new(store.clone(), identity_api, config)?;
-        let provider_engine = ProviderBroker::new(db.clone(), store.clone())?;
-        let requestor_engine =
-            RequestorBroker::new(db.clone(), store.clone(), listeners.proposal_receiver)?;
+        let (matcher, listeners) = Matcher::new(store.clone(), identity_api, config.clone())?;
+
+        // We need the same notifier for both Provider and Requestor implementation since we have
+        // single endpoint and both implementations are able to add events.
+        let agreement_notifier = EventNotifier::<AppSessionId>::new();
+
+        let provider_engine = ProviderBroker::new(
+            db.clone(),
+            store.clone(),
+            agreement_notifier.clone(),
+            config.clone(),
+        )?;
+        let requestor_engine = RequestorBroker::new(
+            db.clone(),
+            store.clone(),
+            listeners.proposal_receiver,
+            agreement_notifier,
+            config.clone(),
+        )?;
         let cleaner_db = db.clone();
         tokio::spawn(async move {
             crate::db::dao::cleaner::clean_forever(cleaner_db).await;
@@ -232,6 +252,24 @@ impl MarketService {
                 .map_err(|e| AgreementError::Internal(e.to_string()))?),
             None => Err(AgreementError::NotFound(agreement_id.clone())),
         }
+    }
+
+    pub async fn query_agreement_events(
+        &self,
+        session_id: &AppSessionId,
+        timeout: f32,
+        max_events: Option<i32>,
+        after_timestamp: DateTime<Utc>,
+        id: &Identity,
+    ) -> Result<Vec<ClientAgreementEvent>, AgreementEventsError> {
+        Ok(self
+            .requestor_engine
+            .common
+            .query_agreement_events(session_id, timeout, max_events, after_timestamp, id)
+            .await?
+            .into_iter()
+            .map(|event| event.into_client())
+            .collect())
     }
 }
 

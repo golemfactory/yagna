@@ -10,7 +10,7 @@ description="Yagna agreement utils"
 keywords=["golem", "yagna"]
 
 [dependencies]
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", branch = "master" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "9b17a8de0c4709bfa7827d4c372e9db729e81c61" }
 
 serde = "1.0"
 serde_json = "1.0"

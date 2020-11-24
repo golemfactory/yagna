@@ -9,9 +9,8 @@ use ya_std_utils::LogErr;
 use crate::db::model::OwnerType;
 use crate::market::MarketService;
 
-use super::{
-    PathAgreement, PathSubscription, PathSubscriptionProposal, QueryTimeout, QueryTimeoutMaxEvents,
-};
+use super::{PathAgreement, PathSubscription, PathSubscriptionProposal, QueryTimeoutMaxEvents};
+use crate::rest_api::QueryTimeoutAppSessionId;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -143,14 +142,15 @@ async fn reject_proposal(
 async fn approve_agreement(
     market: Data<Arc<MarketService>>,
     path: Path<PathAgreement>,
-    query: Query<QueryTimeout>,
+    query: Query<QueryTimeoutAppSessionId>,
     id: Identity,
 ) -> impl Responder {
     let agreement_id = path.into_inner().to_id(OwnerType::Provider)?;
     let timeout = query.timeout;
+    let session = query.into_inner().app_session_id;
     market
         .provider_engine
-        .approve_agreement(id, &agreement_id, timeout)
+        .approve_agreement(id, &agreement_id, session, timeout)
         .await
         .log_err()
         .map(|_| HttpResponse::NoContent().finish())

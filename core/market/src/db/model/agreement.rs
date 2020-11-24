@@ -1,11 +1,5 @@
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
-use diesel::backend::Backend;
-use diesel::deserialize;
-use diesel::serialize::Output;
-use diesel::sql_types::Integer;
-use diesel::types::{FromSql, ToSql};
-use num_derive::FromPrimitive;
-use num_traits::FromPrimitive;
+use diesel::sql_types::Text;
 use serde::{Deserialize, Serialize};
 
 use ya_client::model::market::agreement::{
@@ -14,42 +8,45 @@ use ya_client::model::market::agreement::{
 use ya_client::model::market::demand::Demand as ClientDemand;
 use ya_client::model::market::offer::Offer as ClientOffer;
 use ya_client::model::{ErrorMessage, NodeId};
+use ya_diesel_utils::DbTextField;
 
 use crate::db::model::{OwnerType, Proposal, ProposalId, SubscriptionId};
 use crate::db::schema::market_agreement;
 
 pub type AgreementId = ProposalId;
+pub type AppSessionId = Option<String>;
 
 /// TODO: Could we avoid having separate enum type for database
 ///  and separate for client?
 #[derive(
-    FromPrimitive,
+    strum_macros::EnumString,
+    DbTextField,
+    derive_more::Display,
     AsExpression,
     FromSqlRow,
     PartialEq,
     Debug,
     Clone,
     Copy,
-    derive_more::Display,
     Serialize,
     Deserialize,
 )]
-#[sql_type = "Integer"]
+#[sql_type = "Text"]
 pub enum AgreementState {
     /// Newly created by a Requestor (based on Proposal)
-    Proposal = 0,
+    Proposal,
     /// Confirmed by a Requestor and sent to Provider for approval
-    Pending = 1,
+    Pending,
     /// Cancelled by a Requestor
-    Cancelled = 2,
+    Cancelled,
     /// Rejected by a Provider
-    Rejected = 3,
+    Rejected,
     /// Approved by both sides
-    Approved = 4,
+    Approved,
     /// Not accepted, rejected nor cancelled within validity period
-    Expired = 5,
+    Expired,
     /// Finished after approval
-    Terminated = 6,
+    Terminated,
 }
 
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable, Serialize, Deserialize)]
@@ -72,12 +69,14 @@ pub struct Agreement {
     pub provider_id: NodeId,
     pub requestor_id: NodeId,
 
+    pub session_id: AppSessionId,
+
     /// End of validity period.
     /// Agreement needs to be accepted, rejected or cancelled before this date; otherwise will expire.
     pub creation_ts: NaiveDateTime,
     pub valid_to: NaiveDateTime,
 
-    pub approved_date: Option<NaiveDateTime>,
+    pub approved_ts: Option<NaiveDateTime>,
     pub state: AgreementState,
 
     pub proposed_signature: Option<String>,
@@ -128,9 +127,10 @@ impl Agreement {
             demand_proposal_id: demand_proposal.body.id,
             provider_id: offer_proposal.negotiation.provider_id, // TODO: should be == demand_proposal.negotiation.provider_id
             requestor_id: demand_proposal.negotiation.requestor_id,
+            session_id: None,
             creation_ts,
             valid_to,
-            approved_date: None,
+            approved_ts: None,
             state: AgreementState::Proposal,
             proposed_signature: None,
             approved_signature: None,
@@ -163,9 +163,7 @@ impl Agreement {
             demand,
             offer,
             valid_to: DateTime::<Utc>::from_utc(self.valid_to, Utc),
-            approved_date: self
-                .approved_date
-                .map(|d| DateTime::<Utc>::from_utc(d, Utc)),
+            approved_date: self.approved_ts.map(|d| DateTime::<Utc>::from_utc(d, Utc)),
             state: self.state.into(),
             timestamp: Utc.from_utc_datetime(&self.creation_ts),
             app_session_id: None,
@@ -173,29 +171,6 @@ impl Agreement {
             approved_signature: self.approved_signature,
             committed_signature: self.committed_signature,
         })
-    }
-}
-
-impl<DB: Backend> ToSql<Integer, DB> for AgreementState
-where
-    i32: ToSql<Integer, DB>,
-{
-    fn to_sql<W: std::io::Write>(&self, out: &mut Output<W, DB>) -> diesel::serialize::Result {
-        (*self as i32).to_sql(out)
-    }
-}
-
-impl<DB> FromSql<Integer, DB> for AgreementState
-where
-    i32: FromSql<Integer, DB>,
-    DB: Backend,
-{
-    fn from_sql(bytes: Option<&DB::RawValue>) -> deserialize::Result<Self> {
-        let enum_value = i32::from_sql(bytes)?;
-        Ok(FromPrimitive::from_i32(enum_value).ok_or(anyhow::anyhow!(
-            "Invalid conversion from {} (i32) to Proposal State.",
-            enum_value
-        ))?)
     }
 }
 
