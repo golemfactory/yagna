@@ -227,6 +227,13 @@ enum Services {
     SgxDriver(SgxService),
 }
 
+#[cfg(not(any(
+    feature = "dummy-driver",
+    feature = "gnt-driver",
+    feature = "zksync-driver"
+)))]
+compile_error!("At least one payment driver needs to be enabled in order to make payments.");
+
 #[allow(unused)]
 async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<Vec<String>> {
     let mut drivers = vec![];
