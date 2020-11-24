@@ -7624,6 +7624,7 @@ dependencies = [
  "metrics-core",
  "metrics-runtime",
  "percent-encoding 2.1.0",
+ "structopt",
  "tokio 0.2.23",
  "url 2.2.0",
  "ya-core-model",
