@@ -2,23 +2,27 @@ use chrono::Utc;
 use futures::stream::StreamExt;
 use metrics::counter;
 use std::str::FromStr;
+use std::sync::Arc;
 
-use ya_client::model::market::{event::ProviderEvent, DemandOfferBase};
+use ya_client::model::market::{event::ProviderEvent, NewProposal};
 use ya_client::model::NodeId;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::db::{
-    dao::{AgreementDao, EventsDao, ProposalDao, SaveAgreementError},
-    model::{Agreement, AgreementId, AgreementState},
+    dao::{AgreementDao, NegotiationEventsDao, ProposalDao, SaveAgreementError},
+    model::{Agreement, AgreementId, AgreementState, AppSessionId},
     model::{IssuerType, Offer, OwnerType, Proposal, ProposalId, SubscriptionId},
 };
 use crate::matcher::{error::QueryOfferError, store::SubscriptionStore};
 use crate::protocol::negotiation::{error::*, messages::*, provider::NegotiationApi};
 
-use super::common::{CommonBroker, DisplayIdentity};
+use super::common::CommonBroker;
 use super::error::*;
 use super::notifier::EventNotifier;
+use crate::config::Config;
+use crate::negotiation::common::expect_state;
+use crate::utils::display::EnableDisplay;
 
 /// Provider part of negotiation logic.
 #[derive(Clone)]
@@ -31,13 +35,10 @@ impl ProviderBroker {
     pub fn new(
         db: DbExecutor,
         store: SubscriptionStore,
+        session_notifier: EventNotifier<AppSessionId>,
+        config: Arc<Config>,
     ) -> Result<ProviderBroker, NegotiationInitError> {
-        let notifier = EventNotifier::new();
-        let broker = CommonBroker {
-            store,
-            db,
-            notifier,
-        };
+        let broker = CommonBroker::new(db.clone(), store, session_notifier, config);
 
         let broker1 = broker.clone();
         let broker2 = broker.clone();
@@ -91,7 +92,10 @@ impl ProviderBroker {
         &self,
         offer_id: &SubscriptionId,
     ) -> Result<(), NegotiationError> {
-        self.common.notifier.stop_notifying(offer_id).await;
+        self.common
+            .negotiation_notifier
+            .stop_notifying(offer_id)
+            .await;
         Ok(())
     }
 
@@ -99,7 +103,7 @@ impl ProviderBroker {
         &self,
         offer_id: &SubscriptionId,
         prev_proposal_id: &ProposalId,
-        proposal: &DemandOfferBase,
+        proposal: &NewProposal,
         id: &Identity,
     ) -> Result<ProposalId, ProposalError> {
         let (new_proposal, _) = self
@@ -116,7 +120,7 @@ impl ProviderBroker {
         counter!("market.proposals.provider.countered", 1);
         log::info!(
             "Provider {} countered Proposal [{}] with [{}]",
-            DisplayIdentity(id),
+            id.display(),
             &prev_proposal_id,
             &proposal_id
         );
@@ -142,7 +146,7 @@ impl ProviderBroker {
         counter!("market.proposals.provider.rejected", 1);
         log::info!(
             "Provider {} rejected Proposal [{}]",
-            DisplayIdentity(id),
+            id.display(),
             &proposal_id,
         );
         Ok(())
@@ -179,6 +183,7 @@ impl ProviderBroker {
         &self,
         id: Identity,
         agreement_id: &AgreementId,
+        app_session_id: AppSessionId,
         timeout: f32,
     ) -> Result<(), AgreementError> {
         let dao = self.common.db.as_dao::<AgreementDao>();
@@ -191,31 +196,33 @@ impl ProviderBroker {
             Some(agreement) => agreement,
         };
 
-        Err(match agreement.state {
-            AgreementState::Proposal => AgreementStateError::Proposed(agreement.id),
-            AgreementState::Pending => {
-                // TODO : possible race condition here ISSUE#430
-                // 1. this state check should be also `db.update_state`
-                // 2. `db.update_state` must be invoked after successful propose_agreement
-                self.api.approve_agreement(agreement, timeout).await?;
-                dao.update_state(agreement_id, AgreementState::Approved)
-                    .await
-                    .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?;
+        expect_state(&agreement, AgreementState::Pending)?;
 
-                counter!("market.agreements.provider.approved", 1);
-                log::info!(
-                    "Provider {} approved Agreement [{}].",
-                    DisplayIdentity(&id),
-                    &agreement_id,
-                );
-                return Ok(());
-            }
-            AgreementState::Cancelled => AgreementStateError::Cancelled(agreement.id),
-            AgreementState::Rejected => AgreementStateError::Rejected(agreement.id),
-            AgreementState::Approved => AgreementStateError::Approved(agreement.id),
-            AgreementState::Expired => AgreementStateError::Expired(agreement.id),
-            AgreementState::Terminated => AgreementStateError::Terminated(agreement.id),
-        })?
+        // TODO: possible race condition here ISSUE#430
+        // 1. this state check should be also `db.update_state`
+        // 2. `db.update_state` must be invoked after successful propose_agreement
+        // TODO: if dao.approve fails, Provider and Requestor have inconsistent state.
+        self.api.approve_agreement(&agreement, timeout).await?;
+        dao.approve(agreement_id, &app_session_id)
+            .await
+            .map_err(|e| AgreementError::UpdateState(agreement_id.clone(), e))?;
+
+        self.common.notify_agreement(&agreement).await;
+
+        counter!("market.agreements.provider.approved", 1);
+        log::info!(
+            "Provider {} approved Agreement [{}].",
+            id.display(),
+            &agreement_id,
+        );
+        if let Some(session) = app_session_id {
+            log::info!(
+                "AppSession id [{}] set for Agreement [{}].",
+                &session,
+                &agreement_id
+            );
+        }
+        return Ok(());
     }
 }
 
@@ -347,7 +354,7 @@ async fn agreement_received(
     // TODO: will never approve Agreement. Solve problem when Event API will be available.
     broker
         .db
-        .as_dao::<EventsDao>()
+        .as_dao::<NegotiationEventsDao>()
         .add_agreement_event(&agreement)
         .await
         .map_err(|e| RemoteProposeAgreementError::Unexpected {
@@ -356,7 +363,7 @@ async fn agreement_received(
         })?;
 
     // Send channel message to wake all query_events waiting for proposals.
-    broker.notifier.notify(&offer_id).await;
+    broker.negotiation_notifier.notify(&offer_id).await;
 
     counter!("market.agreements.provider.proposed", 1);
     log::info!(

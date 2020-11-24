@@ -9,6 +9,7 @@ pub use super::matcher::{error::*, *};
 pub use super::negotiation::{error::*, *};
 pub use super::protocol::*;
 
+pub mod agreement_utils;
 pub mod backtrace_util;
 pub mod bcast;
 pub mod dao;

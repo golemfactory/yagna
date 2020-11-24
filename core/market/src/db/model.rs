@@ -1,14 +1,16 @@
 mod agreement;
+mod agreement_events;
 mod demand;
-mod events;
+mod negotiation_events;
 mod offer;
 mod proposal;
 mod proposal_id;
 mod subscription_id;
 
-pub use agreement::{Agreement, AgreementId, AgreementState};
+pub use agreement::{Agreement, AgreementId, AgreementState, AppSessionId};
+pub use agreement_events::{AgreementEvent, AgreementEventType, NewAgreementEvent};
 pub use demand::Demand;
-pub use events::{EventError, EventType, MarketEvent};
+pub use negotiation_events::{EventError, EventType, MarketEvent};
 pub use offer::{Offer, OfferUnsubscribed};
 pub use proposal::{DbProposal, IssuerType, Negotiation, Proposal, ProposalState};
 
