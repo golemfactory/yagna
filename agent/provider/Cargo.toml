@@ -34,6 +34,7 @@ libc = "0.2"
 log = "0.4.8"
 log-derive = "0.4"
 notify = "4.0.15"
+num-bigint = "0.2.6"
 num_cpus = "1.13.0"
 path-clean = "0.1.0"
 semver = { version = "0.10.0", features = ["serde"] }
