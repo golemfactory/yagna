@@ -41,7 +41,7 @@ lazy_static::lazy_static! {
 #[structopt(about = clap::crate_description!())]
 #[structopt(global_setting = clap::AppSettings::ColoredHelp)]
 #[structopt(global_setting = clap::AppSettings::DeriveDisplayOrder)]
-#[structopt(version = ya_compile_time_utils::crate_version_commit!())]
+#[structopt(version = ya_compile_time_utils::version_describe!())]
 /// Golem network server.
 ///
 /// By running this software you declare that you have read,
@@ -228,25 +228,29 @@ enum Services {
 }
 
 #[allow(unused)]
-async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<()> {
+async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<Vec<String>> {
+    let mut drivers = vec![];
     #[cfg(feature = "dummy-driver")]
     {
-        use ya_dummy_driver::PaymentDriverService;
+        use ya_dummy_driver::{PaymentDriverService, DRIVER_NAME};
         PaymentDriverService::gsb(&()).await?;
+        drivers.push(DRIVER_NAME.to_owned());
     }
     #[cfg(feature = "gnt-driver")]
     {
-        use ya_gnt_driver::PaymentDriverService;
+        use ya_gnt_driver::{PaymentDriverService, DRIVER_NAME};
         let db_executor = DbExecutor::from_data_dir(data_dir, "gnt-driver")?;
         PaymentDriverService::gsb(&db_executor).await?;
+        drivers.push(DRIVER_NAME.to_owned());
     }
     #[cfg(feature = "zksync-driver")]
     {
-        use ya_zksync_driver::PaymentDriverService;
+        use ya_zksync_driver::{PaymentDriverService, DRIVER_NAME};
         let db_executor = DbExecutor::from_data_dir(data_dir, "zksync-driver")?;
         PaymentDriverService::gsb(&db_executor).await?;
+        drivers.push(DRIVER_NAME.to_owned());
     }
-    Ok(())
+    Ok(drivers)
 }
 
 #[derive(StructOpt, Debug)]
@@ -337,9 +341,9 @@ impl ServiceCommand {
 
                 let context: ServiceContext = ctx.clone().try_into()?;
                 Services::gsb(&context).await?;
-                start_payment_drivers(&ctx.data_dir).await?;
+                let drivers = start_payment_drivers(&ctx.data_dir).await?;
 
-                payment_accounts::save_default_account(&ctx.data_dir)
+                payment_accounts::save_default_account(&ctx.data_dir, drivers)
                     .await
                     .unwrap_or_else(|e| {
                         log::error!("Saving default payment account failed: {}", e)

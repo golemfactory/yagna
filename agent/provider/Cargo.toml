@@ -15,7 +15,7 @@ ya-utils-actix = "0.1"
 ya-utils-path = "0.1"
 ya-utils-process = { version = "0.1", features = ['lock'] }
 
-actix = "0.9"
+actix = { version = "0.9", default-features = false }
 actix-rt = "1.0"
 actix_derive = "0.5.0"
 anyhow = "1.0"
@@ -34,6 +34,7 @@ libc = "0.2"
 log = "0.4.8"
 log-derive = "0.4"
 notify = "4.0.15"
+num-bigint = "0.2.6"
 num_cpus = "1.13.0"
 path-clean = "0.1.0"
 semver = { version = "0.10.0", features = ["serde"] }

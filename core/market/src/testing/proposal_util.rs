@@ -6,9 +6,13 @@ use ya_client::model::market::Proposal;
 use crate::db::model::{DbProposal, IssuerType, Negotiation, ProposalState};
 use crate::db::model::{ProposalId, SubscriptionId};
 use crate::testing::events_helper::{provider, requestor};
-use crate::testing::mock_offer::client::{sample_demand, sample_offer};
+use crate::testing::mock_offer::client::{
+    exclusive_demand, exclusive_offer, sample_demand, sample_offer,
+};
 use crate::testing::MarketsNetwork;
 use crate::testing::OwnerType;
+
+use ya_client::model::market::{NewDemand, NewOffer};
 use ya_client::model::NodeId;
 
 pub fn generate_proposal(
@@ -60,14 +64,47 @@ pub async fn exchange_draft_proposals(
     req_name: &str,
     prov_name: &str,
 ) -> Result<NegotiationHelper, anyhow::Error> {
+    exchange_proposals_impl(
+        network,
+        req_name,
+        prov_name,
+        &sample_offer(),
+        &sample_demand(),
+    )
+    .await
+}
+
+pub async fn exchange_proposals_exclusive(
+    network: &MarketsNetwork,
+    req_name: &str,
+    prov_name: &str,
+    match_on: &str,
+) -> Result<NegotiationHelper, anyhow::Error> {
+    exchange_proposals_impl(
+        network,
+        req_name,
+        prov_name,
+        &exclusive_offer(match_on),
+        &exclusive_demand(match_on),
+    )
+    .await
+}
+
+pub async fn exchange_proposals_impl(
+    network: &MarketsNetwork,
+    req_name: &str,
+    prov_name: &str,
+    offer: &NewOffer,
+    demand: &NewDemand,
+) -> Result<NegotiationHelper, anyhow::Error> {
     let req_mkt = network.get_market(req_name);
     let prov_mkt = network.get_market(prov_name);
 
     let req_id = network.get_default_id(req_name);
     let prov_id = network.get_default_id(prov_name);
 
-    let demand_id = req_mkt.subscribe_demand(&sample_demand(), &req_id).await?;
-    let offer_id = prov_mkt.subscribe_offer(&sample_offer(), &prov_id).await?;
+    let demand_id = req_mkt.subscribe_demand(demand, &req_id).await?;
+    let offer_id = prov_mkt.subscribe_offer(offer, &prov_id).await?;
 
     // Expect events generated on requestor market.
     let req_offer_proposal1 = requestor::query_proposal(&req_mkt, &demand_id, 1).await?;
@@ -78,7 +115,7 @@ pub async fn exchange_draft_proposals(
         .counter_proposal(
             &demand_id,
             &req_offer_proposal1.proposal_id.parse()?,
-            &sample_demand(),
+            &demand,
             &req_id,
         )
         .await?;
@@ -92,12 +129,7 @@ pub async fn exchange_draft_proposals(
     // Provider counters proposal.
     let _offer_proposal_id = prov_mkt
         .provider_engine
-        .counter_proposal(
-            &offer_id,
-            &prov_demand_proposal1_id,
-            &sample_offer(),
-            &prov_id,
-        )
+        .counter_proposal(&offer_id, &prov_demand_proposal1_id, &offer, &prov_id)
         .await?;
 
     // Requestor receives proposal.

@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use futures::stream::StreamExt;
 use metrics::counter;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 
@@ -10,8 +11,8 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::db::{
-    dao::{AgreementDao, EventsDao, ProposalDao, SaveAgreementError, StateError},
-    model::{Agreement, AgreementId, AgreementState},
+    dao::{AgreementDao, NegotiationEventsDao, ProposalDao, SaveAgreementError, StateError},
+    model::{Agreement, AgreementId, AgreementState, AppSessionId},
     model::{Demand, IssuerType, OwnerType, Proposal, ProposalId, SubscriptionId},
     DbResult,
 };
@@ -19,8 +20,10 @@ use crate::matcher::{store::SubscriptionStore, RawProposal};
 use crate::protocol::negotiation::{error::*, messages::*, requestor::NegotiationApi};
 
 use super::{common::*, error::*, notifier::NotifierError, EventNotifier};
+use crate::config::Config;
+use crate::utils::display::EnableDisplay;
 
-#[derive(Clone, derive_more::Display, Debug)]
+#[derive(Clone, derive_more::Display, Debug, PartialEq)]
 pub enum ApprovalStatus {
     #[display(fmt = "Approved")]
     Approved,
@@ -34,7 +37,6 @@ pub enum ApprovalStatus {
 pub struct RequestorBroker {
     pub(crate) common: CommonBroker,
     api: NegotiationApi,
-    agreement_notifier: EventNotifier<AgreementId>,
 }
 
 impl RequestorBroker {
@@ -42,18 +44,15 @@ impl RequestorBroker {
         db: DbExecutor,
         store: SubscriptionStore,
         proposal_receiver: UnboundedReceiver<RawProposal>,
+        session_notifier: EventNotifier<AppSessionId>,
+        config: Arc<Config>,
     ) -> Result<RequestorBroker, NegotiationInitError> {
-        let agreement_notifier = EventNotifier::new();
-        let notifier = EventNotifier::new();
-        let broker = CommonBroker {
-            store,
-            db: db.clone(),
-            notifier: notifier.clone(),
-        };
+        let broker = CommonBroker::new(db.clone(), store, session_notifier, config);
 
         let broker1 = broker.clone();
         let broker2 = broker.clone();
-        let agreement_notifier2 = agreement_notifier.clone();
+        let notifier = broker.negotiation_notifier.clone();
+
         let api = NegotiationApi::new(
             move |caller: String, msg: ProposalReceived| {
                 broker1
@@ -62,7 +61,7 @@ impl RequestorBroker {
             },
             move |_caller: String, _msg: ProposalRejected| async move { unimplemented!() },
             move |caller: String, msg: AgreementApproved| {
-                on_agreement_approved(broker2.clone(), caller, msg, agreement_notifier2.clone())
+                on_agreement_approved(broker2.clone(), caller, msg)
             },
             move |_caller: String, _msg: AgreementRejected| async move { unimplemented!() },
         );
@@ -70,7 +69,6 @@ impl RequestorBroker {
         let engine = RequestorBroker {
             api,
             common: broker,
-            agreement_notifier,
         };
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
@@ -84,6 +82,7 @@ impl RequestorBroker {
         counter!("market.proposals.requestor.received", 0);
         counter!("market.proposals.requestor.countered", 0);
         counter!("market.events.requestor.queried", 0);
+        counter!("market.agreements.events.queried", 0);
 
         tokio::spawn(proposal_receiver_thread(db, proposal_receiver, notifier));
         Ok(engine)
@@ -107,14 +106,17 @@ impl RequestorBroker {
         &self,
         demand_id: &SubscriptionId,
     ) -> Result<(), NegotiationError> {
-        self.common.notifier.stop_notifying(demand_id).await;
+        self.common
+            .negotiation_notifier
+            .stop_notifying(demand_id)
+            .await;
 
         // We can ignore error, if removing events failed, because they will be never
         // queried again and don't collide with other subscriptions.
         let _ = self
             .common
             .db
-            .as_dao::<EventsDao>()
+            .as_dao::<NegotiationEventsDao>()
             .remove_events(demand_id)
             .await
             .map_err(|e| {
@@ -153,7 +155,7 @@ impl RequestorBroker {
         counter!("market.proposals.requestor.countered", 1);
         log::info!(
             "Requestor {} countered Proposal [{}] with [{}]",
-            DisplayIdentity(id),
+            id.display(),
             &prev_proposal_id,
             &proposal_id
         );
@@ -179,7 +181,7 @@ impl RequestorBroker {
         counter!("market.proposals.requestor.rejected", 1);
         log::info!(
             "Requestor {} rejected Proposal [{}]",
-            DisplayIdentity(id),
+            id.display(),
             &proposal_id,
         );
         Ok(())
@@ -276,7 +278,7 @@ impl RequestorBroker {
         counter!("market.agreements.requestor.created", 1);
         log::info!(
             "Requestor {} created Agreement [{}] from Proposal [{}].",
-            DisplayIdentity(&id),
+            id.display(),
             &agreement_id,
             &proposal_id
         );
@@ -292,7 +294,7 @@ impl RequestorBroker {
         // TODO: What to do with 2 simultaneous calls to wait_for_approval??
         //  should we reject one? And if so, how to discover, that two calls were made?
         let timeout = Duration::from_secs_f32(timeout.max(0.0));
-        let mut notifier = self.agreement_notifier.listen(id);
+        let mut notifier = self.common.agreement_notifier.listen(id);
 
         // Loop will wait for events notifications only one time. It doesn't have to be loop at all,
         // but it spares us doubled getting agreement and mapping statuses to return results.
@@ -348,6 +350,7 @@ impl RequestorBroker {
         &self,
         id: Identity,
         agreement_id: &AgreementId,
+        app_session_id: AppSessionId,
     ) -> Result<(), AgreementError> {
         let dao = self.common.db.as_dao::<AgreementDao>();
 
@@ -364,32 +367,31 @@ impl RequestorBroker {
             Some(agreement) => agreement,
         };
 
-        Err(match agreement.state {
-            AgreementState::Proposal => {
-                // TODO : possible race condition here ISSUE#430
-                // 1. this state check should be also `db.update_state`
-                // 2. `db.update_state` must be invoked after successful propose_agreement
-                agreement.state = AgreementState::Pending;
-                self.api.propose_agreement(&agreement).await?;
-                dao.update_state(agreement_id, AgreementState::Pending)
-                    .await
-                    .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?;
+        expect_state(&agreement, AgreementState::Proposal)?;
 
-                counter!("market.agreements.requestor.confirmed", 1);
-                log::info!(
-                    "Requestor {} confirmed Agreement [{}] and sent to Provider.",
-                    DisplayIdentity(&id),
-                    &agreement_id,
-                );
-                return Ok(());
-            }
-            AgreementState::Pending => AgreementStateError::Confirmed(agreement.id),
-            AgreementState::Cancelled => AgreementStateError::Cancelled(agreement.id),
-            AgreementState::Rejected => AgreementStateError::Rejected(agreement.id),
-            AgreementState::Approved => AgreementStateError::Approved(agreement.id),
-            AgreementState::Expired => AgreementStateError::Expired(agreement.id),
-            AgreementState::Terminated => AgreementStateError::Terminated(agreement.id),
-        })?
+        // TODO : possible race condition here ISSUE#430
+        // 1. this state check should be also `db.update_state`
+        // 2. `db.update_state` must be invoked after successful propose_agreement
+        agreement.state = AgreementState::Pending;
+        self.api.propose_agreement(&agreement).await?;
+        dao.confirm(agreement_id, &app_session_id)
+            .await
+            .map_err(|e| AgreementError::UpdateState(agreement_id.clone(), e))?;
+
+        counter!("market.agreements.requestor.confirmed", 1);
+        log::info!(
+            "Requestor {} confirmed Agreement [{}] and sent to Provider.",
+            id.display(),
+            &agreement_id,
+        );
+        if let Some(session) = app_session_id {
+            log::info!(
+                "AppSession id [{}] set for Agreement [{}].",
+                &session,
+                &agreement_id
+            );
+        }
+        return Ok(());
     }
 }
 
@@ -397,7 +399,6 @@ async fn on_agreement_approved(
     broker: CommonBroker,
     caller: String,
     msg: AgreementApproved,
-    notifier: EventNotifier<AgreementId>,
 ) -> Result<(), ApproveAgreementError> {
     let caller: NodeId =
         caller
@@ -407,14 +408,15 @@ async fn on_agreement_approved(
                 caller,
                 id: msg.agreement_id.clone(),
             })?;
-    Ok(agreement_approved(broker, caller, msg, notifier).await?)
+    Ok(agreement_approved(broker, caller, msg)
+        .await
+        .map_err(|e| ApproveAgreementError::Remote(e))?)
 }
 
 async fn agreement_approved(
     broker: CommonBroker,
     caller: NodeId,
     msg: AgreementApproved,
-    notifier: EventNotifier<AgreementId>,
 ) -> Result<(), RemoteAgreementError> {
     let agreement = broker
         .db
@@ -430,12 +432,14 @@ async fn agreement_approved(
     }
 
     // TODO: Validate agreement signature.
+    // Note: session must be None, because either we already set this value in ConfirmAgreement,
+    // or we purposely left it None.
     broker
         .db
         .as_dao::<AgreementDao>()
-        .approve(&msg.agreement_id)
+        .approve(&msg.agreement_id, &None)
         .await
-        .map_err(|e| match e {
+        .map_err(|err| match err {
             StateError::InvalidTransition { id, from, .. } => {
                 match from {
                     // Expired Agreement could be InvalidState either, but we want to explicit
@@ -444,18 +448,18 @@ async fn agreement_approved(
                     _ => RemoteAgreementError::InvalidState(id, from),
                 }
             }
-            StateError::DbError(e) => {
+            e => {
                 // Log our internal error, but don't reveal error message to Provider.
                 log::warn!(
-                    "Internal error while updating Agreement state. Error: {}",
+                    "Approve Agreement [{}] internal error: {}",
+                    &msg.agreement_id,
                     e
                 );
                 RemoteAgreementError::InternalError(msg.agreement_id.clone())
             }
         })?;
 
-    notifier.notify(&msg.agreement_id).await;
-
+    broker.notify_agreement(&agreement).await;
     log::info!(
         "Agreement [{}] approved by [{}].",
         &msg.agreement_id,
@@ -473,7 +477,7 @@ pub async fn proposal_receiver_thread(
         let db = db.clone();
         let notifier = notifier.clone();
         match async move {
-            log::info!("Got matching Offer-Demand pair; emitting as Proposal to Requestor.");
+            log::debug!("Got matching Offer-Demand pair; emitting as Proposal to Requestor.");
 
             // Add proposal to database together with Negotiation record.
             let proposal = Proposal::new_requestor(proposal.demand, proposal.offer);
@@ -482,7 +486,7 @@ pub async fn proposal_receiver_thread(
                 .save_initial_proposal(proposal)
                 .await?;
 
-            log::debug!(
+            log::info!(
                 "New Proposal [{}] (Offer [{}], Demand [{}])",
                 proposal.body.id,
                 proposal.negotiation.offer_id,
@@ -491,7 +495,7 @@ pub async fn proposal_receiver_thread(
 
             // Create Proposal Event and add it to queue (database).
             let subscription_id = proposal.negotiation.subscription_id.clone();
-            db.as_dao::<EventsDao>()
+            db.as_dao::<NegotiationEventsDao>()
                 .add_proposal_event(proposal, OwnerType::Requestor)
                 .await?;
 

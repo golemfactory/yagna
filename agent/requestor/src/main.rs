@@ -24,7 +24,7 @@ const DEFAULT_TASK_PACKAGE: &str =
 #[structopt(about = clap::crate_description!())]
 #[structopt(setting = clap::AppSettings::ColoredHelp)]
 #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
-#[structopt(version = ya_compile_time_utils::crate_version_commit!())]
+#[structopt(version = ya_compile_time_utils::version_describe!())]
 struct AppSettings {
     #[structopt(flatten)]
     api: ApiOpts,

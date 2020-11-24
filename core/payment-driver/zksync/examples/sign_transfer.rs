@@ -7,11 +7,11 @@ use std::str::FromStr;
 use async_trait::async_trait;
 use num::BigUint;
 
-use zksync::types::{network::Network, BlockStatus};
 use zksync::zksync_types::{
     tx::{PackedEthSignature, TxEthSignature},
     Address,
 };
+use zksync::{types::BlockStatus, Network};
 use zksync::{Provider, Wallet, WalletCredentials};
 use zksync_eth_signer::{error::SignerError, EthereumSigner, RawTransaction};
 

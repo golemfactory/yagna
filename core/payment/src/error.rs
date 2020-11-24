@@ -335,7 +335,7 @@ pub mod processor {
 
     #[derive(thiserror::Error, Debug)]
     pub enum GetStatusError {
-        #[error("{0}")]
+        #[error("Please wait. Account is not yet initialized. platform={} address={}", .0.platform, .0.address)]
         AccountNotRegistered(#[from] AccountNotRegistered),
         #[error("Service bus error: {0}")]
         ServiceBus(#[from] ya_service_bus::error::Error),

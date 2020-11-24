@@ -9,6 +9,7 @@ mod matcher;
 mod negotiation;
 mod protocol;
 mod rest_api;
+mod utils;
 
 #[cfg(feature = "testing")]
 pub mod testing;

@@ -86,8 +86,8 @@ pub enum RemoteProposeAgreementError {
 pub enum ApproveAgreementError {
     #[error("Approve {0}.")]
     Gsb(#[from] GsbAgreementError),
-    #[error("Remote Approve: {0}")]
-    Remote(#[from] RemoteAgreementError),
+    #[error("Remote failed to approve. Error: {0}")]
+    Remote(RemoteAgreementError),
     #[error("Can't parse {caller} for Agreement [{id}]: {e}")]
     CallerParseError {
         e: String,
