@@ -127,6 +127,7 @@ impl YagnaCommand {
         cmd.stdin(Stdio::null())
             .stderr(Stdio::inherit())
             .stdout(Stdio::inherit());
+        cmd.env("RUST_LOG", "info,actix_web::middleware=warn");
 
         #[cfg(target_os = "linux")]
         unsafe {
