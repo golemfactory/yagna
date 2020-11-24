@@ -6,6 +6,7 @@ use crate::state::State;
 use crate::{report, ExeUnit};
 use actix::prelude::*;
 use futures::FutureExt;
+use std::path::Path;
 use ya_client_model::activity;
 use ya_client_model::activity::RuntimeEvent;
 use ya_core_model::activity::local::SetState as SetActivityState;
@@ -111,6 +112,12 @@ impl<R: Runtime> Handler<Initialize> for ExeUnit<R> {
                     use ya_core_model::activity::local::Credentials;
                     use ya_core_model::net::RemoteEndpoint;
                     use ya_core_model::sgx::VerifyAttestationEvidence;
+
+                    let att_dev = Path::new("/dev/attestation");
+                    if !att_dev.exists() {
+                        let msg = format!("'{}' does not exist", att_dev.display());
+                        return Err(Error::Attestation(msg));
+                    }
 
                     let quote = SgxQuote::hasher()
                         .data(&crypto.requestor_pub_key.serialize())
