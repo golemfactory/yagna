@@ -1,6 +1,6 @@
 use actix::prelude::*;
 use anyhow::{anyhow, Error, Result};
-use bigdecimal::BigDecimal;
+use bigdecimal::{BigDecimal, Zero};
 use chrono::Utc;
 use log;
 use serde_json::json;
@@ -131,7 +131,7 @@ impl Payments {
             agreements: HashMap::new(),
             context: Arc::new(provider_ctx),
             invoices_to_pay: vec![],
-            earnings: BigDecimal::from(0.0),
+            earnings: BigDecimal::zero(),
         }
     }
 
