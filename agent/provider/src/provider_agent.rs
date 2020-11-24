@@ -116,7 +116,7 @@ impl GlobalsState {
 }
 
 impl ProviderAgent {
-    pub async fn new(args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
+    pub async fn new(mut args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
         let data_dir = config.data_dir.get_or_create()?.as_path().to_path_buf();
         let api = ProviderApi::try_from(&args.api)?;
 
@@ -127,6 +127,14 @@ impl ProviderAgent {
         let registry = config.registry()?;
         registry.validate()?;
 
+        // Generate session id from node name and process id to make sure it's unique.
+        let name = args
+            .node
+            .node_name
+            .clone()
+            .unwrap_or("provider".to_string());
+        args.market.session_id = format!("{}-[{}]", name, std::process::id());
+
         let mut globals = GlobalsManager::try_new(&config.globals_file, args.node)?;
         globals.spawn_monitor(&config.globals_file)?;
         let mut presets = PresetManager::load_or_create(&config.presets_file)?;
@@ -134,9 +142,9 @@ impl ProviderAgent {
         let mut hardware = hardware::Manager::try_new(&config)?;
         hardware.spawn_monitor(&config.hardware_file)?;
 
-        let market = ProviderMarket::new(api.market, "LimitAgreements").start();
+        let market = ProviderMarket::new(api.market, args.market).start();
         let payments = Payments::new(api.activity.clone(), api.payment).start();
-        let runner = TaskRunner::new(api.activity, args.runner_config, registry, data_dir)?.start();
+        let runner = TaskRunner::new(api.activity, args.runner, registry, data_dir)?.start();
         let task_manager = TaskManager::new(market.clone(), runner.clone(), payments)?.start();
 
         Ok(ProviderAgent {

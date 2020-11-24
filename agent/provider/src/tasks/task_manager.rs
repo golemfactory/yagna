@@ -41,6 +41,7 @@ pub struct BreakAgreement {
 #[rtype(result = "Result<()>")]
 pub struct CloseAgreement {
     pub agreement_id: String,
+    pub is_terminated: bool,
 }
 
 // =========================================== //
@@ -65,6 +66,7 @@ pub struct AgreementBroken {
 #[rtype(result = "Result<()>")]
 pub struct AgreementClosed {
     pub agreement_id: String,
+    pub send_terminate: bool,
 }
 
 // =========================================== //
@@ -232,6 +234,10 @@ impl Handler<InitializeTaskManager> for TaskManager {
             let msg = Subscribe::<AgreementApproved>(actx.myself.clone().recipient());
             actx.market.send(msg).await??;
 
+            // Listen to Agreement terminated event from market.
+            let msg = Subscribe::<CloseAgreement>(actx.myself.clone().recipient());
+            actx.market.send(msg).await??;
+
             // Get info about Activity creation and destruction.
             let msg = Subscribe::<ActivityCreated>(actx.myself.clone().recipient());
             actx.runner.send(msg).await??;
@@ -346,10 +352,21 @@ impl Handler<ActivityDestroyed> for TaskManager {
         let agreement_id = msg.agreement_id.clone();
         let actx = self.async_context(ctx);
 
-        let need_close = self
+        // TODO: We should somehow reject ActivityDestroyed messages, when Agreement doesn't exist.
+        let closing_allowed = self
             .tasks
             .allowed_transition(&agreement_id, &AgreementState::Closed)
             .is_ok();
+
+        let close_after_1st_activity = !self
+            .tasks_props
+            .get(&agreement_id)
+            .map(|info| !info.multi_activity)
+            .unwrap_or(false);
+
+        // Provider is responsible for closing Agreement, if multi_activity flag wasn't
+        // set in Agreement. Otherwise Requestor should terminate.
+        let need_close = closing_allowed && close_after_1st_activity;
 
         let future = async move {
             // Forward information to Payments to send last DebitNote in activity.
@@ -357,11 +374,10 @@ impl Handler<ActivityDestroyed> for TaskManager {
             //       after they will succeed.
             actx.payments.send(msg).await??;
 
-            // Temporary. Requestor should close agreement, but now we assume,
-            // there's only one activity and destroying it means closing agreement.
             if need_close {
                 actx.myself.do_send(CloseAgreement {
                     agreement_id: agreement_id.to_string(),
+                    is_terminated: false,
                 });
             }
             Ok(())
@@ -422,7 +438,11 @@ impl Handler<CloseAgreement> for TaskManager {
         let future = async move {
             start_transition(&actx.myself, &msg.agreement_id, AgreementState::Closed).await?;
 
-            let msg = AgreementClosed::new(&msg.agreement_id);
+            let msg = AgreementClosed {
+                agreement_id: msg.agreement_id.clone(),
+                send_terminate: !msg.is_terminated,
+            };
+
             actx.runner.do_send(msg.clone());
             actx.market.do_send(msg.clone());
             actx.payments.send(msg.clone()).await??;
@@ -478,14 +498,6 @@ impl From<BreakAgreement> for AgreementBroken {
         AgreementBroken {
             agreement_id: msg.agreement_id,
             reason: msg.reason,
-        }
-    }
-}
-
-impl AgreementClosed {
-    pub fn new<StrType: AsRef<str>>(agreement_id: StrType) -> AgreementClosed {
-        AgreementClosed {
-            agreement_id: agreement_id.as_ref().to_string(),
         }
     }
 }

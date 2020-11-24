@@ -598,6 +598,7 @@ impl Handler<AgreementBroken> for Payments {
         let future = async move {
             let msg = AgreementClosed {
                 agreement_id: msg.agreement_id,
+                send_terminate: false,
             };
             Ok(address.send(msg).await??)
         };

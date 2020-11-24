@@ -1,3 +1,4 @@
+pub mod config;
 mod mock_negotiator;
 mod negotiator;
 pub mod presets;

@@ -45,8 +45,10 @@ pub enum AgreementResponse {
 pub enum AgreementResult {
     /// Failed to approve agreement. (Agreement even wasn't created)
     ApprovalFailed,
-    /// Agreement was finished with success.
-    Closed,
+    /// Agreement was finished with success after first Activity.
+    ClosedByUs,
+    /// Agreement was finished with success by Requestor.
+    ClosedByRequestor,
     /// Agreement was broken by us.
     Broken { reason: BreakReason },
 }
