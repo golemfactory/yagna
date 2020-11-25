@@ -53,6 +53,7 @@ async fn main() -> anyhow::Result<()> {
                 signal,
                 clap::crate_name!()
             );
+            log::logger().flush();
             agent.send(Shutdown).await??;
             Ok(())
         }

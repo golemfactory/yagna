@@ -3,7 +3,7 @@ use crate::execution::{
     GetExeUnit, GetOfferTemplates, Shutdown as ShutdownExecution, TaskRunner, UpdateActivity,
 };
 use crate::hardware;
-use crate::market::provider_market::{OfferKind, Unsubscribe};
+use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{LinearPricingOffer, Payments, PricingOffer};
 use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RunConfig};
@@ -383,7 +383,7 @@ impl Handler<Shutdown> for ProviderAgent {
         let runner = self.runner.clone();
 
         async move {
-            market.send(Unsubscribe(OfferKind::Any)).await??;
+            market.send(MarketShutdown).await??;
             runner.send(ShutdownExecution).await??;
             Ok(())
         }

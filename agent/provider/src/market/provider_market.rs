@@ -1,6 +1,8 @@
 use actix::prelude::*;
+use actix::AsyncContext;
 use anyhow::{anyhow, Error, Result};
 use backoff::backoff::Backoff;
+use chrono::Utc;
 use derive_more::Display;
 use futures::prelude::*;
 use std::collections::HashMap;
@@ -25,9 +27,7 @@ use crate::market::config::MarketConfig;
 use crate::market::mock_negotiator::LimitAgreementsNegotiator;
 use crate::market::termination_reason::GolemReason;
 use crate::tasks::{AgreementBroken, AgreementClosed, CloseAgreement};
-use actix::AsyncContext;
-use chrono::Utc;
-use winapi::_core::time::Duration;
+use futures_util::FutureExt;
 use ya_client::model::market::ConvertReason;
 use ya_client_model::market::agreement_event::AgreementTerminator;
 
@@ -48,6 +48,10 @@ pub struct CreateOffer {
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
 pub struct UpdateMarket;
+
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+pub struct Shutdown;
 
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
@@ -124,6 +128,9 @@ pub struct ProviderMarket {
     /// External actors can listen on this signal.
     pub agreement_signed_signal: SignalSlot<AgreementApproved>,
     pub agreement_terminated_signal: SignalSlot<CloseAgreement>,
+
+    /// Infinite tasks requiring to be killed on shutdown.
+    handles: Vec<SpawnHandle>,
 }
 
 #[derive(Clone)]
@@ -146,6 +153,7 @@ impl ProviderMarket {
             subscriptions: HashMap::new(),
             agreement_signed_signal: SignalSlot::<AgreementApproved>::new(),
             agreement_terminated_signal: SignalSlot::<CloseAgreement>::new(),
+            handles: vec![],
         };
     }
 
@@ -453,7 +461,7 @@ async fn collect_agreement_events(ctx: AsyncCtx) {
 
                 // We need to wait after failure, because in most cases it happens immediately
                 // and we are spammed with error logs.
-                tokio::time::delay_for(Duration::from_secs_f32(timeout)).await;
+                tokio::time::delay_for(std::time::Duration::from_secs_f32(timeout)).await;
                 continue;
             }
             Ok(events) => events,
@@ -493,7 +501,10 @@ async fn collect_agreement_events(ctx: AsyncCtx) {
 }
 
 // Called time-to-time to read events.
-async fn run_step(ctx: AsyncCtx, subscriptions: HashMap<String, Subscription>) -> Result<()> {
+async fn collect_negotiation_events(
+    ctx: AsyncCtx,
+    subscriptions: HashMap<String, Subscription>,
+) -> Result<()> {
     let _ = future::join_all(subscriptions.into_iter().map(move |(id, subs)| {
         let ctx = ctx.clone();
         let timeout = ctx.config.negotiation_events_interval;
@@ -508,7 +519,12 @@ async fn run_step(ctx: AsyncCtx, subscriptions: HashMap<String, Subscription>) -
                                 let _ = ctx.market.send(ReSubscribe(id.clone())).await;
                             }
                         }
-                        _ => (),
+                        _ => {
+                            // We need to wait after failure, because in most cases it happens immediately
+                            // and we are spammed with error logs.
+                            tokio::time::delay_for(std::time::Duration::from_secs_f32(timeout))
+                                .await;
+                        }
                     }
                 }
                 Ok(events) => dispatch_events(ctx.clone(), events, subs).await,
@@ -518,6 +534,12 @@ async fn run_step(ctx: AsyncCtx, subscriptions: HashMap<String, Subscription>) -
     .await;
 
     Ok(())
+}
+
+async fn run_update_in_loop(ctx: AsyncCtx) {
+    loop {
+        ctx.market.send(UpdateMarket {}).await.ok();
+    }
 }
 
 #[derive(Message)]
@@ -580,22 +602,43 @@ impl Actor for ProviderMarket {
 
     fn started(&mut self, ctx: &mut Context<Self>) {
         let actx = self.async_context(ctx);
-        ctx.address().do_send(UpdateMarket {});
-        ctx.spawn(collect_agreement_events(actx).into_actor(self));
+
+        self.handles
+            .push(ctx.spawn(run_update_in_loop(actx.clone()).into_actor(self)));
+        self.handles
+            .push(ctx.spawn(collect_agreement_events(actx).into_actor(self)));
     }
 }
 
 impl Handler<UpdateMarket> for ProviderMarket {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ResponseFuture<Result<(), Error>>;
 
-    fn handle(&mut self, msg: UpdateMarket, ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, _msg: UpdateMarket, ctx: &mut Context<Self>) -> Self::Result {
+        // Every time we need to list subscriptions, because they can change during execution.
         let actx = self.async_context(ctx);
 
-        let fut = run_step(actx, self.subscriptions.clone())
-            .into_actor(self)
-            .map(|_, _, ctx| Ok(ctx.address().do_send(msg)));
+        collect_negotiation_events(actx, self.subscriptions.clone()).boxed_local()
+    }
+}
 
-        ActorResponse::r#async(fut)
+impl Handler<Shutdown> for ProviderMarket {
+    type Result = ResponseFuture<Result<(), Error>>;
+
+    fn handle(&mut self, _msg: Shutdown, ctx: &mut Context<Self>) -> Self::Result {
+        for handle in self.handles.drain(..).into_iter() {
+            ctx.cancel_future(handle);
+        }
+
+        let market = ctx.address();
+        async move {
+            Ok(market
+                .send(Unsubscribe(OfferKind::Any))
+                .await?
+                .map_err(|e| log::warn!("Failed to unsubscribe Offers. {}", e))
+                .ok()
+                .unwrap_or(()))
+        }
+        .boxed_local()
     }
 }
 
