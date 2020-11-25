@@ -78,7 +78,10 @@ impl RuntimeProcess {
         match result.status.success() {
             true => {
                 let stdout = vec_to_string(result.stdout).unwrap_or_else(String::new);
-                Ok(serde_json::from_str(&stdout)?)
+                Ok(serde_json::from_str(&stdout).map_err(|e| {
+                    let msg = format!("Invalid offer template [{}]: {:?}", binary.display(), e);
+                    Error::Other(msg)
+                })?)
             }
             false => {
                 log::warn!(
