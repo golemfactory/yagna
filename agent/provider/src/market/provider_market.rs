@@ -27,6 +27,7 @@ use crate::market::termination_reason::GolemReason;
 use crate::tasks::{AgreementBroken, AgreementClosed, CloseAgreement};
 use actix::AsyncContext;
 use chrono::Utc;
+use winapi::_core::time::Duration;
 use ya_client::model::market::ConvertReason;
 use ya_client_model::market::agreement_event::AgreementTerminator;
 
@@ -449,6 +450,10 @@ async fn collect_agreement_events(ctx: AsyncCtx) {
         {
             Err(e) => {
                 log::warn!("Can't query agreement events. Error: {}", e);
+
+                // We need to wait after failure, because in most cases it happens immediately
+                // and we are spammed with error logs.
+                tokio::time::delay_for(Duration::from_secs_f32(timeout)).await;
                 continue;
             }
             Ok(events) => events,
@@ -496,7 +501,7 @@ async fn run_step(ctx: AsyncCtx, subscriptions: HashMap<String, Subscription>) -
         async move {
             match ctx.api.collect(&id, Some(timeout), Some(5)).await {
                 Err(error) => {
-                    log::error!("Can't query market events. Error: {}", error);
+                    log::warn!("Can't query market events. Error: {}", error);
                     match error {
                         ya_client::error::Error::HttpStatusCode { code, .. } => {
                             if code.as_u16() == 404 {
