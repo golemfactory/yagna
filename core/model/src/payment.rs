@@ -195,7 +195,7 @@ pub mod local {
         type Error = GenericError;
     }
 
-    #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[derive(Clone, Debug, Serialize, Deserialize, Default)]
     pub struct StatusResult {
         pub amount: BigDecimal,
         pub reserved: BigDecimal,

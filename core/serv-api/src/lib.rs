@@ -43,7 +43,11 @@ impl CommandOutput {
 
     pub fn print(&self, json_output: bool) {
         match self {
-            CommandOutput::NoOutput => {}
+            CommandOutput::NoOutput => {
+                if json_output {
+                    println!("null");
+                }
+            }
             CommandOutput::Table {
                 columns,
                 values,
