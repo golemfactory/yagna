@@ -7305,7 +7305,7 @@ dependencies = [
  "thiserror",
  "tokio 0.2.23",
  "uuid 0.8.1",
- "ya-client-model 0.2.0 (git+https://github.com/golemfactory/ya-client.git?rev=80221a38c4cf8f4700da36598316fc8048e5c535)",
+ "ya-client-model 0.2.0",
  "ya-core-model",
  "ya-net",
  "ya-persistence",
@@ -7339,7 +7339,7 @@ dependencies = [
  "serde_yaml",
  "tempdir",
  "thiserror",
- "ya-client-model 0.2.0 (git+https://github.com/golemfactory/ya-client.git?rev=9b17a8de0c4709bfa7827d4c372e9db729e81c61)",
+ "ya-client-model 0.2.0",
 ]
 
 [[package]]
@@ -7367,30 +7367,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=80221a38c4cf8f4700da36598316fc8048e5c535#80221a38c4cf8f4700da36598316fc8048e5c535"
-dependencies = [
- "awc 1.0.1",
- "bytes 0.5.6",
- "chrono",
- "envy",
- "failure",
- "futures 0.3.8",
- "heck",
- "hex",
- "log 0.4.11",
- "mime 0.3.16",
- "rand 0.6.5",
- "serde",
- "serde_json",
- "thiserror",
- "url 2.2.0",
- "ya-client-model 0.2.0 (git+https://github.com/golemfactory/ya-client.git?rev=80221a38c4cf8f4700da36598316fc8048e5c535)",
-]
-
-[[package]]
-name = "ya-client"
-version = "0.4.1"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=9b17a8de0c4709bfa7827d4c372e9db729e81c61#9b17a8de0c4709bfa7827d4c372e9db729e81c61"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=50c530fb54fbb91a9ad743f43f2c6e0b3fc3b34f#50c530fb54fbb91a9ad743f43f2c6e0b3fc3b34f"
 dependencies = [
  "awc 1.0.1",
  "bytes 0.5.6",
@@ -7408,7 +7385,7 @@ dependencies = [
  "structopt",
  "thiserror",
  "url 2.2.0",
- "ya-client-model 0.2.0 (git+https://github.com/golemfactory/ya-client.git?rev=9b17a8de0c4709bfa7827d4c372e9db729e81c61)",
+ "ya-client-model 0.2.0",
 ]
 
 [[package]]
@@ -7427,7 +7404,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=80221a38c4cf8f4700da36598316fc8048e5c535#80221a38c4cf8f4700da36598316fc8048e5c535"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=50c530fb54fbb91a9ad743f43f2c6e0b3fc3b34f#50c530fb54fbb91a9ad743f43f2c6e0b3fc3b34f"
 dependencies = [
  "bigdecimal 0.1.2",
  "chrono",
@@ -7436,19 +7413,6 @@ dependencies = [
  "openssl",
  "rand 0.7.3",
  "secp256k1 0.17.2",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "ya-client-model"
-version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=9b17a8de0c4709bfa7827d4c372e9db729e81c61#9b17a8de0c4709bfa7827d4c372e9db729e81c61"
-dependencies = [
- "bigdecimal 0.1.2",
- "chrono",
- "rand 0.7.3",
  "serde",
  "serde_json",
  "thiserror",
@@ -7474,7 +7438,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "thiserror",
- "ya-client-model 0.2.0 (git+https://github.com/golemfactory/ya-client.git?rev=80221a38c4cf8f4700da36598316fc8048e5c535)",
+ "ya-client-model 0.2.0",
  "ya-service-bus",
 ]
 
@@ -7547,7 +7511,7 @@ dependencies = [
  "url 2.2.0",
  "winapi 0.3.9",
  "ya-agreement-utils 0.2.0",
- "ya-client-model 0.2.0 (git+https://github.com/golemfactory/ya-client.git?rev=80221a38c4cf8f4700da36598316fc8048e5c535)",
+ "ya-client-model 0.2.0",
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-runtime-api",
@@ -7595,7 +7559,7 @@ dependencies = [
  "ureq",
  "uuid 0.8.1",
  "web3 0.8.0",
- "ya-client-model 0.2.0 (git+https://github.com/golemfactory/ya-client.git?rev=80221a38c4cf8f4700da36598316fc8048e5c535)",
+ "ya-client-model 0.2.0",
  "ya-core-model",
  "ya-persistence",
  "ya-service-api-interfaces",
@@ -7631,7 +7595,7 @@ dependencies = [
  "thiserror",
  "tokio 0.2.23",
  "uuid 0.8.1",
- "ya-client-model 0.2.0 (git+https://github.com/golemfactory/ya-client.git?rev=80221a38c4cf8f4700da36598316fc8048e5c535)",
+ "ya-client-model 0.2.0",
  "ya-core-model",
  "ya-persistence",
  "ya-sb-router",
@@ -7786,7 +7750,7 @@ dependencies = [
  "uuid 0.8.1",
  "ya-agreement-utils 0.1.0",
  "ya-client 0.4.0",
- "ya-client-model 0.2.0 (git+https://github.com/golemfactory/ya-client.git?rev=80221a38c4cf8f4700da36598316fc8048e5c535)",
+ "ya-client-model 0.2.0",
  "ya-core-model",
  "ya-dummy-driver",
  "ya-gnt-driver",
@@ -7819,7 +7783,7 @@ dependencies = [
  "r2d2",
  "thiserror",
  "tokio 0.2.23",
- "ya-client-model 0.2.0 (git+https://github.com/golemfactory/ya-client.git?rev=80221a38c4cf8f4700da36598316fc8048e5c535)",
+ "ya-client-model 0.2.0",
  "ya-core-model",
  "ya-persistence",
  "ya-service-bus",
@@ -7840,7 +7804,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio 0.2.23",
- "ya-client-model 0.2.0 (git+https://github.com/golemfactory/ya-client.git?rev=80221a38c4cf8f4700da36598316fc8048e5c535)",
+ "ya-client-model 0.2.0",
  "ya-core-model",
 ]
 
@@ -7886,8 +7850,8 @@ dependencies = [
  "url 2.2.0",
  "winapi 0.3.9",
  "ya-agreement-utils 0.2.0",
- "ya-client 0.4.1",
- "ya-client-model 0.2.0 (git+https://github.com/golemfactory/ya-client.git?rev=9b17a8de0c4709bfa7827d4c372e9db729e81c61)",
+ "ya-client 0.4.0",
+ "ya-client-model 0.2.0",
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-utils-actix",
@@ -8095,7 +8059,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "graphene-sgx",
- "ya-client-model 0.2.0 (git+https://github.com/golemfactory/ya-client.git?rev=80221a38c4cf8f4700da36598316fc8048e5c535)",
+ "ya-client-model 0.2.0",
  "ya-core-model",
  "ya-service-bus",
 ]
@@ -8141,7 +8105,7 @@ dependencies = [
  "tokio-util 0.2.0",
  "url 2.2.0",
  "walkdir",
- "ya-client-model 0.2.0 (git+https://github.com/golemfactory/ya-client.git?rev=80221a38c4cf8f4700da36598316fc8048e5c535)",
+ "ya-client-model 0.2.0",
  "ya-core-model",
  "ya-net",
  "ya-service-bus",
@@ -8220,7 +8184,7 @@ dependencies = [
  "tiny-keccak 1.5.0",
  "tokio 0.2.23",
  "uuid 0.8.1",
- "ya-client-model 0.2.0 (git+https://github.com/golemfactory/ya-client.git?rev=80221a38c4cf8f4700da36598316fc8048e5c535)",
+ "ya-client-model 0.2.0",
  "ya-payment-driver",
  "ya-service-api-interfaces",
  "ya-utils-futures",

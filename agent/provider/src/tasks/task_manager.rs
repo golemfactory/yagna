@@ -201,9 +201,7 @@ impl TaskManager {
         let props = TaskInfo::from(&msg.agreement)
             .map_err(|e| anyhow!("Failed to create TaskInfo from Agreement. {}", e))?;
 
-        self.tasks_props
-            .insert(agreement_id.clone(), props.clone())
-            .ok_or(anyhow!("Can't insert TaskInfo. Shouldn't happen."))?;
+        self.tasks_props.insert(agreement_id.clone(), props.clone());
 
         self.tasks
             .start_transition(&agreement_id, AgreementState::Initialized)?;
