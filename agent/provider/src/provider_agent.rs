@@ -427,8 +427,6 @@ impl Handler<CreateOffers> for ProviderAgent {
             OfferKind::WithPresets(names) => names,
         };
 
-        eprintln!("start !!! accounts: {:?}", accounts);
-
         let presets = self.presets.list_matching(&preset_names);
         async move {
             Self::create_offers(presets?, node_info, inf_node_info, runner, market, accounts).await
