@@ -1277,6 +1277,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e4cec68f03f32e44924783795810fa50a7035d8c8ebe78580ad7e6c703fba38"
 
 [[package]]
+name = "bytesize"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "81a18687293a1546b67c246452202bbbf143d239cb43494cc163da14979082da"
+
+[[package]]
 name = "bytestring"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7754,6 +7760,7 @@ dependencies = [
  "actix_derive",
  "anyhow",
  "bigdecimal 0.1.2",
+ "bytesize",
  "chrono",
  "derive_more 0.99.11",
  "dialoguer",
@@ -7771,6 +7778,7 @@ dependencies = [
  "notify",
  "num_cpus",
  "path-clean",
+ "regex",
  "semver 0.10.0",
  "serde",
  "serde_json",
@@ -7783,6 +7791,7 @@ dependencies = [
  "thiserror",
  "tokio 0.2.23",
  "url 2.2.0",
+ "walkdir",
  "winapi 0.3.9",
  "ya-agreement-utils",
  "ya-client 0.4.0",
