@@ -24,16 +24,68 @@ impl MetricsService {
         backlog_limit: Option<usize>,
         supervise_caps: bool,
     ) -> Result<Self, MetricError> {
-        let caps = move |ctx: &ExeUnitContext, id| match supervise_caps {
+        let caps = move |ctx: &ExeUnitContext, id: &str| match supervise_caps {
             true => ctx.agreement.usage_limits.get(id).cloned(),
             _ => None,
         };
-        let metrics: HashMap<String, MetricProvider> = vec![
+        let metrics = Self::metrics(&ctx, backlog_limit, caps);
+
+        if let Some(e) = ctx
+            .agreement
+            .usage_vector
+            .iter()
+            .find(|e| !metrics.contains_key(*e))
+        {
+            return Err(MetricError::Unsupported(e.to_string()));
+        }
+
+        Ok(MetricsService {
+            usage_vector: ctx.agreement.usage_vector.clone(),
+            metrics,
+        })
+    }
+
+    #[cfg(feature = "sgx")]
+    pub fn usage_vector() -> Vec<String> {
+        vec![TimeMetric::ID.to_string()]
+    }
+
+    #[cfg(feature = "sgx")]
+    fn metrics<F: Fn(&ExeUnitContext, &str) -> Option<f64>>(
+        ctx: &ExeUnitContext,
+        backlog_limit: Option<usize>,
+        caps: F,
+    ) -> HashMap<String, MetricProvider> {
+        vec![(
+            TimeMetric::ID.to_string(),
+            MetricProvider::new(TimeMetric::default(), Some(1), caps(ctx, TimeMetric::ID)),
+        )]
+        .into_iter()
+        .collect()
+    }
+
+    #[cfg(not(feature = "sgx"))]
+    pub fn usage_vector() -> Vec<String> {
+        vec![
+            TimeMetric::ID.to_string(),
+            CpuMetric::ID.to_string(),
+            MemMetric::ID.to_string(),
+            StorageMetric::ID.to_string(),
+        ]
+    }
+
+    #[cfg(not(feature = "sgx"))]
+    fn metrics<F: Fn(&ExeUnitContext, &str) -> Option<f64>>(
+        ctx: &ExeUnitContext,
+        backlog_limit: Option<usize>,
+        caps: F,
+    ) -> HashMap<String, MetricProvider> {
+        vec![
             (
                 CpuMetric::ID.to_string(),
                 MetricProvider::new(
                     CpuMetric::default(),
-                    backlog_limit.clone(),
+                    backlog_limit,
                     caps(ctx, CpuMetric::ID),
                 ),
             ),
@@ -59,32 +111,7 @@ impl MetricsService {
             ),
         ]
         .into_iter()
-        .collect();
-
-        if let Some(e) = ctx
-            .agreement
-            .usage_vector
-            .iter()
-            .find(|e| !metrics.contains_key(*e))
-        {
-            return Err(MetricError::Unsupported(e.to_string()));
-        }
-
-        Ok(MetricsService {
-            usage_vector: ctx.agreement.usage_vector.clone(),
-            metrics,
-        })
-    }
-
-    pub fn usage_vector() -> Vec<String> {
-        // TODO: sgx
-        [
-            TimeMetric::ID.to_string(),
-            CpuMetric::ID.to_string(),
-            MemMetric::ID.to_string(),
-            StorageMetric::ID.to_string(),
-        ]
-        .to_vec()
+        .collect()
     }
 }
 
@@ -107,7 +134,6 @@ impl Handler<GetMetrics> for MetricsService {
     fn handle(&mut self, _: GetMetrics, _: &mut Self::Context) -> Self::Result {
         let mut metrics = vec![0f64; self.usage_vector.len()];
 
-        #[cfg(not(feature = "sgx"))]
         for (i, name) in self.usage_vector.iter().enumerate() {
             let metric = self
                 .metrics
