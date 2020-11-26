@@ -158,7 +158,7 @@ impl YagnaCommand {
 
         match v {
             future::Either::Left((_child_ends, _t)) => {
-                anyhow::bail!("fail to start service");
+                anyhow::bail!("failed to start service");
             }
             future::Either::Right((_t, child)) => Ok(child),
         }

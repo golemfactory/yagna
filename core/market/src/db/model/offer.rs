@@ -9,7 +9,7 @@ use ya_service_api_web::middleware::Identity;
 use super::SubscriptionId;
 use crate::db::model::subscription_id::SubscriptionValidationError;
 use crate::db::schema::{market_offer, market_offer_unsubscribed};
-use ya_client::model::market::DemandOfferBase;
+use ya_client::model::market::NewOffer;
 
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable, Deserialize, Serialize)]
 #[table_name = "market_offer"]
@@ -48,7 +48,7 @@ impl Offer {
     /// Creates new model offer. If ClientOffer has id already assigned,
     /// it will be ignored and regenerated.
     pub fn from_new(
-        offer: &DemandOfferBase,
+        offer: &NewOffer,
         id: &Identity,
         creation_ts: NaiveDateTime,
         expiration_ts: NaiveDateTime,

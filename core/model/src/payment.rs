@@ -4,14 +4,16 @@ use ya_service_bus::RpcMessage;
 
 #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
 pub enum RpcMessageError {
-    #[error("Send error: {0}")]
+    #[error("{0}")]
     Send(#[from] public::SendError),
-    #[error("Accept/reject error: {0}")]
+    #[error("{0}")]
     AcceptReject(#[from] public::AcceptRejectError),
-    #[error("Cancel error: {0}")]
+    #[error("{0}")]
     Cancel(#[from] public::CancelError),
     #[error("{0}")]
     Generic(#[from] local::GenericError),
+    #[error("{0}")]
+    ValidateAllocation(#[from] local::ValidateAllocationError),
 }
 
 pub mod local {
@@ -322,6 +324,27 @@ pub mod local {
     pub struct InvoiceStats {
         pub requestor: InvoiceStatusNotes,
         pub provider: InvoiceStatusNotes,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct ValidateAllocation {
+        pub platform: String,
+        pub address: String,
+        pub amount: BigDecimal,
+    }
+
+    impl RpcMessage for ValidateAllocation {
+        const ID: &'static str = "ValidateAllocation";
+        type Item = bool;
+        type Error = ValidateAllocationError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum ValidateAllocationError {
+        #[error("Account not registered")]
+        AccountNotRegistered,
+        #[error("Error while validating allocation: {0}")]
+        Other(String),
     }
 }
 

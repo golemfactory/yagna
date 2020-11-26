@@ -52,10 +52,12 @@ pub async fn account_balance(address: &str) -> Result<BigDecimal, GenericError> 
         .map(|x| x.0.clone())
         .unwrap_or(BigUint::zero());
     let balance = utils::big_uint_to_big_dec(balance_com);
+    log::debug!("account_balance. address={}, balance={}", address, &balance);
     Ok(balance)
 }
 
 pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
+    log::debug!("init_wallet. network={}, msg={:?}", *NETWORK, msg);
     let mode = msg.mode();
     let address = msg.address().clone();
 
@@ -68,7 +70,26 @@ pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
     Ok(())
 }
 
-pub async fn make_transfer(details: &PaymentDetails) -> Result<String, GenericError> {
+pub async fn get_nonce(address: &str) -> u32 {
+    let addr = match Address::from_str(&address[2..]) {
+        Ok(a) => a,
+        Err(e) => {
+            log::error!("Unable to parse address, failed to get nonce. {:?}", e);
+            return 0;
+        }
+    };
+    let provider = get_provider();
+    let account_info = match provider.account_info(addr).await {
+        Ok(i) => i,
+        Err(e) => {
+            log::error!("Unable to get account info, failed to get nonce. {:?}", e);
+            return 0;
+        }
+    };
+    account_info.committed.nonce
+}
+
+pub async fn make_transfer(details: &PaymentDetails, nonce: u32) -> Result<String, GenericError> {
     log::debug!("make_transfer. {:?}", details);
     let amount = details.amount.clone();
     let amount = utils::big_dec_to_big_uint(amount)?;
@@ -86,6 +107,7 @@ pub async fn make_transfer(details: &PaymentDetails) -> Result<String, GenericEr
 
     let transfer = wallet
         .start_transfer()
+        .nonce(nonce)
         .str_to(&details.recipient[2..])
         .map_err(GenericError::new)?
         .token(ZKSYNC_TOKEN_NAME)

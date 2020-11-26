@@ -219,7 +219,7 @@ async fn test_query_events_edge_cases() -> Result<(), anyhow::Error> {
     let result = market1.query_events(&demand_id, 0.0, Some(-5)).await;
     assert_eq!(
         result.unwrap_err().to_string(),
-        QueryEventsError::InvalidMaxEvents(-5).to_string()
+        QueryEventsError::InvalidMaxEvents(-5, 100).to_string()
     );
 
     // Negative timeout should be treated as immediate checking events and return.
@@ -239,10 +239,12 @@ async fn test_query_events_edge_cases() -> Result<(), anyhow::Error> {
         .await?;
     market1.subscribe_offer(&sample_offer(), &identity1).await?;
 
-    // maxEvents equal to 0 isn't forbidden value, but should return 0 events,
-    // even if they exist.
-    let events = market1.query_events(&demand_id, 0.2, Some(0)).await?;
-    assert_eq!(events.len(), 0);
+    // maxEvents equal to 0 is forbidden value now.
+    let result = market1.query_events(&demand_id, 0.2, Some(0)).await;
+    assert_eq!(
+        result.unwrap_err().to_string(),
+        QueryEventsError::InvalidMaxEvents(0, 100).to_string()
+    );
 
     // Query events returns error, if Demand was unsubscribed.
     market1.unsubscribe_demand(&demand_id, &identity1).await?;

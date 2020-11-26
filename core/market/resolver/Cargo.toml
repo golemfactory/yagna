@@ -6,8 +6,8 @@ edition = "2018"
 
 [dependencies]
 asnom = { git = "https://github.com/dequbed/asnom.git" }
+bigdecimal = "0.2.0"
 chrono = "0.4"
-decimal = "2.0"
 log = "0.4.8"
 nom = "2.0"
 regex = "1"

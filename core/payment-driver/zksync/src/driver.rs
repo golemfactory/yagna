@@ -16,12 +16,10 @@ use ya_payment_driver::{
     dao::DbExecutor,
     db::models::PaymentEntity,
     driver::{async_trait, BigDecimal, IdentityError, IdentityEvent, PaymentDriver},
-    model::{
-        Ack, GenericError, GetAccountBalance, GetTransactionBalance, Init, PaymentConfirmation,
-        PaymentDetails, SchedulePayment, VerifyPayment,
-    },
+    model::*,
     utils,
 };
+use ya_utils_futures::timeout::IntoTimeoutFuture;
 
 // Local uses
 use crate::{dao::ZksyncDao, zksync::wallet, DRIVER_NAME, PLATFORM_NAME};
@@ -60,28 +58,32 @@ impl ZksyncDriver {
     async fn process_payments_for_account(&self, node_id: &str) {
         log::trace!("Processing payments for node_id={}", node_id);
         let payments: Vec<PaymentEntity> = self.dao.get_pending_payments(node_id).await;
+        let mut nonce = 0;
         if !payments.is_empty() {
             log::info!(
                 "Processing {} Payments for node_id={}",
                 payments.len(),
                 node_id
             );
-            log::debug!("Payments details: {:?}", payments);
+            nonce = wallet::get_nonce(node_id).await;
+            log::debug!("Payments: nonce={}, details={:?}", &nonce, payments);
         }
         for payment in payments {
-            self.handle_payment(payment).await;
+            self.handle_payment(payment, &mut nonce).await;
         }
     }
 
-    async fn handle_payment(&self, payment: PaymentEntity) {
+    async fn handle_payment(&self, payment: PaymentEntity, nonce: &mut u32) {
         let details = utils::db_to_payment_details(&payment);
         let tx_id = self.dao.insert_transaction(&details, Utc::now()).await;
+        let tx_nonce = nonce.to_owned();
 
-        match wallet::make_transfer(&details).await {
+        match wallet::make_transfer(&details, tx_nonce).await {
             Ok(tx_hash) => {
                 self.dao
                     .transaction_success(&tx_id, &tx_hash, &payment.order_id)
                     .await;
+                *nonce += 1;
             }
             Err(e) => {
                 self.dao
@@ -149,7 +151,10 @@ impl PaymentDriver for ZksyncDriver {
         //     return Err(GenericError::new("Can not init, account not active"));
         // }
 
-        wallet::init_wallet(&msg).await?;
+        wallet::init_wallet(&msg)
+            .timeout(Some(180))
+            .await
+            .map_err(GenericError::new)??;
 
         let mode = msg.mode();
         bus::register_account(self, &address, mode).await?;
@@ -199,6 +204,21 @@ impl PaymentDriver for ZksyncDriver {
         //     None => Err(GenericError::new("Payment not ready to be checked")),
         // }
         from_confirmation(msg.confirmation())
+    }
+
+    async fn validate_allocation(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        msg: ValidateAllocation,
+    ) -> Result<bool, GenericError> {
+        let account_balance = wallet::account_balance(&msg.address).await?;
+        let total_allocated_amount: BigDecimal = msg
+            .existing_allocations
+            .into_iter()
+            .map(|allocation| allocation.remaining_amount)
+            .sum();
+        Ok(msg.amount <= (account_balance - total_allocated_amount))
     }
 }
 

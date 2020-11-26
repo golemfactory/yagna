@@ -1,17 +1,11 @@
-// TODO: This is only temporary
-#![allow(dead_code)]
-
 use chrono::{Duration, NaiveDateTime, TimeZone, Utc};
-use diesel::backend::Backend;
-use diesel::deserialize;
-use diesel::serialize::Output;
-use diesel::sql_types::Integer;
-use diesel::types::{FromSql, ToSql};
-use num_derive::FromPrimitive;
-use num_traits::FromPrimitive;
+use diesel::sql_types::Text;
 
 use ya_client::model::market::proposal::{Proposal as ClientProposal, State};
+use ya_client::model::market::NewProposal;
 use ya_client::model::{ErrorMessage, NodeId};
+use ya_diesel_utils::DbTextField;
+use ya_market_resolver::flatten::{flatten_json, JsonObjectExpected};
 
 use super::{generate_random_id, SubscriptionId};
 use super::{OwnerType, ProposalId};
@@ -21,28 +15,46 @@ use crate::db::model::Demand as ModelDemand;
 use crate::db::model::Offer as ModelOffer;
 use crate::db::schema::{market_negotiation, market_proposal};
 use crate::protocol::negotiation::messages::ProposalContent;
-use ya_client::model::market::DemandOfferBase;
-use ya_market_resolver::flatten::{flatten_json, JsonObjectExpected};
 
 /// TODO: Could we avoid having separate enum type for database
 ///  and separate for client?
-#[derive(FromPrimitive, AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy)]
-#[sql_type = "Integer"]
+#[derive(
+    strum_macros::EnumString,
+    DbTextField,
+    derive_more::Display,
+    AsExpression,
+    FromSqlRow,
+    PartialEq,
+    Debug,
+    Clone,
+    Copy,
+)]
+#[sql_type = "Text"]
 pub enum ProposalState {
     /// Proposal arrived from the market as response to subscription
-    Initial = 0,
+    Initial,
     /// Bespoke counter-proposal issued by one party directly to other party (negotiation phase)
-    Draft = 1,
+    Draft,
     /// Rejected by other party
-    Rejected = 2,
+    Rejected,
     /// Promoted to the Agreement draft
-    Accepted = 3,
+    Accepted,
     /// Not accepted nor rejected before validity period
-    Expired = 4,
+    Expired,
 }
 
-#[derive(FromPrimitive, AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy)]
-#[sql_type = "Integer"]
+#[derive(
+    DbTextField,
+    strum_macros::EnumString,
+    derive_more::Display,
+    AsExpression,
+    FromSqlRow,
+    PartialEq,
+    Debug,
+    Clone,
+    Copy,
+)]
+#[sql_type = "Text"]
 pub enum IssuerType {
     Us = 0,
     Them = 1,
@@ -193,7 +205,7 @@ impl Proposal {
         }
     }
 
-    pub fn from_client(&self, proposal: &DemandOfferBase) -> Result<Proposal, JsonObjectExpected> {
+    pub fn from_client(&self, proposal: &NewProposal) -> Result<Proposal, JsonObjectExpected> {
         let owner = self.body.id.owner();
         let creation_ts = Utc::now().naive_utc();
         // TODO: How to set expiration? Config?
@@ -307,51 +319,5 @@ impl From<ProposalState> for State {
             ProposalState::Accepted => State::Accepted,
             ProposalState::Expired => State::Expired,
         }
-    }
-}
-
-impl<DB: Backend> ToSql<Integer, DB> for ProposalState
-where
-    i32: ToSql<Integer, DB>,
-{
-    fn to_sql<W: std::io::Write>(&self, out: &mut Output<W, DB>) -> diesel::serialize::Result {
-        (*self as i32).to_sql(out)
-    }
-}
-
-impl<DB> FromSql<Integer, DB> for ProposalState
-where
-    i32: FromSql<Integer, DB>,
-    DB: Backend,
-{
-    fn from_sql(bytes: Option<&DB::RawValue>) -> deserialize::Result<Self> {
-        let enum_value = i32::from_sql(bytes)?;
-        Ok(FromPrimitive::from_i32(enum_value).ok_or(anyhow::anyhow!(
-            "Invalid conversion from {} (i32) to Proposal State.",
-            enum_value
-        ))?)
-    }
-}
-
-impl<DB: Backend> ToSql<Integer, DB> for IssuerType
-where
-    i32: ToSql<Integer, DB>,
-{
-    fn to_sql<W: std::io::Write>(&self, out: &mut Output<W, DB>) -> diesel::serialize::Result {
-        (*self as i32).to_sql(out)
-    }
-}
-
-impl<DB> FromSql<Integer, DB> for IssuerType
-where
-    i32: FromSql<Integer, DB>,
-    DB: Backend,
-{
-    fn from_sql(bytes: Option<&DB::RawValue>) -> deserialize::Result<Self> {
-        let enum_value = i32::from_sql(bytes)?;
-        Ok(FromPrimitive::from_i32(enum_value).ok_or(anyhow::anyhow!(
-            "Invalid conversion from {} (i32) to IssuerType.",
-            enum_value
-        ))?)
     }
 }

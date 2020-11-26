@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use ya_agreement_utils::{AgreementView, OfferDefinition};
 use ya_client::market::MarketProviderApi;
-use ya_client_model::market::{Agreement, DemandOfferBase, Proposal, ProviderEvent, Reason};
+use ya_client_model::market::{Agreement, NewOffer, Proposal, ProviderEvent, Reason};
 use ya_utils_actix::{
     actix_handler::ResultTypeGetter,
     actix_signal::{SignalSlot, Subscribe},
@@ -66,7 +66,7 @@ pub struct AgreementApproved {
 struct Subscription {
     id: String,
     preset: Preset,
-    offer: DemandOfferBase,
+    offer: NewOffer,
 }
 
 #[derive(Message)]
@@ -206,7 +206,7 @@ impl ProviderMarket {
 async fn subscribe(
     market: Addr<ProviderMarket>,
     api: Arc<MarketProviderApi>,
-    offer: DemandOfferBase,
+    offer: NewOffer,
     preset: Preset,
 ) -> Result<()> {
     let id = api.subscribe(&offer).await?;

@@ -50,6 +50,10 @@ pub struct GetExeUnit {
 #[rtype(result = "Result<HashMap<String, OfferTemplate>>")]
 pub struct GetOfferTemplates(pub Vec<Preset>);
 
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+pub struct Shutdown;
+
 // =========================================== //
 // Public signals sent by TaskRunner
 // =========================================== //
@@ -720,6 +724,33 @@ impl Handler<AgreementBroken> for TaskRunner {
         };
 
         ActorResponse::r#async(remove_future.into_actor(self))
+    }
+}
+
+impl Handler<Shutdown> for TaskRunner {
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, _: Shutdown, ctx: &mut Context<Self>) -> Self::Result {
+        let ids = self
+            .tasks
+            .iter()
+            .map(|t| (t.activity_id.clone(), t.agreement_id.clone()))
+            .collect::<Vec<_>>();
+
+        let addr = ctx.address();
+        let fut = async move {
+            for (activity_id, agreement_id) in ids {
+                if let Err(e) = addr
+                    .send(DestroyActivity::new(&activity_id, &agreement_id))
+                    .await?
+                {
+                    log::error!("Unable to destroy activity: {}", e);
+                }
+            }
+            Ok(())
+        };
+
+        ActorResponse::r#async(fut.into_actor(self))
     }
 }
 

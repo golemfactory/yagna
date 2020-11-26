@@ -3,7 +3,6 @@ use futures::StreamExt;
 use metrics::{counter, value};
 
 use crate::db::model::{Offer, SubscriptionId};
-
 use crate::matcher::error::ModifyOfferError;
 use crate::protocol::discovery::{
     error::DiscoveryRemoteError,
