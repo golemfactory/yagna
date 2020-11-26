@@ -187,6 +187,7 @@ impl ProviderAgent {
 
             let (initial_price, prices) = get_prices(&pricing_model, &preset, &offer)?;
             offer.set_property("golem.com.usage.vector", get_usage_vector_value(&prices));
+            offer.set_property("golem.com.usage.vector", get_usage_vector_value(&prices));
             offer.add_constraints(Self::build_constraints(subnet.clone())?);
 
             let com_info = pricing_model.build(&accounts, initial_price, prices)?;

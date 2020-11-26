@@ -82,6 +82,7 @@ pub struct InfNodeInfo {
     mem_gib: Option<f64>,
     storage_gib: Option<f64>,
     cpu_info: Option<CpuInfo>,
+    multi_activity: bool,
 }
 
 impl InfNodeInfo {
@@ -111,6 +112,13 @@ impl InfNodeInfo {
         }
     }
 
+    pub fn support_multi_activity(self, multi_activity: bool) -> Self {
+        Self {
+            multi_activity,
+            ..self
+        }
+    }
+
     fn write_json(self, map: &mut serde_json::Map<String, serde_json::Value>) {
         let mut inf_map = serde_json::Map::new();
         if let Some(mem) = self.mem_gib {
@@ -122,6 +130,10 @@ impl InfNodeInfo {
         if let Some(cpu) = self.cpu_info {
             cpu.write_json(&mut inf_map);
         }
+        inf_map.insert(
+            "multi-activity".to_string(),
+            serde_json::Value::Bool(self.multi_activity),
+        );
         let _ = map.insert("inf".to_string(), inf_map.into());
     }
 }
