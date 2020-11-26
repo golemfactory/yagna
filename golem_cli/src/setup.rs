@@ -9,7 +9,8 @@ use std::fs;
 use structopt::StructOpt;
 use ya_core_model::NodeId;
 
-const DEFAULT_SUBNET: &str = "community";
+const OLD_DEFAULT_SUBNET: &str = "community";
+const DEFAULT_SUBNET: &str = "community.3";
 
 #[derive(StructOpt)]
 pub struct RunConfig {
@@ -89,6 +90,10 @@ pub async fn setup(run_config: &mut RunConfig, force: bool) -> Result<i32> {
                 .clone()
                 .unwrap_or_else(|| names::Generator::default().next().unwrap_or_default()),
         )?;
+        // Force subnet upgade.
+        if config.subnet.as_deref() == Some(OLD_DEFAULT_SUBNET) {
+            config.subnet = None;
+        }
         let subnet = promptly::prompt_default(
             "Subnet ",
             config.subnet.unwrap_or_else(|| DEFAULT_SUBNET.to_string()),
@@ -96,7 +101,7 @@ pub async fn setup(run_config: &mut RunConfig, force: bool) -> Result<i32> {
 
         let message = match &config.account {
             Some(account) => format!("Ethereum wallet address (default={})", &account.address),
-            None => "Ethereum wallet address".to_string(),
+            None => "Ethereum wallet address (default=internal golem wallet)".to_string(),
         };
 
         while let Some(account) = promptly::prompt_opt::<String, _>(&message)? {
