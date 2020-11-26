@@ -1,4 +1,3 @@
-use actix::Arbiter;
 use futures::channel::mpsc;
 use futures::StreamExt;
 use tokio_util::codec::{BytesCodec, FramedRead};
@@ -6,7 +5,7 @@ use ya_client_model::activity::{
     CaptureFormat, CaptureMode, CapturePart, CommandOutput, RuntimeEvent,
 };
 
-pub(crate) fn forward_output<F, R>(read: R, tx: &mpsc::Sender<RuntimeEvent>, f: F)
+pub(crate) async fn forward_output<F, R>(read: R, tx: &mpsc::Sender<RuntimeEvent>, f: F)
 where
     F: Fn(Vec<u8>) -> RuntimeEvent + 'static,
     R: tokio::io::AsyncRead + 'static,
@@ -19,11 +18,9 @@ where
         .map(f)
         .map(|evt| Ok(evt));
 
-    Arbiter::spawn(async move {
-        if let Err(e) = stream.forward(tx).await {
-            log::error!("Error forwarding output: {:?}", e);
-        }
-    });
+    if let Err(e) = stream.forward(tx).await {
+        log::error!("Error forwarding output: {:?}", e);
+    }
 }
 
 pub(crate) struct CapturedOutput {

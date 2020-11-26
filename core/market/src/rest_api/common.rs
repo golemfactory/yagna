@@ -1,5 +1,6 @@
-use actix_web::web::{Data, Path};
+use actix_web::web::{Data, Path, Query};
 use actix_web::{HttpResponse, Responder, Scope};
+use chrono::{TimeZone, Utc};
 use std::sync::Arc;
 
 use ya_service_api_web::middleware::Identity;
@@ -9,9 +10,12 @@ use super::PathAgreement;
 use crate::db::model::OwnerType;
 use crate::market::MarketService;
 use crate::negotiation::error::AgreementError;
+use crate::rest_api::QueryAgreementEvents;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
-    scope.service(get_agreement)
+    scope
+        .service(collect_agreement_events)
+        .service(get_agreement)
 }
 
 #[actix_web::get("/agreements/{agreement_id}")]
@@ -40,4 +44,28 @@ async fn get_agreement(
         // Both calls shouldn't return Agreement.
         Err(AgreementError::Internal(format!("We found ")))
     }
+}
+
+#[actix_web::get("/agreementEvents")]
+async fn collect_agreement_events(
+    market: Data<Arc<MarketService>>,
+    query: Query<QueryAgreementEvents>,
+    id: Identity,
+) -> impl Responder {
+    let timeout: f32 = query.timeout;
+    let after_timestamp = query
+        .after_timestamp
+        .unwrap_or(Utc.ymd(2016, 11, 11).and_hms(15, 12, 0));
+
+    market
+        .query_agreement_events(
+            &query.app_session_id,
+            timeout,
+            query.max_events,
+            after_timestamp,
+            &id,
+        )
+        .await
+        .log_err()
+        .map(|events| HttpResponse::Ok().json(events))
 }

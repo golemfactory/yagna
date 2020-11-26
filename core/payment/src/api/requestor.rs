@@ -2,13 +2,17 @@ use crate::api::*;
 use crate::dao::*;
 use crate::error::{DbError, Error};
 use crate::utils::{listen_for_events, response, with_timeout};
+use crate::DEFAULT_PAYMENT_PLATFORM;
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use metrics::counter;
 use serde_json::value::Value::Null;
 use ya_agreement_utils::{ClauseOperator, ConstraintKey, Constraints};
 use ya_client_model::payment::*;
-use ya_core_model::payment::local::{GetAccounts, SchedulePayment, BUS_ID as LOCAL_SERVICE};
+use ya_core_model::payment::local::{
+    GetAccounts, SchedulePayment, ValidateAllocation, ValidateAllocationError,
+    BUS_ID as LOCAL_SERVICE,
+};
 use ya_core_model::payment::public::{
     AcceptDebitNote, AcceptInvoice, AcceptRejectError, BUS_ID as PUBLIC_SERVICE,
 };
@@ -365,12 +369,33 @@ async fn create_allocation(
     id: Identity,
 ) -> HttpResponse {
     // TODO: Handle deposits & timeouts
-    // TODO: Check available funds
     let allocation = body.into_inner();
     let node_id = id.identity;
+    let payment_platform = allocation
+        .payment_platform
+        .clone()
+        .unwrap_or(DEFAULT_PAYMENT_PLATFORM.to_string());
+    let address = allocation.address.clone().unwrap_or(node_id.to_string());
+
+    let validate_msg = ValidateAllocation {
+        platform: payment_platform.clone(),
+        address: address.clone(),
+        amount: allocation.total_amount.clone(),
+    };
+    match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
+        Ok(true) => {}
+        Ok(false) => return response::bad_request(&"Insufficient funds to make allocation"),
+        Err(Error::Rpc(RpcMessageError::ValidateAllocation(
+            ValidateAllocationError::AccountNotRegistered,
+        ))) => return response::bad_request(&"Account not registered"),
+        Err(e) => return response::server_error(&e),
+    }
+
     let dao: AllocationDao = db.as_dao();
     match async move {
-        let allocation_id = dao.create(allocation, node_id).await?;
+        let allocation_id = dao
+            .create(allocation, node_id, payment_platform, address)
+            .await?;
         Ok(dao.get(allocation_id, node_id).await?)
     }
     .await

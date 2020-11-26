@@ -1,21 +1,31 @@
 use chrono::NaiveDateTime;
 use derive_more::Display;
-use diesel::backend::Backend;
-use diesel::deserialize::{FromSql, Result as DeserializeResult};
-use diesel::serialize::{Output, Result as SerializeResult, ToSql};
 use diesel::sql_types::Text;
 use digest::Digest;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use sha3::Sha3_256;
-use std::io::Write;
 use std::str::FromStr;
 use thiserror::Error;
 
-use ya_client::model::ErrorMessage;
+use ya_diesel_utils::DbTextField;
 
 use crate::db::model::SubscriptionId;
 
-#[derive(Display, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[derive(
+    DbTextField,
+    Display,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    AsExpression,
+    FromSqlRow,
+    Eq,
+    Serialize,
+    Deserialize,
+    Hash,
+)]
+#[sql_type = "Text"]
 pub enum OwnerType {
     #[display(fmt = "P")]
     Provider,
@@ -41,7 +51,7 @@ pub enum ProposalIdParseError {
 #[error("Proposal id [{0}] has unexpected hash [{1}].")]
 pub struct ProposalIdValidationError(ProposalId, String);
 
-#[derive(Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq)]
+#[derive(DbTextField, Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq)]
 #[display(fmt = "{}-{}", owner, id)]
 #[sql_type = "Text"]
 pub struct ProposalId {
@@ -138,43 +148,24 @@ impl FromStr for ProposalId {
             Err(ProposalIdParseError::InvalidFormat(s.to_string()))?;
         }
 
-        if elements[0].len() != 1 {
-            Err(ProposalIdParseError::InvalidOwnerType(s.to_string()))?;
-        }
-
-        let owner = match elements[0].chars().nth(0).unwrap() {
-            'P' => OwnerType::Provider,
-            'R' => OwnerType::Requestor,
-            _ => Err(ProposalIdParseError::InvalidOwnerType(s.to_string()))?,
-        };
-
+        let owner = OwnerType::from_str(elements[0])?;
         ProposalId::from_client(elements[1], owner)
     }
 }
 
-impl From<ProposalIdParseError> for ErrorMessage {
-    fn from(e: ProposalIdParseError) -> Self {
-        ErrorMessage::new(e.to_string())
-    }
-}
+impl FromStr for OwnerType {
+    type Err = ProposalIdParseError;
 
-impl<DB> ToSql<Text, DB> for ProposalId
-where
-    DB: Backend,
-    String: ToSql<Text, DB>,
-{
-    fn to_sql<W: Write>(&self, out: &mut Output<W, DB>) -> SerializeResult {
-        self.to_string().to_sql(out)
-    }
-}
+    fn from_str(s: &str) -> Result<OwnerType, Self::Err> {
+        if s.len() != 1 {
+            Err(ProposalIdParseError::InvalidOwnerType(s.to_string()))?;
+        }
 
-impl<DB> FromSql<Text, DB> for ProposalId
-where
-    DB: Backend,
-    String: FromSql<Text, DB>,
-{
-    fn from_sql(bytes: Option<&DB::RawValue>) -> DeserializeResult<Self> {
-        Ok(String::from_sql(bytes)?.parse()?)
+        Ok(match s.chars().nth(0).unwrap() {
+            'P' => OwnerType::Provider,
+            'R' => OwnerType::Requestor,
+            _ => Err(ProposalIdParseError::InvalidOwnerType(s.to_string()))?,
+        })
     }
 }
 

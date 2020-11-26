@@ -5,3 +5,10 @@ rustflags = ["-C", "target-feature=+crt-static"]
 [cargo-new]
 name = "Golem Factory"
 email = "contact@golem.network"
+
+[profile.release]
+lto="fat"
+opt-level=3
+codegen-units=1
+
+

@@ -1,6 +1,6 @@
 use ya_agreement_utils::AgreementView;
 use ya_agreement_utils::OfferDefinition;
-use ya_client_model::market::{DemandOfferBase, Proposal};
+use ya_client_model::market::{NewOffer, Proposal};
 
 use anyhow::Result;
 use derive_more::Display;
@@ -13,7 +13,7 @@ use crate::task_state::BreakReason;
 pub enum ProposalResponse {
     #[display(fmt = "CounterProposal")]
     CounterProposal {
-        offer: DemandOfferBase,
+        offer: NewOffer,
     },
     AcceptProposal,
     #[display(
@@ -54,7 +54,7 @@ pub enum AgreementResult {
 pub trait Negotiator {
     /// Negotiator can modify offer, that was generated for him. He can save
     /// information about this offer, that are necessary for negotiations.
-    fn create_offer(&mut self, node_info: &OfferDefinition) -> Result<DemandOfferBase>;
+    fn create_offer(&mut self, node_info: &OfferDefinition) -> Result<NewOffer>;
 
     /// Agreement notifications. Negotiator can adjust his strategy based on it.
     fn agreement_finalized(&mut self, agreement_id: &str, result: AgreementResult) -> Result<()>;
@@ -62,7 +62,7 @@ pub trait Negotiator {
     /// Reactions to events from market. These function make market decisions.
     fn react_to_proposal(
         &mut self,
-        offer: &DemandOfferBase,
+        offer: &NewOffer,
         demand: &Proposal,
     ) -> Result<ProposalResponse>;
     fn react_to_agreement(&mut self, agreement: &AgreementView) -> Result<AgreementResponse>;

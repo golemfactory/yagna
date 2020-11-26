@@ -31,7 +31,8 @@ mod local {
             .bind_with_processor(notify_payment)
             .bind_with_processor(get_status)
             .bind_with_processor(get_invoice_stats)
-            .bind_with_processor(get_accounts);
+            .bind_with_processor(get_accounts)
+            .bind_with_processor(validate_allocation);
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
         // until first change to value will be made.
@@ -198,6 +199,17 @@ mod local {
             );
         }
         Ok(output_stats)
+    }
+
+    async fn validate_allocation(
+        db: DbExecutor,
+        processor: PaymentProcessor,
+        sender: String,
+        msg: ValidateAllocation,
+    ) -> Result<bool, ValidateAllocationError> {
+        Ok(processor
+            .validate_allocation(msg.platform, msg.address, msg.amount)
+            .await?)
     }
 }
 
