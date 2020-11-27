@@ -413,6 +413,8 @@ impl Handler<BreakAgreement> for TaskManager {
                 actx.payments.send(msg.clone()).await??;
 
                 finish_transition(&actx.myself, &msg.agreement_id, new_state).await?;
+
+                log::info!("Agreement [{}] cleanup finished.", msg.agreement_id);
                 Ok(())
             }
             .await;
@@ -447,6 +449,7 @@ impl Handler<CloseAgreement> for TaskManager {
 
             finish_transition(&actx.myself, &msg.agreement_id, AgreementState::Closed).await?;
 
+            log::info!("Agreement [{}] cleanup finished.", msg.agreement_id);
             Ok(())
         }
         .map_err(move |error: Error| log::error!("Can't close agreement. Error: {}", error));
