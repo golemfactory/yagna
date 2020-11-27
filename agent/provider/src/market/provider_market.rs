@@ -653,8 +653,8 @@ impl Handler<OnAgreementTerminated> for ProviderMarket {
             .unwrap_or("Not specified.".to_string());
 
         log::info!(
-            "Requestor terminated agreement [{}]. Reason: {}",
-            id,
+            "Agreement [{}] terminated by Requestor. Reason: {}",
+            &id,
             reason
         );
 
@@ -768,7 +768,7 @@ async fn terminate_agreement(api: Arc<MarketProviderApi>, msg: AgreementFinalize
         tokio::time::delay_for(delay).await;
     }
 
-    log::info!("Agreement [{}] terminated successfully.", &id);
+    log::info!("Agreement [{}] terminated by Provider.", &id);
 }
 
 async fn resubscribe_offers(
