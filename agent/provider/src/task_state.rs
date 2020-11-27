@@ -1,15 +1,20 @@
 use anyhow::{anyhow, Result};
+use chrono::{DateTime, Utc};
 use derive_more::Display;
 use std::collections::HashMap;
 use std::fmt;
+use std::time::Duration;
 use thiserror;
 use tokio::sync::watch;
 
 #[derive(Display, Debug, Clone, PartialEq)]
 pub enum BreakReason {
+    #[display(fmt = "Agreement initialization error: {}", error)]
     InitializationError { error: String },
-    Expired,
-    NoActivity,
+    #[display(fmt = "Agreement expired @ {}", _0)]
+    Expired(DateTime<Utc>),
+    #[display(fmt = "No activity created within {:?} from Agreement Approval", _0)]
+    NoActivity(Duration),
 }
 
 // =========================================== //
@@ -46,6 +51,7 @@ pub enum AgreementState {
     /// Requestor closed agreement satisfied.
     Closed,
     /// Provider broke agreement.
+    #[display(fmt = "Broken (reason = {})", reason)]
     Broken { reason: BreakReason },
 }
 
@@ -206,12 +212,12 @@ impl TasksStates {
         }
     }
 
-    /// Agreement is finalized or is during finalizing.
-    pub fn is_agreement_computing(&self, agreement_id: &str) -> bool {
+    /// No Activity has been created for this Agreement
+    pub fn not_active(&self, agreement_id: &str) -> bool {
         if let Ok(task_state) = self.get_state(agreement_id) {
             match task_state.state {
-                Transition(AgreementState::Computing, _) => true,
-                Transition(_, Some(AgreementState::Computing)) => true,
+                Transition(AgreementState::New, _) => true,
+                Transition(AgreementState::Initialized, None) => true,
                 _ => false,
             }
         } else {
@@ -289,5 +295,37 @@ impl fmt::Display for Transition {
             Some(state) => write!(f, "({}, {})", self.0, state),
             None => write!(f, "({}, None)", self.0),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::task_state::{AgreementState, BreakReason};
+
+    #[test]
+    #[ignore]
+    fn test_state_broken_display() {
+        println!(
+            "{}",
+            AgreementState::Broken {
+                reason: BreakReason::NoActivity(chrono::Duration::seconds(17).to_std().unwrap())
+            }
+        );
+
+        println!(
+            "{}",
+            AgreementState::Broken {
+                reason: BreakReason::Expired(chrono::Utc::now())
+            }
+        );
+
+        println!(
+            "{}",
+            AgreementState::Broken {
+                reason: BreakReason::InitializationError {
+                    error: "some err".to_string()
+                }
+            }
+        )
     }
 }
