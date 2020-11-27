@@ -9,6 +9,7 @@ use tokio::sync::watch;
 pub enum BreakReason {
     InitializationError { error: String },
     Expired,
+    NoActivity,
 }
 
 // =========================================== //
@@ -198,6 +199,19 @@ impl TasksStates {
                 Transition(_, Some(AgreementState::Closed)) => true,
                 Transition(AgreementState::Broken { .. }, _) => true,
                 Transition(_, Some(AgreementState::Broken { .. })) => true,
+                _ => false,
+            }
+        } else {
+            false
+        }
+    }
+
+    /// Agreement is finalized or is during finalizing.
+    pub fn is_agreement_computing(&self, agreement_id: &str) -> bool {
+        if let Ok(task_state) = self.get_state(agreement_id) {
+            match task_state.state {
+                Transition(AgreementState::Computing, _) => true,
+                Transition(_, Some(AgreementState::Computing)) => true,
                 _ => false,
             }
         } else {

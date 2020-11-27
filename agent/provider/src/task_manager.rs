@@ -1,6 +1,6 @@
 use actix::prelude::*;
 use anyhow::{anyhow, bail, Error, Result};
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Duration, TimeZone, Utc};
 use futures::future::TryFutureExt;
 
 use ya_agreement_utils::AgreementView;
@@ -142,16 +142,30 @@ impl TaskManager {
 
         // Schedule agreement termination after expiration time.
         let duration = (expiration - Utc::now()).to_std()?;
+        let agr_id = agreement_id.clone();
         ctx.run_later(duration, move |myself, ctx| {
-            if !myself.tasks.is_agreement_finalized(&agreement_id) {
+            if !myself.tasks.is_agreement_finalized(&agr_id) {
+                log::warn!("Agreement [{}] expired @ {}. Breaking", agr_id, expiration);
+                let msg = BreakAgreement {
+                    agreement_id: agr_id,
+                    reason: BreakReason::Expired,
+                };
+                ctx.address().do_send(msg);
+            }
+        });
+
+        // Schedule agreement termination when there is no activity created within 90s.
+        let s90 = Duration::seconds(90).to_std()?;
+        ctx.run_later(s90.clone(), move |myself, ctx| {
+            if !myself.tasks.is_agreement_computing(&agreement_id) {
                 log::warn!(
-                    "Agreement [{}] expired @ {}. Breaking",
+                    "No activity for Agreement [{}] after {:?}. Breaking",
                     agreement_id,
-                    expiration
+                    s90
                 );
                 let msg = BreakAgreement {
-                    agreement_id: agreement_id.clone(),
-                    reason: BreakReason::Expired,
+                    agreement_id,
+                    reason: BreakReason::NoActivity,
                 };
                 ctx.address().do_send(msg);
             }
