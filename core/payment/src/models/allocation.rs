@@ -1,5 +1,4 @@
 use crate::schema::pay_allocation;
-use crate::DEFAULT_PAYMENT_PLATFORM;
 use chrono::{NaiveDateTime, TimeZone, Utc};
 use uuid::Uuid;
 use ya_client_model::payment::{Allocation, NewAllocation};
@@ -22,14 +21,17 @@ pub struct WriteObj {
 }
 
 impl WriteObj {
-    pub fn new(allocation: NewAllocation, owner_id: NodeId) -> Self {
+    pub fn new(
+        allocation: NewAllocation,
+        owner_id: NodeId,
+        payment_platform: String,
+        address: String,
+    ) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             owner_id,
-            payment_platform: allocation
-                .payment_platform
-                .unwrap_or(DEFAULT_PAYMENT_PLATFORM.to_string()),
-            address: allocation.address.unwrap_or(owner_id.to_string()),
+            payment_platform,
+            address,
             total_amount: allocation.total_amount.clone().into(),
             spent_amount: Default::default(),
             remaining_amount: allocation.total_amount.into(),

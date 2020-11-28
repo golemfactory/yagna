@@ -1,6 +1,6 @@
 use ya_agreement_utils::AgreementView;
 use ya_agreement_utils::OfferDefinition;
-use ya_client_model::market::{Offer, Proposal};
+use ya_client_model::market::{NewOffer, Proposal};
 
 use anyhow::Result;
 use derive_more::Display;
@@ -13,10 +13,16 @@ use crate::task_state::BreakReason;
 pub enum ProposalResponse {
     #[display(fmt = "CounterProposal")]
     CounterProposal {
-        offer: Proposal,
+        offer: NewOffer,
     },
     AcceptProposal,
-    RejectProposal,
+    #[display(
+        fmt = "RejectProposal{}",
+        "reason.as_ref().map(|r| format!(\" (reason: {})\", r)).unwrap_or(\"\".into())"
+    )]
+    RejectProposal {
+        reason: Option<String>,
+    },
     ///< Don't send any message to requestor. Could be useful to wait for other offers.
     IgnoreProposal,
 }
@@ -26,7 +32,13 @@ pub enum ProposalResponse {
 #[allow(dead_code)]
 pub enum AgreementResponse {
     ApproveAgreement,
-    RejectAgreement,
+    #[display(
+        fmt = "RejectAgreement{}",
+        "reason.as_ref().map(|r| format!(\" (reason: {})\", r)).unwrap_or(\"\".into())"
+    )]
+    RejectAgreement {
+        reason: Option<String>,
+    },
 }
 
 /// Result of agreement execution.
@@ -42,12 +54,43 @@ pub enum AgreementResult {
 pub trait Negotiator {
     /// Negotiator can modify offer, that was generated for him. He can save
     /// information about this offer, that are necessary for negotiations.
-    fn create_offer(&mut self, node_info: &OfferDefinition) -> Result<Offer>;
+    fn create_offer(&mut self, node_info: &OfferDefinition) -> Result<NewOffer>;
 
     /// Agreement notifications. Negotiator can adjust his strategy based on it.
     fn agreement_finalized(&mut self, agreement_id: &str, result: AgreementResult) -> Result<()>;
 
     /// Reactions to events from market. These function make market decisions.
-    fn react_to_proposal(&mut self, offer: &Offer, demand: &Proposal) -> Result<ProposalResponse>;
+    fn react_to_proposal(
+        &mut self,
+        offer: &NewOffer,
+        demand: &Proposal,
+    ) -> Result<ProposalResponse>;
     fn react_to_agreement(&mut self, agreement: &AgreementView) -> Result<AgreementResponse>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_proposal_response_display() {
+        let reason = ProposalResponse::RejectProposal {
+            reason: Some("zima".into()),
+        };
+        let no_reason = ProposalResponse::RejectProposal { reason: None };
+
+        assert_eq!(reason.to_string(), "RejectProposal (reason: zima)");
+        assert_eq!(no_reason.to_string(), "RejectProposal");
+    }
+
+    #[test]
+    fn test_agreement_response_display() {
+        let reason = AgreementResponse::RejectAgreement {
+            reason: Some("lato".into()),
+        };
+        let no_reason = AgreementResponse::RejectAgreement { reason: None };
+
+        assert_eq!(reason.to_string(), "RejectAgreement (reason: lato)");
+        assert_eq!(no_reason.to_string(), "RejectAgreement");
+    }
 }

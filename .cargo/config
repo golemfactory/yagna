@@ -1,7 +1,0 @@
-[build]
-rustflags = ["-C", "target-feature=+crt-static"]
-
-
-[cargo-new]
-name = "Golem Factory"
-email = "contact@golem.network"

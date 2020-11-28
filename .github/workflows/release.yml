@@ -3,6 +3,7 @@ on:
   push:
     tags:
       - v*
+      - pre-rel-*
 
 jobs:
   create-release:
@@ -10,11 +11,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Create Release
-        uses: actions/github-script@0.9.0
+        uses: actions/github-script@v3.0
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
             let tag = context.payload.ref.replace(/.*\//, '');
+            let buildNo = context.runNumber;
+            let versionName = tag.replace(/^pre-rel-/,'');
             try {
               let release =  await github.request("GET /repos/:owner/:repo/releases/tags/:tag", {
                 owner: context.repo.owner,
@@ -23,12 +26,18 @@ jobs:
               });
             }
             catch(e) {
+              let body = ["By installing & running this software you declare that you have read",
+                "understood and hereby accept the disclaimer and",
+                "privacy warning found at https://handbook.golem.network/see-also/terms"].join("\n");
+
               let release =  await github.request("POST /repos/:owner/:repo/releases", {
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 data: {
                   tag_name: tag,
-                  prerelease: true
+                  prerelease: true,
+                  body: body,
+                  name: `${versionName} #${buildNo}`
                 }
               });
               console.log(release.data.upload_url);
@@ -38,15 +47,17 @@ jobs:
     needs: create-release
     runs-on: ${{ matrix.os }}-latest
     strategy:
+      fail-fast: true
       matrix:
         os:
           - ubuntu
           - windows
           - macos
+
     env:
       X86_64_PC_WINDOWS_MSVC_OPENSSL_DIR: c:/vcpkg/installed/x64-windows-static
+      MACOSX_DEPLOYMENT_TARGET: 10.13
       OPENSSL_STATIC: 1
-
     steps:
       - uses: actions/checkout@v1
       - name: Musl
@@ -87,6 +98,9 @@ jobs:
         run: |
           cargo build --release --features static-openssl
           cargo build --bin gftp -p gftp --release
+          cargo build --bin golemsp -p golemsp --release
+          cargo build --bin ya-provider -p ya-provider --release
+          cargo build --bin exe-unit -p ya-exe-unit --release --features openssl/vendored
       - name: Build windows
         if: matrix.os == 'windows'
         run: |
@@ -95,11 +109,18 @@ jobs:
 
           cargo build --release
           cargo build --bin gftp -p gftp --release
+          cargo build --bin golemsp -p golemsp --release
+          cargo build --bin ya-provider -p ya-provider --release
+          cargo build --bin exe-unit -p ya-exe-unit --release
+
       - name: Build linux
         if: matrix.os == 'ubuntu'
         run: |
           cargo build --release --features openssl/vendored --target x86_64-unknown-linux-musl
-          cargo build --bin gftp -p gftp --release --target x86_64-unknown-linux-musl
+          (cd core/gftp && cargo build --bin gftp -p gftp --features bin --release --target x86_64-unknown-linux-musl)
+          (cd golem_cli && cargo build --bin golemsp -p golemsp --release --target x86_64-unknown-linux-musl)
+          (cd agent/provider && cargo build --bin ya-provider -p ya-provider --release --target x86_64-unknown-linux-musl)
+          (cd exe-unit && cargo build --bin exe-unit -p ya-exe-unit --release --features openssl/vendored --target x86_64-unknown-linux-musl)
       - name: Pack
         id: pack
         shell: bash
@@ -107,44 +128,84 @@ jobs:
           OS_NAME: ${{ matrix.os }}
           GITHUB_REF: ${{ github.ref }}
         run: |
-          TAG_NAME="${GITHUB_REF##*/}"
-          target=
-          if [ "$OS_NAME" = "ubuntu" ]; then
-            OS_NAME=linux
-            target=x86_64-unknown-linux-musl/
-          elif [ "$OS_NAME" == "macos" ]; then
-            OS_NAME=osx
-          fi
-          TARGET_DIR=releases/golem-${OS_NAME}-${TAG_NAME}
-          mkdir -p "$TARGET_DIR"
-          if [ "$OS_NAME" = "windows" ]; then
-              cp target/release/yagna.exe target/release/gftp.exe "$TARGET_DIR/"
-              strip "$TARGET_DIR/yagna.exe"
-              strip "$TARGET_DIR/gftp.exe"
-          else
-              cp target/${target}release/yagna target/${target}release/gftp "$TARGET_DIR/"
-              strip "$TARGET_DIR/yagna"
-              strip "$TARGET_DIR/gftp"
-          fi
-          ls -al "$TARGET_DIR"
-          if [ "$OS_NAME" = "windows" ]; then
-              echo "::set-output name=artifact::golem-${OS_NAME}-${TAG_NAME}.zip"
-              echo "::set-output name=media::application/zip"
-              (cd "$TARGET_DIR" && 7z a "../golem-${OS_NAME}-${TAG_NAME}.zip" * )
-          else
-              echo "::set-output name=artifact::golem-${OS_NAME}-${TAG_NAME}.tar.gz"
-              echo "::set-output name=media::application/tar+gzip"
-              (cd releases && tar czvf "golem-${OS_NAME}-${TAG_NAME}.tar.gz" "golem-${OS_NAME}-${TAG_NAME}")
-          fi
-      - name: Upload Release Asset
-        id: upload-release-asset
+          bash .ci/pack-build.sh
+      - name: Upload Release Asset [Requestor]
+        id: upload-release-asset-req
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.release_upload_url.outputs.result }}
-          asset_path: ./releases/${{ steps.pack.outputs.artifact }}
-          asset_name: ${{ steps.pack.outputs.artifact }}
-          asset_content_type: ${{ steps.pack.outputs.media }}
+          asset_path: ./releases/${{ steps.pack.outputs.requestorArtifact }}
+          asset_name: ${{ steps.pack.outputs.requestorArtifact }}
+          asset_content_type: ${{ steps.pack.outputs.requestorMedia }}
+      - name: Upload Release Asset [Provider]
+        id: upload-release-asset-prov
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.release_upload_url.outputs.result }}
+          asset_path: ./releases/${{ steps.pack.outputs.providerArtifact }}
+          asset_name: ${{ steps.pack.outputs.providerArtifact }}
+          asset_content_type: ${{ steps.pack.outputs.providerMedia }}
+  build-deb:
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get upload url
+        id: release_upload_url
+        uses: actions/github-script@0.9.0
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          result-encoding: string
+          script: |
+            let tag = context.payload.ref.replace(/.*\//, '');
+            let release =  await github.request("GET /repos/:owner/:repo/releases/tags/:tag", {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag: tag
+            });
+            console.log(release.data.upload_url);
+            return release.data.upload_url
 
-
+      - name: Check out repository
+        uses: actions/checkout@v2
+      - name: Extract Version
+        id: version
+        shell: bash
+        env:
+          OS_NAME: ${{ matrix.os }}
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          TAG_NAME="${GITHUB_REF##*/}"
+          TAGV_NAME="${TAG_NAME#pre-rel-}"
+          VERSION=${TAGV_NAME#v}
+          echo "::set-output name=tagv::${TAG_NAME}"
+          echo "::set-output name=version::${VERSION}"
+      - uses: golemfactory/build-deb-action@main
+        id: deb
+        with:
+          debVersion: ${{ steps.version.outputs.version }}
+          variants: default provider
+          pkgName: golem
+      - name: Upload Release Deb [Core]
+        id: upload-release-asset-core
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.release_upload_url.outputs.result }}
+          asset_path: ${{ steps.deb.outputs.deb }}
+          asset_name: golem-requestor_${{ steps.version.outputs.tagv }}_amd64.deb
+          asset_content_type: application/vnd.debian.binary-package
+      - name: Upload Release Deb [Prov]
+        id: upload-release-asset-prov
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.release_upload_url.outputs.result }}
+          asset_path: ${{ steps.deb.outputs.deb_provider }}
+          asset_name: golem-provider_${{ steps.version.outputs.tagv }}_amd64.deb
+          asset_content_type: application/vnd.debian.binary-package

@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use crate::error::Error;
 use crate::message::{GetMetrics, Shutdown};
 use crate::metrics::error::MetricError;
@@ -22,42 +24,11 @@ impl MetricsService {
         backlog_limit: Option<usize>,
         supervise_caps: bool,
     ) -> Result<Self, MetricError> {
-        let caps = move |ctx: &ExeUnitContext, id| match supervise_caps {
+        let caps = move |ctx: &ExeUnitContext, id: &str| match supervise_caps {
             true => ctx.agreement.usage_limits.get(id).cloned(),
             _ => None,
         };
-        let metrics: HashMap<String, MetricProvider> = vec![
-            (
-                CpuMetric::ID.to_string(),
-                MetricProvider::new(
-                    CpuMetric::default(),
-                    backlog_limit.clone(),
-                    caps(ctx, CpuMetric::ID),
-                ),
-            ),
-            (
-                MemMetric::ID.to_string(),
-                MetricProvider::new(
-                    MemMetric::default(),
-                    backlog_limit.clone(),
-                    caps(ctx, MemMetric::ID),
-                ),
-            ),
-            (
-                StorageMetric::ID.to_string(),
-                MetricProvider::new(
-                    StorageMetric::new(ctx.work_dir.clone(), Duration::from_secs(60 * 5)),
-                    backlog_limit.clone(),
-                    caps(ctx, StorageMetric::ID),
-                ),
-            ),
-            (
-                TimeMetric::ID.to_string(),
-                MetricProvider::new(TimeMetric::default(), Some(1), caps(ctx, TimeMetric::ID)),
-            ),
-        ]
-        .into_iter()
-        .collect();
+        let metrics = Self::metrics(&ctx, backlog_limit, caps);
 
         if let Some(e) = ctx
             .agreement
@@ -72,6 +43,75 @@ impl MetricsService {
             usage_vector: ctx.agreement.usage_vector.clone(),
             metrics,
         })
+    }
+
+    #[cfg(feature = "sgx")]
+    pub fn usage_vector() -> Vec<String> {
+        vec![TimeMetric::ID.to_string()]
+    }
+
+    #[cfg(feature = "sgx")]
+    fn metrics<F: Fn(&ExeUnitContext, &str) -> Option<f64>>(
+        ctx: &ExeUnitContext,
+        backlog_limit: Option<usize>,
+        caps: F,
+    ) -> HashMap<String, MetricProvider> {
+        vec![(
+            TimeMetric::ID.to_string(),
+            MetricProvider::new(TimeMetric::default(), Some(1), caps(ctx, TimeMetric::ID)),
+        )]
+        .into_iter()
+        .collect()
+    }
+
+    #[cfg(not(feature = "sgx"))]
+    pub fn usage_vector() -> Vec<String> {
+        vec![
+            TimeMetric::ID.to_string(),
+            CpuMetric::ID.to_string(),
+            MemMetric::ID.to_string(),
+            StorageMetric::ID.to_string(),
+        ]
+    }
+
+    #[cfg(not(feature = "sgx"))]
+    fn metrics<F: Fn(&ExeUnitContext, &str) -> Option<f64>>(
+        ctx: &ExeUnitContext,
+        backlog_limit: Option<usize>,
+        caps: F,
+    ) -> HashMap<String, MetricProvider> {
+        vec![
+            (
+                CpuMetric::ID.to_string(),
+                MetricProvider::new(
+                    CpuMetric::default(),
+                    backlog_limit,
+                    caps(ctx, CpuMetric::ID),
+                ),
+            ),
+            (
+                MemMetric::ID.to_string(),
+                MetricProvider::new(
+                    MemMetric::default(),
+                    backlog_limit,
+                    caps(ctx, MemMetric::ID),
+                ),
+            ),
+            (
+                StorageMetric::ID.to_string(),
+                MetricProvider::new(
+                    StorageMetric::new(ctx.work_dir.clone(), Duration::from_secs(60 * 5)),
+                    backlog_limit,
+                    caps(ctx, StorageMetric::ID),
+                ),
+            ),
+            (
+                TimeMetric::ID.to_string(),
+                MetricProvider::new(TimeMetric::default(), Some(1), caps(ctx, TimeMetric::ID)),
+            ),
+        ]
+        .into_iter()
+        .collect()
     }
 }
 
@@ -92,9 +132,9 @@ impl Handler<GetMetrics> for MetricsService {
     type Result = <GetMetrics as Message>::Result;
 
     fn handle(&mut self, _: GetMetrics, _: &mut Self::Context) -> Self::Result {
-        let mut metrics = Vec::with_capacity(self.usage_vector.len());
+        let mut metrics = vec![0f64; self.usage_vector.len()];
 
-        for name in self.usage_vector.iter() {
+        for (i, name) in self.usage_vector.iter().enumerate() {
             let metric = self
                 .metrics
                 .get_mut(name)
@@ -104,7 +144,7 @@ impl Handler<GetMetrics> for MetricsService {
             metric.log_report(report.clone());
 
             match report {
-                MetricReport::Frame(data) => metrics.push(data),
+                MetricReport::Frame(data) => metrics[i] = data,
                 MetricReport::Error(error) => return Err(error.into()),
                 MetricReport::LimitExceeded(data) => {
                     return Err(Error::UsageLimitExceeded(format!(
@@ -115,7 +155,7 @@ impl Handler<GetMetrics> for MetricsService {
             }
         }
 
-        Ok(metrics)
+        Ok::<_, Error>(metrics)
     }
 }
 

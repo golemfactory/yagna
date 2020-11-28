@@ -10,6 +10,7 @@ use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 
 use crate::dao::Result;
 use crate::db::{models::ActivityEventType, schema};
+use ya_client_model::NodeId;
 
 pub const MAX_EVENTS: u32 = 100;
 
@@ -19,6 +20,7 @@ pub struct Event {
     pub event_type: ActivityEventType,
     pub activity_natural_id: String,
     pub agreement_natural_id: String,
+    pub requestor_pub_key: Option<Vec<u8>>,
 }
 
 impl From<Event> for ProviderEvent {
@@ -27,6 +29,7 @@ impl From<Event> for ProviderEvent {
             ActivityEventType::CreateActivity => ProviderEvent::CreateActivity {
                 activity_id: value.activity_natural_id,
                 agreement_id: value.agreement_natural_id,
+                requestor_pub_key: value.requestor_pub_key.map(hex::encode),
             },
             ActivityEventType::DestroyActivity => ProviderEvent::DestroyActivity {
                 activity_id: value.activity_natural_id,
@@ -50,8 +53,9 @@ impl<'c> EventDao<'c> {
     pub async fn create(
         &self,
         activity_id: &str,
-        identity_id: &str,
+        identity_id: &NodeId,
         event_type: ActivityEventType,
+        requestor_pub_key: Option<Vec<u8>>,
     ) -> Result<i32> {
         use schema::activity::dsl;
         use schema::activity_event::dsl as dsl_event;
@@ -71,6 +75,7 @@ impl<'c> EventDao<'c> {
                             identity_id.clone().into_sql::<Text>(),
                             now.into_sql::<Timestamp>(),
                             event_type.into_sql::<Integer>(),
+                            requestor_pub_key.into_sql(),
                         ))
                         .filter(dsl::natural_id.eq(activity_id))
                         .limit(1),
@@ -80,6 +85,7 @@ impl<'c> EventDao<'c> {
                     dsl_event::identity_id,
                     dsl_event::event_date,
                     dsl_event::event_type_id,
+                    dsl_event::requestor_pub_key,
                 ))
                 .execute(conn)?;
 
@@ -116,6 +122,7 @@ impl<'c> EventDao<'c> {
                     dsl_event::event_type_id,
                     dsl::natural_id,
                     dsl::agreement_id,
+                    dsl_event::requestor_pub_key,
                 ))
                 .order(dsl_event::event_date.asc())
                 .limit(limit as i64)

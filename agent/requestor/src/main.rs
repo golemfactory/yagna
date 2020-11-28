@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 use structopt::{clap, StructOpt};
 
 use std::convert::TryFrom;
+use ya_client::model::payment::Account;
 use ya_client::{cli::ApiOpts, cli::RequestorApi, Error};
 
 mod activity;
@@ -15,14 +16,15 @@ mod market;
 mod payment;
 
 const DEFAULT_NODE_NAME: &str = "test1";
-const DEFAULT_TASK_PACKAGE: &str = "hash://sha3:38D951E2BD2408D95D8D5E5068A69C60C8238FA45DB8BC841DC0BD50:http://3.249.139.167:8000/rust-wasi-tutorial.zip";
+const DEFAULT_TASK_PACKAGE: &str =
+    "hash://sha3:d5e31b2eed628572a5898bf8c34447644bfc4b5130cfc1e4f10aeaa1:http://3.249.139.167:8000/rust-wasi-tutorial.zip";
 
 #[derive(StructOpt)]
 #[structopt(rename_all = "kebab-case")]
 #[structopt(about = clap::crate_description!())]
 #[structopt(setting = clap::AppSettings::ColoredHelp)]
 #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
-#[structopt(version = ya_compile_time_utils::crate_version_commit!())]
+#[structopt(version = ya_compile_time_utils::version_describe!())]
 struct AppSettings {
     #[structopt(flatten)]
     api: ApiOpts,
@@ -172,12 +174,18 @@ async fn main() -> anyhow::Result<()> {
 
     let activities = Arc::new(Mutex::new(HashSet::new()));
     let agreement_allocation = Arc::new(Mutex::new(HashMap::new()));
+
+    log::info!("Loading payment accounts...");
+    let accounts: Vec<Account> = api.payment.get_accounts().await?;
+    log::info!("Payment accounts: {:#?}", accounts);
+
     let my_demand = market::build_demand(
         &settings.node_name,
         &settings.runtime,
         &settings.task_package,
         chrono::Duration::from_std(*settings.task_expiration)?,
         &settings.subnet,
+        accounts,
     );
 
     log::debug!(

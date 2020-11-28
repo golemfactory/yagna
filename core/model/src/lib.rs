@@ -6,7 +6,8 @@ pub mod activity;
 #[cfg(feature = "appkey")]
 pub mod appkey;
 
-#[cfg(feature = "driver")]
+// `payment` won't compile without `driver`
+#[cfg(any(feature = "driver", feature = "payment"))]
 pub mod driver;
 
 #[cfg(feature = "identity")]
@@ -23,3 +24,8 @@ pub mod payment;
 
 #[cfg(feature = "gftp")]
 pub mod gftp;
+
+#[cfg(feature = "sgx")]
+pub mod sgx;
+
+pub use ya_client_model::NodeId;

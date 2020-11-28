@@ -12,10 +12,10 @@ use std::sync::Arc;
 use std::{fs, io};
 use url::{quirks::hostname, Position, Url};
 
-use ya_client_model::NodeId;
 use ya_core_model::gftp as model;
 use ya_core_model::identity;
 use ya_core_model::net::TryRemoteEndpoint;
+use ya_core_model::NodeId;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 pub const DEFAULT_CHUNK_SIZE: u64 = 40 * 1024;

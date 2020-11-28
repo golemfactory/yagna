@@ -1,5 +1,6 @@
 use crate::processor::PaymentProcessor;
 use futures::prelude::*;
+use metrics::counter;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::ServiceBinder;
 
@@ -15,7 +16,10 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
 mod local {
     use super::*;
     use crate::dao::*;
+    use std::collections::BTreeMap;
+    use ya_client_model::payment::DocumentStatus;
     use ya_core_model::payment::local::*;
+    use ya_persistence::types::Role;
 
     pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
         log::debug!("Binding payment local service to service bus");
@@ -26,7 +30,30 @@ mod local {
             .bind_with_processor(unregister_account)
             .bind_with_processor(notify_payment)
             .bind_with_processor(get_status)
-            .bind_with_processor(get_accounts);
+            .bind_with_processor(get_invoice_stats)
+            .bind_with_processor(get_accounts)
+            .bind_with_processor(validate_allocation);
+
+        // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
+        // until first change to value will be made.
+        counter!("payment.invoices.requestor.accepted", 0);
+        counter!("payment.invoices.requestor.received", 0);
+        counter!("payment.invoices.requestor.cancelled", 0);
+        counter!("payment.invoices.requestor.paid", 0);
+        counter!("payment.debit_notes.requestor.accepted", 0);
+        counter!("payment.debit_notes.provider.issued", 0);
+        counter!("payment.debit_notes.provider.sent", 0);
+        counter!("payment.debit_notes.provider.accepted", 0);
+        counter!("payment.invoices.provider.issued", 0);
+        counter!("payment.invoices.provider.sent", 0);
+        counter!("payment.invoices.provider.cancelled", 0);
+        counter!("payment.invoices.provider.paid", 0);
+        counter!("payment.invoices.provider.accepted", 0);
+        counter!("payment.amount.received", 0, "platform" => "NGNT");
+        // TODO: counter!("payment.amount.received", 0, "platform" => "ZKSYNC");
+        counter!("payment.amount.sent", 0, "platform" => "NGNT");
+        // TODO: counter!("payment.amount.sent", 0, "platform" => "ZKSYNC");
+
         log::debug!("Successfully bound payment local service to service bus");
     }
 
@@ -121,6 +148,69 @@ mod local {
             incoming,
         })
     }
+
+    async fn get_invoice_stats(
+        db: DbExecutor,
+        processor: PaymentProcessor,
+        _caller: String,
+        msg: GetInvoiceStats,
+    ) -> Result<InvoiceStats, GenericError> {
+        let stats: BTreeMap<(Role, DocumentStatus), StatValue> = async {
+            db.as_dao::<InvoiceDao>()
+                .last_invoice_stats(msg.node_id, msg.since)
+                .await
+        }
+        .map_err(GenericError::new)
+        .await?;
+        let mut output_stats = InvoiceStats::default();
+
+        fn aggregate(
+            iter: impl Iterator<Item = (DocumentStatus, StatValue)>,
+        ) -> InvoiceStatusNotes {
+            let mut notes = InvoiceStatusNotes::default();
+            for (status, value) in iter {
+                match status {
+                    DocumentStatus::Issued => notes.issued += value,
+                    DocumentStatus::Received => notes.received += value,
+                    DocumentStatus::Accepted => notes.accepted += value,
+                    DocumentStatus::Rejected => notes.rejected += value,
+                    DocumentStatus::Failed => notes.failed += value,
+                    DocumentStatus::Settled => notes.settled += value,
+                    DocumentStatus::Cancelled => notes.cancelled += value,
+                }
+            }
+            notes
+        }
+
+        if msg.provider {
+            output_stats.provider = aggregate(
+                stats
+                    .iter()
+                    .filter(|((role, _), _)| matches!(role, Role::Provider))
+                    .map(|((_, status), value)| (*status, value.clone())),
+            );
+        }
+        if msg.requestor {
+            output_stats.requestor = aggregate(
+                stats
+                    .iter()
+                    .filter(|((role, _), _)| matches!(role, Role::Requestor))
+                    .map(|((_, status), value)| (*status, value.clone())),
+            );
+        }
+        Ok(output_stats)
+    }
+
+    async fn validate_allocation(
+        db: DbExecutor,
+        processor: PaymentProcessor,
+        sender: String,
+        msg: ValidateAllocation,
+    ) -> Result<bool, ValidateAllocationError> {
+        Ok(processor
+            .validate_allocation(msg.platform, msg.address, msg.amount)
+            .await?)
+    }
 }
 
 mod public {
@@ -132,7 +222,6 @@ mod public {
 
     use crate::error::processor::VerifyPaymentError;
     use ya_client_model::payment::*;
-    use ya_client_model::NodeId;
     use ya_core_model::payment::public::*;
     use ya_persistence::types::Role;
 
@@ -178,20 +267,13 @@ mod public {
             Ok(Some(agreement)) => agreement,
         };
 
-        let offeror_id = agreement.offer.provider_id.clone().unwrap(); // FIXME: provider_id shouldn't be an Option
+        let offeror_id = agreement.offer.provider_id.to_string();
         let issuer_id = debit_note.issuer_id.to_string();
         if sender_id != offeror_id || sender_id != issuer_id {
             return Err(SendError::BadRequest("Invalid sender node ID".to_owned()));
         }
 
-        // FIXME: requestor_id should be non-optional NodeId field
-        let node_id: NodeId = agreement
-            .demand
-            .requestor_id
-            .clone()
-            .unwrap()
-            .parse()
-            .unwrap();
+        let node_id = agreement.requestor_id().clone();
         match async move {
             db.as_dao::<AgreementDao>()
                 .create_if_not_exists(agreement, node_id, Role::Requestor)
@@ -202,6 +284,8 @@ mod public {
             db.as_dao::<DebitNoteDao>()
                 .insert_received(debit_note)
                 .await?;
+
+            counter!("payment.debit_notes.received", 1);
             Ok(())
         }
         .await
@@ -252,7 +336,10 @@ mod public {
         }
 
         match dao.accept(debit_note_id, node_id).await {
-            Ok(_) => Ok(Ack {}),
+            Ok(_) => {
+                counter!("payment.debit_notes.provider.accepted", 1);
+                Ok(Ack {})
+            }
             Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e.to_string())),
             Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
         }
@@ -318,20 +405,13 @@ mod public {
             }
         }
 
-        let offeror_id = agreement.offer.provider_id.clone().unwrap(); // FIXME: provider_id shouldn't be an Option
+        let offeror_id = agreement.offer.provider_id.to_string();
         let issuer_id = invoice.issuer_id.to_string();
         if sender_id != offeror_id || sender_id != issuer_id {
             return Err(SendError::BadRequest("Invalid sender node ID".to_owned()));
         }
 
-        // FIXME: requestor_id should be non-optional NodeId field
-        let node_id: NodeId = agreement
-            .demand
-            .requestor_id
-            .clone()
-            .unwrap()
-            .parse()
-            .unwrap();
+        let node_id = agreement.requestor_id().clone();
         match async move {
             db.as_dao::<AgreementDao>()
                 .create_if_not_exists(agreement, node_id, Role::Requestor)
@@ -349,6 +429,8 @@ mod public {
             }
 
             db.as_dao::<InvoiceDao>().insert_received(invoice).await?;
+
+            counter!("payment.invoices.requestor.received", 1);
             Ok(())
         }
         .await
@@ -399,7 +481,10 @@ mod public {
         }
 
         match dao.accept(invoice_id, node_id).await {
-            Ok(_) => Ok(Ack {}),
+            Ok(_) => {
+                counter!("payment.invoices.provider.accepted", 1);
+                Ok(Ack {})
+            }
             Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e.to_string())),
             Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
         }
@@ -442,7 +527,10 @@ mod public {
         }
 
         match dao.cancel(invoice_id, invoice.recipient_id).await {
-            Ok(_) => Ok(Ack {}),
+            Ok(_) => {
+                counter!("payment.invoices.requestor.cancelled", 1);
+                Ok(Ack {})
+            }
             Err(e) => Err(CancelError::ServiceError(e.to_string())),
         }
     }
@@ -460,8 +548,15 @@ mod public {
             return Err(SendError::BadRequest("Invalid payer ID".to_owned()));
         }
 
+        let platform = payment.payment_platform.clone();
+        let amount = payment.amount.clone();
+        let num_paid_invoices = payment.agreement_payments.len() as u64;
         match processor.verify_payment(payment).await {
-            Ok(_) => Ok(Ack {}),
+            Ok(_) => {
+                counter!("payment.amount.received", ya_metrics::utils::cryptocurrency_to_u64(&amount), "platform" => platform);
+                counter!("payment.invoices.provider.paid", num_paid_invoices);
+                Ok(Ack {})
+            }
             Err(e) => match e {
                 VerifyPaymentError::ConfirmationEncoding => {
                     Err(SendError::BadRequest(e.to_string()))

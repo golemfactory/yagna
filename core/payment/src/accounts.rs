@@ -1,4 +1,3 @@
-use crate::DEFAULT_PAYMENT_DRIVER;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::{Path, PathBuf};
@@ -51,9 +50,9 @@ pub async fn init_accounts(data_dir: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Get default node ID from identity service and save it in `ACCOUNT_LIST` file as default payment account.
+/// Get default node ID from identity service and save it in `ACCOUNT_LIST` file as default payment account for every driver.
 /// If `ACCOUNT_LIST` file already exists, do nothing.
-pub async fn save_default_account(data_dir: &Path) -> anyhow::Result<()> {
+pub async fn save_default_account(data_dir: &Path, drivers: Vec<String>) -> anyhow::Result<()> {
     let accounts_path = accounts_path(data_dir);
     if accounts_path.exists() {
         log::debug!("Accounts file {} already exists.", accounts_path.display());
@@ -69,13 +68,16 @@ pub async fn save_default_account(data_dir: &Path) -> anyhow::Result<()> {
         .await??
         .ok_or(anyhow::anyhow!("Default identity not found"))?
         .node_id;
-    let default_account = vec![Account {
-        driver: DEFAULT_PAYMENT_DRIVER.to_string(),
-        address: default_node_id.to_string(),
-        send: false,
-        receive: true,
-    }];
-    let text = serde_json::to_string(&default_account)?;
+    let default_accounts: Vec<Account> = drivers
+        .into_iter()
+        .map(|driver| Account {
+            driver,
+            address: default_node_id.to_string(),
+            send: false,
+            receive: true,
+        })
+        .collect();
+    let text = serde_json::to_string(&default_accounts)?;
     fs::write(accounts_path, text).await?;
     log::debug!("Default payment account saved successfully.");
     Ok(())

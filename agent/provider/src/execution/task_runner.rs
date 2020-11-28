@@ -2,6 +2,7 @@ use actix::prelude::*;
 use anyhow::{anyhow, bail, Error, Result};
 use derive_more::Display;
 use futures::future::join_all;
+use futures::{FutureExt, TryFutureExt};
 use humantime;
 use log_derive::{logfn, logfn_inputs};
 use std::collections::HashMap;
@@ -12,9 +13,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use structopt::StructOpt;
 
-use ya_agreement_utils::AgreementView;
+use ya_agreement_utils::{AgreementView, OfferTemplate};
 use ya_client::activity::ActivityProviderApi;
-use ya_client_model::activity::{ActivityState, ProviderEvent, State, StatePair};
+use ya_client_model::activity::{ActivityState, ProviderEvent, State};
 use ya_core_model::activity;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
@@ -25,6 +26,7 @@ use ya_utils_process::ExeUnitExitStatus;
 use super::exeunits_registry::{ExeUnitDesc, ExeUnitsRegistry};
 use super::task::Task;
 use crate::market::provider_market::AgreementApproved;
+use crate::market::Preset;
 use crate::task_manager::{AgreementBroken, AgreementClosed};
 
 // =========================================== //
@@ -43,6 +45,14 @@ pub struct UpdateActivity;
 pub struct GetExeUnit {
     pub name: String,
 }
+
+#[derive(Message)]
+#[rtype(result = "Result<HashMap<String, OfferTemplate>>")]
+pub struct GetOfferTemplates(pub Vec<Preset>);
+
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+pub struct Shutdown;
 
 // =========================================== //
 // Public signals sent by TaskRunner
@@ -79,6 +89,7 @@ pub struct ActivityDestroyed {
 struct CreateActivity {
     pub activity_id: String,
     pub agreement_id: String,
+    pub requestor_pub_key: Option<String>,
 }
 
 /// Called when we got destroyActivity event.
@@ -228,9 +239,14 @@ impl TaskRunner {
                     ProviderEvent::CreateActivity {
                         activity_id,
                         agreement_id,
+                        requestor_pub_key,
                     } => {
                         myself
-                            .send(CreateActivity::new(activity_id, agreement_id))
+                            .send(CreateActivity::new(
+                                activity_id,
+                                agreement_id,
+                                requestor_pub_key.as_ref(),
+                            ))
                             .await?
                     }
                     ProviderEvent::DestroyActivity {
@@ -268,7 +284,12 @@ impl TaskRunner {
 
         let exeunit_name = exe_unit_name_from(&agreement)?;
 
-        let task = match self.create_task(&exeunit_name, &msg.activity_id, &msg.agreement_id) {
+        let task = match self.create_task(
+            &exeunit_name,
+            &msg.activity_id,
+            &msg.agreement_id,
+            msg.requestor_pub_key.as_ref().map(|s| s.as_str()),
+        ) {
             Ok(task) => task,
             Err(error) => bail!("Error creating activity: {:?}: {}", msg, error),
         };
@@ -295,9 +316,27 @@ impl TaskRunner {
             // If it was brutal termination than ExeUnit probably didn't set state.
             // We must do it instead of him. Repeat until it will succeed.
             match &status {
-                ExeUnitExitStatus::Aborted { .. } | ExeUnitExitStatus::Error { .. } => {
-                    log::warn!("ExeUnit [{}] have not finished cleanly. Setting activity [{}] state to Terminated", exeunit_name, activity_id);
-                    set_activity_terminated(api, &activity_id, state_retry_interval).await;
+                ExeUnitExitStatus::Aborted(exit_status) => {
+                    log::warn!(
+                        "ExeUnit [{}] execution aborted. Setting activity [{}] state to Terminated",
+                        exeunit_name,
+                        activity_id
+                    );
+
+                    let reason = "execution aborted";
+                    let msg = format!("exit code {:?}", exit_status.code());
+                    set_activity_terminated(api, &activity_id, reason, msg, state_retry_interval)
+                        .await;
+                }
+                ExeUnitExitStatus::Error(error) => {
+                    log::warn!(
+                        "ExeUnit [{}] execution failed: {}. Setting activity [{}] state to Terminated",
+                        error, exeunit_name, activity_id
+                    );
+
+                    let reason = "execution error";
+                    set_activity_terminated(api, &activity_id, reason, error, state_retry_interval)
+                        .await;
                 }
                 _ => (),
             }
@@ -323,7 +362,7 @@ impl TaskRunner {
             "ExeUnit process exited with status {}, agreement [{}], activity [{}].",
             msg.status,
             msg.agreement_id,
-            msg.agreement_id
+            msg.activity_id
         );
 
         let destroy_msg = ActivityDestroyed {
@@ -346,12 +385,21 @@ impl TaskRunner {
         Ok(())
     }
 
+    fn offer_template(&self, exeunit_name: &str) -> impl Future<Output = Result<String>> {
+        let working_dir = self.tasks_dir.clone();
+        let args = vec![String::from("offer-template")];
+        self.registry
+            .run_exeunit_with_output(exeunit_name, args, &working_dir)
+            .map_err(|error| error.context(format!("ExeUnit offer-template command failed")))
+    }
+
     #[logfn(Debug, fmt = "Task created: {}")]
     fn create_task(
         &self,
         exeunit_name: &str,
         activity_id: &str,
         agreement_id: &str,
+        requestor_pub_key: Option<&str>,
     ) -> Result<Task> {
         let working_dir = self
             .tasks_dir
@@ -374,14 +422,14 @@ impl TaskRunner {
 
         self.save_agreement(&agreement_path, &agreement_id)?;
 
-        let mut args = vec![];
+        let mut args = vec!["service-bus", activity_id, activity::local::BUS_ID];
         args.extend(["-c", self.cache_dir.to_str().ok_or(anyhow!("None"))?].iter());
         args.extend(["-w", working_dir.to_str().ok_or(anyhow!("None"))?].iter());
         args.extend(["-a", agreement_path.to_str().ok_or(anyhow!("None"))?].iter());
 
-        args.push("service-bus");
-        args.push(activity_id);
-        args.push(activity::local::BUS_ID);
+        if let Some(req_pub_key) = requestor_pub_key {
+            args.extend(["--requestor-pub-key", req_pub_key.as_ref()].iter());
+        }
 
         let args = args.iter().map(ToString::to_string).collect();
 
@@ -463,9 +511,15 @@ fn exe_unit_name_from(agreement: &AgreementView) -> Result<String> {
 async fn set_activity_terminated(
     api: Arc<ActivityProviderApi>,
     activity_id: &str,
+    reason: impl ToString,
+    message: impl ToString,
     retry_interval: Duration,
 ) {
-    let state = ActivityState::from(StatePair(State::Terminated, None));
+    let state = ActivityState {
+        state: State::Terminated.into(),
+        reason: Some(reason.to_string()),
+        error_message: Some(message.to_string()),
+    };
 
     // Potentially infinite loop. This is done intentionally.
     // Possible fail reasons:
@@ -517,6 +571,30 @@ forward_actix_handler!(TaskRunner, AgreementApproved, on_agreement_approved);
 forward_actix_handler!(TaskRunner, ExeUnitProcessFinished, on_exeunit_exited);
 forward_actix_handler!(TaskRunner, GetExeUnit, get_exeunit);
 
+impl Handler<GetOfferTemplates> for TaskRunner {
+    type Result = ResponseFuture<Result<HashMap<String, OfferTemplate>>>;
+
+    fn handle(&mut self, msg: GetOfferTemplates, _: &mut Context<Self>) -> Self::Result {
+        let entries = msg
+            .0
+            .into_iter()
+            .map(|p| (p.name, self.offer_template(&p.exeunit_name)))
+            .collect::<Vec<_>>();
+
+        async move {
+            let mut result: HashMap<String, OfferTemplate> = HashMap::new();
+            for (key, fut) in entries {
+                log::info!("Reading offer template for {}", key);
+                let string = fut.await?;
+                let value = serde_json::from_str(string.as_str())?;
+                result.insert(key, value);
+            }
+            Ok(result)
+        }
+        .boxed_local()
+    }
+}
+
 forward_actix_handler!(
     TaskRunner,
     Subscribe<ActivityCreated>,
@@ -550,15 +628,22 @@ impl Handler<CreateActivity> for TaskRunner {
         let state_retry_interval = self.config.exeunit_state_retry_interval.clone();
 
         let result = self.on_create_activity(msg, ctx);
-
-        let on_error_future = async move {
-            set_activity_terminated(api, &activity_id, state_retry_interval).await;
-        }
-        .into_actor(self);
-
         match result {
             Ok(_) => ActorResponse::reply(result),
-            Err(error) => ActorResponse::r#async(on_error_future.map(|_, _, _| Err(error))),
+            Err(error) => ActorResponse::r#async(
+                async move {
+                    set_activity_terminated(
+                        api,
+                        &activity_id,
+                        "creation failed",
+                        &error,
+                        state_retry_interval,
+                    )
+                    .await;
+                    Err(error)
+                }
+                .into_actor(self),
+            ),
         }
     }
 }
@@ -642,15 +727,47 @@ impl Handler<AgreementBroken> for TaskRunner {
     }
 }
 
+impl Handler<Shutdown> for TaskRunner {
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, _: Shutdown, ctx: &mut Context<Self>) -> Self::Result {
+        let ids = self
+            .tasks
+            .iter()
+            .map(|t| (t.activity_id.clone(), t.agreement_id.clone()))
+            .collect::<Vec<_>>();
+
+        let addr = ctx.address();
+        let fut = async move {
+            for (activity_id, agreement_id) in ids {
+                if let Err(e) = addr
+                    .send(DestroyActivity::new(&activity_id, &agreement_id))
+                    .await?
+                {
+                    log::error!("Unable to destroy activity: {}", e);
+                }
+            }
+            Ok(())
+        };
+
+        ActorResponse::r#async(fut.into_actor(self))
+    }
+}
+
 // =========================================== //
 // Messages creation
 // =========================================== //
 
 impl CreateActivity {
-    pub fn new(activity_id: &str, agreement_id: &str) -> CreateActivity {
+    pub fn new<S: AsRef<str>>(
+        activity_id: S,
+        agreement_id: S,
+        requestor_pub_key: Option<S>,
+    ) -> CreateActivity {
         CreateActivity {
-            activity_id: activity_id.to_string(),
-            agreement_id: agreement_id.to_string(),
+            activity_id: activity_id.as_ref().to_string(),
+            agreement_id: agreement_id.as_ref().to_string(),
+            requestor_pub_key: requestor_pub_key.map(|s| s.as_ref().to_string()),
         }
     }
 }

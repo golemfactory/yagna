@@ -2,11 +2,17 @@ use crate::api::*;
 use crate::dao::*;
 use crate::error::{DbError, Error};
 use crate::utils::{listen_for_events, response, with_timeout};
+use crate::DEFAULT_PAYMENT_PLATFORM;
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
+use metrics::counter;
 use serde_json::value::Value::Null;
+use ya_agreement_utils::{ClauseOperator, ConstraintKey, Constraints};
 use ya_client_model::payment::*;
-use ya_core_model::payment::local::{GetAccounts, SchedulePayment, BUS_ID as LOCAL_SERVICE};
+use ya_core_model::payment::local::{
+    GetAccounts, SchedulePayment, ValidateAllocation, ValidateAllocationError,
+    BUS_ID as LOCAL_SERVICE,
+};
 use ya_core_model::payment::public::{
     AcceptDebitNote, AcceptInvoice, AcceptRejectError, BUS_ID as PUBLIC_SERVICE,
 };
@@ -53,6 +59,7 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .route("/payments", get().to(get_payments))
         .route("/payments/{payment_id}", get().to(get_payment))
         .route("/accounts", get().to(get_accounts))
+        .route("/decorateDemand", get().to(decorate_demand))
 }
 
 // ************************** DEBIT NOTE **************************
@@ -160,6 +167,8 @@ async fn accept_debit_note(
                 bus::service(LOCAL_SERVICE).send(msg).await??;
             }
             dao.accept(debit_note_id, node_id).await?;
+
+            counter!("payment.debit_notes.requestor.accepted", 1);
             Ok(())
         }
         .await
@@ -307,6 +316,8 @@ async fn accept_invoice(
                 .await??;
             bus::service(LOCAL_SERVICE).send(schedule_msg).await??;
             dao.accept(invoice_id, node_id).await?;
+
+            counter!("payment.invoices.requestor.accepted", 1);
             Ok(())
         }
         .await
@@ -358,12 +369,33 @@ async fn create_allocation(
     id: Identity,
 ) -> HttpResponse {
     // TODO: Handle deposits & timeouts
-    // TODO: Check available funds
     let allocation = body.into_inner();
     let node_id = id.identity;
+    let payment_platform = allocation
+        .payment_platform
+        .clone()
+        .unwrap_or(DEFAULT_PAYMENT_PLATFORM.to_string());
+    let address = allocation.address.clone().unwrap_or(node_id.to_string());
+
+    let validate_msg = ValidateAllocation {
+        platform: payment_platform.clone(),
+        address: address.clone(),
+        amount: allocation.total_amount.clone(),
+    };
+    match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
+        Ok(true) => {}
+        Ok(false) => return response::bad_request(&"Insufficient funds to make allocation"),
+        Err(Error::Rpc(RpcMessageError::ValidateAllocation(
+            ValidateAllocationError::AccountNotRegistered,
+        ))) => return response::bad_request(&"Account not registered"),
+        Err(e) => return response::server_error(&e),
+    }
+
     let dao: AllocationDao = db.as_dao();
     match async move {
-        let allocation_id = dao.create(allocation, node_id).await?;
+        let allocation_id = dao
+            .create(allocation, node_id, payment_platform, address)
+            .await?;
         Ok(dao.get(allocation_id, node_id).await?)
     }
     .await
@@ -483,4 +515,43 @@ async fn get_accounts(id: Identity) -> HttpResponse {
         })
         .collect();
     response::ok(recv_accounts)
+}
+
+// **************************** MARKET *****************************
+
+async fn decorate_demand(
+    db: Data<DbExecutor>,
+    path: Query<AllocationIds>,
+    id: Identity,
+) -> HttpResponse {
+    let allocation_ids = path.allocation_ids.clone();
+    let node_id = id.identity;
+    let dao: AllocationDao = db.as_dao();
+    let allocations = match dao.get_many(allocation_ids, node_id).await {
+        Ok(allocations) => allocations,
+        Err(e) => return response::server_error(&e),
+    };
+    if allocations.len() != path.allocation_ids.len() {
+        return response::not_found();
+    }
+
+    let properties: Vec<MarketProperty> = allocations
+        .into_iter()
+        .map(|allocation| MarketProperty {
+            key: format!(
+                "golem.com.payment.platform.{}.address",
+                allocation.payment_platform
+            ),
+            value: allocation.address,
+        })
+        .collect();
+    let constraints = properties
+        .iter()
+        .map(|property| ConstraintKey::new(property.key.as_str()).equal_to(ConstraintKey::new("*")))
+        .collect();
+    let constraints = vec![Constraints::new_clause(ClauseOperator::Or, constraints).to_string()];
+    response::ok(MarketDecoration {
+        properties,
+        constraints,
+    })
 }

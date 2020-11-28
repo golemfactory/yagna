@@ -3,13 +3,19 @@ use prettytable::{color, format, format::TableFormat, Attr, Cell, Row, Table};
 use serde::Serialize;
 use std::path::PathBuf;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
+pub struct MetricsCtx {
+    pub push_enabled: bool,
+    pub push_host_url: Option<url::Url>,
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct CliCtx {
     pub data_dir: PathBuf,
     pub gsb_url: Option<url::Url>,
     pub json_output: bool,
     pub accept_terms: bool,
-    pub interactive: bool,
+    pub metrics_ctx: Option<MetricsCtx>,
 }
 
 impl CliCtx {

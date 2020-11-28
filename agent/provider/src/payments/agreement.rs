@@ -1,5 +1,6 @@
 use anyhow::{anyhow, bail, Result};
-use bigdecimal::BigDecimal;
+use bigdecimal::{BigDecimal, Signed, ToPrimitive};
+use num_bigint::BigInt;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,10 +12,47 @@ use super::model::{PaymentDescription, PaymentModel};
 use ya_agreement_utils::AgreementView;
 use ya_client::activity::ActivityProviderApi;
 
+const PAYMENT_PRECISION: i64 = 18; // decimal places
+
 #[derive(Clone, PartialEq)]
 pub struct CostInfo {
     pub usage: Vec<f64>,
     pub cost: BigDecimal,
+}
+
+impl CostInfo {
+    pub fn new(usage: Vec<f64>, cost: BigDecimal) -> Self {
+        let cost = round(cost, PAYMENT_PRECISION);
+        CostInfo { usage, cost }
+    }
+}
+
+/// Return number rounded to round_digits precision after the decimal point
+/// Copied from https://docs.rs/bigdecimal/0.2.0/src/bigdecimal/lib.rs.html#589-612
+/// TODO: Remove when we update to bigdecimal 0.2.0
+fn round(value: BigDecimal, round_digits: i64) -> BigDecimal {
+    let (bigint, decimal_part_digits) = value.as_bigint_and_exponent();
+    let need_to_round_digits = decimal_part_digits - round_digits;
+    if round_digits >= 0 && need_to_round_digits <= 0 {
+        return value;
+    }
+
+    let mut number = bigint.to_i128().unwrap();
+    if number < 0 {
+        number = -number;
+    }
+    for _ in 0..(need_to_round_digits - 1) {
+        number /= 10;
+    }
+    let digit = number % 10;
+
+    if digit <= 4 {
+        value.with_scale(round_digits)
+    } else if bigint.is_negative() {
+        value.with_scale(round_digits) - BigDecimal::new(BigInt::from(1), round_digits)
+    } else {
+        value.with_scale(round_digits) + BigDecimal::new(BigInt::from(1), round_digits)
+    }
 }
 
 #[derive(PartialEq)]
@@ -162,7 +200,7 @@ impl AgreementPayment {
             },
         );
 
-        CostInfo { cost, usage }
+        CostInfo::new(usage, cost)
     }
 
     pub fn list_activities(&self) -> Vec<String> {
@@ -222,5 +260,26 @@ impl ActivitiesWaiter {
                 break;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn test_round() {
+        let x = BigDecimal::from_str("12345.123456789").unwrap();
+        let y = BigDecimal::from_str("12345.12346").unwrap();
+        assert_eq!(round(x, 5), y);
+
+        let x = BigDecimal::from_str("12345.123456789").unwrap();
+        let y = BigDecimal::from_str("12345").unwrap();
+        assert_eq!(round(x, 0), y);
+
+        let x = BigDecimal::from_str("12345").unwrap();
+        let y = BigDecimal::from_str("12345").unwrap();
+        assert_eq!(round(x, 15), y);
     }
 }

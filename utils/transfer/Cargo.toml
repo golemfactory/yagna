@@ -6,8 +6,8 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-ya-client-model = "0.1"
-ya-core-model = "0.1"
+ya-client-model = "0.2"
+ya-core-model = "0.2"
 ya-net = "0.1"
 ya-service-bus = "0.2"
 ya-utils-path = "0.1"
@@ -44,7 +44,7 @@ branch = "feature/tokio"
 
 [dev-dependencies]
 actix-files = "0.2.1"
-actix-web = "2.0.0"
+actix-web = "3.2"
 anyhow = "1.0"
 env_logger = "0.7"
 sha2 = "0.8.1"

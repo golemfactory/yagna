@@ -1,4 +1,3 @@
-#![allow(unused)]
 #![allow(clippy::all)]
 
 use super::schema::*;
@@ -9,7 +8,6 @@ use diesel::serialize::Output;
 use diesel::sql_types::Integer;
 use diesel::types::{FromSql, ToSql};
 use std::convert::TryFrom;
-use std::error::Error;
 
 #[derive(Queryable, Debug, Identifiable)]
 #[table_name = "activity"]
@@ -71,7 +69,7 @@ pub struct ActivityState {
     pub updated_date: NaiveDateTime,
 }
 
-impl std::convert::TryFrom<ActivityState> for ya_client_model::activity::ActivityState {
+impl TryFrom<ActivityState> for ya_client_model::activity::ActivityState {
     type Error = ya_persistence::Error;
 
     fn try_from(value: ActivityState) -> Result<Self, Self::Error> {
@@ -91,7 +89,7 @@ pub struct ActivityUsage {
     pub updated_date: NaiveDateTime,
 }
 
-impl std::convert::TryFrom<ActivityUsage> for ya_client_model::activity::ActivityUsage {
+impl TryFrom<ActivityUsage> for ya_client_model::activity::ActivityUsage {
     type Error = ya_persistence::Error;
 
     fn try_from(value: ActivityUsage) -> Result<Self, Self::Error> {
@@ -102,5 +100,69 @@ impl std::convert::TryFrom<ActivityUsage> for ya_client_model::activity::Activit
                 .transpose()?,
             timestamp: value.updated_date.timestamp(),
         })
+    }
+}
+
+#[derive(Queryable, Debug, Identifiable)]
+#[table_name = "runtime_event"]
+pub struct RuntimeEvent {
+    pub id: i32,
+    pub activity_id: i32,
+    pub batch_id: String,
+    pub index: i32,
+    pub timestamp: NaiveDateTime,
+    pub type_id: RuntimeEventType,
+    pub command: Option<String>,
+    pub return_code: Option<i32>,
+    pub message: Option<String>,
+}
+
+#[derive(AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy)]
+#[sql_type = "Integer"]
+pub enum RuntimeEventType {
+    Started = 1,
+    Finished = 2,
+    StdOut = 3,
+    StdErr = 4,
+}
+
+impl<DB: Backend> ToSql<Integer, DB> for RuntimeEventType
+where
+    i32: ToSql<Integer, DB>,
+{
+    fn to_sql<W: std::io::Write>(&self, out: &mut Output<W, DB>) -> diesel::serialize::Result {
+        (*self as i32).to_sql(out)
+    }
+}
+
+impl<DB> FromSql<Integer, DB> for RuntimeEventType
+where
+    i32: FromSql<Integer, DB>,
+    DB: Backend,
+{
+    fn from_sql(bytes: Option<&DB::RawValue>) -> deserialize::Result<Self> {
+        Ok(match i32::from_sql(bytes)? {
+            1 => RuntimeEventType::Started,
+            2 => RuntimeEventType::Finished,
+            3 => RuntimeEventType::StdOut,
+            4 => RuntimeEventType::StdErr,
+            _ => return Err(anyhow::anyhow!("invalid value").into()),
+        })
+    }
+}
+
+#[derive(Queryable, Debug, Clone, Identifiable, Insertable, AsChangeset)]
+#[table_name = "activity_credentials"]
+#[primary_key(activity_id)]
+pub struct ActivityCredentials {
+    pub activity_id: String,
+    pub credentials: String,
+}
+
+impl TryFrom<ActivityCredentials> for Option<ya_client_model::activity::Credentials> {
+    type Error = ya_persistence::Error;
+
+    fn try_from(value: ActivityCredentials) -> Result<Self, Self::Error> {
+        Ok(serde_json::from_str(&value.credentials)?)
     }
 }

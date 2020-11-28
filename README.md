@@ -52,7 +52,7 @@ _Modular_ means that all the building blocks can be easily replaceable.
    * [ ] SGX on Graphene _(optional)_
 1. Payment platform
     * [x] **Payments with NGNT**
-    * [ ] **Gasless transactions**
+    * [x] **Gasless transactions**
     * [x] **ERC20 token**
     * [ ] payment matching _(optional)_
 1. Transaction system
