@@ -358,6 +358,7 @@ impl ServiceCommand {
 
                     Services::rest(app, &context)
                 })
+                .keep_alive(30)
                 .bind(api_host_port.clone())
                 .context(format!("Failed to bind http server on {:?}", api_host_port))?;
 
