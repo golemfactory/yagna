@@ -386,7 +386,7 @@ impl Handler<TxSave> for TransactionSender {
             .map(|(tx, sign)| {
                 (
                     crate::utils::prepare_tx_id(&tx, chain_id, sender),
-                    crate::eth_hacks::encode_signed_tx(&tx, sign, chain_id),
+                    crate::eth_utils::encode_signed_tx(&tx, sign, chain_id),
                 )
             })
             .collect::<Vec<_>>();
@@ -461,7 +461,7 @@ impl Handler<Retry> for TransactionSender {
                 let tx_id: &str = tx.tx_id.as_ref();
                 let raw_tx: RawTransaction = serde_json::from_str(tx.encoded.as_str()).unwrap();
                 let signature = hex::decode(&tx.signature).unwrap();
-                let signed_tx = crate::eth_hacks::encode_signed_tx(&raw_tx, signature, chain_id);
+                let signed_tx = crate::eth_utils::encode_signed_tx(&raw_tx, signature, chain_id);
                 let hash = client.send_tx(signed_tx).await?;
                 log::info!("resend transaction: {} tx={:?}", tx_id, hash);
                 Ok(true)
@@ -507,7 +507,7 @@ impl Builder {
         params: P,
         gas: U256,
     ) -> &mut Self {
-        let data = crate::eth_hacks::contract_encode(contract, func, params).unwrap();
+        let data = crate::eth_utils::contract_encode(contract, func, params).unwrap();
         let gas_price = self.gas_price;
         let nonce = Default::default();
         let tx = RawTransaction {
@@ -541,7 +541,7 @@ impl Builder {
             for mut tx in me.tx {
                 tx.nonce = nx.start;
                 nx.start += 1.into();
-                let signature = sign_tx(crate::eth_hacks::get_tx_hash(&tx, me.chain_id)).await;
+                let signature = sign_tx(crate::eth_utils::get_tx_hash(&tx, me.chain_id)).await;
                 tx_save.transactions.push((tx, signature))
             }
             assert_eq!(nx.start, nx.end);
