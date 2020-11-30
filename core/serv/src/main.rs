@@ -332,7 +332,11 @@ impl ServiceCommand {
         }
         match self {
             Self::Run(ServiceCommandOpts { api_url }) => {
-                log::info!("Starting {} service!", clap::crate_name!());
+                log::info!(
+                    "Starting {} service! Version: {}.",
+                    clap::crate_name!(),
+                    ya_compile_time_utils::version_describe!()
+                );
                 let _lock = ProcLock::new("yagna", &ctx.data_dir)?.lock(std::process::id())?;
 
                 ya_sb_router::bind_gsb_router(ctx.gsb_url.clone())
