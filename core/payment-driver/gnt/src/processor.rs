@@ -3,6 +3,7 @@ use crate::GntDriver;
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use std::sync::Arc;
+use ya_client_model::payment::Allocation;
 use ya_client_model::NodeId;
 use ya_core_model::driver::{AccountMode, PaymentConfirmation, PaymentDetails};
 
@@ -59,5 +60,16 @@ impl GNTDriverProcessor {
         confirmation: PaymentConfirmation,
     ) -> GNTDriverResult<PaymentDetails> {
         self.driver.verify_payment(&confirmation).await
+    }
+
+    pub async fn validate_allocation(
+        &self,
+        address: String,
+        amount: BigDecimal,
+        existing_allocations: Vec<Allocation>,
+    ) -> GNTDriverResult<bool> {
+        self.driver
+            .validate_allocation(address, amount, existing_allocations)
+            .await
     }
 }
