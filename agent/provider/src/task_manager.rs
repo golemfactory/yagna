@@ -145,29 +145,21 @@ impl TaskManager {
         let agr_id = agreement_id.clone();
         ctx.run_later(duration, move |myself, ctx| {
             if !myself.tasks.is_agreement_finalized(&agr_id) {
-                log::warn!("Agreement [{}] expired @ {}. Breaking", agr_id, expiration);
-                let msg = BreakAgreement {
+                ctx.address().do_send(BreakAgreement {
                     agreement_id: agr_id,
-                    reason: BreakReason::Expired,
-                };
-                ctx.address().do_send(msg);
+                    reason: BreakReason::Expired(expiration),
+                });
             }
         });
 
         // Schedule agreement termination when there is no activity created within 90s.
         let s90 = Duration::seconds(90).to_std()?;
         ctx.run_later(s90.clone(), move |myself, ctx| {
-            if !myself.tasks.is_agreement_computing(&agreement_id) {
-                log::warn!(
-                    "No activity for Agreement [{}] after {:?}. Breaking",
+            if myself.tasks.not_active(&agreement_id) {
+                ctx.address().do_send(BreakAgreement {
                     agreement_id,
-                    s90
-                );
-                let msg = BreakAgreement {
-                    agreement_id,
-                    reason: BreakReason::NoActivity,
-                };
-                ctx.address().do_send(msg);
+                    reason: BreakReason::NoActivity(s90),
+                });
             }
         });
         Ok(())
@@ -407,13 +399,14 @@ impl Handler<BreakAgreement> for TaskManager {
             let new_state = AgreementState::Broken {
                 reason: msg.reason.clone(),
             };
-            start_transition(&myself, &msg.agreement_id, new_state.clone()).await?;
 
             log::warn!(
                 "Breaking agreement [{}], reason: {}.",
                 msg.agreement_id,
                 msg.reason
             );
+
+            start_transition(&myself, &msg.agreement_id, new_state.clone()).await?;
 
             let result = async move {
                 let msg = AgreementBroken::from(msg.clone());
