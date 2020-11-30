@@ -39,6 +39,7 @@ use std::time;
 use uuid::Uuid;
 use web3::contract::Contract;
 use web3::transports::Http;
+use ya_client_model::payment::Allocation;
 use ya_client_model::NodeId;
 use ya_core_model::driver::{AccountMode, PaymentConfirmation, PaymentDetails};
 use ya_core_model::identity;
@@ -328,6 +329,24 @@ impl GntDriver {
                     common::build_payment_details(&receipt)
                 }
             }
+        })
+    }
+
+    fn validate_allocation(
+        &self,
+        address: String,
+        amount: BigDecimal,
+        existing_allocations: Vec<Allocation>,
+    ) -> Pin<Box<dyn Future<Output = GNTDriverResult<bool>> + 'static>> {
+        let gnt_contract = self.gnt_contract.clone();
+        Box::pin(async move {
+            let address = utils::str_to_addr(address.as_str())?;
+            let balance = common::get_gnt_balance(&gnt_contract, address).await?;
+            let total_allocated_amount: BigDecimal = existing_allocations
+                .into_iter()
+                .map(|allocation| allocation.remaining_amount)
+                .sum();
+            Ok(amount <= (balance - total_allocated_amount))
         })
     }
 }

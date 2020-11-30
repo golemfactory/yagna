@@ -121,12 +121,20 @@ async fn verify_payment(
 
 async fn validate_allocation(
     _db: DbExecutor,
-    _processor: GNTDriverProcessor,
+    processor: GNTDriverProcessor,
     _caller: String,
-    _msg: ValidateAllocation,
+    msg: ValidateAllocation,
 ) -> Result<bool, GenericError> {
-    log::debug!("Validate allocation: {:?}", _msg);
-    Ok(true) // TODO: Implement proper check
+    log::debug!("Validate allocation: {:?}", msg);
+    let ValidateAllocation {
+        address,
+        amount,
+        existing_allocations,
+    } = msg;
+    processor
+        .validate_allocation(address, amount, existing_allocations)
+        .await
+        .map_err(GenericError::new)
 }
 
 async fn account_event(
