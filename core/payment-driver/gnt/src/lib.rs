@@ -8,6 +8,7 @@ pub mod migrations {
 
 mod dao;
 mod error;
+mod eth_utils;
 mod gnt;
 mod models;
 mod processor;
