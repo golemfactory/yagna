@@ -3,6 +3,7 @@ use actix_web::{HttpResponse, ResponseError};
 use ya_client::model::ErrorMessage;
 
 use crate::db::dao::SaveProposalError;
+use crate::negotiation::error::AgreementEventsError;
 use crate::{
     db::dao::TakeEventsError,
     market::MarketError,
@@ -124,7 +125,7 @@ impl ResponseError for QueryEventsError {
             | QueryEventsError::TakeEvents(TakeEventsError::SubscriptionExpired(_)) => {
                 HttpResponse::NotFound().json(msg)
             }
-            QueryEventsError::InvalidSubscriptionId(_) | QueryEventsError::InvalidMaxEvents(_) => {
+            QueryEventsError::InvalidSubscriptionId(_) | QueryEventsError::InvalidMaxEvents(..) => {
                 HttpResponse::BadRequest().json(msg)
             }
             _ => HttpResponse::InternalServerError().json(msg),
@@ -180,7 +181,7 @@ impl ResponseError for AgreementError {
             AgreementError::GetProposal(..)
             | AgreementError::Save(..)
             | AgreementError::Get(..)
-            | AgreementError::Update(..)
+            | AgreementError::UpdateState(..)
             | AgreementError::Gsb(_)
             | AgreementError::ProtocolCreate(_)
             | AgreementError::ProtocolApprove(_)
@@ -202,6 +203,16 @@ impl ResponseError for WaitForApprovalError {
             WaitForApprovalError::Internal(_) | WaitForApprovalError::Get(..) => {
                 HttpResponse::InternalServerError().json(msg)
             }
+        }
+    }
+}
+
+impl ResponseError for AgreementEventsError {
+    fn error_response(&self) -> HttpResponse {
+        let msg = ErrorMessage::new(self.to_string());
+        match self {
+            AgreementEventsError::InvalidMaxEvents(..) => HttpResponse::BadRequest().json(msg),
+            AgreementEventsError::Internal(_) => HttpResponse::InternalServerError().json(msg),
         }
     }
 }

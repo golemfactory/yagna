@@ -19,7 +19,7 @@ ya-service-api-interfaces = "0.1"
 ya-service-api-web = "0.1"
 ya-service-bus = "0.2"
 
-actix-web = "2.0"
+actix-web = "3.2"
 anyhow = "1.0.26"
 base64 = "0.12"
 bigdecimal = "0.1.0"
@@ -51,6 +51,7 @@ humantime="2.0.1"
 ya-client = "0.4"
 ya-dummy-driver = "0.1"
 ya-gnt-driver = "0.1"
+ya-zksync-driver = "0.1"
 ya-net = { version = "0.1", features = ["service"] }
 ya-sb-router = "0.1"
 

@@ -18,7 +18,7 @@ msgpack = ["rmp-serde"]
 ya-sb-proto = { version = "0.1", path="../proto" }
 ya-sb-util = { version = "0.1", path="../util", features=["with-futures"] }
 
-actix = "0.9"
+actix = { version = "0.9", default-features = false }
 futures = "0.3"
 lazy_static = "1.4"
 log = "0.4"
@@ -27,7 +27,7 @@ rmp-serde = {version = "=0.14.3", optional=true }
 serde = { version = "1.0.102", features = ["derive"] }
 serde_json = { version = "1.0.48", optional = true }
 thiserror = "1.0.9"
-tokio = { version = "0.2.6", features = ["tcp", "time"] }
+tokio = { version = "0.2.6", features = ["tcp", "time", "io-util"] }
 tokio-util = "0.2.0"
 url = "2.1.1"
 

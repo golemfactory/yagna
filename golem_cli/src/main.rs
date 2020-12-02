@@ -33,6 +33,9 @@ enum Commands {
     /// Run the golem provider
     Run(setup::RunConfig),
 
+    /// Stop the golem provider
+    Stop,
+
     /// Manage settings
     ///
     /// This can be used regardless of whether golem is running or not.
@@ -49,7 +52,7 @@ enum Commands {
 #[structopt(about = clap::crate_description!())]
 #[structopt(global_setting = clap::AppSettings::ColoredHelp)]
 #[structopt(global_setting = clap::AppSettings::DeriveDisplayOrder)]
-#[structopt(version = ya_compile_time_utils::crate_version_commit!())]
+#[structopt(version = ya_compile_time_utils::version_describe!())]
 struct StartupConfig {
     #[structopt(flatten)]
     commands: Commands,
@@ -69,6 +72,7 @@ async fn my_main() -> Result</*exit code*/ i32> {
     match cli_args.commands {
         Commands::Setup(mut run_config) => setup::setup(&mut run_config, true).await,
         Commands::Run(run_config) => service::run(run_config).await,
+        Commands::Stop => service::stop().await,
         Commands::Settings(command) => match command {
             SettingsCommand::Set(set) => settings::run(set).await,
             SettingsCommand::Show => settings_show::run().await,
@@ -78,16 +82,12 @@ async fn my_main() -> Result</*exit code*/ i32> {
 }
 
 pub fn banner() {
-    let mut ref_string = option_env!("GITHUB_REF").unwrap_or(env!("CARGO_PKG_VERSION"));
-    if let Some(pos) = ref_string.rfind('/') {
-        ref_string = &ref_string[pos + 1..];
-    }
-
     terminal::fade_in(&format!(
         include_str!("banner.txt"),
-        version = ref_string,
-        git_commit = option_env!("GITHUB_SHA").unwrap_or("-"),
-        build = option_env!("GITHUB_RUN_NUMBER").unwrap_or("-")
+        version = ya_compile_time_utils::semver(),
+        git_commit = ya_compile_time_utils::git_rev(),
+        build = ya_compile_time_utils::build_number().unwrap_or("-"),
+        date = ya_compile_time_utils::build_date()
     ))
     .unwrap();
 }
@@ -97,7 +97,7 @@ async fn main() {
     std::process::exit(match my_main().await {
         Ok(code) => code,
         Err(e) => {
-            log::error!("Error: {:?}", e);
+            log::error!("{:?}", e);
             1
         }
     });

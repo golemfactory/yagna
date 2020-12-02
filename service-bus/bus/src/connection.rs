@@ -457,6 +457,12 @@ where
     H: CallRequestHandler + 'static,
 {
     fn handle(&mut self, item: Result<GsbMessage, ProtocolError>, ctx: &mut Self::Context) {
+        if let Err(e) = item.as_ref() {
+            log::error!("protocol error {}", e);
+            ctx.stop();
+            return;
+        }
+
         match item.unwrap() {
             GsbMessage::RegisterReply(r) => {
                 if let Some(code) = register_reply_code(r.code) {
@@ -606,7 +612,7 @@ fn send_cmd_async<A: Actor, W: Sink<GsbMessage, Error = ProtocolError> + Unpin +
         ActorResponse::reply(Err(Error::GsbFailure(e.to_string())))
     } else {
         ActorResponse::r#async(fut::wrap_future(async move {
-            rx.await??;
+            rx.await.map_err(|_| Error::Cancelled)??;
             Ok(())
         }))
     }

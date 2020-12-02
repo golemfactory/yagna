@@ -3,7 +3,6 @@ use crate::gnt::ethereum::EthereumClient;
 use crate::{utils, GNTDriverError, GNTDriverResult};
 use bigdecimal::BigDecimal;
 use ethereum_types::{Address, H256, U256, U64};
-use futures3::compat::*;
 use web3::contract::{Contract, Options};
 use web3::transports::Http;
 use web3::types::{Bytes, Log, TransactionReceipt};
@@ -51,7 +50,6 @@ pub(crate) async fn get_gnt_balance(
 ) -> GNTDriverResult<BigDecimal> {
     gnt_contract
         .query("balanceOf", (address,), None, Options::default(), None)
-        .compat()
         .await
         .map_or_else(
             |e| Err(GNTDriverError::LibraryError(format!("{:?}", e))),

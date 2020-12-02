@@ -1,4 +1,4 @@
-use crate::db::dao::{AgreementDao, DemandDao, EventsDao, OfferDao, ProposalDao};
+use crate::db::dao::{AgreementDao, DemandDao, NegotiationEventsDao, OfferDao, ProposalDao};
 use futures::join;
 use std::time::Duration;
 use tokio::time;
@@ -16,7 +16,7 @@ pub async fn clean(db: DbExecutor) {
         async move { offer_db.as_dao::<OfferDao>().clean().await },
         async move { agreement_db.as_dao::<AgreementDao>().clean().await },
         async move { proposal_db.as_dao::<ProposalDao>().clean().await },
-        async move { events_db.as_dao::<EventsDao>().clean().await },
+        async move { events_db.as_dao::<NegotiationEventsDao>().clean().await },
     );
     let v_results = vec![results.0, results.1, results.2, results.3, results.4];
     for db_result in v_results.into_iter() {

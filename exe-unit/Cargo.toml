@@ -36,7 +36,7 @@ ya-service-bus = "0.2"
 ya-transfer = "0.1"
 ya-utils-path = "0.1"
 
-actix = "0.9"
+actix = { version = "0.9", default-features = false }
 anyhow = "1.0.19"
 async-trait = "0.1.24"
 chrono = "0.4.10"
@@ -69,9 +69,9 @@ openssl= { version = "0.10", optional = true }
 ya-runtime-api = { version = "0.1", path = "runtime-api", features = ["codec", "server"] }
 ya-sb-router = "0.1"
 
-actix-files = "0.2.1"
-actix-rt = "1.0.0"
-actix-web = "2.0.0"
+actix-files = "0.4"
+actix-rt = "1.0.1"
+actix-web = "3.2"
 env_logger = "0.7"
 sha3 = "0.8.2"
 tempdir = "0.3.7"

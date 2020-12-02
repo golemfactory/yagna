@@ -14,7 +14,8 @@ pub fn bind_service(db: &DbExecutor, processor: GNTDriverProcessor) {
         .bind_with_processor(get_account_balance)
         .bind_with_processor(get_transaction_balance)
         .bind_with_processor(schedule_payment)
-        .bind_with_processor(verify_payment);
+        .bind_with_processor(verify_payment)
+        .bind_with_processor(validate_allocation);
 
     log::debug!("Successfully bound payment driver service to service bus");
 }
@@ -116,6 +117,24 @@ async fn verify_payment(
         |e| Err(GenericError::new(e)),
         |payment_details| Ok(payment_details),
     )
+}
+
+async fn validate_allocation(
+    _db: DbExecutor,
+    processor: GNTDriverProcessor,
+    _caller: String,
+    msg: ValidateAllocation,
+) -> Result<bool, GenericError> {
+    log::debug!("Validate allocation: {:?}", msg);
+    let ValidateAllocation {
+        address,
+        amount,
+        existing_allocations,
+    } = msg;
+    processor
+        .validate_allocation(address, amount, existing_allocations)
+        .await
+        .map_err(GenericError::new)
 }
 
 async fn account_event(
