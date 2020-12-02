@@ -125,6 +125,32 @@ pub mod local {
         }
     }
 
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    #[error("")]
+    pub struct NoError {} // This is needed because () doesn't implement Display
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct RegisterDriver {
+        pub driver_name: String,
+        pub platform: String,
+        pub recv_init_required: bool, // Is account initialization required for receiving payments
+    }
+
+    impl RpcMessage for RegisterDriver {
+        const ID: &'static str = "RegisterDriver";
+        type Item = ();
+        type Error = NoError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct UnregisterDriver(pub String);
+
+    impl RpcMessage for UnregisterDriver {
+        const ID: &'static str = "UnregisterDriver";
+        type Item = ();
+        type Error = NoError;
+    }
+
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct RegisterAccount {
         pub platform: String,
@@ -135,8 +161,10 @@ pub mod local {
 
     #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
     pub enum RegisterAccountError {
-        #[error("Account already registered")]
-        AlreadyRegistered,
+        #[error("Account already registered: address={0}, driver={1}")]
+        AlreadyRegistered(String, String),
+        #[error("Driver not registered: {0}")]
+        DriverNotRegistered(String),
         #[error("Error while registering account: {0}")]
         Other(String),
     }
@@ -153,18 +181,10 @@ pub mod local {
         pub address: String,
     }
 
-    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
-    pub enum UnregisterAccountError {
-        #[error("Account not registered")]
-        NotRegistered,
-        #[error("Error while unregistering account: {0}")]
-        Other(String),
-    }
-
     impl RpcMessage for UnregisterAccount {
         const ID: &'static str = "UnregisterAccount";
         type Item = ();
-        type Error = UnregisterAccountError;
+        type Error = NoError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
