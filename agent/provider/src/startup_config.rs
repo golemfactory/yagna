@@ -243,25 +243,37 @@ impl FileMonitor {
         let (tx, rx) = mpsc::channel();
         let (tx_ctl, mut rx_ctl) = oneshot::channel();
 
-        let watch_delay = Duration::from_secs(2);
-        let sleep_delay = Duration::from_secs_f32(0.5);
+        let watch_delay = Duration::from_secs(3);
+        let sleep_delay = Duration::from_secs(2);
         let mut watcher: RecommendedWatcher = Watcher::new(tx, watch_delay)?;
 
         std::thread::spawn(move || {
-            if let Err(e) = watcher.watch(&path_th, RecursiveMode::NonRecursive) {
-                log::error!("Unable to monitor path '{:?}': {}", path_th, e);
-                return;
-            }
+            let mut active = false;
             loop {
-                if let Ok(event) = rx.try_recv() {
-                    handler(event);
+                if !active {
+                    match watcher.watch(&path_th, RecursiveMode::NonRecursive) {
+                        Ok(_) => active = true,
+                        Err(e) => log::error!("Unable to monitor path '{:?}': {}", path_th, e),
+                    }
                 }
+                if let Ok(event) = rx.try_recv() {
+                    match &event {
+                        DebouncedEvent::Rename(_, _) | DebouncedEvent::Remove(_) => {
+                            let _ = watcher.unwatch(&path_th);
+                            active = false
+                        }
+                        _ => (),
+                    }
+                    handler(event);
+                    continue;
+                }
+
                 if let Ok(Some(_)) = rx_ctl.try_recv() {
                     break;
                 }
                 std::thread::sleep(sleep_delay);
             }
-            log::debug!("Stopping file monitor: {:?}", path_th);
+            log::error!("Stopping file monitor: {:?}", path_th);
         });
 
         Ok(Self {
@@ -278,6 +290,7 @@ impl FileMonitor {
             DebouncedEvent::Write(p)
             | DebouncedEvent::Chmod(p)
             | DebouncedEvent::Create(p)
+            | DebouncedEvent::Remove(p)
             | DebouncedEvent::Rename(_, p) => {
                 f(p);
             }
