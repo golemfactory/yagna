@@ -175,6 +175,10 @@ async fn start(args: Args) -> Result<()> {
         }
     }
 
+    log::info!("shutting down...");
+    if let Err(e) = service.shutdown().await {
+        log::error!("shutdown error: {:?}", e);
+    }
     Ok(())
 }
 
