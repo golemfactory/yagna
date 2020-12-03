@@ -92,6 +92,39 @@ impl<'c> AgreementDao<'c> {
         .await
     }
 
+    pub async fn select_by_node(
+        &self,
+        id: AgreementId,
+        node_id: NodeId,
+        validation_ts: NaiveDateTime,
+    ) -> DbResult<Option<Agreement>> {
+        // Because we explicitly disallow agreements between the same identities
+        // (i.e. provider_id != requestor_id), we'll always get the right db row
+        // with this query.
+        let id_swapped = id.clone().swap_owner();
+        let id_orig = id.clone();
+        do_with_transaction(self.pool, move |conn| {
+            let query = market_agreement
+                .filter(agreement::id.eq_any(vec![id_orig, id_swapped]))
+                .filter(
+                    agreement::provider_id
+                        .eq(node_id)
+                        .or(agreement::requestor_id.eq(node_id)),
+                );
+            Ok(match query.first::<Agreement>(conn).optional()? {
+                Some(mut agreement) => {
+                    if agreement.valid_to < validation_ts {
+                        agreement.state = AgreementState::Expired;
+                        update_state(conn, &id, &agreement.state)?;
+                    }
+                    Some(agreement)
+                }
+                None => None,
+            })
+        })
+        .await
+    }
+
     pub async fn terminate(
         &self,
         id: &AgreementId,

@@ -223,6 +223,7 @@ impl MarketsNetwork {
         prov_proposal_rejected: impl CallbackHandler<ProposalRejected>,
         prov_agreement_received: impl CallbackHandler<AgreementReceived>,
         prov_agreement_cancelled: impl CallbackHandler<AgreementCancelled>,
+        prov_agreement_terminated: impl CallbackHandler<AgreementTerminated>,
     ) -> Result<Self> {
         self.add_negotiation_api(
             name,
@@ -231,10 +232,12 @@ impl MarketsNetwork {
             prov_proposal_rejected,
             prov_agreement_received,
             prov_agreement_cancelled,
+            prov_agreement_terminated,
             default::empty_on_proposal_received,
             default::empty_on_proposal_rejected,
             default::empty_on_agreement_approved,
             default::empty_on_agreement_rejected,
+            default::empty_on_agreement_terminated,
         )
         .await
     }
@@ -246,6 +249,7 @@ impl MarketsNetwork {
         req_proposal_rejected: impl CallbackHandler<ProposalRejected>,
         req_agreement_approved: impl CallbackHandler<AgreementApproved>,
         req_agreement_rejected: impl CallbackHandler<AgreementRejected>,
+        req_agreement_terminated: impl CallbackHandler<AgreementTerminated>,
     ) -> Result<Self> {
         self.add_negotiation_api(
             name,
@@ -254,10 +258,12 @@ impl MarketsNetwork {
             default::empty_on_proposal_rejected,
             default::empty_on_agreement_received,
             default::empty_on_agreement_cancelled,
+            default::empty_on_agreement_terminated,
             req_proposal_received,
             req_proposal_rejected,
             req_agreement_approved,
             req_agreement_rejected,
+            req_agreement_terminated,
         )
         .await
     }
@@ -270,10 +276,12 @@ impl MarketsNetwork {
         prov_proposal_rejected: impl CallbackHandler<ProposalRejected>,
         prov_agreement_received: impl CallbackHandler<AgreementReceived>,
         prov_agreement_cancelled: impl CallbackHandler<AgreementCancelled>,
+        prov_agreement_terminated: impl CallbackHandler<AgreementTerminated>,
         req_proposal_received: impl CallbackHandler<ProposalReceived>,
         req_proposal_rejected: impl CallbackHandler<ProposalRejected>,
         req_agreement_approved: impl CallbackHandler<AgreementApproved>,
         req_agreement_rejected: impl CallbackHandler<AgreementRejected>,
+        req_agreement_terminated: impl CallbackHandler<AgreementTerminated>,
     ) -> Result<Self> {
         let provider = provider::NegotiationApi::new(
             prov_initial_proposal_received,
@@ -281,6 +289,7 @@ impl MarketsNetwork {
             prov_proposal_rejected,
             prov_agreement_received,
             prov_agreement_cancelled,
+            prov_agreement_terminated,
         );
 
         let requestor = requestor::NegotiationApi::new(
@@ -288,6 +297,7 @@ impl MarketsNetwork {
             req_proposal_rejected,
             req_agreement_approved,
             req_agreement_rejected,
+            req_agreement_terminated,
         );
 
         let identity_api = MockIdentity::new(name);
@@ -534,7 +544,7 @@ pub mod default {
     use super::*;
     use crate::protocol::negotiation::error::{
         ApproveAgreementError, CounterProposalError, GsbAgreementError, GsbProposalError,
-        ProposeAgreementError,
+        ProposeAgreementError, TerminateAgreementError,
     };
 
     pub async fn empty_on_offers_retrieved(
@@ -611,6 +621,13 @@ pub mod default {
         _caller: String,
         _msg: AgreementCancelled,
     ) -> Result<(), GsbAgreementError> {
+        Ok(())
+    }
+
+    pub async fn empty_on_agreement_terminated(
+        _caller: String,
+        _msg: AgreementTerminated,
+    ) -> Result<(), TerminateAgreementError> {
         Ok(())
     }
 }

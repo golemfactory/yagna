@@ -84,9 +84,15 @@ pub enum AgreementError {
     ProtocolApprove(#[from] ApproveAgreementError),
     #[error("Protocol error while terminating: {0}")]
     ProtocolTerminate(#[from] TerminateAgreementError),
+    #[error(transparent)]
+    ReasonError(#[from] ReasonError),
     #[error("Internal error: {0}")]
     Internal(String),
 }
+
+#[derive(Error, Debug)]
+#[error("Reason parse error: {0}")]
+pub struct ReasonError(#[from] pub serde_json::Error);
 
 #[derive(Error, Debug)]
 pub enum WaitForApprovalError {

@@ -29,7 +29,6 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .service(confirm_agreement)
         .service(wait_for_approval)
         .service(cancel_agreement)
-        .service(terminate_agreement)
 }
 
 #[actix_web::post("/demands")]
@@ -200,20 +199,4 @@ async fn cancel_agreement(
     _id: Identity,
 ) -> HttpResponse {
     HttpResponse::NotImplemented().finish()
-}
-
-#[actix_web::post("/agreements/{agreement_id}/terminate")]
-async fn terminate_agreement(
-    market: Data<Arc<MarketService>>,
-    path: Path<PathAgreement>,
-    id: Identity,
-    reason: Option<String>,
-) -> impl Responder {
-    let agreement_id = path.into_inner().to_id(OwnerType::Requestor)?;
-    market
-        .requestor_engine
-        .terminate_agreement(id, &agreement_id, reason)
-        .await
-        .log_err()
-        .map(|_| HttpResponse::Ok().finish())
 }

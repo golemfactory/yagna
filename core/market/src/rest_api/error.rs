@@ -177,6 +177,7 @@ impl ResponseError for AgreementError {
             | AgreementError::OwnProposal(..)
             | AgreementError::ProposalNotFound(..)
             | AgreementError::ProposalCountered(..)
+            | AgreementError::ReasonError(..)
             | AgreementError::InvalidId(..) => HttpResponse::BadRequest().json(msg),
             AgreementError::GetProposal(..)
             | AgreementError::Save(..)
