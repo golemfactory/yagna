@@ -53,7 +53,7 @@ impl RuntimeArgs {
         let mut mem_gib = None;
         let mut storage_gib = None;
         if with_inf {
-            cpu_cores = agreement.infrastructure.get("cpu.cores").cloned();
+            cpu_cores = agreement.infrastructure.get("cpu.threads").cloned();
             mem_gib = agreement.infrastructure.get("mem.gib").cloned();
             storage_gib = agreement.infrastructure.get("storage.gib").cloned();
         }
