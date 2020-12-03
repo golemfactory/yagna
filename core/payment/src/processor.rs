@@ -123,13 +123,26 @@ impl DriverRegistry {
         address: &str,
         mode: AccountMode,
     ) -> Result<String, AccountNotRegistered> {
-        match self
+        if let Some((driver, reg_mode)) = self
             .accounts
             .get(&(platform.to_owned(), address.to_owned()))
         {
-            Some((driver, reg_mode)) if reg_mode.contains(mode) => Ok(driver.to_owned()),
-            _ => Err(AccountNotRegistered::new(platform, address, mode)),
+            if reg_mode.contains(mode) {
+                return Ok(driver.to_owned());
+            }
         }
+
+        // If it's recv-only mode or no-mode (i.e. checking status) we can use any driver that
+        // supports the given platform and doesn't require init for receiving.
+        if !mode.contains(AccountMode::SEND) {
+            for (driver, (driver_platform, recv_init_required)) in self.drivers.iter() {
+                if driver_platform == platform && !*recv_init_required {
+                    return Ok(driver.to_owned());
+                }
+            }
+        }
+
+        Err(AccountNotRegistered::new(platform, address, mode))
     }
 
     pub fn platform(&self, driver: &str) -> Result<String, DriverNotRegistered> {
