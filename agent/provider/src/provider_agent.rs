@@ -404,6 +404,7 @@ impl Handler<CreateOffers> for ProviderAgent {
         let preset_names = match msg.0 {
             OfferKind::Any => self.presets.active(),
             OfferKind::WithPresets(names) => names,
+            OfferKind::WithIds(_) => vec![],
         };
 
         let presets = self.presets.list_matching(&preset_names);

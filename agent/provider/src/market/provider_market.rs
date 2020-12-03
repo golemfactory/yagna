@@ -43,12 +43,6 @@ pub struct CreateOffer {
     pub preset: Preset,
 }
 
-/// Collects events from market and runs negotiations.
-/// This event should be sent periodically.
-#[derive(Message)]
-#[rtype(result = "Result<()>")]
-pub struct UpdateMarket;
-
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
 pub struct Shutdown;
@@ -60,6 +54,7 @@ pub struct Unsubscribe(pub OfferKind);
 pub enum OfferKind {
     Any,
     WithPresets(Vec<String>),
+    WithIds(Vec<String>),
 }
 
 /// Async code emits this event to ProviderMarket, which reacts to it
@@ -130,7 +125,7 @@ pub struct ProviderMarket {
     pub agreement_terminated_signal: SignalSlot<CloseAgreement>,
 
     /// Infinite tasks requiring to be killed on shutdown.
-    handles: Vec<SpawnHandle>,
+    handles: HashMap<String, SpawnHandle>,
 }
 
 #[derive(Clone)]
@@ -153,7 +148,7 @@ impl ProviderMarket {
             subscriptions: HashMap::new(),
             agreement_signed_signal: SignalSlot::<AgreementApproved>::new(),
             agreement_terminated_signal: SignalSlot::<CloseAgreement>::new(),
-            handles: vec![],
+            handles: HashMap::new(),
         };
     }
 
@@ -165,13 +160,18 @@ impl ProviderMarket {
         }
     }
 
-    fn on_subscription(&mut self, msg: Subscription, _ctx: &mut Context<Self>) -> Result<()> {
+    fn on_subscription(&mut self, msg: Subscription, ctx: &mut Context<Self>) -> Result<()> {
         log::info!(
             "Subscribed offer. Subscription id [{}], preset [{}].",
             &msg.id,
             &msg.preset.name
         );
 
+        let actx = self.async_context(ctx);
+        let abort_handle =
+            ctx.spawn(collect_negotiation_events(actx, msg.clone()).into_actor(self));
+
+        self.handles.insert(msg.id.clone(), abort_handle);
         self.subscriptions.insert(msg.id.clone(), msg);
         Ok(())
     }
@@ -276,7 +276,7 @@ async fn unsubscribe_all(api: Arc<MarketProviderApi>, subscriptions: Vec<String>
     Ok(())
 }
 
-async fn dispatch_events(ctx: AsyncCtx, events: Vec<ProviderEvent>, subscription: Subscription) {
+async fn dispatch_events(ctx: AsyncCtx, events: Vec<ProviderEvent>, subscription: &Subscription) {
     if events.len() == 0 {
         return;
     };
@@ -500,96 +500,58 @@ async fn collect_agreement_events(ctx: AsyncCtx) {
     }
 }
 
-// Called time-to-time to read events.
-async fn collect_negotiation_events(
-    ctx: AsyncCtx,
-    subscriptions: HashMap<String, Subscription>,
-) -> Result<()> {
-    let _ = future::join_all(subscriptions.into_iter().map(move |(id, subs)| {
-        let ctx = ctx.clone();
-        let timeout = ctx.config.negotiation_events_interval;
+async fn collect_negotiation_events(ctx: AsyncCtx, subscription: Subscription) {
+    let ctx = ctx.clone();
+    let id = subscription.id.clone();
+    let timeout = ctx.config.negotiation_events_interval;
 
-        async move {
-            match ctx.api.collect(&id, Some(timeout), Some(5)).await {
-                Err(error) => {
-                    log::warn!("Can't query market events. Error: {}", error);
-                    match error {
-                        ya_client::error::Error::HttpStatusCode { code, .. } => {
-                            if code.as_u16() == 404 {
-                                let _ = ctx.market.send(ReSubscribe(id.clone())).await;
-                            }
-                        }
-                        _ => {
-                            // We need to wait after failure, because in most cases it happens immediately
-                            // and we are spammed with error logs.
-                            tokio::time::delay_for(std::time::Duration::from_secs_f32(timeout))
-                                .await;
+    loop {
+        match ctx.api.collect(&id, Some(timeout), Some(5)).await {
+            Err(error) => {
+                log::warn!("Can't query market events. Error: {}", error);
+                match error {
+                    ya_client::error::Error::HttpStatusCode { code, .. } => {
+                        if code.as_u16() == 404 {
+                            log::info!("Resubscribing subscription [{}]", id);
+                            let _ = ctx.market.send(ReSubscribe(id.clone())).await;
                         }
                     }
+                    _ => {
+                        // We need to wait after failure, because in most cases it happens immediately
+                        // and we are spammed with error logs.
+                        tokio::time::delay_for(std::time::Duration::from_secs_f32(timeout)).await;
+                    }
                 }
-                Ok(events) => dispatch_events(ctx.clone(), events, subs).await,
             }
+            Ok(events) => dispatch_events(ctx.clone(), events, &subscription).await,
         }
-    }))
-    .await;
-
-    Ok(())
-}
-
-async fn run_update_in_loop(ctx: AsyncCtx) {
-    loop {
-        ctx.market.send(UpdateMarket {}).await.ok();
     }
 }
 
 #[derive(Message)]
-#[rtype(result = "()")]
+#[rtype(result = "Result<()>")]
 struct ReSubscribe(String);
 
 impl Handler<ReSubscribe> for ProviderMarket {
-    type Result = ();
+    type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: ReSubscribe, ctx: &mut Self::Context) -> Self::Result {
-        let subs_id = msg.0;
-        if let Some(subs) = self.subscriptions.get(&subs_id) {
-            let offer = subs.offer.clone();
-            let api = self.api.clone();
-            let _ = ctx.spawn(
-                async move {
-                    match api.subscribe(&offer).await {
-                        Ok(new_subs_id) => Some((subs_id, new_subs_id)),
-                        Err(e) => {
-                            log::error!("unable to resubscribe {}: {}", subs_id, e);
-                            None
-                        }
-                    }
-                }
-                .into_actor(self)
-                .then(|r, myself, _ctx| {
-                    let api = myself.api.clone();
-                    let to_unsubscribe = if let Some((old_subs_id, new_subs_id)) = r {
-                        if let Some(mut subs) = myself.subscriptions.remove(&old_subs_id) {
-                            subs.id = new_subs_id.clone();
-                            log::info!("offer [{}] resubscribed as [{}]", old_subs_id, new_subs_id);
-                            let _ = myself.subscriptions.insert(new_subs_id, subs);
-                            None
-                        } else {
-                            Some(new_subs_id)
-                        }
-                    } else {
-                        None
-                    };
-                    async move {
-                        if let Some(new_subs_id) = to_unsubscribe {
-                            if let Err(e) = api.unsubscribe(&new_subs_id).await {
-                                log::warn!("fail to unsubscribe: {}: {}", new_subs_id, e);
-                            }
-                        }
-                    }
-                    .into_actor(myself)
-                }),
+        let to_resubscribe = self
+            .subscriptions
+            .values()
+            .filter(|sub| &sub.id == &msg.0)
+            .cloned()
+            .map(|sub| (sub.id.clone(), sub))
+            .collect::<HashMap<String, Subscription>>();
+
+        if to_resubscribe.len() > 0 {
+            return ActorResponse::r#async(
+                resubscribe_offers(ctx.address(), self.api.clone(), to_resubscribe)
+                    .into_actor(self)
+                    .map(|_, _, _| Ok(())),
             );
-        }
+        };
+        ActorResponse::reply(Ok(()))
     }
 }
 
@@ -603,21 +565,11 @@ impl Actor for ProviderMarket {
     fn started(&mut self, ctx: &mut Context<Self>) {
         let actx = self.async_context(ctx);
 
-        self.handles
-            .push(ctx.spawn(run_update_in_loop(actx.clone()).into_actor(self)));
-        self.handles
-            .push(ctx.spawn(collect_agreement_events(actx).into_actor(self)));
-    }
-}
-
-impl Handler<UpdateMarket> for ProviderMarket {
-    type Result = ResponseFuture<Result<(), Error>>;
-
-    fn handle(&mut self, _msg: UpdateMarket, ctx: &mut Context<Self>) -> Self::Result {
-        // Every time we need to list subscriptions, because they can change during execution.
-        let actx = self.async_context(ctx);
-
-        collect_negotiation_events(actx, self.subscriptions.clone()).boxed_local()
+        // Note: There will be no collision with subscription ids stored normally here.
+        self.handles.insert(
+            "collect-agreement-events".to_string(),
+            ctx.spawn(collect_agreement_events(actx).into_actor(self)),
+        );
     }
 }
 
@@ -625,7 +577,7 @@ impl Handler<Shutdown> for ProviderMarket {
     type Result = ResponseFuture<Result<(), Error>>;
 
     fn handle(&mut self, _msg: Shutdown, ctx: &mut Context<Self>) -> Self::Result {
-        for handle in self.handles.drain(..).into_iter() {
+        for (_, handle) in self.handles.drain().into_iter() {
             ctx.cancel_future(handle);
         }
 
@@ -777,8 +729,13 @@ async fn resubscribe_offers(
     subscriptions: HashMap<String, Subscription>,
 ) {
     let subscription_ids = subscriptions.keys().cloned().collect::<Vec<_>>();
-    if let Err(e) = unsubscribe_all(api.clone(), subscription_ids).await {
-        log::warn!("Failed to unsubscribe offers from the market: {:?}", e);
+    match market
+        .send(Unsubscribe(OfferKind::WithIds(subscription_ids)))
+        .await
+    {
+        Err(e) => log::warn!("Failed to unsubscribe offers from the market: {}", e),
+        Ok(Err(e)) => log::warn!("Failed to unsubscribe offers from the market: {}", e),
+        _ => (),
     }
 
     for (_, sub) in subscriptions {
@@ -788,7 +745,7 @@ async fn resubscribe_offers(
 
         if let Err(e) = subscribe(market.clone(), api.clone(), offer, preset).await {
             log::warn!(
-                "Unable to create subscription for preset {:?}: {:?}",
+                "Unable to create subscription for preset {}: {}",
                 preset_name,
                 e
             );
@@ -845,9 +802,9 @@ impl Handler<AgreementBroken> for ProviderMarket {
 }
 
 impl Handler<Unsubscribe> for ProviderMarket {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ResponseFuture<Result<(), Error>>;
 
-    fn handle(&mut self, msg: Unsubscribe, _ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: Unsubscribe, ctx: &mut Context<Self>) -> Self::Result {
         let subscriptions = match msg.0 {
             OfferKind::Any => {
                 log::info!("Unsubscribing all active offers");
@@ -872,9 +829,17 @@ impl Handler<Unsubscribe> for ProviderMarket {
                 log::info!("Unsubscribing {} active offer(s)", subs.len());
                 subs
             }
+            OfferKind::WithIds(subs) => subs,
         };
-        let client = self.api.clone();
-        ActorResponse::r#async(unsubscribe_all(client, subscriptions).into_actor(self))
+
+        subscriptions
+            .iter()
+            .filter_map(|id| self.handles.remove(id))
+            .for_each(|handle| {
+                ctx.cancel_future(handle);
+            });
+
+        unsubscribe_all(self.api.clone(), subscriptions).boxed_local()
     }
 }
 
