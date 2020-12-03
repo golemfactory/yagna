@@ -266,6 +266,13 @@ impl Handler<AgreementApproved> for TaskManager {
             Ok(task_info) => task_info,
         };
 
+        if task_info.multi_activity {
+            log::info!(
+                "Agreement [{}] will be initialized in multi activity mode.",
+                &task_info.agreement_id
+            )
+        }
+
         let actx = self.async_context(ctx);
         let agreement_id = task_info.agreement_id.clone();
 
@@ -356,7 +363,7 @@ impl Handler<ActivityDestroyed> for TaskManager {
             .allowed_transition(&agreement_id, &AgreementState::Closed)
             .is_ok();
 
-        let close_after_1st_activity = !self
+        let close_after_1st_activity = self
             .tasks_props
             .get(&agreement_id)
             .map(|info| !info.multi_activity)
@@ -373,6 +380,12 @@ impl Handler<ActivityDestroyed> for TaskManager {
             actx.payments.send(msg).await??;
 
             if need_close {
+                log::info!(
+                    "First activity for agreement [{}] destroyed. Closing since \
+                    task was in single activity mode.",
+                    &agreement_id
+                );
+
                 actx.myself.do_send(CloseAgreement {
                     agreement_id: agreement_id.to_string(),
                     is_terminated: false,
