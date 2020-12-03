@@ -35,6 +35,12 @@ struct Args {
     /// Service protocol version
     #[structopt(short, long, default_value = "0.1.0")]
     version: String,
+    /// Skip deployment phase
+    #[structopt(
+        long = "no-deploy",
+        parse(from_flag = std::ops::Not::not),
+    )]
+    deploy: bool,
     /// Additional runtime arguments
     varargs: Vec<String>,
 }
@@ -218,7 +224,9 @@ async fn main() -> Result<()> {
     let mut args = Args::from_args();
     args.runtime = args.runtime.canonicalize()?;
 
-    deploy(&args).await?;
+    if args.deploy {
+        deploy(&args).await?;
+    }
     start(args).await?;
 
     Ok(())
