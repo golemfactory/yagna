@@ -2,6 +2,7 @@ use actix_http::{body::Body, Request};
 use actix_service::Service as ActixService;
 use actix_web::{dev::ServiceResponse, test, App};
 use anyhow::{anyhow, bail, Context, Result};
+use std::collections::HashMap;
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 
 use ya_client::model::market::RequestorEvent;
@@ -145,7 +146,7 @@ impl MarketsNetwork {
             kind: node_kind,
         };
 
-        let node_id = node.mock_identity.default.clone().identity;
+        let node_id = node.mock_identity.get_default_id().clone().identity;
         log::info!("Creating mock node {}: [{}].", name, &node_id);
         BCastService::default().register(&node_id, &self.test_name);
         MockNet::default().register_node(&node_id, &public_gsb_prefix);
@@ -155,15 +156,17 @@ impl MarketsNetwork {
     }
 
     pub fn break_networking_for(&self, node_name: &str) -> Result<()> {
-        let id = self.get_default_id(node_name);
-        MockNet::default().unregister_node(&id.identity)
+        for (_, id) in self.list_ids(node_name) {
+            MockNet::default().unregister_node(&id.identity)?
+        }
+        Ok(())
     }
 
     pub fn enable_networking_for(&self, node_name: &str) -> Result<()> {
-        let id = self.get_default_id(node_name);
-        let (public_gsb_prefix, _) = gsb_prefixes(&self.test_name, node_name);
-
-        MockNet::default().register_node(&id.identity, &public_gsb_prefix);
+        for (_, id) in self.list_ids(node_name) {
+            let (public_gsb_prefix, _) = gsb_prefixes(&self.test_name, node_name);
+            MockNet::default().register_node(&id.identity, &public_gsb_prefix);
+        }
         Ok(())
     }
 
@@ -385,8 +388,32 @@ impl MarketsNetwork {
             .find(|node| &node.name == node_name)
             .map(|node| node.mock_identity.clone())
             .unwrap()
-            .default
+            .get_default_id()
             .clone()
+    }
+
+    pub fn create_identity(&self, node_name: &str, id_name: &str) -> Identity {
+        let mock_identity = self
+            .nodes
+            .iter()
+            .find(|node| &node.name == node_name)
+            .map(|node| node.mock_identity.clone())
+            .unwrap();
+        let id = mock_identity.new_identity(id_name);
+
+        let node_id = id.identity.clone();
+        let (public_gsb_prefix, _) = gsb_prefixes(&self.test_name, node_name);
+
+        MockNet::default().register_node(&node_id, &public_gsb_prefix);
+        return id;
+    }
+
+    pub fn list_ids(&self, node_name: &str) -> HashMap<String, Identity> {
+        self.nodes
+            .iter()
+            .find(|node| &node.name == node_name)
+            .map(|node| node.mock_identity.list_ids())
+            .unwrap()
     }
 
     pub async fn get_rest_app(
