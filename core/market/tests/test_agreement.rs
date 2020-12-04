@@ -2,6 +2,8 @@ use anyhow::Result;
 use chrono::{Duration, Utc};
 
 use ya_core_model::market;
+use ya_market::testing::agreement_utils::{gen_reason, negotiate_agreement};
+use ya_market::testing::mock_agreement::generate_agreement;
 use ya_market::testing::mock_node::MarketServiceExt;
 use ya_market::testing::proposal_util::{exchange_draft_proposals, NegotiationHelper};
 use ya_market::testing::MarketsNetwork;
@@ -895,5 +897,74 @@ async fn cant_promote_not_last_proposal() -> Result<()> {
         Err(AgreementError::ProposalCountered(id)) => assert_eq!(id, proposal_id),
         _ => panic!("Expected AgreementError::ProposalCountered."),
     }
+    Ok(())
+}
+
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[actix_rt::test]
+#[serial_test::serial]
+async fn test_terminate() -> Result<()> {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+    let req_market = network.get_market(REQ_NAME);
+    let prov_market = network.get_market(PROV_NAME);
+    let req_agreement_dao = req_market.db.as_dao::<AgreementDao>();
+    let prov_agreement_dao = prov_market.db.as_dao::<AgreementDao>();
+    let agreement_1 = generate_agreement(1, (Utc::now() + Duration::days(1)).naive_utc());
+    req_agreement_dao.save(agreement_1.clone()).await?;
+    prov_agreement_dao.save(agreement_1.clone()).await?;
+    let req_identity = network.get_default_id(REQ_NAME);
+    let reason = serde_json::json!({"ala":"ma kota","message": "coś"}).to_string();
+    req_market
+        .terminate_agreement(req_identity, agreement_1.id, Some(reason))
+        .await
+        .ok();
+    Ok(())
+}
+// TODO: test invalid reason (without message)
+
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[actix_rt::test]
+#[serial_test::serial]
+async fn test_terminate_not_existing_agreement() -> Result<()> {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+
+    let req_market = network.get_market(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME);
+
+    negotiate_agreement(
+        &network,
+        REQ_NAME,
+        PROV_NAME,
+        "negotiation",
+        "r-session",
+        "p-session",
+    )
+    .await
+    .unwrap();
+
+    let not_existing_agreement = generate_agreement(1, Utc::now().naive_utc()).id;
+
+    let result = req_market
+        .terminate_agreement(
+            req_id,
+            not_existing_agreement.clone(),
+            Some(gen_reason("Success")),
+        )
+        .await;
+
+    match result.unwrap_err() {
+        AgreementError::NotFound(id) => assert_eq!(not_existing_agreement, id),
+        _ => panic!("Expected AgreementError::NotFound"),
+    };
     Ok(())
 }
