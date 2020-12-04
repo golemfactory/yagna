@@ -7,7 +7,10 @@ use std::convert::From;
 use std::time::Duration;
 
 use ya_client_model::activity::{ActivityState, ActivityUsage, State, StatePair};
+use ya_client_model::market::{agreement::State as AgreementState, Agreement};
+use ya_client_model::NodeId;
 use ya_core_model::activity;
+use ya_core_model::activity::local::Credentials;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{timeout::*, typed::ServiceBinder};
 
@@ -19,8 +22,6 @@ use crate::common::{
 use crate::dao::*;
 use crate::db::models::ActivityEventType;
 use crate::error::Error;
-use ya_client_model::NodeId;
-use ya_core_model::activity::local::Credentials;
 
 const INACTIVITY_LIMIT_SECONDS_ENV_VAR: &str = "INACTIVITY_LIMIT_SECONDS";
 const UNRESPONSIVE_LIMIT_SECONDS_ENV_VAR: &str = "UNRESPONSIVE_LIMIT_SECONDS";
@@ -65,6 +66,7 @@ pub fn bind_gsb(db: &DbExecutor) {
     // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
     // until first change to value will be made.
     counter!("activity.provider.created", 0);
+    counter!("activity.provider.create.agreement.not-approved", 0);
     counter!("activity.provider.destroyed", 0);
     counter!("activity.provider.destroyed.by_requestor", 0);
     counter!("activity.provider.destroyed.unresponsive", 0);
@@ -82,6 +84,20 @@ async fn create_activity_gsb(
 
     let activity_id = generate_id();
     let agreement = get_agreement(&msg.agreement_id).await?;
+    if agreement.state != AgreementState::Approved {
+        // to track inconsistencies between this and remote market service
+        counter!("activity.provider.create.agreement.not-approved", 1);
+
+        let msg = format!(
+            "Agreement {} is not Approved. Current state: {:?}",
+            msg.agreement_id, agreement.state
+        );
+
+        log::warn!("{}", msg);
+        // below err would also pop up in requestor's corresponding create_activity
+        return Err(Error::BadRequest(msg));
+    }
+
     let provider_id = agreement.provider_id().clone();
 
     db.as_dao::<ActivityDao>()
