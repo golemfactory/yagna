@@ -431,7 +431,14 @@ impl CommonBroker {
 
         dao.terminate(&agreement_id, msg.reason, owner_type)
             .await
-            .map_err(|_e| RemoteAgreementError::InternalError(agreement_id.clone()))?;
+            .map_err(|e| {
+                log::info!(
+                    "Couldn't terminate agreement. id: {}, e: {}",
+                    agreement_id,
+                    e
+                );
+                RemoteAgreementError::InternalError(agreement_id.clone())
+            })?;
         Ok(())
     }
 
