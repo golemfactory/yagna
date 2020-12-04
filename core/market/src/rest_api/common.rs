@@ -82,9 +82,7 @@ async fn terminate_agreement(
     let agreement_id = path.into_inner().to_id(OwnerType::Requestor)?;
     log::debug!("Calling common. qry: {:?}, id: {:?}", query, id); // XXX
     market
-        .requestor_engine
-        .common
-        .terminate_agreement(id, agreement_id, query.reason.clone())
+        .terminate_agreement(id, agreement_id, query.into_inner().reason)
         .await
         .log_err()
         .map(|_| HttpResponse::Ok().finish())
