@@ -7,7 +7,7 @@ use std::convert::From;
 use std::time::Duration;
 
 use ya_client_model::activity::{ActivityState, ActivityUsage, State, StatePair};
-use ya_client_model::market::{agreement::State as AgreementState, Agreement};
+use ya_client_model::market::agreement::State as AgreementState;
 use ya_client_model::NodeId;
 use ya_core_model::activity;
 use ya_core_model::activity::local::Credentials;
@@ -22,6 +22,7 @@ use crate::common::{
 use crate::dao::*;
 use crate::db::models::ActivityEventType;
 use crate::error::Error;
+use ya_core_model::activity::RpcMessageError;
 
 const INACTIVITY_LIMIT_SECONDS_ENV_VAR: &str = "INACTIVITY_LIMIT_SECONDS";
 const UNRESPONSIVE_LIMIT_SECONDS_ENV_VAR: &str = "UNRESPONSIVE_LIMIT_SECONDS";
@@ -95,7 +96,7 @@ async fn create_activity_gsb(
 
         log::warn!("{}", msg);
         // below err would also pop up in requestor's corresponding create_activity
-        return Err(Error::BadRequest(msg));
+        return Err(RpcMessageError::BadRequest(msg));
     }
 
     let provider_id = agreement.provider_id().clone();
