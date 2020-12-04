@@ -76,11 +76,11 @@ pub fn generate_demand(id: &str, expiration_ts: NaiveDateTime) -> Demand {
 
 pub mod client {
     use ya_agreement_utils::{constraints, ConstraintKey, Constraints};
-    use ya_client::model::market::DemandOfferBase;
+    use ya_client::model::market::{NewDemand, NewOffer};
 
     #[allow(unused)]
-    pub fn sample_offer() -> DemandOfferBase {
-        DemandOfferBase::new(
+    pub fn sample_offer() -> NewOffer {
+        NewOffer::new(
             serde_json::json!({
                 "golem": {
                     "node.id.name": "its-test-provider",
@@ -96,9 +96,31 @@ pub mod client {
         )
     }
 
+    /// Use this Offer, if you want to negotiate with only subset of nodes.
+    /// Set match_on parameter to unique string for this subset.
     #[allow(unused)]
-    pub fn not_matching_offer() -> DemandOfferBase {
-        DemandOfferBase::new(
+    pub fn exclusive_offer(match_on: &str) -> NewOffer {
+        NewOffer::new(
+            serde_json::json!({
+                "golem": {
+                    "node.id.name": "its-test-provider",
+                    "node.debug.subnet": "blaa",
+                    "com.pricing.model": "linear",
+                },
+                "subnodes": match_on
+            }),
+            constraints![
+                "golem.node.debug.subnet" == "blaa",
+                "golem.srv.comp.expiration" > 0,
+                "subnodes" == match_on
+            ]
+            .to_string(),
+        )
+    }
+
+    #[allow(unused)]
+    pub fn not_matching_offer() -> NewOffer {
+        NewOffer::new(
             serde_json::json!({
                 "golem": {
                     "node.id.name": "its-test-provider",
@@ -116,8 +138,8 @@ pub mod client {
     }
 
     #[allow(unused)]
-    pub fn sample_demand() -> DemandOfferBase {
-        DemandOfferBase::new(
+    pub fn sample_demand() -> NewDemand {
+        NewDemand::new(
             serde_json::json!({
                 "golem": {
                     "node.id.name": "its-test-requestor",
@@ -134,9 +156,32 @@ pub mod client {
         )
     }
 
+    /// Use this Demand, if you want to negotiate with only subset of nodes.
+    /// Set match_on parameter to unique string for this subset.
     #[allow(unused)]
-    pub fn not_matching_demand() -> DemandOfferBase {
-        DemandOfferBase::new(
+    pub fn exclusive_demand(match_on: &str) -> NewDemand {
+        NewDemand::new(
+            serde_json::json!({
+                "golem": {
+                    "node.id.name": "its-test-requestor",
+                    "node.debug.subnet": "blaa",
+                    "srv.comp.expiration": 3,
+                    "srv.comp.task_package": "test-package",
+                },
+                "subnodes": match_on
+            }),
+            constraints![
+                "golem.node.debug.subnet" == "blaa",
+                "golem.com.pricing.model" == "linear",
+                "subnodes" == match_on
+            ]
+            .to_string(),
+        )
+    }
+
+    #[allow(unused)]
+    pub fn not_matching_demand() -> NewDemand {
+        NewDemand::new(
             serde_json::json!({
                 "golem": {
                     "node.id.name": "its-test-requestor",

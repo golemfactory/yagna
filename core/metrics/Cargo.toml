@@ -25,5 +25,6 @@ metrics = "0.12"
 metrics-core = "0.5.2"
 metrics-runtime = "0.13.1"
 percent-encoding = "2.1.0"
+structopt = "0.3"
 tokio = { version = "0.2", features = ["time", "sync"] }
 url = "2.1.1"

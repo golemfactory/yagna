@@ -7,8 +7,8 @@ use crate::db::model::{
 };
 use crate::db::schema::market_agreement::dsl as agreement_dsl;
 use crate::db::schema::market_demand::dsl as demand_dsl;
-use crate::db::schema::market_event::dsl as event_dsl;
 use crate::db::schema::market_negotiation::dsl as negotiation_dsl;
+use crate::db::schema::market_negotiation_event::dsl as event_dsl;
 use crate::db::schema::market_offer::dsl as offer_dsl;
 use crate::db::schema::market_proposal::dsl as proposal_dsl;
 use crate::db::{DbError, DbResult};
@@ -128,7 +128,7 @@ impl TestingDao<TestMarketEvent> for PoolType {
     type IdType = i32;
     async fn get_by_id(&self, id: i32) -> DbResult<Option<TestMarketEvent>> {
         do_with_transaction(self, move |conn| {
-            Ok(event_dsl::market_event
+            Ok(event_dsl::market_negotiation_event
                 .filter(event_dsl::id.eq(id))
                 .first(conn)
                 .optional()?)
@@ -138,7 +138,7 @@ impl TestingDao<TestMarketEvent> for PoolType {
     async fn raw_insert(&self, instance: TestMarketEvent) -> DbResult<()> {
         do_with_transaction(self, move |conn| {
             Result::<usize, DbError>::Ok(
-                diesel::insert_into(event_dsl::market_event)
+                diesel::insert_into(event_dsl::market_negotiation_event)
                     .values(instance)
                     .execute(conn)?,
             )
