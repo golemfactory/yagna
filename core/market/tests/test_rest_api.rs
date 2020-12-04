@@ -21,6 +21,9 @@ use ya_market::testing::{
 };
 use ya_market_resolver::flatten::flatten_json;
 
+const REQ_NAME: &str = "Node-1";
+const PROV_NAME: &str = "Node-2";
+
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
@@ -425,6 +428,51 @@ async fn test_rest_query_agreement_events() -> anyhow::Result<()> {
     expect_approve(events, 0).unwrap();
     Ok(())
 }
+
+/* XXX
+*/
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[actix_rt::test]
+#[serial_test::serial]
+async fn test_terminate_agreement() -> anyhow::Result<()> {
+    let _ = env_logger::builder().try_init();
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+    let negotiation = negotiate_agreement(
+        &network,
+        REQ_NAME,
+        PROV_NAME,
+        "negotiation",
+        "r-session",
+        "p-session",
+    )
+    .await
+    .unwrap();
+    let req_id = network.get_default_id(REQ_NAME);
+    let reason = serde_json::json!({"ala":"ma kota","message": "coś"}).to_string();
+    let url = format!(
+        "/market-api/v1/agreements/{}/terminate?{}",
+        negotiation.r_agreement.into_client(),
+        QueryParamsBuilder::new()
+            .put("id", Some(req_id.identity))
+            .put("reason", Some(reason))
+            .build()
+    );
+    log::info!("Requesting url: {}", url);
+    let req = test::TestRequest::post().uri(&url).to_request();
+    let mut app = network.get_rest_app(REQ_NAME).await;
+    let resp = test::call_service(&mut app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    Ok(())
+}
+
+// TODO: test invalid reason (without message)
+
 
 // #[cfg_attr(not(feature = "test-suite"), ignore)]
 // #[actix_rt::test]

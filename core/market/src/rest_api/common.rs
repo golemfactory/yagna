@@ -80,6 +80,7 @@ async fn terminate_agreement(
 ) -> impl Responder {
     // We won't attach ourselves too much to owner type here. It will be replaced in CommonBroker
     let agreement_id = path.into_inner().to_id(OwnerType::Requestor)?;
+    log::debug!("Calling common. reason: {:?}, id: {:?}", reason, id); // XXX
     market
         .requestor_engine
         .common

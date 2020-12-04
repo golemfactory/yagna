@@ -7,7 +7,7 @@ use ya_market::testing::proposal_util::{exchange_draft_proposals, NegotiationHel
 use ya_market::testing::MarketsNetwork;
 use ya_market::testing::{
     client::sample_demand, client::sample_offer, events_helper::*,
-    mock_agreement::generate_agreement, AgreementDao, AgreementError, AgreementStateError,
+    AgreementDao, AgreementError, AgreementStateError,
     ApprovalStatus, OwnerType, ProposalState, WaitForApprovalError,
 };
 use ya_service_bus::typed as bus;
@@ -898,32 +898,3 @@ async fn cant_promote_not_last_proposal() -> Result<()> {
     }
     Ok(())
 }
-
-#[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
-#[serial_test::serial]
-async fn test_terminate() -> Result<()> {
-    let network = MarketsNetwork::new(None)
-        .await
-        .add_market_instance(REQ_NAME)
-        .await?
-        .add_market_instance(PROV_NAME)
-        .await?;
-    let req_market = network.get_market(REQ_NAME);
-    let prov_market = network.get_market(PROV_NAME);
-    let req_agreement_dao = req_market.db.as_dao::<AgreementDao>();
-    let prov_agreement_dao = prov_market.db.as_dao::<AgreementDao>();
-    let agreement_1 = generate_agreement(1, (Utc::now() + Duration::days(1)).naive_utc());
-    req_agreement_dao.save(agreement_1.clone()).await?;
-    prov_agreement_dao.save(agreement_1.clone()).await?;
-    let req_identity = network.get_default_id(REQ_NAME);
-    let reason = serde_json::json!({"ala":"ma kota","message": "coś"}).to_string();
-    req_market
-        .requestor_engine
-        .common
-        .terminate_agreement(req_identity, &agreement_1.id, Some(reason))
-        .await?;
-    Ok(())
-}
-
-// TODO: test invalid reason (without message)

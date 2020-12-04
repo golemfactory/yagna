@@ -119,7 +119,10 @@ impl<'c> AgreementDao<'c> {
                     }
                     Some(agreement)
                 }
-                None => None,
+                None => {
+                    log::debug!("Not in DB"); //XXX
+                    None
+                },
             })
         })
         .await
