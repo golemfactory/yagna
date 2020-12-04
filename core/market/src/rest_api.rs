@@ -100,6 +100,11 @@ pub struct QueryAgreementEvents {
     pub after_timestamp: Option<DateTime<Utc>>,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct QueryTerminateAgreement {
+    pub reason: Option<String>,
+}
+
 #[inline(always)]
 pub(crate) fn default_query_timeout() -> f32 {
     DEFAULT_QUERY_TIMEOUT

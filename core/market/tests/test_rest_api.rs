@@ -6,7 +6,8 @@ use serde::de::DeserializeOwned;
 use serde_json::json;
 
 use ya_client::model::market::{
-    Agreement, AgreementOperationEvent, Demand, NewDemand, NewOffer, Offer, Proposal,
+    agreement as client_agreement, Agreement, AgreementOperationEvent, Demand, NewDemand, NewOffer,
+    Offer, Proposal,
 };
 use ya_client::model::ErrorMessage;
 use ya_client::web::QueryParamsBuilder;
@@ -453,12 +454,12 @@ async fn test_terminate_agreement() -> anyhow::Result<()> {
     .await
     .unwrap();
     let req_id = network.get_default_id(REQ_NAME);
+    let prov_id = network.get_default_id(PROV_NAME);
     let reason = serde_json::json!({"ala":"ma kota","message": "coś"}).to_string();
     let url = format!(
         "/market-api/v1/agreements/{}/terminate?{}",
         negotiation.r_agreement.into_client(),
         QueryParamsBuilder::new()
-            .put("id", Some(req_id.identity))
             .put("reason", Some(reason))
             .build()
     );
@@ -468,11 +469,27 @@ async fn test_terminate_agreement() -> anyhow::Result<()> {
     let resp = test::call_service(&mut app, req).await;
 
     assert_eq!(resp.status(), StatusCode::OK);
+
+    assert_eq!(
+        network
+            .get_market(REQ_NAME)
+            .get_agreement(&negotiation.r_agreement, &req_id)
+            .await?
+            .state,
+        client_agreement::State::Terminated
+    );
+    assert_eq!(
+        network
+            .get_market(PROV_NAME)
+            .get_agreement(&negotiation.p_agreement, &prov_id)
+            .await?
+            .state,
+        client_agreement::State::Terminated
+    );
     Ok(())
 }
 
 // TODO: test invalid reason (without message)
-
 
 // #[cfg_attr(not(feature = "test-suite"), ignore)]
 // #[actix_rt::test]

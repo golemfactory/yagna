@@ -10,7 +10,7 @@ use super::PathAgreement;
 use crate::db::model::OwnerType;
 use crate::market::MarketService;
 use crate::negotiation::error::AgreementError;
-use crate::rest_api::QueryAgreementEvents;
+use crate::rest_api::{QueryAgreementEvents, QueryTerminateAgreement};
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -76,15 +76,15 @@ async fn terminate_agreement(
     market: Data<Arc<MarketService>>,
     path: Path<PathAgreement>,
     id: Identity,
-    reason: Option<String>,
+    query: Query<QueryTerminateAgreement>,
 ) -> impl Responder {
     // We won't attach ourselves too much to owner type here. It will be replaced in CommonBroker
     let agreement_id = path.into_inner().to_id(OwnerType::Requestor)?;
-    log::debug!("Calling common. reason: {:?}, id: {:?}", reason, id); // XXX
+    log::debug!("Calling common. qry: {:?}, id: {:?}", query, id); // XXX
     market
         .requestor_engine
         .common
-        .terminate_agreement(id, agreement_id, reason)
+        .terminate_agreement(id, agreement_id, query.reason.clone())
         .await
         .log_err()
         .map(|_| HttpResponse::Ok().finish())

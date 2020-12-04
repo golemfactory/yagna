@@ -6,9 +6,8 @@ use ya_market::testing::mock_node::MarketServiceExt;
 use ya_market::testing::proposal_util::{exchange_draft_proposals, NegotiationHelper};
 use ya_market::testing::MarketsNetwork;
 use ya_market::testing::{
-    client::sample_demand, client::sample_offer, events_helper::*,
-    AgreementDao, AgreementError, AgreementStateError,
-    ApprovalStatus, OwnerType, ProposalState, WaitForApprovalError,
+    client::sample_demand, client::sample_offer, events_helper::*, AgreementDao, AgreementError,
+    AgreementStateError, ApprovalStatus, OwnerType, ProposalState, WaitForApprovalError,
 };
 use ya_service_bus::typed as bus;
 use ya_service_bus::RpcEndpoint;

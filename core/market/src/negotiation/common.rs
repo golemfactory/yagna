@@ -301,7 +301,12 @@ impl CommonBroker {
     ) -> Result<(), AgreementError> {
         verify_reason(reason.as_ref())?;
         let dao = self.db.as_dao::<AgreementDao>();
-        log::debug!("Getting agreement. id: {:?}, agrid: {}, reason: {:?}", id, agreement_id, reason); // XXX
+        log::debug!(
+            "Getting agreement. id: {:?}, agrid: {}, reason: {:?}",
+            id,
+            agreement_id,
+            reason
+        ); // XXX
         let mut agreement = match dao
             .select_by_node(
                 agreement_id.clone(),
