@@ -1,4 +1,5 @@
 use notify::*;
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::path::{Path, PathBuf};
 use structopt::{clap, StructOpt};
@@ -8,6 +9,7 @@ use crate::hardware::{Resources, UpdateResources};
 use directories::UserDirs;
 use futures::channel::oneshot;
 
+use std::str::FromStr;
 use std::sync::mpsc;
 use std::time::Duration;
 use ya_client::cli::ApiOpts;
@@ -80,6 +82,51 @@ impl ProviderConfig {
     }
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+pub struct RecvAccount {
+    pub platform: Option<String>,
+    pub address: String,
+}
+
+impl FromStr for RecvAccount {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> anyhow::Result<Self> {
+        let mut it = s.split("/").fuse();
+        match (it.next(), it.next(), it.next()) {
+            (Some(addr), None, None) => {
+                if addr.starts_with("0x") {
+                    Ok(RecvAccount {
+                        platform: None,
+                        address: addr.to_string(),
+                    })
+                } else {
+                    anyhow::bail!("invalid address format expected  0x..")
+                }
+            }
+            (Some(driver), Some(addr), None) => {
+                let platform = Some(
+                    match driver {
+                        "zksync" | "zk" => "ZK-NGNT",
+                        "eth" | "l1" => "NGTN",
+                        _ => anyhow::bail!("unknown driver: {}", driver),
+                    }
+                    .to_string(),
+                );
+                if addr.starts_with("0x") {
+                    Ok(RecvAccount {
+                        platform,
+                        address: addr.to_string(),
+                    })
+                } else {
+                    anyhow::bail!("invalid address format expected  0x..")
+                }
+            }
+            _ => anyhow::bail!("invalid account desription: {}", s),
+        }
+    }
+}
+
 #[derive(StructOpt)]
 pub struct NodeConfig {
     /// Your human readable identity in the network.
@@ -89,6 +136,12 @@ pub struct NodeConfig {
     /// with other identifiers than selected. Useful for test purposes.
     #[structopt(long, env = "SUBNET")]
     pub subnet: Option<String>,
+
+    /// Account for payments
+    /// Format: `[<driver>/]<address>`
+    ///
+    #[structopt(long, env = "YA_ACCOUNT")]
+    pub account: Option<RecvAccount>,
 }
 
 #[derive(StructOpt)]

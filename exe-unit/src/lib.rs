@@ -1,7 +1,7 @@
 use actix::prelude::*;
 use chrono::Utc;
 use futures::channel::{mpsc, oneshot};
-use futures::{FutureExt, SinkExt, TryFutureExt};
+use futures::{FutureExt, SinkExt};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -340,13 +340,22 @@ impl<R: Runtime> Actor for ExeUnit<R> {
             .finish()
             .spawn(ctx);
 
+        let addr_ = addr.clone();
         let fut = async move {
             addr.send(Initialize).await?.map_err(Error::from)?;
             addr.send(SetState::from(State::Initialized)).await?;
-            Ok(())
+            Ok::<_, Error>(())
         }
-        .map_err(|e: Error| panic!("Supervisor initialization error: {}", e))
-        .map(|_| log::info!("Started"));
+        .then(|result| async move {
+            match result {
+                Ok(_) => log::info!("Supervisor initialized"),
+                Err(e) => {
+                    let err = Error::Other(format!("initialization error: {}", e));
+                    log::error!("Supervisor is shutting down due to {}", err);
+                    let _ = addr_.send(Shutdown(ShutdownReason::Error(err))).await;
+                }
+            }
+        });
 
         ctx.spawn(fut.into_actor(self));
     }
