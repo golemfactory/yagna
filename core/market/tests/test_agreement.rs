@@ -925,7 +925,6 @@ async fn test_terminate() -> Result<()> {
         .ok();
     Ok(())
 }
-// TODO: test invalid reason (without message)
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
@@ -965,6 +964,141 @@ async fn test_terminate_not_existing_agreement() -> Result<()> {
     match result.unwrap_err() {
         AgreementError::NotFound(id) => assert_eq!(not_existing_agreement, id),
         _ => panic!("Expected AgreementError::NotFound"),
+    };
+    Ok(())
+}
+
+/// Terminate is allowed only in `Approved` state of Agreement.
+/// TODO: Add tests for terminate_agreement in Cancelled and Rejected state after
+///  endpoints will be implemented.
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[actix_rt::test]
+#[serial_test::serial]
+async fn test_terminate_from_wrong_states() -> Result<()> {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await?
+        .proposal_id;
+
+    let req_market = network.get_market(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME);
+    let prov_market = network.get_market(PROV_NAME);
+
+    let agreement_id = req_market
+        .requestor_engine
+        .create_agreement(
+            req_id.clone(),
+            &proposal_id,
+            Utc::now() + Duration::hours(1),
+        )
+        .await?;
+
+    let result = req_market
+        .terminate_agreement(
+            req_id.clone(),
+            agreement_id.clone(),
+            Some(gen_reason("Failure")),
+        )
+        .await;
+
+    match result {
+        Ok(_) => panic!("Terminate Agreement should fail."),
+        Err(AgreementError::InvalidState(AgreementStateError::Proposed(id))) => {
+            assert_eq!(id, agreement_id)
+        }
+        _ => panic!("Wrong error returned."),
+    };
+
+    req_market
+        .requestor_engine
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
+        .await?;
+
+    // Terminate can be done on both sides at this moment.
+    let result = req_market
+        .terminate_agreement(
+            req_id.clone(),
+            agreement_id.clone(),
+            Some(gen_reason("Failure")),
+        )
+        .await;
+
+    match result {
+        Ok(_) => panic!("Terminate Agreement should fail."),
+        Err(AgreementError::InvalidState(AgreementStateError::Confirmed(id))) => {
+            assert_eq!(id, agreement_id)
+        }
+        _ => panic!("Wrong error returned."),
+    };
+
+    let agreement_id = agreement_id.clone().translate(OwnerType::Provider);
+
+    let result = prov_market
+        .terminate_agreement(req_id, agreement_id.clone(), Some(gen_reason("Failure")))
+        .await;
+
+    match result {
+        Ok(_) => panic!("Terminate Agreement should fail."),
+        Err(AgreementError::InvalidState(AgreementStateError::Confirmed(id))) => {
+            assert_eq!(id, agreement_id)
+        }
+        _ => panic!("Wrong error returned."),
+    };
+    Ok(())
+}
+
+/// We expect, that reason string is structured and can\
+/// be deserialized to `Reason` struct.
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[actix_rt::test]
+#[serial_test::serial]
+async fn test_terminate_invalid_reason() -> Result<()> {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+
+    let req_market = network.get_market(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME);
+
+    let agreement_id = negotiate_agreement(
+        &network,
+        REQ_NAME,
+        PROV_NAME,
+        "negotiation",
+        "r-session",
+        "p-session",
+    )
+    .await
+    .unwrap()
+    .r_agreement;
+
+    let reason = "Unstructured message. Should be json.".to_string();
+    match req_market
+        .terminate_agreement(req_id.clone(), agreement_id.clone(), Some(reason))
+        .await
+        .unwrap_err()
+    {
+        AgreementError::ReasonError(_) => (),
+        _ => panic!("Expected AgreementError::ReasonError"),
+    };
+
+    let reason = "{'no_message_field': 'Reason expects message field'}".to_string();
+    match req_market
+        .terminate_agreement(req_id, agreement_id.clone(), Some(reason))
+        .await
+        .unwrap_err()
+    {
+        AgreementError::ReasonError(_) => (),
+        _ => panic!("Expected AgreementError::ReasonError"),
     };
     Ok(())
 }
