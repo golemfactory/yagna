@@ -405,7 +405,7 @@ impl CommonBroker {
         dao.terminate(&agreement_id, msg.reason, terminator)
             .await
             .map_err(|e| {
-                log::info!(
+                log::warn!(
                     "Couldn't terminate agreement. id: {}, e: {}",
                     agreement_id,
                     e
