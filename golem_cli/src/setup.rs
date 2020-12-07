@@ -1,4 +1,4 @@
-use crate::command::UsageDef;
+use crate::command::{RecvAccount, UsageDef};
 use crate::terminal::clear_stdin;
 use anyhow::Result;
 use directories::ProjectDirs;
@@ -7,8 +7,10 @@ use std::path::PathBuf;
 
 use std::fs;
 use structopt::StructOpt;
+use ya_core_model::NodeId;
 
-const DEFAULT_SUBNET: &str = "community";
+const OLD_DEFAULT_SUBNET: &str = "community";
+const DEFAULT_SUBNET: &str = "community.3";
 
 #[derive(StructOpt)]
 pub struct RunConfig {
@@ -18,6 +20,8 @@ pub struct RunConfig {
     pub subnet: Option<String>,
     #[structopt(long, env = "YA_CONF_PRICES", hidden = true)]
     pub prices_configured: bool,
+    #[structopt(long, env = "YA_ACCOUNT")]
+    pub account: Option<NodeId>,
 }
 
 impl RunConfig {
@@ -86,10 +90,33 @@ pub async fn setup(run_config: &mut RunConfig, force: bool) -> Result<i32> {
                 .clone()
                 .unwrap_or_else(|| names::Generator::default().next().unwrap_or_default()),
         )?;
+        // Force subnet upgade.
+        if config.subnet.as_deref() == Some(OLD_DEFAULT_SUBNET) {
+            config.subnet = None;
+        }
         let subnet = promptly::prompt_default(
             "Subnet ",
             config.subnet.unwrap_or_else(|| DEFAULT_SUBNET.to_string()),
         )?;
+
+        let message = match &config.account {
+            Some(account) => format!("Ethereum wallet address (default={})", &account.address),
+            None => "Ethereum wallet address (default=internal golem wallet)".to_string(),
+        };
+
+        while let Some(account) = promptly::prompt_opt::<String, _>(&message)? {
+            let r: Result<NodeId, _> = account.parse::<NodeId>();
+            if let Err(_) = r {
+                eprintln!("invalid ethereum address, is should be 20-byte hex (example 0xB1974E1F44EAD2d22bB995167A709b89Fc466B6c)")
+            } else {
+                config.account = Some(RecvAccount {
+                    address: account.to_string(),
+                    platform: None,
+                });
+                break;
+            }
+        }
+
         config.node_name = Some(node_name);
         config.subnet = Some(subnet);
         cmd.ya_provider()?.set_config(&config).await?;
