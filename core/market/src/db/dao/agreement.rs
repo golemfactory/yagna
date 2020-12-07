@@ -325,7 +325,7 @@ fn terminate(
 
     let event = NewAgreementEvent {
         agreement_id: id.clone(),
-        reason: reason,
+        reason,
         event_type: AgreementEventType::Terminated,
         issuer: owner_type,
     };

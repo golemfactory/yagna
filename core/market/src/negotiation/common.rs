@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ya_client::model::market::proposal::Proposal as ClientProposal;
-use ya_client::model::market::reason::{ConvertReason, JsonReason, Reason};
+use ya_client::model::market::reason::Reason;
 use ya_client::model::market::NewProposal;
 use ya_client::model::NodeId;
 use ya_core_model::market::BUS_ID;
@@ -429,7 +429,13 @@ impl CommonBroker {
             }
         }
 
-        dao.terminate(&agreement_id, msg.reason, owner_type)
+        // Opposite side terminated.
+        let terminator = match owner_type {
+            OwnerType::Provider => OwnerType::Requestor,
+            OwnerType::Requestor => OwnerType::Provider,
+        };
+
+        dao.terminate(&agreement_id, msg.reason, terminator)
             .await
             .map_err(|e| {
                 log::info!(
@@ -610,10 +616,7 @@ pub fn expect_state(
 }
 
 fn verify_reason(reason: Option<&String>) -> Result<(), ReasonError> {
-    if let Some(s) = reason {
-        Reason::from_json_reason(JsonReason {
-            json: serde_json::from_str(s)?,
-        })?;
-    };
-    Ok(())
+    Ok(if let Some(s) = reason {
+        serde_json::from_str::<Reason>(s)?;
+    })
 }
