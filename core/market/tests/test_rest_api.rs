@@ -430,8 +430,6 @@ async fn test_rest_query_agreement_events() -> anyhow::Result<()> {
     Ok(())
 }
 
-/* XXX
-*/
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
