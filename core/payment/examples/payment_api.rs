@@ -195,6 +195,10 @@ async fn main() -> anyhow::Result<()> {
     ya_sb_router::bind_gsb_router(None).await?;
     log::debug!("bind_gsb_router()");
 
+    let processor = PaymentProcessor::new(db.clone());
+    ya_payment::service::bind_service(&db, processor);
+    log::debug!("bind_service()");
+
     let (driver_name, platform) = match args.driver {
         Driver::Dummy => {
             start_dummy_driver().await?;
@@ -209,10 +213,6 @@ async fn main() -> anyhow::Result<()> {
             (zksync::DRIVER_NAME, zksync::PLATFORM_NAME)
         }
     };
-
-    let processor = PaymentProcessor::new(db.clone());
-    ya_payment::service::bind_service(&db, processor);
-    log::debug!("bind_service()");
 
     bus::service(driver_bus_id(driver_name))
         .call(Init::new(provider_id.clone(), AccountMode::RECV))
