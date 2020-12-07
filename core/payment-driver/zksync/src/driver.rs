@@ -313,26 +313,34 @@ impl PaymentDriverCron for ZksyncDriver {
                     log::warn!("Payment failed, will be re-tried.");
                     continue;
                 }
-
-                let order_ids = payments
-                    .iter()
-                    .map(|payment| payment.order_id.clone())
-                    .collect();
-
-                // Create bespoke payment details:
-                // - Sender + receiver are the same
-                // - Date is always now
-                // - Amount needs to be updated to total of all PaymentEntity's
+                let driver_name = self.get_name();
+                let details = match wallet::verify_tx(&tx_hash).await
+                {
+                    Ok(a) => a,
+                    Err(e) => {
+                        log::error!("{}", e);
+                        
+	                // Create bespoke payment details:
+	                // - Sender + receiver are the same
+	                // - Date is always now
+	                // - Amount needs to be updated to total of all PaymentEntity's
 
                 // TODO: Add token support
                 let platform =
                     network_token_to_platform(Some(first_payment.network), None).unwrap(); // TODO: Catch error?
                 let mut details = utils::db_to_payment_details(&first_payment);
-                details.amount = payments
-                    .into_iter()
-                    .map(|payment| utils::db_amount_to_big_dec(payment.amount))
-                    .sum::<BigDecimal>();
-                let tx_hash = to_confirmation(&details).unwrap();
+	                details.amount = payments
+	                    .into_iter()
+	                    .map(|payment| utils::db_amount_to_big_dec(payment.amount))
+	                    .sum::<BigDecimal>();
+                    }
+                };
+
+                let order_ids = payments
+                    .iter()
+                    .map(|payment| payment.order_id.clone())
+                    .collect();
+                let tx_hash = hex::decode(&tx_hash).unwrap();
                 if let Err(e) =
                     bus::notify_payment(&self.get_name(), &platform, order_ids, &details, tx_hash)
                         .await
