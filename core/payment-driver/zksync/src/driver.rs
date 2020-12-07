@@ -5,7 +5,6 @@
 */
 // Extrnal crates
 use chrono::Utc;
-use serde_json;
 use std::collections::HashMap;
 use std::str::FromStr;
 use uuid::Uuid;
@@ -266,14 +265,10 @@ impl PaymentDriver for ZksyncDriver {
         msg: VerifyPayment,
     ) -> Result<PaymentDetails, GenericError> {
         log::debug!("verify_payment: {:?}", msg);
-        // TODO: Get transaction details from zksync
-        // let tx_hash = hex::encode(msg.confirmation().confirmation);
-        // match wallet::check_tx(&tx_hash).await {
-        //     Some(true) => Ok(wallet::build_payment_details(tx_hash)),
-        //     Some(false) => Err(GenericError::new("Payment did not succeed")),
-        //     None => Err(GenericError::new("Payment not ready to be checked")),
-        // }
-        from_confirmation(msg.confirmation())
+
+        let tx_hash = hex::encode(msg.confirmation().confirmation);
+        log::info!("Verifying transaction: {}", tx_hash);
+        wallet::verify_tx(&tx_hash).await
     }
 
     async fn validate_allocation(
@@ -353,18 +348,4 @@ impl PaymentDriverCron for ZksyncDriver {
             self.process_payments_for_account(&node_id).await;
         }
     }
-}
-
-// Used by the DummyDriver to have a 2 way conversion between details & confirmation
-fn to_confirmation(details: &PaymentDetails) -> Result<Vec<u8>, GenericError> {
-    Ok(serde_json::to_string(details)
-        .map_err(GenericError::new)?
-        .into_bytes())
-}
-
-fn from_confirmation(confirmation: PaymentConfirmation) -> Result<PaymentDetails, GenericError> {
-    let json_str =
-        std::str::from_utf8(confirmation.confirmation.as_slice()).map_err(GenericError::new)?;
-    let details = serde_json::from_str(&json_str).map_err(GenericError::new)?;
-    Ok(details)
 }

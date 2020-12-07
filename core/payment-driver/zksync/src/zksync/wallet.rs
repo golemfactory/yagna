@@ -10,7 +10,7 @@ use std::str::FromStr;
 use zksync::operations::SyncTransactionHandle;
 use zksync::types::BlockStatus;
 use zksync::zksync_types::{tx::TxHash, Address, TxFeeTypes};
-use zksync::{Network as ZkNetwork, Provider, Wallet, WalletCredentials};
+use zksync::{provider::get_rpc_addr, Network as ZkNetwork, Provider, Wallet, WalletCredentials};
 use zksync_eth_signer::EthereumSigner;
 
 // Workspace uses
@@ -171,20 +171,51 @@ pub async fn check_tx(tx_hash: &str, network: Network) -> Option<bool> {
     log::trace!("tx_info: {:?}", tx_info);
     tx_info.success
 }
-//  TODO: Get Transfer object from zksync
-// pub async fn build_payment_details(tx_hash: &str) -> PaymentDetails {
-//     let provider = get_provider();
-//     let tx_hash = format!("sync-tx:{}", tx_hash);
-//     let tx_hash = TxHash::from_str(&tx_hash).unwrap();
-//     let tx_info = provider.tx_info(tx_hash).await.unwrap();
-//
-//     PaymentDetails {
-//         recipient: tx_info.,
-//         sender,
-//         amount,
-//         date
-//     }
-// }
+
+#[derive(serde::Deserialize)]
+struct TxRespObj {
+    to: String,
+    from: String,
+    amount: String,
+    created_at: String,
+}
+
+pub async fn verify_tx(tx_hash: &str) -> Result<PaymentDetails, GenericError> {
+    let provider_url = get_rpc_addr(*NETWORK);
+    // HACK: Get the transaction data from v0.1 api
+    let api_url = provider_url.replace("/jsrpc", "/api/v0.1");
+    let req_url = format!("{}/transactions_all/{}", api_url, tx_hash);
+    log::debug!("Request URL: {}", &req_url);
+
+    let client = awc::Client::new();
+    let response = client
+        .get(req_url)
+        .send()
+        .await
+        .map_err(GenericError::new)?
+        .body()
+        .await
+        .map_err(GenericError::new)?;
+    let response = String::from_utf8_lossy(response.as_ref());
+    log::trace!("Request response: {}", &response);
+    let v: TxRespObj = serde_json::from_str(&response).map_err(GenericError::new)?;
+
+    let recipient = v.to;
+    let sender = v.from;
+    let amount =
+        utils::big_uint_to_big_dec(BigUint::from_str(&v.amount).map_err(GenericError::new)?);
+    let date_str = format!("{}Z", v.created_at);
+    let date = Some(chrono::DateTime::from_str(&date_str).map_err(GenericError::new)?);
+    let details = PaymentDetails {
+        recipient,
+        sender,
+        amount,
+        date,
+    };
+    log::debug!("PaymentDetails from server: {:?}", &details);
+
+    Ok(details)
+}
 
 fn get_provider(network: Network) -> Provider {
     let provider: Provider = match env::var("ZKSYNC_RPC_ADDRESS").ok() {
