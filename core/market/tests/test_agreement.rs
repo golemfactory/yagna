@@ -925,7 +925,6 @@ async fn test_terminate() -> Result<()> {
         .ok();
     Ok(())
 }
-// TODO: test invalid reason (without message)
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
@@ -1050,6 +1049,56 @@ async fn test_terminate_from_wrong_states() -> Result<()> {
             assert_eq!(id, agreement_id)
         }
         _ => panic!("Wrong error returned."),
+    };
+    Ok(())
+}
+
+/// We expect, that reason string is structured and can\
+/// be deserialized to `Reason` struct.
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[actix_rt::test]
+#[serial_test::serial]
+async fn test_terminate_invalid_reason() -> Result<()> {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+
+    let req_market = network.get_market(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME);
+
+    let agreement_id = negotiate_agreement(
+        &network,
+        REQ_NAME,
+        PROV_NAME,
+        "negotiation",
+        "r-session",
+        "p-session",
+    )
+    .await
+    .unwrap()
+    .r_agreement;
+
+    let reason = "Unstructured message. Should be json.".to_string();
+    match req_market
+        .terminate_agreement(req_id.clone(), agreement_id.clone(), Some(reason))
+        .await
+        .unwrap_err()
+    {
+        AgreementError::ReasonError(_) => (),
+        _ => panic!("Expected AgreementError::ReasonError"),
+    };
+
+    let reason = "{'no_message_field': 'Reason expects message field'}".to_string();
+    match req_market
+        .terminate_agreement(req_id, agreement_id.clone(), Some(reason))
+        .await
+        .unwrap_err()
+    {
+        AgreementError::ReasonError(_) => (),
+        _ => panic!("Expected AgreementError::ReasonError"),
     };
     Ok(())
 }
