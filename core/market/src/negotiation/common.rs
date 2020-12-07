@@ -8,12 +8,9 @@ use ya_client::model::market::proposal::Proposal as ClientProposal;
 use ya_client::model::market::reason::Reason;
 use ya_client::model::market::NewProposal;
 use ya_client::model::NodeId;
-use ya_core_model::market::BUS_ID;
 use ya_market_resolver::{match_demand_offer, Match};
-use ya_net::{self as net, RemoteEndpoint};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
-use ya_service_bus::RpcEndpoint;
 
 use crate::config::Config;
 use crate::db::dao::{
@@ -36,13 +33,11 @@ use crate::negotiation::{
     notifier::NotifierError,
     EventNotifier,
 };
+use crate::protocol::negotiation::common as protocol_common;
 use crate::protocol::negotiation::error::{
-    CounterProposalError, GsbAgreementError, RemoteAgreementError, RemoteProposalError,
-    TerminateAgreementError,
+    CounterProposalError, RemoteAgreementError, RemoteProposalError, TerminateAgreementError,
 };
-use crate::protocol::negotiation::messages::{
-    provider, requestor, AgreementTerminated, ProposalReceived,
-};
+use crate::protocol::negotiation::messages::{AgreementTerminated, ProposalReceived};
 
 type IsFirst = bool;
 
@@ -324,7 +319,7 @@ impl CommonBroker {
         expect_state(&agreement, AgreementState::Approved)?;
         agreement.state = AgreementState::Terminated;
         let owner_type = agreement.id.owner();
-        self.propagate_terminate_agreement(
+        protocol_common::propagate_terminate_agreement(
             &agreement,
             id.identity.clone(),
             match owner_type {
@@ -332,7 +327,6 @@ impl CommonBroker {
                 OwnerType::Provider => agreement.requestor_id,
             },
             reason.clone(),
-            owner_type,
         )
         .await?;
         dao.terminate(&agreement.id, reason, owner_type)
@@ -348,33 +342,6 @@ impl CommonBroker {
             &id.identity,
             &agreement.id,
         );
-        Ok(())
-    }
-    /// Sent to notify other side about termination.
-    pub async fn propagate_terminate_agreement(
-        &self,
-        agreement: &Agreement,
-        sender: NodeId,
-        receiver: NodeId,
-        reason: Option<String>,
-        owner_type: OwnerType,
-    ) -> Result<(), TerminateAgreementError> {
-        let msg = AgreementTerminated {
-            agreement_id: agreement.id.clone(),
-            reason,
-        };
-        let provider_service = &provider::agreement_addr(BUS_ID);
-        let requestor_service = &requestor::agreement_addr(BUS_ID);
-        let service = match owner_type {
-            OwnerType::Requestor => provider_service,
-            OwnerType::Provider => requestor_service,
-        };
-        net::from(sender)
-            .to(receiver)
-            .service(service)
-            .send(msg)
-            .await
-            .map_err(|e| GsbAgreementError(e.to_string(), agreement.id.clone()))??;
         Ok(())
     }
 

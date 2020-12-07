@@ -152,7 +152,7 @@ impl RpcMessage for AgreementCancelled {
     type Error = GsbAgreementError;
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgreementTerminated {
     pub agreement_id: AgreementId,
