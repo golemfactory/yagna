@@ -35,7 +35,7 @@ impl ZksyncService {
         let driver = ZksyncDriver::new(db.clone());
         driver.load_active_accounts().await;
         let driver_rc = Arc::new(driver);
-        bus::bind_service(&db, driver_rc.clone()).await;
+        bus::bind_service(&db, driver_rc.clone()).await?;
         log::debug!("Driver loaded");
 
         // Start cron
