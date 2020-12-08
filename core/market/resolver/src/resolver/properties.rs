@@ -25,6 +25,8 @@ pub enum PropertyValue<'a> {
     DateTime(DateTime<Utc>),
     Version(Version),
     List(Vec<Box<PropertyValue<'a>>>),
+    #[doc(hidden)]
+    __Nonexhaustive,
 }
 
 impl<'a> PropertyValue<'a> {
@@ -52,7 +54,14 @@ impl<'a> PropertyValue<'a> {
                 Ok(result) => result,
                 _ => false,
             }, // ignore parsing error, assume false
-            _ => panic!("Not implemented"),
+            PropertyValue::Boolean(value) => match val.parse::<bool>() {
+                Ok(result) => &result == value,
+                _ => false,
+            }, // ignore parsing error, assume false
+            _ => {
+                log::warn!("Operator `==` not implemented for type {:#?}", &self);
+                false
+            }
         }
     }
 
@@ -77,7 +86,11 @@ impl<'a> PropertyValue<'a> {
                 _ => false,
             }, // ignore parsing error, assume false
             PropertyValue::List(_) => false,           // operator meaningless for List
-            _ => panic!("Not implemented"),
+            PropertyValue::Boolean(_) => false,        // operator meaningless for bool
+            _ => {
+                log::warn!("Operator `<` not implemented for type {:#?}", &self);
+                false
+            }
         }
     }
 
@@ -102,7 +115,11 @@ impl<'a> PropertyValue<'a> {
                 _ => false,
             }, // ignore parsing error, assume false
             PropertyValue::List(_) => false,            // operator meaningless for List
-            _ => panic!("Not implemented"),
+            PropertyValue::Boolean(_) => false,         // operator meaningless for bool
+            _ => {
+                log::warn!("Operator `<=` not implemented for type {:#?}", &self);
+                false
+            }
         }
     }
 
@@ -127,7 +144,11 @@ impl<'a> PropertyValue<'a> {
                 _ => false,
             }, // ignore parsing error, assume false
             PropertyValue::List(_) => false,           // operator meaningless for List
-            _ => panic!("Not implemented"),
+            PropertyValue::Boolean(_) => false,        // operator meaningless for bool
+            _ => {
+                log::warn!("Operator `>` not implemented for type {:#?}", &self);
+                false
+            }
         }
     }
 
@@ -152,7 +173,11 @@ impl<'a> PropertyValue<'a> {
                 _ => false,
             }, // ignore parsing error, assume false
             PropertyValue::List(_) => false,            // operator meaningless for List
-            _ => panic!("Not implemented"),
+            PropertyValue::Boolean(_) => false,         // operator meaningless for bool
+            _ => {
+                log::warn!("Operator `>=` not implemented for type {:#?}", &self);
+                false
+            }
         }
     }
 
