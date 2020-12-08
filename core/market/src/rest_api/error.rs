@@ -177,6 +177,7 @@ impl ResponseError for AgreementError {
             | AgreementError::OwnProposal(..)
             | AgreementError::ProposalNotFound(..)
             | AgreementError::ProposalCountered(..)
+            | AgreementError::ReasonError(..)
             | AgreementError::InvalidId(..) => HttpResponse::BadRequest().json(msg),
             AgreementError::GetProposal(..)
             | AgreementError::Save(..)
@@ -185,6 +186,7 @@ impl ResponseError for AgreementError {
             | AgreementError::Gsb(_)
             | AgreementError::ProtocolCreate(_)
             | AgreementError::ProtocolApprove(_)
+            | AgreementError::ProtocolTerminate(_)
             | AgreementError::Internal(_) => HttpResponse::InternalServerError().json(msg),
         }
     }

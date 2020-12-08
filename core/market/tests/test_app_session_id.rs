@@ -2,7 +2,7 @@ use all_asserts::*;
 use anyhow::Result;
 use chrono::{Duration, Utc};
 
-use ya_market::testing::agreement_utils::negotiate_agreement;
+use ya_market::testing::agreement_utils::{negotiate_agreement, negotiate_agreement_with_ids};
 use ya_market::testing::proposal_util::exchange_proposals_exclusive;
 use ya_market::testing::MarketsNetwork;
 use ya_market::testing::OwnerType;
@@ -263,16 +263,18 @@ async fn test_session_negotiation_on_the_same_node() -> Result<()> {
 
     let req_market = network.get_market("Node");
     let req_id = network.get_default_id("Node");
-    let prov_id = req_id.clone();
+    let prov_id = network.create_identity("Node", "Provider");
     let prov_market = req_market.clone();
 
-    let negotiation = negotiate_agreement(
+    let negotiation = negotiate_agreement_with_ids(
         &network,
         "Node",
         "Node",
         "negotiation",
         "r-session",
         "p-session",
+        &req_id,
+        &prov_id,
     )
     .await
     .unwrap();
@@ -318,16 +320,18 @@ async fn test_session_negotiation_on_the_same_node_same_session() -> Result<()> 
 
     let req_market = network.get_market("Node");
     let req_id = network.get_default_id("Node");
-    let prov_id = req_id.clone();
+    let prov_id = network.create_identity("Node", "Provider");
     let prov_market = req_market.clone();
 
-    let negotiation = negotiate_agreement(
+    let negotiation = negotiate_agreement_with_ids(
         &network,
         "Node",
         "Node",
         "negotiation",
         "same-session",
         "same-session",
+        &req_id,
+        &prov_id,
     )
     .await
     .unwrap();

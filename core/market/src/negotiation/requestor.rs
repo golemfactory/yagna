@@ -51,6 +51,7 @@ impl RequestorBroker {
 
         let broker1 = broker.clone();
         let broker2 = broker.clone();
+        let broker_terminated = broker.clone();
         let notifier = broker.negotiation_notifier.clone();
 
         let api = NegotiationApi::new(
@@ -64,6 +65,11 @@ impl RequestorBroker {
                 on_agreement_approved(broker2.clone(), caller, msg)
             },
             move |_caller: String, _msg: AgreementRejected| async move { unimplemented!() },
+            move |caller: String, msg: AgreementTerminated| {
+                broker_terminated
+                    .clone()
+                    .on_agreement_terminated(caller, msg, OwnerType::Requestor)
+            },
         );
 
         let engine = RequestorBroker {
@@ -78,6 +84,7 @@ impl RequestorBroker {
         counter!("market.agreements.requestor.approved", 0);
         counter!("market.agreements.requestor.rejected", 0);
         counter!("market.agreements.requestor.cancelled", 0);
+        counter!("market.agreements.requestor.terminated", 0);
         counter!("market.proposals.requestor.generated", 0);
         counter!("market.proposals.requestor.received", 0);
         counter!("market.proposals.requestor.countered", 0);

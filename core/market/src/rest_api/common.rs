@@ -10,12 +10,13 @@ use super::PathAgreement;
 use crate::db::model::OwnerType;
 use crate::market::MarketService;
 use crate::negotiation::error::AgreementError;
-use crate::rest_api::QueryAgreementEvents;
+use crate::rest_api::{QueryAgreementEvents, QueryTerminateAgreement};
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
         .service(collect_agreement_events)
         .service(get_agreement)
+        .service(terminate_agreement)
 }
 
 #[actix_web::get("/agreements/{agreement_id}")]
@@ -68,4 +69,20 @@ async fn collect_agreement_events(
         .await
         .log_err()
         .map(|events| HttpResponse::Ok().json(events))
+}
+
+#[actix_web::post("/agreements/{agreement_id}/terminate")]
+async fn terminate_agreement(
+    market: Data<Arc<MarketService>>,
+    path: Path<PathAgreement>,
+    id: Identity,
+    query: Query<QueryTerminateAgreement>,
+) -> impl Responder {
+    // We won't attach ourselves too much to owner type here. It will be replaced in CommonBroker
+    let agreement_id = path.into_inner().to_id(OwnerType::Requestor)?;
+    market
+        .terminate_agreement(id, agreement_id, query.into_inner().reason)
+        .await
+        .log_err()
+        .map(|_| HttpResponse::Ok().finish())
 }
