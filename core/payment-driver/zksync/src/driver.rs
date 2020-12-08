@@ -8,6 +8,7 @@ use chrono::Utc;
 use std::collections::HashMap;
 use std::str::FromStr;
 use uuid::Uuid;
+use std::str::FromStr;
 
 // Workspace uses
 use ya_payment_driver::{
@@ -333,8 +334,8 @@ impl PaymentDriverCron for ZksyncDriver {
 	                    .into_iter()
 	                    .map(|payment| utils::db_amount_to_big_dec(payment.amount))
 	                    .sum::<BigDecimal>();
-                        }
-                    };
+                    }
+                };
 
                 let order_ids = payments
                     .iter()

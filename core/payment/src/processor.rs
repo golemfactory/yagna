@@ -442,7 +442,7 @@ impl PaymentProcessor {
             .await??;
 
         // Verify if amount declared in message matches actual amount transferred on blockchain
-        if &details.amount != &payment.amount {
+        if &details.amount < &payment.amount {
             return VerifyPaymentError::amount(&details.amount, &payment.amount);
         }
 
