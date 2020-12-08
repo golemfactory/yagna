@@ -1,18 +1,20 @@
 use actix::Arbiter;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use futures::channel::mpsc;
 use futures::{FutureExt, SinkExt, StreamExt};
+use rustyline::Editor;
 use std::env;
 use std::ffi::OsString;
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::str::FromStr;
 use structopt::{clap, StructOpt};
-use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt};
 use tokio::process::Command;
 use tokio_util::codec::{BytesCodec, FramedRead};
 use ya_runtime_api::server::{spawn, ProcessStatus, RunProcess, RuntimeEvent, RuntimeService};
+use ya_utils_path::data_dir::DataDir;
 
 /// Deploys and starts a runtime with an interactive prompt{n}
 /// debug-runtime --runtime /usr/lib/yagna/plugins/ya-runtime-vm/ya-runtime-vm \{n}
@@ -20,6 +22,7 @@ use ya_runtime_api::server::{spawn, ProcessStatus, RunProcess, RuntimeEvent, Run
 /// --workdir /tmp/runtime \{n}
 /// -- --cpu-cores 4
 #[derive(StructOpt)]
+#[structopt(global_setting = clap::AppSettings::ColoredHelp)]
 #[structopt(global_setting = clap::AppSettings::DeriveDisplayOrder)]
 #[structopt(rename_all = "kebab-case")]
 struct Args {
@@ -88,8 +91,8 @@ impl RuntimeEvent for EventHandler {
         }
         if !status.running {
             match status.return_code {
-                0 => log::info!("Process exited with code 0"),
-                c => log::error!("Process failed with code {}", c),
+                0 => log::info!("command exited with code 0"),
+                c => log::error!("command failed with code {}", c),
             }
 
             let mut tx = self.tx.clone();
@@ -152,37 +155,39 @@ async fn deploy(args: &Args) -> Result<()> {
     Ok(())
 }
 
-async fn start(args: Args) -> Result<()> {
+async fn start(args: Args, history_path: PathBuf) -> Result<()> {
     let mut rt_args = args.to_args();
     rt_args.push(OsString::from("start"));
 
     log::info!("starting {} {:?}", args.runtime.display(), rt_args);
+
     let mut command = Command::new(&args.runtime);
     command.args(rt_args);
 
     let (tx, mut rx) = mpsc::channel(1);
-    let service = spawn(command, EventHandler::new(tx)).await?;
-
-    log::info!("sending hello");
+    let service = spawn(command, EventHandler::new(tx))
+        .await
+        .context("unable to spawn runtime")?;
     let _ = service.hello(args.version.as_str()).await;
 
-    let mut stdout = io::stdout();
-    let mut reader = io::BufReader::new(io::stdin());
-    let mut buffer = String::new();
+    log::info!("press ctrl+c to exit");
 
-    log::info!("press ctrl+d to exit");
+    let mut rl = Editor::<()>::new();
+    if let Err(e) = rl.load_history(&history_path) {
+        log::warn!("unable to load history: {}", e);
+    }
+
     loop {
-        stdout.write_all("$ ".as_bytes()).await?;
-        stdout.flush().await?;
+        let readline = rl.readline("$ ");
+        let input = match readline {
+            Ok(line) => {
+                if line.trim().is_empty() {
+                    continue;
+                }
 
-        let input = match reader.read_line(&mut buffer).await {
-            Ok(read) => match read {
-                0 => break,
-                _ => match buffer.trim().is_empty() {
-                    true => continue,
-                    _ => std::mem::replace(&mut buffer, String::new()),
-                },
-            },
+                rl.add_history_entry(line.as_str());
+                line
+            }
             Err(_) => break,
         };
 
@@ -192,11 +197,15 @@ async fn start(args: Args) -> Result<()> {
             let _ = rx.next().await;
         }
     }
+    if let Err(e) = rl.save_history(&history_path) {
+        log::error!("error saving history: {}", e)
+    }
 
     log::info!("shutting down...");
     if let Err(e) = service.shutdown().await {
         log::error!("shutdown error: {:?}", e);
     }
+
     Ok(())
 }
 
@@ -234,12 +243,25 @@ async fn main() -> Result<()> {
     env_logger::init();
 
     let mut args = Args::from_args();
-    args.runtime = args.runtime.canonicalize()?;
+    args.runtime = args.runtime.canonicalize().context("runtime not found")?;
+
+    let data_dir = DataDir::new("ya-provider");
+    let work_dir = data_dir
+        .get_or_create()
+        .context("unable to open data dir")?;
+    let history_path = work_dir.join(".debug_runtime_history");
+    {
+        OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(&history_path)
+            .context("unable to create a command history file")?;
+    };
 
     if args.deploy {
-        deploy(&args).await?;
+        deploy(&args).await.context("deployment failed")?;
     }
-    start(args).await?;
+    start(args, history_path).await.context("start failed")?;
 
     Ok(())
 }
