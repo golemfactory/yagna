@@ -2,7 +2,6 @@ use actix::Arbiter;
 use anyhow::Result;
 use futures::channel::mpsc;
 use futures::{FutureExt, SinkExt, StreamExt};
-use linefeed::{Interface, ReadResult};
 use std::env;
 use std::ffi::OsString;
 use std::io::Write;
@@ -10,6 +9,7 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::str::FromStr;
 use structopt::{clap, StructOpt};
+use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt};
 use tokio::process::Command;
 use tokio_util::codec::{BytesCodec, FramedRead};
 use ya_runtime_api::server::{spawn, ProcessStatus, RunProcess, RuntimeEvent, RuntimeService};
@@ -87,6 +87,11 @@ impl RuntimeEvent for EventHandler {
             stderr.flush().unwrap();
         }
         if !status.running {
+            match status.return_code {
+                0 => log::info!("Process exited with code 0"),
+                c => log::error!("Process failed with code {}", c),
+            }
+
             let mut tx = self.tx.clone();
             self.arbiter.send(
                 async move {
@@ -161,17 +166,24 @@ async fn start(args: Args) -> Result<()> {
     log::info!("sending hello");
     let _ = service.hello(args.version.as_str()).await;
 
-    log::info!("press Ctrl+D to exit");
-    loop {
-        let interface = Interface::new("run")?;
-        interface.set_prompt("$ ")?;
+    let mut stdout = io::stdout();
+    let mut reader = io::BufReader::new(io::stdin());
+    let mut buffer = String::new();
 
-        let input = match interface.read_line()? {
-            ReadResult::Eof | ReadResult::Signal(_) => break,
-            ReadResult::Input(input) => match input.is_empty() {
-                true => continue,
-                _ => input,
+    log::info!("press ctrl+d to exit");
+    loop {
+        stdout.write_all("$ ".as_bytes()).await?;
+        stdout.flush().await?;
+
+        let input = match reader.read_line(&mut buffer).await {
+            Ok(read) => match read {
+                0 => break,
+                _ => match buffer.trim().is_empty() {
+                    true => continue,
+                    _ => std::mem::replace(&mut buffer, String::new()),
+                },
             },
+            Err(_) => break,
         };
 
         if let Err(e) = run(service.clone(), input).await {
@@ -218,7 +230,7 @@ async fn run(service: impl RuntimeService, input: String) -> Result<()> {
 
 #[actix_rt::main]
 async fn main() -> Result<()> {
-    env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or("debug".into()));
+    env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or("info".into()));
     env_logger::init();
 
     let mut args = Args::from_args();
