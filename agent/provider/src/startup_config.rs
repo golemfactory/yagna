@@ -1,8 +1,10 @@
 use directories::UserDirs;
 use futures::channel::oneshot;
 use notify::*;
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::mpsc;
 use std::time::Duration;
 use structopt::{clap, StructOpt};
@@ -81,6 +83,51 @@ impl ProviderConfig {
     }
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+pub struct RecvAccount {
+    pub platform: Option<String>,
+    pub address: String,
+}
+
+impl FromStr for RecvAccount {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> anyhow::Result<Self> {
+        let mut it = s.split("/").fuse();
+        match (it.next(), it.next(), it.next()) {
+            (Some(addr), None, None) => {
+                if addr.starts_with("0x") {
+                    Ok(RecvAccount {
+                        platform: None,
+                        address: addr.to_string(),
+                    })
+                } else {
+                    anyhow::bail!("invalid address format expected  0x..")
+                }
+            }
+            (Some(driver), Some(addr), None) => {
+                let platform = Some(
+                    match driver {
+                        "zksync" | "zk" => "ZK-NGNT",
+                        "eth" | "l1" => "NGTN",
+                        _ => anyhow::bail!("unknown driver: {}", driver),
+                    }
+                    .to_string(),
+                );
+                if addr.starts_with("0x") {
+                    Ok(RecvAccount {
+                        platform,
+                        address: addr.to_string(),
+                    })
+                } else {
+                    anyhow::bail!("invalid address format expected  0x..")
+                }
+            }
+            _ => anyhow::bail!("invalid account desription: {}", s),
+        }
+    }
+}
+
 #[derive(StructOpt)]
 pub struct NodeConfig {
     /// Your human readable identity in the network.
@@ -90,6 +137,12 @@ pub struct NodeConfig {
     /// with other identifiers than selected. Useful for test purposes.
     #[structopt(long, env = "SUBNET")]
     pub subnet: Option<String>,
+
+    /// Account for payments
+    /// Format: `[<driver>/]<address>`
+    ///
+    #[structopt(long, env = "YA_ACCOUNT")]
+    pub account: Option<RecvAccount>,
 }
 
 #[derive(StructOpt)]
@@ -246,25 +299,37 @@ impl FileMonitor {
         let (tx, rx) = mpsc::channel();
         let (tx_ctl, mut rx_ctl) = oneshot::channel();
 
-        let watch_delay = Duration::from_secs(2);
-        let sleep_delay = Duration::from_secs_f32(0.5);
+        let watch_delay = Duration::from_secs(3);
+        let sleep_delay = Duration::from_secs(2);
         let mut watcher: RecommendedWatcher = Watcher::new(tx, watch_delay)?;
 
         std::thread::spawn(move || {
-            if let Err(e) = watcher.watch(&path_th, RecursiveMode::NonRecursive) {
-                log::error!("Unable to monitor path '{:?}': {}", path_th, e);
-                return;
-            }
+            let mut active = false;
             loop {
-                if let Ok(event) = rx.try_recv() {
-                    handler(event);
+                if !active {
+                    match watcher.watch(&path_th, RecursiveMode::NonRecursive) {
+                        Ok(_) => active = true,
+                        Err(e) => log::error!("Unable to monitor path '{:?}': {}", path_th, e),
+                    }
                 }
+                if let Ok(event) = rx.try_recv() {
+                    match &event {
+                        DebouncedEvent::Rename(_, _) | DebouncedEvent::Remove(_) => {
+                            let _ = watcher.unwatch(&path_th);
+                            active = false
+                        }
+                        _ => (),
+                    }
+                    handler(event);
+                    continue;
+                }
+
                 if let Ok(Some(_)) = rx_ctl.try_recv() {
                     break;
                 }
                 std::thread::sleep(sleep_delay);
             }
-            log::debug!("Stopping file monitor: {:?}", path_th);
+            log::error!("Stopping file monitor: {:?}", path_th);
         });
 
         Ok(Self {
@@ -281,6 +346,7 @@ impl FileMonitor {
             DebouncedEvent::Write(p)
             | DebouncedEvent::Chmod(p)
             | DebouncedEvent::Create(p)
+            | DebouncedEvent::Remove(p)
             | DebouncedEvent::Rename(_, p) => {
                 f(p);
             }

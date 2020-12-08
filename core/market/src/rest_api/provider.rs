@@ -23,7 +23,6 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .service(reject_proposal)
         .service(approve_agreement)
         .service(reject_agreement)
-        .service(terminate_agreement)
 }
 
 #[actix_web::post("/offers")]
@@ -158,15 +157,6 @@ async fn approve_agreement(
 
 #[actix_web::post("/agreements/{agreement_id}/reject")]
 async fn reject_agreement(
-    _market: Data<Arc<MarketService>>,
-    _path: Path<PathAgreement>,
-    _id: Identity,
-) -> HttpResponse {
-    HttpResponse::NotImplemented().finish()
-}
-
-#[actix_web::post("/agreements/{agreement_id}/terminate")]
-async fn terminate_agreement(
     _market: Data<Arc<MarketService>>,
     _path: Path<PathAgreement>,
     _id: Identity,

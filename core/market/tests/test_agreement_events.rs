@@ -1,12 +1,14 @@
 use anyhow::Result;
 use chrono::{Duration, Utc};
 
+use ya_market::testing::agreement_utils::{gen_reason, negotiate_agreement};
 use ya_market::testing::events_helper::requestor::expect_approve;
 use ya_market::testing::proposal_util::exchange_draft_proposals;
 use ya_market::testing::MarketsNetwork;
 use ya_market::testing::{ApprovalStatus, OwnerType};
 
-use ya_client::model::market::AgreementOperationEvent as AgreementEvent;
+use ya_client::model::market::agreement_event::AgreementTerminator;
+use ya_client::model::market::{AgreementOperationEvent as AgreementEvent, ConvertReason, Reason};
 
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";
@@ -171,5 +173,102 @@ async fn test_agreement_events_and_wait_for_approval() -> Result<()> {
     // Protect from eternal waiting.
     tokio::time::timeout(Duration::milliseconds(600).to_std()?, query_handle).await???;
     tokio::time::timeout(Duration::milliseconds(20).to_std()?, wait_handle).await???;
+    Ok(())
+}
+
+/// We expect to get AgreementTerminatedEvent on both sides Provider and Requestor
+/// after terminate_agreement endpoint was called.
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[actix_rt::test]
+#[serial_test::serial]
+async fn test_agreement_terminated_event() -> Result<()> {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+
+    let req_market = network.get_market(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME);
+    let prov_id = network.get_default_id(PROV_NAME);
+    let prov_market = network.get_market(PROV_NAME);
+
+    let negotiation = negotiate_agreement(
+        &network,
+        REQ_NAME,
+        PROV_NAME,
+        "negotiation",
+        "r-session",
+        "p-session",
+    )
+    .await
+    .unwrap();
+
+    // Take timestamp to filter AgreementApproved which should happen before.
+    let reference_timestamp = Utc::now();
+    prov_market
+        .terminate_agreement(
+            prov_id.clone(),
+            negotiation.p_agreement.clone(),
+            Some(gen_reason("Expired")),
+        )
+        .await
+        .unwrap();
+
+    // == PROVIDER
+    let events = prov_market
+        .query_agreement_events(&None, 0.1, Some(2), reference_timestamp, &prov_id)
+        .await?;
+
+    // Expect single event
+    assert_eq!(events.len(), 1);
+    match &events[0] {
+        AgreementEvent::AgreementTerminatedEvent {
+            agreement_id,
+            terminator,
+            reason,
+            ..
+        } => {
+            assert_eq!(agreement_id, &negotiation.p_agreement.into_client());
+            assert_eq!(terminator, &AgreementTerminator::Provider);
+            assert_ne!(reason, &None);
+
+            let reason = reason
+                .as_ref()
+                .map(|json| Reason::from_json_reason(json.clone()).unwrap())
+                .unwrap();
+            assert_eq!(&reason.message, "Expired");
+        }
+        _ => panic!("Expected AgreementEvent::AgreementTerminatedEvent"),
+    };
+
+    // == REQUESTOR
+    let events = req_market
+        .query_agreement_events(&None, 0.1, Some(2), reference_timestamp, &req_id)
+        .await?;
+
+    // Expect single event
+    assert_eq!(events.len(), 1);
+    match &events[0] {
+        AgreementEvent::AgreementTerminatedEvent {
+            agreement_id,
+            terminator,
+            reason,
+            ..
+        } => {
+            assert_eq!(agreement_id, &negotiation.r_agreement.into_client());
+            assert_eq!(terminator, &AgreementTerminator::Provider);
+            assert!(reason.is_some());
+
+            let reason = reason
+                .as_ref()
+                .map(|json| Reason::from_json_reason(json.clone()).unwrap())
+                .unwrap();
+            assert_eq!(&reason.message, "Expired");
+        }
+        _ => panic!("Expected AgreementEvent::AgreementTerminatedEvent"),
+    };
+
     Ok(())
 }

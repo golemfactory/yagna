@@ -14,8 +14,10 @@ pub fn config_get(config: ProviderConfig, name: Option<String>) -> anyhow::Resul
             if config.json {
                 println!("{}", serde_json::to_string_pretty(&state)?);
             } else {
-                for var in state.as_object().unwrap().iter() {
-                    println!("{}: {}", var.0, var.1.as_str().unwrap());
+                for (key, v) in state.as_object().unwrap().iter() {
+                    if v.is_string() {
+                        println!("{}: {}", key, v.as_str().unwrap());
+                    }
                 }
             }
         }

@@ -6,8 +6,9 @@ use crate::hardware;
 use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{LinearPricingOffer, Payments, PricingOffer};
-use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RunConfig};
+use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RecvAccount, RunConfig};
 use crate::tasks::task_manager::{InitializeTaskManager, TaskManager};
+
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
 use anyhow::{anyhow, Error};
@@ -18,6 +19,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::{fs, io};
+
 use ya_agreement_utils::agreement::TypedArrayPointer;
 use ya_agreement_utils::*;
 use ya_client::cli::ProviderApi;
@@ -73,6 +75,7 @@ impl GlobalsManager {
 pub struct GlobalsState {
     pub node_name: String,
     pub subnet: Option<String>,
+    pub account: Option<RecvAccount>,
 }
 
 impl GlobalsState {
@@ -107,6 +110,9 @@ impl GlobalsState {
         if node_config.subnet.is_some() {
             self.subnet = node_config.subnet;
         }
+        if node_config.account.is_some() {
+            self.account = node_config.account;
+        }
         self.save(path)
     }
 
@@ -123,7 +129,6 @@ impl ProviderAgent {
         log::info!("Loading payment accounts...");
         let accounts: Vec<Account> = api.payment.get_accounts().await?;
         log::info!("Payment accounts: {:#?}", accounts);
-
         let registry = config.registry()?;
         registry.validate()?;
 
@@ -240,6 +245,31 @@ impl ProviderAgent {
             node_info.with_subnet(subnet.clone());
         }
         node_info
+    }
+
+    fn accounts(&self) -> Vec<Account> {
+        let globals = self.globals.get_state();
+        if let Some(account) = &globals.account {
+            let mut accounts = Vec::new();
+            if account.platform.is_some() {
+                let zkaddr = Account {
+                    platform: account.platform.clone().unwrap(),
+                    address: account.address.to_lowercase(),
+                };
+                accounts.push(zkaddr);
+            } else {
+                for &platform in &["NGNT", "ZK-NGNT"] {
+                    accounts.push(Account {
+                        platform: platform.to_string(),
+                        address: account.address.to_lowercase(),
+                    })
+                }
+            }
+
+            accounts
+        } else {
+            self.accounts.clone()
+        }
     }
 }
 
@@ -399,7 +429,7 @@ impl Handler<CreateOffers> for ProviderAgent {
         let runner = self.runner.clone();
         let market = self.market.clone();
         let node_info = self.create_node_info();
-        let accounts = self.accounts.clone();
+        let accounts = self.accounts();
         let inf_node_info = InfNodeInfo::from(self.hardware.capped());
         let preset_names = match msg.0 {
             OfferKind::Any => self.presets.active(),

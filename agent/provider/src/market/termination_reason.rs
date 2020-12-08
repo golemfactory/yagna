@@ -1,7 +1,9 @@
+use chrono::{DateTime, Utc};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::time::Duration;
 use strum::EnumMessage;
 use strum_macros::*;
 
@@ -10,9 +12,12 @@ pub enum BreakReason {
     #[display(fmt = "Failed to initialize. Error: {}", error)]
     #[strum(message = "InitializationError")]
     InitializationError { error: String },
-    #[display(fmt = "Agreement expired")]
+    #[display(fmt = "Agreement expired @ {}", _0)]
     #[strum(message = "Expired")]
-    Expired,
+    Expired(DateTime<Utc>),
+    #[display(fmt = "No activity created within {:?} from Agreement Approval", _0)]
+    #[strum(message = "NoActivity")]
+    NoActivity(Duration),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -41,6 +41,7 @@ pub enum AgreementState {
     /// Requestor closed agreement satisfied.
     Closed,
     /// Provider broke agreement.
+    #[display(fmt = "Broken (reason = {})", reason)]
     Broken { reason: BreakReason },
 }
 
@@ -201,6 +202,19 @@ impl TasksStates {
         }
     }
 
+    /// No Activity has been created for this Agreement
+    pub fn not_active(&self, agreement_id: &str) -> bool {
+        if let Ok(task_state) = self.get_state(agreement_id) {
+            match task_state.state {
+                Transition(AgreementState::New, _) => true,
+                Transition(AgreementState::Initialized, None) => true,
+                _ => false,
+            }
+        } else {
+            false
+        }
+    }
+
     pub fn allowed_transition(
         &self,
         agreement_id: &str,
@@ -271,5 +285,37 @@ impl fmt::Display for Transition {
             Some(state) => write!(f, "({}, {})", self.0, state),
             None => write!(f, "({}, None)", self.0),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::tasks::task_state::{AgreementState, BreakReason};
+
+    #[test]
+    #[ignore]
+    fn test_state_broken_display() {
+        println!(
+            "{}",
+            AgreementState::Broken {
+                reason: BreakReason::NoActivity(chrono::Duration::seconds(17).to_std().unwrap())
+            }
+        );
+
+        println!(
+            "{}",
+            AgreementState::Broken {
+                reason: BreakReason::Expired(chrono::Utc::now())
+            }
+        );
+
+        println!(
+            "{}",
+            AgreementState::Broken {
+                reason: BreakReason::InitializationError {
+                    error: "some err".to_string()
+                }
+            }
+        )
     }
 }

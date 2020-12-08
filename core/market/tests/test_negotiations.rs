@@ -624,3 +624,32 @@ async fn test_not_matching_counter_offer() -> Result<(), anyhow::Error> {
 
     Ok(())
 }
+
+/// Negotiations between Provider and Requestor using the same Identity
+/// (which means that they are on the same node) is forbidden. Matcher should reject
+/// such Offer-Demand pairs.
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[actix_rt::test]
+#[serial_test::serial]
+async fn test_reject_negotiations_same_identity() -> Result<(), anyhow::Error> {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance("Node-1")
+        .await?;
+
+    let market1 = network.get_market("Node-1");
+    let identity1 = network.get_default_id("Node-1");
+
+    let demand_id = market1
+        .subscribe_demand(&sample_demand(), &identity1)
+        .await?;
+    market1.subscribe_offer(&sample_offer(), &identity1).await?;
+
+    // We expect, that there will be no Proposals.
+    let events = market1
+        .requestor_engine
+        .query_events(&demand_id, 3.0, Some(5))
+        .await?;
+    assert_eq!(events.len(), 0);
+    Ok(())
+}
