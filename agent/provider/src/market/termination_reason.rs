@@ -8,6 +8,7 @@ use strum::EnumMessage;
 use strum_macros::*;
 
 #[derive(Display, EnumMessage, Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum BreakReason {
     #[display(fmt = "Failed to initialize. Error: {}", error)]
     #[strum(message = "InitializationError")]

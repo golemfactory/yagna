@@ -74,6 +74,9 @@ impl ProviderBroker {
         counter!("market.proposals.provider.init-negotiation", 0);
         counter!("market.agreements.provider.proposed", 0);
         counter!("market.agreements.provider.approved", 0);
+        counter!("market.agreements.provider.terminated", 0);
+        counter!("market.agreements.provider.terminated.reason", 0, "reason" => "None");
+        counter!("market.agreements.provider.terminated.reason", 0, "reason" => "Success");
 
         Ok(ProviderBroker {
             api,

@@ -338,6 +338,8 @@ impl CommonBroker {
             OwnerType::Provider => counter!("market.agreements.provider.terminated", 1),
             OwnerType::Requestor => counter!("market.agreements.requestor.terminated", 1),
         };
+
+        terminate_reason_metric(&reason, owner_type);
         log::info!(
             "Agent {} terminated Agreement [{}]. Reason: {}",
             &id.display(),
@@ -420,6 +422,7 @@ impl CommonBroker {
             OwnerType::Requestor => counter!("market.agreements.requestor.terminated", 1),
         };
 
+        terminate_reason_metric(&msg.reason, owner_type);
         log::info!(
             "Received terminate Agreement [{}] from [{}]. Reason: {}",
             &agreement_id,
@@ -594,4 +597,35 @@ pub fn expect_state(
         AgreementState::Expired => AgreementStateError::Expired(agreement.id.clone()),
         AgreementState::Terminated => AgreementStateError::Terminated(agreement.id.clone()),
     })?
+}
+
+fn get_reason_code(reason: &Option<Reason>, key: &str) -> Option<String> {
+    reason
+        .as_ref()
+        .map(|reason| {
+            reason
+                .extra
+                .get(key)
+                .map(|json| json.as_str().map(|code| code.to_string()))
+        })
+        .flatten()
+        .flatten()
+}
+
+/// This function extract from Reason additional information about termination reason
+/// and increments metric counter. Note that Reason isn't required to have any fields
+/// despite 'message'.
+pub fn terminate_reason_metric(reason: &Option<Reason>, owner: OwnerType) {
+    let p_code = get_reason_code(reason, "golem.provider.code");
+    let r_code = get_reason_code(reason, "golem.requestor.code");
+
+    let reason_code = r_code.xor(p_code).unwrap_or("None".to_string());
+    match owner {
+        OwnerType::Provider => {
+            counter!("market.agreements.provider.terminated.reason", 1, "reason" => reason_code)
+        }
+        OwnerType::Requestor => {
+            counter!("market.agreements.requestor.terminated.reason", 1, "reason" => reason_code)
+        }
+    };
 }
