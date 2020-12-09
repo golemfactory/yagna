@@ -242,10 +242,9 @@ impl PaymentDriverCron for ZksyncDriver {
                     continue;
                 }
 
-                let order_ids: Vec<String> = payments
-                    .clone()
-                    .into_iter()
-                    .map(|payment| payment.order_id)
+                let order_ids = payments
+                    .iter()
+                    .map(|payment| payment.order_id.clone())
                     .collect();
 
                 // Create bespoke payment details:
