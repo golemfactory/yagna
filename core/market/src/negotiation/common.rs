@@ -376,19 +376,14 @@ impl CommonBroker {
             .map_err(|_e| RemoteAgreementError::NotFound(agreement_id.clone()))?
             .ok_or(RemoteAgreementError::NotFound(agreement_id.clone()))?;
 
-        match owner_type {
-            OwnerType::Requestor => {
-                if agreement.provider_id != caller {
-                    // Don't reveal, that we know this Agreement id.
-                    Err(RemoteAgreementError::NotFound(agreement_id.clone()))?
-                }
-            }
-            OwnerType::Provider => {
-                if agreement.requestor_id != caller {
-                    // Don't reveal, that we know this Agreement id.
-                    Err(RemoteAgreementError::NotFound(agreement_id.clone()))?
-                }
-            }
+        let our_id = match owner_type {
+            OwnerType::Requestor => agreement.provider_id,
+            OwnerType::Provider => agreement.requestor_id,
+        };
+
+        if our_id != caller {
+            // Don't reveal, that we know this Agreement id.
+            Err(RemoteAgreementError::NotFound(agreement_id.clone()))?
         }
 
         // Opposite side terminated.
@@ -407,6 +402,11 @@ impl CommonBroker {
                 );
                 RemoteAgreementError::InternalError(agreement_id.clone())
             })?;
+
+        match terminator {
+            OwnerType::Provider => counter!("market.agreements.provider.terminated", 1),
+            OwnerType::Requestor => counter!("market.agreements.requestor.terminated", 1),
+        };
         Ok(())
     }
 
