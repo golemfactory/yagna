@@ -79,8 +79,6 @@ async fn terminate_agreement(
     id: Identity,
     body: Json<Option<Reason>>,
 ) -> impl Responder {
-    log::warn!("{:?}", body);
-
     // We won't attach ourselves too much to owner type here. It will be replaced in CommonBroker
     let agreement_id = path.into_inner().to_id(OwnerType::Requestor)?;
     market
