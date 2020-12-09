@@ -31,7 +31,7 @@ pub fn register_endpoints(scope: Scope) -> Scope {
             "/allocations/{allocation_id}",
             delete().to(release_allocation),
         )
-        .route("/decorateDemand", get().to(decorate_demand))
+        .route("/demandDecorations", get().to(decorate_demand))
 }
 
 async fn create_allocation(
