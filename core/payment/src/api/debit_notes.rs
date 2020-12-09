@@ -1,0 +1,309 @@
+// Extrnal crates
+use actix_web::web::{get, post, Data, Json, Path, Query};
+use actix_web::{HttpResponse, Scope};
+use serde_json::value::Value::Null;
+
+// Workspace uses
+use metrics::counter;
+use ya_client_model::payment::*;
+use ya_core_model::payment::local::{SchedulePayment, BUS_ID as LOCAL_SERVICE};
+use ya_core_model::payment::public::{
+    AcceptDebitNote, AcceptRejectError, SendDebitNote, SendError, BUS_ID as PUBLIC_SERVICE,
+};
+use ya_core_model::payment::RpcMessageError;
+use ya_net::RemoteEndpoint;
+use ya_persistence::executor::DbExecutor;
+use ya_persistence::types::Role;
+use ya_service_api_web::middleware::Identity;
+use ya_service_bus::{typed as bus, RpcEndpoint};
+
+// Local uses
+use crate::api::*;
+use crate::dao::*;
+use crate::error::{DbError, Error};
+use crate::utils::provider::get_agreement_for_activity;
+use crate::utils::*;
+
+pub fn register_endpoints(scope: Scope) -> Scope {
+    scope
+        // Shared
+        .route("/debitNotes", get().to(get_debit_notes))
+        .route("/debitNotes/{debit_note_id}", get().to(get_debit_note))
+        .route(
+            "/debitNotes/{debit_note_id}/payments",
+            get().to(get_debit_note_payments),
+        )
+        .route("/debitNoteEvents", get().to(get_debit_note_events))
+        // Provider
+        .route("/debitNotes", post().to(issue_debit_note))
+        .route(
+            "/debitNotes/{debit_note_id}/send",
+            post().to(send_debit_note),
+        )
+        .route(
+            "/debitNotes/{debit_note_id}/cancel",
+            post().to(cancel_debit_note),
+        )
+        // Requestor
+        .route(
+            "/debitNotes/{debit_note_id}/accept",
+            post().to(accept_debit_note),
+        )
+        .route(
+            "/debitNotes/{debit_note_id}/reject",
+            post().to(reject_debit_note),
+        )
+}
+
+async fn get_debit_notes(db: Data<DbExecutor>, id: Identity) -> HttpResponse {
+    let node_id = id.identity;
+    let dao: DebitNoteDao = db.as_dao();
+    match dao.get_for_provider(node_id).await {
+        Ok(debit_notes) => response::ok(debit_notes),
+        Err(e) => response::server_error(&e),
+    }
+}
+
+async fn get_debit_note(
+    db: Data<DbExecutor>,
+    path: Path<DebitNoteId>,
+    id: Identity,
+) -> HttpResponse {
+    let debit_note_id = path.debit_note_id.clone();
+    let node_id = id.identity;
+    let dao: DebitNoteDao = db.as_dao();
+    match dao.get(debit_note_id, node_id).await {
+        Ok(Some(debit_note)) => response::ok(debit_note),
+        Ok(None) => response::not_found(),
+        Err(e) => response::server_error(&e),
+    }
+}
+
+async fn get_debit_note_payments(db: Data<DbExecutor>, path: Path<DebitNoteId>) -> HttpResponse {
+    response::not_implemented() // TODO
+}
+
+async fn get_debit_note_events(
+    db: Data<DbExecutor>,
+    query: Query<EventParams>,
+    id: Identity,
+) -> HttpResponse {
+    let node_id = id.identity;
+    let timeout_secs = query.timeout;
+    let later_than = query.later_than.map(|d| d.naive_utc());
+
+    let dao: DebitNoteEventDao = db.as_dao();
+    let getter = || async {
+        dao.get_for_provider(node_id.clone(), later_than.clone())
+            .await
+    };
+
+    match listen_for_events(getter, timeout_secs).await {
+        Ok(events) => response::ok(events),
+        Err(e) => response::server_error(&e),
+    }
+}
+
+// Provider
+
+async fn issue_debit_note(
+    db: Data<DbExecutor>,
+    body: Json<NewDebitNote>,
+    id: Identity,
+) -> HttpResponse {
+    let debit_note = body.into_inner();
+    let activity_id = debit_note.activity_id.clone();
+
+    let agreement = match get_agreement_for_activity(activity_id.clone()).await {
+        Ok(Some(agreement_id)) => agreement_id,
+        Ok(None) => return response::bad_request(&format!("Activity not found: {}", &activity_id)),
+        Err(e) => return response::server_error(&e),
+    };
+    let agreement_id = agreement.agreement_id.clone();
+
+    let node_id = id.identity;
+    if &node_id != agreement.provider_id() {
+        return response::unauthorized();
+    }
+
+    match async move {
+        db.as_dao::<AgreementDao>()
+            .create_if_not_exists(agreement, node_id, Role::Provider)
+            .await?;
+        db.as_dao::<ActivityDao>()
+            .create_if_not_exists(activity_id, node_id, Role::Provider, agreement_id)
+            .await?;
+
+        let dao: DebitNoteDao = db.as_dao();
+        let debit_note_id = dao.create_new(debit_note, node_id).await?;
+        let debit_note = dao.get(debit_note_id, node_id).await?;
+
+        counter!("payment.debit_notes.provider.issued", 1);
+        Ok(debit_note)
+    }
+    .await
+    {
+        Ok(Some(debit_note)) => response::created(debit_note),
+        Ok(None) => response::server_error(&"Database error"),
+        Err(DbError::Query(e)) => response::bad_request(&e),
+        Err(e) => response::server_error(&e),
+    }
+}
+
+async fn send_debit_note(
+    db: Data<DbExecutor>,
+    path: Path<DebitNoteId>,
+    query: Query<Timeout>,
+    id: Identity,
+) -> HttpResponse {
+    let debit_note_id = path.debit_note_id.clone();
+    let node_id = id.identity;
+    let dao: DebitNoteDao = db.as_dao();
+    let debit_note = match dao.get(debit_note_id.clone(), node_id).await {
+        Ok(Some(debit_note)) => debit_note,
+        Ok(None) => return response::not_found(),
+        Err(e) => return response::server_error(&e),
+    };
+
+    if debit_note.status != DocumentStatus::Issued {
+        return response::ok(Null); // Debit note has been already sent
+    }
+
+    with_timeout(query.timeout, async move {
+        match async move {
+            ya_net::from(node_id)
+                .to(debit_note.recipient_id)
+                .service(PUBLIC_SERVICE)
+                .call(SendDebitNote(debit_note))
+                .await??;
+            dao.mark_received(debit_note_id, node_id).await?;
+            counter!("payment.debit_notes.provider.sent", 1);
+            Ok(())
+        }
+        .await
+        {
+            Ok(_) => response::ok(Null),
+            Err(Error::Rpc(RpcMessageError::Send(SendError::BadRequest(e)))) => {
+                response::bad_request(&e)
+            }
+            Err(e) => response::server_error(&e),
+        }
+    })
+    .await
+}
+
+async fn cancel_debit_note(
+    db: Data<DbExecutor>,
+    path: Path<DebitNoteId>,
+    query: Query<Timeout>,
+) -> HttpResponse {
+    response::not_implemented() // TODO
+}
+
+// Requestor
+
+async fn accept_debit_note(
+    db: Data<DbExecutor>,
+    path: Path<DebitNoteId>,
+    query: Query<Timeout>,
+    body: Json<Acceptance>,
+    id: Identity,
+) -> HttpResponse {
+    let debit_note_id = path.debit_note_id.clone();
+    let node_id = id.identity;
+    let acceptance = body.into_inner();
+    let allocation_id = acceptance.allocation_id.clone();
+
+    let dao: DebitNoteDao = db.as_dao();
+    let debit_note: DebitNote = match dao.get(debit_note_id.clone(), node_id).await {
+        Ok(Some(debit_note)) => debit_note,
+        Ok(None) => return response::not_found(),
+        Err(e) => return response::server_error(&e),
+    };
+
+    if debit_note.total_amount_due != acceptance.total_amount_accepted {
+        return response::bad_request(&"Invalid amount accepted");
+    }
+
+    match debit_note.status {
+        DocumentStatus::Received => (),
+        DocumentStatus::Rejected => (),
+        DocumentStatus::Failed => (),
+        DocumentStatus::Accepted => return response::ok(Null),
+        DocumentStatus::Settled => return response::ok(Null),
+        DocumentStatus::Issued => return response::server_error(&"Illegal status: issued"),
+        DocumentStatus::Cancelled => return response::bad_request(&"Debit note cancelled"),
+    }
+
+    let activity_id = debit_note.activity_id.clone();
+    let activity = match db
+        .as_dao::<ActivityDao>()
+        .get(activity_id.clone(), node_id)
+        .await
+    {
+        Ok(Some(activity)) => activity,
+        Ok(None) => return response::server_error(&format!("Activity {} not found", activity_id)),
+        Err(e) => return response::server_error(&e),
+    };
+    let amount_to_pay = &debit_note.total_amount_due - &activity.total_amount_accepted.0;
+
+    let allocation = match db
+        .as_dao::<AllocationDao>()
+        .get(allocation_id.clone(), node_id)
+        .await
+    {
+        Ok(Some(allocation)) => allocation,
+        Ok(None) => {
+            return response::bad_request(&format!("Allocation {} not found", allocation_id))
+        }
+        Err(e) => return response::server_error(&e),
+    };
+    if amount_to_pay > allocation.remaining_amount {
+        let msg = format!(
+            "Not enough funds. Allocated: {} Needed: {}",
+            allocation.remaining_amount, amount_to_pay
+        );
+        return response::bad_request(&msg);
+    }
+
+    with_timeout(query.timeout, async move {
+        let issuer_id = debit_note.issuer_id;
+        let accept_msg = AcceptDebitNote::new(debit_note_id.clone(), acceptance, issuer_id);
+        let schedule_msg =
+            SchedulePayment::from_debit_note(debit_note, allocation_id, amount_to_pay);
+        match async move {
+            ya_net::from(node_id)
+                .to(issuer_id)
+                .service(PUBLIC_SERVICE)
+                .call(accept_msg)
+                .await??;
+            if let Some(msg) = schedule_msg {
+                bus::service(LOCAL_SERVICE).send(msg).await??;
+            }
+            dao.accept(debit_note_id, node_id).await?;
+
+            counter!("payment.debit_notes.requestor.accepted", 1);
+            Ok(())
+        }
+        .await
+        {
+            Ok(_) => response::ok(Null),
+            Err(Error::Rpc(RpcMessageError::AcceptReject(AcceptRejectError::BadRequest(e)))) => {
+                return response::bad_request(&e);
+            }
+            Err(e) => return response::server_error(&e),
+        }
+
+        // TODO: Compute amount to pay and schedule payment
+    })
+    .await
+}
+
+async fn reject_debit_note(
+    db: Data<DbExecutor>,
+    path: Path<DebitNoteId>,
+    query: Query<Timeout>,
+    body: Json<Rejection>,
+) -> HttpResponse {
+    response::not_implemented() // TODO
+}
