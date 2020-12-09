@@ -11,7 +11,6 @@ use ya_client_model::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
-use ya_persistence::types::Role;
 
 pub fn create<T: Serialize>(
     invoice_id: String,
@@ -55,17 +54,15 @@ impl<'c> InvoiceEventDao<'c> {
         .await
     }
 
-    async fn get_for_role(
+    pub async fn get_for_node_id(
         &self,
         node_id: NodeId,
         later_than: Option<NaiveDateTime>,
-        role: Role,
     ) -> DbResult<Vec<InvoiceEvent>> {
         readonly_transaction(self.pool, move |conn| {
             let query = dsl::pay_invoice_event
                 .inner_join(event_type_dsl::pay_event_type)
                 .filter(dsl::owner_id.eq(node_id))
-                .filter(event_type_dsl::role.eq(role))
                 .select(crate::schema::pay_invoice_event::all_columns)
                 .order_by(dsl::timestamp.asc());
             let events: Vec<ReadObj> = match later_than {
@@ -75,22 +72,5 @@ impl<'c> InvoiceEventDao<'c> {
             events.into_iter().map(TryInto::try_into).collect()
         })
         .await
-    }
-
-    pub async fn get_for_requestor(
-        &self,
-        node_id: NodeId,
-        later_than: Option<NaiveDateTime>,
-    ) -> DbResult<Vec<InvoiceEvent>> {
-        self.get_for_role(node_id, later_than, Role::Requestor)
-            .await
-    }
-
-    pub async fn get_for_provider(
-        &self,
-        node_id: NodeId,
-        later_than: Option<NaiveDateTime>,
-    ) -> DbResult<Vec<InvoiceEvent>> {
-        self.get_for_role(node_id, later_than, Role::Provider).await
     }
 }

@@ -199,23 +199,14 @@ impl<'c> DebitNoteDao<'c> {
         .await
     }
 
-    async fn get_for_role(&self, node_id: NodeId, role: Role) -> DbResult<Vec<DebitNote>> {
+    pub async fn get_for_node_id(&self, node_id: NodeId) -> DbResult<Vec<DebitNote>> {
         readonly_transaction(self.pool, move |conn| {
             let debit_notes: Vec<ReadObj> = query!()
                 .filter(dsl::owner_id.eq(node_id))
-                .filter(dsl::role.eq(role))
                 .load(conn)?;
             debit_notes.into_iter().map(TryInto::try_into).collect()
         })
         .await
-    }
-
-    pub async fn get_for_provider(&self, node_id: NodeId) -> DbResult<Vec<DebitNote>> {
-        self.get_for_role(node_id, Role::Provider).await
-    }
-
-    pub async fn get_for_requestor(&self, node_id: NodeId) -> DbResult<Vec<DebitNote>> {
-        self.get_for_role(node_id, Role::Requestor).await
     }
 
     pub async fn mark_received(&self, debit_note_id: String, owner_id: NodeId) -> DbResult<()> {
