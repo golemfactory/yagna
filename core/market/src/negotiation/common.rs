@@ -28,7 +28,7 @@ use crate::matcher::{
 use crate::negotiation::{
     error::{
         AgreementError, AgreementEventsError, AgreementStateError, GetProposalError,
-        MatchValidationError, ProposalError, QueryEventsError, ReasonError,
+        MatchValidationError, ProposalError, QueryEventsError,
     },
     notifier::NotifierError,
     EventNotifier,
@@ -293,9 +293,8 @@ impl CommonBroker {
         &self,
         id: Identity,
         agreement_id: AgreementId,
-        reason: Option<String>,
+        reason: Option<Reason>,
     ) -> Result<(), AgreementError> {
-        verify_reason(reason.as_ref())?;
         let dao = self.db.as_dao::<AgreementDao>();
         let mut agreement = match dao
             .select_by_node(
@@ -309,11 +308,13 @@ impl CommonBroker {
             None => return Err(AgreementError::NotFound(agreement_id)),
             Some(agreement) => agreement,
         };
-        // from now on agreement_id is invalid. Use only agreement.id
+
+        // From now on agreement_id is invalid. Use only agreement.id
         // (which has valid owner)
         expect_state(&agreement, AgreementState::Approved)?;
         agreement.state = AgreementState::Terminated;
         let owner_type = agreement.id.owner();
+
         protocol_common::propagate_terminate_agreement(
             &agreement,
             id.identity.clone(),
@@ -324,7 +325,12 @@ impl CommonBroker {
             reason.clone(),
         )
         .await?;
-        dao.terminate(&agreement.id, reason, owner_type)
+
+        let reason_string = reason
+            .as_ref()
+            .map(|reason| serde_json::to_string::<Reason>(reason).unwrap_or("".to_string()));
+
+        dao.terminate(&agreement.id, reason_string, owner_type)
             .await
             .map_err(|e| AgreementError::Get(agreement.id.clone(), e))?;
 
@@ -333,9 +339,10 @@ impl CommonBroker {
             OwnerType::Requestor => counter!("market.agreements.requestor.terminated", 1),
         };
         log::info!(
-            "Requestor {} terminated Agreement [{}] and sent to Provider.",
+            "Agent {} terminated Agreement [{}]. Reason: {}",
             &id.display(),
             &agreement.id,
+            reason.display(),
         );
         Ok(())
     }
@@ -369,7 +376,7 @@ impl CommonBroker {
         owner_type: OwnerType,
     ) -> Result<(), RemoteAgreementError> {
         let dao = self.db.as_dao::<AgreementDao>();
-        let agreement_id = msg.agreement_id.translate(owner_type);
+        let agreement_id = msg.agreement_id.clone();
         let agreement = dao
             .select(&agreement_id, None, Utc::now().naive_utc())
             .await
@@ -392,7 +399,12 @@ impl CommonBroker {
             OwnerType::Requestor => OwnerType::Provider,
         };
 
-        dao.terminate(&agreement_id, msg.reason, terminator)
+        let reason_string = msg
+            .reason
+            .as_ref()
+            .map(|reason| serde_json::to_string::<Reason>(&reason).unwrap_or("".to_string()));
+
+        dao.terminate(&agreement_id, reason_string, terminator)
             .await
             .map_err(|e| {
                 log::warn!(
@@ -407,6 +419,13 @@ impl CommonBroker {
             OwnerType::Provider => counter!("market.agreements.provider.terminated", 1),
             OwnerType::Requestor => counter!("market.agreements.requestor.terminated", 1),
         };
+
+        log::info!(
+            "Received terminate Agreement [{}] from [{}]. Reason: {}",
+            &agreement_id,
+            &caller,
+            msg.reason.display(),
+        );
         Ok(())
     }
 
@@ -575,10 +594,4 @@ pub fn expect_state(
         AgreementState::Expired => AgreementStateError::Expired(agreement.id.clone()),
         AgreementState::Terminated => AgreementStateError::Terminated(agreement.id.clone()),
     })?
-}
-
-fn verify_reason(reason: Option<&String>) -> Result<(), ReasonError> {
-    Ok(if let Some(s) = reason {
-        serde_json::from_str::<Reason>(s)?;
-    })
 }

@@ -1,8 +1,9 @@
-use actix_web::web::{Data, Path, Query};
+use actix_web::web::{Data, Json, Path, Query};
 use actix_web::{HttpResponse, Responder, Scope};
 use chrono::{TimeZone, Utc};
 use std::sync::Arc;
 
+use ya_client::model::market::Reason;
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::LogErr;
 
@@ -10,7 +11,7 @@ use super::PathAgreement;
 use crate::db::model::OwnerType;
 use crate::market::MarketService;
 use crate::negotiation::error::AgreementError;
-use crate::rest_api::{QueryAgreementEvents, QueryTerminateAgreement};
+use crate::rest_api::QueryAgreementEvents;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -76,12 +77,14 @@ async fn terminate_agreement(
     market: Data<Arc<MarketService>>,
     path: Path<PathAgreement>,
     id: Identity,
-    query: Query<QueryTerminateAgreement>,
+    body: Json<Option<Reason>>,
 ) -> impl Responder {
+    log::warn!("{:?}", body);
+
     // We won't attach ourselves too much to owner type here. It will be replaced in CommonBroker
     let agreement_id = path.into_inner().to_id(OwnerType::Requestor)?;
     market
-        .terminate_agreement(id, agreement_id, query.into_inner().reason)
+        .terminate_agreement(id, agreement_id, body.into_inner())
         .await
         .log_err()
         .map(|_| HttpResponse::Ok().finish())
