@@ -58,7 +58,7 @@ pub fn register_endpoints(scope: Scope) -> Scope {
 async fn get_debit_notes(db: Data<DbExecutor>, id: Identity) -> HttpResponse {
     let node_id = id.identity;
     let dao: DebitNoteDao = db.as_dao();
-    match dao.get_for_provider(node_id).await {
+    match dao.get_for_node_id(node_id).await {
         Ok(debit_notes) => response::ok(debit_notes),
         Err(e) => response::server_error(&e),
     }
@@ -94,7 +94,7 @@ async fn get_debit_note_events(
 
     let dao: DebitNoteEventDao = db.as_dao();
     let getter = || async {
-        dao.get_for_provider(node_id.clone(), later_than.clone())
+        dao.get_for_node_id(node_id.clone(), later_than.clone())
             .await
     };
 

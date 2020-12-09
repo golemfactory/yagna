@@ -47,7 +47,7 @@ pub fn register_endpoints(scope: Scope) -> Scope {
 async fn get_invoices(db: Data<DbExecutor>, id: Identity) -> HttpResponse {
     let node_id = id.identity;
     let dao: InvoiceDao = db.as_dao();
-    match dao.get_for_provider(node_id).await {
+    match dao.get_for_node_id(node_id).await {
         Ok(invoices) => response::ok(invoices),
         Err(e) => response::server_error(&e),
     }
@@ -79,7 +79,7 @@ async fn get_invoice_events(
 
     let dao: InvoiceEventDao = db.as_dao();
     let getter = || async {
-        dao.get_for_provider(node_id.clone(), later_than.clone())
+        dao.get_for_node_id(node_id.clone(), later_than.clone())
             .await
     };
     match listen_for_events(getter, timeout_secs).await {

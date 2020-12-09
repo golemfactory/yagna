@@ -28,7 +28,7 @@ async fn get_payments(
 
     let dao: PaymentDao = db.as_dao();
     let getter = || async {
-        dao.get_for_provider(node_id.clone(), later_than.clone())
+        dao.get_for_node_id(node_id.clone(), later_than.clone())
             .await
     };
 

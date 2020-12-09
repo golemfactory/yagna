@@ -17,7 +17,6 @@ use ya_client_model::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
-use ya_persistence::types::Role;
 
 pub struct PaymentDao<'c> {
     pool: &'c PoolType,
@@ -188,16 +187,14 @@ impl<'c> PaymentDao<'c> {
         .await
     }
 
-    async fn get_for_role(
+    pub async fn get_for_node_id(
         &self,
         node_id: NodeId,
         later_than: Option<NaiveDateTime>,
-        role: Role,
     ) -> DbResult<Vec<Payment>> {
         readonly_transaction(self.pool, move |conn| {
             let query = dsl::pay_payment
                 .filter(dsl::owner_id.eq(&node_id))
-                .filter(dsl::role.eq(&role))
                 .order_by(dsl::timestamp.asc());
             let payments: Vec<ReadObj> = match later_than {
                 Some(timestamp) => query.filter(dsl::timestamp.gt(timestamp)).load(conn)?,
@@ -210,7 +207,6 @@ impl<'c> PaymentDao<'c> {
                         .and(activity_pay_dsl::payment_id.eq(dsl::id))),
                 )
                 .filter(dsl::owner_id.eq(&node_id))
-                .filter(dsl::role.eq(&role))
                 .select(crate::schema::pay_activity_payment::all_columns)
                 .load(conn)?;
             let agreement_payments = agreement_pay_dsl::pay_agreement_payment
@@ -220,7 +216,6 @@ impl<'c> PaymentDao<'c> {
                         .and(agreement_pay_dsl::payment_id.eq(dsl::id))),
                 )
                 .filter(dsl::owner_id.eq(&node_id))
-                .filter(dsl::role.eq(&role))
                 .select(crate::schema::pay_agreement_payment::all_columns)
                 .load(conn)?;
             Ok(join_activity_and_agreement_payments(
@@ -230,23 +225,6 @@ impl<'c> PaymentDao<'c> {
             ))
         })
         .await
-    }
-
-    pub async fn get_for_requestor(
-        &self,
-        node_id: NodeId,
-        later_than: Option<NaiveDateTime>,
-    ) -> DbResult<Vec<Payment>> {
-        self.get_for_role(node_id, later_than, Role::Requestor)
-            .await
-    }
-
-    pub async fn get_for_provider(
-        &self,
-        node_id: NodeId,
-        later_than: Option<NaiveDateTime>,
-    ) -> DbResult<Vec<Payment>> {
-        self.get_for_role(node_id, later_than, Role::Provider).await
     }
 }
 

@@ -158,11 +158,10 @@ impl<'c> InvoiceDao<'c> {
         .await
     }
 
-    async fn get_for_role(&self, node_id: NodeId, role: Role) -> DbResult<Vec<Invoice>> {
+    pub async fn get_for_node_id(&self, node_id: NodeId) -> DbResult<Vec<Invoice>> {
         readonly_transaction(self.pool, move |conn| {
             let invoices = query!()
                 .filter(dsl::owner_id.eq(node_id))
-                .filter(dsl::role.eq(&role))
                 .load(conn)?;
             let activities = activity_dsl::pay_invoice_x_activity
                 .inner_join(
@@ -171,7 +170,6 @@ impl<'c> InvoiceDao<'c> {
                         .and(activity_dsl::invoice_id.eq(dsl::id))),
                 )
                 .filter(dsl::owner_id.eq(node_id))
-                .filter(dsl::role.eq(role))
                 .select(crate::schema::pay_invoice_x_activity::all_columns)
                 .load(conn)?;
             join_invoices_with_activities(invoices, activities)
@@ -204,14 +202,6 @@ impl<'c> InvoiceDao<'c> {
                 };
         }
         Ok(stats)
-    }
-
-    pub async fn get_for_provider(&self, node_id: NodeId) -> DbResult<Vec<Invoice>> {
-        self.get_for_role(node_id, Role::Provider).await
-    }
-
-    pub async fn get_for_requestor(&self, node_id: NodeId) -> DbResult<Vec<Invoice>> {
-        self.get_for_role(node_id, Role::Requestor).await
     }
 
     pub async fn mark_received(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
