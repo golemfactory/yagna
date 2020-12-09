@@ -5,7 +5,7 @@ use crate::schema::pay_agreement::dsl as agreement_dsl;
 use crate::schema::pay_invoice::dsl;
 use crate::schema::pay_invoice_x_activity::dsl as activity_dsl;
 use bigdecimal::BigDecimal;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc, NaiveDateTime};
 use diesel::{
     BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
 };
@@ -158,11 +158,21 @@ impl<'c> InvoiceDao<'c> {
         .await
     }
 
-    pub async fn get_for_node_id(&self, node_id: NodeId) -> DbResult<Vec<Invoice>> {
+    pub async fn get_for_node_id(
+        &self,
+        node_id: NodeId,
+        after_timestamp: Option<NaiveDateTime>,
+        max_items: Option<i64>,
+    ) -> DbResult<Vec<Invoice>> {
         readonly_transaction(self.pool, move |conn| {
-            let invoices = query!()
-                .filter(dsl::owner_id.eq(node_id))
-                .load(conn)?;
+            let mut query = query!().filter(dsl::owner_id.eq(node_id)).into_boxed();
+            if let Some(date) = after_timestamp {
+                query = query.filter(dsl::timestamp.gt(date))
+            }
+            if let Some(items) = max_items {
+                query = query.limit(items)
+            }
+            let invoices = query.load(conn)?;
             let activities = activity_dsl::pay_invoice_x_activity
                 .inner_join(
                     dsl::pay_invoice.on(activity_dsl::owner_id

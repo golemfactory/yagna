@@ -4,6 +4,7 @@ use crate::models::debit_note::{ReadObj, WriteObj};
 use crate::schema::pay_activity::dsl as activity_dsl;
 use crate::schema::pay_agreement::dsl as agreement_dsl;
 use crate::schema::pay_debit_note::dsl;
+use chrono::NaiveDateTime;
 use diesel::{
     self, BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl,
     RunQueryDsl,
@@ -199,11 +200,21 @@ impl<'c> DebitNoteDao<'c> {
         .await
     }
 
-    pub async fn get_for_node_id(&self, node_id: NodeId) -> DbResult<Vec<DebitNote>> {
+    pub async fn get_for_node_id(
+        &self,
+        node_id: NodeId,
+        after_timestamp: Option<NaiveDateTime>,
+        max_items: Option<i64>,
+    ) -> DbResult<Vec<DebitNote>> {
         readonly_transaction(self.pool, move |conn| {
-            let debit_notes: Vec<ReadObj> = query!()
-                .filter(dsl::owner_id.eq(node_id))
-                .load(conn)?;
+            let mut query = query!().filter(dsl::owner_id.eq(node_id)).into_boxed();
+            if let Some(date) = after_timestamp {
+                query = query.filter(dsl::timestamp.gt(date))
+            }
+            if let Some(items) = max_items {
+                query = query.limit(items)
+            }
+            let debit_notes: Vec<ReadObj> = query.load(conn)?;
             debit_notes.into_iter().map(TryInto::try_into).collect()
         })
         .await
