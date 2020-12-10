@@ -1,6 +1,6 @@
 use ya_agreement_utils::AgreementView;
 use ya_agreement_utils::OfferDefinition;
-use ya_client_model::market::{NewOffer, Proposal};
+use ya_client_model::market::{NewOffer, Proposal, Reason};
 
 use super::negotiator::Negotiator;
 use crate::market::negotiator::{AgreementResponse, AgreementResult, ProposalResponse};
@@ -92,10 +92,10 @@ impl Negotiator for LimitAgreementsNegotiator {
                 demand.proposal_id
             );
             Ok(ProposalResponse::RejectProposal {
-                reason: Some(format!(
+                reason: Some(Reason::new(format!(
                     "Proposal expires at: {} which is less than 5 min or more than 30 min from now",
                     expiration
-                )),
+                ))),
             })
         } else if self.has_free_slot() {
             Ok(ProposalResponse::AcceptProposal)
@@ -105,10 +105,10 @@ impl Negotiator for LimitAgreementsNegotiator {
                 demand.proposal_id
             );
             Ok(ProposalResponse::RejectProposal {
-                reason: Some(format!(
+                reason: Some(Reason::new(format!(
                     "No capacity available. Reached Agreements limit: {}",
                     self.max_agreements
-                )),
+                ))),
             })
         }
     }
@@ -124,10 +124,10 @@ impl Negotiator for LimitAgreementsNegotiator {
                 agreement.agreement_id
             );
             Ok(AgreementResponse::RejectAgreement {
-                reason: Some(format!(
+                reason: Some(Reason::new(format!(
                     "No capacity available. Reached Agreements limit: {}",
                     self.max_agreements
-                )),
+                ))),
             })
         }
     }

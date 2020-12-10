@@ -6,8 +6,8 @@ use serde::de::DeserializeOwned;
 use serde_json::json;
 
 use ya_client::model::market::{
-    agreement as client_agreement, Agreement, AgreementOperationEvent, Demand, JsonReason,
-    NewDemand, NewOffer, Offer, Proposal,
+    agreement as client_agreement, Agreement, AgreementOperationEvent, Demand, NewDemand, NewOffer,
+    Offer, Proposal, Reason,
 };
 use ya_client::model::ErrorMessage;
 use ya_client::web::QueryParamsBuilder;
@@ -456,8 +456,9 @@ async fn test_terminate_agreement() -> anyhow::Result<()> {
     let req_id = network.get_default_id(REQ_NAME);
     let prov_id = network.get_default_id(PROV_NAME);
 
-    let reason = JsonReason {
-        json: serde_json::json!({"ala":"ma kota","message": "coś"}),
+    let reason = Reason {
+        message: "coś".into(),
+        extra: serde_json::json!({"ala":"ma kota"}),
     };
     let url = format!(
         "/market-api/v1/agreements/{}/terminate",

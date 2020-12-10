@@ -7,6 +7,8 @@ use std::time::Duration;
 use strum::EnumMessage;
 use strum_macros::*;
 
+use ya_client::model::market::Reason;
+
 #[derive(Display, EnumMessage, Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum BreakReason {
@@ -21,7 +23,7 @@ pub enum BreakReason {
     NoActivity(Duration),
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct GolemReason {
     #[serde(rename = "message")]
     pub message: String,
@@ -46,5 +48,27 @@ impl GolemReason {
             code: "Success".to_string(),
             extra: HashMap::new(),
         }
+    }
+
+    pub fn to_client(&self) -> Option<Reason> {
+        match Reason::from_value(self) {
+            Ok(r) => Some(r),
+            Err(e) => {
+                log::warn!("{}", e);
+                None
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_try_convert_self() {
+        let g = GolemReason::success();
+        let g1: GolemReason = g.to_client().unwrap().to_value().unwrap();
+        assert_eq!(g, g1)
     }
 }
