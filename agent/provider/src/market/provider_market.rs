@@ -5,6 +5,7 @@ use backoff::backoff::Backoff;
 use chrono::Utc;
 use derive_more::Display;
 use futures::prelude::*;
+use futures_util::FutureExt;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::sync::Arc;
@@ -12,7 +13,8 @@ use std::sync::Arc;
 use ya_agreement_utils::{AgreementView, OfferDefinition};
 use ya_client::market::MarketProviderApi;
 use ya_client_model::market::{
-    Agreement, AgreementOperationEvent as AgreementEvent, NewOffer, Proposal, ProviderEvent, Reason,
+    agreement_event::AgreementTerminator, Agreement, AgreementOperationEvent as AgreementEvent,
+    NewOffer, Proposal, ProviderEvent, Reason,
 };
 use ya_utils_actix::{
     actix_handler::ResultTypeGetter,
@@ -27,9 +29,6 @@ use crate::market::config::MarketConfig;
 use crate::market::mock_negotiator::LimitAgreementsNegotiator;
 use crate::market::termination_reason::GolemReason;
 use crate::tasks::{AgreementBroken, AgreementClosed, CloseAgreement};
-use futures_util::FutureExt;
-use ya_client::model::market::ConvertReason;
-use ya_client_model::market::agreement_event::AgreementTerminator;
 
 // =========================================== //
 // Public exposed messages
@@ -352,11 +351,7 @@ async fn process_proposal(
             ProposalResponse::IgnoreProposal => log::info!("Ignoring proposal {:?}", proposal_id),
             ProposalResponse::RejectProposal { reason } => {
                 ctx.api
-                    .reject_proposal_with_reason(
-                        &subscription.id,
-                        proposal_id,
-                        reason.map(|r| Reason::new(r)),
-                    )
+                    .reject_proposal_with_reason(&subscription.id, proposal_id, &reason)
                     .await?;
             }
         },
@@ -427,7 +422,7 @@ async fn process_agreement(
             }
             AgreementResponse::RejectAgreement { reason } => {
                 ctx.api
-                    .reject_agreement(&agreement.agreement_id, reason.map(|r| Reason::new(r)))
+                    .reject_agreement(&agreement.agreement_id, &reason)
                     .await?;
             }
         },
@@ -481,9 +476,7 @@ async fn collect_agreement_events(ctx: AsyncCtx) {
                         // Notify market about termination.
                         let msg = OnAgreementTerminated {
                             id: agreement_id,
-                            reason: reason
-                                .map(|reason| Reason::from_json_reason(reason).ok())
-                                .flatten(),
+                            reason,
                         };
                         ctx.market.send(msg).await.ok();
                     }
@@ -697,7 +690,7 @@ async fn terminate_agreement(api: Arc<MarketProviderApi>, msg: AgreementFinalize
     );
 
     let mut repeats = get_backoff();
-    while let Err(e) = api.terminate_agreement(&id, Some(reason.clone())).await {
+    while let Err(e) = api.terminate_agreement(&id, &reason.to_client()).await {
         let delay = match repeats.next_backoff() {
             Some(delay) => delay,
             None => {

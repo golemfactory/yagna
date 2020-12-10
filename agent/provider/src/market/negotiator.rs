@@ -6,6 +6,7 @@ use anyhow::Result;
 use derive_more::Display;
 
 use crate::market::termination_reason::BreakReason;
+use ya_client::model::market::Reason;
 
 /// Response for requestor proposals.
 #[derive(Debug, Display)]
@@ -21,7 +22,7 @@ pub enum ProposalResponse {
         "reason.as_ref().map(|r| format!(\" (reason: {})\", r)).unwrap_or(\"\".into())"
     )]
     RejectProposal {
-        reason: Option<String>,
+        reason: Option<Reason>,
     },
     ///< Don't send any message to requestor. Could be useful to wait for other offers.
     IgnoreProposal,
@@ -37,7 +38,7 @@ pub enum AgreementResponse {
         "reason.as_ref().map(|r| format!(\" (reason: {})\", r)).unwrap_or(\"\".into())"
     )]
     RejectAgreement {
-        reason: Option<String>,
+        reason: Option<Reason>,
     },
 }
 
@@ -81,7 +82,7 @@ mod tests {
         };
         let no_reason = ProposalResponse::RejectProposal { reason: None };
 
-        assert_eq!(reason.to_string(), "RejectProposal (reason: zima)");
+        assert_eq!(reason.to_string(), "RejectProposal (reason: 'zima')");
         assert_eq!(no_reason.to_string(), "RejectProposal");
     }
 
@@ -92,7 +93,7 @@ mod tests {
         };
         let no_reason = AgreementResponse::RejectAgreement { reason: None };
 
-        assert_eq!(reason.to_string(), "RejectAgreement (reason: lato)");
+        assert_eq!(reason.to_string(), "RejectAgreement (reason: 'lato')");
         assert_eq!(no_reason.to_string(), "RejectAgreement");
     }
 }
