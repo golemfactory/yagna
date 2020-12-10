@@ -81,28 +81,7 @@ impl CommonBroker {
         // Proposal to database. This seems like race conditions, but there's no
         // danger of data inconsistency. If we won't reject countering Proposal here,
         // it will be sent to Provider and his counter Proposal will be rejected later.
-        // TODO: We should use validate_subscription function to do this stuff.
-        if owner == OwnerType::Provider {
-            self.store
-                .get_offer(&subscription_id)
-                .await
-                .map_err(|e| match e {
-                    QueryOfferError::Unsubscribed(id) => ProposalError::Unsubscribed(id),
-                    QueryOfferError::Expired(id) => ProposalError::SubscriptionExpired(id),
-                    QueryOfferError::NotFound(id) => ProposalError::NoSubscription(id),
-                    QueryOfferError::Get(..) => {
-                        ProposalError::Internal(prev_proposal_id.clone(), e.to_string())
-                    }
-                })?;
-        } else {
-            self.store
-                .get_demand(&subscription_id)
-                .await
-                .map_err(|e| match e {
-                    DemandError::NotFound(id) => ProposalError::NoSubscription(id),
-                    _ => ProposalError::Internal(prev_proposal_id.clone(), e.to_string()),
-                })?;
-        }
+        self.validate_subscription(&prev_proposal, owner).await?;
 
         let prev_proposal = self
             .get_proposal(Some(subscription_id.clone()), prev_proposal_id)
@@ -136,28 +115,7 @@ impl CommonBroker {
         // Proposal to database. This seems like race conditions, but there's no
         // danger of data inconsistency. If we won't reject countering Proposal here,
         // it will be sent to Provider and his counter Proposal will be rejected later.
-        // TODO: We should use validate_subscription function to do this stuff.
-        if owner == OwnerType::Provider {
-            self.store
-                .get_offer(&subscription_id)
-                .await
-                .map_err(|e| match e {
-                    QueryOfferError::Unsubscribed(id) => ProposalError::Unsubscribed(id),
-                    QueryOfferError::Expired(id) => ProposalError::SubscriptionExpired(id),
-                    QueryOfferError::NotFound(id) => ProposalError::NoSubscription(id),
-                    QueryOfferError::Get(..) => {
-                        ProposalError::Internal(proposal_id.clone(), e.to_string())
-                    }
-                })?;
-        } else {
-            self.store
-                .get_demand(&subscription_id)
-                .await
-                .map_err(|e| match e {
-                    DemandError::NotFound(id) => ProposalError::NoSubscription(id),
-                    _ => ProposalError::Internal(proposal_id.clone(), e.to_string()),
-                })?;
-        }
+        self.validate_subscription(&prev_proposal, owner).await?;
 
         let proposal = self
             .get_proposal(Some(subscription_id.clone()), proposal_id)
@@ -569,24 +527,30 @@ impl CommonBroker {
         &self,
         proposal: &Proposal,
         owner: OwnerType,
-    ) -> Result<(), RemoteProposalError> {
-        if let Err(e) = self.store.get_offer(&proposal.negotiation.offer_id).await {
-            match e {
-                QueryOfferError::Unsubscribed(id) => Err(RemoteProposalError::Unsubscribed(id))?,
-                QueryOfferError::Expired(id) => Err(RemoteProposalError::Expired(id))?,
-                _ => Err(RemoteProposalError::Unexpected(e.to_string()))?,
-            }
-        };
+    ) -> Result<(), ProposalError> {
+        self.store
+            .get_offer(&proposal.negotiation.offer_id)
+            .await
+            .map_err(|e| match e {
+                QueryOfferError::Unsubscribed(id) => ProposalError::Unsubscribed(id),
+                QueryOfferError::Expired(id) => ProposalError::SubscriptionExpired(id),
+                QueryOfferError::NotFound(id) => ProposalError::NoSubscription(id),
+                QueryOfferError::Get(..) => {
+                    ProposalError::Internal(proposal_id.clone(), e.to_string())
+                }
+            })?;
 
         // On Requestor side we have both Offer and Demand, but Provider has only Offers.
         if owner == OwnerType::Requestor {
-            if let Err(e) = self.store.get_demand(&proposal.negotiation.demand_id).await {
-                match e {
-                    DemandError::NotFound(id) => Err(RemoteProposalError::Unsubscribed(id))?,
-                    _ => Err(RemoteProposalError::Unexpected(e.to_string()))?,
-                }
-            };
+            self.store
+                .get_demand(&proposal.negotiation.demand_id)
+                .await
+                .map_err(|e| match e {
+                    DemandError::NotFound(id) => ProposalError::NoSubscription(id),
+                    _ => ProposalError::Internal(proposal_id.clone(), e.to_string()),
+                })?;
         }
+
         Ok(())
     }
 
