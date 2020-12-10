@@ -57,7 +57,7 @@ async fn unsubscribe(
         .unsubscribe_offer(&path.into_inner().subscription_id, &id)
         .await
         .log_err()
-        .map(|_| HttpResponse::Ok().json("Ok"))
+        .map(|_| HttpResponse::NoContent())
 }
 
 #[actix_web::get("/offers/{subscription_id}/events")]
@@ -152,7 +152,7 @@ async fn approve_agreement(
         .approve_agreement(id, &agreement_id, session, timeout)
         .await
         .log_err()
-        .map(|_| HttpResponse::NoContent().finish())
+        .map(|status| HttpResponse::Ok().json(status.to_string()))
 }
 
 #[actix_web::post("/agreements/{agreement_id}/reject")]

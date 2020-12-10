@@ -63,7 +63,7 @@ async fn unsubscribe(
         .unsubscribe_demand(&subscription_id, &id)
         .await
         .log_err()
-        .map(|_| HttpResponse::Ok().json("Ok"))
+        .map(|_| HttpResponse::NoContent())
 }
 
 #[actix_web::get("/demands/{subscription_id}/events")]

@@ -503,7 +503,7 @@ async fn collect_negotiation_events(ctx: AsyncCtx, subscription: Subscription) {
             Err(error) => {
                 log::warn!("Can't query market events. Error: {}", error);
                 match error {
-                    ya_client::error::Error::HttpStatusCode { code, .. } => {
+                    ya_client::error::Error::HttpError { code, .. } => {
                         if code.as_u16() == 404 {
                             log::info!("Resubscribing subscription [{}]", id);
                             let _ = ctx.market.send(ReSubscribe(id.clone())).await;

@@ -166,10 +166,7 @@ async fn full_market_interaction_aka_happy_path() -> Result<()> {
             .wait_for_approval(&agr_id, 0.1)
             .await?;
 
-        assert_eq!(
-            approval_status.to_string(),
-            ApprovalStatus::Approved.to_string()
-        );
+        assert_eq!(approval_status, ApprovalStatus::Approved);
         Result::<(), anyhow::Error>::Ok(())
     });
 
@@ -538,10 +535,7 @@ async fn waiting_after_approval_should_pass() -> Result<()> {
 
     // Requestor successfully waits for the Agreement approval
     let approval_status = req_engine.wait_for_approval(&agreement_id, 0.1).await?;
-    assert_eq!(
-        approval_status.to_string(),
-        ApprovalStatus::Approved.to_string()
-    );
+    assert_eq!(approval_status, ApprovalStatus::Approved);
 
     Ok(())
 }
@@ -658,17 +652,11 @@ async fn second_waiting_should_pass() -> Result<()> {
 
     // Requestor successfully waits for the Agreement approval first time
     let approval_status = req_engine.wait_for_approval(&agreement_id, 0.1).await?;
-    assert_eq!(
-        approval_status.to_string(),
-        ApprovalStatus::Approved.to_string()
-    );
+    assert_eq!(approval_status, ApprovalStatus::Approved);
 
     // second wait should also succeed
     let approval_status = req_engine.wait_for_approval(&agreement_id, 0.1).await?;
-    assert_eq!(
-        approval_status.to_string(),
-        ApprovalStatus::Approved.to_string()
-    );
+    assert_eq!(approval_status, ApprovalStatus::Approved);
 
     Ok(())
 }
