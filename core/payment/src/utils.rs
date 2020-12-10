@@ -60,12 +60,16 @@ pub mod provider {
         );
     }
 
-    pub async fn get_agreement_id(activity_id: String) -> Result<Option<String>, Error> {
+    pub async fn get_agreement_id(
+        activity_id: String,
+        role: market::Role,
+    ) -> Result<Option<String>, Error> {
         match async move {
             let agreement_id = bus::service(activity::local::BUS_ID)
                 .send(activity::local::GetAgreementId {
                     activity_id,
                     timeout: None,
+                    role,
                 })
                 .await??;
             Ok(agreement_id)
@@ -89,6 +93,7 @@ pub mod provider {
                 .send(activity::local::GetAgreementId {
                     activity_id,
                     timeout: None,
+                    role,
                 })
                 .await??;
             let agreement = bus::service(market::BUS_ID)

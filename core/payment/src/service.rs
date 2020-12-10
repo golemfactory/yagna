@@ -411,7 +411,7 @@ mod public {
         };
 
         for activity_id in activity_ids.iter() {
-            match provider::get_agreement_id(activity_id.clone()).await {
+            match provider::get_agreement_id(activity_id.clone(), market::Role::Requestor).await {
                 Ok(Some(id)) if id != agreement_id => {
                     return Err(SendError::BadRequest(format!(
                         "Activity {} belongs to agreement {} not {}",

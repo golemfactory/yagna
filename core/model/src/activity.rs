@@ -4,6 +4,7 @@
 //! Local and Exeunit are in dedicated submodules.
 use serde::{Deserialize, Serialize};
 
+use crate::market::Role;
 use ya_client_model::activity::{
     ActivityState, ActivityUsage, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
     RuntimeEvent,
@@ -319,6 +320,7 @@ pub mod local {
     pub struct GetAgreementId {
         pub activity_id: String,
         pub timeout: Option<f32>,
+        pub role: Role,
     }
 
     impl RpcMessage for GetAgreementId {

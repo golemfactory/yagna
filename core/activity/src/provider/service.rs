@@ -402,7 +402,7 @@ mod local {
         _caller: String,
         msg: activity::local::GetAgreementId,
     ) -> RpcMessageResult<activity::local::GetAgreementId> {
-        let agreement = get_activity_agreement(&db, &msg.activity_id, Role::Provider).await?;
+        let agreement = get_activity_agreement(&db, &msg.activity_id, msg.role).await?;
         Ok(agreement.agreement_id)
     }
 }

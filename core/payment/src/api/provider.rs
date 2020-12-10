@@ -212,7 +212,7 @@ async fn issue_invoice(db: Data<DbExecutor>, body: Json<NewInvoice>, id: Identit
     };
 
     for activity_id in activity_ids.iter() {
-        match get_agreement_id(activity_id.clone()).await {
+        match get_agreement_id(activity_id.clone(), market::Role::Provider).await {
             Ok(Some(id)) if id != agreement_id => {
                 return response::bad_request(&format!(
                     "Activity {} belongs to agreement {} not {}",
