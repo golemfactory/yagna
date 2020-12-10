@@ -154,7 +154,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          repository: 'golemfactory/yagna-integration'
+          repository: 'golemfactory/goth'
           token: ${{ secrets.YAGNA_WORKFLOW_TOKEN }}
 
       - name: Configure python 3.8
@@ -180,13 +180,13 @@ jobs:
       - name: Run test suite
         env:
           GITHUB_API_TOKEN: ${{ secrets.YAGNA_WORKFLOW_TOKEN }}
-        # --assets-path: https://github.com/golemfactory/yagna-integration/issues/336
-        run: python -m pytest test/yagna -svx --assets-path=/home/runner/work/yagna/yagna/test/yagna/e2e/assets --log-cli-level=DEBUG --yagna-binary-path=/tmp/yagna-build
+        # --assets-path: https://github.com/golemfactory/goth/issues/336
+        run: python -m pytest test/yagna -svx --assets-path=/home/runner/work/yagna/yagna/test/yagna/e2e/assets --yagna-binary-path=/tmp/yagna-build
 
       - name: Upload test logs
         uses: actions/upload-artifact@v2
         if: always()
         with:
           name: goth-logs
-          path: /tmp/yagna-tests
+          path: /tmp/goth-tests
 
