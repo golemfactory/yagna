@@ -6889,6 +6889,7 @@ dependencies = [
  "bigdecimal 0.1.2",
  "bitflags 1.2.1",
  "chrono",
+ "derive_more",
  "graphene-sgx",
  "log",
  "serde",

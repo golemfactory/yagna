@@ -24,10 +24,13 @@ pub fn fake_get_agreement(agreement_id: String, agreement: Agreement) {
     });
 }
 
-pub async fn get_agreement(agreement_id: String) -> Result<Option<Agreement>, Error> {
+pub async fn get_agreement(
+    agreement_id: String,
+    role: market::Role,
+) -> Result<Option<Agreement>, Error> {
     match async move {
         let agreement = bus::service(market::BUS_ID)
-            .send(market::GetAgreement::with_id(agreement_id.clone()))
+            .send(market::GetAgreement::as_role(agreement_id.clone(), role))
             .await??;
         Ok(agreement)
     }
@@ -79,6 +82,7 @@ pub mod provider {
 
     pub async fn get_agreement_for_activity(
         activity_id: String,
+        role: market::Role,
     ) -> Result<Option<Agreement>, Error> {
         match async move {
             let agreement_id = bus::service(activity::local::BUS_ID)
@@ -88,7 +92,7 @@ pub mod provider {
                 })
                 .await??;
             let agreement = bus::service(market::BUS_ID)
-                .send(market::GetAgreement::with_id(agreement_id.clone()))
+                .send(market::GetAgreement::as_role(agreement_id.clone(), role))
                 .await??;
             Ok(agreement)
         }

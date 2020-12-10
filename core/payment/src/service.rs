@@ -1,6 +1,7 @@
 use crate::processor::PaymentProcessor;
 use futures::prelude::*;
 use metrics::counter;
+use ya_core_model::market;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::ServiceBinder;
 
@@ -277,7 +278,7 @@ mod public {
         let activity_id = debit_note.activity_id.clone();
         let agreement_id = debit_note.agreement_id.clone();
 
-        let agreement = match get_agreement(agreement_id.clone()).await {
+        let agreement = match get_agreement(agreement_id.clone(), market::Role::Requestor).await {
             Err(e) => {
                 return Err(SendError::ServiceError(e.to_string()));
             }
@@ -308,7 +309,7 @@ mod public {
                 .insert_received(debit_note)
                 .await?;
 
-            counter!("payment.debit_notes.received", 1);
+            counter!("payment.debit_notes.requestor.received", 1);
             Ok(())
         }
         .await
@@ -396,7 +397,7 @@ mod public {
         let agreement_id = invoice.agreement_id.clone();
         let activity_ids = invoice.activity_ids.clone();
 
-        let agreement = match get_agreement(agreement_id.clone()).await {
+        let agreement = match get_agreement(agreement_id.clone(), market::Role::Requestor).await {
             Err(e) => {
                 return Err(SendError::ServiceError(e.to_string()));
             }

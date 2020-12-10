@@ -39,10 +39,11 @@ async fn test_gsb_get_agreement() -> Result<()> {
     let agreement_id = req_engine
         .create_agreement(req_id.clone(), &proposal_id, Utc::now())
         .await?;
+
     let agreement = bus::service(network.node_gsb_prefixes(REQ_NAME).0)
-        .send(market::GetAgreement {
-            agreement_id: agreement_id.into_client(),
-        })
+        .send(market::GetAgreement::as_requestor(
+            agreement_id.into_client(),
+        ))
         .await??;
     assert_eq!(agreement.agreement_id, agreement_id.into_client());
     assert_eq!(agreement.demand.requestor_id, req_id.identity);
