@@ -15,11 +15,18 @@ use crate::db::{DbError, DbResult};
 pub enum SaveProposalError {
     #[error("Proposal [{0}] already has counter proposal. Can't counter for the second time.")]
     AlreadyCountered(ProposalId),
-    #[error("Failed to save proposal to database. Error: {0}.")]
-    DbError(DbError),
+    #[error("Failed to save proposal to db: {0}.")]
+    Db(DbError),
     #[error("Proposal [{0}] has no previous proposal. This should not happened when calling save_proposal.")]
     NoPrevious(ProposalId),
 }
+
+#[derive(thiserror::Error, Debug)]
+pub enum ChangeProposalStateError {
+    #[error("Failed to change proposal [{0}] state to `{1}` in db: {0}.")]
+    Db(ProposalId, ProposalState, DbError);
+    //TODO: state transition error
+};
 
 pub struct ProposalDao<'c> {
     pool: &'c PoolType,
@@ -64,6 +71,19 @@ impl<'c> ProposalDao<'c> {
             Ok(())
         })
         .await
+    }
+
+    pub async fn change_proposal_state(
+        &self,
+        proposal_id: &ProposalId,
+        state: ProposalState,
+    ) -> Result<(), ChangeProposalStateError> {
+        let id = proposal_id.clone();
+        do_with_transaction(self.pool, move |conn| {
+            update_proposal_state(conn, &id, state)
+        })
+        .await
+        .map_err(|e| ChangeProposalStateError::Db(proposal_id.clone(), state, e.into()))
     }
 
     pub async fn get_proposal(&self, proposal_id: &ProposalId) -> DbResult<Option<Proposal>> {
@@ -146,16 +166,12 @@ pub(super) fn has_counter_proposal(conn: &ConnType, proposal_id: &ProposalId) ->
     Ok(proposal.is_some())
 }
 
-pub(super) fn set_proposal_accepted(conn: &ConnType, proposal_id: &ProposalId) -> DbResult<()> {
-    // TODO: Check if we can do transition to this state.
-    update_proposal_state(conn, proposal_id, ProposalState::Accepted)
-}
-
-fn update_proposal_state(
+pub(super) fn update_proposal_state(
     conn: &ConnType,
     proposal_id: &ProposalId,
     new_state: ProposalState,
 ) -> DbResult<()> {
+    // TODO: Check if transition from current to new state is valid.
     diesel::update(dsl::market_proposal.filter(dsl::id.eq(&proposal_id)))
         .set(dsl::state.eq(new_state))
         .execute(conn)?;
@@ -164,6 +180,6 @@ fn update_proposal_state(
 
 impl<ErrorType: Into<DbError>> From<ErrorType> for SaveProposalError {
     fn from(err: ErrorType) -> Self {
-        SaveProposalError::DbError(err.into())
+        SaveProposalError::Db(err.into())
     }
 }

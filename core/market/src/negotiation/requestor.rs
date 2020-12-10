@@ -174,14 +174,14 @@ impl RequestorBroker {
     // TODO: this is only mock implementation not to throw 501
     pub async fn reject_proposal(
         &self,
-        _demand_id: &SubscriptionId,
+        demand_id: &SubscriptionId,
         proposal_id: &ProposalId,
         id: &Identity,
         reason: Option<Reason>,
     ) -> Result<(), ProposalError> {
-        // self.common
-        //     .reject_proposal(demand_id, proposal_id, OwnerType::Requestor)
-        //     .await?;
+        self.common
+            .reject_proposal(demand_id, proposal_id, OwnerType::Requestor, &reason)
+            .await?;
         //
         // self.api
         //     .reject_proposal(id, proposal_id, TODO: provider_id)

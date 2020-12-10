@@ -147,15 +147,15 @@ impl ProviderBroker {
     // TODO: this is only mock implementation not to throw 501
     pub async fn reject_proposal(
         &self,
-        _offer_id: &SubscriptionId,
+        offer_id: &SubscriptionId,
         proposal_id: &ProposalId,
         id: &Identity,
         reason: Option<Reason>,
     ) -> Result<(), ProposalError> {
-        // self.common
-        //     .reject_proposal(offer_id, proposal_id, OwnerType::Provider)
-        //     .await?;
-        //
+        self.common
+            .reject_proposal(offer_id, proposal_id, OwnerType::Provider, &reason)
+            .await?;
+
         // self.api
         //     .reject_proposal(id, proposal_id, TODO: requestor_id)
         //     .await

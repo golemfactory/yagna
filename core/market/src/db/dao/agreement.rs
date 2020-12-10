@@ -4,11 +4,11 @@ use diesel::prelude::*;
 use ya_client::model::NodeId;
 use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
 
-use crate::db::dao::proposal::{has_counter_proposal, set_proposal_accepted};
+use crate::db::dao::proposal::{has_counter_proposal, update_proposal_state};
 use crate::db::dao::sql_functions::datetime;
 use crate::db::model::{
     Agreement, AgreementEventType, AgreementId, AgreementState, AppSessionId, NewAgreementEvent,
-    OwnerType, ProposalId,
+    OwnerType, ProposalId, ProposalState::Accepted,
 };
 use crate::db::schema::market_agreement::dsl as agreement;
 use crate::db::schema::market_agreement::dsl::market_agreement;
@@ -157,7 +157,7 @@ impl<'c> AgreementDao<'c> {
                 .values(&agreement)
                 .execute(conn)?;
 
-            set_proposal_accepted(conn, &proposal_id)?;
+            update_proposal_state(conn, &proposal_id, Accepted)?;
             Ok(agreement)
         })
         .await

@@ -18,7 +18,7 @@ use crate::db::dao::{
 };
 use crate::db::model::{
     Agreement, AgreementEvent, AgreementId, AgreementState, AppSessionId, IssuerType, MarketEvent,
-    OwnerType, Proposal,
+    OwnerType, Proposal, ProposalState,
 };
 use crate::db::model::{ProposalId, SubscriptionId};
 use crate::matcher::{
@@ -122,6 +122,57 @@ impl CommonBroker {
             .save_proposal(&new_proposal)
             .await?;
         Ok((new_proposal, is_first))
+    }
+
+    pub async fn reject_proposal(
+        &self,
+        subscription_id: &SubscriptionId,
+        proposal_id: &ProposalId,
+        owner: OwnerType,
+        _reason: &Option<Reason>,
+    ) -> Result<(), ProposalError> {
+        // Check if subscription is still active.
+        // Note that subscription can be unsubscribed, before we get to saving
+        // Proposal to database. This seems like race conditions, but there's no
+        // danger of data inconsistency. If we won't reject countering Proposal here,
+        // it will be sent to Provider and his counter Proposal will be rejected later.
+        // TODO: We should use validate_subscription function to do this stuff.
+        if owner == OwnerType::Provider {
+            self.store
+                .get_offer(&subscription_id)
+                .await
+                .map_err(|e| match e {
+                    QueryOfferError::Unsubscribed(id) => ProposalError::Unsubscribed(id),
+                    QueryOfferError::Expired(id) => ProposalError::SubscriptionExpired(id),
+                    QueryOfferError::NotFound(id) => ProposalError::NoSubscription(id),
+                    QueryOfferError::Get(..) => {
+                        ProposalError::Internal(proposal_id.clone(), e.to_string())
+                    }
+                })?;
+        } else {
+            self.store
+                .get_demand(&subscription_id)
+                .await
+                .map_err(|e| match e {
+                    DemandError::NotFound(id) => ProposalError::NoSubscription(id),
+                    _ => ProposalError::Internal(proposal_id.clone(), e.to_string()),
+                })?;
+        }
+
+        let proposal = self
+            .get_proposal(Some(subscription_id.clone()), proposal_id)
+            .await?;
+
+        if proposal.body.issuer == IssuerType::Us {
+            return Err(ProposalError::OwnProposal(proposal_id.clone()));
+        }
+
+        self.db
+            .as_dao::<ProposalDao>()
+            // TODO: save reason to DB
+            .change_proposal_state(proposal_id, ProposalState::Rejected)
+            .await?;
+        Ok(())
     }
 
     pub async fn query_events(
