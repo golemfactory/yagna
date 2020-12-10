@@ -78,7 +78,7 @@ pub struct EventParams {
 #[derive(Deserialize)]
 pub struct FilterParams {
     #[serde(rename = "maxItems", default)]
-    pub max_items: Option<i64>,
+    pub max_items: Option<u32>,
     #[serde(rename = "afterTimestamp", default)]
     pub after_timestamp: Option<DateTime<Utc>>,
 }

@@ -162,7 +162,7 @@ impl<'c> InvoiceDao<'c> {
         &self,
         node_id: NodeId,
         after_timestamp: Option<NaiveDateTime>,
-        max_items: Option<i64>,
+        max_items: Option<u32>,
     ) -> DbResult<Vec<Invoice>> {
         readonly_transaction(self.pool, move |conn| {
             let mut query = query!().filter(dsl::owner_id.eq(node_id)).into_boxed();
@@ -170,7 +170,7 @@ impl<'c> InvoiceDao<'c> {
                 query = query.filter(dsl::timestamp.gt(date))
             }
             if let Some(items) = max_items {
-                query = query.limit(items)
+                query = query.limit(items.into())
             }
             let invoices = query.load(conn)?;
             let activities = activity_dsl::pay_invoice_x_activity
