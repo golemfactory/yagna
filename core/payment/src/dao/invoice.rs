@@ -5,7 +5,7 @@ use crate::schema::pay_agreement::dsl as agreement_dsl;
 use crate::schema::pay_invoice::dsl;
 use crate::schema::pay_invoice_x_activity::dsl as activity_dsl;
 use bigdecimal::BigDecimal;
-use chrono::{DateTime, Utc, NaiveDateTime};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::{
     BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
 };

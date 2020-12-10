@@ -46,14 +46,19 @@ async fn main() -> anyhow::Result<()> {
     log::debug!("allocation={:?}", allocation);
     log::info!("Allocation created.");
 
-    log::info!("INVOICES1: {:?}", requestor.get_invoices(None, None).await);
+    log::info!(
+        "INVOICES1: {:?}",
+        requestor.get_invoices::<Utc>(None, None).await
+    );
     log::info!(
         "INVOICES2: {:?}",
-        requestor.get_invoices(Some(invoice_date), None).await
+        requestor
+            .get_invoices::<Utc>(Some(invoice_date), None)
+            .await
     );
     log::info!(
         "INVOICES3: {:?}",
-        requestor.get_invoices(Some(Utc::now()), None).await
+        requestor.get_invoices::<Utc>(Some(Utc::now()), None).await
     );
 
     log::info!("Accepting invoice...");
