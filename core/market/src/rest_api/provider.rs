@@ -2,7 +2,7 @@ use actix_web::web::{Data, Json, Path, Query};
 use actix_web::{HttpResponse, Responder, Scope};
 use std::sync::Arc;
 
-use ya_client::model::market::{NewOffer, NewProposal};
+use ya_client::model::market::{NewOffer, NewProposal, Reason};
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::LogErr;
 
@@ -21,6 +21,7 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .service(counter_proposal)
         .service(get_proposal)
         .service(reject_proposal)
+        .service(reject_proposal_with_reason)
         .service(approve_agreement)
         .service(reject_agreement)
 }
@@ -131,7 +132,27 @@ async fn reject_proposal(
 
     market
         .provider_engine
-        .reject_proposal(&subscription_id, &proposal_id, &id)
+        .reject_proposal(&subscription_id, &proposal_id, &id, None)
+        .await
+        .log_err()
+        .map(|_| HttpResponse::NoContent().finish())
+}
+
+#[actix_web::post("/offers/{subscription_id}/proposals/{proposal_id}/reject")]
+async fn reject_proposal_with_reason(
+    market: Data<Arc<MarketService>>,
+    path: Path<PathSubscriptionProposal>,
+    id: Identity,
+    body: Json<Option<Reason>>,
+) -> impl Responder {
+    let PathSubscriptionProposal {
+        subscription_id,
+        proposal_id,
+    } = path.into_inner();
+
+    market
+        .provider_engine
+        .reject_proposal(&subscription_id, &proposal_id, &id, body.into_inner())
         .await
         .log_err()
         .map(|_| HttpResponse::NoContent().finish())

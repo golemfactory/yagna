@@ -4,7 +4,7 @@ use metrics::counter;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use ya_client::model::market::{event::ProviderEvent, NewProposal};
+use ya_client::model::market::{event::ProviderEvent, NewProposal, Reason};
 use ya_client::model::NodeId;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
@@ -150,6 +150,7 @@ impl ProviderBroker {
         _offer_id: &SubscriptionId,
         proposal_id: &ProposalId,
         id: &Identity,
+        reason: Option<Reason>,
     ) -> Result<(), ProposalError> {
         // self.common
         //     .reject_proposal(offer_id, proposal_id, OwnerType::Provider)
@@ -162,9 +163,10 @@ impl ProviderBroker {
 
         counter!("market.proposals.provider.rejected", 1);
         log::info!(
-            "Provider {} rejected Proposal [{}]",
+            "Provider {} rejected Proposal [{}] with reason: {:?}",
             id.display(),
             &proposal_id,
+            reason
         );
         Ok(())
     }

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 
-use ya_client::model::market::{event::RequestorEvent, NewProposal};
+use ya_client::model::market::{event::RequestorEvent, NewProposal, Reason};
 use ya_client::model::{node_id::ParseError, NodeId};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
@@ -177,6 +177,7 @@ impl RequestorBroker {
         _demand_id: &SubscriptionId,
         proposal_id: &ProposalId,
         id: &Identity,
+        reason: Option<Reason>,
     ) -> Result<(), ProposalError> {
         // self.common
         //     .reject_proposal(demand_id, proposal_id, OwnerType::Requestor)
@@ -189,9 +190,10 @@ impl RequestorBroker {
 
         counter!("market.proposals.requestor.rejected", 1);
         log::info!(
-            "Requestor {} rejected Proposal [{}]",
+            "Requestor {} rejected Proposal [{}] with reason: {:?}",
             id.display(),
             &proposal_id,
+            reason
         );
         Ok(())
     }

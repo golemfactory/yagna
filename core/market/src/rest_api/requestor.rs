@@ -3,7 +3,7 @@ use actix_web::{HttpResponse, Responder, Scope};
 use std::str::FromStr;
 use std::sync::Arc;
 
-use ya_client::model::market::{AgreementProposal, NewDemand, NewProposal};
+use ya_client::model::market::{AgreementProposal, NewDemand, NewProposal, Reason};
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::LogErr;
 
@@ -25,10 +25,12 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .service(counter_proposal)
         .service(get_proposal)
         .service(reject_proposal)
+        .service(reject_proposal_with_reason)
         .service(create_agreement)
         .service(confirm_agreement)
         .service(wait_for_approval)
         .service(cancel_agreement)
+        .service(cancel_agreement_with_reason)
 }
 
 #[actix_web::post("/demands")]
@@ -137,7 +139,27 @@ async fn reject_proposal(
 
     market
         .requestor_engine
-        .reject_proposal(&subscription_id, &proposal_id, &id)
+        .reject_proposal(&subscription_id, &proposal_id, &id, None)
+        .await
+        .log_err()
+        .map(|_| HttpResponse::NoContent().finish())
+}
+
+#[actix_web::post("/demands/{subscription_id}/proposals/{proposal_id}/reject")]
+async fn reject_proposal_with_reason(
+    market: Data<Arc<MarketService>>,
+    path: Path<PathSubscriptionProposal>,
+    id: Identity,
+    body: Json<Option<Reason>>,
+) -> impl Responder {
+    let PathSubscriptionProposal {
+        subscription_id,
+        proposal_id,
+    } = path.into_inner();
+
+    market
+        .requestor_engine
+        .reject_proposal(&subscription_id, &proposal_id, &id, body.into_inner())
         .await
         .log_err()
         .map(|_| HttpResponse::NoContent().finish())
@@ -197,6 +219,16 @@ async fn cancel_agreement(
     _market: Data<Arc<MarketService>>,
     _path: Path<PathAgreement>,
     _id: Identity,
+) -> HttpResponse {
+    HttpResponse::NotImplemented().finish()
+}
+
+#[actix_web::post("/agreements/{agreement_id}/cancel")]
+async fn cancel_agreement_with_reason(
+    _market: Data<Arc<MarketService>>,
+    _path: Path<PathAgreement>,
+    _id: Identity,
+    _body: Json<Option<Reason>>,
 ) -> HttpResponse {
     HttpResponse::NotImplemented().finish()
 }
