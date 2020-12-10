@@ -15,6 +15,8 @@ async fn main() -> anyhow::Result<()> {
     let provider: PaymentProviderApi = client.interface()?;
     let requestor: PaymentRequestorApi = client.interface()?;
 
+    let invoice_date = Utc::now();
+
     log::info!("Issuing invoice...");
     let invoice = provider
         .issue_invoice(&NewInvoice {
@@ -43,6 +45,21 @@ async fn main() -> anyhow::Result<()> {
         .await?;
     log::debug!("allocation={:?}", allocation);
     log::info!("Allocation created.");
+
+    log::info!(
+        "INVOICES1: {:?}",
+        requestor.get_invoices::<Utc>(None, None).await
+    );
+    log::info!(
+        "INVOICES2: {:?}",
+        requestor
+            .get_invoices::<Utc>(Some(invoice_date), None)
+            .await
+    );
+    log::info!(
+        "INVOICES3: {:?}",
+        requestor.get_invoices::<Utc>(Some(Utc::now()), None).await
+    );
 
     log::info!("Accepting invoice...");
     let now = Utc::now();

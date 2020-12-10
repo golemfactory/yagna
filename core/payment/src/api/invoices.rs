@@ -44,10 +44,19 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .route("/invoices/{invoice_id}/reject", post().to(reject_invoice))
 }
 
-async fn get_invoices(db: Data<DbExecutor>, id: Identity) -> HttpResponse {
+async fn get_invoices(
+    db: Data<DbExecutor>,
+    query: Query<FilterParams>,
+    id: Identity,
+) -> HttpResponse {
     let node_id = id.identity;
+    let after_timestamp = query.after_timestamp.map(|d| d.naive_utc());
+    let max_items = query.max_items;
     let dao: InvoiceDao = db.as_dao();
-    match dao.get_for_node_id(node_id).await {
+    match dao
+        .get_for_node_id(node_id, after_timestamp, max_items)
+        .await
+    {
         Ok(invoices) => response::ok(invoices),
         Err(e) => response::server_error(&e),
     }

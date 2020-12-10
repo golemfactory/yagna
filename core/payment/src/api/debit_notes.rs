@@ -293,8 +293,6 @@ async fn accept_debit_note(
             }
             Err(e) => return response::server_error(&e),
         }
-
-        // TODO: Compute amount to pay and schedule payment
     })
     .await
 }
