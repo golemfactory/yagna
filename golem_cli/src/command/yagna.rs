@@ -10,6 +10,22 @@ use std::process::Stdio;
 use tokio::process::{Child, Command};
 use ya_core_model::payment::local::{InvoiceStats, InvoiceStatusNotes, StatusNotes, StatusResult};
 
+pub struct PaymentType {
+    pub platform: &'static str,
+    pub driver: &'static str,
+}
+
+impl PaymentType {
+    pub const ZK: PaymentType = PaymentType {
+        platform: "ZK-NGNT",
+        driver: "zksync",
+    };
+    pub const PLAIN: PaymentType = PaymentType {
+        platform: "NGNT",
+        driver: "ngnt",
+    };
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Id {
@@ -105,8 +121,35 @@ impl YagnaCommand {
         output.map_err(anyhow::Error::msg)
     }
 
-    pub async fn payment_status(mut self) -> anyhow::Result<StatusResult> {
+    pub async fn payment_status(
+        mut self,
+        address: Option<&str>,
+        payment_type: Option<&PaymentType>,
+    ) -> anyhow::Result<StatusResult> {
         self.cmd.args(&["--json", "payment", "status"]);
+        if let Some(payment_type) = payment_type {
+            self.cmd.arg("-p").arg(payment_type.platform);
+        }
+        if let Some(addr) = address {
+            self.cmd.arg(addr);
+        }
+        self.run().await
+    }
+
+    pub async fn payment_init(
+        mut self,
+        address: &str,
+        payment_type: &PaymentType,
+    ) -> anyhow::Result<()> {
+        self.cmd.args(&[
+            "--json",
+            "payment",
+            "init",
+            "-p",
+            "--driver",
+            payment_type.driver,
+            address,
+        ]);
         self.run().await
     }
 
@@ -127,6 +170,11 @@ impl YagnaCommand {
         cmd.stdin(Stdio::null())
             .stderr(Stdio::inherit())
             .stdout(Stdio::inherit());
+        if let Some(core_log) = std::env::var_os("YA_CORE_LOG") {
+            cmd.env("RUST_LOG", core_log);
+        } else {
+            cmd.env("RUST_LOG", "info,actix_web::middleware=warn");
+        }
 
         #[cfg(target_os = "linux")]
         unsafe {
@@ -158,7 +206,7 @@ impl YagnaCommand {
 
         match v {
             future::Either::Left((_child_ends, _t)) => {
-                anyhow::bail!("fail to start service");
+                anyhow::bail!("failed to start service");
             }
             future::Either::Right((_t, child)) => Ok(child),
         }

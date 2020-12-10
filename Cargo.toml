@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.4.1"
+version = "0.5.0"
 description = "Open platform and marketplace for distributed computations"
 readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
@@ -10,7 +10,7 @@ license = "GPL-3.0"
 edition = "2018"
 
 [features]
-default = ['gnt-driver', 'gftp/bin']
+default = ['zksync-driver', 'gnt-driver', 'gftp/bin']
 static-openssl = ["openssl/vendored"]
 dummy-driver = ['ya-dummy-driver']
 gnt-driver = ['ya-gnt-driver']
@@ -43,10 +43,12 @@ ya-service-api-web = "0.1"
 ya-service-bus = "0.2"
 ya-sgx = "0.1"
 ya-utils-path = "0.1"
+ya-utils-futures = "0.1"
+ya-utils-process = { version = "0.1", features = ["lock"] }
 
 actix-rt = "1.0"
 actix-service = "1.0"
-actix-web = "2.0"
+actix-web = "3.2"
 anyhow = "1.0"
 directories = "2.0.2"
 dotenv = "0.15.0"
@@ -129,11 +131,13 @@ members = [
     "utils/actix_utils",
     "utils/agreement-utils",
     "utils/compile-time-utils",
+    "utils/futures",
     "utils/path",
     "utils/process",
     "utils/std-utils",
     "utils/scheduler",
     "utils/transfer",
+    "utils/diesel-utils",
     "core/metrics"
 ]
 
@@ -182,6 +186,8 @@ ya-compile-time-utils = { path = "utils/compile-time-utils" }
 ya-exe-unit = { path = "exe-unit" }
 ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
+ya-utils-futures = { path = "utils/futures"}
 ya-utils-path = { path = "utils/path"}
 ya-utils-process = { path = "utils/process"}
+ya-diesel-utils = { path = "utils/diesel-utils"}
 ya-metrics = { path = "core/metrics" }

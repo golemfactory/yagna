@@ -7,10 +7,8 @@
 // Workspace uses
 
 // Local uses
-use crate::model::{
-    Ack, GenericError, GetAccountBalance, GetTransactionBalance, Init, PaymentDetails,
-    SchedulePayment, VerifyPayment,
-};
+use crate::dao::DbExecutor;
+use crate::model::*;
 
 // Public revealed uses, required to implement this trait
 pub use async_trait::async_trait;
@@ -22,14 +20,14 @@ pub use ya_core_model::identity::{event::Event as IdentityEvent, Error as Identi
 pub trait PaymentDriver {
     async fn account_event(
         &self,
-        _db: (),
+        _db: DbExecutor,
         _caller: String,
         msg: IdentityEvent,
     ) -> Result<(), IdentityError>;
 
     async fn get_account_balance(
         &self,
-        db: (),
+        db: DbExecutor,
         caller: String,
         msg: GetAccountBalance,
     ) -> Result<BigDecimal, GenericError>;
@@ -37,27 +35,35 @@ pub trait PaymentDriver {
     // used by bus to bind service
     fn get_name(&self) -> String;
     fn get_platform(&self) -> String;
+    fn recv_init_required(&self) -> bool;
 
     async fn get_transaction_balance(
         &self,
-        db: (),
+        db: DbExecutor,
         caller: String,
         msg: GetTransactionBalance,
     ) -> Result<BigDecimal, GenericError>;
 
-    async fn init(&self, db: (), caller: String, msg: Init) -> Result<Ack, GenericError>;
+    async fn init(&self, db: DbExecutor, caller: String, msg: Init) -> Result<Ack, GenericError>;
 
     async fn schedule_payment(
         &self,
-        db: (),
+        db: DbExecutor,
         caller: String,
         msg: SchedulePayment,
     ) -> Result<String, GenericError>;
 
     async fn verify_payment(
         &self,
-        db: (),
+        db: DbExecutor,
         caller: String,
         msg: VerifyPayment,
     ) -> Result<PaymentDetails, GenericError>;
+
+    async fn validate_allocation(
+        &self,
+        db: DbExecutor,
+        caller: String,
+        msg: ValidateAllocation,
+    ) -> Result<bool, GenericError>;
 }

@@ -6,6 +6,7 @@ use std::str::FromStr;
 use uuid::Uuid;
 use ya_core_model::driver::*;
 use ya_core_model::payment::local as payment_srv;
+use ya_service_bus::typed::service;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 pub fn bind_service() {
@@ -16,9 +17,23 @@ pub fn bind_service() {
         .bind(get_account_balance)
         .bind(get_transaction_balance)
         .bind(schedule_payment)
-        .bind(verify_payment);
+        .bind(verify_payment)
+        .bind(validate_allocation);
 
     log::debug!("Successfully bound payment driver service to service bus");
+}
+
+pub async fn register_in_payment_service() -> anyhow::Result<()> {
+    log::debug!("Registering driver in payment service...");
+    let message = payment_srv::RegisterDriver {
+        driver_name: DRIVER_NAME.to_string(),
+        platform: PLATFORM_NAME.to_string(),
+        recv_init_required: false,
+    };
+    service(payment_srv::BUS_ID).send(message).await?.unwrap(); // Unwrap on purpose because it's NoError
+    log::debug!("Successfully registered driver in payment service.");
+
+    Ok(())
 }
 
 async fn init(_db: (), _caller: String, msg: Init) -> Result<Ack, GenericError> {
@@ -110,4 +125,12 @@ async fn verify_payment(
     let json_str = std::str::from_utf8(confirmation.confirmation.as_slice()).unwrap();
     let details = serde_json::from_str(&json_str).unwrap();
     Ok(details)
+}
+
+async fn validate_allocation(
+    _db: (),
+    _caller: String,
+    _msg: ValidateAllocation,
+) -> Result<bool, GenericError> {
+    Ok(true)
 }

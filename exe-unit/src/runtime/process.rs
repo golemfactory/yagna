@@ -1,9 +1,7 @@
 use crate::error::Error;
 use crate::message::{ExecuteCommand, SetRuntimeMode, SetTaskPackagePath, Shutdown};
 use crate::output::{forward_output, vec_to_string};
-use crate::process::kill;
-use crate::process::ProcessTree;
-use crate::process::SystemError;
+use crate::process::{kill, ProcessTree, SystemError};
 use crate::runtime::event::EventMonitor;
 use crate::runtime::{Runtime, RuntimeArgs, RuntimeMode};
 use crate::ExeUnitContext;
@@ -78,7 +76,10 @@ impl RuntimeProcess {
         match result.status.success() {
             true => {
                 let stdout = vec_to_string(result.stdout).unwrap_or_else(String::new);
-                Ok(serde_json::from_str(&stdout)?)
+                Ok(serde_json::from_str(&stdout).map_err(|e| {
+                    let msg = format!("Invalid offer template [{}]: {:?}", binary.display(), e);
+                    Error::Other(msg)
+                })?)
             }
             false => {
                 log::warn!(
@@ -155,11 +156,11 @@ impl RuntimeProcess {
                 .spawn()?;
 
             let id = batch_id.clone();
-            forward_output(child.stdout.take().unwrap(), &evt_tx, move |out| {
+            let stdout = forward_output(child.stdout.take().unwrap(), &evt_tx, move |out| {
                 RuntimeEvent::stdout(id.clone(), idx, CommandOutput::Bin(out))
             });
             let id = batch_id.clone();
-            forward_output(child.stderr.take().unwrap(), &evt_tx, move |out| {
+            let stderr = forward_output(child.stderr.take().unwrap(), &evt_tx, move |out| {
                 RuntimeEvent::stderr(id.clone(), idx, CommandOutput::Bin(out))
             });
 
@@ -169,10 +170,10 @@ impl RuntimeProcess {
                 let tree = ProcessTree::try_new(child.id()).map_err(Error::runtime)?;
                 ChildProcess::from(tree)
             };
-
             let _guard = ChildProcessGuard::new(proc, address.clone());
-            let result = child.await?;
-            Ok(result.code().unwrap_or(-1))
+
+            let result = future::join3(child, stdout, stderr).await;
+            Ok(result.0?.code().unwrap_or(-1))
         }
         .boxed_local()
     }
@@ -254,18 +255,16 @@ impl RuntimeProcess {
 
                     while let Some(status) = events.rx.next().await {
                         if !status.stdout.is_empty() {
-                            let batch_id = batch_id.clone();
                             let evt = RuntimeEvent::stdout(
-                                batch_id,
+                                batch_id.clone(),
                                 idx,
                                 CommandOutput::Bin(status.stdout),
                             );
                             let _ = tx.send(evt).await;
                         }
                         if !status.stderr.is_empty() {
-                            let batch_id = batch_id.clone();
                             let evt = RuntimeEvent::stderr(
-                                batch_id,
+                                batch_id.clone(),
                                 idx,
                                 CommandOutput::Bin(status.stderr),
                             );

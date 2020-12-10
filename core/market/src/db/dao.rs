@@ -1,7 +1,8 @@
 mod agreement;
+mod agreement_events;
 pub mod cleaner;
 mod demand;
-mod events;
+mod negotiation_events;
 pub mod sql_functions {
     use diesel::sql_types;
     diesel::sql_function!(fn datetime(timestring:sql_types::Text, modifier:sql_types::Text) -> sql_types::Timestamp);
@@ -14,7 +15,8 @@ mod offer;
 mod proposal;
 
 pub use agreement::{AgreementDao, SaveAgreementError, StateError};
+pub use agreement_events::AgreementEventsDao;
 pub use demand::DemandDao;
-pub use events::{EventsDao, TakeEventsError};
+pub use negotiation_events::{NegotiationEventsDao, TakeEventsError};
 pub use offer::{OfferDao, OfferState};
 pub use proposal::{ProposalDao, SaveProposalError};

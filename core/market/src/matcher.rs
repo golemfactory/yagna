@@ -2,7 +2,7 @@ use metrics::counter;
 use std::sync::Arc;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
-use ya_client::model::market::DemandOfferBase;
+use ya_client::model::market::{NewDemand, NewOffer};
 use ya_service_api_web::middleware::Identity;
 
 use crate::config::Config;
@@ -101,7 +101,7 @@ impl Matcher {
 
     pub async fn subscribe_offer(
         &self,
-        offer: &DemandOfferBase,
+        offer: &NewOffer,
         id: &Identity,
     ) -> Result<Offer, MatcherError> {
         let offer = self.store.create_offer(id, offer).await?;
@@ -162,7 +162,7 @@ impl Matcher {
 
     pub async fn subscribe_demand(
         &self,
-        demand: &DemandOfferBase,
+        demand: &NewDemand,
         id: &Identity,
     ) -> Result<Demand, MatcherError> {
         let demand = self.store.create_demand(id, demand).await?;

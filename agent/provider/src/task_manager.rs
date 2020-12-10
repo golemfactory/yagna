@@ -1,6 +1,6 @@
 use actix::prelude::*;
-use anyhow::{bail, Error, Result};
-use chrono::{DateTime, TimeZone, Utc};
+use anyhow::{anyhow, bail, Error, Result};
+use chrono::{DateTime, Duration, TimeZone, Utc};
 use futures::future::TryFutureExt;
 
 use ya_agreement_utils::AgreementView;
@@ -142,18 +142,24 @@ impl TaskManager {
 
         // Schedule agreement termination after expiration time.
         let duration = (expiration - Utc::now()).to_std()?;
+        let agr_id = agreement_id.clone();
         ctx.run_later(duration, move |myself, ctx| {
-            if !myself.tasks.is_agreement_finalized(&agreement_id) {
-                log::warn!(
-                    "Agreement [{}] expired @ {}. Breaking",
+            if !myself.tasks.is_agreement_finalized(&agr_id) {
+                ctx.address().do_send(BreakAgreement {
+                    agreement_id: agr_id,
+                    reason: BreakReason::Expired(expiration),
+                });
+            }
+        });
+
+        // Schedule agreement termination when there is no activity created within 90s.
+        let s90 = Duration::seconds(90).to_std()?;
+        ctx.run_later(s90.clone(), move |myself, ctx| {
+            if myself.tasks.not_active(&agreement_id) {
+                ctx.address().do_send(BreakAgreement {
                     agreement_id,
-                    expiration
-                );
-                let msg = BreakAgreement {
-                    agreement_id: agreement_id.clone(),
-                    reason: BreakReason::Expired,
-                };
-                ctx.address().do_send(msg);
+                    reason: BreakReason::NoActivity(s90),
+                });
             }
         });
         Ok(())
@@ -313,22 +319,38 @@ impl Handler<ActivityCreated> for TaskManager {
     fn handle(&mut self, msg: ActivityCreated, _ctx: &mut Context<Self>) -> Self::Result {
         // TODO: Consider different flow: TaskRunner sends us request for creating activity
         //       and TaskManager is responsible for sending CreateActivity to runner.
-        let result: Result<(), anyhow::Error> = (|| {
-            let agreement_id = msg.agreement_id.clone();
-            self.tasks
-                .start_transition(&agreement_id, AgreementState::Computing)?;
-            // Forward information to Payments for cost computing.
-            self.payments.do_send(msg);
-            self.tasks
-                .finish_transition(&agreement_id, AgreementState::Computing)?;
-            Ok(())
-        })();
-
-        if let Err(error) = result {
-            log::error!("{}", error);
+        let listener = self.tasks.changes_listener(&msg.agreement_id);
+        let future = async move {
+            // ActivityCreated event can come, before Task initialization will be finished.
+            // In this case we must wait, because otherwise transition to Computing will fail.
+            let mut state = listener?;
+            state.transition_finished().await
         }
+        .into_actor(self)
+        .map(move |result, myself, _| {
+            // Return, if waiting for transition failed.
+            // This indicates, that State was already dropped.
+            result
+                .map_err(|e| anyhow!("[ActivityCreated] Can't change state to Computing. {}", e))?;
+            let agreement_id = msg.agreement_id.clone();
 
-        ActorResponse::reply(Ok(()))
+            myself
+                .tasks
+                .start_transition(&agreement_id, AgreementState::Computing)?;
+
+            // Forward information to Payments for cost computing.
+            myself.payments.do_send(msg);
+            myself
+                .tasks
+                .finish_transition(&agreement_id, AgreementState::Computing)?;
+            anyhow::Result::<()>::Ok(())
+        })
+        .map(|result, _, _| match result {
+            Err(e) => Ok(log::error!("[ActivityCreated] {}", e)),
+            Ok(()) => Ok(()),
+        });
+
+        ActorResponse::r#async(future)
     }
 }
 
@@ -377,13 +399,14 @@ impl Handler<BreakAgreement> for TaskManager {
             let new_state = AgreementState::Broken {
                 reason: msg.reason.clone(),
             };
-            start_transition(&myself, &msg.agreement_id, new_state.clone()).await?;
 
             log::warn!(
                 "Breaking agreement [{}], reason: {}.",
                 msg.agreement_id,
                 msg.reason
             );
+
+            start_transition(&myself, &msg.agreement_id, new_state.clone()).await?;
 
             let result = async move {
                 let msg = AgreementBroken::from(msg.clone());

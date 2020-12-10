@@ -1,7 +1,7 @@
-use crate::dao::{ActivityDao, AgreementDao, OrderDao, PaymentDao};
+use crate::dao::{ActivityDao, AgreementDao, AllocationDao, OrderDao, PaymentDao};
 use crate::error::processor::{
     AccountNotRegistered, DriverNotRegistered, GetStatusError, NotifyPaymentError,
-    OrderValidationError, SchedulePaymentError, VerifyPaymentError,
+    OrderValidationError, SchedulePaymentError, ValidateAllocationError, VerifyPaymentError,
 };
 use crate::models::order::ReadObj as DbOrder;
 use bigdecimal::{BigDecimal, Zero};
@@ -12,11 +12,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use ya_client_model::payment::{ActivityPayment, AgreementPayment, Payment};
 use ya_core_model::driver::{
-    self, driver_bus_id, AccountMode, PaymentConfirmation, PaymentDetails,
+    self, driver_bus_id, AccountMode, PaymentConfirmation, PaymentDetails, ValidateAllocation,
 };
 use ya_core_model::payment::local::{
-    Account, NotifyPayment, RegisterAccount, RegisterAccountError, SchedulePayment,
-    UnregisterAccount, UnregisterAccountError,
+    Account, NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver, SchedulePayment,
+    UnregisterAccount, UnregisterDriver,
 };
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_net::RemoteEndpoint;
@@ -60,30 +60,36 @@ async fn validate_orders(
 #[derive(Clone, Default)]
 struct DriverRegistry {
     accounts: HashMap<(String, String), (String, AccountMode)>, // (platform, address) -> (driver, mode)
-    drivers: HashMap<String, String>,                           // driver -> platform
+    drivers: HashMap<String, (String, bool)>, // driver -> (platform, recv_init_required)
 }
 
 impl DriverRegistry {
-    pub fn register_account(&mut self, msg: RegisterAccount) -> Result<(), RegisterAccountError> {
-        match self.drivers.entry(msg.driver.clone()) {
-            Entry::Vacant(entry) => {
-                entry.insert(msg.platform.clone());
-            }
-            Entry::Occupied(entry) if entry.get() != &msg.platform => {
-                return Err(RegisterAccountError::Other(format!(
-                    "Driver {} is registered as handling platform {}",
-                    msg.driver,
-                    entry.get()
-                )))
-            }
-            _ => {}
-        }
+    pub fn register_driver(&mut self, msg: RegisterDriver) {
+        self.drivers
+            .insert(msg.driver_name, (msg.platform, msg.recv_init_required));
+    }
 
-        match self.accounts.entry((msg.platform, msg.address)) {
+    pub fn unregister_driver(&mut self, msg: UnregisterDriver) {
+        let driver_name = msg.0;
+        self.drivers.remove(&driver_name);
+        self.accounts
+            .retain(|_, (driver, _)| driver != &driver_name);
+    }
+
+    pub fn register_account(&mut self, msg: RegisterAccount) -> Result<(), RegisterAccountError> {
+        let platform = match self.drivers.get(&msg.driver) {
+            None => return Err(RegisterAccountError::DriverNotRegistered(msg.driver)),
+            Some((platform, _)) => platform.clone(),
+        };
+
+        match self.accounts.entry((platform, msg.address.clone())) {
             Entry::Occupied(mut entry) => {
                 let (driver, mode) = entry.get_mut();
                 if driver != &msg.driver {
-                    return Err(RegisterAccountError::AlreadyRegistered);
+                    return Err(RegisterAccountError::AlreadyRegistered(
+                        msg.address,
+                        driver.to_string(),
+                    ));
                 }
                 *mode |= msg.mode;
             }
@@ -94,14 +100,8 @@ impl DriverRegistry {
         Ok(())
     }
 
-    pub fn unregister_account(
-        &mut self,
-        msg: UnregisterAccount,
-    ) -> Result<(), UnregisterAccountError> {
-        match self.accounts.remove(&(msg.platform, msg.address)) {
-            Some(_) => Ok(()),
-            None => Err(UnregisterAccountError::NotRegistered),
-        }
+    pub fn unregister_account(&mut self, msg: UnregisterAccount) {
+        self.accounts.remove(&(msg.platform, msg.address));
     }
 
     pub fn get_accounts(&self) -> Vec<Account> {
@@ -123,18 +123,38 @@ impl DriverRegistry {
         address: &str,
         mode: AccountMode,
     ) -> Result<String, AccountNotRegistered> {
-        match self
+        if let Some((driver, reg_mode)) = self
             .accounts
             .get(&(platform.to_owned(), address.to_owned()))
         {
-            Some((driver, reg_mode)) if reg_mode.contains(mode) => Ok(driver.to_owned()),
-            _ => Err(AccountNotRegistered::new(platform, address, mode)),
+            if reg_mode.contains(mode) {
+                return Ok(driver.to_owned());
+            }
         }
+
+        // If it's recv-only mode or no-mode (i.e. checking status) we can use any driver that
+        // supports the given platform and doesn't require init for receiving.
+        if !mode.contains(AccountMode::SEND) {
+            for (driver, (driver_platform, recv_init_required)) in self.drivers.iter() {
+                if driver_platform == platform && !*recv_init_required {
+                    return Ok(driver.to_owned());
+                }
+            }
+        }
+
+        Err(AccountNotRegistered::new(platform, address, mode))
     }
 
     pub fn platform(&self, driver: &str) -> Result<String, DriverNotRegistered> {
         match self.drivers.get(driver) {
-            Some(platform) => Ok(platform.to_owned()),
+            Some((platform, _)) => Ok(platform.to_owned()),
+            None => Err(DriverNotRegistered::new(driver)),
+        }
+    }
+
+    pub fn recv_init_required(&self, driver: &str) -> Result<bool, DriverNotRegistered> {
+        match self.drivers.get(driver) {
+            Some((_, required)) => Ok(*required),
             None => Err(DriverNotRegistered::new(driver)),
         }
     }
@@ -154,14 +174,19 @@ impl PaymentProcessor {
         }
     }
 
+    pub async fn register_driver(&self, msg: RegisterDriver) {
+        self.registry.lock().await.register_driver(msg)
+    }
+
+    pub async fn unregister_driver(&self, msg: UnregisterDriver) {
+        self.registry.lock().await.unregister_driver(msg)
+    }
+
     pub async fn register_account(&self, msg: RegisterAccount) -> Result<(), RegisterAccountError> {
         self.registry.lock().await.register_account(msg)
     }
 
-    pub async fn unregister_account(
-        &self,
-        msg: UnregisterAccount,
-    ) -> Result<(), UnregisterAccountError> {
+    pub async fn unregister_account(&self, msg: UnregisterAccount) {
         self.registry.lock().await.unregister_account(msg)
     }
 
@@ -386,5 +411,30 @@ impl PaymentProcessor {
             .send(driver::GetAccountBalance::from(address))
             .await??;
         Ok(amount)
+    }
+
+    pub async fn validate_allocation(
+        &self,
+        platform: String,
+        address: String,
+        amount: BigDecimal,
+    ) -> Result<bool, ValidateAllocationError> {
+        let existing_allocations = self
+            .db_executor
+            .as_dao::<AllocationDao>()
+            .get_for_address(platform.clone(), address.clone())
+            .await?;
+        let driver =
+            self.registry
+                .lock()
+                .await
+                .driver(&platform, &address, AccountMode::empty())?;
+        let msg = ValidateAllocation {
+            address,
+            amount,
+            existing_allocations,
+        };
+        let result = driver_endpoint(&driver).send(msg).await??;
+        Ok(result)
     }
 }

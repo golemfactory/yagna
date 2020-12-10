@@ -8,14 +8,25 @@ edition = "2018"
 default = []
 
 [dependencies]
+actix = { version = "0.9", default-features = false }
+anyhow = "1.0"
 async-trait = "0.1"
 bigdecimal = { version = "0.1.0" }
 chrono = { version = "0.4", features = ["serde"] }
+diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
+diesel_migrations = "1.4"
+ethereum-types = "0.6.0"
+hex = "0.4"
 log = "0.4.8"
+num = { version = "0.2", features = ["serde"] }
+r2d2 = "0.8"
+thiserror = "1.0"
+tokio = { version = "0.2", features = ["macros"] }
 
 ## yagna dependencies
 ya-client-model = "0.2.0"
 ya-core-model = { version = "0.2.1", features = ["driver", "identity", "payment"] }
+ya-persistence = "0.2"
 ya-service-bus = "0.2"
 
 [dev-dependencies]

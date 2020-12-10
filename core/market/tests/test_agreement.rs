@@ -2,11 +2,13 @@ use anyhow::Result;
 use chrono::{Duration, Utc};
 
 use ya_core_model::market;
+use ya_market::testing::agreement_utils::{gen_reason, negotiate_agreement};
+use ya_market::testing::mock_agreement::generate_agreement;
 use ya_market::testing::mock_node::MarketServiceExt;
 use ya_market::testing::proposal_util::{exchange_draft_proposals, NegotiationHelper};
 use ya_market::testing::MarketsNetwork;
 use ya_market::testing::{
-    client::sample_demand, client::sample_offer, events_helper::*, AgreementError,
+    client::sample_demand, client::sample_offer, events_helper::*, AgreementDao, AgreementError,
     AgreementStateError, ApprovalStatus, OwnerType, ProposalState, WaitForApprovalError,
 };
 use ya_service_bus::typed as bus;
@@ -150,7 +152,7 @@ async fn full_market_interaction_aka_happy_path() -> Result<()> {
 
     // Confirms it immediately
     req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await?;
 
     // And starts waiting for Agreement approval by Provider
@@ -172,6 +174,7 @@ async fn full_market_interaction_aka_happy_path() -> Result<()> {
         .approve_agreement(
             network.get_default_id(PROV_NAME),
             &agreement_id.clone().translate(OwnerType::Provider),
+            None,
             0.1,
         )
         .await?;
@@ -249,12 +252,12 @@ async fn second_confirmation_should_fail() -> Result<()> {
 
     // than: first try to confirm agreement should pass
     req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await?;
 
     // but second should fail
     let result = req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await;
     assert_eq!(
         result.unwrap_err().to_string(),
@@ -292,7 +295,7 @@ async fn agreement_expired_before_confirmation() -> Result<()> {
 
     // than: a try to confirm agreement...
     let result = req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await;
 
     // results with Expired error
@@ -333,7 +336,7 @@ async fn agreement_expired_before_approval() -> Result<()> {
 
     // than: immediate confirm agreement should pass
     req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await?;
 
     tokio::time::delay_for(Duration::milliseconds(50).to_std()?).await;
@@ -420,7 +423,7 @@ async fn approval_before_confirmation_should_fail() -> Result<()> {
     let result = network
         .get_market(PROV_NAME)
         .provider_engine
-        .approve_agreement(prov_id.clone(), &agreement_id, 0.1)
+        .approve_agreement(prov_id.clone(), &agreement_id, None, 0.1)
         .await;
 
     // ... which results in not found error, bc there was no confirmation
@@ -463,7 +466,7 @@ async fn approval_without_waiting_should_pass() -> Result<()> {
 
     // Confirms it immediately
     req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await?;
 
     // Provider successfully approves the Agreement
@@ -474,6 +477,7 @@ async fn approval_without_waiting_should_pass() -> Result<()> {
         .approve_agreement(
             prov_id.clone(),
             &agreement_id.translate(OwnerType::Provider),
+            None,
             0.1,
         )
         .await?;
@@ -511,7 +515,7 @@ async fn waiting_after_approval_should_pass() -> Result<()> {
 
     // Confirms it immediately
     req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await?;
 
     // Provider successfully approves the Agreement
@@ -521,6 +525,7 @@ async fn waiting_after_approval_should_pass() -> Result<()> {
         .approve_agreement(
             prov_id.clone(),
             &agreement_id.clone().translate(OwnerType::Provider),
+            None,
             0.1,
         )
         .await?;
@@ -562,7 +567,7 @@ async fn second_approval_should_fail() -> Result<()> {
 
     // Confirms it immediately
     req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await?;
 
     // Provider successfully approves the Agreement
@@ -574,6 +579,7 @@ async fn second_approval_should_fail() -> Result<()> {
         .approve_agreement(
             prov_id.clone(),
             &agreement_id.clone().translate(OwnerType::Provider),
+            None,
             0.1,
         )
         .await?;
@@ -583,6 +589,7 @@ async fn second_approval_should_fail() -> Result<()> {
         .approve_agreement(
             prov_id.clone(),
             &agreement_id.clone().translate(OwnerType::Provider),
+            None,
             0.1,
         )
         .await;
@@ -624,7 +631,7 @@ async fn second_waiting_should_pass() -> Result<()> {
 
     // Confirms it immediately
     req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await?;
 
     // Provider successfully approves the Agreement
@@ -635,6 +642,7 @@ async fn second_waiting_should_pass() -> Result<()> {
         .approve_agreement(
             prov_id.clone(),
             &agreement_id.clone().translate(OwnerType::Provider),
+            None,
             0.1,
         )
         .await?;
@@ -682,7 +690,7 @@ async fn net_err_while_confirming() -> Result<()> {
 
     // then confirm should
     let result = req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await;
     match result.unwrap_err() {
         AgreementError::ProtocolCreate(_) => (),
@@ -721,7 +729,7 @@ async fn net_err_while_approving() -> Result<()> {
 
     // Confirms it immediately
     req_engine
-        .confirm_agreement(req_id.clone(), &agreement_id)
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await?;
 
     // when
@@ -735,6 +743,7 @@ async fn net_err_while_approving() -> Result<()> {
         .approve_agreement(
             prov_id.clone(),
             &agreement_id.clone().translate(OwnerType::Provider),
+            None,
             0.1,
         )
         .await;
@@ -876,5 +885,208 @@ async fn cant_promote_not_last_proposal() -> Result<()> {
         Err(AgreementError::ProposalCountered(id)) => assert_eq!(id, proposal_id),
         _ => panic!("Expected AgreementError::ProposalCountered."),
     }
+    Ok(())
+}
+
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[actix_rt::test]
+#[serial_test::serial]
+async fn test_terminate() -> Result<()> {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+    let req_market = network.get_market(REQ_NAME);
+    let prov_market = network.get_market(PROV_NAME);
+    let req_agreement_dao = req_market.db.as_dao::<AgreementDao>();
+    let prov_agreement_dao = prov_market.db.as_dao::<AgreementDao>();
+    let agreement_1 = generate_agreement(1, (Utc::now() + Duration::days(1)).naive_utc());
+    req_agreement_dao.save(agreement_1.clone()).await?;
+    prov_agreement_dao.save(agreement_1.clone()).await?;
+    let req_identity = network.get_default_id(REQ_NAME);
+    let reason = serde_json::json!({"ala":"ma kota","message": "coś"}).to_string();
+    req_market
+        .terminate_agreement(req_identity, agreement_1.id, Some(reason))
+        .await
+        .ok();
+    Ok(())
+}
+
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[actix_rt::test]
+#[serial_test::serial]
+async fn test_terminate_not_existing_agreement() -> Result<()> {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+
+    let req_market = network.get_market(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME);
+
+    negotiate_agreement(
+        &network,
+        REQ_NAME,
+        PROV_NAME,
+        "negotiation",
+        "r-session",
+        "p-session",
+    )
+    .await
+    .unwrap();
+
+    let not_existing_agreement = generate_agreement(1, Utc::now().naive_utc()).id;
+
+    let result = req_market
+        .terminate_agreement(
+            req_id,
+            not_existing_agreement.clone(),
+            Some(gen_reason("Success")),
+        )
+        .await;
+
+    match result.unwrap_err() {
+        AgreementError::NotFound(id) => assert_eq!(not_existing_agreement, id),
+        _ => panic!("Expected AgreementError::NotFound"),
+    };
+    Ok(())
+}
+
+/// Terminate is allowed only in `Approved` state of Agreement.
+/// TODO: Add tests for terminate_agreement in Cancelled and Rejected state after
+///  endpoints will be implemented.
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[actix_rt::test]
+#[serial_test::serial]
+async fn test_terminate_from_wrong_states() -> Result<()> {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await?
+        .proposal_id;
+
+    let req_market = network.get_market(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME);
+    let prov_market = network.get_market(PROV_NAME);
+
+    let agreement_id = req_market
+        .requestor_engine
+        .create_agreement(
+            req_id.clone(),
+            &proposal_id,
+            Utc::now() + Duration::hours(1),
+        )
+        .await?;
+
+    let result = req_market
+        .terminate_agreement(
+            req_id.clone(),
+            agreement_id.clone(),
+            Some(gen_reason("Failure")),
+        )
+        .await;
+
+    match result {
+        Ok(_) => panic!("Terminate Agreement should fail."),
+        Err(AgreementError::InvalidState(AgreementStateError::Proposed(id))) => {
+            assert_eq!(id, agreement_id)
+        }
+        _ => panic!("Wrong error returned."),
+    };
+
+    req_market
+        .requestor_engine
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
+        .await?;
+
+    // Terminate can be done on both sides at this moment.
+    let result = req_market
+        .terminate_agreement(
+            req_id.clone(),
+            agreement_id.clone(),
+            Some(gen_reason("Failure")),
+        )
+        .await;
+
+    match result {
+        Ok(_) => panic!("Terminate Agreement should fail."),
+        Err(AgreementError::InvalidState(AgreementStateError::Confirmed(id))) => {
+            assert_eq!(id, agreement_id)
+        }
+        _ => panic!("Wrong error returned."),
+    };
+
+    let agreement_id = agreement_id.clone().translate(OwnerType::Provider);
+
+    let result = prov_market
+        .terminate_agreement(req_id, agreement_id.clone(), Some(gen_reason("Failure")))
+        .await;
+
+    match result {
+        Ok(_) => panic!("Terminate Agreement should fail."),
+        Err(AgreementError::InvalidState(AgreementStateError::Confirmed(id))) => {
+            assert_eq!(id, agreement_id)
+        }
+        _ => panic!("Wrong error returned."),
+    };
+    Ok(())
+}
+
+/// We expect, that reason string is structured and can\
+/// be deserialized to `Reason` struct.
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[actix_rt::test]
+#[serial_test::serial]
+async fn test_terminate_invalid_reason() -> Result<()> {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await?
+        .add_market_instance(PROV_NAME)
+        .await?;
+
+    let req_market = network.get_market(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME);
+
+    let agreement_id = negotiate_agreement(
+        &network,
+        REQ_NAME,
+        PROV_NAME,
+        "negotiation",
+        "r-session",
+        "p-session",
+    )
+    .await
+    .unwrap()
+    .r_agreement;
+
+    let reason = "Unstructured message. Should be json.".to_string();
+    match req_market
+        .terminate_agreement(req_id.clone(), agreement_id.clone(), Some(reason))
+        .await
+        .unwrap_err()
+    {
+        AgreementError::ReasonError(_) => (),
+        _ => panic!("Expected AgreementError::ReasonError"),
+    };
+
+    let reason = "{'no_message_field': 'Reason expects message field'}".to_string();
+    match req_market
+        .terminate_agreement(req_id, agreement_id.clone(), Some(reason))
+        .await
+        .unwrap_err()
+    {
+        AgreementError::ReasonError(_) => (),
+        _ => panic!("Expected AgreementError::ReasonError"),
+    };
     Ok(())
 }

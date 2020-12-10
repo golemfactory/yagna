@@ -1,13 +1,10 @@
 use crate::appkey;
+use crate::command::{PaymentType, YaCommand};
 use crate::setup::RunConfig;
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use futures::channel::{mpsc, oneshot};
 use futures::prelude::*;
 use std::io;
-
-use crate::utils::is_yagna_running;
-
-use crate::command::YaCommand;
 use std::process::ExitStatus;
 use tokio::process::Child;
 use tokio::stream::StreamExt;
@@ -111,16 +108,31 @@ pub async fn watch_for_vm() -> anyhow::Result<()> {
 
 pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
     crate::setup::setup(&mut config, false).await?;
-    if is_yagna_running().await? {
-        bail!("service already running")
-    }
+
     let cmd = YaCommand::new()?;
-
     let service = cmd.yagna()?.service_run().await?;
-
     let app_key = appkey::get_app_key().await?;
-    let provider = cmd.ya_provider()?.spawn(&app_key).await?;
 
+    let provider_config = cmd.ya_provider()?.get_config().await?;
+    if let Some(account) = provider_config.account {
+        let address = account.address.to_lowercase();
+        cmd.yagna()?
+            .payment_init(&address, &PaymentType::PLAIN)
+            .await?;
+        cmd.yagna()?
+            .payment_init(&address, &PaymentType::ZK)
+            .await?;
+    } else {
+        let id = cmd.yagna()?.default_id().await?;
+        cmd.yagna()?
+            .payment_init(&id.node_id, &PaymentType::PLAIN)
+            .await?;
+        cmd.yagna()?
+            .payment_init(&id.node_id, &PaymentType::ZK)
+            .await?;
+    }
+
+    let provider = cmd.ya_provider()?.spawn(&app_key).await?;
     let ctrl_c = tokio::signal::ctrl_c();
 
     log::info!("Golem provider is running");
@@ -150,4 +162,70 @@ pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
         log::warn!("service exited with: {:?}", e);
     }
     Ok(0)
+}
+
+#[cfg(target_family = "unix")]
+pub async fn stop() -> Result<i32> {
+    use ya_utils_path::data_dir::DataDir;
+    use ya_utils_process::lock::ProcLock;
+
+    let provider_dir = DataDir::new("ya-provider")
+        .get_or_create()
+        .expect("unable to get ya-provider data dir");
+    let provider_pid = ProcLock::new("ya-provider", &provider_dir)?.read_pid()?;
+
+    kill_pid(provider_pid as i32, 5)
+        .await
+        .context("failed to stop provider")?;
+
+    let yagna_dir = DataDir::new("yagna")
+        .get_or_create()
+        .expect("unable to get yagna data dir");
+    let yagna_pid = ProcLock::new("yagna", &yagna_dir)?.read_pid()?;
+
+    kill_pid(yagna_pid as i32, 5)
+        .await
+        .context("failed to stop yagna")?;
+
+    Ok(0)
+}
+
+#[cfg(target_family = "unix")]
+async fn kill_pid(pid: i32, timeout: i64) -> Result<()> {
+    use nix::sys::signal::*;
+    use nix::sys::wait::*;
+    use nix::unistd::Pid;
+    use std::time::Instant;
+
+    fn alive(pid: Pid) -> bool {
+        match waitpid(pid, Some(WaitPidFlag::WNOHANG)) {
+            Ok(WaitStatus::Exited(_, _)) | Ok(WaitStatus::Signaled(_, _, _)) | Err(_) => false,
+            Ok(_) => true,
+        }
+    }
+
+    let pid = Pid::from_raw(pid);
+    let delay = Duration::from_secs_f32(timeout as f32 / 5.);
+    let started = Instant::now();
+
+    kill(pid, Signal::SIGTERM)?;
+    log::debug!("Sent SIGTERM to {:?}", pid);
+
+    while alive(pid) {
+        if Instant::now() >= started + delay {
+            log::debug!("Sending SIGKILL to {:?}", pid);
+
+            kill(pid, Signal::SIGKILL)?;
+            waitpid(pid, None)?;
+            break;
+        }
+        tokio::time::delay_for(delay).await;
+    }
+    Ok(())
+}
+
+#[cfg(not(target_family = "unix"))]
+pub async fn stop() -> Result<i32> {
+    // FIXME: not implemented for windows
+    todo!("Implement for Windows");
 }

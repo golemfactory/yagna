@@ -2,6 +2,7 @@ use actix_http::{body::Body, Request};
 use actix_service::Service as ActixService;
 use actix_web::{dev::ServiceResponse, test, App};
 use anyhow::{anyhow, bail, Context, Result};
+use std::collections::HashMap;
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 
 use ya_client::model::market::RequestorEvent;
@@ -145,7 +146,7 @@ impl MarketsNetwork {
             kind: node_kind,
         };
 
-        let node_id = node.mock_identity.default.clone().identity;
+        let node_id = node.mock_identity.get_default_id().clone().identity;
         log::info!("Creating mock node {}: [{}].", name, &node_id);
         BCastService::default().register(&node_id, &self.test_name);
         MockNet::default().register_node(&node_id, &public_gsb_prefix);
@@ -155,15 +156,17 @@ impl MarketsNetwork {
     }
 
     pub fn break_networking_for(&self, node_name: &str) -> Result<()> {
-        let id = self.get_default_id(node_name);
-        MockNet::default().unregister_node(&id.identity)
+        for (_, id) in self.list_ids(node_name) {
+            MockNet::default().unregister_node(&id.identity)?
+        }
+        Ok(())
     }
 
     pub fn enable_networking_for(&self, node_name: &str) -> Result<()> {
-        let id = self.get_default_id(node_name);
-        let (public_gsb_prefix, _) = gsb_prefixes(&self.test_name, node_name);
-
-        MockNet::default().register_node(&id.identity, &public_gsb_prefix);
+        for (_, id) in self.list_ids(node_name) {
+            let (public_gsb_prefix, _) = gsb_prefixes(&self.test_name, node_name);
+            MockNet::default().register_node(&id.identity, &public_gsb_prefix);
+        }
         Ok(())
     }
 
@@ -223,6 +226,7 @@ impl MarketsNetwork {
         prov_proposal_rejected: impl CallbackHandler<ProposalRejected>,
         prov_agreement_received: impl CallbackHandler<AgreementReceived>,
         prov_agreement_cancelled: impl CallbackHandler<AgreementCancelled>,
+        prov_agreement_terminated: impl CallbackHandler<AgreementTerminated>,
     ) -> Result<Self> {
         self.add_negotiation_api(
             name,
@@ -231,10 +235,12 @@ impl MarketsNetwork {
             prov_proposal_rejected,
             prov_agreement_received,
             prov_agreement_cancelled,
+            prov_agreement_terminated,
             default::empty_on_proposal_received,
             default::empty_on_proposal_rejected,
             default::empty_on_agreement_approved,
             default::empty_on_agreement_rejected,
+            default::empty_on_agreement_terminated,
         )
         .await
     }
@@ -246,6 +252,7 @@ impl MarketsNetwork {
         req_proposal_rejected: impl CallbackHandler<ProposalRejected>,
         req_agreement_approved: impl CallbackHandler<AgreementApproved>,
         req_agreement_rejected: impl CallbackHandler<AgreementRejected>,
+        req_agreement_terminated: impl CallbackHandler<AgreementTerminated>,
     ) -> Result<Self> {
         self.add_negotiation_api(
             name,
@@ -254,10 +261,12 @@ impl MarketsNetwork {
             default::empty_on_proposal_rejected,
             default::empty_on_agreement_received,
             default::empty_on_agreement_cancelled,
+            default::empty_on_agreement_terminated,
             req_proposal_received,
             req_proposal_rejected,
             req_agreement_approved,
             req_agreement_rejected,
+            req_agreement_terminated,
         )
         .await
     }
@@ -270,10 +279,12 @@ impl MarketsNetwork {
         prov_proposal_rejected: impl CallbackHandler<ProposalRejected>,
         prov_agreement_received: impl CallbackHandler<AgreementReceived>,
         prov_agreement_cancelled: impl CallbackHandler<AgreementCancelled>,
+        prov_agreement_terminated: impl CallbackHandler<AgreementTerminated>,
         req_proposal_received: impl CallbackHandler<ProposalReceived>,
         req_proposal_rejected: impl CallbackHandler<ProposalRejected>,
         req_agreement_approved: impl CallbackHandler<AgreementApproved>,
         req_agreement_rejected: impl CallbackHandler<AgreementRejected>,
+        req_agreement_terminated: impl CallbackHandler<AgreementTerminated>,
     ) -> Result<Self> {
         let provider = provider::NegotiationApi::new(
             prov_initial_proposal_received,
@@ -281,6 +292,7 @@ impl MarketsNetwork {
             prov_proposal_rejected,
             prov_agreement_received,
             prov_agreement_cancelled,
+            prov_agreement_terminated,
         );
 
         let requestor = requestor::NegotiationApi::new(
@@ -288,6 +300,7 @@ impl MarketsNetwork {
             req_proposal_rejected,
             req_agreement_approved,
             req_agreement_rejected,
+            req_agreement_terminated,
         );
 
         let identity_api = MockIdentity::new(name);
@@ -375,8 +388,32 @@ impl MarketsNetwork {
             .find(|node| &node.name == node_name)
             .map(|node| node.mock_identity.clone())
             .unwrap()
-            .default
+            .get_default_id()
             .clone()
+    }
+
+    pub fn create_identity(&self, node_name: &str, id_name: &str) -> Identity {
+        let mock_identity = self
+            .nodes
+            .iter()
+            .find(|node| &node.name == node_name)
+            .map(|node| node.mock_identity.clone())
+            .unwrap();
+        let id = mock_identity.new_identity(id_name);
+
+        let node_id = id.identity.clone();
+        let (public_gsb_prefix, _) = gsb_prefixes(&self.test_name, node_name);
+
+        MockNet::default().register_node(&node_id, &public_gsb_prefix);
+        return id;
+    }
+
+    pub fn list_ids(&self, node_name: &str) -> HashMap<String, Identity> {
+        self.nodes
+            .iter()
+            .find(|node| &node.name == node_name)
+            .map(|node| node.mock_identity.list_ids())
+            .unwrap()
     }
 
     pub async fn get_rest_app(
@@ -534,7 +571,7 @@ pub mod default {
     use super::*;
     use crate::protocol::negotiation::error::{
         ApproveAgreementError, CounterProposalError, GsbAgreementError, GsbProposalError,
-        ProposeAgreementError,
+        ProposeAgreementError, TerminateAgreementError,
     };
 
     pub async fn empty_on_offers_retrieved(
@@ -611,6 +648,13 @@ pub mod default {
         _caller: String,
         _msg: AgreementCancelled,
     ) -> Result<(), GsbAgreementError> {
+        Ok(())
+    }
+
+    pub async fn empty_on_agreement_terminated(
+        _caller: String,
+        _msg: AgreementTerminated,
+    ) -> Result<(), TerminateAgreementError> {
         Ok(())
     }
 }

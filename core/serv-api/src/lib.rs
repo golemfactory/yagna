@@ -15,8 +15,7 @@ pub struct CliCtx {
     pub gsb_url: Option<url::Url>,
     pub json_output: bool,
     pub accept_terms: bool,
-    pub interactive: bool,
-    pub metrics_ctx: MetricsCtx,
+    pub metrics_ctx: Option<MetricsCtx>,
 }
 
 impl CliCtx {
@@ -43,7 +42,11 @@ impl CommandOutput {
 
     pub fn print(&self, json_output: bool) {
         match self {
-            CommandOutput::NoOutput => {}
+            CommandOutput::NoOutput => {
+                if json_output {
+                    println!("null");
+                }
+            }
             CommandOutput::Table {
                 columns,
                 values,
