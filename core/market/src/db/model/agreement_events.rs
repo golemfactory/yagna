@@ -54,7 +54,7 @@ impl AgreementEvent {
         let event_date = DateTime::<Utc>::from_utc(self.timestamp, Utc);
         let reason = self
             .reason
-            .map(|reason| serde_json::from_str::<JsonReason>(&reason))
+            .map(|reason| serde_json::from_str(&reason).map(|value| JsonReason {json: value}))
             .map(|result| result.map_err(|e| {
                 log::warn!(
                     "Agreement Event with not parsable Reason in database. Error: {}. Shouldn't happen \

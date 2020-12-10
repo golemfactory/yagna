@@ -1,11 +1,57 @@
-use crate::command::PaymentSummary as _;
 use crate::command::YaCommand;
+use crate::command::{PaymentSummary, PaymentType, RecvAccount};
 use crate::platform::Status as KvmStatus;
 use crate::utils::is_yagna_running;
 use ansi_term::{Colour, Style};
 use anyhow::Result;
 use futures::prelude::*;
 use prettytable::{cell, format, row, Table};
+use ya_core_model::payment::local::StatusResult;
+
+async fn payment_status(
+    cmd: &YaCommand,
+    account: &Option<RecvAccount>,
+) -> anyhow::Result<(StatusResult, StatusResult)> {
+    if let Some(account) = account {
+        let address = account.address.to_lowercase();
+        let (status_zk, status) = future::join(
+            cmd.yagna()?
+                .payment_status(Some(&address), Some(&PaymentType::ZK)),
+            cmd.yagna()?
+                .payment_status(Some(&address), Some(&PaymentType::PLAIN)),
+        )
+        .await;
+        let is_zk = account
+            .platform
+            .as_ref()
+            .map(|platform| platform == PaymentType::ZK.platform)
+            .unwrap_or(true);
+        let is_plain = account
+            .platform
+            .as_ref()
+            .map(|platform| platform == PaymentType::PLAIN.platform)
+            .unwrap_or(true);
+        match (status_zk, status) {
+            (Ok(zk), Ok(eth)) => Ok((zk, eth)),
+            (Err(e), _) if is_zk => Err(e),
+            (_, Err(e)) if is_plain => Err(e),
+            (Ok(zk), Err(_)) => Ok((zk, StatusResult::default())),
+            (Err(_), Ok(plain)) => Ok((StatusResult::default(), plain)),
+            (Err(e), _) => Err(e),
+        }
+    } else {
+        let (status_zk, status) = future::join(
+            cmd.yagna()?.payment_status(None, Some(&PaymentType::ZK)),
+            cmd.yagna()?.payment_status(None, Some(&PaymentType::PLAIN)),
+        )
+        .await;
+        match (status_zk, status) {
+            (Ok(zk), Ok(eth)) => Ok((zk, eth)),
+            (Err(e), _) => Err(e),
+            (Ok(zk), Err(_)) => Ok((zk, StatusResult::default())),
+        }
+    }
+}
 
 pub async fn run() -> Result</*exit code*/ i32> {
     let size = crossterm::terminal::size().ok().unwrap_or_else(|| (80, 50));
@@ -60,12 +106,9 @@ pub async fn run() -> Result</*exit code*/ i32> {
 
     if is_running {
         let payments = {
-            let (id, payment_status, invoice_status) = future::try_join3(
-                cmd.yagna()?.default_id(),
-                cmd.yagna()?.payment_status(),
-                cmd.yagna()?.invoice_status(),
-            )
-            .await?;
+            let (id, invoice_status) =
+                future::try_join(cmd.yagna()?.default_id(), cmd.yagna()?.invoice_status()).await?;
+            let (zk_payment_status, payment_status) = payment_status(&cmd, &config.account).await?;
 
             let mut table = Table::new();
             let format = format::FormatBuilder::new().padding(1, 1).build();
@@ -75,20 +118,33 @@ pub async fn run() -> Result</*exit code*/ i32> {
                 .underline()
                 .paint("Wallet")]);
             table.add_empty_row();
-            table.add_row(row!["address", &id.node_id]);
-            table.add_row(row!["amount", format!("{} NGNT", &payment_status.amount)]);
+            if let Some(account) = &config.account {
+                table.add_row(row!["address", &account.address]);
+            } else {
+                table.add_row(row!["address", &id.node_id]);
+            }
+            let total_amount = &zk_payment_status.amount + &payment_status.amount;
+            table.add_row(row!["amount (total)", format!("{} GLM", total_amount)]);
+            table.add_row(row![
+                "    (on-chain)",
+                format!("{} GLM", &payment_status.amount)
+            ]);
+            table.add_row(row![
+                "     (zk-sync)",
+                format!("{} GLM", &zk_payment_status.amount)
+            ]);
             table.add_empty_row();
             {
                 let (pending, pending_cnt) = invoice_status.provider.total_pending();
                 table.add_row(row![
                     "pending",
-                    format!("{} NGNT ({})", pending, pending_cnt)
+                    format!("{} GLM ({})", pending, pending_cnt)
                 ]);
             }
             let (unconfirmed, unconfirmed_cnt) = invoice_status.provider.unconfirmed();
             table.add_row(row![
                 "issued",
-                format!("{} NGNT ({})", unconfirmed, unconfirmed_cnt)
+                format!("{} GLM ({})", unconfirmed, unconfirmed_cnt)
             ]);
 
             table

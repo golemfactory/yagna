@@ -99,6 +99,20 @@ pub enum ApproveAgreementError {
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
+pub enum TerminateAgreementError {
+    #[error("Terminate {0}.")]
+    Gsb(#[from] GsbAgreementError),
+    #[error("Remote Terminate: {0}")]
+    Remote(#[from] RemoteAgreementError),
+    #[error("Can't parse {caller} for Agreement [{id}]: {e}")]
+    CallerParseError {
+        e: String,
+        caller: String,
+        id: AgreementId,
+    },
+}
+
+#[derive(Error, Debug, Serialize, Deserialize)]
 pub enum RemoteAgreementError {
     #[error("Agreement [{0}] not found.")]
     NotFound(AgreementId),

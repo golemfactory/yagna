@@ -40,7 +40,7 @@ pub fn generate_backtraced_name(level: Option<usize>) -> String {
     let bt = backtrace::Backtrace::new();
     // 0th element should be this function. We'd like to know the caller
     if let Some(name) = get_symbol_at_level(&bt, level.unwrap_or(1)) {
-        log::debug!("Generated name: {} level: {:?} BT: {:#?}", name, level, bt);
+        log::trace!("Generated name: {} level: {:?} BT: {:#?}", name, level, bt);
         return name;
     }
     let u4 = uuid::Uuid::new_v4().to_string().to_string();
