@@ -2,7 +2,6 @@ use std::fmt::{Error, Formatter};
 
 use crate::db::model::{AgreementId, SubscriptionId};
 
-use ya_client::model::market::reason::Reason;
 use ya_service_api_web::middleware::Identity;
 
 /// Pretty display vector, as list with all elements in separate row.
@@ -36,12 +35,6 @@ impl<'a> std::fmt::Display for DisplayEnabler<'a, AgreementId> {
 impl<'a> std::fmt::Display for DisplayEnabler<'a, Identity> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         write!(f, "'{}' [{}]", &self.0.name, &self.0.identity)
-    }
-}
-
-impl<'a> std::fmt::Display for DisplayEnabler<'a, Reason> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "'{}'", &self.0.message)
     }
 }
 

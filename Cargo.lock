@@ -6928,7 +6928,7 @@ dependencies = [
 
 [[package]]
 name = "ya-exe-unit"
-version = "0.2.0"
+version = "0.1.0"
 dependencies = [
  "actix",
  "actix-files 0.4.1",

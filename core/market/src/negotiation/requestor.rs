@@ -90,7 +90,7 @@ impl RequestorBroker {
         counter!("market.events.requestor.queried", 0);
         counter!("market.agreements.events.queried", 0);
         counter!("market.agreements.requestor.terminated", 0);
-        counter!("market.agreements.requestor.terminated.reason", 0, "reason" => "None");
+        counter!("market.agreements.requestor.terminated.reason", 0, "reason" => "NotSpecified");
         counter!("market.agreements.requestor.terminated.reason", 0, "reason" => "Success");
 
         tokio::spawn(proposal_receiver_thread(db, proposal_receiver, notifier));

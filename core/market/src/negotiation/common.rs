@@ -619,7 +619,7 @@ pub fn terminate_reason_metric(reason: &Option<Reason>, owner: OwnerType) {
     let p_code = get_reason_code(reason, "golem.provider.code");
     let r_code = get_reason_code(reason, "golem.requestor.code");
 
-    let reason_code = r_code.xor(p_code).unwrap_or("None".to_string());
+    let reason_code = r_code.xor(p_code).unwrap_or("NotSpecified".to_string());
     match owner {
         OwnerType::Provider => {
             counter!("market.agreements.provider.terminated.reason", 1, "reason" => reason_code)

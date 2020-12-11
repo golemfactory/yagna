@@ -485,6 +485,7 @@ async fn collect_agreement_events(ctx: AsyncCtx) {
                 AgreementEvent::AgreementApprovedEvent { event_date, .. }
                 | AgreementEvent::AgreementRejectedEvent { event_date, .. }
                 | AgreementEvent::AgreementCancelledEvent { event_date, .. } => {
+                    log::trace!("Got: {:?}", event);
                     last_timestamp = event_date;
                     continue;
                 }
@@ -504,9 +505,11 @@ async fn collect_negotiation_events(ctx: AsyncCtx, subscription: Subscription) {
                 log::warn!("Can't query market events. Error: {}", error);
                 match error {
                     ya_client::error::Error::HttpError { code, .. } => {
+                        // this causes Offer refresh after its expiration
                         if code.as_u16() == 404 {
                             log::info!("Resubscribing subscription [{}]", id);
-                            let _ = ctx.market.send(ReSubscribe(id.clone())).await;
+                            ctx.market.do_send(ReSubscribe(id.clone()));
+                            return;
                         }
                     }
                     _ => {
@@ -595,7 +598,7 @@ impl Handler<OnAgreementTerminated> for ProviderMarket {
         let reason = msg
             .reason
             .map(|msg| msg.message)
-            .unwrap_or("Not specified.".to_string());
+            .unwrap_or("NotSpecified".to_string());
 
         log::info!(
             "Agreement [{}] terminated by Requestor. Reason: {}",
