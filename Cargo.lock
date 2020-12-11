@@ -6797,19 +6797,6 @@ dependencies = [
 
 [[package]]
 name = "ya-agreement-utils"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b04e5464c1b94df915a531e23b758f7f411259dd9da4a81884dc2e50dcc486a"
-dependencies = [
- "serde",
- "serde_json",
- "serde_yaml",
- "thiserror",
- "ya-client-model 0.1.1",
-]
-
-[[package]]
-name = "ya-agreement-utils"
 version = "0.2.0"
 dependencies = [
  "anyhow",
@@ -6990,7 +6977,7 @@ dependencies = [
  "tokio-util 0.2.0",
  "url 2.2.0",
  "winapi 0.3.9",
- "ya-agreement-utils 0.2.0",
+ "ya-agreement-utils",
  "ya-client-model 0.2.0",
  "ya-compile-time-utils",
  "ya-core-model",
@@ -7125,7 +7112,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "uuid 0.8.1",
- "ya-agreement-utils 0.1.0",
+ "ya-agreement-utils",
  "ya-client 0.4.0",
  "ya-core-model",
  "ya-diesel-utils",
@@ -7232,7 +7219,7 @@ dependencies = [
  "tokio",
  "uint 0.7.1",
  "uuid 0.8.1",
- "ya-agreement-utils 0.1.0",
+ "ya-agreement-utils",
  "ya-client 0.4.0",
  "ya-client-model 0.2.0",
  "ya-core-model",
@@ -7333,7 +7320,7 @@ dependencies = [
  "tokio",
  "url 2.2.0",
  "winapi 0.3.9",
- "ya-agreement-utils 0.2.0",
+ "ya-agreement-utils",
  "ya-client 0.4.0",
  "ya-client-model 0.2.0",
  "ya-compile-time-utils",
@@ -7361,7 +7348,7 @@ dependencies = [
  "tokio",
  "url 2.2.0",
  "uuid 0.8.1",
- "ya-agreement-utils 0.1.0",
+ "ya-agreement-utils",
  "ya-client 0.3.1",
  "ya-compile-time-utils",
 ]

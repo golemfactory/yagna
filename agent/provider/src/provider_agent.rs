@@ -204,12 +204,15 @@ impl ProviderAgent {
                 )
             })?;
 
+            let srv_info = ServiceInfo::new(inf_node_info.clone(), exeunit_desc.build())
+                .support_multi_activity(true);
+
             // Create simple offer on market.
             let create_offer_message = CreateOffer {
                 preset,
                 offer_definition: OfferDefinition {
                     node_info: node_info.clone(),
-                    service: ServiceInfo::new(inf_node_info.clone(), exeunit_desc.build()),
+                    srv_info,
                     com_info,
                     offer,
                 },
