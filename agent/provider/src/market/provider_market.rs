@@ -830,6 +830,9 @@ impl Handler<Unsubscribe> for ProviderMarket {
 
         subscriptions
             .iter()
+            .inspect(|id| {
+                self.subscriptions.remove(id);
+            })
             .filter_map(|id| self.handles.remove(id))
             .for_each(|handle| {
                 ctx.cancel_future(handle);
