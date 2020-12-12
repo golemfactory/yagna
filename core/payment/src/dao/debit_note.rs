@@ -201,9 +201,8 @@ impl<'c> DebitNoteDao<'c> {
 
     pub async fn get_for_node_id(&self, node_id: NodeId) -> DbResult<Vec<DebitNote>> {
         readonly_transaction(self.pool, move |conn| {
-            let debit_notes: Vec<ReadObj> = query!()
-                .filter(dsl::owner_id.eq(node_id))
-                .load(conn)?;
+            let debit_notes: Vec<ReadObj> =
+                query!().filter(dsl::owner_id.eq(node_id)).load(conn)?;
             debit_notes.into_iter().map(TryInto::try_into).collect()
         })
         .await

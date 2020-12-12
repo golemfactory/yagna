@@ -52,14 +52,14 @@ impl TryFrom<ReadObj> for DebitNoteEvent {
     type Error = DbError;
 
     fn try_from(event: ReadObj) -> DbResult<Self> {
-        let details = match event.details {
-            Some(s) => Some(json_from_str(&s)?),
-            None => None,
-        };
+        // TODO Attach details when event_type=REJECTED
+        // let details = match event.details {
+        //     Some(s) => Some(json_from_str(&s)?),
+        //     None => None,
+        // };
         Ok(Self {
             debit_note_id: event.debit_note_id,
-            timestamp: Utc.from_utc_datetime(&event.timestamp),
-            details,
+            event_date: Utc.from_utc_datetime(&event.timestamp),
             event_type: event.event_type.try_into()?,
         })
     }
