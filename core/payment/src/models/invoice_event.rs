@@ -61,7 +61,7 @@ impl TryFrom<ReadObj> for InvoiceEvent {
         Ok(Self {
             invoice_id: event.invoice_id,
             event_date: Utc.from_utc_datetime(&event.timestamp),
-            event_type
+            event_type,
         })
     }
 }
