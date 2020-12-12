@@ -60,15 +60,17 @@ impl<'c> InvoiceEventDao<'c> {
         later_than: Option<NaiveDateTime>,
     ) -> DbResult<Vec<InvoiceEvent>> {
         readonly_transaction(self.pool, move |conn| {
-            let query = dsl::pay_invoice_event
+            let mut query = dsl::pay_invoice_event
                 .inner_join(event_type_dsl::pay_event_type)
                 .filter(dsl::owner_id.eq(node_id))
                 .select(crate::schema::pay_invoice_event::all_columns)
-                .order_by(dsl::timestamp.asc());
-            let events: Vec<ReadObj> = match later_than {
-                Some(timestamp) => query.filter(dsl::timestamp.gt(timestamp)).load(conn)?,
-                None => query.load(conn)?,
-            };
+                .order_by(dsl::timestamp.asc())
+                .into_boxed();
+            if let Some(timestamp) = later_than {
+                query = query.filter(dsl::timestamp.gt(timestamp))
+            }
+            let events: Vec<ReadObj> = query.load(conn)?;
+            log::info!("EVENTS: {:?}", events);
             events.into_iter().map(TryInto::try_into).collect()
         })
         .await

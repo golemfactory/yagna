@@ -246,29 +246,30 @@ impl<'c> DebitNoteDao<'c> {
         .await
     }
 
-    pub async fn reject(&self, debit_note_id: String, owner_id: NodeId) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
-            let (activity_id, role): (String, Role) = dsl::pay_debit_note
-                .find((&debit_note_id, &owner_id))
-                .select((dsl::activity_id, dsl::role))
-                .first(conn)?;
-            update_status(
-                &vec![debit_note_id.clone()],
-                &owner_id,
-                &DocumentStatus::Rejected,
-                conn,
-            )?;
-            if let Role::Provider = role {
-                debit_note_event::create::<()>(
-                    debit_note_id,
-                    owner_id,
-                    EventType::Rejected,
-                    None,
-                    conn,
-                )?;
-            }
-            Ok(())
-        })
-        .await
-    }
+    // TODO: Implement reject debit note
+    // pub async fn reject(&self, debit_note_id: String, owner_id: NodeId) -> DbResult<()> {
+    //     do_with_transaction(self.pool, move |conn| {
+    //         let (activity_id, role): (String, Role) = dsl::pay_debit_note
+    //             .find((&debit_note_id, &owner_id))
+    //             .select((dsl::activity_id, dsl::role))
+    //             .first(conn)?;
+    //         update_status(
+    //             &vec![debit_note_id.clone()],
+    //             &owner_id,
+    //             &DocumentStatus::Rejected,
+    //             conn,
+    //         )?;
+    //         if let Role::Provider = role {
+    //             debit_note_event::create::<()>(
+    //                 debit_note_id,
+    //                 owner_id,
+    //                 EventType::Rejected,
+    //                 None,
+    //                 conn,
+    //             )?;
+    //         }
+    //         Ok(())
+    //     })
+    //     .await
+    // }
 }

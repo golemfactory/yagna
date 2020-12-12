@@ -33,6 +33,11 @@ async fn main() -> anyhow::Result<()> {
     provider.send_invoice(&invoice.invoice_id).await?;
     log::info!("Invoice sent.");
 
+    log::info!(
+        "events 1: {:?}",
+        requestor.get_invoice_events::<Utc>(Some(&invoice_date), Some(Duration::from_secs(10))).await
+    );
+
     log::info!("Creating allocation...");
     let allocation = requestor
         .create_allocation(&NewAllocation {
