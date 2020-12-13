@@ -53,10 +53,10 @@ impl TryFrom<ReadObj> for DebitNoteEvent {
 
     fn try_from(event: ReadObj) -> DbResult<Self> {
         // TODO Attach details when event_type=REJECTED
-        // let details = match event.details {
-        //     Some(s) => Some(json_from_str(&s)?),
-        //     None => None,
-        // };
+        let _details = match event.details {
+            Some(s) => Some(json_from_str(&s)?),
+            None => None,
+        };
         Ok(Self {
             debit_note_id: event.debit_note_id,
             event_date: Utc.from_utc_datetime(&event.timestamp),

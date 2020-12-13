@@ -53,10 +53,10 @@ impl TryFrom<ReadObj> for InvoiceEvent {
 
     fn try_from(event: ReadObj) -> DbResult<Self> {
         // TODO Attach details when event_type=REJECTED
-        // let details = match event.details {
-        //     Some(s) => Some(json_from_str(&s)?),
-        //     None => None,
-        // };
+        let _details = match event.details {
+            Some(s) => Some(json_from_str(&s)?),
+            None => None,
+        };
         let event_type = event.event_type.try_into().unwrap();
         Ok(Self {
             invoice_id: event.invoice_id,
