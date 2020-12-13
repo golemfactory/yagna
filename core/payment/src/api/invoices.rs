@@ -83,14 +83,17 @@ async fn get_invoice_events(
     id: Identity,
 ) -> HttpResponse {
     let node_id = id.identity;
-    let timeout_secs = query.timeout;
-    let later_than = query.later_than.map(|d| d.naive_utc());
+    let timeout_secs = query.poll_timeout;
+    let after_timestamp = query.after_timestamp.map(|d| d.naive_utc());
+    let max_events = query.max_events;
+    let app_session_id = &query.app_session_id;
 
     let dao: InvoiceEventDao = db.as_dao();
     let getter = || async {
-        dao.get_for_node_id(node_id.clone(), later_than.clone())
+        dao.get_for_node_id(node_id.clone(), after_timestamp.clone(), max_events.clone(), app_session_id.clone())
             .await
     };
+
     match listen_for_events(getter, timeout_secs).await {
         Ok(events) => response::ok(events),
         Err(e) => response::server_error(&e),

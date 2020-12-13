@@ -190,16 +190,21 @@ impl<'c> PaymentDao<'c> {
     pub async fn get_for_node_id(
         &self,
         node_id: NodeId,
-        later_than: Option<NaiveDateTime>,
+        after_timestamp: Option<NaiveDateTime>,
+        max_events: Option<u32>,
+        _app_session_id: Option<String>
     ) -> DbResult<Vec<Payment>> {
         readonly_transaction(self.pool, move |conn| {
-            let query = dsl::pay_payment
+            let mut query = dsl::pay_payment
                 .filter(dsl::owner_id.eq(&node_id))
-                .order_by(dsl::timestamp.asc());
-            let payments: Vec<ReadObj> = match later_than {
-                Some(timestamp) => query.filter(dsl::timestamp.gt(timestamp)).load(conn)?,
-                None => query.load(conn)?,
-            };
+                .order_by(dsl::timestamp.asc()).into_boxed();
+            if let Some(timestamp) = after_timestamp {
+                query = query.filter(dsl::timestamp.gt(timestamp));
+            }
+            if let Some(limit) = max_events {
+                query = query.limit(limit.into());
+            }
+            let payments: Vec<ReadObj> = query.load(conn)?;
             let activity_payments = activity_pay_dsl::pay_activity_payment
                 .inner_join(
                     dsl::pay_payment.on(activity_pay_dsl::owner_id

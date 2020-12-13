@@ -35,7 +35,7 @@ async fn main() -> anyhow::Result<()> {
     log::info!("Debit note sent.");
 
     let invoice_events_received = requestor
-        .get_debit_note_events::<Utc>(Some(&invoice_date), Some(Duration::from_secs(10)))
+        .get_debit_note_events::<Utc>(Some(&invoice_date), Some(Duration::from_secs(10)), None, None)
         .await
         .unwrap();
     log::debug!("events 1: {:?}", &invoice_events_received);
@@ -86,7 +86,7 @@ async fn main() -> anyhow::Result<()> {
 
     log::info!("Waiting for payment...");
     let timeout = Some(Duration::from_secs(300)); // Should be enough for GNT transfer
-    let mut payments = provider.get_payments(Some(&now), timeout).await?;
+    let mut payments = provider.get_payments(Some(&now), timeout, None, None).await?;
     assert_eq!(payments.len(), 1);
     let payment = payments.pop().unwrap();
     assert_eq!(&payment.amount, &debit_note.total_amount_due);
@@ -129,7 +129,7 @@ async fn main() -> anyhow::Result<()> {
 
     log::info!("Waiting for payment...");
     let timeout = Some(Duration::from_secs(300)); // Should be enough for GNT transfer
-    let mut payments = provider.get_payments(Some(&now), timeout).await?;
+    let mut payments = provider.get_payments(Some(&now), timeout, None, None).await?;
     assert_eq!(payments.len(), 1);
     let payment = payments.pop().unwrap();
     assert_eq!(

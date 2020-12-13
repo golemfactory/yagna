@@ -57,7 +57,9 @@ impl<'c> InvoiceEventDao<'c> {
     pub async fn get_for_node_id(
         &self,
         node_id: NodeId,
-        later_than: Option<NaiveDateTime>,
+        after_timestamp: Option<NaiveDateTime>,
+        max_events: Option<u32>,
+        _app_session_id: Option<String>
     ) -> DbResult<Vec<InvoiceEvent>> {
         readonly_transaction(self.pool, move |conn| {
             let mut query = dsl::pay_invoice_event
@@ -66,11 +68,13 @@ impl<'c> InvoiceEventDao<'c> {
                 .select(crate::schema::pay_invoice_event::all_columns)
                 .order_by(dsl::timestamp.asc())
                 .into_boxed();
-            if let Some(timestamp) = later_than {
-                query = query.filter(dsl::timestamp.gt(timestamp))
+            if let Some(timestamp) = after_timestamp {
+                query = query.filter(dsl::timestamp.gt(timestamp));
+            }
+            if let Some(limit) = max_events {
+                query = query.limit(limit.into());
             }
             let events: Vec<ReadObj> = query.load(conn)?;
-            log::info!("EVENTS: {:?}", events);
             events.into_iter().map(TryInto::try_into).collect()
         })
         .await
