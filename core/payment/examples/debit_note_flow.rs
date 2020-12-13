@@ -7,13 +7,15 @@ use ya_client_model::payment::{Acceptance, DocumentStatus, NewAllocation, NewDeb
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
-    let log_level = std::env::var("RUST_LOG").unwrap_or("info".to_owned());
+    let log_level = std::env::var("RUST_LOG").unwrap_or("debit_note_flow=debug,info".to_owned());
     std::env::set_var("RUST_LOG", log_level);
     env_logger::init();
 
     let client = WebClient::builder().build();
     let provider: PaymentProviderApi = client.interface()?;
     let requestor: PaymentRequestorApi = client.interface()?;
+
+    let invoice_date = Utc::now();
 
     let debit_note = NewDebitNote {
         activity_id: "activity_id".to_string(),
@@ -32,6 +34,16 @@ async fn main() -> anyhow::Result<()> {
     provider.send_debit_note(&debit_note.debit_note_id).await?;
     log::info!("Debit note sent.");
 
+    let invoice_events_received = requestor
+        .get_debit_note_events::<Utc>(Some(&invoice_date), Some(Duration::from_secs(10)))
+        .await
+        .unwrap();
+    log::debug!("events 1: {:?}", &invoice_events_received);
+    log::debug!(
+        "DATE: {:?}",
+        Some(&invoice_events_received.first().unwrap().event_date)
+    );
+
     log::info!("Creating allocation...");
     let allocation = requestor
         .create_allocation(&NewAllocation {
@@ -43,6 +55,21 @@ async fn main() -> anyhow::Result<()> {
         })
         .await?;
     log::info!("Allocation created.");
+
+    log::debug!(
+        "INVOICES1: {:?}",
+        requestor.get_debit_notes::<Utc>(None, None).await
+    );
+    log::debug!(
+        "INVOICES2: {:?}",
+        requestor
+            .get_debit_notes::<Utc>(Some(invoice_date), None)
+            .await
+    );
+    log::debug!(
+        "INVOICES3: {:?}",
+        requestor.get_debit_notes::<Utc>(Some(Utc::now()), None).await
+    );
 
     log::info!("Accepting debit note...");
     let now = Utc::now();
