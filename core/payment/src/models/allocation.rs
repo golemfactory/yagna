@@ -15,6 +15,7 @@ pub struct WriteObj {
     pub total_amount: BigDecimalField,
     pub spent_amount: BigDecimalField,
     pub remaining_amount: BigDecimalField,
+    pub timestamp: NaiveDateTime,
     pub timeout: Option<NaiveDateTime>,
     pub make_deposit: bool,
     pub released: bool,
@@ -35,6 +36,7 @@ impl WriteObj {
             total_amount: allocation.total_amount.clone().into(),
             spent_amount: Default::default(),
             remaining_amount: allocation.total_amount.into(),
+            timestamp: Utc::now().naive_utc(),
             timeout: allocation.timeout.map(|v| v.naive_utc()),
             make_deposit: allocation.make_deposit,
             released: false,
@@ -51,6 +53,7 @@ impl From<WriteObj> for Allocation {
             total_amount: allocation.total_amount.into(),
             spent_amount: allocation.spent_amount.into(),
             remaining_amount: allocation.remaining_amount.into(),
+            timestamp: Utc.from_utc_datetime(&allocation.timestamp),
             timeout: allocation.timeout.map(|v| Utc.from_utc_datetime(&v)),
             make_deposit: allocation.make_deposit,
         }
