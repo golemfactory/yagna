@@ -47,6 +47,16 @@ pub struct DebitNoteId {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DebitNotePaymentsParams {
+    pub debit_note_id: String,
+    #[serde(default)]
+    pub max_items: Option<u32>,
+    #[serde(default)]
+    pub after_timestamp: Option<DateTime<Utc>>,
+}
+
+#[derive(Deserialize)]
 pub struct InvoiceId {
     pub invoice_id: String,
 }

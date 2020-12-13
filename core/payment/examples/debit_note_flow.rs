@@ -143,5 +143,21 @@ async fn main() -> anyhow::Result<()> {
     assert_eq!(debit_note2.status, DocumentStatus::Settled);
     log::info!("Debit note status verified correctly.");
 
+    // Not implemented
+    // log::debug!(
+    //     "get_payments_for_debit_note1: {:?}",
+    //     requestor.get_payments_for_debit_note::<Utc>(&debit_note2.debit_note_id, None, None).await
+    // );
+    // log::debug!(
+    //     "get_payments_for_debit_note2: {:?}",
+    //     requestor
+    //         .get_payments_for_debit_note::<Utc>(&debit_note2.debit_note_id, Some(invoice_date), None)
+    //         .await
+    // );
+    // log::debug!(
+    //     "get_payments_for_debit_note3: {:?}",
+    //     requestor.get_payments_for_debit_note::<Utc>(&debit_note2.debit_note_id, Some(Utc::now()), None).await
+    // );
+
     Ok(())
 }
