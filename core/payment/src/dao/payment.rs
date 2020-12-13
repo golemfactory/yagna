@@ -192,12 +192,13 @@ impl<'c> PaymentDao<'c> {
         node_id: NodeId,
         after_timestamp: Option<NaiveDateTime>,
         max_events: Option<u32>,
-        _app_session_id: Option<String>
+        _app_session_id: Option<String>,
     ) -> DbResult<Vec<Payment>> {
         readonly_transaction(self.pool, move |conn| {
             let mut query = dsl::pay_payment
                 .filter(dsl::owner_id.eq(&node_id))
-                .order_by(dsl::timestamp.asc()).into_boxed();
+                .order_by(dsl::timestamp.asc())
+                .into_boxed();
             if let Some(timestamp) = after_timestamp {
                 query = query.filter(dsl::timestamp.gt(timestamp));
             }

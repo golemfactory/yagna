@@ -78,10 +78,16 @@ async fn create_allocation(
     }
 }
 
-async fn get_allocations(db: Data<DbExecutor>, id: Identity) -> HttpResponse {
+async fn get_allocations(
+    db: Data<DbExecutor>,
+    query: Query<FilterParams>,
+    id: Identity,
+) -> HttpResponse {
     let node_id = id.identity;
+    let after_timestamp = query.after_timestamp.map(|d| d.naive_utc());
+    let max_items = query.max_items;
     let dao: AllocationDao = db.as_dao();
-    match dao.get_for_owner(node_id).await {
+    match dao.get_for_owner(node_id, after_timestamp, max_items).await {
         Ok(allocations) => response::ok(allocations),
         Err(e) => response::server_error(&e),
     }

@@ -59,7 +59,7 @@ impl<'c> DebitNoteEventDao<'c> {
         node_id: NodeId,
         after_timestamp: Option<NaiveDateTime>,
         max_events: Option<u32>,
-        _app_session_id: Option<String>
+        _app_session_id: Option<String>,
     ) -> DbResult<Vec<DebitNoteEvent>> {
         readonly_transaction(self.pool, move |conn| {
             let mut query = dsl::pay_debit_note_event

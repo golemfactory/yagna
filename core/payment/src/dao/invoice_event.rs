@@ -59,7 +59,7 @@ impl<'c> InvoiceEventDao<'c> {
         node_id: NodeId,
         after_timestamp: Option<NaiveDateTime>,
         max_events: Option<u32>,
-        _app_session_id: Option<String>
+        _app_session_id: Option<String>,
     ) -> DbResult<Vec<InvoiceEvent>> {
         readonly_transaction(self.pool, move |conn| {
             let mut query = dsl::pay_invoice_event

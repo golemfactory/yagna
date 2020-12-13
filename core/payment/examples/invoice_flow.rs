@@ -2,8 +2,10 @@ use bigdecimal::BigDecimal;
 use chrono::Utc;
 use std::time::Duration;
 use ya_client::payment::PaymentApi;
-use ya_client::web::{WebClient, rest_api_url};
-use ya_client_model::payment::{Acceptance, DocumentStatus, NewAllocation, NewInvoice, PAYMENT_API_PATH};
+use ya_client::web::{rest_api_url, WebClient};
+use ya_client_model::payment::{
+    Acceptance, DocumentStatus, NewAllocation, NewInvoice, PAYMENT_API_PATH,
+};
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
@@ -39,7 +41,12 @@ async fn main() -> anyhow::Result<()> {
     log::info!("Invoice sent.");
 
     let invoice_events_received = requestor
-        .get_invoice_events::<Utc>(Some(&invoice_date), Some(Duration::from_secs(10)), None, None)
+        .get_invoice_events::<Utc>(
+            Some(&invoice_date),
+            Some(Duration::from_secs(10)),
+            None,
+            None,
+        )
         .await
         .unwrap();
     log::debug!("events 1: {:?}", &invoice_events_received);
@@ -94,7 +101,7 @@ async fn main() -> anyhow::Result<()> {
             Some(&invoice_events_received.first().unwrap().event_date),
             Some(Duration::from_secs(10)),
             None,
-            None
+            None,
         )
         .await
         .unwrap();
@@ -102,7 +109,9 @@ async fn main() -> anyhow::Result<()> {
 
     log::info!("Waiting for payment...");
     let timeout = Some(Duration::from_secs(300)); // Should be enough for GNT transfer
-    let mut payments = provider.get_payments(Some(&now), timeout, None, None).await?;
+    let mut payments = provider
+        .get_payments(Some(&now), timeout, None, None)
+        .await?;
     assert_eq!(payments.len(), 1);
     let payment = payments.pop().unwrap();
     assert_eq!(&payment.amount, &invoice.amount);
@@ -118,7 +127,7 @@ async fn main() -> anyhow::Result<()> {
             Some(&invoice_events_accepted.first().unwrap().event_date),
             Some(Duration::from_secs(10)),
             None,
-            None
+            None,
         )
         .await
         .unwrap();

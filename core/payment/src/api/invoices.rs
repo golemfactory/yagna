@@ -90,8 +90,13 @@ async fn get_invoice_events(
 
     let dao: InvoiceEventDao = db.as_dao();
     let getter = || async {
-        dao.get_for_node_id(node_id.clone(), after_timestamp.clone(), max_events.clone(), app_session_id.clone())
-            .await
+        dao.get_for_node_id(
+            node_id.clone(),
+            after_timestamp.clone(),
+            max_events.clone(),
+            app_session_id.clone(),
+        )
+        .await
     };
 
     match listen_for_events(getter, timeout_secs).await {
