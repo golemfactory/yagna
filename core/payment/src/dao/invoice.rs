@@ -237,20 +237,21 @@ impl<'c> InvoiceDao<'c> {
         .await
     }
 
-    pub async fn reject(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
-            let (agreement_id, amount, role): (String, BigDecimalField, Role) = dsl::pay_invoice
-                .find((&invoice_id, &owner_id))
-                .select((dsl::agreement_id, dsl::amount, dsl::role))
-                .first(conn)?;
-            update_status(&invoice_id, &owner_id, &DocumentStatus::Accepted, conn)?;
-            if let Role::Provider = role {
-                invoice_event::create::<()>(invoice_id, owner_id, EventType::Rejected, None, conn)?;
-            }
-            Ok(())
-        })
-        .await
-    }
+    // TODO: Implement reject invoice
+    // pub async fn reject(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
+    //     do_with_transaction(self.pool, move |conn| {
+    //         let (agreement_id, amount, role): (String, BigDecimalField, Role) = dsl::pay_invoice
+    //             .find((&invoice_id, &owner_id))
+    //             .select((dsl::agreement_id, dsl::amount, dsl::role))
+    //             .first(conn)?;
+    //         update_status(&invoice_id, &owner_id, &DocumentStatus::Accepted, conn)?;
+    //         if let Role::Provider = role {
+    //             invoice_event::create::<()>(invoice_id, owner_id, EventType::Rejected { ... }, None, conn)?;
+    //         }
+    //         Ok(())
+    //     })
+    //     .await
+    // }
 
     pub async fn cancel(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {

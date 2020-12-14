@@ -47,6 +47,16 @@ pub struct DebitNoteId {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DebitNotePaymentsParams {
+    pub debit_note_id: String,
+    #[serde(default)]
+    pub max_items: Option<u32>,
+    #[serde(default)]
+    pub after_timestamp: Option<DateTime<Utc>>,
+}
+
+#[derive(Deserialize)]
 pub struct InvoiceId {
     pub invoice_id: String,
 }
@@ -68,11 +78,16 @@ pub struct Timeout {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EventParams {
     #[serde(default = "default_event_timeout")]
-    pub timeout: f64,
-    #[serde(rename = "laterThan")]
-    pub later_than: Option<DateTime<Utc>>,
+    pub poll_timeout: f64,
+    #[serde(default)]
+    pub after_timestamp: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub max_events: Option<u32>,
+    #[serde(default)]
+    pub app_session_id: Option<String>,
 }
 
 #[derive(Deserialize)]

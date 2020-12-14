@@ -31,7 +31,7 @@ pub fn register_endpoints(scope: Scope) -> Scope {
             "/allocations/{allocation_id}",
             delete().to(release_allocation),
         )
-        .route("/demandDecorations", get().to(decorate_demand))
+        .route("/demandDecorations", get().to(get_demand_decorations))
 }
 
 async fn create_allocation(
@@ -78,10 +78,16 @@ async fn create_allocation(
     }
 }
 
-async fn get_allocations(db: Data<DbExecutor>, id: Identity) -> HttpResponse {
+async fn get_allocations(
+    db: Data<DbExecutor>,
+    query: Query<FilterParams>,
+    id: Identity,
+) -> HttpResponse {
     let node_id = id.identity;
+    let after_timestamp = query.after_timestamp.map(|d| d.naive_utc());
+    let max_items = query.max_items;
     let dao: AllocationDao = db.as_dao();
-    match dao.get_for_owner(node_id).await {
+    match dao.get_for_owner(node_id, after_timestamp, max_items).await {
         Ok(allocations) => response::ok(allocations),
         Err(e) => response::server_error(&e),
     }
@@ -125,7 +131,7 @@ async fn release_allocation(
     }
 }
 
-async fn decorate_demand(
+async fn get_demand_decorations(
     db: Data<DbExecutor>,
     path: Query<AllocationIds>,
     id: Identity,

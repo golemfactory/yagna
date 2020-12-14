@@ -54,6 +54,7 @@ table! {
         total_amount -> Text,
         spent_amount -> Text,
         remaining_amount -> Text,
+        timestamp -> Timestamp,
         timeout -> Nullable<Timestamp>,
         make_deposit -> Bool,
         released -> Bool,

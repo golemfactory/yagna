@@ -1,19 +1,26 @@
 use bigdecimal::BigDecimal;
 use chrono::Utc;
 use std::time::Duration;
-use ya_client::payment::{PaymentProviderApi, PaymentRequestorApi};
-use ya_client::web::WebClient;
-use ya_client_model::payment::{Acceptance, DocumentStatus, NewAllocation, NewInvoice};
+use ya_client::payment::PaymentApi;
+use ya_client::web::{rest_api_url, WebClient};
+use ya_client_model::payment::{
+    Acceptance, DocumentStatus, NewAllocation, NewInvoice, PAYMENT_API_PATH,
+};
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
-    let log_level = std::env::var("RUST_LOG").unwrap_or("info".to_owned());
+    let log_level = std::env::var("RUST_LOG").unwrap_or("invoice_flow=debug,info".to_owned());
     std::env::set_var("RUST_LOG", log_level);
     env_logger::init();
 
-    let client = WebClient::builder().build();
-    let provider: PaymentProviderApi = client.interface()?;
-    let requestor: PaymentRequestorApi = client.interface()?;
+    // Create requestor / provider PaymentApi
+    let rest_api_url = format!("{}{}", rest_api_url(), PAYMENT_API_PATH);
+    let provider_url = format!("{}provider/", &rest_api_url);
+    std::env::set_var("YAGNA_PAYMENT_URL", provider_url);
+    let provider: PaymentApi = WebClient::builder().build().interface()?;
+    let requestor_url = format!("{}requestor/", &rest_api_url);
+    std::env::set_var("YAGNA_PAYMENT_URL", requestor_url);
+    let requestor: PaymentApi = WebClient::builder().build().interface()?;
 
     let invoice_date = Utc::now();
 
@@ -33,6 +40,21 @@ async fn main() -> anyhow::Result<()> {
     provider.send_invoice(&invoice.invoice_id).await?;
     log::info!("Invoice sent.");
 
+    let invoice_events_received = requestor
+        .get_invoice_events::<Utc>(
+            Some(&invoice_date),
+            Some(Duration::from_secs(10)),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+    log::debug!("events 1: {:?}", &invoice_events_received);
+    log::debug!(
+        "DATE: {:?}",
+        Some(&invoice_events_received.first().unwrap().event_date)
+    );
+
     log::info!("Creating allocation...");
     let allocation = requestor
         .create_allocation(&NewAllocation {
@@ -46,17 +68,17 @@ async fn main() -> anyhow::Result<()> {
     log::debug!("allocation={:?}", allocation);
     log::info!("Allocation created.");
 
-    log::info!(
+    log::debug!(
         "INVOICES1: {:?}",
         requestor.get_invoices::<Utc>(None, None).await
     );
-    log::info!(
+    log::debug!(
         "INVOICES2: {:?}",
         requestor
             .get_invoices::<Utc>(Some(invoice_date), None)
             .await
     );
-    log::info!(
+    log::debug!(
         "INVOICES3: {:?}",
         requestor.get_invoices::<Utc>(Some(Utc::now()), None).await
     );
@@ -74,9 +96,22 @@ async fn main() -> anyhow::Result<()> {
         .await?;
     log::info!("Invoice accepted.");
 
+    let invoice_events_accepted = provider
+        .get_invoice_events::<Utc>(
+            Some(&invoice_events_received.first().unwrap().event_date),
+            Some(Duration::from_secs(10)),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+    log::debug!("events 2: {:?}", &invoice_events_accepted);
+
     log::info!("Waiting for payment...");
     let timeout = Some(Duration::from_secs(300)); // Should be enough for GNT transfer
-    let mut payments = provider.get_payments(Some(&now), timeout).await?;
+    let mut payments = provider
+        .get_payments(Some(&now), timeout, None, None)
+        .await?;
     assert_eq!(payments.len(), 1);
     let payment = payments.pop().unwrap();
     assert_eq!(&payment.amount, &invoice.amount);
@@ -86,6 +121,17 @@ async fn main() -> anyhow::Result<()> {
     let invoice = provider.get_invoice(&invoice.invoice_id).await?;
     assert_eq!(invoice.status, DocumentStatus::Settled);
     log::info!("Invoice status verified correctly.");
+
+    let invoice_events_settled = provider
+        .get_invoice_events::<Utc>(
+            Some(&invoice_events_accepted.first().unwrap().event_date),
+            Some(Duration::from_secs(10)),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+    log::debug!("events 3: {:?}", &invoice_events_settled);
 
     Ok(())
 }

@@ -55,10 +55,19 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         )
 }
 
-async fn get_debit_notes(db: Data<DbExecutor>, id: Identity) -> HttpResponse {
+async fn get_debit_notes(
+    db: Data<DbExecutor>,
+    query: Query<FilterParams>,
+    id: Identity,
+) -> HttpResponse {
     let node_id = id.identity;
+    let after_timestamp = query.after_timestamp.map(|d| d.naive_utc());
+    let max_items = query.max_items;
     let dao: DebitNoteDao = db.as_dao();
-    match dao.get_for_node_id(node_id).await {
+    match dao
+        .get_for_node_id(node_id, after_timestamp, max_items)
+        .await
+    {
         Ok(debit_notes) => response::ok(debit_notes),
         Err(e) => response::server_error(&e),
     }
@@ -89,13 +98,20 @@ async fn get_debit_note_events(
     id: Identity,
 ) -> HttpResponse {
     let node_id = id.identity;
-    let timeout_secs = query.timeout;
-    let later_than = query.later_than.map(|d| d.naive_utc());
+    let timeout_secs = query.poll_timeout;
+    let after_timestamp = query.after_timestamp.map(|d| d.naive_utc());
+    let max_events = query.max_events;
+    let app_session_id = &query.app_session_id;
 
     let dao: DebitNoteEventDao = db.as_dao();
     let getter = || async {
-        dao.get_for_node_id(node_id.clone(), later_than.clone())
-            .await
+        dao.get_for_node_id(
+            node_id.clone(),
+            after_timestamp.clone(),
+            max_events.clone(),
+            app_session_id.clone(),
+        )
+        .await
     };
 
     match listen_for_events(getter, timeout_secs).await {

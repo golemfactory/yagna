@@ -57,18 +57,24 @@ impl<'c> DebitNoteEventDao<'c> {
     pub async fn get_for_node_id(
         &self,
         node_id: NodeId,
-        later_than: Option<NaiveDateTime>,
+        after_timestamp: Option<NaiveDateTime>,
+        max_events: Option<u32>,
+        _app_session_id: Option<String>,
     ) -> DbResult<Vec<DebitNoteEvent>> {
         readonly_transaction(self.pool, move |conn| {
-            let query = dsl::pay_debit_note_event
+            let mut query = dsl::pay_debit_note_event
                 .inner_join(event_type_dsl::pay_event_type)
                 .filter(dsl::owner_id.eq(node_id))
                 .select(crate::schema::pay_debit_note_event::all_columns)
-                .order_by(dsl::timestamp.asc());
-            let events: Vec<ReadObj> = match later_than {
-                Some(timestamp) => query.filter(dsl::timestamp.gt(timestamp)).load(conn)?,
-                None => query.load(conn)?,
-            };
+                .order_by(dsl::timestamp.asc())
+                .into_boxed();
+            if let Some(timestamp) = after_timestamp {
+                query = query.filter(dsl::timestamp.gt(timestamp));
+            }
+            if let Some(limit) = max_events {
+                query = query.limit(limit.into());
+            }
+            let events: Vec<ReadObj> = query.load(conn)?;
             events.into_iter().map(TryInto::try_into).collect()
         })
         .await
