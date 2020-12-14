@@ -818,21 +818,21 @@ impl Handler<Unsubscribe> for ProviderMarket {
                         false => None,
                     })
                     .collect::<Vec<_>>();
-                subs.iter().for_each(|s| {
-                    self.subscriptions.remove(s);
-                });
 
                 log::info!("Unsubscribing {} active offer(s)", subs.len());
                 subs
             }
-            OfferKind::WithIds(subs) => subs,
+            OfferKind::WithIds(subs) => {
+                log::info!("Unsubscribing {} offer(s)", subs.len());
+                subs
+            }
         };
 
+        subscriptions.iter().for_each(|id| {
+            self.subscriptions.remove(id);
+        });
         subscriptions
             .iter()
-            .inspect(|id| {
-                self.subscriptions.remove(id);
-            })
             .filter_map(|id| self.handles.remove(id))
             .for_each(|handle| {
                 ctx.cancel_future(handle);
