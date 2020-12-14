@@ -66,7 +66,7 @@ pub mod requestor {
 
         match events[0].event_type {
             AgreementEventType::AgreementApprovedEvent { .. } => Ok(events[0].clone().agreement_id),
-            _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
+            _ => panic!("Expected AgreementEventType::AgreementApprovedEvent"),
         }
     }
 }

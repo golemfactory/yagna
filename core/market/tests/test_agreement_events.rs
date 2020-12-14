@@ -72,7 +72,7 @@ async fn test_agreement_approved_event() -> Result<()> {
 
         match &events[0].event_type {
             AgreementEventType::AgreementApprovedEvent => (),
-            _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
+            _ => panic!("Expected AgreementEventType::AgreementApprovedEvent"),
         };
         Result::<(), anyhow::Error>::Ok(())
     });
@@ -87,7 +87,7 @@ async fn test_agreement_approved_event() -> Result<()> {
 
     match &events[0].event_type {
         AgreementEventType::AgreementApprovedEvent => (),
-        _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
+        _ => panic!("Expected AgreementEventType::AgreementApprovedEvent"),
     };
 
     // Protect from eternal waiting.
@@ -233,7 +233,7 @@ async fn test_agreement_terminated_event() -> Result<()> {
             assert_ne!(reason, &None);
             assert_eq!(reason.as_ref().unwrap().message, "Expired");
         }
-        _ => panic!("Expected AgreementEvent::AgreementTerminatedEvent"),
+        _ => panic!("Expected AgreementEventType::AgreementTerminatedEvent"),
     };
 
     // == REQUESTOR
@@ -256,7 +256,7 @@ async fn test_agreement_terminated_event() -> Result<()> {
             assert!(reason.is_some());
             assert_eq!(reason.as_ref().unwrap().message, "Expired");
         }
-        _ => panic!("Expected AgreementEvent::AgreementTerminatedEvent"),
+        _ => panic!("Expected AgreementEventType::AgreementTerminatedEvent"),
     };
 
     Ok(())

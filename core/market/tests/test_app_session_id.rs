@@ -454,7 +454,7 @@ async fn test_session_timestamp_filtering() -> Result<()> {
                 assert_eq!(event.agreement_id, agreements[i].into_client());
                 assert_ge!(event.event_date, timestamp_before);
             }
-            _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
+            _ => panic!("Expected AgreementEventType::AgreementApprovedEvent"),
         });
 
     r_events
@@ -465,7 +465,7 @@ async fn test_session_timestamp_filtering() -> Result<()> {
                 assert_eq!(event.agreement_id, agreements[i].into_client());
                 assert_ge!(event.event_date, timestamp_before);
             }
-            _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
+            _ => panic!("Expected AgreementEventType::AgreementApprovedEvent"),
         });
 
     // Query events using newer timestamp. We expect to get only new events
@@ -503,7 +503,7 @@ async fn test_session_timestamp_filtering() -> Result<()> {
                 assert_eq!(event.agreement_id, agreements[num_before + i].into_client());
                 assert_ge!(event.event_date, timestamp_before);
             }
-            _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
+            _ => panic!("Expected AgreementEventType::AgreementApprovedEvent"),
         });
 
     r_events
@@ -514,7 +514,7 @@ async fn test_session_timestamp_filtering() -> Result<()> {
                 assert_eq!(event.agreement_id, agreements[num_before + i].into_client());
                 assert_ge!(event.event_date, timestamp_before);
             }
-            _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
+            _ => panic!("Expected AgreementEventType::AgreementApprovedEvent"),
         });
 
     // Query events using newer last timestamp. We expect to get no events.
@@ -598,7 +598,7 @@ async fn test_common_event_flow() -> Result<()> {
 
         match &events[0].event_type {
             AgreementEventType::AgreementApprovedEvent {} => (),
-            _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
+            _ => panic!("Expected AgreementEventType::AgreementApprovedEvent"),
         }
         current_timestamp = events[0].event_date.clone();
     }
