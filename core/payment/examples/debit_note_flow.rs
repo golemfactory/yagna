@@ -22,7 +22,7 @@ async fn main() -> anyhow::Result<()> {
     std::env::set_var("YAGNA_PAYMENT_URL", requestor_url);
     let requestor: PaymentApi = WebClient::builder().build().interface()?;
 
-    let invoice_date = Utc::now();
+    let debit_note_date = Utc::now();
 
     let debit_note = NewDebitNote {
         activity_id: "activity_id".to_string(),
@@ -41,19 +41,19 @@ async fn main() -> anyhow::Result<()> {
     provider.send_debit_note(&debit_note.debit_note_id).await?;
     log::info!("Debit note sent.");
 
-    let invoice_events_received = requestor
+    let debit_note_events_received = requestor
         .get_debit_note_events::<Utc>(
-            Some(&invoice_date),
+            Some(&debit_note_date),
             Some(Duration::from_secs(10)),
             None,
             None,
         )
         .await
         .unwrap();
-    log::debug!("events 1: {:?}", &invoice_events_received);
+    log::debug!("events 1: {:?}", &debit_note_events_received);
     log::debug!(
         "DATE: {:?}",
-        Some(&invoice_events_received.first().unwrap().event_date)
+        Some(&debit_note_events_received.first().unwrap().event_date)
     );
 
     log::info!("Creating allocation...");
@@ -69,17 +69,17 @@ async fn main() -> anyhow::Result<()> {
     log::info!("Allocation created.");
 
     log::debug!(
-        "INVOICES1: {:?}",
+        "DEBIT_NOTES1: {:?}",
         requestor.get_debit_notes::<Utc>(None, None).await
     );
     log::debug!(
-        "INVOICES2: {:?}",
+        "DEBIT_NOTES2: {:?}",
         requestor
-            .get_debit_notes::<Utc>(Some(invoice_date), None)
+            .get_debit_notes::<Utc>(Some(debit_note_date), None)
             .await
     );
     log::debug!(
-        "INVOICES3: {:?}",
+        "DEBIT_NOTES3: {:?}",
         requestor
             .get_debit_notes::<Utc>(Some(Utc::now()), None)
             .await
@@ -169,7 +169,7 @@ async fn main() -> anyhow::Result<()> {
     // log::debug!(
     //     "get_payments_for_debit_note2: {:?}",
     //     requestor
-    //         .get_payments_for_debit_note::<Utc>(&debit_note2.debit_note_id, Some(invoice_date), None)
+    //         .get_payments_for_debit_note::<Utc>(&debit_note2.debit_note_id, Some(debit_note_date), None)
     //         .await
     // );
     // log::debug!(
