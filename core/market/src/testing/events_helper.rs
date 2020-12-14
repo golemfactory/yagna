@@ -56,7 +56,7 @@ pub mod requestor {
     ) -> anyhow::Result<Proposal> {
         let events = market
             .requestor_engine
-            .query_events(&demand_id, 2.2, Some(5))
+            .query_events(&demand_id, 3.8, Some(5))
             .await?;
         expect_proposal(events, i)
     }
@@ -91,7 +91,7 @@ pub mod provider {
     ) -> anyhow::Result<Proposal> {
         let events = market
             .provider_engine
-            .query_events(&offer_id, 2.2, Some(5))
+            .query_events(&offer_id, 3.8, Some(5))
             .await?;
         expect_proposal(events, i)
     }
