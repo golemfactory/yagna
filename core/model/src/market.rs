@@ -1,7 +1,7 @@
 //! Market service bus API.
-use derive_more::Display;
 use serde::{Deserialize, Serialize};
 
+use crate::Role;
 pub use ya_client_model::market::Agreement;
 use ya_service_bus::RpcMessage;
 
@@ -19,12 +19,6 @@ pub mod local {
 pub struct GetAgreement {
     pub agreement_id: String,
     pub role: Role,
-}
-
-#[derive(Clone, Copy, Display, Debug, PartialEq, Serialize, Deserialize)]
-pub enum Role {
-    Provider,
-    Requestor,
 }
 
 impl GetAgreement {
