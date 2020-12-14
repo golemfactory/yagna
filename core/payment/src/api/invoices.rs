@@ -6,6 +6,7 @@ use serde_json::value::Value::Null;
 // Workspace uses
 use metrics::counter;
 use ya_client_model::payment::*;
+use ya_core_model::market;
 use ya_core_model::payment::local::{SchedulePayment, BUS_ID as LOCAL_SERVICE};
 use ya_core_model::payment::public::{
     AcceptInvoice, AcceptRejectError, CancelError, CancelInvoice, SendError, SendInvoice,
@@ -112,7 +113,7 @@ async fn issue_invoice(db: Data<DbExecutor>, body: Json<NewInvoice>, id: Identit
     let agreement_id = invoice.agreement_id.clone();
     let activity_ids = invoice.activity_ids.clone().unwrap_or_default();
 
-    let agreement = match get_agreement(agreement_id.clone()).await {
+    let agreement = match get_agreement(agreement_id.clone(), market::Role::Provider).await {
         Ok(Some(agreement)) => agreement,
         Ok(None) => {
             return response::bad_request(&format!("Agreement not found: {}", agreement_id))
@@ -121,7 +122,7 @@ async fn issue_invoice(db: Data<DbExecutor>, body: Json<NewInvoice>, id: Identit
     };
 
     for activity_id in activity_ids.iter() {
-        match get_agreement_id(activity_id.clone()).await {
+        match get_agreement_id(activity_id.clone(), market::Role::Provider).await {
             Ok(Some(id)) if id != agreement_id => {
                 return response::bad_request(&format!(
                     "Activity {} belongs to agreement {} not {}",

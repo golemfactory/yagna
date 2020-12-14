@@ -327,6 +327,7 @@ mod tests {
     const YAML: &str = r#"
 properties:
   golem:
+    srv.caps.multi-activity: true
     inf:
       mem.gib: 0.5
       storage.gib: 5.0
@@ -355,6 +356,7 @@ constraints: |
 {
 	"properties": {
 		"golem": {
+		    "srv.caps.multi-activity": true,
 			"inf": {
 				"mem.gib": 0.5,
 				"storage.gib": 5
@@ -398,6 +400,12 @@ constraints: |
 "#;
 
     fn check_values(o: &serde_json::Value) {
+        assert_eq!(
+            o.pointer("/properties/golem/srv/caps/multi-activity")
+                .as_typed(Value::as_bool)
+                .unwrap(),
+            true
+        );
         assert_eq!(
             o.pointer("/properties/golem/inf/mem/gib")
                 .as_typed(Value::as_f64)

@@ -4,7 +4,9 @@
 //! within market modules and mapping return values to http responses.
 //! No market logic is allowed here.
 
+use actix_web::web::JsonConfig;
 use actix_web::{error::InternalError, http::StatusCode, web::PathConfig};
+use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 use ya_client::model::ErrorMessage;
@@ -12,7 +14,6 @@ use ya_client::model::ErrorMessage;
 use crate::db::model::{
     AgreementId, AppSessionId, OwnerType, ProposalId, ProposalIdParseError, SubscriptionId,
 };
-use chrono::{DateTime, Utc};
 
 pub(crate) mod common;
 mod error;
@@ -24,6 +25,16 @@ const DEFAULT_QUERY_TIMEOUT: f32 = 5.0;
 
 pub fn path_config() -> PathConfig {
     PathConfig::default().error_handler(|err, _req| {
+        InternalError::new(
+            serde_json::to_string(&ErrorMessage::new(err.to_string())).unwrap(),
+            StatusCode::BAD_REQUEST,
+        )
+        .into()
+    })
+}
+
+pub fn json_config() -> JsonConfig {
+    JsonConfig::default().error_handler(|err, _req| {
         InternalError::new(
             serde_json::to_string(&ErrorMessage::new(err.to_string())).unwrap(),
             StatusCode::BAD_REQUEST,

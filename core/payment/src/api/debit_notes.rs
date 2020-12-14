@@ -6,6 +6,7 @@ use serde_json::value::Value::Null;
 // Workspace uses
 use metrics::counter;
 use ya_client_model::payment::*;
+use ya_core_model::market;
 use ya_core_model::payment::local::{SchedulePayment, BUS_ID as LOCAL_SERVICE};
 use ya_core_model::payment::public::{
     AcceptDebitNote, AcceptRejectError, SendDebitNote, SendError, BUS_ID as PUBLIC_SERVICE,
@@ -130,7 +131,9 @@ async fn issue_debit_note(
     let debit_note = body.into_inner();
     let activity_id = debit_note.activity_id.clone();
 
-    let agreement = match get_agreement_for_activity(activity_id.clone()).await {
+    let agreement = match get_agreement_for_activity(activity_id.clone(), market::Role::Provider)
+        .await
+    {
         Ok(Some(agreement_id)) => agreement_id,
         Ok(None) => return response::bad_request(&format!("Activity not found: {}", &activity_id)),
         Err(e) => return response::server_error(&e),

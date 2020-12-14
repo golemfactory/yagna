@@ -243,7 +243,10 @@ impl NegotiationApi {
             &msg.agreement_id,
             &caller
         );
-        self.inner.agreement_terminated.call(caller, msg).await
+        self.inner
+            .agreement_terminated
+            .call(caller, msg.translate(OwnerType::Requestor))
+            .await
     }
 
     pub async fn bind_gsb(

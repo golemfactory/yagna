@@ -1,17 +1,18 @@
+use directories::UserDirs;
+use futures::channel::oneshot;
 use notify::*;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
+use std::sync::mpsc;
+use std::time::Duration;
 use structopt::{clap, StructOpt};
 
 use crate::execution::{ExeUnitsRegistry, TaskRunnerConfig};
 use crate::hardware::{Resources, UpdateResources};
-use directories::UserDirs;
-use futures::channel::oneshot;
+use crate::market::config::MarketConfig;
 
-use std::str::FromStr;
-use std::sync::mpsc;
-use std::time::Duration;
 use ya_client::cli::ApiOpts;
 use ya_utils_path::data_dir::DataDir;
 
@@ -151,7 +152,9 @@ pub struct RunConfig {
     #[structopt(flatten)]
     pub node: NodeConfig,
     #[structopt(flatten)]
-    pub runner_config: TaskRunnerConfig,
+    pub runner: TaskRunnerConfig,
+    #[structopt(flatten)]
+    pub market: MarketConfig,
 }
 
 #[derive(StructOpt)]

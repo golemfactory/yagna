@@ -28,7 +28,7 @@ use crate::matcher::{
 use crate::negotiation::{
     error::{
         AgreementError, AgreementEventsError, AgreementStateError, GetProposalError,
-        MatchValidationError, ProposalError, QueryEventsError, ReasonError,
+        MatchValidationError, ProposalError, QueryEventsError,
     },
     notifier::NotifierError,
     EventNotifier,
@@ -38,6 +38,7 @@ use crate::protocol::negotiation::error::{
     CounterProposalError, RemoteAgreementError, RemoteProposalError, TerminateAgreementError,
 };
 use crate::protocol::negotiation::messages::{AgreementTerminated, ProposalReceived};
+use crate::utils::display::EnableDisplay;
 
 type IsFirst = bool;
 
@@ -292,9 +293,8 @@ impl CommonBroker {
         &self,
         id: Identity,
         agreement_id: AgreementId,
-        reason: Option<String>,
+        reason: Option<Reason>,
     ) -> Result<(), AgreementError> {
-        verify_reason(reason.as_ref())?;
         let dao = self.db.as_dao::<AgreementDao>();
         let mut agreement = match dao
             .select_by_node(
@@ -308,11 +308,13 @@ impl CommonBroker {
             None => return Err(AgreementError::NotFound(agreement_id)),
             Some(agreement) => agreement,
         };
-        // from now on agreement_id is invalid. Use only agreement.id
+
+        // From now on agreement_id is invalid. Use only agreement.id
         // (which has valid owner)
         expect_state(&agreement, AgreementState::Approved)?;
         agreement.state = AgreementState::Terminated;
         let owner_type = agreement.id.owner();
+
         protocol_common::propagate_terminate_agreement(
             &agreement,
             id.identity.clone(),
@@ -323,7 +325,12 @@ impl CommonBroker {
             reason.clone(),
         )
         .await?;
-        dao.terminate(&agreement.id, reason, owner_type)
+
+        let reason_string = reason
+            .as_ref()
+            .map(|reason| serde_json::to_string::<Reason>(reason).unwrap_or("".to_string()));
+
+        dao.terminate(&agreement.id, reason_string, owner_type)
             .await
             .map_err(|e| AgreementError::Get(agreement.id.clone(), e))?;
 
@@ -331,10 +338,13 @@ impl CommonBroker {
             OwnerType::Provider => counter!("market.agreements.provider.terminated", 1),
             OwnerType::Requestor => counter!("market.agreements.requestor.terminated", 1),
         };
+
+        terminate_reason_metric(&reason, owner_type);
         log::info!(
-            "Requestor {} terminated Agreement [{}] and sent to Provider.",
-            &id.identity,
+            "Agent {} terminated Agreement [{}]. Reason: {}",
+            &id.display(),
             &agreement.id,
+            reason.display(),
         );
         Ok(())
     }
@@ -368,26 +378,21 @@ impl CommonBroker {
         owner_type: OwnerType,
     ) -> Result<(), RemoteAgreementError> {
         let dao = self.db.as_dao::<AgreementDao>();
-        let agreement_id = msg.agreement_id.translate(owner_type);
+        let agreement_id = msg.agreement_id.clone();
         let agreement = dao
             .select(&agreement_id, None, Utc::now().naive_utc())
             .await
             .map_err(|_e| RemoteAgreementError::NotFound(agreement_id.clone()))?
             .ok_or(RemoteAgreementError::NotFound(agreement_id.clone()))?;
 
-        match owner_type {
-            OwnerType::Requestor => {
-                if agreement.provider_id != caller {
-                    // Don't reveal, that we know this Agreement id.
-                    Err(RemoteAgreementError::NotFound(agreement_id.clone()))?
-                }
-            }
-            OwnerType::Provider => {
-                if agreement.requestor_id != caller {
-                    // Don't reveal, that we know this Agreement id.
-                    Err(RemoteAgreementError::NotFound(agreement_id.clone()))?
-                }
-            }
+        let our_id = match owner_type {
+            OwnerType::Requestor => agreement.provider_id,
+            OwnerType::Provider => agreement.requestor_id,
+        };
+
+        if our_id != caller {
+            // Don't reveal, that we know this Agreement id.
+            Err(RemoteAgreementError::NotFound(agreement_id.clone()))?
         }
 
         // Opposite side terminated.
@@ -396,7 +401,12 @@ impl CommonBroker {
             OwnerType::Requestor => OwnerType::Provider,
         };
 
-        dao.terminate(&agreement_id, msg.reason, terminator)
+        let reason_string = msg
+            .reason
+            .as_ref()
+            .map(|reason| serde_json::to_string::<Reason>(&reason).unwrap_or("".to_string()));
+
+        dao.terminate(&agreement_id, reason_string, terminator)
             .await
             .map_err(|e| {
                 log::warn!(
@@ -406,6 +416,19 @@ impl CommonBroker {
                 );
                 RemoteAgreementError::InternalError(agreement_id.clone())
             })?;
+
+        match terminator {
+            OwnerType::Provider => counter!("market.agreements.provider.terminated", 1),
+            OwnerType::Requestor => counter!("market.agreements.requestor.terminated", 1),
+        };
+
+        terminate_reason_metric(&msg.reason, owner_type);
+        log::info!(
+            "Received terminate Agreement [{}] from [{}]. Reason: {}",
+            &agreement_id,
+            &caller,
+            msg.reason.display(),
+        );
         Ok(())
     }
 
@@ -576,8 +599,33 @@ pub fn expect_state(
     })?
 }
 
-fn verify_reason(reason: Option<&String>) -> Result<(), ReasonError> {
-    Ok(if let Some(s) = reason {
-        serde_json::from_str::<Reason>(s)?;
-    })
+fn get_reason_code(reason: &Option<Reason>, key: &str) -> Option<String> {
+    reason
+        .as_ref()
+        .map(|reason| {
+            reason
+                .extra
+                .get(key)
+                .map(|json| json.as_str().map(|code| code.to_string()))
+        })
+        .flatten()
+        .flatten()
+}
+
+/// This function extract from Reason additional information about termination reason
+/// and increments metric counter. Note that Reason isn't required to have any fields
+/// despite 'message'.
+pub fn terminate_reason_metric(reason: &Option<Reason>, owner: OwnerType) {
+    let p_code = get_reason_code(reason, "golem.provider.code");
+    let r_code = get_reason_code(reason, "golem.requestor.code");
+
+    let reason_code = r_code.xor(p_code).unwrap_or("NotSpecified".to_string());
+    match owner {
+        OwnerType::Provider => {
+            counter!("market.agreements.provider.terminated.reason", 1, "reason" => reason_code)
+        }
+        OwnerType::Requestor => {
+            counter!("market.agreements.requestor.terminated.reason", 1, "reason" => reason_code)
+        }
+    };
 }

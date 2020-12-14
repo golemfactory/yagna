@@ -2,6 +2,7 @@
 use actix_web::{web, Responder};
 
 use ya_client_model::activity::{ActivityState, ProviderEvent};
+use ya_core_model::market::Role;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 use ya_service_bus::timeout::IntoTimeoutFuture;
@@ -28,7 +29,7 @@ async fn set_activity_state_web(
     id: Identity,
 ) -> impl Responder {
     log::debug!("set_activity_state_web {:?}", state);
-    authorize_activity_executor(&db, id.identity, &path.activity_id).await?;
+    authorize_activity_executor(&db, id.identity, &path.activity_id, Role::Provider).await?;
 
     set_persisted_state(&db, &path.activity_id, state.into_inner())
         .await

@@ -14,6 +14,7 @@ use ya_client_model::activity::{
 };
 use ya_client_model::market::Agreement;
 use ya_core_model::activity;
+use ya_core_model::market::Role;
 use ya_net::{self as net, RemoteEndpoint};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
@@ -79,9 +80,9 @@ async fn create_activity(
     id: Identity,
 ) -> impl Responder {
     let agreement_id = body.agreement_id();
-    authorize_agreement_initiator(id.identity, agreement_id).await?;
+    authorize_agreement_initiator(id.identity, agreement_id, Role::Requestor).await?;
 
-    let agreement = get_agreement(&agreement_id).await?;
+    let agreement = get_agreement(&agreement_id, Role::Requestor).await?;
     log::debug!("agreement: {:#?}", agreement);
 
     let provider_id = agreement.provider_id().clone();
@@ -124,9 +125,9 @@ async fn destroy_activity(
     query: web::Query<QueryTimeout>,
     id: Identity,
 ) -> impl Responder {
-    authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
+    authorize_activity_initiator(&db, id.identity, &path.activity_id, Role::Requestor).await?;
 
-    let agreement = get_activity_agreement(&db, &path.activity_id).await?;
+    let agreement = get_activity_agreement(&db, &path.activity_id, Role::Requestor).await?;
     let msg = activity::Destroy {
         activity_id: path.activity_id.to_string(),
         agreement_id: agreement.agreement_id.clone(),
@@ -162,11 +163,11 @@ async fn exec(
     body: web::Json<ExeScriptRequest>,
     id: Identity,
 ) -> impl Responder {
-    authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
+    authorize_activity_initiator(&db, id.identity, &path.activity_id, Role::Requestor).await?;
 
     let commands: Vec<ExeScriptCommand> =
         serde_json::from_str(&body.text).map_err(|e| Error::BadRequest(format!("{:?}", e)))?;
-    let agreement = get_activity_agreement(&db, &path.activity_id).await?;
+    let agreement = get_activity_agreement(&db, &path.activity_id, Role::Requestor).await?;
     let batch_id = generate_id();
     let msg = activity::Exec {
         activity_id: path.activity_id.clone(),
@@ -195,8 +196,8 @@ async fn get_batch_results(
     id: Identity,
     request: HttpRequest,
 ) -> Result<impl Responder> {
-    authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
-    let agreement = get_activity_agreement(&db, &path.activity_id).await?;
+    authorize_activity_initiator(&db, id.identity, &path.activity_id, Role::Requestor).await?;
+    let agreement = get_activity_agreement(&db, &path.activity_id, Role::Requestor).await?;
 
     if let Some(value) = request.headers().get(header::ACCEPT) {
         if value.eq(mime::TEXT_EVENT_STREAM.essence_str()) {
@@ -311,7 +312,7 @@ async fn encrypted(
     mut body: web::Payload,
     id: Identity,
 ) -> impl Responder {
-    authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
+    authorize_activity_initiator(&db, id.identity, &path.activity_id, Role::Requestor).await?;
 
     let mut bytes = web::BytesMut::new();
     while let Some(item) = body.next().await {
@@ -320,7 +321,7 @@ async fn encrypted(
         );
     }
 
-    let agreement = get_activity_agreement(&db, &path.activity_id).await?;
+    let agreement = get_activity_agreement(&db, &path.activity_id, Role::Requestor).await?;
     let msg = activity::sgx::CallEncryptedService {
         activity_id: path.activity_id.clone(),
         sender: id.identity,

@@ -12,8 +12,7 @@ mod preset_cli;
 mod provider_agent;
 mod signal;
 mod startup_config;
-mod task_manager;
-mod task_state;
+mod tasks;
 
 use crate::hardware::Profiles;
 use crate::provider_agent::{Initialize, Shutdown};
@@ -54,6 +53,7 @@ async fn main() -> anyhow::Result<()> {
                 signal,
                 clap::crate_name!()
             );
+            log::logger().flush();
             agent.send(Shutdown).await??;
             Ok(())
         }

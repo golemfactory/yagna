@@ -1,6 +1,9 @@
 use anyhow::Result;
 use chrono::{Duration, Utc};
 
+use actix_web::http::StatusCode;
+use actix_web::test;
+use actix_web::web::Bytes;
 use ya_core_model::market;
 use ya_market::testing::agreement_utils::{gen_reason, negotiate_agreement};
 use ya_market::testing::mock_agreement::generate_agreement;
@@ -39,10 +42,11 @@ async fn test_gsb_get_agreement() -> Result<()> {
     let agreement_id = req_engine
         .create_agreement(req_id.clone(), &proposal_id, Utc::now())
         .await?;
+
     let agreement = bus::service(network.node_gsb_prefixes(REQ_NAME).0)
-        .send(market::GetAgreement {
-            agreement_id: agreement_id.into_client(),
-        })
+        .send(market::GetAgreement::as_requestor(
+            agreement_id.into_client(),
+        ))
         .await??;
     assert_eq!(agreement.agreement_id, agreement_id.into_client());
     assert_eq!(agreement.demand.requestor_id, req_id.identity);
@@ -912,13 +916,15 @@ async fn test_terminate() -> Result<()> {
         .await?;
     let req_market = network.get_market(REQ_NAME);
     let prov_market = network.get_market(PROV_NAME);
+    let req_identity = network.get_default_id(REQ_NAME);
     let req_agreement_dao = req_market.db.as_dao::<AgreementDao>();
     let prov_agreement_dao = prov_market.db.as_dao::<AgreementDao>();
     let agreement_1 = generate_agreement(1, (Utc::now() + Duration::days(1)).naive_utc());
     req_agreement_dao.save(agreement_1.clone()).await?;
     prov_agreement_dao.save(agreement_1.clone()).await?;
-    let req_identity = network.get_default_id(REQ_NAME);
-    let reason = serde_json::json!({"ala":"ma kota","message": "coś"}).to_string();
+
+    let reason =
+        serde_json::from_value(serde_json::json!({"ala":"ma kota","message": "coś"})).unwrap();
     req_market
         .terminate_agreement(req_identity, agreement_1.id, Some(reason))
         .await
@@ -1066,9 +1072,6 @@ async fn test_terminate_invalid_reason() -> Result<()> {
         .add_market_instance(PROV_NAME)
         .await?;
 
-    let req_market = network.get_market(REQ_NAME);
-    let req_id = network.get_default_id(REQ_NAME);
-
     let agreement_id = negotiate_agreement(
         &network,
         REQ_NAME,
@@ -1081,24 +1084,28 @@ async fn test_terminate_invalid_reason() -> Result<()> {
     .unwrap()
     .r_agreement;
 
+    let mut app = network.get_rest_app(REQ_NAME).await;
+    let url = format!(
+        "/market-api/v1/agreements/{}/terminate",
+        agreement_id.into_client(),
+    );
+
     let reason = "Unstructured message. Should be json.".to_string();
-    match req_market
-        .terminate_agreement(req_id.clone(), agreement_id.clone(), Some(reason))
-        .await
-        .unwrap_err()
-    {
-        AgreementError::ReasonError(_) => (),
-        _ => panic!("Expected AgreementError::ReasonError"),
-    };
+    let req = test::TestRequest::post()
+        .uri(&url)
+        .set_payload(Bytes::copy_from_slice(reason.as_bytes()))
+        .to_request();
+
+    let resp = test::call_service(&mut app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 
     let reason = "{'no_message_field': 'Reason expects message field'}".to_string();
-    match req_market
-        .terminate_agreement(req_id, agreement_id.clone(), Some(reason))
-        .await
-        .unwrap_err()
-    {
-        AgreementError::ReasonError(_) => (),
-        _ => panic!("Expected AgreementError::ReasonError"),
-    };
+    let req = test::TestRequest::post()
+        .uri(&url)
+        .set_payload(Bytes::copy_from_slice(reason.as_bytes()))
+        .to_request();
+
+    let resp = test::call_service(&mut app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     Ok(())
 }
