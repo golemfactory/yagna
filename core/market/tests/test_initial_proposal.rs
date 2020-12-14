@@ -1,5 +1,6 @@
 use ya_client::model::market::event::{ProviderEvent, RequestorEvent};
 use ya_client::model::market::proposal::State;
+use ya_market::assert_err_eq;
 use ya_market::testing::events_helper::ClientProposalHelper;
 use ya_market::testing::mock_offer::client::{sample_demand, sample_offer};
 use ya_market::testing::{MarketServiceExt, MarketsNetwork, OwnerType};
@@ -13,7 +14,7 @@ use std::time::Duration;
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_query_events_non_existent_subscription() -> Result<(), anyhow::Error> {
+async fn test_query_events_non_existent_subscription() -> anyhow::Result<()> {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
@@ -25,10 +26,7 @@ async fn test_query_events_non_existent_subscription() -> Result<(), anyhow::Err
     // We expect that no events are available for non existent subscription.
     let result = market1.query_events(&non_existent_id, 1.2, Some(5)).await;
 
-    assert_eq!(
-        result.unwrap_err().to_string(),
-        TakeEventsError::SubscriptionNotFound(non_existent_id).to_string()
-    );
+    assert_err_eq!(TakeEventsError::NotFound(non_existent_id), result);
 
     Ok(())
 }
@@ -38,7 +36,7 @@ async fn test_query_events_non_existent_subscription() -> Result<(), anyhow::Err
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_query_initial_proposal() -> Result<(), anyhow::Error> {
+async fn test_query_initial_proposal() -> anyhow::Result<()> {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
@@ -78,7 +76,7 @@ async fn test_query_initial_proposal() -> Result<(), anyhow::Error> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_query_multiple_events() -> Result<(), anyhow::Error> {
+async fn test_query_multiple_events() -> anyhow::Result<()> {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
@@ -125,8 +123,8 @@ async fn test_query_multiple_events() -> Result<(), anyhow::Error> {
 /// or timeout elapses.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
-#[serial_test::serial]
-async fn test_query_events_timeout() -> Result<(), anyhow::Error> {
+#[serial_test::serial(actix_rt)]
+async fn test_query_events_timeout() -> anyhow::Result<()> {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
@@ -182,7 +180,7 @@ async fn test_query_events_unsubscribe_notification() -> Result<(), anyhow::Erro
     // We set timeout and we expect that function will wait until events will come.
     let query_handle = tokio::spawn(async move {
         match market1.query_events(&subscription_id, 1.2, Some(5)).await {
-            Err(QueryEventsError::Unsubscribed(id)) => {
+            Err(QueryEventsError::TakeEvents(TakeEventsError::NotFound(id))) => {
                 assert_eq!(id, subscription_id);
             }
             x => panic!("Expected Unsubscribed error, but got {:?}", x),
@@ -207,7 +205,7 @@ async fn test_query_events_unsubscribe_notification() -> Result<(), anyhow::Erro
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_query_events_edge_cases() -> Result<(), anyhow::Error> {
+async fn test_query_events_edge_cases() -> anyhow::Result<()> {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
@@ -224,10 +222,7 @@ async fn test_query_events_edge_cases() -> Result<(), anyhow::Error> {
 
     // We should reject calls with negative maxEvents.
     let result = market1.query_events(&demand_id, 0.0, Some(-5)).await;
-    assert_eq!(
-        result.unwrap_err().to_string(),
-        QueryEventsError::InvalidMaxEvents(-5, 100).to_string()
-    );
+    assert_err_eq!(QueryEventsError::InvalidMaxEvents(-5, 100), result);
 
     // Negative timeout should be treated as immediate checking events and return.
     tokio::time::delay_for(Duration::from_millis(200)).await;
@@ -248,19 +243,13 @@ async fn test_query_events_edge_cases() -> Result<(), anyhow::Error> {
 
     // maxEvents equal to 0 is forbidden value now.
     let result = market1.query_events(&demand_id, 0.2, Some(0)).await;
-    assert_eq!(
-        result.unwrap_err().to_string(),
-        QueryEventsError::InvalidMaxEvents(0, 100).to_string()
-    );
+    assert_err_eq!(QueryEventsError::InvalidMaxEvents(0, 100), result);
 
     // Query events returns error, if Demand was unsubscribed.
     market1.unsubscribe_demand(&demand_id, &identity2).await?;
 
     let result = market1.query_events(&demand_id, 0.0, None).await;
-    assert_eq!(
-        result.unwrap_err().to_string(),
-        TakeEventsError::SubscriptionNotFound(demand_id).to_string()
-    );
+    assert_err_eq!(TakeEventsError::NotFound(demand_id), result);
 
     Ok(())
 }
@@ -270,7 +259,7 @@ async fn test_query_events_edge_cases() -> Result<(), anyhow::Error> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_query_events_for_multiple_subscriptions() -> Result<(), anyhow::Error> {
+async fn test_query_events_for_multiple_subscriptions() -> anyhow::Result<()> {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
@@ -309,7 +298,7 @@ async fn test_query_events_for_multiple_subscriptions() -> Result<(), anyhow::Er
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_simultaneous_query_events() -> Result<(), anyhow::Error> {
+async fn test_simultaneous_query_events() -> anyhow::Result<()> {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
@@ -372,7 +361,7 @@ async fn test_simultaneous_query_events() -> Result<(), anyhow::Error> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_unsubscribe_demand_while_query_events_for_other() -> Result<(), anyhow::Error> {
+async fn test_unsubscribe_demand_while_query_events_for_other() -> anyhow::Result<()> {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
@@ -420,7 +409,7 @@ async fn test_unsubscribe_demand_while_query_events_for_other() -> Result<(), an
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_counter_initial_proposal() -> Result<(), anyhow::Error> {
+async fn test_counter_initial_proposal() -> anyhow::Result<()> {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")

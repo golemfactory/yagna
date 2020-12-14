@@ -116,8 +116,6 @@ pub enum WaitForApprovalError {
 
 #[derive(Error, Debug)]
 pub enum QueryEventsError {
-    #[error("Subscription [{0}] was already unsubscribed.")]
-    Unsubscribed(SubscriptionId),
     #[error("Invalid subscription id. {0}")]
     InvalidSubscriptionId(#[from] SubscriptionParseError),
     #[error(transparent)]
