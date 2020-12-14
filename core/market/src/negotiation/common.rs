@@ -15,6 +15,7 @@ use ya_service_api_web::middleware::Identity;
 use crate::config::Config;
 use crate::db::dao::{
     AgreementDao, AgreementEventsDao, NegotiationEventsDao, ProposalDao, SaveProposalError,
+    TakeEventsError,
 };
 use crate::db::model::{
     Agreement, AgreementEvent, AgreementId, AgreementState, AppSessionId, IssuerType, MarketEvent,
@@ -160,13 +161,13 @@ impl CommonBroker {
             }
             timeout = stop_time - Instant::now();
 
-            if let Err(error) = notifier.wait_for_event_with_timeout(timeout).await {
-                return match error {
+            if let Err(e) = notifier.wait_for_event_with_timeout(timeout).await {
+                return match e {
                     NotifierError::Timeout(_) => Ok(vec![]),
                     NotifierError::ChannelClosed(_) => {
-                        Err(QueryEventsError::Internal(error.to_string()))
+                        Err(QueryEventsError::Internal(e.to_string()))
                     }
-                    NotifierError::Unsubscribed(id) => Err(QueryEventsError::Unsubscribed(id)),
+                    NotifierError::Unsubscribed(id) => Err(TakeEventsError::NotFound(id).into()),
                 };
             }
             // Ok result means, that event with required subscription id was added.
