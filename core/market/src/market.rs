@@ -271,6 +271,19 @@ impl MarketService {
             .map(|event| event.into_client())
             .collect())
     }
+
+    pub async fn terminate_agreement(
+        &self,
+        id: Identity,
+        agreement_id: AgreementId,
+        reason: Option<String>,
+    ) -> Result<(), AgreementError> {
+        // We won't attach ourselves too much to owner type here. It will be replaced in CommonBroker
+        self.requestor_engine
+            .common
+            .terminate_agreement(id, agreement_id, reason)
+            .await
+    }
 }
 
 impl Service for MarketService {

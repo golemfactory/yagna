@@ -14,6 +14,7 @@ use crate::testing::OwnerType;
 
 use ya_client::model::market::{NewDemand, NewOffer};
 use ya_client::model::NodeId;
+use ya_service_api_web::middleware::Identity;
 
 pub fn generate_proposal(
     unifier: i64,
@@ -64,12 +65,37 @@ pub async fn exchange_draft_proposals(
     req_name: &str,
     prov_name: &str,
 ) -> Result<NegotiationHelper, anyhow::Error> {
+    let req_id = network.get_default_id(req_name);
+    let prov_id = network.get_default_id(prov_name);
+
     exchange_proposals_impl(
         network,
         req_name,
         prov_name,
         &sample_offer(),
         &sample_demand(),
+        &req_id,
+        &prov_id,
+    )
+    .await
+}
+
+pub async fn exchange_proposals_exclusive_with_ids(
+    network: &MarketsNetwork,
+    req_name: &str,
+    prov_name: &str,
+    match_on: &str,
+    req_id: &Identity,
+    prov_id: &Identity,
+) -> Result<NegotiationHelper, anyhow::Error> {
+    exchange_proposals_impl(
+        network,
+        req_name,
+        prov_name,
+        &exclusive_offer(match_on),
+        &exclusive_demand(match_on),
+        &req_id,
+        &prov_id,
     )
     .await
 }
@@ -80,12 +106,17 @@ pub async fn exchange_proposals_exclusive(
     prov_name: &str,
     match_on: &str,
 ) -> Result<NegotiationHelper, anyhow::Error> {
+    let req_id = network.get_default_id(req_name);
+    let prov_id = network.get_default_id(prov_name);
+
     exchange_proposals_impl(
         network,
         req_name,
         prov_name,
         &exclusive_offer(match_on),
         &exclusive_demand(match_on),
+        &req_id,
+        &prov_id,
     )
     .await
 }
@@ -96,12 +127,11 @@ pub async fn exchange_proposals_impl(
     prov_name: &str,
     offer: &NewOffer,
     demand: &NewDemand,
+    req_id: &Identity,
+    prov_id: &Identity,
 ) -> Result<NegotiationHelper, anyhow::Error> {
     let req_mkt = network.get_market(req_name);
     let prov_mkt = network.get_market(prov_name);
-
-    let req_id = network.get_default_id(req_name);
-    let prov_id = network.get_default_id(prov_name);
 
     let demand_id = req_mkt.subscribe_demand(demand, &req_id).await?;
     let offer_id = prov_mkt.subscribe_offer(offer, &prov_id).await?;

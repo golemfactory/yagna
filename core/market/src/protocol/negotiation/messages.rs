@@ -9,6 +9,7 @@ use crate::db::model::{DbProposal, OwnerType, ProposalId, SubscriptionId};
 use super::super::callback::CallbackMessage;
 use super::error::{
     ApproveAgreementError, CounterProposalError, GsbAgreementError, GsbProposalError,
+    TerminateAgreementError,
 };
 use crate::protocol::negotiation::error::ProposeAgreementError;
 
@@ -149,6 +150,19 @@ impl RpcMessage for AgreementCancelled {
     const ID: &'static str = "AgreementCancelled";
     type Item = ();
     type Error = GsbAgreementError;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgreementTerminated {
+    pub agreement_id: AgreementId,
+    pub reason: Option<String>,
+}
+
+impl RpcMessage for AgreementTerminated {
+    const ID: &'static str = "AgreementTerminated";
+    type Item = ();
+    type Error = TerminateAgreementError;
 }
 
 /// The same messaged will be used on GSB and as messages in callbacks.
