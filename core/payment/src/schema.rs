@@ -32,6 +32,7 @@ table! {
         total_amount_due -> Text,
         total_amount_accepted -> Text,
         total_amount_paid -> Text,
+        app_session_id -> Nullable<Text>,
     }
 }
 
