@@ -138,7 +138,9 @@ impl ProviderAgent {
             .node_name
             .clone()
             .unwrap_or("provider".to_string());
-        args.market.session_id = format!("{}-[{}]", name, std::process::id());
+        let session_id = format!("{}-[{}]", name, std::process::id());
+        args.market.session_id = session_id.clone();
+        args.runner.session_id = session_id;
 
         let mut globals = GlobalsManager::try_new(&config.globals_file, args.node)?;
         globals.spawn_monitor(&config.globals_file)?;

@@ -20,6 +20,7 @@ table! {
         id -> Integer,
         activity_id -> Integer,
         identity_id -> Text,
+        app_session_id -> Nullable<Text>,
         event_date -> Timestamp,
         event_type_id -> Integer,
         requestor_pub_key -> Nullable<Binary>,

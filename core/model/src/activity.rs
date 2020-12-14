@@ -4,7 +4,7 @@
 //! Local and Exeunit are in dedicated submodules.
 use serde::{Deserialize, Serialize};
 
-use crate::market::Role;
+use crate::Role;
 use ya_client_model::activity::{
     ActivityState, ActivityUsage, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
     RuntimeEvent,
@@ -216,7 +216,7 @@ pub struct GetRunningCommand {
 
 impl RpcMessage for GetRunningCommand {
     const ID: &'static str = "GetRunningCommand";
-    type Item = ExeScriptCommandState;
+    type Item = Vec<ExeScriptCommandState>;
     type Error = RpcMessageError;
 }
 
