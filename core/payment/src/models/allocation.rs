@@ -15,6 +15,21 @@ pub struct WriteObj {
     pub total_amount: BigDecimalField,
     pub spent_amount: BigDecimalField,
     pub remaining_amount: BigDecimalField,
+    pub timeout: Option<NaiveDateTime>,
+    pub make_deposit: bool,
+    pub released: bool,
+}
+
+#[derive(Queryable, Debug, Identifiable)]
+#[table_name = "pay_allocation"]
+pub struct ReadObj {
+    pub id: String,
+    pub owner_id: NodeId,
+    pub payment_platform: String,
+    pub address: String,
+    pub total_amount: BigDecimalField,
+    pub spent_amount: BigDecimalField,
+    pub remaining_amount: BigDecimalField,
     pub timestamp: NaiveDateTime,
     pub timeout: Option<NaiveDateTime>,
     pub make_deposit: bool,
@@ -36,7 +51,6 @@ impl WriteObj {
             total_amount: allocation.total_amount.clone().into(),
             spent_amount: Default::default(),
             remaining_amount: allocation.total_amount.into(),
-            timestamp: Utc::now().naive_utc(),
             timeout: allocation.timeout.map(|v| v.naive_utc()),
             make_deposit: allocation.make_deposit,
             released: false,
@@ -44,8 +58,8 @@ impl WriteObj {
     }
 }
 
-impl From<WriteObj> for Allocation {
-    fn from(allocation: WriteObj) -> Self {
+impl From<ReadObj> for Allocation {
+    fn from(allocation: ReadObj) -> Self {
         Self {
             allocation_id: allocation.id,
             address: allocation.address,
@@ -59,5 +73,3 @@ impl From<WriteObj> for Allocation {
         }
     }
 }
-
-pub type ReadObj = WriteObj;
