@@ -9,7 +9,7 @@ use ya_service_api_interfaces::Provider;
 use crate::metrics::Metrics;
 
 const YAGNA_METRICS_URL_ENV_VAR: &str = "YAGNA_METRICS_URL";
-const DEFAULT_YAGNA_METRICS_URL: &str = "http://metrics.golem.network:9091/";
+const DEFAULT_YAGNA_METRICS_URL: &str = "https://metrics.golem.network:9092/";
 
 // TODO: enable showing metrics also via CLI
 #[derive(structopt::StructOpt, Debug)]
