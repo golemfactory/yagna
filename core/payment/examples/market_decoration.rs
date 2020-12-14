@@ -42,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
 
     log::info!("Decorating demand...");
     let requestor: PaymentRequestorApi = client.interface()?;
-    let decoration = requestor.decorate_demand(allocation_ids).await?;
+    let decoration = requestor.get_demand_decorations(allocation_ids).await?;
     log::info!("Properties: {:?}", decoration.properties);
     log::info!("Constraints: {:?}", decoration.constraints);
 
