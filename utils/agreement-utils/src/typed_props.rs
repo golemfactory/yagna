@@ -1,22 +1,23 @@
 use crate::OfferTemplate;
+use serde_json::Value;
 
 pub trait OfferBuilder {
-    fn build(&self) -> serde_json::Value;
+    fn build(&self) -> Value;
 }
 
 #[derive(Clone)]
 pub struct OfferDefinition {
     pub node_info: NodeInfo,
-    pub service: ServiceInfo,
+    pub srv_info: ServiceInfo,
     pub com_info: ComInfo,
     pub offer: OfferTemplate,
 }
 
 impl OfferDefinition {
-    pub fn into_json(self) -> serde_json::Value {
+    pub fn into_json(self) -> Value {
         let mut base = serde_json::Map::new();
         self.node_info.write_json(&mut base);
-        self.service.write_json(&mut base);
+        self.srv_info.write_json(&mut base);
         self.com_info.write_json(&mut base);
 
         let template = OfferTemplate::new(serde_json::json!({ "golem": base }));
@@ -45,7 +46,7 @@ impl NodeInfo {
         self
     }
 
-    fn write_json(self, map: &mut serde_json::Map<String, serde_json::Value>) {
+    fn write_json(self, map: &mut serde_json::Map<String, Value>) {
         let mut node = serde_json::Map::new();
         if let Some(name) = self.name {
             let _ = node.insert("id".into(), serde_json::json!({ "name": name }));
@@ -63,17 +64,32 @@ impl NodeInfo {
 #[derive(Clone)]
 pub struct ServiceInfo {
     inf: InfNodeInfo,
-    exeunit_info: serde_json::Value,
+    exeunit_info: Value,
+    multi_activity: bool,
 }
 
 impl ServiceInfo {
-    pub fn new(inf: InfNodeInfo, exeunit_info: serde_json::Value) -> ServiceInfo {
-        ServiceInfo { inf, exeunit_info }
+    pub fn new(inf: InfNodeInfo, exeunit_info: Value) -> ServiceInfo {
+        ServiceInfo {
+            inf,
+            exeunit_info,
+            multi_activity: true,
+        }
     }
 
-    fn write_json(self, map: &mut serde_json::Map<String, serde_json::Value>) {
+    pub fn support_multi_activity(self, multi_activity: bool) -> Self {
+        Self {
+            multi_activity,
+            ..self
+        }
+    }
+
+    fn write_json(self, map: &mut serde_json::Map<String, Value>) {
         self.inf.write_json(map);
         let _ = map.insert("runtime".into(), self.exeunit_info);
+
+        let srv_map = serde_json::json!({ "caps": {"multi-activity": self.multi_activity}});
+        let _ = map.insert("srv".into(), srv_map);
     }
 }
 
@@ -111,7 +127,7 @@ impl InfNodeInfo {
         }
     }
 
-    fn write_json(self, map: &mut serde_json::Map<String, serde_json::Value>) {
+    fn write_json(self, map: &mut serde_json::Map<String, Value>) {
         let mut inf_map = serde_json::Map::new();
         if let Some(mem) = self.mem_gib {
             let _ = inf_map.insert("mem".to_string(), serde_json::json!({ "gib": mem }));
@@ -146,7 +162,7 @@ impl CpuInfo {
         }
     }
 
-    fn write_json(self, map: &mut serde_json::Map<String, serde_json::Value>) {
+    fn write_json(self, map: &mut serde_json::Map<String, Value>) {
         let _ = map.insert(
             "cpu".to_string(),
             serde_json::json!({
@@ -160,11 +176,11 @@ impl CpuInfo {
 
 #[derive(Default, Clone)]
 pub struct ComInfo {
-    pub params: serde_json::Value,
+    pub params: Value,
 }
 
 impl ComInfo {
-    fn write_json(self, map: &mut serde_json::Map<String, serde_json::Value>) {
+    fn write_json(self, map: &mut serde_json::Map<String, Value>) {
         let _ = map.insert("com".to_string(), self.params.clone());
     }
 }
@@ -187,9 +203,10 @@ mod test {
     fn test_wasm_1() {
         let offer = OfferDefinition {
             node_info: NodeInfo::with_name("dany"),
-            service: ServiceInfo {
+            srv_info: ServiceInfo {
                 inf: InfNodeInfo::default().with_mem(5.0).with_storage(50.0),
                 exeunit_info: serde_json::json!({"wasm.wasi.version@v".to_string(): "0.9.0".to_string()}),
+                multi_activity: false,
             },
             com_info: Default::default(),
             offer: OfferTemplate::default(),

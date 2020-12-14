@@ -1,6 +1,6 @@
 use ya_agreement_utils::AgreementView;
 use ya_agreement_utils::OfferDefinition;
-use ya_client_model::market::{NewOffer, Proposal};
+use ya_client_model::market::{NewOffer, Proposal, Reason};
 
 use super::negotiator::Negotiator;
 use crate::market::negotiator::{AgreementResponse, AgreementResult, ProposalResponse};
@@ -18,7 +18,11 @@ impl Negotiator for AcceptAllNegotiator {
         Ok(offer_definition_to_offer(offer.clone()))
     }
 
-    fn agreement_finalized(&mut self, _agreement_id: &str, _result: AgreementResult) -> Result<()> {
+    fn agreement_finalized(
+        &mut self,
+        _agreement_id: &str,
+        _result: &AgreementResult,
+    ) -> Result<()> {
         Ok(())
     }
 
@@ -65,7 +69,7 @@ impl Negotiator for LimitAgreementsNegotiator {
         Ok(offer_definition_to_offer(offer.clone()))
     }
 
-    fn agreement_finalized(&mut self, agreement_id: &str, _result: AgreementResult) -> Result<()> {
+    fn agreement_finalized(&mut self, agreement_id: &str, _result: &AgreementResult) -> Result<()> {
         self.active_agreements.remove(agreement_id);
 
         let free_slots = self.max_agreements as usize - self.active_agreements.len();
@@ -88,10 +92,10 @@ impl Negotiator for LimitAgreementsNegotiator {
                 demand.proposal_id
             );
             Ok(ProposalResponse::RejectProposal {
-                reason: Some(format!(
+                reason: Some(Reason::new(format!(
                     "Proposal expires at: {} which is less than 5 min or more than 30 min from now",
                     expiration
-                )),
+                ))),
             })
         } else if self.has_free_slot() {
             Ok(ProposalResponse::AcceptProposal)
@@ -101,10 +105,10 @@ impl Negotiator for LimitAgreementsNegotiator {
                 demand.proposal_id
             );
             Ok(ProposalResponse::RejectProposal {
-                reason: Some(format!(
+                reason: Some(Reason::new(format!(
                     "No capacity available. Reached Agreements limit: {}",
                     self.max_agreements
-                )),
+                ))),
             })
         }
     }
@@ -120,10 +124,10 @@ impl Negotiator for LimitAgreementsNegotiator {
                 agreement.agreement_id
             );
             Ok(AgreementResponse::RejectAgreement {
-                reason: Some(format!(
+                reason: Some(Reason::new(format!(
                     "No capacity available. Reached Agreements limit: {}",
                     self.max_agreements
-                )),
+                ))),
             })
         }
     }

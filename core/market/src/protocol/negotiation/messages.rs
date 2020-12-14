@@ -12,6 +12,7 @@ use super::error::{
     TerminateAgreementError,
 };
 use crate::protocol::negotiation::error::ProposeAgreementError;
+use ya_client::model::market::Reason;
 
 pub mod provider {
     pub fn proposal_addr(prefix: &str) -> String {
@@ -156,7 +157,7 @@ impl RpcMessage for AgreementCancelled {
 #[serde(rename_all = "camelCase")]
 pub struct AgreementTerminated {
     pub agreement_id: AgreementId,
-    pub reason: Option<String>,
+    pub reason: Option<Reason>,
 }
 
 impl RpcMessage for AgreementTerminated {
@@ -216,6 +217,13 @@ impl AgreementReceived {
     pub fn translate(mut self, owner: OwnerType) -> Self {
         self.agreement_id = self.agreement_id.translate(owner);
         self.proposal_id = self.proposal_id.translate(owner);
+        self
+    }
+}
+
+impl AgreementTerminated {
+    pub fn translate(mut self, owner: OwnerType) -> Self {
+        self.agreement_id = self.agreement_id.translate(owner);
         self
     }
 }

@@ -7,7 +7,7 @@ use serde_json::json;
 
 use ya_client::model::market::{
     agreement as client_agreement, Agreement, AgreementOperationEvent, Demand, NewDemand, NewOffer,
-    Offer, Proposal,
+    Offer, Proposal, Reason,
 };
 use ya_client::model::ErrorMessage;
 use ya_client::web::QueryParamsBuilder;
@@ -437,6 +437,7 @@ async fn test_terminate_agreement() -> anyhow::Result<()> {
         .await?
         .add_market_instance(PROV_NAME)
         .await?;
+
     let negotiation = negotiate_agreement(
         &network,
         REQ_NAME,
@@ -447,18 +448,23 @@ async fn test_terminate_agreement() -> anyhow::Result<()> {
     )
     .await
     .unwrap();
+
     let req_id = network.get_default_id(REQ_NAME);
     let prov_id = network.get_default_id(PROV_NAME);
-    let reason = serde_json::json!({"ala":"ma kota","message": "coś"}).to_string();
+
+    let reason = Reason {
+        message: "coś".into(),
+        extra: serde_json::json!({"ala":"ma kota"}),
+    };
     let url = format!(
-        "/market-api/v1/agreements/{}/terminate?{}",
+        "/market-api/v1/agreements/{}/terminate",
         negotiation.r_agreement.into_client(),
-        QueryParamsBuilder::new()
-            .put("reason", Some(reason))
-            .build()
     );
     log::info!("Requesting url: {}", url);
-    let req = test::TestRequest::post().uri(&url).to_request();
+    let req = test::TestRequest::post()
+        .uri(&url)
+        .set_json(&reason)
+        .to_request();
     let mut app = network.get_rest_app(REQ_NAME).await;
     let resp = test::call_service(&mut app, req).await;
 
