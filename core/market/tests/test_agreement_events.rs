@@ -8,7 +8,7 @@ use ya_market::testing::MarketsNetwork;
 use ya_market::testing::{ApprovalStatus, OwnerType};
 
 use ya_client::model::market::agreement_event::AgreementTerminator;
-use ya_client::model::market::{AgreementOperationEvent as AgreementEvent, ConvertReason, Reason};
+use ya_client::model::market::AgreementOperationEvent as AgreementEvent;
 
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";
@@ -233,12 +233,7 @@ async fn test_agreement_terminated_event() -> Result<()> {
             assert_eq!(agreement_id, &negotiation.p_agreement.into_client());
             assert_eq!(terminator, &AgreementTerminator::Provider);
             assert_ne!(reason, &None);
-
-            let reason = reason
-                .as_ref()
-                .map(|json| Reason::from_json_reason(json.clone()).unwrap())
-                .unwrap();
-            assert_eq!(&reason.message, "Expired");
+            assert_eq!(reason.as_ref().unwrap().message, "Expired");
         }
         _ => panic!("Expected AgreementEvent::AgreementTerminatedEvent"),
     };
@@ -261,11 +256,7 @@ async fn test_agreement_terminated_event() -> Result<()> {
             assert_eq!(terminator, &AgreementTerminator::Provider);
             assert!(reason.is_some());
 
-            let reason = reason
-                .as_ref()
-                .map(|json| Reason::from_json_reason(json.clone()).unwrap())
-                .unwrap();
-            assert_eq!(&reason.message, "Expired");
+            assert_eq!(reason.as_ref().unwrap().message, "Expired");
         }
         _ => panic!("Expected AgreementEvent::AgreementTerminatedEvent"),
     };

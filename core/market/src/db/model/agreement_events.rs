@@ -6,7 +6,7 @@ use crate::db::model::{AgreementId, OwnerType};
 use crate::db::schema::market_agreement_event;
 
 use ya_client::model::market::agreement_event::AgreementTerminator;
-use ya_client::model::market::{AgreementOperationEvent as ClientEvent, JsonReason};
+use ya_client::model::market::{AgreementOperationEvent as ClientEvent, Reason};
 use ya_diesel_utils::DbTextField;
 
 #[derive(
@@ -54,7 +54,7 @@ impl AgreementEvent {
         let event_date = DateTime::<Utc>::from_utc(self.timestamp, Utc);
         let reason = self
             .reason
-            .map(|reason| serde_json::from_str(&reason).map(|value| JsonReason {json: value}))
+            .map(|reason| serde_json::from_str::<Reason>(&reason))
             .map(|result| result.map_err(|e| {
                 log::warn!(
                     "Agreement Event with not parsable Reason in database. Error: {}. Shouldn't happen \
@@ -84,7 +84,7 @@ impl AgreementEvent {
                     OwnerType::Provider => AgreementTerminator::Provider,
                     OwnerType::Requestor => AgreementTerminator::Requestor,
                 },
-                event_date: event_date.to_rfc3339(), // TODO: this is bug in ya-client.
+                event_date,
                 reason,
                 signature: self.signature.unwrap_or_else(|| {
                     log::warn!("AgreementTerminatedEvent without signature in database. This shouldn't happen, because \

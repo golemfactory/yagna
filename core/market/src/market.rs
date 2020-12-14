@@ -21,6 +21,7 @@ use crate::rest_api;
 
 use ya_client::model::market::{
     Agreement, AgreementOperationEvent as ClientAgreementEvent, Demand, NewDemand, NewOffer, Offer,
+    Reason,
 };
 use ya_core_model::market::{local, BUS_ID};
 use ya_persistence::executor::DbExecutor;
@@ -161,6 +162,7 @@ impl MarketService {
         actix_web::web::scope(ya_client::model::market::MARKET_API_PATH)
             .data(myself)
             .app_data(rest_api::path_config())
+            .app_data(rest_api::json_config())
             .extend(rest_api::common::register_endpoints)
             .extend(rest_api::provider::register_endpoints)
             .extend(rest_api::requestor::register_endpoints)
@@ -276,7 +278,7 @@ impl MarketService {
         &self,
         id: Identity,
         agreement_id: AgreementId,
-        reason: Option<String>,
+        reason: Option<Reason>,
     ) -> Result<(), AgreementError> {
         // We won't attach ourselves too much to owner type here. It will be replaced in CommonBroker
         self.requestor_engine
