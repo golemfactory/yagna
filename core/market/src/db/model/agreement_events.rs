@@ -6,7 +6,9 @@ use crate::db::model::{AgreementId, OwnerType};
 use crate::db::schema::market_agreement_event;
 
 use ya_client::model::market::agreement_event::AgreementTerminator;
-use ya_client::model::market::{AgreementOperationEvent as ClientEvent, Reason};
+use ya_client::model::market::{
+    AgreementEventType as ClientEventType, AgreementOperationEvent as ClientEvent, Reason,
+};
 use ya_diesel_utils::DbTextField;
 
 #[derive(
@@ -64,33 +66,36 @@ impl AgreementEvent {
             .flatten();
 
         match self.event_type {
-            AgreementEventType::Approved => ClientEvent::AgreementApprovedEvent {
+            AgreementEventType::Approved => ClientEvent {
                 agreement_id,
                 event_date,
+                event_type: ClientEventType::AgreementApprovedEvent,
             },
-            AgreementEventType::Cancelled => ClientEvent::AgreementCancelledEvent {
+            AgreementEventType::Cancelled => ClientEvent {
                 agreement_id,
                 event_date,
-                reason,
+                event_type: ClientEventType::AgreementCancelledEvent { reason }
             },
-            AgreementEventType::Rejected => ClientEvent::AgreementRejectedEvent {
+            AgreementEventType::Rejected => ClientEvent {
                 agreement_id,
                 event_date,
-                reason,
+                event_type: ClientEventType::AgreementRejectedEvent { reason }
             },
-            AgreementEventType::Terminated => ClientEvent::AgreementTerminatedEvent {
+            AgreementEventType::Terminated => ClientEvent {
                 agreement_id,
-                terminator: match self.issuer {
-                    OwnerType::Provider => AgreementTerminator::Provider,
-                    OwnerType::Requestor => AgreementTerminator::Requestor,
-                },
                 event_date,
-                reason,
-                signature: self.signature.unwrap_or_else(|| {
-                    log::warn!("AgreementTerminatedEvent without signature in database. This shouldn't happen, because \
-                    Market is responsible for signing events and rejecting invalid signatures from other markets.");
-                    "".to_string()
-                }),
+                event_type: ClientEventType::AgreementTerminatedEvent {
+                    terminator: match self.issuer {
+                        OwnerType::Provider => AgreementTerminator::Provider,
+                        OwnerType::Requestor => AgreementTerminator::Requestor,
+                    },
+                    reason,
+                    signature: self.signature.unwrap_or_else(|| {
+                        log::warn!("AgreementTerminatedEvent without signature in database. This shouldn't happen, because \
+                                    Market is responsible for signing events and rejecting invalid signatures from other markets.");
+                        "".to_string()
+                    }),
+                }
             },
         }
     }

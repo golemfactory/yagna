@@ -2,6 +2,7 @@ use crate::error::Error;
 use crate::notify::Notify;
 use crate::output::CapturedOutput;
 use actix::Arbiter;
+use chrono::{DateTime, Utc};
 use futures::channel::{mpsc, oneshot};
 use futures::{SinkExt, StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
@@ -110,6 +111,7 @@ impl Batch {
                 message,
             } => {
                 let state = self.state(idx)?;
+                state.date = Utc::now();
                 state.message = message.clone();
                 state.result = Some(match return_code {
                     0 => CommandResult::Ok,
@@ -180,14 +182,14 @@ impl Batch {
             .take_while(|(_, s)| s.result.is_some())
             .map(|(idx, s)| {
                 let result = s.result.clone().unwrap();
-                let is_batch_finished = idx == last_idx || result == CommandResult::Error;
                 ExeScriptCommandResult {
                     index: idx as u32,
                     result,
                     stdout: s.stdout.output(),
                     stderr: s.stderr.output(),
                     message: s.message.clone(),
-                    is_batch_finished,
+                    is_batch_finished: idx == last_idx || result == CommandResult::Error,
+                    event_date: s.date,
                 }
             })
             .collect::<Vec<_>>()
@@ -270,25 +272,26 @@ pub(crate) struct CommandState {
     pub stdout: CapturedOutput,
     pub stderr: CapturedOutput,
     pub message: Option<String>,
+    pub date: DateTime<Utc>,
 }
 
 impl CommandState {
-    pub fn all() -> Self {
+    fn new(stdout: CapturedOutput, stderr: CapturedOutput) -> Self {
         CommandState {
             result: None,
-            stdout: CapturedOutput::all(),
-            stderr: CapturedOutput::all(),
+            stdout,
+            stderr,
             message: None,
+            date: Utc::now(),
         }
     }
 
+    pub fn all() -> Self {
+        Self::new(CapturedOutput::all(), CapturedOutput::all())
+    }
+
     pub fn discard() -> Self {
-        CommandState {
-            result: None,
-            stdout: CapturedOutput::discard(),
-            stderr: CapturedOutput::discard(),
-            message: None,
-        }
+        Self::new(CapturedOutput::discard(), CapturedOutput::discard())
     }
 
     #[allow(dead_code)]
@@ -313,12 +316,7 @@ impl<'c> From<&'c Option<Capture>> for CommandState {
 
 impl<'c> From<&'c Capture> for CommandState {
     fn from(capture: &'c Capture) -> Self {
-        CommandState {
-            result: None,
-            stdout: CapturedOutput::from(capture.stdout.clone()),
-            stderr: CapturedOutput::from(capture.stderr.clone()),
-            message: None,
-        }
+        Self::new(capture.stdout.clone().into(), capture.stderr.clone().into())
     }
 }
 

@@ -13,8 +13,7 @@ use std::sync::Arc;
 use ya_agreement_utils::{AgreementView, OfferDefinition};
 use ya_client::market::MarketProviderApi;
 use ya_client_model::market::{
-    agreement_event::AgreementTerminator, Agreement, AgreementOperationEvent as AgreementEvent,
-    NewOffer, Proposal, ProviderEvent, Reason,
+    agreement_event::AgreementTerminator, Agreement, NewOffer, Proposal, ProviderEvent, Reason,
 };
 use ya_utils_actix::{
     actix_handler::ResultTypeGetter,
@@ -29,6 +28,7 @@ use crate::market::config::MarketConfig;
 use crate::market::mock_negotiator::LimitAgreementsNegotiator;
 use crate::market::termination_reason::GolemReason;
 use crate::tasks::{AgreementBroken, AgreementClosed, CloseAgreement};
+use ya_client_model::market::agreement_event::AgreementEventType;
 
 // =========================================== //
 // Public exposed messages
@@ -227,9 +227,7 @@ impl ProviderMarket {
     ) -> Result<()> {
         log::info!("Got approved agreement [{}].", msg.agreement.agreement_id,);
         // At this moment we only forward agreement to outside world.
-        self.agreement_signed_signal.send_signal(AgreementApproved {
-            agreement: msg.agreement,
-        })
+        self.agreement_signed_signal.send_signal(msg)
     }
 
     // =========================================== //
@@ -351,7 +349,7 @@ async fn process_proposal(
             ProposalResponse::IgnoreProposal => log::info!("Ignoring proposal {:?}", proposal_id),
             ProposalResponse::RejectProposal { reason } => {
                 ctx.api
-                    .reject_proposal_with_reason(&subscription.id, proposal_id, &reason)
+                    .reject_proposal(&subscription.id, proposal_id, &reason)
                     .await?;
             }
         },
@@ -463,13 +461,12 @@ async fn collect_agreement_events(ctx: AsyncCtx) {
         };
 
         for event in events {
-            match event {
-                AgreementEvent::AgreementTerminatedEvent {
-                    agreement_id,
-                    reason,
-                    terminator,
-                    event_date,
-                    ..
+            last_timestamp = event.event_date;
+            let agreement_id = event.agreement_id.clone();
+
+            match event.event_type {
+                AgreementEventType::AgreementTerminatedEvent {
+                    reason, terminator, ..
                 } => {
                     // Ignore events sent in reaction to termination by us.
                     if terminator == AgreementTerminator::Requestor {
@@ -480,13 +477,9 @@ async fn collect_agreement_events(ctx: AsyncCtx) {
                         };
                         ctx.market.send(msg).await.ok();
                     }
-                    last_timestamp = event_date
                 }
-                AgreementEvent::AgreementApprovedEvent { event_date, .. }
-                | AgreementEvent::AgreementRejectedEvent { event_date, .. }
-                | AgreementEvent::AgreementCancelledEvent { event_date, .. } => {
+                _ => {
                     log::trace!("Got: {:?}", event);
-                    last_timestamp = event_date;
                     continue;
                 }
             }
