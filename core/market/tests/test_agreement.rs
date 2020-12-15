@@ -38,9 +38,21 @@ async fn test_gsb_get_agreement() {
     let prov_id = network.get_default_id(PROV_NAME);
 
     let agreement_id = req_engine
-        .create_agreement(req_id.clone(), &proposal_id, Utc::now())
+        .create_agreement(
+            req_id.clone(),
+            &proposal_id,
+            Utc::now() + Duration::hours(1),
+        )
         .await
         .unwrap();
+
+    // than: confirm agreement with app_session_id
+    let sess_id = Some("sess-ajdi".into());
+    req_engine
+        .confirm_agreement(req_id.clone(), &agreement_id, sess_id.clone())
+        .await
+        .unwrap();
+
     let agreement = bus::service(network.node_gsb_prefixes(REQ_NAME).0)
         .send(market::GetAgreement {
             agreement_id: agreement_id.into_client(),
@@ -51,6 +63,7 @@ async fn test_gsb_get_agreement() {
     assert_eq!(agreement.agreement_id, agreement_id.into_client());
     assert_eq!(agreement.demand.requestor_id, req_id.identity);
     assert_eq!(agreement.offer.provider_id, prov_id.identity);
+    assert_eq!(agreement.app_session_id, sess_id);
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
