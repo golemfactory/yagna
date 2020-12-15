@@ -9,13 +9,13 @@ use ya_client::model::market::proposal::State;
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_get_proposal() -> Result<(), anyhow::Error> {
+async fn test_get_proposal() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Requestor1")
-        .await?
+        .await
         .add_market_instance("Provider1")
-        .await?;
+        .await;
 
     let req_market = network.get_market("Requestor1");
     let prov_market = network.get_market("Provider1");
@@ -23,12 +23,13 @@ async fn test_get_proposal() -> Result<(), anyhow::Error> {
 
     // Requestor side
     let proposal_id = exchange_draft_proposals(&network, "Requestor1", "Provider1")
-        .await?
+        .await
+        .unwrap()
         .proposal_id;
     let result = req_market.get_proposal(&proposal_id).await;
 
     assert!(result.is_ok());
-    let proposal = result.unwrap().into_client()?;
+    let proposal = result.unwrap().into_client().unwrap();
 
     assert_eq!(proposal.state, State::Draft);
     assert_eq!(proposal.proposal_id, proposal_id.to_string());
@@ -40,31 +41,32 @@ async fn test_get_proposal() -> Result<(), anyhow::Error> {
     let result = prov_market.get_proposal(&proposal_id).await;
 
     assert!(result.is_ok());
-    let proposal = result.unwrap().into_client()?;
+    let proposal = result.unwrap().into_client().unwrap();
 
     assert_eq!(proposal.state, State::Draft);
     assert_eq!(proposal.proposal_id, proposal_id.to_string());
     assert_eq!(proposal.issuer_id, prov_id.identity);
     assert!(proposal.prev_proposal_id().is_ok());
-    Ok(())
 }
 
 /// Try to query not existing Proposal.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_get_proposal_not_found() -> Result<(), anyhow::Error> {
+async fn test_get_proposal_not_found() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Requestor1")
-        .await?
+        .await
         .add_market_instance("Provider1")
-        .await?;
+        .await;
 
     let req_market = network.get_market("Requestor1");
 
     // Create some Proposals, that will be unused.
-    exchange_draft_proposals(&network, "Requestor1", "Provider1").await?;
+    exchange_draft_proposals(&network, "Requestor1", "Provider1")
+        .await
+        .unwrap();
 
     // Invalid id
     let proposal_id = "P-0000000000000000000000000000000000000000000000000000000000000003"
@@ -77,5 +79,4 @@ async fn test_get_proposal_not_found() -> Result<(), anyhow::Error> {
         ProposalError::Get(GetProposalError::NotFound(proposal_id, None)),
         result
     );
-    Ok(())
 }

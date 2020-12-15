@@ -1,5 +1,4 @@
 use actix_web::{http::StatusCode, test, web::Bytes};
-use anyhow::Result;
 use chrono::{Duration, Utc};
 
 use ya_core_model::market;
@@ -22,16 +21,17 @@ const PROV_NAME: &str = "Node-2";
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_gsb_get_agreement() -> Result<()> {
+async fn test_gsb_get_agreement() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
-        .await?
+        .await
+        .unwrap()
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
@@ -40,32 +40,34 @@ async fn test_gsb_get_agreement() -> Result<()> {
 
     let agreement_id = req_engine
         .create_agreement(req_id.clone(), &proposal_id, Utc::now())
-        .await?;
-
+        .await
+        .unwrap();
     let agreement = bus::service(network.node_gsb_prefixes(REQ_NAME).0)
         .send(market::GetAgreement::as_requestor(
             agreement_id.into_client(),
         ))
-        .await??;
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(agreement.agreement_id, agreement_id.into_client());
     assert_eq!(agreement.demand.requestor_id, req_id.identity);
     assert_eq!(agreement.offer.provider_id, prov_id.identity);
-    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_get_agreement() -> Result<()> {
+async fn test_get_agreement() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
-        .await?
+        .await
+        .unwrap()
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
@@ -74,28 +76,32 @@ async fn test_get_agreement() -> Result<()> {
 
     let agreement_id = req_engine
         .create_agreement(req_id.clone(), &proposal_id, Utc::now())
-        .await?;
+        .await
+        .unwrap();
 
-    let agreement = req_market.get_agreement(&agreement_id, &req_id).await?;
+    let agreement = req_market
+        .get_agreement(&agreement_id, &req_id)
+        .await
+        .unwrap();
     assert_eq!(agreement.agreement_id, agreement_id.into_client());
     assert_eq!(agreement.demand.requestor_id, req_id.identity);
     assert_eq!(agreement.offer.provider_id, prov_id.identity);
-    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_rest_get_not_existing_agreement() -> Result<()> {
+async fn test_rest_get_not_existing_agreement() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
-        .await?
+        .await
+        .unwrap()
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
@@ -105,7 +111,8 @@ async fn test_rest_get_not_existing_agreement() -> Result<()> {
     // something, that can't be found on Requestor.
     let agreement_id = req_engine
         .create_agreement(req_id.clone(), &proposal_id, Utc::now())
-        .await?
+        .await
+        .unwrap()
         .translate(Owner::Provider);
 
     let result = req_market.get_agreement(&agreement_id, &req_id).await;
@@ -114,22 +121,22 @@ async fn test_rest_get_not_existing_agreement() -> Result<()> {
         AgreementError::NotFound(agreement_id.clone()).to_string(),
         result
     );
-    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn full_market_interaction_aka_happy_path() -> Result<()> {
+async fn full_market_interaction_aka_happy_path() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
-        .await?
+        .await
+        .unwrap()
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
@@ -142,12 +149,14 @@ async fn full_market_interaction_aka_happy_path() -> Result<()> {
             &proposal_id,
             Utc::now() + Duration::hours(1),
         )
-        .await?;
+        .await
+        .unwrap();
 
     assert_eq!(
         req_market
             .get_proposal_from_db(&proposal_id)
-            .await?
+            .await
+            .unwrap()
             .body
             .state,
         ProposalState::Accepted
@@ -156,7 +165,8 @@ async fn full_market_interaction_aka_happy_path() -> Result<()> {
     // Confirms it immediately
     req_engine
         .confirm_agreement(req_id.clone(), &agreement_id, None)
-        .await?;
+        .await
+        .unwrap();
 
     // And starts waiting for Agreement approval by Provider
     let agr_id = agreement_id.clone();
@@ -164,10 +174,10 @@ async fn full_market_interaction_aka_happy_path() -> Result<()> {
         let approval_status = req_market
             .requestor_engine
             .wait_for_approval(&agr_id, 0.1)
-            .await?;
+            .await
+            .unwrap();
 
         assert_eq!(approval_status, ApprovalStatus::Approved);
-        Result::<(), anyhow::Error>::Ok(())
     });
 
     // Provider approves the Agreement and waits for ack
@@ -180,30 +190,33 @@ async fn full_market_interaction_aka_happy_path() -> Result<()> {
             None,
             0.1,
         )
-        .await?;
+        .await
+        .unwrap();
 
     // Protect from eternal waiting.
-    tokio::time::timeout(Duration::milliseconds(150).to_std()?, query_handle).await???;
-
-    Ok(())
+    tokio::time::timeout(Duration::milliseconds(150).to_std().unwrap(), query_handle)
+        .await
+        .unwrap()
+        .unwrap();
 }
 
 /// Requestor can't counter the same Proposal for the second time.
-// TODO: Should it be allowed after expiration?? For sure it shouldn't be allowed
+// TODO: Should it be allowed after expiration.unwrap().unwrap() For sure it shouldn't be allowed
 // TODO: after rejection, because rejection always ends negotiations.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn second_creation_should_fail() -> Result<()> {
+async fn second_creation_should_fail() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
-        .await?
+        .await
+        .unwrap()
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
@@ -212,7 +225,8 @@ async fn second_creation_should_fail() -> Result<()> {
     // when: expiration time is now
     let agreement_id = req_engine
         .create_agreement(req_id.clone(), &proposal_id, Utc::now())
-        .await?;
+        .await
+        .unwrap();
 
     let result = req_engine
         .create_agreement(req_id.clone(), &proposal_id, Utc::now())
@@ -222,23 +236,22 @@ async fn second_creation_should_fail() -> Result<()> {
         AgreementError::AlreadyExists(agreement_id, proposal_id),
         result,
     );
-
-    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn second_confirmation_should_fail() -> Result<()> {
+async fn second_confirmation_should_fail() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
-        .await?
+        .await
+        .unwrap()
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
@@ -251,12 +264,14 @@ async fn second_confirmation_should_fail() -> Result<()> {
             &proposal_id,
             Utc::now() + Duration::hours(1),
         )
-        .await?;
+        .await
+        .unwrap();
 
     // than: first try to confirm agreement should pass
     req_engine
         .confirm_agreement(req_id.clone(), &agreement_id, None)
-        .await?;
+        .await
+        .unwrap();
 
     // but second should fail
     let result = req_engine
@@ -266,23 +281,22 @@ async fn second_confirmation_should_fail() -> Result<()> {
         AgreementError::InvalidState(AgreementStateError::Confirmed(agreement_id)),
         result,
     );
-
-    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn agreement_expired_before_confirmation() -> Result<()> {
+async fn agreement_expired_before_confirmation() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
-        .await?
+        .await
+        .unwrap()
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
@@ -291,10 +305,11 @@ async fn agreement_expired_before_confirmation() -> Result<()> {
     // when: expiration time is now
     let agreement_id = req_engine
         .create_agreement(req_id.clone(), &proposal_id, Utc::now())
-        .await?;
+        .await
+        .unwrap();
 
     // try to wait a bit, because CI on Windows is failing here...
-    tokio::time::delay_for(Duration::milliseconds(50).to_std()?).await;
+    tokio::time::delay_for(Duration::milliseconds(50).to_std().unwrap()).await;
 
     // than: a try to confirm agreement...
     let result = req_engine
@@ -306,23 +321,22 @@ async fn agreement_expired_before_confirmation() -> Result<()> {
         AgreementError::InvalidState(AgreementStateError::Expired(agreement_id)),
         result,
     );
-
-    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn agreement_expired_before_approval() -> Result<()> {
+async fn agreement_expired_before_approval() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
-        .await?
+        .await
+        .unwrap()
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
@@ -335,37 +349,38 @@ async fn agreement_expired_before_approval() -> Result<()> {
             &proposal_id,
             Utc::now() + Duration::milliseconds(30),
         )
-        .await?;
+        .await
+        .unwrap();
 
     // than: immediate confirm agreement should pass
     req_engine
         .confirm_agreement(req_id.clone(), &agreement_id, None)
-        .await?;
+        .await
+        .unwrap();
 
-    tokio::time::delay_for(Duration::milliseconds(50).to_std()?).await;
+    tokio::time::delay_for(Duration::milliseconds(50).to_std().unwrap()).await;
 
     // waiting for approval results with Expired error
     // bc Provider does not approve the Agreement
     let result = req_engine.wait_for_approval(&agreement_id, 0.1).await;
 
     assert_err_eq!(WaitForApprovalError::Expired(agreement_id), result);
-
-    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn waiting_wo_confirmation_should_fail() -> Result<()> {
+async fn waiting_wo_confirmation_should_fail() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
-        .await?
+        .await
+        .unwrap()
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
@@ -378,28 +393,28 @@ async fn waiting_wo_confirmation_should_fail() -> Result<()> {
             &proposal_id,
             Utc::now() + Duration::hours(1),
         )
-        .await?;
+        .await
+        .unwrap();
 
     // waiting for approval results with not confirmed error
     let result = req_engine.wait_for_approval(&agreement_id, 0.1).await;
     assert_err_eq!(WaitForApprovalError::NotConfirmed(agreement_id), result);
-
-    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn approval_before_confirmation_should_fail() -> Result<()> {
+async fn approval_before_confirmation_should_fail() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
-        .await?
+        .await
+        .unwrap()
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
@@ -413,7 +428,8 @@ async fn approval_before_confirmation_should_fail() -> Result<()> {
             &proposal_id,
             Utc::now() + Duration::hours(1),
         )
-        .await?;
+        .await
+        .unwrap();
 
     // Provider tries to approve the Agreement
     let result = network
@@ -425,23 +441,22 @@ async fn approval_before_confirmation_should_fail() -> Result<()> {
     // ... which results in not found error, bc there was no confirmation
     // so Requestor did not send an Agreement
     assert_err_eq!(AgreementError::NotFound(agreement_id), result);
-
-    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn approval_without_waiting_should_pass() -> Result<()> {
+async fn approval_without_waiting_should_pass() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
-        .await?
+        .await
+        .unwrap()
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
@@ -455,12 +470,14 @@ async fn approval_without_waiting_should_pass() -> Result<()> {
             &proposal_id,
             Utc::now() + Duration::hours(1),
         )
-        .await?;
+        .await
+        .unwrap();
 
     // Confirms it immediately
     req_engine
         .confirm_agreement(req_id.clone(), &agreement_id, None)
-        .await?;
+        .await
+        .unwrap();
 
     // Provider successfully approves the Agreement
     // even though Requestor does not wait for it
@@ -473,24 +490,24 @@ async fn approval_without_waiting_should_pass() -> Result<()> {
             None,
             0.1,
         )
-        .await?;
-
-    Ok(())
+        .await
+        .unwrap();
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn waiting_after_approval_should_pass() -> Result<()> {
+async fn waiting_after_approval_should_pass() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
-        .await?
+        .await
+        .unwrap()
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
@@ -504,12 +521,14 @@ async fn waiting_after_approval_should_pass() -> Result<()> {
             &proposal_id,
             Utc::now() + Duration::hours(1),
         )
-        .await?;
+        .await
+        .unwrap();
 
     // Confirms it immediately
     req_engine
         .confirm_agreement(req_id.clone(), &agreement_id, None)
-        .await?;
+        .await
+        .unwrap();
 
     // Provider successfully approves the Agreement
     network
@@ -521,28 +540,31 @@ async fn waiting_after_approval_should_pass() -> Result<()> {
             None,
             0.1,
         )
-        .await?;
+        .await
+        .unwrap();
 
     // Requestor successfully waits for the Agreement approval
-    let approval_status = req_engine.wait_for_approval(&agreement_id, 0.1).await?;
+    let approval_status = req_engine
+        .wait_for_approval(&agreement_id, 0.1)
+        .await
+        .unwrap();
     assert_eq!(approval_status, ApprovalStatus::Approved);
-
-    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn second_approval_should_fail() -> Result<()> {
+async fn second_approval_should_fail() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
-        .await?
+        .await
+        .unwrap()
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
@@ -556,12 +578,14 @@ async fn second_approval_should_fail() -> Result<()> {
             &proposal_id,
             Utc::now() + Duration::hours(1),
         )
-        .await?;
+        .await
+        .unwrap();
 
     // Confirms it immediately
     req_engine
         .confirm_agreement(req_id.clone(), &agreement_id, None)
-        .await?;
+        .await
+        .unwrap();
 
     // Provider successfully approves the Agreement
     // even though Requestor does not wait for it
@@ -575,7 +599,8 @@ async fn second_approval_should_fail() -> Result<()> {
             None,
             0.1,
         )
-        .await?;
+        .await
+        .unwrap();
 
     // ... but second fails
     let result = prov_market
@@ -591,23 +616,22 @@ async fn second_approval_should_fail() -> Result<()> {
         AgreementError::InvalidState(AgreementStateError::Approved(agreement_id)),
         result
     );
-
-    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn second_waiting_should_pass() -> Result<()> {
+async fn second_waiting_should_pass() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
-        .await?
+        .await
+        .unwrap()
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
@@ -620,12 +644,14 @@ async fn second_waiting_should_pass() -> Result<()> {
             &proposal_id,
             Utc::now() + Duration::hours(1),
         )
-        .await?;
+        .await
+        .unwrap();
 
     // Confirms it immediately
     req_engine
         .confirm_agreement(req_id.clone(), &agreement_id, None)
-        .await?;
+        .await
+        .unwrap();
 
     // Provider successfully approves the Agreement
     let prov_id = network.get_default_id(PROV_NAME);
@@ -638,32 +664,38 @@ async fn second_waiting_should_pass() -> Result<()> {
             None,
             0.1,
         )
-        .await?;
+        .await
+        .unwrap();
 
     // Requestor successfully waits for the Agreement approval first time
-    let approval_status = req_engine.wait_for_approval(&agreement_id, 0.1).await?;
+    let approval_status = req_engine
+        .wait_for_approval(&agreement_id, 0.1)
+        .await
+        .unwrap();
     assert_eq!(approval_status, ApprovalStatus::Approved);
 
     // second wait should also succeed
-    let approval_status = req_engine.wait_for_approval(&agreement_id, 0.1).await?;
+    let approval_status = req_engine
+        .wait_for_approval(&agreement_id, 0.1)
+        .await
+        .unwrap();
     assert_eq!(approval_status, ApprovalStatus::Approved);
-
-    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn net_err_while_confirming() -> Result<()> {
+async fn net_err_while_confirming() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
-        .await?
+        .await
+        .unwrap()
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
@@ -676,10 +708,11 @@ async fn net_err_while_confirming() -> Result<()> {
             &proposal_id,
             Utc::now() + Duration::hours(1),
         )
-        .await?;
+        .await
+        .unwrap();
 
     // when
-    network.break_networking_for(PROV_NAME)?;
+    network.break_networking_for(PROV_NAME).unwrap();
 
     // then confirm should
     let result = req_engine
@@ -689,23 +722,22 @@ async fn net_err_while_confirming() -> Result<()> {
         AgreementError::ProtocolCreate(_) => (),
         e => panic!("expected protocol error, but got: {}", e),
     };
-
-    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn net_err_while_approving() -> Result<()> {
+async fn net_err_while_approving() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
-        .await?
+        .await
+        .unwrap()
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
@@ -718,15 +750,17 @@ async fn net_err_while_approving() -> Result<()> {
             &proposal_id,
             Utc::now() + Duration::hours(1),
         )
-        .await?;
+        .await
+        .unwrap();
 
     // Confirms it immediately
     req_engine
         .confirm_agreement(req_id.clone(), &agreement_id, None)
-        .await?;
+        .await
+        .unwrap();
 
     // when
-    network.break_networking_for(REQ_NAME)?;
+    network.break_networking_for(REQ_NAME).unwrap();
 
     // then approve should fail
     let prov_id = network.get_default_id(PROV_NAME);
@@ -745,8 +779,6 @@ async fn net_err_while_approving() -> Result<()> {
         AgreementError::ProtocolApprove(_) => (),
         e => panic!("expected protocol error, but got: {}", e),
     };
-
-    Ok(())
 }
 
 /// Requestor can create Agreements only from Proposals, that came from Provider.
@@ -754,19 +786,21 @@ async fn net_err_while_approving() -> Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn cant_promote_requestor_proposal() -> Result<()> {
+async fn cant_promote_requestor_proposal() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let NegotiationHelper {
         proposal_id,
         demand_id,
         ..
-    } = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    } = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await
+        .unwrap();
 
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
@@ -776,7 +810,8 @@ async fn cant_promote_requestor_proposal() -> Result<()> {
     let our_proposal_id = req_market
         .requestor_engine
         .counter_proposal(&demand_id, &proposal_id, &our_proposal, &req_id)
-        .await?;
+        .await
+        .unwrap();
 
     // Requestor tries to promote his own Proposal to Agreement.
     match req_engine
@@ -790,7 +825,6 @@ async fn cant_promote_requestor_proposal() -> Result<()> {
         Err(AgreementError::OwnProposal(id)) => assert_eq!(id, our_proposal_id),
         e => panic!("Expected AgreementError::OwnProposal, got: {:?}", e),
     }
-    Ok(())
 }
 
 /// Requestor can't create Agreement from initial Proposal. At least one step
@@ -798,13 +832,13 @@ async fn cant_promote_requestor_proposal() -> Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn cant_promote_initial_proposal() -> Result<()> {
+async fn cant_promote_initial_proposal() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let req_market = network.get_market(REQ_NAME);
     let req_identity = network.get_default_id(REQ_NAME);
@@ -813,13 +847,17 @@ async fn cant_promote_initial_proposal() -> Result<()> {
 
     let demand_id = req_market
         .subscribe_demand(&sample_demand(), &req_identity)
-        .await?;
+        .await
+        .unwrap();
     prov_market
         .subscribe_offer(&sample_offer(), &prov_identity)
-        .await?;
+        .await
+        .unwrap();
 
-    let proposal = requestor::query_proposal(&req_market, &demand_id, 1).await?;
-    let proposal_id = proposal.get_proposal_id()?;
+    let proposal = requestor::query_proposal(&req_market, &demand_id, 1)
+        .await
+        .unwrap();
+    let proposal_id = proposal.get_proposal_id().unwrap();
 
     match req_market
         .requestor_engine
@@ -833,7 +871,6 @@ async fn cant_promote_initial_proposal() -> Result<()> {
         Err(AgreementError::NoNegotiations(id)) => assert_eq!(id, proposal_id),
         e => panic!("Expected AgreementError::NoNegotiations, got: {:?}", e),
     }
-    Ok(())
 }
 
 /// Requestor can promote only last proposal in negotiation chain.
@@ -841,19 +878,21 @@ async fn cant_promote_initial_proposal() -> Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn cant_promote_not_last_proposal() -> Result<()> {
+async fn cant_promote_not_last_proposal() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let NegotiationHelper {
         proposal_id,
         demand_id,
         ..
-    } = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME).await?;
+    } = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await
+        .unwrap();
 
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
@@ -863,7 +902,8 @@ async fn cant_promote_not_last_proposal() -> Result<()> {
     req_market
         .requestor_engine
         .counter_proposal(&demand_id, &proposal_id, &our_proposal, &req_id)
-        .await?;
+        .await
+        .unwrap();
 
     // Requestor tries to promote Proposal that was already followed by
     // further negotiations.
@@ -878,27 +918,26 @@ async fn cant_promote_not_last_proposal() -> Result<()> {
         Err(AgreementError::ProposalCountered(id)) => assert_eq!(id, proposal_id),
         e => panic!("Expected AgreementError::ProposalCountered, got: {:?}", e),
     }
-    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_terminate() -> Result<()> {
+async fn test_terminate() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
     let req_market = network.get_market(REQ_NAME);
     let prov_market = network.get_market(PROV_NAME);
     let req_identity = network.get_default_id(REQ_NAME);
     let req_agreement_dao = req_market.db.as_dao::<AgreementDao>();
     let prov_agreement_dao = prov_market.db.as_dao::<AgreementDao>();
     let agreement_1 = generate_agreement(1, (Utc::now() + Duration::days(1)).naive_utc());
-    req_agreement_dao.save(agreement_1.clone()).await?;
-    prov_agreement_dao.save(agreement_1.clone()).await?;
+    req_agreement_dao.save(agreement_1.clone()).await.unwrap();
+    prov_agreement_dao.save(agreement_1.clone()).await.unwrap();
 
     let reason =
         serde_json::from_value(serde_json::json!({"ala":"ma kota","message": "coś"})).unwrap();
@@ -906,19 +945,18 @@ async fn test_terminate() -> Result<()> {
         .terminate_agreement(req_identity, agreement_1.id, Some(reason))
         .await
         .ok();
-    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_terminate_not_existing_agreement() -> Result<()> {
+async fn test_terminate_not_existing_agreement() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let req_market = network.get_market(REQ_NAME);
     let req_id = network.get_default_id(REQ_NAME);
@@ -948,7 +986,6 @@ async fn test_terminate_not_existing_agreement() -> Result<()> {
         AgreementError::NotFound(id) => assert_eq!(not_existing_agreement, id),
         e => panic!("Expected AgreementError::NotFound, got: {}", e),
     };
-    Ok(())
 }
 
 /// Terminate is allowed only in `Approved` state of Agreement.
@@ -957,16 +994,17 @@ async fn test_terminate_not_existing_agreement() -> Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_terminate_from_wrong_states() -> Result<()> {
+async fn test_terminate_from_wrong_states() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
-        .await?
+        .await
+        .unwrap()
         .proposal_id;
 
     let req_market = network.get_market(REQ_NAME);
@@ -980,7 +1018,8 @@ async fn test_terminate_from_wrong_states() -> Result<()> {
             &proposal_id,
             Utc::now() + Duration::hours(1),
         )
-        .await?;
+        .await
+        .unwrap();
 
     let result = req_market
         .terminate_agreement(
@@ -1001,7 +1040,8 @@ async fn test_terminate_from_wrong_states() -> Result<()> {
     req_market
         .requestor_engine
         .confirm_agreement(req_id.clone(), &agreement_id, None)
-        .await?;
+        .await
+        .unwrap();
 
     // Terminate can be done on both sides at this moment.
     let result = req_market
@@ -1033,7 +1073,6 @@ async fn test_terminate_from_wrong_states() -> Result<()> {
         }
         e => panic!("Wrong error returned, got: {:?}", e),
     };
-    Ok(())
 }
 
 /// We expect, that reason string is structured and can\
@@ -1041,13 +1080,13 @@ async fn test_terminate_from_wrong_states() -> Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_terminate_invalid_reason() -> Result<()> {
+async fn test_terminate_invalid_reason() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let agreement_id = negotiate_agreement(
         &network,
@@ -1084,5 +1123,4 @@ async fn test_terminate_invalid_reason() -> Result<()> {
 
     let resp = test::call_service(&mut app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-    Ok(())
 }

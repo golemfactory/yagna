@@ -27,13 +27,13 @@ const PROV_NAME: &str = "Node-2";
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_rest_get_offers() -> Result<(), anyhow::Error> {
+async fn test_rest_get_offers() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?
+        .await
         .add_market_instance("Node-2")
-        .await?;
+        .await;
 
     let market_local = network.get_market("Node-1");
     // Not really remote, but in this scenario will treat it as remote
@@ -46,18 +46,28 @@ async fn test_rest_get_offers() -> Result<(), anyhow::Error> {
     let offer_remote = NewOffer::new(json!({}), "()".to_string());
     let subscription_id_local = market_local
         .subscribe_offer(&offer_local, &identity_local)
-        .await?;
+        .await
+        .unwrap();
     let subscription_id_local_unsubscribed = market_local
         .subscribe_offer(&offer_local_unsubscribed, &identity_local)
-        .await?;
+        .await
+        .unwrap();
     market_local
         .unsubscribe_offer(&subscription_id_local_unsubscribed, &identity_local)
-        .await?;
+        .await
+        .unwrap();
     let subscription_id_remote = market_remote
         .subscribe_offer(&offer_remote, &identity_remote)
-        .await?;
-    let offer_local = market_local.get_offer(&subscription_id_local).await?;
-    let _offer_remote = market_remote.get_offer(&subscription_id_remote).await?;
+        .await
+        .unwrap();
+    let offer_local = market_local
+        .get_offer(&subscription_id_local)
+        .await
+        .unwrap();
+    let _offer_remote = market_remote
+        .get_offer(&subscription_id_remote)
+        .await
+        .unwrap();
 
     wait_for_bcast(1000, &market_remote, &subscription_id_local, true).await;
 
@@ -70,26 +80,26 @@ async fn test_rest_get_offers() -> Result<(), anyhow::Error> {
 
     assert_eq!(resp.status(), StatusCode::OK);
     let result: Vec<Offer> = read_response_json(resp).await;
-    assert_eq!(vec![offer_local.into_client_offer()?], result);
-    Ok(())
+    assert_eq!(vec![offer_local.into_client_offer().unwrap()], result);
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_rest_get_demands() -> Result<(), anyhow::Error> {
+async fn test_rest_get_demands() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?;
+        .await;
 
     let market_local = network.get_market("Node-1");
     let identity_local = network.get_default_id("Node-1");
     let demand_local = NewDemand::new(json!({}), "()".to_string());
     let subscription_id = market_local
         .subscribe_demand(&demand_local, &identity_local)
-        .await?;
-    let demand_local = market_local.get_demand(&subscription_id).await?;
+        .await
+        .unwrap();
+    let demand_local = market_local.get_demand(&subscription_id).await.unwrap();
 
     let mut app = network.get_rest_app("Node-1").await;
 
@@ -99,20 +109,18 @@ async fn test_rest_get_demands() -> Result<(), anyhow::Error> {
     let resp = test::call_service(&mut app, req).await;
     assert_eq!(resp.status(), StatusCode::OK);
     let result: Vec<Demand> = read_response_json(resp).await;
-    assert_eq!(vec![demand_local.into_client_demand()?], result);
-
-    Ok(())
+    assert_eq!(vec![demand_local.into_client_demand().unwrap()], result);
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_rest_invalid_subscription_id_should_return_400() -> anyhow::Result<()> {
+async fn test_rest_invalid_subscription_id_should_return_400() {
     // given
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?;
+        .await;
     let mut app = network.get_rest_app("Node-1").await;
 
     let req = test::TestRequest::delete()
@@ -134,18 +142,17 @@ async fn test_rest_invalid_subscription_id_should_return_400() -> anyhow::Result
         .to_string(),
         result.message.unwrap()
     );
-    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_rest_subscribe_unsubscribe_offer() -> anyhow::Result<()> {
+async fn test_rest_subscribe_unsubscribe_offer() {
     // given
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?;
+        .await;
     let mut app = network.get_rest_app("Node-1").await;
 
     let client_offer = sample_offer();
@@ -201,18 +208,17 @@ async fn test_rest_subscribe_unsubscribe_offer() -> anyhow::Result<()> {
         ModifyOfferError::AlreadyUnsubscribed(subscription_id.clone()).to_string(),
         result.message.unwrap()
     );
-    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_rest_subscribe_unsubscribe_demand() -> anyhow::Result<()> {
+async fn test_rest_subscribe_unsubscribe_demand() {
     // given
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?;
+        .await;
     let mut app = network.get_rest_app("Node-1").await;
 
     let client_demand = sample_demand();
@@ -268,35 +274,36 @@ async fn test_rest_subscribe_unsubscribe_demand() -> anyhow::Result<()> {
         DemandError::NotFound(subscription_id.clone()).to_string(),
         result.message.unwrap()
     );
-    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_rest_get_proposal() -> anyhow::Result<()> {
+async fn test_rest_get_proposal() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Provider")
-        .await?
+        .await
         .add_market_instance("Requestor")
-        .await?;
+        .await;
 
     let prov_mkt = network.get_market("Provider");
     let proposal_id = exchange_draft_proposals(&network, "Requestor", "Provider")
-        .await?
+        .await
+        .unwrap()
         .proposal_id
         .translate(Owner::Provider);
 
     // Not really remote, but in this scenario will treat it as remote
     let identity_local = network.get_default_id("Provider");
-    let offers = prov_mkt.get_offers(Some(identity_local)).await?;
+    let offers = prov_mkt.get_offers(Some(identity_local)).await.unwrap();
     let subscription_id = &offers.first().unwrap().offer_id;
     let proposal = prov_mkt
         .get_proposal(&proposal_id)
         .await
         .unwrap()
-        .into_client()?;
+        .into_client()
+        .unwrap();
     let mut app = network.get_rest_app("Provider").await;
 
     let req_offers = test::TestRequest::get()
@@ -326,22 +333,22 @@ async fn test_rest_get_proposal() -> anyhow::Result<()> {
     assert_eq!(resp_demands.status(), StatusCode::OK);
     let resp_demands: Proposal = read_response_json(resp_demands).await;
     assert_eq!(proposal, resp_demands);
-    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_rest_get_agreement() -> anyhow::Result<()> {
+async fn test_rest_get_agreement() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?
+        .await
         .add_market_instance("Node-2")
-        .await?;
+        .await;
 
     let proposal_id = exchange_draft_proposals(&network, "Node-1", "Node-2")
-        .await?
+        .await
+        .unwrap()
         .proposal_id;
     let req_market = network.get_market("Node-1");
     let req_engine = &req_market.requestor_engine;
@@ -350,7 +357,8 @@ async fn test_rest_get_agreement() -> anyhow::Result<()> {
 
     let agreement_id = req_engine
         .create_agreement(req_id.clone(), &proposal_id, Utc::now())
-        .await?;
+        .await
+        .unwrap();
 
     let mut app = network.get_rest_app("Node-1").await;
     let req = test::TestRequest::get()
@@ -366,19 +374,18 @@ async fn test_rest_get_agreement() -> anyhow::Result<()> {
     assert_eq!(agreement.agreement_id, agreement_id.into_client());
     assert_eq!(agreement.demand.requestor_id, req_id.identity);
     assert_eq!(agreement.offer.provider_id, prov_id.identity);
-    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_rest_query_agreement_events() -> anyhow::Result<()> {
+async fn test_rest_query_agreement_events() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?
+        .await
         .add_market_instance("Node-2")
-        .await?;
+        .await;
 
     // Will produce events to be ignored.
     let _ = negotiate_agreement(
@@ -422,20 +429,19 @@ async fn test_rest_query_agreement_events() -> anyhow::Result<()> {
     let events: Vec<AgreementOperationEvent> = read_response_json(resp).await;
 
     expect_approve(events, 0).unwrap();
-    Ok(())
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_terminate_agreement() -> anyhow::Result<()> {
+async fn test_terminate_agreement() {
     let _ = env_logger::builder().try_init();
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let negotiation = negotiate_agreement(
         &network,
@@ -473,7 +479,8 @@ async fn test_terminate_agreement() -> anyhow::Result<()> {
         network
             .get_market(REQ_NAME)
             .get_agreement(&negotiation.r_agreement, &req_id)
-            .await?
+            .await
+            .unwrap()
             .state,
         client_agreement::State::Terminated
     );
@@ -481,11 +488,11 @@ async fn test_terminate_agreement() -> anyhow::Result<()> {
         network
             .get_market(PROV_NAME)
             .get_agreement(&negotiation.p_agreement, &prov_id)
-            .await?
+            .await
+            .unwrap()
             .state,
         client_agreement::State::Terminated
     );
-    Ok(())
 }
 
 // TODO: test invalid reason (without message)
@@ -493,13 +500,13 @@ async fn test_terminate_agreement() -> anyhow::Result<()> {
 // #[cfg_attr(not(feature = "test-suite"), ignore)]
 // #[actix_rt::test]
 // #[serial_test::serial]
-// async fn test_rest_get_proposal_wrong_subscription() -> anyhow::Result<()> {
+// async fn test_rest_get_proposal_wrong_subscription() {
 //     let network = MarketsNetwork::new(None)
 //         .await
 //         .add_market_instance("Node-1")
-//         .await?
+//         .await.unwrap()
 //         .add_market_instance("Node-2")
-//         .await?;
+//         .await.unwrap();
 //
 //     let identity_local = network.get_default_id("Node-1");
 //     let fake_subscription_id = SubscriptionId::generate_id(
@@ -509,7 +516,7 @@ async fn test_terminate_agreement() -> anyhow::Result<()> {
 //         &Utc::now().naive_utc(),
 //         &Utc::now().naive_utc(),
 //     );
-//     let proposal_id = exchange_draft_proposals(&network, "Node-1", "Node-2").await?;
+//     let proposal_id = exchange_draft_proposals(&network, "Node-1", "Node-2").await.unwrap();
 //     let mut app = network.get_rest_app("Node-1").await;
 //
 //     let req_offers = test::TestRequest::get()
@@ -538,7 +545,7 @@ async fn test_terminate_agreement() -> anyhow::Result<()> {
 //     assert_eq!(resp_demands.status(), StatusCode::OK);
 //     assert_eq!(resp_offers.status(), StatusCode::NOT_FOUND);
 //
-//     Ok(())
+//
 // }
 
 pub async fn read_response_json<B: MessageBody + std::marker::Unpin, T: DeserializeOwned>(

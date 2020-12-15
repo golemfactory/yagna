@@ -1,4 +1,3 @@
-use anyhow::Result;
 use chrono::{Duration, Utc};
 
 use ya_market::testing::agreement_utils::{gen_reason, negotiate_agreement};
@@ -16,16 +15,17 @@ const PROV_NAME: &str = "Node-2";
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_agreement_approved_event() -> Result<()> {
+async fn test_agreement_approved_event() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
-        .await?
+        .await
+        .unwrap()
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
@@ -39,12 +39,14 @@ async fn test_agreement_approved_event() -> Result<()> {
             &proposal_id,
             Utc::now() + Duration::hours(1),
         )
-        .await?;
+        .await
+        .unwrap();
 
     let confirm_timestamp = Utc::now();
     req_engine
         .confirm_agreement(req_id.clone(), &agreement_id, None)
-        .await?;
+        .await
+        .unwrap();
 
     // Provider will approve agreement after some delay.
     let agr_id = agreement_id.clone();
@@ -59,12 +61,14 @@ async fn test_agreement_approved_event() -> Result<()> {
                 None,
                 0.1,
             )
-            .await?;
+            .await
+            .unwrap();
 
         // We expect, that both Provider and Requestor will get event.
         let events = prov_market
             .query_agreement_events(&None, 0.1, Some(2), from_timestamp, &prov_id)
-            .await?;
+            .await
+            .unwrap();
 
         // Expect single event
         assert_eq!(events.len(), 1);
@@ -77,12 +81,12 @@ async fn test_agreement_approved_event() -> Result<()> {
                 e
             ),
         };
-        Result::<(), anyhow::Error>::Ok(())
     });
 
     let events = req_market
         .query_agreement_events(&None, 0.5, Some(2), confirm_timestamp, &req_id)
-        .await?;
+        .await
+        .unwrap();
 
     // Expect single event
     assert_eq!(events.len(), 1);
@@ -98,24 +102,27 @@ async fn test_agreement_approved_event() -> Result<()> {
     };
 
     // Protect from eternal waiting.
-    tokio::time::timeout(Duration::milliseconds(600).to_std()?, query_handle).await???;
-    Ok(())
+    tokio::time::timeout(Duration::milliseconds(600).to_std().unwrap(), query_handle)
+        .await
+        .unwrap()
+        .unwrap();
 }
 
 /// Both endpoints Agreement events and wait_for_approval should work properly.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_agreement_events_and_wait_for_approval() -> Result<()> {
+async fn test_agreement_events_and_wait_for_approval() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
-        .await?
+        .await
+        .unwrap()
         .proposal_id;
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
@@ -128,12 +135,14 @@ async fn test_agreement_events_and_wait_for_approval() -> Result<()> {
             &proposal_id,
             Utc::now() + Duration::hours(1),
         )
-        .await?;
+        .await
+        .unwrap();
 
     let confirm_timestamp = Utc::now();
     req_engine
         .confirm_agreement(req_id.clone(), &agreement_id, None)
-        .await?;
+        .await
+        .unwrap();
 
     let agr_id = agreement_id.clone();
     let requestor = req_market.clone();
@@ -144,7 +153,6 @@ async fn test_agreement_events_and_wait_for_approval() -> Result<()> {
             .await
             .unwrap();
         assert_eq!(status, ApprovalStatus::Approved);
-        Result::<(), anyhow::Error>::Ok(())
     });
 
     // Provider will approve agreement after some delay.
@@ -159,8 +167,8 @@ async fn test_agreement_events_and_wait_for_approval() -> Result<()> {
                 None,
                 0.1,
             )
-            .await?;
-        Result::<(), anyhow::Error>::Ok(())
+            .await
+            .unwrap();
     });
 
     let events = req_market
@@ -175,9 +183,14 @@ async fn test_agreement_events_and_wait_for_approval() -> Result<()> {
     );
 
     // Protect from eternal waiting.
-    tokio::time::timeout(Duration::milliseconds(600).to_std()?, query_handle).await???;
-    tokio::time::timeout(Duration::milliseconds(20).to_std()?, wait_handle).await???;
-    Ok(())
+    tokio::time::timeout(Duration::milliseconds(600).to_std().unwrap(), query_handle)
+        .await
+        .unwrap()
+        .unwrap();
+    tokio::time::timeout(Duration::milliseconds(20).to_std().unwrap(), wait_handle)
+        .await
+        .unwrap()
+        .unwrap();
 }
 
 /// We expect to get AgreementTerminatedEvent on both sides Provider and Requestor
@@ -185,13 +198,13 @@ async fn test_agreement_events_and_wait_for_approval() -> Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_agreement_terminated_event() -> Result<()> {
+async fn test_agreement_terminated_event() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let req_market = network.get_market(REQ_NAME);
     let req_id = network.get_default_id(REQ_NAME);
@@ -223,7 +236,8 @@ async fn test_agreement_terminated_event() -> Result<()> {
     // == PROVIDER
     let events = prov_market
         .query_agreement_events(&None, 0.1, Some(2), reference_timestamp, &prov_id)
-        .await?;
+        .await
+        .unwrap();
 
     // Expect single event
     assert_eq!(events.len(), 1);
@@ -248,8 +262,9 @@ async fn test_agreement_terminated_event() -> Result<()> {
 
     // == REQUESTOR
     let events = req_market
-        .query_agreement_events(&None, 0.1, Some(2), reference_timestamp, &req_id)
-        .await?;
+        .query_agreement_events(&None, 1.0, Some(2), reference_timestamp, &req_id)
+        .await
+        .unwrap();
 
     // Expect single event
     assert_eq!(events.len(), 1);
@@ -271,6 +286,4 @@ async fn test_agreement_terminated_event() -> Result<()> {
             e
         ),
     };
-
-    Ok(())
 }
