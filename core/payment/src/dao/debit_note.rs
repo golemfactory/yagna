@@ -4,6 +4,7 @@ use crate::models::debit_note::{ReadObj, WriteObj};
 use crate::schema::pay_activity::dsl as activity_dsl;
 use crate::schema::pay_agreement::dsl as agreement_dsl;
 use crate::schema::pay_debit_note::dsl;
+use chrono::NaiveDateTime;
 use diesel::{
     self, BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl,
     RunQueryDsl,
@@ -199,23 +200,24 @@ impl<'c> DebitNoteDao<'c> {
         .await
     }
 
-    async fn get_for_role(&self, node_id: NodeId, role: Role) -> DbResult<Vec<DebitNote>> {
+    pub async fn get_for_node_id(
+        &self,
+        node_id: NodeId,
+        after_timestamp: Option<NaiveDateTime>,
+        max_items: Option<u32>,
+    ) -> DbResult<Vec<DebitNote>> {
         readonly_transaction(self.pool, move |conn| {
-            let debit_notes: Vec<ReadObj> = query!()
-                .filter(dsl::owner_id.eq(node_id))
-                .filter(dsl::role.eq(role))
-                .load(conn)?;
+            let mut query = query!().filter(dsl::owner_id.eq(node_id)).into_boxed();
+            if let Some(date) = after_timestamp {
+                query = query.filter(dsl::timestamp.gt(date))
+            }
+            if let Some(items) = max_items {
+                query = query.limit(items.into())
+            }
+            let debit_notes: Vec<ReadObj> = query.load(conn)?;
             debit_notes.into_iter().map(TryInto::try_into).collect()
         })
         .await
-    }
-
-    pub async fn get_for_provider(&self, node_id: NodeId) -> DbResult<Vec<DebitNote>> {
-        self.get_for_role(node_id, Role::Provider).await
-    }
-
-    pub async fn get_for_requestor(&self, node_id: NodeId) -> DbResult<Vec<DebitNote>> {
-        self.get_for_role(node_id, Role::Requestor).await
     }
 
     pub async fn mark_received(&self, debit_note_id: String, owner_id: NodeId) -> DbResult<()> {
@@ -255,29 +257,30 @@ impl<'c> DebitNoteDao<'c> {
         .await
     }
 
-    pub async fn reject(&self, debit_note_id: String, owner_id: NodeId) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
-            let (activity_id, role): (String, Role) = dsl::pay_debit_note
-                .find((&debit_note_id, &owner_id))
-                .select((dsl::activity_id, dsl::role))
-                .first(conn)?;
-            update_status(
-                &vec![debit_note_id.clone()],
-                &owner_id,
-                &DocumentStatus::Rejected,
-                conn,
-            )?;
-            if let Role::Provider = role {
-                debit_note_event::create::<()>(
-                    debit_note_id,
-                    owner_id,
-                    EventType::Rejected,
-                    None,
-                    conn,
-                )?;
-            }
-            Ok(())
-        })
-        .await
-    }
+    // TODO: Implement reject debit note
+    // pub async fn reject(&self, debit_note_id: String, owner_id: NodeId) -> DbResult<()> {
+    //     do_with_transaction(self.pool, move |conn| {
+    //         let (activity_id, role): (String, Role) = dsl::pay_debit_note
+    //             .find((&debit_note_id, &owner_id))
+    //             .select((dsl::activity_id, dsl::role))
+    //             .first(conn)?;
+    //         update_status(
+    //             &vec![debit_note_id.clone()],
+    //             &owner_id,
+    //             &DocumentStatus::Rejected,
+    //             conn,
+    //         )?;
+    //         if let Role::Provider = role {
+    //             debit_note_event::create::<()>(
+    //                 debit_note_id,
+    //                 owner_id,
+    //                 EventType::Rejected,
+    //                 None,
+    //                 conn,
+    //             )?;
+    //         }
+    //         Ok(())
+    //     })
+    //     .await
+    // }
 }
