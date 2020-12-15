@@ -238,7 +238,7 @@ async fn test_agreement_terminated_event() -> Result<()> {
 
     // == REQUESTOR
     let events = req_market
-        .query_agreement_events(&None, 0.1, Some(2), reference_timestamp, &req_id)
+        .query_agreement_events(&None, 1.0, Some(2), reference_timestamp, &req_id)
         .await?;
 
     // Expect single event
