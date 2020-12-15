@@ -3,13 +3,14 @@ use thiserror::Error;
 
 use ya_market_resolver::flatten::JsonObjectExpected;
 
+use crate::db::dao::StateError;
 use crate::db::model::{
     AgreementId, ProposalId, ProposalIdParseError, SubscriptionId, SubscriptionParseError,
 };
 use crate::db::{dao::SaveProposalError, dao::TakeEventsError, DbError};
 use crate::protocol::negotiation::error::{
     ApproveAgreementError, CounterProposalError as ProtocolProposalError, GsbAgreementError,
-    NegotiationApiInitError, ProposeAgreementError,
+    NegotiationApiInitError, ProposeAgreementError, TerminateAgreementError,
 };
 
 #[derive(Error, Debug)]
@@ -69,9 +70,9 @@ pub enum AgreementError {
     Save(ProposalId, DbError),
     #[error("Failed to get Agreement [{0}]. Error: {1}")]
     Get(AgreementId, DbError),
-    #[error("Failed to update Agreement [{0}]. Error: {1}")]
-    Update(AgreementId, DbError),
-    #[error("Invalid state {0}")]
+    #[error("Agreement [{0}]. Error: {1}")]
+    UpdateState(AgreementId, StateError),
+    #[error("Invalid state. {0}")]
     InvalidState(#[from] AgreementStateError),
     #[error("Invalid Agreement id. {0}")]
     InvalidId(#[from] ProposalIdParseError),
@@ -81,9 +82,17 @@ pub enum AgreementError {
     ProtocolCreate(#[from] ProposeAgreementError),
     #[error("Protocol error while approving: {0}")]
     ProtocolApprove(#[from] ApproveAgreementError),
+    #[error("Protocol error while terminating: {0}")]
+    ProtocolTerminate(#[from] TerminateAgreementError),
+    #[error(transparent)]
+    ReasonError(#[from] ReasonError),
     #[error("Internal error: {0}")]
     Internal(String),
 }
+
+#[derive(Error, Debug)]
+#[error("Reason parse error: {0}")]
+pub struct ReasonError(#[from] pub serde_json::Error);
 
 #[derive(Error, Debug)]
 pub enum WaitForApprovalError {
@@ -113,9 +122,17 @@ pub enum QueryEventsError {
     InvalidSubscriptionId(#[from] SubscriptionParseError),
     #[error(transparent)]
     TakeEvents(#[from] TakeEventsError),
-    #[error("Invalid maxEvents '{0}', should be greater from 0.")]
-    InvalidMaxEvents(i32),
+    #[error("Invalid maxEvents '{0}', should be between 1 and {1}.")]
+    InvalidMaxEvents(i32, i32),
     #[error("Can't query events. Error: {0}.")]
+    Internal(String),
+}
+
+#[derive(Error, Debug)]
+pub enum AgreementEventsError {
+    #[error("Invalid maxEvents '{0}', should be between 1 and {1}.")]
+    InvalidMaxEvents(i32, i32),
+    #[error("Internal error while querying Agreement events. Error: {0}.")]
     Internal(String),
 }
 

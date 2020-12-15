@@ -1,5 +1,4 @@
-use ethereum_types::{Address, H256, U256};
-use futures3::compat::*;
+use ethereum_types::{Address, H256, U256, U64};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::env;
@@ -7,7 +6,6 @@ use std::env;
 use crate::GNTDriverError;
 use std::time::Duration;
 use web3::contract::Contract;
-use web3::transports::EventLoopHandle;
 use web3::transports::Http;
 use web3::types::{Bytes, TransactionId, TransactionReceipt};
 use web3::Web3;
@@ -82,10 +80,9 @@ impl EthereumClientBuilder {
     }
 
     pub fn build(self) -> EthereumClientResult<EthereumClient> {
-        let (eloop, transport) = web3::transports::Http::new(self.geth_address.as_ref())?;
+        let transport = web3::transports::Http::new(self.geth_address.as_ref())?;
         Ok(EthereumClient {
             chain: Chain::from_env()?,
-            _eloop: eloop,
             web3: Web3::new(transport),
         })
     }
@@ -93,7 +90,6 @@ impl EthereumClientBuilder {
 
 pub struct EthereumClient {
     chain: Chain,
-    _eloop: EventLoopHandle,
     web3: Web3<Http>,
 }
 
@@ -110,7 +106,7 @@ impl EthereumClient {
     }
 
     pub async fn get_gas_price(&self) -> EthereumClientResult<U256> {
-        let gas_price = self.web3.eth().gas_price().compat().await?;
+        let gas_price = self.web3.eth().gas_price().await?;
         Ok(gas_price)
     }
 
@@ -119,7 +115,6 @@ impl EthereumClient {
             .web3
             .eth()
             .send_raw_transaction(Bytes::from(signed_tx))
-            .compat()
             .await?;
         Ok(tx_hash)
     }
@@ -129,27 +124,20 @@ impl EthereumClient {
     ) -> EthereumClientResult<impl futures3::stream::Stream<Item = EthereumClientResult<H256>>>
     {
         use futures3::prelude::*;
-        let f = self
-            .web3
-            .eth_filter()
-            .create_blocks_filter()
-            .compat()
-            .await?;
+        let f = self.web3.eth_filter().create_blocks_filter().await?;
         Ok(f.stream(Duration::from_secs(30))
-            .compat()
             .map(|v| v.map_err(From::from)))
     }
 
-    pub async fn block_number(&self) -> EthereumClientResult<U256> {
-        Ok(self.web3.eth().block_number().compat().await?)
+    pub async fn block_number(&self) -> EthereumClientResult<U64> {
+        Ok(self.web3.eth().block_number().await?)
     }
 
-    pub async fn tx_block_number(&self, tx_hash: H256) -> EthereumClientResult<Option<U256>> {
+    pub async fn tx_block_number(&self, tx_hash: H256) -> EthereumClientResult<Option<U64>> {
         if let Some(tx) = self
             .web3
             .eth()
             .transaction(TransactionId::Hash(tx_hash))
-            .compat()
             .await?
         {
             Ok(tx.block_number)
@@ -163,12 +151,7 @@ impl EthereumClient {
     }
 
     pub async fn get_next_nonce(&self, eth_address: Address) -> EthereumClientResult<U256> {
-        let nonce = self
-            .web3
-            .eth()
-            .transaction_count(eth_address, None)
-            .compat()
-            .await?;
+        let nonce = self.web3.eth().transaction_count(eth_address, None).await?;
         Ok(nonce)
     }
 
@@ -176,17 +159,12 @@ impl EthereumClient {
         &self,
         tx_hash: H256,
     ) -> EthereumClientResult<Option<TransactionReceipt>> {
-        let tx_receipt = self
-            .web3
-            .eth()
-            .transaction_receipt(tx_hash)
-            .compat()
-            .await?;
+        let tx_receipt = self.web3.eth().transaction_receipt(tx_hash).await?;
         Ok(tx_receipt)
     }
 
     pub async fn get_balance(&self, address: Address) -> EthereumClientResult<U256> {
-        let balance = self.web3.eth().balance(address, None).compat().await?;
+        let balance = self.web3.eth().balance(address, None).await?;
         Ok(balance)
     }
 }

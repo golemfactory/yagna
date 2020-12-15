@@ -110,6 +110,13 @@ impl Resolver {
 }
 
 fn matches(offer: &Offer, demand: &Demand) -> bool {
+    if offer.node_id == demand.node_id {
+        log::info!(
+            "Rejecting Demand Offer pair from single identity. node_id: {}",
+            offer.node_id
+        );
+        return false;
+    }
     match match_demand_offer(
         &demand.properties,
         &demand.constraints,

@@ -9,8 +9,10 @@ use crate::db::model::{DbProposal, OwnerType, ProposalId, SubscriptionId};
 use super::super::callback::CallbackMessage;
 use super::error::{
     ApproveAgreementError, CounterProposalError, GsbAgreementError, GsbProposalError,
+    TerminateAgreementError,
 };
 use crate::protocol::negotiation::error::ProposeAgreementError;
+use ya_client::model::market::Reason;
 
 pub mod provider {
     pub fn proposal_addr(prefix: &str) -> String {
@@ -151,6 +153,19 @@ impl RpcMessage for AgreementCancelled {
     type Error = GsbAgreementError;
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgreementTerminated {
+    pub agreement_id: AgreementId,
+    pub reason: Option<Reason>,
+}
+
+impl RpcMessage for AgreementTerminated {
+    const ID: &'static str = "AgreementTerminated";
+    type Item = ();
+    type Error = TerminateAgreementError;
+}
+
 /// The same messaged will be used on GSB and as messages in callbacks.
 impl<Message: RpcMessage> CallbackMessage for Message {
     type Ok = <Message as RpcMessage>::Item;
@@ -202,6 +217,13 @@ impl AgreementReceived {
     pub fn translate(mut self, owner: OwnerType) -> Self {
         self.agreement_id = self.agreement_id.translate(owner);
         self.proposal_id = self.proposal_id.translate(owner);
+        self
+    }
+}
+
+impl AgreementTerminated {
+    pub fn translate(mut self, owner: OwnerType) -> Self {
+        self.agreement_id = self.agreement_id.translate(owner);
         self
     }
 }

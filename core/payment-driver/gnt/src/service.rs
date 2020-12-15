@@ -1,8 +1,10 @@
 use crate::processor::GNTDriverProcessor;
-use crate::DRIVER_NAME;
+use crate::{DRIVER_NAME, PLATFORM_NAME};
 use bigdecimal::BigDecimal;
 use ya_core_model::driver::*;
+use ya_core_model::payment::local as payment_srv;
 use ya_persistence::executor::DbExecutor;
+use ya_service_bus::typed::service;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 pub fn bind_service(db: &DbExecutor, processor: GNTDriverProcessor) {
@@ -20,15 +22,26 @@ pub fn bind_service(db: &DbExecutor, processor: GNTDriverProcessor) {
     log::debug!("Successfully bound payment driver service to service bus");
 }
 
-pub async fn subscribe_to_identity_events() {
-    if let Err(e) = bus::service(ya_core_model::identity::BUS_ID)
+pub async fn subscribe_to_identity_events() -> anyhow::Result<()> {
+    bus::service(ya_core_model::identity::BUS_ID)
         .send(ya_core_model::identity::Subscribe {
             endpoint: driver_bus_id(DRIVER_NAME),
         })
-        .await
-    {
-        log::error!("init app-key listener error: {}", e)
-    }
+        .await??;
+    Ok(())
+}
+
+pub async fn register_in_payment_service() -> anyhow::Result<()> {
+    log::debug!("Registering driver in payment service...");
+    let message = payment_srv::RegisterDriver {
+        driver_name: DRIVER_NAME.to_string(),
+        platform: PLATFORM_NAME.to_string(),
+        recv_init_required: false,
+    };
+    service(payment_srv::BUS_ID).send(message).await?.unwrap(); // Unwrap on purpose because it's NoError
+    log::debug!("Successfully registered driver in payment service.");
+
+    Ok(())
 }
 
 async fn init(
@@ -121,12 +134,20 @@ async fn verify_payment(
 
 async fn validate_allocation(
     _db: DbExecutor,
-    _processor: GNTDriverProcessor,
+    processor: GNTDriverProcessor,
     _caller: String,
-    _msg: ValidateAllocation,
+    msg: ValidateAllocation,
 ) -> Result<bool, GenericError> {
-    log::debug!("Validate allocation: {:?}", _msg);
-    Ok(true) // TODO: Implement proper check
+    log::debug!("Validate allocation: {:?}", msg);
+    let ValidateAllocation {
+        address,
+        amount,
+        existing_allocations,
+    } = msg;
+    processor
+        .validate_allocation(address, amount, existing_allocations)
+        .await
+        .map_err(GenericError::new)
 }
 
 async fn account_event(

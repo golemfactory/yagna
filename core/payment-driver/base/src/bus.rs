@@ -1,10 +1,10 @@
 /*
-    Collection of interactions a PaymendDriver can have with ya_service_bus
+    Collection of interactions a PaymentDriver can have with ya_service_bus
 
     All interactions with the bus from the driver should go through this mod.
 */
 
-// Extrernal crates
+// External crates
 use std::sync::Arc;
 
 // Workspace uses
@@ -23,8 +23,11 @@ use ya_service_bus::{
 use crate::dao::DbExecutor;
 use crate::driver::PaymentDriver;
 
-pub async fn bind_service<Driver: PaymentDriver + 'static>(db: &DbExecutor, driver: Arc<Driver>) {
-    log::debug!("Binding payment driver service to service bus");
+pub async fn bind_service<Driver: PaymentDriver + 'static>(
+    db: &DbExecutor,
+    driver: Arc<Driver>,
+) -> anyhow::Result<()> {
+    log::debug!("Binding payment driver service to service bus...");
     let bus_id = driver_bus_id(driver.get_name());
 
     /* Short variable names explained:
@@ -33,8 +36,8 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(db: &DbExecutor, driv
         c = caller
         m = message
     */
-    #[rustfmt::skip] // Keep move's neatly alligned
-    ServiceBinder::new(&bus_id, db, driver)
+    #[rustfmt::skip] // Keep move's neatly aligned
+    ServiceBinder::new(&bus_id, db, driver.clone())
         .bind_with_processor(
             move |db, dr, c, m| async move { dr.init(db, c, m).await }
         )
@@ -57,14 +60,23 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(db: &DbExecutor, driv
             move |db, dr, c, m| async move { dr.validate_allocation(db, c, m).await }
         );
 
-    log::debug!("Successfully bound payment driver service to service bus");
-    log::debug!("Subscribing to identity events");
+    log::debug!("Successfully bound payment driver service to service bus.");
+
+    log::debug!("Subscribing to identity events...");
     let message = identity::Subscribe { endpoint: bus_id };
-    let result = service(identity::BUS_ID).send(message).await;
-    match result {
-        Err(e) => log::error!("init app-key listener error: {}", e),
-        _ => log::debug!("Successfully subscribed payment driver service to identity events"),
-    }
+    service(identity::BUS_ID).send(message).await??;
+    log::debug!("Successfully subscribed payment driver service to identity events.");
+
+    log::debug!("Registering driver in payment service...");
+    let message = payment_srv::RegisterDriver {
+        driver_name: driver.get_name(),
+        platform: driver.get_platform(),
+        recv_init_required: driver.recv_init_required(),
+    };
+    service(payment_srv::BUS_ID).send(message).await?.unwrap(); // Unwrap on purpose because it's NoError
+    log::debug!("Successfully registered driver in payment service.");
+
+    Ok(())
 }
 
 pub async fn list_unlocked_identities() -> Result<Vec<NodeId>, GenericError> {

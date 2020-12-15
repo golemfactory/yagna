@@ -2,16 +2,15 @@ use actix_web::web::{Data, Json, Path, Query};
 use actix_web::{HttpResponse, Responder, Scope};
 use std::sync::Arc;
 
-use ya_client::model::market::DemandOfferBase;
+use ya_client::model::market::{NewOffer, NewProposal};
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::LogErr;
 
 use crate::db::model::OwnerType;
 use crate::market::MarketService;
 
-use super::{
-    PathAgreement, PathSubscription, PathSubscriptionProposal, QueryTimeout, QueryTimeoutMaxEvents,
-};
+use super::{PathAgreement, PathSubscription, PathSubscriptionProposal, QueryTimeoutMaxEvents};
+use crate::rest_api::QueryTimeoutAppSessionId;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -24,13 +23,12 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .service(reject_proposal)
         .service(approve_agreement)
         .service(reject_agreement)
-        .service(terminate_agreement)
 }
 
 #[actix_web::post("/offers")]
 async fn subscribe(
     market: Data<Arc<MarketService>>,
-    body: Json<DemandOfferBase>,
+    body: Json<NewOffer>,
     id: Identity,
 ) -> impl Responder {
     market
@@ -84,7 +82,7 @@ async fn collect(
 async fn counter_proposal(
     market: Data<Arc<MarketService>>,
     path: Path<PathSubscriptionProposal>,
-    body: Json<DemandOfferBase>,
+    body: Json<NewProposal>,
     id: Identity,
 ) -> impl Responder {
     let PathSubscriptionProposal {
@@ -143,14 +141,15 @@ async fn reject_proposal(
 async fn approve_agreement(
     market: Data<Arc<MarketService>>,
     path: Path<PathAgreement>,
-    query: Query<QueryTimeout>,
+    query: Query<QueryTimeoutAppSessionId>,
     id: Identity,
 ) -> impl Responder {
     let agreement_id = path.into_inner().to_id(OwnerType::Provider)?;
     let timeout = query.timeout;
+    let session = query.into_inner().app_session_id;
     market
         .provider_engine
-        .approve_agreement(id, &agreement_id, timeout)
+        .approve_agreement(id, &agreement_id, session, timeout)
         .await
         .log_err()
         .map(|_| HttpResponse::NoContent().finish())
@@ -158,15 +157,6 @@ async fn approve_agreement(
 
 #[actix_web::post("/agreements/{agreement_id}/reject")]
 async fn reject_agreement(
-    _market: Data<Arc<MarketService>>,
-    _path: Path<PathAgreement>,
-    _id: Identity,
-) -> HttpResponse {
-    HttpResponse::NotImplemented().finish()
-}
-
-#[actix_web::post("/agreements/{agreement_id}/terminate")]
-async fn terminate_agreement(
     _market: Data<Arc<MarketService>>,
     _path: Path<PathAgreement>,
     _id: Identity,

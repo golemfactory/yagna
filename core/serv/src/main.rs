@@ -14,14 +14,14 @@ use url::Url;
 use ya_activity::service::Activity as ActivityService;
 use ya_identity::service::Identity as IdentityService;
 use ya_market::MarketService;
-use ya_metrics::MetricsService;
+use ya_metrics::{MetricsPusherOpts, MetricsService};
 use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
 use ya_sgx::SgxService;
 
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
-use ya_service_api::{CliCtx, CommandOutput, MetricsCtx};
+use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_api_interfaces::Provider;
 use ya_service_api_web::{
     middleware::{auth, Identity},
@@ -49,14 +49,20 @@ lazy_static::lazy_static! {
 /// privacy warning found at https://handbook.golem.network/see-also/terms
 ///
 struct CliArgs {
+    /// Accept the disclaimer and privacy warning found at
+    /// {n}https://handbook.golem.network/see-also/terms
+    #[structopt(long)]
+    #[cfg_attr(not(feature = "tos"), structopt(hidden = true))]
+    accept_terms: bool,
+
     /// Service data dir
     #[structopt(
         short,
         long = "datadir",
-        set = clap::ArgSettings::Global,
         env = "YAGNA_DATADIR",
         default_value = &*DEFAULT_DATA_DIR,
         hide_env_values = true,
+        set = clap::ArgSettings::Global,
     )]
     data_dir: DataDir,
 
@@ -66,36 +72,14 @@ struct CliArgs {
         long,
         env = GSB_URL_ENV_VAR,
         default_value = DEFAULT_GSB_URL,
-        hide_env_values = true
+        hide_env_values = true,
+        set = clap::ArgSettings::Global,
     )]
     gsb_url: Url,
 
     /// Return results in JSON format
     #[structopt(long, set = clap::ArgSettings::Global)]
     json: bool,
-
-    /// Accept the disclaimer and privacy warning found at
-    /// {n}https://handbook.golem.network/see-also/terms
-    #[structopt(long)]
-    #[cfg_attr(not(feature = "tos"), structopt(hidden = true))]
-    accept_terms: bool,
-
-    /// Disable metrics pushing
-    #[structopt(long, set=clap::ArgSettings::Global)]
-    disable_metrics_push: bool,
-
-    /// Metrics push host url
-    #[structopt(
-        long,
-        env = "YAGNA_METRICS_URL",
-        default_value = "http://metrics.golem.network:9091/",
-        set=clap::ArgSettings::Global,
-    )]
-    metrics_push_url: Url,
-
-    /// Enter interactive mode
-    #[structopt(short, long)]
-    interactive: bool,
 
     /// Log verbosity level
     #[structopt(long, default_value = "info")]
@@ -141,11 +125,7 @@ impl TryFrom<&CliArgs> for CliCtx {
             } else {
                 true
             },
-            interactive: args.interactive,
-            metrics_ctx: MetricsCtx {
-                push_enabled: !args.disable_metrics_push,
-                push_host_url: Some(args.metrics_push_url.clone()),
-            },
+            metrics_ctx: None,
         })
     }
 }
@@ -181,6 +161,10 @@ impl<S: 'static> Provider<S, ()> for ServiceContext {
 impl ServiceContext {
     fn make_entry<S: 'static>(path: &PathBuf, name: &str) -> Result<(TypeId, DbExecutor)> {
         Ok((TypeId::of::<S>(), DbExecutor::from_data_dir(path, name)?))
+    }
+
+    fn set_metrics_ctx(&mut self, metrics_opts: &MetricsPusherOpts) {
+        self.ctx.metrics_ctx = Some(metrics_opts.into())
     }
 }
 
@@ -226,6 +210,13 @@ enum Services {
     #[enable(gsb)]
     SgxDriver(SgxService),
 }
+
+#[cfg(not(any(
+    feature = "dummy-driver",
+    feature = "gnt-driver",
+    feature = "zksync-driver"
+)))]
+compile_error!("At least one payment driver needs to be enabled in order to make payments.");
 
 #[allow(unused)]
 async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<Vec<String>> {
@@ -282,12 +273,6 @@ impl CliCommand {
 enum ServiceCommand {
     /// Runs server in foreground
     Run(ServiceCommandOpts),
-    /// Spawns daemon
-    Start(ServiceCommandOpts),
-    /// Stops daemon
-    Stop,
-    /// Checks if daemon is running
-    Status,
 }
 
 #[derive(StructOpt, Debug)]
@@ -301,6 +286,12 @@ struct ServiceCommandOpts {
         hide_env_values = true,
     )]
     api_url: Url,
+
+    #[structopt(flatten)]
+    metrics_opts: MetricsPusherOpts,
+
+    #[structopt(long, env, default_value = "60")]
+    max_rest_timeout: usize,
 }
 
 #[cfg(unix)]
@@ -331,7 +322,11 @@ impl ServiceCommand {
             prompt_terms()?;
         }
         match self {
-            Self::Run(ServiceCommandOpts { api_url }) => {
+            Self::Run(ServiceCommandOpts {
+                api_url,
+                metrics_opts,
+                max_rest_timeout,
+            }) => {
                 log::info!(
                     "Starting {} service! Version: {}.",
                     clap::crate_name!(),
@@ -343,7 +338,8 @@ impl ServiceCommand {
                     .await
                     .context("binding service bus router")?;
 
-                let context: ServiceContext = ctx.clone().try_into()?;
+                let mut context: ServiceContext = ctx.clone().try_into()?;
+                context.set_metrics_ctx(metrics_opts);
                 Services::gsb(&context).await?;
                 let drivers = start_payment_drivers(&ctx.data_dir).await?;
 
@@ -366,6 +362,8 @@ impl ServiceCommand {
 
                     Services::rest(app, &context)
                 })
+                // this is maximum supported timeout for our REST API
+                .keep_alive(max_rest_timeout.clone())
                 .bind(api_host_port.clone())
                 .context(format!("Failed to bind http server on {:?}", api_host_port))?;
 
@@ -374,7 +372,6 @@ impl ServiceCommand {
                 log::info!("{} daemon successfully finished!", clap::crate_name!());
                 Ok(CommandOutput::NoOutput)
             }
-            _ => anyhow::bail!("command service {:?} is not implemented yet", self),
         }
     }
 }

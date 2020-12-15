@@ -7,7 +7,7 @@ use ya_service_api_web::middleware::Identity;
 
 use super::SubscriptionId;
 use crate::db::schema::market_demand;
-use ya_client::model::market::DemandOfferBase;
+use ya_client::model::market::NewDemand;
 
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable)]
 #[table_name = "market_demand"]
@@ -29,7 +29,7 @@ impl Demand {
     /// Creates new model demand. If ClientDemand has id already assigned,
     /// it will be ignored and regenerated.
     pub fn from_new(
-        demand: &DemandOfferBase,
+        demand: &NewDemand,
         id: &Identity,
         creation_ts: NaiveDateTime,
         expiration_ts: NaiveDateTime,
