@@ -5,7 +5,7 @@ use ya_market::testing::agreement_utils::{gen_reason, negotiate_agreement};
 use ya_market::testing::events_helper::requestor::expect_approve;
 use ya_market::testing::proposal_util::exchange_draft_proposals;
 use ya_market::testing::MarketsNetwork;
-use ya_market::testing::{ApprovalStatus, OwnerType};
+use ya_market::testing::{ApprovalStatus, Owner};
 
 use ya_client::model::market::agreement_event::AgreementTerminator;
 use ya_client::model::market::AgreementOperationEvent as AgreementEvent;
@@ -55,7 +55,7 @@ async fn test_agreement_approved_event() -> Result<()> {
             .provider_engine
             .approve_agreement(
                 network.get_default_id(PROV_NAME),
-                &agr_id.clone().translate(OwnerType::Provider),
+                &agr_id.clone().translate(Owner::Provider),
                 None,
                 0.1,
             )
@@ -151,7 +151,7 @@ async fn test_agreement_events_and_wait_for_approval() -> Result<()> {
             .provider_engine
             .approve_agreement(
                 network.get_default_id(PROV_NAME),
-                &agr_id.clone().translate(OwnerType::Provider),
+                &agr_id.clone().translate(Owner::Provider),
                 None,
                 0.1,
             )

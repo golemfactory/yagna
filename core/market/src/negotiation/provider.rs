@@ -1,20 +1,18 @@
 use chrono::Utc;
 use futures::stream::StreamExt;
 use metrics::counter;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use ya_client::model::market::{event::ProviderEvent, NewProposal, Reason};
-use ya_client::model::NodeId;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::db::{
     dao::{AgreementDao, NegotiationEventsDao, ProposalDao, SaveAgreementError},
     model::{Agreement, AgreementId, AgreementState, AppSessionId},
-    model::{IssuerType, Offer, OwnerType, Proposal, ProposalId, SubscriptionId},
+    model::{Issuer, Offer, Owner, Proposal, ProposalId, SubscriptionId},
 };
-use crate::matcher::{error::QueryOfferError, store::SubscriptionStore};
+use crate::matcher::store::SubscriptionStore;
 use crate::protocol::negotiation::{error::*, messages::*, provider::NegotiationApi};
 
 use super::common::CommonBroker;
@@ -60,7 +58,7 @@ impl ProviderBroker {
             move |caller: String, msg: ProposalReceived| {
                 broker2
                     .clone()
-                    .on_proposal_received(caller, msg, OwnerType::Provider)
+                    .on_proposal_received(caller, msg, Owner::Provider)
             },
             move |_caller: String, _msg: ProposalRejected| async move { unimplemented!() },
             move |caller: String, msg: AgreementReceived| {
@@ -70,7 +68,7 @@ impl ProviderBroker {
             move |caller: String, msg: AgreementTerminated| {
                 broker_terminated
                     .clone()
-                    .on_agreement_terminated(caller, msg, OwnerType::Provider)
+                    .on_agreement_terminated(caller, msg, Owner::Provider)
             },
         );
 
@@ -125,7 +123,13 @@ impl ProviderBroker {
     ) -> Result<ProposalId, ProposalError> {
         let (new_proposal, _) = self
             .common
-            .counter_proposal(offer_id, prev_proposal_id, proposal, OwnerType::Provider)
+            .counter_proposal(
+                offer_id,
+                prev_proposal_id,
+                proposal,
+                &id.identity,
+                Owner::Provider,
+            )
             .await?;
 
         let proposal_id = new_proposal.body.id.clone();
@@ -152,21 +156,28 @@ impl ProviderBroker {
         id: &Identity,
         reason: Option<Reason>,
     ) -> Result<(), ProposalError> {
-        self.common
-            .reject_proposal(offer_id, proposal_id, OwnerType::Provider, &reason)
+        let proposal = self
+            .common
+            .reject_proposal(
+                offer_id,
+                proposal_id,
+                &id.identity,
+                Owner::Provider,
+                &reason,
+            )
             .await?;
 
-        // self.api
-        //     .reject_proposal(id, proposal_id, TODO: requestor_id)
-        //     .await
-        //     .map_err(|e| ProposalError::Send(proposal_id.clone(), e))?;
+        self.api
+            .reject_proposal(id.identity, &proposal, reason.clone())
+            .await
+            .map_err(|e| ProposalError::Send(proposal_id.clone(), e.into()))?;
 
         counter!("market.proposals.provider.rejected", 1);
         log::info!(
-            "Provider {} rejected Proposal [{}] with reason: {:?}",
+            "Provider {} rejected Proposal [{}] with reason: {}",
             id.display(),
             &proposal_id,
-            reason
+            reason.display()
         );
         Ok(())
     }
@@ -179,7 +190,7 @@ impl ProviderBroker {
     ) -> Result<Vec<ProviderEvent>, QueryEventsError> {
         let events = self
             .common
-            .query_events(offer_id, timeout, max_events, OwnerType::Provider)
+            .query_events(offer_id, timeout, max_events, Owner::Provider)
             .await?;
 
         // Map model events to client RequestorEvent.
@@ -268,37 +279,36 @@ async fn initial_proposal(
     let store = broker.store.clone();
 
     // Check subscription.
-    let offer = match store.get_offer(&msg.offer_id).await {
-        Err(e) => match e {
-            QueryOfferError::Unsubscribed(id) => Err(RemoteProposalError::Unsubscribed(id))?,
-            QueryOfferError::Expired(id) => Err(RemoteProposalError::Expired(id))?,
-            _ => Err(RemoteProposalError::Unexpected(e.to_string()))?,
-        },
-        Ok(offer) => offer,
-    };
+    let offer = store.get_offer(&msg.offer_id).await?;
 
     // In this step we add Proposal, that was generated on Requestor by market.
     // This way we have the same state on Provider as on Requestor and we can use
     // the same function to handle this, as in normal counter_proposal flow.
     // TODO: Initial proposal id will differ on Requestor and Provider!! It isn't problem as long
     //  we don't log ids somewhere and try to compare between nodes.
-    let owner_id =
-        NodeId::from_str(&caller).map_err(|e| RemoteProposalError::Unexpected(e.to_string()))?;
-    let proposal = Proposal::new_provider(&msg.demand_id, owner_id, offer);
+    let caller_id = CommonBroker::parse_caller(&caller)?;
+
+    let proposal = Proposal::new_provider(&msg.demand_id, caller_id, offer);
+    let proposal_id = proposal.body.id.clone();
     let proposal = db
         .as_dao::<ProposalDao>()
         .save_initial_proposal(proposal)
         .await
-        .map_err(|e| RemoteProposalError::Unexpected(e.to_string()))?;
+        .map_err(|e| {
+            ProposalValidationError::Internal(format!(
+                "Failed saving initial Proposal [{}]: {}",
+                proposal_id, e
+            ))
+        })?;
 
     // Now, since we have previous event in database, we can pretend that someone sent us
     // normal counter proposal.
-    let received_msg = ProposalReceived {
+    let msg = ProposalReceived {
         prev_proposal_id: proposal.body.id,
         proposal: msg.proposal,
     };
     broker
-        .proposal_received(caller, received_msg, OwnerType::Provider)
+        .proposal_received(msg, caller_id, Owner::Provider)
         .await?;
 
     counter!("market.proposals.provider.init-negotiation", 1);
@@ -325,7 +335,7 @@ async fn agreement_received(
     let offer_proposal_id = offer_proposal.body.id.clone();
     let offer_id = &offer_proposal.negotiation.offer_id.clone();
 
-    if offer_proposal.body.issuer != IssuerType::Us {
+    if offer_proposal.body.issuer != Issuer::Us {
         return Err(RemoteProposeAgreementError::RequestorOwn(
             offer_proposal_id.clone(),
         ));
@@ -343,7 +353,7 @@ async fn agreement_received(
         offer_proposal,
         msg.valid_to,
         msg.creation_ts,
-        OwnerType::Provider,
+        Owner::Provider,
     );
     agreement.state = AgreementState::Pending;
 

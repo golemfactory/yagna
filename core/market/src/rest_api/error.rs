@@ -3,7 +3,7 @@ use actix_web::{HttpResponse, ResponseError};
 use ya_client::model::ErrorMessage;
 
 use crate::db::dao::SaveProposalError;
-use crate::negotiation::error::AgreementEventsError;
+use crate::negotiation::error::{AgreementEventsError, ProposalValidationError};
 use crate::{
     db::dao::TakeEventsError,
     market::MarketError,
@@ -137,13 +137,26 @@ impl ResponseError for ProposalError {
     fn error_response(&self) -> HttpResponse {
         let msg = ErrorMessage::new(self.to_string());
         match self {
-            ProposalError::NoSubscription(..)
-            | ProposalError::SubscriptionExpired(..)
-            | ProposalError::Unsubscribed(..) => HttpResponse::NotFound().json(msg),
-            ProposalError::Save(SaveProposalError::AlreadyCountered(..))
-            | ProposalError::NotMatching(..) => HttpResponse::Gone().json(msg),
+            ProposalError::Validation(e) => e.error_response(),
+            ProposalError::Save(SaveProposalError::AlreadyCountered(..)) => {
+                HttpResponse::Gone().json(msg)
+            }
             ProposalError::Get(e) => e.error_response(),
             _ => HttpResponse::InternalServerError().json(msg),
+        }
+    }
+}
+
+impl ResponseError for ProposalValidationError {
+    fn error_response(&self) -> HttpResponse {
+        let msg = ErrorMessage::new(self.to_string());
+        match self {
+            ProposalValidationError::NoSubscription(_)
+            | ProposalValidationError::Unsubscribed(_)
+            | ProposalValidationError::NotMatching(_) => HttpResponse::BadRequest().json(msg),
+            ProposalValidationError::Expired(_) => HttpResponse::Gone().json(msg),
+            ProposalValidationError::Unauthorized(_, _) => HttpResponse::Unauthorized().json(msg),
+            ProposalValidationError::Internal(_) => HttpResponse::InternalServerError().json(msg),
         }
     }
 }

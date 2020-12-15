@@ -12,7 +12,7 @@ use serde::Deserialize;
 use ya_client::model::ErrorMessage;
 
 use crate::db::model::{
-    AgreementId, AppSessionId, OwnerType, ProposalId, ProposalIdParseError, SubscriptionId,
+    AgreementId, AppSessionId, Owner, ProposalId, ProposalIdParseError, SubscriptionId,
 };
 
 pub(crate) mod common;
@@ -127,7 +127,7 @@ pub(crate) fn default_event_timeout() -> f32 {
 }
 
 impl PathAgreement {
-    pub fn to_id(self, owner: OwnerType) -> Result<AgreementId, ProposalIdParseError> {
+    pub fn to_id(self, owner: Owner) -> Result<AgreementId, ProposalIdParseError> {
         AgreementId::from_client(&self.agreement_id, owner)
     }
 }

@@ -4,40 +4,36 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use ya_client::model::market::proposal::Proposal as ClientProposal;
-use ya_client::model::market::reason::Reason;
-use ya_client::model::market::NewProposal;
+use ya_client::model::market::{proposal::Proposal as ClientProposal, reason::Reason, NewProposal};
 use ya_client::model::NodeId;
 use ya_market_resolver::{match_demand_offer, Match};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::config::Config;
-use crate::db::dao::{
-    AgreementDao, AgreementEventsDao, NegotiationEventsDao, ProposalDao, SaveProposalError,
+use crate::db::{
+    dao::{AgreementDao, AgreementEventsDao, NegotiationEventsDao, ProposalDao, SaveProposalError},
+    model::{
+        Agreement, AgreementEvent, AgreementId, AgreementState, AppSessionId, Issuer, MarketEvent,
+        Owner, Proposal, ProposalId, ProposalState, SubscriptionId,
+    },
 };
-use crate::db::model::{
-    Agreement, AgreementEvent, AgreementId, AgreementState, AppSessionId, IssuerType, MarketEvent,
-    OwnerType, Proposal, ProposalState,
-};
-use crate::db::model::{ProposalId, SubscriptionId};
-use crate::matcher::{
-    error::{DemandError, QueryOfferError},
-    store::SubscriptionStore,
-};
+use crate::matcher::store::SubscriptionStore;
 use crate::negotiation::{
     error::{
         AgreementError, AgreementEventsError, AgreementStateError, GetProposalError,
-        MatchValidationError, ProposalError, QueryEventsError,
+        MatchValidationError, ProposalError, ProposalValidationError, QueryEventsError,
     },
     notifier::NotifierError,
     EventNotifier,
 };
-use crate::protocol::negotiation::common as protocol_common;
-use crate::protocol::negotiation::error::{
-    CounterProposalError, RemoteAgreementError, RemoteProposalError, TerminateAgreementError,
+use crate::protocol::negotiation::{
+    common as protocol_common,
+    error::{
+        CounterProposalError, RemoteAgreementError, RemoteProposalError, TerminateAgreementError,
+    },
+    messages::{AgreementTerminated, ProposalReceived},
 };
-use crate::protocol::negotiation::messages::{AgreementTerminated, ProposalReceived};
 use crate::utils::display::EnableDisplay;
 
 type IsFirst = bool;
@@ -74,20 +70,23 @@ impl CommonBroker {
         subscription_id: &SubscriptionId,
         prev_proposal_id: &ProposalId,
         proposal: &NewProposal,
-        owner: OwnerType,
+        caller_id: &NodeId,
+        caller_role: Owner,
     ) -> Result<(Proposal, IsFirst), ProposalError> {
         // Check if subscription is still active.
         // Note that subscription can be unsubscribed, before we get to saving
         // Proposal to database. This seems like race conditions, but there's no
         // danger of data inconsistency. If we won't reject countering Proposal here,
         // it will be sent to Provider and his counter Proposal will be rejected later.
-        self.validate_subscription(&prev_proposal, owner).await?;
 
         let prev_proposal = self
             .get_proposal(Some(subscription_id.clone()), prev_proposal_id)
             .await?;
 
-        if prev_proposal.body.issuer == IssuerType::Us {
+        self.validate_subscription(&prev_proposal, caller_id, caller_role)
+            .await?;
+
+        if prev_proposal.body.issuer == Issuer::Us {
             return Err(ProposalError::OwnProposal(prev_proposal_id.clone()));
         }
 
@@ -105,23 +104,26 @@ impl CommonBroker {
 
     pub async fn reject_proposal(
         &self,
-        subscription_id: &SubscriptionId,
+        subs_id: &SubscriptionId,
         proposal_id: &ProposalId,
-        owner: OwnerType,
+        caller_id: &NodeId,
+        caller_role: Owner,
         _reason: &Option<Reason>,
-    ) -> Result<(), ProposalError> {
+    ) -> Result<Proposal, ProposalError> {
         // Check if subscription is still active.
         // Note that subscription can be unsubscribed, before we get to saving
         // Proposal to database. This seems like race conditions, but there's no
         // danger of data inconsistency. If we won't reject countering Proposal here,
         // it will be sent to Provider and his counter Proposal will be rejected later.
-        self.validate_subscription(&prev_proposal, owner).await?;
 
         let proposal = self
-            .get_proposal(Some(subscription_id.clone()), proposal_id)
+            .get_proposal(Some(subs_id.clone()), proposal_id)
             .await?;
 
-        if proposal.body.issuer == IssuerType::Us {
+        self.validate_subscription(&proposal, caller_id, caller_role)
+            .await?;
+
+        if proposal.body.issuer == Issuer::Us {
             return Err(ProposalError::OwnProposal(proposal_id.clone()));
         }
 
@@ -130,7 +132,7 @@ impl CommonBroker {
             // TODO: save reason to DB
             .change_proposal_state(proposal_id, ProposalState::Rejected)
             .await?;
-        Ok(())
+        Ok(proposal)
     }
 
     pub async fn query_events(
@@ -138,7 +140,7 @@ impl CommonBroker {
         subscription_id: &SubscriptionId,
         timeout: f32,
         max_events: Option<i32>,
-        owner: OwnerType,
+        owner: Owner,
     ) -> Result<Vec<MarketEvent>, QueryEventsError> {
         let mut timeout = Duration::from_secs_f32(timeout.max(0.0));
         let stop_time = Instant::now() + timeout;
@@ -328,8 +330,8 @@ impl CommonBroker {
             &agreement,
             id.identity.clone(),
             match owner_type {
-                OwnerType::Requestor => agreement.provider_id,
-                OwnerType::Provider => agreement.requestor_id,
+                Owner::Requestor => agreement.provider_id,
+                Owner::Provider => agreement.requestor_id,
             },
             reason.clone(),
         )
@@ -344,8 +346,8 @@ impl CommonBroker {
             .map_err(|e| AgreementError::Get(agreement.id.clone(), e))?;
 
         match owner_type {
-            OwnerType::Provider => counter!("market.agreements.provider.terminated", 1),
-            OwnerType::Requestor => counter!("market.agreements.requestor.terminated", 1),
+            Owner::Provider => counter!("market.agreements.provider.terminated", 1),
+            Owner::Requestor => counter!("market.agreements.requestor.terminated", 1),
         };
 
         terminate_reason_metric(&reason, owner_type);
@@ -363,7 +365,7 @@ impl CommonBroker {
         self,
         caller: String,
         msg: AgreementTerminated,
-        owner_type: OwnerType,
+        owner_type: Owner,
     ) -> Result<(), TerminateAgreementError> {
         let caller: NodeId =
             caller
@@ -384,7 +386,7 @@ impl CommonBroker {
         self,
         caller: NodeId,
         msg: AgreementTerminated,
-        owner_type: OwnerType,
+        owner_type: Owner,
     ) -> Result<(), RemoteAgreementError> {
         let dao = self.db.as_dao::<AgreementDao>();
         let agreement_id = msg.agreement_id.clone();
@@ -395,8 +397,8 @@ impl CommonBroker {
             .ok_or(RemoteAgreementError::NotFound(agreement_id.clone()))?;
 
         let our_id = match owner_type {
-            OwnerType::Requestor => agreement.provider_id,
-            OwnerType::Provider => agreement.requestor_id,
+            Owner::Requestor => agreement.provider_id,
+            Owner::Provider => agreement.requestor_id,
         };
 
         if our_id != caller {
@@ -406,8 +408,8 @@ impl CommonBroker {
 
         // Opposite side terminated.
         let terminator = match owner_type {
-            OwnerType::Provider => OwnerType::Requestor,
-            OwnerType::Requestor => OwnerType::Provider,
+            Owner::Provider => Owner::Requestor,
+            Owner::Requestor => Owner::Provider,
         };
 
         let reason_string = msg
@@ -427,8 +429,8 @@ impl CommonBroker {
             })?;
 
         match terminator {
-            OwnerType::Provider => counter!("market.agreements.provider.terminated", 1),
-            OwnerType::Requestor => counter!("market.agreements.requestor.terminated", 1),
+            Owner::Provider => counter!("market.agreements.provider.terminated", 1),
+            Owner::Requestor => counter!("market.agreements.requestor.terminated", 1),
         };
 
         terminate_reason_metric(&msg.reason, owner_type);
@@ -448,19 +450,20 @@ impl CommonBroker {
         self,
         caller: String,
         msg: ProposalReceived,
-        owner: OwnerType,
+        owner: Owner,
     ) -> Result<(), CounterProposalError> {
         let proposal_id = msg.proposal.proposal_id.clone();
-        self.proposal_received(caller, msg, owner)
+        let caller_id = CommonBroker::parse_caller(&caller)?;
+        self.proposal_received(msg, caller_id, owner)
             .await
             .map_err(|e| CounterProposalError::Remote(e, proposal_id))
     }
 
     pub async fn proposal_received(
         self,
-        caller: String,
         msg: ProposalReceived,
-        owner: OwnerType,
+        caller_id: NodeId,
+        caller_role: Owner,
     ) -> Result<(), RemoteProposalError> {
         // Check if countered Proposal exists.
         let prev_proposal = self
@@ -470,12 +473,9 @@ impl CommonBroker {
         let proposal = prev_proposal.from_draft(msg.proposal);
         proposal.validate_id().map_err(RemoteProposalError::from)?;
 
-        // TODO: do auth
-        let _owner_id = NodeId::from_str(&caller)
-            .map_err(|e| RemoteProposalError::Unexpected(e.to_string()))?;
-
-        self.validate_subscription(&prev_proposal, owner).await?;
-        validate_match(&proposal, &prev_proposal).map_err(RemoteProposalError::NotMatching)?;
+        self.validate_subscription(&prev_proposal, &caller_id, caller_role)
+            .await?;
+        validate_match(&proposal, &prev_proposal)?;
 
         self.db
             .as_dao::<ProposalDao>()
@@ -487,8 +487,9 @@ impl CommonBroker {
                 }
                 _ => {
                     // TODO: Don't leak our database error, but send meaningful message as response.
-                    log::warn!("[ProposalReceived] Error saving Proposal: {}", e);
-                    RemoteProposalError::Unexpected(e.to_string())
+                    let msg = format!("Failed saving Proposal [{}]: {}", proposal.body.id, e);
+                    log::warn!("{}", msg);
+                    ProposalValidationError::Internal(msg).into()
                 }
             })?;
 
@@ -496,59 +497,59 @@ impl CommonBroker {
         // TODO: If creating Proposal succeeds, but event can't be added, provider
         // TODO: will never answer to this Proposal. Solve problem when Event API will be available.
         let subscription_id = proposal.negotiation.subscription_id.clone();
-        let proposal = self
-            .db
+        self.db
             .as_dao::<NegotiationEventsDao>()
-            .add_proposal_event(proposal, owner)
+            .add_proposal_event(&proposal, caller_role)
             .await
             .map_err(|e| {
                 // TODO: Don't leak our database error, but send meaningful message as response.
-                log::warn!("[ProposalReceived] Error adding Proposal event: {}", e);
-                RemoteProposalError::Unexpected(e.to_string())
+                let msg = format!("Failed adding Proposal [{}] event: {}", proposal.body.id, e);
+                log::warn!("{}", msg);
+                ProposalValidationError::Internal(msg)
             })?;
 
         // Send channel message to wake all query_events waiting for proposals.
         self.negotiation_notifier.notify(&subscription_id).await;
 
-        match owner {
-            OwnerType::Requestor => counter!("market.proposals.requestor.received", 1),
-            OwnerType::Provider => counter!("market.proposals.provider.received", 1),
+        match caller_role {
+            Owner::Requestor => counter!("market.proposals.requestor.received", 1),
+            Owner::Provider => counter!("market.proposals.provider.received", 1),
         };
         log::info!(
             "Received counter Proposal [{}] for Proposal [{}] from [{}].",
             &proposal.body.id,
             &msg.prev_proposal_id,
-            &caller
+            &caller_id
         );
         Ok(())
+    }
+
+    pub(crate) fn parse_caller(caller: &str) -> Result<NodeId, ProposalValidationError> {
+        NodeId::from_str(caller).map_err(|e| {
+            ProposalValidationError::Internal(format!("Failed to parse caller [{}]: {}", caller, e))
+        })
     }
 
     pub async fn validate_subscription(
         &self,
         proposal: &Proposal,
-        owner: OwnerType,
-    ) -> Result<(), ProposalError> {
-        self.store
-            .get_offer(&proposal.negotiation.offer_id)
-            .await
-            .map_err(|e| match e {
-                QueryOfferError::Unsubscribed(id) => ProposalError::Unsubscribed(id),
-                QueryOfferError::Expired(id) => ProposalError::SubscriptionExpired(id),
-                QueryOfferError::NotFound(id) => ProposalError::NoSubscription(id),
-                QueryOfferError::Get(..) => {
-                    ProposalError::Internal(proposal_id.clone(), e.to_string())
-                }
-            })?;
+        caller_id: &NodeId,
+        caller_role: Owner,
+    ) -> Result<(), ProposalValidationError> {
+        if match caller_role {
+            Owner::Provider => &proposal.negotiation.provider_id != caller_id,
+            Owner::Requestor => &proposal.negotiation.requestor_id != caller_id,
+        } {
+            ProposalValidationError::Unauthorized(proposal.body.id.clone(), caller_id.clone());
+        }
+
+        self.store.get_offer(&proposal.negotiation.offer_id).await?;
 
         // On Requestor side we have both Offer and Demand, but Provider has only Offers.
-        if owner == OwnerType::Requestor {
+        if caller_role == Owner::Requestor {
             self.store
                 .get_demand(&proposal.negotiation.demand_id)
-                .await
-                .map_err(|e| match e {
-                    DemandError::NotFound(id) => ProposalError::NoSubscription(id),
-                    _ => ProposalError::Internal(proposal_id.clone(), e.to_string()),
-                })?;
+                .await?;
         }
 
         Ok(())
@@ -630,16 +631,16 @@ fn get_reason_code(reason: &Option<Reason>, key: &str) -> Option<String> {
 /// This function extract from Reason additional information about termination reason
 /// and increments metric counter. Note that Reason isn't required to have any fields
 /// despite 'message'.
-pub fn terminate_reason_metric(reason: &Option<Reason>, owner: OwnerType) {
+pub fn terminate_reason_metric(reason: &Option<Reason>, owner: Owner) {
     let p_code = get_reason_code(reason, "golem.provider.code");
     let r_code = get_reason_code(reason, "golem.requestor.code");
 
     let reason_code = r_code.xor(p_code).unwrap_or("None".to_string());
     match owner {
-        OwnerType::Provider => {
+        Owner::Provider => {
             counter!("market.agreements.provider.terminated.reason", 1, "reason" => reason_code)
         }
-        OwnerType::Requestor => {
+        Owner::Requestor => {
             counter!("market.agreements.requestor.terminated.reason", 1, "reason" => reason_code)
         }
     };

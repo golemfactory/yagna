@@ -5,7 +5,7 @@ use chrono::{Duration, Utc};
 use ya_market::testing::agreement_utils::{negotiate_agreement, negotiate_agreement_with_ids};
 use ya_market::testing::proposal_util::exchange_proposals_exclusive;
 use ya_market::testing::MarketsNetwork;
-use ya_market::testing::OwnerType;
+use ya_market::testing::Owner;
 
 use ya_client::model::market::AgreementOperationEvent as AgreementEvent;
 
@@ -81,7 +81,7 @@ async fn test_session_events_filtering() -> Result<()> {
                 .provider_engine
                 .approve_agreement(
                     network.get_default_id(PROV_NAME),
-                    &agreement_id.clone().translate(OwnerType::Provider),
+                    &agreement_id.clone().translate(Owner::Provider),
                     Some(session_id.clone()),
                     0.1,
                 )

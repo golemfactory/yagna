@@ -7,7 +7,7 @@ use ya_client::model::market::{AgreementProposal, NewDemand, NewProposal, Reason
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::LogErr;
 
-use crate::db::model::OwnerType;
+use crate::db::model::Owner;
 use crate::market::MarketService;
 
 use super::{
@@ -167,7 +167,7 @@ async fn confirm_agreement(
     query: Query<QueryAppSessionId>,
     id: Identity,
 ) -> impl Responder {
-    let agreement_id = path.into_inner().to_id(OwnerType::Requestor)?;
+    let agreement_id = path.into_inner().to_id(Owner::Requestor)?;
     market
         .requestor_engine
         .confirm_agreement(id, &agreement_id, query.into_inner().app_session_id)
@@ -183,7 +183,7 @@ async fn wait_for_approval(
     query: Query<QueryTimeout>,
     _id: Identity,
 ) -> impl Responder {
-    let agreement_id = path.into_inner().to_id(OwnerType::Requestor)?;
+    let agreement_id = path.into_inner().to_id(Owner::Requestor)?;
     let timeout = query.timeout;
     market
         .requestor_engine

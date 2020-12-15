@@ -5,7 +5,7 @@ pub mod provider;
 pub mod requestor;
 
 pub mod common {
-    use crate::db::model::{Agreement, OwnerType};
+    use crate::db::model::{Agreement, Owner};
     use crate::protocol::negotiation::error::{GsbAgreementError, TerminateAgreementError};
     use crate::protocol::negotiation::messages::{provider, requestor, AgreementTerminated};
 
@@ -29,8 +29,8 @@ pub mod common {
 
         log::debug!("Propagating TerminateAgreement: {:?}", msg);
         let service = match agreement.id.clone().owner() {
-            OwnerType::Requestor => provider::agreement_addr(BUS_ID),
-            OwnerType::Provider => requestor::agreement_addr(BUS_ID),
+            Owner::Requestor => provider::agreement_addr(BUS_ID),
+            Owner::Provider => requestor::agreement_addr(BUS_ID),
         };
         net::from(sender)
             .to(receiver)

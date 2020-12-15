@@ -8,7 +8,7 @@ use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 use crate::db::dao::demand::{demand_status, DemandState};
 use crate::db::dao::offer::{query_state, OfferState};
 use crate::db::dao::sql_functions::datetime;
-use crate::db::model::{Agreement, MarketEvent, OwnerType, Proposal, SubscriptionId};
+use crate::db::model::{Agreement, MarketEvent, Owner, Proposal, SubscriptionId};
 use crate::db::schema::market_negotiation_event::dsl;
 use crate::db::{DbError, DbResult};
 use crate::market::EnvConfig;
@@ -40,17 +40,13 @@ impl<'c> AsDao<'c> for NegotiationEventsDao<'c> {
 }
 
 impl<'c> NegotiationEventsDao<'c> {
-    pub async fn add_proposal_event(
-        &self,
-        proposal: Proposal,
-        owner: OwnerType,
-    ) -> DbResult<Proposal> {
+    pub async fn add_proposal_event(&self, proposal: &Proposal, owner: Owner) -> DbResult<()> {
+        let event = MarketEvent::from_proposal(proposal, owner);
         do_with_transaction(self.pool, move |conn| {
-            let event = MarketEvent::from_proposal(&proposal, owner);
             diesel::insert_into(dsl::market_negotiation_event)
                 .values(event)
                 .execute(conn)?;
-            Ok(proposal)
+            Ok(())
         })
         .await
     }
@@ -70,7 +66,7 @@ impl<'c> NegotiationEventsDao<'c> {
         &self,
         subscription_id: &SubscriptionId,
         max_events: i32,
-        owner: OwnerType,
+        owner: Owner,
     ) -> Result<Vec<MarketEvent>, TakeEventsError> {
         let subscription_id = subscription_id.clone();
         do_with_transaction(self.pool, move |conn| {
@@ -130,10 +126,10 @@ impl<'c> NegotiationEventsDao<'c> {
 fn validate_subscription(
     conn: &ConnType,
     subscription_id: &SubscriptionId,
-    owner: OwnerType,
+    owner: Owner,
 ) -> Result<(), TakeEventsError> {
     match owner {
-        OwnerType::Requestor => match demand_status(conn, &subscription_id)? {
+        Owner::Requestor => match demand_status(conn, &subscription_id)? {
             DemandState::NotFound => Err(TakeEventsError::SubscriptionNotFound(
                 subscription_id.clone(),
             ))?,
@@ -142,17 +138,15 @@ fn validate_subscription(
             ))?,
             _ => Ok(()),
         },
-        OwnerType::Provider => {
-            match query_state(conn, &subscription_id, &Utc::now().naive_utc())? {
-                OfferState::NotFound => Err(TakeEventsError::SubscriptionNotFound(
-                    subscription_id.clone(),
-                ))?,
-                OfferState::Expired(_) => Err(TakeEventsError::SubscriptionExpired(
-                    subscription_id.clone(),
-                ))?,
-                _ => Ok(()),
-            }
-        }
+        Owner::Provider => match query_state(conn, &subscription_id, &Utc::now().naive_utc())? {
+            OfferState::NotFound => Err(TakeEventsError::SubscriptionNotFound(
+                subscription_id.clone(),
+            ))?,
+            OfferState::Expired(_) => Err(TakeEventsError::SubscriptionExpired(
+                subscription_id.clone(),
+            ))?,
+            _ => Ok(()),
+        },
     }
 }
 

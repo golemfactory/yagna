@@ -10,7 +10,7 @@ use ya_persistence::executor::DbExecutor;
 
 use super::SubscriptionId;
 use crate::db::dao::{AgreementDao, ProposalDao};
-use crate::db::model::{Agreement, AgreementId, OwnerType, Proposal, ProposalId};
+use crate::db::model::{Agreement, AgreementId, Owner, Proposal, ProposalId};
 use crate::db::schema::market_negotiation_event;
 use crate::db::DbError;
 
@@ -76,12 +76,12 @@ pub struct NewMarketEvent {
 }
 
 impl MarketEvent {
-    pub fn from_proposal(proposal: &Proposal, role: OwnerType) -> NewMarketEvent {
+    pub fn from_proposal(proposal: &Proposal, role: Owner) -> NewMarketEvent {
         NewMarketEvent {
             subscription_id: proposal.negotiation.subscription_id.clone(),
             event_type: match role {
-                OwnerType::Requestor => EventType::RequestorNewProposal,
-                OwnerType::Provider => EventType::ProviderNewProposal,
+                Owner::Requestor => EventType::RequestorNewProposal,
+                Owner::Provider => EventType::ProviderNewProposal,
             },
             artifact_id: proposal.body.id.clone(),
         }

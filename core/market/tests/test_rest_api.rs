@@ -17,8 +17,7 @@ use ya_market::testing::{
     client::{sample_demand, sample_offer},
     mock_node::{wait_for_bcast, MarketServiceExt},
     proposal_util::exchange_draft_proposals,
-    DemandError, MarketsNetwork, ModifyOfferError, OwnerType, SubscriptionId,
-    SubscriptionParseError,
+    DemandError, MarketsNetwork, ModifyOfferError, Owner, SubscriptionId, SubscriptionParseError,
 };
 use ya_market_resolver::flatten::flatten_json;
 
@@ -287,7 +286,7 @@ async fn test_rest_get_proposal() -> anyhow::Result<()> {
     let proposal_id = exchange_draft_proposals(&network, "Requestor", "Provider")
         .await?
         .proposal_id
-        .translate(OwnerType::Provider);
+        .translate(Owner::Provider);
 
     // Not really remote, but in this scenario will treat it as remote
     let identity_local = network.get_default_id("Provider");

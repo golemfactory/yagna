@@ -6,7 +6,7 @@ use ya_client::model::market::{NewOffer, NewProposal, Reason};
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::LogErr;
 
-use crate::db::model::OwnerType;
+use crate::db::model::Owner;
 use crate::market::MarketService;
 
 use super::{PathAgreement, PathSubscription, PathSubscriptionProposal, QueryTimeoutMaxEvents};
@@ -146,7 +146,7 @@ async fn approve_agreement(
     query: Query<QueryTimeoutAppSessionId>,
     id: Identity,
 ) -> impl Responder {
-    let agreement_id = path.into_inner().to_id(OwnerType::Provider)?;
+    let agreement_id = path.into_inner().to_id(Owner::Provider)?;
     let timeout = query.timeout;
     let session = query.into_inner().app_session_id;
     market

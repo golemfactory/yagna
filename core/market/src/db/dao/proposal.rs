@@ -16,7 +16,9 @@ pub enum SaveProposalError {
     #[error("Proposal [{0}] already has counter proposal. Can't counter for the second time.")]
     AlreadyCountered(ProposalId),
     #[error("Failed to save proposal to db: {0}.")]
-    Db(DbError),
+    Db(ProposalId, DbError),
+    #[error("Internal DB error: {0}.")]
+    DbInternal(DbError),
     #[error("Proposal [{0}] has no previous proposal. This should not happened when calling save_proposal.")]
     NoPrevious(ProposalId),
 }
@@ -24,9 +26,9 @@ pub enum SaveProposalError {
 #[derive(thiserror::Error, Debug)]
 pub enum ChangeProposalStateError {
     #[error("Failed to change proposal [{0}] state to `{1}` in db: {0}.")]
-    Db(ProposalId, ProposalState, DbError);
+    Db(ProposalId, ProposalState, DbError),
     //TODO: state transition error
-};
+}
 
 pub struct ProposalDao<'c> {
     pool: &'c PoolType,
@@ -39,7 +41,11 @@ impl<'c> AsDao<'c> for ProposalDao<'c> {
 }
 
 impl<'c> ProposalDao<'c> {
-    pub async fn save_initial_proposal(&self, proposal: Proposal) -> DbResult<Proposal> {
+    pub async fn save_initial_proposal(
+        &self,
+        proposal: Proposal,
+    ) -> Result<Proposal, SaveProposalError> {
+        let proposal_id = proposal.body.id.clone();
         do_with_transaction(self.pool, move |conn| {
             diesel::insert_into(dsl_negotiation::market_negotiation)
                 .values(&proposal.negotiation)
@@ -51,6 +57,7 @@ impl<'c> ProposalDao<'c> {
             Ok(proposal)
         })
         .await
+        .map_err(|e| SaveProposalError::Db(proposal_id, e))
     }
 
     pub async fn save_proposal(&self, proposal: &Proposal) -> Result<(), SaveProposalError> {
@@ -67,7 +74,8 @@ impl<'c> ProposalDao<'c> {
 
             diesel::insert_into(dsl::market_proposal)
                 .values(&proposal)
-                .execute(conn)?;
+                .execute(conn)
+                .map_err(|e| SaveProposalError::Db(proposal.id, e.into()))?;
             Ok(())
         })
         .await
@@ -180,6 +188,6 @@ pub(super) fn update_proposal_state(
 
 impl<ErrorType: Into<DbError>> From<ErrorType> for SaveProposalError {
     fn from(err: ErrorType) -> Self {
-        SaveProposalError::Db(err.into())
+        SaveProposalError::DbInternal(err.into())
     }
 }

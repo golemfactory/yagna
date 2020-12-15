@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use ya_client::model::NodeId;
 use ya_market_resolver::flatten::JsonObjectExpected;
 
 use crate::db::dao::StateError;
@@ -12,6 +13,7 @@ use crate::db::{
     dao::{ChangeProposalStateError, SaveProposalError},
     DbError,
 };
+use crate::matcher::error::{DemandError, QueryOfferError};
 use crate::protocol::negotiation::error::{
     ApproveAgreementError, CounterProposalError as ProtocolProposalError, GsbAgreementError,
     NegotiationApiInitError, ProposeAgreementError, TerminateAgreementError,
@@ -148,18 +150,28 @@ pub enum GetProposalError {
     Internal(ProposalId, Option<SubscriptionId>, String),
 }
 
-#[derive(Error, Debug)]
-pub enum ProposalError {
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum ProposalValidationError {
     #[error("Subscription [{0}] wasn't found.")]
     NoSubscription(SubscriptionId),
     #[error("Subscription [{0}] was already unsubscribed.")]
     Unsubscribed(SubscriptionId),
     #[error("Subscription [{0}] expired.")]
-    SubscriptionExpired(SubscriptionId),
-    #[error("Can't counter own Proposal [{0}].")]
-    OwnProposal(ProposalId),
+    Expired(SubscriptionId),
     #[error(transparent)]
     NotMatching(#[from] MatchValidationError),
+    #[error("Unauthorized operation attempt on Proposal [{0}] from [{1}].")]
+    Unauthorized(ProposalId, NodeId),
+    #[error("Internal error processing Proposal: {0}.")]
+    Internal(String),
+}
+
+#[derive(Error, Debug)]
+pub enum ProposalError {
+    #[error(transparent)]
+    Validation(#[from] ProposalValidationError),
+    #[error("Can't counter own Proposal [{0}].")]
+    OwnProposal(ProposalId),
     #[error(transparent)]
     Get(#[from] GetProposalError),
     #[error(transparent)]
@@ -170,8 +182,6 @@ pub enum ProposalError {
     ChangeState(#[from] ChangeProposalStateError),
     #[error("Failed to send counter Proposal for Proposal [{0}]. Error: {1}")]
     Send(ProposalId, ProtocolProposalError),
-    #[error("Can't counter Proposal [{0}]. Error: {1}.")]
-    Internal(ProposalId, String),
 }
 
 impl AgreementError {
@@ -183,6 +193,32 @@ impl AgreementError {
             GetProposalError::Internal(proposal_id, _, err_msg) => {
                 AgreementError::GetProposal(promoted_proposal.clone(), proposal_id, err_msg)
             }
+        }
+    }
+}
+
+impl From<MatchValidationError> for ProposalError {
+    fn from(e: MatchValidationError) -> Self {
+        ProposalValidationError::NotMatching(e).into()
+    }
+}
+
+impl From<QueryOfferError> for ProposalValidationError {
+    fn from(e: QueryOfferError) -> Self {
+        match e {
+            QueryOfferError::NotFound(id) => ProposalValidationError::NoSubscription(id),
+            QueryOfferError::Unsubscribed(id) => ProposalValidationError::Unsubscribed(id),
+            QueryOfferError::Expired(id) => ProposalValidationError::Expired(id),
+            _ => ProposalValidationError::Internal(format!("Offer: {}", e)),
+        }
+    }
+}
+
+impl From<DemandError> for ProposalValidationError {
+    fn from(e: DemandError) -> Self {
+        match e {
+            DemandError::NotFound(id) => ProposalValidationError::NoSubscription(id),
+            _ => ProposalValidationError::Internal(format!("Demand: {}", e)),
         }
     }
 }

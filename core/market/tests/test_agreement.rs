@@ -12,7 +12,7 @@ use ya_market::testing::proposal_util::{exchange_draft_proposals, NegotiationHel
 use ya_market::testing::MarketsNetwork;
 use ya_market::testing::{
     client::sample_demand, client::sample_offer, events_helper::*, AgreementDao, AgreementError,
-    AgreementStateError, ApprovalStatus, OwnerType, ProposalState, WaitForApprovalError,
+    AgreementStateError, ApprovalStatus, Owner, ProposalState, WaitForApprovalError,
 };
 use ya_service_bus::typed as bus;
 use ya_service_bus::RpcEndpoint;
@@ -106,7 +106,7 @@ async fn test_rest_get_not_existing_agreement() -> Result<()> {
     let agreement_id = req_engine
         .create_agreement(req_id.clone(), &proposal_id, Utc::now())
         .await?
-        .translate(OwnerType::Provider);
+        .translate(Owner::Provider);
 
     let result = req_market.get_agreement(&agreement_id, &req_id).await;
     assert!(result.is_err());
@@ -176,7 +176,7 @@ async fn full_market_interaction_aka_happy_path() -> Result<()> {
         .provider_engine
         .approve_agreement(
             network.get_default_id(PROV_NAME),
-            &agreement_id.clone().translate(OwnerType::Provider),
+            &agreement_id.clone().translate(Owner::Provider),
             None,
             0.1,
         )
@@ -479,7 +479,7 @@ async fn approval_without_waiting_should_pass() -> Result<()> {
         .provider_engine
         .approve_agreement(
             prov_id.clone(),
-            &agreement_id.translate(OwnerType::Provider),
+            &agreement_id.translate(Owner::Provider),
             None,
             0.1,
         )
@@ -527,7 +527,7 @@ async fn waiting_after_approval_should_pass() -> Result<()> {
         .provider_engine
         .approve_agreement(
             prov_id.clone(),
-            &agreement_id.clone().translate(OwnerType::Provider),
+            &agreement_id.clone().translate(Owner::Provider),
             None,
             0.1,
         )
@@ -581,7 +581,7 @@ async fn second_approval_should_fail() -> Result<()> {
     prov_market
         .approve_agreement(
             prov_id.clone(),
-            &agreement_id.clone().translate(OwnerType::Provider),
+            &agreement_id.clone().translate(Owner::Provider),
             None,
             0.1,
         )
@@ -591,12 +591,12 @@ async fn second_approval_should_fail() -> Result<()> {
     let result = prov_market
         .approve_agreement(
             prov_id.clone(),
-            &agreement_id.clone().translate(OwnerType::Provider),
+            &agreement_id.clone().translate(Owner::Provider),
             None,
             0.1,
         )
         .await;
-    let agreement_id = agreement_id.clone().translate(OwnerType::Provider);
+    let agreement_id = agreement_id.clone().translate(Owner::Provider);
     assert_eq!(
         result.unwrap_err().to_string(),
         AgreementError::InvalidState(AgreementStateError::Approved(agreement_id)).to_string()
@@ -644,7 +644,7 @@ async fn second_waiting_should_pass() -> Result<()> {
         .provider_engine
         .approve_agreement(
             prov_id.clone(),
-            &agreement_id.clone().translate(OwnerType::Provider),
+            &agreement_id.clone().translate(Owner::Provider),
             None,
             0.1,
         )
@@ -745,7 +745,7 @@ async fn net_err_while_approving() -> Result<()> {
         .provider_engine
         .approve_agreement(
             prov_id.clone(),
-            &agreement_id.clone().translate(OwnerType::Provider),
+            &agreement_id.clone().translate(Owner::Provider),
             None,
             0.1,
         )
@@ -1030,7 +1030,7 @@ async fn test_terminate_from_wrong_states() -> Result<()> {
         _ => panic!("Wrong error returned."),
     };
 
-    let agreement_id = agreement_id.clone().translate(OwnerType::Provider);
+    let agreement_id = agreement_id.clone().translate(Owner::Provider);
 
     let result = prov_market
         .terminate_agreement(req_id, agreement_id.clone(), Some(gen_reason("Failure")))

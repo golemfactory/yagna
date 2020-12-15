@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use ya_client::model::market::Proposal;
 
-use crate::db::model::{EventType, OwnerType, ProposalId, SubscriptionId};
+use crate::db::model::{EventType, Owner, ProposalId, SubscriptionId};
 use crate::db::schema::market_negotiation_event;
 use crate::MarketService;
 
@@ -25,10 +25,10 @@ pub fn generate_event(id: i32, timestamp: NaiveDateTime) -> TestMarketEvent {
         subscription_id: SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
         event_type: EventType::ProviderNewProposal,
         artifact_id: ProposalId::generate_id(
-                &SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
-                &SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
-                &Utc::now().naive_utc(),
-                OwnerType::Requestor,
+            &SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
+            &SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
+            &Utc::now().naive_utc(),
+            Owner::Requestor,
         ),
         timestamp,
         reason: None,

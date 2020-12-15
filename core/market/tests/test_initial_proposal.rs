@@ -2,7 +2,7 @@ use ya_client::model::market::event::{ProviderEvent, RequestorEvent};
 use ya_client::model::market::proposal::State;
 use ya_market::testing::events_helper::ClientProposalHelper;
 use ya_market::testing::mock_offer::client::{sample_demand, sample_offer};
-use ya_market::testing::{MarketServiceExt, MarketsNetwork, OwnerType};
+use ya_market::testing::{MarketServiceExt, MarketsNetwork, Owner};
 use ya_market::testing::{QueryEventsError, TakeEventsError};
 use ya_market::MarketService;
 
@@ -461,7 +461,7 @@ async fn test_counter_initial_proposal() -> Result<(), anyhow::Error> {
     assert_ne!(&new_proposal_id, &init_proposal_id);
 
     // We expect that event was generated on Provider part of Node.
-    let new_proposal_id = new_proposal_id.translate(OwnerType::Provider);
+    let new_proposal_id = new_proposal_id.translate(Owner::Provider);
     let events = market1
         .provider_engine
         .query_events(&offer_id, 1.5, Some(5))

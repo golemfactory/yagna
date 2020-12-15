@@ -1,10 +1,9 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::db::model::{
-    AgreementId, AgreementState, ProposalId, ProposalIdValidationError, SubscriptionId,
-};
-use crate::negotiation::error::MatchValidationError;
+use crate::db::model::{AgreementId, AgreementState, ProposalId, ProposalIdValidationError};
+use crate::matcher::error::QueryOfferError;
+use crate::negotiation::error::{MatchValidationError, ProposalValidationError};
 
 /// Trait for Error types, that shouldn't expose sensitive information
 /// to other Nodes in network, but should contain more useful message, when displaying
@@ -28,24 +27,20 @@ pub enum CounterProposalError {
     NoPrevious(ProposalId),
     #[error("Countering Proposal [{1}] remote error: {0}")]
     Remote(RemoteProposalError, ProposalId),
+    #[error("Remote error: {0}")]
+    RemoteInternal(#[from] RemoteProposalError),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum RemoteProposalError {
-    #[error("Offer/Demand [{0}] already unsubscribed.")]
-    Unsubscribed(SubscriptionId),
-    #[error("Offer/Demand [{0}] expired.")]
-    Expired(SubscriptionId),
+    #[error(transparent)]
+    Validation(#[from] ProposalValidationError),
     #[error("Trying to counter not existing Proposal [{0}].")]
     NotFound(ProposalId),
     #[error("Proposal [{0}] was already countered.")]
     AlreadyCountered(ProposalId),
     #[error(transparent)]
     InvalidId(#[from] ProposalIdValidationError),
-    #[error(transparent)]
-    NotMatching(#[from] MatchValidationError),
-    #[error("Error: {0}.")]
-    Unexpected(String),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
@@ -135,5 +130,23 @@ impl RemoteSensitiveError for RemoteProposeAgreementError {
             }
             _ => self,
         }
+    }
+}
+
+impl From<MatchValidationError> for RemoteProposalError {
+    fn from(e: MatchValidationError) -> Self {
+        ProposalValidationError::NotMatching(e).into()
+    }
+}
+
+impl From<QueryOfferError> for RemoteProposalError {
+    fn from(e: QueryOfferError) -> Self {
+        ProposalValidationError::from(e).into()
+    }
+}
+
+impl From<ProposalValidationError> for CounterProposalError {
+    fn from(e: ProposalValidationError) -> Self {
+        RemoteProposalError::from(e).into()
     }
 }

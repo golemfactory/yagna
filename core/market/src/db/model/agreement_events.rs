@@ -2,7 +2,7 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::sql_types::Text;
 use std::fmt::Debug;
 
-use crate::db::model::{AgreementId, OwnerType};
+use crate::db::model::{AgreementId, Owner};
 use crate::db::schema::market_agreement_event;
 
 use ya_client::model::market::agreement_event::AgreementTerminator;
@@ -34,7 +34,7 @@ pub struct AgreementEvent {
     pub agreement_id: AgreementId,
     pub event_type: AgreementEventType,
     pub timestamp: NaiveDateTime,
-    pub issuer: OwnerType,
+    pub issuer: Owner,
     pub reason: Option<String>,
     pub signature: Option<String>,
 }
@@ -44,7 +44,7 @@ pub struct AgreementEvent {
 pub struct NewAgreementEvent {
     pub agreement_id: AgreementId,
     pub event_type: AgreementEventType,
-    pub issuer: OwnerType,
+    pub issuer: Owner,
     pub reason: Option<String>,
 }
 
@@ -81,8 +81,8 @@ impl AgreementEvent {
             AgreementEventType::Terminated => ClientEvent::AgreementTerminatedEvent {
                 agreement_id,
                 terminator: match self.issuer {
-                    OwnerType::Provider => AgreementTerminator::Provider,
-                    OwnerType::Requestor => AgreementTerminator::Requestor,
+                    Owner::Provider => AgreementTerminator::Provider,
+                    Owner::Requestor => AgreementTerminator::Requestor,
                 },
                 event_date,
                 reason,
