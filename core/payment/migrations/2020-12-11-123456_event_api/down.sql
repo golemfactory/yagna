@@ -1,6 +1,9 @@
-DROP TABLE pay_allocation;
 
-CREATE TABLE pay_allocation(
+-- HACK: All this code below is just to drop column timestamp from table pay_allocation
+
+PRAGMA foreign_keys=off;
+
+CREATE TABLE pay_allocation_tmp(
     id VARCHAR(50) NOT NULL PRIMARY KEY,
     owner_id VARCHAR(50) NOT NULL,
     payment_platform VARCHAR(50) NOT NULL,
@@ -13,9 +16,15 @@ CREATE TABLE pay_allocation(
     released BOOLEAN NOT NULL DEFAULT FALSE
 );
 
--- HACK: All this code below is just to drop column app_session_id from table pay_agreement
+INSERT INTO pay_allocation_tmp(id, owner_id, payment_platform, address, total_amount, spent_amount, remaining_amount, timeout, make_deposit, released)
+SELECT id, owner_id, payment_platform, address, total_amount, spent_amount, remaining_amount, timeout, make_deposit, released FROM pay_allocation;
 
-PRAGMA foreign_keys=off;
+
+DROP TABLE pay_allocation;
+
+ALTER TABLE pay_allocation_tmp RENAME TO pay_allocation;
+
+-- HACK: All this code below is just to drop column app_session_id from table pay_agreement
 
 CREATE TABLE pay_agreement_tmp(
     id VARCHAR(50) NOT NULL,
@@ -32,8 +41,8 @@ CREATE TABLE pay_agreement_tmp(
     UNIQUE (id, role)
 );
 
-INSERT INTO pay_agreement_tmp(id, owner_id, role, peer_id, payee_addr, payer_addr, payment_platform, total_amount_due, total_amount_accepted, total_amount_accepted)
-SELECT id, owner_id, role, peer_id, payee_addr, payer_addr, payment_platform, total_amount_due, total_amount_accepted, total_amount_accepted FROM pay_agreement;
+INSERT INTO pay_agreement_tmp(id, owner_id, role, peer_id, payee_addr, payer_addr, payment_platform, total_amount_due, total_amount_accepted, total_amount_paid)
+SELECT id, owner_id, role, peer_id, payee_addr, payer_addr, payment_platform, total_amount_due, total_amount_accepted, total_amount_paid FROM pay_agreement;
 
 DROP TABLE pay_agreement;
 
