@@ -16,7 +16,7 @@ use crate::tasks::{AgreementBroken, AgreementClosed};
 
 use ya_client::activity::ActivityProviderApi;
 use ya_client::model::payment::{DebitNote, Invoice, NewDebitNote, NewInvoice};
-use ya_client::payment::PaymentProviderApi;
+use ya_client::payment::PaymentApi;
 use ya_client_model::payment::EventType;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::forward_actix_handler;
@@ -98,7 +98,7 @@ pub struct DebitNoteInfo {
 /// Yagna APIs and payments information about provider.
 struct ProviderCtx {
     activity_api: Arc<ActivityProviderApi>,
-    payment_api: Arc<PaymentProviderApi>,
+    payment_api: Arc<PaymentApi>,
 
     get_events_timeout: Option<Duration>,
     get_events_error_timeout: Duration,
@@ -117,7 +117,7 @@ pub struct Payments {
 }
 
 impl Payments {
-    pub fn new(activity_api: ActivityProviderApi, payment_api: PaymentProviderApi) -> Payments {
+    pub fn new(activity_api: ActivityProviderApi, payment_api: PaymentApi) -> Payments {
         let provider_ctx = ProviderCtx {
             activity_api: Arc::new(activity_api),
             payment_api: Arc::new(payment_api),
@@ -222,12 +222,12 @@ async fn send_debit_note(
 async fn check_invoice_events(provider_ctx: Arc<ProviderCtx>, payments_addr: Addr<Payments>) -> () {
     let timeout = provider_ctx.get_events_timeout.clone();
     let error_timeout = provider_ctx.get_events_error_timeout.clone();
-    let mut lather_than = Utc::now();
+    let mut after_timestamp = Utc::now();
 
     loop {
         let events = match provider_ctx
             .payment_api
-            .get_invoice_events(Some(&lather_than), timeout)
+            .get_invoice_events(Some(&after_timestamp), timeout, None, None)
             .await
         {
             Ok(events) => events,
@@ -249,14 +249,14 @@ async fn check_invoice_events(provider_ctx: Arc<ProviderCtx>, payments_addr: Add
                     log::info!("Invoice [{}] settled by requestor.", invoice_id);
                     payments_addr.do_send(InvoiceSettled { invoice_id })
                 }
-                EventType::Rejected => {
-                    log::warn!("Invoice [{}] rejected by requestor.", invoice_id)
-                    // TODO: Send signal to other provider's modules to react to this situation.
-                    //       Probably we don't want to cooperate with this Requestor anymore.
-                }
+                // EventType::Rejected => {
+                //     log::warn!("Invoice [{}] rejected by requestor.", invoice_id)
+                //     // TODO: Send signal to other provider's modules to react to this situation.
+                //     //       Probably we don't want to cooperate with this Requestor anymore.
+                // }
                 _ => log::warn!("Unexpected event received: {}", event.event_type),
             }
-            lather_than = event.timestamp;
+            after_timestamp = event.event_date;
         }
     }
 }

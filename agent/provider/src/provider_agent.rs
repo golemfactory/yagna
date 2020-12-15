@@ -127,7 +127,7 @@ impl ProviderAgent {
         let api = ProviderApi::try_from(&args.api)?;
 
         log::info!("Loading payment accounts...");
-        let accounts: Vec<Account> = api.payment.get_accounts().await?;
+        let accounts: Vec<Account> = api.payment.get_provider_accounts().await?;
         log::info!("Payment accounts: {:#?}", accounts);
         let registry = config.registry()?;
         registry.validate()?;
