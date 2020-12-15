@@ -1,6 +1,7 @@
-DROP TABLE pay_allocation;
 
-CREATE TABLE pay_allocation(
+-- HACK: All this code below is just to drop column timestamp from table pay_allocation
+
+CREATE TABLE pay_allocation_tmp(
     id VARCHAR(50) NOT NULL PRIMARY KEY,
     owner_id VARCHAR(50) NOT NULL,
     payment_platform VARCHAR(50) NOT NULL,
@@ -12,6 +13,17 @@ CREATE TABLE pay_allocation(
     make_deposit BOOLEAN NOT NULL,
     released BOOLEAN NOT NULL DEFAULT FALSE
 );
+
+INSERT INTO pay_allocation_tmp(id, owner_id, payment_platform, address, total_amount, spent_amount, remaining_amount, timeout, make_deposit, released)
+SELECT id, owner_id, payment_platform, address, total_amount, spent_amount, remaining_amount, timeout, make_deposit, released FROM pay_allocation;
+
+
+DROP TABLE pay_allocation;
+
+ALTER TABLE pay_allocation_tmp RENAME TO pay_allocation;
+
+PRAGMA foreign_keys=on;
+
 
 -- HACK: All this code below is just to drop column app_session_id from table pay_agreement
 
