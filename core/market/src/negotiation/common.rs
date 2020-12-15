@@ -335,6 +335,8 @@ impl CommonBroker {
             .await
             .map_err(|e| AgreementError::Get(agreement.id.clone(), e))?;
 
+        self.notify_agreement(&agreement).await;
+
         match owner_type {
             OwnerType::Provider => counter!("market.agreements.provider.terminated", 1),
             OwnerType::Requestor => counter!("market.agreements.requestor.terminated", 1),
@@ -417,6 +419,8 @@ impl CommonBroker {
                 );
                 RemoteAgreementError::InternalError(agreement_id.clone())
             })?;
+
+        self.notify_agreement(&agreement).await;
 
         match terminator {
             OwnerType::Provider => counter!("market.agreements.provider.terminated", 1),
