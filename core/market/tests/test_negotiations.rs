@@ -11,7 +11,6 @@ use ya_market_resolver::flatten::flatten_json;
 
 /// Test countering initial and draft proposals on both Provider and Requestor side.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_exchanging_draft_proposals() {
     let network = MarketsNetwork::new(None)
@@ -139,7 +138,6 @@ async fn test_exchanging_draft_proposals() {
 /// Can't counter proposal, that was already countered.
 /// Market should reject such attempts.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_counter_countered_proposal() {
     let network = MarketsNetwork::new(None)
@@ -225,7 +223,6 @@ async fn test_counter_countered_proposal() {
 
 /// Can't counter own proposal.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_counter_own_proposal() {
     let network = MarketsNetwork::new(None)
@@ -315,7 +312,6 @@ async fn test_counter_own_proposal() {
 
 /// Requestor can't counter Proposal, for which he has unsubscribed Demand.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_counter_unsubscribed_demand() {
     let network = MarketsNetwork::new(None)
@@ -368,7 +364,6 @@ async fn test_counter_unsubscribed_demand() {
 
 /// Provider can't counter Proposal, for which he has unsubscribed Offer.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_counter_unsubscribed_offer() {
     let network = MarketsNetwork::new(None)
@@ -438,7 +433,6 @@ async fn test_counter_unsubscribed_offer() {
 /// Requestor tries to counter initial Proposal, for which Offer was unsubscribed on remote Node.
 /// Negotiation attempt should be rejected by Provider Node.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_counter_initial_unsubscribed_remote_offer() {
     let network = MarketsNetwork::new(None)
@@ -494,7 +488,6 @@ async fn test_counter_initial_unsubscribed_remote_offer() {
 /// Requestor tries to counter draft Proposal, for which Offer was unsubscribed on remote Node.
 /// Negotiation attempt should be rejected by Provider Node.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_counter_draft_unsubscribed_remote_offer() {
     let network = MarketsNetwork::new(None)
@@ -540,7 +533,6 @@ async fn test_counter_draft_unsubscribed_remote_offer() {
 /// Provider tries to counter draft Proposal, for which Demand was unsubscribed on remote Node.
 /// Negotiation attempt should be rejected by Requestor Node.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_counter_draft_unsubscribed_remote_demand() {
     let network = MarketsNetwork::new(None)
@@ -600,7 +592,6 @@ async fn test_counter_draft_unsubscribed_remote_demand() {
 /// Try to send not matching counter Proposal to Provider. Our market
 /// should reject such Proposal. Error should occur on Requestor side.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_not_matching_counter_demand() {
     let network = MarketsNetwork::new(None)
@@ -636,7 +627,6 @@ async fn test_not_matching_counter_demand() {
 /// Try to send not matching counter Proposal to Requestor. Our market
 /// should reject such Proposal. Error should occur on Provider side.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_not_matching_counter_offer() {
     let network = MarketsNetwork::new(None)
@@ -692,7 +682,6 @@ async fn test_not_matching_counter_offer() {
 /// (which means that they are on the same node) is forbidden. Matcher should reject
 /// such Offer-Demand pairs.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_reject_negotiations_same_identity() {
     let network = MarketsNetwork::new(None)

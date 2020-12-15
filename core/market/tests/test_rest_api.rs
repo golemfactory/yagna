@@ -26,7 +26,6 @@ const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_rest_get_offers() {
     let network = MarketsNetwork::new(None)
@@ -85,7 +84,6 @@ async fn test_rest_get_offers() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_rest_get_demands() {
     let network = MarketsNetwork::new(None)
@@ -114,7 +112,6 @@ async fn test_rest_get_demands() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_rest_invalid_subscription_id_should_return_400() {
     // given
@@ -146,7 +143,6 @@ async fn test_rest_invalid_subscription_id_should_return_400() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_rest_subscribe_unsubscribe_offer() {
     // given
@@ -214,7 +210,6 @@ async fn test_rest_subscribe_unsubscribe_offer() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_rest_subscribe_unsubscribe_demand() {
     // given
@@ -282,7 +277,6 @@ async fn test_rest_subscribe_unsubscribe_demand() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_rest_get_proposal() {
     let network = MarketsNetwork::new(None)
@@ -341,7 +335,6 @@ async fn test_rest_get_proposal() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_rest_get_agreement() {
     let network = MarketsNetwork::new(None)
@@ -382,7 +375,6 @@ async fn test_rest_get_agreement() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_rest_query_agreement_events() {
     let network = MarketsNetwork::new(None)
@@ -437,7 +429,6 @@ async fn test_rest_query_agreement_events() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_terminate_agreement() {
     let _ = env_logger::builder().try_init();
