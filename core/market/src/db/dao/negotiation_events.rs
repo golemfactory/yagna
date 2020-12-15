@@ -22,11 +22,11 @@ const EVENT_STORE_DAYS: EnvConfig<'static, u64> = EnvConfig {
 #[derive(Error, Debug)]
 pub enum TakeEventsError {
     #[error("Subscription [{0}] not found. Could be unsubscribed.")]
-    SubscriptionNotFound(SubscriptionId),
+    NotFound(SubscriptionId),
     #[error("Subscription [{0}] expired.")]
-    SubscriptionExpired(SubscriptionId),
-    #[error("Failed to get events from database. Error: {0}.")]
-    DatabaseError(DbError),
+    Expired(SubscriptionId),
+    #[error("Failed to get events from DB: {0}.")]
+    Db(DbError),
 }
 
 pub struct NegotiationEventsDao<'c> {
@@ -134,22 +134,14 @@ fn validate_subscription(
 ) -> Result<(), TakeEventsError> {
     match owner {
         OwnerType::Requestor => match demand_status(conn, &subscription_id)? {
-            DemandState::NotFound => Err(TakeEventsError::SubscriptionNotFound(
-                subscription_id.clone(),
-            ))?,
-            DemandState::Expired(_) => Err(TakeEventsError::SubscriptionExpired(
-                subscription_id.clone(),
-            ))?,
+            DemandState::NotFound => Err(TakeEventsError::NotFound(subscription_id.clone()))?,
+            DemandState::Expired(_) => Err(TakeEventsError::Expired(subscription_id.clone()))?,
             _ => Ok(()),
         },
         OwnerType::Provider => {
             match query_state(conn, &subscription_id, &Utc::now().naive_utc())? {
-                OfferState::NotFound => Err(TakeEventsError::SubscriptionNotFound(
-                    subscription_id.clone(),
-                ))?,
-                OfferState::Expired(_) => Err(TakeEventsError::SubscriptionExpired(
-                    subscription_id.clone(),
-                ))?,
+                OfferState::NotFound => Err(TakeEventsError::NotFound(subscription_id.clone()))?,
+                OfferState::Expired(_) => Err(TakeEventsError::Expired(subscription_id.clone()))?,
                 _ => Ok(()),
             }
         }
@@ -158,6 +150,6 @@ fn validate_subscription(
 
 impl<ErrorType: Into<DbError>> From<ErrorType> for TakeEventsError {
     fn from(err: ErrorType) -> Self {
-        TakeEventsError::DatabaseError(err.into())
+        TakeEventsError::Db(err.into())
     }
 }
