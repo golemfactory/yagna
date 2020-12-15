@@ -1,11 +1,16 @@
 use bigdecimal::BigDecimal;
 use chrono::Utc;
 use std::time::Duration;
+use structopt::StructOpt;
 use ya_client::payment::PaymentApi;
 use ya_client::web::{rest_api_url, WebClient};
-use ya_client_model::payment::{
-    Acceptance, DocumentStatus, NewAllocation, NewDebitNote, PAYMENT_API_PATH,
-};
+use ya_client_model::payment::{Acceptance, DocumentStatus, NewAllocation, NewDebitNote};
+
+#[derive(Clone, Debug, StructOpt)]
+struct Args {
+    #[structopt(long)]
+    app_session_id: Option<String>,
+}
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
@@ -13,14 +18,19 @@ async fn main() -> anyhow::Result<()> {
     std::env::set_var("RUST_LOG", log_level);
     env_logger::init();
 
+    let args: Args = Args::from_args();
+
     // Create requestor / provider PaymentApi
-    let rest_api_url = format!("{}{}", rest_api_url(), PAYMENT_API_PATH);
-    let provider_url = format!("{}provider/", &rest_api_url);
-    std::env::set_var("YAGNA_PAYMENT_URL", provider_url);
-    let provider: PaymentApi = WebClient::builder().build().interface()?;
-    let requestor_url = format!("{}requestor/", &rest_api_url);
-    std::env::set_var("YAGNA_PAYMENT_URL", requestor_url);
-    let requestor: PaymentApi = WebClient::builder().build().interface()?;
+    let provider_url = format!("{}provider/", rest_api_url()).parse().unwrap();
+    let provider: PaymentApi = WebClient::builder()
+        .api_url(provider_url)
+        .build()
+        .interface()?;
+    let requestor_url = format!("{}requestor/", rest_api_url()).parse().unwrap();
+    let requestor: PaymentApi = WebClient::builder()
+        .api_url(requestor_url)
+        .build()
+        .interface()?;
 
     let debit_note_date = Utc::now();
 
@@ -46,7 +56,7 @@ async fn main() -> anyhow::Result<()> {
             Some(&debit_note_date),
             Some(Duration::from_secs(10)),
             None,
-            None,
+            args.app_session_id.clone(),
         )
         .await
         .unwrap();
@@ -146,7 +156,7 @@ async fn main() -> anyhow::Result<()> {
     log::info!("Waiting for payment...");
     let timeout = Some(Duration::from_secs(300)); // Should be enough for GNT transfer
     let mut payments = provider
-        .get_payments(Some(&now), timeout, None, None)
+        .get_payments(Some(&now), timeout, None, args.app_session_id.clone())
         .await?;
     assert_eq!(payments.len(), 1);
     let payment = payments.pop().unwrap();

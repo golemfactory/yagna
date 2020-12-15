@@ -1,13 +1,20 @@
 use bigdecimal::BigDecimal;
 use chrono::Utc;
 use std::time::Duration;
-use ya_client::payment::{PaymentProviderApi, PaymentRequestorApi};
-use ya_client::web::WebClient;
+use structopt::StructOpt;
+use ya_client::payment::PaymentApi;
+use ya_client::web::{rest_api_url, WebClient};
 use ya_client_model::payment::{
     Acceptance, DocumentStatus, EventType, NewAllocation, NewDebitNote, NewInvoice,
 };
 use ya_core_model::payment::local as pay;
 use ya_service_bus::typed as bus;
+
+#[derive(Clone, Debug, StructOpt)]
+struct Args {
+    #[structopt(long)]
+    app_session_id: Option<String>,
+}
 
 async fn assert_requested_amount(
     payer_addr: &str,
@@ -39,9 +46,19 @@ async fn main() -> anyhow::Result<()> {
     std::env::set_var("RUST_LOG", log_level);
     env_logger::init();
 
-    let client = WebClient::builder().build();
-    let provider: PaymentProviderApi = client.interface()?;
-    let requestor: PaymentRequestorApi = client.interface()?;
+    let args: Args = Args::from_args();
+
+    // Create requestor / provider PaymentApi
+    let provider_url = format!("{}provider/", rest_api_url()).parse().unwrap();
+    let provider: PaymentApi = WebClient::builder()
+        .api_url(provider_url)
+        .build()
+        .interface()?;
+    let requestor_url = format!("{}requestor/", rest_api_url()).parse().unwrap();
+    let requestor: PaymentApi = WebClient::builder()
+        .api_url(requestor_url)
+        .build()
+        .interface()?;
 
     let debit_note = NewDebitNote {
         activity_id: "activity1".to_string(),
@@ -107,12 +124,17 @@ async fn main() -> anyhow::Result<()> {
 
     log::info!("Listening for invoice cancelled event...");
     let mut events = requestor
-        .get_invoice_events(Some(&now), Some(Duration::from_secs(5)))
+        .get_invoice_events(
+            Some(&now),
+            Some(Duration::from_secs(5)),
+            None,
+            args.app_session_id.clone(),
+        )
         .await?;
     assert_eq!(events.len(), 1);
     let event = events.pop().unwrap();
     assert_eq!(&event.invoice_id, &invoice.invoice_id);
-    assert_eq!(&event.event_type, &EventType::Cancelled);
+    assert!(matches!(&event.event_type, &EventType::Cancelled));
     log::info!("Event received and verified.");
 
     log::info!("Verifying invoice status...");

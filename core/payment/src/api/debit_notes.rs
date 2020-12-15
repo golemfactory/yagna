@@ -130,8 +130,11 @@ async fn issue_debit_note(
     let debit_note = body.into_inner();
     let activity_id = debit_note.activity_id.clone();
 
-    let agreement = match get_agreement_for_activity(activity_id.clone(), ya_core_model::Role::Provider)
-        .await
+    let agreement = match get_agreement_for_activity(
+        activity_id.clone(),
+        ya_core_model::Role::Provider,
+    )
+    .await
     {
         Ok(Some(agreement_id)) => agreement_id,
         Ok(None) => return response::bad_request(&format!("Activity not found: {}", &activity_id)),
