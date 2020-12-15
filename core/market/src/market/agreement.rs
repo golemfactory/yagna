@@ -1,7 +1,10 @@
 use chrono;
 
 use ya_client::model::market::Agreement as ClientAgreement;
-use ya_core_model::market::{GetAgreement, Role, RpcMessageError};
+use ya_core_model::{
+    market::{GetAgreement, RpcMessageError},
+    Role,
+};
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::ServiceBinder;
 

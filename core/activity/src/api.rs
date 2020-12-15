@@ -15,7 +15,7 @@ pub fn web_scope(db: &DbExecutor) -> Scope {
 mod common {
     use actix_web::{web, Responder};
 
-    use ya_core_model::{activity, market::Role};
+    use ya_core_model::{activity, Role};
     use ya_persistence::executor::DbExecutor;
     use ya_service_api_web::middleware::Identity;
     use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
