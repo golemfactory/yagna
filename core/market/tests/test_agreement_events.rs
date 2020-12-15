@@ -13,7 +13,6 @@ const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_agreement_approved_event() {
     let network = MarketsNetwork::new(None)
@@ -196,7 +195,6 @@ async fn test_agreement_events_and_wait_for_approval() {
 /// We expect to get AgreementTerminatedEvent on both sides Provider and Requestor
 /// after terminate_agreement endpoint was called.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_agreement_terminated_event() {
     let network = MarketsNetwork::new(None)

@@ -7,7 +7,6 @@ use ya_market::testing::{
 use ya_client::model::market::proposal::State;
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_get_proposal() {
     let network = MarketsNetwork::new(None)
@@ -51,7 +50,6 @@ async fn test_get_proposal() {
 
 /// Try to query not existing Proposal.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_get_proposal_not_found() {
     let network = MarketsNetwork::new(None)

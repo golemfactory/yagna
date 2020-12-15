@@ -14,7 +14,6 @@ const PROV_NAME: &str = "Node-2";
 /// Create Agreements with different session ids. Query Agreement
 /// events using different session ids on both Provider and Requestor side.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_session_events_filtering() {
     let network = MarketsNetwork::new(None)
@@ -195,7 +194,6 @@ async fn test_session_events_filtering() {
 /// AppSessionId isn't propagated to Provider and vice versa.
 /// They are completely independent and this test checks this.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_session_should_be_independent_on_both_sides() {
     let network = MarketsNetwork::new(None)
@@ -251,7 +249,6 @@ async fn test_session_should_be_independent_on_both_sides() {
 
 /// Test case, when Provider and Requestor is on the same node.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_session_negotiation_on_the_same_node() {
     let network = MarketsNetwork::new(None)
@@ -307,7 +304,6 @@ async fn test_session_negotiation_on_the_same_node() {
 
 /// Test case, when Provider and Requestor is on the same node and use the same session.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_session_negotiation_on_the_same_node_same_session() {
     let network = MarketsNetwork::new(None)
@@ -364,7 +360,6 @@ async fn test_session_negotiation_on_the_same_node_same_session() {
 
 /// We expect to get only events after specified timestamp.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_session_timestamp_filtering() {
     let network = MarketsNetwork::new(None)
@@ -555,7 +550,6 @@ async fn test_session_timestamp_filtering() {
 /// In the most common flow, user of the API queries events, saves timestamp
 /// of the newest event and uses this timestamp in next calls.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_common_event_flow() {
     let network = MarketsNetwork::new(None)

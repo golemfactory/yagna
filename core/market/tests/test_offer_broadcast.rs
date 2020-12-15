@@ -14,7 +14,6 @@ use ya_market::testing::{QueryOfferError, SubscriptionId};
 /// Test adds offer. It should be broadcasted to other nodes in the network.
 /// Than sending unsubscribe should remove Offer from other nodes.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_broadcast_offer() {
     let _ = env_logger::builder().try_init();
@@ -66,7 +65,6 @@ async fn test_broadcast_offer() {
 /// If it is rejected, we can't trust other tests, that check if broadcasts validation
 /// works correctly.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_broadcast_offer_callbacks() {
     let _ = env_logger::builder().try_init();
@@ -106,7 +104,6 @@ async fn test_broadcast_offer_callbacks() {
 /// id hash doesn't match hash computed from Offer fields, Market should
 /// reject such an Offer since it could be some kind of attack.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_broadcast_offer_id_validation() {
     let _ = env_logger::builder().try_init();
@@ -148,7 +145,6 @@ async fn test_broadcast_offer_id_validation() {
 
 /// Node should reject Offer, that already expired.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_broadcast_expired_offer() {
     let _ = env_logger::builder().try_init();
@@ -195,7 +191,6 @@ async fn test_broadcast_expired_offer() {
 /// behave. We expect that market nodes will stop broadcast and Discovery interface will
 /// get Offer only from himself.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_broadcast_stop_conditions() {
     let _ = env_logger::builder().try_init();
@@ -290,7 +285,6 @@ async fn test_broadcast_stop_conditions() {
 /// Test sends RetrieveOffers requesting existing and not existing subscription.
 /// Market is expected to return only existing Offer without any error.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_discovery_get_offers() {
     let _ = env_logger::builder().try_init();

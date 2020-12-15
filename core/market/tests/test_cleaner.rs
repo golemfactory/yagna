@@ -20,7 +20,6 @@ fn past() -> NaiveDateTime {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_agreement() {
     let _ = env_logger::builder().try_init();
@@ -42,7 +41,6 @@ async fn test_agreement() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_demand() {
     // insert two demands (expired & active) with negotiations
@@ -70,7 +68,6 @@ async fn test_demand() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_offer() {
     // insert two offers with negotiations
@@ -105,7 +102,6 @@ async fn test_offer() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_events() {
     // insert two events
@@ -130,7 +126,6 @@ async fn test_events() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_proposal() {
     let _ = env_logger::builder().try_init();
@@ -194,7 +189,6 @@ async fn test_proposal() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_proposal_lotsa_negotiations() {
     // Due to diesel limitations we have to take care of processing

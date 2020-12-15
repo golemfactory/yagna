@@ -19,7 +19,6 @@ const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_gsb_get_agreement() {
     let network = MarketsNetwork::new(None)
@@ -55,7 +54,6 @@ async fn test_gsb_get_agreement() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_get_agreement() {
     let network = MarketsNetwork::new(None)
@@ -89,7 +87,6 @@ async fn test_get_agreement() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_rest_get_not_existing_agreement() {
     let network = MarketsNetwork::new(None)
@@ -124,7 +121,6 @@ async fn test_rest_get_not_existing_agreement() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn full_market_interaction_aka_happy_path() {
     let network = MarketsNetwork::new(None)
@@ -204,7 +200,6 @@ async fn full_market_interaction_aka_happy_path() {
 // TODO: Should it be allowed after expiration.unwrap().unwrap() For sure it shouldn't be allowed
 // TODO: after rejection, because rejection always ends negotiations.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn second_creation_should_fail() {
     let network = MarketsNetwork::new(None)
@@ -239,7 +234,6 @@ async fn second_creation_should_fail() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn second_confirmation_should_fail() {
     let network = MarketsNetwork::new(None)
@@ -284,7 +278,6 @@ async fn second_confirmation_should_fail() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn agreement_expired_before_confirmation() {
     let network = MarketsNetwork::new(None)
@@ -324,7 +317,6 @@ async fn agreement_expired_before_confirmation() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn agreement_expired_before_approval() {
     let network = MarketsNetwork::new(None)
@@ -368,7 +360,6 @@ async fn agreement_expired_before_approval() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn waiting_wo_confirmation_should_fail() {
     let network = MarketsNetwork::new(None)
@@ -402,7 +393,6 @@ async fn waiting_wo_confirmation_should_fail() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn approval_before_confirmation_should_fail() {
     let network = MarketsNetwork::new(None)
@@ -444,7 +434,6 @@ async fn approval_before_confirmation_should_fail() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn approval_without_waiting_should_pass() {
     let network = MarketsNetwork::new(None)
@@ -495,7 +484,6 @@ async fn approval_without_waiting_should_pass() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn waiting_after_approval_should_pass() {
     let network = MarketsNetwork::new(None)
@@ -552,7 +540,6 @@ async fn waiting_after_approval_should_pass() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn second_approval_should_fail() {
     let network = MarketsNetwork::new(None)
@@ -619,7 +606,6 @@ async fn second_approval_should_fail() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn second_waiting_should_pass() {
     let network = MarketsNetwork::new(None)
@@ -683,7 +669,6 @@ async fn second_waiting_should_pass() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn net_err_while_confirming() {
     let network = MarketsNetwork::new(None)
@@ -725,7 +710,6 @@ async fn net_err_while_confirming() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn net_err_while_approving() {
     let network = MarketsNetwork::new(None)
@@ -784,7 +768,6 @@ async fn net_err_while_approving() {
 /// Requestor can create Agreements only from Proposals, that came from Provider.
 /// He can turn his own Proposal into Agreement.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn cant_promote_requestor_proposal() {
     let network = MarketsNetwork::new(None)
@@ -830,7 +813,6 @@ async fn cant_promote_requestor_proposal() {
 /// Requestor can't create Agreement from initial Proposal. At least one step
 /// of negotiations must happen, before he can create Agreement.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn cant_promote_initial_proposal() {
     let network = MarketsNetwork::new(None)
@@ -876,7 +858,6 @@ async fn cant_promote_initial_proposal() {
 /// Requestor can promote only last proposal in negotiation chain.
 /// If negotiations were more advanced, `create_agreement` will end with error.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn cant_promote_not_last_proposal() {
     let network = MarketsNetwork::new(None)
@@ -921,7 +902,6 @@ async fn cant_promote_not_last_proposal() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_terminate() {
     let network = MarketsNetwork::new(None)
@@ -948,7 +928,6 @@ async fn test_terminate() {
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_terminate_not_existing_agreement() {
     let network = MarketsNetwork::new(None)
@@ -992,7 +971,6 @@ async fn test_terminate_not_existing_agreement() {
 /// TODO: Add tests for terminate_agreement in Cancelled and Rejected state after
 ///  endpoints will be implemented.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_terminate_from_wrong_states() {
     let network = MarketsNetwork::new(None)
@@ -1078,7 +1056,6 @@ async fn test_terminate_from_wrong_states() {
 /// We expect, that reason string is structured and can\
 /// be deserialized to `Reason` struct.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_terminate_invalid_reason() {
     let network = MarketsNetwork::new(None)

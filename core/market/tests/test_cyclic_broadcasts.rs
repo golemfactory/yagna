@@ -12,7 +12,6 @@ use ya_market::testing::{MarketServiceExt, MarketsNetwork};
 /// Third market that will be instantiated after these two, should
 /// get all Offers from them, if cyclic broadcasting works properly.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_startup_offers_sharing() {
     let _ = env_logger::builder().try_init();
@@ -80,7 +79,6 @@ async fn test_startup_offers_sharing() {
 /// Than break networking for one Node and in meantime unsubscribe some of Offers.
 /// After networking will be reenabled, we expect, that 3rd Node will get all unsubscribes.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_unsubscribes_cyclic_broadcasts() {
     let _ = env_logger::builder().try_init();
@@ -189,7 +187,6 @@ async fn test_unsubscribes_cyclic_broadcasts() {
 /// Market should return subscription id and Offer propagation will take place
 /// later during cyclic broadcasts. The same applies to unsubscribes.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_network_error_while_subscribing() {
     let _ = env_logger::builder().try_init();
@@ -227,7 +224,6 @@ async fn test_network_error_while_subscribing() {
 /// Nodes send in cyclic broadcasts not only own Offers, but Offers
 /// from other Nodes either.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_sharing_someones_else_offers() {
     let _ = env_logger::builder().try_init();
@@ -300,7 +296,6 @@ async fn test_sharing_someones_else_offers() {
 /// Nodes send in cyclic broadcasts not only own Offers unsubscribes, but Offers
 /// from other Nodes either.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_sharing_someones_else_unsubscribes() {
     let _ = env_logger::builder().try_init();

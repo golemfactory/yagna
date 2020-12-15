@@ -8,7 +8,6 @@ use ya_market::testing::{
 
 /// Test adds Offer on single node. Resolver should not emit Proposal.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_single_not_resolve_offer() {
     // given
@@ -34,7 +33,6 @@ async fn test_single_not_resolve_offer() {
 
 /// Test adds Offer and Demand. Resolver should emit Proposal on Demand node.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_resolve_offer_demand() {
     // given
@@ -80,7 +78,6 @@ async fn test_resolve_offer_demand() {
 
 /// Test adds Demand on single node. Resolver should not emit Proposal.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_single_not_resolve_demand() {
     // given
@@ -106,7 +103,6 @@ async fn test_single_not_resolve_demand() {
 
 /// Test adds Offer on two nodes and Demand third. Resolver should emit two Proposals on Demand node.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_resolve_2xoffer_demand() {
     // given

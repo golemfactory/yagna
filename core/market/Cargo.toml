@@ -62,6 +62,7 @@ ya-market = { path = ".", features = ["testing"] }
 
 all_asserts = "2.2.0"
 serde_json = "1.0"
-serial_test = "0.5.0"
+#serial_test = "0.5.0"
+serial_test = { git = "https://github.com/tworec/serial_test.git", branch = "actix_rt_test"}
 structopt = "0.3"
 tokio = { version = "0.2", features = ["macros", "rt-core"] }
