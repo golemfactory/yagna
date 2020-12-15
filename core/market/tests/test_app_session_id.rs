@@ -1,5 +1,4 @@
 use all_asserts::*;
-use anyhow::Result;
 use chrono::{Duration, Utc};
 
 use ya_market::testing::agreement_utils::{negotiate_agreement, negotiate_agreement_with_ids};
@@ -17,13 +16,13 @@ const PROV_NAME: &str = "Node-2";
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_session_events_filtering() -> Result<()> {
+async fn test_session_events_filtering() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
@@ -132,8 +131,6 @@ async fn test_session_events_filtering() -> Result<()> {
         assert_eq!(events_ses1.len(), num - 2);
         assert_eq!(events_ses2.len(), 2);
         assert_eq!(events_ses3.len(), 0);
-
-        Result::<(), anyhow::Error>::Ok(())
     });
 
     for agreement_id in agreements.iter() {
@@ -189,8 +186,10 @@ async fn test_session_events_filtering() -> Result<()> {
     assert_eq!(events_ses3.len(), 0);
 
     // Protect from eternal waiting.
-    tokio::time::timeout(Duration::milliseconds(600).to_std()?, query_handle).await???;
-    Ok(())
+    tokio::time::timeout(Duration::milliseconds(600).to_std().unwrap(), query_handle)
+        .await
+        .unwrap()
+        .unwrap();
 }
 
 /// AppSessionId isn't propagated to Provider and vice versa.
@@ -198,13 +197,13 @@ async fn test_session_events_filtering() -> Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_session_should_be_independent_on_both_sides() -> Result<()> {
+async fn test_session_should_be_independent_on_both_sides() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let req_market = network.get_market(REQ_NAME);
     let req_id = network.get_default_id(REQ_NAME);
@@ -248,18 +247,17 @@ async fn test_session_should_be_independent_on_both_sides() -> Result<()> {
     // Each side gets only his own event.
     assert_eq!(p_events.len(), 1);
     assert_eq!(r_events.len(), 1);
-    Ok(())
 }
 
 /// Test case, when Provider and Requestor is on the same node.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_session_negotiation_on_the_same_node() -> Result<()> {
+async fn test_session_negotiation_on_the_same_node() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node")
-        .await?;
+        .await;
 
     let req_market = network.get_market("Node");
     let req_id = network.get_default_id("Node");
@@ -305,18 +303,17 @@ async fn test_session_negotiation_on_the_same_node() -> Result<()> {
     // Each side gets only his own event.
     assert_eq!(p_events.len(), 1);
     assert_eq!(r_events.len(), 1);
-    Ok(())
 }
 
 /// Test case, when Provider and Requestor is on the same node and use the same session.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_session_negotiation_on_the_same_node_same_session() -> Result<()> {
+async fn test_session_negotiation_on_the_same_node_same_session() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node")
-        .await?;
+        .await;
 
     let req_market = network.get_market("Node");
     let req_id = network.get_default_id("Node");
@@ -363,20 +360,19 @@ async fn test_session_negotiation_on_the_same_node_same_session() -> Result<()> 
     // we will get events for both. Note that we use the same Identity for both.
     assert_eq!(p_events.len(), 2);
     assert_eq!(r_events.len(), 2);
-    Ok(())
 }
 
 /// We expect to get only events after specified timestamp.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_session_timestamp_filtering() -> Result<()> {
+async fn test_session_timestamp_filtering() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let req_market = network.get_market(REQ_NAME);
     let req_id = network.get_default_id(REQ_NAME);
@@ -542,7 +538,6 @@ async fn test_session_timestamp_filtering() -> Result<()> {
 
     assert_eq!(p_events.len(), 0);
     assert_eq!(r_events.len(), 0);
-    Ok(())
 }
 
 /// In the most common flow, user of the API queries events, saves timestamp
@@ -550,13 +545,13 @@ async fn test_session_timestamp_filtering() -> Result<()> {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[actix_rt::test]
 #[serial_test::serial]
-async fn test_common_event_flow() -> Result<()> {
+async fn test_common_event_flow() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
-        .await?
+        .await
         .add_market_instance(PROV_NAME)
-        .await?;
+        .await;
 
     let req_market = network.get_market(REQ_NAME);
     let req_id = network.get_default_id(REQ_NAME);
@@ -616,5 +611,4 @@ async fn test_common_event_flow() -> Result<()> {
         .unwrap();
 
     assert_eq!(events.len(), 0);
-    Ok(())
 }
