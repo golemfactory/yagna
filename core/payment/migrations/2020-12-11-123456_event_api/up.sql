@@ -8,8 +8,10 @@ CREATE TABLE pay_allocation(
     total_amount VARCHAR(32) NOT NULL,
     spent_amount VARCHAR(32) NOT NULL,
     remaining_amount VARCHAR(32) NOT NULL,
-    timestamp DATETIME DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
+    timestamp DATETIME NOT NULL DEFAULT(STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
     timeout DATETIME NULL,
     make_deposit BOOLEAN NOT NULL,
     released BOOLEAN NOT NULL DEFAULT FALSE
 );
+
+ALTER TABLE pay_agreement ADD COLUMN app_session_id VARCHAR(50) NULL;
