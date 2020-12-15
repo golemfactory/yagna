@@ -1,5 +1,5 @@
 use chrono::Utc;
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
+use diesel::{sql_types, ExpressionMethods, QueryDsl, RunQueryDsl};
 use thiserror::Error;
 
 use ya_persistence::executor::ConnType;
@@ -12,6 +12,7 @@ use crate::db::model::{Agreement, MarketEvent, OwnerType, Proposal, Subscription
 use crate::db::schema::market_negotiation_event::dsl;
 use crate::db::{DbError, DbResult};
 use crate::market::EnvConfig;
+use diesel::dsl::sql;
 
 const EVENT_STORE_DAYS: EnvConfig<'static, u64> = EnvConfig {
     name: "YAGNA_MARKET_EVENT_STORE_DAYS",
@@ -79,7 +80,7 @@ impl<'c> NegotiationEventsDao<'c> {
 
             let events = dsl::market_negotiation_event
                 .filter(dsl::subscription_id.eq(&subscription_id))
-                .order_by(dsl::timestamp.asc())
+                .order_by(sql::<sql_types::Bool>("RANDOM()"))
                 .limit(max_events as i64)
                 .load::<MarketEvent>(conn)?;
 
