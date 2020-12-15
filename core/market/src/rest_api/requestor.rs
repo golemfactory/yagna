@@ -25,12 +25,10 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .service(counter_proposal)
         .service(get_proposal)
         .service(reject_proposal)
-        .service(reject_proposal_with_reason)
         .service(create_agreement)
         .service(confirm_agreement)
         .service(wait_for_approval)
         .service(cancel_agreement)
-        .service(cancel_agreement_with_reason)
 }
 
 #[actix_web::post("/demands")]
@@ -126,27 +124,8 @@ async fn get_proposal(
         .map(|proposal| HttpResponse::Ok().json(proposal))
 }
 
-#[actix_web::delete("/demands/{subscription_id}/proposals/{proposal_id}")]
-async fn reject_proposal(
-    market: Data<Arc<MarketService>>,
-    path: Path<PathSubscriptionProposal>,
-    id: Identity,
-) -> impl Responder {
-    let PathSubscriptionProposal {
-        subscription_id,
-        proposal_id,
-    } = path.into_inner();
-
-    market
-        .requestor_engine
-        .reject_proposal(&subscription_id, &proposal_id, &id, None)
-        .await
-        .log_err()
-        .map(|_| HttpResponse::NoContent().finish())
-}
-
 #[actix_web::post("/demands/{subscription_id}/proposals/{proposal_id}/reject")]
-async fn reject_proposal_with_reason(
+async fn reject_proposal(
     market: Data<Arc<MarketService>>,
     path: Path<PathSubscriptionProposal>,
     id: Identity,
@@ -214,17 +193,8 @@ async fn wait_for_approval(
         .map(|status| HttpResponse::Ok().json(status.to_string()))
 }
 
-#[actix_web::delete("/agreements/{agreement_id}")]
-async fn cancel_agreement(
-    _market: Data<Arc<MarketService>>,
-    _path: Path<PathAgreement>,
-    _id: Identity,
-) -> HttpResponse {
-    HttpResponse::NotImplemented().finish()
-}
-
 #[actix_web::post("/agreements/{agreement_id}/cancel")]
-async fn cancel_agreement_with_reason(
+async fn cancel_agreement(
     _market: Data<Arc<MarketService>>,
     _path: Path<PathAgreement>,
     _id: Identity,

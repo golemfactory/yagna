@@ -21,7 +21,7 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .service(counter_proposal)
         .service(get_proposal)
         .service(reject_proposal)
-        .service(reject_proposal_with_reason)
+        .service(reject_proposal)
         .service(approve_agreement)
         .service(reject_agreement)
 }
@@ -119,27 +119,8 @@ async fn get_proposal(
         .map(|proposal| HttpResponse::Ok().json(proposal))
 }
 
-#[actix_web::delete("/offers/{subscription_id}/proposals/{proposal_id}")]
-async fn reject_proposal(
-    market: Data<Arc<MarketService>>,
-    path: Path<PathSubscriptionProposal>,
-    id: Identity,
-) -> impl Responder {
-    let PathSubscriptionProposal {
-        subscription_id,
-        proposal_id,
-    } = path.into_inner();
-
-    market
-        .provider_engine
-        .reject_proposal(&subscription_id, &proposal_id, &id, None)
-        .await
-        .log_err()
-        .map(|_| HttpResponse::NoContent().finish())
-}
-
 #[actix_web::post("/offers/{subscription_id}/proposals/{proposal_id}/reject")]
-async fn reject_proposal_with_reason(
+async fn reject_proposal(
     market: Data<Arc<MarketService>>,
     path: Path<PathSubscriptionProposal>,
     id: Identity,
