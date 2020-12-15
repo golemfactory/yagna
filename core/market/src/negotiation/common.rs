@@ -21,10 +21,13 @@ use crate::db::model::{
     OwnerType, Proposal,
 };
 use crate::db::model::{ProposalId, SubscriptionId};
+use crate::db::DbResult;
 use crate::matcher::{
     error::{DemandError, QueryOfferError},
     store::SubscriptionStore,
+    RawProposal,
 };
+use crate::negotiation::error::RegenerateProposalError;
 use crate::negotiation::{
     error::{
         AgreementError, AgreementEventsError, AgreementStateError, GetProposalError,
@@ -346,6 +349,23 @@ impl CommonBroker {
             &agreement.id,
             reason.display(),
         );
+
+        // If we are Requestor we would like to be able to negotiate with the same
+        // provider for the second time, so we must generate new Proposal for him.
+        // Note: Regeneration failure isn't propagated to Requestor, because termination
+        // succeeded at this point.
+        if let OwnerType::Requestor = owner_type {
+            self.regenerate_proposal(&agreement)
+                .await
+                .map_err(|e| {
+                    log::warn!(
+                        "Failed to regenerate Proposal after Agreement [{}] termination. {}",
+                        &agreement.id,
+                        e
+                    )
+                })
+                .ok();
+        }
         Ok(())
     }
 
@@ -429,6 +449,22 @@ impl CommonBroker {
             &caller,
             msg.reason.display(),
         );
+        // If we are Requestor we would like to be able to negotiate with the same
+        // provider for the second time, so we must generate new Proposal for him.
+        // Note: Regeneration failure isn't propagated to Provider, because termination
+        // succeeded at this point.
+        if let OwnerType::Requestor = owner_type {
+            self.regenerate_proposal(&agreement)
+                .await
+                .map_err(|e| {
+                    log::warn!(
+                        "Failed to regenerate Proposal after Agreement [{}] termination. {}",
+                        &agreement.id,
+                        e
+                    )
+                })
+                .ok();
+        }
         Ok(())
     }
 
@@ -552,6 +588,48 @@ impl CommonBroker {
 
         // This notifies wait_for_agreement endpoint.
         self.agreement_notifier.notify(&agreement.id).await;
+    }
+
+    pub async fn generate_proposal(&self, proposal: RawProposal) -> DbResult<()> {
+        let db = self.db.clone();
+        let notifier = self.negotiation_notifier.clone();
+
+        // Add proposal to database together with Negotiation record.
+        let proposal = Proposal::new_requestor(proposal.demand, proposal.offer);
+        let proposal = db
+            .as_dao::<ProposalDao>()
+            .save_initial_proposal(proposal)
+            .await?;
+
+        log::info!(
+            "New Proposal [{}] (Offer [{}], Demand [{}])",
+            proposal.body.id,
+            proposal.negotiation.offer_id,
+            proposal.negotiation.demand_id
+        );
+
+        // Create Proposal Event and add it to queue (database).
+        let subscription_id = proposal.negotiation.subscription_id.clone();
+        db.as_dao::<NegotiationEventsDao>()
+            .add_proposal_event(proposal, OwnerType::Requestor)
+            .await?;
+
+        // Send channel message to wake all query_events waiting for proposals.
+        counter!("market.proposals.requestor.generated", 1);
+        notifier.notify(&subscription_id).await;
+        Ok(())
+    }
+
+    pub async fn regenerate_proposal(
+        &self,
+        agreement: &Agreement,
+    ) -> Result<(), RegenerateProposalError> {
+        let demand = self.store.get_demand(&agreement.demand_id).await?;
+        let offer = self.store.get_offer(&agreement.offer_id).await?;
+
+        self.generate_proposal(RawProposal { demand, offer })
+            .await?;
+        Ok(())
     }
 }
 

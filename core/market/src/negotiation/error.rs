@@ -8,6 +8,7 @@ use crate::db::model::{
     AgreementId, ProposalId, ProposalIdParseError, SubscriptionId, SubscriptionParseError,
 };
 use crate::db::{dao::SaveProposalError, dao::TakeEventsError, DbError};
+use crate::matcher::error::{DemandError, QueryOfferError};
 use crate::protocol::negotiation::error::{
     ApproveAgreementError, CounterProposalError as ProtocolProposalError, GsbAgreementError,
     NegotiationApiInitError, ProposeAgreementError, TerminateAgreementError,
@@ -166,6 +167,16 @@ pub enum ProposalError {
     Send(ProposalId, ProtocolProposalError),
     #[error("Can't counter Proposal [{0}]. Error: {1}.")]
     Internal(ProposalId, String),
+}
+
+#[derive(Error, Debug)]
+pub enum RegenerateProposalError {
+    #[error(transparent)]
+    Offer(#[from] QueryOfferError),
+    #[error(transparent)]
+    Demand(#[from] DemandError),
+    #[error("Failed to add event to database. Error: {0}.")]
+    Db(#[from] DbError),
 }
 
 impl AgreementError {
