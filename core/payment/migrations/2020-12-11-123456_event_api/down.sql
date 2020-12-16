@@ -1,4 +1,7 @@
 
+DROP VIEW pay_debit_note_event_read;
+DROP VIEW pay_invoice_event_read;
+
 -- HACK: All this code below is just to drop column timestamp from table pay_allocation
 
 PRAGMA foreign_keys=off;
