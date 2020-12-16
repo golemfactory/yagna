@@ -189,6 +189,7 @@ async fn test_agreement_events_and_wait_for_approval() {
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_agreement_terminated_event() {
+    std::env::set_var(env_logger::DEFAULT_FILTER_ENV, "debug");
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance(REQ_NAME)
