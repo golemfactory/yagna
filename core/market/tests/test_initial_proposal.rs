@@ -46,10 +46,12 @@ async fn test_query_initial_proposal() -> Result<(), anyhow::Error> {
 
     let market1 = network.get_market("Node-1");
     let identity1 = network.get_default_id("Node-1");
+    let identity2 = network.create_identity("Node-1", "Identity2");
+
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
         .await?;
-    market1.subscribe_offer(&sample_offer(), &identity1).await?;
+    market1.subscribe_offer(&sample_offer(), &identity2).await?;
 
     // We expect that proposal will be available as requestor event.
     let events = market1.query_events(&demand_id, 1.0, Some(5)).await?;
@@ -84,8 +86,10 @@ async fn test_query_multiple_events() -> Result<(), anyhow::Error> {
 
     let market1 = network.get_market("Node-1");
     let identity1 = network.get_default_id("Node-1");
+    let identity2 = network.create_identity("Node-1", "Identity2");
+
     let demand_id = market1
-        .subscribe_demand(&sample_demand(), &identity1)
+        .subscribe_demand(&sample_demand(), &identity2)
         .await?;
     let offer = sample_offer();
     market1.subscribe_offer(&offer, &identity1).await?;
@@ -130,6 +134,7 @@ async fn test_query_events_timeout() -> Result<(), anyhow::Error> {
 
     let market1 = network.get_market("Node-1");
     let identity1 = network.get_default_id("Node-1");
+    let identity2 = network.create_identity("Node-1", "Identity2");
 
     let demand_id1 = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -148,7 +153,7 @@ async fn test_query_events_timeout() -> Result<(), anyhow::Error> {
     // Inject proposal before timeout will elapse. We expect that Proposal
     // event will be generated and query events will return it.
     tokio::time::delay_for(Duration::from_millis(50)).await;
-    market1.subscribe_offer(&sample_offer(), &identity1).await?;
+    market1.subscribe_offer(&sample_offer(), &identity2).await?;
 
     // Protect from eternal waiting.
     tokio::time::timeout(Duration::from_millis(1250), query_handle).await???;
@@ -210,8 +215,10 @@ async fn test_query_events_edge_cases() -> Result<(), anyhow::Error> {
 
     let market1 = network.get_market("Node-1");
     let identity1 = network.get_default_id("Node-1");
+    let identity2 = network.create_identity("Node-1", "Identity2");
+
     let demand_id = market1
-        .subscribe_demand(&sample_demand(), &identity1)
+        .subscribe_demand(&sample_demand(), &identity2)
         .await?;
     market1.subscribe_offer(&sample_offer(), &identity1).await?;
 
@@ -235,7 +242,7 @@ async fn test_query_events_edge_cases() -> Result<(), anyhow::Error> {
 
     // Restore available Proposal
     let demand_id = market1
-        .subscribe_demand(&sample_demand(), &identity1)
+        .subscribe_demand(&sample_demand(), &identity2)
         .await?;
     market1.subscribe_offer(&sample_offer(), &identity1).await?;
 
@@ -247,7 +254,7 @@ async fn test_query_events_edge_cases() -> Result<(), anyhow::Error> {
     );
 
     // Query events returns error, if Demand was unsubscribed.
-    market1.unsubscribe_demand(&demand_id, &identity1).await?;
+    market1.unsubscribe_demand(&demand_id, &identity2).await?;
 
     let result = market1.query_events(&demand_id, 0.0, None).await;
     assert_eq!(
@@ -271,12 +278,13 @@ async fn test_query_events_for_multiple_subscriptions() -> Result<(), anyhow::Er
 
     let market1 = network.get_market("Node-1");
     let identity1 = network.get_default_id("Node-1");
+    let identity2 = network.create_identity("Node-1", "Identity2");
 
     // Spawn 3 Demands and 1 Offer --> should result in 3 Proposals.
     let demand_id1 = market1
         .subscribe_demand(&sample_demand(), &identity1)
         .await?;
-    market1.subscribe_offer(&sample_offer(), &identity1).await?;
+    market1.subscribe_offer(&sample_offer(), &identity2).await?;
     let demand_id2 = market1
         .subscribe_demand(&sample_demand(), &identity1)
         .await?;
@@ -309,9 +317,10 @@ async fn test_simultaneous_query_events() -> Result<(), anyhow::Error> {
 
     let market1 = network.get_market("Node-1");
     let identity1 = network.get_default_id("Node-1");
+    let identity2 = network.create_identity("Node-1", "Identity2");
 
     let demand_id1 = market1
-        .subscribe_demand(&sample_demand(), &identity1)
+        .subscribe_demand(&sample_demand(), &identity2)
         .await?;
 
     let demand_id = demand_id1.clone();
@@ -371,6 +380,7 @@ async fn test_unsubscribe_demand_while_query_events_for_other() -> Result<(), an
 
     let market1 = network.get_market("Node-1");
     let identity1 = network.get_default_id("Node-1");
+    let identity2 = network.create_identity("Node-1", "Identity2");
 
     let demand_id1 = market1
         .subscribe_demand(&sample_demand(), &identity1)
@@ -392,7 +402,7 @@ async fn test_unsubscribe_demand_while_query_events_for_other() -> Result<(), an
     // Wait for a while, and unsubscribe second demand and subscribe first offer.
     tokio::time::delay_for(Duration::from_millis(50)).await;
     market1.unsubscribe_demand(&demand_id2, &identity1).await?;
-    market1.subscribe_offer(&sample_offer(), &identity1).await?;
+    market1.subscribe_offer(&sample_offer(), &identity2).await?;
 
     // Query events for first demand should return single Proposal.
     let events = tokio::time::timeout(Duration::from_millis(1250), query).await???;
@@ -418,10 +428,12 @@ async fn test_counter_initial_proposal() -> Result<(), anyhow::Error> {
 
     let market1: Arc<MarketService> = network.get_market("Node-1");
     let identity1 = network.get_default_id("Node-1");
+    let identity2 = network.create_identity("Node-1", "Identity2");
+
     let subscription_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
         .await?;
-    let offer_id = market1.subscribe_offer(&sample_offer(), &identity1).await?;
+    let offer_id = market1.subscribe_offer(&sample_offer(), &identity2).await?;
 
     // We expect that proposal will be available as event.
     let events = market1

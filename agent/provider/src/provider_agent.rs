@@ -3,11 +3,12 @@ use crate::execution::{
     GetExeUnit, GetOfferTemplates, Shutdown as ShutdownExecution, TaskRunner, UpdateActivity,
 };
 use crate::hardware;
-use crate::market::provider_market::{OfferKind, Unsubscribe, UpdateMarket};
+use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{LinearPricingOffer, Payments, PricingOffer};
-use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RunConfig};
-use crate::task_manager::{InitializeTaskManager, TaskManager};
+use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RecvAccount, RunConfig};
+use crate::tasks::task_manager::{InitializeTaskManager, TaskManager};
+
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
 use anyhow::{anyhow, Error};
@@ -18,6 +19,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::{fs, io};
+
 use ya_agreement_utils::agreement::TypedArrayPointer;
 use ya_agreement_utils::*;
 use ya_client::cli::ProviderApi;
@@ -73,6 +75,7 @@ impl GlobalsManager {
 pub struct GlobalsState {
     pub node_name: String,
     pub subnet: Option<String>,
+    pub account: Option<RecvAccount>,
 }
 
 impl GlobalsState {
@@ -107,6 +110,9 @@ impl GlobalsState {
         if node_config.subnet.is_some() {
             self.subnet = node_config.subnet;
         }
+        if node_config.account.is_some() {
+            self.account = node_config.account;
+        }
         self.save(path)
     }
 
@@ -116,16 +122,23 @@ impl GlobalsState {
 }
 
 impl ProviderAgent {
-    pub async fn new(args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
+    pub async fn new(mut args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
         let data_dir = config.data_dir.get_or_create()?.as_path().to_path_buf();
         let api = ProviderApi::try_from(&args.api)?;
 
         log::info!("Loading payment accounts...");
         let accounts: Vec<Account> = api.payment.get_accounts().await?;
         log::info!("Payment accounts: {:#?}", accounts);
-
         let registry = config.registry()?;
         registry.validate()?;
+
+        // Generate session id from node name and process id to make sure it's unique.
+        let name = args
+            .node
+            .node_name
+            .clone()
+            .unwrap_or("provider".to_string());
+        args.market.session_id = format!("{}-[{}]", name, std::process::id());
 
         let mut globals = GlobalsManager::try_new(&config.globals_file, args.node)?;
         globals.spawn_monitor(&config.globals_file)?;
@@ -134,9 +147,9 @@ impl ProviderAgent {
         let mut hardware = hardware::Manager::try_new(&config)?;
         hardware.spawn_monitor(&config.hardware_file)?;
 
-        let market = ProviderMarket::new(api.market, "LimitAgreements").start();
+        let market = ProviderMarket::new(api.market, args.market).start();
         let payments = Payments::new(api.activity.clone(), api.payment).start();
-        let runner = TaskRunner::new(api.activity, args.runner_config, registry, data_dir)?.start();
+        let runner = TaskRunner::new(api.activity, args.runner, registry, data_dir)?.start();
         let task_manager = TaskManager::new(market.clone(), runner.clone(), payments)?.start();
 
         Ok(ProviderAgent {
@@ -191,12 +204,15 @@ impl ProviderAgent {
                 )
             })?;
 
+            let srv_info = ServiceInfo::new(inf_node_info.clone(), exeunit_desc.build())
+                .support_multi_activity(true);
+
             // Create simple offer on market.
             let create_offer_message = CreateOffer {
                 preset,
                 offer_definition: OfferDefinition {
                     node_info: node_info.clone(),
-                    service: ServiceInfo::new(inf_node_info.clone(), exeunit_desc.build()),
+                    srv_info,
                     com_info,
                     offer,
                 },
@@ -218,7 +234,6 @@ impl ProviderAgent {
 
     fn schedule_jobs(&mut self, _ctx: &mut Context<Self>) {
         send_message(self.runner.clone(), UpdateActivity);
-        send_message(self.market.clone(), UpdateMarket);
     }
 
     fn create_node_info(&self) -> NodeInfo {
@@ -233,6 +248,31 @@ impl ProviderAgent {
             node_info.with_subnet(subnet.clone());
         }
         node_info
+    }
+
+    fn accounts(&self) -> Vec<Account> {
+        let globals = self.globals.get_state();
+        if let Some(account) = &globals.account {
+            let mut accounts = Vec::new();
+            if account.platform.is_some() {
+                let zkaddr = Account {
+                    platform: account.platform.clone().unwrap(),
+                    address: account.address.to_lowercase(),
+                };
+                accounts.push(zkaddr);
+            } else {
+                for &platform in &["NGNT", "ZK-NGNT"] {
+                    accounts.push(Account {
+                        platform: platform.to_string(),
+                        address: account.address.to_lowercase(),
+                    })
+                }
+            }
+
+            accounts
+        } else {
+            self.accounts.clone()
+        }
     }
 }
 
@@ -376,7 +416,7 @@ impl Handler<Shutdown> for ProviderAgent {
         let runner = self.runner.clone();
 
         async move {
-            market.send(Unsubscribe(OfferKind::Any)).await??;
+            market.send(MarketShutdown).await??;
             runner.send(ShutdownExecution).await??;
             Ok(())
         }
@@ -392,11 +432,15 @@ impl Handler<CreateOffers> for ProviderAgent {
         let runner = self.runner.clone();
         let market = self.market.clone();
         let node_info = self.create_node_info();
-        let accounts = self.accounts.clone();
+        let accounts = self.accounts();
         let inf_node_info = InfNodeInfo::from(self.hardware.capped());
         let preset_names = match msg.0 {
             OfferKind::Any => self.presets.active(),
             OfferKind::WithPresets(names) => names,
+            OfferKind::WithIds(_) => {
+                log::warn!("ProviderAgent shouldn't create Offers using OfferKind::WithIds");
+                vec![]
+            }
         };
 
         let presets = self.presets.list_matching(&preset_names);

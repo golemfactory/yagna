@@ -248,7 +248,7 @@ pub async fn compute_cost(
 
     let cost = payment_model.compute_cost(&usage)?;
 
-    Ok(CostInfo { cost, usage })
+    Ok(CostInfo::new(usage, cost))
 }
 
 impl ActivitiesWaiter {

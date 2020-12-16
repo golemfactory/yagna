@@ -1,5 +1,5 @@
 use crate::appkey;
-use crate::command::YaCommand;
+use crate::command::{PaymentType, YaCommand};
 use crate::setup::RunConfig;
 use anyhow::{Context, Result};
 use futures::channel::{mpsc, oneshot};
@@ -112,6 +112,26 @@ pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
     let cmd = YaCommand::new()?;
     let service = cmd.yagna()?.service_run().await?;
     let app_key = appkey::get_app_key().await?;
+
+    let provider_config = cmd.ya_provider()?.get_config().await?;
+    if let Some(account) = provider_config.account {
+        let address = account.address.to_lowercase();
+        cmd.yagna()?
+            .payment_init(&address, &PaymentType::PLAIN)
+            .await?;
+        cmd.yagna()?
+            .payment_init(&address, &PaymentType::ZK)
+            .await?;
+    } else {
+        let id = cmd.yagna()?.default_id().await?;
+        cmd.yagna()?
+            .payment_init(&id.node_id, &PaymentType::PLAIN)
+            .await?;
+        cmd.yagna()?
+            .payment_init(&id.node_id, &PaymentType::ZK)
+            .await?;
+    }
+
     let provider = cmd.ya_provider()?.spawn(&app_key).await?;
     let ctrl_c = tokio::signal::ctrl_c();
 

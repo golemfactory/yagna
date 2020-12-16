@@ -130,6 +130,10 @@ impl PaymentDriver for ZksyncDriver {
         PLATFORM_NAME.to_string()
     }
 
+    fn recv_init_required(&self) -> bool {
+        false
+    }
+
     async fn get_transaction_balance(
         &self,
         _db: DbExecutor,

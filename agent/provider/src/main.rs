@@ -13,8 +13,7 @@ mod preset_cli;
 mod provider_agent;
 mod signal;
 mod startup_config;
-mod task_manager;
-mod task_state;
+mod tasks;
 
 use crate::dir::clean_provider_dir;
 use crate::hardware::Profiles;
@@ -61,6 +60,7 @@ async fn main() -> anyhow::Result<()> {
                 signal,
                 clap::crate_name!()
             );
+            log::logger().flush();
             agent.send(Shutdown).await??;
             Ok(())
         }

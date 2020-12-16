@@ -99,7 +99,8 @@ impl PaymentDriverService {
         let driver = GntDriver::new(db.clone()).await?;
         let processor = GNTDriverProcessor::new(driver);
         self::service::bind_service(&db, processor);
-        self::service::subscribe_to_identity_events().await;
+        self::service::subscribe_to_identity_events().await?;
+        self::service::register_in_payment_service().await?;
         Ok(())
     }
 }

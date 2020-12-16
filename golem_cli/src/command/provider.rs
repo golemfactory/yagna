@@ -9,9 +9,16 @@ pub struct YaProviderCommand {
 }
 
 #[derive(Deserialize)]
+pub struct RecvAccount {
+    pub platform: Option<String>,
+    pub address: String,
+}
+
+#[derive(Deserialize, Default)]
 pub struct ProviderConfig {
     pub node_name: Option<String>,
     pub subnet: Option<String>,
+    pub account: Option<RecvAccount>,
 }
 
 #[derive(Deserialize)]
@@ -64,6 +71,15 @@ impl YaProviderCommand {
         }
         if let Some(subnet) = &config.subnet {
             cmd.arg("--subnet").arg(subnet);
+        }
+
+        if let Some(account) = &config.account {
+            if let Some(platform) = &account.platform {
+                cmd.arg("--account")
+                    .arg(format!("{}/{}", platform, &account.address));
+            } else {
+                cmd.arg("--account").arg(&account.address);
+            }
         }
 
         let output = cmd
