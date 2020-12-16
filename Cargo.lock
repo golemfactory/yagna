@@ -7302,7 +7302,6 @@ dependencies = [
  "num-bigint 0.2.6",
  "num_cpus",
  "path-clean",
- "regex",
  "semver 0.10.0",
  "serde",
  "serde_json",

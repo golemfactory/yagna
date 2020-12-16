@@ -1,13 +1,8 @@
 use crate::startup_config::{GLOBALS_JSON, HARDWARE_JSON, PRESETS_JSON};
-use anyhow::{bail, Context, Result};
-use regex::{Captures, Regex};
+use anyhow::{bail, Result};
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 use walkdir::WalkDir;
-
-lazy_static::lazy_static! {
-    static ref EXPR_REGEX: Regex = Regex::new(r"(\d+)([smhdwMy]?)").unwrap();
-}
 
 pub(crate) fn clean_provider_dir<P: AsRef<Path>, S: AsRef<str>>(
     dir: P,
@@ -15,7 +10,7 @@ pub(crate) fn clean_provider_dir<P: AsRef<Path>, S: AsRef<str>>(
     check_dir: bool,
     dry_run: bool,
 ) -> Result<u64> {
-    let lifetime = parse_expr(expr)?;
+    let lifetime = humantime::parse_duration(expr.as_ref())?;
     if check_dir && !is_provider_dir(&dir)? {
         bail!("Not a provider data directory: {}", dir.as_ref().display());
     }
@@ -89,29 +84,4 @@ fn clean_dir<P: AsRef<Path>>(dir: P, min_depth: usize, lifetime: Duration, dry_r
     }
 
     total_bytes
-}
-
-fn parse_expr<S: AsRef<str>>(expr: S) -> Result<Duration> {
-    let expr = expr.as_ref();
-    let cap: Captures = match (*EXPR_REGEX).captures_iter(expr.trim()).next() {
-        Some(cap) => match cap.len() {
-            3 => cap,
-            _ => bail!("Invalid expression: {}", expr),
-        },
-        None => bail!("Unrecognized expression: {}", expr),
-    };
-
-    let base: u64 = cap[1].parse().context("invalid number")?;
-    let mul: u64 = match &cap[2] {
-        "s" => 1,
-        "m" => 60,
-        "h" => 3600,
-        "d" | "" => 3600 * 24,
-        "w" => 3600 * 24 * 7,
-        "M" => 3600 * 24 * 30,
-        "y" => 3600 * 24 * 365,
-        u => bail!("Invalid unit: {}", u),
-    };
-
-    Ok(Duration::from_secs(base * mul))
 }
