@@ -102,7 +102,6 @@ async fn test_agreement_approved_event() {
 
 /// Both endpoints Agreement events and wait_for_approval should work properly.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_agreement_events_and_wait_for_approval() {
     let network = MarketsNetwork::new(None)
