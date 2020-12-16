@@ -1,21 +1,11 @@
 use anyhow::{anyhow, Result};
-use chrono::{DateTime, Utc};
 use derive_more::Display;
 use std::collections::HashMap;
 use std::fmt;
-use std::time::Duration;
 use thiserror;
 use tokio::sync::watch;
 
-#[derive(Display, Debug, Clone, PartialEq)]
-pub enum BreakReason {
-    #[display(fmt = "Agreement initialization error: {}", error)]
-    InitializationError { error: String },
-    #[display(fmt = "Agreement expired @ {}", _0)]
-    Expired(DateTime<Utc>),
-    #[display(fmt = "No activity created within {:?} from Agreement Approval", _0)]
-    NoActivity(Duration),
-}
+use crate::market::termination_reason::BreakReason;
 
 // =========================================== //
 // Agreement state
@@ -72,7 +62,7 @@ pub struct StateWaiter {
     changed_receiver: watch::Receiver<StateChange>,
 }
 
-/// Responsible for state of single task.
+/// Responsible for state of single tasks.
 struct TaskState {
     agreement_id: String,
     state: Transition,
@@ -300,7 +290,7 @@ impl fmt::Display for Transition {
 
 #[cfg(test)]
 mod test {
-    use crate::task_state::{AgreementState, BreakReason};
+    use crate::tasks::task_state::{AgreementState, BreakReason};
 
     #[test]
     #[ignore]
