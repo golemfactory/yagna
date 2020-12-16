@@ -798,7 +798,7 @@ async fn cant_promote_requestor_proposal() -> Result<()> {
         .await
     {
         Err(AgreementError::OwnProposal(id)) => assert_eq!(id, our_proposal_id),
-        _ => panic!("Expected AgreementError::OwnProposal."),
+        e => panic!("Expected AgreementError::OwnProposal, got: {:?}", e),
     }
     Ok(())
 }
@@ -841,7 +841,7 @@ async fn cant_promote_initial_proposal() -> Result<()> {
         .await
     {
         Err(AgreementError::NoNegotiations(id)) => assert_eq!(id, proposal_id),
-        _ => panic!("Expected AgreementError::NoNegotiations."),
+        e => panic!("Expected AgreementError::NoNegotiations, got: {:?}", e),
     }
     Ok(())
 }
@@ -886,7 +886,7 @@ async fn cant_promote_not_last_proposal() -> Result<()> {
         .await
     {
         Err(AgreementError::ProposalCountered(id)) => assert_eq!(id, proposal_id),
-        _ => panic!("Expected AgreementError::ProposalCountered."),
+        e => panic!("Expected AgreementError::ProposalCountered, got: {:?}", e),
     }
     Ok(())
 }
@@ -956,7 +956,7 @@ async fn test_terminate_not_existing_agreement() -> Result<()> {
 
     match result.unwrap_err() {
         AgreementError::NotFound(id) => assert_eq!(not_existing_agreement, id),
-        _ => panic!("Expected AgreementError::NotFound"),
+        e => panic!("Expected AgreementError::NotFound, got: {}", e),
     };
     Ok(())
 }
@@ -1005,7 +1005,7 @@ async fn test_terminate_from_wrong_states() -> Result<()> {
         Err(AgreementError::InvalidState(AgreementStateError::Proposed(id))) => {
             assert_eq!(id, agreement_id)
         }
-        _ => panic!("Wrong error returned."),
+        e => panic!("Wrong error returned, got: {:?}", e),
     };
 
     req_market
@@ -1027,7 +1027,7 @@ async fn test_terminate_from_wrong_states() -> Result<()> {
         Err(AgreementError::InvalidState(AgreementStateError::Confirmed(id))) => {
             assert_eq!(id, agreement_id)
         }
-        _ => panic!("Wrong error returned."),
+        e => panic!("Wrong error returned, got: {:?}", e),
     };
 
     let agreement_id = agreement_id.clone().translate(Owner::Provider);
@@ -1041,7 +1041,7 @@ async fn test_terminate_from_wrong_states() -> Result<()> {
         Err(AgreementError::InvalidState(AgreementStateError::Confirmed(id))) => {
             assert_eq!(id, agreement_id)
         }
-        _ => panic!("Wrong error returned."),
+        e => panic!("Wrong error returned, got: {:?}", e),
     };
     Ok(())
 }

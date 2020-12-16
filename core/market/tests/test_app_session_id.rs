@@ -457,7 +457,10 @@ async fn test_session_timestamp_filtering() -> Result<()> {
                 assert_eq!(agreement_id, &agreements[i].into_client());
                 assert_ge!(event_date, &timestamp_before);
             }
-            _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
+            e => panic!(
+                "Expected AgreementEvent::AgreementApprovedEvent, got: {:?}",
+                e
+            ),
         });
 
     r_events
@@ -471,7 +474,10 @@ async fn test_session_timestamp_filtering() -> Result<()> {
                 assert_eq!(agreement_id, &agreements[i].into_client());
                 assert_ge!(event_date, &timestamp_before);
             }
-            _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
+            e => panic!(
+                "Expected AgreementEvent::AgreementApprovedEvent, got: {:?}",
+                e
+            ),
         });
 
     // Query events using newer timestamp. We expect to get only new events
@@ -512,7 +518,10 @@ async fn test_session_timestamp_filtering() -> Result<()> {
                 assert_eq!(agreement_id, &agreements[num_before + i].into_client());
                 assert_ge!(event_date, &timestamp_before);
             }
-            _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
+            e => panic!(
+                "Expected AgreementEvent::AgreementApprovedEvent, got: {:?}",
+                e
+            ),
         });
 
     r_events
@@ -526,7 +535,10 @@ async fn test_session_timestamp_filtering() -> Result<()> {
                 assert_eq!(agreement_id, &agreements[num_before + i].into_client());
                 assert_ge!(event_date, &timestamp_before);
             }
-            _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
+            e => panic!(
+                "Expected AgreementEvent::AgreementApprovedEvent, got: {:?}",
+                e
+            ),
         });
 
     // Query events using newer last timestamp. We expect to get no events.
@@ -614,7 +626,10 @@ async fn test_common_event_flow() -> Result<()> {
                 assert_eq!(agreement_id, &agreements[i].into_client());
                 current_timestamp = event_date.clone();
             }
-            _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
+            e => panic!(
+                "Expected AgreementEvent::AgreementApprovedEvent, got: {:?}",
+                e
+            ),
         }
     }
 

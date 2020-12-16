@@ -84,7 +84,7 @@ fn resolve_api_with_supplemented_props() {
         Ok(expr) => {
             assert_eq!(expr.resolve_api(&property_set_full), Ok(Some(true)));
         }
-        _ => panic!("Unexpected result"),
+        e => panic!("Unexpected result, got: {}", e),
     }
 }
 

@@ -169,7 +169,7 @@ async fn test_counter_countered_proposal() -> Result<(), anyhow::Error> {
         ProposalError::Save(SaveProposalError::AlreadyCountered(id)) => {
             assert_eq!(id, proposal0_id);
         }
-        _ => panic!("Expected AlreadyCountered error."),
+        e => panic!("Expected AlreadyCountered error, got: {}", e),
     }
 
     // PROVIDER side
@@ -195,7 +195,7 @@ async fn test_counter_countered_proposal() -> Result<(), anyhow::Error> {
         ProposalError::Save(SaveProposalError::AlreadyCountered(id)) => {
             assert_eq!(id, proposal0_id)
         }
-        _ => panic!("Expected AlreadyCountered error."),
+        e => panic!("Expected AlreadyCountered error, got: {}", e),
     }
 
     Ok(())
@@ -248,8 +248,10 @@ async fn test_counter_own_proposal() -> Result<(), anyhow::Error> {
 
     assert!(result.is_err());
     match result.err().unwrap() {
-        ProposalError::OwnProposal(id) => assert_eq!(id, proposal1_id),
-        _ => panic!("Expected ProposalError::OwnProposal."),
+        ProposalError::Validation(ProposalValidationError::OwnProposal(id)) => {
+            assert_eq!(id, proposal1_id)
+        }
+        e => panic!("Expected ProposalValidationError::OwnProposal, got: {}", e),
     }
 
     // PROVIDER side
@@ -276,8 +278,10 @@ async fn test_counter_own_proposal() -> Result<(), anyhow::Error> {
 
     assert!(result.is_err());
     match result.err().unwrap() {
-        ProposalError::OwnProposal(id) => assert_eq!(id, proposal1_id),
-        _ => panic!("Expected ProposalError::OwnProposal."),
+        ProposalError::Validation(ProposalValidationError::OwnProposal(id)) => {
+            assert_eq!(id, proposal1_id)
+        }
+        e => panic!("Expected ProposalValidationError::OwnProposal, got: {}", e),
     }
 
     Ok(())
@@ -325,7 +329,10 @@ async fn test_counter_unsubscribed_demand() -> Result<(), anyhow::Error> {
         ProposalError::Validation(ProposalValidationError::NoSubscription(id)) => {
             assert_eq!(id, demand_id)
         }
-        _ => panic!("Expected ProposalValidationError::NoSubscription."),
+        e => panic!(
+            "Expected ProposalValidationError::NoSubscription, got: {}",
+            e
+        ),
     }
 
     Ok(())
@@ -386,7 +393,7 @@ async fn test_counter_unsubscribed_offer() -> Result<(), anyhow::Error> {
         ProposalError::Validation(ProposalValidationError::Unsubscribed(id)) => {
             assert_eq!(id, offer_id)
         }
-        _ => panic!("Expected ProposalValidationError::Unsubscribed."),
+        e => panic!("Expected ProposalValidationError::Unsubscribed, got: {}", e),
     }
 
     Ok(())
@@ -536,7 +543,7 @@ async fn test_counter_draft_unsubscribed_remote_demand() -> Result<(), anyhow::E
     assert!(result.is_err());
     match result.err().unwrap() {
         ProposalError::Send(..) => (),
-        _ => panic!("Expected ProposalError::Send."),
+        e => panic!("Expected ProposalError::Send, got: {}", e),
     }
     Ok(())
 }
@@ -571,7 +578,7 @@ async fn test_not_matching_counter_demand() -> Result<(), anyhow::Error> {
     assert!(result.is_err());
     match result.err().unwrap() {
         ProposalError::Validation(ProposalValidationError::NotMatching(..)) => (),
-        _ => panic!("Expected ProposalValidationError::NotMatching."),
+        e => panic!("Expected ProposalValidationError::NotMatching, got: {}", e),
     }
 
     Ok(())
@@ -623,7 +630,7 @@ async fn test_not_matching_counter_offer() -> Result<(), anyhow::Error> {
     assert!(result.is_err());
     match result.err().unwrap() {
         ProposalError::Validation(ProposalValidationError::NotMatching(..)) => (),
-        _ => panic!("Expected ProposalValidationError::NotMatching."),
+        e => panic!("Expected ProposalValidationError::NotMatching, got: {}", e),
     }
 
     Ok(())

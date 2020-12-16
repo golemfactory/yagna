@@ -5,12 +5,11 @@ use ya_client::model::market::Reason;
 use ya_service_bus::RpcMessage;
 
 use crate::db::model::{AgreementId, DbProposal, Owner, ProposalId, SubscriptionId};
-use crate::protocol::negotiation::error::ProposeAgreementError;
+use crate::protocol::negotiation::error::{ProposeAgreementError, RejectProposalError};
 
 use super::super::callback::CallbackMessage;
 use super::error::{
-    ApproveAgreementError, CounterProposalError, GsbAgreementError, GsbProposalError,
-    TerminateAgreementError,
+    ApproveAgreementError, CounterProposalError, GsbAgreementError, TerminateAgreementError,
 };
 
 pub mod provider {
@@ -87,7 +86,7 @@ impl RpcMessage for InitialProposalReceived {
     type Error = CounterProposalError;
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProposalRejected {
     pub proposal_id: ProposalId,
@@ -97,7 +96,7 @@ pub struct ProposalRejected {
 impl RpcMessage for ProposalRejected {
     const ID: &'static str = "ProposalRejected";
     type Item = ();
-    type Error = GsbProposalError;
+    type Error = RejectProposalError;
 }
 
 #[derive(Clone, Serialize, Deserialize)]

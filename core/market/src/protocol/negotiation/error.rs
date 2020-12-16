@@ -1,9 +1,11 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::db::dao::ChangeProposalStateError;
 use crate::db::model::{AgreementId, AgreementState, ProposalId, ProposalIdValidationError};
 use crate::matcher::error::QueryOfferError;
-use crate::negotiation::error::{MatchValidationError, ProposalValidationError};
+use crate::negotiation::error::{GetProposalError, MatchValidationError, ProposalValidationError};
+use ya_client::model::market::Reason;
 
 /// Trait for Error types, that shouldn't expose sensitive information
 /// to other Nodes in network, but should contain more useful message, when displaying
@@ -29,6 +31,29 @@ pub enum CounterProposalError {
     Remote(RemoteProposalError, ProposalId),
     #[error("Remote error: {0}")]
     RemoteInternal(#[from] RemoteProposalError),
+}
+
+#[derive(Error, Debug, Serialize, Deserialize)]
+
+pub enum ReasonError {
+    #[error("Reason {0} serialize error: {1}")]
+    Serialize(Reason, String),
+    #[error("Reason `{0}` deserialize error: {1}")]
+    Deserialize(String, String),
+}
+
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum RejectProposalError {
+    #[error("Rejecting {0}.")]
+    Gsb(#[from] GsbProposalError),
+    #[error(transparent)]
+    Get(#[from] GetProposalError),
+    #[error(transparent)]
+    Reason(#[from] ReasonError),
+    #[error(transparent)]
+    ChangeState(#[from] ChangeProposalStateError),
+    #[error(transparent)]
+    Validation(#[from] ProposalValidationError),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]

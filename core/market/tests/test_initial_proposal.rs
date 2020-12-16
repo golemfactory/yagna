@@ -60,7 +60,7 @@ async fn test_query_initial_proposal() -> Result<(), anyhow::Error> {
 
     let proposal = match events[0].clone() {
         RequestorEvent::ProposalEvent { proposal, .. } => proposal,
-        _ => panic!("Invalid event Type. ProposalEvent expected"),
+        e => panic!("Invalid event Type. ProposalEvent expected, got: {:?}", e),
     };
 
     assert_eq!(proposal.prev_proposal_id, None);
@@ -356,7 +356,7 @@ async fn test_simultaneous_query_events() -> Result<(), anyhow::Error> {
         .into_iter()
         .map(|event| match event {
             RequestorEvent::ProposalEvent { proposal, .. } => proposal.proposal_id,
-            _ => panic!("Expected ProposalEvents"),
+            e => panic!("Expected ProposalEvents, got: {:?}", e),
         })
         .collect::<Vec<String>>();
     assert_ne!(ids[0], ids[1]);
@@ -444,7 +444,7 @@ async fn test_counter_initial_proposal() -> Result<(), anyhow::Error> {
     assert_eq!(events.len(), 1);
     let init_proposal = match events[0].clone() {
         RequestorEvent::ProposalEvent { proposal, .. } => proposal,
-        _ => panic!("Invalid event Type. ProposalEvent expected"),
+        e => panic!("Invalid event Type. ProposalEvent expected, got: {:?}", e),
     };
     let init_proposal_id = init_proposal.get_proposal_id()?;
 
@@ -470,7 +470,7 @@ async fn test_counter_initial_proposal() -> Result<(), anyhow::Error> {
 
     let proposal = match events[0].clone() {
         ProviderEvent::ProposalEvent { proposal, .. } => proposal,
-        _ => panic!("Invalid event Type. ProposalEvent expected"),
+        e => panic!("Invalid event Type. ProposalEvent expected, got: {:?}", e),
     };
     assert_eq!(proposal.issuer_id, identity1.identity);
     assert_eq!(proposal.proposal_id, new_proposal_id.to_string());

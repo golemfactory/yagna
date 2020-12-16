@@ -73,7 +73,10 @@ async fn test_agreement_approved_event() -> Result<()> {
             AgreementEvent::AgreementApprovedEvent { agreement_id, .. } => {
                 assert_eq!(agreement_id, &agr_id.into_client())
             }
-            _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
+            e => panic!(
+                "Expected AgreementEvent::AgreementApprovedEvent, got: {:?}",
+                e
+            ),
         };
         Result::<(), anyhow::Error>::Ok(())
     });
@@ -90,7 +93,10 @@ async fn test_agreement_approved_event() -> Result<()> {
         AgreementEvent::AgreementApprovedEvent { agreement_id, .. } => {
             assert_eq!(agreement_id, &id)
         }
-        _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
+        e => panic!(
+            "Expected AgreementEvent::AgreementApprovedEvent, got: {:?}",
+            e
+        ),
     };
 
     // Protect from eternal waiting.
@@ -235,7 +241,10 @@ async fn test_agreement_terminated_event() -> Result<()> {
             assert_ne!(reason, &None);
             assert_eq!(reason.as_ref().unwrap().message, "Expired");
         }
-        _ => panic!("Expected AgreementEvent::AgreementTerminatedEvent"),
+        e => panic!(
+            "Expected AgreementEvent::AgreementTerminatedEvent, got: {:?}",
+            e
+        ),
     };
 
     // == REQUESTOR
@@ -258,7 +267,10 @@ async fn test_agreement_terminated_event() -> Result<()> {
 
             assert_eq!(reason.as_ref().unwrap().message, "Expired");
         }
-        _ => panic!("Expected AgreementEvent::AgreementTerminatedEvent"),
+        e => panic!(
+            "Expected AgreementEvent::AgreementTerminatedEvent, got: {:?}",
+            e
+        ),
     };
 
     Ok(())

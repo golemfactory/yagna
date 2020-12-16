@@ -119,7 +119,7 @@ async fn get_proposal(
     market
         .requestor_engine
         .common
-        .get_client_proposal(Some(subscription_id), &proposal_id)
+        .get_client_proposal(Some(&subscription_id), &proposal_id)
         .await
         .map(|proposal| HttpResponse::Ok().json(proposal))
 }

@@ -1,6 +1,6 @@
-#![allow(dead_code)]
 use diesel::expression::dsl::now as sql_now;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use serde::{Deserialize, Serialize};
 
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
@@ -23,10 +23,10 @@ pub enum SaveProposalError {
     NoPrevious(ProposalId),
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, Serialize, Deserialize)]
 pub enum ChangeProposalStateError {
     #[error("Failed to change proposal [{0}] state to `{1}` in db: {0}.")]
-    Db(ProposalId, ProposalState, DbError),
+    Db(ProposalId, ProposalState, String),
     //TODO: state transition error
 }
 
@@ -91,7 +91,7 @@ impl<'c> ProposalDao<'c> {
             update_proposal_state(conn, &id, state)
         })
         .await
-        .map_err(|e| ChangeProposalStateError::Db(proposal_id.clone(), state, e.into()))
+        .map_err(|e| ChangeProposalStateError::Db(proposal_id.clone(), state, e.to_string()))
     }
 
     pub async fn get_proposal(&self, proposal_id: &ProposalId) -> DbResult<Option<Proposal>> {

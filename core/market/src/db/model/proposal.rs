@@ -1,5 +1,6 @@
 use chrono::{Duration, NaiveDateTime, TimeZone, Utc};
 use diesel::sql_types::Text;
+use serde::{Deserialize, Serialize};
 
 use ya_client::model::market::proposal::{Proposal as ClientProposal, State};
 use ya_client::model::market::NewProposal;
@@ -28,6 +29,8 @@ use crate::protocol::negotiation::messages::ProposalContent;
     Debug,
     Clone,
     Copy,
+    Serialize,
+    Deserialize,
 )]
 #[sql_type = "Text"]
 pub enum ProposalState {

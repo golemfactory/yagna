@@ -16,7 +16,7 @@ use crate::db::{
 use crate::matcher::error::{DemandError, QueryOfferError};
 use crate::protocol::negotiation::error::{
     ApproveAgreementError, CounterProposalError as ProtocolProposalError, GsbAgreementError,
-    NegotiationApiInitError, ProposeAgreementError, TerminateAgreementError,
+    NegotiationApiInitError, ProposeAgreementError, RejectProposalError, TerminateAgreementError,
 };
 
 #[derive(Error, Debug)]
@@ -90,15 +90,9 @@ pub enum AgreementError {
     ProtocolApprove(#[from] ApproveAgreementError),
     #[error("Protocol error while terminating: {0}")]
     ProtocolTerminate(#[from] TerminateAgreementError),
-    #[error(transparent)]
-    ReasonError(#[from] ReasonError),
     #[error("Internal error: {0}")]
     Internal(String),
 }
-
-#[derive(Error, Debug)]
-#[error("Reason parse error: {0}")]
-pub struct ReasonError(#[from] pub serde_json::Error);
 
 #[derive(Error, Debug)]
 pub enum WaitForApprovalError {
@@ -142,7 +136,7 @@ pub enum AgreementEventsError {
     Internal(String),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Serialize, Deserialize)]
 pub enum GetProposalError {
     #[error("Proposal [{0}] not found (subscription [{1:?}]).")]
     NotFound(ProposalId, Option<SubscriptionId>),
@@ -160,6 +154,8 @@ pub enum ProposalValidationError {
     Expired(SubscriptionId),
     #[error(transparent)]
     NotMatching(#[from] MatchValidationError),
+    #[error("Can't react to own Proposal [{0}].")]
+    OwnProposal(ProposalId),
     #[error("Unauthorized operation attempt on Proposal [{0}] from [{1}].")]
     Unauthorized(ProposalId, NodeId),
     #[error("Internal error processing Proposal: {0}.")]
@@ -170,8 +166,6 @@ pub enum ProposalValidationError {
 pub enum ProposalError {
     #[error(transparent)]
     Validation(#[from] ProposalValidationError),
-    #[error("Can't counter own Proposal [{0}].")]
-    OwnProposal(ProposalId),
     #[error(transparent)]
     Get(#[from] GetProposalError),
     #[error(transparent)]
@@ -180,7 +174,9 @@ pub enum ProposalError {
     Save(#[from] SaveProposalError),
     #[error(transparent)]
     ChangeState(#[from] ChangeProposalStateError),
-    #[error("Failed to send counter Proposal for Proposal [{0}]. Error: {1}")]
+    #[error(transparent)]
+    Reject(#[from] RejectProposalError),
+    #[error("Failed to send response for Proposal [{0}]. Error: {1}")]
     Send(ProposalId, ProtocolProposalError),
 }
 

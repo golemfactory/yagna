@@ -18,7 +18,7 @@ use super::messages::{
     AgreementRejected, AgreementTerminated, InitialProposalReceived, ProposalContent,
     ProposalReceived, ProposalRejected,
 };
-use crate::protocol::negotiation::error::ProposeAgreementError;
+use crate::protocol::negotiation::error::{ProposeAgreementError, RejectProposalError};
 use ya_client::model::market::Reason;
 
 /// Responsible for communication with markets on other nodes
@@ -91,7 +91,7 @@ impl NegotiationApi {
         id: NodeId,
         proposal: &Proposal,
         reason: Option<Reason>,
-    ) -> Result<(), GsbProposalError> {
+    ) -> Result<(), RejectProposalError> {
         let msg = ProposalRejected {
             proposal_id: proposal.body.id.clone(),
             reason,
@@ -189,7 +189,7 @@ impl NegotiationApi {
         self,
         caller: String,
         msg: ProposalRejected,
-    ) -> Result<(), GsbProposalError> {
+    ) -> Result<(), RejectProposalError> {
         log::debug!(
             "Negotiation API: Proposal [{}] rejected by [{}].",
             &msg.proposal_id,

@@ -19,6 +19,7 @@ use crate::db::{
     },
 };
 use crate::matcher::store::SubscriptionStore;
+use crate::negotiation::error::NegotiationError;
 use crate::negotiation::{
     error::{
         AgreementError, AgreementEventsError, AgreementStateError, GetProposalError,
@@ -27,6 +28,8 @@ use crate::negotiation::{
     notifier::NotifierError,
     EventNotifier,
 };
+use crate::protocol::negotiation::error::{ReasonError, RejectProposalError};
+use crate::protocol::negotiation::messages::ProposalRejected;
 use crate::protocol::negotiation::{
     common as protocol_common,
     error::{
@@ -65,6 +68,28 @@ impl CommonBroker {
         }
     }
 
+    pub async fn unsubscribe(&self, id: &SubscriptionId) -> Result<(), NegotiationError> {
+        self.negotiation_notifier.stop_notifying(id).await;
+
+        // We can ignore error, if removing events failed, because they will be never
+        // queried again and don't collide with other subscriptions.
+        let _ = self
+            .db
+            .as_dao::<NegotiationEventsDao>()
+            .remove_events(id)
+            .await
+            .map_err(|e| {
+                log::warn!(
+                    "Failed to remove events related to subscription [{}]. Error: {}.",
+                    id,
+                    e
+                )
+            });
+
+        // TODO: remove all resources related to Proposals
+        Ok(())
+    }
+
     pub async fn counter_proposal(
         &self,
         subscription_id: &SubscriptionId,
@@ -80,14 +105,16 @@ impl CommonBroker {
         // it will be sent to Provider and his counter Proposal will be rejected later.
 
         let prev_proposal = self
-            .get_proposal(Some(subscription_id.clone()), prev_proposal_id)
+            .get_proposal(Some(subscription_id), prev_proposal_id)
             .await?;
 
-        self.validate_subscription(&prev_proposal, caller_id, caller_role)
+        self.validate_proposal(&prev_proposal, caller_id, caller_role)
             .await?;
 
         if prev_proposal.body.issuer == Issuer::Us {
-            return Err(ProposalError::OwnProposal(prev_proposal_id.clone()));
+            Err(ProposalValidationError::OwnProposal(
+                prev_proposal.body.id.clone(),
+            ))?;
         }
 
         let is_first = prev_proposal.body.prev_proposal_id.is_none();
@@ -104,34 +131,50 @@ impl CommonBroker {
 
     pub async fn reject_proposal(
         &self,
-        subs_id: &SubscriptionId,
+        subs_id: Option<&SubscriptionId>,
         proposal_id: &ProposalId,
         caller_id: &NodeId,
         caller_role: Owner,
-        _reason: &Option<Reason>,
-    ) -> Result<Proposal, ProposalError> {
+        reason: &Option<Reason>,
+    ) -> Result<Proposal, RejectProposalError> {
         // Check if subscription is still active.
         // Note that subscription can be unsubscribed, before we get to saving
         // Proposal to database. This seems like race conditions, but there's no
         // danger of data inconsistency. If we won't reject countering Proposal here,
         // it will be sent to Provider and his counter Proposal will be rejected later.
 
-        let proposal = self
-            .get_proposal(Some(subs_id.clone()), proposal_id)
+        let proposal = self.get_proposal(subs_id.clone(), proposal_id).await?;
+
+        self.validate_proposal(&proposal, caller_id, caller_role)
             .await?;
 
-        self.validate_subscription(&proposal, caller_id, caller_role)
-            .await?;
-
-        if proposal.body.issuer == Issuer::Us {
-            return Err(ProposalError::OwnProposal(proposal_id.clone()));
+        if proposal.body.issuer == Issuer::Us && proposal_id.owner() == caller_role {
+            let e = ProposalValidationError::OwnProposal(proposal.body.id.clone());
+            log::warn!("{}", e);
+            Err(e)?;
         }
 
         self.db
             .as_dao::<ProposalDao>()
-            // TODO: save reason to DB
             .change_proposal_state(proposal_id, ProposalState::Rejected)
             .await?;
+
+        match caller_role {
+            Owner::Requestor => counter!("market.proposals.requestor.rejected", 1),
+            Owner::Provider => counter!("market.proposals.provider.rejected", 1),
+        };
+
+        log::info!(
+            "{:?} [{}] rejected Proposal [{}] {}.",
+            caller_role,
+            caller_id,
+            &proposal_id,
+            reason
+                .as_ref()
+                .map(|r| format!("with reason: {}", r))
+                .unwrap_or("without reason".into()),
+        );
+
         Ok(proposal)
     }
 
@@ -253,7 +296,7 @@ impl CommonBroker {
 
     pub async fn get_proposal(
         &self,
-        subscription_id: Option<SubscriptionId>,
+        subs_id: Option<&SubscriptionId>,
         id: &ProposalId,
     ) -> Result<Proposal, GetProposalError> {
         Ok(self
@@ -261,14 +304,12 @@ impl CommonBroker {
             .as_dao::<ProposalDao>()
             .get_proposal(&id)
             .await
-            .map_err(|e| {
-                GetProposalError::Internal(id.clone(), subscription_id.clone(), e.to_string())
-            })?
+            .map_err(|e| GetProposalError::Internal(id.clone(), subs_id.cloned(), e.to_string()))?
             .filter(|proposal| {
-                if subscription_id.is_none() {
+                if subs_id.is_none() {
                     return true;
                 }
-                let subscription_id = subscription_id.as_ref().unwrap();
+                let subscription_id = subs_id.unwrap();
                 if &proposal.negotiation.subscription_id == subscription_id {
                     return true;
                 }
@@ -282,12 +323,12 @@ impl CommonBroker {
                 // that such Proposal exists, but for different subscription_id.
                 false
             })
-            .ok_or(GetProposalError::NotFound(id.clone(), subscription_id))?)
+            .ok_or(GetProposalError::NotFound(id.clone(), subs_id.cloned()))?)
     }
 
     pub async fn get_client_proposal(
         &self,
-        subscription_id: Option<SubscriptionId>,
+        subscription_id: Option<&SubscriptionId>,
         id: &ProposalId,
     ) -> Result<ClientProposal, GetProposalError> {
         self.get_proposal(subscription_id, id)
@@ -448,13 +489,13 @@ impl CommonBroker {
     //  of handlers should return RemoteProposalError.
     pub async fn on_proposal_received(
         self,
-        caller: String,
         msg: ProposalReceived,
-        owner: Owner,
+        caller: String,
+        caller_role: Owner,
     ) -> Result<(), CounterProposalError> {
         let proposal_id = msg.proposal.proposal_id.clone();
         let caller_id = CommonBroker::parse_caller(&caller)?;
-        self.proposal_received(msg, caller_id, owner)
+        self.proposal_received(msg, caller_id, caller_role)
             .await
             .map_err(|e| CounterProposalError::Remote(e, proposal_id))
     }
@@ -471,9 +512,9 @@ impl CommonBroker {
             .await
             .map_err(|_e| RemoteProposalError::NotFound(msg.prev_proposal_id.clone()))?;
         let proposal = prev_proposal.from_draft(msg.proposal);
-        proposal.validate_id().map_err(RemoteProposalError::from)?;
+        proposal.validate_id()?;
 
-        self.validate_subscription(&prev_proposal, &caller_id, caller_role)
+        self.validate_proposal(&prev_proposal, &caller_id, caller_role)
             .await?;
         validate_match(&proposal, &prev_proposal)?;
 
@@ -499,11 +540,11 @@ impl CommonBroker {
         let subscription_id = proposal.negotiation.subscription_id.clone();
         self.db
             .as_dao::<NegotiationEventsDao>()
-            .add_proposal_event(&proposal, caller_role)
+            .add_proposal_event(&proposal, caller_role.swap())
             .await
             .map_err(|e| {
                 // TODO: Don't leak our database error, but send meaningful message as response.
-                let msg = format!("Failed adding Proposal [{}] event: {}", proposal.body.id, e);
+                let msg = format!("Failed adding Proposal [{}] Event: {}", proposal.body.id, e);
                 log::warn!("{}", msg);
                 ProposalValidationError::Internal(msg)
             })?;
@@ -524,13 +565,71 @@ impl CommonBroker {
         Ok(())
     }
 
+    pub async fn on_proposal_rejected(
+        self,
+        msg: ProposalRejected,
+        caller: String,
+        caller_role: Owner,
+    ) -> Result<(), RejectProposalError> {
+        let caller_id = CommonBroker::parse_caller(&caller)?;
+        self.proposal_rejected(msg, caller_id, caller_role).await
+    }
+
+    pub async fn proposal_rejected(
+        self,
+        msg: ProposalRejected,
+        caller_id: NodeId,
+        caller_role: Owner,
+    ) -> Result<(), RejectProposalError> {
+        let proposal = CommonBroker::reject_proposal(
+            &self,
+            None,
+            &msg.proposal_id,
+            &caller_id,
+            caller_role,
+            &msg.reason,
+        )
+        .await?;
+
+        // Create Proposal Event and add it to queue (database).
+        // TODO: If creating Proposal succeeds, but event can't be added, provider
+        // TODO: will never answer to this Proposal. Solve problem when Event API will be available.
+        let subscription_id = proposal.negotiation.subscription_id.clone();
+        let reason = match &msg.reason {
+            Some(r) => Some(
+                serde_json::to_string(r)
+                    .map_err(|e| ReasonError::Serialize(r.clone(), e.to_string()))?,
+            ),
+            None => None,
+        };
+        self.db
+            .as_dao::<NegotiationEventsDao>()
+            .add_proposal_rejected_event(&proposal, reason)
+            .await
+            .map_err(|e| {
+                // TODO: Don't leak our database error, but send meaningful message as response.
+                let msg = format!(
+                    "Failed adding Proposal [{}] Rejected Event: {}",
+                    msg.proposal_id, e
+                );
+                log::warn!("{}", msg);
+                ProposalValidationError::Internal(msg)
+            })?;
+        log::warn!("proposal rejected event inserted");
+
+        // Send channel message to wake all query_events waiting for proposals.
+        self.negotiation_notifier.notify(&subscription_id).await;
+
+        Ok(())
+    }
+
     pub(crate) fn parse_caller(caller: &str) -> Result<NodeId, ProposalValidationError> {
         NodeId::from_str(caller).map_err(|e| {
             ProposalValidationError::Internal(format!("Failed to parse caller [{}]: {}", caller, e))
         })
     }
 
-    pub async fn validate_subscription(
+    pub async fn validate_proposal(
         &self,
         proposal: &Proposal,
         caller_id: &NodeId,
@@ -543,10 +642,11 @@ impl CommonBroker {
             ProposalValidationError::Unauthorized(proposal.body.id.clone(), caller_id.clone());
         }
 
+        // check Offer
         self.store.get_offer(&proposal.negotiation.offer_id).await?;
 
         // On Requestor side we have both Offer and Demand, but Provider has only Offers.
-        if caller_role == Owner::Requestor {
+        if proposal.body.id.owner() == Owner::Requestor {
             self.store
                 .get_demand(&proposal.negotiation.demand_id)
                 .await?;

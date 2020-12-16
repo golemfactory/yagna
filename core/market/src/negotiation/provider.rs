@@ -49,6 +49,7 @@ impl ProviderBroker {
         let broker1 = broker.clone();
         let broker2 = broker.clone();
         let broker3 = broker.clone();
+        let broker_proposal_reject = broker.clone();
         let broker_terminated = broker.clone();
 
         let api = NegotiationApi::new(
@@ -58,9 +59,13 @@ impl ProviderBroker {
             move |caller: String, msg: ProposalReceived| {
                 broker2
                     .clone()
-                    .on_proposal_received(caller, msg, Owner::Provider)
+                    .on_proposal_received(msg, caller, Owner::Requestor)
             },
-            move |_caller: String, _msg: ProposalRejected| async move { unimplemented!() },
+            move |caller: String, msg: ProposalRejected| {
+                broker_proposal_reject
+                    .clone()
+                    .on_proposal_rejected(msg, caller, Owner::Requestor)
+            },
             move |caller: String, msg: AgreementReceived| {
                 on_agreement_received(broker3.clone(), caller, msg)
             },
@@ -76,6 +81,7 @@ impl ProviderBroker {
         // until first change to value will be made.
         counter!("market.events.provider.queried", 0);
         counter!("market.proposals.provider.received", 0);
+        counter!("market.proposals.provider.rejected", 0);
         counter!("market.proposals.provider.countered", 0);
         counter!("market.proposals.provider.init-negotiation", 0);
         counter!("market.agreements.provider.proposed", 0);
@@ -103,15 +109,8 @@ impl ProviderBroker {
         Ok(())
     }
 
-    pub async fn unsubscribe_offer(
-        &self,
-        offer_id: &SubscriptionId,
-    ) -> Result<(), NegotiationError> {
-        self.common
-            .negotiation_notifier
-            .stop_notifying(offer_id)
-            .await;
-        Ok(())
+    pub async fn unsubscribe_offer(&self, id: &SubscriptionId) -> Result<(), NegotiationError> {
+        self.common.unsubscribe(id).await
     }
 
     pub async fn counter_proposal(
@@ -148,18 +147,17 @@ impl ProviderBroker {
         Ok(proposal_id)
     }
 
-    // TODO: this is only mock implementation not to throw 501
     pub async fn reject_proposal(
         &self,
         offer_id: &SubscriptionId,
         proposal_id: &ProposalId,
         id: &Identity,
         reason: Option<Reason>,
-    ) -> Result<(), ProposalError> {
+    ) -> Result<(), RejectProposalError> {
         let proposal = self
             .common
             .reject_proposal(
-                offer_id,
+                Some(offer_id),
                 proposal_id,
                 &id.identity,
                 Owner::Provider,
@@ -169,16 +167,8 @@ impl ProviderBroker {
 
         self.api
             .reject_proposal(id.identity, &proposal, reason.clone())
-            .await
-            .map_err(|e| ProposalError::Send(proposal_id.clone(), e.into()))?;
+            .await?;
 
-        counter!("market.proposals.provider.rejected", 1);
-        log::info!(
-            "Provider {} rejected Proposal [{}] with reason: {}",
-            id.display(),
-            &proposal_id,
-            reason.display()
-        );
         Ok(())
     }
 
@@ -198,7 +188,7 @@ impl ProviderBroker {
             .then(|event| event.into_client_provider_event(&self.common.db))
             .inspect(|result| {
                 if let Err(error) = result {
-                    log::warn!("Error converting event to client type: {}", error);
+                    log::error!("Error converting event to client type: {}", error);
                 }
             })
             .filter_map(|event| async move { event.ok() })
@@ -308,7 +298,7 @@ async fn initial_proposal(
         proposal: msg.proposal,
     };
     broker
-        .proposal_received(msg, caller_id, Owner::Provider)
+        .proposal_received(msg, caller_id, Owner::Requestor)
         .await?;
 
     counter!("market.proposals.provider.init-negotiation", 1);

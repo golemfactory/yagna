@@ -50,6 +50,7 @@ impl RequestorBroker {
 
         let broker1 = broker.clone();
         let broker2 = broker.clone();
+        let broker_proposal_reject = broker.clone();
         let broker_terminated = broker.clone();
         let notifier = broker.negotiation_notifier.clone();
 
@@ -57,9 +58,13 @@ impl RequestorBroker {
             move |caller: String, msg: ProposalReceived| {
                 broker1
                     .clone()
-                    .on_proposal_received(caller, msg, Owner::Requestor)
+                    .on_proposal_received(msg, caller, Owner::Provider)
             },
-            move |_caller: String, _msg: ProposalRejected| async move { unimplemented!() },
+            move |caller: String, msg: ProposalRejected| {
+                broker_proposal_reject
+                    .clone()
+                    .on_proposal_rejected(msg, caller, Owner::Provider)
+            },
             move |caller: String, msg: AgreementApproved| {
                 on_agreement_approved(broker2.clone(), caller, msg)
             },
@@ -85,6 +90,7 @@ impl RequestorBroker {
         counter!("market.agreements.requestor.cancelled", 0);
         counter!("market.proposals.requestor.generated", 0);
         counter!("market.proposals.requestor.received", 0);
+        counter!("market.proposals.requestor.rejected", 0);
         counter!("market.proposals.requestor.countered", 0);
         counter!("market.events.requestor.queried", 0);
         counter!("market.agreements.events.queried", 0);
@@ -110,32 +116,8 @@ impl RequestorBroker {
         Ok(())
     }
 
-    pub async fn unsubscribe_demand(
-        &self,
-        demand_id: &SubscriptionId,
-    ) -> Result<(), NegotiationError> {
-        self.common
-            .negotiation_notifier
-            .stop_notifying(demand_id)
-            .await;
-
-        // We can ignore error, if removing events failed, because they will be never
-        // queried again and don't collide with other subscriptions.
-        let _ = self
-            .common
-            .db
-            .as_dao::<NegotiationEventsDao>()
-            .remove_events(demand_id)
-            .await
-            .map_err(|e| {
-                log::warn!(
-                    "Failed to remove events related to subscription [{}]. Error: {}.",
-                    demand_id,
-                    e
-                )
-            });
-        // TODO: We could remove all resources related to Proposals.
-        Ok(())
+    pub async fn unsubscribe_demand(&self, id: &SubscriptionId) -> Result<(), NegotiationError> {
+        self.common.unsubscribe(id).await
     }
 
     pub async fn counter_proposal(
@@ -176,7 +158,6 @@ impl RequestorBroker {
         Ok(proposal_id)
     }
 
-    // TODO: this is only mock implementation not to throw 501
     pub async fn reject_proposal(
         &self,
         demand_id: &SubscriptionId,
@@ -187,7 +168,7 @@ impl RequestorBroker {
         let proposal = self
             .common
             .reject_proposal(
-                demand_id,
+                Some(demand_id),
                 proposal_id,
                 &id.identity,
                 Owner::Requestor,
@@ -197,16 +178,8 @@ impl RequestorBroker {
 
         self.api
             .reject_proposal(id.identity, &proposal, reason.clone())
-            .await
-            .map_err(|e| ProposalError::Send(proposal_id.clone(), e.into()))?;
+            .await?;
 
-        counter!("market.proposals.requestor.rejected", 1);
-        log::info!(
-            "Requestor {} rejected Proposal [{}] with reason: {}",
-            id.display(),
-            &proposal_id,
-            reason.display(),
-        );
         Ok(())
     }
 
@@ -226,7 +199,7 @@ impl RequestorBroker {
             .then(|event| event.into_client_requestor_event(&self.common.db))
             .inspect(|result| {
                 if let Err(error) = result {
-                    log::warn!("Error converting event to client type: {}", error);
+                    log::error!("Error converting event to client type: {}", error);
                 }
             })
             .filter_map(|event| async move { event.ok() })

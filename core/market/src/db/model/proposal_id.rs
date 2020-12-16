@@ -33,6 +33,15 @@ pub enum Owner {
     Requestor,
 }
 
+impl Owner {
+    pub fn swap(self) -> Self {
+        match self {
+            Self::Provider => Self::Requestor,
+            Self::Requestor => Self::Provider,
+        }
+    }
+}
+
 const HASH_SUFFIX_LEN: usize = 64;
 
 #[derive(Error, Debug, PartialEq)]
@@ -82,10 +91,7 @@ impl ProposalId {
     }
 
     pub fn swap_owner(mut self) -> Self {
-        self.owner = match self.owner {
-            Owner::Provider => Owner::Requestor,
-            Owner::Requestor => Owner::Provider,
-        };
+        self.owner = self.owner.swap();
         self
     }
 

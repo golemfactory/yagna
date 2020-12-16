@@ -40,8 +40,23 @@ impl<'c> AsDao<'c> for NegotiationEventsDao<'c> {
 }
 
 impl<'c> NegotiationEventsDao<'c> {
-    pub async fn add_proposal_event(&self, proposal: &Proposal, owner: Owner) -> DbResult<()> {
-        let event = MarketEvent::from_proposal(proposal, owner);
+    pub async fn add_proposal_event(&self, proposal: &Proposal, role: Owner) -> DbResult<()> {
+        let event = MarketEvent::from_proposal(proposal, role);
+        do_with_transaction(self.pool, move |conn| {
+            diesel::insert_into(dsl::market_negotiation_event)
+                .values(event)
+                .execute(conn)?;
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn add_proposal_rejected_event(
+        &self,
+        proposal: &Proposal,
+        reason: Option<String>,
+    ) -> DbResult<()> {
+        let event = MarketEvent::proposal_rejected(proposal, reason);
         do_with_transaction(self.pool, move |conn| {
             diesel::insert_into(dsl::market_negotiation_event)
                 .values(event)

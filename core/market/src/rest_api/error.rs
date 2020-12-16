@@ -4,6 +4,7 @@ use ya_client::model::ErrorMessage;
 
 use crate::db::dao::SaveProposalError;
 use crate::negotiation::error::{AgreementEventsError, ProposalValidationError};
+use crate::protocol::negotiation::error::RejectProposalError;
 use crate::{
     db::dao::TakeEventsError,
     market::MarketError,
@@ -142,7 +143,23 @@ impl ResponseError for ProposalError {
                 HttpResponse::Gone().json(msg)
             }
             ProposalError::Get(e) => e.error_response(),
+            ProposalError::Reject(e) => e.error_response(),
+            // TODO: get rid of those `_` patterns as they do not break when error is extended
             _ => HttpResponse::InternalServerError().json(msg),
+        }
+    }
+}
+
+impl ResponseError for RejectProposalError {
+    fn error_response(&self) -> HttpResponse {
+        let msg = ErrorMessage::new(self.to_string());
+        match self {
+            RejectProposalError::Validation(_) | RejectProposalError::Reason(_) => {
+                HttpResponse::BadRequest().json(msg)
+            }
+            RejectProposalError::Gsb(_)
+            | RejectProposalError::Get(_)
+            | RejectProposalError::ChangeState(_) => HttpResponse::InternalServerError().json(msg),
         }
     }
 }
@@ -153,7 +170,8 @@ impl ResponseError for ProposalValidationError {
         match self {
             ProposalValidationError::NoSubscription(_)
             | ProposalValidationError::Unsubscribed(_)
-            | ProposalValidationError::NotMatching(_) => HttpResponse::BadRequest().json(msg),
+            | ProposalValidationError::NotMatching(_)
+            | ProposalValidationError::OwnProposal(_) => HttpResponse::BadRequest().json(msg),
             ProposalValidationError::Expired(_) => HttpResponse::Gone().json(msg),
             ProposalValidationError::Unauthorized(_, _) => HttpResponse::Unauthorized().json(msg),
             ProposalValidationError::Internal(_) => HttpResponse::InternalServerError().json(msg),
@@ -190,7 +208,7 @@ impl ResponseError for AgreementError {
             | AgreementError::OwnProposal(..)
             | AgreementError::ProposalNotFound(..)
             | AgreementError::ProposalCountered(..)
-            | AgreementError::ReasonError(..)
+            // | AgreementError::ReasonError(..)
             | AgreementError::InvalidId(..) => HttpResponse::BadRequest().json(msg),
             AgreementError::GetProposal(..)
             | AgreementError::Save(..)
