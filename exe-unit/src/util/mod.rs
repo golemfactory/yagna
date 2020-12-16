@@ -1,4 +1,4 @@
-use futures::future::AbortHandle;
+use futures::future::{AbortHandle, AbortRegistration};
 use std::cmp::Eq;
 use std::hash::Hash;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 pub mod path;
 pub mod url;
 
-/// Allows storing of AbortHandle objects in a container
+/// Allows storing AbortHandle objects in a container
 #[derive(Clone, Debug)]
 pub struct Abort {
     id: usize,
@@ -14,6 +14,11 @@ pub struct Abort {
 }
 
 impl Abort {
+    pub fn new_pair() -> (Self, AbortRegistration) {
+        let (handle, reg) = AbortHandle::new_pair();
+        (Self::from(handle), reg)
+    }
+
     pub fn abort(&self) {
         self.inner.abort()
     }
