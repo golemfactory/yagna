@@ -1,6 +1,6 @@
 use structopt::StructOpt;
-use ya_client::payment::{PaymentProviderApi, PaymentRequestorApi};
-use ya_client::web::WebClient;
+use ya_client::payment::PaymentApi;
+use ya_client::web::{rest_api_url, WebClient};
 use ya_client_model::payment::Account;
 
 #[derive(Clone, Debug, StructOpt)]
@@ -21,16 +21,24 @@ async fn main() -> anyhow::Result<()> {
 
     let args: Args = Args::from_args();
 
-    let client = WebClient::builder().build();
-    let provider: PaymentProviderApi = client.interface()?;
-    let requestor: PaymentRequestorApi = client.interface()?;
+    // Create requestor / provider PaymentApi
+    let provider_url = format!("{}provider/", rest_api_url()).parse().unwrap();
+    let provider: PaymentApi = WebClient::builder()
+        .api_url(provider_url)
+        .build()
+        .interface()?;
+    let requestor_url = format!("{}requestor/", rest_api_url()).parse().unwrap();
+    let requestor: PaymentApi = WebClient::builder()
+        .api_url(requestor_url)
+        .build()
+        .interface()?;
 
     log::info!("Checking provider account...");
     let provider_account = Account {
         platform: args.platform.clone(),
         address: args.provider_addr,
     };
-    let provider_accounts = provider.get_accounts().await?;
+    let provider_accounts = provider.get_provider_accounts().await?;
     assert!(provider_accounts
         .iter()
         .any(|account| account == &provider_account));
@@ -41,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
         platform: args.platform.clone(),
         address: args.requestor_addr,
     };
-    let requestor_accounts = requestor.get_accounts().await?;
+    let requestor_accounts = requestor.get_requestor_accounts().await?;
     assert!(requestor_accounts
         .iter()
         .any(|account| account == &requestor_account));
