@@ -102,7 +102,6 @@ async fn test_agreement_approved_event() {
 
 /// Both endpoints Agreement events and wait_for_approval should work properly.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
 async fn test_agreement_events_and_wait_for_approval() {
     let network = MarketsNetwork::new(None)
@@ -271,4 +270,56 @@ async fn test_agreement_terminated_event() {
         }
         _ => panic!("Expected AgreementEventType::AgreementTerminatedEvent"),
     };
+}
+
+/// Tests if AgreementEvents notifications work as expected.
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
+async fn test_waiting_for_agreement_event() {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await
+        .add_market_instance(PROV_NAME)
+        .await;
+
+    let req_market = network.get_market(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME);
+    let prov_id = network.get_default_id(PROV_NAME);
+    let prov_market = network.get_market(PROV_NAME);
+
+    let negotiation = negotiate_agreement(
+        &network,
+        REQ_NAME,
+        PROV_NAME,
+        "negotiation",
+        "r-session",
+        "p-session",
+    )
+    .await
+    .unwrap();
+
+    // Take timestamp to filter AgreementApproved which should happen before.
+    let reference_timestamp = Utc::now();
+    let p_agreement = negotiation.p_agreement.clone();
+
+    // Terminate agreement with delay, so event will have to be woken up.
+    tokio::task::spawn_local(async move {
+        tokio::time::delay_for(std::time::Duration::from_millis(1200)).await;
+        prov_market
+            .terminate_agreement(prov_id.clone(), p_agreement, Some(gen_reason("Expired")))
+            .await
+            .unwrap();
+    });
+
+    let events = req_market
+        .query_agreement_events(&None, 3.0, Some(2), reference_timestamp, &req_id)
+        .await
+        .unwrap();
+
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0].agreement_id,
+        negotiation.r_agreement.into_client()
+    );
 }
