@@ -223,6 +223,8 @@ async fn test_agreement_terminated_event() {
         .await
         .unwrap();
 
+    tokio::time::delay_for(std::time::Duration::from_millis(50)).await;
+
     // == PROVIDER
     let events = prov_market
         .query_agreement_events(&None, 3.0, Some(2), reference_timestamp, &prov_id)
