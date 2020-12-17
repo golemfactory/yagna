@@ -32,6 +32,7 @@ table! {
         total_amount_due -> Text,
         total_amount_accepted -> Text,
         total_amount_paid -> Text,
+        app_session_id -> Nullable<Text>,
     }
 }
 
@@ -54,6 +55,7 @@ table! {
         total_amount -> Text,
         spent_amount -> Text,
         remaining_amount -> Text,
+        timestamp -> Timestamp,
         timeout -> Nullable<Timestamp>,
         make_deposit -> Bool,
         released -> Bool,

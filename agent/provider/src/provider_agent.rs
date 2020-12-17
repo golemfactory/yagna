@@ -127,7 +127,7 @@ impl ProviderAgent {
         let api = ProviderApi::try_from(&args.api)?;
 
         log::info!("Loading payment accounts...");
-        let accounts: Vec<Account> = api.payment.get_accounts().await?;
+        let accounts: Vec<Account> = api.payment.get_provider_accounts().await?;
         log::info!("Payment accounts: {:#?}", accounts);
         let registry = config.registry()?;
         registry.validate()?;
@@ -138,7 +138,9 @@ impl ProviderAgent {
             .node_name
             .clone()
             .unwrap_or("provider".to_string());
-        args.market.session_id = format!("{}-[{}]", name, std::process::id());
+        let session_id = format!("{}-[{}]", name, std::process::id());
+        args.market.session_id = session_id.clone();
+        args.runner.session_id = session_id;
 
         let mut globals = GlobalsManager::try_new(&config.globals_file, args.node)?;
         globals.spawn_monitor(&config.globals_file)?;
@@ -204,12 +206,15 @@ impl ProviderAgent {
                 )
             })?;
 
+            let srv_info = ServiceInfo::new(inf_node_info.clone(), exeunit_desc.build())
+                .support_multi_activity(true);
+
             // Create simple offer on market.
             let create_offer_message = CreateOffer {
                 preset,
                 offer_definition: OfferDefinition {
                     node_info: node_info.clone(),
-                    service: ServiceInfo::new(inf_node_info.clone(), exeunit_desc.build()),
+                    srv_info,
                     com_info,
                     offer,
                 },
@@ -434,7 +439,10 @@ impl Handler<CreateOffers> for ProviderAgent {
         let preset_names = match msg.0 {
             OfferKind::Any => self.presets.active(),
             OfferKind::WithPresets(names) => names,
-            OfferKind::WithIds(_) => vec![],
+            OfferKind::WithIds(_) => {
+                log::warn!("ProviderAgent shouldn't create Offers using OfferKind::WithIds");
+                vec![]
+            }
         };
 
         let presets = self.presets.list_matching(&preset_names);

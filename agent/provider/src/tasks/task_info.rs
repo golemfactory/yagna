@@ -28,7 +28,7 @@ fn agreement_expiration_from(agreement: &AgreementView) -> Result<DateTime<Utc>>
 }
 
 fn multi_activity_from(agreement: &AgreementView) -> Result<bool> {
-    let multi_activity_key_str = "/demand/properties/golem/srv/comp/multi-activity";
+    let multi_activity_key_str = "/demand/properties/golem/srv/caps/multi-activity";
     match agreement.pointer_typed::<bool>(multi_activity_key_str) {
         Err(e) => match e {
             // For backward compatibility 'multi-activity' field doesn't have to be set
@@ -60,7 +60,7 @@ mod test {
     "demand.properties":
     {
       "golem.srv.comp.expiration": 1590765503361,
-      "golem.srv.comp.multi-activity": true
+      "golem.srv.caps.multi-activity": true
     },
     "offer.properties": {},
     "agreementId": "fb30737abc959a5d464245fed9ecc6c4568190c9daa0221692035f823030fb81"
@@ -81,7 +81,7 @@ mod test {
     "demand.properties":
     {
       "golem.srv.comp.expiration": 1590765503361,
-      "golem.srv.comp.multi-activity": false
+      "golem.srv.caps.multi-activity": false
     },
     "offer.properties": {},
     "agreementId": "fb30737abc959a5d464245fed9ecc6c4568190c9daa0221692035f823030fb81"
@@ -101,8 +101,7 @@ mod test {
     pub static SAMPLE_AGREEMENT_MULTI_EMPTY: &str = r#"{
     "demand.properties":
     {
-      "golem.srv.comp.expiration": 1590765503361,
-      "golem.srv.comp.multi-activity": false
+      "golem.srv.comp.expiration": 1590765503361
     },
     "offer.properties": {},
     "agreementId": "fb30737abc959a5d464245fed9ecc6c4568190c9daa0221692035f823030fb81"

@@ -38,7 +38,7 @@ pub fn generate_event(id: i32, timestamp: NaiveDateTime) -> TestMarketEvent {
 pub mod requestor {
     use super::*;
     use ya_client::model::market::event::RequestorEvent;
-    use ya_client::model::market::AgreementOperationEvent as AgreementEvent;
+    use ya_client::model::market::{AgreementEventType, AgreementOperationEvent as AgreementEvent};
 
     pub fn expect_proposal(events: Vec<RequestorEvent>, i: u8) -> anyhow::Result<Proposal> {
         assert_eq!(events.len(), 1, "{}: Expected one event: {:?}.", i, events);
@@ -56,7 +56,7 @@ pub mod requestor {
     ) -> anyhow::Result<Proposal> {
         let events = market
             .requestor_engine
-            .query_events(&demand_id, 2.2, Some(5))
+            .query_events(&demand_id, 3.8, Some(5))
             .await?;
         expect_proposal(events, i)
     }
@@ -64,10 +64,10 @@ pub mod requestor {
     pub fn expect_approve(events: Vec<AgreementEvent>, i: u8) -> anyhow::Result<String> {
         assert_eq!(events.len(), 1, "{}: Expected one event: {:?}.", i, events);
 
-        Ok(match events[0].clone() {
-            AgreementEvent::AgreementApprovedEvent { agreement_id, .. } => agreement_id,
-            _ => panic!("Expected AgreementEvent::AgreementApprovedEvent"),
-        })
+        match events[0].event_type {
+            AgreementEventType::AgreementApprovedEvent { .. } => Ok(events[0].clone().agreement_id),
+            _ => panic!("Expected AgreementEventType::AgreementApprovedEvent"),
+        }
     }
 }
 
@@ -91,7 +91,7 @@ pub mod provider {
     ) -> anyhow::Result<Proposal> {
         let events = market
             .provider_engine
-            .query_events(&offer_id, 2.2, Some(5))
+            .query_events(&offer_id, 3.8, Some(5))
             .await?;
         expect_proposal(events, i)
     }

@@ -8,7 +8,7 @@ use ya_market::testing::MarketsNetwork;
 use ya_market::testing::{ApprovalStatus, Owner};
 
 use ya_client::model::market::agreement_event::AgreementTerminator;
-use ya_client::model::market::AgreementOperationEvent as AgreementEvent;
+use ya_client::model::market::AgreementEventType;
 
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";
@@ -68,13 +68,12 @@ async fn test_agreement_approved_event() -> Result<()> {
 
         // Expect single event
         assert_eq!(events.len(), 1);
+        assert_eq!(events[0].agreement_id, agr_id.into_client());
 
-        match &events[0] {
-            AgreementEvent::AgreementApprovedEvent { agreement_id, .. } => {
-                assert_eq!(agreement_id, &agr_id.into_client())
-            }
+        match &events[0].event_type {
+            AgreementEventType::AgreementApprovedEvent => (),
             e => panic!(
-                "Expected AgreementEvent::AgreementApprovedEvent, got: {:?}",
+                "Expected AgreementEventType::AgreementApprovedEvent, got: {:?}",
                 e
             ),
         };
@@ -87,14 +86,13 @@ async fn test_agreement_approved_event() -> Result<()> {
 
     // Expect single event
     assert_eq!(events.len(), 1);
+    assert_eq!(events[0].agreement_id, agreement_id.into_client());
 
-    let id = agreement_id.into_client();
-    match &events[0] {
-        AgreementEvent::AgreementApprovedEvent { agreement_id, .. } => {
-            assert_eq!(agreement_id, &id)
-        }
+    match &events[0].event_type {
+        AgreementEventType::AgreementApprovedEvent => (),
+        _ => panic!("Expected AgreementEventType::AgreementApprovedEvent"),
         e => panic!(
-            "Expected AgreementEvent::AgreementApprovedEvent, got: {:?}",
+            "Expected AgreementEventType::AgreementApprovedEvent, got: {:?}",
             e
         ),
     };
@@ -229,20 +227,21 @@ async fn test_agreement_terminated_event() -> Result<()> {
 
     // Expect single event
     assert_eq!(events.len(), 1);
-    match &events[0] {
-        AgreementEvent::AgreementTerminatedEvent {
-            agreement_id,
-            terminator,
-            reason,
-            ..
+    assert_eq!(
+        events[0].agreement_id,
+        negotiation.p_agreement.into_client()
+    );
+
+    match &events[0].event_type {
+        AgreementEventType::AgreementTerminatedEvent {
+            terminator, reason, ..
         } => {
-            assert_eq!(agreement_id, &negotiation.p_agreement.into_client());
             assert_eq!(terminator, &AgreementTerminator::Provider);
             assert_ne!(reason, &None);
             assert_eq!(reason.as_ref().unwrap().message, "Expired");
         }
         e => panic!(
-            "Expected AgreementEvent::AgreementTerminatedEvent, got: {:?}",
+            "Expected AgreementEventType::AgreementTerminatedEvent, got: {:?}",
             e
         ),
     };
@@ -254,21 +253,21 @@ async fn test_agreement_terminated_event() -> Result<()> {
 
     // Expect single event
     assert_eq!(events.len(), 1);
-    match &events[0] {
-        AgreementEvent::AgreementTerminatedEvent {
-            agreement_id,
-            terminator,
-            reason,
-            ..
+    assert_eq!(
+        events[0].agreement_id,
+        negotiation.r_agreement.into_client()
+    );
+
+    match &events[0].event_type {
+        AgreementEventType::AgreementTerminatedEvent {
+            terminator, reason, ..
         } => {
-            assert_eq!(agreement_id, &negotiation.r_agreement.into_client());
             assert_eq!(terminator, &AgreementTerminator::Provider);
             assert!(reason.is_some());
-
             assert_eq!(reason.as_ref().unwrap().message, "Expired");
         }
         e => panic!(
-            "Expected AgreementEvent::AgreementTerminatedEvent, got: {:?}",
+            "Expected AgreementEventType::AgreementTerminatedEvent, got: {:?}",
             e
         ),
     };

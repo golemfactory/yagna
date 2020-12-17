@@ -7,7 +7,7 @@ use ya_market::testing::proposal_util::exchange_proposals_exclusive;
 use ya_market::testing::MarketsNetwork;
 use ya_market::testing::Owner;
 
-use ya_client::model::market::AgreementOperationEvent as AgreementEvent;
+use ya_client::model::market::AgreementEventType;
 
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";
@@ -449,16 +449,13 @@ async fn test_session_timestamp_filtering() -> Result<()> {
     p_events
         .iter()
         .enumerate()
-        .for_each(|(i, event)| match event {
-            AgreementEvent::AgreementApprovedEvent {
-                event_date,
-                agreement_id,
-            } => {
-                assert_eq!(agreement_id, &agreements[i].into_client());
-                assert_ge!(event_date, &timestamp_before);
+        .for_each(|(i, event)| match &event.event_type {
+            AgreementEventType::AgreementApprovedEvent {} => {
+                assert_eq!(event.agreement_id, agreements[i].into_client());
+                assert_ge!(event.event_date, timestamp_before);
             }
             e => panic!(
-                "Expected AgreementEvent::AgreementApprovedEvent, got: {:?}",
+                "Expected AgreementEventType::AgreementApprovedEvent, got: {:?}",
                 e
             ),
         });
@@ -466,16 +463,13 @@ async fn test_session_timestamp_filtering() -> Result<()> {
     r_events
         .iter()
         .enumerate()
-        .for_each(|(i, event)| match event {
-            AgreementEvent::AgreementApprovedEvent {
-                event_date,
-                agreement_id,
-            } => {
-                assert_eq!(agreement_id, &agreements[i].into_client());
-                assert_ge!(event_date, &timestamp_before);
+        .for_each(|(i, event)| match &event.event_type {
+            AgreementEventType::AgreementApprovedEvent {} => {
+                assert_eq!(event.agreement_id, agreements[i].into_client());
+                assert_ge!(event.event_date, timestamp_before);
             }
             e => panic!(
-                "Expected AgreementEvent::AgreementApprovedEvent, got: {:?}",
+                "Expected AgreementEventType::AgreementApprovedEvent, got: {:?}",
                 e
             ),
         });
@@ -510,16 +504,13 @@ async fn test_session_timestamp_filtering() -> Result<()> {
     p_events
         .iter()
         .enumerate()
-        .for_each(|(i, event)| match event {
-            AgreementEvent::AgreementApprovedEvent {
-                event_date,
-                agreement_id,
-            } => {
-                assert_eq!(agreement_id, &agreements[num_before + i].into_client());
-                assert_ge!(event_date, &timestamp_before);
+        .for_each(|(i, event)| match &event.event_type {
+            AgreementEventType::AgreementApprovedEvent {} => {
+                assert_eq!(event.agreement_id, agreements[num_before + i].into_client());
+                assert_ge!(event.event_date, timestamp_before);
             }
             e => panic!(
-                "Expected AgreementEvent::AgreementApprovedEvent, got: {:?}",
+                "Expected AgreementEventType::AgreementApprovedEvent, got: {:?}",
                 e
             ),
         });
@@ -527,16 +518,13 @@ async fn test_session_timestamp_filtering() -> Result<()> {
     r_events
         .iter()
         .enumerate()
-        .for_each(|(i, event)| match event {
-            AgreementEvent::AgreementApprovedEvent {
-                event_date,
-                agreement_id,
-            } => {
-                assert_eq!(agreement_id, &agreements[num_before + i].into_client());
-                assert_ge!(event_date, &timestamp_before);
+        .for_each(|(i, event)| match &event.event_type {
+            AgreementEventType::AgreementApprovedEvent {} => {
+                assert_eq!(event.agreement_id, agreements[num_before + i].into_client());
+                assert_ge!(event.event_date, timestamp_before);
             }
             e => panic!(
-                "Expected AgreementEvent::AgreementApprovedEvent, got: {:?}",
+                "Expected AgreementEventType::AgreementApprovedEvent, got: {:?}",
                 e
             ),
         });
@@ -616,21 +604,18 @@ async fn test_common_event_flow() -> Result<()> {
             )
             .await
             .unwrap();
-        assert_eq!(events.len(), 1);
 
-        match &events[0] {
-            AgreementEvent::AgreementApprovedEvent {
-                event_date,
-                agreement_id,
-            } => {
-                assert_eq!(agreement_id, &agreements[i].into_client());
-                current_timestamp = event_date.clone();
-            }
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].agreement_id, agreements[i].into_client());
+
+        match &events[0].event_type {
+            AgreementEventType::AgreementApprovedEvent {} => (),
             e => panic!(
-                "Expected AgreementEvent::AgreementApprovedEvent, got: {:?}",
+                "Expected AgreementEventType::AgreementApprovedEvent, got: {:?}",
                 e
             ),
         }
+        current_timestamp = events[0].event_date.clone();
     }
 
     // We don't expect any events anymore.

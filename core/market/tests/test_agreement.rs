@@ -1,21 +1,20 @@
+use actix_web::{http::StatusCode, test, web::Bytes};
 use anyhow::Result;
 use chrono::{Duration, Utc};
 
-use actix_web::http::StatusCode;
-use actix_web::test;
-use actix_web::web::Bytes;
 use ya_core_model::market;
-use ya_market::testing::agreement_utils::{gen_reason, negotiate_agreement};
-use ya_market::testing::mock_agreement::generate_agreement;
-use ya_market::testing::mock_node::MarketServiceExt;
-use ya_market::testing::proposal_util::{exchange_draft_proposals, NegotiationHelper};
-use ya_market::testing::MarketsNetwork;
+use ya_market::assert_err_eq;
 use ya_market::testing::{
-    client::sample_demand, client::sample_offer, events_helper::*, AgreementDao, AgreementError,
-    AgreementStateError, ApprovalStatus, Owner, ProposalState, WaitForApprovalError,
+    agreement_utils::{gen_reason, negotiate_agreement},
+    client::{sample_demand, sample_offer},
+    events_helper::*,
+    mock_agreement::generate_agreement,
+    mock_node::MarketServiceExt,
+    proposal_util::{exchange_draft_proposals, NegotiationHelper},
+    AgreementDao, AgreementError, AgreementStateError, ApprovalStatus, MarketsNetwork, Owner,
+    ProposalState, WaitForApprovalError,
 };
-use ya_service_bus::typed as bus;
-use ya_service_bus::RpcEndpoint;
+use ya_service_bus::{typed as bus, RpcEndpoint};
 
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";
@@ -42,10 +41,11 @@ async fn test_gsb_get_agreement() -> Result<()> {
     let agreement_id = req_engine
         .create_agreement(req_id.clone(), &proposal_id, Utc::now())
         .await?;
+
     let agreement = bus::service(network.node_gsb_prefixes(REQ_NAME).0)
-        .send(market::GetAgreement {
-            agreement_id: agreement_id.into_client(),
-        })
+        .send(market::GetAgreement::as_requestor(
+            agreement_id.into_client(),
+        ))
         .await??;
     assert_eq!(agreement.agreement_id, agreement_id.into_client());
     assert_eq!(agreement.demand.requestor_id, req_id.identity);
@@ -110,9 +110,9 @@ async fn test_rest_get_not_existing_agreement() -> Result<()> {
 
     let result = req_market.get_agreement(&agreement_id, &req_id).await;
     assert!(result.is_err());
-    assert_eq!(
-        result.unwrap_err().to_string(),
-        AgreementError::NotFound(agreement_id.clone()).to_string()
+    assert_err_eq!(
+        AgreementError::NotFound(agreement_id.clone()).to_string(),
+        result
     );
     Ok(())
 }
@@ -218,9 +218,9 @@ async fn second_creation_should_fail() -> Result<()> {
         .create_agreement(req_id.clone(), &proposal_id, Utc::now())
         .await;
 
-    assert_eq!(
-        result.unwrap_err().to_string(),
-        AgreementError::AlreadyExists(agreement_id, proposal_id).to_string()
+    assert_err_eq!(
+        AgreementError::AlreadyExists(agreement_id, proposal_id),
+        result,
     );
 
     Ok(())
@@ -262,9 +262,9 @@ async fn second_confirmation_should_fail() -> Result<()> {
     let result = req_engine
         .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await;
-    assert_eq!(
-        result.unwrap_err().to_string(),
-        AgreementError::InvalidState(AgreementStateError::Confirmed(agreement_id)).to_string()
+    assert_err_eq!(
+        AgreementError::InvalidState(AgreementStateError::Confirmed(agreement_id)),
+        result,
     );
 
     Ok(())
@@ -302,9 +302,9 @@ async fn agreement_expired_before_confirmation() -> Result<()> {
         .await;
 
     // results with Expired error
-    assert_eq!(
-        result.unwrap_err().to_string(),
-        AgreementError::InvalidState(AgreementStateError::Expired(agreement_id)).to_string()
+    assert_err_eq!(
+        AgreementError::InvalidState(AgreementStateError::Expired(agreement_id)),
+        result,
     );
 
     Ok(())
@@ -348,10 +348,7 @@ async fn agreement_expired_before_approval() -> Result<()> {
     // bc Provider does not approve the Agreement
     let result = req_engine.wait_for_approval(&agreement_id, 0.1).await;
 
-    assert_eq!(
-        result.unwrap_err().to_string(),
-        WaitForApprovalError::Expired(agreement_id).to_string()
-    );
+    assert_err_eq!(WaitForApprovalError::Expired(agreement_id), result);
 
     Ok(())
 }
@@ -385,11 +382,7 @@ async fn waiting_wo_confirmation_should_fail() -> Result<()> {
 
     // waiting for approval results with not confirmed error
     let result = req_engine.wait_for_approval(&agreement_id, 0.1).await;
-
-    assert_eq!(
-        result.unwrap_err().to_string(),
-        WaitForApprovalError::NotConfirmed(agreement_id).to_string()
-    );
+    assert_err_eq!(WaitForApprovalError::NotConfirmed(agreement_id), result);
 
     Ok(())
 }
@@ -431,10 +424,7 @@ async fn approval_before_confirmation_should_fail() -> Result<()> {
 
     // ... which results in not found error, bc there was no confirmation
     // so Requestor did not send an Agreement
-    assert_eq!(
-        result.unwrap_err().to_string(),
-        AgreementError::NotFound(agreement_id).to_string()
-    );
+    assert_err_eq!(AgreementError::NotFound(agreement_id), result);
 
     Ok(())
 }
@@ -597,9 +587,9 @@ async fn second_approval_should_fail() -> Result<()> {
         )
         .await;
     let agreement_id = agreement_id.clone().translate(Owner::Provider);
-    assert_eq!(
-        result.unwrap_err().to_string(),
-        AgreementError::InvalidState(AgreementStateError::Approved(agreement_id)).to_string()
+    assert_err_eq!(
+        AgreementError::InvalidState(AgreementStateError::Approved(agreement_id)),
+        result
     );
 
     Ok(())

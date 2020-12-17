@@ -7,7 +7,10 @@ use std::convert::From;
 use std::time::Duration;
 
 use ya_client_model::activity::{ActivityState, ActivityUsage, State, StatePair};
+use ya_client_model::NodeId;
 use ya_core_model::activity;
+use ya_core_model::activity::local::Credentials;
+use ya_core_model::Role;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{timeout::*, typed::ServiceBinder};
 
@@ -19,8 +22,6 @@ use crate::common::{
 use crate::dao::*;
 use crate::db::models::ActivityEventType;
 use crate::error::Error;
-use ya_client_model::NodeId;
-use ya_core_model::activity::local::Credentials;
 
 const INACTIVITY_LIMIT_SECONDS_ENV_VAR: &str = "INACTIVITY_LIMIT_SECONDS";
 const UNRESPONSIVE_LIMIT_SECONDS_ENV_VAR: &str = "UNRESPONSIVE_LIMIT_SECONDS";
@@ -78,10 +79,11 @@ async fn create_activity_gsb(
     caller: String,
     msg: activity::Create,
 ) -> RpcMessageResult<activity::Create> {
-    authorize_agreement_initiator(caller, &msg.agreement_id).await?;
+    authorize_agreement_initiator(caller, &msg.agreement_id, Role::Provider).await?;
 
     let activity_id = generate_id();
-    let agreement = get_agreement(&msg.agreement_id).await?;
+    let agreement = get_agreement(&msg.agreement_id, Role::Provider).await?;
+    let app_session_id = agreement.app_session_id.clone();
     let provider_id = agreement.provider_id().clone();
 
     db.as_dao::<ActivityDao>()
@@ -97,19 +99,30 @@ async fn create_activity_gsb(
             &provider_id,
             ActivityEventType::CreateActivity,
             msg.requestor_pub_key,
+            &agreement.app_session_id,
         )
         .await
         .map_err(Error::from)?;
 
     counter!("activity.provider.created", 1);
 
-    let credentials =
-        activity_credentials(db.clone(), &activity_id, provider_id.clone(), msg.timeout)
-            .await
-            .map_err(|e| {
-                Arbiter::spawn(enqueue_destroy_evt(db.clone(), &activity_id, provider_id));
-                Error::from(e)
-            })?;
+    let credentials = activity_credentials(
+        db.clone(),
+        &activity_id,
+        provider_id.clone(),
+        app_session_id.clone(),
+        msg.timeout,
+    )
+    .await
+    .map_err(|e| {
+        Arbiter::spawn(enqueue_destroy_evt(
+            db.clone(),
+            &activity_id,
+            provider_id,
+            app_session_id,
+        ));
+        Error::from(e)
+    })?;
 
     Ok(if credentials.is_none() {
         activity::CreateResponseCompat::ActivityId(activity_id)
@@ -126,6 +139,7 @@ async fn activity_credentials(
     db: DbExecutor,
     activity_id: &String,
     provider_id: NodeId,
+    app_session_id: Option<String>,
     timeout: Option<f32>,
 ) -> Result<Option<Credentials>, Error> {
     let activity_state = db
@@ -155,6 +169,7 @@ async fn activity_credentials(
         db.clone(),
         activity_id.clone(),
         provider_id,
+        app_session_id,
     ));
 
     let credentials = db
@@ -173,19 +188,20 @@ async fn destroy_activity_gsb(
     caller: String,
     msg: activity::Destroy,
 ) -> RpcMessageResult<activity::Destroy> {
-    authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
+    authorize_activity_initiator(&db, caller, &msg.activity_id, Role::Provider).await?;
 
     if !get_persisted_state(&db, &msg.activity_id).await?.alive() {
         return Ok(());
     }
 
-    let agreement = get_agreement(&msg.agreement_id).await?;
+    let agreement = get_agreement(&msg.agreement_id, Role::Provider).await?;
     db.as_dao::<EventDao>()
         .create(
             &msg.activity_id,
             agreement.provider_id(),
             ActivityEventType::DestroyActivity,
             None,
+            &agreement.app_session_id,
         )
         .await
         .map_err(Error::from)?;
@@ -211,7 +227,7 @@ async fn get_activity_state_gsb(
     caller: String,
     msg: activity::GetState,
 ) -> RpcMessageResult<activity::GetState> {
-    authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
+    authorize_activity_initiator(&db, caller, &msg.activity_id, Role::Provider).await?;
 
     Ok(get_persisted_state(&db, &msg.activity_id).await?)
 }
@@ -221,7 +237,7 @@ async fn get_activity_usage_gsb(
     caller: String,
     msg: activity::GetUsage,
 ) -> RpcMessageResult<activity::GetUsage> {
-    authorize_activity_initiator(&db, caller, &msg.activity_id).await?;
+    authorize_activity_initiator(&db, caller, &msg.activity_id, Role::Provider).await?;
 
     Ok(get_persisted_usage(&db, &msg.activity_id).await?)
 }
@@ -239,6 +255,7 @@ fn enqueue_destroy_evt(
     db: DbExecutor,
     activity_id: impl ToString,
     provider_id: NodeId,
+    app_session_id: Option<String>,
 ) -> LocalBoxFuture<'static, ()> {
     let activity_id = activity_id.to_string();
 
@@ -252,6 +269,7 @@ fn enqueue_destroy_evt(
                 &provider_id,
                 ActivityEventType::DestroyActivity,
                 None,
+                &app_session_id,
             )
             .await
         {
@@ -265,7 +283,12 @@ fn enqueue_destroy_evt(
     .boxed_local()
 }
 
-async fn monitor_activity(db: DbExecutor, activity_id: impl ToString, provider_id: NodeId) {
+async fn monitor_activity(
+    db: DbExecutor,
+    activity_id: impl ToString,
+    provider_id: NodeId,
+    app_session_id: Option<String>,
+) {
     let activity_id = activity_id.to_string();
     let limit_s = inactivity_limit_seconds();
     let unresp_s = unresponsive_limit_seconds();
@@ -283,7 +306,7 @@ async fn monitor_activity(db: DbExecutor, activity_id: impl ToString, provider_i
             let dt = (Utc::now().timestamp() - usage.timestamp) as f64;
             if dt > limit_s {
                 log::warn!("activity {} inactive for {}s, destroying", activity_id, dt);
-                enqueue_destroy_evt(db, &activity_id, provider_id).await;
+                enqueue_destroy_evt(db, &activity_id, provider_id, app_session_id.clone()).await;
 
                 counter!("activity.provider.destroyed.unresponsive", 1);
                 break;
@@ -401,7 +424,7 @@ mod local {
         _caller: String,
         msg: activity::local::GetAgreementId,
     ) -> RpcMessageResult<activity::local::GetAgreementId> {
-        let agreement = get_activity_agreement(&db, &msg.activity_id).await?;
+        let agreement = get_activity_agreement(&db, &msg.activity_id, msg.role).await?;
         Ok(agreement.agreement_id)
     }
 }

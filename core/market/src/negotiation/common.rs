@@ -12,7 +12,10 @@ use ya_service_api_web::middleware::Identity;
 
 use crate::config::Config;
 use crate::db::{
-    dao::{AgreementDao, AgreementEventsDao, NegotiationEventsDao, ProposalDao, SaveProposalError},
+    dao::{
+        AgreementDao, AgreementEventsDao, NegotiationEventsDao, ProposalDao, SaveProposalError,
+        TakeEventsError,
+    },
     model::{
         Agreement, AgreementEvent, AgreementId, AgreementState, AppSessionId, Issuer, MarketEvent,
         Owner, Proposal, ProposalId, ProposalState, SubscriptionId,
@@ -214,13 +217,13 @@ impl CommonBroker {
             }
             timeout = stop_time - Instant::now();
 
-            if let Err(error) = notifier.wait_for_event_with_timeout(timeout).await {
-                return match error {
+            if let Err(e) = notifier.wait_for_event_with_timeout(timeout).await {
+                return match e {
                     NotifierError::Timeout(_) => Ok(vec![]),
                     NotifierError::ChannelClosed(_) => {
-                        Err(QueryEventsError::Internal(error.to_string()))
+                        Err(QueryEventsError::Internal(e.to_string()))
                     }
-                    NotifierError::Unsubscribed(id) => Err(QueryEventsError::Unsubscribed(id)),
+                    NotifierError::Unsubscribed(id) => Err(TakeEventsError::NotFound(id).into()),
                 };
             }
             // Ok result means, that event with required subscription id was added.
@@ -735,7 +738,7 @@ pub fn terminate_reason_metric(reason: &Option<Reason>, owner: Owner) {
     let p_code = get_reason_code(reason, "golem.provider.code");
     let r_code = get_reason_code(reason, "golem.requestor.code");
 
-    let reason_code = r_code.xor(p_code).unwrap_or("None".to_string());
+    let reason_code = r_code.xor(p_code).unwrap_or("NotSpecified".to_string());
     match owner {
         Owner::Provider => {
             counter!("market.agreements.provider.terminated.reason", 1, "reason" => reason_code)

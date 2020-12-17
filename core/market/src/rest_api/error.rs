@@ -121,9 +121,8 @@ impl ResponseError for QueryEventsError {
     fn error_response(&self) -> HttpResponse {
         let msg = ErrorMessage::new(self.to_string());
         match self {
-            QueryEventsError::Unsubscribed(_)
-            | QueryEventsError::TakeEvents(TakeEventsError::SubscriptionNotFound(_))
-            | QueryEventsError::TakeEvents(TakeEventsError::SubscriptionExpired(_)) => {
+            QueryEventsError::TakeEvents(TakeEventsError::NotFound(_))
+            | QueryEventsError::TakeEvents(TakeEventsError::Expired(_)) => {
                 HttpResponse::NotFound().json(msg)
             }
             QueryEventsError::InvalidSubscriptionId(_) | QueryEventsError::InvalidMaxEvents(..) => {

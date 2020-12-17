@@ -289,6 +289,9 @@ struct ServiceCommandOpts {
 
     #[structopt(flatten)]
     metrics_opts: MetricsPusherOpts,
+
+    #[structopt(long, env, default_value = "60")]
+    max_rest_timeout: usize,
 }
 
 #[cfg(unix)]
@@ -322,6 +325,7 @@ impl ServiceCommand {
             Self::Run(ServiceCommandOpts {
                 api_url,
                 metrics_opts,
+                max_rest_timeout,
             }) => {
                 log::info!(
                     "Starting {} service! Version: {}.",
@@ -358,7 +362,8 @@ impl ServiceCommand {
 
                     Services::rest(app, &context)
                 })
-                .keep_alive(30)
+                // this is maximum supported timeout for our REST API
+                .keep_alive(max_rest_timeout.clone())
                 .bind(api_host_port.clone())
                 .context(format!("Failed to bind http server on {:?}", api_host_port))?;
 

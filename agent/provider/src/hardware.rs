@@ -205,7 +205,6 @@ impl From<Resources> for InfNodeInfo {
             .with_mem(res.mem_gib)
             .with_storage(res.storage_gib)
             .with_cpu(cpu_info)
-            .support_multi_activity(true)
     }
 }
 

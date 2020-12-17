@@ -28,4 +28,12 @@ pub mod gftp;
 #[cfg(feature = "sgx")]
 pub mod sgx;
 
+use derive_more::Display;
+use serde::{Deserialize, Serialize};
 pub use ya_client_model::NodeId;
+
+#[derive(Clone, Copy, Debug, Display, PartialEq, Serialize, Deserialize)]
+pub enum Role {
+    Provider,
+    Requestor,
+}
