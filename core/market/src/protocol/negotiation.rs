@@ -27,7 +27,11 @@ pub mod common {
             reason,
         };
 
-        log::debug!("Propagating TerminateAgreement: {:?}", msg);
+        log::debug!(
+            "Propagating TerminateAgreement: [{}]. Reason: {:?}",
+            &msg.agreement_id,
+            &msg.reason
+        );
         let service = match agreement.id.clone().owner() {
             OwnerType::Requestor => provider::agreement_addr(BUS_ID),
             OwnerType::Provider => requestor::agreement_addr(BUS_ID),
