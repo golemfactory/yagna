@@ -19,4 +19,4 @@ pub use agreement_events::AgreementEventsDao;
 pub use demand::DemandDao;
 pub use negotiation_events::{NegotiationEventsDao, TakeEventsError};
 pub use offer::{OfferDao, OfferState};
-pub use proposal::{ProposalDao, SaveProposalError};
+pub use proposal::{ChangeProposalStateError, ProposalDao, SaveProposalError};

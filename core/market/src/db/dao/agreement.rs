@@ -4,11 +4,11 @@ use diesel::prelude::*;
 use ya_client::model::NodeId;
 use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
 
-use crate::db::dao::proposal::{has_counter_proposal, set_proposal_accepted};
+use crate::db::dao::proposal::{has_counter_proposal, update_proposal_state};
 use crate::db::dao::sql_functions::datetime;
 use crate::db::model::{
     Agreement, AgreementEventType, AgreementId, AgreementState, AppSessionId, NewAgreementEvent,
-    OwnerType, ProposalId,
+    Owner, ProposalId, ProposalState::Accepted,
 };
 use crate::db::schema::market_agreement::dsl as agreement;
 use crate::db::schema::market_agreement::dsl::market_agreement;
@@ -72,8 +72,8 @@ impl<'c> AgreementDao<'c> {
 
             if let Some(node_id) = node_id {
                 query = match id.owner() {
-                    OwnerType::Provider => query.filter(agreement::provider_id.eq(node_id)),
-                    OwnerType::Requestor => query.filter(agreement::requestor_id.eq(node_id)),
+                    Owner::Provider => query.filter(agreement::provider_id.eq(node_id)),
+                    Owner::Requestor => query.filter(agreement::requestor_id.eq(node_id)),
                 }
             };
 
@@ -129,11 +129,11 @@ impl<'c> AgreementDao<'c> {
         &self,
         id: &AgreementId,
         reason: Option<String>,
-        owner_type: OwnerType,
+        caller_role: Owner,
     ) -> DbResult<bool> {
         let id = id.clone();
         do_with_transaction(self.pool, move |conn| {
-            terminate(conn, &id, reason, owner_type)
+            terminate(conn, &id, reason, caller_role)
         })
         .await
     }
@@ -157,7 +157,7 @@ impl<'c> AgreementDao<'c> {
                 .values(&agreement)
                 .execute(conn)?;
 
-            set_proposal_accepted(conn, &proposal_id)?;
+            update_proposal_state(conn, &proposal_id, Accepted)?;
             Ok(agreement)
         })
         .await
@@ -229,7 +229,7 @@ impl<'c> AgreementDao<'c> {
                 agreement_id: id.clone(),
                 reason: None,
                 event_type: AgreementEventType::Approved,
-                issuer: OwnerType::Provider, // Always Provider approves.
+                issuer: Owner::Provider, // Always Provider approves.
             };
 
             diesel::insert_into(market_agreement_event)
@@ -309,7 +309,7 @@ fn terminate(
     conn: &ConnType,
     id: &AgreementId,
     reason: Option<String>,
-    owner_type: OwnerType,
+    caller_role: Owner,
 ) -> DbResult<bool> {
     log::debug!("Termination reason: {:?}", reason);
     let num_updated = diesel::update(agreement::market_agreement.find(id))
@@ -324,7 +324,7 @@ fn terminate(
         agreement_id: id.clone(),
         reason,
         event_type: AgreementEventType::Terminated,
-        issuer: owner_type,
+        issuer: caller_role,
     };
 
     diesel::insert_into(market_agreement_event)

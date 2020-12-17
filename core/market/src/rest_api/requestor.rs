@@ -3,11 +3,11 @@ use actix_web::{HttpResponse, Responder, Scope};
 use std::str::FromStr;
 use std::sync::Arc;
 
-use ya_client::model::market::{AgreementProposal, NewDemand, NewProposal};
+use ya_client::model::market::{AgreementProposal, NewDemand, NewProposal, Reason};
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::LogErr;
 
-use crate::db::model::OwnerType;
+use crate::db::model::Owner;
 use crate::market::MarketService;
 
 use super::{
@@ -119,16 +119,17 @@ async fn get_proposal(
     market
         .requestor_engine
         .common
-        .get_client_proposal(Some(subscription_id), &proposal_id)
+        .get_client_proposal(Some(&subscription_id), &proposal_id)
         .await
         .map(|proposal| HttpResponse::Ok().json(proposal))
 }
 
-#[actix_web::delete("/demands/{subscription_id}/proposals/{proposal_id}")]
+#[actix_web::post("/demands/{subscription_id}/proposals/{proposal_id}/reject")]
 async fn reject_proposal(
     market: Data<Arc<MarketService>>,
     path: Path<PathSubscriptionProposal>,
     id: Identity,
+    body: Json<Option<Reason>>,
 ) -> impl Responder {
     let PathSubscriptionProposal {
         subscription_id,
@@ -137,7 +138,7 @@ async fn reject_proposal(
 
     market
         .requestor_engine
-        .reject_proposal(&subscription_id, &proposal_id, &id)
+        .reject_proposal(&subscription_id, &proposal_id, &id, body.into_inner())
         .await
         .log_err()
         .map(|_| HttpResponse::NoContent().finish())
@@ -166,7 +167,7 @@ async fn confirm_agreement(
     query: Query<QueryAppSessionId>,
     id: Identity,
 ) -> impl Responder {
-    let agreement_id = path.into_inner().to_id(OwnerType::Requestor)?;
+    let agreement_id = path.into_inner().to_id(Owner::Requestor)?;
     market
         .requestor_engine
         .confirm_agreement(id, &agreement_id, query.into_inner().app_session_id)
@@ -182,7 +183,7 @@ async fn wait_for_approval(
     query: Query<QueryTimeout>,
     _id: Identity,
 ) -> impl Responder {
-    let agreement_id = path.into_inner().to_id(OwnerType::Requestor)?;
+    let agreement_id = path.into_inner().to_id(Owner::Requestor)?;
     let timeout = query.timeout;
     market
         .requestor_engine
@@ -192,11 +193,12 @@ async fn wait_for_approval(
         .map(|status| HttpResponse::Ok().json(status.to_string()))
 }
 
-#[actix_web::delete("/agreements/{agreement_id}")]
+#[actix_web::post("/agreements/{agreement_id}/cancel")]
 async fn cancel_agreement(
     _market: Data<Arc<MarketService>>,
     _path: Path<PathAgreement>,
     _id: Identity,
+    _body: Json<Option<Reason>>,
 ) -> HttpResponse {
     HttpResponse::NotImplemented().finish()
 }

@@ -9,7 +9,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::ServiceBinder;
 
 use crate::db::dao::AgreementDao;
-use crate::db::model::{AgreementId, OwnerType};
+use crate::db::model::{AgreementId, Owner};
 
 pub async fn bind_gsb(db: DbExecutor, public_prefix: &str, _local_prefix: &str) {
     log::trace!("Binding market agreement public service to service bus");
@@ -23,8 +23,8 @@ async fn get_agreement(
     msg: GetAgreement,
 ) -> Result<ClientAgreement, RpcMessageError> {
     let owner = match msg.role {
-        Role::Provider => OwnerType::Provider,
-        Role::Requestor => OwnerType::Requestor,
+        Role::Provider => Owner::Provider,
+        Role::Requestor => Owner::Requestor,
     };
 
     let agreement_id = AgreementId::from_client(&msg.agreement_id, owner)
