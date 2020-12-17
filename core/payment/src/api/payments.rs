@@ -3,11 +3,11 @@ use actix_web::web::{get, Data, Path, Query};
 use actix_web::{HttpResponse, Scope};
 
 // Workspace uses
+use ya_client_model::payment::*;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 // Local uses
-use crate::api::*;
 use crate::dao::*;
 use crate::utils::*;
 
@@ -19,11 +19,11 @@ pub fn register_endpoints(scope: Scope) -> Scope {
 
 async fn get_payments(
     db: Data<DbExecutor>,
-    query: Query<EventParams>,
+    query: Query<params::EventParams>,
     id: Identity,
 ) -> HttpResponse {
     let node_id = id.identity;
-    let timeout_secs = query.poll_timeout;
+    let timeout_secs = query.poll_timeout.unwrap_or(params::DEFAULT_EVENT_TIMEOUT);
     let after_timestamp = query.after_timestamp.map(|d| d.naive_utc());
     let max_events = query.max_events;
     let app_session_id = &query.app_session_id;
@@ -45,7 +45,11 @@ async fn get_payments(
     }
 }
 
-async fn get_payment(db: Data<DbExecutor>, path: Path<PaymentId>, id: Identity) -> HttpResponse {
+async fn get_payment(
+    db: Data<DbExecutor>,
+    path: Path<params::PaymentId>,
+    id: Identity,
+) -> HttpResponse {
     let payment_id = path.payment_id.clone();
     let node_id = id.identity;
     let dao: PaymentDao = db.as_dao();
