@@ -31,7 +31,7 @@ use crate::negotiation::{
     notifier::NotifierError,
     EventNotifier,
 };
-use crate::protocol::negotiation::error::{CallerParseError, ReasonError, RejectProposalError};
+use crate::protocol::negotiation::error::{CallerParseError, RejectProposalError};
 use crate::protocol::negotiation::messages::ProposalRejected;
 use crate::protocol::negotiation::{
     common as protocol_common,
@@ -376,9 +376,7 @@ impl CommonBroker {
         )
         .await?;
 
-        let reason_string = reason
-            .as_ref()
-            .map(|reason| serde_json::to_string::<Reason>(reason).unwrap_or("".to_string()));
+        let reason_string = CommonBroker::reason2string(&reason);
 
         dao.terminate(&agreement.id, reason_string, owner_type)
             .await
@@ -398,6 +396,12 @@ impl CommonBroker {
             reason.display(),
         );
         Ok(())
+    }
+
+    fn reason2string(reason: &Option<Reason>) -> Option<String> {
+        reason.as_ref().map(|reason| {
+            serde_json::to_string::<Reason>(reason).unwrap_or(reason.message.to_string())
+        })
     }
 
     // Called remotely via GSB
@@ -437,10 +441,7 @@ impl CommonBroker {
             Err(RemoteAgreementError::NotFound(agreement_id.clone()))?
         }
 
-        let reason_string = msg
-            .reason
-            .as_ref()
-            .map(|reason| serde_json::to_string::<Reason>(&reason).unwrap_or("".to_string()));
+        let reason_string = CommonBroker::reason2string(&msg.reason);
 
         dao.terminate(&agreement_id, reason_string, caller_role)
             .await
@@ -579,13 +580,7 @@ impl CommonBroker {
         // TODO: If creating Proposal succeeds, but event can't be added, provider
         // TODO: will never answer to this Proposal. Solve problem when Event API will be available.
         let subscription_id = proposal.negotiation.subscription_id.clone();
-        let reason = match &msg.reason {
-            Some(r) => Some(
-                serde_json::to_string(r)
-                    .map_err(|e| ReasonError::Serialize(r.clone(), e.to_string()))?,
-            ),
-            None => None,
-        };
+        let reason = CommonBroker::reason2string(&msg.reason);
         self.db
             .as_dao::<NegotiationEventsDao>()
             .add_proposal_rejected_event(&proposal, reason)
@@ -599,7 +594,6 @@ impl CommonBroker {
                 log::warn!("{}", msg);
                 ProposalValidationError::Internal(msg)
             })?;
-        log::warn!("proposal rejected event inserted");
 
         // Send channel message to wake all query_events waiting for proposals.
         self.negotiation_notifier.notify(&subscription_id).await;

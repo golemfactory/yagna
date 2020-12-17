@@ -153,9 +153,7 @@ impl ResponseError for RejectProposalError {
     fn error_response(&self) -> HttpResponse {
         let msg = ErrorMessage::new(self.to_string());
         match self {
-            RejectProposalError::Validation(_) | RejectProposalError::Reason(_) => {
-                HttpResponse::BadRequest().json(msg)
-            }
+            RejectProposalError::Validation(_) => HttpResponse::BadRequest().json(msg),
             RejectProposalError::Gsb(_)
             | RejectProposalError::Get(_)
             | RejectProposalError::ChangeState(_)
@@ -172,7 +170,7 @@ impl ResponseError for ProposalValidationError {
             | ProposalValidationError::Unsubscribed(_)
             | ProposalValidationError::NotMatching(_)
             | ProposalValidationError::OwnProposal(_) => HttpResponse::BadRequest().json(msg),
-            ProposalValidationError::Expired(_) => HttpResponse::Gone().json(msg),
+            ProposalValidationError::SubscriptionExpired(_) => HttpResponse::Gone().json(msg),
             ProposalValidationError::Unauthorized(_, _) => HttpResponse::Unauthorized().json(msg),
             ProposalValidationError::Internal(_) => HttpResponse::InternalServerError().json(msg),
         }
@@ -208,7 +206,6 @@ impl ResponseError for AgreementError {
             | AgreementError::OwnProposal(..)
             | AgreementError::ProposalNotFound(..)
             | AgreementError::ProposalCountered(..)
-            // | AgreementError::ReasonError(..)
             | AgreementError::InvalidId(..) => HttpResponse::BadRequest().json(msg),
             AgreementError::GetProposal(..)
             | AgreementError::Save(..)

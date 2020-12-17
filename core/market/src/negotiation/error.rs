@@ -149,7 +149,7 @@ pub enum ProposalValidationError {
     #[error("Subscription [{0}] was already unsubscribed.")]
     Unsubscribed(SubscriptionId),
     #[error("Subscription [{0}] expired.")]
-    Expired(SubscriptionId),
+    SubscriptionExpired(SubscriptionId),
     #[error(transparent)]
     NotMatching(#[from] MatchValidationError),
     #[error("Can't react to own Proposal [{0}].")]
@@ -202,7 +202,7 @@ impl From<QueryOfferError> for ProposalValidationError {
         match e {
             QueryOfferError::NotFound(id) => ProposalValidationError::NoSubscription(id),
             QueryOfferError::Unsubscribed(id) => ProposalValidationError::Unsubscribed(id),
-            QueryOfferError::Expired(id) => ProposalValidationError::Expired(id),
+            QueryOfferError::Expired(id) => ProposalValidationError::SubscriptionExpired(id),
             _ => ProposalValidationError::Internal(format!("Offer: {}", e)),
         }
     }

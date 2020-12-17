@@ -21,7 +21,6 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .service(counter_proposal)
         .service(get_proposal)
         .service(reject_proposal)
-        .service(reject_proposal)
         .service(approve_agreement)
         .service(reject_agreement)
 }

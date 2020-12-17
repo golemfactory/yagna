@@ -3,7 +3,7 @@ use diesel::sql_types::Text;
 use thiserror::Error;
 
 use ya_client::model::market::event::{ProviderEvent, RequestorEvent};
-use ya_client::model::market::{Agreement as ClientAgreement, Proposal as ClientProposal};
+use ya_client::model::market::{Agreement as ClientAgreement, Proposal as ClientProposal, Reason};
 use ya_client::model::ErrorMessage;
 use ya_diesel_utils::DbTextField;
 use ya_persistence::executor::DbExecutor;
@@ -13,7 +13,6 @@ use crate::db::dao::{AgreementDao, ProposalDao};
 use crate::db::model::{Agreement, AgreementId, Owner, Proposal, ProposalId};
 use crate::db::schema::market_negotiation_event;
 use crate::db::DbError;
-use crate::protocol::negotiation::error::ReasonError;
 
 #[derive(Error, Debug)]
 pub enum EventError {
@@ -23,8 +22,6 @@ pub enum EventError {
     AgreementNotFound(AgreementId),
     #[error("Failed get proposal from database. Error: {0}.")]
     FailedGetProposal(DbError),
-    #[error(transparent)]
-    Reason(#[from] ReasonError),
     #[error("Unexpected error: {0}.")]
     InternalError(#[from] ErrorMessage),
 }
@@ -128,10 +125,7 @@ impl MarketEvent {
                 proposal_id: self.artifact_id.to_string(),
                 reason: match self.reason {
                     None => None,
-                    Some(r) => Some(
-                        serde_json::from_str(&r)
-                            .map_err(|e| ReasonError::Deserialize(r, e.to_string()))?,
-                    ),
+                    Some(r) => Some(serde_json::from_str(&r).unwrap_or_else(|_| Reason::new(r))),
                 },
             }),
             EventType::RequestorPropertyQuery => unimplemented!(),
@@ -183,10 +177,7 @@ impl MarketEvent {
                 proposal_id: self.artifact_id.to_string(),
                 reason: match self.reason {
                     None => None,
-                    Some(r) => Some(
-                        serde_json::from_str(&r)
-                            .map_err(|e| ReasonError::Deserialize(r, e.to_string()))?,
-                    ),
+                    Some(r) => Some(serde_json::from_str(&r).unwrap_or_else(|_| Reason::new(r))),
                 },
             }),
             EventType::ProviderPropertyQuery => unimplemented!(),
