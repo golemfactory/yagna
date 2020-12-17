@@ -219,6 +219,8 @@ impl CommonBroker {
             }
             timeout = stop_time - Instant::now();
 
+            log::debug!("{} Started waiting for AgreementEvents", id.display());
+
             if let Err(error) = agreement_notifier
                 .wait_for_event_with_timeout(timeout)
                 .await
