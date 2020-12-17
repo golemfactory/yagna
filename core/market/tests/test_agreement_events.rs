@@ -93,7 +93,6 @@ async fn test_agreement_approved_event() {
 
     match &events[0].event_type {
         AgreementEventType::AgreementApprovedEvent => (),
-        _ => panic!("Expected AgreementEventType::AgreementApprovedEvent"),
         e => panic!(
             "Expected AgreementEventType::AgreementApprovedEvent, got: {:?}",
             e
