@@ -5094,6 +5094,7 @@ checksum = "2932dc07acd2066ff2e3921a4419606b220ba6cd03a9935123856cc534877056"
 dependencies = [
  "rand 0.6.5",
  "secp256k1-sys 0.1.2",
+ "serde",
 ]
 
 [[package]]
@@ -5103,7 +5104,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6179428c22c73ac0fbb7b5579a56353ce78ba29759b3b8575183336ea74cdfb"
 dependencies = [
  "secp256k1-sys 0.3.0",
- "serde",
 ]
 
 [[package]]
@@ -5265,7 +5265,7 @@ version = "0.5.1"
 source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#0d3db75eb5dde6aae32ba3672c80af652e0b58ba"
 dependencies = [
  "lazy_static",
- "parking_lot 0.11.1",
+ "parking_lot 0.10.2",
  "serial_test_derive 0.5.1",
 ]
 
@@ -6838,7 +6838,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-client.git?branch=event-api/master#03b59f45b875bf66af88e3b22b2c05ba56ad2e2e"
+source = "git+https://github.com/golemfactory/ya-client.git?branch=event-api/master#0a650664865afc4dc2bd9894643830bc79a0102e"
 dependencies = [
  "awc 1.0.1",
  "bytes 0.5.6",
@@ -6875,7 +6875,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-client.git?branch=event-api/master#03b59f45b875bf66af88e3b22b2c05ba56ad2e2e"
+source = "git+https://github.com/golemfactory/ya-client.git?branch=event-api/master#0a650664865afc4dc2bd9894643830bc79a0102e"
 dependencies = [
  "bigdecimal 0.1.2",
  "chrono",
@@ -6884,7 +6884,7 @@ dependencies = [
  "hex",
  "openssl",
  "rand 0.7.3",
- "secp256k1 0.19.0",
+ "secp256k1 0.17.2",
  "serde",
  "serde_json",
  "thiserror",

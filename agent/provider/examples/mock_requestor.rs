@@ -28,7 +28,7 @@ async fn wait_for_approval(client: &MarketRequestorApi, proposal_id: &str) {
         let _ = match client.wait_for_approval(proposal_id, None).await {
             Err(Error::TimeoutError { .. }) => {
                 println!("Timeout waiting for Agreement approval...");
-                Ok("".into())
+                Ok(())
             }
             Ok(_) => {
                 println!("OK! Agreement {} approved by Provider.", proposal_id);
