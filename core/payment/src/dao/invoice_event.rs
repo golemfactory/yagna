@@ -1,11 +1,9 @@
 use crate::error::DbResult;
 use crate::models::invoice_event::{ReadObj, WriteObj};
-use crate::schema::pay_agreement::dsl as agreement_dsl;
-use crate::schema::pay_event_type::dsl as event_type_dsl;
-use crate::schema::pay_invoice::dsl as invoice_dsl;
-use crate::schema::pay_invoice_event::dsl;
+use crate::schema::pay_invoice_event::dsl as write_dsl;
+use crate::schema::pay_invoice_event_read::dsl as read_dsl;
 use chrono::NaiveDateTime;
-use diesel::{BoolExpressionMethods, ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl};
+use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 use serde::Serialize;
 use std::convert::TryInto;
 use ya_client_model::payment::{EventType, InvoiceEvent};
@@ -22,7 +20,7 @@ pub fn create<T: Serialize>(
     conn: &ConnType,
 ) -> DbResult<()> {
     let event = WriteObj::new(invoice_id, owner_id, event_type, details)?;
-    diesel::insert_into(dsl::pay_invoice_event)
+    diesel::insert_into(write_dsl::pay_invoice_event)
         .values(event)
         .execute(conn)?;
     Ok(())
@@ -48,7 +46,7 @@ impl<'c> InvoiceEventDao<'c> {
     ) -> DbResult<()> {
         let event = WriteObj::new(invoice_id, owner_id, event_type, details)?;
         do_with_transaction(self.pool, move |conn| {
-            diesel::insert_into(dsl::pay_invoice_event)
+            diesel::insert_into(write_dsl::pay_invoice_event)
                 .values(event)
                 .execute(conn)?;
             Ok(())
@@ -64,27 +62,15 @@ impl<'c> InvoiceEventDao<'c> {
         app_session_id: Option<String>,
     ) -> DbResult<Vec<InvoiceEvent>> {
         readonly_transaction(self.pool, move |conn| {
-            let mut query = dsl::pay_invoice_event
-                .inner_join(event_type_dsl::pay_event_type)
-                .inner_join(
-                    invoice_dsl::pay_invoice.on(dsl::owner_id
-                        .eq(invoice_dsl::owner_id)
-                        .and(dsl::invoice_id.eq(invoice_dsl::id))),
-                )
-                .inner_join(
-                    agreement_dsl::pay_agreement.on(dsl::owner_id
-                        .eq(agreement_dsl::owner_id)
-                        .and(invoice_dsl::agreement_id.eq(agreement_dsl::id))),
-                )
-                .filter(dsl::owner_id.eq(node_id))
-                .select(crate::schema::pay_invoice_event::all_columns)
-                .order_by(dsl::timestamp.asc())
+            let mut query = read_dsl::pay_invoice_event_read
+                .filter(read_dsl::owner_id.eq(node_id))
+                .order_by(read_dsl::timestamp.asc())
                 .into_boxed();
             if let Some(timestamp) = after_timestamp {
-                query = query.filter(dsl::timestamp.gt(timestamp));
+                query = query.filter(read_dsl::timestamp.gt(timestamp));
             }
             if let Some(app_session_id) = app_session_id {
-                query = query.filter(agreement_dsl::app_session_id.eq(app_session_id));
+                query = query.filter(read_dsl::app_session_id.eq(app_session_id));
             }
             if let Some(limit) = max_events {
                 query = query.limit(limit.into());

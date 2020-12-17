@@ -1,5 +1,5 @@
 use crate::error::{DbError, DbResult};
-use crate::schema::pay_debit_note_event;
+use crate::schema::{pay_debit_note_event, pay_debit_note_event_read};
 use crate::utils::{json_from_str, json_to_string};
 use chrono::{NaiveDateTime, TimeZone, Utc};
 use serde::Serialize;
@@ -38,7 +38,7 @@ impl WriteObj {
 }
 
 #[derive(Queryable, Debug, Identifiable)]
-#[table_name = "pay_debit_note_event"]
+#[table_name = "pay_debit_note_event_read"]
 #[primary_key(debit_note_id, event_type)]
 pub struct ReadObj {
     pub debit_note_id: String,
@@ -46,6 +46,7 @@ pub struct ReadObj {
     pub event_type: String,
     pub timestamp: NaiveDateTime,
     pub details: Option<String>,
+    pub app_session_id: Option<String>,
 }
 
 impl TryFrom<ReadObj> for DebitNoteEvent {

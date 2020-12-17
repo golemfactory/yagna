@@ -88,6 +88,17 @@ table! {
 }
 
 table! {
+    pay_debit_note_event_read (debit_note_id, event_type) {
+        debit_note_id -> Text,
+        owner_id -> Text,
+        event_type -> Text,
+        timestamp -> Timestamp,
+        details -> Nullable<Text>,
+        app_session_id -> Nullable<Text>,
+    }
+}
+
+table! {
     pay_document_status (status) {
         status -> Text,
     }
@@ -120,6 +131,17 @@ table! {
         event_type -> Text,
         timestamp -> Timestamp,
         details -> Nullable<Text>,
+    }
+}
+
+table! {
+    pay_invoice_event_read (invoice_id, event_type) {
+        invoice_id -> Text,
+        owner_id -> Text,
+        event_type -> Text,
+        timestamp -> Timestamp,
+        details -> Nullable<Text>,
+        app_session_id -> Nullable<Text>,
     }
 }
 
@@ -179,10 +201,12 @@ allow_tables_to_appear_in_same_query!(
     pay_allocation,
     pay_debit_note,
     pay_debit_note_event,
+    pay_debit_note_event_read,
     pay_document_status,
     pay_event_type,
     pay_invoice,
     pay_invoice_event,
+    pay_invoice_event_read,
     pay_invoice_x_activity,
     pay_order,
     pay_payment,
