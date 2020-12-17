@@ -83,20 +83,21 @@ impl RequestorBroker {
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
         // until first change to value will be made.
-        counter!("market.agreements.requestor.created", 0);
-        counter!("market.agreements.requestor.confirmed", 0);
-        counter!("market.agreements.requestor.approved", 0);
-        counter!("market.agreements.requestor.rejected", 0);
-        counter!("market.agreements.requestor.cancelled", 0);
-        counter!("market.proposals.requestor.generated", 0);
-        counter!("market.proposals.requestor.received", 0);
-        counter!("market.proposals.requestor.rejected", 0);
-        counter!("market.proposals.requestor.countered", 0);
-        counter!("market.events.requestor.queried", 0);
         counter!("market.agreements.events.queried", 0);
+        counter!("market.agreements.requestor.approved", 0);
+        counter!("market.agreements.requestor.cancelled", 0);
+        counter!("market.agreements.requestor.confirmed", 0);
+        counter!("market.agreements.requestor.created", 0);
+        counter!("market.agreements.requestor.rejected", 0);
         counter!("market.agreements.requestor.terminated", 0);
         counter!("market.agreements.requestor.terminated.reason", 0, "reason" => "NotSpecified");
         counter!("market.agreements.requestor.terminated.reason", 0, "reason" => "Success");
+        counter!("market.events.requestor.queried", 0);
+        counter!("market.proposals.requestor.countered", 0);
+        counter!("market.proposals.requestor.generated", 0);
+        counter!("market.proposals.requestor.received", 0);
+        counter!("market.proposals.requestor.rejected.by-them", 0);
+        counter!("market.proposals.requestor.rejected.by-us", 0);
 
         tokio::spawn(proposal_receiver_thread(db, proposal_receiver, notifier));
         Ok(engine)
@@ -179,6 +180,8 @@ impl RequestorBroker {
         self.api
             .reject_proposal(id.identity, &proposal, reason.clone())
             .await?;
+
+        counter!("market.proposals.requestor.rejected.by-us", 1);
 
         Ok(())
     }

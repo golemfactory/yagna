@@ -79,16 +79,17 @@ impl ProviderBroker {
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
         // until first change to value will be made.
-        counter!("market.events.provider.queried", 0);
-        counter!("market.proposals.provider.received", 0);
-        counter!("market.proposals.provider.rejected", 0);
-        counter!("market.proposals.provider.countered", 0);
-        counter!("market.proposals.provider.init-negotiation", 0);
-        counter!("market.agreements.provider.proposed", 0);
         counter!("market.agreements.provider.approved", 0);
+        counter!("market.agreements.provider.proposed", 0);
         counter!("market.agreements.provider.terminated", 0);
         counter!("market.agreements.provider.terminated.reason", 0, "reason" => "NotSpecified");
         counter!("market.agreements.provider.terminated.reason", 0, "reason" => "Success");
+        counter!("market.events.provider.queried", 0);
+        counter!("market.proposals.provider.countered", 0);
+        counter!("market.proposals.provider.init-negotiation", 0);
+        counter!("market.proposals.provider.received", 0);
+        counter!("market.proposals.provider.rejected.by-them", 0);
+        counter!("market.proposals.provider.rejected.by-us", 0);
 
         Ok(ProviderBroker {
             api,
@@ -168,6 +169,8 @@ impl ProviderBroker {
         self.api
             .reject_proposal(id.identity, &proposal, reason.clone())
             .await?;
+
+        counter!("market.proposals.provider.rejected.by-us", 1);
 
         Ok(())
     }

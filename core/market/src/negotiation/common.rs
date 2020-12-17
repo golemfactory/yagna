@@ -162,11 +162,6 @@ impl CommonBroker {
             .change_proposal_state(proposal_id, ProposalState::Rejected)
             .await?;
 
-        match caller_role {
-            Owner::Requestor => counter!("market.proposals.requestor.rejected", 1),
-            Owner::Provider => counter!("market.proposals.provider.rejected", 1),
-        };
-
         log::info!(
             "{:?} [{}] rejected Proposal [{}] {}.",
             caller_role,
