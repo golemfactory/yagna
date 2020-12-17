@@ -10,7 +10,9 @@ use crate::db::model::Owner;
 use crate::market::MarketService;
 
 use super::{PathAgreement, PathSubscription, PathSubscriptionProposal, QueryTimeoutMaxEvents};
+use crate::negotiation::ApprovalResult;
 use crate::rest_api::QueryTimeoutAppSessionId;
+use ya_client::model::ErrorMessage;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -153,7 +155,10 @@ async fn approve_agreement(
         .approve_agreement(id, &agreement_id, session, timeout)
         .await
         .log_err()
-        .map(|status| HttpResponse::Ok().json(status.to_string()))
+        .map(|result| match result {
+            ApprovalResult::Approved => HttpResponse::NoContent().finish(),
+            _ => HttpResponse::Gone().json(ErrorMessage::new(result)),
+        })
 }
 
 #[actix_web::post("/agreements/{agreement_id}/reject")]

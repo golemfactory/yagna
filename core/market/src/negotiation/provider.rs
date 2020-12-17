@@ -23,7 +23,7 @@ use crate::negotiation::common::expect_state;
 use crate::utils::display::EnableDisplay;
 
 #[derive(Clone, Debug, Eq, PartialEq, derive_more::Display)]
-pub enum ApprovalStatus {
+pub enum ApprovalResult {
     #[display(fmt = "Approved")]
     Approved,
     #[display(fmt = "Cancelled")]
@@ -208,7 +208,7 @@ impl ProviderBroker {
         agreement_id: &AgreementId,
         app_session_id: AppSessionId,
         timeout: f32,
-    ) -> Result<ApprovalStatus, AgreementError> {
+    ) -> Result<ApprovalResult, AgreementError> {
         let dao = self.common.db.as_dao::<AgreementDao>();
         let agreement = match dao
             .select(agreement_id, None, Utc::now().naive_utc())
@@ -245,7 +245,7 @@ impl ProviderBroker {
                 &agreement_id
             );
         }
-        return Ok(ApprovalStatus::Approved);
+        return Ok(ApprovalResult::Approved);
     }
 }
 

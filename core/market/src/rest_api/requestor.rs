@@ -14,7 +14,9 @@ use super::{
     PathAgreement, PathSubscription, PathSubscriptionProposal, ProposalId, QueryTimeout,
     QueryTimeoutMaxEvents,
 };
+use crate::negotiation::ApprovalStatus;
 use crate::rest_api::QueryAppSessionId;
+use ya_client::model::ErrorMessage;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -190,7 +192,10 @@ async fn wait_for_approval(
         .wait_for_approval(&agreement_id, timeout)
         .await
         .log_err()
-        .map(|status| HttpResponse::Ok().json(status.to_string()))
+        .map(|status| match status {
+            ApprovalStatus::Approved => HttpResponse::NoContent().finish(),
+            _ => HttpResponse::Gone().json(ErrorMessage::new(status)),
+        })
 }
 
 #[actix_web::post("/agreements/{agreement_id}/cancel")]
