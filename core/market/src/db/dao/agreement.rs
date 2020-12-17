@@ -129,11 +129,11 @@ impl<'c> AgreementDao<'c> {
         &self,
         id: &AgreementId,
         reason: Option<String>,
-        owner_type: Owner,
+        caller_role: Owner,
     ) -> DbResult<bool> {
         let id = id.clone();
         do_with_transaction(self.pool, move |conn| {
-            terminate(conn, &id, reason, owner_type)
+            terminate(conn, &id, reason, caller_role)
         })
         .await
     }
@@ -309,7 +309,7 @@ fn terminate(
     conn: &ConnType,
     id: &AgreementId,
     reason: Option<String>,
-    owner_type: Owner,
+    caller_role: Owner,
 ) -> DbResult<bool> {
     log::debug!("Termination reason: {:?}", reason);
     let num_updated = diesel::update(agreement::market_agreement.find(id))
@@ -324,7 +324,7 @@ fn terminate(
         agreement_id: id.clone(),
         reason,
         event_type: AgreementEventType::Terminated,
-        issuer: owner_type,
+        issuer: caller_role,
     };
 
     diesel::insert_into(market_agreement_event)

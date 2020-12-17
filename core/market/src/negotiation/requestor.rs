@@ -72,7 +72,7 @@ impl RequestorBroker {
             move |caller: String, msg: AgreementTerminated| {
                 broker_terminated
                     .clone()
-                    .on_agreement_terminated(caller, msg, Owner::Requestor)
+                    .on_agreement_terminated(msg, caller, Owner::Provider)
             },
         );
 

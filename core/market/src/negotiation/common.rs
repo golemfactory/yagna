@@ -31,7 +31,7 @@ use crate::negotiation::{
     notifier::NotifierError,
     EventNotifier,
 };
-use crate::protocol::negotiation::error::{ReasonError, RejectProposalError};
+use crate::protocol::negotiation::error::{CallerParseError, ReasonError, RejectProposalError};
 use crate::protocol::negotiation::messages::ProposalRejected;
 use crate::protocol::negotiation::{
     common as protocol_common,
@@ -391,7 +391,8 @@ impl CommonBroker {
 
         terminate_reason_metric(&reason, owner_type);
         log::info!(
-            "Agent {} terminated Agreement [{}]. Reason: {}",
+            "{:?} {} terminated Agreement [{}]. Reason: {}",
+            owner_type,
             &id.display(),
             &agreement.id,
             reason.display(),
@@ -402,30 +403,21 @@ impl CommonBroker {
     // Called remotely via GSB
     pub async fn on_agreement_terminated(
         self,
-        caller: String,
         msg: AgreementTerminated,
-        owner_type: Owner,
+        caller: String,
+        caller_role: Owner,
     ) -> Result<(), TerminateAgreementError> {
-        let caller: NodeId =
-            caller
-                .parse()
-                .map_err(|e: ya_client::model::node_id::ParseError| {
-                    TerminateAgreementError::CallerParseError {
-                        e: e.to_string(),
-                        caller,
-                        id: msg.agreement_id.clone(),
-                    }
-                })?;
+        let caller_id = CommonBroker::parse_caller(&caller)?;
         Ok(self
-            .on_agreement_terminated_inner(caller, msg, owner_type)
+            .on_agreement_terminated_inner(msg, caller_id, caller_role)
             .await?)
     }
 
     async fn on_agreement_terminated_inner(
         self,
-        caller: NodeId,
         msg: AgreementTerminated,
-        owner_type: Owner,
+        caller_id: NodeId,
+        caller_role: Owner,
     ) -> Result<(), RemoteAgreementError> {
         let dao = self.db.as_dao::<AgreementDao>();
         let agreement_id = msg.agreement_id.clone();
@@ -435,28 +427,22 @@ impl CommonBroker {
             .map_err(|_e| RemoteAgreementError::NotFound(agreement_id.clone()))?
             .ok_or(RemoteAgreementError::NotFound(agreement_id.clone()))?;
 
-        let our_id = match owner_type {
-            Owner::Requestor => agreement.provider_id,
-            Owner::Provider => agreement.requestor_id,
+        let auth_id = match caller_role {
+            Owner::Provider => agreement.provider_id,
+            Owner::Requestor => agreement.requestor_id,
         };
 
-        if our_id != caller {
+        if auth_id != caller_id {
             // Don't reveal, that we know this Agreement id.
             Err(RemoteAgreementError::NotFound(agreement_id.clone()))?
         }
-
-        // Opposite side terminated.
-        let terminator = match owner_type {
-            Owner::Provider => Owner::Requestor,
-            Owner::Requestor => Owner::Provider,
-        };
 
         let reason_string = msg
             .reason
             .as_ref()
             .map(|reason| serde_json::to_string::<Reason>(&reason).unwrap_or("".to_string()));
 
-        dao.terminate(&agreement_id, reason_string, terminator)
+        dao.terminate(&agreement_id, reason_string, caller_role)
             .await
             .map_err(|e| {
                 log::warn!(
@@ -467,16 +453,16 @@ impl CommonBroker {
                 RemoteAgreementError::InternalError(agreement_id.clone())
             })?;
 
-        match terminator {
+        match caller_role {
             Owner::Provider => counter!("market.agreements.provider.terminated", 1),
             Owner::Requestor => counter!("market.agreements.requestor.terminated", 1),
         };
 
-        terminate_reason_metric(&msg.reason, owner_type);
+        terminate_reason_metric(&msg.reason, caller_role);
         log::info!(
             "Received terminate Agreement [{}] from [{}]. Reason: {}",
             &agreement_id,
-            &caller,
+            &caller_id,
             msg.reason.display(),
         );
         Ok(())
@@ -618,12 +604,18 @@ impl CommonBroker {
         // Send channel message to wake all query_events waiting for proposals.
         self.negotiation_notifier.notify(&subscription_id).await;
 
+        match caller_role {
+            Owner::Provider => counter!("market.proposals.requestor.rejected.by-them", 1),
+            Owner::Requestor => counter!("market.proposals.provider.rejected.by-them", 1),
+        };
+
         Ok(())
     }
 
-    pub(crate) fn parse_caller(caller: &str) -> Result<NodeId, ProposalValidationError> {
-        NodeId::from_str(caller).map_err(|e| {
-            ProposalValidationError::Internal(format!("Failed to parse caller [{}]: {}", caller, e))
+    pub(crate) fn parse_caller(caller: &str) -> Result<NodeId, CallerParseError> {
+        NodeId::from_str(caller).map_err(|e| CallerParseError {
+            caller: caller.to_string(),
+            e: e.to_string(),
         })
     }
 
@@ -729,12 +721,12 @@ fn get_reason_code(reason: &Option<Reason>, key: &str) -> Option<String> {
 /// This function extract from Reason additional information about termination reason
 /// and increments metric counter. Note that Reason isn't required to have any fields
 /// despite 'message'.
-pub fn terminate_reason_metric(reason: &Option<Reason>, owner: Owner) {
+pub fn terminate_reason_metric(reason: &Option<Reason>, caller_role: Owner) {
     let p_code = get_reason_code(reason, "golem.provider.code");
     let r_code = get_reason_code(reason, "golem.requestor.code");
 
     let reason_code = r_code.xor(p_code).unwrap_or("NotSpecified".to_string());
-    match owner {
+    match caller_role {
         Owner::Provider => {
             counter!("market.agreements.provider.terminated.reason", 1, "reason" => reason_code)
         }

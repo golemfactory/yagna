@@ -31,6 +31,8 @@ pub enum CounterProposalError {
     Remote(RemoteProposalError, ProposalId),
     #[error("Remote error: {0}")]
     RemoteInternal(#[from] RemoteProposalError),
+    #[error(transparent)]
+    CallerParse(#[from] CallerParseError),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
@@ -54,6 +56,8 @@ pub enum RejectProposalError {
     ChangeState(#[from] ChangeProposalStateError),
     #[error(transparent)]
     Validation(#[from] ProposalValidationError),
+    #[error(transparent)]
+    CallerParse(#[from] CallerParseError),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
@@ -66,6 +70,8 @@ pub enum RemoteProposalError {
     AlreadyCountered(ProposalId),
     #[error(transparent)]
     InvalidId(#[from] ProposalIdValidationError),
+    #[error(transparent)]
+    CallerParse(#[from] CallerParseError),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
@@ -119,17 +125,20 @@ pub enum ApproveAgreementError {
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
+#[error("Failed to parse caller {caller}: {e}")]
+pub struct CallerParseError {
+    pub caller: String,
+    pub e: String,
+}
+
+#[derive(Error, Debug, Serialize, Deserialize)]
 pub enum TerminateAgreementError {
     #[error("Terminate {0}.")]
     Gsb(#[from] GsbAgreementError),
     #[error("Remote Terminate: {0}")]
     Remote(#[from] RemoteAgreementError),
-    #[error("Can't parse {caller} for Agreement [{id}]: {e}")]
-    CallerParseError {
-        e: String,
-        caller: String,
-        id: AgreementId,
-    },
+    #[error(transparent)]
+    CallerParse(#[from] CallerParseError),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]

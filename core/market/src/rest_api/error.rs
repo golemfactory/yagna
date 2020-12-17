@@ -158,7 +158,8 @@ impl ResponseError for RejectProposalError {
             }
             RejectProposalError::Gsb(_)
             | RejectProposalError::Get(_)
-            | RejectProposalError::ChangeState(_) => HttpResponse::InternalServerError().json(msg),
+            | RejectProposalError::ChangeState(_)
+            | RejectProposalError::CallerParse(_) => HttpResponse::InternalServerError().json(msg),
         }
     }
 }
