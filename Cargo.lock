@@ -7139,6 +7139,7 @@ dependencies = [
  "num-traits",
  "r2d2",
  "rand 0.7.3",
+ "regex",
  "serde",
  "serde_json",
  "serial_test 0.5.1",
