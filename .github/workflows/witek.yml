@@ -60,5 +60,5 @@ jobs:
           # because the latter needs separate compilation of lots of dependant crates again.
           #
           # we use single thread (via macro), because GSB Router is a singleton shared among tests
-          args: -p ya-market --test test_agreement_events --features ya-market/test-suite
+          args: -p ya-market --features ya-market/test-suite
 
