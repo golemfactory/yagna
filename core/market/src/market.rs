@@ -79,6 +79,8 @@ pub struct MarketService {
     pub matcher: Matcher,
     pub provider_engine: ProviderBroker,
     pub requestor_engine: RequestorBroker,
+
+    gsb_prefixes: Arc<Mutex<(String, String)>>,
 }
 
 impl MarketService {
@@ -119,6 +121,9 @@ impl MarketService {
             matcher,
             provider_engine,
             requestor_engine,
+
+            // Default prefixes that will be changes in bind_gsb function.
+            gsb_prefixes: Arc::new(Mutex::new((BUS_ID.to_string(), local::BUS_ID.to_string()))),
         })
     }
 
@@ -127,6 +132,11 @@ impl MarketService {
         public_prefix: &str,
         local_prefix: &str,
     ) -> Result<(), MarketInitError> {
+        {
+            *self.gsb_prefixes.lock().unwrap() =
+                (public_prefix.to_string(), local_prefix.to_string());
+        }
+
         self.matcher.bind_gsb(public_prefix, local_prefix).await?;
         self.provider_engine
             .bind_gsb(public_prefix, local_prefix)
@@ -141,6 +151,14 @@ impl MarketService {
         counter!("market.demands.subscribed", 0);
         counter!("market.demands.unsubscribed", 0);
         Ok(())
+    }
+
+    pub async fn unbind_gsb(public_prefix: String, local_prefix: String) {
+        log::info!("Unbinding MarketService GSB endpoints...");
+
+        ProviderBroker::unbind_gsb(&public_prefix, &local_prefix).await;
+        RequestorBroker::unbind_gsb(&public_prefix, &local_prefix).await;
+        Matcher::unbind_gsb(&public_prefix, &local_prefix).await;
     }
 
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> anyhow::Result<()> {
@@ -290,6 +308,17 @@ impl MarketService {
 
 impl Service for MarketService {
     type Cli = ();
+}
+
+impl Drop for MarketService {
+    fn drop(&mut self) {
+        let prefixes = self.gsb_prefixes.lock().unwrap();
+
+        tokio::task::spawn_local(MarketService::unbind_gsb(
+            prefixes.0.clone(),
+            prefixes.1.clone(),
+        ));
+    }
 }
 
 // =========================================== //

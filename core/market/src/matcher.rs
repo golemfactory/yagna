@@ -95,6 +95,10 @@ impl Matcher {
         Ok(())
     }
 
+    pub async fn unbind_gsb(public_prefix: &str, local_prefix: &str) {
+        Discovery::unbind_gsb(public_prefix, local_prefix).await;
+    }
+
     // =========================================== //
     // Offer/Demand subscription
     // =========================================== //

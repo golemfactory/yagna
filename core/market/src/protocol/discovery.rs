@@ -131,6 +131,20 @@ impl Discovery {
         Ok(())
     }
 
+    pub async fn unbind_gsb(public_prefix: &str, local_prefix: &str) {
+        bus::unbind(&get_offers_addr(public_prefix)).await.ok();
+        bus::unbind(&format!("{}/{}", local_prefix, OffersBcast::TOPIC))
+            .await
+            .ok();
+        bus::unbind(&format!(
+            "{}/{}",
+            local_prefix,
+            UnsubscribedOffersBcast::TOPIC
+        ))
+        .await
+        .ok();
+    }
+
     async fn on_bcast_offers(self, caller: String, msg: OffersBcast) -> Result<(), ()> {
         let num_ids_received = msg.offer_ids.len();
         if !msg.offer_ids.is_empty() {

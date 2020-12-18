@@ -4,7 +4,7 @@ use std::time::Duration;
 use ya_client::model::NodeId;
 use ya_core_model::market::BUS_ID;
 use ya_net::{self as net, RemoteEndpoint};
-use ya_service_bus::{typed::ServiceBinder, RpcEndpoint};
+use ya_service_bus::{typed as bus, typed::ServiceBinder, RpcEndpoint};
 
 use crate::db::model::{Agreement, AgreementId, OwnerType, Proposal, ProposalId};
 
@@ -282,5 +282,14 @@ impl NegotiationApi {
                 myself.on_agreement_terminated(caller, msg)
             });
         Ok(())
+    }
+
+    pub async fn unbind_gsb(public_prefix: &str, _local_prefix: &str) {
+        bus::unbind(&provider::proposal_addr(public_prefix))
+            .await
+            .ok();
+        bus::unbind(&provider::agreement_addr(public_prefix))
+            .await
+            .ok();
     }
 }

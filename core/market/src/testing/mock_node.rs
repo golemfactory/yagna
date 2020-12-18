@@ -478,6 +478,16 @@ impl MarketsNetwork {
     }
 }
 
+impl Drop for MarketsNetwork {
+    fn drop(&mut self) {
+        log::debug!("[MarketsNetwork] Unregistering nodes.");
+
+        for node in self.nodes.iter() {
+            self.break_networking_for(&node.name).ok();
+        }
+    }
+}
+
 fn test_data_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests")

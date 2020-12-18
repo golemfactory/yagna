@@ -441,6 +441,11 @@ impl Router {
             .cloned()
             .collect::<Vec<String>>();
 
+        log::debug!(
+            "Handlers: {:?}",
+            self.handlers.keys().cloned().collect::<Vec<String>>()
+        );
+
         addrs.iter().for_each(|addr| {
             log::debug!("unbinding {}", addr);
             self.handlers.remove(&addr);

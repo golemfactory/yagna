@@ -106,6 +106,10 @@ impl RequestorBroker {
         Ok(())
     }
 
+    pub async fn unbind_gsb(public_prefix: &str, local_prefix: &str) {
+        NegotiationApi::unbind_gsb(public_prefix, local_prefix).await;
+    }
+
     pub async fn subscribe_demand(&self, _demand: &Demand) -> Result<(), NegotiationError> {
         // TODO: Implement
         Ok(())
