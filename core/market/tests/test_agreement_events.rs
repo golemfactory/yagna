@@ -9,8 +9,8 @@ use ya_market::testing::{ApprovalStatus, OwnerType};
 use ya_client::model::market::agreement_event::AgreementTerminator;
 use ya_client::model::market::AgreementEventType;
 
-const REQ_NAME: &str = "Node-1";
-const PROV_NAME: &str = "Node-2";
+const REQ_NAME: &str = "Requestor-1";
+const PROV_NAME: &str = "Provider-2";
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]

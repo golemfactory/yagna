@@ -7,8 +7,8 @@ use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
 use crate::db::dao::proposal::{has_counter_proposal, set_proposal_accepted};
 use crate::db::dao::sql_functions::datetime;
 use crate::db::model::{
-    Agreement, AgreementEventType, AgreementId, AgreementState, AppSessionId, NewAgreementEvent,
-    OwnerType, ProposalId,
+    Agreement, AgreementEvent, AgreementEventType, AgreementId, AgreementState, AppSessionId,
+    NewAgreementEvent, OwnerType, ProposalId,
 };
 use crate::db::schema::market_agreement::dsl as agreement;
 use crate::db::schema::market_agreement::dsl::market_agreement;
@@ -236,6 +236,12 @@ impl<'c> AgreementDao<'c> {
                 .values(&event)
                 .execute(conn)
                 .map_err(|e| StateError::EventError(e.into()))?;
+
+            let events = market_agreement_event
+                .filter(event::agreement_id.eq(id))
+                .load::<AgreementEvent>(conn)?;
+
+            log::warn!("Events {} after termination", events.len());
             Ok(())
         })
         .await
@@ -330,5 +336,12 @@ fn terminate(
     diesel::insert_into(market_agreement_event)
         .values(&event)
         .execute(conn)?;
+
+    let events = market_agreement_event
+        .filter(event::agreement_id.eq(id))
+        .load::<AgreementEvent>(conn)?;
+
+    log::warn!("Events {} after termination", events.len());
+
     Ok(true)
 }
