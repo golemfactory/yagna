@@ -199,6 +199,10 @@ impl CommonBroker {
 
         let mut agreement_notifier = self.session_notifier.listen(session_id);
         loop {
+            log::info!(
+                "Query AgreementEvents with timestamp: {}",
+                after_timestamp.naive_utc()
+            );
             let events = self
                 .db
                 .as_dao::<AgreementEventsDao>()

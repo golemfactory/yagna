@@ -343,5 +343,10 @@ fn terminate(
 
     log::warn!("Events {} after termination", events.len());
 
+    for event in events.iter() {
+        log::info!("AgreementEvent timestamp: {}", event.timestamp);
+        log::info!("AgreementEvent type: {}", event.event_type);
+    }
+
     Ok(true)
 }
