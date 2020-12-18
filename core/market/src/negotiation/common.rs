@@ -184,6 +184,8 @@ impl CommonBroker {
         after_timestamp: DateTime<Utc>,
         id: &Identity,
     ) -> Result<Vec<AgreementEvent>, AgreementEventsError> {
+        log::debug!("{} called query_agreement_events", id.display());
+
         let mut timeout = Duration::from_secs_f32(timeout.max(0.0));
         let stop_time = Instant::now() + timeout;
         let max_events = max_events.unwrap_or(self.config.events.max_events_default);
@@ -211,10 +213,19 @@ impl CommonBroker {
 
             if events.len() > 0 {
                 counter!("market.agreements.events.queried", events.len() as u64);
+                log::debug!(
+                    "{} Collected {} AgreementEvents",
+                    id.display(),
+                    events.len()
+                );
                 return Ok(events);
             }
             // Solves panic 'supplied instant is later than self'.
             if stop_time < Instant::now() {
+                log::debug!(
+                    "{} returned from collect AgreementEvents on stop time condition.",
+                    id.display()
+                );
                 return Ok(vec![]);
             }
             timeout = stop_time - Instant::now();
@@ -226,7 +237,13 @@ impl CommonBroker {
                 .await
             {
                 return match error {
-                    NotifierError::Timeout(_) => Ok(vec![]),
+                    NotifierError::Timeout(_) => {
+                        log::debug!(
+                            "{} returned from collect AgreementEvents on Timeout.",
+                            id.display()
+                        );
+                        Ok(vec![])
+                    }
                     NotifierError::ChannelClosed(_) => {
                         Err(AgreementEventsError::Internal(error.to_string()))
                     }

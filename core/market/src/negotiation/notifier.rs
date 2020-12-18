@@ -65,6 +65,8 @@ where
     pub async fn notify(&self, subscription_id: &Type) {
         let sender = self.sender.clone();
         let to_send = Notification::<Type>::NewEvent(subscription_id.clone());
+
+        log::debug!("[EventNotifier] Notify {}", subscription_id.display());
         // TODO: How to handle this error?
         let _ = sender.send(to_send);
     }
@@ -72,6 +74,11 @@ where
     pub async fn stop_notifying(&self, subscription_id: &Type) {
         let sender = self.sender.clone();
         let to_send = Notification::<Type>::StopEvents(subscription_id.clone());
+
+        log::debug!(
+            "[EventNotifier] Stop notifying {}",
+            subscription_id.display()
+        );
         // TODO: How to handle this error?
         let _ = sender.send(to_send);
     }
@@ -93,12 +100,28 @@ where
         while let Ok(value) = self.receiver.recv().await {
             match value {
                 Notification::<Type>::NewEvent(subscription_id) => {
+                    log::debug!(
+                        "[EventNotifierListener] Got NewEvent for {}",
+                        subscription_id.display()
+                    );
                     if subscription_id == self.subscription_id {
+                        log::debug!(
+                            "[EventNotifierListener] NewEvent for {} matches.",
+                            subscription_id.display()
+                        );
                         return Ok(());
                     }
                 }
                 Notification::<Type>::StopEvents(subscription_id) => {
+                    log::debug!(
+                        "[EventNotifierListener] Got StopEvents for {}",
+                        subscription_id.display()
+                    );
                     if subscription_id == self.subscription_id {
+                        log::debug!(
+                            "[EventNotifierListener] StopEvents for {} matches",
+                            subscription_id.display()
+                        );
                         return Err(NotifierError::Unsubscribed(subscription_id));
                     }
                 }
