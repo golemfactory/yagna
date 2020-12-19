@@ -14,7 +14,7 @@ pub mod sql_functions {
 mod offer;
 mod proposal;
 
-pub use agreement::{AgreementDao, SaveAgreementError, StateError};
+pub use agreement::{check_transition, AgreementDao, SaveAgreementError, StateError};
 pub use agreement_events::AgreementEventsDao;
 pub use demand::DemandDao;
 pub use negotiation_events::{NegotiationEventsDao, TakeEventsError};

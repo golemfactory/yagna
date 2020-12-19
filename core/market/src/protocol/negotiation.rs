@@ -10,7 +10,6 @@ pub mod common {
     use crate::protocol::negotiation::messages::{provider, requestor, AgreementTerminated};
 
     use ya_client::model::market::Reason;
-    use ya_client::model::NodeId;
     use ya_core_model::market::BUS_ID;
     use ya_net::{self as net, RemoteEndpoint};
     use ya_service_bus::RpcEndpoint;
@@ -18,8 +17,6 @@ pub mod common {
     /// Sent to notify other side about termination.
     pub async fn propagate_terminate_agreement(
         agreement: &Agreement,
-        sender: NodeId,
-        receiver: NodeId,
         reason: Option<Reason>,
     ) -> Result<(), TerminateAgreementError> {
         let msg = AgreementTerminated {
@@ -27,6 +24,7 @@ pub mod common {
             reason,
         };
 
+<<<<<<< HEAD
         log::debug!(
             "Propagating TerminateAgreement: [{}]. Reason: {:?}",
             &msg.agreement_id,
@@ -35,6 +33,20 @@ pub mod common {
         let service = match agreement.id.clone().owner() {
             OwnerType::Requestor => provider::agreement_addr(BUS_ID),
             OwnerType::Provider => requestor::agreement_addr(BUS_ID),
+=======
+        log::debug!("Propagating TerminateAgreement: {:?}", msg);
+        let (service, sender, receiver) = match agreement.id.clone().owner() {
+            OwnerType::Requestor => (
+                provider::agreement_addr(BUS_ID),
+                agreement.requestor_id,
+                agreement.provider_id,
+            ),
+            OwnerType::Provider => (
+                requestor::agreement_addr(BUS_ID),
+                agreement.provider_id,
+                agreement.requestor_id,
+            ),
+>>>>>>> 8916e789... agreememt state machine + fix agreement event timestamp + more:
         };
         net::from(sender)
             .to(receiver)
