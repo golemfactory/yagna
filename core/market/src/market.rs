@@ -310,16 +310,22 @@ impl Service for MarketService {
     type Cli = ();
 }
 
-impl Drop for MarketService {
-    fn drop(&mut self) {
-        let prefixes = self.gsb_prefixes.lock().unwrap();
-
-        tokio::task::spawn_local(MarketService::unbind_gsb(
-            prefixes.0.clone(),
-            prefixes.1.clone(),
-        ));
-    }
-}
+// impl Drop for MarketService {
+//     fn drop(&mut self) {
+//         let prefixes = match self.gsb_prefixes.lock() {
+//             Err(e) => {
+//                 log::error!("Getting gsb prefixes: {}", e);
+//                 return;
+//             }
+//             Ok(r) => r,
+//         };
+//
+//         tokio::task::spawn_local(MarketService::unbind_gsb(
+//             prefixes.0.clone(),
+//             prefixes.1.clone(),
+//         ));
+//     }
+// }
 
 // =========================================== //
 // Awful static initialization. Necessary to
