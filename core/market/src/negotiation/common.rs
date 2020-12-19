@@ -14,12 +14,12 @@ use ya_service_api_web::middleware::Identity;
 
 use crate::config::Config;
 use crate::db::dao::{
-    check_transition, AgreementDao, AgreementEventsDao, NegotiationEventsDao, ProposalDao,
-    SaveProposalError, TakeEventsError,
+    AgreementDao, AgreementEventsDao, NegotiationEventsDao, ProposalDao, SaveProposalError,
+    TakeEventsError,
 };
 use crate::db::model::{
-    Agreement, AgreementEvent, AgreementId, AgreementState, AppSessionId, IssuerType, MarketEvent,
-    OwnerType, Proposal,
+    check_transition, Agreement, AgreementEvent, AgreementId, AgreementState, AppSessionId,
+    IssuerType, MarketEvent, OwnerType, Proposal,
 };
 use crate::db::model::{ProposalId, SubscriptionId};
 use crate::matcher::{
@@ -312,8 +312,7 @@ impl CommonBroker {
 
         // From now on agreement_id is invalid. Use only agreement.id
         // (which has valid owner)
-        check_transition(agreement.state, AgreementState::Terminated)
-            .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?;
+        validate_transition(&agreement, AgreementState::Terminated)?;
 
         protocol_common::propagate_terminate_agreement(&agreement, reason.clone()).await?;
 
@@ -570,7 +569,10 @@ pub fn validate_match(
     }
 }
 
-pub fn expect_state(agreement: &Agreement, state: AgreementState) -> Result<(), AgreementError> {
+pub fn validate_transition(
+    agreement: &Agreement,
+    state: AgreementState,
+) -> Result<(), AgreementError> {
     check_transition(agreement.state, state)
         .map_err(|e| AgreementError::UpdateState(agreement.id.clone(), e))
 }

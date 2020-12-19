@@ -21,7 +21,6 @@ use crate::protocol::negotiation::{error::*, messages::*, requestor::Negotiation
 
 use super::{common::*, error::*, notifier::NotifierError, EventNotifier};
 use crate::config::Config;
-use crate::db::dao::check_transition;
 use crate::utils::display::EnableDisplay;
 
 #[derive(Clone, derive_more::Display, Debug, PartialEq)]
@@ -377,8 +376,7 @@ impl RequestorBroker {
             Some(agreement) => agreement,
         };
 
-        check_transition(agreement.state, AgreementState::Pending)
-            .map_err(|e| AgreementError::UpdateState(agreement_id.clone(), e))?;
+        validate_transition(&agreement, AgreementState::Pending)?;
 
         // TODO : possible race condition here ISSUE#430
         // 1. this state check should be also `db.update_state`
