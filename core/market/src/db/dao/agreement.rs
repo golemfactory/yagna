@@ -4,11 +4,11 @@ use diesel::prelude::*;
 use ya_client::model::NodeId;
 use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
 
+use crate::db::dao::agreement_events::create_event;
 use crate::db::dao::proposal::{has_counter_proposal, set_proposal_accepted};
 use crate::db::dao::sql_functions::datetime;
 use crate::db::model::{
-    Agreement, AgreementEvent, AgreementEventType, AgreementId, AgreementState, AppSessionId,
-    NewAgreementEvent, OwnerType, ProposalId,
+    Agreement, AgreementId, AgreementState, AppSessionId, OwnerType, ProposalId,
 };
 use crate::db::schema::market_agreement::dsl as agreement;
 use crate::db::schema::market_agreement::dsl::market_agreement;
@@ -45,9 +45,8 @@ impl<'a> AsDao<'a> for AgreementDao<'a> {
 
 #[derive(thiserror::Error, Debug)]
 pub enum StateError {
-    #[error("Can't update Agreement [{id}] state from {from} to {to}.")]
+    #[error("Can't update Agreement state from {from} to {to}.")]
     InvalidTransition {
-        id: AgreementId,
         from: AgreementState,
         to: AgreementState,
     },
@@ -56,7 +55,7 @@ pub enum StateError {
     #[error("Failed to set AppSessionId. Error: {0}")]
     SessionId(DbError),
     #[error("Failed to add event. Error: {0}")]
-    EventError(DbError),
+    EventError(String),
 }
 
 impl<'c> AgreementDao<'c> {
@@ -65,7 +64,7 @@ impl<'c> AgreementDao<'c> {
         id: &AgreementId,
         node_id: Option<NodeId>,
         validation_ts: NaiveDateTime,
-    ) -> DbResult<Option<Agreement>> {
+    ) -> Result<Option<Agreement>, StateError> {
         let id = id.clone();
         do_with_transaction(self.pool, move |conn| {
             let mut query = market_agreement.filter(agreement::id.eq(&id)).into_boxed();
@@ -83,8 +82,11 @@ impl<'c> AgreementDao<'c> {
             };
 
             if agreement.valid_to < validation_ts {
-                agreement.state = AgreementState::Expired;
-                update_state(conn, &id, &agreement.state)?;
+                match update_state(conn, &mut agreement, AgreementState::Expired) {
+                    // ignore transition errors
+                    Err(StateError::InvalidTransition { .. }) => Ok(true),
+                    r => r,
+                }?;
             }
 
             Ok(Some(agreement))
@@ -97,7 +99,7 @@ impl<'c> AgreementDao<'c> {
         id: AgreementId,
         node_id: NodeId,
         validation_ts: NaiveDateTime,
-    ) -> DbResult<Option<Agreement>> {
+    ) -> Result<Option<Agreement>, StateError> {
         // Because we explicitly disallow agreements between the same identities
         // (i.e. provider_id != requestor_id), we'll always get the right db row
         // with this query.
@@ -114,26 +116,16 @@ impl<'c> AgreementDao<'c> {
             Ok(match query.first::<Agreement>(conn).optional()? {
                 Some(mut agreement) => {
                     if agreement.valid_to < validation_ts {
-                        agreement.state = AgreementState::Expired;
-                        update_state(conn, &id, &agreement.state)?;
+                        match update_state(conn, &mut agreement, AgreementState::Expired) {
+                            // ignore transition errors
+                            Err(StateError::InvalidTransition { .. }) => Ok(true),
+                            r => r,
+                        }?;
                     }
                     Some(agreement)
                 }
                 None => None,
             })
-        })
-        .await
-    }
-
-    pub async fn terminate(
-        &self,
-        id: &AgreementId,
-        reason: Option<String>,
-        owner_type: OwnerType,
-    ) -> DbResult<bool> {
-        let id = id.clone();
-        do_with_transaction(self.pool, move |conn| {
-            terminate(conn, &id, reason, owner_type)
         })
         .await
     }
@@ -172,22 +164,13 @@ impl<'c> AgreementDao<'c> {
         let session = session.clone();
 
         do_with_transaction(self.pool, move |conn| {
-            let agreement: Agreement =
+            let mut agreement: Agreement =
                 market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
 
-            if agreement.state != AgreementState::Proposal {
-                Err(StateError::InvalidTransition {
-                    id: id.clone(),
-                    from: agreement.state,
-                    to: AgreementState::Pending,
-                })?
-            }
-
-            update_state(conn, &id, &AgreementState::Pending)
-                .map_err(|e| StateError::DbError(e.into()))?;
+            update_state(conn, &mut agreement, AgreementState::Pending)?;
 
             if let Some(session) = session {
-                update_session(conn, &id, &session).map_err(|e| StateError::SessionId(e.into()))?;
+                update_session(conn, &mut agreement, session)?;
             }
             Ok(())
         })
@@ -204,45 +187,41 @@ impl<'c> AgreementDao<'c> {
         let session = session.clone();
 
         do_with_transaction(self.pool, move |conn| {
-            let agreement: Agreement =
+            let mut agreement: Agreement =
                 market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
 
-            if agreement.state != AgreementState::Pending {
-                Err(StateError::InvalidTransition {
-                    id: id.clone(),
-                    from: agreement.state,
-                    to: AgreementState::Approved,
-                })?
-            }
-
-            update_state(conn, &id, &AgreementState::Approved)
-                .map_err(|e| StateError::DbError(e.into()))?;
+            update_state(conn, &mut agreement, AgreementState::Approved)?;
 
             // It's important, that if None AppSessionId comes, we shouldn't update Agreement
             // appSessionId field to None. This function can be called in different context, for example
             // on Requestor, when appSessionId is already set.
             if let Some(session) = session {
-                update_session(conn, &id, &session).map_err(|e| StateError::SessionId(e.into()))?;
+                update_session(conn, &mut agreement, session)?;
             }
+            // Always Provider approves.
+            create_event(conn, &agreement, None, OwnerType::Provider)?;
 
-            let event = NewAgreementEvent {
-                agreement_id: id.clone(),
-                reason: None,
-                event_type: AgreementEventType::Approved,
-                issuer: OwnerType::Provider, // Always Provider approves.
-            };
-
-            diesel::insert_into(market_agreement_event)
-                .values(&event)
-                .execute(conn)
-                .map_err(|e| StateError::EventError(e.into()))?;
-
-            let events = market_agreement_event
-                .filter(event::agreement_id.eq(id))
-                .load::<AgreementEvent>(conn)?;
-
-            log::warn!("Events {} after termination", events.len());
             Ok(())
+        })
+        .await
+    }
+
+    pub async fn terminate(
+        &self,
+        id: &AgreementId,
+        reason: Option<String>,
+        terminator: OwnerType,
+    ) -> Result<bool, StateError> {
+        let id = id.clone();
+        do_with_transaction(self.pool, move |conn| {
+            log::debug!("Termination reason: {:?}", reason);
+            let mut agreement: Agreement =
+                market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
+
+            update_state(conn, &mut agreement, AgreementState::Terminated)?;
+            create_event(conn, &agreement, reason, terminator)?;
+
+            Ok(true)
         })
         .await
     }
@@ -297,56 +276,61 @@ impl<ErrorType: Into<DbError>> From<ErrorType> for SaveAgreementError {
     }
 }
 
-fn update_state(conn: &ConnType, id: &AgreementId, state: &AgreementState) -> DbResult<bool> {
-    let num_updated = diesel::update(market_agreement.find(id))
-        .set(agreement::state.eq(state))
-        .execute(conn)?;
-    Ok(num_updated > 0)
-}
-
-fn update_session(conn: &ConnType, id: &AgreementId, session: &str) -> DbResult<bool> {
-    let num_updated = diesel::update(market_agreement.find(id))
-        .set(agreement::session_id.eq(session))
-        .execute(conn)?;
-    Ok(num_updated > 0)
-}
-
-fn terminate(
+fn update_state(
     conn: &ConnType,
-    id: &AgreementId,
-    reason: Option<String>,
-    owner_type: OwnerType,
-) -> DbResult<bool> {
-    log::debug!("Termination reason: {:?}", reason);
-    let num_updated = diesel::update(agreement::market_agreement.find(id))
-        .set(agreement::state.eq(AgreementState::Terminated))
-        .execute(conn)?;
+    agreement: &mut Agreement,
+    to_state: AgreementState,
+) -> Result<bool, StateError> {
+    check_transition(agreement.state, to_state)?;
 
-    if num_updated == 0 {
-        return Ok(false);
-    }
+    let num_updated = diesel::update(market_agreement.find(&agreement.id))
+        .set(agreement::state.eq(&to_state))
+        .execute(conn)
+        .map_err(|e| StateError::DbError(e.into()))?;
 
-    let event = NewAgreementEvent {
-        agreement_id: id.clone(),
-        reason,
-        event_type: AgreementEventType::Terminated,
-        issuer: owner_type,
+    agreement.state = to_state;
+
+    Ok(num_updated > 0)
+}
+
+pub fn check_transition(from: AgreementState, to: AgreementState) -> Result<(), StateError> {
+    log::trace!("Checking Agreement state transition: {} => {}", from, to);
+    match from {
+        AgreementState::Proposal => match to {
+            AgreementState::Pending => return Ok(()),
+            AgreementState::Cancelled => return Ok(()),
+            AgreementState::Expired => return Ok(()),
+            _ => (),
+        },
+        AgreementState::Pending => match to {
+            AgreementState::Cancelled => return Ok(()),
+            AgreementState::Rejected => return Ok(()),
+            AgreementState::Approved => return Ok(()),
+            AgreementState::Expired => return Ok(()),
+            _ => (),
+        },
+        AgreementState::Cancelled => (),
+        AgreementState::Rejected => (),
+        AgreementState::Approved => match to {
+            AgreementState::Terminated => return Ok(()),
+            _ => (),
+        },
+        AgreementState::Expired => (),
+        AgreementState::Terminated => (),
     };
 
-    diesel::insert_into(market_agreement_event)
-        .values(&event)
-        .execute(conn)?;
+    Err(StateError::InvalidTransition { from, to })
+}
 
-    let events = market_agreement_event
-        .filter(event::agreement_id.eq(id))
-        .load::<AgreementEvent>(conn)?;
-
-    log::warn!("Events {} after termination", events.len());
-
-    for event in events.iter() {
-        log::info!("AgreementEvent timestamp: {}", event.timestamp);
-        log::info!("AgreementEvent type: {}", event.event_type);
-    }
-
-    Ok(true)
+fn update_session(
+    conn: &ConnType,
+    agreement: &mut Agreement,
+    session_id: String,
+) -> Result<bool, StateError> {
+    let num_updated = diesel::update(market_agreement.find(&agreement.id))
+        .set(agreement::session_id.eq(&session_id))
+        .execute(conn)
+        .map_err(|e| StateError::SessionId(e.into()))?;
+    agreement.session_id = Some(session_id);
+    Ok(num_updated > 0)
 }

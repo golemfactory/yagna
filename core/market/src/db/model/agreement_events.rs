@@ -2,7 +2,7 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::sql_types::Text;
 use std::fmt::Debug;
 
-use crate::db::model::{AgreementId, OwnerType};
+use crate::db::model::{Agreement, AgreementId, AgreementState, OwnerType};
 use crate::db::schema::market_agreement_event;
 
 use ya_client::model::market::agreement_event::AgreementTerminator;
@@ -46,8 +46,39 @@ pub struct AgreementEvent {
 pub struct NewAgreementEvent {
     pub agreement_id: AgreementId,
     pub event_type: AgreementEventType,
+    pub timestamp: NaiveDateTime,
     pub issuer: OwnerType,
     pub reason: Option<String>,
+}
+
+#[derive(thiserror::Error, Debug, Clone)]
+#[error("Error creating Event from the Agreement: {0}")]
+pub struct EventFromAgreementError(pub String);
+
+impl NewAgreementEvent {
+    pub(crate) fn new(
+        agreement: &Agreement,
+        reason: Option<String>,
+        terminator: OwnerType,
+    ) -> Result<Self, EventFromAgreementError> {
+        Ok(Self {
+            agreement_id: agreement.id.clone(),
+            event_type: match agreement.state {
+                AgreementState::Pending | AgreementState::Proposal | AgreementState::Expired => {
+                    let msg = format!("Wrong [{}] state {}", agreement.id, agreement.state);
+                    log::error!("{}", msg);
+                    return Err(EventFromAgreementError(msg));
+                }
+                AgreementState::Cancelled => AgreementEventType::Cancelled,
+                AgreementState::Rejected => AgreementEventType::Rejected,
+                AgreementState::Approved => AgreementEventType::Approved,
+                AgreementState::Terminated => AgreementEventType::Terminated,
+            },
+            timestamp: Utc::now().naive_utc(),
+            issuer: terminator,
+            reason,
+        })
+    }
 }
 
 impl AgreementEvent {

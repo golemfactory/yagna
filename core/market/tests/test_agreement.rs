@@ -10,8 +10,8 @@ use ya_market::testing::{
     mock_agreement::generate_agreement,
     mock_node::MarketServiceExt,
     proposal_util::{exchange_draft_proposals, NegotiationHelper},
-    AgreementDao, AgreementError, AgreementStateError, ApprovalStatus, MarketsNetwork, OwnerType,
-    ProposalState, WaitForApprovalError,
+    AgreementDao, AgreementError, AgreementState, ApprovalStatus, MarketsNetwork, OwnerType,
+    ProposalState, StateError, WaitForApprovalError,
 };
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -288,7 +288,13 @@ async fn second_confirmation_should_fail() {
         .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await;
     assert_err_eq!(
-        AgreementError::InvalidState(AgreementStateError::Confirmed(agreement_id)),
+        AgreementError::UpdateState(
+            agreement_id,
+            StateError::InvalidTransition {
+                from: AgreementState::Pending,
+                to: AgreementState::Pending
+            }
+        ),
         result,
     );
 }
@@ -327,7 +333,13 @@ async fn agreement_expired_before_confirmation() {
 
     // results with Expired error
     assert_err_eq!(
-        AgreementError::InvalidState(AgreementStateError::Expired(agreement_id)),
+        AgreementError::UpdateState(
+            agreement_id,
+            StateError::InvalidTransition {
+                from: AgreementState::Expired,
+                to: AgreementState::Pending
+            }
+        ),
         result,
     );
 }
@@ -619,7 +631,13 @@ async fn second_approval_should_fail() {
         .await;
     let agreement_id = agreement_id.clone().translate(OwnerType::Provider);
     assert_err_eq!(
-        AgreementError::InvalidState(AgreementStateError::Approved(agreement_id)),
+        AgreementError::UpdateState(
+            agreement_id,
+            StateError::InvalidTransition {
+                from: AgreementState::Approved,
+                to: AgreementState::Approved
+            }
+        ),
         result
     );
 }
@@ -1034,7 +1052,13 @@ async fn test_terminate_from_wrong_states() {
 
     match result {
         Ok(_) => panic!("Terminate Agreement should fail."),
-        Err(AgreementError::InvalidState(AgreementStateError::Proposed(id))) => {
+        Err(AgreementError::UpdateState(
+            id,
+            StateError::InvalidTransition {
+                from: AgreementState::Proposal,
+                to: AgreementState::Terminated,
+            },
+        )) => {
             assert_eq!(id, agreement_id)
         }
         _ => panic!("Wrong error returned."),
@@ -1057,7 +1081,13 @@ async fn test_terminate_from_wrong_states() {
 
     match result {
         Ok(_) => panic!("Terminate Agreement should fail."),
-        Err(AgreementError::InvalidState(AgreementStateError::Confirmed(id))) => {
+        Err(AgreementError::UpdateState(
+            id,
+            StateError::InvalidTransition {
+                from: AgreementState::Pending,
+                to: AgreementState::Terminated,
+            },
+        )) => {
             assert_eq!(id, agreement_id)
         }
         _ => panic!("Wrong error returned."),
@@ -1071,7 +1101,13 @@ async fn test_terminate_from_wrong_states() {
 
     match result {
         Ok(_) => panic!("Terminate Agreement should fail."),
-        Err(AgreementError::InvalidState(AgreementStateError::Confirmed(id))) => {
+        Err(AgreementError::UpdateState(
+            id,
+            StateError::InvalidTransition {
+                from: AgreementState::Pending,
+                to: AgreementState::Terminated,
+            },
+        )) => {
             assert_eq!(id, agreement_id)
         }
         _ => panic!("Wrong error returned."),
