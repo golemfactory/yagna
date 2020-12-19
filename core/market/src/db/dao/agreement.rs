@@ -8,7 +8,7 @@ use crate::db::dao::agreement_events::create_event;
 use crate::db::dao::proposal::{has_counter_proposal, set_proposal_accepted};
 use crate::db::dao::sql_functions::datetime;
 use crate::db::model::{
-    Agreement, AgreementId, AgreementState, AppSessionId, OwnerType, ProposalId,
+    check_transition, Agreement, AgreementId, AgreementState, AppSessionId, OwnerType, ProposalId,
 };
 use crate::db::schema::market_agreement::dsl as agreement;
 use crate::db::schema::market_agreement::dsl::market_agreement;
@@ -291,35 +291,6 @@ fn update_state(
     agreement.state = to_state;
 
     Ok(num_updated > 0)
-}
-
-pub fn check_transition(from: AgreementState, to: AgreementState) -> Result<(), StateError> {
-    log::trace!("Checking Agreement state transition: {} => {}", from, to);
-    match from {
-        AgreementState::Proposal => match to {
-            AgreementState::Pending => return Ok(()),
-            AgreementState::Cancelled => return Ok(()),
-            AgreementState::Expired => return Ok(()),
-            _ => (),
-        },
-        AgreementState::Pending => match to {
-            AgreementState::Cancelled => return Ok(()),
-            AgreementState::Rejected => return Ok(()),
-            AgreementState::Approved => return Ok(()),
-            AgreementState::Expired => return Ok(()),
-            _ => (),
-        },
-        AgreementState::Cancelled => (),
-        AgreementState::Rejected => (),
-        AgreementState::Approved => match to {
-            AgreementState::Terminated => return Ok(()),
-            _ => (),
-        },
-        AgreementState::Expired => (),
-        AgreementState::Terminated => (),
-    };
-
-    Err(StateError::InvalidTransition { from, to })
 }
 
 fn update_session(
