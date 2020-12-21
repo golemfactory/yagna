@@ -82,20 +82,6 @@ struct CliArgs {
     #[structopt(long, set = clap::ArgSettings::Global)]
     json: bool,
 
-    /// Log verbosity level
-    #[structopt(long, default_value = "info", set = clap::ArgSettings::Global)]
-    log_level: String,
-
-    /// Create logs in this directory. Logs are automatically rotated and compressed.
-    /// Logging to file is disabled if set to empty string.
-    #[structopt(
-        long,
-        env = "YAGNA_LOG_DIR",
-        default_value = &*DEFAULT_DATA_DIR,
-        set = clap::ArgSettings::Global
-    )]
-    log_dir: PathBuf,
-
     #[structopt(subcommand)]
     command: CliCommand,
 }
@@ -296,6 +282,20 @@ struct ServiceCommandOpts {
 
     #[structopt(long, env, default_value = "60")]
     max_rest_timeout: usize,
+
+    /// Log verbosity level
+    #[structopt(long, default_value = "info", set = clap::ArgSettings::Global)]
+    log_level: String,
+
+    /// Create logs in this directory. Logs are automatically rotated and compressed.
+    /// Logging to file is disabled if set to empty string.
+    #[structopt(
+    long,
+    env = "YAGNA_LOG_DIR",
+    default_value = &*DEFAULT_DATA_DIR,
+    set = clap::ArgSettings::Global
+    )]
+    log_dir: PathBuf,
 }
 
 #[cfg(unix)]
@@ -330,7 +330,11 @@ impl ServiceCommand {
                 api_url,
                 metrics_opts,
                 max_rest_timeout,
+                log_level,
+                log_dir,
             }) => {
+                set_logging(&log_level, &log_dir)?;
+
                 log::info!(
                     "Starting {} service! Version: {}.",
                     clap::crate_name!(),
@@ -451,14 +455,22 @@ fn set_logging(log_level: &str, log_dir: &Path) -> Result<()> {
         )
     }
 
+    // workaround to silence middleware logger by default
+    // to enable it explicitly set RUST_LOG=info or more verbose
+    env::set_var(
+        "RUST_LOG",
+        env::var("RUST_LOG").unwrap_or(format!("{},actix_web::middleware::logger=warn", log_level)),
+    );
+
     let log_spec = LogSpecification::env_or_parse(log_level)?;
     let log_spec = LogSpecBuilder::from_module_filters(log_spec.module_filters())
-        .module("actix_web::middleware::logger", log::LevelFilter::Warn)
         .module("actix_http::response", log::LevelFilter::Off)
         .module("tokio_core", log::LevelFilter::Info)
         .module("tokio_reactor", log::LevelFilter::Info)
+        .module("reqwest", log::LevelFilter::Info)
         .module("hyper", log::LevelFilter::Info)
         .module("web3", log::LevelFilter::Info)
+        .module("h2", log::LevelFilter::Info)
         .build();
 
     let mut logger = Logger::with(log_spec).format(log_format);
@@ -485,11 +497,7 @@ fn set_logging(log_level: &str, log_dir: &Path) -> Result<()> {
 #[actix_rt::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
-    let args: CliArgs = CliArgs::from_args();
-
-    if let CliCommand::Service(ServiceCommand::Run(_)) = args.command {
-        set_logging(&args.log_level, &args.log_dir)?;
-    }
+    let args = CliArgs::from_args();
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
 
