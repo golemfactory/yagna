@@ -24,17 +24,12 @@ pub mod common {
             reason,
         };
 
-<<<<<<< HEAD
         log::debug!(
             "Propagating TerminateAgreement: [{}]. Reason: {:?}",
             &msg.agreement_id,
             &msg.reason
         );
-        let service = match agreement.id.clone().owner() {
-            OwnerType::Requestor => provider::agreement_addr(BUS_ID),
-            OwnerType::Provider => requestor::agreement_addr(BUS_ID),
-=======
-        log::debug!("Propagating TerminateAgreement: {:?}", msg);
+
         let (service, sender, receiver) = match agreement.id.clone().owner() {
             OwnerType::Requestor => (
                 provider::agreement_addr(BUS_ID),
@@ -46,7 +41,6 @@ pub mod common {
                 agreement.provider_id,
                 agreement.requestor_id,
             ),
->>>>>>> 8916e789... agreememt state machine + fix agreement event timestamp + more:
         };
         net::from(sender)
             .to(receiver)
