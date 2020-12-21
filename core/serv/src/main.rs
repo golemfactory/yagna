@@ -1,5 +1,6 @@
 use actix_web::{middleware, web, App, HttpServer, Responder};
 use anyhow::{Context, Result};
+use chrono::{DateTime, SecondsFormat, Utc};
 use futures::prelude::*;
 use std::{
     any::TypeId,
@@ -82,8 +83,18 @@ struct CliArgs {
     json: bool,
 
     /// Log verbosity level
-    #[structopt(long, default_value = "info")]
+    #[structopt(long, default_value = "info", set = clap::ArgSettings::Global)]
     log_level: String,
+
+    /// Create logs in this directory. Logs are automatically rotated and compressed.
+    /// Logging to file is disabled if set to empty string.
+    #[structopt(
+        long,
+        env = "YAGNA_LOG_DIR",
+        default_value = &*DEFAULT_DATA_DIR,
+        set = clap::ArgSettings::Global
+    )]
+    log_dir: PathBuf,
 
     #[structopt(subcommand)]
     command: CliCommand,
@@ -92,13 +103,6 @@ struct CliArgs {
 impl CliArgs {
     pub fn get_data_dir(&self) -> Result<PathBuf> {
         self.data_dir.get_or_create()
-    }
-
-    pub fn log_level(&self) -> String {
-        match self.command {
-            CliCommand::Service(ServiceCommand::Run(..)) => self.log_level.clone(),
-            _ => "error".to_string(),
-        }
     }
 
     pub async fn run_command(self) -> Result<()> {
@@ -410,25 +414,82 @@ async fn me(id: Identity) -> impl Responder {
     web::Json(id)
 }
 
+fn set_logging(log_level: &str, log_dir: &Path) -> Result<()> {
+    use flexi_logger::{
+        style, AdaptiveFormat, Age, Cleanup, Criterion, DeferredNow, Duplicate, LogSpecBuilder,
+        LogSpecification, Logger, Naming, Record,
+    };
+
+    fn log_format(
+        w: &mut dyn std::io::Write,
+        now: &mut DeferredNow,
+        record: &Record,
+    ) -> Result<(), std::io::Error> {
+        write!(
+            w,
+            "[{} {:5} {}] {}",
+            DateTime::<Utc>::from(*now.now()).to_rfc3339_opts(SecondsFormat::Secs, true),
+            record.level(),
+            record.module_path().unwrap_or("<unnamed>"),
+            record.args()
+        )
+    }
+
+    fn log_format_color(
+        w: &mut dyn std::io::Write,
+        now: &mut DeferredNow,
+        record: &Record,
+    ) -> Result<(), std::io::Error> {
+        let level = record.level();
+        write!(
+            w,
+            "[{} {:5} {}] {}",
+            DateTime::<Utc>::from(*now.now()).to_rfc3339_opts(SecondsFormat::Secs, true),
+            style(level, level),
+            record.module_path().unwrap_or("<unnamed>"),
+            record.args()
+        )
+    }
+
+    let log_spec = LogSpecification::env_or_parse(log_level)?;
+    let log_spec = LogSpecBuilder::from_module_filters(log_spec.module_filters())
+        .module("actix_web::middleware::logger", log::LevelFilter::Warn)
+        .module("actix_http::response", log::LevelFilter::Off)
+        .module("tokio_core", log::LevelFilter::Info)
+        .module("tokio_reactor", log::LevelFilter::Info)
+        .module("hyper", log::LevelFilter::Info)
+        .module("web3", log::LevelFilter::Info)
+        .build();
+
+    let mut logger = Logger::with(log_spec).format(log_format);
+    if log_dir.components().count() != 0 {
+        logger = logger
+            .log_to_file()
+            .directory(log_dir)
+            .rotate(
+                Criterion::AgeOrSize(Age::Day, /*size in bytes*/ 1024 * 1024 * 1024),
+                Naming::Timestamps,
+                Cleanup::KeepLogAndCompressedFiles(1, 10),
+            )
+            .print_message()
+            .duplicate_to_stderr(Duplicate::All);
+    }
+    logger = logger
+        .adaptive_format_for_stderr(AdaptiveFormat::Custom(log_format, log_format_color))
+        .set_palette("9;11;2;7;8".to_string());
+
+    logger.start()?;
+    Ok(())
+}
+
 #[actix_rt::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
     let args: CliArgs = CliArgs::from_args();
 
-    env::set_var(
-        "RUST_LOG",
-        env::var("RUST_LOG").unwrap_or(format!(
-            "{},actix_web::middleware::logger=warn",
-            args.log_level()
-        )),
-    );
-    env_logger::builder()
-        .filter_module("actix_http::response", log::LevelFilter::Off)
-        .filter_module("tokio_core", log::LevelFilter::Info)
-        .filter_module("tokio_reactor", log::LevelFilter::Info)
-        .filter_module("hyper", log::LevelFilter::Info)
-        .filter_module("web3", log::LevelFilter::Info)
-        .init();
+    if let CliCommand::Service(ServiceCommand::Run(_)) = args.command {
+        set_logging(&args.log_level, &args.log_dir)?;
+    }
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
 

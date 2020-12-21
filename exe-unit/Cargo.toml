@@ -42,7 +42,7 @@ async-trait = "0.1.24"
 chrono = "0.4.10"
 derivative = "2.1"
 dotenv = "0.15.0"
-flexi_logger = { version = "0.15", features = ["colors"] }
+flexi_logger = { version = "0.16", features = ["colors"] }
 futures = "0.3"
 graphene-sgx = { version = "0.3", optional = true }
 hex = "0.4.2"
