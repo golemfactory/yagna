@@ -22,11 +22,12 @@ use ya_utils_actix::{
     forward_actix_handler,
 };
 
-use super::mock_negotiator::AcceptAllNegotiator;
-use super::negotiator::{AgreementResponse, AgreementResult, Negotiator, ProposalResponse};
+use super::negotiator::{
+    AcceptAllNegotiator, AgreementResponse, AgreementResult, LimitAgreementsNegotiator, Negotiator,
+    ProposalResponse,
+};
 use super::Preset;
 use crate::market::config::MarketConfig;
-use crate::market::mock_negotiator::LimitAgreementsNegotiator;
 use crate::market::termination_reason::GolemReason;
 use crate::tasks::{AgreementBroken, AgreementClosed, CloseAgreement};
 

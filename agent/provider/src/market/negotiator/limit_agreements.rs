@@ -2,48 +2,13 @@ use ya_agreement_utils::AgreementView;
 use ya_agreement_utils::OfferDefinition;
 use ya_client_model::market::{NewOffer, Proposal, Reason};
 
-use super::negotiator::Negotiator;
-use crate::market::negotiator::{AgreementResponse, AgreementResult, ProposalResponse};
+use super::common::offer_definition_to_offer;
+use super::common::{AgreementResponse, AgreementResult, Negotiator, ProposalResponse};
 
 use anyhow::Result;
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use std::collections::HashSet;
 use ya_agreement_utils::agreement::expand;
-
-#[derive(Debug)]
-pub struct AcceptAllNegotiator;
-
-impl Negotiator for AcceptAllNegotiator {
-    fn create_offer(&mut self, offer: &OfferDefinition) -> Result<NewOffer> {
-        Ok(offer_definition_to_offer(offer.clone()))
-    }
-
-    fn agreement_finalized(
-        &mut self,
-        _agreement_id: &str,
-        _result: &AgreementResult,
-    ) -> Result<()> {
-        Ok(())
-    }
-
-    fn react_to_proposal(
-        &mut self,
-        _offer: &NewOffer,
-        _demand: &Proposal,
-    ) -> Result<ProposalResponse> {
-        Ok(ProposalResponse::AcceptProposal)
-    }
-
-    fn react_to_agreement(&mut self, _agreement: &AgreementView) -> Result<AgreementResponse> {
-        Ok(AgreementResponse::ApproveAgreement)
-    }
-}
-
-impl AcceptAllNegotiator {
-    pub fn new() -> AcceptAllNegotiator {
-        AcceptAllNegotiator {}
-    }
-}
 
 /// Negotiator that can limit number of running agreements.
 pub struct LimitAgreementsNegotiator {
@@ -141,9 +106,4 @@ fn proposal_expiration_from(proposal: &Proposal) -> Result<DateTime<Utc>> {
         .clone();
     let timestamp: i64 = serde_json::from_value(value)?;
     Ok(Utc.timestamp_millis(timestamp))
-}
-
-fn offer_definition_to_offer(offer_def: OfferDefinition) -> NewOffer {
-    let constraints = offer_def.offer.constraints.clone();
-    NewOffer::new(offer_def.into_json(), constraints)
 }

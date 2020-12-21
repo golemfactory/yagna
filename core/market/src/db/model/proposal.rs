@@ -142,7 +142,6 @@ impl Proposal {
             creation_ts,
             expiration_ts,
         };
-
         Proposal {
             body: proposal,
             negotiation,
