@@ -5,7 +5,7 @@ use structopt::StructOpt;
 use ya_client::payment::PaymentApi;
 use ya_client::web::{rest_api_url, WebClient};
 use ya_client_model::payment::{
-    Acceptance, DocumentStatus, EventType, NewAllocation, NewDebitNote, NewInvoice,
+    Acceptance, DocumentStatus, InvoiceEventType, NewAllocation, NewDebitNote, NewInvoice,
 };
 use ya_core_model::payment::local as pay;
 use ya_service_bus::typed as bus;
@@ -134,7 +134,10 @@ async fn main() -> anyhow::Result<()> {
     assert_eq!(events.len(), 1);
     let event = events.pop().unwrap();
     assert_eq!(&event.invoice_id, &invoice.invoice_id);
-    assert!(matches!(&event.event_type, &EventType::Cancelled));
+    assert!(matches!(
+        &event.event_type,
+        &InvoiceEventType::InvoiceCancelledEvent
+    ));
     log::info!("Event received and verified.");
 
     log::info!("Verifying invoice status...");

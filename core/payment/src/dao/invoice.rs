@@ -11,7 +11,7 @@ use diesel::{
 };
 use std::collections::{BTreeMap, HashMap};
 use std::convert::TryFrom;
-use ya_client_model::payment::{DocumentStatus, EventType, Invoice, NewInvoice};
+use ya_client_model::payment::{DocumentStatus, Invoice, InvoiceEventType, NewInvoice};
 use ya_client_model::NodeId;
 use ya_core_model::payment::local::StatValue;
 use ya_persistence::executor::{
@@ -98,7 +98,13 @@ impl<'c> InvoiceDao<'c> {
             })?;
 
             if let Role::Requestor = role {
-                invoice_event::create::<()>(invoice_id, owner_id, EventType::Received, None, conn)?;
+                invoice_event::create::<()>(
+                    invoice_id,
+                    owner_id,
+                    InvoiceEventType::InvoiceReceivedEvent,
+                    None,
+                    conn,
+                )?;
             }
 
             Ok(())
@@ -230,7 +236,13 @@ impl<'c> InvoiceDao<'c> {
             update_status(&invoice_id, &owner_id, &DocumentStatus::Accepted, conn)?;
             agreement::set_amount_accepted(&agreement_id, &owner_id, &amount, conn)?;
             if let Role::Provider = role {
-                invoice_event::create::<()>(invoice_id, owner_id, EventType::Accepted, None, conn)?;
+                invoice_event::create::<()>(
+                    invoice_id,
+                    owner_id,
+                    InvoiceEventType::InvoiceAcceptedEvent,
+                    None,
+                    conn,
+                )?;
             }
             Ok(())
         })
@@ -246,7 +258,7 @@ impl<'c> InvoiceDao<'c> {
     //             .first(conn)?;
     //         update_status(&invoice_id, &owner_id, &DocumentStatus::Accepted, conn)?;
     //         if let Role::Provider = role {
-    //             invoice_event::create::<()>(invoice_id, owner_id, EventType::Rejected { ... }, None, conn)?;
+    //             invoice_event::create::<()>(invoice_id, owner_id, InvoiceEventType::InvoiceRejectedEvent { ... }, None, conn)?;
     //         }
     //         Ok(())
     //     })
@@ -267,7 +279,7 @@ impl<'c> InvoiceDao<'c> {
                 invoice_event::create::<()>(
                     invoice_id,
                     owner_id,
-                    EventType::Cancelled,
+                    InvoiceEventType::InvoiceCancelledEvent,
                     None,
                     conn,
                 )?;

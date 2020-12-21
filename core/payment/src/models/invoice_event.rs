@@ -3,8 +3,8 @@ use crate::schema::{pay_invoice_event, pay_invoice_event_read};
 use crate::utils::{json_from_str, json_to_string};
 use chrono::{NaiveDateTime, TimeZone, Utc};
 use serde::Serialize;
-use std::convert::{TryFrom, TryInto};
-use ya_client_model::payment::{EventType, InvoiceEvent};
+use std::convert::TryFrom;
+use ya_client_model::payment::{InvoiceEvent, InvoiceEventType};
 use ya_client_model::NodeId;
 
 #[derive(Debug, Identifiable, Insertable)]
@@ -21,9 +21,9 @@ impl WriteObj {
     pub fn new<T: Serialize>(
         invoice_id: String,
         owner_id: NodeId,
-        event_type: EventType,
+        event_type: InvoiceEventType,
         details: Option<T>,
-    ) -> Result<Self, DbError> {
+    ) -> DbResult<Self> {
         let details = match details {
             Some(details) => Some(json_to_string(&details)?),
             None => None,
@@ -31,7 +31,7 @@ impl WriteObj {
         Ok(Self {
             invoice_id,
             owner_id,
-            event_type: event_type.into(),
+            event_type: serde_json::to_string(&event_type)?,
             details,
         })
     }
@@ -58,7 +58,7 @@ impl TryFrom<ReadObj> for InvoiceEvent {
             Some(s) => Some(json_from_str(&s)?),
             None => None,
         };
-        let event_type = event.event_type.try_into().unwrap();
+        let event_type = serde_json::from_str(&event.event_type)?;
         Ok(Self {
             invoice_id: event.invoice_id,
             event_date: Utc.from_utc_datetime(&event.timestamp),
