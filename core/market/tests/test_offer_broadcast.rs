@@ -94,7 +94,8 @@ async fn test_broadcast_offer_callbacks() {
         .bcast_offers(vec![offer_id.clone()])
         .await
         .unwrap();
-    tokio::time::delay_for(Duration::from_millis(50)).await;
+
+    wait_for_bcast(1000, &market1, &offer_id, true).await;
 
     let offer = market1.get_offer(&offer_id).await.unwrap();
     assert_eq!(offer_clone, offer);
@@ -135,8 +136,8 @@ async fn test_broadcast_offer_id_validation() {
         .bcast_offers(vec![invalid_id.clone()])
         .await
         .unwrap();
-    tokio::time::delay_for(Duration::from_millis(50)).await;
 
+    wait_for_bcast(100, &market1, &invalid_id, false).await;
     assert_err_eq!(
         QueryOfferError::NotFound(invalid_id.clone()),
         market1.get_offer(&invalid_id).await,
@@ -176,7 +177,8 @@ async fn test_broadcast_expired_offer() {
         .bcast_offers(vec![offer_id.clone()])
         .await
         .unwrap();
-    tokio::time::delay_for(Duration::from_millis(50)).await;
+
+    wait_for_bcast(100, &market1, &offer_id, false).await;
 
     // This should return NotFound, because Market shouldn't add this Offer
     // to database at all.
