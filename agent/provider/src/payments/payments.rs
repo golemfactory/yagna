@@ -17,7 +17,7 @@ use crate::tasks::{AgreementBroken, AgreementClosed};
 use ya_client::activity::ActivityProviderApi;
 use ya_client::model::payment::{DebitNote, Invoice, NewDebitNote, NewInvoice};
 use ya_client::payment::PaymentApi;
-use ya_client_model::payment::EventType;
+use ya_client_model::payment::InvoiceEventType;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::forward_actix_handler;
 
@@ -241,20 +241,20 @@ async fn check_invoice_events(provider_ctx: Arc<ProviderCtx>, payments_addr: Add
         for event in events {
             let invoice_id = event.invoice_id;
             match event.event_type {
-                EventType::Accepted => {
+                InvoiceEventType::InvoiceAcceptedEvent => {
                     log::info!("Invoice [{}] accepted by requestor.", invoice_id);
                     payments_addr.do_send(InvoiceAccepted { invoice_id })
                 }
-                EventType::Settled => {
+                InvoiceEventType::InvoiceSettledEvent => {
                     log::info!("Invoice [{}] settled by requestor.", invoice_id);
                     payments_addr.do_send(InvoiceSettled { invoice_id })
                 }
-                // EventType::Rejected => {
+                // InvoiceEventType::InvoiceRejectedEvent {} => {
                 //     log::warn!("Invoice [{}] rejected by requestor.", invoice_id)
                 //     // TODO: Send signal to other provider's modules to react to this situation.
                 //     //       Probably we don't want to cooperate with this Requestor anymore.
                 // }
-                _ => log::warn!("Unexpected event received: {}", event.event_type),
+                _ => log::warn!("Unexpected event received: {:?}", event.event_type),
             }
             after_timestamp = event.event_date;
         }

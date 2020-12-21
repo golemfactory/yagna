@@ -6,7 +6,7 @@ use chrono::NaiveDateTime;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 use serde::Serialize;
 use std::convert::TryInto;
-use ya_client_model::payment::{DebitNoteEvent, EventType};
+use ya_client_model::payment::{DebitNoteEvent, DebitNoteEventType};
 use ya_client_model::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
@@ -15,7 +15,7 @@ use ya_persistence::executor::{
 pub fn create<T: Serialize>(
     debit_note_id: String,
     owner_id: NodeId,
-    event_type: EventType,
+    event_type: DebitNoteEventType,
     details: Option<T>,
     conn: &ConnType,
 ) -> DbResult<()> {
@@ -41,7 +41,7 @@ impl<'c> DebitNoteEventDao<'c> {
         &self,
         debit_note_id: String,
         owner_id: NodeId,
-        event_type: EventType,
+        event_type: DebitNoteEventType,
         details: Option<T>,
     ) -> DbResult<()> {
         let event = WriteObj::new(debit_note_id, owner_id, event_type, details)?;

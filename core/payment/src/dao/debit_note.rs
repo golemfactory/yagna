@@ -11,7 +11,7 @@ use diesel::{
 };
 use std::collections::HashMap;
 use std::convert::TryInto;
-use ya_client_model::payment::{DebitNote, DocumentStatus, EventType, NewDebitNote};
+use ya_client_model::payment::{DebitNote, DebitNoteEventType, DocumentStatus, NewDebitNote};
 use ya_client_model::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
@@ -164,7 +164,7 @@ impl<'c> DebitNoteDao<'c> {
             debit_note_event::create::<()>(
                 debit_note_id,
                 owner_id,
-                EventType::Received,
+                DebitNoteEventType::DebitNoteReceivedEvent,
                 None,
                 conn,
             )?;
@@ -247,7 +247,7 @@ impl<'c> DebitNoteDao<'c> {
                 debit_note_event::create::<()>(
                     debit_note_id,
                     owner_id,
-                    EventType::Accepted,
+                    DebitNoteEventType::DebitNoteAcceptedEvent,
                     None,
                     conn,
                 )?;
@@ -274,7 +274,7 @@ impl<'c> DebitNoteDao<'c> {
     //             debit_note_event::create::<()>(
     //                 debit_note_id,
     //                 owner_id,
-    //                 EventType::Rejected,
+    //                 DebitNoteEventType::DebitNoteRejectedEvent,
     //                 None,
     //                 conn,
     //             )?;
