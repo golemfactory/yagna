@@ -6838,7 +6838,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-client.git?branch=event-api/master#0a650664865afc4dc2bd9894643830bc79a0102e"
+source = "git+https://github.com/golemfactory/ya-client.git?branch=event-api/pay-invoice-events-fix#edd4d090c57f56c91269336c4956bebd799456dd"
 dependencies = [
  "awc 1.0.1",
  "bytes 0.5.6",
@@ -6875,7 +6875,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-client.git?branch=event-api/master#0a650664865afc4dc2bd9894643830bc79a0102e"
+source = "git+https://github.com/golemfactory/ya-client.git?branch=event-api/pay-invoice-events-fix#edd4d090c57f56c91269336c4956bebd799456dd"
 dependencies = [
  "bigdecimal 0.1.2",
  "chrono",
