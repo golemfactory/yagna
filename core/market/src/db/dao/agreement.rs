@@ -92,6 +92,52 @@ impl<'c> AgreementDao<'c> {
         .await
     }
 
+    pub async fn select_by_node(
+        &self,
+        id: AgreementId,
+        node_id: NodeId,
+        validation_ts: NaiveDateTime,
+    ) -> DbResult<Option<Agreement>> {
+        // Because we explicitly disallow agreements between the same identities
+        // (i.e. provider_id != requestor_id), we'll always get the right db row
+        // with this query.
+        let id_swapped = id.clone().swap_owner();
+        let id_orig = id.clone();
+        do_with_transaction(self.pool, move |conn| {
+            let query = market_agreement
+                .filter(agreement::id.eq_any(vec![id_orig, id_swapped]))
+                .filter(
+                    agreement::provider_id
+                        .eq(node_id)
+                        .or(agreement::requestor_id.eq(node_id)),
+                );
+            Ok(match query.first::<Agreement>(conn).optional()? {
+                Some(mut agreement) => {
+                    if agreement.valid_to < validation_ts {
+                        agreement.state = AgreementState::Expired;
+                        update_state(conn, &id, &agreement.state)?;
+                    }
+                    Some(agreement)
+                }
+                None => None,
+            })
+        })
+        .await
+    }
+
+    pub async fn terminate(
+        &self,
+        id: &AgreementId,
+        reason: Option<String>,
+        owner_type: OwnerType,
+    ) -> DbResult<bool> {
+        let id = id.clone();
+        do_with_transaction(self.pool, move |conn| {
+            terminate(conn, &id, reason, owner_type)
+        })
+        .await
+    }
+
     pub async fn save(&self, agreement: Agreement) -> Result<Agreement, SaveAgreementError> {
         // Agreement is always created for last Provider Proposal.
         let proposal_id = agreement.offer_proposal_id.clone();
@@ -257,4 +303,32 @@ fn update_session(conn: &ConnType, id: &AgreementId, session: &str) -> DbResult<
         .set(agreement::session_id.eq(session))
         .execute(conn)?;
     Ok(num_updated > 0)
+}
+
+fn terminate(
+    conn: &ConnType,
+    id: &AgreementId,
+    reason: Option<String>,
+    owner_type: OwnerType,
+) -> DbResult<bool> {
+    log::debug!("Termination reason: {:?}", reason);
+    let num_updated = diesel::update(agreement::market_agreement.find(id))
+        .set(agreement::state.eq(AgreementState::Terminated))
+        .execute(conn)?;
+
+    if num_updated == 0 {
+        return Ok(false);
+    }
+
+    let event = NewAgreementEvent {
+        agreement_id: id.clone(),
+        reason,
+        event_type: AgreementEventType::Terminated,
+        issuer: owner_type,
+    };
+
+    diesel::insert_into(market_agreement_event)
+        .values(&event)
+        .execute(conn)?;
+    Ok(true)
 }

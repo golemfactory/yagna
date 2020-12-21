@@ -35,6 +35,7 @@ pub trait PaymentDriver {
     // used by bus to bind service
     fn get_name(&self) -> String;
     fn get_platform(&self) -> String;
+    fn recv_init_required(&self) -> bool;
 
     async fn get_transaction_balance(
         &self,

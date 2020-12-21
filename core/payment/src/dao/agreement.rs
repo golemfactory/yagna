@@ -1,5 +1,5 @@
 use crate::dao::{invoice, invoice_event};
-use crate::error::DbResult;
+use crate::error::{DbError, DbResult};
 use crate::models::agreement::{ReadObj, WriteObj};
 use crate::schema::pay_activity::dsl as activity_dsl;
 use crate::schema::pay_agreement::dsl;
@@ -41,7 +41,9 @@ pub fn set_amount_due(
     let agreement: ReadObj = dsl::pay_agreement
         .find((agreement_id, owner_id))
         .first(conn)?;
-    assert!(total_amount_due >= &agreement.total_amount_due); // TODO: Remove when payment service is production-ready.
+    if total_amount_due < &agreement.total_amount_due {
+        return Err(DbError::Query(format!("Requested amount for agreement cannot be lowered. Current amount requested: {} Amount on invoice: {}", agreement.total_amount_due, total_amount_due)));
+    }
     diesel::update(&agreement)
         .set(dsl::total_amount_due.eq(total_amount_due))
         .execute(conn)?;

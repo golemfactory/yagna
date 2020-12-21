@@ -27,7 +27,7 @@ use super::exeunits_registry::{ExeUnitDesc, ExeUnitsRegistry};
 use super::task::Task;
 use crate::market::provider_market::AgreementApproved;
 use crate::market::Preset;
-use crate::task_manager::{AgreementBroken, AgreementClosed};
+use crate::tasks::{AgreementBroken, AgreementClosed};
 
 // =========================================== //
 // Public exposed messages

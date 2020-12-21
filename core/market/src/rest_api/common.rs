@@ -1,8 +1,9 @@
-use actix_web::web::{Data, Path, Query};
+use actix_web::web::{Data, Json, Path, Query};
 use actix_web::{HttpResponse, Responder, Scope};
 use chrono::{TimeZone, Utc};
 use std::sync::Arc;
 
+use ya_client::model::market::Reason;
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::LogErr;
 
@@ -16,6 +17,7 @@ pub fn register_endpoints(scope: Scope) -> Scope {
     scope
         .service(collect_agreement_events)
         .service(get_agreement)
+        .service(terminate_agreement)
 }
 
 #[actix_web::get("/agreements/{agreement_id}")]
@@ -68,4 +70,20 @@ async fn collect_agreement_events(
         .await
         .log_err()
         .map(|events| HttpResponse::Ok().json(events))
+}
+
+#[actix_web::post("/agreements/{agreement_id}/terminate")]
+async fn terminate_agreement(
+    market: Data<Arc<MarketService>>,
+    path: Path<PathAgreement>,
+    id: Identity,
+    body: Json<Option<Reason>>,
+) -> impl Responder {
+    // We won't attach ourselves too much to owner type here. It will be replaced in CommonBroker
+    let agreement_id = path.into_inner().to_id(OwnerType::Requestor)?;
+    market
+        .terminate_agreement(id, agreement_id, body.into_inner())
+        .await
+        .log_err()
+        .map(|_| HttpResponse::Ok().finish())
 }

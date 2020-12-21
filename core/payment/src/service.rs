@@ -26,6 +26,8 @@ mod local {
 
         ServiceBinder::new(BUS_ID, db, processor)
             .bind_with_processor(schedule_payment)
+            .bind_with_processor(register_driver)
+            .bind_with_processor(unregister_driver)
             .bind_with_processor(register_account)
             .bind_with_processor(unregister_account)
             .bind_with_processor(notify_payment)
@@ -67,6 +69,26 @@ mod local {
         Ok(())
     }
 
+    async fn register_driver(
+        db: DbExecutor,
+        processor: PaymentProcessor,
+        sender: String,
+        msg: RegisterDriver,
+    ) -> Result<(), NoError> {
+        processor.register_driver(msg).await;
+        Ok(())
+    }
+
+    async fn unregister_driver(
+        db: DbExecutor,
+        processor: PaymentProcessor,
+        sender: String,
+        msg: UnregisterDriver,
+    ) -> Result<(), NoError> {
+        processor.unregister_driver(msg).await;
+        Ok(())
+    }
+
     async fn register_account(
         db: DbExecutor,
         processor: PaymentProcessor,
@@ -81,8 +103,9 @@ mod local {
         processor: PaymentProcessor,
         sender: String,
         msg: UnregisterAccount,
-    ) -> Result<(), UnregisterAccountError> {
-        processor.unregister_account(msg).await
+    ) -> Result<(), NoError> {
+        processor.unregister_account(msg).await;
+        Ok(())
     }
 
     async fn get_accounts(

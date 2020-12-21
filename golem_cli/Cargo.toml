@@ -6,8 +6,8 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
+actix-rt="1.1"
 ya-compile-time-utils = "0.1"
-actix-rt = "1.0"
 anyhow = "1.0"
 bigdecimal = { version = "0.1.0"}
 byte-unit = "4.0"
