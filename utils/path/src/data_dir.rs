@@ -42,6 +42,6 @@ impl FromStr for DataDir {
 
 impl Display for DataDir {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "{:?}", self.0)
+        write!(f, "{}", self.0.to_string_lossy())
     }
 }
