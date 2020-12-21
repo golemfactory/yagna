@@ -5286,10 +5286,10 @@ dependencies = [
 [[package]]
 name = "serial_test"
 version = "0.5.1"
-source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#0d3db75eb5dde6aae32ba3672c80af652e0b58ba"
+source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6c848541e89262f90ca693d9e1a84c6f3df0953b"
 dependencies = [
  "lazy_static",
- "parking_lot 0.11.1",
+ "parking_lot 0.10.2",
  "serial_test_derive 0.5.1",
 ]
 
@@ -5307,7 +5307,7 @@ dependencies = [
 [[package]]
 name = "serial_test_derive"
 version = "0.5.1"
-source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#0d3db75eb5dde6aae32ba3672c80af652e0b58ba"
+source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6c848541e89262f90ca693d9e1a84c6f3df0953b"
 dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.7",
