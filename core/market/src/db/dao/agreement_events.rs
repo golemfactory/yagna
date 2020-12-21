@@ -5,7 +5,7 @@ use ya_client::model::NodeId;
 use ya_persistence::executor::{readonly_transaction, ConnType};
 use ya_persistence::executor::{AsDao, PoolType};
 
-use crate::db::dao::StateError;
+use crate::db::dao::AgreementDaoError;
 use crate::db::model::{Agreement, AgreementEvent, NewAgreementEvent};
 use crate::db::model::{AppSessionId, OwnerType};
 use crate::db::schema::market_agreement::dsl as agreement;
@@ -69,14 +69,14 @@ pub(crate) fn create_event(
     agreement: &Agreement,
     reason: Option<String>,
     terminator: OwnerType,
-) -> Result<(), StateError> {
+) -> Result<(), AgreementDaoError> {
     let event = NewAgreementEvent::new(agreement, reason, terminator)
-        .map_err(|e| StateError::EventError(e.to_string()))?;
+        .map_err(|e| AgreementDaoError::EventError(e.to_string()))?;
 
     diesel::insert_into(market_agreement_event)
         .values(&event)
         .execute(conn)
-        .map_err(|e| StateError::EventError(e.to_string()))?;
+        .map_err(|e| AgreementDaoError::EventError(e.to_string()))?;
 
     let events = market_agreement_event
         .filter(event::agreement_id.eq(&agreement.id))

@@ -2,7 +2,7 @@ use actix_web::{HttpResponse, ResponseError};
 
 use ya_client::model::ErrorMessage;
 
-use crate::db::dao::{SaveProposalError, StateError};
+use crate::db::dao::{AgreementDaoError, SaveProposalError};
 use crate::db::model::AgreementState;
 use crate::negotiation::error::AgreementEventsError;
 use crate::{
@@ -183,11 +183,11 @@ impl ResponseError for AgreementError {
     }
 }
 
-impl ResponseError for StateError {
+impl ResponseError for AgreementDaoError {
     fn error_response(&self) -> HttpResponse {
         let msg = ErrorMessage::new(self.to_string());
         match self {
-            StateError::InvalidTransition { from, .. } => match from {
+            AgreementDaoError::InvalidTransition { from, .. } => match from {
                 AgreementState::Proposal => HttpResponse::Conflict().json(msg),
                 AgreementState::Pending
                 | AgreementState::Cancelled
@@ -196,9 +196,9 @@ impl ResponseError for StateError {
                 | AgreementState::Approved
                 | AgreementState::Terminated => HttpResponse::Gone().json(msg),
             },
-            StateError::DbError(_) | StateError::SessionId(_) | StateError::EventError(_) => {
-                HttpResponse::InternalServerError().json(msg)
-            }
+            AgreementDaoError::DbError(_)
+            | AgreementDaoError::SessionId(_)
+            | AgreementDaoError::EventError(_) => HttpResponse::InternalServerError().json(msg),
         }
     }
 }

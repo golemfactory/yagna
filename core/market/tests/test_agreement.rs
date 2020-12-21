@@ -10,8 +10,8 @@ use ya_market::testing::{
     mock_agreement::generate_agreement,
     mock_node::MarketServiceExt,
     proposal_util::{exchange_draft_proposals, NegotiationHelper},
-    AgreementDao, AgreementError, AgreementState, ApprovalStatus, MarketsNetwork, OwnerType,
-    ProposalState, StateError, WaitForApprovalError,
+    AgreementDao, AgreementDaoError, AgreementError, AgreementState, ApprovalStatus,
+    MarketsNetwork, OwnerType, ProposalState, WaitForApprovalError,
 };
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -290,7 +290,7 @@ async fn second_confirmation_should_fail() {
     assert_err_eq!(
         AgreementError::UpdateState(
             agreement_id,
-            StateError::InvalidTransition {
+            AgreementDaoError::InvalidTransition {
                 from: AgreementState::Pending,
                 to: AgreementState::Pending
             }
@@ -335,7 +335,7 @@ async fn agreement_expired_before_confirmation() {
     assert_err_eq!(
         AgreementError::UpdateState(
             agreement_id,
-            StateError::InvalidTransition {
+            AgreementDaoError::InvalidTransition {
                 from: AgreementState::Expired,
                 to: AgreementState::Pending
             }
@@ -633,7 +633,7 @@ async fn second_approval_should_fail() {
     assert_err_eq!(
         AgreementError::UpdateState(
             agreement_id,
-            StateError::InvalidTransition {
+            AgreementDaoError::InvalidTransition {
                 from: AgreementState::Approved,
                 to: AgreementState::Approved
             }
@@ -1054,7 +1054,7 @@ async fn test_terminate_from_wrong_states() {
         Ok(_) => panic!("Terminate Agreement should fail."),
         Err(AgreementError::UpdateState(
             id,
-            StateError::InvalidTransition {
+            AgreementDaoError::InvalidTransition {
                 from: AgreementState::Proposal,
                 to: AgreementState::Terminated,
             },
@@ -1083,7 +1083,7 @@ async fn test_terminate_from_wrong_states() {
         Ok(_) => panic!("Terminate Agreement should fail."),
         Err(AgreementError::UpdateState(
             id,
-            StateError::InvalidTransition {
+            AgreementDaoError::InvalidTransition {
                 from: AgreementState::Pending,
                 to: AgreementState::Terminated,
             },
@@ -1103,7 +1103,7 @@ async fn test_terminate_from_wrong_states() {
         Ok(_) => panic!("Terminate Agreement should fail."),
         Err(AgreementError::UpdateState(
             id,
-            StateError::InvalidTransition {
+            AgreementDaoError::InvalidTransition {
                 from: AgreementState::Pending,
                 to: AgreementState::Terminated,
             },
