@@ -2331,6 +2331,22 @@ dependencies = [
 
 [[package]]
 name = "flexi_logger"
+version = "0.15.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aaab3caedb4149800f91e8e4899f29cd9ddf3b569b04c365ca9334f92f7542bf"
+dependencies = [
+ "atty",
+ "chrono",
+ "glob",
+ "lazy_static",
+ "log",
+ "regex",
+ "thiserror",
+ "yansi",
+]
+
+[[package]]
+name = "flexi_logger"
 version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c37586928c27a25ff5fce49ff3f8e071b3beeef48b4f004fe7d40d75a26e3db5"
@@ -6988,7 +7004,7 @@ dependencies = [
  "derivative",
  "dotenv",
  "env_logger 0.7.1",
- "flexi_logger",
+ "flexi_logger 0.15.12",
  "futures 0.3.8",
  "graphene-sgx",
  "hex",
@@ -7333,7 +7349,7 @@ dependencies = [
  "dialoguer",
  "directories",
  "dotenv",
- "flexi_logger",
+ "flexi_logger 0.16.2",
  "futures 0.3.8",
  "futures-util",
  "humantime 2.0.1",
@@ -7713,7 +7729,7 @@ dependencies = [
  "chrono",
  "directories",
  "dotenv",
- "flexi_logger",
+ "flexi_logger 0.16.2",
  "futures 0.3.8",
  "gftp",
  "lazy_static",
