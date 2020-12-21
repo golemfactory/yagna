@@ -10,7 +10,7 @@ use ya_client::model::market::offer::Offer as ClientOffer;
 use ya_client::model::{ErrorMessage, NodeId};
 use ya_diesel_utils::DbTextField;
 
-use crate::db::dao::StateError;
+use crate::db::dao::AgreementDaoError;
 use crate::db::model::{OwnerType, Proposal, ProposalId, SubscriptionId};
 use crate::db::schema::market_agreement;
 
@@ -189,7 +189,7 @@ impl From<AgreementState> for ClientAgreementState {
     }
 }
 
-pub fn check_transition(from: AgreementState, to: AgreementState) -> Result<(), StateError> {
+pub fn check_transition(from: AgreementState, to: AgreementState) -> Result<(), AgreementDaoError> {
     log::trace!("Checking Agreement state transition: {} => {}", from, to);
     match from {
         AgreementState::Proposal => match to {
@@ -215,5 +215,5 @@ pub fn check_transition(from: AgreementState, to: AgreementState) -> Result<(), 
         AgreementState::Terminated => (),
     };
 
-    Err(StateError::InvalidTransition { from, to })
+    Err(AgreementDaoError::InvalidTransition { from, to })
 }

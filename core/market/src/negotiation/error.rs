@@ -3,7 +3,7 @@ use thiserror::Error;
 
 use ya_market_resolver::flatten::JsonObjectExpected;
 
-use crate::db::dao::StateError;
+use crate::db::dao::AgreementDaoError;
 use crate::db::model::{
     AgreementId, ProposalId, ProposalIdParseError, SubscriptionId, SubscriptionParseError,
 };
@@ -51,9 +51,9 @@ pub enum AgreementError {
     #[error("Failed to save Agreement for Proposal [{0}]. Error: {1}")]
     Save(ProposalId, DbError),
     #[error("Failed to get Agreement [{0}]. Error: {1}")]
-    Get(AgreementId, StateError),
+    Get(AgreementId, AgreementDaoError),
     #[error("Agreement [{0}]. Error: {1}")]
-    UpdateState(AgreementId, StateError),
+    UpdateState(AgreementId, AgreementDaoError),
     #[error("Invalid Agreement id. {0}")]
     InvalidId(#[from] ProposalIdParseError),
     #[error(transparent)]
@@ -89,7 +89,7 @@ pub enum WaitForApprovalError {
     #[error("Invalid agreement id. {0}")]
     InvalidId(#[from] ProposalIdParseError),
     #[error("Failed to get Agreement [{0}]. Error: {1}")]
-    Get(AgreementId, StateError),
+    Get(AgreementId, AgreementDaoError),
     #[error("Waiting for approval failed. Error: {0}.")]
     Internal(String),
 }

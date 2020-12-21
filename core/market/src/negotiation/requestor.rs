@@ -11,7 +11,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::db::{
-    dao::{AgreementDao, NegotiationEventsDao, ProposalDao, SaveAgreementError, StateError},
+    dao::{AgreementDao, AgreementDaoError, NegotiationEventsDao, ProposalDao, SaveAgreementError},
     model::{Agreement, AgreementId, AgreementState, AppSessionId},
     model::{Demand, IssuerType, OwnerType, Proposal, ProposalId, SubscriptionId},
     DbResult,
@@ -452,7 +452,7 @@ async fn agreement_approved(
         .approve(&msg.agreement_id, &None)
         .await
         .map_err(|err| match err {
-            StateError::InvalidTransition { from, .. } => {
+            AgreementDaoError::InvalidTransition { from, .. } => {
                 match from {
                     // Expired Agreement could be InvalidState either, but we want to explicit
                     // say to provider, that Agreement has expired.

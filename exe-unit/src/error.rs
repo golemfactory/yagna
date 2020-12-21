@@ -3,13 +3,13 @@ use ya_core_model::activity::RpcMessageError as RpcError;
 pub use ya_transfer::error::Error as TransferError;
 
 use crate::metrics::error::MetricError;
-use crate::state::StateError;
+use crate::state::AgreementDaoError;
 use hex::FromHexError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum LocalServiceError {
     #[error("State error: {0}")]
-    StateError(#[from] StateError),
+    AgreementDaoError(#[from] AgreementDaoError),
     #[error("Metric error: {0}")]
     MetricError(#[from] MetricError),
     #[error("Transfer error: {0}")]
@@ -89,9 +89,9 @@ impl From<MetricError> for Error {
     }
 }
 
-impl From<StateError> for Error {
-    fn from(e: StateError) -> Self {
-        Error::from(LocalServiceError::StateError(e))
+impl From<AgreementDaoError> for Error {
+    fn from(e: AgreementDaoError) -> Self {
+        Error::from(LocalServiceError::AgreementDaoError(e))
     }
 }
 

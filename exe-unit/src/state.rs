@@ -16,7 +16,7 @@ use ya_client_model::activity::{
 use ya_core_model::activity::Exec;
 
 #[derive(Error, Debug, Serialize)]
-pub enum StateError {
+pub enum AgreementDaoError {
     #[error("Busy: {0:?}")]
     Busy(StatePair),
     #[error("Invalid state: {0:?}")]

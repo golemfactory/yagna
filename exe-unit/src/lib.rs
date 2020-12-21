@@ -21,7 +21,7 @@ use crate::runtime::*;
 use crate::service::metrics::MetricsService;
 use crate::service::transfer::{AddVolumes, DeployImage, TransferResource, TransferService};
 use crate::service::{ServiceAddr, ServiceControl};
-use crate::state::{ExeUnitState, StateError};
+use crate::state::{AgreementDaoError, ExeUnitState};
 
 pub mod agreement;
 #[cfg(feature = "sgx")]
@@ -219,24 +219,24 @@ impl<R: Runtime> RuntimeRef<R> {
         let state = self.send(GetState {}).await?.0;
         let state_pre = match (&state.0, &state.1) {
             (_, Some(_)) => {
-                return Err(StateError::Busy(state).into());
+                return Err(AgreementDaoError::Busy(state).into());
             }
             (State::New, _) | (State::Terminated, _) => {
-                return Err(StateError::InvalidState(state).into());
+                return Err(AgreementDaoError::InvalidState(state).into());
             }
             (State::Initialized, _) => match &runtime_cmd.command {
                 ExeScriptCommand::Deploy { .. } => {
                     StatePair(State::Initialized, Some(State::Deployed))
                 }
-                _ => return Err(StateError::InvalidState(state).into()),
+                _ => return Err(AgreementDaoError::InvalidState(state).into()),
             },
             (State::Deployed, _) => match &runtime_cmd.command {
                 ExeScriptCommand::Start { .. } => StatePair(State::Deployed, Some(State::Ready)),
-                _ => return Err(StateError::InvalidState(state).into()),
+                _ => return Err(AgreementDaoError::InvalidState(state).into()),
             },
             (s, _) => match &runtime_cmd.command {
                 ExeScriptCommand::Deploy { .. } | ExeScriptCommand::Start { .. } => {
-                    return Err(StateError::InvalidState(state).into());
+                    return Err(AgreementDaoError::InvalidState(state).into());
                 }
                 _ => StatePair(*s, Some(*s)),
             },
@@ -292,7 +292,7 @@ impl<R: Runtime> RuntimeRef<R> {
 
         let state_cur = self.send(GetState {}).await?.0;
         if state_cur != state_pre {
-            return Err(StateError::UnexpectedState {
+            return Err(AgreementDaoError::UnexpectedState {
                 current: state_cur,
                 expected: state_pre,
             }

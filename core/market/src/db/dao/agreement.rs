@@ -44,7 +44,7 @@ impl<'a> AsDao<'a> for AgreementDao<'a> {
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum StateError {
+pub enum AgreementDaoError {
     #[error("Can't update Agreement state from {from} to {to}.")]
     InvalidTransition {
         from: AgreementState,
@@ -64,7 +64,7 @@ impl<'c> AgreementDao<'c> {
         id: &AgreementId,
         node_id: Option<NodeId>,
         validation_ts: NaiveDateTime,
-    ) -> Result<Option<Agreement>, StateError> {
+    ) -> Result<Option<Agreement>, AgreementDaoError> {
         let id = id.clone();
         do_with_transaction(self.pool, move |conn| {
             let mut query = market_agreement.filter(agreement::id.eq(&id)).into_boxed();
@@ -84,7 +84,7 @@ impl<'c> AgreementDao<'c> {
             if agreement.valid_to < validation_ts {
                 match update_state(conn, &mut agreement, AgreementState::Expired) {
                     // ignore transition errors
-                    Err(StateError::InvalidTransition { .. }) => Ok(true),
+                    Err(AgreementDaoError::InvalidTransition { .. }) => Ok(true),
                     r => r,
                 }?;
             }
@@ -99,7 +99,7 @@ impl<'c> AgreementDao<'c> {
         id: AgreementId,
         node_id: NodeId,
         validation_ts: NaiveDateTime,
-    ) -> Result<Option<Agreement>, StateError> {
+    ) -> Result<Option<Agreement>, AgreementDaoError> {
         // Because we explicitly disallow agreements between the same identities
         // (i.e. provider_id != requestor_id), we'll always get the right db row
         // with this query.
@@ -118,7 +118,7 @@ impl<'c> AgreementDao<'c> {
                     if agreement.valid_to < validation_ts {
                         match update_state(conn, &mut agreement, AgreementState::Expired) {
                             // ignore transition errors
-                            Err(StateError::InvalidTransition { .. }) => Ok(true),
+                            Err(AgreementDaoError::InvalidTransition { .. }) => Ok(true),
                             r => r,
                         }?;
                     }
@@ -159,7 +159,7 @@ impl<'c> AgreementDao<'c> {
         &self,
         id: &AgreementId,
         session: &AppSessionId,
-    ) -> Result<(), StateError> {
+    ) -> Result<(), AgreementDaoError> {
         let id = id.clone();
         let session = session.clone();
 
@@ -182,7 +182,7 @@ impl<'c> AgreementDao<'c> {
         &self,
         id: &AgreementId,
         session: &AppSessionId,
-    ) -> Result<(), StateError> {
+    ) -> Result<(), AgreementDaoError> {
         let id = id.clone();
         let session = session.clone();
 
@@ -211,7 +211,7 @@ impl<'c> AgreementDao<'c> {
         id: &AgreementId,
         reason: Option<String>,
         terminator: OwnerType,
-    ) -> Result<bool, StateError> {
+    ) -> Result<bool, AgreementDaoError> {
         let id = id.clone();
         do_with_transaction(self.pool, move |conn| {
             log::debug!("Termination reason: {:?}", reason);
@@ -264,9 +264,9 @@ fn find_agreement_for_proposal(
         .optional()?)
 }
 
-impl<ErrorType: Into<DbError>> From<ErrorType> for StateError {
+impl<ErrorType: Into<DbError>> From<ErrorType> for AgreementDaoError {
     fn from(err: ErrorType) -> Self {
-        StateError::DbError(err.into())
+        AgreementDaoError::DbError(err.into())
     }
 }
 
@@ -280,13 +280,13 @@ fn update_state(
     conn: &ConnType,
     agreement: &mut Agreement,
     to_state: AgreementState,
-) -> Result<bool, StateError> {
+) -> Result<bool, AgreementDaoError> {
     check_transition(agreement.state, to_state)?;
 
     let num_updated = diesel::update(market_agreement.find(&agreement.id))
         .set(agreement::state.eq(&to_state))
         .execute(conn)
-        .map_err(|e| StateError::DbError(e.into()))?;
+        .map_err(|e| AgreementDaoError::DbError(e.into()))?;
 
     agreement.state = to_state;
 
@@ -297,11 +297,11 @@ fn update_session(
     conn: &ConnType,
     agreement: &mut Agreement,
     session_id: String,
-) -> Result<bool, StateError> {
+) -> Result<bool, AgreementDaoError> {
     let num_updated = diesel::update(market_agreement.find(&agreement.id))
         .set(agreement::session_id.eq(&session_id))
         .execute(conn)
-        .map_err(|e| StateError::SessionId(e.into()))?;
+        .map_err(|e| AgreementDaoError::SessionId(e.into()))?;
     agreement.session_id = Some(session_id);
     Ok(num_updated > 0)
 }

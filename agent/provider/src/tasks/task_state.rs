@@ -12,7 +12,7 @@ use crate::market::termination_reason::BreakReason;
 // =========================================== //
 
 #[derive(thiserror::Error, Clone, Debug)]
-pub enum StateError {
+pub enum AgreementDaoError {
     #[error("State for agreement [{agreement_id}] doesn't exist.")]
     NoAgreement { agreement_id: String },
     #[error(
@@ -88,7 +88,7 @@ impl TaskState {
         }
     }
 
-    pub fn allowed_transition(&self, new_state: &AgreementState) -> Result<(), StateError> {
+    pub fn allowed_transition(&self, new_state: &AgreementState) -> Result<(), AgreementDaoError> {
         let is_allowed = match self.state {
             Transition(_, Some(AgreementState::Broken { .. })) => false,
             // TODO: Consider what to do when payment wasn't accepted.
@@ -120,7 +120,7 @@ impl TaskState {
 
         match is_allowed {
             true => Ok(()),
-            false => Err(StateError::InvalidTransition {
+            false => Err(AgreementDaoError::InvalidTransition {
                 agreement_id: self.agreement_id.clone(),
                 current_state: self.state.clone(),
                 new_state: new_state.clone(),
@@ -128,32 +128,35 @@ impl TaskState {
         }
     }
 
-    pub fn start_transition(&mut self, new_state: AgreementState) -> Result<(), StateError> {
+    pub fn start_transition(&mut self, new_state: AgreementState) -> Result<(), AgreementDaoError> {
         self.allowed_transition(&new_state)?;
         self.state = Transition(self.state.0.clone(), Some(new_state.clone()));
 
         self.changed_sender
             .broadcast(StateChange::TransitionStarted(self.state.clone()))
-            .map_err(|_| StateError::FailedNotify {
+            .map_err(|_| AgreementDaoError::FailedNotify {
                 agreement_id: self.agreement_id.clone(),
                 new_state: self.state.clone(),
             })?;
         Ok(())
     }
 
-    pub fn finish_transition(&mut self, new_state: AgreementState) -> Result<(), StateError> {
+    pub fn finish_transition(
+        &mut self,
+        new_state: AgreementState,
+    ) -> Result<(), AgreementDaoError> {
         if self.state.1.as_ref() == Some(&new_state) {
             self.state = Transition(new_state.clone(), None);
 
             self.changed_sender
                 .broadcast(StateChange::TransitionFinished(new_state))
-                .map_err(|_| StateError::FailedNotify {
+                .map_err(|_| AgreementDaoError::FailedNotify {
                     agreement_id: self.agreement_id.clone(),
                     new_state: self.state.clone(),
                 })?;
             Ok(())
         } else {
-            return Err(StateError::InvalidTransition {
+            return Err(AgreementDaoError::InvalidTransition {
                 agreement_id: self.agreement_id.to_string(),
                 current_state: self.state.clone(),
                 new_state,
@@ -219,7 +222,7 @@ impl TasksStates {
         &self,
         agreement_id: &str,
         new_state: &AgreementState,
-    ) -> Result<(), StateError> {
+    ) -> Result<(), AgreementDaoError> {
         let task_state = self.get_state(agreement_id)?;
         task_state.allowed_transition(new_state)
     }
@@ -228,7 +231,7 @@ impl TasksStates {
         &mut self,
         agreement_id: &str,
         new_state: AgreementState,
-    ) -> Result<(), StateError> {
+    ) -> Result<(), AgreementDaoError> {
         let state = self.get_mut_state(agreement_id)?;
         state.start_transition(new_state)
     }
@@ -237,7 +240,7 @@ impl TasksStates {
         &mut self,
         agreement_id: &str,
         new_state: AgreementState,
-    ) -> Result<(), StateError> {
+    ) -> Result<(), AgreementDaoError> {
         let state = self.get_mut_state(agreement_id)?;
         state.finish_transition(new_state)
     }
@@ -247,19 +250,19 @@ impl TasksStates {
         Ok(state.listen_state_changes())
     }
 
-    fn get_mut_state(&mut self, agreement_id: &str) -> Result<&mut TaskState, StateError> {
+    fn get_mut_state(&mut self, agreement_id: &str) -> Result<&mut TaskState, AgreementDaoError> {
         match self.tasks.get_mut(agreement_id) {
             Some(state) => Ok(state),
-            None => Err(StateError::NoAgreement {
+            None => Err(AgreementDaoError::NoAgreement {
                 agreement_id: agreement_id.to_string(),
             }),
         }
     }
 
-    fn get_state(&self, agreement_id: &str) -> Result<&TaskState, StateError> {
+    fn get_state(&self, agreement_id: &str) -> Result<&TaskState, AgreementDaoError> {
         match self.tasks.get(agreement_id) {
             Some(state) => Ok(state),
-            None => Err(StateError::NoAgreement {
+            None => Err(AgreementDaoError::NoAgreement {
                 agreement_id: agreement_id.to_string(),
             }),
         }
