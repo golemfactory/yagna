@@ -171,8 +171,8 @@ ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", branch = "event-api/pay-invoice-events-fix"}
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", branch = "event-api/pay-invoice-events-fix"}
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", branch = "event-api/master"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", branch = "event-api/master"}
 
 #ya-client = { path = "../ya-client" }
 #ya-client-model = { path = "../ya-client/model" }
