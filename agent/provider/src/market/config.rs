@@ -1,5 +1,7 @@
 use structopt::StructOpt;
 
+use crate::market::negotiator::factory::NegotiatorsConfig;
+
 /// Configuration for ProviderMarket actor.
 #[derive(StructOpt, Clone, Debug)]
 pub struct MarketConfig {
@@ -11,6 +13,8 @@ pub struct MarketConfig {
     pub agreement_approve_timeout: f32,
     #[structopt(long, env, default_value = "LimitAgreements")]
     pub negotiator_type: String,
+    #[structopt(flatten)]
+    pub negotiator_config: NegotiatorsConfig,
     #[structopt(skip = "you-forgot-to-set-session-id")]
     pub session_id: String,
 }

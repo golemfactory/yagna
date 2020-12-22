@@ -1,14 +1,18 @@
-use ya_agreement_utils::AgreementView;
-use ya_agreement_utils::OfferDefinition;
-use ya_client_model::market::{NewOffer, Proposal, Reason};
-
-use super::common::offer_definition_to_offer;
-use super::common::{AgreementResponse, AgreementResult, Negotiator, ProposalResponse};
-
+use actix::{Actor, Addr, Context, Handler};
 use anyhow::Result;
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use std::collections::HashSet;
+
 use ya_agreement_utils::agreement::expand;
+use ya_client_model::market::{NewOffer, Proposal, Reason};
+
+use super::common::offer_definition_to_offer;
+use super::common::{AgreementResponse, Negotiator, ProposalResponse};
+use crate::market::negotiator::common::{
+    AgreementFinalized, CreateOffer, ReactToAgreement, ReactToProposal,
+};
+use crate::market::negotiator::factory::LimitAgreementsNegotiatorConfig;
+use crate::market::ProviderMarket;
 
 /// Negotiator that can limit number of running agreements.
 pub struct LimitAgreementsNegotiator {
@@ -17,9 +21,12 @@ pub struct LimitAgreementsNegotiator {
 }
 
 impl LimitAgreementsNegotiator {
-    pub fn new(max_agreements: u32) -> LimitAgreementsNegotiator {
+    pub fn new(
+        _market: Addr<ProviderMarket>,
+        config: &LimitAgreementsNegotiatorConfig,
+    ) -> LimitAgreementsNegotiator {
         LimitAgreementsNegotiator {
-            max_agreements,
+            max_agreements: config.max_simultaneous_agreements,
             active_agreements: HashSet::new(),
         }
     }
@@ -29,32 +36,36 @@ impl LimitAgreementsNegotiator {
     }
 }
 
-impl Negotiator for LimitAgreementsNegotiator {
-    fn create_offer(&mut self, offer: &OfferDefinition) -> Result<NewOffer> {
-        Ok(offer_definition_to_offer(offer.clone()))
+fn proposal_expiration_from(proposal: &Proposal) -> Result<DateTime<Utc>> {
+    let expiration_key_str = "/golem/srv/comp/expiration";
+    let value = expand(proposal.properties.clone())
+        .pointer(expiration_key_str)
+        .ok_or_else(|| anyhow::anyhow!("Missing expiration key"))?
+        .clone();
+    let timestamp: i64 = serde_json::from_value(value)?;
+    Ok(Utc.timestamp_millis(timestamp))
+}
+
+impl Handler<CreateOffer> for LimitAgreementsNegotiator {
+    type Result = anyhow::Result<NewOffer>;
+
+    fn handle(&mut self, msg: CreateOffer, _: &mut Context<Self>) -> Self::Result {
+        Ok(offer_definition_to_offer(msg.offer_definition))
     }
+}
 
-    fn agreement_finalized(&mut self, agreement_id: &str, _result: &AgreementResult) -> Result<()> {
-        self.active_agreements.remove(agreement_id);
+impl Handler<ReactToProposal> for LimitAgreementsNegotiator {
+    type Result = anyhow::Result<ProposalResponse>;
 
-        let free_slots = self.max_agreements as usize - self.active_agreements.len();
-        log::info!("Negotiator: {} free slot(s) for agreements.", free_slots);
-        Ok(())
-    }
-
-    fn react_to_proposal(
-        &mut self,
-        _offer: &NewOffer,
-        demand: &Proposal,
-    ) -> Result<ProposalResponse> {
-        let expiration = proposal_expiration_from(&demand)?;
+    fn handle(&mut self, msg: ReactToProposal, _: &mut Context<Self>) -> Self::Result {
+        let expiration = proposal_expiration_from(&msg.demand)?;
         let min_expiration = Utc::now() + Duration::minutes(5);
         let max_expiration = Utc::now() + Duration::minutes(30);
 
         if expiration > max_expiration || expiration < min_expiration {
             log::info!(
                 "Negotiator: Reject proposal [{:?}] due to expiration limits.",
-                demand.proposal_id
+                msg.demand.proposal_id
             );
             Ok(ProposalResponse::RejectProposal {
                 reason: Some(Reason::new(format!(
@@ -67,7 +78,7 @@ impl Negotiator for LimitAgreementsNegotiator {
         } else {
             log::info!(
                 "Negotiator: Reject proposal [{:?}] due to limit.",
-                demand.proposal_id
+                msg.demand.proposal_id
             );
             Ok(ProposalResponse::RejectProposal {
                 reason: Some(Reason::new(format!(
@@ -77,16 +88,20 @@ impl Negotiator for LimitAgreementsNegotiator {
             })
         }
     }
+}
 
-    fn react_to_agreement(&mut self, agreement: &AgreementView) -> Result<AgreementResponse> {
+impl Handler<ReactToAgreement> for LimitAgreementsNegotiator {
+    type Result = anyhow::Result<AgreementResponse>;
+
+    fn handle(&mut self, msg: ReactToAgreement, _: &mut Context<Self>) -> Self::Result {
         if self.has_free_slot() {
             self.active_agreements
-                .insert(agreement.agreement_id.clone());
+                .insert(msg.agreement.agreement_id.clone());
             Ok(AgreementResponse::ApproveAgreement)
         } else {
             log::info!(
                 "Negotiator: Reject agreement proposal [{}] due to limit.",
-                agreement.agreement_id
+                msg.agreement.agreement_id
             );
             Ok(AgreementResponse::RejectAgreement {
                 reason: Some(Reason::new(format!(
@@ -98,12 +113,19 @@ impl Negotiator for LimitAgreementsNegotiator {
     }
 }
 
-fn proposal_expiration_from(proposal: &Proposal) -> Result<DateTime<Utc>> {
-    let expiration_key_str = "/golem/srv/comp/expiration";
-    let value = expand(proposal.properties.clone())
-        .pointer(expiration_key_str)
-        .ok_or_else(|| anyhow::anyhow!("Missing expiration key"))?
-        .clone();
-    let timestamp: i64 = serde_json::from_value(value)?;
-    Ok(Utc.timestamp_millis(timestamp))
+impl Handler<AgreementFinalized> for LimitAgreementsNegotiator {
+    type Result = anyhow::Result<()>;
+
+    fn handle(&mut self, msg: AgreementFinalized, _: &mut Context<Self>) -> Self::Result {
+        self.active_agreements.remove(&msg.agreement_id);
+
+        let free_slots = self.max_agreements as usize - self.active_agreements.len();
+        log::info!("Negotiator: {} free slot(s) for agreements.", free_slots);
+        Ok(())
+    }
+}
+
+impl Negotiator for LimitAgreementsNegotiator {}
+impl Actor for LimitAgreementsNegotiator {
+    type Context = Context<Self>;
 }
