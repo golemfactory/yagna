@@ -2,7 +2,8 @@ use actix_web::{HttpResponse, ResponseError};
 
 use ya_client::model::ErrorMessage;
 
-use crate::db::dao::SaveProposalError;
+use crate::db::dao::{AgreementDaoError, SaveProposalError};
+use crate::db::model::AgreementState;
 use crate::negotiation::error::AgreementEventsError;
 use crate::{
     db::dao::TakeEventsError,
@@ -12,8 +13,8 @@ use crate::{
         QueryOffersError, ResolverError, SaveOfferError,
     },
     negotiation::error::{
-        AgreementError, AgreementStateError, GetProposalError, NegotiationError, ProposalError,
-        QueryEventsError, WaitForApprovalError,
+        AgreementError, GetProposalError, NegotiationError, ProposalError, QueryEventsError,
+        WaitForApprovalError,
     },
 };
 
@@ -120,9 +121,8 @@ impl ResponseError for QueryEventsError {
     fn error_response(&self) -> HttpResponse {
         let msg = ErrorMessage::new(self.to_string());
         match self {
-            QueryEventsError::Unsubscribed(_)
-            | QueryEventsError::TakeEvents(TakeEventsError::SubscriptionNotFound(_))
-            | QueryEventsError::TakeEvents(TakeEventsError::SubscriptionExpired(_)) => {
+            QueryEventsError::TakeEvents(TakeEventsError::NotFound(_))
+            | QueryEventsError::TakeEvents(TakeEventsError::Expired(_)) => {
                 HttpResponse::NotFound().json(msg)
             }
             QueryEventsError::InvalidSubscriptionId(_) | QueryEventsError::InvalidMaxEvents(..) => {
@@ -164,15 +164,7 @@ impl ResponseError for AgreementError {
         match self {
             AgreementError::NotFound(_) => HttpResponse::NotFound().json(msg),
             AgreementError::AlreadyExists(_, _) => HttpResponse::Conflict().json(msg),
-            AgreementError::InvalidState(e) => match e {
-                AgreementStateError::Confirmed(_)
-                | AgreementStateError::Cancelled(_)
-                | AgreementStateError::Approved(_)
-                | AgreementStateError::Proposed(_) => HttpResponse::Conflict().json(msg),
-                AgreementStateError::Rejected(_)
-                | AgreementStateError::Expired(_)
-                | AgreementStateError::Terminated(_) => HttpResponse::Gone().json(msg),
-            },
+            AgreementError::UpdateState(_, e) => e.error_response(),
             AgreementError::NoNegotiations(_)
             | AgreementError::OwnProposal(..)
             | AgreementError::ProposalNotFound(..)
@@ -182,12 +174,31 @@ impl ResponseError for AgreementError {
             AgreementError::GetProposal(..)
             | AgreementError::Save(..)
             | AgreementError::Get(..)
-            | AgreementError::UpdateState(..)
             | AgreementError::Gsb(_)
             | AgreementError::ProtocolCreate(_)
             | AgreementError::ProtocolApprove(_)
             | AgreementError::ProtocolTerminate(_)
             | AgreementError::Internal(_) => HttpResponse::InternalServerError().json(msg),
+        }
+    }
+}
+
+impl ResponseError for AgreementDaoError {
+    fn error_response(&self) -> HttpResponse {
+        let msg = ErrorMessage::new(self.to_string());
+        match self {
+            AgreementDaoError::InvalidTransition { from, .. } => match from {
+                AgreementState::Proposal => HttpResponse::Conflict().json(msg),
+                AgreementState::Pending
+                | AgreementState::Cancelled
+                | AgreementState::Rejected
+                | AgreementState::Expired
+                | AgreementState::Approved
+                | AgreementState::Terminated => HttpResponse::Gone().json(msg),
+            },
+            AgreementDaoError::DbError(_)
+            | AgreementDaoError::SessionId(_)
+            | AgreementDaoError::EventError(_) => HttpResponse::InternalServerError().json(msg),
         }
     }
 }

@@ -5286,11 +5286,10 @@ dependencies = [
 [[package]]
 name = "serial_test"
 version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0bccbcf40c8938196944a3da0e133e031a33f4d6b72db3bda3cc556e361905d"
+source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6c848541e89262f90ca693d9e1a84c6f3df0953b"
 dependencies = [
  "lazy_static",
- "parking_lot 0.11.1",
+ "parking_lot 0.10.2",
  "serial_test_derive 0.5.1",
 ]
 
@@ -5308,8 +5307,7 @@ dependencies = [
 [[package]]
 name = "serial_test_derive"
 version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2acd6defeddb41eb60bb468f8825d0cfd0c2a76bc03bfd235b6a1dc4f6a1ad5"
+source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6c848541e89262f90ca693d9e1a84c6f3df0953b"
 dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.7",
@@ -6870,7 +6868,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=e09070085f9f6b9f681a4fbc0ce039abe5211365#e09070085f9f6b9f681a4fbc0ce039abe5211365"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=e68bbd90c903c6f74f77fddb80a432d20e4e2b2a#e68bbd90c903c6f74f77fddb80a432d20e4e2b2a"
 dependencies = [
  "awc 1.0.1",
  "bytes 0.5.6",
@@ -6907,7 +6905,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=e09070085f9f6b9f681a4fbc0ce039abe5211365#e09070085f9f6b9f681a4fbc0ce039abe5211365"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=e68bbd90c903c6f74f77fddb80a432d20e4e2b2a#e68bbd90c903c6f74f77fddb80a432d20e4e2b2a"
 dependencies = [
  "bigdecimal 0.1.2",
  "chrono",
@@ -7141,6 +7139,7 @@ dependencies = [
  "num-traits",
  "r2d2",
  "rand 0.7.3",
+ "regex",
  "serde",
  "serde_json",
  "serial_test 0.5.1",

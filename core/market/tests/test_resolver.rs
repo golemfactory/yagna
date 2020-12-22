@@ -8,45 +8,41 @@ use ya_market::testing::{
 
 /// Test adds Offer on single node. Resolver should not emit Proposal.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
-async fn test_single_not_resolve_offer() -> Result<(), anyhow::Error> {
+async fn test_single_not_resolve_offer() {
     // given
     let _ = env_logger::builder().try_init();
     let mut network = MarketsNetwork::new(None)
         .await
         .add_matcher_instance("Node-1")
-        .await?;
+        .await;
 
     let id1 = network.get_default_id("Node-1");
     let provider = network.get_matcher("Node-1");
     let offer = sample_offer();
 
     // when
-    let _offer = provider.subscribe_offer(&offer, &id1).await?;
+    let _offer = provider.subscribe_offer(&offer, &id1).await.unwrap();
 
     // then
     let listener = network.get_event_listeners("Node-1");
     assert!(timeout200ms(listener.proposal_receiver.recv())
         .await
         .is_err());
-
-    Ok(())
 }
 
 /// Test adds Offer and Demand. Resolver should emit Proposal on Demand node.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
-async fn test_resolve_offer_demand() -> Result<(), anyhow::Error> {
+async fn test_resolve_offer_demand() {
     // given
     let _ = env_logger::builder().try_init();
     let mut network = MarketsNetwork::new(None)
         .await
         .add_matcher_instance("Provider-1")
-        .await?
+        .await
         .add_matcher_instance("Requestor-1")
-        .await?;
+        .await;
 
     let id1 = network.get_default_id("Provider-1");
     let provider = network.get_matcher("Provider-1");
@@ -54,14 +50,21 @@ async fn test_resolve_offer_demand() -> Result<(), anyhow::Error> {
     let requestor = network.get_matcher("Requestor-1");
 
     // when: Add Offer on Provider
-    let offer = provider.subscribe_offer(&sample_offer(), &id1).await?;
+    let offer = provider
+        .subscribe_offer(&sample_offer(), &id1)
+        .await
+        .unwrap();
     // and: Add Demand on Requestor
-    let demand = requestor.subscribe_demand(&sample_demand(), &id2).await?;
+    let demand = requestor
+        .subscribe_demand(&sample_demand(), &id2)
+        .await
+        .unwrap();
 
     // then: It should be resolved on Requestor
     let listener = network.get_event_listeners("Requestor-1");
     let proposal = timeout200ms(listener.proposal_receiver.recv())
-        .await?
+        .await
+        .unwrap()
         .unwrap();
     assert_eq!(proposal.offer, offer);
     assert_eq!(proposal.demand, demand);
@@ -71,53 +74,47 @@ async fn test_resolve_offer_demand() -> Result<(), anyhow::Error> {
     assert!(timeout200ms(listener.proposal_receiver.recv())
         .await
         .is_err());
-
-    Ok(())
 }
 
 /// Test adds Demand on single node. Resolver should not emit Proposal.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
-async fn test_single_not_resolve_demand() -> Result<(), anyhow::Error> {
+async fn test_single_not_resolve_demand() {
     // given
     let _ = env_logger::builder().try_init();
     let mut network = MarketsNetwork::new(None)
         .await
         .add_matcher_instance("Node-1")
-        .await?;
+        .await;
 
     let demand = sample_demand();
     let id1 = network.get_default_id("Node-1");
     let requestor = network.get_matcher("Node-1");
 
     // when
-    let _demand = requestor.subscribe_demand(&demand, &id1).await?;
+    let _demand = requestor.subscribe_demand(&demand, &id1).await.unwrap();
 
     // then
     let listener = network.get_event_listeners("Node-1");
     assert!(timeout200ms(listener.proposal_receiver.recv())
         .await
         .is_err());
-
-    Ok(())
 }
 
 /// Test adds Offer on two nodes and Demand third. Resolver should emit two Proposals on Demand node.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
-async fn test_resolve_2xoffer_demand() -> Result<(), anyhow::Error> {
+async fn test_resolve_2xoffer_demand() {
     // given
     let _ = env_logger::builder().try_init();
     let mut network = MarketsNetwork::new(None)
         .await
         .add_matcher_instance("Provider-1")
-        .await?
+        .await
         .add_matcher_instance("Provider-2")
-        .await?
+        .await
         .add_matcher_instance("Requestor-1")
-        .await?;
+        .await;
 
     let id1 = network.get_default_id("Provider-1");
     let provider1 = network.get_matcher("Provider-1");
@@ -127,19 +124,30 @@ async fn test_resolve_2xoffer_demand() -> Result<(), anyhow::Error> {
     let requestor = network.get_matcher("Requestor-1");
 
     // when: Add Offer on Provider-1
-    let offer1 = provider1.subscribe_offer(&sample_offer(), &id1).await?;
+    let offer1 = provider1
+        .subscribe_offer(&sample_offer(), &id1)
+        .await
+        .unwrap();
     // when: Add Offer on Provider-2
-    let offer2 = provider2.subscribe_offer(&sample_offer(), &id2).await?;
+    let offer2 = provider2
+        .subscribe_offer(&sample_offer(), &id2)
+        .await
+        .unwrap();
     // and: Add Demand on Requestor
-    let demand = requestor.subscribe_demand(&sample_demand(), &id3).await?;
+    let demand = requestor
+        .subscribe_demand(&sample_demand(), &id3)
+        .await
+        .unwrap();
 
     // then: It should be resolved on Requestor two times
     let listener = network.get_event_listeners("Requestor-1");
     let proposal1 = timeout200ms(listener.proposal_receiver.recv())
-        .await?
+        .await
+        .unwrap()
         .unwrap();
     let proposal2 = timeout200ms(listener.proposal_receiver.recv())
-        .await?
+        .await
+        .unwrap()
         .unwrap();
 
     assert_eq!(proposal1.demand, demand);
@@ -161,8 +169,6 @@ async fn test_resolve_2xoffer_demand() -> Result<(), anyhow::Error> {
     assert!(timeout200ms(listener.proposal_receiver.recv())
         .await
         .is_err());
-
-    Ok(())
 }
 
 fn timeout200ms<T: Future>(fut: T) -> Timeout<T> {
