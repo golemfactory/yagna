@@ -5111,6 +5111,7 @@ checksum = "2932dc07acd2066ff2e3921a4419606b220ba6cd03a9935123856cc534877056"
 dependencies = [
  "rand 0.6.5",
  "secp256k1-sys 0.1.2",
+ "serde",
 ]
 
 [[package]]
@@ -5120,7 +5121,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6179428c22c73ac0fbb7b5579a56353ce78ba29759b3b8575183336ea74cdfb"
 dependencies = [
  "secp256k1-sys 0.3.0",
- "serde",
 ]
 
 [[package]]
@@ -5279,7 +5279,7 @@ dependencies = [
 [[package]]
 name = "serial_test"
 version = "0.5.1"
-source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#0d3db75eb5dde6aae32ba3672c80af652e0b58ba"
+source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6c848541e89262f90ca693d9e1a84c6f3df0953b"
 dependencies = [
  "lazy_static",
  "parking_lot 0.10.2",
@@ -5300,7 +5300,7 @@ dependencies = [
 [[package]]
 name = "serial_test_derive"
 version = "0.5.1"
-source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#0d3db75eb5dde6aae32ba3672c80af652e0b58ba"
+source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6c848541e89262f90ca693d9e1a84c6f3df0953b"
 dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.7",
@@ -6855,7 +6855,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-client.git?branch=event-api/master#ff0a2d48f0b8b2e6b751cc536db0edc378af8ed7"
+source = "git+https://github.com/golemfactory/ya-client.git?branch=event-api/master#721259d017a3306af3724eb393aa2f9383d74b9c"
 dependencies = [
  "awc 1.0.1",
  "bytes 0.5.6",
@@ -6892,7 +6892,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-client.git?branch=event-api/master#ff0a2d48f0b8b2e6b751cc536db0edc378af8ed7"
+source = "git+https://github.com/golemfactory/ya-client.git?branch=event-api/master#721259d017a3306af3724eb393aa2f9383d74b9c"
 dependencies = [
  "bigdecimal 0.1.2",
  "chrono",
@@ -6901,9 +6901,11 @@ dependencies = [
  "hex",
  "openssl",
  "rand 0.7.3",
- "secp256k1 0.19.0",
+ "secp256k1 0.17.2",
  "serde",
  "serde_json",
+ "strum",
+ "strum_macros",
  "thiserror",
 ]
 

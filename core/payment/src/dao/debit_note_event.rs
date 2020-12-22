@@ -37,19 +37,15 @@ impl<'c> AsDao<'c> for DebitNoteEventDao<'c> {
 }
 
 impl<'c> DebitNoteEventDao<'c> {
-    pub async fn create<T: Serialize>(
+    pub async fn create<T: Serialize + Send + 'static>(
         &self,
         debit_note_id: String,
         owner_id: NodeId,
         event_type: DebitNoteEventType,
         details: Option<T>,
     ) -> DbResult<()> {
-        let event = WriteObj::new(debit_note_id, owner_id, event_type, details)?;
         do_with_transaction(self.pool, move |conn| {
-            diesel::insert_into(write_dsl::pay_debit_note_event)
-                .values(event)
-                .execute(conn)?;
-            Ok(())
+            create(debit_note_id, owner_id, event_type, details, conn)
         })
         .await
     }

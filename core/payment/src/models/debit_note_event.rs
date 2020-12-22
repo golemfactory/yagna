@@ -31,7 +31,7 @@ impl WriteObj {
         Ok(Self {
             debit_note_id,
             owner_id,
-            event_type: serde_json::to_string(&event_type)?,
+            event_type: event_type.to_string(),
             details,
         })
     }
@@ -53,6 +53,12 @@ impl TryFrom<ReadObj> for DebitNoteEvent {
     type Error = DbError;
 
     fn try_from(event: ReadObj) -> DbResult<Self> {
+        let event_type = event.event_type.parse().map_err(|e| {
+            DbError::Integrity(format!(
+                "DebitNoteEvent type `{}` parsing failed: {}",
+                &event.event_type, e
+            ))
+        })?;
         // TODO Attach details when event_type=REJECTED
         let _details = match event.details {
             Some(s) => Some(json_from_str(&s)?),
@@ -61,7 +67,7 @@ impl TryFrom<ReadObj> for DebitNoteEvent {
         Ok(Self {
             debit_note_id: event.debit_note_id,
             event_date: Utc.from_utc_datetime(&event.timestamp),
-            event_type: serde_json::from_str(&event.event_type)?,
+            event_type,
         })
     }
 }
