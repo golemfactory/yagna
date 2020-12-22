@@ -382,12 +382,18 @@ impl CommonBroker {
             Err(RemoteAgreementError::NotFound(agreement_id.clone()))?
         }
 
+        // Opposite side terminated.
+        let terminator = match owner_type {
+            OwnerType::Provider => OwnerType::Requestor,
+            OwnerType::Requestor => OwnerType::Provider,
+        };
+
         let reason_string = msg
             .reason
             .as_ref()
             .map(|reason| serde_json::to_string::<Reason>(&reason).unwrap_or("".to_string()));
 
-        dao.terminate(&agreement_id, reason_string, owner_type.swap())
+        dao.terminate(&agreement_id, reason_string, terminator)
             .await
             .map_err(|e| {
                 log::warn!(
@@ -400,7 +406,7 @@ impl CommonBroker {
 
         self.notify_agreement(&agreement).await;
 
-        inc_terminate_metrics(&msg.reason, owner_type.swap());
+        inc_terminate_metrics(&msg.reason, terminator);
         log::info!(
             "Received terminate Agreement [{}] from [{}]. Reason: {}",
             &agreement_id,
