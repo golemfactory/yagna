@@ -380,7 +380,7 @@ impl TaskRunner {
         _ctx: &mut Context<Self>,
     ) -> Result<()> {
         // Agreement waits for first create activity event.
-        let agreement_id = msg.agreement.agreement_id.clone();
+        let agreement_id = msg.agreement.id.clone();
         self.active_agreements.insert(agreement_id, msg.agreement);
         Ok(())
     }

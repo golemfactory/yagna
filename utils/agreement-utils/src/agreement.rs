@@ -16,7 +16,7 @@ const DEFAULT_FORMAT: &str = "json";
 #[derive(Clone, Debug)]
 pub struct AgreementView {
     pub json: Value,
-    pub agreement_id: String,
+    pub id: String,
 }
 
 impl AgreementView {
@@ -64,7 +64,7 @@ impl TryFrom<Value> for AgreementView {
 
         Ok(AgreementView {
             json: value,
-            agreement_id,
+            id: agreement_id,
         })
     }
 }

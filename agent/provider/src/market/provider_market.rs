@@ -171,7 +171,7 @@ impl ProviderMarket {
         msg: AgreementApproved,
         _ctx: &mut Context<Self>,
     ) -> Result<()> {
-        log::info!("Got approved agreement [{}].", msg.agreement.agreement_id,);
+        log::info!("Got approved agreement [{}].", msg.agreement.id,);
         // At this moment we only forward agreement to outside world.
         self.agreement_signed_signal.send_signal(AgreementApproved {
             agreement: msg.agreement,
@@ -278,9 +278,11 @@ async fn process_proposal(
         subscription.preset.name,
     );
 
+    // TODO: Note that if we pass `subscription.offer`, we can't support multi-step
+    //       negotiations, because we always pass initial Offer to negotiator.
     let action = ctx
         .negotiator
-        .react_to_proposal(&subscription.offer, &demand)
+        .react_to_proposal(&subscription.offer, &subscription.id, &demand)
         .await
         .map_err(|e| {
             anyhow!(
@@ -340,8 +342,8 @@ async fn process_agreement(
         .await
         .map_err(|e| {
             anyhow!(
-                "Negotiator error while processing agreement {}. Error: {}",
-                agreement.agreement_id,
+                "Negotiator error while processing agreement [{}]. Error: {}",
+                agreement.id,
                 e
             )
         })?;
@@ -349,7 +351,7 @@ async fn process_agreement(
     log::info!(
         "Decided to {} [{}] for subscription [{}].",
         action,
-        agreement.agreement_id,
+        agreement.id,
         subscription.preset.name
     );
 
@@ -360,7 +362,7 @@ async fn process_agreement(
             let result = ctx
                 .api
                 .approve_agreement(
-                    &agreement.agreement_id,
+                    &agreement.id,
                     Some(config.session_id.clone()),
                     Some(config.agreement_approve_timeout),
                 )
@@ -369,13 +371,13 @@ async fn process_agreement(
             if let Err(error) = result {
                 // Notify negotiator, that we couldn't approve.
                 let msg = AgreementFinalized {
-                    id: agreement.agreement_id.clone(),
+                    id: agreement.id.clone(),
                     result: AgreementResult::ApprovalFailed,
                 };
                 let _ = ctx.market.send(msg).await;
                 return Err(anyhow!(
                     "Failed to approve agreement [{}]. Error: {}",
-                    agreement.agreement_id,
+                    agreement.id,
                     error
                 ));
             }
@@ -389,9 +391,7 @@ async fn process_agreement(
             let _ = ctx.market.send(message).await?;
         }
         AgreementResponse::RejectAgreement { reason } => {
-            ctx.api
-                .reject_agreement(&agreement.agreement_id, &reason)
-                .await?;
+            ctx.api.reject_agreement(&agreement.id, &reason).await?;
         }
     };
     Ok(())

@@ -43,7 +43,7 @@ impl PaymentDescription {
         Ok(PaymentDescription {
             commercial_agreement: AgreementView {
                 json: commercial,
-                agreement_id: agreement.agreement_id.clone(),
+                id: agreement.id.clone(),
             },
         })
     }

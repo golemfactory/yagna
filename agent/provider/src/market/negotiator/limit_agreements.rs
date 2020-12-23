@@ -95,13 +95,12 @@ impl Handler<ReactToAgreement> for LimitAgreementsNegotiator {
 
     fn handle(&mut self, msg: ReactToAgreement, _: &mut Context<Self>) -> Self::Result {
         if self.has_free_slot() {
-            self.active_agreements
-                .insert(msg.agreement.agreement_id.clone());
+            self.active_agreements.insert(msg.agreement.id.clone());
             Ok(AgreementResponse::ApproveAgreement)
         } else {
             log::info!(
                 "Negotiator: Reject agreement proposal [{}] due to limit.",
-                msg.agreement.agreement_id
+                msg.agreement.id
             );
             Ok(AgreementResponse::RejectAgreement {
                 reason: Some(Reason::new(format!(
