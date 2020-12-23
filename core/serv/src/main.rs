@@ -1,6 +1,5 @@
 use actix_web::{middleware, web, App, HttpServer, Responder};
 use anyhow::{Context, Result};
-use chrono::{DateTime, SecondsFormat, Utc};
 use futures::prelude::*;
 use std::{
     any::TypeId,
@@ -20,6 +19,7 @@ use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
 use ya_sgx::SgxService;
 
+use ya_file_logging::set_logging;
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
@@ -284,18 +284,14 @@ struct ServiceCommandOpts {
     max_rest_timeout: usize,
 
     /// Log verbosity level
-    #[structopt(long, default_value = "info", set = clap::ArgSettings::Global)]
+    #[structopt(long, default_value = "info")]
     log_level: String,
 
     /// Create logs in this directory. Logs are automatically rotated and compressed.
-    /// Logging to file is disabled if set to empty string.
-    #[structopt(
-    long,
-    env = "YAGNA_LOG_DIR",
-    default_value = &*DEFAULT_DATA_DIR,
-    set = clap::ArgSettings::Global
-    )]
-    log_dir: PathBuf,
+    /// If unset, then it's the same as datadir.
+    /// If set to empty string, then logging to files is disabled.
+    #[structopt(long, env = "YAGNA_LOG_DIR")]
+    log_dir: Option<PathBuf>,
 }
 
 #[cfg(unix)]
@@ -333,7 +329,29 @@ impl ServiceCommand {
                 log_level,
                 log_dir,
             }) => {
-                set_logging(&log_level, &log_dir)?;
+                // workaround to silence middleware logger by default
+                // to enable it explicitly set RUST_LOG=info or more verbose
+                env::set_var(
+                    "RUST_LOG",
+                    env::var("RUST_LOG")
+                        .unwrap_or(format!("{},actix_web::middleware::logger=warn", log_level)),
+                );
+                set_logging(
+                    &log_level,
+                    match log_dir {
+                        Some(log_dir) => log_dir.as_path(),
+                        None => &ctx.data_dir,
+                    },
+                    &vec![
+                        ("actix_http::response", log::LevelFilter::Off),
+                        ("tokio_core", log::LevelFilter::Info),
+                        ("tokio_reactor", log::LevelFilter::Info),
+                        ("reqwest", log::LevelFilter::Info),
+                        ("hyper", log::LevelFilter::Info),
+                        ("web3", log::LevelFilter::Info),
+                        ("h2", log::LevelFilter::Info),
+                    ],
+                )?;
 
                 log::info!(
                     "Starting {} service! Version: {}.",
@@ -416,82 +434,6 @@ https://handbook.golem.network/see-also/terms
 
 async fn me(id: Identity) -> impl Responder {
     web::Json(id)
-}
-
-fn set_logging(log_level: &str, log_dir: &Path) -> Result<()> {
-    use flexi_logger::{
-        style, AdaptiveFormat, Age, Cleanup, Criterion, DeferredNow, Duplicate, LogSpecBuilder,
-        LogSpecification, Logger, Naming, Record,
-    };
-
-    fn log_format(
-        w: &mut dyn std::io::Write,
-        now: &mut DeferredNow,
-        record: &Record,
-    ) -> Result<(), std::io::Error> {
-        write!(
-            w,
-            "[{} {:5} {}] {}",
-            DateTime::<Utc>::from(*now.now()).to_rfc3339_opts(SecondsFormat::Secs, true),
-            record.level(),
-            record.module_path().unwrap_or("<unnamed>"),
-            record.args()
-        )
-    }
-
-    fn log_format_color(
-        w: &mut dyn std::io::Write,
-        now: &mut DeferredNow,
-        record: &Record,
-    ) -> Result<(), std::io::Error> {
-        let level = record.level();
-        write!(
-            w,
-            "[{} {:5} {}] {}",
-            DateTime::<Utc>::from(*now.now()).to_rfc3339_opts(SecondsFormat::Secs, true),
-            style(level, level),
-            record.module_path().unwrap_or("<unnamed>"),
-            record.args()
-        )
-    }
-
-    // workaround to silence middleware logger by default
-    // to enable it explicitly set RUST_LOG=info or more verbose
-    env::set_var(
-        "RUST_LOG",
-        env::var("RUST_LOG").unwrap_or(format!("{},actix_web::middleware::logger=warn", log_level)),
-    );
-
-    let log_spec = LogSpecification::env_or_parse(log_level)?;
-    let log_spec = LogSpecBuilder::from_module_filters(log_spec.module_filters())
-        .module("actix_http::response", log::LevelFilter::Off)
-        .module("tokio_core", log::LevelFilter::Info)
-        .module("tokio_reactor", log::LevelFilter::Info)
-        .module("reqwest", log::LevelFilter::Info)
-        .module("hyper", log::LevelFilter::Info)
-        .module("web3", log::LevelFilter::Info)
-        .module("h2", log::LevelFilter::Info)
-        .build();
-
-    let mut logger = Logger::with(log_spec).format(log_format);
-    if log_dir.components().count() != 0 {
-        logger = logger
-            .log_to_file()
-            .directory(log_dir)
-            .rotate(
-                Criterion::AgeOrSize(Age::Day, /*size in bytes*/ 1024 * 1024 * 1024),
-                Naming::Timestamps,
-                Cleanup::KeepLogAndCompressedFiles(1, 10),
-            )
-            .print_message()
-            .duplicate_to_stderr(Duplicate::All);
-    }
-    logger = logger
-        .adaptive_format_for_stderr(AdaptiveFormat::Custom(log_format, log_format_color))
-        .set_palette("9;11;2;7;8".to_string());
-
-    logger.start()?;
-    Ok(())
 }
 
 #[actix_rt::main]

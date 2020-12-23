@@ -1,6 +1,5 @@
 use actix::Actor;
-use chrono::{DateTime, SecondsFormat, Utc};
-use std::{env, path::Path};
+use std::env;
 use structopt::{clap, StructOpt};
 
 mod cli;
@@ -22,65 +21,8 @@ use provider_agent::ProviderAgent;
 use startup_config::{
     Commands, ConfigConfig, ExeUnitsConfig, PresetsConfig, ProfileConfig, StartupConfig,
 };
+use ya_file_logging::set_logging;
 use ya_utils_process::lock::ProcLock;
-
-fn set_logging(log_level: &str, log_dir: &Path) -> anyhow::Result<()> {
-    use flexi_logger::{
-        style, AdaptiveFormat, Age, Cleanup, Criterion, DeferredNow, Duplicate, Logger, Naming,
-        Record,
-    };
-
-    fn log_format(
-        w: &mut dyn std::io::Write,
-        now: &mut DeferredNow,
-        record: &Record,
-    ) -> Result<(), std::io::Error> {
-        write!(
-            w,
-            "[{} {:5} {}] {}",
-            DateTime::<Utc>::from(*now.now()).to_rfc3339_opts(SecondsFormat::Secs, true),
-            record.level(),
-            record.module_path().unwrap_or("<unnamed>"),
-            record.args()
-        )
-    }
-
-    fn log_format_color(
-        w: &mut dyn std::io::Write,
-        now: &mut DeferredNow,
-        record: &Record,
-    ) -> Result<(), std::io::Error> {
-        let level = record.level();
-        write!(
-            w,
-            "[{} {:5} {}] {}",
-            DateTime::<Utc>::from(*now.now()).to_rfc3339_opts(SecondsFormat::Secs, true),
-            style(level, level),
-            record.module_path().unwrap_or("<unnamed>"),
-            record.args()
-        )
-    }
-
-    let mut logger = Logger::with_env_or_str(log_level).format(log_format);
-    if log_dir.components().count() != 0 {
-        logger = logger
-            .log_to_file()
-            .directory(log_dir)
-            .rotate(
-                Criterion::AgeOrSize(Age::Day, /*size in bytes*/ 1024 * 1024 * 1024),
-                Naming::Timestamps,
-                Cleanup::KeepLogAndCompressedFiles(1, 10),
-            )
-            .print_message()
-            .duplicate_to_stderr(Duplicate::All);
-    }
-    logger = logger
-        .adaptive_format_for_stderr(AdaptiveFormat::Custom(log_format, log_format_color))
-        .set_palette("9;11;2;7;8".to_string());
-
-    logger.start()?;
-    Ok(())
-}
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
@@ -95,7 +37,7 @@ async fn main() -> anyhow::Result<()> {
 
     match cli_args.commands {
         Commands::Run(args) => {
-            set_logging("info", &data_dir)?;
+            set_logging("info", &data_dir, &vec![])?;
 
             let app_name = clap::crate_name!();
             log::info!("Starting {}...", app_name);
