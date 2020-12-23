@@ -11,15 +11,14 @@ use ya_market_resolver::flatten::flatten_json;
 
 /// Test countering initial and draft proposals on both Provider and Requestor side.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
-async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
+async fn test_exchanging_draft_proposals() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?
+        .await
         .add_market_instance("Node-2")
-        .await?;
+        .await;
 
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
@@ -29,12 +28,15 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
-        .await?;
+        .await
+        .unwrap();
     let offer = sample_offer();
-    let offer_id = market2.subscribe_offer(&offer, &identity2).await?;
+    let offer_id = market2.subscribe_offer(&offer, &identity2).await.unwrap();
 
     // Expect events generated on requestor market.
-    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1).await?;
+    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1)
+        .await
+        .unwrap();
     assert_eq!(
         proposal0.properties,
         flatten_json(&offer.properties).unwrap()
@@ -50,14 +52,17 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
         .requestor_engine
         .counter_proposal(
             &demand_id,
-            &proposal0.get_proposal_id()?,
+            &proposal0.get_proposal_id().unwrap(),
             &proposal1_req,
             &identity1,
         )
-        .await?;
+        .await
+        .unwrap();
 
     // Provider receives Proposal
-    let proposal1_prov = provider::query_proposal(&market2, &offer_id, 2).await?;
+    let proposal1_prov = provider::query_proposal(&market2, &offer_id, 2)
+        .await
+        .unwrap();
     let proposal1_prov_id = proposal1_req_id.clone().translate(OwnerType::Provider);
 
     assert_eq!(proposal1_prov.constraints, proposal1_req.constraints);
@@ -76,10 +81,13 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
     let proposal2_id = market2
         .provider_engine
         .counter_proposal(&offer_id, &proposal1_prov_id, &proposal2_prov, &identity2)
-        .await?;
+        .await
+        .unwrap();
 
     // Requestor receives proposal.
-    let proposal2_req = requestor::query_proposal(&market1, &demand_id, 3).await?;
+    let proposal2_req = requestor::query_proposal(&market1, &demand_id, 3)
+        .await
+        .unwrap();
     let proposal2_req_id = proposal2_id.clone().translate(OwnerType::Requestor);
 
     assert_eq!(proposal2_req.constraints, proposal2_prov.constraints);
@@ -104,10 +112,13 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
     let proposal3_req_id = market1
         .requestor_engine
         .counter_proposal(&demand_id, &proposal2_req_id, &proposal3_req, &identity1)
-        .await?;
+        .await
+        .unwrap();
 
     // Provider receives Proposal
-    let proposal3_prov = provider::query_proposal(&market2, &offer_id, 4).await?;
+    let proposal3_prov = provider::query_proposal(&market2, &offer_id, 4)
+        .await
+        .unwrap();
     let proposal3_prov_id = proposal3_req_id.clone().translate(OwnerType::Provider);
 
     assert_eq!(proposal3_prov.constraints, proposal3_req.constraints);
@@ -122,22 +133,19 @@ async fn test_exchanging_draft_proposals() -> Result<(), anyhow::Error> {
         proposal3_prov.prev_proposal_id,
         Some(proposal2_req_id.translate(OwnerType::Provider).to_string()),
     );
-
-    Ok(())
 }
 
 /// Can't counter proposal, that was already countered.
 /// Market should reject such attempts.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
-async fn test_counter_countered_proposal() -> Result<(), anyhow::Error> {
+async fn test_counter_countered_proposal() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?
+        .await
         .add_market_instance("Node-2")
-        .await?;
+        .await;
 
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
@@ -147,19 +155,26 @@ async fn test_counter_countered_proposal() -> Result<(), anyhow::Error> {
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
-        .await?;
-    let offer_id = market2.subscribe_offer(&sample_offer(), &identity2).await?;
+        .await
+        .unwrap();
+    let offer_id = market2
+        .subscribe_offer(&sample_offer(), &identity2)
+        .await
+        .unwrap();
 
     // REQUESTOR side.
-    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1).await?;
-    let proposal0_id = proposal0.get_proposal_id()?;
+    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1)
+        .await
+        .unwrap();
+    let proposal0_id = proposal0.get_proposal_id().unwrap();
 
     // Counter proposal for the first time.
     let proposal1 = sample_demand();
     market1
         .requestor_engine
         .counter_proposal(&demand_id, &proposal0_id, &proposal1, &identity1)
-        .await?;
+        .await
+        .unwrap();
 
     // Now counter proposal for the second time. It should fail.
     let proposal2 = sample_demand();
@@ -177,15 +192,18 @@ async fn test_counter_countered_proposal() -> Result<(), anyhow::Error> {
     }
 
     // PROVIDER side
-    let proposal0 = provider::query_proposal(&market2, &offer_id, 2).await?;
-    let proposal0_id = proposal0.get_proposal_id()?;
+    let proposal0 = provider::query_proposal(&market2, &offer_id, 2)
+        .await
+        .unwrap();
+    let proposal0_id = proposal0.get_proposal_id().unwrap();
 
     // Counter proposal for the first time.
     let proposal1 = sample_offer();
     market2
         .provider_engine
         .counter_proposal(&offer_id, &proposal0_id, &proposal1, &identity2)
-        .await?;
+        .await
+        .unwrap();
 
     // Now counter proposal for the second time. It should fail.
     let proposal2 = sample_offer();
@@ -201,21 +219,18 @@ async fn test_counter_countered_proposal() -> Result<(), anyhow::Error> {
         }
         _ => panic!("Expected AlreadyCountered error."),
     }
-
-    Ok(())
 }
 
 /// Can't counter own proposal.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
-async fn test_counter_own_proposal() -> Result<(), anyhow::Error> {
+async fn test_counter_own_proposal() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?
+        .await
         .add_market_instance("Node-2")
-        .await?;
+        .await;
 
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
@@ -225,22 +240,29 @@ async fn test_counter_own_proposal() -> Result<(), anyhow::Error> {
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
-        .await?;
-    let offer_id = market2.subscribe_offer(&sample_offer(), &identity2).await?;
+        .await
+        .unwrap();
+    let offer_id = market2
+        .subscribe_offer(&sample_offer(), &identity2)
+        .await
+        .unwrap();
 
     // REQUESTOR side.
-    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1).await?;
+    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1)
+        .await
+        .unwrap();
 
     let proposal1 = sample_demand();
     let proposal1_id = market1
         .requestor_engine
         .counter_proposal(
             &demand_id,
-            &proposal0.get_proposal_id()?,
+            &proposal0.get_proposal_id().unwrap(),
             &proposal1,
             &identity1,
         )
-        .await?;
+        .await
+        .unwrap();
 
     // Counter proposal1, that was created by us.
     let proposal2 = sample_demand();
@@ -257,18 +279,21 @@ async fn test_counter_own_proposal() -> Result<(), anyhow::Error> {
     }
 
     // PROVIDER side
-    let proposal0 = provider::query_proposal(&market2, &offer_id, 2).await?;
+    let proposal0 = provider::query_proposal(&market2, &offer_id, 2)
+        .await
+        .unwrap();
 
     let proposal1 = sample_offer();
     let proposal1_id = market2
         .provider_engine
         .counter_proposal(
             &offer_id,
-            &proposal0.get_proposal_id()?,
+            &proposal0.get_proposal_id().unwrap(),
             &proposal1,
             &identity2,
         )
-        .await?;
+        .await
+        .unwrap();
 
     // Counter proposal1, that was created by us.
     let proposal2 = sample_offer();
@@ -283,21 +308,18 @@ async fn test_counter_own_proposal() -> Result<(), anyhow::Error> {
         ProposalError::OwnProposal(id) => assert_eq!(id, proposal1_id),
         _ => panic!("Expected ProposalError::OwnProposal."),
     }
-
-    Ok(())
 }
 
 /// Requestor can't counter Proposal, for which he has unsubscribed Demand.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
-async fn test_counter_unsubscribed_demand() -> Result<(), anyhow::Error> {
+async fn test_counter_unsubscribed_demand() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?
+        .await
         .add_market_instance("Node-2")
-        .await?;
+        .await;
 
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
@@ -307,18 +329,27 @@ async fn test_counter_unsubscribed_demand() -> Result<(), anyhow::Error> {
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
-        .await?;
-    market2.subscribe_offer(&sample_offer(), &identity2).await?;
+        .await
+        .unwrap();
+    market2
+        .subscribe_offer(&sample_offer(), &identity2)
+        .await
+        .unwrap();
 
-    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1).await?;
-    market1.unsubscribe_demand(&demand_id, &identity1).await?;
+    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1)
+        .await
+        .unwrap();
+    market1
+        .unsubscribe_demand(&demand_id, &identity1)
+        .await
+        .unwrap();
 
     let proposal1 = sample_demand();
     let result = market1
         .requestor_engine
         .counter_proposal(
             &demand_id,
-            &proposal0.get_proposal_id()?,
+            &proposal0.get_proposal_id().unwrap(),
             &proposal1,
             &identity1,
         )
@@ -329,21 +360,18 @@ async fn test_counter_unsubscribed_demand() -> Result<(), anyhow::Error> {
         ProposalError::NoSubscription(id) => assert_eq!(id, demand_id),
         _ => panic!("Expected ProposalError::Unsubscribed."),
     }
-
-    Ok(())
 }
 
 /// Provider can't counter Proposal, for which he has unsubscribed Offer.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
-async fn test_counter_unsubscribed_offer() -> Result<(), anyhow::Error> {
+async fn test_counter_unsubscribed_offer() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?
+        .await
         .add_market_instance("Node-2")
-        .await?;
+        .await;
 
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
@@ -353,31 +381,43 @@ async fn test_counter_unsubscribed_offer() -> Result<(), anyhow::Error> {
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
-        .await?;
-    let offer_id = market2.subscribe_offer(&sample_offer(), &identity2).await?;
+        .await
+        .unwrap();
+    let offer_id = market2
+        .subscribe_offer(&sample_offer(), &identity2)
+        .await
+        .unwrap();
 
-    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1).await?;
+    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1)
+        .await
+        .unwrap();
     let proposal1 = sample_demand();
     market1
         .requestor_engine
         .counter_proposal(
             &demand_id,
-            &proposal0.get_proposal_id()?,
+            &proposal0.get_proposal_id().unwrap(),
             &proposal1,
             &identity1,
         )
-        .await?;
+        .await
+        .unwrap();
 
     // PROVIDER side
-    let proposal0 = provider::query_proposal(&market2, &offer_id, 2).await?;
-    market2.unsubscribe_offer(&offer_id, &identity2).await?;
+    let proposal0 = provider::query_proposal(&market2, &offer_id, 2)
+        .await
+        .unwrap();
+    market2
+        .unsubscribe_offer(&offer_id, &identity2)
+        .await
+        .unwrap();
 
     let proposal1 = sample_offer();
     let result = market2
         .provider_engine
         .counter_proposal(
             &offer_id,
-            &proposal0.get_proposal_id()?,
+            &proposal0.get_proposal_id().unwrap(),
             &proposal1,
             &identity2,
         )
@@ -388,22 +428,19 @@ async fn test_counter_unsubscribed_offer() -> Result<(), anyhow::Error> {
         ProposalError::Unsubscribed(id) => assert_eq!(id, offer_id),
         _ => panic!("Expected ProposalError::Unsubscribed."),
     }
-
-    Ok(())
 }
 
 /// Requestor tries to counter initial Proposal, for which Offer was unsubscribed on remote Node.
 /// Negotiation attempt should be rejected by Provider Node.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
-async fn test_counter_initial_unsubscribed_remote_offer() -> Result<(), anyhow::Error> {
+async fn test_counter_initial_unsubscribed_remote_offer() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?
+        .await
         .add_market_instance("Node-2")
-        .await?;
+        .await;
 
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
@@ -413,20 +450,29 @@ async fn test_counter_initial_unsubscribed_remote_offer() -> Result<(), anyhow::
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
-        .await?;
-    let offer_id = market2.subscribe_offer(&sample_offer(), &identity2).await?;
+        .await
+        .unwrap();
+    let offer_id = market2
+        .subscribe_offer(&sample_offer(), &identity2)
+        .await
+        .unwrap();
 
-    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1).await?;
+    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1)
+        .await
+        .unwrap();
 
     // When we will counter this Proposal, Provider will have it already unsubscribed.
-    market2.unsubscribe_offer(&offer_id, &identity2).await?;
+    market2
+        .unsubscribe_offer(&offer_id, &identity2)
+        .await
+        .unwrap();
 
     let proposal1 = sample_demand();
     let result = market1
         .requestor_engine
         .counter_proposal(
             &demand_id,
-            &proposal0.get_proposal_id()?,
+            &proposal0.get_proposal_id().unwrap(),
             &proposal1,
             &identity1,
         )
@@ -437,29 +483,28 @@ async fn test_counter_initial_unsubscribed_remote_offer() -> Result<(), anyhow::
         ProposalError::Send(..) => (),
         _ => panic!("Expected ProposalError::Send."),
     }
-
-    Ok(())
 }
 
 /// Requestor tries to counter draft Proposal, for which Offer was unsubscribed on remote Node.
 /// Negotiation attempt should be rejected by Provider Node.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
-async fn test_counter_draft_unsubscribed_remote_offer() -> Result<(), anyhow::Error> {
+async fn test_counter_draft_unsubscribed_remote_offer() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?
+        .await
         .add_market_instance("Node-2")
-        .await?;
+        .await;
 
     let NegotiationHelper {
         proposal_id: proposal0_id,
         offer_id,
         demand_id,
         ..
-    } = exchange_draft_proposals(&network, "Node-1", "Node-2").await?;
+    } = exchange_draft_proposals(&network, "Node-1", "Node-2")
+        .await
+        .unwrap();
 
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
@@ -467,7 +512,10 @@ async fn test_counter_draft_unsubscribed_remote_offer() -> Result<(), anyhow::Er
     let identity2 = network.get_default_id("Node-2");
 
     // When we will counter this Proposal, Provider will have it already unsubscribed.
-    market2.unsubscribe_offer(&offer_id, &identity2).await?;
+    market2
+        .unsubscribe_offer(&offer_id, &identity2)
+        .await
+        .unwrap();
 
     let proposal1 = sample_demand();
     let result = market1
@@ -480,29 +528,28 @@ async fn test_counter_draft_unsubscribed_remote_offer() -> Result<(), anyhow::Er
         ProposalError::Send(..) => (),
         _ => panic!("Expected ProposalError::Send."),
     }
-
-    Ok(())
 }
 
 /// Provider tries to counter draft Proposal, for which Demand was unsubscribed on remote Node.
 /// Negotiation attempt should be rejected by Requestor Node.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
-async fn test_counter_draft_unsubscribed_remote_demand() -> Result<(), anyhow::Error> {
+async fn test_counter_draft_unsubscribed_remote_demand() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?
+        .await
         .add_market_instance("Node-2")
-        .await?;
+        .await;
 
     let NegotiationHelper {
         proposal_id: proposal0_id,
         offer_id,
         demand_id,
         ..
-    } = exchange_draft_proposals(&network, "Node-1", "Node-2").await?;
+    } = exchange_draft_proposals(&network, "Node-1", "Node-2")
+        .await
+        .unwrap();
 
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
@@ -513,17 +560,23 @@ async fn test_counter_draft_unsubscribed_remote_demand() -> Result<(), anyhow::E
     market1
         .requestor_engine
         .counter_proposal(&demand_id, &proposal0_id, &proposal1, &identity1)
-        .await?;
+        .await
+        .unwrap();
 
-    let proposal2 = provider::query_proposal(&market2, &offer_id, 1).await?;
-    market1.unsubscribe_demand(&demand_id, &identity1).await?;
+    let proposal2 = provider::query_proposal(&market2, &offer_id, 1)
+        .await
+        .unwrap();
+    market1
+        .unsubscribe_demand(&demand_id, &identity1)
+        .await
+        .unwrap();
 
     let proposal3 = sample_offer();
     let result = market2
         .provider_engine
         .counter_proposal(
             &offer_id,
-            &proposal2.get_proposal_id()?,
+            &proposal2.get_proposal_id().unwrap(),
             &proposal3,
             &identity2,
         )
@@ -534,27 +587,27 @@ async fn test_counter_draft_unsubscribed_remote_demand() -> Result<(), anyhow::E
         ProposalError::Send(..) => (),
         _ => panic!("Expected ProposalError::Send."),
     }
-    Ok(())
 }
 
 /// Try to send not matching counter Proposal to Provider. Our market
 /// should reject such Proposal. Error should occur on Requestor side.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
-async fn test_not_matching_counter_demand() -> Result<(), anyhow::Error> {
+async fn test_not_matching_counter_demand() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?
+        .await
         .add_market_instance("Node-2")
-        .await?;
+        .await;
 
     let NegotiationHelper {
         proposal_id: proposal0_id,
         demand_id,
         ..
-    } = exchange_draft_proposals(&network, "Node-1", "Node-2").await?;
+    } = exchange_draft_proposals(&network, "Node-1", "Node-2")
+        .await
+        .unwrap();
 
     let market1 = network.get_market("Node-1");
     let identity1 = network.get_default_id("Node-1");
@@ -569,29 +622,28 @@ async fn test_not_matching_counter_demand() -> Result<(), anyhow::Error> {
         ProposalError::NotMatching(..) => (),
         _ => panic!("Expected ProposalError::NotMatching."),
     }
-
-    Ok(())
 }
 
 /// Try to send not matching counter Proposal to Requestor. Our market
 /// should reject such Proposal. Error should occur on Provider side.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
-async fn test_not_matching_counter_offer() -> Result<(), anyhow::Error> {
+async fn test_not_matching_counter_offer() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?
+        .await
         .add_market_instance("Node-2")
-        .await?;
+        .await;
 
     let NegotiationHelper {
         proposal_id: proposal0_id,
         demand_id,
         offer_id,
         ..
-    } = exchange_draft_proposals(&network, "Node-1", "Node-2").await?;
+    } = exchange_draft_proposals(&network, "Node-1", "Node-2")
+        .await
+        .unwrap();
 
     let market1 = network.get_market("Node-1");
     let market2 = network.get_market("Node-2");
@@ -602,15 +654,18 @@ async fn test_not_matching_counter_offer() -> Result<(), anyhow::Error> {
     market1
         .requestor_engine
         .counter_proposal(&demand_id, &proposal0_id, &proposal1, &identity1)
-        .await?;
+        .await
+        .unwrap();
 
-    let proposal2 = provider::query_proposal(&market2, &offer_id, 1).await?;
+    let proposal2 = provider::query_proposal(&market2, &offer_id, 1)
+        .await
+        .unwrap();
     let proposal3 = not_matching_offer();
     let result = market2
         .provider_engine
         .counter_proposal(
             &offer_id,
-            &proposal2.get_proposal_id()?,
+            &proposal2.get_proposal_id().unwrap(),
             &proposal3,
             &identity2,
         )
@@ -621,35 +676,36 @@ async fn test_not_matching_counter_offer() -> Result<(), anyhow::Error> {
         ProposalError::NotMatching(..) => (),
         _ => panic!("Expected ProposalError::NotMatching."),
     }
-
-    Ok(())
 }
 
 /// Negotiations between Provider and Requestor using the same Identity
 /// (which means that they are on the same node) is forbidden. Matcher should reject
 /// such Offer-Demand pairs.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
-async fn test_reject_negotiations_same_identity() -> Result<(), anyhow::Error> {
+async fn test_reject_negotiations_same_identity() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?;
+        .await;
 
     let market1 = network.get_market("Node-1");
     let identity1 = network.get_default_id("Node-1");
 
     let demand_id = market1
         .subscribe_demand(&sample_demand(), &identity1)
-        .await?;
-    market1.subscribe_offer(&sample_offer(), &identity1).await?;
+        .await
+        .unwrap();
+    market1
+        .subscribe_offer(&sample_offer(), &identity1)
+        .await
+        .unwrap();
 
     // We expect, that there will be no Proposals.
     let events = market1
         .requestor_engine
         .query_events(&demand_id, 3.0, Some(5))
-        .await?;
+        .await
+        .unwrap();
     assert_eq!(events.len(), 0);
-    Ok(())
 }

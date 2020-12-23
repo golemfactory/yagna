@@ -3,7 +3,7 @@ use thiserror::Error;
 
 use ya_market_resolver::flatten::JsonObjectExpected;
 
-use crate::db::dao::StateError;
+use crate::db::dao::AgreementDaoError;
 use crate::db::model::{
     AgreementId, ProposalId, ProposalIdParseError, SubscriptionId, SubscriptionParseError,
 };
@@ -33,24 +33,6 @@ pub enum MatchValidationError {
 }
 
 #[derive(Error, Debug)]
-pub enum AgreementStateError {
-    #[error("Agreement [{0}] proposed.")]
-    Proposed(AgreementId),
-    #[error("Agreement [{0}] already confirmed.")]
-    Confirmed(AgreementId),
-    #[error("Agreement [{0}] cancelled.")]
-    Cancelled(AgreementId),
-    #[error("Agreement [{0}] rejected.")]
-    Rejected(AgreementId),
-    #[error("Agreement [{0}] already approved.")]
-    Approved(AgreementId),
-    #[error("Agreement [{0}] expired.")]
-    Expired(AgreementId),
-    #[error("Agreement [{0}] terminated.")]
-    Terminated(AgreementId),
-}
-
-#[derive(Error, Debug)]
 pub enum AgreementError {
     #[error("Agreement [{0}] not found.")]
     NotFound(AgreementId),
@@ -69,11 +51,9 @@ pub enum AgreementError {
     #[error("Failed to save Agreement for Proposal [{0}]. Error: {1}")]
     Save(ProposalId, DbError),
     #[error("Failed to get Agreement [{0}]. Error: {1}")]
-    Get(AgreementId, DbError),
+    Get(AgreementId, AgreementDaoError),
     #[error("Agreement [{0}]. Error: {1}")]
-    UpdateState(AgreementId, StateError),
-    #[error("Invalid state. {0}")]
-    InvalidState(#[from] AgreementStateError),
+    UpdateState(AgreementId, AgreementDaoError),
     #[error("Invalid Agreement id. {0}")]
     InvalidId(#[from] ProposalIdParseError),
     #[error(transparent)]
@@ -109,15 +89,13 @@ pub enum WaitForApprovalError {
     #[error("Invalid agreement id. {0}")]
     InvalidId(#[from] ProposalIdParseError),
     #[error("Failed to get Agreement [{0}]. Error: {1}")]
-    Get(AgreementId, DbError),
+    Get(AgreementId, AgreementDaoError),
     #[error("Waiting for approval failed. Error: {0}.")]
     Internal(String),
 }
 
 #[derive(Error, Debug)]
 pub enum QueryEventsError {
-    #[error("Subscription [{0}] was already unsubscribed.")]
-    Unsubscribed(SubscriptionId),
     #[error("Invalid subscription id. {0}")]
     InvalidSubscriptionId(#[from] SubscriptionParseError),
     #[error(transparent)]
