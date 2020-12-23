@@ -742,7 +742,7 @@ impl Handler<AgreementFinalized> for ProviderMarket {
             );
             Ok(())
         });
-        Box::new(future)
+        Box::pin(future)
     }
 }
 
