@@ -49,6 +49,7 @@ lazy_static::lazy_static! {
 /// understood and hereby accept the disclaimer and
 /// privacy warning found at https://handbook.golem.network/see-also/terms
 ///
+/// Use RUST_LOG env variable to change log level.
 struct CliArgs {
     /// Accept the disclaimer and privacy warning found at
     /// {n}https://handbook.golem.network/see-also/terms
@@ -252,7 +253,10 @@ enum CliCommand {
 impl CliCommand {
     pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
-            CliCommand::Commands(command) => command.run_command(ctx).await,
+            CliCommand::Commands(command) => {
+                set_logging("warn", &Path::new(""), &vec![])?;
+                command.run_command(ctx).await
+            }
             CliCommand::Complete(complete) => complete.run_command(ctx),
             CliCommand::Service(service) => service.run_command(ctx).await,
         }
@@ -282,10 +286,6 @@ struct ServiceCommandOpts {
 
     #[structopt(long, env, default_value = "60")]
     max_rest_timeout: usize,
-
-    /// Log verbosity level
-    #[structopt(long, default_value = "info")]
-    log_level: String,
 
     /// Create logs in this directory. Logs are automatically rotated and compressed.
     /// If unset, then it's the same as datadir.
@@ -326,7 +326,6 @@ impl ServiceCommand {
                 api_url,
                 metrics_opts,
                 max_rest_timeout,
-                log_level,
                 log_dir,
             }) => {
                 // workaround to silence middleware logger by default
@@ -334,10 +333,11 @@ impl ServiceCommand {
                 env::set_var(
                     "RUST_LOG",
                     env::var("RUST_LOG")
-                        .unwrap_or(format!("{},actix_web::middleware::logger=warn", log_level)),
+                        .unwrap_or(format!("info,actix_web::middleware::logger=warn",)),
                 );
+
                 set_logging(
-                    &log_level,
+                    "info",
                     match log_dir {
                         Some(log_dir) => log_dir.as_path(),
                         None => &ctx.data_dir,
