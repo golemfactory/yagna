@@ -4,7 +4,7 @@ use chrono::{DateTime, Duration, TimeZone, Utc};
 use ya_agreement_utils::OfferDefinition;
 use ya_client_model::market::Reason;
 
-use crate::market::negotiator::factory::LimitAgreementsNegotiatorConfig;
+use crate::market::negotiator::factory::AgreementExpirationNegotiatorConfig;
 use crate::market::negotiator::{
     AgreementResult, NegotiationResult, NegotiatorComponent, ProposalView,
 };
@@ -16,11 +16,11 @@ pub struct LimitExpiration {
 }
 
 impl LimitExpiration {
-    pub fn new(_config: &LimitAgreementsNegotiatorConfig) -> LimitExpiration {
-        LimitExpiration {
-            min_expiration: Duration::minutes(5),
-            max_expiration: Duration::minutes(30),
-        }
+    pub fn new(config: &AgreementExpirationNegotiatorConfig) -> anyhow::Result<LimitExpiration> {
+        Ok(LimitExpiration {
+            min_expiration: chrono::Duration::from_std(config.min_agreement_expiration)?,
+            max_expiration: chrono::Duration::from_std(config.max_agreement_expiration)?,
+        })
     }
 }
 

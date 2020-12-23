@@ -12,7 +12,7 @@ use super::{NegotiationResult, NegotiatorsPack};
 use crate::market::negotiator::common::{
     AgreementFinalized, CreateOffer, ReactToAgreement, ReactToProposal,
 };
-use crate::market::negotiator::factory::LimitAgreementsNegotiatorConfig;
+use crate::market::negotiator::factory::CompositeNegotiatorConfig;
 use crate::market::negotiator::{NegotiatorComponent, ProposalView};
 use crate::market::ProviderMarket;
 
@@ -24,13 +24,19 @@ pub struct CompositeNegotiator {
 impl CompositeNegotiator {
     pub fn new(
         _market: Addr<ProviderMarket>,
-        config: &LimitAgreementsNegotiatorConfig,
-    ) -> CompositeNegotiator {
+        config: &CompositeNegotiatorConfig,
+    ) -> anyhow::Result<CompositeNegotiator> {
         let components = NegotiatorsPack::new()
-            .add_component("LimitAgreements", Box::new(MaxAgreements::new(&config)))
-            .add_component("LimitExpiration", Box::new(LimitExpiration::new(&config)));
+            .add_component(
+                "LimitAgreements",
+                Box::new(MaxAgreements::new(&config.limit_agreements_config)),
+            )
+            .add_component(
+                "LimitExpiration",
+                Box::new(LimitExpiration::new(&config.expire_agreements_config)?),
+            );
 
-        CompositeNegotiator { components }
+        Ok(CompositeNegotiator { components })
     }
 }
 

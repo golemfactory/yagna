@@ -11,7 +11,7 @@ pub struct MarketConfig {
     pub negotiation_events_interval: f32,
     #[structopt(long, env, default_value = "10.0")]
     pub agreement_approve_timeout: f32,
-    #[structopt(long, env, default_value = "LimitAgreements")]
+    #[structopt(long, env, default_value = "Composite")]
     pub negotiator_type: String,
     #[structopt(flatten)]
     pub negotiator_config: NegotiatorsConfig,

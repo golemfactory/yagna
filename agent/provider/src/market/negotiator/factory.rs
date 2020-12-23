@@ -1,4 +1,5 @@
 use actix::Addr;
+use humantime;
 use structopt::StructOpt;
 
 use super::common::NegotiatorAddr;
@@ -8,18 +9,35 @@ use crate::market::negotiator::{AcceptAllNegotiator, CompositeNegotiator};
 use crate::market::ProviderMarket;
 use std::sync::Arc;
 
-/// Configuration for ProviderMarket actor.
+/// Configuration for LimitAgreements Negotiator.
 #[derive(StructOpt, Clone, Debug)]
 pub struct LimitAgreementsNegotiatorConfig {
     #[structopt(long, env, default_value = "1")]
     pub max_simultaneous_agreements: u32,
 }
 
-/// Configuration for ProviderMarket actor.
+/// Configuration for LimitAgreements Negotiator.
+#[derive(StructOpt, Clone, Debug)]
+pub struct AgreementExpirationNegotiatorConfig {
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "5min")]
+    pub min_agreement_expiration: std::time::Duration,
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "30min")]
+    pub max_agreement_expiration: std::time::Duration,
+}
+
+/// Configuration for LimitAgreements Negotiator.
+#[derive(StructOpt, Clone, Debug)]
+pub struct CompositeNegotiatorConfig {
+    #[structopt(flatten)]
+    pub limit_agreements_config: LimitAgreementsNegotiatorConfig,
+    #[structopt(flatten)]
+    pub expire_agreements_config: AgreementExpirationNegotiatorConfig,
+}
+
 #[derive(StructOpt, Clone, Debug)]
 pub struct NegotiatorsConfig {
     #[structopt(flatten)]
-    pub limit_agreements_config: LimitAgreementsNegotiatorConfig,
+    pub composite_config: CompositeNegotiatorConfig,
 }
 
 pub fn create_negotiator(
@@ -29,12 +47,14 @@ pub fn create_negotiator(
     let negotiator = match &config.negotiator_type[..] {
         "LimitAgreements" => NegotiatorAddr::from(LimitAgreementsNegotiator::new(
             market,
-            &config.negotiator_config.limit_agreements_config,
+            &config
+                .negotiator_config
+                .composite_config
+                .limit_agreements_config,
         )),
-        "Composite" => NegotiatorAddr::from(CompositeNegotiator::new(
-            market,
-            &config.negotiator_config.limit_agreements_config,
-        )),
+        "Composite" => NegotiatorAddr::from(
+            CompositeNegotiator::new(market, &config.negotiator_config.composite_config).unwrap(),
+        ),
         "AcceptAll" => NegotiatorAddr::from(AcceptAllNegotiator::new()),
         _ => Default::default(),
     };
