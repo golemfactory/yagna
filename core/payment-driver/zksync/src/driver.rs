@@ -241,18 +241,31 @@ impl PaymentDriverCron for ZksyncDriver {
             // Check_tx returns None when the result is unknown
             if let Some(result) = wallet::check_tx(&tx_hash).await {
                 let payments = self.dao.transaction_confirmed(&tx.tx_id, result).await;
-                let driver_name = self.get_name();
-                for pay in payments {
-                    let details = utils::db_to_payment_details(&pay);
-                    // TODO: Provider needs method to fetch details based on hash
-                    // let tx_hash = hex::decode(&tx_hash).unwrap();
-                    let tx_hash = to_confirmation(&details).unwrap();
-                    if let Err(e) =
-                        bus::notify_payment(&driver_name, &pay.order_id, &details, tx_hash).await
-                    {
-                        log::error!("{}", e)
-                    };
+                if !result {
+                    log::warn!("Payment failed, will be re-tried.");
+                    continue;
                 }
+
+                let order_ids = payments
+                    .iter()
+                    .map(|payment| payment.order_id.clone())
+                    .collect();
+
+                // Create bespoke payment details:
+                // - Sender + receiver are the same
+                // - Date is always now
+                // - Amount needs to be updated to total of all PaymentEntity's
+                let mut details = utils::db_to_payment_details(&payments.first().unwrap());
+                details.amount = payments
+                    .into_iter()
+                    .map(|payment| utils::db_amount_to_big_dec(payment.amount))
+                    .sum::<BigDecimal>();
+                let tx_hash = to_confirmation(&details).unwrap();
+                if let Err(e) =
+                    bus::notify_payment(&self.get_name(), order_ids, &details, tx_hash).await
+                {
+                    log::error!("{}", e)
+                };
             }
         }
     }
