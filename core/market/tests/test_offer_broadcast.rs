@@ -14,18 +14,17 @@ use ya_market::testing::{QueryOfferError, SubscriptionId};
 /// Test adds offer. It should be broadcasted to other nodes in the network.
 /// Than sending unsubscribe should remove Offer from other nodes.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
-async fn test_broadcast_offer() -> Result<(), anyhow::Error> {
+async fn test_broadcast_offer() {
     let _ = env_logger::builder().try_init();
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?
+        .await
         .add_market_instance("Node-2")
-        .await?
+        .await
         .add_market_instance("Node-3")
-        .await?;
+        .await;
 
     // Add Offer on Node-1. It should be propagated to remaining nodes.
     let market1 = network.get_market("Node-1");
@@ -33,26 +32,28 @@ async fn test_broadcast_offer() -> Result<(), anyhow::Error> {
 
     let subscription_id = market1
         .subscribe_offer(&client::sample_offer(), &id1)
-        .await?;
-    let offer = market1.get_offer(&subscription_id).await?;
+        .await
+        .unwrap();
+    let offer = market1.get_offer(&subscription_id).await.unwrap();
 
     // Expect, that Offer will appear on other nodes.
     let market2 = network.get_market("Node-2");
     let market3 = network.get_market("Node-3");
     wait_for_bcast(1000, &market2, &subscription_id, true).await;
-    assert_eq!(offer, market2.get_offer(&subscription_id).await?);
-    assert_eq!(offer, market3.get_offer(&subscription_id).await?);
+    assert_eq!(offer, market2.get_offer(&subscription_id).await.unwrap());
+    assert_eq!(offer, market3.get_offer(&subscription_id).await.unwrap());
 
     // Unsubscribe Offer. Wait some delay for propagation.
-    market1.unsubscribe_offer(&subscription_id, &id1).await?;
+    market1
+        .unsubscribe_offer(&subscription_id, &id1)
+        .await
+        .unwrap();
     let expected_error = QueryOfferError::Unsubscribed(subscription_id.clone());
     assert_err_eq!(expected_error, market1.get_offer(&subscription_id).await);
     // Expect, that Offer will disappear on other nodes.
     wait_for_bcast(1000, &market2, &subscription_id, false).await;
     assert_err_eq!(expected_error, market2.get_offer(&subscription_id).await);
     assert_err_eq!(expected_error, market2.get_offer(&subscription_id).await);
-
-    Ok(())
 }
 
 /// This test checks, if Discovery interface calls expected sequence of callbacks.
@@ -64,14 +65,13 @@ async fn test_broadcast_offer() -> Result<(), anyhow::Error> {
 /// If it is rejected, we can't trust other tests, that check if broadcasts validation
 /// works correctly.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
-async fn test_broadcast_offer_callbacks() -> Result<(), anyhow::Error> {
+async fn test_broadcast_offer_callbacks() {
     let _ = env_logger::builder().try_init();
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?;
+        .await;
 
     let market1 = network.get_market("Node-1");
 
@@ -87,34 +87,36 @@ async fn test_broadcast_offer_callbacks() -> Result<(), anyhow::Error> {
                 async move { Ok(vec![offer]) }
             }),
         )
-        .await?;
+        .await;
     let discovery2: Discovery = network.get_discovery("Node-2");
 
-    discovery2.bcast_offers(vec![offer_id.clone()]).await?;
-    tokio::time::delay_for(Duration::from_millis(50)).await;
+    discovery2
+        .bcast_offers(vec![offer_id.clone()])
+        .await
+        .unwrap();
 
-    let offer = market1.get_offer(&offer_id).await?;
+    wait_for_bcast(1000, &market1, &offer_id, true).await;
+
+    let offer = market1.get_offer(&offer_id).await.unwrap();
     assert_eq!(offer_clone, offer);
-    Ok(())
 }
 
 /// Offer subscription id should be validated on reception. If Offer
 /// id hash doesn't match hash computed from Offer fields, Market should
 /// reject such an Offer since it could be some kind of attack.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
-async fn test_broadcast_offer_id_validation() -> Result<(), anyhow::Error> {
+async fn test_broadcast_offer_id_validation() {
     let _ = env_logger::builder().try_init();
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?;
+        .await;
 
     let market1 = network.get_market("Node-1");
 
     // Prepare Offer with subscription id changed to invalid.
-    let invalid_id = SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53")?;
+    let invalid_id = SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53").unwrap();
     let mut offer = sample_offer();
     offer.id = invalid_id.clone();
 
@@ -126,30 +128,31 @@ async fn test_broadcast_offer_id_validation() -> Result<(), anyhow::Error> {
                 async move { Ok(vec![offer]) }
             }),
         )
-        .await?;
+        .await;
     let discovery2: Discovery = network.get_discovery("Node-2");
 
     // Offer should be propagated to market1, but he should reject it.
-    discovery2.bcast_offers(vec![invalid_id.clone()]).await?;
-    tokio::time::delay_for(Duration::from_millis(50)).await;
+    discovery2
+        .bcast_offers(vec![invalid_id.clone()])
+        .await
+        .unwrap();
 
+    wait_for_bcast(100, &market1, &invalid_id, false).await;
     assert_err_eq!(
         QueryOfferError::NotFound(invalid_id.clone()),
         market1.get_offer(&invalid_id).await,
     );
-    Ok(())
 }
 
 /// Node should reject Offer, that already expired.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
-async fn test_broadcast_expired_offer() -> Result<(), anyhow::Error> {
+async fn test_broadcast_expired_offer() {
     let _ = env_logger::builder().try_init();
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?;
+        .await;
 
     let market1 = network.get_market("Node-1");
 
@@ -166,12 +169,16 @@ async fn test_broadcast_expired_offer() -> Result<(), anyhow::Error> {
                 async move { Ok(vec![offer]) }
             }),
         )
-        .await?;
+        .await;
     let discovery2: Discovery = network.get_discovery("Node-2");
 
     // Offer should be propagated to market1, but he should reject it.
-    discovery2.bcast_offers(vec![offer_id.clone()]).await?;
-    tokio::time::delay_for(Duration::from_millis(50)).await;
+    discovery2
+        .bcast_offers(vec![offer_id.clone()])
+        .await
+        .unwrap();
+
+    wait_for_bcast(100, &market1, &offer_id, false).await;
 
     // This should return NotFound, because Market shouldn't add this Offer
     // to database at all.
@@ -179,7 +186,6 @@ async fn test_broadcast_expired_offer() -> Result<(), anyhow::Error> {
         QueryOfferError::NotFound(offer_id.clone()),
         market1.get_offer(&offer_id).await,
     );
-    Ok(())
 }
 
 /// Nodes shouldn't broadcast unsubscribed Offers.
@@ -187,16 +193,15 @@ async fn test_broadcast_expired_offer() -> Result<(), anyhow::Error> {
 /// behave. We expect that market nodes will stop broadcast and Discovery interface will
 /// get Offer only from himself.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
-async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
+async fn test_broadcast_stop_conditions() {
     let _ = env_logger::builder().try_init();
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?
+        .await
         .add_market_instance("Node-2")
-        .await?;
+        .await;
 
     // Add Offer on Node-1. It should be propagated to remaining nodes.
     let market1 = network.get_market("Node-1");
@@ -204,19 +209,21 @@ async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
 
     let subscription_id = market1
         .subscribe_offer(&client::sample_offer(), &identity1)
-        .await?;
-    let offer = market1.get_offer(&subscription_id).await?;
+        .await
+        .unwrap();
+    let offer = market1.get_offer(&subscription_id).await.unwrap();
 
     // Expect, that Offer will appear on other nodes.
     let market2 = network.get_market("Node-2");
     wait_for_bcast(1000, &market2, &subscription_id, true).await;
-    assert_eq!(offer, market2.get_offer(&subscription_id).await?);
+    assert_eq!(offer, market2.get_offer(&subscription_id).await.unwrap());
 
     // Unsubscribe Offer. It should be unsubscribed on all Nodes and removed from
     // database on Node-2, since it's foreign Offer.
     market1
         .unsubscribe_offer(&subscription_id, &identity1)
-        .await?;
+        .await
+        .unwrap();
     assert_err_eq!(
         QueryOfferError::Unsubscribed(subscription_id.clone()),
         market1.get_offer(&subscription_id).await
@@ -248,14 +255,16 @@ async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
     );
     let network = network
         .add_discovery_instance("Node-3", discovery_builder)
-        .await?;
+        .await;
 
     // Broadcast already unsubscribed Offer. We will count number of Offers that will come back.
     let discovery3: Discovery = network.get_discovery("Node-3");
-    discovery3.bcast_offers(vec![offer.id]).await?;
+    discovery3.bcast_offers(vec![offer.id]).await.unwrap();
 
     // Wait for broadcast.
-    tokio::time::timeout(Duration::from_millis(150), rx.next()).await?;
+    tokio::time::timeout(Duration::from_millis(150), rx.next())
+        .await
+        .unwrap();
 
     assert_eq!(
         offers_counter.load(Ordering::SeqCst),
@@ -272,24 +281,21 @@ async fn test_broadcast_stop_conditions() -> Result<(), anyhow::Error> {
         QueryOfferError::Unsubscribed(subscription_id.clone()),
         market2.get_offer(&subscription_id).await,
     );
-
-    Ok(())
 }
 
 /// Discovery `RetrieveOffers` GSB endpoint should return only existing Offers.
 /// Test sends RetrieveOffers requesting existing and not existing subscription.
 /// Market is expected to return only existing Offer without any error.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
-#[actix_rt::test]
 #[serial_test::serial]
-async fn test_discovery_get_offers() -> Result<(), anyhow::Error> {
+async fn test_discovery_get_offers() {
     let _ = env_logger::builder().try_init();
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await?
+        .await
         .add_discovery_instance("Node-2", MarketsNetwork::discovery_builder())
-        .await?;
+        .await;
 
     let market1 = network.get_market("Node-1");
     let id1 = network.get_default_id("Node-1");
@@ -297,7 +303,8 @@ async fn test_discovery_get_offers() -> Result<(), anyhow::Error> {
 
     let subscription_id = market1
         .subscribe_offer(&client::sample_offer(), &id1)
-        .await?;
+        .await
+        .unwrap();
     let invalid_subscription = "00000000000000000000000000000001-0000000000000000000000000000000000000000000000000000000000000002".parse().unwrap();
 
     let offers = discovery2
@@ -305,9 +312,9 @@ async fn test_discovery_get_offers() -> Result<(), anyhow::Error> {
             id1.identity.to_string(),
             vec![subscription_id.clone(), invalid_subscription],
         )
-        .await?;
+        .await
+        .unwrap();
 
     assert_eq!(offers.len(), 1);
     assert_eq!(offers[0].id, subscription_id);
-    Ok(())
 }
