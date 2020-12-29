@@ -19,7 +19,7 @@ use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
 use ya_sgx::SgxService;
 
-use ya_file_logging::set_logging;
+use ya_file_logging::start_logger;
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
@@ -96,7 +96,7 @@ impl CliArgs {
         let ctx: CliCtx = (&self).try_into()?;
 
         ctx.output(self.command.run_command(&ctx).await?);
-        Ok::<_, anyhow::Error>(())
+        Ok(())
     }
 }
 
@@ -105,7 +105,6 @@ impl TryFrom<&CliArgs> for CliCtx {
 
     fn try_from(args: &CliArgs) -> Result<Self, Self::Error> {
         let data_dir = args.get_data_dir()?;
-        log::info!("Using data dir: {:?} ", data_dir);
 
         Ok(CliCtx {
             data_dir,
@@ -254,7 +253,7 @@ impl CliCommand {
     pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
             CliCommand::Commands(command) => {
-                set_logging("warn", &Path::new(""), &vec![])?;
+                start_logger("info", None, &vec![])?;
                 command.run_command(ctx).await
             }
             CliCommand::Complete(complete) => complete.run_command(ctx),
@@ -336,12 +335,9 @@ impl ServiceCommand {
                         .unwrap_or(format!("info,actix_web::middleware::logger=warn",)),
                 );
 
-                set_logging(
+                let logger_handle = start_logger(
                     "info",
-                    match log_dir {
-                        Some(log_dir) => log_dir.as_path(),
-                        None => &ctx.data_dir,
-                    },
+                    log_dir.as_deref().or(Some(&ctx.data_dir)),
                     &vec![
                         ("actix_http::response", log::LevelFilter::Off),
                         ("tokio_core", log::LevelFilter::Info),
@@ -353,12 +349,15 @@ impl ServiceCommand {
                     ],
                 )?;
 
+                let app_name = clap::crate_name!();
                 log::info!(
                     "Starting {} service! Version: {}.",
-                    clap::crate_name!(),
+                    app_name,
                     ya_compile_time_utils::version_describe!()
                 );
-                let _lock = ProcLock::new("yagna", &ctx.data_dir)?.lock(std::process::id())?;
+                log::info!("Data directory: {}", ctx.data_dir.display());
+
+                let _lock = ProcLock::new(app_name, &ctx.data_dir)?.lock(std::process::id())?;
 
                 ya_sb_router::bind_gsb_router(ctx.gsb_url.clone())
                     .await
@@ -395,7 +394,8 @@ impl ServiceCommand {
 
                 future::try_join(server.run(), sd_notify(false, "READY=1")).await?;
 
-                log::info!("{} daemon successfully finished!", clap::crate_name!());
+                log::info!("{} service successfully finished!", app_name);
+                logger_handle.shutdown();
                 Ok(CommandOutput::NoOutput)
             }
         }

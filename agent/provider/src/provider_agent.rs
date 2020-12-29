@@ -24,6 +24,7 @@ use ya_agreement_utils::agreement::TypedArrayPointer;
 use ya_agreement_utils::*;
 use ya_client::cli::ProviderApi;
 use ya_client_model::payment::Account;
+use ya_file_logging::{start_logger, ReconfigurationHandle};
 use ya_utils_actix::actix_handler::send_message;
 use ya_utils_path::SwapSave;
 
@@ -35,6 +36,7 @@ pub struct ProviderAgent {
     presets: PresetManager,
     hardware: hardware::Manager,
     accounts: Vec<Account>,
+    log_handler: ReconfigurationHandle,
 }
 
 struct GlobalsManager {
@@ -123,7 +125,16 @@ impl GlobalsState {
 
 impl ProviderAgent {
     pub async fn new(mut args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
-        let data_dir = config.data_dir.get_or_create()?.as_path().to_path_buf();
+        let data_dir = config.data_dir.get_or_create()?;
+        let log_handler = start_logger("info", Some(&data_dir), &vec![])?;
+        let app_name = structopt::clap::crate_name!();
+        log::info!(
+            "Starting {}. Version: {}.",
+            structopt::clap::crate_name!(),
+            ya_compile_time_utils::version_describe!()
+        );
+        log::info!("Data directory: {}", data_dir.display());
+
         let api = ProviderApi::try_from(&args.api)?;
 
         log::info!("Loading payment accounts...");
@@ -133,11 +144,7 @@ impl ProviderAgent {
         registry.validate()?;
 
         // Generate session id from node name and process id to make sure it's unique.
-        let name = args
-            .node
-            .node_name
-            .clone()
-            .unwrap_or("provider".to_string());
+        let name = args.node.node_name.clone().unwrap_or(app_name.to_string());
         args.market.session_id = format!("{}-[{}]", name, std::process::id());
 
         let mut globals = GlobalsManager::try_new(&config.globals_file, args.node)?;
@@ -160,6 +167,7 @@ impl ProviderAgent {
             presets,
             hardware,
             accounts,
+            log_handler,
         })
     }
 
@@ -414,10 +422,12 @@ impl Handler<Shutdown> for ProviderAgent {
     fn handle(&mut self, _: Shutdown, _: &mut Context<Self>) -> Self::Result {
         let market = self.market.clone();
         let runner = self.runner.clone();
+        let log_handler = self.log_handler.clone();
 
         async move {
             market.send(MarketShutdown).await??;
             runner.send(ShutdownExecution).await??;
+            log_handler.shutdown();
             Ok(())
         }
         .boxed_local()

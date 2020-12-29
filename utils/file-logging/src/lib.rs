@@ -6,6 +6,8 @@ use flexi_logger::{
 };
 use std::path::Path;
 
+pub use flexi_logger::ReconfigurationHandle;
+
 fn log_format(
     w: &mut dyn std::io::Write,
     now: &mut DeferredNow,
@@ -50,26 +52,25 @@ fn set_logging_to_files(logger: Logger, log_dir: &Path) -> Logger {
         .duplicate_to_stderr(Duplicate::All)
 }
 
-pub fn set_logging(
-    default_log_level: &str,
-    log_dir: &Path,
-    filters: &[(&str, log::LevelFilter)],
-) -> Result<()> {
-    let log_spec = LogSpecification::env_or_parse(default_log_level)?;
+pub fn start_logger(
+    default_log_spec: &str,
+    log_dir: Option<&Path>,
+    module_filters: &[(&str, log::LevelFilter)],
+) -> Result<ReconfigurationHandle> {
+    let log_spec = LogSpecification::env_or_parse(default_log_spec)?;
     let mut log_spec_builder = LogSpecBuilder::from_module_filters(log_spec.module_filters());
-    for filter in filters {
+    for filter in module_filters {
         log_spec_builder.module(filter.0, filter.1);
     }
     let log_spec = log_spec_builder.finalize();
 
     let mut logger = Logger::with(log_spec).format(log_format);
-    if log_dir.components().count() != 0 {
+    if let Some(log_dir) = log_dir {
         logger = set_logging_to_files(logger, log_dir);
     }
     logger = logger
         .adaptive_format_for_stderr(AdaptiveFormat::Custom(log_format, log_format_color))
         .set_palette("9;11;2;7;8".to_string());
 
-    logger.start()?;
-    Ok(())
+    Ok(logger.start()?)
 }
