@@ -287,7 +287,7 @@ struct ServiceCommandOpts {
     max_rest_timeout: usize,
 
     /// Create logs in this directory. Logs are automatically rotated and compressed.
-    /// If unset, then it's the same as datadir.
+    /// If unset, then `data_dir` is used.
     /// If set to empty string, then logging to files is disabled.
     #[structopt(long, env = "YAGNA_LOG_DIR")]
     log_dir: Option<PathBuf>,
@@ -337,7 +337,12 @@ impl ServiceCommand {
 
                 let logger_handle = start_logger(
                     "info",
-                    log_dir.as_deref().or(Some(&ctx.data_dir)),
+                    log_dir.as_deref().or(Some(&ctx.data_dir)).and_then(|path| {
+                        match path.components().count() {
+                            0 => None,
+                            _ => Some(path),
+                        }
+                    }),
                     &vec![
                         ("actix_http::response", log::LevelFilter::Off),
                         ("tokio_core", log::LevelFilter::Info),
