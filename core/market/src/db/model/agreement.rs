@@ -10,6 +10,7 @@ use ya_client::model::market::offer::Offer as ClientOffer;
 use ya_client::model::{ErrorMessage, NodeId};
 use ya_diesel_utils::DbTextField;
 
+use crate::db::dao::AgreementDaoError;
 use crate::db::model::{OwnerType, Proposal, ProposalId, SubscriptionId};
 use crate::db::schema::market_agreement;
 
@@ -166,7 +167,7 @@ impl Agreement {
             approved_date: self.approved_ts.map(|d| DateTime::<Utc>::from_utc(d, Utc)),
             state: self.state.into(),
             timestamp: Utc.from_utc_datetime(&self.creation_ts),
-            app_session_id: None,
+            app_session_id: self.session_id,
             proposed_signature: self.proposed_signature,
             approved_signature: self.approved_signature,
             committed_signature: self.committed_signature,
@@ -186,4 +187,33 @@ impl From<AgreementState> for ClientAgreementState {
             AgreementState::Terminated => ClientAgreementState::Terminated,
         }
     }
+}
+
+pub fn check_transition(from: AgreementState, to: AgreementState) -> Result<(), AgreementDaoError> {
+    log::trace!("Checking Agreement state transition: {} => {}", from, to);
+    match from {
+        AgreementState::Proposal => match to {
+            AgreementState::Pending => return Ok(()),
+            AgreementState::Cancelled => return Ok(()),
+            AgreementState::Expired => return Ok(()),
+            _ => (),
+        },
+        AgreementState::Pending => match to {
+            AgreementState::Cancelled => return Ok(()),
+            AgreementState::Rejected => return Ok(()),
+            AgreementState::Approved => return Ok(()),
+            AgreementState::Expired => return Ok(()),
+            _ => (),
+        },
+        AgreementState::Cancelled => (),
+        AgreementState::Rejected => (),
+        AgreementState::Approved => match to {
+            AgreementState::Terminated => return Ok(()),
+            _ => (),
+        },
+        AgreementState::Expired => (),
+        AgreementState::Terminated => (),
+    };
+
+    Err(AgreementDaoError::InvalidTransition { from, to })
 }
