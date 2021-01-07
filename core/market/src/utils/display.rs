@@ -1,6 +1,7 @@
 use std::fmt::{Error, Formatter};
 
 use crate::db::model::{AgreementId, SubscriptionId};
+
 use ya_service_api_web::middleware::Identity;
 
 /// Pretty display vector, as list with all elements in separate row.

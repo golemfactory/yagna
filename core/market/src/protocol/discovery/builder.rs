@@ -156,7 +156,6 @@ mod test {
             .build();
     }
 
-    #[actix_rt::test]
     #[serial_test::serial]
     async fn build_from_with_overwritten_handlers_should_pass() {
         // given

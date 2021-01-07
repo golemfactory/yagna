@@ -5,7 +5,8 @@ use ya_client_model::market::{NewOffer, Proposal};
 use anyhow::Result;
 use derive_more::Display;
 
-use crate::task_state::BreakReason;
+use crate::market::termination_reason::BreakReason;
+use ya_client::model::market::Reason;
 
 /// Response for requestor proposals.
 #[derive(Debug, Display)]
@@ -21,7 +22,7 @@ pub enum ProposalResponse {
         "reason.as_ref().map(|r| format!(\" (reason: {})\", r)).unwrap_or(\"\".into())"
     )]
     RejectProposal {
-        reason: Option<String>,
+        reason: Option<Reason>,
     },
     ///< Don't send any message to requestor. Could be useful to wait for other offers.
     IgnoreProposal,
@@ -37,16 +38,18 @@ pub enum AgreementResponse {
         "reason.as_ref().map(|r| format!(\" (reason: {})\", r)).unwrap_or(\"\".into())"
     )]
     RejectAgreement {
-        reason: Option<String>,
+        reason: Option<Reason>,
     },
 }
 
 /// Result of agreement execution.
 pub enum AgreementResult {
-    /// Failed to approve agreement.
+    /// Failed to approve agreement. (Agreement even wasn't created)
     ApprovalFailed,
-    /// Agreement was finished with success.
-    Closed,
+    /// Agreement was finished with success after first Activity.
+    ClosedByUs,
+    /// Agreement was finished with success by Requestor.
+    ClosedByRequestor,
     /// Agreement was broken by us.
     Broken { reason: BreakReason },
 }
@@ -57,7 +60,7 @@ pub trait Negotiator {
     fn create_offer(&mut self, node_info: &OfferDefinition) -> Result<NewOffer>;
 
     /// Agreement notifications. Negotiator can adjust his strategy based on it.
-    fn agreement_finalized(&mut self, agreement_id: &str, result: AgreementResult) -> Result<()>;
+    fn agreement_finalized(&mut self, agreement_id: &str, result: &AgreementResult) -> Result<()>;
 
     /// Reactions to events from market. These function make market decisions.
     fn react_to_proposal(
@@ -79,7 +82,7 @@ mod tests {
         };
         let no_reason = ProposalResponse::RejectProposal { reason: None };
 
-        assert_eq!(reason.to_string(), "RejectProposal (reason: zima)");
+        assert_eq!(reason.to_string(), "RejectProposal (reason: 'zima')");
         assert_eq!(no_reason.to_string(), "RejectProposal");
     }
 
@@ -90,7 +93,7 @@ mod tests {
         };
         let no_reason = AgreementResponse::RejectAgreement { reason: None };
 
-        assert_eq!(reason.to_string(), "RejectAgreement (reason: lato)");
+        assert_eq!(reason.to_string(), "RejectAgreement (reason: 'lato')");
         assert_eq!(no_reason.to_string(), "RejectAgreement");
     }
 }

@@ -89,10 +89,9 @@ pub async fn negotiate_agreement_with_ids(
     })
 }
 
-pub fn gen_reason(message: &str) -> String {
-    let reason = Reason {
+pub fn gen_reason(message: &str) -> Reason {
+    Reason {
         message: message.to_string(),
         extra: Default::default(),
-    };
-    serde_json::to_string(&reason).unwrap()
+    }
 }

@@ -11,7 +11,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::db::{
-    dao::{AgreementDao, NegotiationEventsDao, ProposalDao, SaveAgreementError, StateError},
+    dao::{AgreementDao, AgreementDaoError, NegotiationEventsDao, ProposalDao, SaveAgreementError},
     model::{Agreement, AgreementId, AgreementState, AppSessionId},
     model::{Demand, IssuerType, OwnerType, Proposal, ProposalId, SubscriptionId},
     DbResult,
@@ -84,12 +84,14 @@ impl RequestorBroker {
         counter!("market.agreements.requestor.approved", 0);
         counter!("market.agreements.requestor.rejected", 0);
         counter!("market.agreements.requestor.cancelled", 0);
-        counter!("market.agreements.requestor.terminated", 0);
         counter!("market.proposals.requestor.generated", 0);
         counter!("market.proposals.requestor.received", 0);
         counter!("market.proposals.requestor.countered", 0);
         counter!("market.events.requestor.queried", 0);
         counter!("market.agreements.events.queried", 0);
+        counter!("market.agreements.requestor.terminated", 0);
+        counter!("market.agreements.requestor.terminated.reason", 0, "reason" => "NotSpecified");
+        counter!("market.agreements.requestor.terminated.reason", 0, "reason" => "Success");
 
         tokio::spawn(proposal_receiver_thread(db, proposal_receiver, notifier));
         Ok(engine)
@@ -361,7 +363,7 @@ impl RequestorBroker {
     ) -> Result<(), AgreementError> {
         let dao = self.common.db.as_dao::<AgreementDao>();
 
-        let mut agreement = match dao
+        let agreement = match dao
             .select(
                 agreement_id,
                 Some(id.identity.clone()),
@@ -374,12 +376,11 @@ impl RequestorBroker {
             Some(agreement) => agreement,
         };
 
-        expect_state(&agreement, AgreementState::Proposal)?;
+        validate_transition(&agreement, AgreementState::Pending)?;
 
         // TODO : possible race condition here ISSUE#430
         // 1. this state check should be also `db.update_state`
         // 2. `db.update_state` must be invoked after successful propose_agreement
-        agreement.state = AgreementState::Pending;
         self.api.propose_agreement(&agreement).await?;
         dao.confirm(agreement_id, &app_session_id)
             .await
@@ -447,12 +448,14 @@ async fn agreement_approved(
         .approve(&msg.agreement_id, &None)
         .await
         .map_err(|err| match err {
-            StateError::InvalidTransition { id, from, .. } => {
+            AgreementDaoError::InvalidTransition { from, .. } => {
                 match from {
                     // Expired Agreement could be InvalidState either, but we want to explicit
                     // say to provider, that Agreement has expired.
-                    AgreementState::Expired => RemoteAgreementError::Expired(id),
-                    _ => RemoteAgreementError::InvalidState(id, from),
+                    AgreementState::Expired => {
+                        RemoteAgreementError::Expired(msg.agreement_id.clone())
+                    }
+                    _ => RemoteAgreementError::InvalidState(msg.agreement_id.clone(), from),
                 }
             }
             e => {

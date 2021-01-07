@@ -21,7 +21,7 @@ use super::common::CommonBroker;
 use super::error::*;
 use super::notifier::EventNotifier;
 use crate::config::Config;
-use crate::negotiation::common::expect_state;
+use crate::negotiation::common::validate_transition;
 use crate::utils::display::EnableDisplay;
 
 /// Provider part of negotiation logic.
@@ -74,6 +74,9 @@ impl ProviderBroker {
         counter!("market.proposals.provider.init-negotiation", 0);
         counter!("market.agreements.provider.proposed", 0);
         counter!("market.agreements.provider.approved", 0);
+        counter!("market.agreements.provider.terminated", 0);
+        counter!("market.agreements.provider.terminated.reason", 0, "reason" => "NotSpecified");
+        counter!("market.agreements.provider.terminated.reason", 0, "reason" => "Success");
 
         Ok(ProviderBroker {
             api,
@@ -202,7 +205,7 @@ impl ProviderBroker {
             Some(agreement) => agreement,
         };
 
-        expect_state(&agreement, AgreementState::Pending)?;
+        validate_transition(&agreement, AgreementState::Approved)?;
 
         // TODO: possible race condition here ISSUE#430
         // 1. this state check should be also `db.update_state`
