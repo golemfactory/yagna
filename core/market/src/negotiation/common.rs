@@ -11,6 +11,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::config::Config;
+use crate::db::model::check_transition;
 use crate::db::{
     dao::{
         AgreementDao, AgreementEventsDao, NegotiationEventsDao, ProposalDao, SaveProposalError,
@@ -22,11 +23,11 @@ use crate::db::{
     },
 };
 use crate::matcher::store::SubscriptionStore;
-use crate::negotiation::error::NegotiationError;
+use crate::negotiation::error::{NegotiationError, ProposalValidationError};
 use crate::negotiation::{
     error::{
-        AgreementError, AgreementEventsError, AgreementStateError, GetProposalError,
-        MatchValidationError, ProposalError, ProposalValidationError, QueryEventsError,
+        AgreementError, AgreementEventsError, GetProposalError, MatchValidationError,
+        ProposalError, QueryEventsError,
     },
     notifier::NotifierError,
     EventNotifier,
@@ -346,7 +347,7 @@ impl CommonBroker {
         reason: Option<Reason>,
     ) -> Result<(), AgreementError> {
         let dao = self.db.as_dao::<AgreementDao>();
-        let mut agreement = match dao
+        let agreement = match dao
             .select_by_node(
                 agreement_id.clone(),
                 id.identity.clone(),
@@ -361,36 +362,21 @@ impl CommonBroker {
 
         // From now on agreement_id is invalid. Use only agreement.id
         // (which has valid owner)
-        expect_state(&agreement, AgreementState::Approved)?;
-        agreement.state = AgreementState::Terminated;
-        let owner_type = agreement.id.owner();
+        validate_transition(&agreement, AgreementState::Terminated)?;
 
-        protocol_common::propagate_terminate_agreement(
-            &agreement,
-            id.identity.clone(),
-            match owner_type {
-                Owner::Requestor => agreement.provider_id,
-                Owner::Provider => agreement.requestor_id,
-            },
-            reason.clone(),
-        )
-        .await?;
+        protocol_common::propagate_terminate_agreement(&agreement, reason.clone()).await?;
 
         let reason_string = CommonBroker::reason2string(&reason);
 
-        dao.terminate(&agreement.id, reason_string, owner_type)
+        dao.terminate(&agreement.id, reason_string, agreement.id.owner())
             .await
-            .map_err(|e| AgreementError::Get(agreement.id.clone(), e))?;
+            .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?;
+        self.notify_agreement(&agreement).await;
 
-        match owner_type {
-            Owner::Provider => counter!("market.agreements.provider.terminated", 1),
-            Owner::Requestor => counter!("market.agreements.requestor.terminated", 1),
-        };
-
-        terminate_reason_metric(&reason, owner_type);
+        inc_terminate_metrics(&reason, agreement.id.owner());
         log::info!(
             "{:?} {} terminated Agreement [{}]. Reason: {}",
-            owner_type,
+            agreement.id.owner(),
             &id.display(),
             &agreement.id,
             reason.display(),
@@ -454,12 +440,9 @@ impl CommonBroker {
                 RemoteAgreementError::InternalError(agreement_id.clone())
             })?;
 
-        match caller_role {
-            Owner::Provider => counter!("market.agreements.provider.terminated", 1),
-            Owner::Requestor => counter!("market.agreements.requestor.terminated", 1),
-        };
+        self.notify_agreement(&agreement).await;
 
-        terminate_reason_metric(&msg.reason, caller_role);
+        inc_terminate_metrics(&msg.reason, agreement.id.owner());
         log::info!(
             "Received terminate Agreement [{}] from [{}]. Reason: {}",
             &agreement_id,
@@ -680,23 +663,12 @@ pub fn validate_match(
     }
 }
 
-pub fn expect_state(
+pub fn validate_transition(
     agreement: &Agreement,
     state: AgreementState,
-) -> Result<(), AgreementStateError> {
-    if agreement.state == state {
-        return Ok(());
-    }
-
-    Err(match agreement.state {
-        AgreementState::Proposal => AgreementStateError::Proposed(agreement.id.clone()),
-        AgreementState::Pending => AgreementStateError::Confirmed(agreement.id.clone()),
-        AgreementState::Cancelled => AgreementStateError::Cancelled(agreement.id.clone()),
-        AgreementState::Rejected => AgreementStateError::Rejected(agreement.id.clone()),
-        AgreementState::Approved => AgreementStateError::Approved(agreement.id.clone()),
-        AgreementState::Expired => AgreementStateError::Expired(agreement.id.clone()),
-        AgreementState::Terminated => AgreementStateError::Terminated(agreement.id.clone()),
-    })?
+) -> Result<(), AgreementError> {
+    check_transition(agreement.state, state)
+        .map_err(|e| AgreementError::UpdateState(agreement.id.clone(), e))
 }
 
 fn get_reason_code(reason: &Option<Reason>, key: &str) -> Option<String> {
@@ -715,12 +687,17 @@ fn get_reason_code(reason: &Option<Reason>, key: &str) -> Option<String> {
 /// This function extract from Reason additional information about termination reason
 /// and increments metric counter. Note that Reason isn't required to have any fields
 /// despite 'message'.
-pub fn terminate_reason_metric(reason: &Option<Reason>, caller_role: Owner) {
+pub fn inc_terminate_metrics(reason: &Option<Reason>, owner: Owner) {
+    match owner {
+        Owner::Provider => counter!("market.agreements.provider.terminated", 1),
+        Owner::Requestor => counter!("market.agreements.requestor.terminated", 1),
+    };
+
     let p_code = get_reason_code(reason, "golem.provider.code");
     let r_code = get_reason_code(reason, "golem.requestor.code");
 
     let reason_code = r_code.xor(p_code).unwrap_or("NotSpecified".to_string());
-    match caller_role {
+    match owner {
         Owner::Provider => {
             counter!("market.agreements.provider.terminated.reason", 1, "reason" => reason_code)
         }

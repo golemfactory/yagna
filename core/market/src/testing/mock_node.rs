@@ -2,6 +2,7 @@ use actix_http::{body::Body, Request};
 use actix_service::Service as ActixService;
 use actix_web::{dev::ServiceResponse, test, App};
 use anyhow::{anyhow, bail, Context, Result};
+use regex::Regex;
 use std::collections::HashMap;
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 
@@ -91,6 +92,19 @@ impl MockNodeKind {
     }
 }
 
+fn testname_from_backtrace(bn: &str) -> String {
+    log::info!("Test name to regex match: {}", &bn);
+    // Extract test name
+    let captures = Regex::new(r"(.*)::(.*)::\{\{.*")
+        .unwrap()
+        .captures(&bn)
+        .unwrap();
+    let filename = captures.get(1).unwrap().as_str().to_string();
+    let testname = captures.get(2).unwrap().as_str().to_string();
+
+    format!("{}.{}", filename, testname)
+}
+
 impl MarketsNetwork {
     /// Remember that test_name should be unique between all tests.
     /// It will be used to create directories and GSB binding points,
@@ -107,7 +121,9 @@ impl MarketsNetwork {
         if !bn.starts_with("test_") {
             bn = crate::testing::backtrace_util::generate_backtraced_name(Some(2));
         }
-        let tn = test_name.unwrap_or(bn.as_str());
+        bn = testname_from_backtrace(&bn);
+
+        let tn = test_name.unwrap_or(&bn);
         log::info!("Intializing MarketsNetwork. tn={}", tn);
         let test_dir = prepare_test_dir(&tn).unwrap();
 

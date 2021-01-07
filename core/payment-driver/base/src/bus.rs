@@ -130,7 +130,7 @@ pub async fn sign(node_id: NodeId, payload: Vec<u8>) -> Result<Vec<u8>, GenericE
 
 pub async fn notify_payment(
     driver_name: &str,
-    order_id: &str,
+    order_ids: Vec<String>,
     details: &PaymentDetails,
     confirmation: Vec<u8>,
 ) -> Result<(), GenericError> {
@@ -139,7 +139,7 @@ pub async fn notify_payment(
         amount: details.amount.clone(),
         sender: details.sender.clone(),
         recipient: details.recipient.clone(),
-        order_ids: vec![order_id.to_string()],
+        order_ids,
         confirmation: PaymentConfirmation { confirmation },
     };
     service(payment_srv::BUS_ID)

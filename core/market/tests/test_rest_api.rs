@@ -448,10 +448,10 @@ async fn test_terminate_agreement() {
     let req_id = network.get_default_id(REQ_NAME);
     let prov_id = network.get_default_id(PROV_NAME);
 
-    let reason = Reason {
+    let reason = Some(Reason {
         message: "coś".into(),
         extra: serde_json::json!({"ala":"ma kota"}),
-    };
+    });
     let url = format!(
         "/market-api/v1/agreements/{}/terminate",
         negotiation.r_agreement.into_client(),
@@ -486,7 +486,65 @@ async fn test_terminate_agreement() {
     );
 }
 
-// TODO: test invalid reason (without message)
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
+async fn test_terminate_agreement_without_reason() {
+    let _ = env_logger::builder().try_init();
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await
+        .add_market_instance(PROV_NAME)
+        .await;
+
+    let negotiation = negotiate_agreement(
+        &network,
+        REQ_NAME,
+        PROV_NAME,
+        "negotiation",
+        "r-session",
+        "p-session",
+    )
+    .await
+    .unwrap();
+
+    let req_id = network.get_default_id(REQ_NAME);
+    let prov_id = network.get_default_id(PROV_NAME);
+
+    let reason = Option::<Reason>::None;
+    let url = format!(
+        "/market-api/v1/agreements/{}/terminate",
+        negotiation.r_agreement.into_client(),
+    );
+    log::info!("Requesting url: {}", url);
+    let req = test::TestRequest::post()
+        .uri(&url)
+        .set_json(&reason)
+        .to_request();
+    let mut app = network.get_rest_app(REQ_NAME).await;
+    let resp = test::call_service(&mut app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    assert_eq!(
+        network
+            .get_market(REQ_NAME)
+            .get_agreement(&negotiation.r_agreement, &req_id)
+            .await
+            .unwrap()
+            .state,
+        client_agreement::State::Terminated
+    );
+    assert_eq!(
+        network
+            .get_market(PROV_NAME)
+            .get_agreement(&negotiation.p_agreement, &prov_id)
+            .await
+            .unwrap()
+            .state,
+        client_agreement::State::Terminated
+    );
+}
 
 // #[cfg_attr(not(feature = "test-suite"), ignore)]
 // #[actix_rt::test]

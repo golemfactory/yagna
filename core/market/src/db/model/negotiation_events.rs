@@ -12,7 +12,6 @@ use super::SubscriptionId;
 use crate::db::dao::{AgreementDao, ProposalDao};
 use crate::db::model::{Agreement, AgreementId, Owner, Proposal, ProposalId};
 use crate::db::schema::market_negotiation_event;
-use crate::db::DbError;
 
 #[derive(Error, Debug)]
 pub enum EventError {
@@ -20,8 +19,8 @@ pub enum EventError {
     ProposalNotFound(ProposalId),
     #[error("Proposal [{0}] not found.")]
     AgreementNotFound(AgreementId),
-    #[error("Failed get proposal from database. Error: {0}.")]
-    FailedGetProposal(DbError),
+    #[error("Failed get Proposal or Agreement from database. Error: {0}.")]
+    GetError(ProposalId, String),
     #[error("Unexpected error: {0}.")]
     InternalError(#[from] ErrorMessage),
 }
@@ -141,7 +140,7 @@ impl MarketEvent {
             .as_dao::<ProposalDao>()
             .get_proposal(&self.artifact_id)
             .await
-            .map_err(|error| EventError::FailedGetProposal(error))?
+            .map_err(|e| EventError::GetError(self.artifact_id.clone(), e.to_string()))?
             .ok_or(EventError::ProposalNotFound(self.artifact_id.clone()))?;
 
         Ok(prop.into_client()?)
@@ -152,7 +151,7 @@ impl MarketEvent {
             .as_dao::<AgreementDao>()
             .select(&self.artifact_id, None, Utc::now().naive_utc())
             .await
-            .map_err(|error| EventError::FailedGetProposal(error))?
+            .map_err(|e| EventError::GetError(self.artifact_id.clone(), e.to_string()))?
             .ok_or(EventError::AgreementNotFound(self.artifact_id.clone()))?;
 
         Ok(agreement.into_client()?)

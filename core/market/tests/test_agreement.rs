@@ -1,7 +1,7 @@
 use actix_web::{http::StatusCode, test, web::Bytes};
 use chrono::{Duration, Utc};
 
-use ya_core_model::market;
+use ya_core_model::{market, Role};
 use ya_market::assert_err_eq;
 use ya_market::testing::{
     agreement_utils::{gen_reason, negotiate_agreement},
@@ -10,8 +10,8 @@ use ya_market::testing::{
     mock_agreement::generate_agreement,
     mock_node::MarketServiceExt,
     proposal_util::{exchange_draft_proposals, NegotiationHelper},
-    AgreementDao, AgreementError, AgreementStateError, ApprovalStatus, MarketsNetwork, Owner,
-    ProposalState, WaitForApprovalError,
+    AgreementDao, AgreementDaoError, AgreementError, AgreementState, ApprovalStatus,
+    MarketsNetwork, Owner, ProposalState, WaitForApprovalError,
 };
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -38,19 +38,33 @@ async fn test_gsb_get_agreement() {
     let prov_id = network.get_default_id(PROV_NAME);
 
     let agreement_id = req_engine
-        .create_agreement(req_id.clone(), &proposal_id, Utc::now())
+        .create_agreement(
+            req_id.clone(),
+            &proposal_id,
+            Utc::now() + Duration::hours(1),
+        )
         .await
         .unwrap();
+
+    // than: confirm agreement with app_session_id
+    let sess_id = Some("sess-ajdi".into());
+    req_engine
+        .confirm_agreement(req_id.clone(), &agreement_id, sess_id.clone())
+        .await
+        .unwrap();
+
     let agreement = bus::service(network.node_gsb_prefixes(REQ_NAME).0)
-        .send(market::GetAgreement::as_requestor(
-            agreement_id.into_client(),
-        ))
+        .send(market::GetAgreement {
+            agreement_id: agreement_id.into_client(),
+            role: Role::Requestor,
+        })
         .await
         .unwrap()
         .unwrap();
     assert_eq!(agreement.agreement_id, agreement_id.into_client());
     assert_eq!(agreement.demand.requestor_id, req_id.identity);
     assert_eq!(agreement.offer.provider_id, prov_id.identity);
+    assert_eq!(agreement.app_session_id, sess_id);
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
@@ -272,7 +286,13 @@ async fn second_confirmation_should_fail() {
         .confirm_agreement(req_id.clone(), &agreement_id, None)
         .await;
     assert_err_eq!(
-        AgreementError::InvalidState(AgreementStateError::Confirmed(agreement_id)),
+        AgreementError::UpdateState(
+            agreement_id,
+            AgreementDaoError::InvalidTransition {
+                from: AgreementState::Pending,
+                to: AgreementState::Pending
+            }
+        ),
         result,
     );
 }
@@ -311,7 +331,13 @@ async fn agreement_expired_before_confirmation() {
 
     // results with Expired error
     assert_err_eq!(
-        AgreementError::InvalidState(AgreementStateError::Expired(agreement_id)),
+        AgreementError::UpdateState(
+            agreement_id,
+            AgreementDaoError::InvalidTransition {
+                from: AgreementState::Expired,
+                to: AgreementState::Pending
+            }
+        ),
         result,
     );
 }
@@ -600,7 +626,13 @@ async fn second_approval_should_fail() {
         .await;
     let agreement_id = agreement_id.clone().translate(Owner::Provider);
     assert_err_eq!(
-        AgreementError::InvalidState(AgreementStateError::Approved(agreement_id)),
+        AgreementError::UpdateState(
+            agreement_id,
+            AgreementDaoError::InvalidTransition {
+                from: AgreementState::Approved,
+                to: AgreementState::Approved
+            }
+        ),
         result
     );
 }
@@ -1009,7 +1041,13 @@ async fn test_terminate_from_wrong_states() {
 
     match result {
         Ok(_) => panic!("Terminate Agreement should fail."),
-        Err(AgreementError::InvalidState(AgreementStateError::Proposed(id))) => {
+        Err(AgreementError::UpdateState(
+            id,
+            AgreementDaoError::InvalidTransition {
+                from: AgreementState::Proposal,
+                to: AgreementState::Terminated,
+            },
+        )) => {
             assert_eq!(id, agreement_id)
         }
         e => panic!("Wrong error returned, got: {:?}", e),
@@ -1032,7 +1070,13 @@ async fn test_terminate_from_wrong_states() {
 
     match result {
         Ok(_) => panic!("Terminate Agreement should fail."),
-        Err(AgreementError::InvalidState(AgreementStateError::Confirmed(id))) => {
+        Err(AgreementError::UpdateState(
+            id,
+            AgreementDaoError::InvalidTransition {
+                from: AgreementState::Pending,
+                to: AgreementState::Terminated,
+            },
+        )) => {
             assert_eq!(id, agreement_id)
         }
         e => panic!("Wrong error returned, got: {:?}", e),
@@ -1046,7 +1090,13 @@ async fn test_terminate_from_wrong_states() {
 
     match result {
         Ok(_) => panic!("Terminate Agreement should fail."),
-        Err(AgreementError::InvalidState(AgreementStateError::Confirmed(id))) => {
+        Err(AgreementError::UpdateState(
+            id,
+            AgreementDaoError::InvalidTransition {
+                from: AgreementState::Pending,
+                to: AgreementState::Terminated,
+            },
+        )) => {
             assert_eq!(id, agreement_id)
         }
         e => panic!("Wrong error returned, got: {:?}", e),

@@ -7,9 +7,11 @@ use std::convert::From;
 use std::time::Duration;
 
 use ya_client_model::activity::{ActivityState, ActivityUsage, State, StatePair};
+use ya_client_model::market::agreement::State as AgreementState;
 use ya_client_model::NodeId;
 use ya_core_model::activity;
 use ya_core_model::activity::local::Credentials;
+use ya_core_model::activity::RpcMessageError;
 use ya_core_model::Role;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{timeout::*, typed::ServiceBinder};
@@ -66,6 +68,7 @@ pub fn bind_gsb(db: &DbExecutor) {
     // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
     // until first change to value will be made.
     counter!("activity.provider.created", 0);
+    counter!("activity.provider.create.agreement.not-approved", 0);
     counter!("activity.provider.destroyed", 0);
     counter!("activity.provider.destroyed.by_requestor", 0);
     counter!("activity.provider.destroyed.unresponsive", 0);
@@ -84,6 +87,20 @@ async fn create_activity_gsb(
     let activity_id = generate_id();
     let agreement = get_agreement(&msg.agreement_id, Role::Provider).await?;
     let app_session_id = agreement.app_session_id.clone();
+    if agreement.state != AgreementState::Approved {
+        // to track inconsistencies between this and remote market service
+        counter!("activity.provider.create.agreement.not-approved", 1);
+
+        let msg = format!(
+            "Agreement {} is not Approved. Current state: {:?}",
+            msg.agreement_id, agreement.state
+        );
+
+        log::warn!("{}", msg);
+        // below err would also pop up in requestor's corresponding create_activity
+        return Err(RpcMessageError::BadRequest(msg));
+    }
+
     let provider_id = agreement.provider_id().clone();
 
     db.as_dao::<ActivityDao>()
@@ -104,8 +121,6 @@ async fn create_activity_gsb(
         .await
         .map_err(Error::from)?;
 
-    counter!("activity.provider.created", 1);
-
     let credentials = activity_credentials(
         db.clone(),
         &activity_id,
@@ -123,6 +138,8 @@ async fn create_activity_gsb(
         ));
         Error::from(e)
     })?;
+
+    counter!("activity.provider.created", 1);
 
     Ok(if credentials.is_none() {
         activity::CreateResponseCompat::ActivityId(activity_id)
