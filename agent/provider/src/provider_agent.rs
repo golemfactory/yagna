@@ -1,3 +1,4 @@
+use crate::dir::clean_provider_dir;
 use crate::events::Event;
 use crate::execution::{
     GetExeUnit, GetOfferTemplates, Shutdown as ShutdownExecution, TaskRunner, UpdateActivity,
@@ -134,6 +135,13 @@ impl ProviderAgent {
             ya_compile_time_utils::version_describe!()
         );
         log::info!("Data directory: {}", data_dir.display());
+
+        {
+            log::info!("Performing disk cleanup...");
+            let freed = clean_provider_dir(&data_dir, "30d", false, false)?;
+            let human_freed = bytesize::to_string(freed, false);
+            log::info!("Freed {} of disk space", human_freed);
+        }
 
         let api = ProviderApi::try_from(&args.api)?;
 

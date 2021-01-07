@@ -3,6 +3,7 @@ use std::env;
 use structopt::{clap, StructOpt};
 
 mod cli;
+mod dir;
 mod events;
 mod execution;
 mod hardware;
@@ -14,6 +15,7 @@ mod signal;
 mod startup_config;
 mod tasks;
 
+use crate::dir::clean_provider_dir;
 use crate::hardware::Profiles;
 use crate::provider_agent::{Initialize, Shutdown};
 use crate::signal::SignalMonitor;
@@ -124,5 +126,19 @@ async fn main() -> anyhow::Result<()> {
         Commands::ExeUnit(exeunit_cmd) => match exeunit_cmd {
             ExeUnitsConfig::List => cli::list_exeunits(config),
         },
+        Commands::Clean(clean_cmd) => {
+            println!("Using data dir: {}", data_dir.display());
+
+            let freed = clean_provider_dir(data_dir, clean_cmd.expr, true, clean_cmd.dry_run)?;
+            let human_freed = bytesize::to_string(freed, false);
+
+            if clean_cmd.dry_run {
+                println!("Dry run: {} to be freed", human_freed)
+            } else {
+                println!("Freed {} of disk space", human_freed)
+            }
+
+            Ok(())
+        }
     }
 }

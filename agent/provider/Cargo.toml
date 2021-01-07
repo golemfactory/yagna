@@ -22,6 +22,7 @@ actix_derive = "0.5.0"
 anyhow = "1.0"
 backoff = "0.2.1"
 bigdecimal = "0.1.0"
+bytesize = "1.0.1"
 chrono = "0.4.10"
 derive_more = "0.99.5"
 dialoguer = "0.5.0"
@@ -50,6 +51,7 @@ sys-info = "0.7.0"
 thiserror = "1.0.14"
 tokio = { version = "0.2.10", features = ["process", "signal"] }
 url = "2.1.1"
+walkdir = "2.3.1"
 
 [target.'cfg(target_family = "unix")'.dependencies]
 nix = "0.17.0"
