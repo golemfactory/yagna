@@ -253,7 +253,7 @@ impl CliCommand {
     pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
             CliCommand::Commands(command) => {
-                start_logger("info", None, &vec![])?;
+                start_logger("warn", None, &vec![])?;
                 command.run_command(ctx).await
             }
             CliCommand::Complete(complete) => complete.run_command(ctx),
