@@ -9,21 +9,21 @@ license = "LGPL-3.0"
 description="Golem Service Bus"
 
 [features]
-default = ["json"]
+default = ["flex"]
 
+flex = ["flexbuffers"]
 json = ["serde_json"]
-msgpack = ["rmp-serde"]
 
 [dependencies]
 ya-sb-proto = { version = "0.1", path="../proto" }
 ya-sb-util = { version = "0.1", path="../util", features=["with-futures"] }
 
 actix = { version = "0.9", default-features = false }
+flexbuffers = { version = "0.2.1", optional = true }
 futures = "0.3"
 lazy_static = "1.4"
 log = "0.4"
 rand = "0.7.2"
-rmp-serde = {version = "=0.14.3", optional=true }
 serde = { version = "1.0.102", features = ["derive"] }
 serde_json = { version = "1.0.48", optional = true }
 thiserror = "1.0.9"

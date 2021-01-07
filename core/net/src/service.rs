@@ -5,10 +5,11 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use std::rc::Rc;
 
 use ya_core_model::identity::{self, IdentityInfo};
-use ya_core_model::net::{self, local as local_net, local::SendBroadcastMessage};
+use ya_core_model::net;
+use ya_core_model::net::local::{self as local_net, SendBroadcastMessage, SendBroadcastStub};
 use ya_core_model::NodeId;
 use ya_service_bus::{
-    connection, typed as bus, untyped as local_bus, Error, RpcEndpoint, RpcMessage,
+    connection, serialization, typed as bus, untyped as local_bus, Error, RpcEndpoint, RpcMessage,
 };
 
 use crate::api::{net_service, parse_from_addr};
@@ -29,7 +30,7 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
     let hub_addr = central_net_addr()?;
     let conn = connection::tcp(hub_addr).await?;
     let bcast = super::bcast::BCastService::default();
-    let bcast_service_id = <SendBroadcastMessage<serde_json::Value> as RpcMessage>::ID;
+    let bcast_service_id = <SendBroadcastMessage<()> as RpcMessage>::ID;
 
     // connect to hub with forwarding handler
     let own_net_nodes: Vec<_> = nodes.iter().map(|id| net_service(id)).collect();
@@ -205,30 +206,37 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
     {
         let central_bus = central_bus.clone();
         let addr = format!("{}/{}", local_net::BUS_ID, bcast_service_id);
-        let resp: Rc<[u8]> = serde_json::to_vec(&Ok::<(), ()>(())).unwrap().into();
+        let resp: Rc<[u8]> = serialization::to_vec(&Ok::<(), ()>(())).unwrap().into();
         let _ = local_bus::subscribe(
             &addr,
             move |caller: &str, _addr: &str, msg: &[u8]| {
-                // TODO: remove unwrap here.
-                let ent: SendBroadcastMessage<serde_json::Value> =
-                    serde_json::from_slice(msg).unwrap();
+                let stub: SendBroadcastStub = match serialization::from_slice(msg) {
+                    Ok(m) => m,
+                    Err(e) => {
+                        return async move {
+                            let err = Error::GsbFailure(format!("invalid bcast message: {}", e));
+                            Err::<Vec<u8>, _>(err)
+                        }
+                        .right_future()
+                    }
+                };
 
                 log::trace!(
                     "Broadcast msg related to topic {} from [{}].",
-                    ent.topic(),
+                    stub.topic,
                     &caller
                 );
 
-                let fut =
-                    central_bus.broadcast(caller.to_owned(), ent.topic().to_owned(), msg.into());
+                let fut = central_bus.broadcast(caller.to_owned(), stub.topic, msg.into());
                 let resp = resp.clone();
                 async move {
                     if let Err(e) = fut.await {
-                        Err(Error::GsbFailure(format!("broadcast send failure {}", e)))
+                        Err(Error::GsbFailure(format!("bcast send failure: {}", e)))
                     } else {
                         Ok(Vec::from(resp.as_ref()))
                     }
                 }
+                .left_future()
             },
             (),
         );
