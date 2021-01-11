@@ -13,6 +13,7 @@ use std::{
     fs::File,
     io::BufReader,
     path::{Path, PathBuf},
+    process::{Command, Stdio},
 };
 use thiserror::Error;
 use ya_agreement_utils::OfferBuilder;
@@ -218,6 +219,24 @@ impl ExeUnitsRegistry {
         }
         return Err(RegistryError(errors));
     }
+
+    pub fn test_runtimes(&self) -> anyhow::Result<()> {
+        if self.descriptors.is_empty() {
+            anyhow::bail!("No runtimes available");
+        }
+
+        for (name, desc) in self.descriptors.iter() {
+            log::info!("Testing runtime [{}]", name);
+
+            desc.runtime_path
+                .as_ref()
+                .map(|p| test_runtime(p))
+                .unwrap_or(Ok(()))
+                .map_err(|e| e.context("runtime test failure"))?;
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Error, Debug)]
@@ -245,6 +264,11 @@ impl ExeUnitDesc {
         if !self.supervisor_path.exists() {
             return Err(ExeUnitValidation::SupervisorNotFound { desc: self.clone() });
         }
+        if let Some(runtime_path) = self.runtime_path.as_ref() {
+            if !runtime_path.exists() {
+                return Err(ExeUnitValidation::RuntimeNotFound { desc: self.clone() });
+            }
+        }
         Ok(())
     }
 }
@@ -260,6 +284,27 @@ impl OfferBuilder for ExeUnitDesc {
 
         return serde_json::Value::Object(offer_part);
     }
+}
+
+fn test_runtime(path: &Path) -> anyhow::Result<()> {
+    let child = Command::new(path)
+        .arg("test")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+
+    let output = child.wait_with_output()?;
+    if !output.status.success() {
+        let mut message = String::from_utf8_lossy(&output.stderr).to_string();
+        if message.is_empty() {
+            message = String::from_utf8_lossy(&output.stdout).to_string();
+        }
+        if message.find("--help").is_none() {
+            anyhow::bail!(message);
+        }
+    }
+
+    Ok(())
 }
 
 fn normalize_path(path: &Path) -> Result<PathBuf> {
