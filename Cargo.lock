@@ -2354,9 +2354,9 @@ dependencies = [
 
 [[package]]
 name = "flexi_logger"
-version = "0.16.2"
+version = "0.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c37586928c27a25ff5fce49ff3f8e071b3beeef48b4f004fe7d40d75a26e3db5"
+checksum = "291b6ce7b3ed2dda82efa6aee4c6bdb55fd11bc88b06c55b01851e94b96e5322"
 dependencies = [
  "atty",
  "chrono",
@@ -5160,7 +5160,6 @@ checksum = "2932dc07acd2066ff2e3921a4419606b220ba6cd03a9935123856cc534877056"
 dependencies = [
  "rand 0.6.5",
  "secp256k1-sys 0.1.2",
- "serde",
 ]
 
 [[package]]
@@ -5170,6 +5169,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6179428c22c73ac0fbb7b5579a56353ce78ba29759b3b8575183336ea74cdfb"
 dependencies = [
  "secp256k1-sys 0.3.0",
+ "serde",
 ]
 
 [[package]]
@@ -5331,7 +5331,7 @@ version = "0.5.1"
 source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6c848541e89262f90ca693d9e1a84c6f3df0953b"
 dependencies = [
  "lazy_static",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.1",
  "serial_test_derive 0.5.1",
 ]
 
@@ -6956,7 +6956,7 @@ dependencies = [
  "hex",
  "openssl",
  "rand 0.7.3",
- "secp256k1 0.17.2",
+ "secp256k1 0.19.0",
  "serde",
  "serde_json",
  "strum",
@@ -7068,6 +7068,16 @@ dependencies = [
  "ya-service-bus",
  "ya-transfer",
  "ya-utils-path",
+]
+
+[[package]]
+name = "ya-file-logging"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "flexi_logger 0.16.3",
+ "log",
 ]
 
 [[package]]
@@ -7378,7 +7388,6 @@ dependencies = [
  "dialoguer",
  "directories",
  "dotenv",
- "flexi_logger 0.16.2",
  "futures 0.3.8",
  "futures-util",
  "humantime 2.0.1",
@@ -7410,6 +7419,7 @@ dependencies = [
  "ya-client-model 0.2.0",
  "ya-compile-time-utils",
  "ya-core-model",
+ "ya-file-logging",
  "ya-utils-actix",
  "ya-utils-path",
  "ya-utils-process",
@@ -7759,7 +7769,6 @@ dependencies = [
  "chrono",
  "directories",
  "dotenv",
- "flexi_logger 0.16.2",
  "futures 0.3.8",
  "gftp",
  "lazy_static",
@@ -7771,6 +7780,7 @@ dependencies = [
  "ya-activity",
  "ya-compile-time-utils",
  "ya-dummy-driver",
+ "ya-file-logging",
  "ya-gnt-driver",
  "ya-identity",
  "ya-market",

@@ -26,6 +26,7 @@ gftp = "0.1" # just to enable gftp build for cargo-deb
 ya-activity = "0.2"
 ya-compile-time-utils = "0.1"
 ya-dummy-driver = { version = "0.1", optional = true }
+ya-file-logging = "0.1"
 ya-gnt-driver = { version = "0.1", optional = true }
 ya-zksync-driver = { version = "0.1", optional = true }
 ya-identity = "0.2"
@@ -53,7 +54,6 @@ anyhow = "1.0"
 chrono = "0.4"
 directories = "2.0.2"
 dotenv = "0.15.0"
-flexi_logger = { version = "0.16", features = ["colors", "compress"] }
 futures = "0.3"
 lazy_static = "1.4"
 log = "0.4"
@@ -185,6 +185,7 @@ ya-agreement-utils = { path = "utils/agreement-utils" }
 ya-std-utils = { path = "utils/std-utils" }
 ya-compile-time-utils = { path = "utils/compile-time-utils" }
 ya-exe-unit = { path = "exe-unit" }
+ya-file-logging = { path = "utils/file-logging" }
 ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
 ya-utils-futures = { path = "utils/futures"}

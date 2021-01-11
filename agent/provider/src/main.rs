@@ -1,6 +1,5 @@
 use actix::Actor;
-use chrono::{DateTime, SecondsFormat, Utc};
-use std::{env, path::Path};
+use std::env;
 use structopt::{clap, StructOpt};
 
 mod cli;
@@ -26,64 +25,6 @@ use startup_config::{
 };
 use ya_utils_process::lock::ProcLock;
 
-fn set_logging(log_level: &str, log_dir: &Path) -> anyhow::Result<()> {
-    use flexi_logger::{
-        style, AdaptiveFormat, Age, Cleanup, Criterion, DeferredNow, Duplicate, Logger, Naming,
-        Record,
-    };
-
-    fn log_format(
-        w: &mut dyn std::io::Write,
-        now: &mut DeferredNow,
-        record: &Record,
-    ) -> Result<(), std::io::Error> {
-        write!(
-            w,
-            "[{} {:5} {}] {}",
-            DateTime::<Utc>::from(*now.now()).to_rfc3339_opts(SecondsFormat::Secs, true),
-            record.level(),
-            record.module_path().unwrap_or("<unnamed>"),
-            record.args()
-        )
-    }
-
-    fn log_format_color(
-        w: &mut dyn std::io::Write,
-        now: &mut DeferredNow,
-        record: &Record,
-    ) -> Result<(), std::io::Error> {
-        let level = record.level();
-        write!(
-            w,
-            "[{} {:5} {}] {}",
-            DateTime::<Utc>::from(*now.now()).to_rfc3339_opts(SecondsFormat::Secs, true),
-            style(level, level),
-            record.module_path().unwrap_or("<unnamed>"),
-            record.args()
-        )
-    }
-
-    let mut logger = Logger::with_env_or_str(log_level).format(log_format);
-    if log_dir.components().count() != 0 {
-        logger = logger
-            .log_to_file()
-            .directory(log_dir)
-            .rotate(
-                Criterion::AgeOrSize(Age::Day, /*size in bytes*/ 1024 * 1024 * 1024),
-                Naming::Timestamps,
-                Cleanup::KeepLogAndCompressedFiles(1, 10),
-            )
-            .print_message()
-            .duplicate_to_stderr(Duplicate::All);
-    }
-    logger = logger
-        .adaptive_format_for_stderr(AdaptiveFormat::Custom(log_format, log_format_color))
-        .set_palette("9;11;2;7;8".to_string());
-
-    logger.start()?;
-    Ok(())
-}
-
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
@@ -97,28 +38,13 @@ async fn main() -> anyhow::Result<()> {
 
     match cli_args.commands {
         Commands::Run(args) => {
-            set_logging("info", &data_dir)?;
-
             let app_name = clap::crate_name!();
-            log::info!("Starting {}...", app_name);
-            log::info!("Data directory: {}", data_dir.display());
-
-            log::info!("Performing disk cleanup...");
-            let freed = clean_provider_dir(&data_dir, "30d", false, false)?;
-            let human_freed = bytesize::to_string(freed, false);
-            log::info!("Freed {} of disk space", human_freed);
-
-            let _lock = ProcLock::new("ya-provider", &data_dir)?.lock(std::process::id())?;
+            let _lock = ProcLock::new(&app_name, &data_dir)?.lock(std::process::id())?;
             let agent = ProviderAgent::new(args, config).await?.start();
             agent.send(Initialize).await??;
 
             let (_, signal) = SignalMonitor::default().await;
-            log::info!(
-                "{} received, Shutting down {}...",
-                signal,
-                clap::crate_name!()
-            );
-            log::logger().flush();
+            log::info!("{} received, Shutting down {}...", signal, app_name);
             agent.send(Shutdown).await??;
             Ok(())
         }
