@@ -7663,6 +7663,7 @@ dependencies = [
 name = "ya-zksync-driver"
 version = "0.1.0"
 dependencies = [
+ "actix-rt",
  "anyhow",
  "async-trait",
  "awc 2.0.3",
