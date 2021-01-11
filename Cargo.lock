@@ -5279,6 +5279,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_qs"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5cb0f0564a84554436c4ceff5c896308d4e09d0eb4bd0215b8f698f88084601"
+dependencies = [
+ "percent-encoding 2.1.0",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "serde_urlencoded"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6910,7 +6921,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=87f106498a7a7b1519d82d0981fc21b260a89cf2#87f106498a7a7b1519d82d0981fc21b260a89cf2"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=e27bd52cc501b99b3cef8d16149779856d8c0e14#e27bd52cc501b99b3cef8d16149779856d8c0e14"
 dependencies = [
  "awc 1.0.1",
  "bytes 0.5.6",
@@ -6925,6 +6936,7 @@ dependencies = [
  "rand 0.6.5",
  "serde",
  "serde_json",
+ "serde_qs",
  "structopt",
  "thiserror",
  "url 2.2.0",
@@ -6947,7 +6959,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=87f106498a7a7b1519d82d0981fc21b260a89cf2#87f106498a7a7b1519d82d0981fc21b260a89cf2"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=e27bd52cc501b99b3cef8d16149779856d8c0e14#e27bd52cc501b99b3cef8d16149779856d8c0e14"
 dependencies = [
  "bigdecimal 0.1.2",
  "chrono",
