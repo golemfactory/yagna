@@ -2354,9 +2354,9 @@ dependencies = [
 
 [[package]]
 name = "flexi_logger"
-version = "0.16.3"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "291b6ce7b3ed2dda82efa6aee4c6bdb55fd11bc88b06c55b01851e94b96e5322"
+checksum = "c37586928c27a25ff5fce49ff3f8e071b3beeef48b4f004fe7d40d75a26e3db5"
 dependencies = [
  "atty",
  "chrono",
@@ -3301,6 +3301,12 @@ dependencies = [
  "libc",
  "pkg-config",
 ]
+
+[[package]]
+name = "maplit"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
 
 [[package]]
 name = "match_cfg"
@@ -5160,7 +5166,6 @@ checksum = "2932dc07acd2066ff2e3921a4419606b220ba6cd03a9935123856cc534877056"
 dependencies = [
  "rand 0.6.5",
  "secp256k1-sys 0.1.2",
- "serde",
 ]
 
 [[package]]
@@ -5170,6 +5175,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6179428c22c73ac0fbb7b5579a56353ce78ba29759b3b8575183336ea74cdfb"
 dependencies = [
  "secp256k1-sys 0.3.0",
+ "serde",
 ]
 
 [[package]]
@@ -6910,7 +6916,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=87f106498a7a7b1519d82d0981fc21b260a89cf2#87f106498a7a7b1519d82d0981fc21b260a89cf2"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=94f4cc5844477374f97dacfa22a53a15f3a59ada#94f4cc5844477374f97dacfa22a53a15f3a59ada"
 dependencies = [
  "awc 1.0.1",
  "bytes 0.5.6",
@@ -6947,7 +6953,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=87f106498a7a7b1519d82d0981fc21b260a89cf2#87f106498a7a7b1519d82d0981fc21b260a89cf2"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=94f4cc5844477374f97dacfa22a53a15f3a59ada#94f4cc5844477374f97dacfa22a53a15f3a59ada"
 dependencies = [
  "bigdecimal 0.1.2",
  "chrono",
@@ -6956,7 +6962,7 @@ dependencies = [
  "hex",
  "openssl",
  "rand 0.7.3",
- "secp256k1 0.17.2",
+ "secp256k1 0.19.0",
  "serde",
  "serde_json",
  "strum",
@@ -7010,6 +7016,7 @@ dependencies = [
  "chrono",
  "futures 0.3.8",
  "log",
+ "maplit",
  "serde_json",
  "uuid 0.8.1",
  "ya-core-model",
@@ -7076,7 +7083,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "flexi_logger 0.16.3",
+ "flexi_logger 0.16.2",
  "log",
 ]
 
@@ -7106,6 +7113,7 @@ dependencies = [
  "lazy_static",
  "libsqlite3-sys",
  "log",
+ "maplit",
  "num-bigint 0.2.6",
  "r2d2",
  "rlp",
@@ -7745,6 +7753,7 @@ dependencies = [
  "hex",
  "lazy_static",
  "log",
+ "maplit",
  "num",
  "serde_json",
  "tiny-keccak 1.5.0",

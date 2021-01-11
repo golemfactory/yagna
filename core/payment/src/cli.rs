@@ -17,6 +17,8 @@ pub enum PaymentCli {
         provider: bool,
         #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
         driver: String,
+        #[structopt(long)]
+        network: Option<String>,
     },
     Status {
         address: Option<String>,
@@ -45,6 +47,7 @@ impl PaymentCli {
             PaymentCli::Init {
                 address,
                 driver,
+                network,
                 requestor,
                 provider,
             } => {
@@ -53,6 +56,8 @@ impl PaymentCli {
                 let account = Account {
                     driver,
                     address,
+                    network,
+                    token: None, // Use default -- we don't yet support other tokens than GLM
                     send: requestor,
                     receive: provider,
                 };

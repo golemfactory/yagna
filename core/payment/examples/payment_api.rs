@@ -213,7 +213,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Driver::Zksync => {
             start_zksync_driver(&db, requestor_account).await?;
-            (zksync::DRIVER_NAME, zksync::PLATFORM_NAME)
+            (zksync::DRIVER_NAME, zksync::DEFAULT_PLATFORM)
         }
     };
 

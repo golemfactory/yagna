@@ -18,7 +18,7 @@ mod local {
     use super::*;
     use crate::dao::*;
     use std::collections::BTreeMap;
-    use ya_client_model::payment::DocumentStatus;
+    use ya_client_model::payment::{Account, DocumentStatus};
     use ya_core_model::payment::local::*;
     use ya_persistence::types::Role;
 
@@ -75,9 +75,8 @@ mod local {
         processor: PaymentProcessor,
         sender: String,
         msg: RegisterDriver,
-    ) -> Result<(), NoError> {
-        processor.register_driver(msg).await;
-        Ok(())
+    ) -> Result<(), RegisterDriverError> {
+        processor.register_driver(msg).await
     }
 
     async fn unregister_driver(
