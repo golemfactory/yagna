@@ -286,16 +286,27 @@ mod test {
                 .unwrap();
         }
 
+        // Add another deadline at the same timestamp as already existing one.
+        checker
+            .send(TrackDeadline {
+                agreement_id: "agrrrrr-1".to_string(),
+                deadline: now + Duration::milliseconds(200) + Duration::milliseconds(3),
+                entity: 7.to_string(),
+            })
+            .await
+            .unwrap();
+
         let interval = (now + Duration::milliseconds(300)) - Utc::now();
         tokio::time::delay_for(interval.to_std().unwrap()).await;
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
-        assert_eq!(deadlined.len(), 5);
+        assert_eq!(deadlined.len(), 6);
         assert_eq!(deadlined[0].entity, 1.to_string());
         assert_eq!(deadlined[1].entity, 2.to_string());
         assert_eq!(deadlined[2].entity, 3.to_string());
-        assert_eq!(deadlined[3].entity, 4.to_string());
-        assert_eq!(deadlined[4].entity, 5.to_string());
+        assert_eq!(deadlined[3].entity, 7.to_string());
+        assert_eq!(deadlined[4].entity, 4.to_string());
+        assert_eq!(deadlined[5].entity, 5.to_string());
     }
 
     #[actix_rt::test]
@@ -354,5 +365,34 @@ mod test {
         assert_eq!(deadlined[1].entity, 2.to_string());
         assert_eq!(deadlined[2].entity, 7.to_string());
         assert_eq!(deadlined[3].entity, 3.to_string());
+    }
+
+    #[actix_rt::test]
+    async fn test_deadline_checker_multi_agreements() {
+        let receiver = DeadlineReceiver::new();
+        let checker = DeadlineChecker::new(receiver.clone().recipient()).start();
+
+        let now = Utc::now();
+        for i in 1..6 {
+            checker
+                .send(TrackDeadline {
+                    agreement_id: format!("agrrrrr-{}", i),
+                    deadline: now + Duration::milliseconds(100) + Duration::milliseconds(3 * i),
+                    entity: i.to_string(),
+                })
+                .await
+                .unwrap();
+        }
+
+        let interval = (now + Duration::milliseconds(250)) - Utc::now();
+        tokio::time::delay_for(interval.to_std().unwrap()).await;
+
+        let deadlined = receiver.send(Collect {}).await.unwrap();
+        assert_eq!(deadlined.len(), 5);
+        assert_eq!(deadlined[0].entity, 1.to_string());
+        assert_eq!(deadlined[1].entity, 2.to_string());
+        assert_eq!(deadlined[2].entity, 3.to_string());
+        assert_eq!(deadlined[3].entity, 4.to_string());
+        assert_eq!(deadlined[4].entity, 5.to_string());
     }
 }
