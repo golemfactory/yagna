@@ -406,12 +406,7 @@ impl CommonBroker {
 
         self.notify_agreement(&agreement).await;
 
-        match terminator {
-            OwnerType::Provider => counter!("market.agreements.provider.terminated", 1),
-            OwnerType::Requestor => counter!("market.agreements.requestor.terminated", 1),
-        };
-
-        inc_terminate_metrics(&msg.reason, owner_type);
+        inc_terminate_metrics(&msg.reason, terminator);
         log::info!(
             "Received terminate Agreement [{}] from [{}]. Reason: {}",
             &agreement_id,
