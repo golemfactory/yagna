@@ -39,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
         utils::big_uint_to_big_dec(balance)
     );
 
-    if wallet.is_signing_key_set().await.unwrap() == false {
+    if wallet.is_signing_key_set().await? == false {
         info!("Unlocking account");
         let unlock = wallet
             .start_change_pubkey()
@@ -55,13 +55,11 @@ async fn main() -> anyhow::Result<()> {
     let withdraw_amount: u64 = BigUint::to_u64(&gnt_10).unwrap();
     let withdraw_handle = wallet
         .start_withdraw()
-        .token(TOKEN)
-        .unwrap()
+        .token(TOKEN)?
         .amount(withdraw_amount)
         .to(address)
         .send()
-        .await
-        .unwrap();
+        .await?;
 
     debug!("Withdraw: {:?}", withdraw_handle);
 
