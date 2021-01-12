@@ -1,0 +1,11 @@
+[package]
+name = "ya-file-logging"
+version = "0.1.0"
+authors = ["Golem Factory <contact@golem.network>"]
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0"
+chrono = "0.4"
+flexi_logger = { version = "0.16", features = ["colors", "compress"] }
+log = "0.4"
