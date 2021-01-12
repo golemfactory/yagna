@@ -34,13 +34,18 @@ async fn set_activity_state(
 
 /// Fetch Requestor command events.
 #[actix_web::get("/events")]
-async fn get_events(db: web::Data<DbExecutor>, query: web::Query<QueryEvents>) -> impl Responder {
+async fn get_events(
+    db: web::Data<DbExecutor>,
+    query: web::Query<QueryEvents>,
+    id: Identity,
+) -> impl Responder {
     log::trace!("getting events {:?}", query);
     let events = db
         .as_dao::<EventDao>()
         .get_events_wait(
-            query.after_timestamp,
+            &id.identity,
             &query.app_session_id,
+            query.after_timestamp,
             query.max_events,
         )
         .timeout(query.poll_timeout)

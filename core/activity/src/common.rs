@@ -40,12 +40,13 @@ pub struct QueryTimeoutCommandIndex {
 
 #[derive(Deserialize, Debug)]
 pub struct QueryEvents {
-    /// number of milliseconds to wait
+    /// application session identifier
     #[serde(rename = "appSessionId")]
     pub app_session_id: Option<String>,
     /// number of milliseconds to wait
     #[serde(rename = "pollTimeout", default = "default_query_timeout")]
     pub poll_timeout: Option<f32>,
+    /// select events past the specified point in time
     #[serde(rename = "afterTimestamp")]
     pub after_timestamp: DateTime<Utc>,
     /// maximum count of events to return

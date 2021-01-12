@@ -64,7 +64,6 @@ impl<'c> EventDao<'c> {
         use schema::activity::dsl;
         use schema::activity_event::dsl as dsl_event;
 
-        let now = Utc::now().naive_utc();
         log::trace!("creating event_type: {:?}", event_type);
 
         let app_session_id = app_session_id.to_owned();
@@ -72,6 +71,7 @@ impl<'c> EventDao<'c> {
         let identity_id = identity_id.to_owned();
 
         do_with_transaction(self.pool, move |conn| {
+            let now = Utc::now().naive_utc();
             diesel::insert_into(dsl_event::activity_event)
                 .values(
                     dsl::activity
@@ -106,13 +106,15 @@ impl<'c> EventDao<'c> {
 
     pub async fn get_events(
         &self,
-        after_timestamp: DateTime<Utc>,
+        identity_id: &NodeId,
         app_session_id: &Option<String>,
+        after_timestamp: DateTime<Utc>,
         max_events: Option<u32>,
     ) -> Result<Option<Vec<ProviderEvent>>> {
         use schema::activity::dsl;
         use schema::activity_event::dsl as dsl_event;
 
+        let identity_id = identity_id.to_string();
         let app_session_id = app_session_id.to_owned();
         let limit = match max_events {
             Some(val) => MAX_EVENTS.min(val as i64),
@@ -123,6 +125,7 @@ impl<'c> EventDao<'c> {
         readonly_transaction(self.pool, move |conn| {
             let mut query = dsl_event::activity_event
                 .inner_join(schema::activity::table)
+                .filter(dsl_event::identity_id.eq(identity_id))
                 .select((
                     dsl_event::id,
                     dsl_event::event_date,
@@ -151,15 +154,16 @@ impl<'c> EventDao<'c> {
 
     pub async fn get_events_wait(
         &self,
-        after_timestamp: DateTime<Utc>,
+        identity_id: &NodeId,
         app_session_id: &Option<String>,
+        after_timestamp: DateTime<Utc>,
         max_events: Option<u32>,
     ) -> Result<Vec<ProviderEvent>> {
         let duration = Duration::from_millis(750);
 
         loop {
             if let Some(events) = self
-                .get_events(after_timestamp, &app_session_id, max_events)
+                .get_events(identity_id, app_session_id, after_timestamp, max_events)
                 .await?
             {
                 if events.len() > 0 {
