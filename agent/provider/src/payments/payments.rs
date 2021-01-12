@@ -260,6 +260,39 @@ async fn check_invoice_events(provider_ctx: Arc<ProviderCtx>, payments_addr: Add
     }
 }
 
+#[allow(dead_code)]
+async fn check_debit_notes_events(provider_ctx: Arc<ProviderCtx>, _payments_addr: Addr<Payments>) {
+    let timeout = provider_ctx.get_events_timeout.clone();
+    let error_timeout = provider_ctx.get_events_error_timeout.clone();
+    let mut lather_than = Utc::now();
+
+    loop {
+        let events = match provider_ctx
+            .payment_api
+            .get_debit_note_events(Some(&lather_than), timeout)
+            .await
+        {
+            Ok(events) => events,
+            Err(e) => {
+                log::error!("Can't query debit note events: {}", e);
+                tokio::time::delay_for(error_timeout).await;
+                vec![]
+            }
+        };
+
+        for event in events {
+            match event.event_type {
+                EventType::Received => {}
+                EventType::Accepted => {}
+                EventType::Rejected => {}
+                EventType::Cancelled => {}
+                EventType::Settled => {}
+            }
+            lather_than = event.timestamp;
+        }
+    }
+}
+
 async fn compute_cost_and_send_debit_note(
     provider_context: Arc<ProviderCtx>,
     payment_model: Arc<dyn PaymentModel>,

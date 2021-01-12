@@ -1,0 +1,358 @@
+use actix::prelude::*;
+use anyhow::anyhow;
+use chrono::{DateTime, Duration, Utc};
+use std::collections::HashMap;
+
+pub trait Deadlineable: Clone + Sized + Send + Sync + Unpin + 'static {}
+
+/// Will be sent when deadline elapsed.
+#[derive(Message, Clone, Debug)]
+#[rtype(result = "()")]
+pub struct DeadlineElapsed<E: Deadlineable> {
+    agreement_id: String,
+    deadline: DateTime<Utc>,
+    entity: E,
+}
+
+#[derive(Message, Clone)]
+#[rtype(result = "()")]
+pub struct TrackDeadline<E: Deadlineable> {
+    agreement_id: String,
+    deadline: DateTime<Utc>,
+    entity: E,
+}
+
+#[derive(Clone)]
+struct DeadlineDesc<E: Deadlineable> {
+    deadline: DateTime<Utc>,
+    entity: E,
+}
+
+/// Checks if debit notes are accepted in time.
+pub struct DeadlineChecker<E: Deadlineable> {
+    // Maps Agreement ids to chain of DebitNotes.
+    // Vec inside HashMap is ordered by DebitNote deadline.
+    deadlines: HashMap<String, Vec<DeadlineDesc<E>>>,
+
+    nearest_deadline: DateTime<Utc>,
+    callback: Recipient<DeadlineElapsed<E>>,
+    handle: Option<SpawnHandle>,
+}
+
+impl<E: Deadlineable> DeadlineChecker<E> {
+    pub fn new(callback: Recipient<DeadlineElapsed<E>>) -> DeadlineChecker<E> {
+        DeadlineChecker {
+            deadlines: HashMap::new(),
+            nearest_deadline: Utc::now() + Duration::weeks(50),
+            callback,
+            handle: None,
+        }
+    }
+
+    fn update_deadline(&mut self, ctx: &mut Context<Self>) -> anyhow::Result<()> {
+        let top_deadline = self.top_deadline();
+        if self.nearest_deadline != top_deadline {
+            if let Some(handle) = self.handle.take() {
+                ctx.cancel_future(handle);
+            }
+
+            let notify_timestamp = top_deadline.clone();
+            let wait_duration = (top_deadline - Utc::now())
+                .max(Duration::milliseconds(1))
+                .to_std()
+                .map_err(|e| anyhow!("Failed to convert chrono to std Duration. {}", e))?;
+
+            self.handle = Some(ctx.run_later(wait_duration, move |myself, ctx| {
+                myself.on_deadline_elapsed(ctx, notify_timestamp);
+            }));
+
+            self.nearest_deadline = top_deadline;
+        }
+        Ok(())
+    }
+
+    fn on_deadline_elapsed(&mut self, ctx: &mut Context<Self>, deadline: DateTime<Utc>) {
+        let now = Utc::now();
+        assert!(now >= deadline);
+
+        let elapsed = self.drain_elapsed(now);
+
+        for event in elapsed.into_iter() {
+            self.callback.do_send(event).ok();
+        }
+
+        self.handle.take();
+        self.update_deadline(ctx).ok();
+    }
+
+    fn drain_elapsed(&mut self, timestamp: DateTime<Utc>) -> Vec<DeadlineElapsed<E>> {
+        let elapsed = self
+            .deadlines
+            .iter_mut()
+            .map(|(agreement_id, deadlines)| {
+                let idx =
+                    match deadlines.binary_search_by(|element| element.deadline.cmp(&timestamp)) {
+                        Ok(idx) => idx + 1,
+                        Err(idx) => idx,
+                    };
+                deadlines
+                    .drain(0..idx)
+                    .map(|desc| DeadlineElapsed::<E> {
+                        agreement_id: agreement_id.to_string(),
+                        deadline: desc.deadline,
+                        entity: desc.entity,
+                    })
+                    .collect::<Vec<DeadlineElapsed<E>>>()
+                    .into_iter()
+            })
+            .flatten()
+            .collect::<Vec<DeadlineElapsed<E>>>();
+
+        // Remove Agreements with empty lists. Otherwise no longer needed Agreements
+        // would remain in HashMap for always.
+        self.deadlines = self
+            .deadlines
+            .drain()
+            .filter(|(_, value)| !value.is_empty())
+            .collect();
+        elapsed
+    }
+
+    fn top_deadline(&self) -> DateTime<Utc> {
+        let nearest = self
+            .deadlines
+            .iter()
+            .filter_map(|element| {
+                let dead_vec = element.1;
+                if dead_vec.len() > 0 {
+                    Some(dead_vec[0].deadline.clone())
+                } else {
+                    None
+                }
+            })
+            .min();
+
+        match nearest {
+            Some(deadline) => deadline,
+            None => Utc::now() + Duration::weeks(50),
+        }
+    }
+}
+
+impl<E: Deadlineable> Handler<TrackDeadline<E>> for DeadlineChecker<E> {
+    type Result = ();
+
+    fn handle(&mut self, msg: TrackDeadline<E>, ctx: &mut Context<Self>) -> Self::Result {
+        if let None = self.deadlines.get(&msg.agreement_id) {
+            self.deadlines.insert(msg.agreement_id.to_string(), vec![]);
+        }
+
+        let deadlines = self.deadlines.get_mut(&msg.agreement_id).unwrap();
+        let idx = match deadlines.binary_search_by(|element| element.deadline.cmp(&msg.deadline)) {
+            // Element with this deadline existed. We add new element behind it (order shouldn't matter since timestamps
+            // are the same, but it's better to keep order of calls to `track_deadline` function).
+            Ok(idx) => idx + 1,
+            // Element doesn't exists. Index where it can be inserted is returned here.
+            Err(idx) => idx,
+        };
+
+        deadlines.insert(
+            idx,
+            DeadlineDesc::<E> {
+                deadline: msg.deadline,
+                entity: msg.entity,
+            },
+        );
+
+        self.update_deadline(ctx).unwrap();
+    }
+}
+
+impl<E: Deadlineable> Actor for DeadlineChecker<E> {
+    type Context = Context<Self>;
+}
+
+impl Deadlineable for String {}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    struct DeadlineReceiver {
+        elapsed: Vec<DeadlineElapsed<String>>,
+    }
+
+    impl Actor for DeadlineReceiver {
+        type Context = Context<Self>;
+    }
+
+    impl DeadlineReceiver {
+        pub fn new() -> Addr<DeadlineReceiver> {
+            DeadlineReceiver { elapsed: vec![] }.start()
+        }
+    }
+
+    #[derive(Message, Clone)]
+    #[rtype(result = "Vec<DeadlineElapsed<String>>")]
+    pub struct Collect;
+
+    impl Handler<DeadlineElapsed<String>> for DeadlineReceiver {
+        type Result = ();
+
+        fn handle(
+            &mut self,
+            msg: DeadlineElapsed<String>,
+            _ctx: &mut Context<Self>,
+        ) -> Self::Result {
+            self.elapsed.push(msg);
+        }
+    }
+
+    impl Handler<Collect> for DeadlineReceiver {
+        type Result = MessageResult<Collect>;
+
+        fn handle(&mut self, _msg: Collect, _ctx: &mut Context<Self>) -> Self::Result {
+            MessageResult(self.elapsed.drain(..).collect())
+        }
+    }
+
+    #[actix_rt::test]
+    async fn test_deadline_checker_single_agreement() {
+        let receiver = DeadlineReceiver::new();
+        let checker = DeadlineChecker::new(receiver.clone().recipient()).start();
+
+        let now = Utc::now();
+        for i in 1..6 {
+            checker
+                .send(TrackDeadline {
+                    agreement_id: "agrrrrr-1".to_string(),
+                    deadline: now + Duration::milliseconds(200 * i),
+                    entity: i.to_string(),
+                })
+                .await
+                .unwrap();
+        }
+
+        let interval = (now + Duration::milliseconds(500)) - Utc::now();
+        tokio::time::delay_for(interval.to_std().unwrap()).await;
+
+        let deadlined = receiver.send(Collect {}).await.unwrap();
+        assert_eq!(deadlined.len(), 2);
+        assert_eq!(deadlined[0].entity, 1.to_string());
+        assert_eq!(deadlined[1].entity, 2.to_string());
+
+        let interval = (now + Duration::milliseconds(1100)) - Utc::now();
+        tokio::time::delay_for(interval.to_std().unwrap()).await;
+
+        let deadlined = receiver.send(Collect {}).await.unwrap();
+        assert_eq!(deadlined.len(), 3);
+        assert_eq!(deadlined[0].entity, 3.to_string());
+        assert_eq!(deadlined[1].entity, 4.to_string());
+        assert_eq!(deadlined[2].entity, 5.to_string());
+
+        // Add another entry to check if there wasn't any incorrect state,
+        // after all deadlines elapsed.
+        checker
+            .send(TrackDeadline {
+                agreement_id: "agrrrrr-1".to_string(),
+                deadline: now + Duration::milliseconds(1300),
+                entity: 6.to_string(),
+            })
+            .await
+            .unwrap();
+
+        let interval = (now + Duration::milliseconds(1400)) - Utc::now();
+        tokio::time::delay_for(interval.to_std().unwrap()).await;
+
+        let deadlined = receiver.send(Collect {}).await.unwrap();
+        assert_eq!(deadlined.len(), 1);
+        assert_eq!(deadlined[0].entity, 6.to_string());
+    }
+
+    #[actix_rt::test]
+    async fn test_deadline_checker_near_deadlines() {
+        let receiver = DeadlineReceiver::new();
+        let checker = DeadlineChecker::new(receiver.clone().recipient()).start();
+
+        let now = Utc::now();
+        for i in 1..6 {
+            checker
+                .send(TrackDeadline {
+                    agreement_id: "agrrrrr-1".to_string(),
+                    deadline: now + Duration::milliseconds(200) + Duration::milliseconds(1 * i),
+                    entity: i.to_string(),
+                })
+                .await
+                .unwrap();
+        }
+
+        let interval = (now + Duration::milliseconds(300)) - Utc::now();
+        tokio::time::delay_for(interval.to_std().unwrap()).await;
+
+        let deadlined = receiver.send(Collect {}).await.unwrap();
+        assert_eq!(deadlined.len(), 5);
+        assert_eq!(deadlined[0].entity, 1.to_string());
+        assert_eq!(deadlined[1].entity, 2.to_string());
+        assert_eq!(deadlined[2].entity, 3.to_string());
+        assert_eq!(deadlined[3].entity, 4.to_string());
+        assert_eq!(deadlined[4].entity, 5.to_string());
+    }
+
+    #[actix_rt::test]
+    async fn test_deadline_checker_insert_deadlines_between() {
+        let receiver = DeadlineReceiver::new();
+        let checker = DeadlineChecker::new(receiver.clone().recipient()).start();
+
+        let now = Utc::now();
+        for i in 1..6 {
+            checker
+                .send(TrackDeadline {
+                    agreement_id: "agrrrrr-1".to_string(),
+                    deadline: now + Duration::milliseconds(400) + Duration::milliseconds(200 * i),
+                    entity: i.to_string(),
+                })
+                .await
+                .unwrap();
+        }
+
+        let interval = (now + Duration::milliseconds(100)) - Utc::now();
+        tokio::time::delay_for(interval.to_std().unwrap()).await;
+
+        // Insert deadline before all other deadlines.
+        checker
+            .send(TrackDeadline {
+                agreement_id: "agrrrrr-1".to_string(),
+                deadline: now + Duration::milliseconds(200),
+                entity: 6.to_string(),
+            })
+            .await
+            .unwrap();
+
+        let interval = (now + Duration::milliseconds(250)) - Utc::now();
+        tokio::time::delay_for(interval.to_std().unwrap()).await;
+
+        let deadlined = receiver.send(Collect {}).await.unwrap();
+        assert_eq!(deadlined.len(), 1);
+        assert_eq!(deadlined[0].entity, 6.to_string());
+
+        // Insert deadline between all other deadlines.
+        checker
+            .send(TrackDeadline {
+                agreement_id: "agrrrrr-1".to_string(),
+                deadline: now + Duration::milliseconds(900),
+                entity: 7.to_string(),
+            })
+            .await
+            .unwrap();
+
+        let interval = (now + Duration::milliseconds(1100)) - Utc::now();
+        tokio::time::delay_for(interval.to_std().unwrap()).await;
+
+        let deadlined = receiver.send(Collect {}).await.unwrap();
+        assert_eq!(deadlined.len(), 4);
+        assert_eq!(deadlined[0].entity, 1.to_string());
+        assert_eq!(deadlined[1].entity, 2.to_string());
+        assert_eq!(deadlined[2].entity, 7.to_string());
+        assert_eq!(deadlined[3].entity, 3.to_string());
+    }
+}
