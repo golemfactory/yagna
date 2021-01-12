@@ -7,5 +7,5 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0"
 chrono = "0.4"
-flexi_logger = { version = "0.16", features = ["colors", "compress"] }
+flexi_logger = { version = "0.17", features = ["colors", "compress"] }
 log = "0.4"
