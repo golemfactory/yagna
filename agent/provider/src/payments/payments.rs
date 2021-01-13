@@ -2,11 +2,13 @@ use actix::prelude::*;
 use anyhow::{anyhow, Error, Result};
 use bigdecimal::{BigDecimal, Zero};
 use chrono::{DateTime, Utc};
+use humantime;
 use log;
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+use structopt::StructOpt;
 
 use super::agreement::{compute_cost, ActivityPayment, AgreementPayment, CostInfo};
 use super::model::PaymentModel;
@@ -17,8 +19,8 @@ use crate::tasks::{AgreementBroken, AgreementClosed};
 
 use ya_client::activity::ActivityProviderApi;
 use ya_client::model::payment::{DebitNote, Invoice, NewDebitNote, NewInvoice};
-use ya_client::payment::PaymentProviderApi;
-use ya_client_model::payment::EventType;
+use ya_client::payment::PaymentApi;
+use ya_client_model::payment::{DebitNoteEventType, InvoiceEventType};
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::Subscribe;
 use ya_utils_actix::forward_actix_handler;
@@ -98,17 +100,29 @@ pub struct DebitNoteInfo {
     pub payment_deadline: Option<DateTime<Utc>>,
 }
 
+/// Configuration for Payments actor.
+#[derive(StructOpt, Clone, Debug)]
+pub struct PaymentsConfig {
+    #[structopt(env = "PAYMENT_EVENTS_TIMEOUT", parse(try_from_str = humantime::parse_duration), default_value = "50s")]
+    pub get_events_timeout: Duration,
+    #[structopt(parse(try_from_str = humantime::parse_duration), default_value = "5s")]
+    pub get_events_error_timeout: Duration,
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "5s")]
+    pub invoice_reissue_interval: Duration,
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "50s")]
+    pub invoice_resend_interval: Duration,
+    #[structopt(skip = "you-forgot-to-set-session-id")]
+    pub session_id: String,
+}
+
 /// Yagna APIs and payments information about provider.
 struct ProviderCtx {
     activity_api: Arc<ActivityProviderApi>,
-    payment_api: Arc<PaymentProviderApi>,
+    payment_api: Arc<PaymentApi>,
 
     debit_checker: Addr<DeadlineChecker>,
 
-    get_events_timeout: Option<Duration>,
-    get_events_error_timeout: Duration,
-    invoice_reissue_interval: Duration,
-    invoice_resend_interval: Duration,
+    config: PaymentsConfig,
 }
 
 /// Computes charges for tasks execution.
@@ -122,15 +136,16 @@ pub struct Payments {
 }
 
 impl Payments {
-    pub fn new(activity_api: ActivityProviderApi, payment_api: PaymentProviderApi) -> Payments {
+    pub fn new(
+        activity_api: ActivityProviderApi,
+        payment_api: PaymentApi,
+        config: PaymentsConfig,
+    ) -> Payments {
         let provider_ctx = ProviderCtx {
             activity_api: Arc::new(activity_api),
             payment_api: Arc::new(payment_api),
             debit_checker: DeadlineChecker::new().start(),
-            get_events_timeout: Some(Duration::from_secs(60)),
-            get_events_error_timeout: Duration::from_secs(5),
-            invoice_reissue_interval: Duration::from_secs(5),
-            invoice_resend_interval: Duration::from_secs(50),
+            config,
         };
 
         Payments {
@@ -236,14 +251,20 @@ async fn send_debit_note(
 }
 
 async fn check_invoice_events(provider_ctx: Arc<ProviderCtx>, payments_addr: Addr<Payments>) -> () {
-    let timeout = provider_ctx.get_events_timeout.clone();
-    let error_timeout = provider_ctx.get_events_error_timeout.clone();
-    let mut lather_than = Utc::now();
+    let config = &provider_ctx.config;
+    let timeout = config.get_events_timeout.clone();
+    let error_timeout = config.get_events_error_timeout.clone();
+    let mut after_timestamp = Utc::now();
 
     loop {
         let events = match provider_ctx
             .payment_api
-            .get_invoice_events(Some(&lather_than), timeout)
+            .get_invoice_events(
+                Some(&after_timestamp),
+                Some(timeout),
+                None,
+                Some(config.session_id.clone()),
+            )
             .await
         {
             Ok(events) => events,
@@ -257,22 +278,22 @@ async fn check_invoice_events(provider_ctx: Arc<ProviderCtx>, payments_addr: Add
         for event in events {
             let invoice_id = event.invoice_id;
             match event.event_type {
-                EventType::Accepted => {
+                InvoiceEventType::InvoiceAcceptedEvent => {
                     log::info!("Invoice [{}] accepted by requestor.", invoice_id);
                     payments_addr.do_send(InvoiceAccepted { invoice_id })
                 }
-                EventType::Settled => {
+                InvoiceEventType::InvoiceSettledEvent => {
                     log::info!("Invoice [{}] settled by requestor.", invoice_id);
                     payments_addr.do_send(InvoiceSettled { invoice_id })
                 }
-                EventType::Rejected => {
-                    log::warn!("Invoice [{}] rejected by requestor.", invoice_id)
-                    // TODO: Send signal to other provider's modules to react to this situation.
-                    //       Probably we don't want to cooperate with this Requestor anymore.
-                }
-                _ => log::warn!("Unexpected event received: {}", event.event_type),
+                // InvoiceEventType::InvoiceRejectedEvent {} => {
+                //     log::warn!("Invoice [{}] rejected by requestor.", invoice_id)
+                //     // TODO: Send signal to other provider's modules to react to this situation.
+                //     //       Probably we don't want to cooperate with this Requestor anymore.
+                // }
+                _ => log::warn!("Unexpected event received: {:?}", event.event_type),
             }
-            lather_than = event.timestamp;
+            after_timestamp = event.event_date;
         }
     }
 }
@@ -281,14 +302,20 @@ async fn check_debit_notes_events(
     provider_ctx: Arc<ProviderCtx>,
     debit_checker: Addr<DeadlineChecker>,
 ) {
-    let timeout = provider_ctx.get_events_timeout.clone();
-    let error_timeout = provider_ctx.get_events_error_timeout.clone();
+    let config = &provider_ctx.config;
+    let timeout = config.get_events_timeout.clone();
+    let error_timeout = config.get_events_error_timeout.clone();
     let mut lather_than = Utc::now();
 
     loop {
         let events = match provider_ctx
             .payment_api
-            .get_debit_note_events(Some(&lather_than), timeout)
+            .get_debit_note_events(
+                Some(&lather_than),
+                Some(timeout),
+                None,
+                Some(config.session_id.clone()),
+            )
             .await
         {
             Ok(events) => events,
@@ -301,7 +328,7 @@ async fn check_debit_notes_events(
 
         for event in events {
             match event.event_type {
-                EventType::Accepted => debit_checker
+                DebitNoteEventType::DebitNoteAcceptedEvent => debit_checker
                     .send(StopTracking {
                         id: event.debit_note_id.clone(),
                     })
@@ -313,12 +340,9 @@ async fn check_debit_notes_events(
                         )
                     })
                     .ok(),
-                EventType::Received => None,
-                EventType::Rejected => None,
-                EventType::Cancelled => None,
-                EventType::Settled => None,
+                _ => None,
             };
-            lather_than = event.timestamp;
+            lather_than = event.event_date;
         }
     }
 }
@@ -425,7 +449,7 @@ impl Handler<ActivityDestroyed> for Payments {
                 {
                     Ok(debit_note) => break debit_note,
                     Err(error) => {
-                        let interval = provider_context.invoice_resend_interval;
+                        let interval = provider_context.config.invoice_resend_interval;
 
                         log::error!(
                             "{} Final debit note will be resent after {:#?}.",
@@ -608,7 +632,7 @@ impl Handler<IssueInvoice> for Payments {
                         return Ok(invoice);
                     }
                     Err(e) => {
-                        let interval = provider_ctx.invoice_reissue_interval;
+                        let interval = provider_ctx.config.invoice_reissue_interval;
                         log::error!("Error issuing invoice: {} Retry in {:#?}.", e, interval);
                         tokio::time::delay_for(interval).await
                     }
@@ -635,7 +659,7 @@ impl Handler<SendInvoice> for Payments {
                         return Ok(());
                     }
                     Err(e) => {
-                        let interval = provider_ctx.invoice_resend_interval;
+                        let interval = provider_ctx.config.invoice_resend_interval;
                         log::error!("Error sending invoice: {} Retry in {:#?}.", e, interval);
                         tokio::time::delay_for(interval).await
                     }

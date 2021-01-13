@@ -19,6 +19,7 @@ use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
 use ya_sgx::SgxService;
 
+use ya_file_logging::start_logger;
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
@@ -48,6 +49,7 @@ lazy_static::lazy_static! {
 /// understood and hereby accept the disclaimer and
 /// privacy warning found at https://handbook.golem.network/see-also/terms
 ///
+/// Use RUST_LOG env variable to change log level.
 struct CliArgs {
     /// Accept the disclaimer and privacy warning found at
     /// {n}https://handbook.golem.network/see-also/terms
@@ -81,10 +83,6 @@ struct CliArgs {
     #[structopt(long, set = clap::ArgSettings::Global)]
     json: bool,
 
-    /// Log verbosity level
-    #[structopt(long, default_value = "info")]
-    log_level: String,
-
     #[structopt(subcommand)]
     command: CliCommand,
 }
@@ -94,18 +92,11 @@ impl CliArgs {
         self.data_dir.get_or_create()
     }
 
-    pub fn log_level(&self) -> String {
-        match self.command {
-            CliCommand::Service(ServiceCommand::Run(..)) => self.log_level.clone(),
-            _ => "error".to_string(),
-        }
-    }
-
     pub async fn run_command(self) -> Result<()> {
         let ctx: CliCtx = (&self).try_into()?;
 
         ctx.output(self.command.run_command(&ctx).await?);
-        Ok::<_, anyhow::Error>(())
+        Ok(())
     }
 }
 
@@ -114,7 +105,6 @@ impl TryFrom<&CliArgs> for CliCtx {
 
     fn try_from(args: &CliArgs) -> Result<Self, Self::Error> {
         let data_dir = args.get_data_dir()?;
-        log::info!("Using data dir: {:?} ", data_dir);
 
         Ok(CliCtx {
             data_dir,
@@ -262,7 +252,10 @@ enum CliCommand {
 impl CliCommand {
     pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
-            CliCommand::Commands(command) => command.run_command(ctx).await,
+            CliCommand::Commands(command) => {
+                start_logger("warn", None, &vec![])?;
+                command.run_command(ctx).await
+            }
             CliCommand::Complete(complete) => complete.run_command(ctx),
             CliCommand::Service(service) => service.run_command(ctx).await,
         }
@@ -292,6 +285,12 @@ struct ServiceCommandOpts {
 
     #[structopt(long, env, default_value = "60")]
     max_rest_timeout: usize,
+
+    /// Create logs in this directory. Logs are automatically rotated and compressed.
+    /// If unset, then `data_dir` is used.
+    /// If set to empty string, then logging to files is disabled.
+    #[structopt(long, env = "YAGNA_LOG_DIR")]
+    log_dir: Option<PathBuf>,
 }
 
 #[cfg(unix)]
@@ -326,13 +325,44 @@ impl ServiceCommand {
                 api_url,
                 metrics_opts,
                 max_rest_timeout,
+                log_dir,
             }) => {
+                // workaround to silence middleware logger by default
+                // to enable it explicitly set RUST_LOG=info or more verbose
+                env::set_var(
+                    "RUST_LOG",
+                    env::var("RUST_LOG")
+                        .unwrap_or(format!("info,actix_web::middleware::logger=warn",)),
+                );
+
+                let logger_handle = start_logger(
+                    "info",
+                    log_dir.as_deref().or(Some(&ctx.data_dir)).and_then(|path| {
+                        match path.components().count() {
+                            0 => None,
+                            _ => Some(path),
+                        }
+                    }),
+                    &vec![
+                        ("actix_http::response", log::LevelFilter::Off),
+                        ("tokio_core", log::LevelFilter::Info),
+                        ("tokio_reactor", log::LevelFilter::Info),
+                        ("reqwest", log::LevelFilter::Info),
+                        ("hyper", log::LevelFilter::Info),
+                        ("web3", log::LevelFilter::Info),
+                        ("h2", log::LevelFilter::Info),
+                    ],
+                )?;
+
+                let app_name = clap::crate_name!();
                 log::info!(
                     "Starting {} service! Version: {}.",
-                    clap::crate_name!(),
+                    app_name,
                     ya_compile_time_utils::version_describe!()
                 );
-                let _lock = ProcLock::new("yagna", &ctx.data_dir)?.lock(std::process::id())?;
+                log::info!("Data directory: {}", ctx.data_dir.display());
+
+                let _lock = ProcLock::new(app_name, &ctx.data_dir)?.lock(std::process::id())?;
 
                 ya_sb_router::bind_gsb_router(ctx.gsb_url.clone())
                     .await
@@ -369,7 +399,8 @@ impl ServiceCommand {
 
                 future::try_join(server.run(), sd_notify(false, "READY=1")).await?;
 
-                log::info!("{} daemon successfully finished!", clap::crate_name!());
+                log::info!("{} service successfully finished!", app_name);
+                logger_handle.shutdown();
                 Ok(CommandOutput::NoOutput)
             }
         }
@@ -413,22 +444,7 @@ async fn me(id: Identity) -> impl Responder {
 #[actix_rt::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
-    let args: CliArgs = CliArgs::from_args();
-
-    env::set_var(
-        "RUST_LOG",
-        env::var("RUST_LOG").unwrap_or(format!(
-            "{},actix_web::middleware::logger=warn",
-            args.log_level()
-        )),
-    );
-    env_logger::builder()
-        .filter_module("actix_http::response", log::LevelFilter::Off)
-        .filter_module("tokio_core", log::LevelFilter::Info)
-        .filter_module("tokio_reactor", log::LevelFilter::Info)
-        .filter_module("hyper", log::LevelFilter::Info)
-        .filter_module("web3", log::LevelFilter::Info)
-        .init();
+    let args = CliArgs::from_args();
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
 

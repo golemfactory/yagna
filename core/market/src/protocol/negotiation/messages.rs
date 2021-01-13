@@ -1,18 +1,16 @@
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
+use ya_client::model::market::Reason;
 use ya_service_bus::RpcMessage;
 
-use crate::db::model::AgreementId;
-use crate::db::model::{DbProposal, OwnerType, ProposalId, SubscriptionId};
+use crate::db::model::{AgreementId, DbProposal, Owner, ProposalId, SubscriptionId};
+use crate::protocol::negotiation::error::{ProposeAgreementError, RejectProposalError};
 
 use super::super::callback::CallbackMessage;
 use super::error::{
-    ApproveAgreementError, CounterProposalError, GsbAgreementError, GsbProposalError,
-    TerminateAgreementError,
+    ApproveAgreementError, CounterProposalError, GsbAgreementError, TerminateAgreementError,
 };
-use crate::protocol::negotiation::error::ProposeAgreementError;
-use ya_client::model::market::Reason;
 
 pub mod provider {
     pub fn proposal_addr(prefix: &str) -> String {
@@ -88,16 +86,17 @@ impl RpcMessage for InitialProposalReceived {
     type Error = CounterProposalError;
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProposalRejected {
     pub proposal_id: ProposalId,
+    pub reason: Option<Reason>,
 }
 
 impl RpcMessage for ProposalRejected {
     const ID: &'static str = "ProposalRejected";
     type Item = ();
-    type Error = GsbProposalError;
+    type Error = RejectProposalError;
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -185,7 +184,7 @@ impl ProposalContent {
 }
 
 impl ProposalReceived {
-    pub fn translate(mut self, owner: OwnerType) -> Self {
+    pub fn translate(mut self, owner: Owner) -> Self {
         self.prev_proposal_id = self.prev_proposal_id.translate(owner);
         self.proposal.proposal_id = self.proposal.proposal_id.translate(owner);
         self
@@ -193,28 +192,28 @@ impl ProposalReceived {
 }
 
 impl InitialProposalReceived {
-    pub fn translate(mut self, owner: OwnerType) -> Self {
+    pub fn translate(mut self, owner: Owner) -> Self {
         self.proposal.proposal_id = self.proposal.proposal_id.translate(owner);
         self
     }
 }
 
 impl ProposalRejected {
-    pub fn translate(mut self, owner: OwnerType) -> Self {
+    pub fn translate(mut self, owner: Owner) -> Self {
         self.proposal_id = self.proposal_id.translate(owner);
         self
     }
 }
 
 impl AgreementApproved {
-    pub fn translate(mut self, owner: OwnerType) -> Self {
+    pub fn translate(mut self, owner: Owner) -> Self {
         self.agreement_id = self.agreement_id.translate(owner);
         self
     }
 }
 
 impl AgreementReceived {
-    pub fn translate(mut self, owner: OwnerType) -> Self {
+    pub fn translate(mut self, owner: Owner) -> Self {
         self.agreement_id = self.agreement_id.translate(owner);
         self.proposal_id = self.proposal_id.translate(owner);
         self
@@ -222,7 +221,7 @@ impl AgreementReceived {
 }
 
 impl AgreementTerminated {
-    pub fn translate(mut self, owner: OwnerType) -> Self {
+    pub fn translate(mut self, owner: Owner) -> Self {
         self.agreement_id = self.agreement_id.translate(owner);
         self
     }

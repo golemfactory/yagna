@@ -3,7 +3,9 @@ use crate::error::DbResult;
 use crate::models::payment::{
     ActivityPayment as DbActivityPayment, AgreementPayment as DbAgreementPayment, ReadObj, WriteObj,
 };
+use crate::schema::pay_activity::dsl as activity_dsl;
 use crate::schema::pay_activity_payment::dsl as activity_pay_dsl;
+use crate::schema::pay_agreement::dsl as agreement_dsl;
 use crate::schema::pay_agreement_payment::dsl as agreement_pay_dsl;
 use crate::schema::pay_payment::dsl;
 use bigdecimal::BigDecimal;
@@ -17,7 +19,6 @@ use ya_client_model::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
-use ya_persistence::types::Role;
 
 pub struct PaymentDao<'c> {
     pool: &'c PoolType,
@@ -188,65 +189,92 @@ impl<'c> PaymentDao<'c> {
         .await
     }
 
-    async fn get_for_role(
+    pub async fn get_for_node_id(
         &self,
         node_id: NodeId,
-        later_than: Option<NaiveDateTime>,
-        role: Role,
+        after_timestamp: Option<NaiveDateTime>,
+        max_events: Option<u32>,
+        app_session_id: Option<String>,
     ) -> DbResult<Vec<Payment>> {
         readonly_transaction(self.pool, move |conn| {
-            let query = dsl::pay_payment
+            let mut query = dsl::pay_payment
                 .filter(dsl::owner_id.eq(&node_id))
-                .filter(dsl::role.eq(&role))
-                .order_by(dsl::timestamp.asc());
-            let payments: Vec<ReadObj> = match later_than {
-                Some(timestamp) => query.filter(dsl::timestamp.gt(timestamp)).load(conn)?,
-                None => query.load(conn)?,
+                .order_by(dsl::timestamp.asc())
+                .into_boxed();
+            if let Some(timestamp) = after_timestamp {
+                query = query.filter(dsl::timestamp.gt(timestamp));
+            }
+            if let Some(limit) = max_events {
+                query = query.limit(limit.into());
+            }
+            let payments: Vec<ReadObj> = query.load(conn)?;
+
+            let activity_payments = {
+                let mut query = activity_pay_dsl::pay_activity_payment
+                    .inner_join(
+                        dsl::pay_payment.on(activity_pay_dsl::owner_id
+                            .eq(dsl::owner_id)
+                            .and(activity_pay_dsl::payment_id.eq(dsl::id))),
+                    )
+                    .inner_join(
+                        activity_dsl::pay_activity.on(activity_pay_dsl::owner_id
+                            .eq(activity_dsl::owner_id)
+                            .and(activity_pay_dsl::activity_id.eq(activity_dsl::id))),
+                    )
+                    .inner_join(
+                        agreement_dsl::pay_agreement.on(activity_pay_dsl::owner_id
+                            .eq(agreement_dsl::owner_id)
+                            .and(activity_dsl::agreement_id.eq(agreement_dsl::id))),
+                    )
+                    .filter(dsl::owner_id.eq(&node_id))
+                    .select(crate::schema::pay_activity_payment::all_columns)
+                    .into_boxed();
+                if let Some(app_session_id) = &app_session_id {
+                    query = query.filter(agreement_dsl::app_session_id.eq(app_session_id));
+                }
+                query.load(conn)?
             };
-            let activity_payments = activity_pay_dsl::pay_activity_payment
-                .inner_join(
-                    dsl::pay_payment.on(activity_pay_dsl::owner_id
-                        .eq(dsl::owner_id)
-                        .and(activity_pay_dsl::payment_id.eq(dsl::id))),
-                )
-                .filter(dsl::owner_id.eq(&node_id))
-                .filter(dsl::role.eq(&role))
-                .select(crate::schema::pay_activity_payment::all_columns)
-                .load(conn)?;
-            let agreement_payments = agreement_pay_dsl::pay_agreement_payment
-                .inner_join(
-                    dsl::pay_payment.on(agreement_pay_dsl::owner_id
-                        .eq(dsl::owner_id)
-                        .and(agreement_pay_dsl::payment_id.eq(dsl::id))),
-                )
-                .filter(dsl::owner_id.eq(&node_id))
-                .filter(dsl::role.eq(&role))
-                .select(crate::schema::pay_agreement_payment::all_columns)
-                .load(conn)?;
-            Ok(join_activity_and_agreement_payments(
+
+            let agreement_payments = {
+                let mut query = agreement_pay_dsl::pay_agreement_payment
+                    .inner_join(
+                        dsl::pay_payment.on(agreement_pay_dsl::owner_id
+                            .eq(dsl::owner_id)
+                            .and(agreement_pay_dsl::payment_id.eq(dsl::id))),
+                    )
+                    .inner_join(
+                        agreement_dsl::pay_agreement.on(agreement_pay_dsl::owner_id
+                            .eq(agreement_dsl::owner_id)
+                            .and(agreement_pay_dsl::agreement_id.eq(agreement_dsl::id))),
+                    )
+                    .filter(dsl::owner_id.eq(&node_id))
+                    .select(crate::schema::pay_agreement_payment::all_columns)
+                    .into_boxed();
+                if let Some(app_session_id) = &app_session_id {
+                    query = query.filter(agreement_dsl::app_session_id.eq(app_session_id));
+                }
+                query.load(conn)?
+            };
+
+            let mut payments = join_activity_and_agreement_payments(
                 payments,
                 activity_payments,
                 agreement_payments,
-            ))
+            );
+
+            // A trick to filter payments by app_session_id. Payments are not directly linked to any
+            // particular agreement but they always have at least one related activity_payment or
+            // agreement_payment. So if some payment lacks related sub-payments that means they've
+            // been filtered out due to non-matching app_sesion_id and so should be the payment.
+            if let Some(app_session_id) = app_session_id {
+                payments.retain(|payment| {
+                    !payment.activity_payments.is_empty() || !payment.agreement_payments.is_empty()
+                });
+            };
+
+            Ok(payments)
         })
         .await
-    }
-
-    pub async fn get_for_requestor(
-        &self,
-        node_id: NodeId,
-        later_than: Option<NaiveDateTime>,
-    ) -> DbResult<Vec<Payment>> {
-        self.get_for_role(node_id, later_than, Role::Requestor)
-            .await
-    }
-
-    pub async fn get_for_provider(
-        &self,
-        node_id: NodeId,
-        later_than: Option<NaiveDateTime>,
-    ) -> DbResult<Vec<Payment>> {
-        self.get_for_role(node_id, later_than, Role::Provider).await
     }
 }
 

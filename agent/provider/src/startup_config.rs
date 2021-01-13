@@ -13,6 +13,7 @@ use crate::execution::{ExeUnitsRegistry, TaskRunnerConfig};
 use crate::hardware::{Resources, UpdateResources};
 use crate::market::config::MarketConfig;
 
+use crate::payments::PaymentsConfig;
 use ya_client::cli::ApiOpts;
 use ya_utils_path::data_dir::DataDir;
 
@@ -21,6 +22,10 @@ lazy_static::lazy_static! {
 
     static ref DEFAULT_PLUGINS_DIR : PathBuf = default_plugins();
 }
+
+pub(crate) const GLOBALS_JSON: &'static str = "globals.json";
+pub(crate) const PRESETS_JSON: &'static str = "presets.json";
+pub(crate) const HARDWARE_JSON: &'static str = "hardware.json";
 
 /// Common configuration for all Provider commands.
 #[derive(StructOpt, Clone)]
@@ -43,11 +48,11 @@ pub struct ProviderConfig {
         default_value = &*DEFAULT_DATA_DIR,
     )]
     pub data_dir: DataDir,
-    #[structopt(skip = "globals.json")]
+    #[structopt(skip = GLOBALS_JSON)]
     pub globals_file: PathBuf,
-    #[structopt(skip = "presets.json")]
+    #[structopt(skip = PRESETS_JSON)]
     pub presets_file: PathBuf,
-    #[structopt(skip = "hardware.json")]
+    #[structopt(skip = HARDWARE_JSON)]
     pub hardware_file: PathBuf,
     /// Max number of available CPU cores
     #[structopt(
@@ -155,6 +160,8 @@ pub struct RunConfig {
     pub runner: TaskRunnerConfig,
     #[structopt(flatten)]
     pub market: MarketConfig,
+    #[structopt(flatten)]
+    pub payment: PaymentsConfig,
 }
 
 #[derive(StructOpt)]
@@ -269,6 +276,19 @@ pub struct StartupConfig {
 }
 
 #[derive(StructOpt)]
+#[structopt(rename_all = "kebab-case")]
+pub struct CleanConfig {
+    /// Expression in the following format:
+    /// <number>P, e.g. 30d
+    /// where P: s|m|h|d|w|M|y or empty for days
+    #[structopt(default_value = "30d")]
+    pub expr: String,
+    /// Perform a dry run
+    #[structopt(long)]
+    pub dry_run: bool,
+}
+
+#[derive(StructOpt)]
 pub enum Commands {
     /// Run provider agent
     Run(RunConfig),
@@ -280,6 +300,8 @@ pub enum Commands {
     Profile(ProfileConfig),
     /// Manage ExeUnits
     ExeUnit(ExeUnitsConfig),
+    /// Clean up disk space
+    Clean(CleanConfig),
 }
 
 #[derive(Debug)]

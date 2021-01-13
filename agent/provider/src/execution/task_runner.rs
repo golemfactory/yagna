@@ -1,5 +1,6 @@
 use actix::prelude::*;
 use anyhow::{anyhow, bail, Error, Result};
+use chrono::{DateTime, Utc};
 use derive_more::Display;
 use futures::future::join_all;
 use futures::{FutureExt, TryFutureExt};
@@ -15,6 +16,7 @@ use structopt::StructOpt;
 
 use ya_agreement_utils::{AgreementView, OfferTemplate};
 use ya_client::activity::ActivityProviderApi;
+use ya_client_model::activity::provider_event::ProviderEventType;
 use ya_client_model::activity::{ActivityState, ProviderEvent, State};
 use ya_core_model::activity;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
@@ -122,6 +124,8 @@ pub struct TaskRunnerConfig {
     pub process_termination_timeout: Duration,
     #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "10s")]
     pub exeunit_state_retry_interval: Duration,
+    #[structopt(skip = "you-forgot-to-set-session-id")]
+    pub session_id: String,
 }
 
 // =========================================== //
@@ -144,6 +148,7 @@ pub struct TaskRunner {
 
     config: Arc<TaskRunnerConfig>,
 
+    event_ts: DateTime<Utc>,
     tasks_dir: PathBuf,
     cache_dir: PathBuf,
 }
@@ -192,6 +197,7 @@ impl TaskRunner {
             activity_created: SignalSlot::<ActivityCreated>::new(),
             activity_destroyed: SignalSlot::<ActivityDestroyed>::new(),
             config: Arc::new(config),
+            event_ts: Utc::now(),
             tasks_dir,
             cache_dir,
         })
@@ -205,25 +211,11 @@ impl TaskRunner {
         self.registry.find_exeunit(&msg.name)
     }
 
-    pub async fn collect_events(
-        client: Arc<ActivityProviderApi>,
-        addr: Addr<TaskRunner>,
-    ) -> Result<()> {
-        match TaskRunner::query_events(client).await {
-            Err(error) => log::error!("Can't query activity events. Error: {:?}", error),
-            Ok(activity_events) => {
-                TaskRunner::dispatch_events(&activity_events, addr).await;
-            }
-        }
-
-        Ok(())
-    }
-
     // =========================================== //
     // TaskRunner internals - events dispatching
     // =========================================== //
 
-    async fn dispatch_events(events: &Vec<ProviderEvent>, myself: Addr<TaskRunner>) {
+    async fn dispatch_events(events: Vec<ProviderEvent>, myself: &Addr<TaskRunner>) {
         if events.len() == 0 {
             return;
         };
@@ -235,26 +227,22 @@ impl TaskRunner {
             .into_iter()
             .zip(iter::repeat(myself))
             .map(|(event, myself)| async move {
-                let _ = match event {
-                    ProviderEvent::CreateActivity {
-                        activity_id,
-                        agreement_id,
-                        requestor_pub_key,
-                    } => {
+                let _ = match event.event_type {
+                    ProviderEventType::CreateActivity { requestor_pub_key } => {
                         myself
-                            .send(CreateActivity::new(
-                                activity_id,
-                                agreement_id,
-                                requestor_pub_key.as_ref(),
-                            ))
+                            .send(CreateActivity {
+                                activity_id: event.activity_id,
+                                agreement_id: event.agreement_id,
+                                requestor_pub_key,
+                            })
                             .await?
                     }
-                    ProviderEvent::DestroyActivity {
-                        activity_id,
-                        agreement_id,
-                    } => {
+                    ProviderEventType::DestroyActivity {} => {
                         myself
-                            .send(DestroyActivity::new(activity_id, agreement_id))
+                            .send(DestroyActivity {
+                                activity_id: event.activity_id,
+                                agreement_id: event.agreement_id,
+                            })
                             .await?
                     }
                 }
@@ -264,10 +252,6 @@ impl TaskRunner {
             .collect::<Vec<_>>();
 
         let _ = join_all(futures).await;
-    }
-
-    async fn query_events(client: Arc<ActivityProviderApi>) -> Result<Vec<ProviderEvent>> {
-        Ok(client.get_activity_events(Some(3.), None).await?)
     }
 
     // =========================================== //
@@ -536,7 +520,10 @@ async fn remove_remaining_tasks(
                 agreement_id,
             );
             myself
-                .send(DestroyActivity::new(&activity_id, &agreement_id))
+                .send(DestroyActivity {
+                    activity_id: activity_id.clone(),
+                    agreement_id,
+                })
                 .await
         })
         .collect::<Vec<_>>();
@@ -584,13 +571,43 @@ impl Handler<GetOfferTemplates> for TaskRunner {
 impl Handler<UpdateActivity> for TaskRunner {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, _msg: UpdateActivity, ctx: &mut Context<Self>) -> Self::Result {
-        let client = self.api.clone();
+    fn handle(&mut self, _: UpdateActivity, ctx: &mut Context<Self>) -> Self::Result {
         let addr = ctx.address();
+        let client = self.api.clone();
 
-        ActorResponse::r#async(
-            async move { TaskRunner::collect_events(client, addr).await }.into_actor(self),
-        )
+        let mut event_ts = self.event_ts.clone();
+        let app_session_id = self.config.session_id.clone();
+        let poll_timeout = Duration::from_secs(3);
+
+        let fut = async move {
+            let result = client
+                .get_activity_events(
+                    Some(event_ts.clone()),
+                    Some(app_session_id),
+                    Some(poll_timeout),
+                    None,
+                )
+                .await;
+
+            match result {
+                Ok(events) => {
+                    events
+                        .iter()
+                        .max_by_key(|e| e.event_date)
+                        .map(|e| event_ts = event_ts.max(e.event_date));
+                    Self::dispatch_events(events, &addr).await;
+                }
+                Err(error) => log::error!("Can't query activity events: {:?}", error),
+            };
+            event_ts
+        }
+        .into_actor(self)
+        .map(|event_ts, actor, _| {
+            actor.event_ts = actor.event_ts.max(event_ts);
+            Ok(())
+        });
+
+        ActorResponse::r#async(fut)
     }
 }
 
@@ -716,7 +733,10 @@ impl Handler<Shutdown> for TaskRunner {
         let fut = async move {
             for (activity_id, agreement_id) in ids {
                 if let Err(e) = addr
-                    .send(DestroyActivity::new(&activity_id, &agreement_id))
+                    .send(DestroyActivity {
+                        activity_id,
+                        agreement_id,
+                    })
                     .await?
                 {
                     log::error!("Unable to destroy activity: {}", e);
@@ -726,32 +746,5 @@ impl Handler<Shutdown> for TaskRunner {
         };
 
         ActorResponse::r#async(fut.into_actor(self))
-    }
-}
-
-// =========================================== //
-// Messages creation
-// =========================================== //
-
-impl CreateActivity {
-    pub fn new<S: AsRef<str>>(
-        activity_id: S,
-        agreement_id: S,
-        requestor_pub_key: Option<S>,
-    ) -> CreateActivity {
-        CreateActivity {
-            activity_id: activity_id.as_ref().to_string(),
-            agreement_id: agreement_id.as_ref().to_string(),
-            requestor_pub_key: requestor_pub_key.map(|s| s.as_ref().to_string()),
-        }
-    }
-}
-
-impl DestroyActivity {
-    pub fn new(activity_id: &str, agreement_id: &str) -> DestroyActivity {
-        DestroyActivity {
-            activity_id: activity_id.to_string(),
-            agreement_id: agreement_id.to_string(),
-        }
     }
 }

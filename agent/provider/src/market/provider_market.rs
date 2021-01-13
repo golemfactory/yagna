@@ -173,9 +173,7 @@ impl ProviderMarket {
     ) -> Result<()> {
         log::info!("Got approved agreement [{}].", msg.agreement.id,);
         // At this moment we only forward agreement to outside world.
-        self.agreement_signed_signal.send_signal(AgreementApproved {
-            agreement: msg.agreement,
-        })
+        self.agreement_signed_signal.send_signal(msg)
     }
 }
 
@@ -291,7 +289,7 @@ async fn process_proposal(
         ProposalResponse::IgnoreProposal => log::info!("Ignoring proposal {:?}", proposal_id),
         ProposalResponse::RejectProposal { reason } => {
             ctx.api
-                .reject_proposal_with_reason(&subscription.id, proposal_id, &reason)
+                .reject_proposal(&subscription.id, proposal_id, &reason)
                 .await?;
         }
     };
