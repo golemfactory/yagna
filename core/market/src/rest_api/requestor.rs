@@ -183,13 +183,13 @@ async fn wait_for_approval(
     market: Data<Arc<MarketService>>,
     path: Path<PathAgreement>,
     query: Query<QueryTimeout>,
-    _id: Identity,
+    id: Identity,
 ) -> impl Responder {
     let agreement_id = path.into_inner().to_id(Owner::Requestor)?;
     let timeout = query.timeout;
     market
         .requestor_engine
-        .wait_for_approval(&agreement_id, timeout)
+        .wait_for_approval(id, &agreement_id, timeout)
         .await
         .log_err()
         .map(|status| match status {

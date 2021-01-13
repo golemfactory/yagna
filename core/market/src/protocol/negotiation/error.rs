@@ -5,6 +5,7 @@ use crate::db::dao::ChangeProposalStateError;
 use crate::db::model::{AgreementId, AgreementState, ProposalId, ProposalIdValidationError};
 use crate::matcher::error::QueryOfferError;
 use crate::negotiation::error::{GetProposalError, MatchValidationError, ProposalValidationError};
+use ya_client::model::ParseError;
 
 /// Trait for Error types, that shouldn't expose sensitive information
 /// to other Nodes in network, but should contain more useful message, when displaying
@@ -30,8 +31,8 @@ pub enum CounterProposalError {
     Remote(RemoteProposalError, ProposalId),
     #[error("Remote error: {0}")]
     RemoteInternal(#[from] RemoteProposalError),
-    #[error(transparent)]
-    CallerParse(#[from] CallerParseError),
+    #[error("Caller {0}")]
+    CallerParse(#[from] ParseError),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
@@ -44,8 +45,8 @@ pub enum RejectProposalError {
     ChangeState(#[from] ChangeProposalStateError),
     #[error(transparent)]
     Validation(#[from] ProposalValidationError),
-    #[error(transparent)]
-    CallerParse(#[from] CallerParseError),
+    #[error("Caller {0}")]
+    CallerParse(#[from] ParseError),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
@@ -58,8 +59,8 @@ pub enum RemoteProposalError {
     AlreadyCountered(ProposalId),
     #[error(transparent)]
     InvalidId(#[from] ProposalIdValidationError),
-    #[error(transparent)]
-    CallerParse(#[from] CallerParseError),
+    #[error("Caller {0}")]
+    CallerParse(#[from] ParseError),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
@@ -113,20 +114,13 @@ pub enum ApproveAgreementError {
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
-#[error("Failed to parse caller {caller}: {e}")]
-pub struct CallerParseError {
-    pub caller: String,
-    pub e: String,
-}
-
-#[derive(Error, Debug, Serialize, Deserialize)]
 pub enum TerminateAgreementError {
     #[error("Terminate {0}.")]
     Gsb(#[from] GsbAgreementError),
     #[error("Remote Terminate: {0}")]
     Remote(#[from] RemoteAgreementError),
-    #[error(transparent)]
-    CallerParse(#[from] CallerParseError),
+    #[error("Caller {0}")]
+    CallerParse(#[from] ParseError),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]

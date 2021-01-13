@@ -18,8 +18,8 @@ use ya_service_bus::{timeout::*, typed::ServiceBinder};
 
 use crate::common::{
     authorize_activity_initiator, authorize_agreement_initiator, generate_id,
-    get_activity_agreement, get_agreement, get_persisted_state, get_persisted_usage,
-    set_persisted_state, RpcMessageResult,
+    get_activity_agreement, get_persisted_state, get_persisted_usage, set_persisted_state,
+    RpcMessageResult,
 };
 use crate::dao::*;
 use crate::db::models::ActivityEventType;
@@ -82,10 +82,9 @@ async fn create_activity_gsb(
     caller: String,
     msg: activity::Create,
 ) -> RpcMessageResult<activity::Create> {
-    authorize_agreement_initiator(caller, &msg.agreement_id, Role::Provider).await?;
-
+    let agreement =
+        authorize_agreement_initiator(caller, &msg.agreement_id, Role::Provider).await?;
     let activity_id = generate_id();
-    let agreement = get_agreement(&msg.agreement_id, Role::Provider).await?;
     let app_session_id = agreement.app_session_id.clone();
     if agreement.state != AgreementState::Approved {
         // to track inconsistencies between this and remote market service
@@ -205,13 +204,13 @@ async fn destroy_activity_gsb(
     caller: String,
     msg: activity::Destroy,
 ) -> RpcMessageResult<activity::Destroy> {
-    authorize_activity_initiator(&db, caller, &msg.activity_id, Role::Provider).await?;
+    let agreement =
+        authorize_activity_initiator(&db, &caller, &msg.activity_id, Role::Provider).await?;
 
     if !get_persisted_state(&db, &msg.activity_id).await?.alive() {
         return Ok(());
     }
 
-    let agreement = get_agreement(&msg.agreement_id, Role::Provider).await?;
     db.as_dao::<EventDao>()
         .create(
             &msg.activity_id,
@@ -438,10 +437,10 @@ mod local {
     /// Called e.g. by payment module
     async fn get_agreement_id_gsb(
         db: DbExecutor,
-        _caller: String,
+        caller: String,
         msg: activity::local::GetAgreementId,
     ) -> RpcMessageResult<activity::local::GetAgreementId> {
-        let agreement = get_activity_agreement(&db, &msg.activity_id, msg.role).await?;
+        let agreement = get_activity_agreement(caller, &db, &msg.activity_id, msg.role).await?;
         Ok(agreement.agreement_id)
     }
 }

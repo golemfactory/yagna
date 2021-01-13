@@ -10,6 +10,7 @@ use ya_service_bus::typed::ServiceBinder;
 
 use crate::db::dao::AgreementDao;
 use crate::db::model::{AgreementId, Owner};
+use ya_client::model::ParseError;
 
 pub async fn bind_gsb(db: DbExecutor, public_prefix: &str, _local_prefix: &str) {
     log::trace!("Binding market agreement public service to service bus");
@@ -19,7 +20,7 @@ pub async fn bind_gsb(db: DbExecutor, public_prefix: &str, _local_prefix: &str) 
 
 async fn get_agreement(
     db: DbExecutor,
-    _sender_id: String,
+    caller: String,
     msg: GetAgreement,
 ) -> Result<ClientAgreement, RpcMessageError> {
     let owner = match msg.role {
@@ -30,15 +31,17 @@ async fn get_agreement(
     let agreement_id = AgreementId::from_client(&msg.agreement_id, owner)
         .map_err(|e| RpcMessageError::Market(e.to_string()))?;
 
-    // TODO: We should check Agreement owner, like in REST get_agreement implementation, but
-    //  I'm not sure we can trust `sender_id` value from gsb now.
-    let dao = db.as_dao::<AgreementDao>();
+    let caller_id = caller
+        .parse()
+        .map_err(|e: ParseError| RpcMessageError::BadRequest(e.to_string()))?;
     let now = chrono::Utc::now().naive_utc();
-    Ok(dao
-        .select(&agreement_id, None, now)
+    let agreement = db
+        .as_dao::<AgreementDao>()
+        .select(&agreement_id, Some(caller_id), now)
         .await
         .map_err(|e| RpcMessageError::Market(e.to_string()))?
         .ok_or(RpcMessageError::NotFound(msg.agreement_id.clone()))?
         .into_client()
-        .map_err(|e| RpcMessageError::Market(e.to_string()))?)
+        .map_err(|e| RpcMessageError::Market(e.to_string()))?;
+    Ok(agreement)
 }

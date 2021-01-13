@@ -6,8 +6,7 @@ use ya_service_api_web::middleware::Identity;
 use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
 
 use crate::common::{
-    agreement_provider_service, authorize_activity_initiator, get_activity_agreement, PathActivity,
-    QueryTimeout,
+    agreement_provider_service, authorize_activity_initiator, PathActivity, QueryTimeout,
 };
 use crate::error::Error;
 
@@ -23,9 +22,9 @@ async fn get_running_command(
     query: web::Query<QueryTimeout>,
     id: Identity,
 ) -> impl Responder {
-    authorize_activity_initiator(&db, id.identity, &path.activity_id, Role::Requestor).await?;
+    let agreement =
+        authorize_activity_initiator(&db, id.identity, &path.activity_id, Role::Requestor).await?;
 
-    let agreement = get_activity_agreement(&db, &path.activity_id, Role::Requestor).await?;
     let msg = activity::GetRunningCommand {
         activity_id: path.activity_id.to_string(),
         timeout: query.timeout.clone(),

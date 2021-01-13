@@ -115,14 +115,15 @@ pub(crate) async fn set_persisted_usage(
 }
 
 pub(crate) async fn get_agreement(
+    caller: impl ToString,
     agreement_id: impl ToString,
     role: Role,
 ) -> Result<Agreement, Error> {
     Ok(bus::service(market::BUS_ID)
-        .send(market::GetAgreement::as_role(
-            agreement_id.to_string(),
-            role,
-        ))
+        .send_as(
+            caller.to_string(),
+            market::GetAgreement::as_role(agreement_id.to_string(), role),
+        )
         .await??)
 }
 
@@ -134,11 +135,12 @@ pub(crate) async fn get_agreement_id(db: &DbExecutor, activity_id: &str) -> Resu
 }
 
 pub(crate) async fn get_activity_agreement(
+    caller: impl ToString,
     db: &DbExecutor,
     activity_id: &str,
     role: Role,
 ) -> Result<Agreement, Error> {
-    get_agreement(get_agreement_id(db, activity_id).await?, role).await
+    get_agreement(caller, get_agreement_id(db, activity_id).await?, role).await
 }
 
 pub(crate) async fn authorize_activity_initiator(
@@ -146,7 +148,7 @@ pub(crate) async fn authorize_activity_initiator(
     caller: impl ToString,
     activity_id: &str,
     role: Role,
-) -> Result<(), Error> {
+) -> Result<Agreement, Error> {
     authorize_agreement_initiator(caller, &get_agreement_id(db, activity_id).await?, role).await
 }
 
@@ -155,7 +157,7 @@ pub(crate) async fn authorize_activity_executor(
     caller: impl ToString,
     activity_id: &str,
     role: Role,
-) -> Result<(), Error> {
+) -> Result<Agreement, Error> {
     authorize_agreement_executor(caller, &get_agreement_id(db, activity_id).await?, role).await
 }
 
@@ -163,20 +165,24 @@ pub(crate) async fn authorize_agreement_initiator(
     caller: impl ToString,
     agreement_id: &str,
     role: Role,
-) -> Result<(), Error> {
-    let agreement = get_agreement(agreement_id, role).await?;
+) -> Result<Agreement, Error> {
+    let caller = caller.to_string();
+    let agreement = get_agreement(&caller, agreement_id, role).await?;
 
-    authorize_caller(&caller.to_string().parse()?, agreement.requestor_id())
+    authorize_caller(&caller.parse()?, agreement.requestor_id())?;
+    Ok(agreement)
 }
 
 pub(crate) async fn authorize_agreement_executor(
     caller: impl ToString,
     agreement_id: &str,
     role: Role,
-) -> Result<(), Error> {
-    let agreement = get_agreement(agreement_id, role).await?;
+) -> Result<Agreement, Error> {
+    let caller = caller.to_string();
+    let agreement = get_agreement(&caller, agreement_id, role).await?;
 
-    authorize_caller(&caller.to_string().parse()?, agreement.provider_id())
+    authorize_caller(&caller.parse()?, agreement.provider_id())?;
+    Ok(agreement)
 }
 
 #[inline(always)]

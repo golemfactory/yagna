@@ -134,7 +134,7 @@ async fn test_session_events_filtering() {
 
     for agreement_id in agreements.iter() {
         req_engine
-            .wait_for_approval(agreement_id, 0.2)
+            .wait_for_approval(req_id.clone(), agreement_id, 0.2)
             .await
             .unwrap();
     }

@@ -143,10 +143,11 @@ async fn test_agreement_events_and_wait_for_approval() {
 
     let agr_id = agreement_id.clone();
     let requestor = req_market.clone();
+    let req_id1 = req_id.clone();
     let wait_handle = tokio::task::spawn_local(async move {
         let status = requestor
             .requestor_engine
-            .wait_for_approval(&agr_id, 60.0)
+            .wait_for_approval(req_id1, &agr_id, 60.0)
             .await
             .unwrap();
         assert_eq!(status, ApprovalStatus::Approved);

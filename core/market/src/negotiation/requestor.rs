@@ -287,14 +287,14 @@ impl RequestorBroker {
 
     pub async fn wait_for_approval(
         &self,
-        id: &AgreementId,
+        id: Identity,
+        agreement_id: &AgreementId,
         timeout: f32,
     ) -> Result<ApprovalStatus, WaitForApprovalError> {
-        // TODO: Check if we are owner of Proposal
         // TODO: What to do with 2 simultaneous calls to wait_for_approval??
         //  should we reject one? And if so, how to discover, that two calls were made?
         let timeout = Duration::from_secs_f32(timeout.max(0.0));
-        let mut notifier = self.common.agreement_notifier.listen(id);
+        let mut notifier = self.common.agreement_notifier.listen(agreement_id);
 
         // Loop will wait for events notifications only one time. It doesn't have to be loop at all,
         // but it spares us doubled getting agreement and mapping statuses to return results.
@@ -304,10 +304,10 @@ impl RequestorBroker {
                 .common
                 .db
                 .as_dao::<AgreementDao>()
-                .select(id, None, Utc::now().naive_utc())
+                .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
                 .await
-                .map_err(|e| WaitForApprovalError::Get(id.clone(), e))?
-                .ok_or(WaitForApprovalError::NotFound(id.clone()))?;
+                .map_err(|e| WaitForApprovalError::Get(agreement_id.clone(), e))?
+                .ok_or(WaitForApprovalError::NotFound(agreement_id.clone()))?;
 
             match agreement.state {
                 AgreementState::Approved => {
@@ -322,19 +322,23 @@ impl RequestorBroker {
                     counter!("market.agreements.requestor.cancelled", 1);
                     return Ok(ApprovalStatus::Cancelled);
                 }
-                AgreementState::Expired => return Err(WaitForApprovalError::Expired(id.clone())),
+                AgreementState::Expired => {
+                    return Err(WaitForApprovalError::Expired(agreement_id.clone()))
+                }
                 AgreementState::Proposal => {
-                    return Err(WaitForApprovalError::NotConfirmed(id.clone()))
+                    return Err(WaitForApprovalError::NotConfirmed(agreement_id.clone()))
                 }
                 AgreementState::Terminated => {
-                    return Err(WaitForApprovalError::Terminated(id.clone()))
+                    return Err(WaitForApprovalError::Terminated(agreement_id.clone()))
                 }
                 AgreementState::Pending => (), // Still waiting for approval.
             };
 
             if let Err(error) = notifier.wait_for_event_with_timeout(timeout).await {
                 return match error {
-                    NotifierError::Timeout(_) => Err(WaitForApprovalError::Timeout(id.clone())),
+                    NotifierError::Timeout(_) => {
+                        Err(WaitForApprovalError::Timeout(agreement_id.clone()))
+                    }
                     NotifierError::ChannelClosed(_) => {
                         Err(WaitForApprovalError::Internal(error.to_string()))
                     }
@@ -355,11 +359,7 @@ impl RequestorBroker {
         let dao = self.common.db.as_dao::<AgreementDao>();
 
         let agreement = match dao
-            .select(
-                agreement_id,
-                Some(id.identity.clone()),
-                Utc::now().naive_utc(),
-            )
+            .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
             .await
             .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
         {
@@ -414,18 +414,18 @@ async fn on_agreement_approved(
 
 async fn agreement_approved(
     broker: CommonBroker,
-    caller: NodeId,
+    caller_id: NodeId,
     msg: AgreementApproved,
 ) -> Result<(), RemoteAgreementError> {
     let agreement = broker
         .db
         .as_dao::<AgreementDao>()
-        .select(&msg.agreement_id, None, Utc::now().naive_utc())
+        .select(&msg.agreement_id, Some(caller_id), Utc::now().naive_utc())
         .await
         .map_err(|_e| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
         .ok_or(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
 
-    if agreement.provider_id != caller {
+    if agreement.provider_id != caller_id {
         // Don't reveal, that we know this Agreement id.
         Err(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
     }
@@ -464,7 +464,7 @@ async fn agreement_approved(
     log::info!(
         "Agreement [{}] approved by [{}].",
         &msg.agreement_id,
-        &caller
+        &caller_id
     );
     Ok(())
 }

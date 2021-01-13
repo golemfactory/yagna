@@ -78,7 +78,7 @@ pub async fn negotiate_agreement_with_ids(
 
     req_mkt
         .requestor_engine
-        .wait_for_approval(&r_agreement, 0.2)
+        .wait_for_approval(req_id.clone(), &r_agreement, 0.2)
         .await?;
 
     Ok(NegotiationAgreementHelper {

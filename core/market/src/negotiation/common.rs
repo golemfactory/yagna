@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use metrics::counter;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -32,7 +31,7 @@ use crate::negotiation::{
     notifier::NotifierError,
     EventNotifier,
 };
-use crate::protocol::negotiation::error::{CallerParseError, RejectProposalError};
+use crate::protocol::negotiation::error::RejectProposalError;
 use crate::protocol::negotiation::messages::ProposalRejected;
 use crate::protocol::negotiation::{
     common as protocol_common,
@@ -385,9 +384,8 @@ impl CommonBroker {
         caller: String,
         caller_role: Owner,
     ) -> Result<(), TerminateAgreementError> {
-        let caller_id = CommonBroker::parse_caller(&caller)?;
         Ok(self
-            .on_agreement_terminated_inner(msg, caller_id, caller_role)
+            .on_agreement_terminated_inner(msg, caller.parse()?, caller_role)
             .await?)
     }
 
@@ -400,7 +398,7 @@ impl CommonBroker {
         let dao = self.db.as_dao::<AgreementDao>();
         let agreement_id = msg.agreement_id.clone();
         let agreement = dao
-            .select(&agreement_id, None, Utc::now().naive_utc())
+            .select(&agreement_id, Some(caller_id), Utc::now().naive_utc())
             .await
             .map_err(|_e| RemoteAgreementError::NotFound(agreement_id.clone()))?
             .ok_or(RemoteAgreementError::NotFound(agreement_id.clone()))?;
@@ -450,8 +448,7 @@ impl CommonBroker {
         caller_role: Owner,
     ) -> Result<(), CounterProposalError> {
         let proposal_id = msg.proposal.proposal_id.clone();
-        let caller_id = CommonBroker::parse_caller(&caller)?;
-        self.proposal_received(msg, caller_id, caller_role)
+        self.proposal_received(msg, caller.parse()?, caller_role)
             .await
             .map_err(|e| CounterProposalError::Remote(e, proposal_id))
     }
@@ -527,8 +524,8 @@ impl CommonBroker {
         caller: String,
         caller_role: Owner,
     ) -> Result<(), RejectProposalError> {
-        let caller_id = CommonBroker::parse_caller(&caller)?;
-        self.proposal_rejected(msg, caller_id, caller_role).await
+        self.proposal_rejected(msg, caller.parse()?, caller_role)
+            .await
     }
 
     pub async fn proposal_rejected(
@@ -575,13 +572,6 @@ impl CommonBroker {
         };
 
         Ok(())
-    }
-
-    pub(crate) fn parse_caller(caller: &str) -> Result<NodeId, CallerParseError> {
-        NodeId::from_str(caller).map_err(|e| CallerParseError {
-            caller: caller.to_string(),
-            e: e.to_string(),
-        })
     }
 
     pub async fn validate_proposal(

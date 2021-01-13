@@ -22,8 +22,8 @@ mod common {
 
     use crate::common::{
         agreement_provider_service, authorize_activity_executor, authorize_activity_initiator,
-        get_activity_agreement, get_persisted_state, get_persisted_usage, set_persisted_state,
-        set_persisted_usage, PathActivity, QueryTimeout,
+        get_persisted_state, get_persisted_usage, set_persisted_state, set_persisted_usage,
+        PathActivity, QueryTimeout,
     };
 
     pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
@@ -62,7 +62,9 @@ mod common {
         log::trace!("get_activity_state_web: Not provider, maybe requestor?");
 
         // check if caller is the Requestor
-        authorize_activity_initiator(&db, id.identity, &path.activity_id, Role::Requestor).await?;
+        let agreement =
+            authorize_activity_initiator(&db, id.identity, &path.activity_id, Role::Requestor)
+                .await?;
 
         log::trace!("get_activity_state_web: I'm the requestor");
 
@@ -74,7 +76,6 @@ mod common {
         }
 
         // Retrieve and persist activity state
-        let agreement = get_activity_agreement(&db, &path.activity_id, Role::Requestor).await?;
         let provider_service = agreement_provider_service(&id, &agreement)?;
         let state = provider_service
             .send(activity::GetState {
@@ -107,7 +108,9 @@ mod common {
         }
 
         // check if caller is the Requestor
-        authorize_activity_initiator(&db, id.identity, &path.activity_id, Role::Requestor).await?;
+        let agreement =
+            authorize_activity_initiator(&db, id.identity, &path.activity_id, Role::Requestor)
+                .await?;
 
         // Return locally persisted usage if activity has been already terminated or terminating
         if get_persisted_state(&db, &path.activity_id).await?.alive() {
@@ -117,7 +120,6 @@ mod common {
         }
 
         // Retrieve and persist activity usage
-        let agreement = get_activity_agreement(&db, &path.activity_id, Role::Requestor).await?;
         let provider_service = agreement_provider_service(&id, &agreement)?;
         let usage = provider_service
             .send(activity::GetUsage {

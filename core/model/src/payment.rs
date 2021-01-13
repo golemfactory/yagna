@@ -370,6 +370,7 @@ pub mod local {
 
 pub mod public {
     use super::*;
+    use ya_client_model::node_id::ParseError;
     use ya_client_model::NodeId;
 
     pub const BUS_ID: &'static str = "/public/payment";
@@ -383,6 +384,10 @@ pub mod public {
         ServiceError(String),
         #[error("Bad request: {0}")]
         BadRequest(String),
+        #[error("[{0}] is not authorized to send Invoice/DebitNote [{1}]")]
+        Unauthorized(NodeId, String),
+        #[error("Caller {0}")]
+        CallerParse(#[from] ParseError),
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]

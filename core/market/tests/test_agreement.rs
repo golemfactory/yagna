@@ -183,7 +183,7 @@ async fn full_market_interaction_aka_happy_path() {
     let query_handle = tokio::spawn(async move {
         let approval_status = req_market
             .requestor_engine
-            .wait_for_approval(&agr_id, 0.1)
+            .wait_for_approval(req_id, &agr_id, 0.1)
             .await
             .unwrap();
 
@@ -380,7 +380,9 @@ async fn agreement_expired_before_approval() {
 
     // waiting for approval results with Expired error
     // bc Provider does not approve the Agreement
-    let result = req_engine.wait_for_approval(&agreement_id, 0.1).await;
+    let result = req_engine
+        .wait_for_approval(req_id, &agreement_id, 0.1)
+        .await;
 
     assert_err_eq!(WaitForApprovalError::Expired(agreement_id), result);
 }
@@ -414,7 +416,9 @@ async fn waiting_wo_confirmation_should_fail() {
         .unwrap();
 
     // waiting for approval results with not confirmed error
-    let result = req_engine.wait_for_approval(&agreement_id, 0.1).await;
+    let result = req_engine
+        .wait_for_approval(req_id, &agreement_id, 0.1)
+        .await;
     assert_err_eq!(WaitForApprovalError::NotConfirmed(agreement_id), result);
 }
 
@@ -559,7 +563,7 @@ async fn waiting_after_approval_should_pass() {
 
     // Requestor successfully waits for the Agreement approval
     let approval_status = req_engine
-        .wait_for_approval(&agreement_id, 0.1)
+        .wait_for_approval(req_id, &agreement_id, 0.1)
         .await
         .unwrap();
     assert_eq!(approval_status, ApprovalStatus::Approved);
@@ -687,14 +691,14 @@ async fn second_waiting_should_pass() {
 
     // Requestor successfully waits for the Agreement approval first time
     let approval_status = req_engine
-        .wait_for_approval(&agreement_id, 0.1)
+        .wait_for_approval(req_id.clone(), &agreement_id, 0.1)
         .await
         .unwrap();
     assert_eq!(approval_status, ApprovalStatus::Approved);
 
     // second wait should also succeed
     let approval_status = req_engine
-        .wait_for_approval(&agreement_id, 0.1)
+        .wait_for_approval(req_id.clone(), &agreement_id, 0.1)
         .await
         .unwrap();
     assert_eq!(approval_status, ApprovalStatus::Approved);

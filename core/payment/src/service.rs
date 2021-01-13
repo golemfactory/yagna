@@ -247,6 +247,7 @@ mod public {
     use crate::error::processor::VerifyPaymentError;
     use ya_client_model::payment::*;
     use ya_core_model::payment::public::*;
+    use ya_core_model::NodeId;
     use ya_persistence::types::Role;
 
     pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
@@ -270,7 +271,7 @@ mod public {
 
     async fn send_debit_note(
         db: DbExecutor,
-        sender_id: String,
+        caller: String,
         msg: SendDebitNote,
     ) -> Result<Ack, SendError> {
         let debit_note = msg.0;
@@ -278,32 +279,34 @@ mod public {
         let activity_id = debit_note.activity_id.clone();
         let agreement_id = debit_note.agreement_id.clone();
 
-        let agreement = match get_agreement(agreement_id.clone(), core::Role::Requestor).await {
-            Err(e) => {
-                return Err(SendError::ServiceError(e.to_string()));
-            }
-            Ok(None) => {
-                return Err(SendError::BadRequest(format!(
-                    "Agreement {} not found",
-                    debit_note.agreement_id
-                )));
-            }
-            Ok(Some(agreement)) => agreement,
-        };
+        let agreement =
+            match get_agreement(&caller, agreement_id.clone(), core::Role::Requestor).await {
+                Err(e) => {
+                    return Err(SendError::ServiceError(e.to_string()));
+                }
+                Ok(None) => {
+                    return Err(SendError::BadRequest(format!(
+                        "Agreement {} not found",
+                        debit_note.agreement_id
+                    )));
+                }
+                Ok(Some(agreement)) => agreement,
+            };
 
-        let offeror_id = agreement.offer.provider_id.to_string();
-        let issuer_id = debit_note.issuer_id.to_string();
-        if sender_id != offeror_id || sender_id != issuer_id {
+        let offeror_id = agreement.provider_id();
+        let issuer_id = &debit_note.issuer_id;
+        let caller_id = caller.parse::<NodeId>()?;
+        if &caller_id != offeror_id || &caller_id != issuer_id {
             return Err(SendError::BadRequest("Invalid sender node ID".to_owned()));
         }
 
-        let node_id = agreement.requestor_id().clone();
+        let owner_id = agreement.requestor_id().clone();
         match async move {
             db.as_dao::<AgreementDao>()
-                .create_if_not_exists(agreement, node_id, Role::Requestor)
+                .create_if_not_exists(agreement, owner_id, Role::Requestor)
                 .await?;
             db.as_dao::<ActivityDao>()
-                .create_if_not_exists(activity_id, node_id, Role::Requestor, agreement_id)
+                .create_if_not_exists(activity_id, owner_id, Role::Requestor, agreement_id)
                 .await?;
             db.as_dao::<DebitNoteDao>()
                 .insert_received(debit_note)
@@ -389,7 +392,7 @@ mod public {
 
     async fn send_invoice(
         db: DbExecutor,
-        sender_id: String,
+        caller: String,
         msg: SendInvoice,
     ) -> Result<Ack, SendError> {
         let invoice = msg.0;
@@ -397,21 +400,22 @@ mod public {
         let agreement_id = invoice.agreement_id.clone();
         let activity_ids = invoice.activity_ids.clone();
 
-        let agreement = match get_agreement(agreement_id.clone(), core::Role::Requestor).await {
-            Err(e) => {
-                return Err(SendError::ServiceError(e.to_string()));
-            }
-            Ok(None) => {
-                return Err(SendError::BadRequest(format!(
-                    "Agreement {} not found",
-                    invoice.agreement_id
-                )));
-            }
-            Ok(Some(agreement)) => agreement,
-        };
+        let agreement =
+            match get_agreement(&caller, agreement_id.clone(), core::Role::Requestor).await {
+                Err(e) => {
+                    return Err(SendError::ServiceError(e.to_string()));
+                }
+                Ok(None) => {
+                    return Err(SendError::BadRequest(format!(
+                        "Agreement {} not found",
+                        invoice.agreement_id
+                    )));
+                }
+                Ok(Some(agreement)) => agreement,
+            };
 
         for activity_id in activity_ids.iter() {
-            match provider::get_agreement_id(activity_id.clone(), core::Role::Requestor).await {
+            match provider::get_agreement_id(&caller, activity_id, core::Role::Requestor).await {
                 Ok(Some(id)) if id != agreement_id => {
                     return Err(SendError::BadRequest(format!(
                         "Activity {} belongs to agreement {} not {}",
@@ -431,7 +435,7 @@ mod public {
 
         let offeror_id = agreement.offer.provider_id.to_string();
         let issuer_id = invoice.issuer_id.to_string();
-        if sender_id != offeror_id || sender_id != issuer_id {
+        if caller != offeror_id || caller != issuer_id {
             return Err(SendError::BadRequest("Invalid sender node ID".to_owned()));
         }
 

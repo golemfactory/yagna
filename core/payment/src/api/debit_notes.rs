@@ -130,7 +130,9 @@ async fn issue_debit_note(
     let debit_note = body.into_inner();
     let activity_id = debit_note.activity_id.clone();
 
+    let caller_id = id.identity;
     let agreement = match get_agreement_for_activity(
+        &caller_id,
         activity_id.clone(),
         ya_core_model::Role::Provider,
     )
@@ -142,22 +144,21 @@ async fn issue_debit_note(
     };
     let agreement_id = agreement.agreement_id.clone();
 
-    let node_id = id.identity;
-    if &node_id != agreement.provider_id() {
+    if &caller_id != agreement.provider_id() {
         return response::unauthorized();
     }
 
     match async move {
         db.as_dao::<AgreementDao>()
-            .create_if_not_exists(agreement, node_id, Role::Provider)
+            .create_if_not_exists(agreement, caller_id, Role::Provider)
             .await?;
         db.as_dao::<ActivityDao>()
-            .create_if_not_exists(activity_id, node_id, Role::Provider, agreement_id)
+            .create_if_not_exists(activity_id, caller_id, Role::Provider, agreement_id)
             .await?;
 
         let dao: DebitNoteDao = db.as_dao();
-        let debit_note_id = dao.create_new(debit_note, node_id).await?;
-        let debit_note = dao.get(debit_note_id, node_id).await?;
+        let debit_note_id = dao.create_new(debit_note, caller_id).await?;
+        let debit_note = dao.get(debit_note_id, caller_id).await?;
 
         counter!("payment.debit_notes.provider.issued", 1);
         Ok(debit_note)

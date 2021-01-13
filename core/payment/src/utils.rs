@@ -24,10 +24,17 @@ pub fn fake_get_agreement(agreement_id: String, agreement: Agreement) {
     });
 }
 
-pub async fn get_agreement(agreement_id: String, role: Role) -> Result<Option<Agreement>, Error> {
+pub async fn get_agreement(
+    caller: impl ToString,
+    agreement_id: String,
+    role: Role,
+) -> Result<Option<Agreement>, Error> {
     match async move {
         let agreement = bus::service(market::BUS_ID)
-            .send(market::GetAgreement::as_role(agreement_id.clone(), role))
+            .send_as(
+                caller.to_string(),
+                market::GetAgreement::as_role(agreement_id.clone(), role),
+            )
             .await??;
         Ok(agreement)
     }
@@ -58,16 +65,20 @@ pub mod provider {
     }
 
     pub async fn get_agreement_id(
-        activity_id: String,
+        caller: impl ToString,
+        activity_id: impl ToString,
         role: Role,
     ) -> Result<Option<String>, Error> {
         match async move {
             let agreement_id = bus::service(activity::local::BUS_ID)
-                .send(activity::local::GetAgreementId {
-                    activity_id,
-                    timeout: None,
-                    role,
-                })
+                .send_as(
+                    caller.to_string(),
+                    activity::local::GetAgreementId {
+                        activity_id: activity_id.to_string(),
+                        timeout: None,
+                        role,
+                    },
+                )
                 .await??;
             Ok(agreement_id)
         }
@@ -82,19 +93,26 @@ pub mod provider {
     }
 
     pub async fn get_agreement_for_activity(
+        caller: impl ToString,
         activity_id: String,
         role: Role,
     ) -> Result<Option<Agreement>, Error> {
         match async move {
             let agreement_id = bus::service(activity::local::BUS_ID)
-                .send(activity::local::GetAgreementId {
-                    activity_id,
-                    timeout: None,
-                    role,
-                })
+                .send_as(
+                    caller.to_string(),
+                    activity::local::GetAgreementId {
+                        activity_id,
+                        timeout: None,
+                        role,
+                    },
+                )
                 .await??;
             let agreement = bus::service(market::BUS_ID)
-                .send(market::GetAgreement::as_role(agreement_id.clone(), role))
+                .send_as(
+                    caller.to_string(),
+                    market::GetAgreement::as_role(agreement_id.clone(), role),
+                )
                 .await??;
             Ok(agreement)
         }

@@ -211,7 +211,7 @@ impl ProviderBroker {
     ) -> Result<ApprovalResult, AgreementError> {
         let dao = self.common.db.as_dao::<AgreementDao>();
         let agreement = match dao
-            .select(agreement_id, None, Utc::now().naive_utc())
+            .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
             .await
             .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
         {
@@ -279,7 +279,7 @@ async fn initial_proposal(
     // the same function to handle this, as in normal counter_proposal flow.
     // TODO: Initial proposal id will differ on Requestor and Provider!! It isn't problem as long
     //  we don't log ids somewhere and try to compare between nodes.
-    let caller_id = CommonBroker::parse_caller(&caller)?;
+    let caller_id = caller.parse()?;
 
     let proposal = Proposal::new_provider(&msg.demand_id, caller_id, offer);
     let proposal_id = proposal.body.id.clone();
