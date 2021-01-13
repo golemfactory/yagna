@@ -6,6 +6,7 @@ pub mod resolver;
 
 use resolver::error::MatchError as InternalMatchErorr;
 
+use crate::resolver::properties::PropertyRef;
 use flatten::{flatten_properties, FlattenError};
 use resolver::error::PrepareError;
 pub use resolver::matching::{match_weak, MatchResult};
@@ -14,8 +15,14 @@ pub use resolver::prepare::{PreparedDemand, PreparedOffer};
 #[derive(Debug, PartialEq)]
 pub enum Match {
     Yes,
-    No,
-    Undefined,
+    No {
+        offer_mismatch: Vec<String>,
+        demand_mismatch: Vec<String>,
+    },
+    Undefined {
+        offer_mismatch: Vec<String>,
+        demand_mismatch: Vec<String>,
+    },
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -41,10 +48,26 @@ pub fn match_demand_offer(
 
     match match_weak(&prep_demand_result, &prep_offer_result)? {
         MatchResult::True => Ok(Match::Yes),
-        MatchResult::False(..) => Ok(Match::No),
-        MatchResult::Undefined(..) => Ok(Match::Undefined),
+        MatchResult::False(from_offer, from_demand) => Ok(Match::No {
+            offer_mismatch: extract_names(&from_offer),
+            demand_mismatch: extract_names(&from_demand),
+        }),
+        MatchResult::Undefined((from_offer, _), (from_demand, _)) => Ok(Match::Undefined {
+            offer_mismatch: extract_names(&from_offer),
+            demand_mismatch: extract_names(&from_demand),
+        }),
         MatchResult::Err(e) => Err(e.into()),
     }
+}
+
+fn extract_names(props_vec: &Vec<&PropertyRef>) -> Vec<String> {
+    props_vec
+        .iter()
+        .map(|prop| match prop {
+            PropertyRef::Value(name, _) => name.to_string(),
+            PropertyRef::Aspect(name, aspect, _) => format!("{}[{}]", name, aspect),
+        })
+        .collect()
 }
 
 #[derive(Debug, Default)]
