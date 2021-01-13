@@ -5,10 +5,11 @@ use ya_client::model::NodeId;
 use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
 
 use crate::db::dao::agreement_events::create_event;
-use crate::db::dao::proposal::{has_counter_proposal, set_proposal_accepted};
+use crate::db::dao::proposal::{has_counter_proposal, update_proposal_state};
 use crate::db::dao::sql_functions::datetime;
 use crate::db::model::{
-    check_transition, Agreement, AgreementId, AgreementState, AppSessionId, OwnerType, ProposalId,
+    check_transition, Agreement, AgreementId, AgreementState, AppSessionId, Owner, ProposalId,
+    ProposalState,
 };
 use crate::db::schema::market_agreement::dsl as agreement;
 use crate::db::schema::market_agreement::dsl::market_agreement;
@@ -71,8 +72,8 @@ impl<'c> AgreementDao<'c> {
 
             if let Some(node_id) = node_id {
                 query = match id.owner() {
-                    OwnerType::Provider => query.filter(agreement::provider_id.eq(node_id)),
-                    OwnerType::Requestor => query.filter(agreement::requestor_id.eq(node_id)),
+                    Owner::Provider => query.filter(agreement::provider_id.eq(node_id)),
+                    Owner::Requestor => query.filter(agreement::requestor_id.eq(node_id)),
                 }
             };
 
@@ -149,7 +150,7 @@ impl<'c> AgreementDao<'c> {
                 .values(&agreement)
                 .execute(conn)?;
 
-            set_proposal_accepted(conn, &proposal_id)?;
+            update_proposal_state(conn, &proposal_id, ProposalState::Accepted)?;
             Ok(agreement)
         })
         .await
@@ -199,7 +200,7 @@ impl<'c> AgreementDao<'c> {
                 update_session(conn, &mut agreement, session)?;
             }
             // Always Provider approves.
-            create_event(conn, &agreement, None, OwnerType::Provider)?;
+            create_event(conn, &agreement, None, Owner::Provider)?;
 
             Ok(())
         })
@@ -210,7 +211,7 @@ impl<'c> AgreementDao<'c> {
         &self,
         id: &AgreementId,
         reason: Option<String>,
-        terminator: OwnerType,
+        terminator: Owner,
     ) -> Result<bool, AgreementDaoError> {
         let id = id.clone();
         do_with_transaction(self.pool, move |conn| {

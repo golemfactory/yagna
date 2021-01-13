@@ -100,15 +100,15 @@ impl<R: Runtime> Handler<RpcEnvelope<GetRunningCommand>> for ExeUnit<R> {
         _: &mut Self::Context,
     ) -> Self::Result {
         self.ctx.verify_activity_id(&msg.activity_id)?;
+        let commands = self
+            .state
+            .batches
+            .values()
+            .filter_map(|b| b.running_command())
+            .collect::<Vec<_>>();
 
-        // FIXME: use batch_id when added to GetRunningCommand
-        if let Some(cmd) = (|| {
-            self.state
-                .batches
-                .get(self.state.last_batch.as_ref()?)?
-                .running_command()
-        })() {
-            return Ok(cmd);
+        if !commands.is_empty() {
+            return Ok(commands);
         }
 
         Err(RpcMessageError::NotFound(format!(

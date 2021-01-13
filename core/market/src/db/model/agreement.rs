@@ -11,7 +11,7 @@ use ya_client::model::{ErrorMessage, NodeId};
 use ya_diesel_utils::DbTextField;
 
 use crate::db::dao::AgreementDaoError;
-use crate::db::model::{OwnerType, Proposal, ProposalId, SubscriptionId};
+use crate::db::model::{Owner, Proposal, ProposalId, SubscriptionId};
 use crate::db::schema::market_agreement;
 
 pub type AgreementId = ProposalId;
@@ -90,7 +90,7 @@ impl Agreement {
         demand_proposal: Proposal,
         offer_proposal: Proposal,
         valid_to: NaiveDateTime,
-        owner: OwnerType,
+        owner: Owner,
     ) -> Agreement {
         let creation_ts = Utc::now().naive_utc();
         Agreement::new_with_ts(
@@ -107,7 +107,7 @@ impl Agreement {
         offer_proposal: Proposal,
         valid_to: NaiveDateTime,
         creation_ts: NaiveDateTime,
-        owner: OwnerType,
+        owner: Owner,
     ) -> Agreement {
         let agreement_id = ProposalId::generate_id(
             &offer_proposal.negotiation.offer_id,

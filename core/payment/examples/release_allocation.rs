@@ -1,7 +1,7 @@
 use bigdecimal::BigDecimal;
 use chrono::Utc;
-use ya_client::payment::{PaymentProviderApi, PaymentRequestorApi};
-use ya_client::web::WebClient;
+use ya_client::payment::PaymentApi;
+use ya_client::web::{rest_api_url, WebClient};
 use ya_client_model::payment::{Acceptance, NewAllocation, NewInvoice};
 
 #[actix_rt::main]
@@ -10,9 +10,17 @@ async fn main() -> anyhow::Result<()> {
     std::env::set_var("RUST_LOG", log_level);
     env_logger::init();
 
-    let client = WebClient::builder().build();
-    let provider: PaymentProviderApi = client.interface()?;
-    let requestor: PaymentRequestorApi = client.interface()?;
+    // Create requestor / provider PaymentApi
+    let provider_url = format!("{}provider/", rest_api_url()).parse().unwrap();
+    let provider: PaymentApi = WebClient::builder()
+        .api_url(provider_url)
+        .build()
+        .interface()?;
+    let requestor_url = format!("{}requestor/", rest_api_url()).parse().unwrap();
+    let requestor: PaymentApi = WebClient::builder()
+        .api_url(requestor_url)
+        .build()
+        .interface()?;
 
     log::info!("Creating allocation...");
     let allocation = requestor
@@ -27,7 +35,7 @@ async fn main() -> anyhow::Result<()> {
     log::info!("Allocation created.");
 
     log::info!("Verifying allocation...");
-    let allocations = requestor.get_allocations().await?;
+    let allocations = requestor.get_allocations::<Utc>(None, None).await?;
     assert_eq!(allocations.len(), 1);
     assert_eq!(allocations[0], allocation);
     let allocation1 = requestor.get_allocation(&allocation.allocation_id).await?;
@@ -41,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
     log::info!("Allocation released.");
 
     log::info!("Verifying allocation removal...");
-    let allocations = requestor.get_allocations().await?;
+    let allocations = requestor.get_allocations::<Utc>(None, None).await?;
     assert_eq!(allocations.len(), 0);
     let result = requestor.get_allocation(&allocation.allocation_id).await;
     assert!(result.is_err());
@@ -106,7 +114,7 @@ async fn main() -> anyhow::Result<()> {
     log::info!("Allocation released.");
 
     log::info!("Verifying allocation removal...");
-    let allocations = requestor.get_allocations().await?;
+    let allocations = requestor.get_allocations::<Utc>(None, None).await?;
     assert_eq!(allocations.len(), 0);
     let result = requestor.get_allocation(&allocation.allocation_id).await;
     assert!(result.is_err());

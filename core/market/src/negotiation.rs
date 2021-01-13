@@ -5,5 +5,5 @@ mod provider;
 mod requestor;
 
 pub use notifier::EventNotifier;
-pub use provider::ProviderBroker;
+pub use provider::{ApprovalResult, ProviderBroker};
 pub use requestor::{ApprovalStatus, RequestorBroker};

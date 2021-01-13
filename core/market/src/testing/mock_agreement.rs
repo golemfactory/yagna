@@ -1,7 +1,7 @@
 use chrono::{Duration, NaiveDateTime, Utc};
 use std::str::FromStr;
 
-use crate::db::model::{Agreement, AgreementState, OwnerType, ProposalId, SubscriptionId};
+use crate::db::model::{Agreement, AgreementState, Owner, ProposalId, SubscriptionId};
 use ya_client::model::NodeId;
 
 pub fn generate_agreement(unifier: i64, valid_to: NaiveDateTime) -> Agreement {
@@ -10,7 +10,7 @@ pub fn generate_agreement(unifier: i64, valid_to: NaiveDateTime) -> Agreement {
         &SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53", ).unwrap(),
         // Add parametrized integer - unifier to ensure unique ids
         &(Utc::now() + Duration::days(unifier)).naive_utc(),
-        OwnerType::Requestor,
+        Owner::Requestor,
     );
     Agreement {
         id: id.clone(),
@@ -20,7 +20,7 @@ pub fn generate_agreement(unifier: i64, valid_to: NaiveDateTime) -> Agreement {
         demand_constraints: "".to_string(),
         offer_id: SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
         demand_id: SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
-        offer_proposal_id: id.clone().translate(OwnerType::Provider),
+        offer_proposal_id: id.clone().translate(Owner::Provider),
         demand_proposal_id: id,
         provider_id: NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap(),
         requestor_id: NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap(),

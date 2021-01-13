@@ -5,22 +5,27 @@ use ya_client_model::payment::PAYMENT_API_PATH;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::scope::ExtendableScope;
 
-mod provider;
-mod requestor;
+mod accounts;
+mod allocations;
+mod debit_notes;
+mod invoices;
+mod payments;
 
-pub fn provider_scope() -> Scope {
-    Scope::new("/provider").extend(provider::register_endpoints)
-}
-
-pub fn requestor_scope() -> Scope {
-    Scope::new("/requestor").extend(requestor::register_endpoints)
+pub fn api_scope(scope: Scope) -> Scope {
+    scope
+        .extend(accounts::register_endpoints)
+        .extend(allocations::register_endpoints)
+        .extend(debit_notes::register_endpoints)
+        .extend(invoices::register_endpoints)
+        .extend(payments::register_endpoints)
 }
 
 pub fn web_scope(db: &DbExecutor) -> Scope {
     Scope::new(PAYMENT_API_PATH)
         .data(db.clone())
-        .service(provider_scope())
-        .service(requestor_scope())
+        .service(api_scope(Scope::new("")))
+    // TODO: TEST
+    // Scope::new(PAYMENT_API_PATH).extend(api_scope).data(db.clone())
 }
 
 pub const DEFAULT_ACK_TIMEOUT: f64 = 60.0; // seconds
@@ -39,6 +44,16 @@ pub(crate) fn default_event_timeout() -> f64 {
 #[derive(Deserialize)]
 pub struct DebitNoteId {
     pub debit_note_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DebitNotePaymentsParams {
+    pub debit_note_id: String,
+    #[serde(default)]
+    pub max_items: Option<u32>,
+    #[serde(default)]
+    pub after_timestamp: Option<DateTime<Utc>>,
 }
 
 #[derive(Deserialize)]
@@ -63,11 +78,24 @@ pub struct Timeout {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EventParams {
     #[serde(default = "default_event_timeout")]
-    pub timeout: f64,
-    #[serde(rename = "laterThan")]
-    pub later_than: Option<DateTime<Utc>>,
+    pub poll_timeout: f64,
+    #[serde(default)]
+    pub after_timestamp: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub max_events: Option<u32>,
+    #[serde(default)]
+    pub app_session_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct FilterParams {
+    #[serde(rename = "maxItems", default)]
+    pub max_items: Option<u32>,
+    #[serde(rename = "afterTimestamp", default)]
+    pub after_timestamp: Option<DateTime<Utc>>,
 }
 
 #[derive(Deserialize)]

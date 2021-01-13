@@ -1,22 +1,23 @@
-use chrono::Utc;
+use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use diesel::prelude::*;
-use diesel::sql_types::{Integer, Text, Timestamp};
-use std::cmp::min;
+use diesel::sql_types::{Integer, Nullable, Text, Timestamp};
 use std::time::Duration;
 use tokio::time::delay_for;
 
 use ya_client_model::activity::ProviderEvent;
-use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
+use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
 use crate::dao::Result;
 use crate::db::{models::ActivityEventType, schema};
+use ya_client_model::activity::provider_event::ProviderEventType;
 use ya_client_model::NodeId;
 
-pub const MAX_EVENTS: u32 = 100;
+pub const MAX_EVENTS: i64 = 100;
 
 #[derive(Queryable, Debug)]
 pub struct Event {
     pub id: i32,
+    pub event_date: NaiveDateTime,
     pub event_type: ActivityEventType,
     pub activity_natural_id: String,
     pub agreement_natural_id: String,
@@ -25,16 +26,18 @@ pub struct Event {
 
 impl From<Event> for ProviderEvent {
     fn from(value: Event) -> Self {
-        match value.event_type {
-            ActivityEventType::CreateActivity => ProviderEvent::CreateActivity {
-                activity_id: value.activity_natural_id,
-                agreement_id: value.agreement_natural_id,
+        let event_type = match value.event_type {
+            ActivityEventType::CreateActivity => ProviderEventType::CreateActivity {
                 requestor_pub_key: value.requestor_pub_key.map(hex::encode),
             },
-            ActivityEventType::DestroyActivity => ProviderEvent::DestroyActivity {
-                activity_id: value.activity_natural_id,
-                agreement_id: value.agreement_natural_id,
-            },
+            ActivityEventType::DestroyActivity => ProviderEventType::DestroyActivity {},
+        };
+
+        ProviderEvent {
+            activity_id: value.activity_natural_id,
+            agreement_id: value.agreement_natural_id,
+            event_type,
+            event_date: Utc.from_utc_datetime(&value.event_date),
         }
     }
 }
@@ -56,17 +59,19 @@ impl<'c> EventDao<'c> {
         identity_id: &NodeId,
         event_type: ActivityEventType,
         requestor_pub_key: Option<Vec<u8>>,
+        app_session_id: &Option<String>,
     ) -> Result<i32> {
         use schema::activity::dsl;
         use schema::activity_event::dsl as dsl_event;
 
-        let now = Utc::now().naive_utc();
         log::trace!("creating event_type: {:?}", event_type);
 
+        let app_session_id = app_session_id.to_owned();
         let activity_id = activity_id.to_owned();
         let identity_id = identity_id.to_owned();
 
         do_with_transaction(self.pool, move |conn| {
+            let now = Utc::now().naive_utc();
             diesel::insert_into(dsl_event::activity_event)
                 .values(
                     dsl::activity
@@ -76,6 +81,7 @@ impl<'c> EventDao<'c> {
                             now.into_sql::<Timestamp>(),
                             event_type.into_sql::<Integer>(),
                             requestor_pub_key.into_sql(),
+                            app_session_id.into_sql::<Nullable<Text>>(),
                         ))
                         .filter(dsl::natural_id.eq(activity_id))
                         .limit(1),
@@ -86,6 +92,7 @@ impl<'c> EventDao<'c> {
                     dsl_event::event_date,
                     dsl_event::event_type_id,
                     dsl_event::requestor_pub_key,
+                    dsl_event::app_session_id,
                 ))
                 .execute(conn)?;
 
@@ -99,43 +106,46 @@ impl<'c> EventDao<'c> {
 
     pub async fn get_events(
         &self,
-        identity_id: &str,
+        identity_id: &NodeId,
+        app_session_id: &Option<String>,
+        after_timestamp: DateTime<Utc>,
         max_events: Option<u32>,
     ) -> Result<Option<Vec<ProviderEvent>>> {
         use schema::activity::dsl;
         use schema::activity_event::dsl as dsl_event;
 
+        let identity_id = identity_id.to_string();
+        let app_session_id = app_session_id.to_owned();
         let limit = match max_events {
-            Some(val) => min(MAX_EVENTS, val),
+            Some(val) => MAX_EVENTS.min(val as i64),
             None => MAX_EVENTS,
         };
 
         log::trace!("get_events: starting db query");
-        let identity_id = identity_id.to_owned();
-
-        do_with_transaction(self.pool, move |conn| {
-            let results: Option<Vec<Event>> = dsl_event::activity_event
+        readonly_transaction(self.pool, move |conn| {
+            let mut query = dsl_event::activity_event
                 .inner_join(schema::activity::table)
                 .filter(dsl_event::identity_id.eq(identity_id))
                 .select((
                     dsl_event::id,
+                    dsl_event::event_date,
                     dsl_event::event_type_id,
                     dsl::natural_id,
                     dsl::agreement_id,
                     dsl_event::requestor_pub_key,
                 ))
+                .filter(dsl_event::event_date.gt(after_timestamp.naive_utc()))
+                .into_boxed();
+
+            if let Some(app_sid) = app_session_id {
+                query = query.filter(dsl_event::app_session_id.eq(app_sid));
+            }
+
+            let results: Option<Vec<Event>> = query
                 .order(dsl_event::event_date.asc())
-                .limit(limit as i64)
+                .limit(limit)
                 .load::<Event>(conn)
                 .optional()?;
-
-            if let Some(r) = &results {
-                let ids = r.iter().map(|event| event.id).collect::<Vec<_>>();
-                if !ids.is_empty() {
-                    diesel::delete(dsl_event::activity_event.filter(dsl_event::id.eq_any(ids)))
-                        .execute(conn)?;
-                }
-            }
 
             Ok(results.map(|r| r.into_iter().map(ProviderEvent::from).collect()))
         })
@@ -144,20 +154,22 @@ impl<'c> EventDao<'c> {
 
     pub async fn get_events_wait(
         &self,
-        identity_id: impl ToString,
+        identity_id: &NodeId,
+        app_session_id: &Option<String>,
+        after_timestamp: DateTime<Utc>,
         max_events: Option<u32>,
     ) -> Result<Vec<ProviderEvent>> {
         let duration = Duration::from_millis(750);
-        let identity_id = identity_id.to_string();
 
         loop {
-            let result = self.get_events(&identity_id, max_events).await?;
-            if let Some(events) = result {
+            if let Some(events) = self
+                .get_events(identity_id, app_session_id, after_timestamp, max_events)
+                .await?
+            {
                 if events.len() > 0 {
                     return Ok(events);
                 }
             }
-
             delay_for(duration).await;
         }
     }
