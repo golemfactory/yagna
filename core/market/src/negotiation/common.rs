@@ -598,7 +598,7 @@ impl CommonBroker {
         }
 
         if proposal.body.issuer == Issuer::Us && proposal.body.id.owner() == caller_role {
-            let e = ProposalValidationError::OwnProposal(prev_proposal.body.id.clone());
+            let e = ProposalValidationError::OwnProposal(proposal.body.id.clone());
             log::warn!("{}", e);
             counter!("market.proposals.self-reaction-attempt", 1);
             Err(e)?;
