@@ -1,8 +1,8 @@
 use super::*;
-use futures::lock::Mutex;
-
 use futures::channel::oneshot;
-use futures::SinkExt;
+use futures::future::Shared;
+use futures::lock::Mutex;
+use futures::{FutureExt, SinkExt};
 use std::collections::HashMap;
 use std::fmt::Debug;
 
@@ -16,13 +16,19 @@ struct Client<Out> {
     inner: Mutex<ClientInner<Out>>,
     pid: u32,
     kill_cmd: std::sync::Mutex<Option<oneshot::Sender<()>>>,
+    status: Shared<oneshot::Receiver<i32>>,
 }
 
 impl<Out: Sink<proto::Request> + Unpin> Client<Out>
 where
     Out::Error: Debug,
 {
-    fn new(output: Out, pid: u32, kill_cmd: oneshot::Sender<()>) -> Self {
+    fn new(
+        output: Out,
+        pid: u32,
+        kill_cmd: oneshot::Sender<()>,
+        status: Shared<oneshot::Receiver<i32>>,
+    ) -> Self {
         let kill_cmd = std::sync::Mutex::new(Some(kill_cmd));
         let inner = Mutex::new(ClientInner {
             ids: 1,
@@ -33,6 +39,7 @@ where
             inner,
             pid,
             kill_cmd,
+            status,
         }
     }
 
@@ -64,6 +71,12 @@ where
         } {
             let _ = callback.send(resp);
         }
+    }
+}
+
+impl<Out: Sink<proto::Request> + Unpin> RuntimeStatus for Arc<Client<Out>> {
+    fn exited<'a>(&self) -> BoxFuture<'a, i32> {
+        Box::pin(self.status.clone().then(|r| async move { r.unwrap_or(1) }))
     }
 }
 
@@ -155,7 +168,7 @@ where
 pub async fn spawn(
     mut command: process::Command,
     event_handler: impl RuntimeEvent + Send + 'static,
-) -> Result<impl RuntimeService + Clone + ProcessControl, anyhow::Error> {
+) -> Result<impl RuntimeService + RuntimeStatus + ProcessControl + Clone, anyhow::Error> {
     command.stdin(Stdio::piped()).stdout(Stdio::piped());
     command.kill_on_drop(true);
     let mut child: process::Child = command.spawn()?;
@@ -164,7 +177,9 @@ pub async fn spawn(
         tokio_util::codec::FramedWrite::new(child.stdin.take().unwrap(), codec::Codec::default());
     let stdout = child.stdout.take().unwrap();
     let (kill_tx, kill_rx) = oneshot::channel();
-    let client = Arc::new(Client::new(stdin, pid, kill_tx));
+    let (status_tx, status_rx) = oneshot::channel();
+
+    let client = Arc::new(Client::new(stdin, pid, kill_tx, status_rx.shared()));
     {
         let client = client.clone();
         let mut stdout =
@@ -183,14 +198,15 @@ pub async fn spawn(
             futures::pin_mut!(child);
             futures::pin_mut!(kill_rx);
             futures::pin_mut!(pump);
-            match future::select(child, future::select(pump, kill_rx)).await {
-                future::Either::Left(_) => (),
+            let code = match future::select(child, future::select(pump, kill_rx)).await {
+                future::Either::Left((result, _)) => map_return_code(result, pid),
                 future::Either::Right((_, mut child)) => {
-                    if let Err(e) = child.kill() {
-                        log::warn!("kill {}: {}", pid, e);
-                    }
-                    let _ = child.await;
+                    let _ = child.kill();
+                    map_return_code(child.await, pid)
                 }
+            };
+            if let Err(_) = status_tx.send(code) {
+                log::warn!("Unable to update process {} status: receiver is gone", pid);
             }
         });
     }
@@ -210,4 +226,19 @@ pub async fn spawn(
     }
 
     Ok(client)
+}
+
+fn map_return_code(result: std::io::Result<ExitStatus>, pid: u32) -> i32 {
+    result
+        .map(|e| match e.code() {
+            Some(code) => code,
+            None => {
+                log::warn!("Unable to kill process {}: {}", pid, e);
+                1
+            }
+        })
+        .unwrap_or_else(|e| {
+            log::warn!("Child process {} error: {}", pid, e);
+            1
+        })
 }
