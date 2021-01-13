@@ -2,15 +2,17 @@ use actix_web::web::{Data, Json, Path, Query};
 use actix_web::{HttpResponse, Responder, Scope};
 use std::sync::Arc;
 
-use ya_client::model::market::{NewOffer, NewProposal};
+use ya_client::model::market::{NewOffer, NewProposal, Reason};
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::LogErr;
 
-use crate::db::model::OwnerType;
+use crate::db::model::Owner;
 use crate::market::MarketService;
 
 use super::{PathAgreement, PathSubscription, PathSubscriptionProposal, QueryTimeoutMaxEvents};
+use crate::negotiation::ApprovalResult;
 use crate::rest_api::QueryTimeoutAppSessionId;
+use ya_client::model::ErrorMessage;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -57,7 +59,7 @@ async fn unsubscribe(
         .unsubscribe_offer(&path.into_inner().subscription_id, &id)
         .await
         .log_err()
-        .map(|_| HttpResponse::Ok().json("Ok"))
+        .map(|_| HttpResponse::NoContent())
 }
 
 #[actix_web::get("/offers/{subscription_id}/events")]
@@ -113,16 +115,17 @@ async fn get_proposal(
     market
         .provider_engine
         .common
-        .get_client_proposal(Some(subscription_id), &proposal_id)
+        .get_client_proposal(Some(&subscription_id), &proposal_id)
         .await
         .map(|proposal| HttpResponse::Ok().json(proposal))
 }
 
-#[actix_web::delete("/offers/{subscription_id}/proposals/{proposal_id}")]
+#[actix_web::post("/offers/{subscription_id}/proposals/{proposal_id}/reject")]
 async fn reject_proposal(
     market: Data<Arc<MarketService>>,
     path: Path<PathSubscriptionProposal>,
     id: Identity,
+    body: Json<Option<Reason>>,
 ) -> impl Responder {
     let PathSubscriptionProposal {
         subscription_id,
@@ -131,7 +134,7 @@ async fn reject_proposal(
 
     market
         .provider_engine
-        .reject_proposal(&subscription_id, &proposal_id, &id)
+        .reject_proposal(&subscription_id, &proposal_id, &id, body.into_inner())
         .await
         .log_err()
         .map(|_| HttpResponse::NoContent().finish())
@@ -144,7 +147,7 @@ async fn approve_agreement(
     query: Query<QueryTimeoutAppSessionId>,
     id: Identity,
 ) -> impl Responder {
-    let agreement_id = path.into_inner().to_id(OwnerType::Provider)?;
+    let agreement_id = path.into_inner().to_id(Owner::Provider)?;
     let timeout = query.timeout;
     let session = query.into_inner().app_session_id;
     market
@@ -152,7 +155,10 @@ async fn approve_agreement(
         .approve_agreement(id, &agreement_id, session, timeout)
         .await
         .log_err()
-        .map(|_| HttpResponse::NoContent().finish())
+        .map(|result| match result {
+            ApprovalResult::Approved => HttpResponse::NoContent().finish(),
+            _ => HttpResponse::Gone().json(ErrorMessage::new(result)),
+        })
 }
 
 #[actix_web::post("/agreements/{agreement_id}/reject")]

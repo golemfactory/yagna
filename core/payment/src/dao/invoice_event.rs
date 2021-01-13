@@ -1,27 +1,26 @@
 use crate::error::DbResult;
 use crate::models::invoice_event::{ReadObj, WriteObj};
-use crate::schema::pay_event_type::dsl as event_type_dsl;
-use crate::schema::pay_invoice_event::dsl;
+use crate::schema::pay_invoice_event::dsl as write_dsl;
+use crate::schema::pay_invoice_event_read::dsl as read_dsl;
 use chrono::NaiveDateTime;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 use serde::Serialize;
 use std::convert::TryInto;
-use ya_client_model::payment::{EventType, InvoiceEvent};
+use ya_client_model::payment::{InvoiceEvent, InvoiceEventType};
 use ya_client_model::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
-use ya_persistence::types::Role;
 
 pub fn create<T: Serialize>(
     invoice_id: String,
     owner_id: NodeId,
-    event_type: EventType,
+    event_type: InvoiceEventType,
     details: Option<T>,
     conn: &ConnType,
 ) -> DbResult<()> {
     let event = WriteObj::new(invoice_id, owner_id, event_type, details)?;
-    diesel::insert_into(dsl::pay_invoice_event)
+    diesel::insert_into(write_dsl::pay_invoice_event)
         .values(event)
         .execute(conn)?;
     Ok(())
@@ -38,59 +37,43 @@ impl<'c> AsDao<'c> for InvoiceEventDao<'c> {
 }
 
 impl<'c> InvoiceEventDao<'c> {
-    pub async fn create<T: Serialize>(
+    pub async fn create<T: Serialize + Send + 'static>(
         &self,
         invoice_id: String,
         owner_id: NodeId,
-        event_type: EventType,
+        event_type: InvoiceEventType,
         details: Option<T>,
     ) -> DbResult<()> {
-        let event = WriteObj::new(invoice_id, owner_id, event_type, details)?;
         do_with_transaction(self.pool, move |conn| {
-            diesel::insert_into(dsl::pay_invoice_event)
-                .values(event)
-                .execute(conn)?;
-            Ok(())
+            create(invoice_id, owner_id, event_type, details, conn)
         })
         .await
     }
 
-    async fn get_for_role(
+    pub async fn get_for_node_id(
         &self,
         node_id: NodeId,
-        later_than: Option<NaiveDateTime>,
-        role: Role,
+        after_timestamp: Option<NaiveDateTime>,
+        max_events: Option<u32>,
+        app_session_id: Option<String>,
     ) -> DbResult<Vec<InvoiceEvent>> {
         readonly_transaction(self.pool, move |conn| {
-            let query = dsl::pay_invoice_event
-                .inner_join(event_type_dsl::pay_event_type)
-                .filter(dsl::owner_id.eq(node_id))
-                .filter(event_type_dsl::role.eq(role))
-                .select(crate::schema::pay_invoice_event::all_columns)
-                .order_by(dsl::timestamp.asc());
-            let events: Vec<ReadObj> = match later_than {
-                Some(timestamp) => query.filter(dsl::timestamp.gt(timestamp)).load(conn)?,
-                None => query.load(conn)?,
-            };
+            let mut query = read_dsl::pay_invoice_event_read
+                .filter(read_dsl::owner_id.eq(node_id))
+                .order_by(read_dsl::timestamp.asc())
+                .into_boxed();
+            if let Some(timestamp) = after_timestamp {
+                query = query.filter(read_dsl::timestamp.gt(timestamp));
+            }
+            if let Some(app_session_id) = app_session_id {
+                query = query.filter(read_dsl::app_session_id.eq(app_session_id));
+            }
+            if let Some(limit) = max_events {
+                query = query.limit(limit.into());
+            }
+            let events: Vec<ReadObj> = query.load(conn)?;
             events.into_iter().map(TryInto::try_into).collect()
         })
         .await
-    }
-
-    pub async fn get_for_requestor(
-        &self,
-        node_id: NodeId,
-        later_than: Option<NaiveDateTime>,
-    ) -> DbResult<Vec<InvoiceEvent>> {
-        self.get_for_role(node_id, later_than, Role::Requestor)
-            .await
-    }
-
-    pub async fn get_for_provider(
-        &self,
-        node_id: NodeId,
-        later_than: Option<NaiveDateTime>,
-    ) -> DbResult<Vec<InvoiceEvent>> {
-        self.get_for_role(node_id, later_than, Role::Provider).await
     }
 }

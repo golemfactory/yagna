@@ -3,14 +3,14 @@ use diesel::sql_types::Text;
 use thiserror::Error;
 
 use ya_client::model::market::event::{ProviderEvent, RequestorEvent};
-use ya_client::model::market::{Agreement as ClientAgreement, Proposal as ClientProposal};
+use ya_client::model::market::{Agreement as ClientAgreement, Proposal as ClientProposal, Reason};
 use ya_client::model::ErrorMessage;
 use ya_diesel_utils::DbTextField;
 use ya_persistence::executor::DbExecutor;
 
 use super::SubscriptionId;
 use crate::db::dao::{AgreementDao, ProposalDao};
-use crate::db::model::{Agreement, AgreementId, OwnerType, Proposal, ProposalId};
+use crate::db::model::{Agreement, AgreementId, Owner, Proposal, ProposalId};
 use crate::db::schema::market_negotiation_event;
 
 #[derive(Error, Debug)]
@@ -72,17 +72,31 @@ pub struct NewMarketEvent {
     pub subscription_id: SubscriptionId,
     pub event_type: EventType,
     pub artifact_id: ProposalId, // TODO: typed
+    pub reason: Option<String>,
 }
 
 impl MarketEvent {
-    pub fn from_proposal(proposal: &Proposal, role: OwnerType) -> NewMarketEvent {
+    pub fn from_proposal(proposal: &Proposal, role: Owner) -> NewMarketEvent {
         NewMarketEvent {
             subscription_id: proposal.negotiation.subscription_id.clone(),
             event_type: match role {
-                OwnerType::Requestor => EventType::RequestorNewProposal,
-                OwnerType::Provider => EventType::ProviderNewProposal,
+                Owner::Requestor => EventType::RequestorNewProposal,
+                Owner::Provider => EventType::ProviderNewProposal,
             },
             artifact_id: proposal.body.id.clone(),
+            reason: None,
+        }
+    }
+
+    pub fn proposal_rejected(proposal: &Proposal, reason: Option<String>) -> NewMarketEvent {
+        NewMarketEvent {
+            subscription_id: proposal.negotiation.subscription_id.clone(),
+            event_type: match proposal.body.id.owner() {
+                Owner::Requestor => EventType::RequestorProposalRejected,
+                Owner::Provider => EventType::ProviderProposalRejected,
+            },
+            artifact_id: proposal.body.id.clone(),
+            reason,
         }
     }
 
@@ -91,6 +105,7 @@ impl MarketEvent {
             subscription_id: agreement.offer_id.clone(),
             event_type: EventType::ProviderAgreement,
             artifact_id: agreement.id.clone(),
+            reason: None,
         }
     }
 
@@ -98,15 +113,24 @@ impl MarketEvent {
         self,
         db: &DbExecutor,
     ) -> Result<RequestorEvent, EventError> {
+        let event_date = DateTime::<Utc>::from_utc(self.timestamp, Utc);
         match self.event_type {
             EventType::RequestorNewProposal => Ok(RequestorEvent::ProposalEvent {
-                event_date: DateTime::<Utc>::from_utc(self.timestamp, Utc),
+                event_date,
                 proposal: self.into_client_proposal(db.clone()).await?,
             }),
+            EventType::RequestorProposalRejected => Ok(RequestorEvent::ProposalRejectedEvent {
+                event_date,
+                proposal_id: self.artifact_id.to_string(),
+                reason: match self.reason {
+                    None => None,
+                    Some(r) => Some(serde_json::from_str(&r).unwrap_or_else(|_| Reason::new(r))),
+                },
+            }),
             EventType::RequestorPropertyQuery => unimplemented!(),
-            _ => Err(ErrorMessage::new(format!(
-                "Wrong MarketEvent type [id={}]. Requestor event in Provider subscription.",
-                self.id
+            e => Err(ErrorMessage::new(format!(
+                "Wrong MarketEvent type [{:?}]. Provider event on Requestor side not allowed.",
+                e
             )))?,
         }
     }
@@ -137,19 +161,28 @@ impl MarketEvent {
         self,
         db: &DbExecutor,
     ) -> Result<ProviderEvent, EventError> {
+        let event_date = DateTime::<Utc>::from_utc(self.timestamp, Utc);
         match self.event_type {
             EventType::ProviderNewProposal => Ok(ProviderEvent::ProposalEvent {
-                event_date: DateTime::<Utc>::from_utc(self.timestamp, Utc),
+                event_date,
                 proposal: self.into_client_proposal(db.clone()).await?,
             }),
             EventType::ProviderAgreement => Ok(ProviderEvent::AgreementEvent {
-                event_date: DateTime::<Utc>::from_utc(self.timestamp, Utc),
+                event_date,
                 agreement: self.into_client_agreement(db.clone()).await?,
             }),
+            EventType::ProviderProposalRejected => Ok(ProviderEvent::ProposalRejectedEvent {
+                event_date,
+                proposal_id: self.artifact_id.to_string(),
+                reason: match self.reason {
+                    None => None,
+                    Some(r) => Some(serde_json::from_str(&r).unwrap_or_else(|_| Reason::new(r))),
+                },
+            }),
             EventType::ProviderPropertyQuery => unimplemented!(),
-            _ => Err(ErrorMessage::new(format!(
-                "Wrong MarketEvent type [id={}]. Requestor event in Provider subscription.",
-                self.id
+            e => Err(ErrorMessage::new(format!(
+                "Wrong MarketEvent type [{:?}]. Requestor event in Provider side not allowed.",
+                e
             )))?,
         }
     }

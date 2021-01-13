@@ -21,6 +21,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::auth::dummy::DummyAuth;
 use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::rest_api_addr;
+use ya_service_api_web::scope::ExtendableScope;
 use ya_service_bus::typed as bus;
 use ya_zksync_driver as zksync;
 
@@ -72,6 +73,8 @@ struct Args {
     requestor_addr: Option<String>,
     #[structopt(long, default_value = "agreement_id")]
     agreement_id: String,
+    #[structopt(long)]
+    app_session_id: Option<String>,
 }
 
 pub async fn start_dummy_driver() -> anyhow::Result<()> {
@@ -264,7 +267,7 @@ async fn main() -> anyhow::Result<()> {
         approved_date: None,
         state: market::agreement::State::Proposal,
         timestamp: Utc::now(),
-        app_session_id: None,
+        app_session_id: args.app_session_id,
         proposed_signature: None,
         approved_signature: None,
         committed_signature: None,
@@ -293,17 +296,18 @@ async fn main() -> anyhow::Result<()> {
             role: "".to_string(),
         };
 
-        let provider_scope =
-            ya_payment::api::provider_scope().wrap(DummyAuth::new(provider_identity));
-        let requestor_scope =
-            ya_payment::api::requestor_scope().wrap(DummyAuth::new(requestor_identity));
-        let payment_service = Scope::new(PAYMENT_API_PATH)
+        let provider_api_scope = Scope::new(&format!("provider/{}", PAYMENT_API_PATH))
             .data(db.clone())
-            .service(provider_scope)
-            .service(requestor_scope);
+            .extend(ya_payment::api::api_scope)
+            .wrap(DummyAuth::new(provider_identity));
+        let requestor_api_scope = Scope::new(&format!("requestor/{}", PAYMENT_API_PATH))
+            .data(db.clone())
+            .extend(ya_payment::api::api_scope)
+            .wrap(DummyAuth::new(requestor_identity));
         App::new()
             .wrap(middleware::Logger::default())
-            .service(payment_service)
+            .service(provider_api_scope)
+            .service(requestor_api_scope)
     })
     .bind(rest_addr)?
     .run()

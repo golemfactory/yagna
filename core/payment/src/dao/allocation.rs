@@ -2,6 +2,7 @@ use crate::error::{DbError, DbResult};
 use crate::models::allocation::{ReadObj, WriteObj};
 use crate::schema::pay_allocation::dsl;
 use bigdecimal::BigDecimal;
+use chrono::NaiveDateTime;
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use ya_client_model::payment::{Allocation, NewAllocation};
 use ya_client_model::NodeId;
@@ -95,12 +96,24 @@ impl<'c> AllocationDao<'c> {
         .await
     }
 
-    pub async fn get_for_owner(&self, owner_id: NodeId) -> DbResult<Vec<Allocation>> {
+    pub async fn get_for_owner(
+        &self,
+        owner_id: NodeId,
+        after_timestamp: Option<NaiveDateTime>,
+        max_items: Option<u32>,
+    ) -> DbResult<Vec<Allocation>> {
         readonly_transaction(self.pool, move |conn| {
-            let allocations: Vec<ReadObj> = dsl::pay_allocation
+            let mut query = dsl::pay_allocation
                 .filter(dsl::owner_id.eq(owner_id))
                 .filter(dsl::released.eq(false))
-                .load(conn)?;
+                .into_boxed();
+            if let Some(date) = after_timestamp {
+                query = query.filter(dsl::timestamp.gt(date))
+            }
+            if let Some(items) = max_items {
+                query = query.limit(items.into())
+            }
+            let allocations: Vec<ReadObj> = query.load(conn)?;
             Ok(allocations.into_iter().map(Into::into).collect())
         })
         .await

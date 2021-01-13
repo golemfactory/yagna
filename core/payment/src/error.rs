@@ -32,8 +32,8 @@ impl From<ya_client_model::payment::document_status::InvalidOption> for DbError 
     }
 }
 
-impl From<ya_client_model::payment::event_type::InvalidOption> for DbError {
-    fn from(e: ya_client_model::payment::event_type::InvalidOption) -> Self {
+impl From<serde_json::Error> for DbError {
+    fn from(e: serde_json::Error) -> Self {
         DbError::Integrity(e.to_string())
     }
 }
