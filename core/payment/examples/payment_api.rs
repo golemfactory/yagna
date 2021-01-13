@@ -209,7 +209,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Driver::Ngnt => {
             start_gnt_driver(&db, requestor_account).await?;
-            (gnt::DRIVER_NAME, gnt::PLATFORM_NAME)
+            (gnt::DRIVER_NAME, gnt::DEFAULT_PLATFORM)
         }
         Driver::Zksync => {
             start_zksync_driver(&db, requestor_account).await?;
@@ -218,10 +218,20 @@ async fn main() -> anyhow::Result<()> {
     };
 
     bus::service(driver_bus_id(driver_name))
-        .call(Init::new(provider_id.clone(), AccountMode::RECV))
+        .call(Init::new(
+            provider_id.clone(),
+            None,
+            None,
+            AccountMode::RECV,
+        ))
         .await??;
     bus::service(driver_bus_id(driver_name))
-        .call(Init::new(requestor_id.clone(), AccountMode::SEND))
+        .call(Init::new(
+            requestor_id.clone(),
+            None,
+            None,
+            AccountMode::SEND,
+        ))
         .await??;
 
     let address_property = format!("platform.{}.address", platform);
