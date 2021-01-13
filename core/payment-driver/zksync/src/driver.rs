@@ -317,25 +317,24 @@ impl PaymentDriverCron for ZksyncDriver {
                     .iter()
                     .map(|payment| payment.order_id.clone())
                     .collect();
-                let details = match wallet::verify_tx(&tx_hash).await
-                {
+                let details = match wallet::verify_tx(&tx_hash).await {
                     Ok(a) => a,
                     Err(e) => {
                         log::warn!("Failed to get transaction details from zksync, creating bespoke details. Error={}", e);
 
-    	                // Create bespoke payment details:
-    	                // - Sender + receiver are the same
-    	                // - Date is always now
-    	                // - Amount needs to be updated to total of all PaymentEntity's
+                        // Create bespoke payment details:
+                        // - Sender + receiver are the same
+                        // - Date is always now
+                        // - Amount needs to be updated to total of all PaymentEntity's
 
 	                // TODO: Add token support
 	                let platform =
 	                    network_token_to_platform(Some(first_payment.network), None).unwrap(); // TODO: Catch error?
 	                let mut details = utils::db_to_payment_details(&first_payment);
-    	                details.amount = payments
-    	                    .into_iter()
-    	                    .map(|payment| utils::db_amount_to_big_dec(payment.amount.clone()))
-    	                    .sum::<BigDecimal>();
+                        details.amount = payments
+                            .into_iter()
+                            .map(|payment| utils::db_amount_to_big_dec(payment.amount.clone()))
+                            .sum::<BigDecimal>();
                         details
                     }
                 };
