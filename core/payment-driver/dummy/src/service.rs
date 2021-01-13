@@ -57,8 +57,8 @@ async fn init(_db: (), _caller: String, msg: Init) -> Result<Ack, GenericError> 
     let msg = payment_srv::RegisterAccount {
         address,
         driver: DRIVER_NAME.to_string(),
-        network: "".to_string(),
-        token: "".to_string(),
+        network: NETWORK_NAME.to_string(),
+        token: TOKEN_NAME.to_string(),
         mode,
     };
     bus::service(payment_srv::BUS_ID)

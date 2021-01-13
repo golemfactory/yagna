@@ -78,6 +78,12 @@ impl DriverRegistry {
             driver_name,
             details,
         } = msg;
+        log::trace!(
+            "register_driver: driver_name={} details={:?}",
+            driver_name,
+            details
+        );
+
         if !details.networks.contains_key(&details.default_network) {
             return Err(RegisterDriverError::InvalidDefaultNetwork(
                 details.default_network,

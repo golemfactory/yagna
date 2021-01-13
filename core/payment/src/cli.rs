@@ -66,9 +66,7 @@ impl PaymentCli {
             }
             PaymentCli::Status { address, platform } => {
                 let address = resolve_address(address).await?;
-                let platform = platform
-                    .unwrap_or(DEFAULT_PAYMENT_PLATFORM.to_owned())
-                    .to_uppercase();
+                let platform = platform.unwrap_or(DEFAULT_PAYMENT_PLATFORM.to_owned());
                 CommandOutput::object(
                     bus::service(pay::BUS_ID)
                         .call(pay::GetStatus { address, platform })

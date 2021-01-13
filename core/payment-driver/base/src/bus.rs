@@ -72,7 +72,7 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
         driver_name: driver.get_name(),
         details: payment_srv::DriverDetails {
             default_network: driver.get_default_network(),
-            networks: Default::default(),
+            networks: driver.get_networks(),
             recv_init_required: driver.recv_init_required(),
         },
     };

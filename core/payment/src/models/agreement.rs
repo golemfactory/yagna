@@ -58,7 +58,7 @@ impl WriteObj {
             peer_id,
             payee_addr,
             payer_addr,
-            payment_platform: payment_platform.to_uppercase(),
+            payment_platform,
             total_amount_due: Default::default(),
             total_amount_accepted: Default::default(),
             total_amount_paid: Default::default(),
