@@ -4,7 +4,7 @@ use ya_market::testing::agreement_utils::{gen_reason, negotiate_agreement};
 use ya_market::testing::events_helper::requestor::expect_approve;
 use ya_market::testing::proposal_util::exchange_draft_proposals;
 use ya_market::testing::MarketsNetwork;
-use ya_market::testing::{ApprovalStatus, OwnerType};
+use ya_market::testing::{ApprovalStatus, Owner};
 
 use ya_client::model::market::agreement_event::AgreementTerminator;
 use ya_client::model::market::AgreementEventType;
@@ -56,7 +56,7 @@ async fn test_agreement_approved_event() {
             .provider_engine
             .approve_agreement(
                 network.get_default_id(PROV_NAME),
-                &agr_id.clone().translate(OwnerType::Provider),
+                &agr_id.clone().translate(Owner::Provider),
                 None,
                 0.1,
             )
@@ -75,7 +75,10 @@ async fn test_agreement_approved_event() {
 
         match &events[0].event_type {
             AgreementEventType::AgreementApprovedEvent => (),
-            _ => panic!("Expected AgreementEventType::AgreementApprovedEvent"),
+            e => panic!(
+                "Expected AgreementEventType::AgreementApprovedEvent, got: {:?}",
+                e
+            ),
         };
     });
 
@@ -90,7 +93,10 @@ async fn test_agreement_approved_event() {
 
     match &events[0].event_type {
         AgreementEventType::AgreementApprovedEvent => (),
-        _ => panic!("Expected AgreementEventType::AgreementApprovedEvent"),
+        e => panic!(
+            "Expected AgreementEventType::AgreementApprovedEvent, got: {:?}",
+            e
+        ),
     };
 
     // Protect from eternal waiting.
@@ -154,7 +160,7 @@ async fn test_agreement_events_and_wait_for_approval() {
             .provider_engine
             .approve_agreement(
                 network.get_default_id(PROV_NAME),
-                &agr_id.clone().translate(OwnerType::Provider),
+                &agr_id.clone().translate(Owner::Provider),
                 None,
                 0.1,
             )
@@ -244,7 +250,10 @@ async fn test_agreement_terminated_event() {
             assert_ne!(reason, &None);
             assert_eq!(reason.as_ref().unwrap().message, "Expired");
         }
-        _ => panic!("Expected AgreementEventType::AgreementTerminatedEvent"),
+        e => panic!(
+            "Expected AgreementEventType::AgreementTerminatedEvent, got: {:?}",
+            e
+        ),
     };
 
     // == REQUESTOR
@@ -268,7 +277,10 @@ async fn test_agreement_terminated_event() {
             assert!(reason.is_some());
             assert_eq!(reason.as_ref().unwrap().message, "Expired");
         }
-        _ => panic!("Expected AgreementEventType::AgreementTerminatedEvent"),
+        e => panic!(
+            "Expected AgreementEventType::AgreementTerminatedEvent, got: {:?}",
+            e
+        ),
     };
 }
 

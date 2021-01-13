@@ -15,7 +15,7 @@ pub fn web_scope(db: &DbExecutor) -> Scope {
 mod common {
     use actix_web::{web, Responder};
 
-    use ya_core_model::activity;
+    use ya_core_model::{activity, Role};
     use ya_persistence::executor::DbExecutor;
     use ya_service_api_web::middleware::Identity;
     use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
@@ -49,7 +49,7 @@ mod common {
         log::debug!("get_activity_state_web");
 
         // check if caller is the Provider
-        if authorize_activity_executor(&db, id.identity, &path.activity_id)
+        if authorize_activity_executor(&db, id.identity, &path.activity_id, Role::Provider)
             .await
             .is_ok()
         {
@@ -62,7 +62,7 @@ mod common {
         log::trace!("get_activity_state_web: Not provider, maybe requestor?");
 
         // check if caller is the Requestor
-        authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
+        authorize_activity_initiator(&db, id.identity, &path.activity_id, Role::Requestor).await?;
 
         log::trace!("get_activity_state_web: I'm the requestor");
 
@@ -74,7 +74,7 @@ mod common {
         }
 
         // Retrieve and persist activity state
-        let agreement = get_activity_agreement(&db, &path.activity_id).await?;
+        let agreement = get_activity_agreement(&db, &path.activity_id, Role::Requestor).await?;
         let provider_service = agreement_provider_service(&id, &agreement)?;
         let state = provider_service
             .send(activity::GetState {
@@ -97,7 +97,7 @@ mod common {
         id: Identity,
     ) -> impl Responder {
         // check if caller is the Provider
-        if authorize_activity_executor(&db, id.identity, &path.activity_id)
+        if authorize_activity_executor(&db, id.identity, &path.activity_id, Role::Provider)
             .await
             .is_ok()
         {
@@ -107,7 +107,7 @@ mod common {
         }
 
         // check if caller is the Requestor
-        authorize_activity_initiator(&db, id.identity, &path.activity_id).await?;
+        authorize_activity_initiator(&db, id.identity, &path.activity_id, Role::Requestor).await?;
 
         // Return locally persisted usage if activity has been already terminated or terminating
         if get_persisted_state(&db, &path.activity_id).await?.alive() {
@@ -117,7 +117,7 @@ mod common {
         }
 
         // Retrieve and persist activity usage
-        let agreement = get_activity_agreement(&db, &path.activity_id).await?;
+        let agreement = get_activity_agreement(&db, &path.activity_id, Role::Requestor).await?;
         let provider_service = agreement_provider_service(&id, &agreement)?;
         let usage = provider_service
             .send(activity::GetUsage {

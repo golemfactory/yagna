@@ -12,9 +12,9 @@ pub use agreement_events::{AgreementEvent, AgreementEventType, NewAgreementEvent
 pub use demand::Demand;
 pub use negotiation_events::{EventError, EventType, MarketEvent};
 pub use offer::{Offer, OfferUnsubscribed};
-pub use proposal::{DbProposal, IssuerType, Negotiation, Proposal, ProposalState};
+pub use proposal::{DbProposal, Issuer, Negotiation, Proposal, ProposalState};
 
-pub use proposal_id::{OwnerType, ProposalId, ProposalIdParseError, ProposalIdValidationError};
+pub use proposal_id::{Owner, ProposalId, ProposalIdParseError, ProposalIdValidationError};
 pub use subscription_id::{
     generate_random_id, SubscriptionId, SubscriptionParseError, SubscriptionValidationError,
 };

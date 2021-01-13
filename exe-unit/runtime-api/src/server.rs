@@ -25,8 +25,9 @@ pub use proto::response::{ErrorCode, ProcessStatus};
 pub type DynFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
 pub type AsyncResponse<'a, T> = DynFuture<'a, Result<T, ErrorResponse>>;
 
+use futures::future::BoxFuture;
 use futures::prelude::*;
-use std::process::Stdio;
+use std::process::{ExitStatus, Stdio};
 use std::sync::Arc;
 use tokio::process;
 
@@ -42,6 +43,10 @@ pub trait RuntimeService {
 
 pub trait RuntimeEvent {
     fn on_process_status(&self, _status: ProcessStatus) {}
+}
+
+pub trait RuntimeStatus {
+    fn exited<'a>(&self) -> BoxFuture<'a, i32>;
 }
 
 pub trait ProcessControl {

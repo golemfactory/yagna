@@ -5,13 +5,13 @@ use crate::schema::pay_agreement::dsl as agreement_dsl;
 use crate::schema::pay_invoice::dsl;
 use crate::schema::pay_invoice_x_activity::dsl as activity_dsl;
 use bigdecimal::BigDecimal;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::{
     BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
 };
 use std::collections::{BTreeMap, HashMap};
 use std::convert::TryFrom;
-use ya_client_model::payment::{DocumentStatus, EventType, Invoice, NewInvoice};
+use ya_client_model::payment::{DocumentStatus, Invoice, InvoiceEventType, NewInvoice};
 use ya_client_model::NodeId;
 use ya_core_model::payment::local::StatValue;
 use ya_persistence::executor::{
@@ -98,7 +98,13 @@ impl<'c> InvoiceDao<'c> {
             })?;
 
             if let Role::Requestor = role {
-                invoice_event::create::<()>(invoice_id, owner_id, EventType::Received, None, conn)?;
+                invoice_event::create::<()>(
+                    invoice_id,
+                    owner_id,
+                    InvoiceEventType::InvoiceReceivedEvent,
+                    None,
+                    conn,
+                )?;
             }
 
             Ok(())
@@ -158,12 +164,21 @@ impl<'c> InvoiceDao<'c> {
         .await
     }
 
-    async fn get_for_role(&self, node_id: NodeId, role: Role) -> DbResult<Vec<Invoice>> {
+    pub async fn get_for_node_id(
+        &self,
+        node_id: NodeId,
+        after_timestamp: Option<NaiveDateTime>,
+        max_items: Option<u32>,
+    ) -> DbResult<Vec<Invoice>> {
         readonly_transaction(self.pool, move |conn| {
-            let invoices = query!()
-                .filter(dsl::owner_id.eq(node_id))
-                .filter(dsl::role.eq(&role))
-                .load(conn)?;
+            let mut query = query!().filter(dsl::owner_id.eq(node_id)).into_boxed();
+            if let Some(date) = after_timestamp {
+                query = query.filter(dsl::timestamp.gt(date))
+            }
+            if let Some(items) = max_items {
+                query = query.limit(items.into())
+            }
+            let invoices = query.load(conn)?;
             let activities = activity_dsl::pay_invoice_x_activity
                 .inner_join(
                     dsl::pay_invoice.on(activity_dsl::owner_id
@@ -171,7 +186,6 @@ impl<'c> InvoiceDao<'c> {
                         .and(activity_dsl::invoice_id.eq(dsl::id))),
                 )
                 .filter(dsl::owner_id.eq(node_id))
-                .filter(dsl::role.eq(role))
                 .select(crate::schema::pay_invoice_x_activity::all_columns)
                 .load(conn)?;
             join_invoices_with_activities(invoices, activities)
@@ -206,14 +220,6 @@ impl<'c> InvoiceDao<'c> {
         Ok(stats)
     }
 
-    pub async fn get_for_provider(&self, node_id: NodeId) -> DbResult<Vec<Invoice>> {
-        self.get_for_role(node_id, Role::Provider).await
-    }
-
-    pub async fn get_for_requestor(&self, node_id: NodeId) -> DbResult<Vec<Invoice>> {
-        self.get_for_role(node_id, Role::Requestor).await
-    }
-
     pub async fn mark_received(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
             update_status(&invoice_id, &owner_id, &DocumentStatus::Received, conn)
@@ -230,27 +236,34 @@ impl<'c> InvoiceDao<'c> {
             update_status(&invoice_id, &owner_id, &DocumentStatus::Accepted, conn)?;
             agreement::set_amount_accepted(&agreement_id, &owner_id, &amount, conn)?;
             if let Role::Provider = role {
-                invoice_event::create::<()>(invoice_id, owner_id, EventType::Accepted, None, conn)?;
+                invoice_event::create::<()>(
+                    invoice_id,
+                    owner_id,
+                    InvoiceEventType::InvoiceAcceptedEvent,
+                    None,
+                    conn,
+                )?;
             }
             Ok(())
         })
         .await
     }
 
-    pub async fn reject(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
-        do_with_transaction(self.pool, move |conn| {
-            let (agreement_id, amount, role): (String, BigDecimalField, Role) = dsl::pay_invoice
-                .find((&invoice_id, &owner_id))
-                .select((dsl::agreement_id, dsl::amount, dsl::role))
-                .first(conn)?;
-            update_status(&invoice_id, &owner_id, &DocumentStatus::Accepted, conn)?;
-            if let Role::Provider = role {
-                invoice_event::create::<()>(invoice_id, owner_id, EventType::Rejected, None, conn)?;
-            }
-            Ok(())
-        })
-        .await
-    }
+    // TODO: Implement reject invoice
+    // pub async fn reject(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
+    //     do_with_transaction(self.pool, move |conn| {
+    //         let (agreement_id, amount, role): (String, BigDecimalField, Role) = dsl::pay_invoice
+    //             .find((&invoice_id, &owner_id))
+    //             .select((dsl::agreement_id, dsl::amount, dsl::role))
+    //             .first(conn)?;
+    //         update_status(&invoice_id, &owner_id, &DocumentStatus::Accepted, conn)?;
+    //         if let Role::Provider = role {
+    //             invoice_event::create::<()>(invoice_id, owner_id, InvoiceEventType::InvoiceRejectedEvent { ... }, None, conn)?;
+    //         }
+    //         Ok(())
+    //     })
+    //     .await
+    // }
 
     pub async fn cancel(&self, invoice_id: String, owner_id: NodeId) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
@@ -266,7 +279,7 @@ impl<'c> InvoiceDao<'c> {
                 invoice_event::create::<()>(
                     invoice_id,
                     owner_id,
-                    EventType::Cancelled,
+                    InvoiceEventType::InvoiceCancelledEvent,
                     None,
                     conn,
                 )?;

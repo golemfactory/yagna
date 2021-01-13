@@ -1,7 +1,7 @@
 use ya_market::assert_err_eq;
 use ya_market::testing::proposal_util::exchange_draft_proposals;
 use ya_market::testing::{
-    GetProposalError, MarketServiceExt, MarketsNetwork, OwnerType, ProposalError,
+    GetProposalError, MarketServiceExt, MarketsNetwork, Owner, ProposalError,
 };
 
 use ya_client::model::market::proposal::State;
@@ -36,7 +36,7 @@ async fn test_get_proposal() {
     assert!(proposal.prev_proposal_id().is_ok());
 
     // Provider side
-    let proposal_id = proposal_id.translate(OwnerType::Provider);
+    let proposal_id = proposal_id.translate(Owner::Provider);
     let result = prov_market.get_proposal(&proposal_id).await;
 
     assert!(result.is_ok());

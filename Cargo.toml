@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.5.0"
+version = "0.6.0"
 description = "Open platform and marketplace for distributed computations"
 readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
@@ -26,6 +26,7 @@ gftp = "0.1" # just to enable gftp build for cargo-deb
 ya-activity = "0.2"
 ya-compile-time-utils = "0.1"
 ya-dummy-driver = { version = "0.1", optional = true }
+ya-file-logging = "0.1"
 ya-gnt-driver = { version = "0.1", optional = true }
 ya-zksync-driver = { version = "0.1", optional = true }
 ya-identity = "0.2"
@@ -50,9 +51,9 @@ actix-rt = "1.0"
 actix-service = "1.0"
 actix-web = "3.2"
 anyhow = "1.0"
+chrono = "0.4"
 directories = "2.0.2"
 dotenv = "0.15.0"
-env_logger = "0.7"
 futures = "0.3"
 lazy_static = "1.4"
 log = "0.4"
@@ -171,8 +172,11 @@ ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "e68bbd90c903c6f74f77fddb80a432d20e4e2b2a"}
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "e68bbd90c903c6f74f77fddb80a432d20e4e2b2a"}
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "87f106498a7a7b1519d82d0981fc21b260a89cf2"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "87f106498a7a7b1519d82d0981fc21b260a89cf2"}
+
+#ya-client = { path = "../ya-client" }
+#ya-client-model = { path = "../ya-client/model" }
 
 ## OTHERS
 gftp = { path = "core/gftp" }
@@ -181,6 +185,7 @@ ya-agreement-utils = { path = "utils/agreement-utils" }
 ya-std-utils = { path = "utils/std-utils" }
 ya-compile-time-utils = { path = "utils/compile-time-utils" }
 ya-exe-unit = { path = "exe-unit" }
+ya-file-logging = { path = "utils/file-logging" }
 ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
 ya-utils-futures = { path = "utils/futures"}

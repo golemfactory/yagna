@@ -7,7 +7,7 @@ use ya_persistence::executor::{AsDao, PoolType};
 
 use crate::db::dao::AgreementDaoError;
 use crate::db::model::{Agreement, AgreementEvent, NewAgreementEvent};
-use crate::db::model::{AppSessionId, OwnerType};
+use crate::db::model::{AppSessionId, Owner};
 use crate::db::schema::market_agreement::dsl as agreement;
 use crate::db::schema::market_agreement::dsl::market_agreement;
 use crate::db::schema::market_agreement_event::dsl as event;
@@ -68,7 +68,7 @@ pub(crate) fn create_event(
     conn: &ConnType,
     agreement: &Agreement,
     reason: Option<String>,
-    terminator: OwnerType,
+    terminator: Owner,
 ) -> Result<(), AgreementDaoError> {
     let event = NewAgreementEvent::new(agreement, reason, terminator)
         .map_err(|e| AgreementDaoError::EventError(e.to_string()))?;

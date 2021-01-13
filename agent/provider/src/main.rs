@@ -38,29 +38,13 @@ async fn main() -> anyhow::Result<()> {
 
     match cli_args.commands {
         Commands::Run(args) => {
-            env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or("info".into()));
-            env_logger::init();
-
             let app_name = clap::crate_name!();
-            log::info!("Starting {}...", app_name);
-            log::info!("Data directory: {}", data_dir.display());
-
-            log::info!("Performing disk cleanup...");
-            let freed = clean_provider_dir(&data_dir, "30d", false, false)?;
-            let human_freed = bytesize::to_string(freed, false);
-            log::info!("Freed {} of disk space", human_freed);
-
-            let _lock = ProcLock::new("ya-provider", &data_dir)?.lock(std::process::id())?;
+            let _lock = ProcLock::new(&app_name, &data_dir)?.lock(std::process::id())?;
             let agent = ProviderAgent::new(args, config).await?.start();
             agent.send(Initialize).await??;
 
             let (_, signal) = SignalMonitor::default().await;
-            log::info!(
-                "{} received, Shutting down {}...",
-                signal,
-                clap::crate_name!()
-            );
-            log::logger().flush();
+            log::info!("{} received, Shutting down {}...", signal, app_name);
             agent.send(Shutdown).await??;
             Ok(())
         }
