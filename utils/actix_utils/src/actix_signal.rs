@@ -1,14 +1,6 @@
 use actix::prelude::*;
 use anyhow::{anyhow, Result};
 
-/// Subscribe to process signals.
-#[derive(Message)]
-#[rtype(result = "Result<()>")]
-pub struct Subscribe<MessageType>(pub Recipient<MessageType>)
-where
-    MessageType: Message + std::marker::Send + std::marker::Sync + std::clone::Clone,
-    MessageType::Result: std::marker::Send + std::marker::Sync;
-
 /// Actor that provides signal subscriptions
 pub struct SignalSlot<MessageType>
 where
@@ -17,6 +9,14 @@ where
 {
     subscribers: Vec<Recipient<MessageType>>,
 }
+
+/// Subscribe to process signals.
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct Subscribe<MessageType>(pub Recipient<MessageType>)
+where
+    MessageType: Message + std::marker::Send + std::marker::Sync + std::clone::Clone,
+    MessageType::Result: std::marker::Send + std::marker::Sync;
 
 #[allow(dead_code)]
 impl<MessageType> SignalSlot<MessageType>
@@ -65,4 +65,21 @@ where
     pub fn on_subscribe(&mut self, msg: Subscribe<MessageType>) {
         self.subscribe(msg.0);
     }
+}
+
+#[macro_export]
+macro_rules! actix_signal_handler {
+    ($ActorType:ty, $MessageType:ty, $SignalFieldName:tt) => {
+        impl Handler<Subscribe<$MessageType>> for $ActorType {
+            type Result = ();
+
+            fn handle(
+                &mut self,
+                msg: Subscribe<$MessageType>,
+                ctx: &mut <Self as Actor>::Context,
+            ) -> Self::Result {
+                self.$SignalFieldName.subscribe(msg.0);
+            }
+        }
+    };
 }

@@ -236,18 +236,18 @@ impl Handler<InitializeTaskManager> for TaskManager {
         let future = async move {
             // Listen to AgreementApproved event.
             let msg = Subscribe::<AgreementApproved>(actx.myself.clone().recipient());
-            actx.market.send(msg).await??;
+            actx.market.send(msg).await?;
 
             // Listen to Agreement terminated event from market.
             let msg = Subscribe::<CloseAgreement>(actx.myself.clone().recipient());
-            actx.market.send(msg).await??;
+            actx.market.send(msg).await?;
 
             // Get info about Activity creation and destruction.
             let msg = Subscribe::<ActivityCreated>(actx.myself.clone().recipient());
-            actx.runner.send(msg).await??;
+            actx.runner.send(msg).await?;
 
             let msg = Subscribe::<ActivityDestroyed>(actx.myself.clone().recipient());
-            Ok(actx.runner.send(msg).await??)
+            Ok(actx.runner.send(msg).await?)
         }
         .into_actor(self);
 

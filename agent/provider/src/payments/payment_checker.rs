@@ -3,48 +3,61 @@ use anyhow::anyhow;
 use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
 
-pub trait Deadlineable: Clone + Sized + Send + Sync + Unpin + 'static {}
+use ya_utils_actix::{
+    actix_signal::{SignalSlot, Subscribe},
+    actix_signal_handler,
+};
+
+pub trait Deadlineable: Clone + Ord + Sized + Send + Sync + Unpin + 'static {}
 
 /// Will be sent when deadline elapsed.
 #[derive(Message, Clone, Debug)]
 #[rtype(result = "()")]
-pub struct DeadlineElapsed<E: Deadlineable> {
-    agreement_id: String,
-    deadline: DateTime<Utc>,
-    entity: E,
+pub struct DeadlineElapsed {
+    pub agreement_id: String,
+    pub deadline: DateTime<Utc>,
+    pub id: String,
 }
 
 #[derive(Message, Clone)]
 #[rtype(result = "()")]
-pub struct TrackDeadline<E: Deadlineable> {
-    agreement_id: String,
-    deadline: DateTime<Utc>,
-    entity: E,
+pub struct TrackDeadline {
+    pub agreement_id: String,
+    pub deadline: DateTime<Utc>,
+    pub id: String,
+}
+
+#[derive(Message, Clone)]
+#[rtype(result = "()")]
+pub struct StopTracking {
+    pub id: String,
 }
 
 #[derive(Clone)]
-struct DeadlineDesc<E: Deadlineable> {
+struct DeadlineDesc {
     deadline: DateTime<Utc>,
-    entity: E,
+    id: String,
 }
 
 /// Checks if debit notes are accepted in time.
-pub struct DeadlineChecker<E: Deadlineable> {
+pub struct DeadlineChecker {
     // Maps Agreement ids to chain of DebitNotes.
     // Vec inside HashMap is ordered by DebitNote deadline.
-    deadlines: HashMap<String, Vec<DeadlineDesc<E>>>,
+    deadlines: HashMap<String, Vec<DeadlineDesc>>,
 
     nearest_deadline: DateTime<Utc>,
-    callback: Recipient<DeadlineElapsed<E>>,
     handle: Option<SpawnHandle>,
+    callback: SignalSlot<DeadlineElapsed>,
 }
 
-impl<E: Deadlineable> DeadlineChecker<E> {
-    pub fn new(callback: Recipient<DeadlineElapsed<E>>) -> DeadlineChecker<E> {
+actix_signal_handler!(DeadlineChecker, DeadlineElapsed, callback);
+
+impl DeadlineChecker {
+    pub fn new() -> DeadlineChecker {
         DeadlineChecker {
             deadlines: HashMap::new(),
             nearest_deadline: Utc::now() + Duration::weeks(50),
-            callback,
+            callback: SignalSlot::<DeadlineElapsed>::new(),
             handle: None,
         }
     }
@@ -78,14 +91,14 @@ impl<E: Deadlineable> DeadlineChecker<E> {
         let elapsed = self.drain_elapsed(now);
 
         for event in elapsed.into_iter() {
-            self.callback.do_send(event).ok();
+            self.callback.send_signal(event).ok();
         }
 
         self.handle.take();
         self.update_deadline(ctx).ok();
     }
 
-    fn drain_elapsed(&mut self, timestamp: DateTime<Utc>) -> Vec<DeadlineElapsed<E>> {
+    fn drain_elapsed(&mut self, timestamp: DateTime<Utc>) -> Vec<DeadlineElapsed> {
         let elapsed = self
             .deadlines
             .iter_mut()
@@ -97,16 +110,16 @@ impl<E: Deadlineable> DeadlineChecker<E> {
                     };
                 deadlines
                     .drain(0..idx)
-                    .map(|desc| DeadlineElapsed::<E> {
+                    .map(|desc| DeadlineElapsed {
                         agreement_id: agreement_id.to_string(),
                         deadline: desc.deadline,
-                        entity: desc.entity,
+                        id: desc.id,
                     })
-                    .collect::<Vec<DeadlineElapsed<E>>>()
+                    .collect::<Vec<DeadlineElapsed>>()
                     .into_iter()
             })
             .flatten()
-            .collect::<Vec<DeadlineElapsed<E>>>();
+            .collect::<Vec<DeadlineElapsed>>();
 
         // Remove Agreements with empty lists. Otherwise no longer needed Agreements
         // would remain in HashMap for always.
@@ -139,10 +152,10 @@ impl<E: Deadlineable> DeadlineChecker<E> {
     }
 }
 
-impl<E: Deadlineable> Handler<TrackDeadline<E>> for DeadlineChecker<E> {
+impl Handler<TrackDeadline> for DeadlineChecker {
     type Result = ();
 
-    fn handle(&mut self, msg: TrackDeadline<E>, ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: TrackDeadline, ctx: &mut Context<Self>) -> Self::Result {
         if let None = self.deadlines.get(&msg.agreement_id) {
             self.deadlines.insert(msg.agreement_id.to_string(), vec![]);
         }
@@ -158,9 +171,9 @@ impl<E: Deadlineable> Handler<TrackDeadline<E>> for DeadlineChecker<E> {
 
         deadlines.insert(
             idx,
-            DeadlineDesc::<E> {
+            DeadlineDesc {
                 deadline: msg.deadline,
-                entity: msg.entity,
+                id: msg.id,
             },
         );
 
@@ -168,7 +181,28 @@ impl<E: Deadlineable> Handler<TrackDeadline<E>> for DeadlineChecker<E> {
     }
 }
 
-impl<E: Deadlineable> Actor for DeadlineChecker<E> {
+impl Handler<StopTracking> for DeadlineChecker {
+    type Result = ();
+
+    fn handle(&mut self, msg: StopTracking, ctx: &mut Context<Self>) -> Self::Result {
+        let mut any = false;
+        // We could store inverse mapping from entities to agreements, but there will never
+        // be so many Agreements at the same time, to make it worth.
+        for deadlines in self.deadlines.values_mut() {
+            if let Ok(idx) = deadlines.binary_search_by(|element| element.id.cmp(&msg.id)) {
+                // Or we could remove all earlier entries??
+                deadlines.remove(idx);
+                any = true;
+            }
+        }
+
+        if any {
+            self.update_deadline(ctx).unwrap();
+        }
+    }
+}
+
+impl Actor for DeadlineChecker {
     type Context = Context<Self>;
 }
 
@@ -179,7 +213,7 @@ mod test {
     use super::*;
 
     struct DeadlineReceiver {
-        elapsed: Vec<DeadlineElapsed<String>>,
+        elapsed: Vec<DeadlineElapsed>,
     }
 
     impl Actor for DeadlineReceiver {
@@ -193,17 +227,13 @@ mod test {
     }
 
     #[derive(Message, Clone)]
-    #[rtype(result = "Vec<DeadlineElapsed<String>>")]
+    #[rtype(result = "Vec<DeadlineElapsed>")]
     pub struct Collect;
 
-    impl Handler<DeadlineElapsed<String>> for DeadlineReceiver {
+    impl Handler<DeadlineElapsed> for DeadlineReceiver {
         type Result = ();
 
-        fn handle(
-            &mut self,
-            msg: DeadlineElapsed<String>,
-            _ctx: &mut Context<Self>,
-        ) -> Self::Result {
+        fn handle(&mut self, msg: DeadlineElapsed, _ctx: &mut Context<Self>) -> Self::Result {
             self.elapsed.push(msg);
         }
     }
@@ -216,10 +246,19 @@ mod test {
         }
     }
 
+    async fn init_checker(receiver: Addr<DeadlineReceiver>) -> Addr<DeadlineChecker> {
+        let checker = DeadlineChecker::new().start();
+        checker
+            .send(Subscribe::<DeadlineElapsed>(receiver.recipient()))
+            .await
+            .unwrap();
+        checker
+    }
+
     #[actix_rt::test]
     async fn test_deadline_checker_single_agreement() {
         let receiver = DeadlineReceiver::new();
-        let checker = DeadlineChecker::new(receiver.clone().recipient()).start();
+        let checker = init_checker(receiver.clone()).await;
 
         let now = Utc::now();
         for i in 1..6 {
@@ -227,7 +266,7 @@ mod test {
                 .send(TrackDeadline {
                     agreement_id: "agrrrrr-1".to_string(),
                     deadline: now + Duration::milliseconds(200 * i),
-                    entity: i.to_string(),
+                    id: i.to_string(),
                 })
                 .await
                 .unwrap();
@@ -238,17 +277,17 @@ mod test {
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
         assert_eq!(deadlined.len(), 2);
-        assert_eq!(deadlined[0].entity, 1.to_string());
-        assert_eq!(deadlined[1].entity, 2.to_string());
+        assert_eq!(deadlined[0].id, 1.to_string());
+        assert_eq!(deadlined[1].id, 2.to_string());
 
         let interval = (now + Duration::milliseconds(1100)) - Utc::now();
         tokio::time::delay_for(interval.to_std().unwrap()).await;
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
         assert_eq!(deadlined.len(), 3);
-        assert_eq!(deadlined[0].entity, 3.to_string());
-        assert_eq!(deadlined[1].entity, 4.to_string());
-        assert_eq!(deadlined[2].entity, 5.to_string());
+        assert_eq!(deadlined[0].id, 3.to_string());
+        assert_eq!(deadlined[1].id, 4.to_string());
+        assert_eq!(deadlined[2].id, 5.to_string());
 
         // Add another entry to check if there wasn't any incorrect state,
         // after all deadlines elapsed.
@@ -256,7 +295,7 @@ mod test {
             .send(TrackDeadline {
                 agreement_id: "agrrrrr-1".to_string(),
                 deadline: now + Duration::milliseconds(1300),
-                entity: 6.to_string(),
+                id: 6.to_string(),
             })
             .await
             .unwrap();
@@ -266,13 +305,13 @@ mod test {
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
         assert_eq!(deadlined.len(), 1);
-        assert_eq!(deadlined[0].entity, 6.to_string());
+        assert_eq!(deadlined[0].id, 6.to_string());
     }
 
     #[actix_rt::test]
     async fn test_deadline_checker_near_deadlines() {
         let receiver = DeadlineReceiver::new();
-        let checker = DeadlineChecker::new(receiver.clone().recipient()).start();
+        let checker = init_checker(receiver.clone()).await;
 
         let now = Utc::now();
         for i in 1..6 {
@@ -280,7 +319,7 @@ mod test {
                 .send(TrackDeadline {
                     agreement_id: "agrrrrr-1".to_string(),
                     deadline: now + Duration::milliseconds(200) + Duration::milliseconds(1 * i),
-                    entity: i.to_string(),
+                    id: i.to_string(),
                 })
                 .await
                 .unwrap();
@@ -291,7 +330,7 @@ mod test {
             .send(TrackDeadline {
                 agreement_id: "agrrrrr-1".to_string(),
                 deadline: now + Duration::milliseconds(200) + Duration::milliseconds(3),
-                entity: 7.to_string(),
+                id: 7.to_string(),
             })
             .await
             .unwrap();
@@ -301,18 +340,18 @@ mod test {
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
         assert_eq!(deadlined.len(), 6);
-        assert_eq!(deadlined[0].entity, 1.to_string());
-        assert_eq!(deadlined[1].entity, 2.to_string());
-        assert_eq!(deadlined[2].entity, 3.to_string());
-        assert_eq!(deadlined[3].entity, 7.to_string());
-        assert_eq!(deadlined[4].entity, 4.to_string());
-        assert_eq!(deadlined[5].entity, 5.to_string());
+        assert_eq!(deadlined[0].id, 1.to_string());
+        assert_eq!(deadlined[1].id, 2.to_string());
+        assert_eq!(deadlined[2].id, 3.to_string());
+        assert_eq!(deadlined[3].id, 7.to_string());
+        assert_eq!(deadlined[4].id, 4.to_string());
+        assert_eq!(deadlined[5].id, 5.to_string());
     }
 
     #[actix_rt::test]
     async fn test_deadline_checker_insert_deadlines_between() {
         let receiver = DeadlineReceiver::new();
-        let checker = DeadlineChecker::new(receiver.clone().recipient()).start();
+        let checker = init_checker(receiver.clone()).await;
 
         let now = Utc::now();
         for i in 1..6 {
@@ -320,7 +359,7 @@ mod test {
                 .send(TrackDeadline {
                     agreement_id: "agrrrrr-1".to_string(),
                     deadline: now + Duration::milliseconds(400) + Duration::milliseconds(200 * i),
-                    entity: i.to_string(),
+                    id: i.to_string(),
                 })
                 .await
                 .unwrap();
@@ -334,7 +373,7 @@ mod test {
             .send(TrackDeadline {
                 agreement_id: "agrrrrr-1".to_string(),
                 deadline: now + Duration::milliseconds(200),
-                entity: 6.to_string(),
+                id: 6.to_string(),
             })
             .await
             .unwrap();
@@ -344,14 +383,14 @@ mod test {
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
         assert_eq!(deadlined.len(), 1);
-        assert_eq!(deadlined[0].entity, 6.to_string());
+        assert_eq!(deadlined[0].id, 6.to_string());
 
         // Insert deadline between all other deadlines.
         checker
             .send(TrackDeadline {
                 agreement_id: "agrrrrr-1".to_string(),
                 deadline: now + Duration::milliseconds(900),
-                entity: 7.to_string(),
+                id: 7.to_string(),
             })
             .await
             .unwrap();
@@ -361,16 +400,16 @@ mod test {
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
         assert_eq!(deadlined.len(), 4);
-        assert_eq!(deadlined[0].entity, 1.to_string());
-        assert_eq!(deadlined[1].entity, 2.to_string());
-        assert_eq!(deadlined[2].entity, 7.to_string());
-        assert_eq!(deadlined[3].entity, 3.to_string());
+        assert_eq!(deadlined[0].id, 1.to_string());
+        assert_eq!(deadlined[1].id, 2.to_string());
+        assert_eq!(deadlined[2].id, 7.to_string());
+        assert_eq!(deadlined[3].id, 3.to_string());
     }
 
     #[actix_rt::test]
     async fn test_deadline_checker_multi_agreements() {
         let receiver = DeadlineReceiver::new();
-        let checker = DeadlineChecker::new(receiver.clone().recipient()).start();
+        let checker = init_checker(receiver.clone()).await;
 
         let now = Utc::now();
         for i in 1..6 {
@@ -378,7 +417,7 @@ mod test {
                 .send(TrackDeadline {
                     agreement_id: format!("agrrrrr-{}", i),
                     deadline: now + Duration::milliseconds(100) + Duration::milliseconds(3 * i),
-                    entity: i.to_string(),
+                    id: i.to_string(),
                 })
                 .await
                 .unwrap();
@@ -389,10 +428,52 @@ mod test {
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
         assert_eq!(deadlined.len(), 5);
-        assert_eq!(deadlined[0].entity, 1.to_string());
-        assert_eq!(deadlined[1].entity, 2.to_string());
-        assert_eq!(deadlined[2].entity, 3.to_string());
-        assert_eq!(deadlined[3].entity, 4.to_string());
-        assert_eq!(deadlined[4].entity, 5.to_string());
+        assert_eq!(deadlined[0].id, 1.to_string());
+        assert_eq!(deadlined[1].id, 2.to_string());
+        assert_eq!(deadlined[2].id, 3.to_string());
+        assert_eq!(deadlined[3].id, 4.to_string());
+        assert_eq!(deadlined[4].id, 5.to_string());
+    }
+
+    #[actix_rt::test]
+    async fn test_deadline_checker_stop_tracking() {
+        let receiver = DeadlineReceiver::new();
+        let checker = init_checker(receiver.clone()).await;
+
+        let now = Utc::now();
+        for i in 1..8 {
+            checker
+                .send(TrackDeadline {
+                    agreement_id: "agrrrrr-1".to_string(),
+                    deadline: now + Duration::milliseconds(200 * i),
+                    id: i.to_string(),
+                })
+                .await
+                .unwrap();
+        }
+
+        let interval = (now + Duration::milliseconds(100)) - Utc::now();
+        tokio::time::delay_for(interval.to_std().unwrap()).await;
+
+        checker
+            .send(StopTracking { id: 2.to_string() })
+            .await
+            .unwrap();
+        checker
+            .send(StopTracking { id: 5.to_string() })
+            .await
+            .unwrap();
+
+        let interval = (now + Duration::milliseconds(1700)) - Utc::now();
+        tokio::time::delay_for(interval.to_std().unwrap()).await;
+
+        let deadlined = receiver.send(Collect {}).await.unwrap();
+
+        assert_eq!(deadlined.len(), 5);
+        assert_eq!(deadlined[0].id, 1.to_string());
+        assert_eq!(deadlined[1].id, 3.to_string());
+        assert_eq!(deadlined[2].id, 4.to_string());
+        assert_eq!(deadlined[3].id, 6.to_string());
+        assert_eq!(deadlined[4].id, 7.to_string());
     }
 }

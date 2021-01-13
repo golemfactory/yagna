@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use super::agreement::{compute_cost, ActivityPayment, AgreementPayment, CostInfo};
 use super::model::PaymentModel;
+use super::payment_checker::{DeadlineChecker, DeadlineElapsed, StopTracking, TrackDeadline};
 use crate::execution::{ActivityCreated, ActivityDestroyed};
 use crate::market::provider_market::AgreementApproved;
 use crate::tasks::{AgreementBroken, AgreementClosed};
@@ -19,6 +20,7 @@ use ya_client::model::payment::{DebitNote, Invoice, NewDebitNote, NewInvoice};
 use ya_client::payment::PaymentProviderApi;
 use ya_client_model::payment::EventType;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
+use ya_utils_actix::actix_signal::Subscribe;
 use ya_utils_actix::forward_actix_handler;
 
 // =========================================== //
@@ -100,10 +102,13 @@ struct ProviderCtx {
     activity_api: Arc<ActivityProviderApi>,
     payment_api: Arc<PaymentProviderApi>,
 
+    debit_checker: Addr<DeadlineChecker>,
+
     get_events_timeout: Option<Duration>,
     get_events_error_timeout: Duration,
     invoice_reissue_interval: Duration,
     invoice_resend_interval: Duration,
+    debit_note_accept_deadline: Duration,
 }
 
 /// Computes charges for tasks execution.
@@ -121,10 +126,12 @@ impl Payments {
         let provider_ctx = ProviderCtx {
             activity_api: Arc::new(activity_api),
             payment_api: Arc::new(payment_api),
+            debit_checker: DeadlineChecker::new().start(),
             get_events_timeout: Some(Duration::from_secs(60)),
             get_events_error_timeout: Duration::from_secs(5),
             invoice_reissue_interval: Duration::from_secs(5),
             invoice_resend_interval: Duration::from_secs(50),
+            debit_note_accept_deadline: Duration::from_secs(30),
         };
 
         Payments {
@@ -215,6 +222,16 @@ async fn send_debit_note(
         &debit_note_info.activity_id
     );
 
+    provider_context
+        .debit_checker
+        .send(TrackDeadline {
+            agreement_id: debit_note.agreement_id.clone(),
+            deadline: Utc::now()
+                + chrono::Duration::from_std(provider_context.debit_note_accept_deadline.clone())?,
+            id: debit_note.debit_note_id.clone(),
+        })
+        .await?;
+
     Ok(debit_note)
 }
 
@@ -260,8 +277,10 @@ async fn check_invoice_events(provider_ctx: Arc<ProviderCtx>, payments_addr: Add
     }
 }
 
-#[allow(dead_code)]
-async fn check_debit_notes_events(provider_ctx: Arc<ProviderCtx>, _payments_addr: Addr<Payments>) {
+async fn check_debit_notes_events(
+    provider_ctx: Arc<ProviderCtx>,
+    debit_checker: Addr<DeadlineChecker>,
+) {
     let timeout = provider_ctx.get_events_timeout.clone();
     let error_timeout = provider_ctx.get_events_error_timeout.clone();
     let mut lather_than = Utc::now();
@@ -282,12 +301,23 @@ async fn check_debit_notes_events(provider_ctx: Arc<ProviderCtx>, _payments_addr
 
         for event in events {
             match event.event_type {
-                EventType::Received => {}
-                EventType::Accepted => {}
-                EventType::Rejected => {}
-                EventType::Cancelled => {}
-                EventType::Settled => {}
-            }
+                EventType::Accepted => debit_checker
+                    .send(StopTracking {
+                        id: event.debit_note_id.clone(),
+                    })
+                    .await
+                    .map_err(|_| {
+                        log::warn!(
+                            "Failed to notify about accepted DebitNote {}",
+                            event.debit_note_id
+                        )
+                    })
+                    .ok(),
+                EventType::Received => None,
+                EventType::Rejected => None,
+                EventType::Cancelled => None,
+                EventType::Settled => None,
+            };
             lather_than = event.timestamp;
         }
     }
@@ -690,8 +720,21 @@ impl Handler<InvoiceSettled> for Payments {
     }
 }
 
+impl Handler<DeadlineElapsed> for Payments {
+    type Result = ();
+
+    fn handle(&mut self, msg: DeadlineElapsed, _ctx: &mut Context<Self>) -> Self::Result {
+        log::warn!(
+            "Deadline {} elapsed for accepting DebitNote [{}] for Agreement [{}].",
+            msg.deadline,
+            msg.id,
+            msg.agreement_id
+        );
+    }
+}
+
 impl Handler<GetAgreementSummary> for Payments {
-    type Result = ActorResponse<Self, CostsSummary, Error>;
+    type Result = anyhow::Result<CostsSummary>;
 
     fn handle(&mut self, msg: GetAgreementSummary, _ctx: &mut Context<Self>) -> Self::Result {
         if let Some(agreement) = self.agreements.get_mut(&msg.agreement_id) {
@@ -703,19 +746,33 @@ impl Handler<GetAgreementSummary> for Payments {
                 cost_summary,
                 activities,
             };
-            return ActorResponse::reply(Ok(summary));
+            return Ok(summary);
         }
-        return ActorResponse::reply(Err(anyhow!("Not my agreement {}.", &msg.agreement_id)));
+        return Err(anyhow!("Not my agreement {}.", &msg.agreement_id));
     }
 }
 
 impl Actor for Payments {
     type Context = Context<Self>;
 
-    fn started(&mut self, context: &mut Context<Self>) {
+    fn started(&mut self, ctx: &mut Context<Self>) {
         // Start checking incoming payments.
         let provider_ctx = self.context.clone();
-        let payment_addr = context.address();
-        Arbiter::spawn(check_invoice_events(provider_ctx, payment_addr));
+        let payment_addr = ctx.address();
+
+        Arbiter::spawn(check_invoice_events(
+            provider_ctx.clone(),
+            payment_addr.clone(),
+        ));
+        Arbiter::spawn(async move {
+            let debit_checker = provider_ctx.debit_checker.clone();
+            provider_ctx
+                .debit_checker
+                .send(Subscribe(payment_addr.recipient()))
+                .await
+                .map_err(|_| log::error!("Subscribing to DebitNotes deadline checker failed."))
+                .ok();
+            check_debit_notes_events(provider_ctx, debit_checker).await;
+        });
     }
 }

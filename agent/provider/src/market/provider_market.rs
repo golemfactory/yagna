@@ -12,13 +12,14 @@ use std::sync::Arc;
 
 use ya_agreement_utils::{AgreementView, OfferDefinition};
 use ya_client::market::MarketProviderApi;
+use ya_client_model::market::agreement_event::AgreementEventType;
 use ya_client_model::market::{
     agreement_event::AgreementTerminator, Agreement, NewOffer, Proposal, ProviderEvent, Reason,
 };
 use ya_utils_actix::{
     actix_handler::ResultTypeGetter,
     actix_signal::{SignalSlot, Subscribe},
-    forward_actix_handler,
+    actix_signal_handler, forward_actix_handler,
 };
 
 use super::negotiator::factory;
@@ -27,7 +28,6 @@ use super::Preset;
 use crate::market::config::MarketConfig;
 use crate::market::termination_reason::GolemReason;
 use crate::tasks::{AgreementBroken, AgreementClosed, CloseAgreement};
-use ya_client_model::market::agreement_event::AgreementEventType;
 
 // =========================================== //
 // Public exposed messages
@@ -176,28 +176,6 @@ impl ProviderMarket {
         self.agreement_signed_signal.send_signal(AgreementApproved {
             agreement: msg.agreement,
         })
-    }
-
-    // =========================================== //
-    // Market internals - event subscription
-    // =========================================== //
-
-    pub fn on_subscribe_approved(
-        &mut self,
-        msg: Subscribe<AgreementApproved>,
-        _ctx: &mut Context<Self>,
-    ) -> Result<()> {
-        self.agreement_signed_signal.on_subscribe(msg);
-        Ok(())
-    }
-
-    pub fn on_subscribe_terminated(
-        &mut self,
-        msg: Subscribe<CloseAgreement>,
-        _ctx: &mut Context<Self>,
-    ) -> Result<()> {
-        self.agreement_terminated_signal.on_subscribe(msg);
-        Ok(())
     }
 }
 
@@ -814,17 +792,9 @@ impl Handler<Unsubscribe> for ProviderMarket {
 }
 
 forward_actix_handler!(ProviderMarket, Subscription, on_subscription);
-forward_actix_handler!(
-    ProviderMarket,
-    Subscribe<AgreementApproved>,
-    on_subscribe_approved
-);
-forward_actix_handler!(
-    ProviderMarket,
-    Subscribe<CloseAgreement>,
-    on_subscribe_terminated
-);
 forward_actix_handler!(ProviderMarket, AgreementApproved, on_agreement_approved);
+actix_signal_handler!(ProviderMarket, CloseAgreement, agreement_terminated_signal);
+actix_signal_handler!(ProviderMarket, AgreementApproved, agreement_signed_signal);
 
 fn get_backoff() -> backoff::ExponentialBackoff {
     // TODO: We could have config for Market actor to be able to set at least initial interval.
