@@ -1,9 +1,9 @@
 use anyhow::{anyhow, bail, Result};
 use bigdecimal::{BigDecimal, Signed, ToPrimitive};
+use chrono::Duration;
 use num_bigint::BigInt;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::watch;
 
 use super::factory::PaymentModelFactory;
@@ -76,9 +76,11 @@ pub enum ActivityPayment {
 /// We must wait until agreement will be closed, before we send invoice.
 pub struct AgreementPayment {
     pub agreement_id: String,
-    pub update_interval: Duration,
     pub payment_model: Arc<dyn PaymentModel>,
     pub activities: HashMap<String, ActivityPayment>,
+
+    pub update_interval: std::time::Duration,
+    pub payment_deadline: Option<chrono::Duration>,
 
     // Watches for waiting for activities. You can await on receiver
     // to observe changes in number of active activities.
@@ -105,6 +107,7 @@ impl AgreementPayment {
             activities: HashMap::new(),
             payment_model,
             update_interval,
+            payment_deadline: Some(Duration::seconds(30)),
             watch_sender: sender,
             activities_watch: ActivitiesWaiter {
                 watch_receiver: receiver,

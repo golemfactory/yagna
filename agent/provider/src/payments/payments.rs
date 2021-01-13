@@ -1,7 +1,7 @@
 use actix::prelude::*;
 use anyhow::{anyhow, Error, Result};
 use bigdecimal::{BigDecimal, Zero};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use log;
 use serde_json::json;
 use std::collections::HashMap;
@@ -95,6 +95,7 @@ struct CostsSummary {
 pub struct DebitNoteInfo {
     pub agreement_id: String,
     pub activity_id: String,
+    pub payment_deadline: Option<DateTime<Utc>>,
 }
 
 /// Yagna APIs and payments information about provider.
@@ -108,7 +109,6 @@ struct ProviderCtx {
     get_events_error_timeout: Duration,
     invoice_reissue_interval: Duration,
     invoice_resend_interval: Duration,
-    debit_note_accept_deadline: Duration,
 }
 
 /// Computes charges for tasks execution.
@@ -131,7 +131,6 @@ impl Payments {
             get_events_error_timeout: Duration::from_secs(5),
             invoice_reissue_interval: Duration::from_secs(5),
             invoice_resend_interval: Duration::from_secs(50),
-            debit_note_accept_deadline: Duration::from_secs(30),
         };
 
         Payments {
@@ -179,7 +178,7 @@ async fn send_debit_note(
         activity_id: debit_note_info.activity_id.clone(),
         total_amount_due: cost_info.cost,
         usage_counter_vector: Some(json!(cost_info.usage)),
-        payment_due_date: None,
+        payment_due_date: debit_note_info.payment_deadline,
     };
 
     log::debug!(
@@ -222,15 +221,16 @@ async fn send_debit_note(
         &debit_note_info.activity_id
     );
 
-    provider_context
-        .debit_checker
-        .send(TrackDeadline {
-            agreement_id: debit_note.agreement_id.clone(),
-            deadline: Utc::now()
-                + chrono::Duration::from_std(provider_context.debit_note_accept_deadline.clone())?,
-            id: debit_note.debit_note_id.clone(),
-        })
-        .await?;
+    if let Some(deadline) = debit_note_info.payment_deadline {
+        provider_context
+            .debit_checker
+            .send(TrackDeadline {
+                agreement_id: debit_note.agreement_id.clone(),
+                deadline,
+                id: debit_note.debit_note_id.clone(),
+            })
+            .await?;
+    }
 
     Ok(debit_note)
 }
@@ -365,6 +365,7 @@ impl Handler<ActivityCreated> for Payments {
                 invoice_info: DebitNoteInfo {
                     agreement_id: msg.agreement_id.clone(),
                     activity_id: msg.activity_id.clone(),
+                    payment_deadline: None, // Will be added in UpdateCost handler.
                 },
             };
 
@@ -405,6 +406,9 @@ impl Handler<ActivityDestroyed> for Payments {
         let debit_note_info = DebitNoteInfo {
             activity_id: msg.activity_id.clone(),
             agreement_id: msg.agreement_id.clone(),
+            payment_deadline: agreement
+                .payment_deadline
+                .map(|deadline| Utc::now() + deadline),
         };
 
         let future = async move {
