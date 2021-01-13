@@ -18,7 +18,6 @@ use ya_service_api_web::middleware::Identity;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
-use crate::api::*;
 use crate::dao::*;
 use crate::error::{DbError, Error};
 use crate::utils::provider::get_agreement_for_activity;
@@ -57,7 +56,7 @@ pub fn register_endpoints(scope: Scope) -> Scope {
 
 async fn get_debit_notes(
     db: Data<DbExecutor>,
-    query: Query<FilterParams>,
+    query: Query<params::FilterParams>,
     id: Identity,
 ) -> HttpResponse {
     let node_id = id.identity;
@@ -75,7 +74,7 @@ async fn get_debit_notes(
 
 async fn get_debit_note(
     db: Data<DbExecutor>,
-    path: Path<DebitNoteId>,
+    path: Path<params::DebitNoteId>,
     id: Identity,
 ) -> HttpResponse {
     let debit_note_id = path.debit_note_id.clone();
@@ -88,17 +87,20 @@ async fn get_debit_note(
     }
 }
 
-async fn get_debit_note_payments(db: Data<DbExecutor>, path: Path<DebitNoteId>) -> HttpResponse {
+async fn get_debit_note_payments(
+    db: Data<DbExecutor>,
+    path: Path<params::DebitNoteId>,
+) -> HttpResponse {
     response::not_implemented() // TODO
 }
 
 async fn get_debit_note_events(
     db: Data<DbExecutor>,
-    query: Query<EventParams>,
+    query: Query<params::EventParams>,
     id: Identity,
 ) -> HttpResponse {
     let node_id = id.identity;
-    let timeout_secs = query.poll_timeout;
+    let timeout_secs = query.poll_timeout.unwrap_or(params::DEFAULT_EVENT_TIMEOUT);
     let after_timestamp = query.after_timestamp.map(|d| d.naive_utc());
     let max_events = query.max_events;
     let app_session_id = &query.app_session_id;
@@ -173,8 +175,8 @@ async fn issue_debit_note(
 
 async fn send_debit_note(
     db: Data<DbExecutor>,
-    path: Path<DebitNoteId>,
-    query: Query<Timeout>,
+    path: Path<params::DebitNoteId>,
+    query: Query<params::Timeout>,
     id: Identity,
 ) -> HttpResponse {
     let debit_note_id = path.debit_note_id.clone();
@@ -190,7 +192,8 @@ async fn send_debit_note(
         return response::ok(Null); // Debit note has been already sent
     }
 
-    with_timeout(query.timeout, async move {
+    let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
+    with_timeout(timeout, async move {
         match async move {
             ya_net::from(node_id)
                 .to(debit_note.recipient_id)
@@ -215,8 +218,8 @@ async fn send_debit_note(
 
 async fn cancel_debit_note(
     db: Data<DbExecutor>,
-    path: Path<DebitNoteId>,
-    query: Query<Timeout>,
+    path: Path<params::DebitNoteId>,
+    query: Query<params::Timeout>,
 ) -> HttpResponse {
     response::not_implemented() // TODO
 }
@@ -225,8 +228,8 @@ async fn cancel_debit_note(
 
 async fn accept_debit_note(
     db: Data<DbExecutor>,
-    path: Path<DebitNoteId>,
-    query: Query<Timeout>,
+    path: Path<params::DebitNoteId>,
+    query: Query<params::Timeout>,
     body: Json<Acceptance>,
     id: Identity,
 ) -> HttpResponse {
@@ -287,7 +290,8 @@ async fn accept_debit_note(
         return response::bad_request(&msg);
     }
 
-    with_timeout(query.timeout, async move {
+    let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
+    with_timeout(timeout, async move {
         let issuer_id = debit_note.issuer_id;
         let accept_msg = AcceptDebitNote::new(debit_note_id.clone(), acceptance, issuer_id);
         let schedule_msg =
@@ -320,8 +324,8 @@ async fn accept_debit_note(
 
 async fn reject_debit_note(
     db: Data<DbExecutor>,
-    path: Path<DebitNoteId>,
-    query: Query<Timeout>,
+    path: Path<params::DebitNoteId>,
+    query: Query<params::Timeout>,
     body: Json<Rejection>,
 ) -> HttpResponse {
     response::not_implemented() // TODO
