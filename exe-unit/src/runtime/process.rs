@@ -18,7 +18,7 @@ use std::sync::Arc;
 use tokio::process::Command;
 use ya_agreement_utils::agreement::OfferTemplate;
 use ya_client_model::activity::{CommandOutput, ExeScriptCommand, RuntimeEvent};
-use ya_runtime_api::server::{spawn, ProcessControl, RunProcess, RuntimeService};
+use ya_runtime_api::server::{spawn, ProcessControl, RunProcess, RuntimeService, RuntimeStatus};
 
 const PROCESS_KILL_TIMEOUT_SECONDS_ENV_VAR: &str = "PROCESS_KILL_TIMEOUT_SECONDS";
 const DEFAULT_PROCESS_KILL_TIMEOUT_SECONDS: i64 = 5;
@@ -204,10 +204,15 @@ impl RuntimeProcess {
 
                 async move {
                     let service = spawn(command, monitor).map_err(Error::runtime).await?;
-                    service
+                    let hello = service
                         .hello(SERVICE_PROTOCOL_VERSION)
-                        .map_err(|e| Error::runtime(format!("service hello error: {:?}", e)))
-                        .await?;
+                        .map_err(|e| Error::runtime(format!("service hello error: {:?}", e)));
+
+                    match future::select(service.exited(), hello).await {
+                        future::Either::Left((result, _)) => return Ok(result),
+                        future::Either::Right((result, _)) => result.map(|_| ())?,
+                    }
+
                     address
                         .send(SetProcessService(ProcessService::new(service)))
                         .await?;
@@ -220,8 +225,8 @@ impl RuntimeProcess {
                 mut args,
                 capture: _,
             } => {
-                let service = match self.service.as_ref() {
-                    Some(svc) => svc.service.clone(),
+                let (service, status) = match self.service.as_ref() {
+                    Some(svc) => (svc.service.clone(), svc.status.clone()),
                     None => {
                         return future::err(Error::runtime("START command not run")).boxed_local()
                     }
@@ -234,7 +239,7 @@ impl RuntimeProcess {
                 let idx = cmd.idx;
                 let mut tx = cmd.tx.clone();
 
-                async move {
+                let exec = async move {
                     let name = Path::new(&entry_point)
                         .file_name()
                         .ok_or_else(|| Error::runtime("Invalid binary name"))?;
@@ -275,6 +280,12 @@ impl RuntimeProcess {
                         }
                     }
                     Ok(0)
+                };
+
+                async move {
+                    futures::pin_mut!(exec);
+                    let exited = status.exited().map(Ok);
+                    future::select(exited, exec).await.factor_first().0
                 }
                 .boxed_local()
             }
@@ -439,16 +450,18 @@ impl Drop for ChildProcessGuard {
 struct ProcessService {
     service: Arc<dyn RuntimeService + Send + Sync + 'static>,
     control: Arc<dyn ProcessControl + Send + Sync + 'static>,
+    status: Arc<dyn RuntimeStatus + Send + Sync + 'static>,
 }
 
 impl ProcessService {
     pub fn new<S>(service: S) -> Self
     where
-        S: RuntimeService + ProcessControl + Clone + Send + Sync + 'static,
+        S: RuntimeService + RuntimeStatus + ProcessControl + Clone + Send + Sync + 'static,
     {
         ProcessService {
             service: Arc::new(service.clone()),
-            control: Arc::new(service),
+            control: Arc::new(service.clone()),
+            status: Arc::new(service),
         }
     }
 }
