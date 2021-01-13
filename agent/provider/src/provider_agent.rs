@@ -154,8 +154,8 @@ impl ProviderAgent {
 
         // Generate session id from node name and process id to make sure it's unique.
         let name = args.node.node_name.clone().unwrap_or(app_name.to_string());
-        args.market.session_id = format!("{}-[{}]", name, std::process::id());
-        args.runner.session_id = args.market.session_id.clone(); // TODO: unwind this dirty fix
+        args.market.session_id = format!("{}-{}", name, std::process::id());
+        args.runner.session_id = args.market.session_id.clone();
         args.payment.session_id = args.market.session_id.clone();
 
         let mut globals = GlobalsManager::try_new(&config.globals_file, args.node)?;
