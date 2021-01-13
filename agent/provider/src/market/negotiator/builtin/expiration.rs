@@ -13,6 +13,9 @@ use crate::market::negotiator::{
 pub struct LimitExpiration {
     min_expiration: Duration,
     max_expiration: Duration,
+
+    /// If deadline is None, we allow, that Requestor doesn't accept DebitNotes.
+    payment_deadline: Option<Duration>,
 }
 
 impl LimitExpiration {
@@ -20,6 +23,7 @@ impl LimitExpiration {
         Ok(LimitExpiration {
             min_expiration: chrono::Duration::from_std(config.min_agreement_expiration)?,
             max_expiration: chrono::Duration::from_std(config.max_agreement_expiration)?,
+            payment_deadline: Some(chrono::Duration::seconds(30)),
         })
     }
 }
@@ -64,11 +68,14 @@ impl NegotiatorComponent for LimitExpiration {
         }
     }
 
-    fn fill_template(
-        &mut self,
-        offer_template: OfferDefinition,
-    ) -> anyhow::Result<OfferDefinition> {
-        Ok(offer_template)
+    fn fill_template(&mut self, mut template: OfferDefinition) -> anyhow::Result<OfferDefinition> {
+        if let Some(deadline) = self.payment_deadline {
+            template.offer.set_property(
+                "golem.com.payment.debit-notes.accept-deadline",
+                serde_json::Value::Number(deadline.num_seconds().into()),
+            );
+        }
+        Ok(template)
     }
 
     fn on_agreement_terminated(
