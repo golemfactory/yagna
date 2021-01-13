@@ -9,7 +9,16 @@ use zksync::zksync_types::H256;
 use zksync::{types::BlockStatus, Network, Provider, Wallet, WalletCredentials};
 use zksync_eth_signer::{EthereumSigner, PrivateKeySigner};
 
+use structopt::StructOpt;
+
 const TOKEN: &str = "GNT";
+const PRIVATE_KEY: &str = "312776bb901c426cb62238db9015c100948534dea42f9fa1591eff4beb35cc13";
+
+#[derive(Clone, Debug, StructOpt)]
+struct Args {
+    #[structopt(long = "gen-key")]
+    genkey: bool,
+}
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
@@ -17,7 +26,18 @@ async fn main() -> anyhow::Result<()> {
     std::env::set_var("RUST_LOG", log_level);
     env_logger::init();
 
-    let private_key = H256::random();
+    let args: Args = Args::from_args();
+    let private_key = if args.genkey {
+        debug!("Using randomly generated key");
+        H256::random()
+    } else {
+        debug!("Using hardcoded key");
+        let mut bytes = [0u8; 32];
+        hex::decode_to_slice(PRIVATE_KEY, &mut bytes)
+            .expect("Cannot decode bytes from hex-encoded PK");
+        H256::from(bytes)
+    };
+
     let pk_hex: String = private_key.encode_hex();
     let signer = PrivateKeySigner::new(private_key);
     let address = signer.get_address().await?;
@@ -51,8 +71,8 @@ async fn main() -> anyhow::Result<()> {
     }
 
     info!("Withdrawal started");
-    let gnt_10 = utils::big_dec_to_big_uint(BigDecimal::from(10))?;
-    let withdraw_amount: u64 = BigUint::to_u64(&gnt_10).unwrap();
+    let amount = utils::big_dec_to_big_uint(BigDecimal::from(1.230028519070000))?;
+    let withdraw_amount: u64 = BigUint::to_u64(&amount).unwrap();
     let withdraw_handle = wallet
         .start_withdraw()
         .token(TOKEN)?
