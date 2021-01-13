@@ -4,7 +4,7 @@ use futures::Future;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use ya_client_model::market::Agreement;
-use ya_core_model::market;
+use ya_core_model::{market, Role};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 pub fn fake_get_agreement(agreement_id: String, agreement: Agreement) {
@@ -24,10 +24,10 @@ pub fn fake_get_agreement(agreement_id: String, agreement: Agreement) {
     });
 }
 
-pub async fn get_agreement(agreement_id: String) -> Result<Option<Agreement>, Error> {
+pub async fn get_agreement(agreement_id: String, role: Role) -> Result<Option<Agreement>, Error> {
     match async move {
         let agreement = bus::service(market::BUS_ID)
-            .send(market::GetAgreement::with_id(agreement_id.clone()))
+            .send(market::GetAgreement::as_role(agreement_id.clone(), role))
             .await??;
         Ok(agreement)
     }
@@ -44,7 +44,7 @@ pub async fn get_agreement(agreement_id: String) -> Result<Option<Agreement>, Er
 pub mod provider {
     use crate::error::{Error, ExternalServiceError};
     use ya_client_model::market::Agreement;
-    use ya_core_model::{activity, market};
+    use ya_core_model::{activity, market, Role};
     use ya_service_bus::{typed as bus, RpcEndpoint};
 
     pub fn fake_get_agreement_id(agreement_id: String) {
@@ -57,12 +57,16 @@ pub mod provider {
         );
     }
 
-    pub async fn get_agreement_id(activity_id: String) -> Result<Option<String>, Error> {
+    pub async fn get_agreement_id(
+        activity_id: String,
+        role: Role,
+    ) -> Result<Option<String>, Error> {
         match async move {
             let agreement_id = bus::service(activity::local::BUS_ID)
                 .send(activity::local::GetAgreementId {
                     activity_id,
                     timeout: None,
+                    role,
                 })
                 .await??;
             Ok(agreement_id)
@@ -79,16 +83,18 @@ pub mod provider {
 
     pub async fn get_agreement_for_activity(
         activity_id: String,
+        role: Role,
     ) -> Result<Option<Agreement>, Error> {
         match async move {
             let agreement_id = bus::service(activity::local::BUS_ID)
                 .send(activity::local::GetAgreementId {
                     activity_id,
                     timeout: None,
+                    role,
                 })
                 .await??;
             let agreement = bus::service(market::BUS_ID)
-                .send(market::GetAgreement::with_id(agreement_id.clone()))
+                .send(market::GetAgreement::as_role(agreement_id.clone(), role))
                 .await??;
             Ok(agreement)
         }

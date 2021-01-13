@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::db::model::{
-    AgreementId, AgreementState, ProposalId, ProposalIdValidationError, SubscriptionId,
-};
-use crate::negotiation::error::MatchValidationError;
+use crate::db::dao::ChangeProposalStateError;
+use crate::db::model::{AgreementId, AgreementState, ProposalId, ProposalIdValidationError};
+use crate::matcher::error::QueryOfferError;
+use crate::negotiation::error::{GetProposalError, MatchValidationError, ProposalValidationError};
 
 /// Trait for Error types, that shouldn't expose sensitive information
 /// to other Nodes in network, but should contain more useful message, when displaying
@@ -28,14 +28,30 @@ pub enum CounterProposalError {
     NoPrevious(ProposalId),
     #[error("Countering Proposal [{1}] remote error: {0}")]
     Remote(RemoteProposalError, ProposalId),
+    #[error("Remote error: {0}")]
+    RemoteInternal(#[from] RemoteProposalError),
+    #[error(transparent)]
+    CallerParse(#[from] CallerParseError),
+}
+
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum RejectProposalError {
+    #[error("Rejecting {0}.")]
+    Gsb(#[from] GsbProposalError),
+    #[error(transparent)]
+    Get(#[from] GetProposalError),
+    #[error(transparent)]
+    ChangeState(#[from] ChangeProposalStateError),
+    #[error(transparent)]
+    Validation(#[from] ProposalValidationError),
+    #[error(transparent)]
+    CallerParse(#[from] CallerParseError),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum RemoteProposalError {
-    #[error("Offer/Demand [{0}] already unsubscribed.")]
-    Unsubscribed(SubscriptionId),
-    #[error("Offer/Demand [{0}] expired.")]
-    Expired(SubscriptionId),
+    #[error(transparent)]
+    Validation(#[from] ProposalValidationError),
     #[error("Trying to counter not existing Proposal [{0}].")]
     NotFound(ProposalId),
     #[error("Proposal [{0}] was already countered.")]
@@ -43,9 +59,7 @@ pub enum RemoteProposalError {
     #[error(transparent)]
     InvalidId(#[from] ProposalIdValidationError),
     #[error(transparent)]
-    NotMatching(#[from] MatchValidationError),
-    #[error("Error: {0}.")]
-    Unexpected(String),
+    CallerParse(#[from] CallerParseError),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
@@ -99,17 +113,20 @@ pub enum ApproveAgreementError {
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
+#[error("Failed to parse caller {caller}: {e}")]
+pub struct CallerParseError {
+    pub caller: String,
+    pub e: String,
+}
+
+#[derive(Error, Debug, Serialize, Deserialize)]
 pub enum TerminateAgreementError {
     #[error("Terminate {0}.")]
     Gsb(#[from] GsbAgreementError),
     #[error("Remote Terminate: {0}")]
     Remote(#[from] RemoteAgreementError),
-    #[error("Can't parse {caller} for Agreement [{id}]: {e}")]
-    CallerParseError {
-        e: String,
-        caller: String,
-        id: AgreementId,
-    },
+    #[error(transparent)]
+    CallerParse(#[from] CallerParseError),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
@@ -135,5 +152,23 @@ impl RemoteSensitiveError for RemoteProposeAgreementError {
             }
             _ => self,
         }
+    }
+}
+
+impl From<MatchValidationError> for RemoteProposalError {
+    fn from(e: MatchValidationError) -> Self {
+        ProposalValidationError::NotMatching(e).into()
+    }
+}
+
+impl From<QueryOfferError> for RemoteProposalError {
+    fn from(e: QueryOfferError) -> Self {
+        ProposalValidationError::from(e).into()
+    }
+}
+
+impl From<ProposalValidationError> for CounterProposalError {
+    fn from(e: ProposalValidationError) -> Self {
+        RemoteProposalError::from(e).into()
     }
 }
