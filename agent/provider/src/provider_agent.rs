@@ -24,7 +24,7 @@ use std::{fs, io};
 use ya_agreement_utils::agreement::TypedArrayPointer;
 use ya_agreement_utils::*;
 use ya_client::cli::ProviderApi;
-use ya_file_logging::{start_logger, ReconfigurationHandle};
+use ya_file_logging::{start_logger, LoggerHandle};
 use ya_utils_actix::actix_handler::send_message;
 use ya_utils_path::SwapSave;
 
@@ -36,7 +36,7 @@ pub struct ProviderAgent {
     presets: PresetManager,
     hardware: hardware::Manager,
     accounts: Vec<AccountView>,
-    log_handler: ReconfigurationHandle,
+    log_handler: LoggerHandle,
 }
 
 struct GlobalsManager {

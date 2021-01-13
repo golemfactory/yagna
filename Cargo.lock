@@ -2338,25 +2338,9 @@ dependencies = [
 
 [[package]]
 name = "flexi_logger"
-version = "0.15.12"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaab3caedb4149800f91e8e4899f29cd9ddf3b569b04c365ca9334f92f7542bf"
-dependencies = [
- "atty",
- "chrono",
- "glob",
- "lazy_static",
- "log",
- "regex",
- "thiserror",
- "yansi",
-]
-
-[[package]]
-name = "flexi_logger"
-version = "0.16.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c37586928c27a25ff5fce49ff3f8e071b3beeef48b4f004fe7d40d75a26e3db5"
+checksum = "cb17f043f5161c62f37683a850da6b4a0a217da77340e63b8789a4635a98da62"
 dependencies = [
  "atty",
  "chrono",
@@ -5285,6 +5269,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_qs"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5cb0f0564a84554436c4ceff5c896308d4e09d0eb4bd0215b8f698f88084601"
+dependencies = [
+ "percent-encoding 2.1.0",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "serde_urlencoded"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6916,7 +6911,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=94f4cc5844477374f97dacfa22a53a15f3a59ada#94f4cc5844477374f97dacfa22a53a15f3a59ada"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=a5bfc61da8f3a5cdcafcacf3d48a9f706571a9d7#a5bfc61da8f3a5cdcafcacf3d48a9f706571a9d7"
 dependencies = [
  "awc 1.0.1",
  "bytes 0.5.6",
@@ -6931,6 +6926,7 @@ dependencies = [
  "rand 0.6.5",
  "serde",
  "serde_json",
+ "serde_qs",
  "structopt",
  "thiserror",
  "url 2.2.0",
@@ -6953,7 +6949,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=94f4cc5844477374f97dacfa22a53a15f3a59ada#94f4cc5844477374f97dacfa22a53a15f3a59ada"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=a5bfc61da8f3a5cdcafcacf3d48a9f706571a9d7#a5bfc61da8f3a5cdcafcacf3d48a9f706571a9d7"
 dependencies = [
  "bigdecimal 0.1.2",
  "chrono",
@@ -7039,7 +7035,7 @@ dependencies = [
  "derivative",
  "dotenv",
  "env_logger 0.7.1",
- "flexi_logger 0.15.12",
+ "flexi_logger",
  "futures 0.3.8",
  "graphene-sgx",
  "hex",
@@ -7083,7 +7079,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "flexi_logger 0.16.2",
+ "flexi_logger",
  "log",
 ]
 

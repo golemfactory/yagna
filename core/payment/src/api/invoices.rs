@@ -19,7 +19,6 @@ use ya_service_api_web::middleware::Identity;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
-use crate::api::*;
 use crate::dao::*;
 use crate::error::{DbError, Error};
 use crate::utils::provider::get_agreement_id;
@@ -46,7 +45,7 @@ pub fn register_endpoints(scope: Scope) -> Scope {
 
 async fn get_invoices(
     db: Data<DbExecutor>,
-    query: Query<FilterParams>,
+    query: Query<params::FilterParams>,
     id: Identity,
 ) -> HttpResponse {
     let node_id = id.identity;
@@ -62,7 +61,11 @@ async fn get_invoices(
     }
 }
 
-async fn get_invoice(db: Data<DbExecutor>, path: Path<InvoiceId>, id: Identity) -> HttpResponse {
+async fn get_invoice(
+    db: Data<DbExecutor>,
+    path: Path<params::InvoiceId>,
+    id: Identity,
+) -> HttpResponse {
     let invoice_id = path.invoice_id.clone();
     let node_id = id.identity;
     let dao: InvoiceDao = db.as_dao();
@@ -73,17 +76,17 @@ async fn get_invoice(db: Data<DbExecutor>, path: Path<InvoiceId>, id: Identity) 
     }
 }
 
-async fn get_invoice_payments(db: Data<DbExecutor>, path: Path<InvoiceId>) -> HttpResponse {
+async fn get_invoice_payments(db: Data<DbExecutor>, path: Path<params::InvoiceId>) -> HttpResponse {
     response::not_implemented() // TODO
 }
 
 async fn get_invoice_events(
     db: Data<DbExecutor>,
-    query: Query<EventParams>,
+    query: Query<params::EventParams>,
     id: Identity,
 ) -> HttpResponse {
     let node_id = id.identity;
-    let timeout_secs = query.poll_timeout;
+    let timeout_secs = query.poll_timeout.unwrap_or(params::DEFAULT_EVENT_TIMEOUT);
     let after_timestamp = query.after_timestamp.map(|d| d.naive_utc());
     let max_events = query.max_events;
     let app_session_id = &query.app_session_id;
@@ -170,8 +173,8 @@ async fn issue_invoice(db: Data<DbExecutor>, body: Json<NewInvoice>, id: Identit
 
 async fn send_invoice(
     db: Data<DbExecutor>,
-    path: Path<InvoiceId>,
-    query: Query<Timeout>,
+    path: Path<params::InvoiceId>,
+    query: Query<params::Timeout>,
     id: Identity,
 ) -> HttpResponse {
     let invoice_id = path.invoice_id.clone();
@@ -186,8 +189,8 @@ async fn send_invoice(
     if invoice.status != DocumentStatus::Issued {
         return response::ok(Null); // Invoice has been already sent
     }
-
-    with_timeout(query.timeout, async move {
+    let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
+    with_timeout(timeout, async move {
         match async move {
             ya_net::from(node_id)
                 .to(invoice.recipient_id)
@@ -213,8 +216,8 @@ async fn send_invoice(
 
 async fn cancel_invoice(
     db: Data<DbExecutor>,
-    path: Path<InvoiceId>,
-    query: Query<Timeout>,
+    path: Path<params::InvoiceId>,
+    query: Query<params::Timeout>,
     id: Identity,
 ) -> HttpResponse {
     let invoice_id = path.invoice_id.clone();
@@ -236,7 +239,8 @@ async fn cancel_invoice(
         }
     }
 
-    with_timeout(query.timeout, async move {
+    let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
+    with_timeout(timeout, async move {
         match async move {
             ya_net::from(node_id)
                 .to(invoice.recipient_id)
@@ -267,8 +271,8 @@ async fn cancel_invoice(
 
 async fn accept_invoice(
     db: Data<DbExecutor>,
-    path: Path<InvoiceId>,
-    query: Query<Timeout>,
+    path: Path<params::InvoiceId>,
+    query: Query<params::Timeout>,
     body: Json<Acceptance>,
     id: Identity,
 ) -> HttpResponse {
@@ -332,7 +336,8 @@ async fn accept_invoice(
         return response::bad_request(&msg);
     }
 
-    with_timeout(query.timeout, async move {
+    let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
+    with_timeout(timeout, async move {
         let issuer_id = invoice.issuer_id;
         let accept_msg = AcceptInvoice::new(invoice_id.clone(), acceptance, issuer_id);
         let schedule_msg = SchedulePayment::from_invoice(invoice, allocation_id, amount_to_pay);
@@ -362,8 +367,8 @@ async fn accept_invoice(
 
 async fn reject_invoice(
     db: Data<DbExecutor>,
-    path: Path<InvoiceId>,
-    query: Query<Timeout>,
+    path: Path<params::InvoiceId>,
+    query: Query<params::Timeout>,
     body: Json<Rejection>,
 ) -> HttpResponse {
     response::not_implemented() // TODO
