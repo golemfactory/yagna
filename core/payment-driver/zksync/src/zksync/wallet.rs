@@ -164,13 +164,20 @@ pub async fn make_transfer(
     Ok(tx_hash)
 }
 
-pub async fn check_tx(tx_hash: &str, network: Network) -> Option<bool> {
+pub async fn check_tx(tx_hash: &str, network: Network) -> Option<Result<(), String>> {
     let provider = get_provider(network);
     let tx_hash = format!("sync-tx:{}", tx_hash);
     let tx_hash = TxHash::from_str(&tx_hash).unwrap();
     let tx_info = provider.tx_info(tx_hash).await.unwrap();
     log::trace!("tx_info: {:?}", tx_info);
-    tx_info.success
+    match tx_info.success {
+        None => None,
+        Some(true) => Some(Ok(())),
+        Some(false) => match tx_info.fail_reason {
+            Some(err) => Some(Err(err)),
+            None => Some(Err("Unknown failure".to_string())),
+        },
+    }
 }
 
 #[derive(serde::Deserialize)]
