@@ -3,13 +3,11 @@ extern crate log;
 
 use bigdecimal::BigDecimal;
 use hex::ToHex;
+use structopt::StructOpt;
 use ya_zksync_driver::zksync::{faucet, utils};
 use zksync::zksync_types::{TxFeeTypes, H256};
 use zksync::{types::BlockStatus, Network, Provider, Wallet, WalletCredentials};
 use zksync_eth_signer::{EthereumSigner, PrivateKeySigner};
-
-use std::cmp::Ordering;
-use structopt::StructOpt;
 
 const TOKEN: &str = "GNT";
 const PRIVATE_KEY: &str = "312776bb901c426cb62238db9015c100948534dea42f9fa1591eff4beb35cc13";
@@ -47,7 +45,7 @@ async fn main() -> anyhow::Result<()> {
     let addr_hex = format!("0x{}", address.encode_hex::<String>());
     info!("Private key: {}\nAccount address {}", pk_hex, addr_hex);
 
-    info!("Depositing funds");
+    info!("Funding an account");
     // let hex_addr = key.address().to_string();
     faucet::request_ngnt(&addr_hex).await?;
 
@@ -55,12 +53,6 @@ async fn main() -> anyhow::Result<()> {
     let provider = Provider::new(Network::Rinkeby);
     let cred = WalletCredentials::from_eth_signer(address, signer, Network::Rinkeby).await?;
     let wallet = Wallet::new(provider, cred).await?;
-
-    let balance = wallet.get_balance(BlockStatus::Committed, TOKEN).await?;
-    info!(
-        "Deposit successful {} NGNT available",
-        utils::big_uint_to_big_dec(balance.clone())
-    );
 
     if wallet.is_signing_key_set().await? == false {
         info!("Unlocking account");
@@ -72,6 +64,12 @@ async fn main() -> anyhow::Result<()> {
         debug!("unlock={:?}", unlock);
         unlock.wait_for_commit().await?;
     }
+
+    let balance = wallet.get_balance(BlockStatus::Committed, TOKEN).await?;
+    info!(
+        "Deposit successful {} NGNT available",
+        utils::big_uint_to_big_dec(balance.clone())
+    );
 
     info!("Obtaining withdrawal fee");
     let amount = utils::big_dec_to_big_uint(BigDecimal::from(args.amount))?;
@@ -85,21 +83,10 @@ async fn main() -> anyhow::Result<()> {
         utils::big_uint_to_big_dec(withdraw_fee.clone())
     );
 
-    let total = &amount + &withdraw_fee;
-    let withdraw_amount = if balance.cmp(&total) == Ordering::Less {
-        warn!("Insufficient funds - withdrawing all remaining balance");
-        // I failed to clean the account even if there was 0.1 GNT remaining (Rejection reason:	Not enough balance)
-        // see: https://rinkeby.zkscan.io/explorer/accounts/0x92d088f43f688808313c31e5c92ee729e4e0b6bf
-        let rounding_error_margin = utils::big_dec_to_big_uint(BigDecimal::from(1.0))?;
-        balance - &withdraw_fee - rounding_error_margin
-    } else {
-        amount
-    };
-
+    let withdraw_amount = std::cmp::min(balance - withdraw_fee, amount);
     info!(
-        "Withdrawal of {:.5} NGNT started, fee amount {:.5}",
-        utils::big_uint_to_big_dec(withdraw_amount.clone()),
-        utils::big_uint_to_big_dec(withdraw_fee.clone())
+        "Withdrawal of {:.5} NGNT started",
+        utils::big_uint_to_big_dec(withdraw_amount.clone())
     );
 
     // let withdraw_amount = withdraw_amount.to_u64().unwrap();
