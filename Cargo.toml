@@ -100,7 +100,6 @@ assets = [
 [workspace]
 members = [
     "agent/provider",
-    "agent/requestor",
     "core/activity",
     "core/gftp",
     "core/identity",
