@@ -159,12 +159,10 @@ pub enum ProposalError {
 }
 
 #[derive(Error, Debug)]
+#[error("Failed regenerate proposal: {0}.")]
 pub enum RegenerateProposalError {
-    #[error(transparent)]
     Offer(#[from] QueryOfferError),
-    #[error(transparent)]
     Demand(#[from] DemandError),
-    #[error(transparent)]
     Save(#[from] SaveProposalError),
 }
 
