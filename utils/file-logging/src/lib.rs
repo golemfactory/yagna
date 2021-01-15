@@ -6,7 +6,7 @@ use flexi_logger::{
 };
 use std::path::Path;
 
-pub use flexi_logger::ReconfigurationHandle;
+pub use flexi_logger::LoggerHandle;
 
 fn log_format(
     w: &mut dyn std::io::Write,
@@ -56,7 +56,7 @@ pub fn start_logger(
     default_log_spec: &str,
     log_dir: Option<&Path>,
     module_filters: &[(&str, log::LevelFilter)],
-) -> Result<ReconfigurationHandle> {
+) -> Result<LoggerHandle> {
     let log_spec = LogSpecification::env_or_parse(default_log_spec)?;
     let mut log_spec_builder = LogSpecBuilder::from_module_filters(log_spec.module_filters());
     for filter in module_filters {
