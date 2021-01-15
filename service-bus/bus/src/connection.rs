@@ -401,7 +401,8 @@ where
 {
     type Context = Context<Self>;
 
-    fn started(&mut self, _ctx: &mut Self::Context) {
+    fn started(&mut self, ctx: &mut Self::Context) {
+        ctx.set_mailbox_capacity(256);
         log::info!("started connection to gsb");
     }
 
