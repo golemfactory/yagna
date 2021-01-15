@@ -15,7 +15,6 @@ use ya_service_api_web::middleware::Identity;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
-use crate::api::*;
 use crate::dao::*;
 use crate::error::{DbError, Error};
 use crate::utils::response;
@@ -80,7 +79,7 @@ async fn create_allocation(
 
 async fn get_allocations(
     db: Data<DbExecutor>,
-    query: Query<FilterParams>,
+    query: Query<params::FilterParams>,
     id: Identity,
 ) -> HttpResponse {
     let node_id = id.identity;
@@ -95,7 +94,7 @@ async fn get_allocations(
 
 async fn get_allocation(
     db: Data<DbExecutor>,
-    path: Path<AllocationId>,
+    path: Path<params::AllocationId>,
     id: Identity,
 ) -> HttpResponse {
     let allocation_id = path.allocation_id.clone();
@@ -110,7 +109,7 @@ async fn get_allocation(
 
 async fn amend_allocation(
     db: Data<DbExecutor>,
-    path: Path<AllocationId>,
+    path: Path<params::AllocationId>,
     body: Json<Allocation>,
 ) -> HttpResponse {
     response::not_implemented() // TODO
@@ -118,7 +117,7 @@ async fn amend_allocation(
 
 async fn release_allocation(
     db: Data<DbExecutor>,
-    path: Path<AllocationId>,
+    path: Path<params::AllocationId>,
     id: Identity,
 ) -> HttpResponse {
     let allocation_id = path.allocation_id.clone();
@@ -133,7 +132,7 @@ async fn release_allocation(
 
 async fn get_demand_decorations(
     db: Data<DbExecutor>,
-    path: Query<AllocationIds>,
+    path: Query<params::AllocationIds>,
     id: Identity,
 ) -> HttpResponse {
     let allocation_ids = path.allocation_ids.clone();
