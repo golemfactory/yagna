@@ -12,6 +12,11 @@ the Provider Node in the Yagna Network. It includes rules and logic for:
 * ExeUnit instantiation and control
 * Invoice/Debit Note generation
 
+# Handbook
+
+Please refer https://handbook.golem.network/ for instruction how to use Provider.
+
+
 ### Offer formulation
 
 It is rather straightforward and minimal: 
@@ -409,62 +414,6 @@ Then start the Provider Agent:
 cargo run -p ya-provider run
 ```
 
-## Mock requestor
-
-Run `ya-requestor` app to mock negotiations, activity and payments.
-There is also `gwasm-runner` being prepared as a fully fledged Requestor Agent.
-See [PR#47](https://github.com/golemfactory/gwasm-runner/pull/47)
-
-#### 0. Configure Requestor
-
-You need to run a separate yagna service with a different identity,
-if you want to run requestor on the same machine. The best way is to create
-a separate directory (say `ya-req` in the main yagna
-source directory) with a new `.env` copied from `.env-template`. 
-In this `.env` file you must change port numbers not to interfere with the provider
-and `NODE_NAME` of your choice. Use below script
-
-```bash
-mkdir ya-req && cd ya-req && cp ../.env-template .env
-sed \
-  -e "s|#GSB_URL=tcp://127.0.0.1:7464|GSB_URL=tcp://127.0.0.1:7474|" \
-  -e "s|#YAGNA_API_URL=http://127.0.0.1:7465|YAGNA_API_URL=http://127.0.0.1:7475|" \
-  -i.bckp .env
-```
-
-#### 1. Run yagna service
-Start requestor-side yagna service
-```
-cargo run service run
-```
-
-#### 2. Create app-key
-1. In a new console but in the same directory (`<repo>/ya-req`) run:
-```bash
-APP_KEY=`cargo run app-key create 'requestor-agent'`
-sed -e "s/__GENERATED_APP_KEY__/$APP_KEY/" -i.bckp .env
-```
-
-#### 3. Get some ETH and NGNT
-1. We need to acquire funds from faucet on testnet (rinkeby).
-This can last a little bit long. Retry if not succeed at first.
-```bash
-cargo run payment init -r
-```
-2. Check if you got credit on your account:
-```bash
-cargo run payment status
-```
-Or go to the Rinkeby's etherscan: https://rinkeby.etherscan.io/address/0xdeadbeef00000000000000000000000000000000
-(Replace the address with the generated node id for the requestor agent -- a result of `cargo run id show`)
-
-#### 4. Run Requestor Agent
-You need `commands.json` file which contains commands to be executed on the provider:
-
-```
-cargo run -p ya-requestor -- --exe-script ../exe-unit/examples/commands.json --one-agreement
-```
-
 ## Central setup
 We have centrally deployed (@ ip: `3.249.139.167`) three independent standalone modules/apps:
  - [net Mk1](https://github.com/golemfactory/yagna/blob/master/docs/net-api/net-mk1-hub.md) @ 3.249.139.167:7464 \
@@ -474,8 +423,3 @@ We have centrally deployed (@ ip: `3.249.139.167`) three independent standalone 
    (can be run locally with `cargo run --release -p ya-exe-unit --example http-get-put -- --root-dir <DIR-WITH-WASM-BINARY-IMAGES>`)
  - ya-zksync-faucet @ 3.249.139.167:5778
     eg. `curl http://3.249.139.167:5778/zk/donatex/0xf63579d46eedee31d9db380a38addd58fdf414fd`
-
-### Yagna binary image
-   TODO: describe how to build and pack yagna wasm binary image
-
-   Example can be found in gwasm-runner: [here](https://github.com/golemfactory/gwasm-runner/pull/47/files#diff-bb439e3905abce87b1ff2f3d832f6f0cR83) and [here](https://github.com/golemfactory/gwasm-runner/pull/47/files#diff-bb439e3905abce87b1ff2f3d832f6f0cR130).
