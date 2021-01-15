@@ -164,8 +164,8 @@ pub enum RegenerateProposalError {
     Offer(#[from] QueryOfferError),
     #[error(transparent)]
     Demand(#[from] DemandError),
-    #[error("Failed to add event to database. Error: {0}.")]
-    Db(#[from] SaveProposalError),
+    #[error(transparent)]
+    Save(#[from] SaveProposalError),
 }
 
 impl AgreementError {
