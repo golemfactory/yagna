@@ -265,14 +265,14 @@ mod test {
             checker
                 .send(TrackDeadline {
                     agreement_id: "agrrrrr-1".to_string(),
-                    deadline: now + Duration::milliseconds(200 * i),
+                    deadline: now + Duration::milliseconds(500 * i),
                     id: i.to_string(),
                 })
                 .await
                 .unwrap();
         }
 
-        let interval = (now + Duration::milliseconds(500)) - Utc::now();
+        let interval = (now + Duration::milliseconds(1200)) - Utc::now();
         tokio::time::delay_for(interval.to_std().unwrap()).await;
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
@@ -280,7 +280,7 @@ mod test {
         assert_eq!(deadlined[0].id, 1.to_string());
         assert_eq!(deadlined[1].id, 2.to_string());
 
-        let interval = (now + Duration::milliseconds(1100)) - Utc::now();
+        let interval = (now + Duration::milliseconds(2600)) - Utc::now();
         tokio::time::delay_for(interval.to_std().unwrap()).await;
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
@@ -294,13 +294,13 @@ mod test {
         checker
             .send(TrackDeadline {
                 agreement_id: "agrrrrr-1".to_string(),
-                deadline: now + Duration::milliseconds(1300),
+                deadline: now + Duration::milliseconds(3000),
                 id: 6.to_string(),
             })
             .await
             .unwrap();
 
-        let interval = (now + Duration::milliseconds(1400)) - Utc::now();
+        let interval = (now + Duration::milliseconds(3200)) - Utc::now();
         tokio::time::delay_for(interval.to_std().unwrap()).await;
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
@@ -358,7 +358,7 @@ mod test {
             checker
                 .send(TrackDeadline {
                     agreement_id: "agrrrrr-1".to_string(),
-                    deadline: now + Duration::milliseconds(400) + Duration::milliseconds(200 * i),
+                    deadline: now + Duration::milliseconds(1000) + Duration::milliseconds(500 * i),
                     id: i.to_string(),
                 })
                 .await
@@ -372,13 +372,13 @@ mod test {
         checker
             .send(TrackDeadline {
                 agreement_id: "agrrrrr-1".to_string(),
-                deadline: now + Duration::milliseconds(200),
+                deadline: now + Duration::milliseconds(500),
                 id: 6.to_string(),
             })
             .await
             .unwrap();
 
-        let interval = (now + Duration::milliseconds(250)) - Utc::now();
+        let interval = (now + Duration::milliseconds(900)) - Utc::now();
         tokio::time::delay_for(interval.to_std().unwrap()).await;
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
@@ -389,13 +389,13 @@ mod test {
         checker
             .send(TrackDeadline {
                 agreement_id: "agrrrrr-1".to_string(),
-                deadline: now + Duration::milliseconds(900),
+                deadline: now + Duration::milliseconds(2300),
                 id: 7.to_string(),
             })
             .await
             .unwrap();
 
-        let interval = (now + Duration::milliseconds(1100)) - Utc::now();
+        let interval = (now + Duration::milliseconds(2700)) - Utc::now();
         tokio::time::delay_for(interval.to_std().unwrap()).await;
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
@@ -423,7 +423,7 @@ mod test {
                 .unwrap();
         }
 
-        let interval = (now + Duration::milliseconds(250)) - Utc::now();
+        let interval = (now + Duration::milliseconds(500)) - Utc::now();
         tokio::time::delay_for(interval.to_std().unwrap()).await;
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
@@ -445,7 +445,7 @@ mod test {
             checker
                 .send(TrackDeadline {
                     agreement_id: "agrrrrr-1".to_string(),
-                    deadline: now + Duration::milliseconds(200 * i),
+                    deadline: now + Duration::milliseconds(500 * i),
                     id: i.to_string(),
                 })
                 .await
@@ -464,7 +464,7 @@ mod test {
             .await
             .unwrap();
 
-        let interval = (now + Duration::milliseconds(1700)) - Utc::now();
+        let interval = (now + Duration::milliseconds(3900)) - Utc::now();
         tokio::time::delay_for(interval.to_std().unwrap()).await;
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
