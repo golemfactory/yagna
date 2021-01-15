@@ -191,3 +191,8 @@ jobs:
         with:
           name: goth-logs
           path: /tmp/goth-tests
+
+      # Only relevant for self-hosted runners
+      - name: Remove test logs
+        if: always()
+        run: rm -rf /tmp/goth-tests
