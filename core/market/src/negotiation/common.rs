@@ -12,7 +12,6 @@ use ya_service_api_web::middleware::Identity;
 
 use crate::config::Config;
 use crate::db::model::check_transition;
-use crate::db::DbResult;
 use crate::db::{
     dao::{
         AgreementDao, AgreementEventsDao, NegotiationEventsDao, ProposalDao, SaveProposalError,
@@ -23,11 +22,7 @@ use crate::db::{
         Owner, Proposal, ProposalId, ProposalState, SubscriptionId,
     },
 };
-use crate::matcher::{
-    error::{DemandError, QueryOfferError},
-    store::SubscriptionStore,
-    RawProposal,
-};
+use crate::matcher::{store::SubscriptionStore, RawProposal};
 use crate::negotiation::error::RegenerateProposalError;
 use crate::negotiation::error::{NegotiationError, ProposalValidationError};
 use crate::negotiation::{
@@ -392,7 +387,7 @@ impl CommonBroker {
         // provider for the second time, so we must generate new Proposal for him.
         // Note: Regeneration failure isn't propagated to Requestor, because termination
         // succeeded at this point.
-        if let OwnerType::Requestor = agreement.id.owner() {
+        if let Owner::Requestor = agreement.id.owner() {
             self.regenerate_proposal(&agreement)
                 .await
                 .map_err(|e| {
@@ -476,7 +471,7 @@ impl CommonBroker {
         // provider for the second time, so we must generate new Proposal for him.
         // Note: Regeneration failure isn't propagated to Provider, because termination
         // succeeded at this point.
-        if let OwnerType::Requestor = owner_type {
+        if let Owner::Requestor = agreement.id.owner() {
             self.regenerate_proposal(&agreement)
                 .await
                 .map_err(|e| {
@@ -676,7 +671,7 @@ impl CommonBroker {
         self.agreement_notifier.notify(&agreement.id).await;
     }
 
-    pub async fn generate_proposal(&self, proposal: RawProposal) -> DbResult<()> {
+    pub async fn generate_proposal(&self, proposal: RawProposal) -> Result<(), SaveProposalError> {
         let db = self.db.clone();
         let notifier = self.negotiation_notifier.clone();
 
@@ -697,7 +692,7 @@ impl CommonBroker {
         // Create Proposal Event and add it to queue (database).
         let subscription_id = proposal.negotiation.subscription_id.clone();
         db.as_dao::<NegotiationEventsDao>()
-            .add_proposal_event(proposal, OwnerType::Requestor)
+            .add_proposal_event(&proposal, Owner::Requestor)
             .await?;
 
         // Send channel message to wake all query_events waiting for proposals.

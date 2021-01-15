@@ -630,7 +630,7 @@ async fn test_respawn_proposal_after_terminate_by_provider() -> anyhow::Result<(
     prov_market
         .terminate_agreement(
             prov_id,
-            agreement_id.clone().translate(OwnerType::Provider),
+            agreement_id.clone().translate(Owner::Provider),
             Some(gen_reason("Success")),
         )
         .await
