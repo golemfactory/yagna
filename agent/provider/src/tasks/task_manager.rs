@@ -242,6 +242,10 @@ impl Handler<InitializeTaskManager> for TaskManager {
             let msg = Subscribe::<CloseAgreement>(actx.myself.clone().recipient());
             actx.market.send(msg).await?;
 
+            // Listen to BreakAgreement signals emitted by Payments
+            let msg = Subscribe::<BreakAgreement>(actx.myself.clone().recipient());
+            actx.payments.send(msg).await?;
+
             // Get info about Activity creation and destruction.
             let msg = Subscribe::<ActivityCreated>(actx.myself.clone().recipient());
             actx.runner.send(msg).await?;

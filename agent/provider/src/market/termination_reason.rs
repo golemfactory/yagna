@@ -21,6 +21,9 @@ pub enum BreakReason {
     #[display(fmt = "No activity created within {:?} from Agreement Approval", _0)]
     #[strum(message = "NoActivity")]
     NoActivity(Duration),
+    #[display(fmt = "Requestor isn't accepting DebitNotes in time ({})", _0)]
+    #[strum(message = "DebitNotesDeadline")]
+    DebitNotesDeadline(chrono::Duration),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

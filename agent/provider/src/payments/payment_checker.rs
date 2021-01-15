@@ -33,6 +33,12 @@ pub struct StopTracking {
     pub id: String,
 }
 
+#[derive(Message, Clone)]
+#[rtype(result = "()")]
+pub struct StopTrackingAgreement {
+    pub agreement_id: String,
+}
+
 #[derive(Clone)]
 struct DeadlineDesc {
     deadline: DateTime<Utc>,
@@ -198,6 +204,16 @@ impl Handler<StopTracking> for DeadlineChecker {
 
         if any {
             self.update_deadline(ctx).unwrap();
+        }
+    }
+}
+
+impl Handler<StopTrackingAgreement> for DeadlineChecker {
+    type Result = ();
+
+    fn handle(&mut self, msg: StopTrackingAgreement, ctx: &mut Context<Self>) -> Self::Result {
+        if let Some(_) = self.deadlines.remove(&msg.agreement_id) {
+            self.update_deadline(ctx).unwrap()
         }
     }
 }

@@ -1,5 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use bigdecimal::{BigDecimal, Signed, ToPrimitive};
+use humantime::format_duration;
 use num_bigint::BigInt;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -98,6 +99,14 @@ impl AgreementPayment {
         let update_interval = payment_description.get_update_interval()?;
         let debit_deadline = payment_description.get_debit_note_deadline()?;
         let payment_model = PaymentModelFactory::create(&payment_description)?;
+
+        if let Some(deadline) = &debit_deadline {
+            log::info!(
+                "Requestor is expected to accept DebitNotes for Agreement [{}] in {}",
+                &agreement.id,
+                format_duration(deadline.clone().to_std().unwrap())
+            );
+        }
 
         // Initially we have 0 activities.
         let (sender, receiver) = watch::channel(0);

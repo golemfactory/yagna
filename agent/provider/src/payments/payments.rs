@@ -1,7 +1,7 @@
 use actix::prelude::*;
 use anyhow::{anyhow, Error, Result};
 use bigdecimal::{BigDecimal, Zero};
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use humantime;
 use log;
 use serde_json::json;
@@ -15,15 +15,17 @@ use super::model::PaymentModel;
 use super::payment_checker::{DeadlineChecker, DeadlineElapsed, StopTracking, TrackDeadline};
 use crate::execution::{ActivityCreated, ActivityDestroyed};
 use crate::market::provider_market::AgreementApproved;
-use crate::tasks::{AgreementBroken, AgreementClosed};
+use crate::market::termination_reason::BreakReason;
+use crate::tasks::{AgreementBroken, AgreementClosed, BreakAgreement};
 
+use crate::payments::payment_checker::StopTrackingAgreement;
 use ya_client::activity::ActivityProviderApi;
 use ya_client::model::payment::{DebitNote, Invoice, NewDebitNote, NewInvoice};
 use ya_client::payment::PaymentApi;
 use ya_client_model::payment::{DebitNoteEventType, InvoiceEventType};
 use ya_utils_actix::actix_handler::ResultTypeGetter;
-use ya_utils_actix::actix_signal::Subscribe;
-use ya_utils_actix::forward_actix_handler;
+use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
+use ya_utils_actix::{actix_signal_handler, forward_actix_handler};
 
 // =========================================== //
 // Internal messages
@@ -97,7 +99,7 @@ struct CostsSummary {
 pub struct DebitNoteInfo {
     pub agreement_id: String,
     pub activity_id: String,
-    pub payment_deadline: Option<DateTime<Utc>>,
+    pub payment_deadline: Option<chrono::Duration>,
 }
 
 /// Configuration for Payments actor.
@@ -133,7 +135,11 @@ pub struct Payments {
 
     invoices_to_pay: Vec<Invoice>,
     earnings: BigDecimal,
+
+    break_agreement_signal: SignalSlot<BreakAgreement>,
 }
+
+actix_signal_handler!(Payments, BreakAgreement, break_agreement_signal);
 
 impl Payments {
     pub fn new(
@@ -153,6 +159,7 @@ impl Payments {
             context: Arc::new(provider_ctx),
             invoices_to_pay: vec![],
             earnings: BigDecimal::zero(),
+            break_agreement_signal: SignalSlot::<BreakAgreement>::new(),
         }
     }
 
@@ -193,7 +200,9 @@ async fn send_debit_note(
         activity_id: debit_note_info.activity_id.clone(),
         total_amount_due: cost_info.cost,
         usage_counter_vector: Some(json!(cost_info.usage)),
-        payment_due_date: debit_note_info.payment_deadline,
+        payment_due_date: debit_note_info
+            .payment_deadline
+            .map(|deadline| Utc::now() + deadline),
     };
 
     log::debug!(
@@ -236,7 +245,7 @@ async fn send_debit_note(
         &debit_note_info.activity_id
     );
 
-    if let Some(deadline) = debit_note_info.payment_deadline {
+    if let Some(deadline) = debit_note.payment_due_date {
         provider_context
             .debit_checker
             .send(TrackDeadline {
@@ -333,6 +342,7 @@ async fn check_debit_notes_events(
                         id: event.debit_note_id.clone(),
                     })
                     .await
+                    .map(|_| log::debug!("DebitNote [{}] accepted.", event.debit_note_id))
                     .map_err(|_| {
                         log::warn!(
                             "Failed to notify about accepted DebitNote {}",
@@ -430,9 +440,7 @@ impl Handler<ActivityDestroyed> for Payments {
         let debit_note_info = DebitNoteInfo {
             activity_id: msg.activity_id.clone(),
             agreement_id: msg.agreement_id.clone(),
-            payment_deadline: agreement
-                .payment_deadline
-                .map(|deadline| Utc::now() + deadline),
+            payment_deadline: agreement.payment_deadline,
         };
 
         let future = async move {
@@ -501,7 +509,10 @@ impl Handler<UpdateCost> for Payments {
             if let ActivityPayment::Running { .. } = activity {
                 let payment_model = agreement.payment_model.clone();
                 let context = self.context.clone();
-                let invoice_info = msg.invoice_info.clone();
+                let invoice_info = DebitNoteInfo {
+                    payment_deadline: agreement.payment_deadline.clone(),
+                    ..msg.invoice_info.clone()
+                };
                 let update_interval = agreement.update_interval;
 
                 let debit_note_future = async move {
@@ -575,8 +586,16 @@ impl Handler<AgreementClosed> for Payments {
             let activities_watch = agreement.activities_watch.clone();
             let agreement_id = msg.agreement_id.clone();
             let myself = ctx.address().clone();
+            let ctx = self.context.clone();
 
             let future = async move {
+                ctx.debit_checker
+                    .send(StopTrackingAgreement {
+                        agreement_id: agreement_id.clone(),
+                    })
+                    .await
+                    .ok();
+
                 activities_watch.wait_for_finish().await;
 
                 let costs_summary = myself.send(GetAgreementSummary { agreement_id }).await??;
@@ -752,12 +771,50 @@ impl Handler<DeadlineElapsed> for Payments {
     type Result = ();
 
     fn handle(&mut self, msg: DeadlineElapsed, _ctx: &mut Context<Self>) -> Self::Result {
+        let deadline = match self.agreements.get(&msg.agreement_id) {
+            Some(agreement) => match agreement.payment_deadline {
+                Some(deadline) => deadline,
+                None => {
+                    log::error!(
+                        "DeadlineElapsed for Agreement [{}], that's deadline shouldn't be tracked.",
+                        msg.agreement_id
+                    );
+                    return ();
+                }
+            },
+            None => {
+                log::error!(
+                    "DeadlineElapsed for not existing Agreement [{}].",
+                    msg.agreement_id
+                );
+                return ();
+            }
+        };
+
         log::warn!(
             "Deadline {} elapsed for accepting DebitNote [{}] for Agreement [{}].",
             msg.deadline,
             msg.id,
             msg.agreement_id
         );
+
+        self.context.debit_checker.do_send(StopTrackingAgreement {
+            agreement_id: msg.agreement_id.clone(),
+        });
+
+        self.break_agreement_signal
+            .send_signal(BreakAgreement {
+                agreement_id: msg.agreement_id.clone(),
+                reason: BreakReason::DebitNotesDeadline(deadline),
+            })
+            .map_err(|e| {
+                log::error!(
+                    "Failed to send BreakAgreement when deadline elapsed for [{}]. {}",
+                    msg.agreement_id,
+                    e
+                )
+            })
+            .ok();
     }
 }
 
