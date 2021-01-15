@@ -1,6 +1,5 @@
 use anyhow::{anyhow, bail, Result};
 use bigdecimal::{BigDecimal, Signed, ToPrimitive};
-use chrono::Duration;
 use num_bigint::BigInt;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -97,7 +96,8 @@ impl AgreementPayment {
     pub fn new(agreement: &AgreementView) -> Result<AgreementPayment> {
         let payment_description = PaymentDescription::new(agreement)?;
         let update_interval = payment_description.get_update_interval()?;
-        let payment_model = PaymentModelFactory::create(payment_description)?;
+        let debit_deadline = payment_description.get_debit_note_deadline()?;
+        let payment_model = PaymentModelFactory::create(&payment_description)?;
 
         // Initially we have 0 activities.
         let (sender, receiver) = watch::channel(0);
@@ -107,7 +107,7 @@ impl AgreementPayment {
             activities: HashMap::new(),
             payment_model,
             update_interval,
-            payment_deadline: Some(Duration::seconds(30)),
+            payment_deadline: debit_deadline,
             watch_sender: sender,
             activities_watch: ActivitiesWaiter {
                 watch_receiver: receiver,

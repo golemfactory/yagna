@@ -43,7 +43,7 @@ impl PaymentModel for LinearPricing {
 }
 
 impl LinearPricing {
-    pub fn new(commercials: PaymentDescription) -> Result<LinearPricing> {
+    pub fn new<'a>(commercials: &'a PaymentDescription<'a>) -> Result<LinearPricing> {
         let usage: Vec<f64> = commercials.get_usage_coefficients()?;
 
         log::info!(
