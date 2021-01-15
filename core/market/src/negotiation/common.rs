@@ -12,7 +12,6 @@ use ya_service_api_web::middleware::Identity;
 
 use crate::config::Config;
 use crate::db::model::check_transition;
-use crate::db::DbResult;
 use crate::db::{
     dao::{
         AgreementDao, AgreementEventsDao, NegotiationEventsDao, ProposalDao, SaveProposalError,
@@ -23,11 +22,7 @@ use crate::db::{
         Owner, Proposal, ProposalId, ProposalState, SubscriptionId,
     },
 };
-use crate::matcher::{
-    error::{DemandError, QueryOfferError},
-    store::SubscriptionStore,
-    RawProposal,
-};
+use crate::matcher::{store::SubscriptionStore, RawProposal};
 use crate::negotiation::error::RegenerateProposalError;
 use crate::negotiation::error::{NegotiationError, ProposalValidationError};
 use crate::negotiation::{
@@ -349,25 +344,23 @@ impl CommonBroker {
     pub async fn terminate_agreement(
         &self,
         id: Identity,
-        agreement_id: AgreementId,
+        client_agreement_id: String,
         reason: Option<Reason>,
     ) -> Result<(), AgreementError> {
         let dao = self.db.as_dao::<AgreementDao>();
         let agreement = match dao
             .select_by_node(
-                agreement_id.clone(),
+                &client_agreement_id,
                 id.identity.clone(),
                 Utc::now().naive_utc(),
             )
             .await
-            .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
+            .map_err(|e| AgreementError::Get(client_agreement_id.clone(), e))?
         {
-            None => return Err(AgreementError::NotFound(agreement_id)),
+            None => return Err(AgreementError::NotFound(client_agreement_id)),
             Some(agreement) => agreement,
         };
 
-        // From now on agreement_id is invalid. Use only agreement.id
-        // (which has valid owner)
         validate_transition(&agreement, AgreementState::Terminated)?;
 
         protocol_common::propagate_terminate_agreement(&agreement, reason.clone()).await?;
@@ -392,7 +385,7 @@ impl CommonBroker {
         // provider for the second time, so we must generate new Proposal for him.
         // Note: Regeneration failure isn't propagated to Requestor, because termination
         // succeeded at this point.
-        if let OwnerType::Requestor = agreement.id.owner() {
+        if let Owner::Requestor = agreement.id.owner() {
             self.regenerate_proposal(&agreement)
                 .await
                 .map_err(|e| {
@@ -476,7 +469,7 @@ impl CommonBroker {
         // provider for the second time, so we must generate new Proposal for him.
         // Note: Regeneration failure isn't propagated to Provider, because termination
         // succeeded at this point.
-        if let OwnerType::Requestor = owner_type {
+        if let Owner::Requestor = agreement.id.owner() {
             self.regenerate_proposal(&agreement)
                 .await
                 .map_err(|e| {
@@ -676,7 +669,7 @@ impl CommonBroker {
         self.agreement_notifier.notify(&agreement.id).await;
     }
 
-    pub async fn generate_proposal(&self, proposal: RawProposal) -> DbResult<()> {
+    pub async fn generate_proposal(&self, proposal: RawProposal) -> Result<(), SaveProposalError> {
         let db = self.db.clone();
         let notifier = self.negotiation_notifier.clone();
 
@@ -697,7 +690,7 @@ impl CommonBroker {
         // Create Proposal Event and add it to queue (database).
         let subscription_id = proposal.negotiation.subscription_id.clone();
         db.as_dao::<NegotiationEventsDao>()
-            .add_proposal_event(proposal, OwnerType::Requestor)
+            .add_proposal_event(&proposal, Owner::Requestor)
             .await?;
 
         // Send channel message to wake all query_events waiting for proposals.

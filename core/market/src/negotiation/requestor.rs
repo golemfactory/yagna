@@ -11,9 +11,9 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::db::{
-    dao::{AgreementDao, AgreementDaoError, NegotiationEventsDao, SaveAgreementError},
+    dao::{AgreementDao, AgreementDaoError, SaveAgreementError},
     model::{Agreement, AgreementId, AgreementState, AppSessionId},
-    model::{Demand, Issuer, Owner, Proposal, ProposalId, SubscriptionId},
+    model::{Demand, Issuer, Owner, ProposalId, SubscriptionId},
 };
 use crate::matcher::{store::SubscriptionStore, RawProposal};
 use crate::protocol::negotiation::{error::*, messages::*, requestor::NegotiationApi};
@@ -359,9 +359,9 @@ impl RequestorBroker {
                 Utc::now().naive_utc(),
             )
             .await
-            .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
+            .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
         {
-            None => return Err(AgreementError::NotFound(agreement_id.clone())),
+            None => return Err(AgreementError::NotFound(agreement_id.to_string())),
             Some(agreement) => agreement,
         };
 

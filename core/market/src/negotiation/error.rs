@@ -13,6 +13,7 @@ use crate::db::{
     dao::{ChangeProposalStateError, SaveProposalError},
     DbError,
 };
+use crate::matcher::error::{DemandError, QueryOfferError};
 use crate::protocol::negotiation::error::{
     ApproveAgreementError, CounterProposalError as ProtocolProposalError, GsbAgreementError,
     NegotiationApiInitError, ProposeAgreementError, RejectProposalError, TerminateAgreementError,
@@ -40,7 +41,7 @@ pub enum MatchValidationError {
 #[derive(Error, Debug)]
 pub enum AgreementError {
     #[error("Agreement [{0}] not found.")]
-    NotFound(AgreementId),
+    NotFound(String),
     #[error("Can't create Agreement for Proposal {0}. Proposal {1} not found.")]
     ProposalNotFound(ProposalId, ProposalId),
     #[error("Can't create second Agreement [{0}] for Proposal [{1}].")]
@@ -56,7 +57,7 @@ pub enum AgreementError {
     #[error("Failed to save Agreement for Proposal [{0}]. Error: {1}")]
     Save(ProposalId, DbError),
     #[error("Failed to get Agreement [{0}]. Error: {1}")]
-    Get(AgreementId, AgreementDaoError),
+    Get(String, AgreementDaoError),
     #[error("Agreement [{0}]. Error: {1}")]
     UpdateState(AgreementId, AgreementDaoError),
     #[error("Invalid Agreement id. {0}")]
@@ -164,7 +165,7 @@ pub enum RegenerateProposalError {
     #[error(transparent)]
     Demand(#[from] DemandError),
     #[error("Failed to add event to database. Error: {0}.")]
-    Db(#[from] DbError),
+    Db(#[from] SaveProposalError),
 }
 
 impl AgreementError {
