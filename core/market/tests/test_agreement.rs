@@ -1,7 +1,7 @@
 use actix_web::{http::StatusCode, test, web::Bytes};
 use chrono::{Duration, Utc};
 
-use ya_core_model::market;
+use ya_core_model::{market, Role};
 use ya_market::assert_err_eq;
 use ya_market::testing::{
     agreement_utils::{gen_reason, negotiate_agreement},
@@ -11,7 +11,7 @@ use ya_market::testing::{
     mock_node::MarketServiceExt,
     proposal_util::{exchange_draft_proposals, NegotiationHelper},
     AgreementDao, AgreementDaoError, AgreementError, AgreementState, ApprovalStatus,
-    MarketsNetwork, OwnerType, ProposalState, WaitForApprovalError,
+    MarketsNetwork, Owner, ProposalState, WaitForApprovalError,
 };
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -56,6 +56,7 @@ async fn test_gsb_get_agreement() {
     let agreement = bus::service(network.node_gsb_prefixes(REQ_NAME).0)
         .send(market::GetAgreement {
             agreement_id: agreement_id.into_client(),
+            role: Role::Requestor,
         })
         .await
         .unwrap()
@@ -123,7 +124,7 @@ async fn test_rest_get_not_existing_agreement() {
         .create_agreement(req_id.clone(), &proposal_id, Utc::now())
         .await
         .unwrap()
-        .translate(OwnerType::Provider);
+        .translate(Owner::Provider);
 
     let result = req_market.get_agreement(&agreement_id, &req_id).await;
     assert!(result.is_err());
@@ -186,10 +187,7 @@ async fn full_market_interaction_aka_happy_path() {
             .await
             .unwrap();
 
-        assert_eq!(
-            approval_status.to_string(),
-            ApprovalStatus::Approved.to_string()
-        );
+        assert_eq!(approval_status, ApprovalStatus::Approved);
     });
 
     // Provider approves the Agreement and waits for ack
@@ -198,7 +196,7 @@ async fn full_market_interaction_aka_happy_path() {
         .provider_engine
         .approve_agreement(
             network.get_default_id(PROV_NAME),
-            &agreement_id.clone().translate(OwnerType::Provider),
+            &agreement_id.clone().translate(Owner::Provider),
             None,
             0.1,
         )
@@ -503,7 +501,7 @@ async fn approval_without_waiting_should_pass() {
         .provider_engine
         .approve_agreement(
             prov_id.clone(),
-            &agreement_id.translate(OwnerType::Provider),
+            &agreement_id.translate(Owner::Provider),
             None,
             0.1,
         )
@@ -552,7 +550,7 @@ async fn waiting_after_approval_should_pass() {
         .provider_engine
         .approve_agreement(
             prov_id.clone(),
-            &agreement_id.clone().translate(OwnerType::Provider),
+            &agreement_id.clone().translate(Owner::Provider),
             None,
             0.1,
         )
@@ -564,10 +562,7 @@ async fn waiting_after_approval_should_pass() {
         .wait_for_approval(&agreement_id, 0.1)
         .await
         .unwrap();
-    assert_eq!(
-        approval_status.to_string(),
-        ApprovalStatus::Approved.to_string()
-    );
+    assert_eq!(approval_status, ApprovalStatus::Approved);
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
@@ -613,7 +608,7 @@ async fn second_approval_should_fail() {
     prov_market
         .approve_agreement(
             prov_id.clone(),
-            &agreement_id.clone().translate(OwnerType::Provider),
+            &agreement_id.clone().translate(Owner::Provider),
             None,
             0.1,
         )
@@ -624,12 +619,12 @@ async fn second_approval_should_fail() {
     let result = prov_market
         .approve_agreement(
             prov_id.clone(),
-            &agreement_id.clone().translate(OwnerType::Provider),
+            &agreement_id.clone().translate(Owner::Provider),
             None,
             0.1,
         )
         .await;
-    let agreement_id = agreement_id.clone().translate(OwnerType::Provider);
+    let agreement_id = agreement_id.clone().translate(Owner::Provider);
     assert_err_eq!(
         AgreementError::UpdateState(
             agreement_id,
@@ -683,7 +678,7 @@ async fn second_waiting_should_pass() {
         .provider_engine
         .approve_agreement(
             prov_id.clone(),
-            &agreement_id.clone().translate(OwnerType::Provider),
+            &agreement_id.clone().translate(Owner::Provider),
             None,
             0.1,
         )
@@ -695,20 +690,14 @@ async fn second_waiting_should_pass() {
         .wait_for_approval(&agreement_id, 0.1)
         .await
         .unwrap();
-    assert_eq!(
-        approval_status.to_string(),
-        ApprovalStatus::Approved.to_string()
-    );
+    assert_eq!(approval_status, ApprovalStatus::Approved);
 
     // second wait should also succeed
     let approval_status = req_engine
         .wait_for_approval(&agreement_id, 0.1)
         .await
         .unwrap();
-    assert_eq!(
-        approval_status.to_string(),
-        ApprovalStatus::Approved.to_string()
-    );
+    assert_eq!(approval_status, ApprovalStatus::Approved);
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
@@ -796,7 +785,7 @@ async fn net_err_while_approving() {
         .provider_engine
         .approve_agreement(
             prov_id.clone(),
-            &agreement_id.clone().translate(OwnerType::Provider),
+            &agreement_id.clone().translate(Owner::Provider),
             None,
             0.1,
         )
@@ -849,7 +838,7 @@ async fn cant_promote_requestor_proposal() {
         .await
     {
         Err(AgreementError::OwnProposal(id)) => assert_eq!(id, our_proposal_id),
-        _ => panic!("Expected AgreementError::OwnProposal."),
+        e => panic!("Expected AgreementError::OwnProposal, got: {:?}", e),
     }
 }
 
@@ -894,7 +883,7 @@ async fn cant_promote_initial_proposal() {
         .await
     {
         Err(AgreementError::NoNegotiations(id)) => assert_eq!(id, proposal_id),
-        _ => panic!("Expected AgreementError::NoNegotiations."),
+        e => panic!("Expected AgreementError::NoNegotiations, got: {:?}", e),
     }
 }
 
@@ -940,7 +929,7 @@ async fn cant_promote_not_last_proposal() {
         .await
     {
         Err(AgreementError::ProposalCountered(id)) => assert_eq!(id, proposal_id),
-        _ => panic!("Expected AgreementError::ProposalCountered."),
+        e => panic!("Expected AgreementError::ProposalCountered, got: {:?}", e),
     }
 }
 
@@ -1006,7 +995,7 @@ async fn test_terminate_not_existing_agreement() {
 
     match result.unwrap_err() {
         AgreementError::NotFound(id) => assert_eq!(not_existing_agreement, id),
-        _ => panic!("Expected AgreementError::NotFound"),
+        e => panic!("Expected AgreementError::NotFound, got: {}", e),
     };
 }
 
@@ -1061,7 +1050,7 @@ async fn test_terminate_from_wrong_states() {
         )) => {
             assert_eq!(id, agreement_id)
         }
-        _ => panic!("Wrong error returned."),
+        e => panic!("Wrong error returned, got: {:?}", e),
     };
 
     req_market
@@ -1090,10 +1079,10 @@ async fn test_terminate_from_wrong_states() {
         )) => {
             assert_eq!(id, agreement_id)
         }
-        _ => panic!("Wrong error returned."),
+        e => panic!("Wrong error returned, got: {:?}", e),
     };
 
-    let agreement_id = agreement_id.clone().translate(OwnerType::Provider);
+    let agreement_id = agreement_id.clone().translate(Owner::Provider);
 
     let result = prov_market
         .terminate_agreement(req_id, agreement_id.clone(), Some(gen_reason("Failure")))
@@ -1110,7 +1099,7 @@ async fn test_terminate_from_wrong_states() {
         )) => {
             assert_eq!(id, agreement_id)
         }
-        _ => panic!("Wrong error returned."),
+        e => panic!("Wrong error returned, got: {:?}", e),
     };
 }
 

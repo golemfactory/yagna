@@ -7,7 +7,7 @@ use crate::schema::pay_invoice::dsl as invoice_dsl;
 use bigdecimal::{BigDecimal, Zero};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use ya_client_model::market::Agreement;
-use ya_client_model::payment::{DocumentStatus, EventType};
+use ya_client_model::payment::{DocumentStatus, InvoiceEventType};
 use ya_client_model::NodeId;
 use ya_core_model::payment::local::{StatValue, StatusNotes};
 use ya_persistence::executor::{
@@ -138,7 +138,7 @@ pub fn increase_amount_paid(
             invoice_event::create::<()>(
                 invoice_id,
                 owner_id.clone(),
-                EventType::Settled,
+                InvoiceEventType::InvoiceSettledEvent,
                 None,
                 conn,
             )?;

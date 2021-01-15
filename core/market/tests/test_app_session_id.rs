@@ -4,7 +4,7 @@ use chrono::{Duration, Utc};
 use ya_market::testing::agreement_utils::{negotiate_agreement, negotiate_agreement_with_ids};
 use ya_market::testing::proposal_util::exchange_proposals_exclusive;
 use ya_market::testing::MarketsNetwork;
-use ya_market::testing::OwnerType;
+use ya_market::testing::Owner;
 
 use ya_client::model::market::AgreementEventType;
 
@@ -79,7 +79,7 @@ async fn test_session_events_filtering() {
                 .provider_engine
                 .approve_agreement(
                     network.get_default_id(PROV_NAME),
-                    &agreement_id.clone().translate(OwnerType::Provider),
+                    &agreement_id.clone().translate(Owner::Provider),
                     Some(session_id.clone()),
                     0.1,
                 )
@@ -445,7 +445,10 @@ async fn test_session_timestamp_filtering() {
                 assert_eq!(event.agreement_id, agreements[i].into_client());
                 assert_ge!(event.event_date, timestamp_before);
             }
-            _ => panic!("Expected AgreementEventType::AgreementApprovedEvent"),
+            e => panic!(
+                "Expected AgreementEventType::AgreementApprovedEvent, got: {:?}",
+                e
+            ),
         });
 
     r_events
@@ -456,7 +459,10 @@ async fn test_session_timestamp_filtering() {
                 assert_eq!(event.agreement_id, agreements[i].into_client());
                 assert_ge!(event.event_date, timestamp_before);
             }
-            _ => panic!("Expected AgreementEventType::AgreementApprovedEvent"),
+            e => panic!(
+                "Expected AgreementEventType::AgreementApprovedEvent, got: {:?}",
+                e
+            ),
         });
 
     // Query events using newer timestamp. We expect to get only new events
@@ -494,7 +500,10 @@ async fn test_session_timestamp_filtering() {
                 assert_eq!(event.agreement_id, agreements[num_before + i].into_client());
                 assert_ge!(event.event_date, timestamp_before);
             }
-            _ => panic!("Expected AgreementEventType::AgreementApprovedEvent"),
+            e => panic!(
+                "Expected AgreementEventType::AgreementApprovedEvent, got: {:?}",
+                e
+            ),
         });
 
     r_events
@@ -505,7 +514,10 @@ async fn test_session_timestamp_filtering() {
                 assert_eq!(event.agreement_id, agreements[num_before + i].into_client());
                 assert_ge!(event.event_date, timestamp_before);
             }
-            _ => panic!("Expected AgreementEventType::AgreementApprovedEvent"),
+            e => panic!(
+                "Expected AgreementEventType::AgreementApprovedEvent, got: {:?}",
+                e
+            ),
         });
 
     // Query events using newer last timestamp. We expect to get no events.
@@ -587,7 +599,10 @@ async fn test_common_event_flow() {
 
         match &events[0].event_type {
             AgreementEventType::AgreementApprovedEvent {} => (),
-            _ => panic!("Expected AgreementEventType::AgreementApprovedEvent"),
+            e => panic!(
+                "Expected AgreementEventType::AgreementApprovedEvent, got: {:?}",
+                e
+            ),
         }
         current_timestamp = events[0].event_date.clone();
     }

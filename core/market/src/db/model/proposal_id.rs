@@ -26,11 +26,20 @@ use crate::db::model::SubscriptionId;
     Hash,
 )]
 #[sql_type = "Text"]
-pub enum OwnerType {
+pub enum Owner {
     #[display(fmt = "P")]
     Provider,
     #[display(fmt = "R")]
     Requestor,
+}
+
+impl Owner {
+    pub fn swap(self) -> Self {
+        match self {
+            Self::Provider => Self::Requestor,
+            Self::Requestor => Self::Provider,
+        }
+    }
 }
 
 const HASH_SUFFIX_LEN: usize = 64;
@@ -40,7 +49,7 @@ pub enum ProposalIdParseError {
     #[error("Id [{0}] has invalid format.")]
     InvalidFormat(String),
     #[error("Id [{0}] has invalid owner type.")]
-    InvalidOwnerType(String),
+    InvalidOwner(String),
     #[error("Id [{0}] contains non hexadecimal characters.")]
     NotHexadecimal(String),
     #[error("Id [{0}] hash has invalid length. Should be |{}|", HASH_SUFFIX_LEN)]
@@ -56,7 +65,7 @@ pub struct ProposalIdValidationError(ProposalId, String);
 #[sql_type = "Text"]
 pub struct ProposalId {
     id: String,
-    owner: OwnerType,
+    owner: Owner,
 }
 
 impl ProposalId {
@@ -64,7 +73,7 @@ impl ProposalId {
         offer_id: &SubscriptionId,
         demand_id: &SubscriptionId,
         creation_ts: &NaiveDateTime,
-        owner: OwnerType,
+        owner: Owner,
     ) -> ProposalId {
         ProposalId {
             owner,
@@ -72,20 +81,17 @@ impl ProposalId {
         }
     }
 
-    pub fn owner(&self) -> OwnerType {
+    pub fn owner(&self) -> Owner {
         self.owner.clone()
     }
 
-    pub fn translate(mut self, new_owner: OwnerType) -> Self {
+    pub fn translate(mut self, new_owner: Owner) -> Self {
         self.owner = new_owner;
         self
     }
 
     pub fn swap_owner(mut self) -> Self {
-        self.owner = match self.owner {
-            OwnerType::Provider => OwnerType::Requestor,
-            OwnerType::Requestor => OwnerType::Provider,
-        };
+        self.owner = self.owner.swap();
         self
     }
 
@@ -108,7 +114,7 @@ impl ProposalId {
         self.id.clone()
     }
 
-    pub fn from_client(s: &str, owner: OwnerType) -> Result<ProposalId, ProposalIdParseError> {
+    pub fn from_client(s: &str, owner: Owner) -> Result<ProposalId, ProposalIdParseError> {
         if !s.chars().all(|character| character.is_ascii_hexdigit()) {
             Err(ProposalIdParseError::NotHexadecimal(s.to_string()))?;
         }
@@ -148,23 +154,23 @@ impl FromStr for ProposalId {
             Err(ProposalIdParseError::InvalidFormat(s.to_string()))?;
         }
 
-        let owner = OwnerType::from_str(elements[0])?;
+        let owner = Owner::from_str(elements[0])?;
         ProposalId::from_client(elements[1], owner)
     }
 }
 
-impl FromStr for OwnerType {
+impl FromStr for Owner {
     type Err = ProposalIdParseError;
 
-    fn from_str(s: &str) -> Result<OwnerType, Self::Err> {
+    fn from_str(s: &str) -> Result<Owner, Self::Err> {
         if s.len() != 1 {
-            Err(ProposalIdParseError::InvalidOwnerType(s.to_string()))?;
+            Err(ProposalIdParseError::InvalidOwner(s.to_string()))?;
         }
 
         Ok(match s.chars().nth(0).unwrap() {
-            'P' => OwnerType::Provider,
-            'R' => OwnerType::Requestor,
-            _ => Err(ProposalIdParseError::InvalidOwnerType(s.to_string()))?,
+            'P' => Owner::Provider,
+            'R' => Owner::Requestor,
+            _ => Err(ProposalIdParseError::InvalidOwner(s.to_string()))?,
         })
     }
 }

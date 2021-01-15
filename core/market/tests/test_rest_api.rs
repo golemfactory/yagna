@@ -17,8 +17,7 @@ use ya_market::testing::{
     client::{sample_demand, sample_offer},
     mock_node::{wait_for_bcast, MarketServiceExt},
     proposal_util::exchange_draft_proposals,
-    DemandError, MarketsNetwork, ModifyOfferError, OwnerType, SubscriptionId,
-    SubscriptionParseError,
+    DemandError, MarketsNetwork, ModifyOfferError, Owner, SubscriptionId, SubscriptionParseError,
 };
 use ya_market_resolver::flatten::flatten_json;
 
@@ -189,9 +188,7 @@ async fn test_rest_subscribe_unsubscribe_offer() {
     // when unsubscribe
     let resp = test::call_service(&mut app, req).await;
     // then
-    assert_eq!(resp.status(), StatusCode::OK);
-    let result: String = read_response_json(resp).await;
-    assert_eq!("Ok", result);
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
     // given
     let req = test::TestRequest::delete()
@@ -256,9 +253,7 @@ async fn test_rest_subscribe_unsubscribe_demand() {
     // when
     let resp = test::call_service(&mut app, req).await;
     // then
-    assert_eq!(resp.status(), StatusCode::OK);
-    let result: String = read_response_json(resp).await;
-    assert_eq!("Ok", result);
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
     // given
     let req = test::TestRequest::delete()
@@ -291,7 +286,7 @@ async fn test_rest_get_proposal() {
         .await
         .unwrap()
         .proposal_id
-        .translate(OwnerType::Provider);
+        .translate(Owner::Provider);
 
     // Not really remote, but in this scenario will treat it as remote
     let identity_local = network.get_default_id("Provider");

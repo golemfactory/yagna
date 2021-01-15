@@ -5,8 +5,8 @@ use ya_market::testing::mock_offer::client::{
 };
 use ya_market::testing::proposal_util::{exchange_draft_proposals, NegotiationHelper};
 use ya_market::testing::MarketsNetwork;
-use ya_market::testing::OwnerType;
-use ya_market::testing::{ProposalError, SaveProposalError};
+use ya_market::testing::Owner;
+use ya_market::testing::{ProposalError, ProposalValidationError, SaveProposalError};
 use ya_market_resolver::flatten::flatten_json;
 
 /// Test countering initial and draft proposals on both Provider and Requestor side.
@@ -63,7 +63,7 @@ async fn test_exchanging_draft_proposals() {
     let proposal1_prov = provider::query_proposal(&market2, &offer_id, 2)
         .await
         .unwrap();
-    let proposal1_prov_id = proposal1_req_id.clone().translate(OwnerType::Provider);
+    let proposal1_prov_id = proposal1_req_id.clone().translate(Owner::Provider);
 
     assert_eq!(proposal1_prov.constraints, proposal1_req.constraints);
     assert_eq!(
@@ -88,7 +88,7 @@ async fn test_exchanging_draft_proposals() {
     let proposal2_req = requestor::query_proposal(&market1, &demand_id, 3)
         .await
         .unwrap();
-    let proposal2_req_id = proposal2_id.clone().translate(OwnerType::Requestor);
+    let proposal2_req_id = proposal2_id.clone().translate(Owner::Requestor);
 
     assert_eq!(proposal2_req.constraints, proposal2_prov.constraints);
     assert_eq!(
@@ -100,11 +100,7 @@ async fn test_exchanging_draft_proposals() {
     assert_eq!(proposal2_req.state, State::Draft);
     assert_eq!(
         proposal2_req.prev_proposal_id,
-        Some(
-            proposal1_prov_id
-                .translate(OwnerType::Requestor)
-                .to_string()
-        ),
+        Some(proposal1_prov_id.translate(Owner::Requestor).to_string()),
     );
 
     // Requestor counters draft proposal.
@@ -119,7 +115,7 @@ async fn test_exchanging_draft_proposals() {
     let proposal3_prov = provider::query_proposal(&market2, &offer_id, 4)
         .await
         .unwrap();
-    let proposal3_prov_id = proposal3_req_id.clone().translate(OwnerType::Provider);
+    let proposal3_prov_id = proposal3_req_id.clone().translate(Owner::Provider);
 
     assert_eq!(proposal3_prov.constraints, proposal3_req.constraints);
     assert_eq!(
@@ -131,7 +127,7 @@ async fn test_exchanging_draft_proposals() {
     assert_eq!(proposal3_prov.state, State::Draft);
     assert_eq!(
         proposal3_prov.prev_proposal_id,
-        Some(proposal2_req_id.translate(OwnerType::Provider).to_string()),
+        Some(proposal2_req_id.translate(Owner::Provider).to_string()),
     );
 }
 
@@ -188,7 +184,7 @@ async fn test_counter_countered_proposal() {
         ProposalError::Save(SaveProposalError::AlreadyCountered(id)) => {
             assert_eq!(id, proposal0_id);
         }
-        _ => panic!("Expected AlreadyCountered error."),
+        e => panic!("Expected AlreadyCountered error, got: {}", e),
     }
 
     // PROVIDER side
@@ -217,7 +213,7 @@ async fn test_counter_countered_proposal() {
         ProposalError::Save(SaveProposalError::AlreadyCountered(id)) => {
             assert_eq!(id, proposal0_id)
         }
-        _ => panic!("Expected AlreadyCountered error."),
+        e => panic!("Expected AlreadyCountered error, got: {}", e),
     }
 }
 
@@ -274,8 +270,10 @@ async fn test_counter_own_proposal() {
 
     assert!(result.is_err());
     match result.err().unwrap() {
-        ProposalError::OwnProposal(id) => assert_eq!(id, proposal1_id),
-        _ => panic!("Expected ProposalError::OwnProposal."),
+        ProposalError::Validation(ProposalValidationError::OwnProposal(id)) => {
+            assert_eq!(id, proposal1_id)
+        }
+        e => panic!("Expected ProposalValidationError::OwnProposal, got: {}", e),
     }
 
     // PROVIDER side
@@ -305,8 +303,10 @@ async fn test_counter_own_proposal() {
 
     assert!(result.is_err());
     match result.err().unwrap() {
-        ProposalError::OwnProposal(id) => assert_eq!(id, proposal1_id),
-        _ => panic!("Expected ProposalError::OwnProposal."),
+        ProposalError::Validation(ProposalValidationError::OwnProposal(id)) => {
+            assert_eq!(id, proposal1_id)
+        }
+        e => panic!("Expected ProposalValidationError::OwnProposal, got: {}", e),
     }
 }
 
@@ -357,8 +357,13 @@ async fn test_counter_unsubscribed_demand() {
 
     assert!(result.is_err());
     match result.err().unwrap() {
-        ProposalError::NoSubscription(id) => assert_eq!(id, demand_id),
-        _ => panic!("Expected ProposalError::Unsubscribed."),
+        ProposalError::Validation(ProposalValidationError::NoSubscription(id)) => {
+            assert_eq!(id, demand_id)
+        }
+        e => panic!(
+            "Expected ProposalValidationError::NoSubscription, got: {}",
+            e
+        ),
     }
 }
 
@@ -425,8 +430,10 @@ async fn test_counter_unsubscribed_offer() {
 
     assert!(result.is_err());
     match result.err().unwrap() {
-        ProposalError::Unsubscribed(id) => assert_eq!(id, offer_id),
-        _ => panic!("Expected ProposalError::Unsubscribed."),
+        ProposalError::Validation(ProposalValidationError::Unsubscribed(id)) => {
+            assert_eq!(id, offer_id)
+        }
+        e => panic!("Expected ProposalValidationError::Unsubscribed, got: {}", e),
     }
 }
 
@@ -480,8 +487,10 @@ async fn test_counter_initial_unsubscribed_remote_offer() {
 
     assert!(result.is_err());
     match result.err().unwrap() {
-        ProposalError::Send(..) => (),
-        _ => panic!("Expected ProposalError::Send."),
+        ProposalError::Validation(ProposalValidationError::Unsubscribed(id)) => {
+            assert_eq!(id, offer_id)
+        }
+        e => panic!("Expected ProposalValidationError::Unsubscribed, got: {}", e),
     }
 }
 
@@ -525,8 +534,10 @@ async fn test_counter_draft_unsubscribed_remote_offer() {
 
     assert!(result.is_err());
     match result.err().unwrap() {
-        ProposalError::Send(..) => (),
-        _ => panic!("Expected ProposalError::Send."),
+        ProposalError::Validation(ProposalValidationError::Unsubscribed(id)) => {
+            assert_eq!(id, offer_id)
+        }
+        e => panic!("Expected ProposalValidationError::Unsubscribed, got: {}", e),
     }
 }
 
@@ -585,7 +596,7 @@ async fn test_counter_draft_unsubscribed_remote_demand() {
     assert!(result.is_err());
     match result.err().unwrap() {
         ProposalError::Send(..) => (),
-        _ => panic!("Expected ProposalError::Send."),
+        e => panic!("Expected ProposalError::Send, got: {}", e),
     }
 }
 
@@ -619,8 +630,8 @@ async fn test_not_matching_counter_demand() {
 
     assert!(result.is_err());
     match result.err().unwrap() {
-        ProposalError::NotMatching(..) => (),
-        _ => panic!("Expected ProposalError::NotMatching."),
+        ProposalError::Validation(ProposalValidationError::NotMatching(..)) => (),
+        e => panic!("Expected ProposalValidationError::NotMatching, got: {}", e),
     }
 }
 
@@ -673,8 +684,8 @@ async fn test_not_matching_counter_offer() {
 
     assert!(result.is_err());
     match result.err().unwrap() {
-        ProposalError::NotMatching(..) => (),
-        _ => panic!("Expected ProposalError::NotMatching."),
+        ProposalError::Validation(ProposalValidationError::NotMatching(..)) => (),
+        e => panic!("Expected ProposalValidationError::NotMatching, got: {}", e),
     }
 }
 

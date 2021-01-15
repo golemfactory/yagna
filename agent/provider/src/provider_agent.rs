@@ -25,7 +25,7 @@ use ya_agreement_utils::agreement::TypedArrayPointer;
 use ya_agreement_utils::*;
 use ya_client::cli::ProviderApi;
 use ya_client_model::payment::Account;
-use ya_file_logging::{start_logger, ReconfigurationHandle};
+use ya_file_logging::{start_logger, LoggerHandle};
 use ya_utils_actix::actix_handler::send_message;
 use ya_utils_path::SwapSave;
 
@@ -37,7 +37,7 @@ pub struct ProviderAgent {
     presets: PresetManager,
     hardware: hardware::Manager,
     accounts: Vec<Account>,
-    log_handler: ReconfigurationHandle,
+    log_handler: LoggerHandle,
 }
 
 struct GlobalsManager {
@@ -146,7 +146,7 @@ impl ProviderAgent {
         let api = ProviderApi::try_from(&args.api)?;
 
         log::info!("Loading payment accounts...");
-        let accounts: Vec<Account> = api.payment.get_accounts().await?;
+        let accounts: Vec<Account> = api.payment.get_provider_accounts().await?;
         log::info!("Payment accounts: {:#?}", accounts);
         let registry = config.registry()?;
         registry.validate()?;
@@ -155,6 +155,7 @@ impl ProviderAgent {
         // Generate session id from node name and process id to make sure it's unique.
         let name = args.node.node_name.clone().unwrap_or(app_name.to_string());
         args.market.session_id = format!("{}-[{}]", name, std::process::id());
+        args.runner.session_id = args.market.session_id.clone(); // TODO: unwind this dirty fix
 
         let mut globals = GlobalsManager::try_new(&config.globals_file, args.node)?;
         globals.spawn_monitor(&config.globals_file)?;
