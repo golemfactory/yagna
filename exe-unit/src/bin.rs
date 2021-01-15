@@ -243,13 +243,14 @@ fn configure_logger(logger: flexi_logger::Logger) -> flexi_logger::Logger {
 }
 
 fn main() {
-    if configure_logger(flexi_logger::Logger::with_env())
+    let default_log_level = "info";
+    if configure_logger(flexi_logger::Logger::with_env_or_str(default_log_level))
         .log_to_file()
         .directory("logs")
         .start()
         .is_err()
     {
-        configure_logger(flexi_logger::Logger::with_env())
+        configure_logger(flexi_logger::Logger::with_env_or_str(default_log_level))
             .start()
             .expect("Failed to initialize logging");
         log::warn!("Switched to fallback logging method");

@@ -197,7 +197,7 @@ pub fn try_from_path(path: &PathBuf) -> Result<Value, Error> {
         None => DEFAULT_FORMAT,
     };
 
-    eprintln!("Parsing agreement at {}", path.display());
+    log::debug!("Parsing agreement at {}", path.display());
     match ext.to_lowercase().as_str() {
         "json" => try_from_json(&contents),
         "yaml" => try_from_yaml(&contents),
