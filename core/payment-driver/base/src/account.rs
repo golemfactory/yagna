@@ -26,7 +26,7 @@ impl Accounts {
     }
 
     pub fn handle_event(&mut self, msg: IdentityEvent) {
-        log::debug!("handle_event: {:?}", &msg);
+        log::trace!("handle_event: {:?}", &msg);
         match msg {
             IdentityEvent::AccountLocked { identity } => self.remove_account(identity),
             IdentityEvent::AccountUnlocked { identity } => self.add_account(identity),
@@ -35,13 +35,13 @@ impl Accounts {
 
     pub fn list_accounts(&self) -> Vec<String> {
         let list = self.accounts.keys().cloned().collect();
-        log::debug!("list_accounts: {:?}", &list);
+        log::trace!("list_accounts: {:?}", &list);
         list
     }
 
     pub fn get_node_id(&self, account: &str) -> Option<NodeId> {
         let node_id = self.accounts.get(account).cloned();
-        log::debug!("get_node_id: {:?}", &node_id);
+        log::trace!("get_node_id: {:?}", &node_id);
         node_id
     }
 
@@ -53,11 +53,11 @@ impl Accounts {
 
     pub fn add_account(&mut self, account: NodeId) {
         self.accounts.insert(account.to_string(), account);
-        log::info!("Account: {:?} is unlocked", account.to_string());
+        log::debug!("Account: {:?} is unlocked", account.to_string());
     }
 
     fn remove_account(&mut self, account: NodeId) {
         self.accounts.remove(&account.to_string());
-        log::info!("Account: {:?} is locked", account.to_string());
+        log::debug!("Account: {:?} is locked", account.to_string());
     }
 }
