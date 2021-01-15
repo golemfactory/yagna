@@ -55,18 +55,18 @@ impl Handler<ReactToProposal> for CompositeNegotiator {
     fn handle(&mut self, msg: ReactToProposal, _: &mut Context<Self>) -> Self::Result {
         // In current implementation we don't allow to change constraints, so we take
         // them from initial Offer.
-        let constraints = msg.offer.constraints;
+        let constraints = msg.prev_proposal.constraints;
         let proposal = ProposalView {
             id: msg.demand.proposal_id,
             json: expand(msg.demand.properties),
         };
 
-        let offer = ProposalView {
-            json: expand(msg.offer.properties),
-            id: msg.offer_id,
+        let offer_proposal = ProposalView {
+            json: expand(msg.prev_proposal.properties),
+            id: msg.prev_proposal.proposal_id,
         };
 
-        let result = self.components.negotiate_step(&proposal, offer);
+        let result = self.components.negotiate_step(&proposal, offer_proposal)?;
         match result {
             NegotiationResult::Reject { reason } => Ok(ProposalResponse::RejectProposal { reason }),
             NegotiationResult::Ready { offer } | NegotiationResult::Negotiating { offer } => {
@@ -125,7 +125,7 @@ impl Handler<ReactToAgreement> for CompositeNegotiator {
         // Otherwise we must reject Agreement proposals, because negotiations didn't end.
         match self
             .components
-            .negotiate_step(&demand_proposal, offer_proposal)
+            .negotiate_step(&demand_proposal, offer_proposal)?
         {
             NegotiationResult::Ready { .. } => Ok(AgreementResponse::ApproveAgreement),
             NegotiationResult::Reject { reason } => {

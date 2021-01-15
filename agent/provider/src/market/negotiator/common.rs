@@ -73,8 +73,7 @@ pub struct CreateOffer {
 #[derive(Message)]
 #[rtype(result = "Result<ProposalResponse>")]
 pub struct ReactToProposal {
-    pub offer_id: String,
-    pub offer: NewOffer,
+    pub prev_proposal: Proposal,
     pub demand: Proposal,
 }
 
@@ -143,15 +142,13 @@ impl NegotiatorAddr {
 
     pub async fn react_to_proposal(
         &self,
-        offer: &NewOffer,
-        offer_id: &str,
-        demand: &Proposal,
+        prev_proposal: Proposal,
+        demand: Proposal,
     ) -> Result<ProposalResponse> {
         self.on_proposal
             .send(ReactToProposal {
-                demand: demand.clone(),
-                offer: offer.clone(),
-                offer_id: offer_id.to_string(),
+                demand,
+                prev_proposal,
             })
             .await?
     }

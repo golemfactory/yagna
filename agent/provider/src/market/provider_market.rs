@@ -8,14 +8,17 @@ use futures::prelude::*;
 use futures_util::FutureExt;
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use ya_agreement_utils::{AgreementView, OfferDefinition};
 use ya_client::market::MarketProviderApi;
 use ya_client_model::market::agreement_event::AgreementEventType;
+use ya_client_model::market::proposal::State;
 use ya_client_model::market::{
     agreement_event::AgreementTerminator, Agreement, NewOffer, Proposal, ProviderEvent, Reason,
 };
+use ya_client_model::NodeId;
 use ya_utils_actix::{
     actix_handler::ResultTypeGetter,
     actix_signal::{SignalSlot, Subscribe},
@@ -254,11 +257,34 @@ async fn process_proposal(
         subscription.preset.name,
     );
 
-    // TODO: Note that if we pass `subscription.offer`, we can't support multi-step
-    //       negotiations, because we always pass initial Offer to negotiator.
+    let prev_proposal = match &demand.prev_proposal_id {
+        Some(prev_proposal_id) => ctx
+            .api
+            .get_proposal(&subscription.id, prev_proposal_id)
+            .await
+            .map_err(|e| {
+                anyhow!(
+                    "Failed to get previous proposal [{}] for Requestor proposal [{}]. {}",
+                    prev_proposal_id,
+                    proposal_id,
+                    e
+                )
+            })?,
+        // It's first Proposal from Requestor, so we have to use our initial Offer.
+        None => Proposal {
+            properties: subscription.offer.properties.clone(),
+            constraints: subscription.offer.constraints.clone(),
+            proposal_id: subscription.id.clone(),
+            issuer_id: NodeId::from_str("0x000000000000000000000000000000000000000")?, // How to set?
+            state: State::Initial,
+            timestamp: Utc::now(), // How to set?
+            prev_proposal_id: None,
+        },
+    };
+
     let action = ctx
         .negotiator
-        .react_to_proposal(&subscription.offer, &subscription.id, &demand)
+        .react_to_proposal(prev_proposal, demand.clone())
         .await
         .map_err(|e| {
             anyhow!(

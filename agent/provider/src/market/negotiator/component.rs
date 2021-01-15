@@ -34,7 +34,11 @@ pub trait NegotiatorComponent {
     /// Push forward negotiations as far as you can.
     /// `NegotiatorComponent` should modify only properties in his responsibility
     /// and return remaining part of Proposal unchanged.
-    fn negotiate_step(&mut self, demand: &ProposalView, offer: ProposalView) -> NegotiationResult;
+    fn negotiate_step(
+        &mut self,
+        demand: &ProposalView,
+        offer: ProposalView,
+    ) -> anyhow::Result<NegotiationResult>;
 
     /// Called during Offer creation. `NegotiatorComponent` should add properties
     /// and constraints for which it is responsible during future negotiations.
@@ -80,10 +84,10 @@ impl NegotiatorComponent for NegotiatorsPack {
         &mut self,
         demand: &ProposalView,
         mut offer: ProposalView,
-    ) -> NegotiationResult {
+    ) -> anyhow::Result<NegotiationResult> {
         let mut all_ready = true;
         for (name, component) in &mut self.components {
-            let result = component.negotiate_step(demand, offer);
+            let result = component.negotiate_step(demand, offer)?;
             offer = match result {
                 NegotiationResult::Ready { offer } => offer,
                 NegotiationResult::Negotiating { offer } => {
@@ -96,17 +100,17 @@ impl NegotiatorComponent for NegotiatorsPack {
                     offer
                 }
                 NegotiationResult::Reject { reason } => {
-                    return NegotiationResult::Reject { reason }
+                    return Ok(NegotiationResult::Reject { reason })
                 }
             }
         }
 
         // Full negotiations is ready only, if all `NegotiatorComponent` returned
         // ready state. Otherwise we must still continue negotiations.
-        match all_ready {
+        Ok(match all_ready {
             true => NegotiationResult::Ready { offer },
             false => NegotiationResult::Negotiating { offer },
-        }
+        })
     }
 
     fn fill_template(

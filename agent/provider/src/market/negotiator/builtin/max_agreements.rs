@@ -29,20 +29,24 @@ impl MaxAgreements {
 }
 
 impl NegotiatorComponent for MaxAgreements {
-    fn negotiate_step(&mut self, demand: &ProposalView, offer: ProposalView) -> NegotiationResult {
+    fn negotiate_step(
+        &mut self,
+        demand: &ProposalView,
+        offer: ProposalView,
+    ) -> anyhow::Result<NegotiationResult> {
         if self.has_free_slot() {
-            NegotiationResult::Ready { offer }
+            Ok(NegotiationResult::Ready { offer })
         } else {
             log::info!(
                 "'MaxAgreements' negotiator: Reject proposal [{}] due to limit.",
                 demand.id, // TODO: Should be just `id`, but I reuse AgreementView struct.
             );
-            NegotiationResult::Reject {
+            Ok(NegotiationResult::Reject {
                 reason: Some(Reason::new(format!(
                     "No capacity available. Reached Agreements limit: {}",
                     self.max_agreements
                 ))),
-            }
+            })
         }
     }
 
