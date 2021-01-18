@@ -705,13 +705,11 @@ impl CommonBroker {
         &self,
         agreement: &Agreement,
     ) -> Result<(), RegenerateProposalError> {
-        if let Owner::Requestor = agreement.id.owner() {
-            let demand = self.store.get_demand(&agreement.demand_id).await?;
-            let offer = self.store.get_offer(&agreement.offer_id).await?;
+        let demand = self.store.get_demand(&agreement.demand_id).await?;
+        let offer = self.store.get_offer(&agreement.offer_id).await?;
 
-            self.generate_proposal(RawProposal { demand, offer })
-                .await?;
-        }
+        self.generate_proposal(RawProposal { demand, offer })
+            .await?;
         Ok(())
     }
 }

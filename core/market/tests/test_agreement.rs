@@ -868,7 +868,7 @@ async fn cant_promote_initial_proposal() {
         .await
         .unwrap();
 
-    let proposal = requestor::query_proposal(&req_market, &demand_id, 1)
+    let proposal = requestor::query_proposal(&req_market, &demand_id, "Requestor query_events")
         .await
         .unwrap();
     let proposal_id = proposal.get_proposal_id().unwrap();

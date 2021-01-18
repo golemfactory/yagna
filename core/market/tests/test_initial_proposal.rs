@@ -591,9 +591,10 @@ async fn test_respawn_proposal_after_terminate_by_requestor() -> anyhow::Result<
         .await
         .unwrap();
 
-    let proposal = requestor::query_proposal(&req_market, &info.negotiation.demand_id, 4)
-        .await
-        .unwrap();
+    let proposal =
+        requestor::query_proposal(&req_market, &info.negotiation.demand_id, "Respawn #R")
+            .await
+            .unwrap();
 
     assert!(timestamp <= proposal.timestamp);
     assert_eq!(
@@ -649,9 +650,10 @@ async fn test_respawn_proposal_after_terminate_by_provider() -> anyhow::Result<(
         .await
         .unwrap();
 
-    let proposal = requestor::query_proposal(&req_market, &info.negotiation.demand_id, 4)
-        .await
-        .unwrap();
+    let proposal =
+        requestor::query_proposal(&req_market, &info.negotiation.demand_id, "Respawn #R")
+            .await
+            .unwrap();
 
     assert!(timestamp <= proposal.timestamp);
     assert_eq!(

@@ -40,8 +40,14 @@ pub mod requestor {
     use ya_client::model::market::event::RequestorEvent;
     use ya_client::model::market::{AgreementEventType, AgreementOperationEvent as AgreementEvent};
 
-    pub fn expect_proposal(events: Vec<RequestorEvent>, i: u8) -> anyhow::Result<Proposal> {
-        assert_eq!(events.len(), 1, "{}: Expected one event: {:?}.", i, events);
+    pub fn expect_proposal(events: Vec<RequestorEvent>, stage: &str) -> anyhow::Result<Proposal> {
+        assert_eq!(
+            events.len(),
+            1,
+            "Requestor {}: Expected single proposal event: {:?}.",
+            stage,
+            events
+        );
 
         Ok(match events[0].clone() {
             RequestorEvent::ProposalEvent { proposal, .. } => proposal,
@@ -52,17 +58,23 @@ pub mod requestor {
     pub async fn query_proposal(
         market: &Arc<MarketService>,
         demand_id: &SubscriptionId,
-        i: u8,
+        stage: &str,
     ) -> anyhow::Result<Proposal> {
         let events = market
             .requestor_engine
             .query_events(&demand_id, 3.8, Some(5))
             .await?;
-        expect_proposal(events, i)
+        expect_proposal(events, stage)
     }
 
-    pub fn expect_approve(events: Vec<AgreementEvent>, i: u8) -> anyhow::Result<String> {
-        assert_eq!(events.len(), 1, "{}: Expected one event: {:?}.", i, events);
+    pub fn expect_approve(events: Vec<AgreementEvent>, stage: &str) -> anyhow::Result<String> {
+        assert_eq!(
+            events.len(),
+            1,
+            "Requestor {}: Expected single agreement event: {:?}.",
+            stage,
+            events
+        );
 
         match events[0].event_type {
             AgreementEventType::AgreementApprovedEvent { .. } => Ok(events[0].clone().agreement_id),
@@ -76,8 +88,14 @@ pub mod provider {
     use ya_client::model::market::event::ProviderEvent;
     use ya_client::model::market::Agreement;
 
-    pub fn expect_proposal(events: Vec<ProviderEvent>, i: u8) -> anyhow::Result<Proposal> {
-        assert_eq!(events.len(), 1, "{}: Expected one event: {:?}.", i, events);
+    pub fn expect_proposal(events: Vec<ProviderEvent>, stage: &str) -> anyhow::Result<Proposal> {
+        assert_eq!(
+            events.len(),
+            1,
+            "Provider {}: Expected single proposal event: {:?}.",
+            stage,
+            events
+        );
 
         Ok(match events[0].clone() {
             ProviderEvent::ProposalEvent { proposal, .. } => proposal,
@@ -85,8 +103,14 @@ pub mod provider {
         })
     }
 
-    pub fn expect_agreement(events: Vec<ProviderEvent>, i: u8) -> anyhow::Result<Agreement> {
-        assert_eq!(events.len(), 1, "{}: Expected one event: {:?}.", i, events);
+    pub fn expect_agreement(events: Vec<ProviderEvent>, stage: &str) -> anyhow::Result<Agreement> {
+        assert_eq!(
+            events.len(),
+            1,
+            "Provider {}: Expected single agreement event: {:?}.",
+            stage,
+            events
+        );
 
         Ok(match events[0].clone() {
             ProviderEvent::AgreementEvent { agreement, .. } => agreement,
@@ -97,13 +121,13 @@ pub mod provider {
     pub async fn query_proposal(
         market: &Arc<MarketService>,
         offer_id: &SubscriptionId,
-        i: u8,
+        stage: &str,
     ) -> anyhow::Result<Proposal> {
         let events = market
             .provider_engine
             .query_events(&offer_id, 3.8, Some(5))
             .await?;
-        expect_proposal(events, i)
+        expect_proposal(events, stage)
     }
 }
 

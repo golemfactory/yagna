@@ -175,7 +175,7 @@ async fn test_agreement_events_and_wait_for_approval() {
 
     // Expect single event
     assert_eq!(
-        expect_approve(events, 0).unwrap(),
+        expect_approve(events, "After approve").unwrap(),
         agreement_id.into_client()
     );
 

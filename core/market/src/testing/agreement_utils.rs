@@ -72,7 +72,7 @@ pub async fn negotiate_agreement_with_ids(
         .provider_engine
         .query_events(&negotiation.offer_id, 2.0, Some(5))
         .await?;
-    let _ = expect_agreement(events, 4).unwrap();
+    let _ = expect_agreement(events, "To approve #P").unwrap();
 
     let p_agreement = r_agreement.clone().translate(Owner::Provider);
     prov_mkt
