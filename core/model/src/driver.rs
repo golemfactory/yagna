@@ -241,13 +241,13 @@ impl RpcMessage for ValidateAllocation {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Enter {
-    amount: String,
+    amount: BigDecimal,
     network: Option<String>,
     token: Option<String>,
 }
 
 impl Enter {
-    pub fn new(amount: String, network: Option<String>, token: Option<String>) -> Enter {
+    pub fn new(amount: BigDecimal, network: Option<String>, token: Option<String>) -> Enter {
         Enter {
             amount,
             network,
@@ -267,7 +267,7 @@ impl RpcMessage for Enter {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Exit {
     to: Option<String>,
-    amount: Option<String>,
+    amount: Option<BigDecimal>,
     network: Option<String>,
     token: Option<String>,
 }
@@ -275,7 +275,7 @@ pub struct Exit {
 impl Exit {
     pub fn new(
         to: Option<String>,
-        amount: Option<String>,
+        amount: Option<BigDecimal>,
         network: Option<String>,
         token: Option<String>,
     ) -> Exit {
@@ -299,7 +299,7 @@ impl RpcMessage for Exit {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Transfer {
     to: String,
-    amount: String,
+    amount: BigDecimal,
     network: Option<String>,
     token: Option<String>,
 }
@@ -307,7 +307,7 @@ pub struct Transfer {
 impl Transfer {
     pub fn new(
         to: String,
-        amount: String,
+        amount: BigDecimal,
         network: Option<String>,
         token: Option<String>,
     ) -> Transfer {
