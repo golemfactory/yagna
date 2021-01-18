@@ -17,6 +17,10 @@ fn accounts_path(data_dir: &Path) -> PathBuf {
 pub(crate) struct Account {
     pub driver: String,
     pub address: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub network: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
     pub send: bool,
     pub receive: bool,
 }
@@ -27,7 +31,12 @@ pub(crate) async fn init_account(account: Account) -> anyhow::Result<()> {
     mode.set(AccountMode::SEND, account.send);
     mode.set(AccountMode::RECV, account.receive);
     bus::service(driver_bus_id(account.driver))
-        .call(Init::new(account.address, mode))
+        .call(Init::new(
+            account.address,
+            account.network,
+            account.token,
+            mode,
+        ))
         .await??;
     log::debug!("Account initialized.");
     Ok(())
@@ -73,6 +82,8 @@ pub async fn save_default_account(data_dir: &Path, drivers: Vec<String>) -> anyh
         .map(|driver| Account {
             driver,
             address: default_node_id.to_string(),
+            network: None, // Use default
+            token: None,   // Use default
             send: false,
             receive: true,
         })
