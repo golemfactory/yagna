@@ -7671,6 +7671,7 @@ dependencies = [
 name = "ya-zksync-driver"
 version = "0.1.0"
 dependencies = [
+ "actix-rt",
  "anyhow",
  "async-trait",
  "awc 2.0.3",
@@ -7686,6 +7687,7 @@ dependencies = [
  "maplit",
  "num",
  "serde_json",
+ "structopt",
  "tiny-keccak 1.5.0",
  "tokio",
  "uuid 0.8.1",
