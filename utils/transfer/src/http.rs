@@ -2,12 +2,11 @@ use crate::error::{Error, HttpError};
 use crate::{abortable_sink, abortable_stream};
 use crate::{TransferData, TransferProvider, TransferSink, TransferStream};
 use actix_http::http::Method;
-use actix_rt::System;
 use awc::SendClientRequest;
 use bytes::Bytes;
-use futures::future::ready;
-use futures::{SinkExt, StreamExt, TryStreamExt};
-use std::thread;
+use futures::future::{ready, LocalBoxFuture};
+use futures::{FutureExt, SinkExt, StreamExt, TryStreamExt};
+use tokio::task::spawn_local;
 use url::Url;
 use ya_client_model::activity::TransferArgs;
 
@@ -64,11 +63,12 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
         let txc = tx.clone();
         let url = url.clone();
 
-        thread::spawn(move || {
+        spawn_local(async move {
             let fut = async move {
                 request(Method::GET, url)
                     .send()
                     .await?
+                    .http_err()?
                     .into_stream()
                     .map_err(Error::from)
                     .forward(
@@ -79,7 +79,7 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
                     .map_err(Error::from)
             };
 
-            System::new("tx-http").block_on(abortable_stream(fut, abort_reg, txc))
+            abortable_stream(fut, abort_reg, txc).await
         });
 
         stream
@@ -91,23 +91,53 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
 
         let (sink, rx, res_tx) = TransferSink::<TransferData, Error>::create(1);
 
-        thread::spawn(move || {
+        spawn_local(async move {
             let fut = async move {
-                match request(method, url).send_stream(rx.map(|d| d.map(Bytes::from))) {
-                    SendClientRequest::Fut(fut, _, _) => {
-                        fut.await.map_err(Error::from)?;
-                        Ok(())
-                    }
-                    SendClientRequest::Err(maybe) => Err(match maybe {
-                        Some(error) => HttpError::from(error).into(),
-                        None => HttpError::Unspecified.into(),
-                    }),
-                }
+                request(method, url)
+                    .send_stream(rx.map(|res| res.map(Bytes::from)))
+                    .http_err()?
+                    .await
+                    .map(|_| ())
             };
 
-            System::new("rx-http").block_on(abortable_sink(fut, res_tx))
+            abortable_sink(fut, res_tx).await
         });
 
         sink
+    }
+}
+
+trait HttpErr<T>
+where
+    Self: Sized,
+{
+    fn http_err(self) -> Result<T, Error>;
+}
+
+impl<S> HttpErr<Self> for awc::ClientResponse<S> {
+    fn http_err(self) -> Result<Self, Error> {
+        let status = self.status();
+        if status.is_success() {
+            Ok(self)
+        } else {
+            if status.is_client_error() {
+                Err(HttpError::Client(status.to_string()).into())
+            } else {
+                Err(HttpError::Server(status.to_string()).into())
+            }
+        }
+    }
+}
+
+impl<'a> HttpErr<LocalBoxFuture<'a, Result<awc::ClientResponse, Error>>> for SendClientRequest {
+    fn http_err(self) -> Result<LocalBoxFuture<'a, Result<awc::ClientResponse, Error>>, Error> {
+        match self {
+            SendClientRequest::Fut(fut, _, _) => {
+                Ok(async move { Ok(fut.await?.http_err()?) }.boxed_local())
+            }
+            SendClientRequest::Err(err) => Err(err
+                .map(|e| e.into())
+                .unwrap_or_else(|| HttpError::Other("unspecified".into()).into())),
+        }
     }
 }

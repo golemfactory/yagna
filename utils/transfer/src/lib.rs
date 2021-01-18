@@ -3,10 +3,11 @@ pub mod error;
 mod file;
 mod gftp;
 mod http;
+mod retry;
 mod traverse;
 mod util;
 
-use crate::error::{ChannelError, Error};
+use crate::error::Error;
 use actix_rt::Arbiter;
 use bytes::Bytes;
 use futures::channel::mpsc::{channel, Receiver, Sender};
@@ -24,6 +25,7 @@ pub use crate::archive::{archive, extract, ArchiveFormat};
 pub use crate::file::{DirTransferProvider, FileTransferProvider};
 pub use crate::gftp::GftpTransferProvider;
 pub use crate::http::HttpTransferProvider;
+pub use crate::retry::Retry;
 pub use crate::traverse::PathTraverse;
 pub use crate::util::UrlExt;
 
@@ -33,13 +35,35 @@ where
 {
     let rx = sink.res_rx.take().unwrap();
     stream.forward(sink).await?;
-    rx.await
-        .map_err(ChannelError::from)
-        .map_err(Error::from)
-        .map(|_| ())
+    Ok(rx.await??)
+}
+
+pub async fn retry_transfer<S, T, Fs, Fd>(
+    stream_fn: Fs,
+    sink_fn: Fd,
+    mut retry: Retry,
+) -> Result<(), Error>
+where
+    S: Stream<Item = Result<T, Error>>,
+    Fs: Fn() -> Result<S, Error>,
+    Fd: Fn() -> TransferSink<T, Error>,
+{
+    loop {
+        match transfer(stream_fn()?, sink_fn()).await {
+            Ok(val) => return Ok(val),
+            Err(err) => match retry.delay(&err) {
+                Some(delay) => {
+                    log::warn!("retrying in {}s: {}", delay.as_secs_f32(), err);
+                    tokio::time::delay_for(delay).await;
+                }
+                None => return Err(err),
+            },
+        };
+    }
 }
 
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub enum TransferData {
     Bytes(Bytes),
 }
@@ -75,7 +99,7 @@ pub trait TransferProvider<T, E> {
 
 pub struct TransferStream<T, E> {
     rx: Receiver<Result<T, E>>,
-    pub abort_handle: AbortHandle,
+    abort_handle: AbortHandle,
 }
 
 impl<T: 'static, E: 'static> TransferStream<T, E> {
@@ -112,7 +136,7 @@ impl<T, E> Drop for TransferStream<T, E> {
 
 pub struct TransferSink<T, E> {
     tx: Sender<Result<T, E>>,
-    pub res_rx: Option<oneshot::Receiver<Result<(), E>>>,
+    res_rx: Option<oneshot::Receiver<Result<(), E>>>,
 }
 
 impl<T, E> TransferSink<T, E> {
