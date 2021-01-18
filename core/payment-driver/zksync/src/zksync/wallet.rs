@@ -9,8 +9,9 @@ use lazy_static::lazy_static;
 use num::BigUint;
 use std::env;
 use std::str::FromStr;
+use zksync::operations::SyncTransactionHandle;
 use zksync::types::BlockStatus;
-use zksync::zksync_types::{tx::TxHash, Address};
+use zksync::zksync_types::{tx::TxHash, Address, TxFeeTypes};
 use zksync::{Network, Provider, Wallet, WalletCredentials};
 use zksync_eth_signer::EthereumSigner;
 
@@ -183,4 +184,54 @@ async fn unlock_wallet<S: EthereumSigner + Clone>(wallet: Wallet<S>) -> Result<(
         log::info!("Wallet unlocked. tx_info = {:?}", tx_info);
     }
     Ok(())
+}
+
+pub async fn withdraw<S: EthereumSigner + Clone>(
+    wallet: Wallet<S>,
+    amount: Option<BigDecimal>,
+) -> Result<SyncTransactionHandle, GenericError> {
+    let balance = wallet
+        .get_balance(BlockStatus::Committed, ZKSYNC_TOKEN_NAME)
+        .await
+        .map_err(GenericError::new)?;
+    info!(
+        "Wallet funded with {} tGLM available for withdrawal",
+        utils::big_uint_to_big_dec(balance.clone())
+    );
+
+    info!("Obtaining withdrawal fee");
+    let address = wallet.address();
+    let withdraw_fee = wallet
+        .provider
+        .get_tx_fee(TxFeeTypes::Withdraw, address, ZKSYNC_TOKEN_NAME)
+        .await
+        .map_err(GenericError::new)?
+        .total_fee;
+    info!(
+        "Withdrawal transaction fee {:.5}",
+        utils::big_uint_to_big_dec(withdraw_fee.clone())
+    );
+
+    let amount = amount
+        .ok_or(GenericError::new("unused"))
+        .and_then(utils::big_dec_to_big_uint)
+        .unwrap_or(balance.clone());
+    let withdraw_amount = std::cmp::min(balance - withdraw_fee, amount);
+    info!(
+        "Withdrawal of {:.5} tGLM started",
+        utils::big_uint_to_big_dec(withdraw_amount.clone())
+    );
+
+    let withdraw_handle = wallet
+        .start_withdraw()
+        .token(ZKSYNC_TOKEN_NAME)
+        .map_err(GenericError::new)?
+        .amount(withdraw_amount)
+        .to(address)
+        .send()
+        .await
+        .map_err(GenericError::new)?;
+
+    debug!("Withdraw handle: {:?}", withdraw_handle);
+    Ok(withdraw_handle)
 }

@@ -5,9 +5,10 @@ use bigdecimal::BigDecimal;
 use hex::ToHex;
 use std::str::FromStr;
 use structopt::StructOpt;
-use ya_zksync_driver::zksync::{faucet, utils};
-use zksync::zksync_types::{TxFeeTypes, H256};
-use zksync::{types::BlockStatus, Network, Provider, Wallet, WalletCredentials};
+use ya_zksync_driver::zksync::faucet;
+use ya_zksync_driver::zksync::wallet as driver_wallet;
+use zksync::zksync_types::H256;
+use zksync::{Network, Provider, Wallet, WalletCredentials};
 use zksync_eth_signer::{EthereumSigner, PrivateKeySigner};
 
 const TOKEN: &str = "GNT";
@@ -61,43 +62,12 @@ async fn main() -> anyhow::Result<()> {
         unlock.wait_for_commit().await?;
     }
 
-    let balance = wallet.get_balance(BlockStatus::Committed, TOKEN).await?;
-    info!(
-        "Deposit successful {} tGLM available",
-        utils::big_uint_to_big_dec(balance.clone())
-    );
-
-    info!("Obtaining withdrawal fee");
     let amount: BigDecimal = args
         .amount
         .parse()
         .expect("Cannot parse 'amount' parameter to BigDecimal");
-    let amount = utils::big_dec_to_big_uint(amount)?;
-    let withdraw_fee = wallet
-        .provider
-        .get_tx_fee(TxFeeTypes::Withdraw, address, TOKEN)
-        .await?
-        .total_fee;
-    info!(
-        "Withdrawal transaction fee {:.5}",
-        utils::big_uint_to_big_dec(withdraw_fee.clone())
-    );
 
-    let withdraw_amount = std::cmp::min(balance - withdraw_fee, amount);
-    info!(
-        "Withdrawal of {:.5} tGLM started",
-        utils::big_uint_to_big_dec(withdraw_amount.clone())
-    );
-
-    let withdraw_handle = wallet
-        .start_withdraw()
-        .token(TOKEN)?
-        .amount(withdraw_amount)
-        .to(address)
-        .send()
-        .await?;
-
-    debug!("Withdraw: {:?}", withdraw_handle);
+    let withdraw_handle = driver_wallet::withdraw(wallet, Some(amount)).await?;
 
     info!("Waiting for receipt - this takes LOOONG to complete...");
     info!(
