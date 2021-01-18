@@ -28,10 +28,6 @@ async fn get_provider_accounts(id: Identity) -> HttpResponse {
         .into_iter()
         .filter(|account| account.receive)
         .filter(|account| account.address == node_id) // TODO: Implement proper account permission system
-        .map(|account| Account {
-            platform: account.platform,
-            address: account.address,
-        })
         .collect();
     response::ok(recv_accounts)
 }
@@ -47,10 +43,6 @@ async fn get_requestor_accounts(id: Identity) -> HttpResponse {
         .into_iter()
         .filter(|account| account.send)
         .filter(|account| account.address == node_id) // TODO: Implement proper account permission system
-        .map(|account| Account {
-            platform: account.platform,
-            address: account.address,
-        })
         .collect();
     response::ok(recv_accounts)
 }

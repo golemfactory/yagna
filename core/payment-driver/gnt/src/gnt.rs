@@ -4,7 +4,9 @@ pub mod ethereum;
 pub mod faucet;
 pub mod sender;
 
-use crate::{GNTDriverError, GNTDriverResult, DRIVER_NAME, PLATFORM_NAME};
+use crate::{
+    GNTDriverError, GNTDriverResult, DEFAULT_NETWORK, DEFAULT_PLATFORM, DEFAULT_TOKEN, DRIVER_NAME,
+};
 use bigdecimal::BigDecimal;
 use std::future::Future;
 use std::pin::Pin;
@@ -23,6 +25,7 @@ pub(crate) async fn notify_payment(
 ) -> GNTDriverResult<()> {
     let msg = payment::NotifyPayment {
         driver: DRIVER_NAME.to_string(),
+        platform: DEFAULT_PLATFORM.to_string(), // TODO: Implement multi-network support
         amount,
         sender,
         recipient,
@@ -41,9 +44,10 @@ pub(crate) async fn notify_payment(
 pub(crate) async fn register_account(address: String, mode: AccountMode) -> GNTDriverResult<()> {
     log::info!("Register account: {}, mode: {:?}", address, mode);
     let msg = payment::RegisterAccount {
-        platform: PLATFORM_NAME.to_string(),
         address,
         driver: DRIVER_NAME.to_string(),
+        network: DEFAULT_NETWORK.to_string(), // TODO: Implement multi-network support
+        token: DEFAULT_TOKEN.to_string(),     // TODO: Implement multi-network support
         mode,
     };
     bus::service(payment::BUS_ID)
