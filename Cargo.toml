@@ -46,6 +46,7 @@ ya-sgx = "0.1"
 ya-utils-path = "0.1"
 ya-utils-futures = "0.1"
 ya-utils-process = { version = "0.1", features = ["lock"] }
+ya-version = "0.0.1"
 
 actix-rt = "1.0"
 actix-service = "1.0"
@@ -119,6 +120,7 @@ members = [
     "core/serv-api/interfaces",
     "core/serv-api/web",
     "core/sgx",
+    "core/version",
     "exe-unit",
     "exe-unit/runtime-api",
     "exe-unit/tokio-process-ns",
@@ -192,3 +194,4 @@ ya-utils-path = { path = "utils/path"}
 ya-utils-process = { path = "utils/process"}
 ya-diesel-utils = { path = "utils/diesel-utils"}
 ya-metrics = { path = "core/metrics" }
+ya-version = { path = "core/version" }
