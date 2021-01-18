@@ -3,6 +3,7 @@ extern crate log;
 
 use bigdecimal::BigDecimal;
 use hex::ToHex;
+use std::str::FromStr;
 use structopt::StructOpt;
 use ya_zksync_driver::zksync::{faucet, utils};
 use zksync::zksync_types::{TxFeeTypes, H256};
@@ -18,7 +19,7 @@ struct Args {
     genkey: bool,
 
     #[structopt(long, default_value = "5.0")]
-    amount: f64,
+    amount: String,
 }
 
 #[actix_rt::main]
@@ -33,20 +34,15 @@ async fn main() -> anyhow::Result<()> {
         H256::random()
     } else {
         debug!("Using hardcoded key");
-        let mut bytes = [0u8; 32];
-        hex::decode_to_slice(PRIVATE_KEY, &mut bytes)
-            .expect("Cannot decode bytes from hex-encoded PK");
-        H256::from(bytes)
+        H256::from_str(PRIVATE_KEY).expect("Cannot decode bytes from hex-encoded PK")
     };
 
-    let pk_hex: String = private_key.encode_hex();
     let signer = PrivateKeySigner::new(private_key);
     let address = signer.get_address().await?;
     let addr_hex = format!("0x{}", address.encode_hex::<String>());
-    info!("Private key: {}\nAccount address {}", pk_hex, addr_hex);
+    info!("Account address {}", addr_hex);
 
     info!("Funding an account");
-    // let hex_addr = key.address().to_string();
     faucet::request_ngnt(&addr_hex).await?;
 
     info!("Creating wallet");
@@ -58,7 +54,7 @@ async fn main() -> anyhow::Result<()> {
         info!("Unlocking account");
         let unlock = wallet
             .start_change_pubkey()
-            .fee_token("GNT")?
+            .fee_token(TOKEN)?
             .send()
             .await?;
         debug!("unlock={:?}", unlock);
@@ -67,12 +63,16 @@ async fn main() -> anyhow::Result<()> {
 
     let balance = wallet.get_balance(BlockStatus::Committed, TOKEN).await?;
     info!(
-        "Deposit successful {} NGNT available",
+        "Deposit successful {} tGLM available",
         utils::big_uint_to_big_dec(balance.clone())
     );
 
     info!("Obtaining withdrawal fee");
-    let amount = utils::big_dec_to_big_uint(BigDecimal::from(args.amount))?;
+    let amount: BigDecimal = args
+        .amount
+        .parse()
+        .expect("Cannot parse 'amount' parameter to BigDecimal");
+    let amount = utils::big_dec_to_big_uint(amount)?;
     let withdraw_fee = wallet
         .provider
         .get_tx_fee(TxFeeTypes::Withdraw, address, TOKEN)
@@ -85,11 +85,10 @@ async fn main() -> anyhow::Result<()> {
 
     let withdraw_amount = std::cmp::min(balance - withdraw_fee, amount);
     info!(
-        "Withdrawal of {:.5} NGNT started",
+        "Withdrawal of {:.5} tGLM started",
         utils::big_uint_to_big_dec(withdraw_amount.clone())
     );
 
-    // let withdraw_amount = withdraw_amount.to_u64().unwrap();
     let withdraw_handle = wallet
         .start_withdraw()
         .token(TOKEN)?
@@ -100,10 +99,12 @@ async fn main() -> anyhow::Result<()> {
 
     debug!("Withdraw: {:?}", withdraw_handle);
 
+    info!("Waiting for receipt - this takes LOOONG to complete...");
     info!(
-        "Waiting for receipt - this takes LOOONG to complete...\nCheck it here: {}",
-        format!("https://rinkeby.zkscan.io/explorer/accounts/{}", addr_hex)
+        "Check it here: https://rinkeby.zkscan.io/explorer/accounts/{}",
+        addr_hex
     );
+
     let tx_info = withdraw_handle.wait_for_verify().await?;
     info!("Withdrawal succeeded!\n{:?}", tx_info);
 
