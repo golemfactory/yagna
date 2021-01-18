@@ -1,6 +1,5 @@
 use anyhow::{anyhow, bail, Result};
 use bigdecimal::{BigDecimal, Signed, ToPrimitive};
-use humantime::format_duration;
 use num_bigint::BigInt;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -8,6 +7,7 @@ use tokio::sync::watch;
 
 use super::factory::PaymentModelFactory;
 use super::model::{PaymentDescription, PaymentModel};
+use crate::display::EnableDisplay;
 
 use ya_agreement_utils::AgreementView;
 use ya_client::activity::ActivityProviderApi;
@@ -104,7 +104,7 @@ impl AgreementPayment {
             log::info!(
                 "Requestor is expected to accept DebitNotes for Agreement [{}] in {}",
                 &agreement.id,
-                format_duration(deadline.clone().to_std().unwrap())
+                deadline.display()
             );
         }
 

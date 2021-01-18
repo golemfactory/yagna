@@ -4,6 +4,7 @@ use chrono::{DateTime, Duration, TimeZone, Utc};
 use ya_agreement_utils::{Error, OfferDefinition};
 use ya_client_model::market::Reason;
 
+use crate::display::EnableDisplay;
 use crate::market::negotiator::factory::AgreementExpirationNegotiatorConfig;
 use crate::market::negotiator::{
     AgreementResult, NegotiationResult, NegotiatorComponent, ProposalView,
@@ -83,7 +84,9 @@ impl NegotiatorComponent for LimitExpiration {
             return Ok(NegotiationResult::Reject {
                 reason: Some(Reason::new(format!(
                     "Proposal expires at: {} which is less than {} or more than {} from now",
-                    req_expiration, self.min_expiration, max_expiration_delta,
+                    req_expiration,
+                    self.min_expiration.display(),
+                    max_expiration_delta.display()
                 ))),
             });
         };
