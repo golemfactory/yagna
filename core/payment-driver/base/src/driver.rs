@@ -32,6 +32,16 @@ pub trait PaymentDriver {
         msg: GetAccountBalance,
     ) -> Result<BigDecimal, GenericError>;
 
+    async fn enter(
+        &self,
+        db: DbExecutor,
+        caller: String,
+        msg: Enter,
+    ) -> Result<String, GenericError>;
+
+    async fn exit(&self, db: DbExecutor, caller: String, msg: Exit)
+        -> Result<String, GenericError>;
+
     // used by bus to bind service
     fn get_name(&self) -> String;
     fn get_platform(&self) -> String;
@@ -45,6 +55,13 @@ pub trait PaymentDriver {
     ) -> Result<BigDecimal, GenericError>;
 
     async fn init(&self, db: DbExecutor, caller: String, msg: Init) -> Result<Ack, GenericError>;
+
+    async fn transfer(
+        &self,
+        db: DbExecutor,
+        caller: String,
+        msg: Transfer,
+    ) -> Result<String, GenericError>;
 
     async fn schedule_payment(
         &self,

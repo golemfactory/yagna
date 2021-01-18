@@ -1,5 +1,5 @@
 use crate::accounts::{init_account, Account};
-use crate::{DEFAULT_PAYMENT_DRIVER, DEFAULT_PAYMENT_PLATFORM};
+use crate::{wallet, DEFAULT_PAYMENT_DRIVER, DEFAULT_PAYMENT_PLATFORM};
 use chrono::Utc;
 use structopt::*;
 use ya_core_model::{identity as id_api, payment::local as pay};
@@ -9,6 +9,26 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 /// Payment management.
 #[derive(StructOpt, Debug)]
 pub enum PaymentCli {
+    Accounts,
+    Enter {
+        amount: String,
+        #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
+        driver: String,
+        #[structopt(long, short)]
+        network: Option<String>,
+        #[structopt(long, short)]
+        token: Option<String>,
+    },
+    Exit {
+        to: Option<String>,
+        amount: Option<String>,
+        #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
+        driver: String,
+        #[structopt(long, short)]
+        network: Option<String>,
+        #[structopt(long, short)]
+        token: Option<String>,
+    },
     Init {
         address: Option<String>,
         #[structopt(long, short)]
@@ -18,16 +38,25 @@ pub enum PaymentCli {
         #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
         driver: String,
     },
-    Status {
-        address: Option<String>,
-        #[structopt(long, short)]
-        platform: Option<String>,
-    },
-    Accounts,
     Invoice {
         address: Option<String>,
         #[structopt(subcommand)]
         command: InvoiceCommand,
+    },
+    Transfer {
+        amount: String,
+        to: String,
+        #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
+        driver: String,
+        #[structopt(long, short)]
+        network: Option<String>,
+        #[structopt(long, short)]
+        token: Option<String>,
+    },
+    Status {
+        address: Option<String>,
+        #[structopt(long, short)]
+        platform: Option<String>,
     },
 }
 
@@ -112,6 +141,26 @@ impl PaymentCli {
                         .await??,
                 )
             }
+            PaymentCli::Enter {
+                amount,
+                driver,
+                network,
+                token,
+            } => CommandOutput::object(wallet::enter(amount, driver, network, token).await?),
+            PaymentCli::Exit {
+                to,
+                amount,
+                driver,
+                network,
+                token,
+            } => CommandOutput::object(wallet::exit(to, amount, driver, network, token).await?),
+            PaymentCli::Transfer {
+                to,
+                amount,
+                driver,
+                network,
+                token,
+            } => CommandOutput::object(wallet::transfer(to, amount, driver, network, token).await?),
         }
     }
 }
