@@ -3278,6 +3278,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "maplit"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
+
+[[package]]
 name = "match_cfg"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6874,7 +6880,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=200d42efa6bd77de071b5674efe55aeb2f6296e1#200d42efa6bd77de071b5674efe55aeb2f6296e1"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=a5bfc61da8f3a5cdcafcacf3d48a9f706571a9d7#a5bfc61da8f3a5cdcafcacf3d48a9f706571a9d7"
 dependencies = [
  "awc 1.0.1",
  "bytes 0.5.6",
@@ -6899,7 +6905,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=200d42efa6bd77de071b5674efe55aeb2f6296e1#200d42efa6bd77de071b5674efe55aeb2f6296e1"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=a5bfc61da8f3a5cdcafcacf3d48a9f706571a9d7#a5bfc61da8f3a5cdcafcacf3d48a9f706571a9d7"
 dependencies = [
  "bigdecimal 0.1.2",
  "chrono",
@@ -6962,6 +6968,7 @@ dependencies = [
  "chrono",
  "futures 0.3.8",
  "log",
+ "maplit",
  "serde_json",
  "uuid 0.8.1",
  "ya-core-model",
@@ -7058,6 +7065,7 @@ dependencies = [
  "lazy_static",
  "libsqlite3-sys",
  "log",
+ "maplit",
  "num-bigint 0.2.6",
  "r2d2",
  "rlp",
@@ -7663,6 +7671,7 @@ dependencies = [
 name = "ya-zksync-driver"
 version = "0.1.0"
 dependencies = [
+ "actix-rt",
  "anyhow",
  "async-trait",
  "awc 2.0.3",
@@ -7675,8 +7684,10 @@ dependencies = [
  "hex",
  "lazy_static",
  "log",
+ "maplit",
  "num",
  "serde_json",
+ "structopt",
  "tiny-keccak 1.5.0",
  "tokio",
  "uuid 0.8.1",

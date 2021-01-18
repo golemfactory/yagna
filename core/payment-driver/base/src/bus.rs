@@ -70,8 +70,11 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
     log::debug!("Registering driver in payment service...");
     let message = payment_srv::RegisterDriver {
         driver_name: driver.get_name(),
-        platform: driver.get_platform(),
-        recv_init_required: driver.recv_init_required(),
+        details: payment_srv::DriverDetails {
+            default_network: driver.get_default_network(),
+            networks: driver.get_networks(),
+            recv_init_required: driver.recv_init_required(),
+        },
     };
     service(payment_srv::BUS_ID).send(message).await?.unwrap(); // Unwrap on purpose because it's NoError
     log::debug!("Successfully registered driver in payment service.");
@@ -102,13 +105,15 @@ pub async fn list_unlocked_identities() -> Result<Vec<NodeId>, GenericError> {
 pub async fn register_account(
     driver: &(dyn PaymentDriver),
     address: &str,
+    network: &str,
+    token: &str,
     mode: AccountMode,
 ) -> Result<(), GenericError> {
-    let address = address.to_string();
     let msg = payment_srv::RegisterAccount {
-        platform: driver.get_platform(),
-        address,
+        address: address.to_string(),
         driver: driver.get_name(),
+        network: network.to_string(),
+        token: token.to_string(),
         mode,
     };
     service(payment_srv::BUS_ID)
@@ -130,12 +135,14 @@ pub async fn sign(node_id: NodeId, payload: Vec<u8>) -> Result<Vec<u8>, GenericE
 
 pub async fn notify_payment(
     driver_name: &str,
+    platform: &str,
     order_ids: Vec<String>,
     details: &PaymentDetails,
     confirmation: Vec<u8>,
 ) -> Result<(), GenericError> {
     let msg = payment_srv::NotifyPayment {
         driver: driver_name.to_string(),
+        platform: platform.to_string(),
         amount: details.amount.clone(),
         sender: details.sender.clone(),
         recipient: details.recipient.clone(),
