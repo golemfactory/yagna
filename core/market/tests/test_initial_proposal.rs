@@ -576,6 +576,7 @@ async fn test_respawn_proposal_after_terminate_by_requestor() -> anyhow::Result<
     .unwrap();
 
     let req_market = network.get_market(REQ_NAME);
+    let prov_market = network.get_market(PROV_NAME);
     let req_id = network.get_default_id(REQ_NAME);
     let agreement_id = info.r_agreement;
 
@@ -596,6 +597,14 @@ async fn test_respawn_proposal_after_terminate_by_requestor() -> anyhow::Result<
         network.get_default_id(PROV_NAME).identity
     );
     assert_eq!(proposal.state, State::Initial);
+
+    // No new Proposal should appear on Provider Daemon side.
+    assert!(prov_market
+        .provider_engine
+        .query_events(&info.negotiation.offer_id, 0.2, Some(2))
+        .await
+        .unwrap()
+        .is_empty());
     Ok(())
 }
 

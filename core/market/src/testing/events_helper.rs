@@ -74,6 +74,7 @@ pub mod requestor {
 pub mod provider {
     use super::*;
     use ya_client::model::market::event::ProviderEvent;
+    use ya_client::model::market::Agreement;
 
     pub fn expect_proposal(events: Vec<ProviderEvent>, i: u8) -> anyhow::Result<Proposal> {
         assert_eq!(events.len(), 1, "{}: Expected one event: {:?}.", i, events);
@@ -81,6 +82,15 @@ pub mod provider {
         Ok(match events[0].clone() {
             ProviderEvent::ProposalEvent { proposal, .. } => proposal,
             _ => anyhow::bail!("Invalid event Type. ProposalEvent expected"),
+        })
+    }
+
+    pub fn expect_agreement(events: Vec<ProviderEvent>, i: u8) -> anyhow::Result<Agreement> {
+        assert_eq!(events.len(), 1, "{}: Expected one event: {:?}.", i, events);
+
+        Ok(match events[0].clone() {
+            ProviderEvent::AgreementEvent { agreement, .. } => agreement,
+            _ => anyhow::bail!("Invalid event Type. AgreementEvent expected"),
         })
     }
 

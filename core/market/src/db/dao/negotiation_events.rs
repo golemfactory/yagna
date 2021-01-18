@@ -89,6 +89,9 @@ impl<'c> NegotiationEventsDao<'c> {
             // Check subscription wasn't unsubscribed or expired.
             validate_subscription(conn, &subscription_id, owner)?;
 
+            // TODO: Only ProposalEvents should be in random order.
+            //  AgreementEvent and rejections events should be sorted with higher
+            //  priority.
             let events = dsl::market_negotiation_event
                 .filter(dsl::subscription_id.eq(&subscription_id))
                 .order_by(sql::<sql_types::Bool>("RANDOM()"))

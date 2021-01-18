@@ -472,16 +472,18 @@ impl CommonBroker {
         // Note: Regeneration failure isn't propagated to Provider, because termination
         // succeeded at this point.
         if let Owner::Requestor = agreement.id.owner() {
-            self.regenerate_proposal(&agreement)
-                .await
-                .map_err(|e| {
-                    log::warn!(
-                        "Failed to regenerate Proposal after Agreement [{}] termination. {}",
-                        &agreement.id,
-                        e
-                    )
-                })
-                .ok();
+            tokio::task::spawn_local(async move {
+                self.regenerate_proposal(&agreement)
+                    .await
+                    .map_err(|e| {
+                        log::warn!(
+                            "Failed to regenerate Proposal after Agreement [{}] termination. {}",
+                            &agreement.id,
+                            e
+                        )
+                    })
+                    .ok();
+            });
         }
         Ok(())
     }
@@ -705,11 +707,13 @@ impl CommonBroker {
         &self,
         agreement: &Agreement,
     ) -> Result<(), RegenerateProposalError> {
-        let demand = self.store.get_demand(&agreement.demand_id).await?;
-        let offer = self.store.get_offer(&agreement.offer_id).await?;
+        if let Owner::Requestor = agreement.id.owner() {
+            let demand = self.store.get_demand(&agreement.demand_id).await?;
+            let offer = self.store.get_offer(&agreement.offer_id).await?;
 
-        self.generate_proposal(RawProposal { demand, offer })
-            .await?;
+            self.generate_proposal(RawProposal { demand, offer })
+                .await?;
+        }
         Ok(())
     }
 }
