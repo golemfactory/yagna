@@ -105,8 +105,13 @@ async fn main() -> anyhow::Result<()> {
         addr_hex
     );
 
-    let tx_info = withdraw_handle.wait_for_verify().await?;
-    info!("Withdrawal succeeded!\n{:?}", tx_info);
+    let tx_info = withdraw_handle.wait_for_commit().await?;
+    if tx_info.success.unwrap_or(false) {
+        withdraw_handle.wait_for_verify().await?;
+        info!("Withdrawal succeeded!");
+    } else {
+        warn!("Withdraw has failed. Reason: {:?}", tx_info.fail_reason);
+    }
 
     Ok(())
 }
