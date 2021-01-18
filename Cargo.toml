@@ -100,7 +100,6 @@ assets = [
 [workspace]
 members = [
     "agent/provider",
-    "agent/requestor",
     "core/activity",
     "core/gftp",
     "core/identity",
@@ -172,8 +171,8 @@ ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "87f106498a7a7b1519d82d0981fc21b260a89cf2"}
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "87f106498a7a7b1519d82d0981fc21b260a89cf2"}
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "a5bfc61da8f3a5cdcafcacf3d48a9f706571a9d7"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "a5bfc61da8f3a5cdcafcacf3d48a9f706571a9d7"}
 
 #ya-client = { path = "../ya-client" }
 #ya-client-model = { path = "../ya-client/model" }

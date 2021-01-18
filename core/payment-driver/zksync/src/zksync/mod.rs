@@ -4,6 +4,6 @@
 
 pub mod wallet;
 
-mod faucet;
+pub mod faucet;
 mod signer;
-mod utils;
+pub mod utils;

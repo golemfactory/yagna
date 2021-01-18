@@ -2351,25 +2351,9 @@ dependencies = [
 
 [[package]]
 name = "flexi_logger"
-version = "0.15.12"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaab3caedb4149800f91e8e4899f29cd9ddf3b569b04c365ca9334f92f7542bf"
-dependencies = [
- "atty",
- "chrono",
- "glob",
- "lazy_static",
- "log",
- "regex",
- "thiserror",
- "yansi",
-]
-
-[[package]]
-name = "flexi_logger"
-version = "0.16.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "291b6ce7b3ed2dda82efa6aee4c6bdb55fd11bc88b06c55b01851e94b96e5322"
+checksum = "cb17f043f5161c62f37683a850da6b4a0a217da77340e63b8789a4635a98da62"
 dependencies = [
  "atty",
  "chrono",
@@ -3144,15 +3128,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "itertools"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "284f18f85651fe11e8a991b2adb42cb078325c996ed026d994719efcfca1d54b"
-dependencies = [
- "either",
-]
-
-[[package]]
 name = "itoa"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3314,6 +3289,12 @@ dependencies = [
  "libc",
  "pkg-config",
 ]
+
+[[package]]
+name = "maplit"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
 
 [[package]]
 name = "match_cfg"
@@ -4452,7 +4433,7 @@ checksum = "eb788126ea840817128183f8f603dce02cb7aea25c2a0b764359d8e20010702e"
 dependencies = [
  "bytes 0.4.12",
  "heck",
- "itertools 0.8.2",
+ "itertools",
  "log",
  "multimap 0.4.0",
  "petgraph 0.4.13",
@@ -4470,7 +4451,7 @@ checksum = "02b10678c913ecbd69350e8535c3aef91a8676c0773fc1d7b95cdd196d7f2f26"
 dependencies = [
  "bytes 0.5.6",
  "heck",
- "itertools 0.8.2",
+ "itertools",
  "log",
  "multimap 0.8.2",
  "petgraph 0.5.1",
@@ -4487,7 +4468,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e7dc378b94ac374644181a2247cebf59a6ec1c88b49ac77f3a94b86b79d0e11"
 dependencies = [
  "failure",
- "itertools 0.8.2",
+ "itertools",
  "proc-macro2 0.4.30",
  "quote 0.6.13",
  "syn 0.15.44",
@@ -4500,7 +4481,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "537aa19b95acde10a12fec4301466386f757403de4cd4e5b4fa78fb5ecb18f72"
 dependencies = [
  "anyhow",
- "itertools 0.8.2",
+ "itertools",
  "proc-macro2 1.0.24",
  "quote 1.0.7",
  "syn 1.0.54",
@@ -5299,6 +5280,17 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
+]
+
+[[package]]
+name = "serde_qs"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5cb0f0564a84554436c4ceff5c896308d4e09d0eb4bd0215b8f698f88084601"
+dependencies = [
+ "percent-encoding 2.1.0",
+ "serde",
+ "thiserror",
 ]
 
 [[package]]
@@ -6893,7 +6885,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "uuid 0.8.1",
- "ya-client-model 0.2.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-net",
  "ya-persistence",
@@ -6914,35 +6906,13 @@ dependencies = [
  "serde_yaml",
  "tempdir",
  "thiserror",
- "ya-client-model 0.2.0",
-]
-
-[[package]]
-name = "ya-client"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e90c91653a82525747f213c865d7f8509b77d62f98d106533f0121fa5d9c5c66"
-dependencies = [
- "awc 1.0.1",
- "backtrace",
- "bytes 0.5.6",
- "chrono",
- "envy",
- "failure",
- "futures 0.3.8",
- "log",
- "serde",
- "serde_json",
- "structopt",
- "thiserror",
- "url 2.2.0",
- "ya-client-model 0.1.1",
+ "ya-client-model",
 ]
 
 [[package]]
 name = "ya-client"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=87f106498a7a7b1519d82d0981fc21b260a89cf2#87f106498a7a7b1519d82d0981fc21b260a89cf2"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=a5bfc61da8f3a5cdcafcacf3d48a9f706571a9d7#a5bfc61da8f3a5cdcafcacf3d48a9f706571a9d7"
 dependencies = [
  "awc 1.0.1",
  "bytes 0.5.6",
@@ -6957,29 +6927,17 @@ dependencies = [
  "rand 0.6.5",
  "serde",
  "serde_json",
+ "serde_qs",
  "structopt",
  "thiserror",
  "url 2.2.0",
- "ya-client-model 0.2.0",
-]
-
-[[package]]
-name = "ya-client-model"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b325b7e2de2ad52bc85bce0f1fb491023cf7e41991202597c09854371df99f3"
-dependencies = [
- "bigdecimal 0.1.2",
- "chrono",
- "serde",
- "serde_json",
- "thiserror",
+ "ya-client-model",
 ]
 
 [[package]]
 name = "ya-client-model"
 version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=87f106498a7a7b1519d82d0981fc21b260a89cf2#87f106498a7a7b1519d82d0981fc21b260a89cf2"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=a5bfc61da8f3a5cdcafcacf3d48a9f706571a9d7#a5bfc61da8f3a5cdcafcacf3d48a9f706571a9d7"
 dependencies = [
  "bigdecimal 0.1.2",
  "chrono",
@@ -7017,7 +6975,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "thiserror",
- "ya-client-model 0.2.0",
+ "ya-client-model",
  "ya-service-bus",
 ]
 
@@ -7042,6 +7000,7 @@ dependencies = [
  "chrono",
  "futures 0.3.8",
  "log",
+ "maplit",
  "serde_json",
  "uuid 0.8.1",
  "ya-core-model",
@@ -7064,7 +7023,7 @@ dependencies = [
  "derivative",
  "dotenv",
  "env_logger 0.7.1",
- "flexi_logger 0.15.12",
+ "flexi_logger",
  "futures 0.3.8",
  "graphene-sgx",
  "hex",
@@ -7092,7 +7051,7 @@ dependencies = [
  "url 2.2.0",
  "winapi 0.3.9",
  "ya-agreement-utils",
- "ya-client-model 0.2.0",
+ "ya-client-model",
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-runtime-api",
@@ -7108,7 +7067,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "flexi_logger 0.16.3",
+ "flexi_logger",
  "log",
 ]
 
@@ -7138,6 +7097,7 @@ dependencies = [
  "lazy_static",
  "libsqlite3-sys",
  "log",
+ "maplit",
  "num-bigint 0.2.6",
  "r2d2",
  "rlp",
@@ -7153,7 +7113,7 @@ dependencies = [
  "ureq",
  "uuid 0.8.1",
  "web3",
- "ya-client-model 0.2.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-persistence",
  "ya-service-api-interfaces",
@@ -7189,7 +7149,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "uuid 0.8.1",
- "ya-client-model 0.2.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-persistence",
  "ya-sb-router",
@@ -7238,7 +7198,7 @@ dependencies = [
  "tokio",
  "uuid 0.8.1",
  "ya-agreement-utils",
- "ya-client 0.4.0",
+ "ya-client",
  "ya-core-model",
  "ya-diesel-utils",
  "ya-market",
@@ -7345,8 +7305,8 @@ dependencies = [
  "uint 0.7.1",
  "uuid 0.8.1",
  "ya-agreement-utils",
- "ya-client 0.4.0",
- "ya-client-model 0.2.0",
+ "ya-client",
+ "ya-client-model",
  "ya-core-model",
  "ya-dummy-driver",
  "ya-gnt-driver",
@@ -7379,7 +7339,7 @@ dependencies = [
  "r2d2",
  "thiserror",
  "tokio",
- "ya-client-model 0.2.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-persistence",
  "ya-service-bus",
@@ -7400,7 +7360,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
- "ya-client-model 0.2.0",
+ "ya-client-model",
  "ya-core-model",
 ]
 
@@ -7447,37 +7407,14 @@ dependencies = [
  "walkdir",
  "winapi 0.3.9",
  "ya-agreement-utils",
- "ya-client 0.4.0",
- "ya-client-model 0.2.0",
+ "ya-client",
+ "ya-client-model",
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-file-logging",
  "ya-utils-actix",
  "ya-utils-path",
  "ya-utils-process",
-]
-
-[[package]]
-name = "ya-requestor"
-version = "0.1.0"
-dependencies = [
- "actix-rt",
- "anyhow",
- "chrono",
- "dotenv",
- "env_logger 0.7.1",
- "futures 0.3.8",
- "humantime 2.0.1",
- "itertools 0.9.0",
- "log",
- "serde_json",
- "structopt",
- "tokio",
- "url 2.2.0",
- "uuid 0.8.1",
- "ya-agreement-utils",
- "ya-client 0.3.1",
- "ya-compile-time-utils",
 ]
 
 [[package]]
@@ -7615,7 +7552,7 @@ dependencies = [
  "serde",
  "structopt",
  "url 2.2.0",
- "ya-client 0.4.0",
+ "ya-client",
  "ya-core-model",
  "ya-identity",
  "ya-persistence",
@@ -7657,7 +7594,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "graphene-sgx",
- "ya-client-model 0.2.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-service-bus",
 ]
@@ -7686,6 +7623,7 @@ dependencies = [
  "futures 0.3.8",
  "gftp",
  "globset",
+ "h2",
  "hex",
  "lazy_static",
  "log",
@@ -7703,7 +7641,7 @@ dependencies = [
  "tokio-util 0.2.0",
  "url 2.2.0",
  "walkdir",
- "ya-client-model 0.2.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-net",
  "ya-service-bus",
@@ -7765,6 +7703,7 @@ dependencies = [
 name = "ya-zksync-driver"
 version = "0.1.0"
 dependencies = [
+ "actix-rt",
  "anyhow",
  "async-trait",
  "awc 2.0.3",
@@ -7777,12 +7716,14 @@ dependencies = [
  "hex",
  "lazy_static",
  "log",
+ "maplit",
  "num",
  "serde_json",
+ "structopt",
  "tiny-keccak 1.5.0",
  "tokio",
  "uuid 0.8.1",
- "ya-client-model 0.2.0",
+ "ya-client-model",
  "ya-payment-driver",
  "ya-service-api-interfaces",
  "ya-utils-futures",

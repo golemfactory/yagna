@@ -1,14 +1,12 @@
 use crate::error::Error;
 use crate::{abortable_sink, abortable_stream};
 use crate::{TransferData, TransferProvider, TransferSink, TransferStream};
-use actix_rt::System;
 use bytes::Bytes;
 use futures::future::ready;
 use futures::{SinkExt, StreamExt, TryFutureExt, TryStreamExt};
 use gftp::DEFAULT_CHUNK_SIZE;
 use sha3::{Digest, Sha3_256};
 use std::cmp::min;
-use std::thread;
 use url::Url;
 use ya_client_model::activity::TransferArgs;
 use ya_core_model::gftp as model;
@@ -40,7 +38,7 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
         let (stream, tx, abort_reg) = TransferStream::<TransferData, Error>::create(1);
         let txc = tx.clone();
 
-        thread::spawn(move || {
+        tokio::task::spawn_local(async move {
             let fut = async move {
                 let (node_id, hash) = gftp::extract_url(&url)
                     .map_err(|_| Error::InvalidUrlError("Invalid gftp URL".to_owned()))?;
@@ -70,7 +68,7 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
                     .map_err(Error::from)
             };
 
-            System::new("tx-gftp").block_on(abortable_stream(fut, abort_reg, txc))
+            abortable_stream(fut, abort_reg, txc).await
         });
 
         stream
@@ -82,7 +80,7 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
 
         let (sink, mut rx, res_tx) = TransferSink::<TransferData, Error>::create(1);
 
-        thread::spawn(move || {
+        tokio::task::spawn_local(async move {
             let fut = async move {
                 let (node_id, random_filename) = gftp::extract_url(&url)
                     .map_err(|_| Error::InvalidUrlError("Invalid gftp URL".to_owned()))?;
@@ -112,7 +110,7 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
             }
             .map_err(Error::from);
 
-            System::new("rx-gftp").block_on(abortable_sink(fut, res_tx))
+            abortable_sink(fut, res_tx).await
         });
 
         sink
