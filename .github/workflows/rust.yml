@@ -121,7 +121,7 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           mkdir build
-          cp target/debug/{yagna,ya-provider,ya-requestor,exe-unit,golemsp} build
+          cp target/debug/{yagna,ya-provider,exe-unit,golemsp} build
           cp target/debug/examples/ya_sb_router build
           strip -x build/*
 
@@ -131,7 +131,6 @@ jobs:
           mkdir build
           copy target\debug\yagna.exe build
           copy target\debug\ya-provider.exe build
-          copy target\debug\ya-requestor.exe build
           copy target\debug\exe-unit.exe build
 
       - name: Upload binaries
@@ -191,3 +190,8 @@ jobs:
         with:
           name: goth-logs
           path: /tmp/goth-tests
+
+      # Only relevant for self-hosted runners
+      - name: Remove test logs
+        if: always()
+        run: rm -rf /tmp/goth-tests
