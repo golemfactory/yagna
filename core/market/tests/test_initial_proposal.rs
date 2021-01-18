@@ -583,7 +583,11 @@ async fn test_respawn_proposal_after_terminate_by_requestor() -> anyhow::Result<
     let timestamp = Utc::now();
 
     req_market
-        .terminate_agreement(req_id, agreement_id.clone(), Some(gen_reason("Success")))
+        .terminate_agreement(
+            req_id,
+            agreement_id.into_client(),
+            Some(gen_reason("Success")),
+        )
         .await
         .unwrap();
 
@@ -639,7 +643,7 @@ async fn test_respawn_proposal_after_terminate_by_provider() -> anyhow::Result<(
     prov_market
         .terminate_agreement(
             prov_id,
-            agreement_id.clone().translate(Owner::Provider),
+            agreement_id.into_client(),
             Some(gen_reason("Success")),
         )
         .await

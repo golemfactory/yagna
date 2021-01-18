@@ -129,7 +129,7 @@ async fn test_rest_get_not_existing_agreement() {
     let result = req_market.get_agreement(&agreement_id, &req_id).await;
     assert!(result.is_err());
     assert_err_eq!(
-        AgreementError::NotFound(agreement_id.clone()).to_string(),
+        AgreementError::NotFound(agreement_id.into_client()).to_string(),
         result
     );
 }
@@ -456,7 +456,7 @@ async fn approval_before_confirmation_should_fail() {
 
     // ... which results in not found error, bc there was no confirmation
     // so Requestor did not send an Agreement
-    assert_err_eq!(AgreementError::NotFound(agreement_id), result);
+    assert_err_eq!(AgreementError::NotFound(agreement_id.into_client()), result);
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
@@ -954,7 +954,7 @@ async fn test_terminate() {
     let reason =
         serde_json::from_value(serde_json::json!({"ala":"ma kota","message": "coś"})).unwrap();
     req_market
-        .terminate_agreement(req_identity, agreement_1.id, Some(reason))
+        .terminate_agreement(req_identity, agreement_1.id.into_client(), Some(reason))
         .await
         .ok();
 }
@@ -983,7 +983,9 @@ async fn test_terminate_not_existing_agreement() {
     .await
     .unwrap();
 
-    let not_existing_agreement = generate_agreement(1, Utc::now().naive_utc()).id;
+    let not_existing_agreement = generate_agreement(1, Utc::now().naive_utc())
+        .id
+        .into_client();
 
     let result = req_market
         .terminate_agreement(
@@ -1034,7 +1036,7 @@ async fn test_terminate_from_wrong_states() {
     let result = req_market
         .terminate_agreement(
             req_id.clone(),
-            agreement_id.clone(),
+            agreement_id.into_client(),
             Some(gen_reason("Failure")),
         )
         .await;
@@ -1063,7 +1065,7 @@ async fn test_terminate_from_wrong_states() {
     let result = req_market
         .terminate_agreement(
             req_id.clone(),
-            agreement_id.clone(),
+            agreement_id.into_client(),
             Some(gen_reason("Failure")),
         )
         .await;
@@ -1085,7 +1087,11 @@ async fn test_terminate_from_wrong_states() {
     let agreement_id = agreement_id.clone().translate(Owner::Provider);
 
     let result = prov_market
-        .terminate_agreement(req_id, agreement_id.clone(), Some(gen_reason("Failure")))
+        .terminate_agreement(
+            req_id,
+            agreement_id.into_client(),
+            Some(gen_reason("Failure")),
+        )
         .await;
 
     match result {

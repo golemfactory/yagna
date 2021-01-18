@@ -344,25 +344,23 @@ impl CommonBroker {
     pub async fn terminate_agreement(
         &self,
         id: Identity,
-        agreement_id: AgreementId,
+        client_agreement_id: String,
         reason: Option<Reason>,
     ) -> Result<(), AgreementError> {
         let dao = self.db.as_dao::<AgreementDao>();
         let agreement = match dao
             .select_by_node(
-                agreement_id.clone(),
+                &client_agreement_id,
                 id.identity.clone(),
                 Utc::now().naive_utc(),
             )
             .await
-            .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
+            .map_err(|e| AgreementError::Get(client_agreement_id.clone(), e))?
         {
-            None => return Err(AgreementError::NotFound(agreement_id)),
+            None => return Err(AgreementError::NotFound(client_agreement_id)),
             Some(agreement) => agreement,
         };
 
-        // From now on agreement_id is invalid. Use only agreement.id
-        // (which has valid owner)
         validate_transition(&agreement, AgreementState::Terminated)?;
 
         protocol_common::propagate_terminate_agreement(&agreement, reason.clone()).await?;

@@ -223,7 +223,7 @@ async fn test_agreement_terminated_event() {
     prov_market
         .terminate_agreement(
             prov_id.clone(),
-            negotiation.p_agreement.clone(),
+            negotiation.p_agreement.into_client(),
             Some(gen_reason("Expired")),
         )
         .await
@@ -313,7 +313,7 @@ async fn test_waiting_for_agreement_event() {
 
     // Take timestamp to filter AgreementApproved which should happen before.
     let reference_timestamp = Utc::now();
-    let p_agreement = negotiation.p_agreement.clone();
+    let p_agreement = negotiation.p_agreement.into_client();
 
     // Terminate agreement with delay, so event will have to be woken up.
     tokio::task::spawn_local(async move {
