@@ -129,7 +129,7 @@ async fn test_rest_get_not_existing_agreement() {
     let result = req_market.get_agreement(&agreement_id, &req_id).await;
     assert!(result.is_err());
     assert_err_eq!(
-        AgreementError::NotFound(agreement_id.into_client()).to_string(),
+        AgreementError::NotFound(agreement_id.to_string()).to_string(),
         result
     );
 }
@@ -456,7 +456,7 @@ async fn approval_before_confirmation_should_fail() {
 
     // ... which results in not found error, bc there was no confirmation
     // so Requestor did not send an Agreement
-    assert_err_eq!(AgreementError::NotFound(agreement_id.into_client()), result);
+    assert_err_eq!(AgreementError::NotFound(agreement_id.to_string()), result);
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
