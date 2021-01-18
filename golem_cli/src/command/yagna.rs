@@ -17,12 +17,12 @@ pub struct PaymentType {
 
 impl PaymentType {
     pub const ZK: PaymentType = PaymentType {
-        platform: "ZK-NGNT",
+        platform: "zksync-rinkeby-tglm",
         driver: "zksync",
     };
     pub const PLAIN: PaymentType = PaymentType {
-        platform: "NGNT",
-        driver: "ngnt",
+        platform: "erc20-rinkeby-tglm",
+        driver: "erc20",
     };
 }
 
