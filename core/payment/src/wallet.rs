@@ -1,3 +1,7 @@
+// External crates
+use bigdecimal::BigDecimal;
+
+// Workspace uses
 use ya_core_model::driver::{driver_bus_id, Enter, Exit, Transfer};
 use ya_service_bus::typed as bus;
 
@@ -28,7 +32,7 @@ pub async fn exit(
 
 pub async fn transfer(
     to: String,
-    amount: BigDeciaml,
+    amount: BigDecimal,
     driver: String,
     network: Option<String>,
     token: Option<String>,
