@@ -212,10 +212,10 @@ pub async fn withdraw<S: EthereumSigner + Clone>(
         utils::big_uint_to_big_dec(withdraw_fee.clone())
     );
 
-    let amount = amount
-        .ok_or(GenericError::new("unused"))
-        .and_then(utils::big_dec_to_big_uint)
-        .unwrap_or(balance.clone());
+    let amount = match amount {
+        Some(amount) => utils::big_dec_to_big_uint(amount)?,
+        None => balance.clone(),
+    };
     let withdraw_amount = std::cmp::min(balance - withdraw_fee, amount);
     info!(
         "Withdrawal of {:.5} tGLM started",
