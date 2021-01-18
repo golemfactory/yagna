@@ -7591,6 +7591,7 @@ dependencies = [
  "futures 0.3.8",
  "gftp",
  "globset",
+ "h2",
  "hex",
  "lazy_static",
  "log",
