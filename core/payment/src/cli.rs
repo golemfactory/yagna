@@ -1,5 +1,5 @@
 use crate::accounts::{init_account, Account};
-use crate::{DEFAULT_PAYMENT_DRIVER, DEFAULT_PAYMENT_PLATFORM};
+use crate::DEFAULT_PAYMENT_DRIVER;
 use chrono::Utc;
 use structopt::*;
 use ya_core_model::{identity as id_api, payment::local as pay};
@@ -76,7 +76,12 @@ impl PaymentCli {
                 token,
             } => {
                 let address = resolve_address(account).await?;
-                let platform = DEFAULT_PAYMENT_PLATFORM.to_owned();
+                let platform = format!(
+                    "{}-{}-{}",
+                    driver,
+                    network.unwrap_or("mainnet".into()),
+                    token.unwrap_or("glm".into())
+                );
                 let status = bus::service(pay::BUS_ID)
                     .call(pay::GetStatus { address, platform })
                     .await??;
