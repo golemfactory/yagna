@@ -105,7 +105,7 @@ impl DeadlineChecker {
     }
 
     fn drain_elapsed(&mut self, timestamp: DateTime<Utc>) -> Vec<DeadlineElapsed> {
-        let elapsed = self
+        let mut elapsed = self
             .deadlines
             .iter_mut()
             .map(|(agreement_id, deadlines)| {
@@ -126,6 +126,8 @@ impl DeadlineChecker {
             })
             .flatten()
             .collect::<Vec<DeadlineElapsed>>();
+
+        elapsed.sort_by(|dead1, dead2| dead1.deadline.cmp(&dead2.deadline));
 
         // Remove Agreements with empty lists. Otherwise no longer needed Agreements
         // would remain in HashMap for always.
@@ -432,7 +434,9 @@ mod test {
             checker
                 .send(TrackDeadline {
                     agreement_id: format!("agrrrrr-{}", i),
-                    deadline: now + Duration::milliseconds(100) + Duration::milliseconds(3 * i),
+                    deadline: now
+                        + Duration::milliseconds(100)
+                        + Duration::milliseconds(6 * 3 - 3 * i),
                     id: i.to_string(),
                 })
                 .await
@@ -444,11 +448,11 @@ mod test {
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
         assert_eq!(deadlined.len(), 5);
-        assert_eq!(deadlined[0].id, 1.to_string());
-        assert_eq!(deadlined[1].id, 2.to_string());
+        assert_eq!(deadlined[0].id, 5.to_string());
+        assert_eq!(deadlined[1].id, 4.to_string());
         assert_eq!(deadlined[2].id, 3.to_string());
-        assert_eq!(deadlined[3].id, 4.to_string());
-        assert_eq!(deadlined[4].id, 5.to_string());
+        assert_eq!(deadlined[3].id, 2.to_string());
+        assert_eq!(deadlined[4].id, 1.to_string());
     }
 
     #[actix_rt::test]
