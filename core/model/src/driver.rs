@@ -48,6 +48,7 @@ bitflags! {
 pub struct PaymentDetails {
     pub recipient: String,
     pub sender: String,
+    pub platform: String,
     pub amount: BigDecimal,
     pub date: Option<DateTime<Utc>>,
 }
@@ -156,6 +157,7 @@ pub struct SchedulePayment {
     amount: BigDecimal,
     sender: String,
     recipient: String,
+    platform: String,
     due_date: DateTime<Utc>,
 }
 
@@ -164,12 +166,14 @@ impl SchedulePayment {
         amount: BigDecimal,
         sender: String,
         recipient: String,
+        platform: String,
         due_date: DateTime<Utc>,
     ) -> SchedulePayment {
         SchedulePayment {
             amount,
             sender,
             recipient,
+            platform,
             due_date,
         }
     }
@@ -184,6 +188,10 @@ impl SchedulePayment {
 
     pub fn recipient(&self) -> String {
         self.recipient.clone()
+    }
+
+    pub fn platform(&self) -> String {
+        self.platform.clone()
     }
 
     pub fn due_date(&self) -> DateTime<Utc> {

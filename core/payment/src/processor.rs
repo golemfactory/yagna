@@ -350,6 +350,7 @@ impl PaymentProcessor {
                 amount,
                 msg.payer_addr.clone(),
                 msg.payee_addr.clone(),
+                msg.payment_platform.clone(),
                 msg.due_date.clone(),
             ))
             .await??;
@@ -403,6 +404,11 @@ impl PaymentProcessor {
             return VerifyPaymentError::sender(payer_addr, &details.sender);
         }
 
+        // Verify payment platform
+        if &details.platform != &payment.payment_platform {
+            return VerifyPaymentError::platform(&payment.payment_platform, &details.platform);
+        }
+
         // Verify agreement payments
         let agreement_dao: AgreementDao = self.db_executor.as_dao();
         for agreement_payment in payment.agreement_payments.iter() {
@@ -415,6 +421,9 @@ impl PaymentProcessor {
                 }
                 Some(agreement) if &agreement.payer_addr != payer_addr => {
                     return VerifyPaymentError::agreement_payer(&agreement, payer_addr)
+                }
+                Some(agreement) if &agreement.payment_platform != &details.platform => {
+                    return VerifyPaymentError::agreement_platform(&agreement, &details.platform)
                 }
                 _ => (),
             }
@@ -433,6 +442,7 @@ impl PaymentProcessor {
                 Some(activity) if &activity.payer_addr != payer_addr => {
                     return VerifyPaymentError::activity_payer(&activity, payer_addr)
                 }
+                // TODO: Validate payment platform for activity payments
                 _ => (),
             }
         }

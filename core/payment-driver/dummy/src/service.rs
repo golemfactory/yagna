@@ -97,8 +97,9 @@ async fn schedule_payment(
     log::info!("schedule payment: {:?}", msg);
 
     let details = PaymentDetails {
-        recipient: msg.recipient().to_string(),
-        sender: msg.sender().to_string(),
+        recipient: msg.recipient(),
+        sender: msg.sender(),
+        platform: msg.platform(),
         amount: msg.amount(),
         date: Some(Utc::now()),
     };

@@ -272,6 +272,13 @@ pub mod processor {
             )))
         }
 
+        pub fn platform(declared: &str, actual: &str) -> Result<(), Self> {
+            Err(Self::Validation(format!(
+                "Invalid payment platform. Declared: {} Actual: {}",
+                declared, actual
+            )))
+        }
+
         pub fn agreement_not_found(agreement_id: &str) -> Result<(), Self> {
             Err(Self::Validation(format!(
                 "Agreement not found: {}",
@@ -290,6 +297,13 @@ pub mod processor {
             Err(Self::Validation(format!(
                 "Invalid payer address for agreement {}: {} != {}",
                 agreement.id, agreement.payer_addr, payer_addr
+            )))
+        }
+
+        pub fn agreement_platform(agreement: &Agreement, platform: &str) -> Result<(), Self> {
+            Err(Self::Validation(format!(
+                "Invalid payment platform for agreement {}: {} != {}",
+                agreement.id, agreement.payment_platform, platform
             )))
         }
 
