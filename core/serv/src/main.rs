@@ -1,7 +1,6 @@
 use actix_web::{middleware, web, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use futures::prelude::*;
-use metrics::value;
 use std::{
     any::TypeId,
     collections::HashMap,
@@ -316,20 +315,6 @@ async fn sd_notify(_unset_environment: bool, _state: &str) -> std::io::Result<()
     Ok(())
 }
 
-fn report_version_to_metrics() {
-    let version = ya_compile_time_utils::semver();
-    value!("yagna.version.major", version.major);
-    value!("yagna.version.minor", version.minor);
-    value!("yagna.version.patch", version.patch);
-    value!(
-        "yagna.version.is_prerelease",
-        (!version.pre.is_empty()) as u64
-    );
-    if let Some(build_number) = ya_compile_time_utils::build_number() {
-        value!("yagna.version.build_number", build_number);
-    }
-}
-
 impl ServiceCommand {
     async fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
         if !ctx.accept_terms {
@@ -387,7 +372,7 @@ impl ServiceCommand {
                 context.set_metrics_ctx(metrics_opts);
                 Services::gsb(&context).await?;
 
-                report_version_to_metrics();
+                ya_compile_time_utils::report_version_to_metrics();
 
                 let drivers = start_payment_drivers(&ctx.data_dir).await?;
                 payment_accounts::save_default_account(&ctx.data_dir, drivers)

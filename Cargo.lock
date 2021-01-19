@@ -7006,6 +7006,7 @@ name = "ya-compile-time-utils"
 version = "0.1.0"
 dependencies = [
  "git-version",
+ "metrics",
  "semver 0.11.0",
  "vergen",
 ]
@@ -7794,7 +7795,6 @@ dependencies = [
  "gftp",
  "lazy_static",
  "log",
- "metrics",
  "openssl",
  "structopt",
  "tokio",
