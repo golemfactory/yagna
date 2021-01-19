@@ -19,6 +19,7 @@ pub struct PaymentType {
     pub platform: &'static str,
     pub token: &'static str,
     pub driver: &'static str,
+    pub token_display_name: &'static str,
 }
 
 pub struct DriverDescriptor(pub HashMap<&'static str, PaymentType>);
@@ -32,14 +33,16 @@ lazy_static! {
                 platform: "zksync-mainnet-glm",
                 token: "glm",
                 driver: "zksync",
+                token_display_name: "GLM",
             },
         );
         zksync.insert(
             "rinkeby",
             PaymentType {
                 platform: "zksync-rinkeby-tglm",
-                token: "tglm",
+                token: "glm",
                 driver: "zksync",
+                token_display_name: "tGLM",
             },
         );
         DriverDescriptor(zksync)
@@ -52,6 +55,7 @@ lazy_static! {
                 platform: "erc20-mainnet-glm",
                 token: "glm",
                 driver: "erc20",
+                token_display_name: "GLM",
             },
         );
         erc20.insert(
@@ -60,6 +64,7 @@ lazy_static! {
                 platform: "erc20-rinkeby-tglm",
                 token: "tglm",
                 driver: "erc20",
+                token_display_name: "tGLM",
             },
         );
         DriverDescriptor(erc20)
@@ -67,7 +72,7 @@ lazy_static! {
 }
 
 impl DriverDescriptor {
-    pub fn get_payment_type(&self, network: Option<&str>) -> anyhow::Result<&PaymentType> {
+    pub fn payment_type(&self, network: Option<&str>) -> anyhow::Result<&PaymentType> {
         Ok(self
             .0
             .get(network.as_deref().unwrap_or(DEFAULT_NETWORK))
@@ -75,6 +80,10 @@ impl DriverDescriptor {
                 "Network '{}' not found.",
                 network.unwrap_or(DEFAULT_NETWORK)
             ))?)
+    }
+
+    pub fn token_name(&self, network: Option<&str>) -> anyhow::Result<&str> {
+        Ok(self.payment_type(network)?.token_display_name)
     }
 }
 
@@ -184,7 +193,7 @@ impl YagnaCommand {
             self.cmd.args(&["--account", addr]);
         }
 
-        let payment_type = driver_desc.get_payment_type(Some(network))?;
+        let payment_type = driver_desc.payment_type(Some(network))?;
 
         self.cmd.args(&["--network", network]);
         self.cmd.args(&["--driver", payment_type.driver]);
@@ -205,7 +214,7 @@ impl YagnaCommand {
             "init",
             "-p",
             "--driver",
-            payment_type.get_payment_type(Some(network))?.driver,
+            payment_type.payment_type(Some(network))?.driver,
             address,
         ]);
         self.run().await

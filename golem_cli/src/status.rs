@@ -36,7 +36,7 @@ async fn payment_status(
             .as_ref()
             .map(|platform| {
                 (*ZKSYNC_DRIVER)
-                    .get_payment_type(Some(network))
+                    .payment_type(Some(network))
                     .map(|desc| desc.platform == platform)
                     .ok()
             })
@@ -47,7 +47,7 @@ async fn payment_status(
             .as_ref()
             .map(|platform| {
                 (*ERC20_DRIVER)
-                    .get_payment_type(Some(network))
+                    .payment_type(Some(network))
                     .map(|desc| desc.platform == platform)
                     .ok()
             })
@@ -130,8 +130,11 @@ pub async fn run(args: StatusCommand) -> Result</*exit code*/ i32> {
         let payments = {
             let (id, invoice_status) =
                 future::try_join(cmd.yagna()?.default_id(), cmd.yagna()?.invoice_status()).await?;
-            let (zk_payment_status, payment_status) =
+            let (zk_payment_status, erc20_payment_status) =
                 payment_status(&cmd, &args.network, &config.account).await?;
+
+            // We expect, that token name will be the same for zksync driver within specified network.
+            let token = (*ERC20_DRIVER).token_name(Some(&args.network))?;
 
             let mut table = Table::new();
             let format = format::FormatBuilder::new().padding(1, 1).build();
@@ -146,28 +149,31 @@ pub async fn run(args: StatusCommand) -> Result</*exit code*/ i32> {
             } else {
                 table.add_row(row!["address", &id.node_id]);
             }
-            let total_amount = &zk_payment_status.amount + &payment_status.amount;
-            table.add_row(row!["amount (total)", format!("{} GLM", total_amount)]);
+            let total_amount = &zk_payment_status.amount + &erc20_payment_status.amount;
+            table.add_row(row![
+                "amount (total)",
+                format!("{} {}", total_amount, token)
+            ]);
             table.add_row(row![
                 "    (on-chain)",
-                format!("{} GLM", &payment_status.amount)
+                format!("{} {}", &erc20_payment_status.amount, token)
             ]);
             table.add_row(row![
                 "     (zk-sync)",
-                format!("{} GLM", &zk_payment_status.amount)
+                format!("{} {}", &zk_payment_status.amount, token)
             ]);
             table.add_empty_row();
             {
                 let (pending, pending_cnt) = invoice_status.provider.total_pending();
                 table.add_row(row![
                     "pending",
-                    format!("{} GLM ({})", pending, pending_cnt)
+                    format!("{} {} ({})", pending, token, pending_cnt)
                 ]);
             }
             let (unconfirmed, unconfirmed_cnt) = invoice_status.provider.unconfirmed();
             table.add_row(row![
                 "issued",
-                format!("{} GLM ({})", unconfirmed, unconfirmed_cnt)
+                format!("{} {} ({})", unconfirmed, token, unconfirmed_cnt)
             ]);
 
             table
