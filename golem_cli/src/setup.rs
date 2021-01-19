@@ -22,6 +22,8 @@ pub struct RunConfig {
     pub prices_configured: bool,
     #[structopt(long, env = "YA_ACCOUNT")]
     pub account: Option<NodeId>,
+    #[structopt(long, env = "YA_NETWORK", default_value = "mainnet")]
+    pub network: String,
 }
 
 impl RunConfig {

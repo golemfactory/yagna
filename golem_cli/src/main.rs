@@ -44,7 +44,7 @@ enum Commands {
     /// Show provider status
     ///
     /// Requires golem running.
-    Status,
+    Status(status::StatusCommand),
 }
 
 #[derive(StructOpt)]
@@ -77,7 +77,7 @@ async fn my_main() -> Result</*exit code*/ i32> {
             SettingsCommand::Set(set) => settings::run(set).await,
             SettingsCommand::Show => settings_show::run().await,
         },
-        Commands::Status => status::run().await,
+        Commands::Status(config) => status::run(config).await,
     }
 }
 

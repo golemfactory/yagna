@@ -1,48 +1,70 @@
 use crate::command::YaCommand;
-use crate::command::{PaymentSummary, PaymentType, RecvAccount};
+use crate::command::{PaymentSummary, RecvAccount, ERC20_DRIVER, ZKSYNC_DRIVER};
 use crate::platform::Status as KvmStatus;
 use crate::utils::is_yagna_running;
+
 use ansi_term::{Colour, Style};
 use anyhow::Result;
 use futures::prelude::*;
 use prettytable::{cell, format, row, Table};
+use structopt::StructOpt;
 use ya_core_model::payment::local::StatusResult;
+
+#[derive(StructOpt, Debug)]
+pub struct StatusCommand {
+    #[structopt(long, env = "YA_NETWORK", default_value = "mainnet")]
+    pub network: String,
+}
 
 async fn payment_status(
     cmd: &YaCommand,
+    network: &str,
     account: &Option<RecvAccount>,
 ) -> anyhow::Result<(StatusResult, StatusResult)> {
     if let Some(account) = account {
         let address = account.address.to_lowercase();
         let (status_zk, status) = future::join(
             cmd.yagna()?
-                .payment_status(Some(&address), Some(&PaymentType::ZK)),
+                .payment_status(Some(&address), network, &ZKSYNC_DRIVER),
             cmd.yagna()?
-                .payment_status(Some(&address), Some(&PaymentType::PLAIN)),
+                .payment_status(Some(&address), network, &ERC20_DRIVER),
         )
         .await;
+
         let is_zk = account
             .platform
             .as_ref()
-            .map(|platform| platform == PaymentType::ZK.platform)
+            .map(|platform| {
+                (*ZKSYNC_DRIVER)
+                    .get_payment_type(Some(network))
+                    .map(|desc| desc.platform == platform)
+                    .ok()
+            })
+            .flatten()
             .unwrap_or(true);
-        let is_plain = account
+        let is_erc20 = account
             .platform
             .as_ref()
-            .map(|platform| platform == PaymentType::PLAIN.platform)
+            .map(|platform| {
+                (*ERC20_DRIVER)
+                    .get_payment_type(Some(network))
+                    .map(|desc| desc.platform == platform)
+                    .ok()
+            })
+            .flatten()
             .unwrap_or(true);
         match (status_zk, status) {
             (Ok(zk), Ok(eth)) => Ok((zk, eth)),
             (Err(e), _) if is_zk => Err(e),
-            (_, Err(e)) if is_plain => Err(e),
+            (_, Err(e)) if is_erc20 => Err(e),
             (Ok(zk), Err(_)) => Ok((zk, StatusResult::default())),
             (Err(_), Ok(plain)) => Ok((StatusResult::default(), plain)),
             (Err(e), _) => Err(e),
         }
     } else {
         let (status_zk, status) = future::join(
-            cmd.yagna()?.payment_status(None, Some(&PaymentType::ZK)),
-            cmd.yagna()?.payment_status(None, Some(&PaymentType::PLAIN)),
+            cmd.yagna()?.payment_status(None, network, &ZKSYNC_DRIVER),
+            cmd.yagna()?.payment_status(None, network, &ERC20_DRIVER),
         )
         .await;
         match (status_zk, status) {
@@ -53,7 +75,7 @@ async fn payment_status(
     }
 }
 
-pub async fn run() -> Result</*exit code*/ i32> {
+pub async fn run(args: StatusCommand) -> Result</*exit code*/ i32> {
     let size = crossterm::terminal::size().ok().unwrap_or_else(|| (80, 50));
     let cmd = YaCommand::new()?;
     let kvm_status = crate::platform::kvm_status();
@@ -108,7 +130,8 @@ pub async fn run() -> Result</*exit code*/ i32> {
         let payments = {
             let (id, invoice_status) =
                 future::try_join(cmd.yagna()?.default_id(), cmd.yagna()?.invoice_status()).await?;
-            let (zk_payment_status, payment_status) = payment_status(&cmd, &config.account).await?;
+            let (zk_payment_status, payment_status) =
+                payment_status(&cmd, &args.network, &config.account).await?;
 
             let mut table = Table::new();
             let format = format::FormatBuilder::new().padding(1, 1).build();
