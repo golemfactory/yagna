@@ -248,3 +248,92 @@ impl RpcMessage for ValidateAllocation {
     type Item = bool;
     type Error = GenericError;
 }
+
+// ************************** ENTER **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Enter {
+    amount: BigDecimal,
+    network: Option<String>,
+    token: Option<String>,
+}
+
+impl Enter {
+    pub fn new(amount: BigDecimal, network: Option<String>, token: Option<String>) -> Enter {
+        Enter {
+            amount,
+            network,
+            token,
+        }
+    }
+}
+
+impl RpcMessage for Enter {
+    const ID: &'static str = "Enter";
+    type Item = String; // Transaction Identifier
+    type Error = GenericError;
+}
+
+// ************************** EXIT **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Exit {
+    to: Option<String>,
+    amount: Option<BigDecimal>,
+    network: Option<String>,
+    token: Option<String>,
+}
+
+impl Exit {
+    pub fn new(
+        to: Option<String>,
+        amount: Option<BigDecimal>,
+        network: Option<String>,
+        token: Option<String>,
+    ) -> Exit {
+        Exit {
+            to,
+            amount,
+            network,
+            token,
+        }
+    }
+}
+
+impl RpcMessage for Exit {
+    const ID: &'static str = "Exit";
+    type Item = String; // Transaction Identifier
+    type Error = GenericError;
+}
+
+// ************************** TRANSFER **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Transfer {
+    to: String,
+    amount: BigDecimal,
+    network: Option<String>,
+    token: Option<String>,
+}
+
+impl Transfer {
+    pub fn new(
+        to: String,
+        amount: BigDecimal,
+        network: Option<String>,
+        token: Option<String>,
+    ) -> Transfer {
+        Transfer {
+            to,
+            amount,
+            network,
+            token,
+        }
+    }
+}
+
+impl RpcMessage for Transfer {
+    const ID: &'static str = "Transfer";
+    type Item = String; // Transaction Identifier
+    type Error = GenericError;
+}
