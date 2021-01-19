@@ -23,7 +23,7 @@ pub mod migrations {
     struct _Dummy;
 }
 
-pub const DEFAULT_PAYMENT_PLATFORM: &str = "zksync-mainnet-glm"; // TODO: remove
+pub const DEFAULT_PAYMENT_PLATFORM: &str = "zksync-rinkeby-tglm"; // TODO: remove
 pub const DEFAULT_PAYMENT_DRIVER: &str = "zksync";
 
 pub struct PaymentService;

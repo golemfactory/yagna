@@ -18,7 +18,7 @@ pub enum PaymentCli {
         #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
         driver: String,
         #[structopt(long)]
-        network: Option<String>, // TODO: network enum
+        network: Option<String>,
     },
     Status {
         #[structopt(long)]
@@ -26,9 +26,9 @@ pub enum PaymentCli {
         #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
         driver: String,
         #[structopt(long)]
-        network: Option<String>, // TODO: network enum
+        network: Option<String>,
         #[structopt(long)]
-        token: Option<String>, // TODO: token enum?
+        token: Option<String>,
     },
     Accounts,
     Invoice {
