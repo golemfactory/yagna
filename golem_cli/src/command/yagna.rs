@@ -40,7 +40,7 @@ lazy_static! {
             "rinkeby",
             PaymentType {
                 platform: "zksync-rinkeby-tglm",
-                token: "glm",
+                token: "tglm",
                 driver: "zksync",
                 token_display_name: "tGLM",
             },
