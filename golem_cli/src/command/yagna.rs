@@ -13,7 +13,8 @@ use tokio::process::{Child, Command};
 use ya_core_model::payment::local::{InvoiceStats, InvoiceStatusNotes, StatusNotes, StatusResult};
 
 pub static DEFAULT_DRIVER: &'static str = "zksync";
-pub static DEFAULT_NETWORK: &'static str = "mainnet";
+pub static DEFAULT_CHAIN: &'static str = "mainnet";
+pub static CHAIN_ENV_VAR: &'static str = "CHAIN";
 
 pub struct PaymentType {
     pub platform: &'static str,
@@ -75,10 +76,10 @@ impl DriverDescriptor {
     pub fn payment_type(&self, network: Option<&str>) -> anyhow::Result<&PaymentType> {
         Ok(self
             .0
-            .get(network.as_deref().unwrap_or(DEFAULT_NETWORK))
+            .get(network.as_deref().unwrap_or(DEFAULT_CHAIN))
             .ok_or(anyhow!(
-                "Network '{}' not found.",
-                network.unwrap_or(DEFAULT_NETWORK)
+                "Chain '{}' not found.",
+                network.unwrap_or(DEFAULT_CHAIN)
             ))?)
     }
 

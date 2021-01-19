@@ -6,7 +6,7 @@ use std::{env, fs};
 use tokio::process::Command;
 
 mod provider;
-mod yagna;
+pub(crate) mod yagna;
 
 pub use provider::*;
 pub use yagna::*;

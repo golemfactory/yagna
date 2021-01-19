@@ -1,3 +1,4 @@
+use crate::command::yagna::{CHAIN_ENV_VAR, DEFAULT_CHAIN};
 use crate::command::ERC20_DRIVER;
 use crate::command::{RecvAccount, UsageDef};
 use crate::terminal::clear_stdin;
@@ -23,8 +24,8 @@ pub struct RunConfig {
     pub prices_configured: bool,
     #[structopt(long, env = "YA_ACCOUNT")]
     pub account: Option<NodeId>,
-    #[structopt(long, env = "YA_NETWORK", default_value = "mainnet")]
-    pub network: String,
+    #[structopt(long, env = CHAIN_ENV_VAR, default_value = DEFAULT_CHAIN)]
+    pub chain: String,
 }
 
 impl RunConfig {
@@ -153,8 +154,8 @@ pub async fn setup(run_config: &mut RunConfig, force: bool) -> Result<i32> {
             .map(|p| p.name)
             .collect();
 
-        // We expect, that token name will be the same for zksync driver within specified network.
-        let token = (*ERC20_DRIVER).token_name(Some(&run_config.network))?;
+        // We expect, that token name will be the same for zksync driver within specified chain.
+        let token = (*ERC20_DRIVER).token_name(Some(&run_config.chain))?;
         let ngnt_per_h = promptly::prompt_default(format!("Price {} per hour", token), 5.0)?;
 
         let usage = UsageDef {

@@ -1,3 +1,4 @@
+use crate::command::yagna::{CHAIN_ENV_VAR, DEFAULT_CHAIN};
 use crate::command::YaCommand;
 use crate::command::{PaymentSummary, RecvAccount, ERC20_DRIVER, ZKSYNC_DRIVER};
 use crate::platform::Status as KvmStatus;
@@ -12,8 +13,8 @@ use ya_core_model::payment::local::StatusResult;
 
 #[derive(StructOpt, Debug)]
 pub struct StatusCommand {
-    #[structopt(long, env = "YA_NETWORK", default_value = "mainnet")]
-    pub network: String,
+    #[structopt(long, env = CHAIN_ENV_VAR, default_value = DEFAULT_CHAIN)]
+    pub chain: String,
 }
 
 async fn payment_status(
@@ -131,10 +132,10 @@ pub async fn run(args: StatusCommand) -> Result</*exit code*/ i32> {
             let (id, invoice_status) =
                 future::try_join(cmd.yagna()?.default_id(), cmd.yagna()?.invoice_status()).await?;
             let (zk_payment_status, erc20_payment_status) =
-                payment_status(&cmd, &args.network, &config.account).await?;
+                payment_status(&cmd, &args.chain, &config.account).await?;
 
-            // We expect, that token name will be the same for zksync driver within specified network.
-            let token = (*ERC20_DRIVER).token_name(Some(&args.network))?;
+            // We expect, that token name will be the same for zksync driver within specified chain.
+            let token = (*ERC20_DRIVER).token_name(Some(&args.chain))?;
 
             let mut table = Table::new();
             let format = format::FormatBuilder::new().padding(1, 1).build();
