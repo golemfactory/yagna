@@ -298,6 +298,13 @@ impl Exit {
             token,
         }
     }
+
+    pub fn amount(&self) -> Option<BigDecimal> {
+        match &self.amount {
+            Some(a) => Some(a.clone()),
+            None => None,
+        }
+    }
 }
 
 impl RpcMessage for Exit {

@@ -16,7 +16,7 @@ use zksync::{Network, Provider, Wallet, WalletCredentials};
 use zksync_eth_signer::EthereumSigner;
 
 // Workspace uses
-use ya_payment_driver::model::{AccountMode, GenericError, Init, PaymentDetails};
+use ya_payment_driver::model::{AccountMode, Exit, GenericError, Init, PaymentDetails};
 
 // Local uses
 use crate::{
@@ -69,6 +69,20 @@ pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
         get_wallet(&address).and_then(unlock_wallet).await?;
     }
     Ok(())
+}
+
+pub async fn exit(address: String, msg: &Exit) -> Result<(), GenericError> {
+    let wallet = get_wallet(&address).await?;
+    let tx_handle = withdraw(wallet, msg.amount()).await?;
+    let tx_info = tx_handle
+        .wait_for_commit()
+        .await
+        .map_err(GenericError::new)?;
+    match tx_info.success {
+        Some(true) => Ok(()),
+        Some(false) => Err(GenericError::new(tx_info.fail_reason.unwrap())),
+        None => Err(GenericError::new("timeout?")),
+    }
 }
 
 pub async fn get_nonce(address: &str) -> u32 {

@@ -128,8 +128,9 @@ impl PaymentDriver for ZksyncDriver {
         _caller: String,
         msg: Exit,
     ) -> Result<String, GenericError> {
-        log::info!("EXIT = Not Implemented: {:?}", msg);
-        Ok("NOT_IMPLEMENTED".to_string())
+        wallet::exit(_caller, &msg)
+            .await
+            .and(Ok("Success!".to_string()))
     }
 
     async fn get_account_balance(
