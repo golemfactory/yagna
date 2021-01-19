@@ -116,12 +116,24 @@ impl RpcMessage for VerifyPayment {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Init {
     address: String,
+    network: Option<String>,
+    token: Option<String>,
     mode: AccountMode,
 }
 
 impl Init {
-    pub fn new(address: String, mode: AccountMode) -> Init {
-        Init { address, mode }
+    pub fn new(
+        address: String,
+        network: Option<String>,
+        token: Option<String>,
+        mode: AccountMode,
+    ) -> Init {
+        Init {
+            address,
+            network,
+            token,
+            mode,
+        }
     }
     pub fn address(&self) -> String {
         self.address.clone()

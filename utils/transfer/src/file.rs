@@ -4,7 +4,6 @@ use crate::error::Error;
 use crate::traverse::PathTraverse;
 use crate::{abortable_sink, abortable_stream};
 use crate::{TransferData, TransferProvider, TransferSink, TransferStream};
-use actix_rt::Arbiter;
 use bytes::BytesMut;
 use futures::future::ready;
 use futures::{SinkExt, StreamExt, TryFutureExt, TryStreamExt};
@@ -12,6 +11,7 @@ use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
+use tokio::task::spawn_local;
 use tokio_util::codec::{BytesCodec, FramedRead};
 use url::Url;
 use ya_client_model::activity::TransferArgs;
@@ -37,8 +37,7 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
 
         tokio::task::spawn_local(async move {
             let fut = async move {
-                let path = extract_file_url(&url);
-                let file = File::open(&path).await?;
+                let file = File::open(extract_file_url(&url)).await?;
                 FramedRead::new(file, BytesCodec::new())
                     .map_ok(BytesMut::freeze)
                     .map_err(Error::from)
@@ -73,6 +72,7 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
                     file.write_all(result?.as_ref()).await?;
                 }
                 file.flush().await?;
+                file.sync_all().await?;
 
                 Ok::<(), Error>(())
             }
@@ -111,13 +111,13 @@ impl TransferProvider<TransferData, Error> for DirTransferProvider {
         let (stream, tx, abort_reg) = TransferStream::<TransferData, Error>::create(1);
         let txc = tx.clone();
 
-        tokio::task::spawn_local(async move {
+        spawn_local(async move {
             let fut = async move {
                 let format = ArchiveFormat::try_from(&args)?;
                 let path_iter = args.traverse(&dir)?;
 
                 let (evt_tx, mut evt_rx) = futures::channel::mpsc::channel(1);
-                Arbiter::spawn(async move {
+                spawn_local(async move {
                     while let Some(evt) = evt_rx.next().await {
                         log::debug!("Compress: {:?}", evt);
                     }
@@ -145,12 +145,12 @@ impl TransferProvider<TransferData, Error> for DirTransferProvider {
 
         let (sink, rx, res_tx) = TransferSink::<TransferData, Error>::create(1);
 
-        tokio::task::spawn_local(async move {
+        spawn_local(async move {
             let fut = async move {
                 let format = ArchiveFormat::try_from(&args)?;
 
                 let (evt_tx, mut evt_rx) = futures::channel::mpsc::channel(1);
-                Arbiter::spawn(async move {
+                spawn_local(async move {
                     while let Some(evt) = evt_rx.next().await {
                         log::debug!("Extract: {:?}", evt);
                     }

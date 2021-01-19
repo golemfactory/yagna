@@ -46,6 +46,8 @@ pub enum PaymentCli {
         provider: bool,
         #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
         driver: String,
+        #[structopt(long)]
+        network: Option<String>,
     },
     Invoice {
         address: Option<String>,
@@ -84,6 +86,7 @@ impl PaymentCli {
             PaymentCli::Init {
                 address,
                 driver,
+                network,
                 requestor,
                 provider,
             } => {
@@ -92,6 +95,8 @@ impl PaymentCli {
                 let account = Account {
                     driver,
                     address,
+                    network,
+                    token: None, // Use default -- we don't yet support other tokens than GLM
                     send: requestor,
                     receive: provider,
                 };
@@ -100,9 +105,7 @@ impl PaymentCli {
             }
             PaymentCli::Status { address, platform } => {
                 let address = resolve_address(address).await?;
-                let platform = platform
-                    .unwrap_or(DEFAULT_PAYMENT_PLATFORM.to_owned())
-                    .to_uppercase();
+                let platform = platform.unwrap_or(DEFAULT_PAYMENT_PLATFORM.to_owned());
                 CommandOutput::object(
                     bus::service(pay::BUS_ID)
                         .call(pay::GetStatus { address, platform })
