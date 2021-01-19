@@ -8,6 +8,7 @@ table! {
         payment_due_date -> Timestamp,
         status -> Integer,
         tx_id -> Nullable<Text>,
+        platform -> Text,
     }
 }
 

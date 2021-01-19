@@ -26,7 +26,25 @@ use ya_utils_futures::timeout::IntoTimeoutFuture;
 // Local uses
 use crate::{
     dao::ZksyncDao, zksync::wallet, DEFAULT_NETWORK, DEFAULT_PLATFORM, DEFAULT_TOKEN, DRIVER_NAME,
+    MAINNET_NETWORK, MAINNET_PLATFORM, MAINNET_TOKEN,
 };
+
+lazy_static::lazy_static! {
+    static ref SUPPORTED_NETWORKS: HashMap<String, Network> = hashmap! {
+        DEFAULT_NETWORK.to_string() => Network {
+            default_token: DEFAULT_TOKEN.to_string(),
+            tokens: hashmap! {
+                DEFAULT_TOKEN.to_string() => DEFAULT_PLATFORM.to_string()
+            }
+        },
+        MAINNET_NETWORK.to_string() => Network {
+            default_token: MAINNET_TOKEN.to_string(),
+            tokens: hashmap! {
+                MAINNET_TOKEN.to_string() => MAINNET_PLATFORM.to_string()
+            }
+        }
+    };
+}
 
 pub struct ZksyncDriver {
     active_accounts: AccountsRc,
@@ -166,16 +184,7 @@ impl PaymentDriver for ZksyncDriver {
     }
 
     fn get_networks(&self) -> HashMap<String, Network> {
-        // TODO: Implement multi-network support
-
-        hashmap! {
-            DEFAULT_NETWORK.to_string() => Network {
-                default_token: DEFAULT_TOKEN.to_string(),
-                tokens: hashmap! {
-                    DEFAULT_TOKEN.to_string() => DEFAULT_PLATFORM.to_string()
-                }
-            }
-        }
+        SUPPORTED_NETWORKS.clone()
     }
 
     fn recv_init_required(&self) -> bool {
@@ -189,7 +198,6 @@ impl PaymentDriver for ZksyncDriver {
         msg: GetTransactionBalance,
     ) -> Result<BigDecimal, GenericError> {
         log::debug!("get_transaction_balance: {:?}", msg);
-        //todo!()
         // TODO: Get real transaction balance
         Ok(BigDecimal::from(1_000_000_000_000_000_000u64))
     }
@@ -209,9 +217,9 @@ impl PaymentDriver for ZksyncDriver {
             .map_err(GenericError::new)??;
 
         let mode = msg.mode();
-        let network = DEFAULT_NETWORK; // TODO: Implement multi-network support
-        let token = DEFAULT_TOKEN; // TODO: Implement multi-network support
-        bus::register_account(self, &address, network, token, mode).await?;
+        let network = msg.network().unwrap_or(DEFAULT_NETWORK.to_string());
+        let token = msg.token().unwrap_or(DEFAULT_TOKEN.to_string());
+        bus::register_account(self, &address, &network, &token, mode).await?;
 
         log::info!(
             "Initialised payment account. mode={:?}, address={}, driver={}, network={}, token={}",
@@ -322,10 +330,14 @@ impl PaymentDriverCron for ZksyncDriver {
                     .map(|payment| utils::db_amount_to_big_dec(payment.amount))
                     .sum::<BigDecimal>();
                 let tx_hash = to_confirmation(&details).unwrap();
-                let platform = DEFAULT_PLATFORM; // TODO: Implement multi-network support
-                if let Err(e) =
-                    bus::notify_payment(&self.get_name(), platform, order_ids, &details, tx_hash)
-                        .await
+                if let Err(e) = bus::notify_payment(
+                    &self.get_name(),
+                    &details.platform,
+                    order_ids,
+                    &details,
+                    tx_hash,
+                )
+                .await
                 {
                     log::error!("{}", e)
                 };

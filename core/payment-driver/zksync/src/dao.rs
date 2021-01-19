@@ -66,6 +66,7 @@ impl ZksyncDao {
             recipient: recipient.clone(),
             status: PAYMENT_STATUS_NOT_YET,
             tx_id: None,
+            platform: msg.platform().clone(),
         };
         if let Err(e) = self.payment().insert(payment).await {
             log::error!(

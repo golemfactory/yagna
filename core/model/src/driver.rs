@@ -196,6 +196,14 @@ impl Init {
     pub fn mode(&self) -> AccountMode {
         self.mode.clone()
     }
+
+    pub fn network(&self) -> Option<String> {
+        self.network.clone()
+    }
+
+    pub fn token(&self) -> Option<String> {
+        self.token.clone()
+    }
 }
 
 impl RpcMessage for Init {
