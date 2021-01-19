@@ -232,8 +232,10 @@ pub mod local {
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct GetStatus {
-        pub platform: String,
         pub address: String,
+        pub driver: String,
+        pub network: Option<String>,
+        pub token: Option<String>,
     }
 
     impl RpcMessage for GetStatus {
