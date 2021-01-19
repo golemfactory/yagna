@@ -1,14 +1,43 @@
-use crate::accounts::{init_account, Account};
-use crate::{DEFAULT_PAYMENT_DRIVER, DEFAULT_PAYMENT_PLATFORM};
+// External crates
+use bigdecimal::BigDecimal;
 use chrono::Utc;
+use std::str::FromStr;
 use structopt::*;
+
+// Workspace uses
 use ya_core_model::{identity as id_api, payment::local as pay};
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
+// Local uses
+use crate::accounts::{init_account, Account};
+use crate::{wallet, DEFAULT_PAYMENT_DRIVER, DEFAULT_PAYMENT_PLATFORM};
+
 /// Payment management.
 #[derive(StructOpt, Debug)]
 pub enum PaymentCli {
+    Accounts,
+    Enter {
+        amount: String,
+        #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
+        driver: String,
+        #[structopt(long, short)]
+        network: Option<String>,
+        #[structopt(long, short)]
+        token: Option<String>,
+    },
+    Exit {
+        #[structopt(help = "Optional address to exit to. [default: <DEFAULT_IDENTIDITY>]")]
+        to: Option<String>,
+        #[structopt(long, short, help = "Optional amount to exit. [default: <ALL_FUNDS>]")]
+        amount: Option<String>,
+        #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
+        driver: String,
+        #[structopt(long, short)]
+        network: Option<String>,
+        #[structopt(long, short)]
+        token: Option<String>,
+    },
     Init {
         address: Option<String>,
         #[structopt(long, short)]
@@ -20,16 +49,26 @@ pub enum PaymentCli {
         #[structopt(long)]
         network: Option<String>,
     },
-    Status {
-        address: Option<String>,
-        #[structopt(long, short)]
-        platform: Option<String>,
-    },
-    Accounts,
     Invoice {
         address: Option<String>,
         #[structopt(subcommand)]
         command: InvoiceCommand,
+    },
+    Transfer {
+        to: String,
+        #[structopt(long, short)]
+        amount: String,
+        #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
+        driver: String,
+        #[structopt(long, short)]
+        network: Option<String>,
+        #[structopt(long, short)]
+        token: Option<String>,
+    },
+    Status {
+        address: Option<String>,
+        #[structopt(long, short)]
+        platform: Option<String>,
     },
 }
 
@@ -114,6 +153,38 @@ impl PaymentCli {
                         ))
                         .await??,
                 )
+            }
+            PaymentCli::Enter {
+                amount,
+                driver,
+                network,
+                token,
+            } => {
+                let amount = BigDecimal::from_str(&amount)?;
+                CommandOutput::object(wallet::enter(amount, driver, network, token).await?)
+            }
+            PaymentCli::Exit {
+                to,
+                amount,
+                driver,
+                network,
+                token,
+            } => {
+                let amount = match amount {
+                    None => None,
+                    Some(a) => Some(BigDecimal::from_str(&a)?),
+                };
+                CommandOutput::object(wallet::exit(to, amount, driver, network, token).await?)
+            }
+            PaymentCli::Transfer {
+                to,
+                amount,
+                driver,
+                network,
+                token,
+            } => {
+                let amount = BigDecimal::from_str(&amount)?;
+                CommandOutput::object(wallet::transfer(to, amount, driver, network, token).await?)
             }
         }
     }
