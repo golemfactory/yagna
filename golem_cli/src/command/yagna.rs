@@ -211,7 +211,7 @@ impl YagnaCommand {
             "--json",
             "payment",
             "init",
-            "-p",
+            "--receiver", // provider is a receiver
             "--driver",
             payment_type.payment_type(Some(network))?.driver,
             address,
