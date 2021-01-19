@@ -54,9 +54,9 @@ const CREATE_FAUCET_FUNCTION: &str = "create";
 
 pub const DRIVER_NAME: &'static str = "erc20";
 
-pub const DEFAULT_NETWORK: &'static str = "rinkeby";
-pub const DEFAULT_TOKEN: &'static str = "tGLM";
-pub const DEFAULT_PLATFORM: &'static str = "erc20-rinkeby-tglm";
+pub const DEFAULT_NETWORK: &'static str = "mainnet";
+pub const DEFAULT_TOKEN: &'static str = "GLM";
+pub const DEFAULT_PLATFORM: &'static str = "erc20-mainnet-glm";
 
 const ETH_FAUCET_MAX_WAIT: time::Duration = time::Duration::from_secs(180);
 
