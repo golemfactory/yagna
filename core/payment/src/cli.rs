@@ -1,5 +1,5 @@
 use crate::accounts::{init_account, Account};
-use crate::{DEFAULT_PAYMENT_DRIVER, DEFAULT_PAYMENT_PLATFORM};
+use crate::DEFAULT_PAYMENT_DRIVER;
 use chrono::Utc;
 use structopt::*;
 use ya_core_model::{identity as id_api, payment::local as pay};
@@ -21,9 +21,14 @@ pub enum PaymentCli {
         network: Option<String>,
     },
     Status {
-        address: Option<String>,
-        #[structopt(long, short)]
-        platform: Option<String>,
+        #[structopt(long)]
+        account: Option<String>,
+        #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
+        driver: String,
+        #[structopt(long)]
+        network: Option<String>,
+        #[structopt(long)]
+        token: Option<String>,
     },
     Accounts,
     Invoice {
@@ -64,14 +69,23 @@ impl PaymentCli {
                 init_account(account).await?;
                 Ok(CommandOutput::NoOutput)
             }
-            PaymentCli::Status { address, platform } => {
-                let address = resolve_address(address).await?;
-                let platform = platform.unwrap_or(DEFAULT_PAYMENT_PLATFORM.to_owned());
-                CommandOutput::object(
-                    bus::service(pay::BUS_ID)
-                        .call(pay::GetStatus { address, platform })
-                        .await??,
-                )
+            PaymentCli::Status {
+                account,
+                driver,
+                network,
+                token,
+            } => {
+                let address = resolve_address(account).await?;
+                let platform = format!(
+                    "{}-{}-{}",
+                    driver,
+                    network.unwrap_or("mainnet".into()),
+                    token.unwrap_or("glm".into())
+                );
+                let status = bus::service(pay::BUS_ID)
+                    .call(pay::GetStatus { address, platform })
+                    .await??;
+                CommandOutput::object(status) // TODO: render as table
             }
             PaymentCli::Accounts => {
                 let accounts = bus::service(pay::BUS_ID)
