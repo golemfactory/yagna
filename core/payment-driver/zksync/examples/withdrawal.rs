@@ -67,16 +67,14 @@ async fn main() -> anyhow::Result<()> {
         .parse()
         .expect("Cannot parse 'amount' parameter to BigDecimal");
 
-    let withdraw_handle = driver_wallet::withdraw(wallet, Some(amount)).await?;
-
-    info!("Waiting for receipt - this takes LOOONG to complete...");
-    info!(
-        "Check it here: https://rinkeby.zkscan.io/explorer/accounts/{}",
-        addr_hex
-    );
+    let withdraw_handle = driver_wallet::withdraw(wallet, Some(amount), None).await?;
 
     let tx_info = withdraw_handle.wait_for_commit().await?;
     if tx_info.success.unwrap_or(false) {
+        let tx_hash = withdraw_handle.hash();
+        let hash_hex = hex::encode(tx_hash.as_ref());
+        info!("Transaction committed, track it here https://rinkeby.zkscan.io/explorer/transactions/{}", hash_hex);
+        info!("Waiting for verification - this takes LOOONG to complete...");
         withdraw_handle.wait_for_verify().await?;
         info!("Withdrawal succeeded!");
     } else {

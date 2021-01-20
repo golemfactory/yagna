@@ -16,7 +16,7 @@ use zksync::{Network, Provider, Wallet, WalletCredentials};
 use zksync_eth_signer::EthereumSigner;
 
 // Workspace uses
-use ya_payment_driver::model::{AccountMode, GenericError, Init, PaymentDetails};
+use ya_payment_driver::model::{AccountMode, Exit, GenericError, Init, PaymentDetails};
 
 // Local uses
 use crate::{
@@ -69,6 +69,30 @@ pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
         get_wallet(&address).and_then(unlock_wallet).await?;
     }
     Ok(())
+}
+
+pub async fn exit(msg: &Exit) -> Result<String, GenericError> {
+    let wallet = get_wallet(&msg.sender()).await?;
+    let tx_handle = withdraw(wallet, msg.amount(), msg.to()).await?;
+    let tx_info = tx_handle
+        .wait_for_commit()
+        .await
+        .map_err(GenericError::new)?;
+
+    match tx_info.success {
+        Some(true) => Ok(hash_to_hex(tx_handle.hash())),
+        Some(false) => Err(GenericError::new(
+            tx_info
+                .fail_reason
+                .unwrap_or("Unknown failure reason".to_string()),
+        )),
+        None => Err(GenericError::new("Transaction time-outed")),
+    }
+}
+
+fn hash_to_hex(hash: TxHash) -> String {
+    // TxHash::to_string adds a prefix to the hex value
+    hex::encode(hash.as_ref())
 }
 
 pub async fn get_nonce(address: &str) -> u32 {
@@ -189,6 +213,7 @@ async fn unlock_wallet<S: EthereumSigner + Clone>(wallet: Wallet<S>) -> Result<(
 pub async fn withdraw<S: EthereumSigner + Clone>(
     wallet: Wallet<S>,
     amount: Option<BigDecimal>,
+    recipient: Option<String>,
 ) -> Result<SyncTransactionHandle, GenericError> {
     let balance = wallet
         .get_balance(BlockStatus::Committed, ZKSYNC_TOKEN_NAME)
@@ -222,12 +247,17 @@ pub async fn withdraw<S: EthereumSigner + Clone>(
         utils::big_uint_to_big_dec(withdraw_amount.clone())
     );
 
+    let recipient_address = match recipient {
+        Some(addr) => Address::from_str(&addr[2..]).map_err(GenericError::new)?,
+        None => address,
+    };
+
     let withdraw_handle = wallet
         .start_withdraw()
         .token(ZKSYNC_TOKEN_NAME)
         .map_err(GenericError::new)?
         .amount(withdraw_amount)
-        .to(address)
+        .to(recipient_address)
         .send()
         .await
         .map_err(GenericError::new)?;
