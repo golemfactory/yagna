@@ -1,5 +1,6 @@
-use crate::command::YaCommand;
-use crate::command::{PaymentSummary, RecvAccount, ERC20_DRIVER, ZKSYNC_DRIVER};
+use crate::command::{
+    PaymentSummary, RecvAccount, YaCommand, DEFAULT_NETWORK, ERC20_DRIVER, ZKSYNC_DRIVER,
+};
 use crate::platform::Status as KvmStatus;
 use crate::utils::is_yagna_running;
 
@@ -12,7 +13,7 @@ use ya_core_model::payment::local::StatusResult;
 
 #[derive(StructOpt, Debug)]
 pub struct StatusCommand {
-    #[structopt(long, env = "YA_NETWORK", default_value = "mainnet")]
+    #[structopt(long = "payment-network", env = "YA_PAYMENT_NETWORK", default_value = &DEFAULT_NETWORK)]
     pub network: String,
 }
 

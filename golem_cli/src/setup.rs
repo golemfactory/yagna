@@ -1,5 +1,4 @@
-use crate::command::ERC20_DRIVER;
-use crate::command::{RecvAccount, UsageDef};
+use crate::command::{RecvAccount, UsageDef, DEFAULT_NETWORK, ERC20_DRIVER};
 use crate::terminal::clear_stdin;
 use anyhow::Result;
 use directories::ProjectDirs;
@@ -23,7 +22,7 @@ pub struct RunConfig {
     pub prices_configured: bool,
     #[structopt(long, env = "YA_ACCOUNT")]
     pub account: Option<NodeId>,
-    #[structopt(long, env = "YA_NETWORK", default_value = "mainnet")]
+    #[structopt(long = "payment-network", env = "YA_PAYMENT_NETWORK", default_value = &DEFAULT_NETWORK)]
     pub network: String,
 }
 
