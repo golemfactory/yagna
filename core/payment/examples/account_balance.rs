@@ -15,8 +15,11 @@ async fn main() -> anyhow::Result<()> {
     for account in account_list.into_iter() {
         let payer_status = bus::service(pay::BUS_ID)
             .call(pay::GetStatus {
-                platform: account.platform.to_string(),
                 address: account.address.to_string(),
+                platform: Some(account.platform.to_string()),
+                driver: None,
+                network: None,
+                token: None,
             })
             .await??;
 

@@ -24,16 +24,22 @@ async fn assert_requested_amount(
 ) -> anyhow::Result<()> {
     let payer_status = bus::service(pay::BUS_ID)
         .call(pay::GetStatus {
-            platform: payment_platform.to_string(),
             address: payer_addr.to_string(),
+            platform: Some(payment_platform.to_string()),
+            driver: None,
+            network: None,
+            token: None,
         })
         .await??;
     assert_eq!(&payer_status.outgoing.requested.total_amount, amount);
 
     let payee_status = bus::service(pay::BUS_ID)
         .call(pay::GetStatus {
-            platform: payment_platform.to_string(),
             address: payee_addr.to_string(),
+            platform: Some(payment_platform.to_string()),
+            driver: None,
+            network: None,
+            token: None,
         })
         .await??;
     assert_eq!(&payee_status.incoming.requested.total_amount, amount);

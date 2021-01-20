@@ -27,6 +27,8 @@ pub enum PaymentCli {
         driver: String,
         #[structopt(long)]
         network: Option<String>,
+        #[structopt(long)]
+        platform: Option<String>,
     },
     Accounts,
     Invoice {
@@ -71,12 +73,14 @@ impl PaymentCli {
                 account,
                 driver,
                 network,
+                platform,
             } => {
                 let address = resolve_address(account).await?;
                 let status = bus::service(pay::BUS_ID)
                     .call(pay::GetStatus {
                         address,
-                        driver,
+                        platform,
+                        driver: Some(driver),
                         network,
                         token: None,
                     })

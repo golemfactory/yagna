@@ -130,10 +130,19 @@ pub mod local {
     #[error("")]
     pub struct NoError {} // This is needed because () doesn't implement Display
 
+    #[derive(Clone, Debug, Serialize, Deserialize, Default, derive_more::Display)]
+    #[display(fmt = "{}-{}-{}", driver, network, "token.to_lowercase()")]
+    pub struct Platform {
+        pub driver: String,
+        pub network: String,
+        pub token: String,
+    }
+
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct Network {
+        pub name: String,
         pub default_token: String,
-        pub tokens: HashMap<String, String>, // token -> platform
+        pub tokens: HashMap<String, Platform>, // token -> platform
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -181,6 +190,16 @@ pub mod local {
         pub mode: AccountMode,
     }
 
+    impl From<RegisterAccount> for Platform {
+        fn from(msg: RegisterAccount) -> Self {
+            Self {
+                driver: msg.driver,
+                network: msg.network,
+                token: msg.token,
+            }
+        }
+    }
+
     #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
     pub enum RegisterAccountError {
         #[error("Account already registered: address={0}, driver={1}")]
@@ -189,8 +208,8 @@ pub mod local {
         DriverNotRegistered(String),
         #[error("Network not supported by driver: network={0}, driver={1}")]
         UnsupportedNetwork(String, String),
-        #[error("Token not supported by driver: token={0}, network={1}, driver={2}")]
-        UnsupportedToken(String, String, String),
+        #[error("Platform not supported: token={}, network={}, driver={}", _0.token, _0.network, _0.driver)]
+        UnsupportedPlatform(Platform),
         #[error("Error while registering account: {0}")]
         Other(String),
     }
@@ -233,7 +252,8 @@ pub mod local {
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct GetStatus {
         pub address: String,
-        pub driver: String,
+        pub platform: Option<String>,
+        pub driver: Option<String>,
         pub network: Option<String>,
         pub token: Option<String>,
     }
@@ -246,6 +266,7 @@ pub mod local {
 
     #[derive(Clone, Debug, Serialize, Deserialize, Default)]
     pub struct StatusResult {
+        pub platform: Platform,
         pub amount: BigDecimal,
         pub reserved: BigDecimal,
         pub outgoing: StatusNotes,
@@ -556,5 +577,43 @@ pub mod public {
         const ID: &'static str = "SendPayment";
         type Item = Ack;
         type Error = SendError;
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::payment::local::{Platform, RegisterAccountError};
+
+    #[test]
+    fn test_plarform_to_string() {
+        let p = Platform {
+            driver: "drv".into(),
+            network: "net".into(),
+            token: "tkn".into(),
+        };
+        assert_eq!(p.to_string(), "drv-net-tkn");
+    }
+
+    #[test]
+    fn test_plarform_to_string_uppercase_token() {
+        let p = Platform {
+            driver: "drv".into(),
+            network: "net".into(),
+            token: "TKN".into(),
+        };
+        assert_eq!(p.to_string(), "drv-net-tkn");
+    }
+
+    #[test]
+    fn test_unsupported_plarform() {
+        let e = RegisterAccountError::UnsupportedPlatform(Platform {
+            driver: "drv".into(),
+            network: "net".into(),
+            token: "TKN".into(),
+        });
+        assert_eq!(
+            e.to_string(),
+            "Platform not supported: token=TKN, network=net, driver=drv"
+        )
     }
 }

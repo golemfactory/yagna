@@ -14,8 +14,11 @@ async fn get_requestor_balance_and_platform() -> anyhow::Result<(BigDecimal, Str
         if account.send {
             let status = bus::service(pay::BUS_ID)
                 .call(pay::GetStatus {
-                    platform: account.platform.clone(),
                     address: account.address.clone(),
+                    platform: Some(account.platform.clone()),
+                    driver: None,
+                    network: None,
+                    token: None,
                 })
                 .await??;
             return Ok((status.amount, account.platform));
