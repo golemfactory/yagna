@@ -302,9 +302,15 @@ impl Exit {
         }
     }
 
-    pub fn amount(&self) -> Option<BigDecimal> { self.amount.clone() }
-    pub fn sender(&self) -> String { self.sender.clone() }
-    pub fn to(&self) -> Option<String> { self.to.clone() }
+    pub fn amount(&self) -> Option<BigDecimal> {
+        self.amount.clone()
+    }
+    pub fn sender(&self) -> String {
+        self.sender.clone()
+    }
+    pub fn to(&self) -> Option<String> {
+        self.to.clone()
+    }
 }
 
 impl RpcMessage for Exit {
