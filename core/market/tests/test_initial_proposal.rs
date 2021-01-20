@@ -1,14 +1,19 @@
 use ya_client::model::market::event::{ProviderEvent, RequestorEvent};
 use ya_client::model::market::proposal::State;
 use ya_market::assert_err_eq;
-use ya_market::testing::events_helper::ClientProposalHelper;
+use ya_market::testing::agreement_utils::{gen_reason, negotiate_agreement};
+use ya_market::testing::events_helper::{requestor, ClientProposalHelper};
 use ya_market::testing::mock_offer::client::{sample_demand, sample_offer};
 use ya_market::testing::{MarketServiceExt, MarketsNetwork, Owner};
 use ya_market::testing::{QueryEventsError, TakeEventsError};
 use ya_market::MarketService;
 
+use chrono::Utc;
 use std::sync::Arc;
 use std::time::Duration;
+
+const REQ_NAME: &str = "Node-1";
+const PROV_NAME: &str = "Node-2";
 
 /// No events available for not existent subscription.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
@@ -547,4 +552,114 @@ async fn test_counter_initial_proposal() {
     // Provider creates internally Proposal corresponding to initial Proposal
     // on Requestor, but id will be different.
     assert!(proposal.prev_proposal_id.is_some());
+}
+
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
+async fn test_respawn_proposal_after_terminate_by_requestor() -> anyhow::Result<()> {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await
+        .add_market_instance(PROV_NAME)
+        .await;
+
+    let info = negotiate_agreement(
+        &network,
+        REQ_NAME,
+        PROV_NAME,
+        "negotiation",
+        "r-session",
+        "p-session",
+    )
+    .await
+    .unwrap();
+
+    let req_market = network.get_market(REQ_NAME);
+    let prov_market = network.get_market(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME);
+    let agreement_id = info.r_agreement;
+
+    let timestamp = Utc::now();
+
+    req_market
+        .terminate_agreement(
+            req_id,
+            agreement_id.into_client(),
+            Some(gen_reason("Success")),
+        )
+        .await
+        .unwrap();
+
+    let proposal =
+        requestor::query_proposal(&req_market, &info.negotiation.demand_id, "Respawn #R")
+            .await
+            .unwrap();
+
+    assert!(timestamp <= proposal.timestamp);
+    assert_eq!(
+        proposal.issuer_id,
+        network.get_default_id(PROV_NAME).identity
+    );
+    assert_eq!(proposal.state, State::Initial);
+
+    // No new Proposal should appear on Provider Daemon side.
+    assert!(prov_market
+        .provider_engine
+        .query_events(&info.negotiation.offer_id, 0.2, Some(2))
+        .await
+        .unwrap()
+        .is_empty());
+    Ok(())
+}
+
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
+async fn test_respawn_proposal_after_terminate_by_provider() -> anyhow::Result<()> {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await
+        .add_market_instance(PROV_NAME)
+        .await;
+
+    let info = negotiate_agreement(
+        &network,
+        REQ_NAME,
+        PROV_NAME,
+        "negotiation",
+        "r-session",
+        "p-session",
+    )
+    .await
+    .unwrap();
+
+    let req_market = network.get_market(REQ_NAME);
+    let prov_market = network.get_market(PROV_NAME);
+    let prov_id = network.get_default_id(PROV_NAME);
+    let agreement_id = info.r_agreement;
+
+    let timestamp = Utc::now();
+
+    prov_market
+        .terminate_agreement(
+            prov_id,
+            agreement_id.into_client(),
+            Some(gen_reason("Success")),
+        )
+        .await
+        .unwrap();
+
+    let proposal =
+        requestor::query_proposal(&req_market, &info.negotiation.demand_id, "Respawn #R")
+            .await
+            .unwrap();
+
+    assert!(timestamp <= proposal.timestamp);
+    assert_eq!(
+        proposal.issuer_id,
+        network.get_default_id(PROV_NAME).identity
+    );
+    assert_eq!(proposal.state, State::Initial);
+    Ok(())
 }

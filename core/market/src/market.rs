@@ -247,12 +247,12 @@ impl MarketService {
             .as_dao::<AgreementDao>()
             .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
             .await
-            .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
+            .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
         {
             Some(agreement) => Ok(agreement
                 .into_client()
                 .map_err(|e| AgreementError::Internal(e.to_string()))?),
-            None => Err(AgreementError::NotFound(agreement_id.clone())),
+            None => Err(AgreementError::NotFound(agreement_id.to_string())),
         }
     }
 
@@ -277,13 +277,12 @@ impl MarketService {
     pub async fn terminate_agreement(
         &self,
         id: Identity,
-        agreement_id: AgreementId,
+        client_agreement_id: String,
         reason: Option<Reason>,
     ) -> Result<(), AgreementError> {
-        // We won't attach ourselves too much to owner type here. It will be replaced in CommonBroker
         self.requestor_engine
             .common
-            .terminate_agreement(id, agreement_id, reason)
+            .terminate_agreement(id, client_agreement_id, reason)
             .await
     }
 }

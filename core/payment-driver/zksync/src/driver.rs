@@ -128,8 +128,19 @@ impl PaymentDriver for ZksyncDriver {
         _caller: String,
         msg: Exit,
     ) -> Result<String, GenericError> {
-        log::info!("EXIT = Not Implemented: {:?}", msg);
-        Ok("NOT_IMPLEMENTED".to_string())
+        if !self.is_account_active(&msg.sender()) {
+            return Err(GenericError::new(
+                "Cannot start withdrawal, account is not active",
+            ));
+        }
+
+        let tx_hash = wallet::exit(&msg).await?;
+        Ok(format!(
+            "Withdrawal has been accepted by the zkSync operator. \
+        It may take some time until the funds are available on Ethereum blockchain. \
+        Tracking link: https://rinkeby.zkscan.io/explorer/transactions/{}",
+            tx_hash
+        ))
     }
 
     async fn get_account_balance(

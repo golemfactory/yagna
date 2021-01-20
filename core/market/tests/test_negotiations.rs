@@ -34,7 +34,7 @@ async fn test_exchanging_draft_proposals() {
     let offer_id = market2.subscribe_offer(&offer, &identity2).await.unwrap();
 
     // Expect events generated on requestor market.
-    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1)
+    let proposal0 = requestor::query_proposal(&market1, &demand_id, "Initial #R")
         .await
         .unwrap();
     assert_eq!(
@@ -60,7 +60,7 @@ async fn test_exchanging_draft_proposals() {
         .unwrap();
 
     // Provider receives Proposal
-    let proposal1_prov = provider::query_proposal(&market2, &offer_id, 2)
+    let proposal1_prov = provider::query_proposal(&market2, &offer_id, "Initial #P")
         .await
         .unwrap();
     let proposal1_prov_id = proposal1_req_id.clone().translate(Owner::Provider);
@@ -85,7 +85,7 @@ async fn test_exchanging_draft_proposals() {
         .unwrap();
 
     // Requestor receives proposal.
-    let proposal2_req = requestor::query_proposal(&market1, &demand_id, 3)
+    let proposal2_req = requestor::query_proposal(&market1, &demand_id, "Counter #R1")
         .await
         .unwrap();
     let proposal2_req_id = proposal2_id.clone().translate(Owner::Requestor);
@@ -112,7 +112,7 @@ async fn test_exchanging_draft_proposals() {
         .unwrap();
 
     // Provider receives Proposal
-    let proposal3_prov = provider::query_proposal(&market2, &offer_id, 4)
+    let proposal3_prov = provider::query_proposal(&market2, &offer_id, "Counter #P1")
         .await
         .unwrap();
     let proposal3_prov_id = proposal3_req_id.clone().translate(Owner::Provider);
@@ -159,7 +159,7 @@ async fn test_counter_countered_proposal() {
         .unwrap();
 
     // REQUESTOR side.
-    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1)
+    let proposal0 = requestor::query_proposal(&market1, &demand_id, "Initial #R")
         .await
         .unwrap();
     let proposal0_id = proposal0.get_proposal_id().unwrap();
@@ -188,7 +188,7 @@ async fn test_counter_countered_proposal() {
     }
 
     // PROVIDER side
-    let proposal0 = provider::query_proposal(&market2, &offer_id, 2)
+    let proposal0 = provider::query_proposal(&market2, &offer_id, "Initial #P")
         .await
         .unwrap();
     let proposal0_id = proposal0.get_proposal_id().unwrap();
@@ -244,7 +244,7 @@ async fn test_counter_own_proposal() {
         .unwrap();
 
     // REQUESTOR side.
-    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1)
+    let proposal0 = requestor::query_proposal(&market1, &demand_id, "Initial #R")
         .await
         .unwrap();
 
@@ -277,7 +277,7 @@ async fn test_counter_own_proposal() {
     }
 
     // PROVIDER side
-    let proposal0 = provider::query_proposal(&market2, &offer_id, 2)
+    let proposal0 = provider::query_proposal(&market2, &offer_id, "Initial #P")
         .await
         .unwrap();
 
@@ -336,7 +336,7 @@ async fn test_counter_unsubscribed_demand() {
         .await
         .unwrap();
 
-    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1)
+    let proposal0 = requestor::query_proposal(&market1, &demand_id, "Initial #R")
         .await
         .unwrap();
     market1
@@ -393,7 +393,7 @@ async fn test_counter_unsubscribed_offer() {
         .await
         .unwrap();
 
-    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1)
+    let proposal0 = requestor::query_proposal(&market1, &demand_id, "Initial #R")
         .await
         .unwrap();
     let proposal1 = sample_demand();
@@ -409,7 +409,7 @@ async fn test_counter_unsubscribed_offer() {
         .unwrap();
 
     // PROVIDER side
-    let proposal0 = provider::query_proposal(&market2, &offer_id, 2)
+    let proposal0 = provider::query_proposal(&market2, &offer_id, "Initial #P")
         .await
         .unwrap();
     market2
@@ -464,7 +464,7 @@ async fn test_counter_initial_unsubscribed_remote_offer() {
         .await
         .unwrap();
 
-    let proposal0 = requestor::query_proposal(&market1, &demand_id, 1)
+    let proposal0 = requestor::query_proposal(&market1, &demand_id, "Initial #R")
         .await
         .unwrap();
 
@@ -574,7 +574,7 @@ async fn test_counter_draft_unsubscribed_remote_demand() {
         .await
         .unwrap();
 
-    let proposal2 = provider::query_proposal(&market2, &offer_id, 1)
+    let proposal2 = provider::query_proposal(&market2, &offer_id, "Counter #P")
         .await
         .unwrap();
     market1
@@ -668,7 +668,7 @@ async fn test_not_matching_counter_offer() {
         .await
         .unwrap();
 
-    let proposal2 = provider::query_proposal(&market2, &offer_id, 1)
+    let proposal2 = provider::query_proposal(&market2, &offer_id, "Counter #P")
         .await
         .unwrap();
     let proposal3 = not_matching_offer();
