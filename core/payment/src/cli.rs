@@ -27,6 +27,7 @@ pub enum PaymentCli {
         token: Option<String>,
     },
     Exit {
+        address: Option<String>,
         #[structopt(help = "Optional address to exit to. [default: <DEFAULT_IDENTIDITY>]")]
         to: Option<String>,
         #[structopt(long, short, help = "Optional amount to exit. [default: <ALL_FUNDS>]")]
@@ -164,17 +165,21 @@ impl PaymentCli {
                 CommandOutput::object(wallet::enter(amount, driver, network, token).await?)
             }
             PaymentCli::Exit {
+                address,
                 to,
                 amount,
                 driver,
                 network,
                 token,
             } => {
+                let address = resolve_address(address).await?;
                 let amount = match amount {
                     None => None,
                     Some(a) => Some(BigDecimal::from_str(&a)?),
                 };
-                CommandOutput::object(wallet::exit(to, amount, driver, network, token).await?)
+                CommandOutput::object(
+                    wallet::exit(address, to, amount, driver, network, token).await?,
+                )
             }
             PaymentCli::Transfer {
                 to,
