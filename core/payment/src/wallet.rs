@@ -18,6 +18,7 @@ pub async fn enter(
 }
 
 pub async fn exit(
+    sender: String,
     to: Option<String>,
     amount: Option<BigDecimal>,
     driver: String,
@@ -25,7 +26,7 @@ pub async fn exit(
     token: Option<String>,
 ) -> anyhow::Result<String> {
     let driver_id = driver_bus_id(driver);
-    let message = Exit::new(to, amount, network, token);
+    let message = Exit::new(sender, to, amount, network, token);
     let tx_id = bus::service(driver_id).call(message).await??;
     Ok(tx_id)
 }
