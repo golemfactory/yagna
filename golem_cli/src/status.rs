@@ -134,8 +134,10 @@ pub async fn run(args: StatusCommand) -> Result</*exit code*/ i32> {
             let (zk_payment_status, erc20_payment_status) =
                 payment_status(&cmd, &args.network, &config.account).await?;
 
-            // We expect, that token name will be the same for zksync driver within specified network.
-            let token = (*ERC20_DRIVER).token_name(Some(&args.network))?;
+            let token = match zk_payment_status.platform.token.len() {
+                0 => erc20_payment_status.platform.token,
+                _ => zk_payment_status.platform.token,
+            };
 
             let mut table = Table::new();
             let format = format::FormatBuilder::new().padding(1, 1).build();

@@ -17,9 +17,8 @@ pub static DEFAULT_NETWORK: &'static str = "mainnet";
 
 pub struct PaymentType {
     pub platform: &'static str,
-    pub token: &'static str,
     pub driver: &'static str,
-    pub token_display_name: &'static str,
+    pub token: &'static str,
 }
 
 pub struct DriverDescriptor(pub HashMap<&'static str, PaymentType>);
@@ -31,18 +30,16 @@ lazy_static! {
             "mainnet",
             PaymentType {
                 platform: "zksync-mainnet-glm",
-                token: "glm",
                 driver: "zksync",
-                token_display_name: "GLM",
+                token: "GLM",
             },
         );
         zksync.insert(
             "rinkeby",
             PaymentType {
                 platform: "zksync-rinkeby-tglm",
-                token: "tglm",
                 driver: "zksync",
-                token_display_name: "tGLM",
+                token: "tGLM",
             },
         );
         DriverDescriptor(zksync)
@@ -53,18 +50,16 @@ lazy_static! {
             "mainnet",
             PaymentType {
                 platform: "erc20-mainnet-glm",
-                token: "glm",
                 driver: "erc20",
-                token_display_name: "GLM",
+                token: "GLM",
             },
         );
         erc20.insert(
             "rinkeby",
             PaymentType {
                 platform: "erc20-rinkeby-tglm",
-                token: "tglm",
                 driver: "erc20",
-                token_display_name: "tGLM",
+                token: "tGLM",
             },
         );
         DriverDescriptor(erc20)
@@ -83,7 +78,7 @@ impl DriverDescriptor {
     }
 
     pub fn token_name(&self, network: Option<&str>) -> anyhow::Result<&str> {
-        Ok(self.payment_type(network)?.token_display_name)
+        Ok(self.payment_type(network)?.token)
     }
 }
 
