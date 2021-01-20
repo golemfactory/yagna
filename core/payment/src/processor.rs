@@ -370,13 +370,14 @@ impl PaymentProcessor {
             Ok(confirmation) => PaymentConfirmation { confirmation },
             Err(e) => return Err(VerifyPaymentError::ConfirmationEncoding),
         };
+        let platform = payment.payment_platform.clone();
         let driver = self.registry.lock().await.driver(
             &payment.payment_platform,
             &payment.payee_addr,
             AccountMode::RECV,
         )?;
         let details: PaymentDetails = driver_endpoint(&driver)
-            .send(driver::VerifyPayment::from(confirmation))
+            .send(driver::VerifyPayment::new(confirmation, platform.clone()))
             .await??;
 
         // Verify if amount declared in message matches actual amount transferred on blockchain
@@ -456,6 +457,7 @@ impl PaymentProcessor {
             .send(driver::GetTransactionBalance::new(
                 payer_addr.clone(),
                 payee_addr.clone(),
+                platform,
             ))
             .await??;
 
@@ -503,6 +505,7 @@ impl PaymentProcessor {
                 .driver(&platform, &address, AccountMode::empty())?;
         let msg = ValidateAllocation {
             address,
+            platform,
             amount,
             existing_allocations,
         };

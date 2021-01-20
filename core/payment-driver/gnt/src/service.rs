@@ -155,6 +155,7 @@ async fn validate_allocation(
         address,
         amount,
         existing_allocations,
+        ..
     } = msg;
     processor
         .validate_allocation(address, amount, existing_allocations)

@@ -92,17 +92,26 @@ impl RpcMessage for GetAccountBalance {
 // ************************** VERIFY PAYMENT **************************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct VerifyPayment(PaymentConfirmation);
+pub struct VerifyPayment {
+    pub confirmation: PaymentConfirmation,
+    pub platform: String,
+}
 
-impl From<PaymentConfirmation> for VerifyPayment {
-    fn from(confirmation: PaymentConfirmation) -> Self {
-        VerifyPayment(confirmation)
+impl VerifyPayment {
+    pub fn new(confirmation: PaymentConfirmation, platform: String) -> Self {
+        Self {
+            confirmation,
+            platform,
+        }
     }
 }
 
 impl VerifyPayment {
     pub fn confirmation(&self) -> PaymentConfirmation {
-        self.0.clone()
+        self.confirmation.clone()
+    }
+    pub fn platform(&self) -> String {
+        self.platform.clone()
     }
 }
 
@@ -211,11 +220,16 @@ impl RpcMessage for SchedulePayment {
 pub struct GetTransactionBalance {
     pub sender: String,
     pub recipient: String,
+    pub platform: String,
 }
 
 impl GetTransactionBalance {
-    pub fn new(sender: String, recipient: String) -> GetTransactionBalance {
-        GetTransactionBalance { sender, recipient }
+    pub fn new(sender: String, recipient: String, platform: String) -> GetTransactionBalance {
+        GetTransactionBalance {
+            sender,
+            recipient,
+            platform,
+        }
     }
     pub fn sender(&self) -> String {
         self.sender.clone()
@@ -223,6 +237,10 @@ impl GetTransactionBalance {
 
     pub fn recipient(&self) -> String {
         self.recipient.clone()
+    }
+
+    pub fn platform(&self) -> String {
+        self.platform.clone()
     }
 }
 
@@ -237,14 +255,21 @@ impl RpcMessage for GetTransactionBalance {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ValidateAllocation {
     pub address: String,
+    pub platform: String,
     pub amount: BigDecimal,
     pub existing_allocations: Vec<Allocation>,
 }
 
 impl ValidateAllocation {
-    pub fn new(address: String, amount: BigDecimal, existing: Vec<Allocation>) -> Self {
+    pub fn new(
+        address: String,
+        platform: String,
+        amount: BigDecimal,
+        existing: Vec<Allocation>,
+    ) -> Self {
         ValidateAllocation {
             address,
+            platform,
             amount,
             existing_allocations: existing,
         }
