@@ -1,7 +1,9 @@
 #![allow(dead_code)]
+use anyhow::anyhow;
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use futures::prelude::*;
+use lazy_static::lazy_static;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -10,20 +12,79 @@ use std::process::Stdio;
 use tokio::process::{Child, Command};
 use ya_core_model::payment::local::{InvoiceStats, InvoiceStatusNotes, StatusNotes, StatusResult};
 
+pub static DEFAULT_DRIVER: &'static str = "zksync";
+pub static DEFAULT_NETWORK: &'static str = "mainnet";
+
 pub struct PaymentType {
     pub platform: &'static str,
+    pub token: &'static str,
     pub driver: &'static str,
+    pub token_display_name: &'static str,
 }
 
-impl PaymentType {
-    pub const ZK: PaymentType = PaymentType {
-        platform: "ZK-NGNT",
-        driver: "zksync",
+pub struct DriverDescriptor(pub HashMap<&'static str, PaymentType>);
+
+lazy_static! {
+    pub static ref ZKSYNC_DRIVER: DriverDescriptor = {
+        let mut zksync = HashMap::new();
+        zksync.insert(
+            "mainnet",
+            PaymentType {
+                platform: "zksync-mainnet-glm",
+                token: "glm",
+                driver: "zksync",
+                token_display_name: "GLM",
+            },
+        );
+        zksync.insert(
+            "rinkeby",
+            PaymentType {
+                platform: "zksync-rinkeby-tglm",
+                token: "tglm",
+                driver: "zksync",
+                token_display_name: "tGLM",
+            },
+        );
+        DriverDescriptor(zksync)
     };
-    pub const PLAIN: PaymentType = PaymentType {
-        platform: "NGNT",
-        driver: "ngnt",
+    pub static ref ERC20_DRIVER: DriverDescriptor = {
+        let mut erc20 = HashMap::new();
+        erc20.insert(
+            "mainnet",
+            PaymentType {
+                platform: "erc20-mainnet-glm",
+                token: "glm",
+                driver: "erc20",
+                token_display_name: "GLM",
+            },
+        );
+        erc20.insert(
+            "rinkeby",
+            PaymentType {
+                platform: "erc20-rinkeby-tglm",
+                token: "tglm",
+                driver: "erc20",
+                token_display_name: "tGLM",
+            },
+        );
+        DriverDescriptor(erc20)
     };
+}
+
+impl DriverDescriptor {
+    pub fn payment_type(&self, network: Option<&str>) -> anyhow::Result<&PaymentType> {
+        Ok(self
+            .0
+            .get(network.as_deref().unwrap_or(DEFAULT_NETWORK))
+            .ok_or(anyhow!(
+                "Network '{}' not found.",
+                network.unwrap_or(DEFAULT_NETWORK)
+            ))?)
+    }
+
+    pub fn token_name(&self, network: Option<&str>) -> anyhow::Result<&str> {
+        Ok(self.payment_type(network)?.token_display_name)
+    }
 }
 
 #[derive(Deserialize)]
@@ -124,30 +185,35 @@ impl YagnaCommand {
     pub async fn payment_status(
         mut self,
         address: Option<&str>,
-        payment_type: Option<&PaymentType>,
+        network: &str,
+        driver_desc: &DriverDescriptor,
     ) -> anyhow::Result<StatusResult> {
         self.cmd.args(&["--json", "payment", "status"]);
-        if let Some(payment_type) = payment_type {
-            self.cmd.arg("-p").arg(payment_type.platform);
-        }
         if let Some(addr) = address {
-            self.cmd.arg(addr);
+            self.cmd.args(&["--account", addr]);
         }
+
+        let payment_type = driver_desc.payment_type(Some(network))?;
+
+        self.cmd.args(&["--network", network]);
+        self.cmd.args(&["--driver", payment_type.driver]);
+
         self.run().await
     }
 
     pub async fn payment_init(
         mut self,
         address: &str,
-        payment_type: &PaymentType,
+        network: &str,
+        payment_type: &DriverDescriptor,
     ) -> anyhow::Result<()> {
         self.cmd.args(&[
             "--json",
             "payment",
             "init",
-            "-p",
+            "--receiver", // provider is a receiver
             "--driver",
-            payment_type.driver,
+            payment_type.payment_type(Some(network))?.driver,
             address,
         ]);
         self.run().await
