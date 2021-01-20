@@ -93,7 +93,7 @@ impl ZksyncDriver {
                 self.dao
                     .transaction_failed(&tx_id, &e, &payment.order_id)
                     .await;
-                log::error!("NGNT transfer failed: {}", e);
+                log::error!("GLM transfer failed: {}", e);
                 //return Err(e);
             }
         };

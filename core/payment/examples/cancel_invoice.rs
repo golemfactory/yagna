@@ -67,7 +67,7 @@ async fn main() -> anyhow::Result<()> {
         payment_due_date: Some(Utc::now()),
     };
     log::info!(
-        "Issuing debit note for activity 1 (total amount due: {} NGNT)...",
+        "Issuing debit note for activity 1 (total amount due: {} GLM)...",
         &debit_note.total_amount_due
     );
     let debit_note = provider.issue_debit_note(&debit_note).await?;
@@ -84,7 +84,7 @@ async fn main() -> anyhow::Result<()> {
         payment_due_date: Some(Utc::now()),
     };
     log::info!(
-        "Issuing debit note for activity 2 (total amount due: {} NGNT)...",
+        "Issuing debit note for activity 2 (total amount due: {} GLM)...",
         debit_note2.total_amount_due
     );
     let debit_note2 = provider.issue_debit_note(&debit_note2).await?;
@@ -107,7 +107,7 @@ async fn main() -> anyhow::Result<()> {
         amount: BigDecimal::from(3u64),
         payment_due_date: Utc::now(),
     };
-    log::info!("Issuing invoice (amount: {} NGNT)...", &invoice.amount);
+    log::info!("Issuing invoice (amount: {} GLM)...", &invoice.amount);
     let invoice = provider.issue_invoice(&invoice).await?;
     log::info!("Invoice issued.");
 
@@ -178,7 +178,7 @@ async fn main() -> anyhow::Result<()> {
         amount: BigDecimal::from(3u64),
         payment_due_date: Utc::now(),
     };
-    log::info!("Issuing invoice (amount: {} NGNT)...", &invoice.amount);
+    log::info!("Issuing invoice (amount: {} GLM)...", &invoice.amount);
     let invoice = provider.issue_invoice(&invoice).await?;
     log::info!("Invoice issued.");
 

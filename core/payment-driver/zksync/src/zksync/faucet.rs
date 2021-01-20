@@ -31,10 +31,7 @@ pub async fn request_ngnt(address: &str) -> Result<(), GenericError> {
         return Ok(());
     }
 
-    log::info!(
-        "Requesting NGNT from zkSync faucet... address = {}",
-        address
-    );
+    log::info!("Requesting GLM from zkSync faucet... address = {}", address);
 
     for i in 0..MAX_FAUCET_REQUESTS {
         match faucet_donate(address).await {
@@ -43,14 +40,14 @@ pub async fn request_ngnt(address: &str) -> Result<(), GenericError> {
                 // Do not warn nor sleep at the last try.
                 if i >= MAX_FAUCET_REQUESTS - 1 {
                     log::error!(
-                        "Failed to request NGNT from Faucet, tried {} times.: {:?}",
+                        "Failed to request GLM from Faucet, tried {} times.: {:?}",
                         MAX_FAUCET_REQUESTS,
                         e
                     );
                     return Err(e);
                 } else {
                     log::warn!(
-                        "Retrying ({}/{}) to request NGNT from Faucet after failure: {:?}",
+                        "Retrying ({}/{}) to request GLM from Faucet after failure: {:?}",
                         i + 1,
                         MAX_FAUCET_REQUESTS,
                         e
@@ -65,16 +62,16 @@ pub async fn request_ngnt(address: &str) -> Result<(), GenericError> {
 }
 
 async fn wait_for_ngnt(address: &str) -> Result<(), GenericError> {
-    log::info!("Waiting for NGNT from faucet...");
+    log::info!("Waiting for GLM from faucet...");
     let wait_until = Utc::now() + *MAX_WAIT;
     while Utc::now() < wait_until {
         if account_balance(address).await? >= *MIN_BALANCE {
-            log::info!("Received NGNT from faucet.");
+            log::info!("Received GLM from faucet.");
             return Ok(());
         }
         delay_for(time::Duration::from_secs(3)).await;
     }
-    let msg = "Waiting for NGNT timed out.";
+    let msg = "Waiting for GLM timed out.";
     log::error!("{}", msg);
     Err(GenericError::new(msg))
 }
