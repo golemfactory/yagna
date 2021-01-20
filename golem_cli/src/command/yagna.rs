@@ -197,7 +197,6 @@ impl YagnaCommand {
 
         self.cmd.args(&["--network", network]);
         self.cmd.args(&["--driver", payment_type.driver]);
-        self.cmd.args(&["--token", payment_type.token]);
 
         self.run().await
     }
