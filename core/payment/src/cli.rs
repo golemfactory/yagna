@@ -85,7 +85,47 @@ impl PaymentCli {
                         token: None,
                     })
                     .await??;
-                CommandOutput::object(status) // TODO: render as table
+                if ctx.json_output {
+                    CommandOutput::object(status)
+                } else {
+                    Ok(ResponseTable {
+                        columns: vec![
+                            "platform".to_owned(),
+                            "total amount".to_owned(),
+                            "reserved".to_owned(),
+                            "amount".to_owned(),
+                            "incoming".to_owned(),
+                            "outgoing".to_owned(),
+                        ],
+                        values: vec![
+                            serde_json::json! {[
+                            format!("driver: {}", status.platform.driver),
+                            format!("{} {}", status.amount, status.platform.token),
+                            format!("{} {}", status.reserved, status.platform.token),
+                            "accepted",
+                            status.incoming.accepted.total_amount,
+                            status.outgoing.accepted.total_amount,
+                            ]},
+                            serde_json::json! {[
+                            format!("network: {}", status.platform.network),
+                            "",
+                            "",
+                            "confirmed",
+                            status.incoming.confirmed.total_amount,
+                            status.outgoing.confirmed.total_amount,
+                            ]},
+                            serde_json::json! {[
+                            format!("token: {}", status.platform.token),
+                            "",
+                            "",
+                            "requested",
+                            status.incoming.requested.total_amount,
+                            status.outgoing.requested.total_amount,
+                            ]},
+                        ],
+                    }
+                    .into())
+                }
             }
             PaymentCli::Accounts => {
                 let accounts = bus::service(pay::BUS_ID)
