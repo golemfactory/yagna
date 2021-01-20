@@ -278,6 +278,7 @@ impl RpcMessage for Enter {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Exit {
+    sender: String,
     to: Option<String>,
     amount: Option<BigDecimal>,
     network: Option<String>,
@@ -286,12 +287,14 @@ pub struct Exit {
 
 impl Exit {
     pub fn new(
+        sender: String,
         to: Option<String>,
         amount: Option<BigDecimal>,
         network: Option<String>,
         token: Option<String>,
     ) -> Exit {
         Exit {
+            sender,
             to,
             amount,
             network,
@@ -299,12 +302,9 @@ impl Exit {
         }
     }
 
-    pub fn amount(&self) -> Option<BigDecimal> {
-        match &self.amount {
-            Some(a) => Some(a.clone()),
-            None => None,
-        }
-    }
+    pub fn amount(&self) -> Option<BigDecimal> { self.amount.clone() }
+    pub fn sender(&self) -> String { self.sender.clone() }
+    pub fn to(&self) -> Option<String> { self.to.clone() }
 }
 
 impl RpcMessage for Exit {
