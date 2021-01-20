@@ -1,4 +1,4 @@
-use crate::command::{RecvAccount, UsageDef, DEFAULT_NETWORK, ERC20_DRIVER};
+use crate::command::{RecvAccount, UsageDef, DEFAULT_NETWORK};
 use crate::terminal::clear_stdin;
 use anyhow::Result;
 use directories::ProjectDirs;
@@ -152,13 +152,12 @@ pub async fn setup(run_config: &mut RunConfig, force: bool) -> Result<i32> {
             .map(|p| p.name)
             .collect();
 
-        // We expect, that token name will be the same for zksync driver within specified network.
-        let token = (*ERC20_DRIVER).token_name(Some(&run_config.network))?;
-        let ngnt_per_h = promptly::prompt_default(format!("Price {} per hour", token), 5.0)?;
+        let default_glm_per_h = 1.0;
+        let glm_per_h = promptly::prompt_default("Price GLM per hour", default_glm_per_h)?;
 
         let usage = UsageDef {
-            cpu: ngnt_per_h / 3600.0,
-            duration: ngnt_per_h / 3600.0 / 5.0,
+            cpu: glm_per_h / 3600.0,
+            duration: glm_per_h / 3600.0 / default_glm_per_h,
             initial: 0.0,
         };
 
