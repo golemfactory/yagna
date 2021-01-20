@@ -134,7 +134,17 @@ mod local {
         msg: GetStatus,
     ) -> Result<StatusResult, GenericError> {
         log::info!("get status: {:?}", msg);
-        let GetStatus { platform, address } = msg;
+        let GetStatus {
+            address,
+            driver,
+            network,
+            token,
+        } = msg;
+
+        let platform = processor
+            .get_platform(driver, network, token)
+            .await
+            .map_err(GenericError::new)?;
 
         let incoming_fut = async {
             db.as_dao::<AgreementDao>()
