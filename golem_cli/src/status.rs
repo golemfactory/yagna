@@ -24,7 +24,7 @@ async fn payment_status(
 ) -> anyhow::Result<(StatusResult, StatusResult)> {
     if let Some(account) = account {
         let address = account.address.to_lowercase();
-        let (status_zk, status) = future::join(
+        let (status_zk, status_erc20) = future::join(
             cmd.yagna()?
                 .payment_status(Some(&address), network, &ZKSYNC_DRIVER),
             cmd.yagna()?
@@ -54,7 +54,7 @@ async fn payment_status(
             })
             .flatten()
             .unwrap_or(true);
-        match (status_zk, status) {
+        match (status_zk, status_erc20) {
             (Ok(zk), Ok(eth)) => Ok((zk, eth)),
             (Err(e), _) if is_zk => Err(e),
             (_, Err(e)) if is_erc20 => Err(e),
@@ -63,12 +63,12 @@ async fn payment_status(
             (Err(e), _) => Err(e),
         }
     } else {
-        let (status_zk, status) = future::join(
+        let (status_zk, status_erc20) = future::join(
             cmd.yagna()?.payment_status(None, network, &ZKSYNC_DRIVER),
             cmd.yagna()?.payment_status(None, network, &ERC20_DRIVER),
         )
         .await;
-        match (status_zk, status) {
+        match (status_zk, status_erc20) {
             (Ok(zk), Ok(eth)) => Ok((zk, eth)),
             (Err(e), _) => Err(e),
             (Ok(zk), Err(_)) => Ok((zk, StatusResult::default())),
@@ -150,6 +150,10 @@ pub async fn run(args: StatusCommand) -> Result</*exit code*/ i32> {
             } else {
                 table.add_row(row!["address", &id.node_id]);
             }
+            table.add_row(row![
+                "network",
+                Style::new().fg(Colour::Purple).paint(&args.network)
+            ]);
             let total_amount = &zk_payment_status.amount + &erc20_payment_status.amount;
             table.add_row(row![
                 "amount (total)",
