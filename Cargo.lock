@@ -2321,12 +2321,6 @@ dependencies = [
 
 [[package]]
 name = "fixedbitset"
-version = "0.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86d4de0081402f5e88cdac65c8dcdcc73118c1a7a465e2a05f0da05843a8ea33"
-
-[[package]]
-name = "fixedbitset"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37ab347416e802de484e4d03c7316c48f1ecb56574dfd4a46a80f173ce1de04d"
@@ -3585,12 +3579,6 @@ dependencies = [
 
 [[package]]
 name = "multimap"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2eb04b9f127583ed176e163fb9ec6f3e793b87e21deedd5734a69386a18a0151"
-
-[[package]]
-name = "multimap"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1255076139a83bb467426e7f8d0134968a8118844faa755985e077cf31850333"
@@ -4166,20 +4154,11 @@ checksum = "d4fd5641d01c8f18a23da7b6fe29298ff4b55afcccdf78973b24cf3175fee32e"
 
 [[package]]
 name = "petgraph"
-version = "0.4.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c3659d1ee90221741f65dd128d9998311b0e40c5d3c23a62445938214abce4f"
-dependencies = [
- "fixedbitset 0.1.9",
-]
-
-[[package]]
-name = "petgraph"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "467d164a6de56270bd7c4d070df81d07beace25012d5103ced4e9ff08d6afdb7"
 dependencies = [
- "fixedbitset 0.2.0",
+ "fixedbitset",
  "indexmap",
 ]
 
@@ -4380,41 +4359,12 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96d14b1c185652833d24aaad41c5832b0be5616a590227c1fbff57c616754b23"
-dependencies = [
- "byteorder",
- "bytes 0.4.12",
- "prost-derive 0.5.0",
-]
-
-[[package]]
-name = "prost"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce49aefe0a6144a45de32927c77bd2859a5f7677b55f220ae5b744e87389c212"
 dependencies = [
  "bytes 0.5.6",
- "prost-derive 0.6.1",
-]
-
-[[package]]
-name = "prost-build"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb788126ea840817128183f8f603dce02cb7aea25c2a0b764359d8e20010702e"
-dependencies = [
- "bytes 0.4.12",
- "heck",
- "itertools",
- "log",
- "multimap 0.4.0",
- "petgraph 0.4.13",
- "prost 0.5.0",
- "prost-types 0.5.0",
- "tempfile",
- "which 2.0.1",
+ "prost-derive",
 ]
 
 [[package]]
@@ -4427,25 +4377,12 @@ dependencies = [
  "heck",
  "itertools",
  "log",
- "multimap 0.8.2",
- "petgraph 0.5.1",
- "prost 0.6.1",
- "prost-types 0.6.1",
+ "multimap",
+ "petgraph",
+ "prost",
+ "prost-types",
  "tempfile",
- "which 3.1.1",
-]
-
-[[package]]
-name = "prost-derive"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e7dc378b94ac374644181a2247cebf59a6ec1c88b49ac77f3a94b86b79d0e11"
-dependencies = [
- "failure",
- "itertools",
- "proc-macro2 0.4.30",
- "quote 0.6.13",
- "syn 0.15.44",
+ "which",
 ]
 
 [[package]]
@@ -4463,22 +4400,12 @@ dependencies = [
 
 [[package]]
 name = "prost-types"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1de482a366941c8d56d19b650fac09ca08508f2a696119ee7513ad590c8bac6f"
-dependencies = [
- "bytes 0.4.12",
- "prost 0.5.0",
-]
-
-[[package]]
-name = "prost-types"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1834f67c0697c001304b75be76f67add9c89742eda3a085ad8ee0bb38c3417aa"
 dependencies = [
  "bytes 0.5.6",
- "prost 0.6.1",
+ "prost",
 ]
 
 [[package]]
@@ -6760,16 +6687,6 @@ dependencies = [
 
 [[package]]
 name = "which"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b57acb10231b9493c8472b20cb57317d0679a49e0bdbee44b3b803a6473af164"
-dependencies = [
- "failure",
- "libc",
-]
-
-[[package]]
-name = "which"
 version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d011071ae14a2f6671d0b74080ae0cd8ebf3a6f8c9589a2cd45f23126fe29724"
@@ -7440,8 +7357,8 @@ dependencies = [
  "env_logger 0.7.1",
  "futures 0.3.12",
  "log",
- "prost 0.6.1",
- "prost-build 0.6.1",
+ "prost",
+ "prost-build",
  "serde",
  "serde_json",
  "tokio",
@@ -7457,8 +7374,8 @@ name = "ya-sb-proto"
 version = "0.1.0"
 dependencies = [
  "bytes 0.5.6",
- "prost 0.6.1",
- "prost-build 0.5.0",
+ "prost",
+ "prost-build",
  "serial_test 0.4.0",
  "thiserror",
  "tokio",
@@ -7477,7 +7394,7 @@ dependencies = [
  "futures 0.3.12",
  "lazy_static",
  "log",
- "prost 0.5.0",
+ "prost",
  "structopt",
  "tokio",
  "tokio-util 0.2.0",
