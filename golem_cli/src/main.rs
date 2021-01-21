@@ -86,8 +86,8 @@ pub fn banner() {
         include_str!("banner.txt"),
         version = ya_compile_time_utils::semver_str(),
         git_commit = ya_compile_time_utils::git_rev(),
+        date = ya_compile_time_utils::build_date(),
         build = ya_compile_time_utils::build_number_str().unwrap_or("-"),
-        date = ya_compile_time_utils::build_date()
     ))
     .unwrap();
 }
