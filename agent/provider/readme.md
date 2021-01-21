@@ -24,7 +24,7 @@ It is rather straightforward and minimal:
   * requires `golem.srv.comp.expiration` to be set
   * if provided (via env or CLI) sets also `golem.node.debug.subnet`
 *  properties:
-  * linear pricing (see sample below: 0.01 NGNT/sec + 1.2 NGNT/CPUsec + 1.5 NGNT const)
+  * linear pricing (see sample below: 0.01 GLM/sec + 1.2 GLM/CPUsec + 1.5 GLM const)
   * hardware: memory and storage (sample below: 1 gib RAM and 10 gib disk)
   * node name set via env or CLI
   * runtime (sample below: wasmtime)
@@ -203,9 +203,9 @@ Name:               default
 ExeUnit:            wasmtime
 Pricing model:      linear
 Coefficients:
-    Duration        0.1 NGNT
-    CPU             0.2 NGNT
-    Init price        1 NGNT
+    Duration        0.1 GLM
+    CPU             0.2 GLM
+    Init price        1 GLM
 
 ```
 

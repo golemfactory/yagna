@@ -11,7 +11,7 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
 use crate::accounts::{init_account, Account};
-use crate::{wallet, DEFAULT_PAYMENT_DRIVER, DEFAULT_PAYMENT_PLATFORM};
+use crate::{wallet, DEFAULT_PAYMENT_DRIVER};
 
 /// Payment management.
 #[derive(StructOpt, Debug)]
@@ -40,11 +40,12 @@ pub enum PaymentCli {
         token: Option<String>,
     },
     Init {
-        address: Option<String>,
-        #[structopt(long, short)]
-        requestor: bool,
-        #[structopt(long, short)]
-        provider: bool,
+        #[structopt(long)]
+        account: Option<String>,
+        #[structopt(long)]
+        sender: bool,
+        #[structopt(long)]
+        receiver: bool,
         #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
         driver: String,
         #[structopt(long)]
@@ -67,9 +68,12 @@ pub enum PaymentCli {
         token: Option<String>,
     },
     Status {
-        address: Option<String>,
-        #[structopt(long, short)]
-        platform: Option<String>,
+        #[structopt(long)]
+        account: Option<String>,
+        #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
+        driver: String,
+        #[structopt(long)]
+        network: Option<String>,
     },
 }
 
@@ -85,33 +89,80 @@ impl PaymentCli {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
             PaymentCli::Init {
-                address,
+                account,
                 driver,
                 network,
-                requestor,
-                provider,
+                sender,
+                receiver,
             } => {
-                let address = resolve_address(address).await?;
+                let address = resolve_address(account).await?;
                 let driver = driver.to_lowercase();
                 let account = Account {
                     driver,
                     address,
                     network,
                     token: None, // Use default -- we don't yet support other tokens than GLM
-                    send: requestor,
-                    receive: provider,
+                    send: sender,
+                    receive: receiver,
                 };
                 init_account(account).await?;
                 Ok(CommandOutput::NoOutput)
             }
-            PaymentCli::Status { address, platform } => {
-                let address = resolve_address(address).await?;
-                let platform = platform.unwrap_or(DEFAULT_PAYMENT_PLATFORM.to_owned());
-                CommandOutput::object(
-                    bus::service(pay::BUS_ID)
-                        .call(pay::GetStatus { address, platform })
-                        .await??,
-                )
+            PaymentCli::Status {
+                account,
+                driver,
+                network,
+            } => {
+                let address = resolve_address(account).await?;
+                let status = bus::service(pay::BUS_ID)
+                    .call(pay::GetStatus {
+                        address,
+                        driver,
+                        network,
+                        token: None,
+                    })
+                    .await??;
+                if ctx.json_output {
+                    CommandOutput::object(status)
+                } else {
+                    Ok(ResponseTable {
+                        columns: vec![
+                            "platform".to_owned(),
+                            "total amount".to_owned(),
+                            "reserved".to_owned(),
+                            "amount".to_owned(),
+                            "incoming".to_owned(),
+                            "outgoing".to_owned(),
+                        ],
+                        values: vec![
+                            serde_json::json! {[
+                                format!("driver: {}", status.driver),
+                                format!("{} {}", status.amount, status.token),
+                                format!("{} {}", status.reserved, status.token),
+                                "accepted",
+                                format!("{} {}", status.incoming.accepted.total_amount, status.token),
+                                format!("{} {}", status.outgoing.accepted.total_amount, status.token),
+                            ]},
+                            serde_json::json! {[
+                                format!("network: {}", status.network),
+                                "",
+                                "",
+                                "confirmed",
+                                format!("{} {}", status.incoming.confirmed.total_amount, status.token),
+                                format!("{} {}", status.outgoing.confirmed.total_amount, status.token),
+                            ]},
+                            serde_json::json! {[
+                                format!("token: {}", status.token),
+                                "",
+                                "",
+                                "requested",
+                                format!("{} {}", status.incoming.requested.total_amount, status.token),
+                                format!("{} {}", status.outgoing.requested.total_amount, status.token),
+                            ]},
+                        ],
+                    }
+                    .into())
+                }
             }
             PaymentCli::Accounts => {
                 let accounts = bus::service(pay::BUS_ID)
@@ -119,9 +170,10 @@ impl PaymentCli {
                     .await??;
                 Ok(ResponseTable {
                     columns: vec![
-                        "platform".to_owned(),
                         "address".to_owned(),
                         "driver".to_owned(),
+                        "network".to_owned(),
+                        "token".to_owned(),
                         "send".to_owned(),
                         "recv".to_owned(),
                     ],
@@ -129,9 +181,10 @@ impl PaymentCli {
                         .into_iter()
                         .map(|account| {
                             serde_json::json! {[
-                                account.platform,
                                 account.address,
                                 account.driver,
+                                account.network,
+                                account.token,
                                 if account.send { "X" } else { "" },
                                 if account.receive { "X" } else { "" }
                             ]}

@@ -1,4 +1,4 @@
-use crate::command::{RecvAccount, UsageDef};
+use crate::command::{RecvAccount, UsageDef, DEFAULT_NETWORK};
 use crate::terminal::clear_stdin;
 use anyhow::Result;
 use directories::ProjectDirs;
@@ -22,6 +22,8 @@ pub struct RunConfig {
     pub prices_configured: bool,
     #[structopt(long, env = "YA_ACCOUNT")]
     pub account: Option<NodeId>,
+    #[structopt(long = "payment-network", env = "YA_PAYMENT_NETWORK", default_value = &DEFAULT_NETWORK)]
+    pub network: String,
 }
 
 impl RunConfig {
@@ -149,11 +151,13 @@ pub async fn setup(run_config: &mut RunConfig, force: bool) -> Result<i32> {
             .into_iter()
             .map(|p| p.name)
             .collect();
-        let ngnt_per_h = promptly::prompt_default("Price NGNT per hour", 5.0)?;
+
+        let default_glm_per_h = 1.0;
+        let glm_per_h = promptly::prompt_default("Price GLM per hour", default_glm_per_h)?;
 
         let usage = UsageDef {
-            cpu: ngnt_per_h / 3600.0,
-            duration: ngnt_per_h / 3600.0 / 5.0,
+            cpu: glm_per_h / 3600.0,
+            duration: glm_per_h / 3600.0 / default_glm_per_h,
             initial: 0.0,
         };
 

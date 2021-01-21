@@ -15,7 +15,7 @@ use ya_core_model::driver::{
     self, driver_bus_id, AccountMode, PaymentConfirmation, PaymentDetails, ValidateAllocation,
 };
 use ya_core_model::payment::local::{
-    DriverDetails, NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver,
+    DriverDetails, Network, NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver,
     RegisterDriverError, SchedulePayment, UnregisterAccount, UnregisterDriver,
 };
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
@@ -191,6 +191,47 @@ impl DriverRegistry {
             .collect()
     }
 
+    pub fn get_driver(&self, driver: &str) -> Result<&DriverDetails, RegisterAccountError> {
+        match self.drivers.get(driver) {
+            None => Err(RegisterAccountError::DriverNotRegistered(driver.into())),
+            Some(details) => Ok(details),
+        }
+    }
+
+    pub fn get_network(
+        &self,
+        driver: String,
+        network: Option<String>,
+    ) -> Result<(String, Network), RegisterAccountError> {
+        let driver_details = self.get_driver(&driver)?;
+        let network_name = network.unwrap_or(driver_details.default_network.to_owned());
+        match driver_details.networks.get(&network_name) {
+            None => Err(RegisterAccountError::UnsupportedNetwork(
+                network_name,
+                driver.into(),
+            )),
+            Some(network_details) => Ok((network_name, network_details.clone())),
+        }
+    }
+
+    pub fn get_platform(
+        &self,
+        driver: String,
+        network: Option<String>,
+        token: Option<String>,
+    ) -> Result<String, RegisterAccountError> {
+        let (network_name, network_details) = self.get_network(driver.clone(), network)?;
+        let token = token.unwrap_or(network_details.default_token.to_owned());
+        match network_details.tokens.get(&token) {
+            None => Err(RegisterAccountError::UnsupportedToken(
+                token,
+                network_name,
+                driver,
+            )),
+            Some(platform) => Ok(platform.into()),
+        }
+    }
+
     pub fn driver(
         &self,
         platform: &str,
@@ -254,6 +295,26 @@ impl PaymentProcessor {
 
     pub async fn get_accounts(&self) -> Vec<Account> {
         self.registry.lock().await.get_accounts()
+    }
+
+    pub async fn get_network(
+        &self,
+        driver: String,
+        network: Option<String>,
+    ) -> Result<(String, Network), RegisterAccountError> {
+        self.registry.lock().await.get_network(driver, network)
+    }
+
+    pub async fn get_platform(
+        &self,
+        driver: String,
+        network: Option<String>,
+        token: Option<String>,
+    ) -> Result<String, RegisterAccountError> {
+        self.registry
+            .lock()
+            .await
+            .get_platform(driver, network, token)
     }
 
     pub async fn notify_payment(&self, msg: NotifyPayment) -> Result<(), NotifyPaymentError> {
