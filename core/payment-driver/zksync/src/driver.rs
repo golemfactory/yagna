@@ -5,9 +5,9 @@
 */
 // Extrnal crates
 use chrono::Utc;
-use maplit::hashmap;
 use serde_json;
 use std::collections::HashMap;
+use std::str::FromStr;
 use uuid::Uuid;
 
 // Workspace uses
@@ -16,6 +16,7 @@ use ya_payment_driver::{
     bus,
     cron::PaymentDriverCron,
     dao::DbExecutor,
+    db::network::Network as DbNetwork,
     db::models::PaymentEntity,
     driver::{async_trait, BigDecimal, IdentityError, IdentityEvent, Network, PaymentDriver},
     model::*,
@@ -25,26 +26,10 @@ use ya_utils_futures::timeout::IntoTimeoutFuture;
 
 // Local uses
 use crate::{
+    network::{platform_to_network_token, SUPPORTED_NETWORKS},
     dao::ZksyncDao, zksync::wallet, DEFAULT_NETWORK, DEFAULT_PLATFORM, DEFAULT_TOKEN, DRIVER_NAME,
-    MAINNET_NETWORK, MAINNET_PLATFORM, MAINNET_TOKEN,
 };
 
-lazy_static::lazy_static! {
-    static ref SUPPORTED_NETWORKS: HashMap<String, Network> = hashmap! {
-        DEFAULT_NETWORK.to_string() => Network {
-            default_token: DEFAULT_TOKEN.to_string(),
-            tokens: hashmap! {
-                DEFAULT_TOKEN.to_string() => DEFAULT_PLATFORM.to_string()
-            }
-        },
-        MAINNET_NETWORK.to_string() => Network {
-            default_token: MAINNET_TOKEN.to_string(),
-            tokens: hashmap! {
-                MAINNET_TOKEN.to_string() => MAINNET_PLATFORM.to_string()
-            }
-        }
-    };
-}
 
 pub struct ZksyncDriver {
     active_accounts: AccountsRc,
@@ -81,15 +66,17 @@ impl ZksyncDriver {
         log::trace!("Processing payments for node_id={}", node_id);
         let payments: Vec<PaymentEntity> = self.dao.get_pending_payments(node_id).await;
         let mut nonce = 0;
-        if !payments.is_empty() {
-            log::info!(
-                "Processing {} Payments for node_id={}",
-                payments.len(),
-                node_id
-            );
-            nonce = wallet::get_nonce(node_id).await;
-            log::debug!("Payments: nonce={}, details={:?}", &nonce, payments);
-        }
+        // DISABLED NONCE FOR MULTI NETWORK. TODO: Fix
+        // if !payments.is_empty() {
+        //     log::info!(
+        //         "Processing {} Payments for node_id={}",
+        //         payments.len(),
+        //         node_id
+        //     );
+        //
+        //     nonce = wallet::get_nonce(node_id, network).await;
+        //     log::debug!("Payments: nonce={}, details={:?}", &nonce, payments);
+        // }
         for payment in payments {
             self.handle_payment(payment, &mut nonce).await;
         }
@@ -168,8 +155,11 @@ impl PaymentDriver for ZksyncDriver {
         msg: GetAccountBalance,
     ) -> Result<BigDecimal, GenericError> {
         log::debug!("get_account_balance: {:?}", msg);
+        //let network = msg.network().unwrap_or(DEFAULT_NETWORK);
+        //let network = DbNetwork::from_str(network).map_err(GenericError::new);
+        let network = DbNetwork::Rinkeby;
 
-        let balance = wallet::account_balance(&msg.address()).await?;
+        let balance = wallet::account_balance(&msg.address(), network).await?;
 
         log::debug!("get_account_balance - result: {}", &balance);
         Ok(balance)
@@ -285,7 +275,9 @@ impl PaymentDriver for ZksyncDriver {
         _caller: String,
         msg: ValidateAllocation,
     ) -> Result<bool, GenericError> {
-        let account_balance = wallet::account_balance(&msg.address).await?;
+        //let (network, _) = platform_to_network_token(msg.platform)?;
+        let network = DbNetwork::from_str(DEFAULT_NETWORK).map_err(GenericError::new)?;
+        let account_balance = wallet::account_balance(&msg.address, network).await?;
         let total_allocated_amount: BigDecimal = msg
             .existing_allocations
             .into_iter()
@@ -300,6 +292,7 @@ impl PaymentDriverCron for ZksyncDriver {
     async fn confirm_payments(&self) {
         let txs = self.dao.get_unconfirmed_txs().await;
         log::trace!("confirm_payments {:?}", txs);
+        let network = DbNetwork::Rinkeby; // TODO: GET NETWORK WHERE?
 
         for tx in txs {
             log::trace!("checking tx {:?}", &tx);
@@ -308,7 +301,7 @@ impl PaymentDriverCron for ZksyncDriver {
                 Some(a) => a,
             };
             // Check_tx returns None when the result is unknown
-            if let Some(result) = wallet::check_tx(&tx_hash).await {
+            if let Some(result) = wallet::check_tx(&tx_hash, network).await {
                 let payments = self.dao.transaction_confirmed(&tx.tx_id, result).await;
                 if !result {
                     log::warn!("Payment failed, will be re-tried.");
