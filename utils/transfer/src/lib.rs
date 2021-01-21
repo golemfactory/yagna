@@ -90,6 +90,12 @@ impl From<Bytes> for TransferData {
     }
 }
 
+impl From<Vec<u8>> for TransferData {
+    fn from(vec: Vec<u8>) -> Self {
+        TransferData::Bytes(Bytes::from(vec))
+    }
+}
+
 pub trait TransferProvider<T, E> {
     fn schemes(&self) -> Vec<&'static str>;
 
