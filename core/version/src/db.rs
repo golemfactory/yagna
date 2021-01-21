@@ -1,16 +1,15 @@
-
 pub(crate) mod dao {
     use anyhow::Result;
     use chrono::NaiveDateTime;
-    use diesel::prelude::*;
     use diesel::dsl::{exists, select};
+    use diesel::prelude::*;
     use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 
     use crate::db::model::Release as DBRelease;
     use crate::db::schema::version_release::dsl as release;
     use crate::db::schema::version_release::dsl::version_release;
 
-    pub struct ReleaseDAO <'c>{
+    pub struct ReleaseDAO<'c> {
         pool: &'c PoolType,
     }
     impl<'a> AsDao<'a> for ReleaseDAO<'a> {
@@ -30,13 +29,18 @@ pub(crate) mod dao {
                 update_ts: None,
             };
             Ok(do_with_transaction(self.pool, move |conn| {
-                if !select(exists(version_release.filter(release::version.eq(&db_release.version)))).get_result(conn)? {
+                if !select(exists(
+                    version_release.filter(release::version.eq(&db_release.version)),
+                ))
+                .get_result(conn)?
+                {
                     diesel::insert_into(version_release)
                         .values(&db_release)
                         .execute(conn)?;
                 };
                 Result::<()>::Ok(())
-            }).await?)
+            })
+            .await?)
         }
 
         /*
@@ -47,7 +51,10 @@ pub(crate) mod dao {
 
         pub async fn pending_release(&self) -> Result<Option<DBRelease>> {
             do_with_transaction(self.pool, move |conn| {
-                let query = version_release.filter(release::seen.eq(false)).order(release::release_ts.desc()).into_boxed();
+                let query = version_release
+                    .filter(release::seen.eq(false))
+                    .order(release::release_ts.desc())
+                    .into_boxed();
 
                 Ok(query.first::<DBRelease>(conn).optional()?)
             })
@@ -56,9 +63,9 @@ pub(crate) mod dao {
     }
 }
 pub(crate) mod model {
-    use chrono::NaiveDateTime;
     use crate::db::schema::version_release;
-    use serde::{Serialize, Deserialize,};
+    use chrono::NaiveDateTime;
+    use serde::{Deserialize, Serialize};
 
     #[derive(Clone, Debug, Identifiable, Insertable, Queryable, Serialize, Deserialize)]
     #[primary_key(version)]
@@ -74,7 +81,11 @@ pub(crate) mod model {
 
     impl std::fmt::Display for Release {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "{} {} released {}", self.version, self.name, self.release_ts)
+            write!(
+                f,
+                "{} {} released {}",
+                self.version, self.name, self.release_ts
+            )
         }
     }
 }

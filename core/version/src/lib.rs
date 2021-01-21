@@ -13,7 +13,8 @@ pub mod notifier {
     const SILENCE_CMD: &'static str = "yagna update skip";
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-    pub async fn check_release() -> Result<Vec<self_update::update::Release>, self_update::errors::Error> {
+    pub async fn check_release(
+    ) -> Result<Vec<self_update::update::Release>, self_update::errors::Error> {
         log::trace!("Market release checker started");
         let releases = self_update::backends::github::ReleaseList::configure()
             .repo_owner("golemfactory")
@@ -21,9 +22,14 @@ pub mod notifier {
             .build()?
             .fetch()?;
         log::trace!("Market release checker done");
-        Ok(releases.into_iter().filter(|r| self_update::version::bump_is_greater(VERSION, r.version.as_str()).map_err(|e| {
-            log::warn!("Github version parse error. {}", e)
-        }).unwrap_or(false)).collect())
+        Ok(releases
+            .into_iter()
+            .filter(|r| {
+                self_update::version::bump_is_greater(VERSION, r.version.as_str())
+                    .map_err(|e| log::warn!("Github version parse error. {}", e))
+                    .unwrap_or(false)
+            })
+            .collect())
     }
 
     pub async fn worker(db: DbExecutor) {
@@ -32,12 +38,19 @@ pub mod notifier {
         loop {
             interval.tick().await;
             match check_release().await {
-                Err(e) => log::debug!("Problem encountered during checking for new releases: {}", e),
+                Err(e) => log::debug!(
+                    "Problem encountered during checking for new releases: {}",
+                    e
+                ),
                 Ok(releases) => {
                     for r in releases.into_iter() {
-                        release_dao.new_release(r).await.map_err(|e| log::debug!("Problem storing new release. {}", e)).ok();
+                        release_dao
+                            .new_release(r)
+                            .await
+                            .map_err(|e| log::debug!("Problem storing new release. {}", e))
+                            .ok();
                     }
-                },
+                }
             };
         }
     }
@@ -50,7 +63,7 @@ pub mod notifier {
             if let Ok(Some(db_release)) = release_dao.pending_release().await {
                 log::warn!("New version of yagna available {}! Close yagna and run `{}` to install or `{}` to mute this notification", db_release, UPDATE_CURL, SILENCE_CMD);
             };
-        };
+        }
     }
 }
 
