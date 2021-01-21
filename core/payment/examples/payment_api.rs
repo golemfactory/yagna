@@ -59,6 +59,10 @@ impl std::fmt::Display for Driver {
 struct Args {
     #[structopt(long, default_value = "dummy")]
     driver: Driver,
+    #[structopt(long)]
+    network: Option<String>,
+    #[structopt(long, default_value = "dummy-glm")]
+    platform: String,
     #[structopt(long, default_value = "provider.key")]
     provider_key_path: String,
     #[structopt(long, default_value = "")]
@@ -202,25 +206,25 @@ async fn main() -> anyhow::Result<()> {
     ya_payment::service::bind_service(&db, processor);
     log::debug!("bind_service()");
 
-    let (driver_name, platform) = match args.driver {
+    let driver_name = match args.driver {
         Driver::Dummy => {
             start_dummy_driver().await?;
-            (dummy::DRIVER_NAME, dummy::PLATFORM_NAME)
+            dummy::DRIVER_NAME
         }
         Driver::Ngnt => {
             start_gnt_driver(&db, requestor_account).await?;
-            (gnt::DRIVER_NAME, gnt::DEFAULT_PLATFORM)
+            gnt::DRIVER_NAME
         }
         Driver::Zksync => {
             start_zksync_driver(&db, requestor_account).await?;
-            (zksync::DRIVER_NAME, zksync::DEFAULT_PLATFORM)
+            zksync::DRIVER_NAME
         }
     };
 
     bus::service(driver_bus_id(driver_name))
         .call(Init::new(
             provider_id.clone(),
-            None,
+            args.network.clone(),
             None,
             AccountMode::RECV,
         ))
@@ -228,16 +232,16 @@ async fn main() -> anyhow::Result<()> {
     bus::service(driver_bus_id(driver_name))
         .call(Init::new(
             requestor_id.clone(),
-            None,
+            args.network.clone(),
             None,
             AccountMode::SEND,
         ))
         .await??;
 
-    let address_property = format!("platform.{}.address", platform);
+    let address_property = format!("platform.{}.address", args.platform);
     let demand_properties = serde_json::json!({
         "golem.com.payment": {
-            "chosen-platform": &platform,
+            "chosen-platform": &args.platform,
             &address_property: &requestor_addr,
         }
     });
