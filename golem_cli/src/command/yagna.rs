@@ -155,6 +155,7 @@ pub struct YagnaCommand {
 impl YagnaCommand {
     async fn run<T: DeserializeOwned>(self) -> anyhow::Result<T> {
         let mut cmd = self.cmd;
+        let cmd_str = format!("running: {:?}", cmd);
         let output = cmd
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -165,7 +166,8 @@ impl YagnaCommand {
             Ok(serde_json::from_slice(&output.stdout)?)
         } else {
             Err(anyhow::anyhow!(
-                "{}",
+                "`{}` failed: {}",
+                cmd_str,
                 String::from_utf8_lossy(&output.stderr)
             ))
         }
@@ -209,6 +211,7 @@ impl YagnaCommand {
             "--receiver", // provider is a receiver
             "--driver",
             payment_type.payment_type(Some(network))?.driver,
+            "--account",
             address,
         ]);
         self.run().await
