@@ -13,8 +13,10 @@ use crate::model::*;
 // Public revealed uses, required to implement this trait
 pub use async_trait::async_trait;
 pub use bigdecimal::BigDecimal;
+use std::collections::HashMap;
 pub use ya_client_model::NodeId;
 pub use ya_core_model::identity::{event::Event as IdentityEvent, Error as IdentityError};
+pub use ya_core_model::payment::local::Network;
 
 #[async_trait(?Send)]
 pub trait PaymentDriver {
@@ -32,9 +34,20 @@ pub trait PaymentDriver {
         msg: GetAccountBalance,
     ) -> Result<BigDecimal, GenericError>;
 
+    async fn enter(
+        &self,
+        db: DbExecutor,
+        caller: String,
+        msg: Enter,
+    ) -> Result<String, GenericError>;
+
+    async fn exit(&self, db: DbExecutor, caller: String, msg: Exit)
+        -> Result<String, GenericError>;
+
     // used by bus to bind service
     fn get_name(&self) -> String;
-    fn get_platform(&self) -> String;
+    fn get_default_network(&self) -> String;
+    fn get_networks(&self) -> HashMap<String, Network>;
     fn recv_init_required(&self) -> bool;
 
     async fn get_transaction_balance(
@@ -45,6 +58,13 @@ pub trait PaymentDriver {
     ) -> Result<BigDecimal, GenericError>;
 
     async fn init(&self, db: DbExecutor, caller: String, msg: Init) -> Result<Ack, GenericError>;
+
+    async fn transfer(
+        &self,
+        db: DbExecutor,
+        caller: String,
+        msg: Transfer,
+    ) -> Result<String, GenericError>;
 
     async fn schedule_payment(
         &self,

@@ -1,6 +1,6 @@
 [package]
 name = "ya-runtime-api"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
@@ -30,7 +30,7 @@ tokio = { version = "0.2" , optional = true, features=["io-std", "rt-core", "rt-
 tokio-util = { version = "0.2", optional = true, features = ["codec"] }
 
 [build-dependencies]
-prost-build = "0.6.0"
+prost-build = "0.6.1"
 
 [dev-dependencies]
 tokio = { version = "0.2" , features=["io-std", "rt-core", "macros", "rt-threaded", "time"] }

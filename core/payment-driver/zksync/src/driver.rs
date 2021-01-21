@@ -5,7 +5,9 @@
 */
 // Extrnal crates
 use chrono::Utc;
+use maplit::hashmap;
 use serde_json;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 // Workspace uses
@@ -15,14 +17,16 @@ use ya_payment_driver::{
     cron::PaymentDriverCron,
     dao::DbExecutor,
     db::models::PaymentEntity,
-    driver::{async_trait, BigDecimal, IdentityError, IdentityEvent, PaymentDriver},
+    driver::{async_trait, BigDecimal, IdentityError, IdentityEvent, Network, PaymentDriver},
     model::*,
     utils,
 };
 use ya_utils_futures::timeout::IntoTimeoutFuture;
 
 // Local uses
-use crate::{dao::ZksyncDao, zksync::wallet, DRIVER_NAME, PLATFORM_NAME};
+use crate::{
+    dao::ZksyncDao, zksync::wallet, DEFAULT_NETWORK, DEFAULT_PLATFORM, DEFAULT_TOKEN, DRIVER_NAME,
+};
 
 pub struct ZksyncDriver {
     active_accounts: AccountsRc,
@@ -108,6 +112,37 @@ impl PaymentDriver for ZksyncDriver {
         Ok(())
     }
 
+    async fn enter(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        msg: Enter,
+    ) -> Result<String, GenericError> {
+        log::info!("ENTER = Not Implemented: {:?}", msg);
+        Ok("NOT_IMPLEMENTED".to_string())
+    }
+
+    async fn exit(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        msg: Exit,
+    ) -> Result<String, GenericError> {
+        if !self.is_account_active(&msg.sender()) {
+            return Err(GenericError::new(
+                "Cannot start withdrawal, account is not active",
+            ));
+        }
+
+        let tx_hash = wallet::exit(&msg).await?;
+        Ok(format!(
+            "Withdrawal has been accepted by the zkSync operator. \
+        It may take some time until the funds are available on Ethereum blockchain. \
+        Tracking link: https://rinkeby.zkscan.io/explorer/transactions/{}",
+            tx_hash
+        ))
+    }
+
     async fn get_account_balance(
         &self,
         _db: DbExecutor,
@@ -126,8 +161,21 @@ impl PaymentDriver for ZksyncDriver {
         DRIVER_NAME.to_string()
     }
 
-    fn get_platform(&self) -> String {
-        PLATFORM_NAME.to_string()
+    fn get_default_network(&self) -> String {
+        DEFAULT_NETWORK.to_string()
+    }
+
+    fn get_networks(&self) -> HashMap<String, Network> {
+        // TODO: Implement multi-network support
+
+        hashmap! {
+            DEFAULT_NETWORK.to_string() => Network {
+                default_token: DEFAULT_TOKEN.to_string(),
+                tokens: hashmap! {
+                    DEFAULT_TOKEN.to_string() => DEFAULT_PLATFORM.to_string()
+                }
+            }
+        }
     }
 
     fn recv_init_required(&self) -> bool {
@@ -161,16 +209,29 @@ impl PaymentDriver for ZksyncDriver {
             .map_err(GenericError::new)??;
 
         let mode = msg.mode();
-        bus::register_account(self, &address, mode).await?;
+        let network = DEFAULT_NETWORK; // TODO: Implement multi-network support
+        let token = DEFAULT_TOKEN; // TODO: Implement multi-network support
+        bus::register_account(self, &address, network, token, mode).await?;
 
         log::info!(
-            "Initialised payment account. mode={:?}, address={}, driver={}, platform={}",
+            "Initialised payment account. mode={:?}, address={}, driver={}, network={}, token={}",
             mode,
             &address,
             DRIVER_NAME,
-            PLATFORM_NAME
+            network,
+            token
         );
         Ok(Ack {})
+    }
+
+    async fn transfer(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        msg: Transfer,
+    ) -> Result<String, GenericError> {
+        log::info!("TRANSFER = Not Implemented: {:?}", msg);
+        Ok("NOT_IMPLEMENTED".to_string())
     }
 
     async fn schedule_payment(
@@ -261,8 +322,10 @@ impl PaymentDriverCron for ZksyncDriver {
                     .map(|payment| utils::db_amount_to_big_dec(payment.amount))
                     .sum::<BigDecimal>();
                 let tx_hash = to_confirmation(&details).unwrap();
+                let platform = DEFAULT_PLATFORM; // TODO: Implement multi-network support
                 if let Err(e) =
-                    bus::notify_payment(&self.get_name(), order_ids, &details, tx_hash).await
+                    bus::notify_payment(&self.get_name(), platform, order_ids, &details, tx_hash)
+                        .await
                 {
                     log::error!("{}", e)
                 };

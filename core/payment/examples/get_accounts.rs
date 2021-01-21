@@ -1,7 +1,6 @@
 use structopt::StructOpt;
 use ya_client::payment::PaymentApi;
 use ya_client::web::{rest_api_url, WebClient};
-use ya_client_model::payment::Account;
 
 #[derive(Clone, Debug, StructOpt)]
 struct Args {
@@ -34,25 +33,20 @@ async fn main() -> anyhow::Result<()> {
         .interface()?;
 
     log::info!("Checking provider account...");
-    let provider_account = Account {
-        platform: args.platform.clone(),
-        address: args.provider_addr,
-    };
     let provider_accounts = provider.get_provider_accounts().await?;
     assert!(provider_accounts
         .iter()
-        .any(|account| account == &provider_account));
+        .any(|account| account.platform == args.platform && account.address == args.provider_addr));
     log::info!("OK.");
 
     log::info!("Checking requestor account...");
-    let requestor_account = Account {
-        platform: args.platform.clone(),
-        address: args.requestor_addr,
-    };
     let requestor_accounts = requestor.get_requestor_accounts().await?;
-    assert!(requestor_accounts
-        .iter()
-        .any(|account| account == &requestor_account));
+    assert!(
+        requestor_accounts
+            .iter()
+            .any(|account| account.platform == args.platform
+                && account.address == args.requestor_addr)
+    );
     log::info!("OK.");
 
     Ok(())

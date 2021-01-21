@@ -9,13 +9,14 @@ use lazy_static::lazy_static;
 use num::BigUint;
 use std::env;
 use std::str::FromStr;
+use zksync::operations::SyncTransactionHandle;
 use zksync::types::BlockStatus;
-use zksync::zksync_types::{tx::TxHash, Address};
+use zksync::zksync_types::{tx::TxHash, Address, TxFeeTypes};
 use zksync::{Network, Provider, Wallet, WalletCredentials};
 use zksync_eth_signer::EthereumSigner;
 
 // Workspace uses
-use ya_payment_driver::model::{AccountMode, GenericError, Init, PaymentDetails};
+use ya_payment_driver::model::{AccountMode, Exit, GenericError, Init, PaymentDetails};
 
 // Local uses
 use crate::{
@@ -68,6 +69,30 @@ pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
         get_wallet(&address).and_then(unlock_wallet).await?;
     }
     Ok(())
+}
+
+pub async fn exit(msg: &Exit) -> Result<String, GenericError> {
+    let wallet = get_wallet(&msg.sender()).await?;
+    let tx_handle = withdraw(wallet, msg.amount(), msg.to()).await?;
+    let tx_info = tx_handle
+        .wait_for_commit()
+        .await
+        .map_err(GenericError::new)?;
+
+    match tx_info.success {
+        Some(true) => Ok(hash_to_hex(tx_handle.hash())),
+        Some(false) => Err(GenericError::new(
+            tx_info
+                .fail_reason
+                .unwrap_or("Unknown failure reason".to_string()),
+        )),
+        None => Err(GenericError::new("Transaction time-outed")),
+    }
+}
+
+fn hash_to_hex(hash: TxHash) -> String {
+    // TxHash::to_string adds a prefix to the hex value
+    hex::encode(hash.as_ref())
 }
 
 pub async fn get_nonce(address: &str) -> u32 {
@@ -183,4 +208,60 @@ async fn unlock_wallet<S: EthereumSigner + Clone>(wallet: Wallet<S>) -> Result<(
         log::info!("Wallet unlocked. tx_info = {:?}", tx_info);
     }
     Ok(())
+}
+
+pub async fn withdraw<S: EthereumSigner + Clone>(
+    wallet: Wallet<S>,
+    amount: Option<BigDecimal>,
+    recipient: Option<String>,
+) -> Result<SyncTransactionHandle, GenericError> {
+    let balance = wallet
+        .get_balance(BlockStatus::Committed, ZKSYNC_TOKEN_NAME)
+        .await
+        .map_err(GenericError::new)?;
+    info!(
+        "Wallet funded with {} tGLM available for withdrawal",
+        utils::big_uint_to_big_dec(balance.clone())
+    );
+
+    info!("Obtaining withdrawal fee");
+    let address = wallet.address();
+    let withdraw_fee = wallet
+        .provider
+        .get_tx_fee(TxFeeTypes::Withdraw, address, ZKSYNC_TOKEN_NAME)
+        .await
+        .map_err(GenericError::new)?
+        .total_fee;
+    info!(
+        "Withdrawal transaction fee {:.5}",
+        utils::big_uint_to_big_dec(withdraw_fee.clone())
+    );
+
+    let amount = match amount {
+        Some(amount) => utils::big_dec_to_big_uint(amount)?,
+        None => balance.clone(),
+    };
+    let withdraw_amount = std::cmp::min(balance - withdraw_fee, amount);
+    info!(
+        "Withdrawal of {:.5} tGLM started",
+        utils::big_uint_to_big_dec(withdraw_amount.clone())
+    );
+
+    let recipient_address = match recipient {
+        Some(addr) => Address::from_str(&addr[2..]).map_err(GenericError::new)?,
+        None => address,
+    };
+
+    let withdraw_handle = wallet
+        .start_withdraw()
+        .token(ZKSYNC_TOKEN_NAME)
+        .map_err(GenericError::new)?
+        .amount(withdraw_amount)
+        .to(recipient_address)
+        .send()
+        .await
+        .map_err(GenericError::new)?;
+
+    debug!("Withdraw handle: {:?}", withdraw_handle);
+    Ok(withdraw_handle)
 }
