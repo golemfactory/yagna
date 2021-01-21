@@ -11,9 +11,9 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::db::{
-    dao::{AgreementDao, AgreementDaoError, NegotiationEventsDao, ProposalDao, SaveAgreementError},
+    dao::{AgreementDao, AgreementDaoError, SaveAgreementError},
     model::{Agreement, AgreementId, AgreementState, AppSessionId},
-    model::{Demand, Issuer, Owner, Proposal, ProposalId, SubscriptionId},
+    model::{Demand, Issuer, Owner, ProposalId, SubscriptionId},
 };
 use crate::matcher::{store::SubscriptionStore, RawProposal};
 use crate::protocol::negotiation::{error::*, messages::*, requestor::NegotiationApi};
@@ -52,7 +52,6 @@ impl RequestorBroker {
         let broker2 = broker.clone();
         let broker_proposal_reject = broker.clone();
         let broker_terminated = broker.clone();
-        let notifier = broker.negotiation_notifier.clone();
 
         let api = NegotiationApi::new(
             move |caller: String, msg: ProposalReceived| {
@@ -78,7 +77,7 @@ impl RequestorBroker {
 
         let engine = RequestorBroker {
             api,
-            common: broker,
+            common: broker.clone(),
         };
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
@@ -99,7 +98,7 @@ impl RequestorBroker {
         counter!("market.proposals.requestor.rejected.by-them", 0);
         counter!("market.proposals.requestor.rejected.by-us", 0);
 
-        tokio::spawn(proposal_receiver_thread(db, proposal_receiver, notifier));
+        tokio::spawn(proposal_receiver_thread(broker, proposal_receiver));
         Ok(engine)
     }
 
@@ -360,9 +359,9 @@ impl RequestorBroker {
                 Utc::now().naive_utc(),
             )
             .await
-            .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
+            .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
         {
-            None => return Err(AgreementError::NotFound(agreement_id.clone())),
+            None => return Err(AgreementError::NotFound(agreement_id.to_string())),
             Some(agreement) => agreement,
         };
 
@@ -469,40 +468,14 @@ async fn agreement_approved(
 }
 
 pub async fn proposal_receiver_thread(
-    db: DbExecutor,
+    broker: CommonBroker,
     mut proposal_receiver: UnboundedReceiver<RawProposal>,
-    notifier: EventNotifier<SubscriptionId>,
 ) {
     while let Some(proposal) = proposal_receiver.recv().await {
-        let db = db.clone();
-        let notifier = notifier.clone();
+        let broker = broker.clone();
         match async move {
             log::debug!("Got matching Offer-Demand pair; emitting as Proposal to Requestor.");
-
-            // Add proposal to database together with Negotiation record.
-            let proposal = Proposal::new_requestor(proposal.demand, proposal.offer);
-            let proposal = db
-                .as_dao::<ProposalDao>()
-                .save_initial_proposal(proposal)
-                .await?;
-
-            log::info!(
-                "New Proposal [{}] (Offer [{}], Demand [{}])",
-                proposal.body.id,
-                proposal.negotiation.offer_id,
-                proposal.negotiation.demand_id
-            );
-
-            // Create Proposal Event and add it to queue (database).
-            let subscription_id = proposal.negotiation.subscription_id.clone();
-            db.as_dao::<NegotiationEventsDao>()
-                .add_proposal_event(&proposal, Owner::Requestor)
-                .await?;
-
-            // Send channel message to wake all query_events waiting for proposals.
-            counter!("market.proposals.requestor.generated", 1);
-            notifier.notify(&subscription_id).await;
-            Ok::<_, anyhow::Error>(())
+            broker.generate_proposal(proposal).await
         }
         .await
         {

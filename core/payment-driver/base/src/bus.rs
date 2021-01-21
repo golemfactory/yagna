@@ -39,16 +39,25 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
     #[rustfmt::skip] // Keep move's neatly aligned
     ServiceBinder::new(&bus_id, db, driver.clone())
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.init(db, c, m).await }
+            move |db, dr, c, m| async move { dr.account_event(db, c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.account_event(db, c, m).await }
+            move |db, dr, c, m| async move { dr.enter(db, c, m).await }
+        )
+        .bind_with_processor(
+            move |db, dr, c, m| async move { dr.exit(db, c, m).await }
         )
         .bind_with_processor(
             move |db, dr, c, m| async move { dr.get_account_balance(db, c, m).await }
         )
         .bind_with_processor(
             move |db, dr, c, m| async move { dr.get_transaction_balance(db, c, m).await }
+        )
+        .bind_with_processor(
+            move |db, dr, c, m| async move { dr.init(db, c, m).await }
+        )
+        .bind_with_processor(
+            move |db, dr, c, m| async move { dr.transfer(db, c, m).await }
         )
         .bind_with_processor(
             move |db, dr, c, m| async move { dr.schedule_payment(db, c, m).await }

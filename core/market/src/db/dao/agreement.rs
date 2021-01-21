@@ -9,7 +9,7 @@ use crate::db::dao::proposal::{has_counter_proposal, update_proposal_state};
 use crate::db::dao::sql_functions::datetime;
 use crate::db::model::{
     check_transition, Agreement, AgreementId, AgreementState, AppSessionId, Owner, ProposalId,
-    ProposalState,
+    ProposalIdParseError, ProposalState,
 };
 use crate::db::schema::market_agreement::dsl as agreement;
 use crate::db::schema::market_agreement::dsl::market_agreement;
@@ -57,6 +57,8 @@ pub enum AgreementDaoError {
     SessionId(DbError),
     #[error("Failed to add event. Error: {0}")]
     EventError(String),
+    #[error("Invalid Agreement id: {0}")]
+    InvalidId(#[from] ProposalIdParseError),
 }
 
 impl<'c> AgreementDao<'c> {
@@ -97,18 +99,18 @@ impl<'c> AgreementDao<'c> {
 
     pub async fn select_by_node(
         &self,
-        id: AgreementId,
+        client_agreement_id: &str,
         node_id: NodeId,
         validation_ts: NaiveDateTime,
     ) -> Result<Option<Agreement>, AgreementDaoError> {
         // Because we explicitly disallow agreements between the same identities
         // (i.e. provider_id != requestor_id), we'll always get the right db row
         // with this query.
+        let id = AgreementId::from_client(client_agreement_id, Owner::Requestor)?;
         let id_swapped = id.clone().swap_owner();
-        let id_orig = id.clone();
         do_with_transaction(self.pool, move |conn| {
             let query = market_agreement
-                .filter(agreement::id.eq_any(vec![id_orig, id_swapped]))
+                .filter(agreement::id.eq_any(vec![id, id_swapped]))
                 .filter(
                     agreement::provider_id
                         .eq(node_id)

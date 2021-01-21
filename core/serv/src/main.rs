@@ -11,15 +11,14 @@ use std::{
 };
 use structopt::{clap, StructOpt};
 use url::Url;
+
 use ya_activity::service::Activity as ActivityService;
+use ya_file_logging::start_logger;
 use ya_identity::service::Identity as IdentityService;
 use ya_market::MarketService;
 use ya_metrics::{MetricsPusherOpts, MetricsService};
 use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
-use ya_sgx::SgxService;
-
-use ya_file_logging::start_logger;
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
@@ -28,6 +27,7 @@ use ya_service_api_web::{
     middleware::{auth, Identity},
     rest_api_host_port, DEFAULT_YAGNA_API_URL, YAGNA_API_URL_ENV_VAR,
 };
+use ya_sgx::SgxService;
 use ya_utils_path::data_dir::DataDir;
 use ya_utils_process::lock::ProcLock;
 

@@ -420,7 +420,7 @@ async fn test_rest_query_agreement_events() {
     assert_eq!(resp.status(), StatusCode::OK);
     let events: Vec<AgreementOperationEvent> = read_response_json(resp).await;
 
-    expect_approve(events, 0).unwrap();
+    expect_approve(events, "After agreementEvents").unwrap();
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
