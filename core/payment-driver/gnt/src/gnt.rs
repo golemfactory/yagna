@@ -4,9 +4,7 @@ pub mod ethereum;
 pub mod faucet;
 pub mod sender;
 
-use crate::{
-    GNTDriverError, GNTDriverResult, DEFAULT_NETWORK, DEFAULT_PLATFORM, DEFAULT_TOKEN, DRIVER_NAME,
-};
+use crate::{GNTDriverError, GNTDriverResult, DRIVER_NAME};
 use bigdecimal::BigDecimal;
 use std::future::Future;
 use std::pin::Pin;
@@ -20,12 +18,13 @@ pub(crate) async fn notify_payment(
     amount: BigDecimal,
     sender: String,
     recipient: String,
+    platform: String,
     order_ids: Vec<String>,
     confirmation: PaymentConfirmation,
 ) -> GNTDriverResult<()> {
     let msg = payment::NotifyPayment {
         driver: DRIVER_NAME.to_string(),
-        platform: DEFAULT_PLATFORM.to_string(), // TODO: Implement multi-network support
+        platform,
         amount,
         sender,
         recipient,
@@ -41,13 +40,18 @@ pub(crate) async fn notify_payment(
         .map_err(|e| GNTDriverError::LibraryError(e.to_string()))
 }
 
-pub(crate) async fn register_account(address: String, mode: AccountMode) -> GNTDriverResult<()> {
+pub(crate) async fn register_account(
+    address: String,
+    network: String,
+    token: String,
+    mode: AccountMode,
+) -> GNTDriverResult<()> {
     log::info!("Register account: {}, mode: {:?}", address, mode);
     let msg = payment::RegisterAccount {
         address,
         driver: DRIVER_NAME.to_string(),
-        network: DEFAULT_NETWORK.to_string(), // TODO: Implement multi-network support
-        token: DEFAULT_TOKEN.to_string(),     // TODO: Implement multi-network support
+        network,
+        token,
         mode,
     };
     bus::service(payment::BUS_ID)

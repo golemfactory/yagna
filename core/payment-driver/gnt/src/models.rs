@@ -1,5 +1,6 @@
 use chrono::NaiveDateTime;
 
+use crate::networks::Network;
 use crate::schema::*;
 
 const TX_CREATED: i32 = 1;
@@ -82,4 +83,5 @@ pub struct PaymentEntity {
     pub payment_due_date: NaiveDateTime,
     pub status: i32,
     pub tx_id: Option<String>,
+    pub network: Network,
 }

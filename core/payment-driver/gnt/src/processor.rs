@@ -1,3 +1,5 @@
+use crate::config::{MAINNET_CONFIG, RINKEBY_CONFIG};
+use crate::networks::Network;
 use crate::GNTDriverResult;
 use crate::GntDriver;
 use bigdecimal::BigDecimal;
@@ -6,41 +8,77 @@ use std::sync::Arc;
 use ya_client_model::payment::Allocation;
 use ya_client_model::NodeId;
 use ya_core_model::driver::{AccountMode, PaymentConfirmation, PaymentDetails};
+use ya_persistence::executor::DbExecutor;
 
 #[derive(Clone)]
 pub struct GNTDriverProcessor {
-    driver: Arc<GntDriver>,
+    rinkeby_driver: Arc<GntDriver>,
+    mainnet_driver: Arc<GntDriver>,
 }
 
 impl GNTDriverProcessor {
-    pub fn new(driver: GntDriver) -> Self {
-        Self {
-            driver: Arc::new(driver),
-        }
+    pub async fn new(db: DbExecutor) -> GNTDriverResult<Self> {
+        Ok(Self {
+            rinkeby_driver: Arc::new(
+                GntDriver::new(db.clone(), Network::Rinkeby, *RINKEBY_CONFIG).await?,
+            ),
+            mainnet_driver: Arc::new(
+                GntDriver::new(db.clone(), Network::Mainnet, *MAINNET_CONFIG).await?,
+            ),
+        })
     }
 
     pub async fn account_locked(&self, identity: NodeId) -> GNTDriverResult<()> {
-        self.driver.account_locked(identity).await
+        self.rinkeby_driver.account_locked(identity).await?;
+        self.mainnet_driver.account_locked(identity).await
     }
 
     pub async fn account_unlocked(&self, identity: NodeId) -> GNTDriverResult<()> {
-        self.driver.account_unlocked(identity).await
+        self.rinkeby_driver.account_unlocked(identity).await?;
+        self.mainnet_driver.account_unlocked(identity).await
     }
 
-    pub async fn init(&self, mode: AccountMode, address: &str) -> GNTDriverResult<()> {
-        self.driver.init(mode, address).await
+    pub async fn init(
+        &self,
+        mode: AccountMode,
+        address: &str,
+        network: Network,
+    ) -> GNTDriverResult<()> {
+        match network {
+            Network::Rinkeby => self.rinkeby_driver.init(mode, address).await,
+            Network::Mainnet => self.mainnet_driver.init(mode, address).await,
+        }
     }
 
-    pub async fn get_account_balance(&self, address: &str) -> GNTDriverResult<BigDecimal> {
-        self.driver.get_account_balance(address).await
+    pub async fn get_account_balance(
+        &self,
+        address: &str,
+        network: Network,
+    ) -> GNTDriverResult<BigDecimal> {
+        match network {
+            Network::Rinkeby => self.rinkeby_driver.get_account_balance(address).await,
+            Network::Mainnet => self.mainnet_driver.get_account_balance(address).await,
+        }
     }
 
     pub async fn get_transaction_balance(
         &self,
         sender: &str,
         recipient: &str,
+        network: Network,
     ) -> GNTDriverResult<BigDecimal> {
-        self.driver.get_transaction_balance(sender, recipient).await
+        match network {
+            Network::Rinkeby => {
+                self.rinkeby_driver
+                    .get_transaction_balance(sender, recipient)
+                    .await
+            }
+            Network::Mainnet => {
+                self.mainnet_driver
+                    .get_transaction_balance(sender, recipient)
+                    .await
+            }
+        }
     }
 
     pub async fn schedule_payment(
@@ -48,28 +86,52 @@ impl GNTDriverProcessor {
         amount: BigDecimal,
         sender: &str,
         recipient: &str,
+        network: Network,
         due_date: DateTime<Utc>,
     ) -> GNTDriverResult<String> {
-        self.driver
-            .schedule_payment(amount, sender, recipient, due_date)
-            .await
+        match network {
+            Network::Rinkeby => {
+                self.rinkeby_driver
+                    .schedule_payment(amount, sender, recipient, due_date)
+                    .await
+            }
+            Network::Mainnet => {
+                self.mainnet_driver
+                    .schedule_payment(amount, sender, recipient, due_date)
+                    .await
+            }
+        }
     }
 
     pub async fn verify_payment(
         &self,
         confirmation: PaymentConfirmation,
+        network: Network,
     ) -> GNTDriverResult<PaymentDetails> {
-        self.driver.verify_payment(&confirmation).await
+        match network {
+            Network::Rinkeby => self.rinkeby_driver.verify_payment(&confirmation).await,
+            Network::Mainnet => self.mainnet_driver.verify_payment(&confirmation).await,
+        }
     }
 
     pub async fn validate_allocation(
         &self,
         address: String,
+        network: Network,
         amount: BigDecimal,
         existing_allocations: Vec<Allocation>,
     ) -> GNTDriverResult<bool> {
-        self.driver
-            .validate_allocation(address, amount, existing_allocations)
-            .await
+        match network {
+            Network::Rinkeby => {
+                self.rinkeby_driver
+                    .validate_allocation(address, amount, existing_allocations)
+                    .await
+            }
+            Network::Mainnet => {
+                self.mainnet_driver
+                    .validate_allocation(address, amount, existing_allocations)
+                    .await
+            }
+        }
     }
 }

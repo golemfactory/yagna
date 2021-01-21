@@ -11,6 +11,7 @@ mod error;
 mod eth_utils;
 mod gnt;
 mod models;
+mod networks;
 mod processor;
 mod schema;
 mod service;
@@ -19,18 +20,22 @@ mod utils;
 pub use error::GNTDriverError;
 
 use crate::dao::payment::PaymentDao;
-use crate::gnt::ethereum::{Chain, EthereumClient, EthereumClientBuilder};
+use crate::gnt::ethereum::{EthereumClient, EthereumClientBuilder};
 use crate::gnt::sender::{AccountLocked, AccountUnlocked};
 use crate::gnt::{common, config, faucet, sender};
 use crate::models::{PaymentEntity, TxType};
+use crate::networks::Network;
 use crate::utils::PAYMENT_STATUS_NOT_YET;
 use actix::Addr;
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 
+use crate::gnt::config::EnvConfiguration;
 use crate::processor::GNTDriverProcessor;
 use ethereum_types::{Address, H256, U256};
 use futures3::prelude::*;
+use lazy_static::lazy_static;
+use maplit::hashmap;
 use std::future::Future;
 use std::pin::Pin;
 use std::str::FromStr;
@@ -43,6 +48,7 @@ use ya_client_model::payment::Allocation;
 use ya_client_model::NodeId;
 use ya_core_model::driver::{AccountMode, PaymentConfirmation, PaymentDetails};
 use ya_core_model::identity;
+use ya_core_model::payment::local::DriverDetails;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::Provider;
 use ya_service_bus::typed as bus;
@@ -54,9 +60,16 @@ const CREATE_FAUCET_FUNCTION: &str = "create";
 
 pub const DRIVER_NAME: &'static str = "erc20";
 
-pub const DEFAULT_NETWORK: &'static str = "rinkeby";
-pub const DEFAULT_TOKEN: &'static str = "tGLM";
-pub const DEFAULT_PLATFORM: &'static str = "erc20-rinkeby-tglm";
+lazy_static! {
+    pub static ref DRIVER_DETAILS: DriverDetails = DriverDetails {
+        default_network: Network::default().to_string(),
+        networks: hashmap! {
+            Network::Mainnet.to_string() => Network::Mainnet.into(),
+            Network::Rinkeby.to_string() => Network::Rinkeby.into(),
+        },
+        recv_init_required: false,
+    };
+}
 
 const ETH_FAUCET_MAX_WAIT: time::Duration = time::Duration::from_secs(180);
 
@@ -99,8 +112,7 @@ pub struct PaymentDriverService;
 impl PaymentDriverService {
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
         let db: DbExecutor = context.component();
-        let driver = GntDriver::new(db.clone()).await?;
-        let processor = GNTDriverProcessor::new(driver);
+        let processor = GNTDriverProcessor::new(db.clone()).await?;
         self::service::bind_service(&db, processor);
         self::service::subscribe_to_identity_events().await?;
         self::service::register_in_payment_service().await?;
@@ -110,6 +122,7 @@ impl PaymentDriverService {
 
 pub struct GntDriver {
     db: DbExecutor,
+    network: Network,
     ethereum_client: Arc<EthereumClient>,
     gnt_contract: Arc<Contract<Http>>,
     faucet_contract: Option<Arc<Contract<Http>>>,
@@ -118,28 +131,32 @@ pub struct GntDriver {
 
 impl GntDriver {
     /// Creates new driver
-    pub async fn new(db: DbExecutor) -> GNTDriverResult<GntDriver> {
+    pub async fn new(
+        db: DbExecutor,
+        network: Network,
+        config: EnvConfiguration,
+    ) -> GNTDriverResult<GntDriver> {
         crate::dao::init(&db)
             .await
             .map_err(GNTDriverError::library_err_msg)?;
-        let chain = Chain::from_env()?;
-        let ethereum_client = Arc::new(EthereumClientBuilder::from_env()?.build()?);
-        let env = config::EnvConfiguration::from_env(chain)?;
+        let ethereum_client = Arc::new(EthereumClientBuilder::with_network(network).build()?);
 
-        let gnt_contract = Arc::new(common::prepare_gnt_contract(&ethereum_client, &env)?);
+        let gnt_contract = Arc::new(common::prepare_gnt_contract(&ethereum_client, &config)?);
         let faucet_contract =
-            common::prepare_gnt_faucet_contract(&ethereum_client, &env)?.map(Arc::new);
+            common::prepare_gnt_faucet_contract(&ethereum_client, &config)?.map(Arc::new);
         let tx_sender = sender::TransactionSender::new(
+            network,
             ethereum_client.clone(),
             gnt_contract.clone(),
             db.clone(),
-            &env,
+            &config,
         );
 
         load_active_accounts(tx_sender.clone()).await?;
 
         Ok(GntDriver {
             db,
+            network,
             ethereum_client,
             gnt_contract,
             faucet_contract,
@@ -176,13 +193,14 @@ impl GntDriver {
         let sender = self.tx_sender.clone();
         let contract = self.gnt_contract.clone();
         let faucet_contract = self.faucet_contract.clone().unwrap();
+        let chain_id = self.network.chain_id();
         async move {
             let balance = common::get_gnt_balance(&contract, address).await?;
             if balance < max_testnet_balance {
                 log::info!("Requesting NGNT from Faucet...");
                 let gas_price = client.get_gas_price().await?;
-                let mut b = sender::Builder::new(address, gas_price, client.chain_id())
-                    .with_tx_type(TxType::Faucet);
+                let mut b =
+                    sender::Builder::new(address, gas_price, chain_id).with_tx_type(TxType::Faucet);
                 b.push(
                     &faucet_contract,
                     CREATE_FAUCET_FUNCTION,
@@ -224,10 +242,10 @@ impl GntDriver {
         use futures3::prelude::*;
 
         let addr: String = address.into();
+        let network = self.network.to_string();
+        let token = self.network.default_token();
         Box::pin(
-            if mode.contains(AccountMode::SEND)
-                && self.ethereum_client.chain_id() == Chain::Rinkeby.id()
-            {
+            if mode.contains(AccountMode::SEND) && self.network == Network::Rinkeby {
                 let address = utils::str_to_addr(address).unwrap();
                 let wait_for_eth = self.wait_for_eth(address);
                 let request_gnt = self.request_gnt_from_faucet(address);
@@ -239,14 +257,14 @@ impl GntDriver {
                     wait_for_eth.await?;
                     request_gnt.await?;
 
-                    gnt::register_account(addr, mode).await?;
+                    gnt::register_account(addr, network, token, mode).await?;
                     Ok(())
                 };
 
                 fut.left_future()
             } else {
                 let fut = async move {
-                    gnt::register_account(addr, mode).await?;
+                    gnt::register_account(addr, network, token, mode).await?;
                     Ok(())
                 };
                 fut.right_future()
@@ -309,6 +327,7 @@ impl GntDriver {
             recipient: recipient.clone(),
             status: PAYMENT_STATUS_NOT_YET,
             tx_id: None,
+            network: self.network,
         };
         async move {
             db.as_dao::<PaymentDao>().insert(payment).await?;
@@ -379,7 +398,7 @@ mod tests {
     #[actix_rt::test]
     async fn test_get_gnt_balance() -> anyhow::Result<()> {
         let ethereum_client = EthereumClientBuilder::with_chain(Chain::Rinkeby)?.build()?;
-        let gnt_contract = common::prepare_gnt_contract(&ethereum_client, &config::CFG_TESTNET)?;
+        let gnt_contract = common::prepare_gnt_contract(&ethereum_client, &config::RINKEBY_CONFIG)?;
         let gnt_balance =
             common::get_gnt_balance(&gnt_contract, utils::str_to_addr(ETH_ADDRESS)?).await?;
         assert!(gnt_balance >= utils::str_to_big_dec("0")?);

@@ -1,7 +1,8 @@
+use crate::networks::Network;
 use crate::processor::GNTDriverProcessor;
-use crate::{DEFAULT_NETWORK, DEFAULT_PLATFORM, DEFAULT_TOKEN, DRIVER_NAME};
+use crate::{DRIVER_DETAILS, DRIVER_NAME};
 use bigdecimal::BigDecimal;
-use maplit::hashmap;
+use std::convert::TryInto;
 use ya_core_model::driver::*;
 use ya_core_model::payment::local as payment_srv;
 use ya_persistence::executor::DbExecutor;
@@ -34,21 +35,9 @@ pub async fn subscribe_to_identity_events() -> anyhow::Result<()> {
 
 pub async fn register_in_payment_service() -> anyhow::Result<()> {
     log::debug!("Registering driver in payment service...");
-    let networks = hashmap! {  // TODO: Implement multi-network support
-        DEFAULT_NETWORK.to_string() => payment_srv::Network {
-            default_token: DEFAULT_TOKEN.to_string(),
-            tokens: hashmap! {
-                DEFAULT_TOKEN.to_string() => DEFAULT_PLATFORM.to_string()
-            }
-        }
-    };
     let message = payment_srv::RegisterDriver {
         driver_name: DRIVER_NAME.to_string(),
-        details: payment_srv::DriverDetails {
-            default_network: DEFAULT_NETWORK.to_string(),
-            networks,
-            recv_init_required: false,
-        },
+        details: DRIVER_DETAILS.clone(),
     };
     service(payment_srv::BUS_ID).send(message).await?.unwrap(); // Unwrap on purpose because it's NoError
     log::debug!("Successfully registered driver in payment service.");
@@ -66,9 +55,10 @@ async fn init(
 
     let address = msg.address();
     let mode = msg.mode();
+    let network = parse_network(msg.network())?;
 
     processor
-        .init(mode, address.as_str())
+        .init(mode, address.as_str(), network)
         .await
         .map_or_else(|e| Err(GenericError::new(e)), |()| Ok(Ack {}))
 }
@@ -82,9 +72,10 @@ async fn get_account_balance(
     log::info!("get account balance: {:?}", msg);
 
     let addr = msg.address();
+    let network = parse_platform(msg.platform())?;
 
     processor
-        .get_account_balance(addr.as_str())
+        .get_account_balance(addr.as_str(), network)
         .await
         .map_or_else(
             |e| Err(GenericError::new(e)),
@@ -102,9 +93,10 @@ async fn get_transaction_balance(
 
     let sender = msg.sender();
     let recipient = msg.recipient();
+    let network = parse_platform(msg.platform())?;
 
     processor
-        .get_transaction_balance(sender.as_str(), recipient.as_str())
+        .get_transaction_balance(sender.as_str(), recipient.as_str(), network)
         .await
         .map_or_else(|e| Err(GenericError::new(e)), |balance| Ok(balance))
 }
@@ -121,9 +113,16 @@ async fn schedule_payment(
     let sender = msg.sender();
     let recipient = msg.recipient();
     let due_date = msg.due_date();
+    let network = parse_platform(msg.platform())?;
 
     processor
-        .schedule_payment(amount, sender.as_str(), recipient.as_str(), due_date)
+        .schedule_payment(
+            amount,
+            sender.as_str(),
+            recipient.as_str(),
+            network,
+            due_date,
+        )
         .await
         .map_or_else(|e| Err(GenericError::new(e)), |r| Ok(r))
 }
@@ -137,11 +136,15 @@ async fn verify_payment(
     log::info!("verify payment: {:?}", msg);
 
     let confirmation = msg.confirmation();
+    let network = parse_platform(msg.platform())?;
 
-    processor.verify_payment(confirmation).await.map_or_else(
-        |e| Err(GenericError::new(e)),
-        |payment_details| Ok(payment_details),
-    )
+    processor
+        .verify_payment(confirmation, network)
+        .await
+        .map_or_else(
+            |e| Err(GenericError::new(e)),
+            |payment_details| Ok(payment_details),
+        )
 }
 
 async fn validate_allocation(
@@ -153,12 +156,13 @@ async fn validate_allocation(
     log::debug!("Validate allocation: {:?}", msg);
     let ValidateAllocation {
         address,
+        platform,
         amount,
         existing_allocations,
-        ..
     } = msg;
+    let network = parse_platform(platform)?;
     processor
-        .validate_allocation(address, amount, existing_allocations)
+        .validate_allocation(address, network, amount, existing_allocations)
         .await
         .map_err(GenericError::new)
 }
@@ -181,4 +185,26 @@ async fn account_event(
     .map_err(|e| log::error!("Identity event listener error: {:?}", e));
 
     Ok(())
+}
+
+fn parse_network(network: Option<String>) -> Result<Network, GenericError> {
+    network
+        .unwrap_or(DRIVER_DETAILS.default_network.clone())
+        .parse()
+        .map_err(GenericError::new)
+}
+
+fn parse_platform(platform: String) -> Result<Network, GenericError> {
+    let parts: Vec<&str> = platform.split("-").collect();
+    let parts: [&str; 3] = parts
+        .try_into()
+        .map_err(|_| GenericError::new(format!("Invalid platform: {}", platform)))?;
+    if parts[0] != DRIVER_NAME {
+        return Err(GenericError::new(format!(
+            "Invalid driver name: {} != {}",
+            parts[0], DRIVER_NAME
+        )));
+    }
+    let network = parts[1].parse().map_err(GenericError::new)?;
+    Ok(network)
 }
