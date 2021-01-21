@@ -139,7 +139,6 @@ pub(crate) fn build_payment_details(
     Ok(PaymentDetails {
         recipient: utils::addr_to_str(recipient).into(),
         sender: utils::addr_to_str(sender).into(),
-        platform: "platform".to_string(), // TODO: Put in real platform
         amount: utils::u256_to_big_dec(amount)?,
         date,
     })

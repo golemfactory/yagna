@@ -407,7 +407,6 @@ mod tests {
         let expected = PaymentDetails {
             recipient: String::from("0xf466400dd3c7ef0694205c2e93754ffce7c32313"),
             sender: String::from("0xf466400dd3c7ef0694205c2e93754ffce7c32313"),
-            platform: "platform".to_string(), // TODO: Put in real platform
             amount: utils::str_to_big_dec("69")?,
             date: None,
         };

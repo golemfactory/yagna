@@ -48,7 +48,6 @@ bitflags! {
 pub struct PaymentDetails {
     pub recipient: String,
     pub sender: String,
-    pub platform: String,
     pub amount: BigDecimal,
     pub date: Option<DateTime<Utc>>,
 }

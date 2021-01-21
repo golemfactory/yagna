@@ -99,7 +99,6 @@ async fn schedule_payment(
     let details = PaymentDetails {
         recipient: msg.recipient(),
         sender: msg.sender(),
-        platform: msg.platform(),
         amount: msg.amount(),
         date: Some(Utc::now()),
     };
