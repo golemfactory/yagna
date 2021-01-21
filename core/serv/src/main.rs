@@ -18,6 +18,7 @@ use ya_metrics::{MetricsPusherOpts, MetricsService};
 use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
 use ya_sgx::SgxService;
+use ya_version::VersionService;
 
 use ya_file_logging::start_logger;
 use ya_persistence::executor::DbExecutor;
@@ -189,6 +190,8 @@ enum Services {
     Metrics(MetricsService),
     #[enable(gsb, cli(flatten))]
     Identity(IdentityService),
+    #[enable(rest)]
+    Version(VersionService),
     #[enable(gsb)]
     Net(NetService),
     #[enable(gsb, rest)]
