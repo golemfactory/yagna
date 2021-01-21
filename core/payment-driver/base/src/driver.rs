@@ -16,7 +16,7 @@ pub use bigdecimal::BigDecimal;
 use std::collections::HashMap;
 pub use ya_client_model::NodeId;
 pub use ya_core_model::identity::{event::Event as IdentityEvent, Error as IdentityError};
-pub use ya_core_model::payment::local::Network;
+pub use ya_core_model::payment::local::{Network, Platform};
 
 #[async_trait(?Send)]
 pub trait PaymentDriver {

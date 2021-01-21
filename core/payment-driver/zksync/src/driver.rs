@@ -17,7 +17,9 @@ use ya_payment_driver::{
     cron::PaymentDriverCron,
     dao::DbExecutor,
     db::models::PaymentEntity,
-    driver::{async_trait, BigDecimal, IdentityError, IdentityEvent, Network, PaymentDriver},
+    driver::{
+        async_trait, BigDecimal, IdentityError, IdentityEvent, Network, PaymentDriver, Platform,
+    },
     model::*,
     utils,
 };
@@ -136,12 +138,18 @@ impl PaymentDriver for ZksyncDriver {
 
     fn get_networks(&self) -> HashMap<String, Network> {
         // TODO: Implement multi-network support
+        let default_platform = Platform {
+            driver: DRIVER_NAME.to_string(),
+            network: DEFAULT_NETWORK.to_string(),
+            token: DEFAULT_TOKEN.to_string(),
+        };
 
         hashmap! {
             DEFAULT_NETWORK.to_string() => Network {
+                name: DEFAULT_NETWORK.to_string(),
                 default_token: DEFAULT_TOKEN.to_string(),
                 tokens: hashmap! {
-                    DEFAULT_TOKEN.to_string() => DEFAULT_PLATFORM.to_string()
+                    DEFAULT_TOKEN.to_string().to_lowercase() => default_platform
                 }
             }
         }

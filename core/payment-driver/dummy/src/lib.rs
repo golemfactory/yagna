@@ -3,7 +3,7 @@ mod service;
 pub const DRIVER_NAME: &'static str = "dummy";
 pub const NETWORK_NAME: &'static str = "dummy";
 pub const TOKEN_NAME: &'static str = "GLM";
-pub const PLATFORM_NAME: &'static str = "dummy-glm";
+pub const PLATFORM_NAME: &'static str = "dummy-dummy-glm"; // TODO: remove
 
 pub struct PaymentDriverService;
 

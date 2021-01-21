@@ -136,45 +136,63 @@ mod local {
         log::info!("get status: {:?}", msg);
         let GetStatus {
             address,
+            platform,
             driver,
             network,
             token,
         } = msg;
 
-        let platform = processor
-            .get_platform(driver, network, token)
-            .await
-            .map_err(GenericError::new)?;
+        let platform = match platform {
+            Some(platform) => {
+                let mut it = platform.split("-").fuse();
+                if let (Some(driver), Some(network), Some(token)) =
+                    (it.next(), it.next(), it.next())
+                {
+                    processor
+                        .get_platform(Some(driver), Some(network), Some(token))
+                        .await
+                        .map_err(GenericError::new)?
+                } else {
+                    return Err(GenericError::new(format!("Invalid platform: {}", platform)));
+                }
+            }
+            None => processor
+                .get_platform(driver.as_deref(), network.as_deref(), token.as_deref())
+                .await
+                .map_err(GenericError::new)?,
+        };
 
+        let platform_str = platform.to_string();
         let incoming_fut = async {
             db.as_dao::<AgreementDao>()
-                .incoming_transaction_summary(platform.clone(), address.clone())
+                .incoming_transaction_summary(platform_str.clone(), address.clone())
                 .await
         }
         .map_err(GenericError::new);
 
         let outgoing_fut = async {
             db.as_dao::<AgreementDao>()
-                .outgoing_transaction_summary(platform.clone(), address.clone())
+                .outgoing_transaction_summary(platform_str.clone(), address.clone())
                 .await
         }
         .map_err(GenericError::new);
 
         let reserved_fut = async {
             db.as_dao::<AllocationDao>()
-                .total_remaining_allocation(platform.clone(), address.clone())
+                .total_remaining_allocation(platform_str.clone(), address.clone())
                 .await
         }
         .map_err(GenericError::new);
 
         let amount_fut = processor
-            .get_status(platform.clone(), address.clone())
+            .get_status(platform_str.clone(), address.clone())
             .map_err(GenericError::new);
 
         let (incoming, outgoing, amount, reserved) =
             future::try_join4(incoming_fut, outgoing_fut, amount_fut, reserved_fut).await?;
 
         Ok(StatusResult {
+            platform,
             amount,
             reserved,
             outgoing,

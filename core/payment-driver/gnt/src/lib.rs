@@ -56,7 +56,7 @@ pub const DRIVER_NAME: &'static str = "erc20";
 
 pub const DEFAULT_NETWORK: &'static str = "rinkeby";
 pub const DEFAULT_TOKEN: &'static str = "tGLM";
-pub const DEFAULT_PLATFORM: &'static str = "erc20-rinkeby-tglm";
+pub const DEFAULT_PLATFORM: &'static str = "erc20-rinkeby-tglm"; // TODO: remove
 
 const ETH_FAUCET_MAX_WAIT: time::Duration = time::Duration::from_secs(180);
 

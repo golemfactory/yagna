@@ -6,7 +6,7 @@ use maplit::hashmap;
 use std::str::FromStr;
 use uuid::Uuid;
 use ya_core_model::driver::*;
-use ya_core_model::payment::local as payment_srv;
+use ya_core_model::payment::local::{self as payment_srv, Platform};
 use ya_service_bus::typed::service;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -26,13 +26,19 @@ pub fn bind_service() {
 
 pub async fn register_in_payment_service() -> anyhow::Result<()> {
     log::debug!("Registering driver in payment service...");
+    let default_platform = Platform {
+        driver: DRIVER_NAME.to_string(),
+        network: NETWORK_NAME.to_string(),
+        token: TOKEN_NAME.to_string(),
+    };
     let details = payment_srv::DriverDetails {
         default_network: NETWORK_NAME.to_string(),
         networks: hashmap! {
             NETWORK_NAME.to_string() => payment_srv::Network {
+                name: NETWORK_NAME.to_string(),
                 default_token: TOKEN_NAME.to_string(),
                 tokens: hashmap! {
-                    TOKEN_NAME.to_string() => PLATFORM_NAME.to_string()
+                    TOKEN_NAME.to_string().to_lowercase() => default_platform
                 }
             }
         },
