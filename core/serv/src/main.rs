@@ -371,8 +371,10 @@ impl ServiceCommand {
                 let mut context: ServiceContext = ctx.clone().try_into()?;
                 context.set_metrics_ctx(metrics_opts);
                 Services::gsb(&context).await?;
-                let drivers = start_payment_drivers(&ctx.data_dir).await?;
 
+                ya_compile_time_utils::report_version_to_metrics();
+
+                let drivers = start_payment_drivers(&ctx.data_dir).await?;
                 payment_accounts::save_default_account(&ctx.data_dir, drivers)
                     .await
                     .unwrap_or_else(|e| {
