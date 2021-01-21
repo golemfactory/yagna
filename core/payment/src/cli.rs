@@ -17,27 +17,39 @@ use crate::{wallet, DEFAULT_PAYMENT_DRIVER};
 #[derive(StructOpt, Debug)]
 pub enum PaymentCli {
     Accounts,
-    Enter {
-        amount: String,
-        #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
-        driver: String,
-        #[structopt(long, short)]
-        network: Option<String>,
-        #[structopt(long, short)]
-        token: Option<String>,
-    },
+    // TODO: Uncomment when operation is supported by drivers
+    // Enter {
+    //     #[structopt(long)]
+    //     account: Option<String>,
+    //     #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
+    //     driver: String,
+    //     #[structopt(long)]
+    //     network: Option<String>,
+    //     #[structopt(long)]
+    //     amount: String,
+    // },
     Exit {
-        address: Option<String>,
-        #[structopt(help = "Optional address to exit to. [default: <DEFAULT_IDENTIDITY>]")]
-        to: Option<String>,
-        #[structopt(long, short, help = "Optional amount to exit. [default: <ALL_FUNDS>]")]
-        amount: Option<String>,
+        #[structopt(long)]
+        account: Option<String>,
         #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
         driver: String,
-        #[structopt(long, short)]
+        #[structopt(long)]
         network: Option<String>,
-        #[structopt(long, short)]
-        token: Option<String>,
+        #[structopt(
+            long,
+            help = "Optional address to exit to. [default: <DEFAULT_IDENTIDITY>]"
+        )]
+        to_address: Option<String>,
+        #[structopt(long, help = "Optional amount to exit. [default: <ALL_FUNDS>]")]
+        amount: Option<String>,
+    },
+    Fund {
+        #[structopt(long)]
+        account: Option<String>,
+        #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
+        driver: String,
+        #[structopt(long)]
+        network: Option<String>,
     },
     Init {
         #[structopt(long)]
@@ -56,17 +68,19 @@ pub enum PaymentCli {
         #[structopt(subcommand)]
         command: InvoiceCommand,
     },
-    Transfer {
-        to: String,
-        #[structopt(long, short)]
-        amount: String,
-        #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
-        driver: String,
-        #[structopt(long, short)]
-        network: Option<String>,
-        #[structopt(long, short)]
-        token: Option<String>,
-    },
+    // TODO: Uncomment when operation is supported by drivers
+    // Transfer {
+    //     #[structopt(long)]
+    //     account: Option<String>,
+    //     #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
+    //     driver: String,
+    //     #[structopt(long)]
+    //     network: Option<String>,
+    //     #[structopt(long)]
+    //     to_address: String,
+    //     #[structopt(long)]
+    //     amount: String,
+    // },
     Status {
         #[structopt(long)]
         account: Option<String>,
@@ -88,6 +102,15 @@ pub enum InvoiceCommand {
 impl PaymentCli {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
+            PaymentCli::Fund {
+                account,
+                driver,
+                network,
+            } => {
+                let address = resolve_address(account).await?;
+                let driver = driver.to_lowercase();
+                CommandOutput::object(wallet::fund(address, driver, network, None).await?)
+            }
             PaymentCli::Init {
                 account,
                 driver,
@@ -208,42 +231,44 @@ impl PaymentCli {
                         .await??,
                 )
             }
-            PaymentCli::Enter {
-                amount,
-                driver,
-                network,
-                token,
-            } => {
-                let amount = BigDecimal::from_str(&amount)?;
-                CommandOutput::object(wallet::enter(amount, driver, network, token).await?)
-            }
+            // TODO: Uncomment when operation is supported by drivers
+            // PaymentCli::Enter {
+            //     account,
+            //     driver,
+            //     network,
+            //     amount
+            // } => {
+            //     let address = resolve_address(account).await?;
+            //     let amount = BigDecimal::from_str(&amount)?;
+            //     CommandOutput::object(wallet::enter(amount, address, driver, network, token).await?)
+            // }
             PaymentCli::Exit {
-                address,
-                to,
-                amount,
+                account,
                 driver,
                 network,
-                token,
+                to_address,
+                amount,
             } => {
-                let address = resolve_address(address).await?;
+                let address = resolve_address(account).await?;
                 let amount = match amount {
                     None => None,
                     Some(a) => Some(BigDecimal::from_str(&a)?),
                 };
                 CommandOutput::object(
-                    wallet::exit(address, to, amount, driver, network, token).await?,
+                    wallet::exit(address, to_address, amount, driver, network, None).await?,
                 )
-            }
-            PaymentCli::Transfer {
-                to,
-                amount,
-                driver,
-                network,
-                token,
-            } => {
-                let amount = BigDecimal::from_str(&amount)?;
-                CommandOutput::object(wallet::transfer(to, amount, driver, network, token).await?)
-            }
+            } // TODO: Uncomment when operation is supported by drivers
+              // PaymentCli::Transfer {
+              //     account,
+              //     driver,
+              //     network,
+              //     to_address,
+              //     amount
+              // } => {
+              //     let address = resolve_address(account).await?;
+              //     let amount = BigDecimal::from_str(&amount)?;
+              //     CommandOutput::object(wallet::transfer(address, to_address, amount, driver, network, token).await?)
+              // }
         }
     }
 }

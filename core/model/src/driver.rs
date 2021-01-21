@@ -126,6 +126,40 @@ impl RpcMessage for VerifyPayment {
     type Error = GenericError;
 }
 
+// ************************** FUND **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Fund {
+    address: String,
+    network: Option<String>,
+    token: Option<String>,
+}
+
+impl Fund {
+    pub fn new(address: String, network: Option<String>, token: Option<String>) -> Self {
+        Self {
+            address,
+            network,
+            token,
+        }
+    }
+    pub fn address(&self) -> String {
+        self.address.clone()
+    }
+    pub fn network(&self) -> Option<String> {
+        self.network.clone()
+    }
+    pub fn token(&self) -> Option<String> {
+        self.token.clone()
+    }
+}
+
+impl RpcMessage for Fund {
+    const ID: &'static str = "Fund";
+    type Item = String;
+    type Error = GenericError;
+}
+
 // ************************** INIT **************************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -298,14 +332,21 @@ impl RpcMessage for ValidateAllocation {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Enter {
     amount: BigDecimal,
+    address: String,
     network: Option<String>,
     token: Option<String>,
 }
 
 impl Enter {
-    pub fn new(amount: BigDecimal, network: Option<String>, token: Option<String>) -> Enter {
+    pub fn new(
+        amount: BigDecimal,
+        address: String,
+        network: Option<String>,
+        token: Option<String>,
+    ) -> Enter {
         Enter {
             amount,
+            address,
             network,
             token,
         }
@@ -367,6 +408,7 @@ impl RpcMessage for Exit {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Transfer {
+    sender: String,
     to: String,
     amount: BigDecimal,
     network: Option<String>,
@@ -375,12 +417,14 @@ pub struct Transfer {
 
 impl Transfer {
     pub fn new(
+        sender: String,
         to: String,
         amount: BigDecimal,
         network: Option<String>,
         token: Option<String>,
     ) -> Transfer {
         Transfer {
+            sender,
             to,
             amount,
             network,
