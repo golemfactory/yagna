@@ -10,11 +10,12 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 #[derive(StructOpt, Debug)]
 pub enum PaymentCli {
     Init {
-        address: Option<String>,
-        #[structopt(long, short)]
-        requestor: bool,
-        #[structopt(long, short)]
-        provider: bool,
+        #[structopt(long)]
+        account: Option<String>,
+        #[structopt(long)]
+        sender: bool,
+        #[structopt(long)]
+        receiver: bool,
         #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
         driver: String,
         #[structopt(long)]
@@ -48,21 +49,21 @@ impl PaymentCli {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
             PaymentCli::Init {
-                address,
+                account,
                 driver,
                 network,
-                requestor,
-                provider,
+                sender,
+                receiver,
             } => {
-                let address = resolve_address(address).await?;
+                let address = resolve_address(account).await?;
                 let driver = driver.to_lowercase();
                 let account = Account {
                     driver,
                     address,
                     network,
                     token: None, // Use default -- we don't yet support other tokens than GLM
-                    send: requestor,
-                    receive: provider,
+                    send: sender,
+                    receive: receiver,
                 };
                 init_account(account).await?;
                 Ok(CommandOutput::NoOutput)
@@ -95,15 +96,15 @@ impl PaymentCli {
                         ],
                         values: vec![
                             serde_json::json! {[
-                            format!("driver: {}", status.platform.driver),
-                            format!("{} {}", status.amount, status.platform.token),
-                            format!("{} {}", status.reserved, status.platform.token),
+                            format!("driver: {}", status.driver),
+                            format!("{} {}", status.amount, status.token),
+                            format!("{} {}", status.reserved, status.token),
                             "accepted",
                             status.incoming.accepted.total_amount,
                             status.outgoing.accepted.total_amount,
                             ]},
                             serde_json::json! {[
-                            format!("network: {}", status.platform.network),
+                            format!("network: {}", status.network),
                             "",
                             "",
                             "confirmed",
@@ -111,7 +112,7 @@ impl PaymentCli {
                             status.outgoing.confirmed.total_amount,
                             ]},
                             serde_json::json! {[
-                            format!("token: {}", status.platform.token),
+                            format!("token: {}", status.token),
                             "",
                             "",
                             "requested",
@@ -129,9 +130,10 @@ impl PaymentCli {
                     .await??;
                 Ok(ResponseTable {
                     columns: vec![
-                        "platform".to_owned(),
                         "address".to_owned(),
                         "driver".to_owned(),
+                        "network".to_owned(),
+                        "token".to_owned(),
                         "send".to_owned(),
                         "recv".to_owned(),
                     ],
@@ -139,9 +141,10 @@ impl PaymentCli {
                         .into_iter()
                         .map(|account| {
                             serde_json::json! {[
-                                account.platform,
                                 account.address,
                                 account.driver,
+                                account.network,
+                                account.token,
                                 if account.send { "X" } else { "" },
                                 if account.receive { "X" } else { "" }
                             ]}

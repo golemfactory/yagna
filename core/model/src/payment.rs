@@ -250,6 +250,9 @@ pub mod local {
         pub reserved: BigDecimal,
         pub outgoing: StatusNotes,
         pub incoming: StatusNotes,
+        pub driver: String,
+        pub network: String,
+        pub token: String,
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize, Default)]

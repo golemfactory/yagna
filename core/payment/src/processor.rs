@@ -200,17 +200,17 @@ impl DriverRegistry {
 
     pub fn get_network(
         &self,
-        driver: &str,
+        driver: String,
         network: Option<String>,
-    ) -> Result<(String, &Network), RegisterAccountError> {
-        let driver_details = self.get_driver(driver)?;
+    ) -> Result<(String, Network), RegisterAccountError> {
+        let driver_details = self.get_driver(&driver)?;
         let network_name = network.unwrap_or(driver_details.default_network.to_owned());
         match driver_details.networks.get(&network_name) {
             None => Err(RegisterAccountError::UnsupportedNetwork(
                 network_name,
                 driver.into(),
             )),
-            Some(network_details) => Ok((network_name, network_details)),
+            Some(network_details) => Ok((network_name, network_details.clone())),
         }
     }
 
@@ -220,7 +220,7 @@ impl DriverRegistry {
         network: Option<String>,
         token: Option<String>,
     ) -> Result<String, RegisterAccountError> {
-        let (network_name, network_details) = self.get_network(&driver, network)?;
+        let (network_name, network_details) = self.get_network(driver.clone(), network)?;
         let token = token.unwrap_or(network_details.default_token.to_owned());
         match network_details.tokens.get(&token) {
             None => Err(RegisterAccountError::UnsupportedToken(
@@ -295,6 +295,14 @@ impl PaymentProcessor {
 
     pub async fn get_accounts(&self) -> Vec<Account> {
         self.registry.lock().await.get_accounts()
+    }
+
+    pub async fn get_network(
+        &self,
+        driver: String,
+        network: Option<String>,
+    ) -> Result<(String, Network), RegisterAccountError> {
+        self.registry.lock().await.get_network(driver, network)
     }
 
     pub async fn get_platform(

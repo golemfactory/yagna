@@ -141,10 +141,20 @@ mod local {
             token,
         } = msg;
 
-        let platform = processor
-            .get_platform(driver, network, token)
+        let (network, network_details) = processor
+            .get_network(driver.clone(), network)
             .await
             .map_err(GenericError::new)?;
+        let token = token.unwrap_or(network_details.default_token.clone());
+        let platform = match network_details.tokens.get(&token) {
+            Some(platform) => platform.clone(),
+            None => {
+                return Err(GenericError::new(format!(
+                    "Unsupported token. driver={} network={} token={}",
+                    driver, network, token
+                )))
+            }
+        };
 
         let incoming_fut = async {
             db.as_dao::<AgreementDao>()
@@ -179,6 +189,9 @@ mod local {
             reserved,
             outgoing,
             incoming,
+            driver,
+            network,
+            token,
         })
     }
 

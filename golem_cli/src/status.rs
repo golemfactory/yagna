@@ -134,9 +134,9 @@ pub async fn run(args: StatusCommand) -> Result</*exit code*/ i32> {
             let (zk_payment_status, erc20_payment_status) =
                 payment_status(&cmd, &args.network, &config.account).await?;
 
-            let token = match zk_payment_status.platform.token.len() {
-                0 => erc20_payment_status.platform.token,
-                _ => zk_payment_status.platform.token,
+            let token = match zk_payment_status.token.len() {
+                0 => erc20_payment_status.token,
+                _ => zk_payment_status.token,
             };
 
             let mut table = Table::new();
