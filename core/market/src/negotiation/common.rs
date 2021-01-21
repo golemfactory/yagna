@@ -43,6 +43,7 @@ use crate::protocol::negotiation::{
     messages::{AgreementTerminated, ProposalReceived},
 };
 use crate::utils::display::EnableDisplay;
+use crate::utils::AgreementLock;
 
 type IsFirst = bool;
 
@@ -54,6 +55,7 @@ pub struct CommonBroker {
     pub(super) session_notifier: EventNotifier<AppSessionId>,
     pub(super) agreement_notifier: EventNotifier<AgreementId>,
     pub(super) config: Arc<Config>,
+    pub(super) agreement_lock: AgreementLock,
 }
 
 impl CommonBroker {
@@ -70,6 +72,7 @@ impl CommonBroker {
             session_notifier,
             agreement_notifier: EventNotifier::new(),
             config,
+            agreement_lock: AgreementLock::new(),
         }
     }
 
@@ -370,7 +373,9 @@ impl CommonBroker {
         dao.terminate(&agreement.id, reason_string, agreement.id.owner())
             .await
             .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?;
+
         self.notify_agreement(&agreement).await;
+        self.agreement_lock.clear_locks(&agreement.id).await;
 
         inc_terminate_metrics(&reason, agreement.id.owner());
         log::info!(
@@ -457,6 +462,7 @@ impl CommonBroker {
             })?;
 
         self.notify_agreement(&agreement).await;
+        self.agreement_lock.clear_locks(&agreement_id).await;
 
         inc_terminate_metrics(&msg.reason, agreement.id.owner());
         log::info!(
