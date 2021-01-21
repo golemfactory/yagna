@@ -28,6 +28,7 @@ use ya_utils_futures::timeout::IntoTimeoutFuture;
 // Local uses
 use crate::{
     dao::ZksyncDao, zksync::wallet, DEFAULT_NETWORK, DEFAULT_PLATFORM, DEFAULT_TOKEN, DRIVER_NAME,
+    MAINNET_NAME, MAINNET_TOKEN,
 };
 
 pub struct ZksyncDriver {
@@ -137,19 +138,27 @@ impl PaymentDriver for ZksyncDriver {
     }
 
     fn get_networks(&self) -> HashMap<String, Network> {
-        // TODO: Implement multi-network support
-        let default_platform = Platform {
-            driver: DRIVER_NAME.to_string(),
-            network: DEFAULT_NETWORK.to_string(),
-            token: DEFAULT_TOKEN.to_string(),
-        };
-
         hashmap! {
             DEFAULT_NETWORK.to_string() => Network {
                 name: DEFAULT_NETWORK.to_string(),
                 default_token: DEFAULT_TOKEN.to_string(),
                 tokens: hashmap! {
-                    DEFAULT_TOKEN.to_string().to_lowercase() => default_platform
+                    DEFAULT_TOKEN.to_lowercase() => Platform {
+                        driver: DRIVER_NAME.to_string(),
+                        network: DEFAULT_NETWORK.to_string(),
+                        token: DEFAULT_TOKEN.to_string(),
+                    }
+                }
+            },
+            MAINNET_NAME.to_string() => Network {
+                name: MAINNET_NAME.to_string(),
+                default_token: MAINNET_TOKEN.to_string(),
+                tokens: hashmap! {
+                    MAINNET_TOKEN.to_lowercase() => Platform {
+                        driver: DRIVER_NAME.to_string(),
+                        network: MAINNET_NAME.to_string(),
+                        token: MAINNET_TOKEN.to_string(),
+                    }
                 }
             }
         }
@@ -173,7 +182,6 @@ impl PaymentDriver for ZksyncDriver {
 
     async fn init(&self, _db: DbExecutor, _caller: String, msg: Init) -> Result<Ack, GenericError> {
         log::debug!("init: {:?}", msg);
-        let address = msg.address().clone();
 
         // TODO: payment_api fails to start due to provider account not unlocked
         // if !self.is_account_active(&address) {
@@ -185,18 +193,15 @@ impl PaymentDriver for ZksyncDriver {
             .await
             .map_err(GenericError::new)??;
 
-        let mode = msg.mode();
-        let network = DEFAULT_NETWORK; // TODO: Implement multi-network support
-        let token = DEFAULT_TOKEN; // TODO: Implement multi-network support
-        bus::register_account(self, &address, network, token, mode).await?;
+        let platform = bus::register_account(self, msg.clone()).await?;
 
         log::info!(
             "Initialised payment account. mode={:?}, address={}, driver={}, network={}, token={}",
-            mode,
-            &address,
+            msg.mode,
+            msg.address,
             DRIVER_NAME,
-            network,
-            token
+            platform.network,
+            platform.token
         );
         Ok(Ack {})
     }

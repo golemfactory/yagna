@@ -185,19 +185,9 @@ pub mod local {
     pub struct RegisterAccount {
         pub address: String,
         pub driver: String,
-        pub network: String,
-        pub token: String,
+        pub network: Option<String>,
+        pub token: Option<String>,
         pub mode: AccountMode,
-    }
-
-    impl From<RegisterAccount> for Platform {
-        fn from(msg: RegisterAccount) -> Self {
-            Self {
-                driver: msg.driver,
-                network: msg.network,
-                token: msg.token,
-            }
-        }
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
@@ -216,7 +206,7 @@ pub mod local {
 
     impl RpcMessage for RegisterAccount {
         const ID: &'static str = "RegisterAccount";
-        type Item = ();
+        type Item = Platform;
         type Error = RegisterAccountError;
     }
 

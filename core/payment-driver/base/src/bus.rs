@@ -9,9 +9,7 @@ use std::sync::Arc;
 
 // Workspace uses
 use ya_client_model::NodeId;
-use ya_core_model::driver::{
-    driver_bus_id, AccountMode, GenericError, PaymentConfirmation, PaymentDetails,
-};
+use ya_core_model::driver::{driver_bus_id, GenericError, PaymentConfirmation, PaymentDetails};
 use ya_core_model::identity;
 use ya_core_model::payment::local as payment_srv;
 use ya_service_bus::{
@@ -22,6 +20,8 @@ use ya_service_bus::{
 // Local uses
 use crate::dao::DbExecutor;
 use crate::driver::PaymentDriver;
+use crate::model::Init;
+use ya_core_model::payment::local::Platform;
 
 pub async fn bind_service<Driver: PaymentDriver + 'static>(
     db: &DbExecutor,
@@ -104,24 +104,20 @@ pub async fn list_unlocked_identities() -> Result<Vec<NodeId>, GenericError> {
 
 pub async fn register_account(
     driver: &(dyn PaymentDriver),
-    address: &str,
-    network: &str,
-    token: &str,
-    mode: AccountMode,
-) -> Result<(), GenericError> {
+    msg: Init,
+) -> Result<Platform, GenericError> {
     let msg = payment_srv::RegisterAccount {
-        address: address.to_string(),
+        address: msg.address,
         driver: driver.get_name(),
-        network: network.to_string(),
-        token: token.to_string(),
-        mode,
+        network: msg.network,
+        token: msg.token,
+        mode: msg.mode,
     };
-    service(payment_srv::BUS_ID)
+    Ok(service(payment_srv::BUS_ID)
         .send(msg)
         .await
         .map_err(GenericError::new)?
-        .map_err(GenericError::new)?;
-    Ok(())
+        .map_err(GenericError::new)?)
 }
 
 pub async fn sign(node_id: NodeId, payload: Vec<u8>) -> Result<Vec<u8>, GenericError> {

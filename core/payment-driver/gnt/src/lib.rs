@@ -19,7 +19,9 @@ mod utils;
 pub use error::GNTDriverError;
 
 use crate::dao::payment::PaymentDao;
-use crate::gnt::ethereum::{Chain, EthereumClient, EthereumClientBuilder};
+use crate::gnt::ethereum::{
+    Chain, EthereumClient, EthereumClientBuilder, RINKEBY_NAME, RINKEBY_TOKEN,
+};
 use crate::gnt::sender::{AccountLocked, AccountUnlocked};
 use crate::gnt::{common, config, faucet, sender};
 use crate::models::{PaymentEntity, TxType};
@@ -41,7 +43,7 @@ use web3::contract::Contract;
 use web3::transports::Http;
 use ya_client_model::payment::Allocation;
 use ya_client_model::NodeId;
-use ya_core_model::driver::{AccountMode, PaymentConfirmation, PaymentDetails};
+use ya_core_model::driver::{AccountMode, Init, PaymentConfirmation, PaymentDetails};
 use ya_core_model::identity;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::Provider;
@@ -54,8 +56,8 @@ const CREATE_FAUCET_FUNCTION: &str = "create";
 
 pub const DRIVER_NAME: &'static str = "erc20";
 
-pub const DEFAULT_NETWORK: &'static str = "rinkeby";
-pub const DEFAULT_TOKEN: &'static str = "tGLM";
+pub const DEFAULT_NETWORK: &'static str = RINKEBY_NAME;
+pub const DEFAULT_TOKEN: &'static str = RINKEBY_TOKEN;
 pub const DEFAULT_PLATFORM: &'static str = "erc20-rinkeby-tglm"; // TODO: remove
 
 const ETH_FAUCET_MAX_WAIT: time::Duration = time::Duration::from_secs(180);
@@ -216,19 +218,15 @@ impl GntDriver {
     }
 
     /// Initializes account
-    fn init<'a>(
-        &self,
-        mode: AccountMode,
-        address: &str,
-    ) -> Pin<Box<dyn Future<Output = GNTDriverResult<()>> + 'a>> {
+    fn init<'a>(&self, init: Init) -> Pin<Box<dyn Future<Output = GNTDriverResult<()>> + 'a>> {
         use futures3::prelude::*;
 
-        let addr: String = address.into();
         Box::pin(
-            if mode.contains(AccountMode::SEND)
+            if init.mode.contains(AccountMode::SEND)
                 && self.ethereum_client.chain_id() == Chain::Rinkeby.id()
+                && init.network.as_deref().unwrap_or(DEFAULT_NETWORK) == RINKEBY_NAME
             {
-                let address = utils::str_to_addr(address).unwrap();
+                let address = utils::str_to_addr(&init.address).unwrap();
                 let wait_for_eth = self.wait_for_eth(address);
                 let request_gnt = self.request_gnt_from_faucet(address);
                 let fut = async move {
@@ -239,14 +237,14 @@ impl GntDriver {
                     wait_for_eth.await?;
                     request_gnt.await?;
 
-                    gnt::register_account(addr, mode).await?;
+                    gnt::register_account(init).await?;
                     Ok(())
                 };
 
                 fut.left_future()
             } else {
                 let fut = async move {
-                    gnt::register_account(addr, mode).await?;
+                    gnt::register_account(init).await?;
                     Ok(())
                 };
                 fut.right_future()

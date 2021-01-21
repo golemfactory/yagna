@@ -8,8 +8,13 @@
 pub const DRIVER_NAME: &'static str = "zksync";
 pub const ZKSYNC_TOKEN_NAME: &'static str = "GNT";
 
-pub const DEFAULT_NETWORK: &'static str = "rinkeby";
-pub const DEFAULT_TOKEN: &'static str = "tGLM";
+pub(crate) const MAINNET_NAME: &str = "mainnet";
+pub(crate) const MAINNET_TOKEN: &str = "GLM";
+pub(crate) const RINKEBY_NAME: &str = "rinkeby";
+pub(crate) const RINKEBY_TOKEN: &str = "tGLM";
+
+pub const DEFAULT_NETWORK: &'static str = RINKEBY_NAME;
+pub const DEFAULT_TOKEN: &'static str = RINKEBY_TOKEN;
 pub const DEFAULT_PLATFORM: &'static str = "zksync-rinkeby-tglm"; // TODO: remove
 
 pub use service::ZksyncService as PaymentDriverService;

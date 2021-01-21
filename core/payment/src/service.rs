@@ -94,7 +94,7 @@ mod local {
         processor: PaymentProcessor,
         sender: String,
         msg: RegisterAccount,
-    ) -> Result<(), RegisterAccountError> {
+    ) -> Result<Platform, RegisterAccountError> {
         processor.register_account(msg).await
     }
 
