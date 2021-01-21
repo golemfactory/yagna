@@ -540,7 +540,7 @@ impl PaymentProcessor {
                 .await
                 .driver(&platform, &address, AccountMode::empty())?;
         let amount = driver_endpoint(&driver)
-            .send(driver::GetAccountBalance::from(address))
+            .send(driver::GetAccountBalance::new(address, platform))
             .await??;
         Ok(amount)
     }

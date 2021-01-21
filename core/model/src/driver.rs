@@ -68,17 +68,23 @@ impl PaymentConfirmation {
 // ************************** GET ACCOUNT BALANCE **************************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct GetAccountBalance(String);
+pub struct GetAccountBalance {
+    address: String,
+    platform: String,
+}
 
-impl From<String> for GetAccountBalance {
-    fn from(address: String) -> Self {
-        GetAccountBalance(address)
+impl GetAccountBalance {
+    pub fn new(address: String, platform: String) -> Self {
+        GetAccountBalance { address, platform }
     }
 }
 
 impl GetAccountBalance {
     pub fn address(&self) -> String {
-        self.0.clone()
+        self.address.clone()
+    }
+    pub fn platform(&self) -> String {
+        self.platform.clone()
     }
 }
 
