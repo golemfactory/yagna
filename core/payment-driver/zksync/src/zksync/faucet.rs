@@ -10,7 +10,7 @@ use std::{env, time};
 use tokio::time::delay_for;
 
 // Workspace uses
-use ya_payment_driver::{db::network::Network, model::GenericError};
+use ya_payment_driver::{db::models::Network, model::GenericError};
 
 // Local uses
 use crate::zksync::wallet::account_balance;

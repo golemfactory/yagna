@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 // Workspace uses
-use ya_payment_driver::{db::network::Network as DbNetwork, model::GenericError, driver::Network};
+use ya_payment_driver::{db::models::Network as DbNetwork, model::GenericError, driver::Network};
 
 // Local uses
 use crate::{
@@ -38,4 +38,28 @@ pub fn platform_to_network_token(platform: String) -> Result<(DbNetwork, String)
         }
     };
     Err(GenericError::new(format!("Unable to find network for platform: {}", platform)))
+}
+
+pub fn network_token_to_platform(network: Option<DbNetwork>, token: Option<String>) -> Result<String, GenericError> {
+    let network = network.unwrap_or(DbNetwork::from_str(DEFAULT_NETWORK).map_err(GenericError::new)?);
+    let network_config = (*SUPPORTED_NETWORKS).get(&(network.to_string()));
+    let network_config = match network_config {
+        Some(nc) => nc,
+        None => return Err(GenericError::new(format!("Unable to find platform for network={}", network)))
+    };
+
+    let token = token.unwrap_or(network_config.default_token.clone());
+    let platform = network_config.tokens.get(&token);
+    let platform = match platform {
+        Some(p) => p,
+        None => return Err(GenericError::new(format!("Unable to find platform for token={}", token)))
+    };
+    Ok(platform.to_string())
+}
+
+pub fn get_network_token(network: DbNetwork, token: Option<String>) -> String {
+    // Fetch network config, safe as long as all DbNetwork entries are in SUPPORTED_NETWORKS
+    let network_config = (*SUPPORTED_NETWORKS).get(&(network.to_string())).unwrap();
+    // TODO: Check if token in network.tokens
+    token.unwrap_or(network_config.default_token.clone())
 }

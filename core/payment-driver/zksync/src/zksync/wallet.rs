@@ -4,7 +4,6 @@
 
 // External crates
 use bigdecimal::{BigDecimal, Zero};
-use futures3::TryFutureExt;
 use num::BigUint;
 use std::env;
 use std::str::FromStr;
@@ -15,11 +14,11 @@ use zksync::{Network as ZkNetwork, Provider, Wallet, WalletCredentials};
 use zksync_eth_signer::EthereumSigner;
 
 // Workspace uses
-use ya_payment_driver::{db::network::Network, model::{AccountMode, Exit, GenericError, Init, PaymentDetails}};
+use ya_payment_driver::{db::models::Network, model::{AccountMode, Exit, GenericError, Init, PaymentDetails}};
 
 // Local uses
 use crate::{
-    network::platform_to_network_token,
+    network::get_network_token,
     zksync::{faucet, signer::YagnaEthSigner, utils},
     ZKSYNC_TOKEN_NAME, DEFAULT_NETWORK,
 };
@@ -30,14 +29,26 @@ pub async fn account_balance(address: &str, network: Network) -> Result<BigDecim
         .account_info(pub_address)
         .await
         .map_err(GenericError::new)?;
-    let balance_com = acc_info
+    // TODO: implement tokens, replace None
+    let token = get_network_token(network, None);
+    let mut balance_com = acc_info
         .committed
         .balances
-        .get(ZKSYNC_TOKEN_NAME) // TODO: Network token
+        .get(&token)
         .map(|x| x.0.clone())
         .unwrap_or(BigUint::zero());
+    // Hack to get GNT balance for backwards compatability
+    // TODO: Remove this if {} and the `mut` from `let mut balance_com`
+    if network == Network::Rinkeby && balance_com == BigUint::zero() {
+        balance_com = acc_info
+            .committed
+            .balances
+            .get(ZKSYNC_TOKEN_NAME)
+            .map(|x| x.0.clone())
+            .unwrap_or(BigUint::zero());
+    }
     let balance = utils::big_uint_to_big_dec(balance_com);
-    log::debug!("account_balance. address={}, balance={}", address, &balance);
+    log::debug!("account_balance. address={}, network={}, balance={}", address, &network, &balance);
     Ok(balance)
 }
 
@@ -52,13 +63,16 @@ pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
         if network != Network::Mainnet {
             faucet::request_ngnt(&address, network).await?;
         }
-        get_wallet(&address, network).and_then(unlock_wallet).await?;
+        let wallet = get_wallet(&address, network).await?;
+        unlock_wallet(wallet, network).await?;
     }
     Ok(())
 }
 
 pub async fn exit(msg: &Exit) -> Result<String, GenericError> {
-    let wallet = get_wallet(&msg.sender()).await?;
+    let network = msg.network().unwrap_or(DEFAULT_NETWORK.to_string());
+    let network = Network::from_str(&network).map_err(|e| GenericError::new(e))?;
+    let wallet = get_wallet(&msg.sender(), network).await?;
     let tx_handle = withdraw(wallet, msg.amount(), msg.to()).await?;
     let tx_info = tx_handle
         .wait_for_commit()
@@ -100,16 +114,19 @@ pub async fn get_nonce(address: &str, network: Network) -> u32 {
     account_info.committed.nonce
 }
 
-pub async fn make_transfer(details: &PaymentDetails, nonce: u32) -> Result<String, GenericError> {
+pub async fn make_transfer(details: &PaymentDetails, nonce: u32, network: Network) -> Result<String, GenericError> {
     log::debug!("make_transfer. {:?}", details);
     let amount = details.amount.clone();
     let amount = utils::big_dec_to_big_uint(amount)?;
     let amount = utils::pack_up(&amount);
 
     let sender = details.sender.clone();
-    let (network, token) = platform_to_network_token(details.platform.clone())?;
-
     let wallet = get_wallet(&sender, network).await?;
+    let mut token = get_network_token(network, None);
+    // TODO Investiggate and fix tGLM ticker name on rinkeby
+    if token == "tGLM" {
+        token = ZKSYNC_TOKEN_NAME.to_string();
+    }
 
     let balance = wallet
         .get_balance(BlockStatus::Committed, token.as_ref())
@@ -119,10 +136,10 @@ pub async fn make_transfer(details: &PaymentDetails, nonce: u32) -> Result<Strin
 
     let transfer = wallet
         .start_transfer()
-        // .nonce(nonce) Nonce disabled for multi network
+        .nonce(nonce)
         .str_to(&details.recipient[2..])
         .map_err(GenericError::new)?
-        .token(ZKSYNC_TOKEN_NAME)
+        .token(token.as_ref()) // TODO: use `token`
         .map_err(GenericError::new)?
         .amount(amount)
         .send()
@@ -183,7 +200,7 @@ fn get_zk_network(network: Network) -> ZkNetwork {
     ZkNetwork::from_str(&network.to_string()).unwrap() // _or(ZkNetwork::Rinkeby)
 }
 
-async fn unlock_wallet<S: EthereumSigner + Clone>(wallet: Wallet<S>) -> Result<(), GenericError> {
+async fn unlock_wallet<S: EthereumSigner + Clone>(wallet: Wallet<S>, network: Network) -> Result<(), GenericError> {
     log::debug!("unlock_wallet");
     if !wallet
         .is_signing_key_set()
@@ -191,9 +208,14 @@ async fn unlock_wallet<S: EthereumSigner + Clone>(wallet: Wallet<S>) -> Result<(
         .map_err(GenericError::new)?
     {
         log::info!("Unlocking wallet... address = {}", wallet.signer.address);
+        let mut token = get_network_token(network, None);
+        // TODO Investiggate and fix tGLM ticker name on rinkeby
+        if token == "tGLM" {
+            token = ZKSYNC_TOKEN_NAME.to_string();
+        }
         let unlock = wallet
             .start_change_pubkey()
-            .fee_token(ZKSYNC_TOKEN_NAME)
+            .fee_token(token.as_ref())
             .map_err(GenericError::new)?
             .send()
             .await

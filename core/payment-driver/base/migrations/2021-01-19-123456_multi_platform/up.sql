@@ -1,2 +1,2 @@
 
-ALTER TABLE `payment` ADD COLUMN platform VARCHAR(64) NOT NULL DEFAULT "zksync-rinkeby-tglm";
+ALTER TABLE payment ADD COLUMN network INTEGER NOT NULL DEFAULT 4;  -- 4 is rinkeby's network ID
