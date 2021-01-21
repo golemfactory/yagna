@@ -85,14 +85,9 @@ where
         async move {
             while let Some(event) = rx.next().await {
                 log::debug!("event: {:?}", event);
-                tokio::task::spawn_local({
-                    let output = output.clone();
-                    async move {
-                        let mut output = output.lock().await;
-                        let r = SinkExt::send(&mut *output, event).await;
-                        log::debug!("sending event done: {:?}", r);
-                    }
-                });
+                let mut output = output.lock().await;
+                let r = SinkExt::send(&mut *output, event).await;
+                log::debug!("sending event done: {:?}", r);
             }
         }
     });
