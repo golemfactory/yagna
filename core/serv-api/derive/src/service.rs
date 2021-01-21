@@ -3,7 +3,7 @@ use proc_macro2::{Ident, Span};
 use quote::ToTokens;
 use std::collections::HashSet;
 use std::convert::TryFrom;
-use syn::export::Formatter;
+use std::fmt::Formatter;
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::{

@@ -22,7 +22,8 @@ use crate::db::{
         Proposal, ProposalId, ProposalState, SubscriptionId,
     },
 };
-use crate::matcher::store::SubscriptionStore;
+use crate::matcher::{store::SubscriptionStore, RawProposal};
+use crate::negotiation::error::RegenerateProposalError;
 use crate::negotiation::error::{NegotiationError, ProposalValidationError};
 use crate::negotiation::{
     error::{
@@ -331,25 +332,23 @@ impl CommonBroker {
     pub async fn terminate_agreement(
         &self,
         id: Identity,
-        agreement_id: AgreementId,
+        client_agreement_id: String,
         reason: Option<Reason>,
     ) -> Result<(), AgreementError> {
         let dao = self.db.as_dao::<AgreementDao>();
         let agreement = match dao
             .select_by_node(
-                agreement_id.clone(),
+                &client_agreement_id,
                 id.identity.clone(),
                 Utc::now().naive_utc(),
             )
             .await
-            .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
+            .map_err(|e| AgreementError::Get(client_agreement_id.clone(), e))?
         {
-            None => return Err(AgreementError::NotFound(agreement_id)),
+            None => return Err(AgreementError::NotFound(client_agreement_id)),
             Some(agreement) => agreement,
         };
 
-        // From now on agreement_id is invalid. Use only agreement.id
-        // (which has valid owner)
         validate_transition(&agreement, AgreementState::Terminated)?;
 
         protocol_common::propagate_terminate_agreement(&agreement, reason.clone()).await?;
@@ -369,6 +368,23 @@ impl CommonBroker {
             &agreement.id,
             reason.display(),
         );
+
+        // If we are Requestor we would like to be able to negotiate with the same
+        // provider for the second time, so we must generate new Proposal for him.
+        // Note: Regeneration failure isn't propagated to Requestor, because termination
+        // succeeded at this point.
+        if let Owner::Requestor = agreement.id.owner() {
+            self.regenerate_proposal(&agreement)
+                .await
+                .map_err(|e| {
+                    log::warn!(
+                        "Failed to regenerate Proposal after Agreement [{}] termination. {}",
+                        &agreement.id,
+                        e
+                    )
+                })
+                .ok();
+        }
         Ok(())
     }
 
@@ -437,6 +453,24 @@ impl CommonBroker {
             &caller_id,
             msg.reason.display(),
         );
+        // If we are Requestor we would like to be able to negotiate with the same
+        // provider for the second time, so we must generate new Proposal for him.
+        // Note: Regeneration failure isn't propagated to Provider, because termination
+        // succeeded at this point.
+        if let Owner::Requestor = agreement.id.owner() {
+            tokio::task::spawn_local(async move {
+                self.regenerate_proposal(&agreement)
+                    .await
+                    .map_err(|e| {
+                        log::warn!(
+                            "Failed to regenerate Proposal after Agreement [{}] termination. {}",
+                            &agreement.id,
+                            e
+                        )
+                    })
+                    .ok();
+            });
+        }
         Ok(())
     }
 
@@ -630,6 +664,48 @@ impl CommonBroker {
 
         // This notifies wait_for_agreement endpoint.
         self.agreement_notifier.notify(&agreement.id).await;
+    }
+
+    pub async fn generate_proposal(&self, proposal: RawProposal) -> Result<(), SaveProposalError> {
+        let db = self.db.clone();
+        let notifier = self.negotiation_notifier.clone();
+
+        // Add proposal to database together with Negotiation record.
+        let proposal = Proposal::new_requestor(proposal.demand, proposal.offer);
+        let proposal = db
+            .as_dao::<ProposalDao>()
+            .save_initial_proposal(proposal)
+            .await?;
+
+        log::info!(
+            "New Proposal [{}] (Offer [{}], Demand [{}])",
+            proposal.body.id,
+            proposal.negotiation.offer_id,
+            proposal.negotiation.demand_id
+        );
+
+        // Create Proposal Event and add it to queue (database).
+        let subscription_id = proposal.negotiation.subscription_id.clone();
+        db.as_dao::<NegotiationEventsDao>()
+            .add_proposal_event(&proposal, Owner::Requestor)
+            .await?;
+
+        // Send channel message to wake all query_events waiting for proposals.
+        counter!("market.proposals.requestor.generated", 1);
+        notifier.notify(&subscription_id).await;
+        Ok(())
+    }
+
+    pub async fn regenerate_proposal(
+        &self,
+        agreement: &Agreement,
+    ) -> Result<(), RegenerateProposalError> {
+        let demand = self.store.get_demand(&agreement.demand_id).await?;
+        let offer = self.store.get_offer(&agreement.offer_id).await?;
+
+        self.generate_proposal(RawProposal { demand, offer })
+            .await?;
+        Ok(())
     }
 }
 

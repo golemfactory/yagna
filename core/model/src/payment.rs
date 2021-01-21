@@ -21,6 +21,7 @@ pub mod local {
     use crate::driver::{AccountMode, PaymentConfirmation};
     use bigdecimal::{BigDecimal, Zero};
     use chrono::{DateTime, Utc};
+    use std::collections::HashMap;
     use std::fmt::Display;
     use ya_client_model::NodeId;
 
@@ -130,16 +131,36 @@ pub mod local {
     pub struct NoError {} // This is needed because () doesn't implement Display
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct Network {
+        pub default_token: String,
+        pub tokens: HashMap<String, String>, // token -> platform
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct DriverDetails {
+        pub default_network: String,
+        pub networks: HashMap<String, Network>,
+        pub recv_init_required: bool, // Is account initialization required for receiving payments
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct RegisterDriver {
         pub driver_name: String,
-        pub platform: String,
-        pub recv_init_required: bool, // Is account initialization required for receiving payments
+        pub details: DriverDetails,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
+    pub enum RegisterDriverError {
+        #[error("Invalid default token specified: token={0}, network={1}")]
+        InvalidDefaultToken(String, String),
+        #[error("Invalid default network specified: {0}")]
+        InvalidDefaultNetwork(String),
     }
 
     impl RpcMessage for RegisterDriver {
         const ID: &'static str = "RegisterDriver";
         type Item = ();
-        type Error = NoError;
+        type Error = RegisterDriverError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -153,9 +174,10 @@ pub mod local {
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct RegisterAccount {
-        pub platform: String,
         pub address: String,
         pub driver: String,
+        pub network: String,
+        pub token: String,
         pub mode: AccountMode,
     }
 
@@ -165,6 +187,10 @@ pub mod local {
         AlreadyRegistered(String, String),
         #[error("Driver not registered: {0}")]
         DriverNotRegistered(String),
+        #[error("Network not supported by driver: network={0}, driver={1}")]
+        UnsupportedNetwork(String, String),
+        #[error("Token not supported by driver: token={0}, network={1}, driver={2}")]
+        UnsupportedToken(String, String, String),
         #[error("Error while registering account: {0}")]
         Other(String),
     }
@@ -190,6 +216,7 @@ pub mod local {
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct NotifyPayment {
         pub driver: String,
+        pub platform: String,
         pub amount: BigDecimal,
         pub sender: String,
         pub recipient: String,
@@ -286,15 +313,6 @@ pub mod local {
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct GetAccounts {}
-
-    #[derive(Clone, Debug, Serialize, Deserialize)]
-    pub struct Account {
-        pub platform: String,
-        pub address: String,
-        pub driver: String,
-        pub send: bool,
-        pub receive: bool,
-    }
 
     impl RpcMessage for GetAccounts {
         const ID: &'static str = "GetAccounts";
