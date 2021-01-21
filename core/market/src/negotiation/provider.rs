@@ -213,9 +213,9 @@ impl ProviderBroker {
         let agreement = match dao
             .select(agreement_id, None, Utc::now().naive_utc())
             .await
-            .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
+            .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
         {
-            None => Err(AgreementError::NotFound(agreement_id.clone()))?,
+            None => Err(AgreementError::NotFound(agreement_id.to_string()))?,
             Some(agreement) => agreement,
         };
 

@@ -59,8 +59,8 @@ lazy_static = "1.4"
 log = "0.4"
 openssl = "0.10"
 structopt = "0.3"
-url = "2.1.1"
 tokio = {version = "0.2.22", features=["uds"]}
+url = "2.1.1"
 
 [package.metadata.deb]
 name="golem-requestor"

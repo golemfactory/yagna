@@ -17,6 +17,7 @@ pub mod processor;
 pub mod schema;
 pub mod service;
 pub mod utils;
+mod wallet;
 
 pub mod migrations {
     #[derive(diesel_migrations::EmbedMigrations)]
