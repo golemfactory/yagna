@@ -152,12 +152,9 @@ pub async fn run(args: StatusCommand) -> Result</*exit code*/ i32> {
                 .fg(Colour::Yellow)
                 .underline()
                 .paint("Wallet")]);
+            let account = config.account.map(|a| a.address).unwrap_or(id.node_id);
+            table.add_row(row![H2->Style::new().fg(Colour::Fixed(63)).paint(&account)]);
             table.add_empty_row();
-            if let Some(account) = &config.account {
-                table.add_row(row!["address", &account.address]);
-            } else {
-                table.add_row(row!["address", &id.node_id]);
-            }
             table.add_row(row![
                 "network",
                 Style::new().fg(Colour::Purple).paint(&args.network)
