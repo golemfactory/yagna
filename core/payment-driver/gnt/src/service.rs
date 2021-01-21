@@ -1,3 +1,4 @@
+use crate::gnt::ethereum::{MAINNET_NAME, MAINNET_TOKEN};
 use crate::processor::GNTDriverProcessor;
 use crate::{DEFAULT_NETWORK, DEFAULT_TOKEN, DRIVER_NAME};
 use bigdecimal::BigDecimal;
@@ -34,17 +35,27 @@ pub async fn subscribe_to_identity_events() -> anyhow::Result<()> {
 
 pub async fn register_in_payment_service() -> anyhow::Result<()> {
     log::debug!("Registering driver in payment service...");
-    let default_platform = Platform {
-        driver: DRIVER_NAME.to_string(),
-        network: DEFAULT_NETWORK.to_string(),
-        token: DEFAULT_TOKEN.to_string(),
-    };
-    let networks = hashmap! {  // TODO: Implement multi-network support
+    let networks = hashmap! {
         DEFAULT_NETWORK.to_string() => payment_srv::Network {
             name: DEFAULT_NETWORK.to_string(),
             default_token: DEFAULT_TOKEN.to_string(),
             tokens: hashmap! {
-                DEFAULT_TOKEN.to_string().to_lowercase() => default_platform
+                DEFAULT_TOKEN.to_lowercase() => Platform {
+                    driver: DRIVER_NAME.to_string(),
+                    network: DEFAULT_NETWORK.to_string(),
+                    token: DEFAULT_TOKEN.to_string(),
+                }
+            }
+        },
+        MAINNET_NAME.to_string() => payment_srv::Network {
+            name: MAINNET_NAME.to_string(),
+            default_token: MAINNET_TOKEN.to_string(),
+            tokens: hashmap! {
+                MAINNET_TOKEN.to_lowercase() => Platform {
+                    driver: DRIVER_NAME.to_string(),
+                    network: MAINNET_NAME.to_string(),
+                    token: MAINNET_TOKEN.to_string(),
+                }
             }
         }
     };
@@ -70,11 +81,8 @@ async fn init(
 ) -> Result<Ack, GenericError> {
     log::info!("init: {:?}", msg);
 
-    let address = msg.address();
-    let mode = msg.mode();
-
     processor
-        .init(mode, address.as_str())
+        .init(msg)
         .await
         .map_or_else(|e| Err(GenericError::new(e)), |()| Ok(Ack {}))
 }

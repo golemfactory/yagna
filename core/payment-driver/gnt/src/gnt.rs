@@ -4,13 +4,11 @@ pub mod ethereum;
 pub mod faucet;
 pub mod sender;
 
-use crate::{
-    GNTDriverError, GNTDriverResult, DEFAULT_NETWORK, DEFAULT_PLATFORM, DEFAULT_TOKEN, DRIVER_NAME,
-};
+use crate::{GNTDriverError, GNTDriverResult, DEFAULT_PLATFORM, DRIVER_NAME};
 use bigdecimal::BigDecimal;
 use std::future::Future;
 use std::pin::Pin;
-use ya_core_model::driver::{AccountMode, PaymentConfirmation};
+use ya_core_model::driver::{Init, PaymentConfirmation};
 use ya_core_model::payment::local as payment;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -41,18 +39,28 @@ pub(crate) async fn notify_payment(
         .map_err(|e| GNTDriverError::LibraryError(e.to_string()))
 }
 
-pub(crate) async fn register_account(address: String, mode: AccountMode) -> GNTDriverResult<()> {
-    log::info!("Register account: {}, mode: {:?}", address, mode);
+pub(crate) async fn register_account(init: Init) -> GNTDriverResult<()> {
+    log::info!("Register account: {:?}", init);
     let msg = payment::RegisterAccount {
-        address,
+        address: init.address,
         driver: DRIVER_NAME.to_string(),
-        network: DEFAULT_NETWORK.to_string(), // TODO: Implement multi-network support
-        token: DEFAULT_TOKEN.to_string(),     // TODO: Implement multi-network support
-        mode,
+        network: init.network,
+        token: init.token,
+        mode: init.mode,
     };
-    bus::service(payment::BUS_ID)
-        .send(msg)
+    let platform = bus::service(payment::BUS_ID)
+        .send(msg.clone())
         .await
         .map_err(|e| GNTDriverError::GSBError(e.to_string()))?
-        .map_err(|e| GNTDriverError::LibraryError(e.to_string()))
+        .map_err(|e| GNTDriverError::LibraryError(e.to_string()))?;
+
+    log::info!(
+        "Initialised payment account. mode={:?}, address={}, driver={}, network={}, token={}",
+        msg.mode,
+        msg.address,
+        msg.driver,
+        platform.network,
+        platform.token
+    );
+    Ok(())
 }

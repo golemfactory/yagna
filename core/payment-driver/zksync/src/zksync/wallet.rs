@@ -59,14 +59,12 @@ pub async fn account_balance(address: &str) -> Result<BigDecimal, GenericError> 
 
 pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
     log::debug!("init_wallet. network={}, msg={:?}", *NETWORK, msg);
-    let mode = msg.mode();
-    let address = msg.address().clone();
 
-    if mode.contains(AccountMode::SEND) {
+    if msg.mode.contains(AccountMode::SEND) {
         if *NETWORK != Network::Mainnet {
-            faucet::request_ngnt(&address).await?;
+            faucet::request_ngnt(&msg.address).await?;
         }
-        get_wallet(&address).and_then(unlock_wallet).await?;
+        get_wallet(&msg.address).and_then(unlock_wallet).await?;
     }
     Ok(())
 }

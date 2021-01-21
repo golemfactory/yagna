@@ -60,9 +60,7 @@ async fn validate_orders(
 
 #[derive(Clone, Debug)]
 struct AccountDetails {
-    pub driver: String,
-    pub network: String,
-    pub token: String,
+    pub platform: Platform,
     pub mode: AccountMode,
 }
 
@@ -125,27 +123,18 @@ impl DriverRegistry {
             }
         }
         self.accounts
-            .retain(|_, details| details.driver != driver_name);
+            .retain(|_, details| details.platform.driver != driver_name);
     }
 
-    pub fn register_account(&mut self, msg: RegisterAccount) -> Result<(), RegisterAccountError> {
-        let driver_details = match self.drivers.get(&msg.driver) {
-            None => return Err(RegisterAccountError::DriverNotRegistered(msg.driver)),
-            Some(details) => details,
-        };
-        let network = match driver_details.networks.get(&msg.network) {
-            None => {
-                return Err(RegisterAccountError::UnsupportedNetwork(
-                    msg.network,
-                    msg.driver,
-                ))
-            }
-            Some(network) => network,
-        };
-        let platform = match network.tokens.get(&msg.token.to_lowercase()) {
-            None => return Err(RegisterAccountError::UnsupportedPlatform(msg.into())),
-            Some(platform) => platform.clone(),
-        };
+    pub fn register_account(
+        &mut self,
+        msg: RegisterAccount,
+    ) -> Result<Platform, RegisterAccountError> {
+        let platform = self.get_platform(
+            Some(&msg.driver),
+            msg.network.as_deref(),
+            msg.token.as_deref(),
+        )?;
 
         match self
             .accounts
@@ -153,24 +142,22 @@ impl DriverRegistry {
         {
             Entry::Occupied(mut entry) => {
                 let details = entry.get_mut();
-                if details.driver != msg.driver {
+                if details.platform.driver != msg.driver {
                     return Err(RegisterAccountError::AlreadyRegistered(
                         msg.address,
-                        details.driver.to_string(),
+                        details.platform.driver.to_string(),
                     ));
                 }
                 details.mode |= msg.mode;
             }
             Entry::Vacant(entry) => {
                 entry.insert(AccountDetails {
-                    driver: msg.driver,
-                    network: msg.network,
-                    token: msg.token,
+                    platform: platform.clone(),
                     mode: msg.mode,
                 });
             }
         };
-        Ok(())
+        Ok(platform)
     }
 
     pub fn unregister_account(&mut self, msg: UnregisterAccount) {
@@ -183,9 +170,9 @@ impl DriverRegistry {
             .map(|((platform, address), details)| Account {
                 platform: platform.clone(),
                 address: address.clone(),
-                driver: details.driver.clone(),
-                network: details.network.clone(),
-                token: details.token.clone(),
+                driver: details.platform.driver.clone(),
+                network: details.platform.network.clone(),
+                token: details.platform.token.clone(),
                 send: details.mode.contains(AccountMode::SEND),
                 receive: details.mode.contains(AccountMode::RECV),
             })
@@ -245,7 +232,7 @@ impl DriverRegistry {
             .get(&(platform.to_owned(), address.to_owned()))
         {
             if details.mode.contains(mode) {
-                return Ok(details.driver.clone());
+                return Ok(details.platform.driver.clone());
             }
         }
 
@@ -287,7 +274,10 @@ impl PaymentProcessor {
         self.registry.lock().await.unregister_driver(msg)
     }
 
-    pub async fn register_account(&self, msg: RegisterAccount) -> Result<(), RegisterAccountError> {
+    pub async fn register_account(
+        &self,
+        msg: RegisterAccount,
+    ) -> Result<Platform, RegisterAccountError> {
         self.registry.lock().await.register_account(msg)
     }
 

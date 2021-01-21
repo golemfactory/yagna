@@ -13,8 +13,10 @@ use web3::Web3;
 const MAINNET_ID: u64 = 1;
 const RINKEBY_ID: u64 = 4;
 
-const MAINNET_NAME: &str = "mainnet";
-const RINKEBY_NAME: &str = "rinkeby";
+pub(crate) const MAINNET_NAME: &str = "mainnet";
+pub(crate) const MAINNET_TOKEN: &str = "GLM";
+pub(crate) const RINKEBY_NAME: &str = "rinkeby";
+pub(crate) const RINKEBY_TOKEN: &str = "tGLM";
 
 const CHAIN_ENV_VAR: &str = "CHAIN";
 const GETH_ADDRESS_ENV_VAR: &str = "GETH_ADDRESS";

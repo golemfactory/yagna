@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use ya_client_model::payment::Allocation;
 use ya_client_model::NodeId;
-use ya_core_model::driver::{AccountMode, PaymentConfirmation, PaymentDetails};
+use ya_core_model::driver::{Init, PaymentConfirmation, PaymentDetails};
 
 #[derive(Clone)]
 pub struct GNTDriverProcessor {
@@ -27,8 +27,8 @@ impl GNTDriverProcessor {
         self.driver.account_unlocked(identity).await
     }
 
-    pub async fn init(&self, mode: AccountMode, address: &str) -> GNTDriverResult<()> {
-        self.driver.init(mode, address).await
+    pub async fn init(&self, init: Init) -> GNTDriverResult<()> {
+        self.driver.init(init).await
     }
 
     pub async fn get_account_balance(&self, address: &str) -> GNTDriverResult<BigDecimal> {

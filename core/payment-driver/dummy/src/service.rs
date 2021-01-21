@@ -57,15 +57,12 @@ pub async fn register_in_payment_service() -> anyhow::Result<()> {
 async fn init(_db: (), _caller: String, msg: Init) -> Result<Ack, GenericError> {
     log::info!("init: {:?}", msg);
 
-    let address = msg.address();
-    let mode = msg.mode();
-
     let msg = payment_srv::RegisterAccount {
-        address,
+        address: msg.address,
         driver: DRIVER_NAME.to_string(),
-        network: NETWORK_NAME.to_string(),
-        token: TOKEN_NAME.to_string(),
-        mode,
+        network: Some(NETWORK_NAME.to_string()),
+        token: Some(TOKEN_NAME.to_string()),
+        mode: msg.mode,
     };
     bus::service(payment_srv::BUS_ID)
         .send(msg)

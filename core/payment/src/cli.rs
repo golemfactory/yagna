@@ -10,11 +10,11 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 #[derive(StructOpt, Debug)]
 pub enum PaymentCli {
     Init {
-        address: Option<String>,
+        account: Option<String>,
+        #[structopt(long)]
+        sender: bool,
         #[structopt(long, short)]
-        requestor: bool,
-        #[structopt(long, short)]
-        provider: bool,
+        receiver: bool,
         #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
         driver: String,
         #[structopt(long)]
@@ -32,7 +32,7 @@ pub enum PaymentCli {
     },
     Accounts,
     Invoice {
-        address: Option<String>,
+        account: Option<String>,
         #[structopt(subcommand)]
         command: InvoiceCommand,
     },
@@ -50,21 +50,21 @@ impl PaymentCli {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
             PaymentCli::Init {
-                address,
+                account,
                 driver,
                 network,
-                requestor,
-                provider,
+                sender,
+                receiver,
             } => {
-                let address = resolve_address(address).await?;
+                let address = resolve_address(account).await?;
                 let driver = driver.to_lowercase();
                 let account = Account {
                     driver,
                     address,
                     network,
                     token: None, // Use default -- we don't yet support other tokens than GLM
-                    send: requestor,
-                    receive: provider,
+                    send: sender,
+                    receive: receiver,
                 };
                 init_account(account).await?;
                 Ok(CommandOutput::NoOutput)
@@ -82,7 +82,7 @@ impl PaymentCli {
                         platform,
                         driver: Some(driver),
                         network,
-                        token: None,
+                        token: None, // Use default -- we don't yet support other tokens than GLM
                     })
                     .await??;
                 if ctx.json_output {
@@ -155,11 +155,11 @@ impl PaymentCli {
                 .into())
             }
             PaymentCli::Invoice {
-                address,
+                account,
                 command: InvoiceCommand::Status { last },
             } => {
                 let seconds = last.map(|d| d.as_secs() as i64).unwrap_or(3600);
-                let address = resolve_address(address).await?;
+                let address = resolve_address(account).await?;
                 CommandOutput::object(
                     bus::service(pay::BUS_ID)
                         .call(pay::GetInvoiceStats::new(
