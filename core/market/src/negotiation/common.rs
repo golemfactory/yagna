@@ -18,8 +18,8 @@ use crate::db::{
         TakeEventsError,
     },
     model::{
-        Agreement, AgreementEvent, AgreementId, AgreementState, AppSessionId, Issuer, MarketEvent,
-        Owner, Proposal, ProposalId, ProposalState, SubscriptionId,
+        Agreement, AgreementEvent, AgreementId, AgreementState, AppSessionId, MarketEvent, Owner,
+        Proposal, ProposalId, ProposalState, SubscriptionId,
     },
 };
 use crate::matcher::{store::SubscriptionStore, RawProposal};
@@ -119,12 +119,6 @@ impl CommonBroker {
         self.validate_proposal(&prev_proposal, caller_id, caller_role)
             .await?;
 
-        if prev_proposal.body.issuer == Issuer::Us {
-            Err(ProposalValidationError::OwnProposal(
-                prev_proposal.body.id.clone(),
-            ))?;
-        }
-
         let is_first = prev_proposal.body.prev_proposal_id.is_none();
         let new_proposal = prev_proposal.from_client(proposal)?;
 
@@ -155,12 +149,6 @@ impl CommonBroker {
 
         self.validate_proposal(&proposal, caller_id, caller_role)
             .await?;
-
-        if proposal.body.issuer == Issuer::Us && proposal_id.owner() == caller_role {
-            let e = ProposalValidationError::OwnProposal(proposal.body.id.clone());
-            log::warn!("{}", e);
-            Err(e)?;
-        }
 
         self.db
             .as_dao::<ProposalDao>()
@@ -647,6 +635,13 @@ impl CommonBroker {
             Owner::Requestor => &proposal.negotiation.requestor_id != caller_id,
         } {
             ProposalValidationError::Unauthorized(proposal.body.id.clone(), caller_id.clone());
+        }
+
+        if &proposal.issuer() == caller_id {
+            let e = ProposalValidationError::OwnProposal(proposal.body.id.clone());
+            log::warn!("{}", e);
+            counter!("market.proposals.self-reaction-attempt", 1);
+            Err(e)?;
         }
 
         // check Offer
