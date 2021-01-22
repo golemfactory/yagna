@@ -95,7 +95,7 @@ fn get_current_release(conn: &ConnType) -> anyhow::Result<Option<DBRelease>> {
 fn get_pending_release(conn: &ConnType) -> anyhow::Result<Option<DBRelease>> {
     let query = version_release
         .filter(release::seen.eq(false))
-        .order(release::release_ts.desc())
+        .order((release::release_ts.desc(), release::version.desc()))
         .into_boxed();
 
     match query.first::<DBRelease>(conn).optional()? {
