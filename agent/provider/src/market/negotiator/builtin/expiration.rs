@@ -152,3 +152,200 @@ impl NegotiatorComponent for LimitExpiration {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test_expiration_negotiator {
+    use super::*;
+    use ya_agreement_utils::agreement::expand;
+    use ya_agreement_utils::{InfNodeInfo, NodeInfo, OfferTemplate, ServiceInfo};
+
+    fn expiration_config() -> AgreementExpirationNegotiatorConfig {
+        AgreementExpirationNegotiatorConfig {
+            min_agreement_expiration: std::time::Duration::from_secs(5 * 60),
+            max_agreement_expiration: std::time::Duration::from_secs(30 * 60),
+            max_agreement_expiration_without_deadline: std::time::Duration::from_secs(10 * 60),
+            debit_note_acceptance_deadline: std::time::Duration::from_secs(120),
+        }
+    }
+
+    fn properties_to_proposal(value: serde_json::Value) -> ProposalView {
+        ProposalView {
+            id: "2332850934yer".to_string(),
+            json: expand(value),
+        }
+    }
+
+    fn example_offer() -> OfferDefinition {
+        OfferDefinition {
+            node_info: NodeInfo::with_name("nanana"),
+            srv_info: ServiceInfo::new(InfNodeInfo::default(), serde_json::Value::Null),
+            com_info: Default::default(),
+            offer: OfferTemplate::default(),
+        }
+    }
+
+    trait ToProposal {
+        fn to_proposal(self) -> ProposalView;
+    }
+
+    impl ToProposal for OfferDefinition {
+        fn to_proposal(self) -> ProposalView {
+            ProposalView {
+                id: "sagdshgdfgd".to_string(),
+                json: expand(self.into_json()),
+            }
+        }
+    }
+
+    /// Negotiator accepts lower deadline (which is better for him) and
+    /// adjusts his property to match Requestor's.
+    /// Provider should use `max_agreement_expiration` value, when checking expiration.
+    #[test]
+    fn test_lower_deadline() {
+        let config = expiration_config();
+        let mut negotiator = LimitExpiration::new(&config).unwrap();
+
+        let offer_proposal = negotiator
+            .fill_template(example_offer())
+            .unwrap()
+            .to_proposal();
+
+        let proposal = properties_to_proposal(serde_json::json!({
+            "golem.srv.comp.expiration": (Utc::now() + Duration::minutes(15)).timestamp_millis(),
+            "golem.com.payment.debit-notes.acceptance-deadline": 50,
+        }));
+
+        match negotiator
+            .negotiate_step(&proposal, offer_proposal)
+            .unwrap()
+        {
+            // Negotiator is expected to take better proposal and change adjust property.
+            NegotiationResult::Negotiating { offer } => {
+                assert_eq!(
+                    debit_deadline_from(&offer).unwrap().unwrap(),
+                    Duration::seconds(50)
+                )
+            }
+            result => panic!("Expected NegotiationResult::Negotiating. Got: {:?}", result),
+        }
+    }
+
+    /// Negotiator rejects Proposals with deadline greater than he expects.
+    #[test]
+    fn test_greater_deadline() {
+        let config = expiration_config();
+        let mut negotiator = LimitExpiration::new(&config).unwrap();
+
+        let offer_proposal = negotiator
+            .fill_template(example_offer())
+            .unwrap()
+            .to_proposal();
+
+        let proposal = properties_to_proposal(serde_json::json!({
+            "golem.srv.comp.expiration": (Utc::now() + Duration::minutes(7)).timestamp_millis(),
+            "golem.com.payment.debit-notes.acceptance-deadline": 130,
+        }));
+
+        match negotiator
+            .negotiate_step(&proposal, offer_proposal)
+            .unwrap()
+        {
+            NegotiationResult::Reject { reason } => {
+                assert!(reason
+                    .unwrap()
+                    .message
+                    .contains("DebitNote acceptance deadline should be less than"))
+            }
+            result => panic!("Expected NegotiationResult::Reject. Got: {:?}", result),
+        }
+    }
+
+    /// Negotiator accepts the same deadline property. Negotiation is ready
+    /// to create Agreement from this Proposal.
+    #[test]
+    fn test_equal_deadline() {
+        let config = expiration_config();
+        let mut negotiator = LimitExpiration::new(&config).unwrap();
+
+        let offer_proposal = negotiator
+            .fill_template(example_offer())
+            .unwrap()
+            .to_proposal();
+
+        let proposal = properties_to_proposal(serde_json::json!({
+            "golem.srv.comp.expiration": (Utc::now() + Duration::minutes(7)).timestamp_millis(),
+            "golem.com.payment.debit-notes.acceptance-deadline": 120,
+        }));
+
+        match negotiator
+            .negotiate_step(&proposal, offer_proposal)
+            .unwrap()
+        {
+            NegotiationResult::Ready { offer } => {
+                assert_eq!(
+                    debit_deadline_from(&offer).unwrap().unwrap(),
+                    Duration::seconds(120)
+                )
+            }
+            result => panic!("Expected NegotiationResult::Ready. Got: {:?}", result),
+        }
+    }
+
+    /// Requestor doesn't declare that he is able to accept DebitNotes, but demands
+    /// to high expirations time.
+    /// Provider should use `max_agreement_expiration_without_deadline` config
+    /// value for expiration in this case and reject Proposal.
+    #[test]
+    fn test_requestor_doesnt_accept_debit_notes_to_high_expiration() {
+        let config = expiration_config();
+        let mut negotiator = LimitExpiration::new(&config).unwrap();
+
+        let offer_proposal = negotiator
+            .fill_template(example_offer())
+            .unwrap()
+            .to_proposal();
+
+        let proposal = properties_to_proposal(serde_json::json!({
+            "golem.srv.comp.expiration": (Utc::now() + Duration::minutes(15)).timestamp_millis(),
+        }));
+
+        match negotiator
+            .negotiate_step(&proposal, offer_proposal)
+            .unwrap()
+        {
+            NegotiationResult::Reject { reason } => {
+                assert!(reason.unwrap().message.contains("Proposal expires at"))
+            }
+            result => panic!("Expected NegotiationResult::Reject. Got: {:?}", result),
+        }
+    }
+
+    /// Requestor isn't able to accept DebitNotes, but he sets expirations below
+    /// Provider's limit.
+    /// Property related to DebitNotes deadline should be removed. Provider should
+    /// return Negotiating state, because he had to remove property.
+    #[test]
+    fn test_requestor_doesnt_accept_debit_notes_expiration_ok() {
+        let config = expiration_config();
+        let mut negotiator = LimitExpiration::new(&config).unwrap();
+
+        let offer_proposal = negotiator
+            .fill_template(example_offer())
+            .unwrap()
+            .to_proposal();
+
+        let proposal = properties_to_proposal(serde_json::json!({
+            "golem.srv.comp.expiration": (Utc::now() + Duration::minutes(7)).timestamp_millis(),
+        }));
+
+        match negotiator
+            .negotiate_step(&proposal, offer_proposal)
+            .unwrap()
+        {
+            NegotiationResult::Negotiating { offer } => {
+                assert!(debit_deadline_from(&offer).unwrap().is_none())
+            }
+            result => panic!("Expected NegotiationResult::Negotiating. Got: {:?}", result),
+        }
+    }
+}

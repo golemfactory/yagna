@@ -13,7 +13,7 @@ const DEFAULT_FORMAT: &str = "json";
 //  - 2 fields for parsed properties (demand, offer)
 //  - other fields for agreement remain typed.
 // TODO: Move to ya-client to make it available for third party developers.
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AgreementView {
     pub json: Value,
     pub id: String,

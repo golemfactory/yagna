@@ -1,4 +1,5 @@
 use anyhow::anyhow;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use ya_agreement_utils::{AgreementView, OfferDefinition};
@@ -9,6 +10,7 @@ use crate::market::negotiator::AgreementResult;
 pub type ProposalView = AgreementView;
 
 /// Result returned by `NegotiatorComponent` during Proposals evaluation.
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum NegotiationResult {
     /// `NegotiatorComponent` fully negotiated his part of Proposal,
     /// and it can be turned into valid Agreement. Provider will send
