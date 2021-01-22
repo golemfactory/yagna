@@ -173,7 +173,7 @@ impl<R: Runtime> Handler<Initialize> for ExeUnit<R> {
 
     #[cfg(not(feature = "sgx"))]
     fn handle(&mut self, _: Initialize, _: &mut Context<Self>) -> Self::Result {
-        Box::new(futures::future::ok(()).into_actor(self))
+        Box::pin(futures::future::ok(()).into_actor(self))
     }
 }
 

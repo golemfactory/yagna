@@ -18,7 +18,7 @@ msgpack = ["rmp-serde"]
 ya-sb-proto = { version = "0.1", path="../proto" }
 ya-sb-util = { version = "0.1", path="../util", features=["with-futures"] }
 
-actix = { version = "0.9", default-features = false }
+actix = { version = "0.10", default-features = false }
 futures = "0.3"
 lazy_static = "1.4"
 log = "0.4"
