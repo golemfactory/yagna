@@ -77,8 +77,7 @@ pub(crate) async fn worker(db: DbExecutor) {
 
 pub(crate) async fn pinger(db: DbExecutor) -> ! {
     // TODO: make interval configurable
-    // TODO: after test make it 30min instead 30sec
-    let mut interval = tokio::time::interval(Duration::from_secs(30));
+    let mut interval = tokio::time::interval(Duration::from_secs(30 * 60));
     loop {
         let release_dao = db.as_dao::<ReleaseDAO>();
         interval.tick().await;
