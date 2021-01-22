@@ -1,6 +1,7 @@
 use crate::processor::GNTDriverProcessor;
-use crate::{DRIVER_NAME, PLATFORM_NAME};
+use crate::{DEFAULT_NETWORK, DEFAULT_PLATFORM, DEFAULT_TOKEN, DRIVER_NAME};
 use bigdecimal::BigDecimal;
+use maplit::hashmap;
 use ya_core_model::driver::*;
 use ya_core_model::payment::local as payment_srv;
 use ya_persistence::executor::DbExecutor;
@@ -33,10 +34,21 @@ pub async fn subscribe_to_identity_events() -> anyhow::Result<()> {
 
 pub async fn register_in_payment_service() -> anyhow::Result<()> {
     log::debug!("Registering driver in payment service...");
+    let networks = hashmap! {  // TODO: Implement multi-network support
+        DEFAULT_NETWORK.to_string() => payment_srv::Network {
+            default_token: DEFAULT_TOKEN.to_string(),
+            tokens: hashmap! {
+                DEFAULT_TOKEN.to_string() => DEFAULT_PLATFORM.to_string()
+            }
+        }
+    };
     let message = payment_srv::RegisterDriver {
         driver_name: DRIVER_NAME.to_string(),
-        platform: PLATFORM_NAME.to_string(),
-        recv_init_required: false,
+        details: payment_srv::DriverDetails {
+            default_network: DEFAULT_NETWORK.to_string(),
+            networks,
+            recv_init_required: false,
+        },
     };
     service(payment_srv::BUS_ID).send(message).await?.unwrap(); // Unwrap on purpose because it's NoError
     log::debug!("Successfully registered driver in payment service.");

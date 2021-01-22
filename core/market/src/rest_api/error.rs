@@ -225,6 +225,7 @@ impl ResponseError for AgreementDaoError {
                 | AgreementState::Approved
                 | AgreementState::Terminated => HttpResponse::Gone().json(msg),
             },
+            AgreementDaoError::InvalidId(_) => HttpResponse::BadRequest().json(msg),
             AgreementDaoError::DbError(_)
             | AgreementDaoError::SessionId(_)
             | AgreementDaoError::EventError(_) => HttpResponse::InternalServerError().json(msg),

@@ -17,13 +17,14 @@ pub mod processor;
 pub mod schema;
 pub mod service;
 pub mod utils;
+mod wallet;
 
 pub mod migrations {
     #[derive(diesel_migrations::EmbedMigrations)]
     struct _Dummy;
 }
 
-pub const DEFAULT_PAYMENT_PLATFORM: &str = "ZK-NGNT";
+pub const DEFAULT_PAYMENT_PLATFORM: &str = "zksync-rinkeby-tglm";
 pub const DEFAULT_PAYMENT_DRIVER: &str = "zksync";
 
 pub struct PaymentService;
