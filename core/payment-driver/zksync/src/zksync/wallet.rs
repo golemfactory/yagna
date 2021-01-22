@@ -14,13 +14,16 @@ use zksync::{Network as ZkNetwork, Provider, Wallet, WalletCredentials};
 use zksync_eth_signer::EthereumSigner;
 
 // Workspace uses
-use ya_payment_driver::{db::models::Network, model::{AccountMode, Exit, GenericError, Init, PaymentDetails}};
+use ya_payment_driver::{
+    db::models::Network,
+    model::{AccountMode, Exit, GenericError, Init, PaymentDetails},
+};
 
 // Local uses
 use crate::{
     network::get_network_token,
     zksync::{faucet, signer::YagnaEthSigner, utils},
-    ZKSYNC_TOKEN_NAME, DEFAULT_NETWORK,
+    DEFAULT_NETWORK, ZKSYNC_TOKEN_NAME,
 };
 
 pub async fn account_balance(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
@@ -48,7 +51,12 @@ pub async fn account_balance(address: &str, network: Network) -> Result<BigDecim
             .unwrap_or(BigUint::zero());
     }
     let balance = utils::big_uint_to_big_dec(balance_com);
-    log::debug!("account_balance. address={}, network={}, balance={}", address, &network, &balance);
+    log::debug!(
+        "account_balance. address={}, network={}, balance={}",
+        address,
+        &network,
+        &balance
+    );
     Ok(balance)
 }
 
@@ -114,7 +122,11 @@ pub async fn get_nonce(address: &str, network: Network) -> u32 {
     account_info.committed.nonce
 }
 
-pub async fn make_transfer(details: &PaymentDetails, nonce: u32, network: Network) -> Result<String, GenericError> {
+pub async fn make_transfer(
+    details: &PaymentDetails,
+    nonce: u32,
+    network: Network,
+) -> Result<String, GenericError> {
     log::debug!("make_transfer. {:?}", details);
     let amount = details.amount.clone();
     let amount = utils::big_dec_to_big_uint(amount)?;
@@ -182,7 +194,10 @@ fn get_provider(network: Network) -> Provider {
     provider.clone()
 }
 
-async fn get_wallet(address: &str, network: Network) -> Result<Wallet<YagnaEthSigner>, GenericError> {
+async fn get_wallet(
+    address: &str,
+    network: Network,
+) -> Result<Wallet<YagnaEthSigner>, GenericError> {
     log::debug!("get_wallet {:?}", address);
     let addr = Address::from_str(&address[2..]).map_err(GenericError::new)?;
     let provider = get_provider(network);
@@ -200,7 +215,10 @@ fn get_zk_network(network: Network) -> ZkNetwork {
     ZkNetwork::from_str(&network.to_string()).unwrap() // _or(ZkNetwork::Rinkeby)
 }
 
-async fn unlock_wallet<S: EthereumSigner + Clone>(wallet: Wallet<S>, network: Network) -> Result<(), GenericError> {
+async fn unlock_wallet<S: EthereumSigner + Clone>(
+    wallet: Wallet<S>,
+    network: Network,
+) -> Result<(), GenericError> {
     log::debug!("unlock_wallet");
     if !wallet
         .is_signing_key_set()
@@ -216,13 +234,20 @@ async fn unlock_wallet<S: EthereumSigner + Clone>(wallet: Wallet<S>, network: Ne
         let unlock = wallet
             .start_change_pubkey()
             .fee_token(token.as_ref())
-            .map_err(GenericError::new)?
+            .map_err(|e| GenericError::new(format!("Failed to create change_pubkey request: {}", e)))?
             .send()
             .await
-            .map_err(GenericError::new)?;
-        info!("Unlock tx: {:?}", unlock);
+            .map_err(|e| GenericError::new(format!("Failed to send change_pubkey request: '{}'. HINT: Did you run `yagna payment fund` and follow the instructions?", e)))?;
+        log::debug!("Unlock tx: {:?}", unlock);
+        log::info!("Unlock send. tx_hash= {}", unlock.hash().to_string());
+
         let tx_info = unlock.wait_for_commit().await.map_err(GenericError::new)?;
-        log::info!("Wallet unlocked. tx_info = {:?}", tx_info);
+        log::debug!("tx_info = {:?}", tx_info);
+        match tx_info.success {
+            Some(true) => log::info!("Wallet successfully unlocked. address = {}", wallet.signer.address),
+            Some(false) => return Err(GenericError::new(format!("Failed to unlock wallet. reason={}", tx_info.fail_reason.unwrap_or("Unknown reason".to_string())))),
+            None => return Err(GenericError::new(format!("Unknown result from zksync unlock, please check your wallet on zkscan and try again. {:?}", tx_info))),
+        }
     }
     Ok(())
 }

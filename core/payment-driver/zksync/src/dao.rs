@@ -36,7 +36,11 @@ impl ZksyncDao {
         self.db.as_dao::<TransactionDao>()
     }
 
-    pub async fn get_pending_payments(&self, node_id: &str, network: Network) -> Vec<PaymentEntity> {
+    pub async fn get_pending_payments(
+        &self,
+        node_id: &str,
+        network: Network,
+    ) -> Vec<PaymentEntity> {
         match self
             .payment()
             .get_pending_payments(node_id.to_string(), network)
@@ -135,7 +139,11 @@ impl ZksyncDao {
     }
 
     pub async fn get_first_payment(&self, tx_hash: &str) -> Option<PaymentEntity> {
-        match self.payment().get_first_by_tx_hash(tx_hash.to_string()).await {
+        match self
+            .payment()
+            .get_first_by_tx_hash(tx_hash.to_string())
+            .await
+        {
             Ok(payment) => Some(payment),
             Err(_) => None,
         }

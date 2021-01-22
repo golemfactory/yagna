@@ -16,7 +16,7 @@ use ya_payment_driver::{
     bus,
     cron::PaymentDriverCron,
     dao::DbExecutor,
-    db::models::{PaymentEntity, Network as DbNetwork},
+    db::models::{Network as DbNetwork, PaymentEntity},
     driver::{async_trait, BigDecimal, IdentityError, IdentityEvent, Network, PaymentDriver},
     model::*,
     utils,
@@ -25,10 +25,13 @@ use ya_utils_futures::timeout::IntoTimeoutFuture;
 
 // Local uses
 use crate::{
-    network::{network_token_to_platform, get_network_token, SUPPORTED_NETWORKS},
-    dao::ZksyncDao, zksync::wallet, DEFAULT_NETWORK, DRIVER_NAME,
+    dao::ZksyncDao,
+    network::{
+        get_network_token, network_token_to_platform, platform_to_network_token, SUPPORTED_NETWORKS,
+    },
+    zksync::wallet,
+    DEFAULT_NETWORK, DRIVER_NAME,
 };
-
 
 pub struct ZksyncDriver {
     active_accounts: AccountsRc,
@@ -65,7 +68,8 @@ impl ZksyncDriver {
         log::trace!("Processing payments for node_id={}", node_id);
         for network_key in self.get_networks().keys() {
             let network = DbNetwork::from_str(&network_key).unwrap();
-            let payments: Vec<PaymentEntity> = self.dao.get_pending_payments(node_id, network).await;
+            let payments: Vec<PaymentEntity> =
+                self.dao.get_pending_payments(node_id, network).await;
             let mut nonce = 0;
             if !payments.is_empty() {
                 log::info!(
@@ -157,10 +161,7 @@ impl PaymentDriver for ZksyncDriver {
         msg: GetAccountBalance,
     ) -> Result<BigDecimal, GenericError> {
         log::debug!("get_account_balance: {:?}", msg);
-        // TODO: Add network
-        //let network = msg.network().unwrap_or(DEFAULT_NETWORK);
-        //let network = DbNetwork::from_str(network).map_err(GenericError::new);
-        let network = DbNetwork::Rinkeby;
+        let (network, _) = platform_to_network_token(msg.platform())?;
 
         let balance = wallet::account_balance(&msg.address(), network).await?;
 
@@ -211,7 +212,10 @@ impl PaymentDriver for ZksyncDriver {
 
         let mode = msg.mode();
         let network = msg.network().unwrap_or(DEFAULT_NETWORK.to_string());
-        let token = get_network_token(DbNetwork::from_str(&network).map_err(GenericError::new)?, msg.token());
+        let token = get_network_token(
+            DbNetwork::from_str(&network).map_err(GenericError::new)?,
+            msg.token(),
+        );
         bus::register_account(self, &address, &network, &token, mode).await?;
 
         log::info!(
@@ -278,8 +282,7 @@ impl PaymentDriver for ZksyncDriver {
         _caller: String,
         msg: ValidateAllocation,
     ) -> Result<bool, GenericError> {
-        //let (network, _) = platform_to_network_token(msg.platform)?;
-        let network = DbNetwork::from_str(DEFAULT_NETWORK).map_err(GenericError::new)?;
+        let (network, _) = platform_to_network_token(msg.platform)?;
         let account_balance = wallet::account_balance(&msg.address, network).await?;
         let total_allocated_amount: BigDecimal = msg
             .existing_allocations
@@ -327,21 +330,17 @@ impl PaymentDriverCron for ZksyncDriver {
                 // - Amount needs to be updated to total of all PaymentEntity's
 
                 // TODO: Add token support
-                let platform = network_token_to_platform(Some(first_payment.network), None).unwrap(); // TODO: Catch error?
+                let platform =
+                    network_token_to_platform(Some(first_payment.network), None).unwrap(); // TODO: Catch error?
                 let mut details = utils::db_to_payment_details(&first_payment);
                 details.amount = payments
                     .into_iter()
                     .map(|payment| utils::db_amount_to_big_dec(payment.amount))
                     .sum::<BigDecimal>();
                 let tx_hash = to_confirmation(&details).unwrap();
-                if let Err(e) = bus::notify_payment(
-                    &self.get_name(),
-                    &platform,
-                    order_ids,
-                    &details,
-                    tx_hash,
-                )
-                .await
+                if let Err(e) =
+                    bus::notify_payment(&self.get_name(), &platform, order_ids, &details, tx_hash)
+                        .await
                 {
                     log::error!("{}", e)
                 };

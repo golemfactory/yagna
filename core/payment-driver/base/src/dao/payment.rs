@@ -29,7 +29,11 @@ impl<'c> AsDao<'c> for PaymentDao<'c> {
 }
 
 impl<'c> PaymentDao<'c> {
-    pub async fn get_pending_payments(&self, address: String, network: Network) -> DbResult<Vec<PaymentEntity>> {
+    pub async fn get_pending_payments(
+        &self,
+        address: String,
+        network: Network,
+    ) -> DbResult<Vec<PaymentEntity>> {
         readonly_transaction(self.pool, move |conn| {
             let payments: Vec<PaymentEntity> = dsl::payment
                 .filter(dsl::sender.eq(address))
@@ -83,8 +87,11 @@ impl<'c> PaymentDao<'c> {
 
     pub async fn get_first_by_tx_hash(&self, tx_hash: String) -> DbResult<PaymentEntity> {
         readonly_transaction(self.pool, move |conn| {
-            let payments: PaymentEntity =
-                dsl::payment.inner_join(transaction::table).select(payment::all_columns).filter(transaction::dsl::tx_hash.eq(tx_hash)).first(conn)?;
+            let payments: PaymentEntity = dsl::payment
+                .inner_join(transaction::table)
+                .select(payment::all_columns)
+                .filter(transaction::dsl::tx_hash.eq(tx_hash))
+                .first(conn)?;
             Ok(payments)
         })
         .await

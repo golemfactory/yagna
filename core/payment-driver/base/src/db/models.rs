@@ -113,7 +113,10 @@ impl FromStr for Network {
         match s.to_lowercase().as_str() {
             "mainnet" => Ok(Network::Mainnet),
             "rinkeby" => Ok(Network::Rinkeby),
-            _ => Err(DbError::InvalidData(format!("Invalid network: {}", s.to_string()))),
+            _ => Err(DbError::InvalidData(format!(
+                "Invalid network: {}",
+                s.to_string()
+            ))),
         }
     }
 }

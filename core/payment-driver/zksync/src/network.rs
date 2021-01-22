@@ -3,11 +3,12 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 // Workspace uses
-use ya_payment_driver::{db::models::Network as DbNetwork, model::GenericError, driver::Network};
+use ya_payment_driver::{db::models::Network as DbNetwork, driver::Network, model::GenericError};
 
 // Local uses
 use crate::{
-    DEFAULT_NETWORK, DEFAULT_PLATFORM, DEFAULT_TOKEN, MAINNET_NETWORK, MAINNET_PLATFORM, MAINNET_TOKEN,
+    DEFAULT_NETWORK, DEFAULT_PLATFORM, DEFAULT_TOKEN, MAINNET_NETWORK, MAINNET_PLATFORM,
+    MAINNET_TOKEN,
 };
 
 lazy_static::lazy_static! {
@@ -36,23 +37,40 @@ pub fn platform_to_network_token(platform: String) -> Result<(DbNetwork, String)
                 return Ok((db_network, token.0));
             }
         }
-    };
-    Err(GenericError::new(format!("Unable to find network for platform: {}", platform)))
+    }
+    Err(GenericError::new(format!(
+        "Unable to find network for platform: {}",
+        platform
+    )))
 }
 
-pub fn network_token_to_platform(network: Option<DbNetwork>, token: Option<String>) -> Result<String, GenericError> {
-    let network = network.unwrap_or(DbNetwork::from_str(DEFAULT_NETWORK).map_err(GenericError::new)?);
+pub fn network_token_to_platform(
+    network: Option<DbNetwork>,
+    token: Option<String>,
+) -> Result<String, GenericError> {
+    let network =
+        network.unwrap_or(DbNetwork::from_str(DEFAULT_NETWORK).map_err(GenericError::new)?);
     let network_config = (*SUPPORTED_NETWORKS).get(&(network.to_string()));
     let network_config = match network_config {
         Some(nc) => nc,
-        None => return Err(GenericError::new(format!("Unable to find platform for network={}", network)))
+        None => {
+            return Err(GenericError::new(format!(
+                "Unable to find platform for network={}",
+                network
+            )))
+        }
     };
 
     let token = token.unwrap_or(network_config.default_token.clone());
     let platform = network_config.tokens.get(&token);
     let platform = match platform {
         Some(p) => p,
-        None => return Err(GenericError::new(format!("Unable to find platform for token={}", token)))
+        None => {
+            return Err(GenericError::new(format!(
+                "Unable to find platform for token={}",
+                token
+            )))
+        }
     };
     Ok(platform.to_string())
 }
