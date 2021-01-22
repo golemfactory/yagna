@@ -64,7 +64,7 @@ pub(crate) mod dao {
         pub async fn current_release(&self) -> Result<Option<DBRelease>> {
             readonly_transaction(self.pool, move |conn| {
                 Ok(version_release
-                    .filter(release::version.eq(VERSION))
+                    .filter(release::version.eq(ya_compile_time_utils::semver_str()))
                     .first::<DBRelease>(conn)
                     .optional()?)
             })
