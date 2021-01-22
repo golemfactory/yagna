@@ -7605,7 +7605,6 @@ dependencies = [
  "tokio",
  "tokio-byteorder",
  "tokio-tar",
- "tokio-util 0.2.0",
  "url 2.2.0",
  "walkdir",
  "ya-client-model",
