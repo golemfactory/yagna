@@ -24,7 +24,7 @@ pub(crate) mod dao {
                 version: r.version,
                 name: r.name,
                 seen: false,
-                release_ts: NaiveDateTime::parse_from_str(&r.date, "%Y-%m-%d %H:%M:%S")?,
+                release_ts: NaiveDateTime::parse_from_str(&r.date, "%Y-%m-%dT%H:%M:%S%Z")?,
                 insertion_ts: None,
                 update_ts: None,
             };

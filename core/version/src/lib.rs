@@ -79,6 +79,7 @@ mod tests {
     async fn test_check_release() -> Result<()> {
         let result = crate::notifier::check_release().await?;
         println!("Check version result: {:#?}", result);
+        println!("Current version: {}", ya_compile_time_utils::semver_str());
         assert!(false);
         Ok(())
     }
