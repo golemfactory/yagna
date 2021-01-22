@@ -404,12 +404,6 @@ ya-provider profile activate some_other_profile
 While the yagna service is still running (and you are in the `ya-prov` directory)
 you can now start Provider Agent.
 
-At first, you need to register provider's payment account:
-```bash
-cargo run payment init -p
-```
-
-Then start the Provider Agent:
 ```bash
 cargo run -p ya-provider run
 ```

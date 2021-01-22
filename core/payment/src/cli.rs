@@ -16,7 +16,43 @@ use crate::{wallet, DEFAULT_PAYMENT_DRIVER};
 /// Payment management.
 #[derive(StructOpt, Debug)]
 pub enum PaymentCli {
+    /// List active payment accounts
     Accounts,
+
+    /// Supply payment account with funds
+    Fund {
+        #[structopt(long, help = "Wallet address [default: <DEFAULT_IDENTIDITY>]")]
+        account: Option<String>,
+        #[structopt(long, help = "Payment driver (zksync or erc20)", default_value = DEFAULT_PAYMENT_DRIVER)]
+        driver: String,
+        #[structopt(long, help = "Payment network (rinkeby or mainnet) [default: rinkeby]")]
+        network: Option<String>,
+    },
+
+    /// Initialize payment account (i.e. make it ready for sending/receiving funds)
+    Init {
+        #[structopt(long, help = "Wallet address [default: <DEFAULT_IDENTIDITY>]")]
+        account: Option<String>,
+        #[structopt(long, help = "Initialize account for sending")]
+        sender: bool,
+        #[structopt(long, help = "Initialize account for receiving")]
+        receiver: bool,
+        #[structopt(long, help = "Payment driver (zksync or erc20)", default_value = DEFAULT_PAYMENT_DRIVER)]
+        driver: String,
+        #[structopt(long, help = "Payment network (rinkeby or mainnet) [default: rinkeby]")]
+        network: Option<String>,
+    },
+
+    /// Display account balance and a summary of sent/received payments
+    Status {
+        #[structopt(long, help = "Wallet address [default: <DEFAULT_IDENTIDITY>]")]
+        account: Option<String>,
+        #[structopt(long, help = "Payment driver (zksync or erc20)", default_value = DEFAULT_PAYMENT_DRIVER)]
+        driver: String,
+        #[structopt(long, help = "Payment network (rinkeby or mainnet) [default: rinkeby]")]
+        network: Option<String>,
+    },
+
     // TODO: Uncomment when operation is supported by drivers
     // Enter {
     //     #[structopt(long)]
@@ -28,46 +64,23 @@ pub enum PaymentCli {
     //     #[structopt(long)]
     //     amount: String,
     // },
+    /// Exit layer 2 (withdraw funds to Ethereum)
     Exit {
-        #[structopt(long)]
+        #[structopt(long, help = "Wallet address [default: <DEFAULT_IDENTIDITY>]")]
         account: Option<String>,
-        #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
+        #[structopt(long, help = "Payment driver (zksync or erc20)", default_value = DEFAULT_PAYMENT_DRIVER)]
         driver: String,
-        #[structopt(long)]
+        #[structopt(long, help = "Payment network (rinkeby or mainnet) [default: rinkeby]")]
         network: Option<String>,
         #[structopt(
             long,
-            help = "Optional address to exit to. [default: <DEFAULT_IDENTIDITY>]"
+            help = "Optional address to exit to [default: <DEFAULT_IDENTIDITY>]"
         )]
         to_address: Option<String>,
-        #[structopt(long, help = "Optional amount to exit. [default: <ALL_FUNDS>]")]
+        #[structopt(long, help = "Optional amount to exit [default: <ALL_FUNDS>]")]
         amount: Option<String>,
     },
-    Fund {
-        #[structopt(long)]
-        account: Option<String>,
-        #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
-        driver: String,
-        #[structopt(long)]
-        network: Option<String>,
-    },
-    Init {
-        #[structopt(long)]
-        account: Option<String>,
-        #[structopt(long)]
-        sender: bool,
-        #[structopt(long)]
-        receiver: bool,
-        #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
-        driver: String,
-        #[structopt(long)]
-        network: Option<String>,
-    },
-    Invoice {
-        address: Option<String>,
-        #[structopt(subcommand)]
-        command: InvoiceCommand,
-    },
+
     // TODO: Uncomment when operation is supported by drivers
     // Transfer {
     //     #[structopt(long)]
@@ -81,13 +94,10 @@ pub enum PaymentCli {
     //     #[structopt(long)]
     //     amount: String,
     // },
-    Status {
-        #[structopt(long)]
-        account: Option<String>,
-        #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
-        driver: String,
-        #[structopt(long)]
-        network: Option<String>,
+    Invoice {
+        address: Option<String>,
+        #[structopt(subcommand)]
+        command: InvoiceCommand,
     },
 }
 

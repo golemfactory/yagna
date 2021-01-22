@@ -121,8 +121,8 @@ pub mod processor {
 
     #[derive(thiserror::Error, Debug)]
     #[error(
-        "Account not registered. Hint: Did you run `yagna payment init -{}` after restarting? platform={platform} address={address} mode={mode:?}",
-        if *.mode == AccountMode::SEND {"r"} else {"p"}
+        "Account not registered. Hint: Did you run `yagna payment init --{}` after restarting? platform={platform} address={address} mode={mode:?}",
+        if *.mode == AccountMode::SEND {"sender"} else {"receiver"}
     )]
     pub struct AccountNotRegistered {
         platform: String,
