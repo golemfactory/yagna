@@ -48,10 +48,12 @@ fn proposal_expiration_from(proposal: &ProposalView) -> Result<DateTime<Utc>> {
 
 fn debit_deadline_from(proposal: &ProposalView) -> Result<Option<Duration>> {
     match proposal.pointer_typed::<i64>("/golem/com/payment/debit-notes/acceptance-deadline") {
-        // Requestor can accept DebitNotes, because he set this property.
+        // Requestor is able to accept DebitNotes, because he set this property.
         Ok(deadline) => Ok(Some(Duration::seconds(deadline))),
-        // If he didn't set this property, he can't accept DebitNotes.
+        // If he didn't set this property, he is unable to accept DebitNotes.
         Err(Error::NoKey { .. }) => Ok(None),
+        // Property has invalid type. We shouldn't continue negotiations, since
+        // Requestor probably doesn't understand specification.
         Err(e) => Err(e.into()),
     }
 }
@@ -96,11 +98,11 @@ impl NegotiatorComponent for LimitExpiration {
             // Both Provider and Requestor support DebitNotes acceptance. We must
             // negotiate until we will agree to the same value.
             (Some(req_deadline), Some(our_deadline)) => {
-                if req_deadline < our_deadline {
+                if req_deadline > our_deadline {
                     NegotiationResult::Reject {
                         reason: Some(Reason::new(format!(
-                            "DebitNote acceptance deadline should be greater than {}.",
-                            self.payment_deadline
+                            "DebitNote acceptance deadline should be less than {}.",
+                            self.payment_deadline.display()
                         ))),
                     }
                 } else if req_deadline == our_deadline {

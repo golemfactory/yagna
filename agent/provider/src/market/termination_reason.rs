@@ -7,6 +7,8 @@ use std::time::Duration;
 use strum::EnumMessage;
 use strum_macros::*;
 
+use crate::display::EnableDisplay;
+
 use ya_client::model::market::Reason;
 
 #[derive(Display, EnumMessage, Debug, Clone, PartialEq)]
@@ -21,7 +23,10 @@ pub enum BreakReason {
     #[display(fmt = "No activity created within {:?} from Agreement Approval", _0)]
     #[strum(message = "NoActivity")]
     NoActivity(Duration),
-    #[display(fmt = "Requestor isn't accepting DebitNotes in time ({})", _0.display())]
+    #[display(
+        fmt = "Requestor isn't accepting DebitNotes in time ({})",
+        "_0.display()"
+    )]
     #[strum(message = "DebitNotesDeadline")]
     DebitNotesDeadline(chrono::Duration),
 }
