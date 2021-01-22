@@ -14,7 +14,7 @@ pub fn bind_gsb(db: &DbExecutor) {
     // public for remote requestors interactions
     bus::ServiceBinder::new(version::BUS_ID, db, ())
         .bind(skip_version_gsb)
-        .bind(check_version_gsb);
+        .bind(get_version_gsb);
 
     // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
     // until first change to value will be made.
@@ -37,18 +37,19 @@ async fn skip_version_gsb(
     }
 }
 
-async fn check_version_gsb(
+async fn get_version_gsb(
     db: DbExecutor,
     _caller: String,
-    _msg: version::Check,
-) -> RpcMessageResult<version::Check> {
-    crate::notifier::check_latest_release(&db)
-        .await
-        .map_err(|e| e.to_string())?;
+    msg: version::Get,
+) -> RpcMessageResult<version::Get> {
+    if msg.check {
+        crate::notifier::check_latest_release(&db)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
 
     db.as_dao::<ReleaseDAO>()
-        .pending_release()
+        .version()
         .await
-        .map(|r| r.map(|r| r.into()))
         .map_err(|e| e.to_string().into())
 }

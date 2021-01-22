@@ -10,15 +10,19 @@ use crate::notifier::ReleaseMessage;
 // Yagna version management.
 #[derive(StructOpt, Debug)]
 pub enum UpgradeCLI {
-    /// Stop logging warnings about latest Yagna release availability.
-    Skip,
+    /// Show current Yagna version and updates if available.
+    Show,
     /// Checks if there is new Yagna version available and shows it.
     Check,
+    /// Stop logging warnings about latest Yagna release availability.
+    Skip,
 }
 
 impl UpgradeCLI {
-    pub async fn run_command(self, _ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
+    pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
+            UpgradeCLI::Show => UpgradeCLI::show(version::Get::show_only(), ctx).await,
+            UpgradeCLI::Check => UpgradeCLI::show(version::Get::with_check(), ctx).await,
             UpgradeCLI::Skip => match bus::service(version::BUS_ID)
                 .send(version::Skip {})
                 .await??
@@ -29,16 +33,20 @@ impl UpgradeCLI {
                 }
                 None => CommandOutput::object("No pending release to skip."),
             },
-            UpgradeCLI::Check => match bus::service(version::BUS_ID)
-                .send(version::Check {})
-                .await??
-            {
-                Some(r) => CommandOutput::object(ReleaseMessage::Available(&r).to_string()),
-                None => CommandOutput::object(format!(
-                    "Your Yagna is up to date -- {}",
-                    ya_compile_time_utils::version_describe!()
-                )),
-            },
+        }
+    }
+
+    async fn show(msg: version::Get, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
+        let version_info = bus::service(version::BUS_ID).send(msg).await??;
+        if ctx.json_output {
+            return CommandOutput::object(version_info);
+        }
+        match &version_info.pending {
+            Some(r) => CommandOutput::object(ReleaseMessage::Available(r).to_string()),
+            None => CommandOutput::object(format!(
+                "Your Yagna is up to date -- {}",
+                ya_compile_time_utils::version_describe!()
+            )),
         }
     }
 }

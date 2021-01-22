@@ -1,13 +1,17 @@
+use anyhow::anyhow;
 use chrono::NaiveDateTime;
 use diesel::dsl::{exists, select};
 use diesel::prelude::*;
 use self_update::update::Release;
 
-use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
+use ya_persistence::executor::{
+    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
+};
 
 use crate::db::model::DBRelease;
 use crate::db::schema::version_release::dsl as release;
 use crate::db::schema::version_release::dsl::version_release;
+use ya_core_model::version::VersionInfo;
 
 pub struct ReleaseDAO<'c> {
     pool: &'c PoolType,
@@ -44,49 +48,29 @@ impl<'c> ReleaseDAO<'c> {
     }
 
     pub async fn pending_release(&self) -> anyhow::Result<Option<DBRelease>> {
-        readonly_transaction(self.pool, move |conn| {
-            let query = version_release
-                .filter(release::seen.eq(false))
-                .order(release::release_ts.desc())
-                .into_boxed();
-
-            match query.first::<DBRelease>(conn).optional()? {
-                Some(r) => {
-                    if !self_update::version::bump_is_greater(
-                        ya_compile_time_utils::semver_str(),
-                        r.version.as_str(),
-                    )
-                    .map_err(|e| log::warn!("Stored version parse error. {}", e))
-                    .unwrap_or(false)
-                    {
-                        return Ok(None);
-                    }
-                    Ok(Some(r))
-                }
-                None => Ok(None),
-            }
-        })
-        .await
+        readonly_transaction(self.pool, move |conn| get_pending_release(conn)).await
     }
 
-    pub async fn current_release(&self) -> anyhow::Result<Option<DBRelease>> {
+    pub async fn version(&self) -> anyhow::Result<VersionInfo> {
+        log::debug!("Getting Yagna version: current and pending from DB");
         readonly_transaction(self.pool, move |conn| {
-            Ok(version_release
-                .filter(release::version.eq(ya_compile_time_utils::semver_str()))
-                .first::<DBRelease>(conn)
-                .optional()?)
+            Ok(VersionInfo {
+                current: get_current_release(conn)?
+                    .ok_or(anyhow!("Can't determine current release."))?
+                    .into(),
+                pending: get_pending_release(conn)?.map(|r| r.into()),
+            })
         })
         .await
     }
 
     pub async fn skip_pending_release(&self) -> anyhow::Result<Option<DBRelease>> {
         log::debug!("Skipping latest pending Yagna release");
-        let mut pending_release = match self.pending_release().await? {
-            Some(r) => r,
-            None => return Ok(None),
-        };
-
         do_with_transaction(self.pool, move |conn| {
+            let mut pending_release = match get_pending_release(conn)? {
+                Some(r) => r,
+                None => return Ok(None),
+            };
             let num_updated = diesel::update(version_release.find(&pending_release.version))
                 .set(release::seen.eq(true))
                 .execute(conn)?;
@@ -98,5 +82,35 @@ impl<'c> ReleaseDAO<'c> {
             }
         })
         .await
+    }
+}
+
+fn get_current_release(conn: &ConnType) -> anyhow::Result<Option<DBRelease>> {
+    Ok(version_release
+        .filter(release::version.eq(ya_compile_time_utils::semver_str()))
+        .first::<DBRelease>(conn)
+        .optional()?)
+}
+
+fn get_pending_release(conn: &ConnType) -> anyhow::Result<Option<DBRelease>> {
+    let query = version_release
+        .filter(release::seen.eq(false))
+        .order(release::release_ts.desc())
+        .into_boxed();
+
+    match query.first::<DBRelease>(conn).optional()? {
+        Some(r) => {
+            if !self_update::version::bump_is_greater(
+                ya_compile_time_utils::semver_str(),
+                r.version.as_str(),
+            )
+            .map_err(|e| log::warn!("Stored version parse error. {}", e))
+            .unwrap_or(false)
+            {
+                return Ok(None);
+            }
+            Ok(Some(r))
+        }
+        None => Ok(None),
     }
 }

@@ -21,11 +21,23 @@ impl RpcMessage for Skip {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Check();
+pub struct Get {
+    pub check: bool,
+}
 
-impl RpcMessage for Check {
+impl Get {
+    pub fn show_only() -> Self {
+        Get { check: false }
+    }
+
+    pub fn with_check() -> Self {
+        Get { check: true }
+    }
+}
+
+impl RpcMessage for Get {
     const ID: &'static str = "check";
-    type Item = Option<Release>;
+    type Item = VersionInfo;
     type Error = ErrorMessage;
 }
 
@@ -38,4 +50,11 @@ pub struct Release {
     pub release_ts: NaiveDateTime,
     pub insertion_ts: Option<NaiveDateTime>,
     pub update_ts: Option<NaiveDateTime>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VersionInfo {
+    pub current: Release,
+    pub pending: Option<Release>,
 }
