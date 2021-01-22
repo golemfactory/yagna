@@ -12,7 +12,7 @@ pub mod notifier {
 
     use ya_persistence::executor::DbExecutor;
 
-    const UPDATE_CURL: &'static str = "curl xxx|bash";
+    const UPDATE_CURL: &'static str = "curl -sSf https://join.golem.network/as-provider | bash -";
     const SILENCE_CMD: &'static str = "yagna update skip";
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
