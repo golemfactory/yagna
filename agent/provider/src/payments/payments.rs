@@ -771,9 +771,19 @@ impl Handler<DeadlineElapsed> for Payments {
     type Result = ();
 
     fn handle(&mut self, msg: DeadlineElapsed, _ctx: &mut Context<Self>) -> Self::Result {
-        let deadline = match self.agreements.get(&msg.agreement_id) {
+        let deadline = match self.agreements.get_mut(&msg.agreement_id) {
             Some(agreement) => match agreement.payment_deadline {
-                Some(deadline) => deadline,
+                Some(deadline) => {
+                    match agreement.deadline_elapsed {
+                        false => {
+                            agreement.deadline_elapsed = true;
+                            deadline
+                        }
+                        // If at least one deadline elapses, we don't want to generate any
+                        // new unnecessary events.
+                        true => return (),
+                    }
+                }
                 None => {
                     log::error!(
                         "DeadlineElapsed for Agreement [{}], that's deadline shouldn't be tracked.",

@@ -81,6 +81,9 @@ pub struct AgreementPayment {
 
     pub update_interval: std::time::Duration,
     pub payment_deadline: Option<chrono::Duration>,
+    // If at least one deadline elapses, we don't want to generate any
+    // new unnecessary events.
+    pub deadline_elapsed: bool,
 
     // Watches for waiting for activities. You can await on receiver
     // to observe changes in number of active activities.
@@ -117,6 +120,7 @@ impl AgreementPayment {
             payment_model,
             update_interval,
             payment_deadline: debit_deadline,
+            deadline_elapsed: false,
             watch_sender: sender,
             activities_watch: ActivitiesWaiter {
                 watch_receiver: receiver,
