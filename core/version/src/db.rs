@@ -62,9 +62,9 @@ pub(crate) mod dao {
         }
 
         pub async fn current_release(&self) -> Result<Option<DBRelease>> {
-            do_with_transaction(self.pool, move |conn| {
+            readonly_transaction(self.pool, move |conn| {
                 Ok(version_release
-                    .order(release::update_ts.desc())
+                    .filter(release::version.eq(VERSION))
                     .first::<DBRelease>(conn)
                     .optional()?)
             })
