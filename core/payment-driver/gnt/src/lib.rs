@@ -52,8 +52,11 @@ pub type GNTDriverResult<T> = Result<T, GNTDriverError>;
 const GNT_FAUCET_GAS: u32 = 90000;
 const CREATE_FAUCET_FUNCTION: &str = "create";
 
-pub const PLATFORM_NAME: &'static str = "NGNT";
-pub const DRIVER_NAME: &'static str = "ngnt";
+pub const DRIVER_NAME: &'static str = "erc20";
+
+pub const DEFAULT_NETWORK: &'static str = "rinkeby";
+pub const DEFAULT_TOKEN: &'static str = "tGLM";
+pub const DEFAULT_PLATFORM: &'static str = "erc20-rinkeby-tglm";
 
 const ETH_FAUCET_MAX_WAIT: time::Duration = time::Duration::from_secs(180);
 

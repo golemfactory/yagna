@@ -384,7 +384,7 @@ async fn compute_cost_and_send_debit_note(
 forward_actix_handler!(Payments, AgreementApproved, on_signed_agreement);
 
 impl Handler<ActivityCreated> for Payments {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = anyhow::Result<()>;
 
     fn handle(&mut self, msg: ActivityCreated, ctx: &mut Context<Self>) -> Self::Result {
         if let Some(agreement) = self.agreements.get_mut(&msg.agreement_id) {
@@ -407,11 +407,11 @@ impl Handler<ActivityCreated> for Payments {
             agreement.add_created_activity(&msg.invoice_info.activity_id);
             ctx.notify_later(msg, agreement.update_interval);
 
-            ActorResponse::reply(Ok(()))
+            Ok(())
         } else {
             let error = format!("Agreement [{}] wasn't registered.", &msg.agreement_id);
             log::warn!("{}", error);
-            ActorResponse::reply(Err(anyhow!(error)))
+            Err(anyhow!(error))
         }
     }
 }

@@ -8,11 +8,26 @@ use ya_client_model::payment::Account;
 use super::model::{PaymentDescription, PaymentModel};
 use crate::market::presets::{Coefficient, Preset};
 
+#[derive(Clone, Debug)]
+pub struct AccountView {
+    pub address: String,
+    pub platform: String,
+}
+
+impl From<Account> for AccountView {
+    fn from(account: Account) -> Self {
+        Self {
+            address: account.address,
+            platform: account.platform,
+        }
+    }
+}
+
 pub trait PricingOffer {
     fn prices(&self, preset: &Preset) -> Vec<(Coefficient, f64)>;
     fn build(
         &self,
-        accounts: &Vec<Account>,
+        accounts: &Vec<AccountView>,
         initial_price: f64,
         prices: Vec<(String, f64)>,
     ) -> Result<ComInfo>;
@@ -89,7 +104,7 @@ impl PricingOffer for LinearPricingOffer {
 
     fn build(
         &self,
-        accounts: &Vec<Account>,
+        accounts: &Vec<AccountView>,
         initial_price: f64,
         prices: Vec<(String, f64)>,
     ) -> Result<ComInfo> {

@@ -6,7 +6,7 @@ use crate::execution::{
 use crate::hardware;
 use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
-use crate::payments::{LinearPricingOffer, Payments, PricingOffer};
+use crate::payments::{AccountView, LinearPricingOffer, Payments, PricingOffer};
 use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RecvAccount, RunConfig};
 use crate::tasks::task_manager::{InitializeTaskManager, TaskManager};
 
@@ -24,7 +24,6 @@ use std::{fs, io};
 use ya_agreement_utils::agreement::TypedArrayPointer;
 use ya_agreement_utils::*;
 use ya_client::cli::ProviderApi;
-use ya_client_model::payment::Account;
 use ya_file_logging::{start_logger, LoggerHandle};
 use ya_utils_actix::actix_handler::send_message;
 use ya_utils_path::SwapSave;
@@ -36,7 +35,7 @@ pub struct ProviderAgent {
     task_manager: Addr<TaskManager>,
     presets: PresetManager,
     hardware: hardware::Manager,
-    accounts: Vec<Account>,
+    accounts: Vec<AccountView>,
     log_handler: LoggerHandle,
 }
 
@@ -146,7 +145,13 @@ impl ProviderAgent {
         let api = ProviderApi::try_from(&args.api)?;
 
         log::info!("Loading payment accounts...");
-        let accounts: Vec<Account> = api.payment.get_provider_accounts().await?;
+        let accounts: Vec<AccountView> = api
+            .payment
+            .get_provider_accounts()
+            .await?
+            .into_iter()
+            .map(Into::into)
+            .collect();
         log::info!("Payment accounts: {:#?}", accounts);
         let registry = config.registry()?;
         registry.validate()?;
@@ -188,7 +193,7 @@ impl ProviderAgent {
         inf_node_info: InfNodeInfo,
         runner: Addr<TaskRunner>,
         market: Addr<ProviderMarket>,
-        accounts: Vec<Account>,
+        accounts: Vec<AccountView>,
     ) -> anyhow::Result<()> {
         if presets.is_empty() {
             return Err(anyhow!("No Presets were selected. Can't create offers."));
@@ -269,19 +274,19 @@ impl ProviderAgent {
         node_info
     }
 
-    fn accounts(&self) -> Vec<Account> {
+    fn accounts(&self) -> Vec<AccountView> {
         let globals = self.globals.get_state();
         if let Some(account) = &globals.account {
             let mut accounts = Vec::new();
             if account.platform.is_some() {
-                let zkaddr = Account {
+                let zkaddr = AccountView {
                     platform: account.platform.clone().unwrap(),
                     address: account.address.to_lowercase(),
                 };
                 accounts.push(zkaddr);
             } else {
-                for &platform in &["NGNT", "ZK-NGNT"] {
-                    accounts.push(Account {
+                for &platform in &["erc20-rinkeby-tglm", "zksync-rinkeby-tglm"] {
+                    accounts.push(AccountView {
                         platform: platform.to_string(),
                         address: account.address.to_lowercase(),
                     })

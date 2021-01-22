@@ -137,7 +137,7 @@ pub async fn exchange_proposals_impl(
     let offer_id = prov_mkt.subscribe_offer(offer, &prov_id).await?;
 
     // Expect events generated on requestor market.
-    let req_offer_proposal1 = requestor::query_proposal(&req_mkt, &demand_id, 1).await?;
+    let req_offer_proposal1 = requestor::query_proposal(&req_mkt, &demand_id, "Initial #R").await?;
 
     // Requestor counters initial proposal. We expect that provider will get proposal event.
     let req_demand_proposal1_id = req_mkt
@@ -151,7 +151,8 @@ pub async fn exchange_proposals_impl(
         .await?;
 
     // Provider receives Proposal
-    let _prov_demand_proposal1 = provider::query_proposal(&prov_mkt, &offer_id, 2).await?;
+    let _prov_demand_proposal1 =
+        provider::query_proposal(&prov_mkt, &offer_id, "Initial #P").await?;
     let prov_demand_proposal1_id = req_demand_proposal1_id.clone().translate(Owner::Provider);
 
     // Provider counters proposal.
@@ -161,7 +162,7 @@ pub async fn exchange_proposals_impl(
         .await?;
 
     // Requestor receives proposal.
-    let req_offer_proposal2 = requestor::query_proposal(&req_mkt, &demand_id, 3).await?;
+    let req_offer_proposal2 = requestor::query_proposal(&req_mkt, &demand_id, "Counter #R").await?;
     Ok(NegotiationHelper {
         proposal_id: ProposalId::from_str(&req_offer_proposal2.proposal_id)?,
         proposal: req_offer_proposal2,

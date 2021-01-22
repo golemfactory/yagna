@@ -141,16 +141,6 @@ pub mod processor {
     }
 
     #[derive(thiserror::Error, Debug)]
-    #[error("Driver '{0}' not registered.")]
-    pub struct DriverNotRegistered(String);
-
-    impl DriverNotRegistered {
-        pub fn new(driver: &str) -> Self {
-            Self(driver.to_owned())
-        }
-    }
-
-    #[derive(thiserror::Error, Debug)]
     pub enum SchedulePaymentError {
         #[error("{0}")]
         AccountNotRegistered(#[from] AccountNotRegistered),
@@ -208,8 +198,6 @@ pub mod processor {
 
     #[derive(thiserror::Error, Debug)]
     pub enum NotifyPaymentError {
-        #[error("{0}")]
-        DriverNotRegistered(#[from] DriverNotRegistered),
         #[error("{0}")]
         Validation(#[from] OrderValidationError),
         #[error("Service bus error: {0}")]

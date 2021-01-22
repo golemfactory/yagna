@@ -113,8 +113,8 @@ impl FromStr for RecvAccount {
             (Some(driver), Some(addr), None) => {
                 let platform = Some(
                     match driver {
-                        "zksync" | "zk" => "ZK-NGNT",
-                        "eth" | "l1" => "NGTN",
+                        "zksync" | "zk" => "zksync-rinkeby-tglm",
+                        "eth" | "l1" => "erc20-rinkeby-tglm",
                         _ => anyhow::bail!("unknown driver: {}", driver),
                     }
                     .to_string(),

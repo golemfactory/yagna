@@ -1,5 +1,4 @@
-use serde::export::Formatter;
-use std::fmt;
+use std::fmt::{self, Formatter};
 
 #[derive(Clone)]
 pub struct Constraints {

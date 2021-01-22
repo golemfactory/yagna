@@ -59,8 +59,8 @@ lazy_static = "1.4"
 log = "0.4"
 openssl = "0.10"
 structopt = "0.3"
-url = "2.1.1"
 tokio = {version = "0.2.22", features=["uds"]}
+url = "2.1.1"
 
 [package.metadata.deb]
 name="golem-requestor"
@@ -100,7 +100,6 @@ assets = [
 [workspace]
 members = [
     "agent/provider",
-    "agent/requestor",
     "core/activity",
     "core/gftp",
     "core/identity",
@@ -172,8 +171,8 @@ ya-sb-router = { path = "service-bus/router" }
 ya-sb-util = { path = "service-bus/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "200d42efa6bd77de071b5674efe55aeb2f6296e1"}
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "200d42efa6bd77de071b5674efe55aeb2f6296e1"}
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "a5bfc61da8f3a5cdcafcacf3d48a9f706571a9d7"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "a5bfc61da8f3a5cdcafcacf3d48a9f706571a9d7"}
 
 #ya-client = { path = "../ya-client" }
 #ya-client-model = { path = "../ya-client/model" }

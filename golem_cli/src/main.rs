@@ -84,9 +84,9 @@ async fn my_main() -> Result</*exit code*/ i32> {
 pub fn banner() {
     terminal::fade_in(&format!(
         include_str!("banner.txt"),
-        version = ya_compile_time_utils::semver(),
+        version = ya_compile_time_utils::semver_str(),
         git_commit = ya_compile_time_utils::git_rev(),
-        build = ya_compile_time_utils::build_number().unwrap_or("-"),
+        build = ya_compile_time_utils::build_number_str().unwrap_or("-"),
         date = ya_compile_time_utils::build_date()
     ))
     .unwrap();
