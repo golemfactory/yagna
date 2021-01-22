@@ -3,7 +3,7 @@ pub(crate) mod dao {
     use chrono::NaiveDateTime;
     use diesel::dsl::{exists, select};
     use diesel::prelude::*;
-    use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
+    use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
     use crate::db::model::Release as DBRelease;
     use crate::db::schema::version_release::dsl as release;
@@ -24,7 +24,7 @@ pub(crate) mod dao {
                 version: r.version,
                 name: r.name,
                 seen: false,
-                release_ts: NaiveDateTime::parse_from_str(&r.date, "%Y-%m-%d %H:%M:%S")?,
+                release_ts: NaiveDateTime::parse_from_str(&r.date, "%Y-%m-%dT%H:%M:%S%Z")?,
                 insertion_ts: None,
                 update_ts: None,
             };
@@ -43,20 +43,38 @@ pub(crate) mod dao {
             .await?)
         }
 
-        /*
-        pub async fn clean(&self) {
-            // TODO
-        }
-        */
-
         pub async fn pending_release(&self) -> Result<Option<DBRelease>> {
-            do_with_transaction(self.pool, move |conn| {
+            readonly_transaction(self.pool, move |conn| {
                 let query = version_release
                     .filter(release::seen.eq(false))
                     .order(release::release_ts.desc())
                     .into_boxed();
 
-                Ok(query.first::<DBRelease>(conn).optional()?)
+                match query.first::<DBRelease>(conn).optional()? {
+                    Some(r) => {
+                        if !self_update::version::bump_is_greater(
+                            ya_compile_time_utils::semver_str(),
+                            r.version.as_str(),
+                        )
+                        .map_err(|e| log::warn!("Stored version parse error. {}", e))
+                        .unwrap_or(false)
+                        {
+                            return Ok(None);
+                        }
+                        Ok(Some(r))
+                    }
+                    None => Ok(None),
+                }
+            })
+            .await
+        }
+
+        pub async fn current_release(&self) -> Result<Option<DBRelease>> {
+            readonly_transaction(self.pool, move |conn| {
+                Ok(version_release
+                    .filter(release::version.eq(ya_compile_time_utils::semver_str()))
+                    .first::<DBRelease>(conn)
+                    .optional()?)
             })
             .await
         }
