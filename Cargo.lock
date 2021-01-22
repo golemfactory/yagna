@@ -7887,16 +7887,24 @@ dependencies = [
 name = "ya-version"
 version = "0.0.1"
 dependencies = [
+ "actix-web 3.3.2",
  "anyhow",
  "chrono",
  "diesel",
  "diesel_migrations",
  "log",
+ "metrics",
  "self_update",
  "serde",
  "serde_json",
+ "structopt",
  "tokio 0.2.24",
+ "ya-compile-time-utils",
+ "ya-core-model",
  "ya-persistence",
+ "ya-service-api",
+ "ya-service-api-interfaces",
+ "ya-service-bus",
 ]
 
 [[package]]

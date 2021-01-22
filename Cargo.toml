@@ -145,17 +145,18 @@ members = [
 
 [patch.crates-io]
 ## SERVICES
+ya-identity = { path = "core/identity" }
+ya-net = { path = "core/net" }
+ya-market = { path = "core/market" }
+ya-market-resolver = { path = "core/market/resolver" }
 ya-activity = { path = "core/activity" }
+ya-sgx = { path = "core/sgx" }
+ya-payment = { path = "core/payment" }
 ya-payment-driver = { path = "core/payment-driver/base" }
 ya-dummy-driver = { path = "core/payment-driver/dummy" }
 ya-gnt-driver = { path = "core/payment-driver/gnt" }
 ya-zksync-driver = { path = "core/payment-driver/zksync" }
-ya-identity = { path = "core/identity" }
-ya-market = { path = "core/market" }
-ya-market-resolver = { path = "core/market/resolver" }
-ya-net = { path = "core/net" }
-ya-payment = { path = "core/payment" }
-ya-sgx = { path = "core/sgx" }
+ya-version = { path = "core/version" }
 
 ## CORE UTILS
 ya-core-model = { path = "core/model" }
@@ -194,4 +195,3 @@ ya-utils-path = { path = "utils/path"}
 ya-utils-process = { path = "utils/process"}
 ya-diesel-utils = { path = "utils/diesel-utils"}
 ya-metrics = { path = "core/metrics" }
-ya-version = { path = "core/version" }
