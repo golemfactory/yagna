@@ -10,12 +10,12 @@ const SILENCE_CMD: &'static str = "yagna version skip";
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub(crate) enum ReleaseMessage<'a> {
-    #[error("New Yagna release is available -- '{}' (v{}).\n\
-    Update via `{}` or skip `{}`", .0.name, .0.version, UPDATE_CURL, SILENCE_CMD)]
+    #[error("New Yagna release is available: '{}' (v{}).\n\
+    Update via\n\t`{}`\nor skip\n\t`{}`", .0.name, .0.version, UPDATE_CURL, SILENCE_CMD)]
     Available(&'a version::Release),
     #[error("Your Yagna is up to date -- '{}' (v{})", .0.name, .0.version)]
     UpToDate(&'a version::Release),
-    #[error("Release skipped -- '{}' (v{})", .0.name, .0.version)]
+    #[error("Release skipped: '{}' (v{})", .0.name, .0.version)]
     Skipped(&'a version::Release),
     #[error("No pending release to skip")]
     NotSkipped,
