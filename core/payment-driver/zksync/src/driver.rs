@@ -25,8 +25,8 @@ use ya_utils_futures::timeout::IntoTimeoutFuture;
 
 // Local uses
 use crate::{
-    network::{network_token_to_platform,  SUPPORTED_NETWORKS},
-    dao::ZksyncDao, zksync::wallet, DEFAULT_NETWORK, DEFAULT_TOKEN, DRIVER_NAME,
+    network::{network_token_to_platform, get_network_token, SUPPORTED_NETWORKS},
+    dao::ZksyncDao, zksync::wallet, DEFAULT_NETWORK, DRIVER_NAME,
 };
 
 
@@ -211,7 +211,7 @@ impl PaymentDriver for ZksyncDriver {
 
         let mode = msg.mode();
         let network = msg.network().unwrap_or(DEFAULT_NETWORK.to_string());
-        let token = msg.token().unwrap_or(DEFAULT_TOKEN.to_string());
+        let token = get_network_token(DbNetwork::from_str(&network).map_err(GenericError::new)?, msg.token());
         bus::register_account(self, &address, &network, &token, mode).await?;
 
         log::info!(

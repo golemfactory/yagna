@@ -1,4 +1,4 @@
--- HACK: All this code below is just to drop column timestamp from table pay_allocation
+-- HACK: All this code below is just to drop column network from table payment
 
 PRAGMA foreign_keys=off;
 
