@@ -50,7 +50,7 @@ pub(crate) mod dao {
         */
 
         pub async fn pending_release(&self) -> Result<Option<DBRelease>> {
-            do_with_transaction(self.pool, move |conn| {
+            readonly_transaction(self.pool, move |conn| {
                 let query = version_release
                     .filter(release::seen.eq(false))
                     .order(release::release_ts.desc())
