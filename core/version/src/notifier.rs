@@ -9,17 +9,9 @@ use ya_persistence::executor::DbExecutor;
 
 use crate::db::dao::ReleaseDAO;
 use crate::db::model::DBRelease;
+use crate::service::cli::ReleaseMessage;
 
 pub(crate) const DEFAULT_RELEASE_TS: &'static str = "2015-10-13T15:43:00GMT+2";
-
-#[derive(thiserror::Error, Debug, Clone)]
-#[error("New Yagna release named '{}' (v{}) is available", .0.name, .0.version)]
-pub(crate) enum ReleaseMessage<'a> {
-    Available(&'a ya_core_model::version::Release),
-    AvailableDB(&'a DBRelease),
-    #[error("Release '{}' (v{}) skipped", .0.name, .0.version)]
-    Skipped(&'a ya_core_model::version::Release),
-}
 
 pub async fn check_latest_release(db: &DbExecutor) -> anyhow::Result<()> {
     log::trace!("Checking latest Yagna release");
@@ -45,7 +37,7 @@ pub async fn check_latest_release(db: &DbExecutor) -> anyhow::Result<()> {
             Err(e) => log::error!("Storing new Yagna release `{:?}` to DB. {}", release, e),
             Ok(r) => {
                 counter!("version.new", 1);
-                new_version_log(&r);
+                new_version_log(r);
             }
         }
     };
@@ -93,7 +85,7 @@ pub(crate) async fn pinger(db: DbExecutor) -> ! {
         match release_dao.pending_release().await {
             Ok(Some(release)) => {
                 if !release.seen {
-                    new_version_log(&release)
+                    new_version_log(release)
                 }
             }
             Ok(None) => log::trace!("Your Yagna is up to date"),
@@ -102,8 +94,8 @@ pub(crate) async fn pinger(db: DbExecutor) -> ! {
     }
 }
 
-fn new_version_log(release: &DBRelease) {
-    log::warn!("{}", ReleaseMessage::AvailableDB(release))
+fn new_version_log(release: DBRelease) {
+    log::warn!("{}", ReleaseMessage::Available(&release.into()))
 }
 
 #[cfg(test)]

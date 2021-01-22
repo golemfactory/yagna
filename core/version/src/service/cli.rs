@@ -5,7 +5,21 @@ use ya_core_model::version;
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
-use crate::notifier::ReleaseMessage;
+const UPDATE_CURL: &'static str = "curl -sSf https://join.golem.network/as-provider | bash -";
+const SILENCE_CMD: &'static str = "yagna version skip";
+
+#[derive(thiserror::Error, Debug, Clone)]
+pub(crate) enum ReleaseMessage<'a> {
+    #[error("New Yagna release is available -- '{}' (v{}).\n\
+    Update via `{}` or skip `{}`", .0.name, .0.version, UPDATE_CURL, SILENCE_CMD)]
+    Available(&'a version::Release),
+    #[error("Your Yagna is up to date -- '{}' (v{})", .0.name, .0.version)]
+    UpToDate(&'a version::Release),
+    #[error("Release skipped -- '{}' (v{})", .0.name, .0.version)]
+    Skipped(&'a version::Release),
+    #[error("No pending release to skip")]
+    NotSkipped,
+}
 
 // Yagna version management.
 #[derive(StructOpt, Debug)]
@@ -23,16 +37,18 @@ impl UpgradeCLI {
         match self {
             UpgradeCLI::Show => show(version::Get::show_only(), ctx).await,
             UpgradeCLI::Check => show(version::Get::with_check(), ctx).await,
-            UpgradeCLI::Skip => match bus::service(version::BUS_ID)
-                .send(version::Skip {})
-                .await??
-            {
-                Some(r) => {
-                    counter!("version.skip", 1);
-                    CommandOutput::object(ReleaseMessage::Skipped(&r).to_string())
-                }
-                None => CommandOutput::object("No pending release to skip."),
-            },
+            UpgradeCLI::Skip => CommandOutput::object(
+                match bus::service(version::BUS_ID)
+                    .send(version::Skip())
+                    .await??
+                {
+                    Some(r) => {
+                        counter!("version.skip", 1);
+                        ReleaseMessage::Skipped(&r).to_string()
+                    }
+                    None => ReleaseMessage::NotSkipped.to_string(),
+                },
+            ),
         }
     }
 }
@@ -42,11 +58,8 @@ async fn show(msg: version::Get, ctx: &CliCtx) -> anyhow::Result<CommandOutput> 
     if ctx.json_output {
         return CommandOutput::object(version_info);
     }
-    match &version_info.pending {
-        Some(r) => CommandOutput::object(ReleaseMessage::Available(r).to_string()),
-        None => CommandOutput::object(format!(
-            "Your Yagna is up to date -- {}",
-            ya_compile_time_utils::version_describe!()
-        )),
-    }
+    CommandOutput::object(match &version_info.pending {
+        Some(r) => ReleaseMessage::Available(r).to_string(),
+        None => ReleaseMessage::UpToDate(&version_info.current).to_string(),
+    })
 }

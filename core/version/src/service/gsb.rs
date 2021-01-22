@@ -2,11 +2,10 @@ use metrics::counter;
 
 use ya_core_model::version;
 use ya_persistence::executor::DbExecutor;
+use ya_service_bus::{typed as bus, RpcMessage};
 
 use crate::db::dao::ReleaseDAO;
-use crate::notifier::ReleaseMessage;
-
-use ya_service_bus::{typed as bus, RpcMessage};
+use crate::service::cli::ReleaseMessage;
 
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
 

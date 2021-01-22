@@ -18,7 +18,7 @@ impl std::fmt::Display for DBRelease {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} {} released {}",
+            "{} '{}' released @ {}",
             self.version, self.name, self.release_ts
         )
     }

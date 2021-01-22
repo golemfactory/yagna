@@ -3,7 +3,7 @@ use ya_service_api_interfaces::{Provider, Service};
 
 use crate::db::migrations;
 
-mod cli;
+pub(crate) mod cli;
 mod gsb;
 mod rest;
 
