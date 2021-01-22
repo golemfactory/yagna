@@ -3,7 +3,7 @@ pub(crate) mod dao {
     use chrono::NaiveDateTime;
     use diesel::dsl::{exists, select};
     use diesel::prelude::*;
-    use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
+    use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
     use crate::db::model::Release as DBRelease;
     use crate::db::schema::version_release::dsl as release;
