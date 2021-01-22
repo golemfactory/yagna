@@ -2,6 +2,28 @@
 # It is not intended for manual editing.
 [[package]]
 name = "actix"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4af87564ff659dee8f9981540cac9418c45e910c8072fdedd643a262a38fcaf"
+dependencies = [
+ "actix-rt",
+ "actix_derive",
+ "bitflags 1.2.1",
+ "bytes 0.5.6",
+ "crossbeam-channel 0.4.4",
+ "derive_more",
+ "futures 0.3.12",
+ "lazy_static",
+ "log",
+ "parking_lot 0.10.2",
+ "pin-project 0.4.27",
+ "smallvec 1.6.1",
+ "tokio",
+ "tokio-util 0.2.0",
+]
+
+[[package]]
+name = "actix"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1be241f88f3b1e7e9a3fbe3b5a8a0f6915b5a1d7ee0d9a248d3376d01068cc60"
@@ -6962,7 +6984,7 @@ dependencies = [
 name = "ya-dummy-driver"
 version = "0.1.0"
 dependencies = [
- "actix",
+ "actix 0.9.0",
  "anyhow",
  "bigdecimal 0.1.2",
  "chrono",
@@ -6981,7 +7003,7 @@ dependencies = [
 name = "ya-exe-unit"
 version = "0.1.0"
 dependencies = [
- "actix",
+ "actix 0.9.0",
  "actix-files 0.4.1",
  "actix-rt",
  "actix-web 3.3.2",
@@ -7043,7 +7065,7 @@ dependencies = [
 name = "ya-gnt-driver"
 version = "0.1.0"
 dependencies = [
- "actix",
+ "actix 0.9.0",
  "actix-connect 1.0.2",
  "actix-http 1.0.1",
  "actix-rt",
@@ -7293,7 +7315,7 @@ dependencies = [
 name = "ya-payment-driver"
 version = "0.1.0"
 dependencies = [
- "actix",
+ "actix 0.9.0",
  "anyhow",
  "async-trait",
  "bigdecimal 0.1.2",
@@ -7336,7 +7358,7 @@ dependencies = [
 name = "ya-provider"
 version = "0.1.0"
 dependencies = [
- "actix",
+ "actix 0.10.0",
  "actix-rt",
  "actix_derive",
  "anyhow",
@@ -7536,7 +7558,7 @@ dependencies = [
 name = "ya-service-bus"
 version = "0.2.2"
 dependencies = [
- "actix",
+ "actix 0.9.0",
  "actix-rt",
  "async-stream",
  "env_logger 0.7.1",
@@ -7620,7 +7642,7 @@ dependencies = [
 name = "ya-utils-actix"
 version = "0.1.0"
 dependencies = [
- "actix",
+ "actix 0.10.0",
  "anyhow",
  "futures 0.3.12",
  "log",
@@ -7647,7 +7669,7 @@ dependencies = [
 name = "ya-utils-process"
 version = "0.1.0"
 dependencies = [
- "actix",
+ "actix 0.9.0",
  "anyhow",
  "derive_more",
  "fs2",

@@ -518,8 +518,8 @@ where
                 self.handler.handle_event(r.caller, r.topic, r.data);
             }
             GsbMessage::Ping => {
-                if let None = self.writer.write(GsbMessage::Pong) {
-                    log::error!("error sending pong: Failed to write to sink");
+                if let Err(e) = self.writer.write(GsbMessage::Pong) {
+                    log::error!("error sending pong: {}", e);
                     ctx.stop();
                 }
             }
@@ -609,10 +609,8 @@ fn send_cmd_async<A: Actor, W: Sink<GsbMessage, Error = ProtocolError> + Unpin +
 ) -> ActorResponse<A, (), Error> {
     let (tx, rx) = oneshot::channel();
     queue.push_back(tx);
-    if let None = writer.write(msg) {
-        ActorResponse::reply(Err(Error::GsbFailure(
-            "Failed to write to sink".to_string(),
-        )))
+    if let Err(e) = writer.write(msg) {
+        ActorResponse::reply(Err(Error::GsbFailure(e.to_string())))
     } else {
         ActorResponse::r#async(fut::wrap_future(async move {
             rx.await.map_err(|_| Error::Cancelled)??;
