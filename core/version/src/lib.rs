@@ -2,6 +2,9 @@
 extern crate diesel;
 
 pub(crate) mod db;
+mod rest;
+
+pub use rest::VersionService;
 
 pub mod notifier {
     use std::time::Duration;
@@ -9,7 +12,7 @@ pub mod notifier {
 
     use ya_persistence::executor::DbExecutor;
 
-    const UPDATE_CURL: &'static str = "curl xxx|bash";
+    const UPDATE_CURL: &'static str = "curl -sSf https://join.golem.network/as-provider | bash -";
     const SILENCE_CMD: &'static str = "yagna update skip";
     //const DEFAULT_RELEASE_TS: "Oct 13, 2015, 3:43 PM GMT+2"
 
@@ -79,6 +82,7 @@ mod tests {
     async fn test_check_release() -> Result<()> {
         let result = crate::notifier::check_release().await?;
         println!("Check version result: {:#?}", result);
+        println!("Current version: {}", ya_compile_time_utils::semver_str());
         assert!(false);
         Ok(())
     }
