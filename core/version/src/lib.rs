@@ -2,6 +2,7 @@
 extern crate diesel;
 
 pub(crate) mod db;
+pub mod service;
 
 pub mod notifier {
     use std::time::Duration;

@@ -30,6 +30,7 @@ use ya_service_api_web::{
 use ya_sgx::SgxService;
 use ya_utils_path::data_dir::DataDir;
 use ya_utils_process::lock::ProcLock;
+use ya_version::service::VersionService;
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
@@ -187,6 +188,8 @@ enum Services {
     // other services to initialize counters and other metrics.
     #[enable(gsb, rest)]
     Metrics(MetricsService),
+    #[enable(gsb, rest, cli)]
+    Upgrade(VersionService),
     #[enable(gsb, cli(flatten))]
     Identity(IdentityService),
     #[enable(gsb)]

@@ -60,6 +60,26 @@ pub(crate) mod dao {
             })
             .await
         }
+
+        pub async fn skip_pending_release(&self) -> Result<Option<DBRelease>> {
+            let mut pending_release = match self.pending_release().await? {
+                Some(r) => r,
+                None => return Ok(None),
+            };
+
+            do_with_transaction(self.pool, move |conn| {
+                let num_updated = diesel::update(version_release.find(&pending_release.version))
+                    .set(release::seen.eq(true))
+                    .execute(conn)?;
+                pending_release.seen = true;
+                match num_updated {
+                    0 => anyhow::bail!("no release updated: {}", pending_release),
+                    1 => Ok(Some(pending_release)),
+                    _ => anyhow::bail!("more than one release updated: {}", pending_release),
+                }
+            })
+            .await
+        }
     }
 }
 pub(crate) mod model {
@@ -86,6 +106,19 @@ pub(crate) mod model {
                 "{} {} released {}",
                 self.version, self.name, self.release_ts
             )
+        }
+    }
+
+    impl From<Release> for ya_core_model::version::Release {
+        fn from(r: Release) -> Self {
+            Self {
+                version: r.version,
+                name: r.name,
+                seen: r.seen,
+                release_ts: r.release_ts,
+                insertion_ts: r.insertion_ts,
+                update_ts: r.update_ts,
+            }
         }
     }
 }
