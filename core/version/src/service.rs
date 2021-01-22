@@ -9,6 +9,7 @@ use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
 
 use crate::db::{dao::ReleaseDAO, migrations};
+use crate::notifier::ReleaseMessage;
 
 /// Yagna version management.
 #[derive(StructOpt, Debug)]
@@ -29,17 +30,15 @@ impl UpgradeCLI {
             {
                 Some(r) => {
                     counter!("version.skip", 1);
-                    CommandOutput::object(format!("skipped: {:?}", r))
+                    CommandOutput::object(ReleaseMessage::Skipped(&r).to_string())
                 }
-                None => CommandOutput::object("not skipped"),
+                None => CommandOutput::object("No pending release to skip."),
             },
             UpgradeCLI::Check => match bus::service(version::BUS_ID)
                 .send(version::Check {})
                 .await??
             {
-                Some(r) => {
-                    CommandOutput::object(format!("New Yagna release is available: {:?}", r))
-                }
+                Some(r) => CommandOutput::object(ReleaseMessage::Available(&r).to_string()),
                 None => CommandOutput::object(format!(
                     "Your Yagna is up to date -- {}",
                     ya_compile_time_utils::version_describe!()
@@ -88,7 +87,11 @@ async fn skip_version_gsb(
     _msg: version::Skip,
 ) -> RpcMessageResult<version::Skip> {
     match db.as_dao::<ReleaseDAO>().skip_pending_release().await {
-        Ok(r) => Ok(r.map(|r| r.into())),
+        Ok(r) => Ok(r.map(|r| {
+            let r = r.into();
+            log::info!("{}", ReleaseMessage::Skipped(&r));
+            r
+        })),
         Err(e) => Err(e.to_string().into()),
     }
 }
@@ -98,7 +101,7 @@ async fn check_version_gsb(
     _caller: String,
     _msg: version::Check,
 ) -> RpcMessageResult<version::Check> {
-    crate::notifier::check_release()
+    crate::notifier::check_latest_release(&db)
         .await
         .map_err(|e| e.to_string())?;
 

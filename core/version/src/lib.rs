@@ -8,35 +8,58 @@ mod rest;
 pub mod service;
 
 pub mod notifier {
+    use anyhow::anyhow;
     use metrics::counter;
+    use self_update::backends::github::UpdateBuilder;
+    use self_update::update::Release;
+    use self_update::version;
     use std::time::Duration;
 
     use ya_persistence::executor::DbExecutor;
 
     use crate::db::dao::ReleaseDAO;
+    use crate::db::model::DBRelease;
 
     pub(crate) const DEFAULT_RELEASE_TS: &'static str = "2015-10-13T15:43:00GMT+2";
 
-    pub async fn check_release(
-    ) -> Result<Vec<self_update::update::Release>, self_update::errors::Error> {
-        log::trace!("Market release checker started");
-        let releases = self_update::backends::github::ReleaseList::configure()
+    #[derive(thiserror::Error, Debug, Clone)]
+    #[error("New Yagna release named '{}' (v{}) is available", .0.name, .0.version)]
+    pub(crate) enum ReleaseMessage<'a> {
+        Available(&'a ya_core_model::version::Release),
+        AvailableDB(&'a DBRelease),
+        #[error("Release '{}' (v{}) skipped", .0.name, .0.version)]
+        Skipped(&'a ya_core_model::version::Release),
+    }
+
+    pub async fn check_latest_release(db: &DbExecutor) -> anyhow::Result<()> {
+        log::trace!("Checking latest Yagna release");
+        let release = UpdateBuilder::new()
             .repo_owner("golemfactory")
             .repo_name("yagna")
+            .bin_name("") // seems required by builder but unused
+            .current_version("") // similar as above
             .build()?
-            .fetch()?;
-        log::trace!("Market release checker done");
-        Ok(releases
-            .into_iter()
-            .filter(|r| {
-                self_update::version::bump_is_greater(
-                    ya_compile_time_utils::semver_str(),
-                    r.version.as_str(),
-                )
-                .map_err(|e| log::warn!("Github version parse error. {}", e))
-                .unwrap_or(false)
-            })
-            .collect())
+            .get_latest_release()?;
+        log::trace!(
+            "Got latest Yagna release: '{}' (v{})",
+            release.name,
+            release.version
+        );
+        if version::bump_is_greater(
+            ya_compile_time_utils::semver_str(),
+            release.version.as_str(),
+        )
+        .map_err(|e| anyhow!("Github release `{:?}` parse error: {}", release, e))?
+        {
+            match db.as_dao::<ReleaseDAO>().new_release(&release).await {
+                Err(e) => log::error!("Storing new Yagna release `{:?}` to DB. {}", release, e),
+                Ok(r) => {
+                    counter!("version.new", 1);
+                    new_version_log(&r);
+                }
+            }
+        };
+        Ok(())
     }
 
     pub async fn on_start(db: &DbExecutor) -> anyhow::Result<()> {
@@ -47,7 +70,7 @@ pub mod notifier {
 
         let release_dao = db.as_dao::<ReleaseDAO>();
         release_dao
-            .new_release(self_update::update::Release {
+            .new_release(&Release {
                 name: "".into(),
                 version: ya_compile_time_utils::semver_str().into(),
                 date: DEFAULT_RELEASE_TS.into(),
@@ -56,7 +79,7 @@ pub mod notifier {
             })
             .await
             .map_err(|e| {
-                anyhow::anyhow!("Storing current Yagna version as Release to DB: {}", e)
+                anyhow::anyhow!("Storing current Yagna version as release to DB: {}", e)
             })?;
         Ok(())
     }
@@ -64,24 +87,10 @@ pub mod notifier {
     pub(crate) async fn worker(db: DbExecutor) {
         // TODO: make interval configurable
         let mut interval = tokio::time::interval(Duration::from_secs(3600 * 24));
-        let release_dao = db.as_dao::<crate::db::dao::ReleaseDAO>();
         loop {
             interval.tick().await;
-            match check_release().await {
-                Err(e) => log::debug!(
-                    "Problem encountered during checking for new releases: {}",
-                    e
-                ),
-                Ok(releases) => {
-                    for r in releases.into_iter() {
-                        counter!("version.new", 1);
-                        release_dao
-                            .new_release(r)
-                            .await
-                            .map_err(|e| log::error!("Storing new Yagna release to DB. {}", e))
-                            .ok();
-                    }
-                }
+            if let Err(e) = check_latest_release(&db).await {
+                log::error!("Failed to check for new Yagna release: {}", e);
             };
         }
     }
@@ -96,17 +105,17 @@ pub mod notifier {
             match release_dao.pending_release().await {
                 Ok(Some(release)) => {
                     if !release.seen {
-                        log::warn!(
-                            "New Yagna version {} ({}) is available. TODO: add howto here",
-                            release.name,
-                            release.version
-                        )
+                        new_version_log(&release)
                     }
                 }
                 Ok(None) => log::trace!("Your Yagna is up to date"),
                 Err(e) => log::error!("Fetching new Yagna release from DB: {}", e),
             }
         }
+    }
+
+    fn new_version_log(release: &DBRelease) {
+        log::warn!("{}", ReleaseMessage::AvailableDB(release))
     }
 }
 

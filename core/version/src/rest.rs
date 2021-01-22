@@ -1,5 +1,5 @@
 use crate::db::dao::ReleaseDAO;
-use crate::db::model::Release;
+use crate::db::model::DBRelease;
 
 use ya_client::model::ErrorMessage;
 use ya_persistence::executor::DbExecutor;
@@ -12,8 +12,8 @@ pub const VERSION_API_PATH: &str = "";
 
 #[derive(Serialize, Deserialize)]
 struct VersionInfo {
-    pub current: Release,
-    pub pending: Option<Release>,
+    pub current: DBRelease,
+    pub pending: Option<DBRelease>,
 }
 
 pub fn web_scope(db: DbExecutor) -> actix_web::Scope {

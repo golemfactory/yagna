@@ -1,11 +1,12 @@
 pub(crate) mod dao {
-    use anyhow::Result;
     use chrono::NaiveDateTime;
     use diesel::dsl::{exists, select};
     use diesel::prelude::*;
+    use self_update::update::Release;
+
     use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
-    use crate::db::model::Release as DBRelease;
+    use crate::db::model::DBRelease;
     use crate::db::schema::version_release::dsl as release;
     use crate::db::schema::version_release::dsl::version_release;
 
@@ -19,16 +20,16 @@ pub(crate) mod dao {
     }
 
     impl<'c> ReleaseDAO<'c> {
-        pub async fn new_release(&self, r: self_update::update::Release) -> Result<()> {
+        pub async fn new_release(&self, r: &Release) -> anyhow::Result<DBRelease> {
             let db_release = DBRelease {
-                version: r.version,
-                name: r.name,
+                version: r.version.clone(),
+                name: r.name.clone(),
                 seen: false,
                 release_ts: NaiveDateTime::parse_from_str(&r.date, "%Y-%m-%dT%H:%M:%S%Z")?,
                 insertion_ts: None,
                 update_ts: None,
             };
-            Ok(do_with_transaction(self.pool, move |conn| {
+            do_with_transaction(self.pool, move |conn| {
                 if !select(exists(
                     version_release.filter(release::version.eq(&db_release.version)),
                 ))
@@ -38,12 +39,12 @@ pub(crate) mod dao {
                         .values(&db_release)
                         .execute(conn)?;
                 };
-                Result::<()>::Ok(())
+                Ok(db_release)
             })
-            .await?)
+            .await
         }
 
-        pub async fn pending_release(&self) -> Result<Option<DBRelease>> {
+        pub async fn pending_release(&self) -> anyhow::Result<Option<DBRelease>> {
             readonly_transaction(self.pool, move |conn| {
                 let query = version_release
                     .filter(release::seen.eq(false))
@@ -69,7 +70,7 @@ pub(crate) mod dao {
             .await
         }
 
-        pub async fn current_release(&self) -> Result<Option<DBRelease>> {
+        pub async fn current_release(&self) -> anyhow::Result<Option<DBRelease>> {
             readonly_transaction(self.pool, move |conn| {
                 Ok(version_release
                     .filter(release::version.eq(ya_compile_time_utils::semver_str()))
@@ -79,7 +80,8 @@ pub(crate) mod dao {
             .await
         }
 
-        pub async fn skip_pending_release(&self) -> Result<Option<DBRelease>> {
+        pub async fn skip_pending_release(&self) -> anyhow::Result<Option<DBRelease>> {
+            log::debug!("Skipping latest pending Yagna release");
             let mut pending_release = match self.pending_release().await? {
                 Some(r) => r,
                 None => return Ok(None),
@@ -93,7 +95,7 @@ pub(crate) mod dao {
                 match num_updated {
                     0 => anyhow::bail!("Release not skipped: {}", pending_release),
                     1 => Ok(Some(pending_release)),
-                    _ => anyhow::bail!("More than one Release skipped: {}", pending_release),
+                    _ => anyhow::bail!("More than one release skipped: {}", pending_release),
                 }
             })
             .await
@@ -108,7 +110,7 @@ pub(crate) mod model {
     #[derive(Clone, Debug, Identifiable, Insertable, Queryable, Serialize, Deserialize)]
     #[primary_key(version)]
     #[table_name = "version_release"]
-    pub struct Release {
+    pub struct DBRelease {
         pub version: String,
         pub name: String,
         pub seen: bool,
@@ -117,7 +119,7 @@ pub(crate) mod model {
         pub update_ts: Option<NaiveDateTime>,
     }
 
-    impl std::fmt::Display for Release {
+    impl std::fmt::Display for DBRelease {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             write!(
                 f,
@@ -127,8 +129,8 @@ pub(crate) mod model {
         }
     }
 
-    impl From<Release> for ya_core_model::version::Release {
-        fn from(r: Release) -> Self {
+    impl From<DBRelease> for ya_core_model::version::Release {
+        fn from(r: DBRelease) -> Self {
             Self {
                 version: r.version,
                 name: r.name,
