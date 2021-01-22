@@ -27,7 +27,10 @@ impl UpgradeCLI {
                 .send(version::Skip {})
                 .await??
             {
-                Some(r) => CommandOutput::object(format!("skipped: {:?}", r)),
+                Some(r) => {
+                    counter!("version.skip", 1);
+                    CommandOutput::object(format!("skipped: {:?}", r))
+                }
                 None => CommandOutput::object("not skipped"),
             },
             UpgradeCLI::Check => match bus::service(version::BUS_ID)
@@ -84,7 +87,6 @@ async fn skip_version_gsb(
     _caller: String,
     _msg: version::Skip,
 ) -> RpcMessageResult<version::Skip> {
-    counter!("version.skip", 1);
     match db.as_dao::<ReleaseDAO>().skip_pending_release().await {
         Ok(r) => Ok(r.map(|r| r.into())),
         Err(e) => Err(e.to_string().into()),

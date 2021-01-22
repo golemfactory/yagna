@@ -91,9 +91,9 @@ pub(crate) mod dao {
                     .execute(conn)?;
                 pending_release.seen = true;
                 match num_updated {
-                    0 => anyhow::bail!("no release updated: {}", pending_release),
+                    0 => anyhow::bail!("Release not skipped: {}", pending_release),
                     1 => Ok(Some(pending_release)),
-                    _ => anyhow::bail!("more than one release updated: {}", pending_release),
+                    _ => anyhow::bail!("More than one Release skipped: {}", pending_release),
                 }
             })
             .await
