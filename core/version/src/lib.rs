@@ -14,7 +14,7 @@ pub mod notifier {
 
     const UPDATE_CURL: &'static str = "curl -sSf https://join.golem.network/as-provider | bash -";
     const SILENCE_CMD: &'static str = "yagna update skip";
-    const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+    pub(crate) const DEFAULT_RELEASE_TS: &'static str = "2015-10-13T15:43:00GMT+2";
 
     pub async fn check_release(
     ) -> Result<Vec<self_update::update::Release>, self_update::errors::Error> {
@@ -28,13 +28,29 @@ pub mod notifier {
         Ok(releases
             .into_iter()
             .filter(|r| {
-                self_update::version::bump_is_greater(VERSION, r.version.as_str())
-                    .map_err(|e| log::warn!("Github version parse error. {}", e))
-                    .unwrap_or(false)
+                self_update::version::bump_is_greater(
+                    ya_compile_time_utils::semver_str(),
+                    r.version.as_str(),
+                )
+                .map_err(|e| log::warn!("Github version parse error. {}", e))
+                .unwrap_or(false)
             })
             .collect())
     }
 
+    pub async fn on_start(db: DbExecutor) -> anyhow::Result<()> {
+        let release_dao = db.as_dao::<crate::db::dao::ReleaseDAO>();
+        release_dao
+            .new_release(self_update::update::Release {
+                name: "".into(),
+                version: ya_compile_time_utils::semver_str().into(),
+                date: DEFAULT_RELEASE_TS.into(),
+                body: None,
+                assets: vec![],
+            })
+            .await?;
+        Ok(())
+    }
     pub async fn worker(db: DbExecutor) {
         let mut interval = time::interval(Duration::from_secs(3600 * 24));
         let release_dao = db.as_dao::<crate::db::dao::ReleaseDAO>();
@@ -72,8 +88,16 @@ pub mod notifier {
 
 #[cfg(test)]
 mod tests {
-    /*
     use anyhow::Result;
+    use chrono::NaiveDateTime;
+
+    #[test]
+    fn test_default_release_ts() -> Result<()> {
+        NaiveDateTime::parse_from_str(&crate::notifier::DEFAULT_RELEASE_TS, "%Y-%m-%dT%H:%M:%S%Z")?;
+        Ok(())
+    }
+
+    /*
 
     #[tokio::test]
     async fn test_check_release() -> Result<()> {
