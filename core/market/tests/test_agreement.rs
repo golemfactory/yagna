@@ -1049,9 +1049,7 @@ async fn test_terminate_from_wrong_states() {
                 from: AgreementState::Proposal,
                 to: AgreementState::Terminated,
             },
-        )) => {
-            assert_eq!(id, agreement_id)
-        }
+        )) => assert_eq!(id, agreement_id),
         e => panic!("Wrong error returned, got: {:?}", e),
     };
 
@@ -1078,9 +1076,7 @@ async fn test_terminate_from_wrong_states() {
                 from: AgreementState::Pending,
                 to: AgreementState::Terminated,
             },
-        )) => {
-            assert_eq!(id, agreement_id)
-        }
+        )) => assert_eq!(id, agreement_id),
         e => panic!("Wrong error returned, got: {:?}", e),
     };
 
@@ -1102,9 +1098,7 @@ async fn test_terminate_from_wrong_states() {
                 from: AgreementState::Pending,
                 to: AgreementState::Terminated,
             },
-        )) => {
-            assert_eq!(id, agreement_id)
-        }
+        )) => assert_eq!(id, agreement_id),
         e => panic!("Wrong error returned, got: {:?}", e),
     };
 }

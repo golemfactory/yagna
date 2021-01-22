@@ -11,7 +11,7 @@ pub mod notifier {
 
     const UPDATE_CURL: &'static str = "curl xxx|bash";
     const SILENCE_CMD: &'static str = "yagna update skip";
-    const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+    //const DEFAULT_RELEASE_TS: "Oct 13, 2015, 3:43 PM GMT+2"
 
     pub async fn check_release(
     ) -> Result<Vec<self_update::update::Release>, self_update::errors::Error> {
@@ -25,9 +25,12 @@ pub mod notifier {
         Ok(releases
             .into_iter()
             .filter(|r| {
-                self_update::version::bump_is_greater(VERSION, r.version.as_str())
-                    .map_err(|e| log::warn!("Github version parse error. {}", e))
-                    .unwrap_or(false)
+                self_update::version::bump_is_greater(
+                    ya_compile_time_utils::semver_str(),
+                    r.version.as_str(),
+                )
+                .map_err(|e| log::warn!("Github version parse error. {}", e))
+                .unwrap_or(false)
             })
             .collect())
     }

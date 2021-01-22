@@ -43,12 +43,6 @@ pub(crate) mod dao {
             .await?)
         }
 
-        /*
-        pub async fn clean(&self) {
-            // TODO
-        }
-        */
-
         pub async fn pending_release(&self) -> Result<Option<DBRelease>> {
             do_with_transaction(self.pool, move |conn| {
                 let query = version_release
@@ -56,7 +50,21 @@ pub(crate) mod dao {
                     .order(release::release_ts.desc())
                     .into_boxed();
 
-                Ok(query.first::<DBRelease>(conn).optional()?)
+                match query.first::<DBRelease>(conn).optional()? {
+                    Some(r) => {
+                        if !self_update::version::bump_is_greater(
+                            ya_compile_time_utils::semver_str(),
+                            r.version.as_str(),
+                        )
+                        .map_err(|e| log::warn!("Stored version parse error. {}", e))
+                        .unwrap_or(false)
+                        {
+                            return Ok(None);
+                        }
+                        Ok(Some(r))
+                    }
+                    None => Ok(None),
+                }
             })
             .await
         }

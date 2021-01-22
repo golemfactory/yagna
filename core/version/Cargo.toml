@@ -6,6 +6,7 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
+ya-compile-time-utils = "0.1"
 ya-persistence = "0.2"
 
 anyhow = "1.0"
