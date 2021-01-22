@@ -9,6 +9,7 @@ edition = "2018"
 ya-persistence = "0.2"
 ya-service-api-interfaces = "0.1"
 ya-service-api-web = "0.1"
+ya-client = "0.4"
 
 actix-web = "3.2"
 anyhow = "1.0"
@@ -16,6 +17,7 @@ chrono = { version = "0.4", features = ["serde"] }
 diesel = { version = "1.4", features = ["chrono", "sqlite", "r2d2"] }
 diesel_migrations = "1.4"
 log = "0.4"
+thiserror = "^1.0"
 tokio = { version = "0.2", features = ["time", "sync"] }
 self_update = "0.23"
 serde = { version = "1.0", features = ["derive"] }

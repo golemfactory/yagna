@@ -1,15 +1,16 @@
+use crate::db::dao::ReleaseDAO;
 use crate::db::model::Release;
-use crate::notifier::check_release;
 
+use ya_client::model::ErrorMessage;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
 use ya_service_api_web::middleware::Identity;
 
-use actix_web::{web, HttpResponse, Responder};
-use chrono::DateTime;
+use actix_web::{web, HttpResponse, ResponseError};
+use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 
-pub const VERSION_API_PATH: &str = "/version-api/v1/";
+pub const VERSION_API_PATH: &str = "";
 
 pub struct VersionService;
 
@@ -32,23 +33,34 @@ struct VersionInfo {
 }
 
 #[actix_web::get("/version")]
-async fn get_version(db: web::Data<DbExecutor>, _id: Identity) -> impl Responder {
+async fn get_version(
+    db: web::Data<DbExecutor>,
+    _id: Identity,
+) -> Result<HttpResponse, VersionError> {
     // TODO: Should we validate identity??
-    let last_release = check_release().await.unwrap().into_iter().last().unwrap();
 
-    let last_release = Release {
-        version: last_release.version,
-        name: last_release.name,
-        seen: false,
-        release_ts: DateTime::parse_from_rfc3339(&last_release.date)
-            .unwrap()
-            .naive_utc(),
-        insertion_ts: None,
-        update_ts: None,
-    };
+    Ok(HttpResponse::Ok().json(VersionInfo {
+        current: db
+            .as_dao::<ReleaseDAO>()
+            .current_release()
+            .await
+            .map_err(VersionError::from)?
+            .ok_or(anyhow!("Can't determine current version."))
+            .map_err(VersionError::from)?,
+        pending: db
+            .as_dao::<ReleaseDAO>()
+            .pending_release()
+            .await
+            .map_err(VersionError::from)?,
+    }))
+}
 
-    HttpResponse::Ok().json(VersionInfo {
-        current: last_release.clone(),
-        pending: Some(last_release),
-    })
+#[derive(thiserror::Error, Debug)]
+#[error("Error querying version. {0}.")]
+pub struct VersionError(#[from] anyhow::Error);
+
+impl ResponseError for VersionError {
+    fn error_response(&self) -> HttpResponse {
+        HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string()))
+    }
 }
