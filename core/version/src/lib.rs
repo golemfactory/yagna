@@ -14,7 +14,7 @@ pub mod notifier {
 
     const UPDATE_CURL: &'static str = "curl -sSf https://join.golem.network/as-provider | bash -";
     const SILENCE_CMD: &'static str = "yagna update skip";
-    //const DEFAULT_RELEASE_TS: "Oct 13, 2015, 3:43 PM GMT+2"
+    const DEFAULT_RELEASE_TS: &'static str = "2015-10-13T15:43:00GMT+2";
 
     pub async fn check_release(
     ) -> Result<Vec<self_update::update::Release>, self_update::errors::Error> {
@@ -38,6 +38,19 @@ pub mod notifier {
             .collect())
     }
 
+    pub async fn on_start(db: DbExecutor) -> anyhow::Result<()> {
+        let release_dao = db.as_dao::<crate::db::dao::ReleaseDAO>();
+        release_dao
+            .new_release(self_update::update::Release {
+                name: "".into(),
+                version: ya_compile_time_utils::semver_str().into(),
+                date: DEFAULT_RELEASE_TS.into(),
+                body: None,
+                assets: vec![],
+            })
+            .await?;
+        Ok(())
+    }
     pub async fn worker(db: DbExecutor) {
         let mut interval = time::interval(Duration::from_secs(3600 * 24));
         let release_dao = db.as_dao::<crate::db::dao::ReleaseDAO>();
