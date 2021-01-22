@@ -30,7 +30,7 @@ use ya_service_api_web::{
 use ya_sgx::SgxService;
 use ya_utils_path::data_dir::DataDir;
 use ya_utils_process::lock::ProcLock;
-use ya_version::service::VersionService;
+use ya_version::VersionService;
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
