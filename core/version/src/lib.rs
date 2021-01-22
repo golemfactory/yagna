@@ -1,20 +1,20 @@
 #[macro_use]
 extern crate diesel;
+#[macro_use]
+extern crate diesel_migrations;
 
 pub(crate) mod db;
 mod rest;
 pub mod service;
 
-pub use rest::VersionService;
-
 pub mod notifier {
+    use metrics::counter;
     use std::time::Duration;
-    use tokio::time;
 
     use ya_persistence::executor::DbExecutor;
 
-    const UPDATE_CURL: &'static str = "curl -sSf https://join.golem.network/as-provider | bash -";
-    const SILENCE_CMD: &'static str = "yagna update skip";
+    use crate::db::dao::ReleaseDAO;
+
     pub(crate) const DEFAULT_RELEASE_TS: &'static str = "2015-10-13T15:43:00GMT+2";
 
     pub async fn check_release(
@@ -39,8 +39,13 @@ pub mod notifier {
             .collect())
     }
 
-    pub async fn on_start(db: DbExecutor) -> anyhow::Result<()> {
-        let release_dao = db.as_dao::<crate::db::dao::ReleaseDAO>();
+    pub async fn on_start(db: &DbExecutor) -> anyhow::Result<()> {
+        let worker_db = db.clone();
+        tokio::task::spawn_local(async move { crate::notifier::worker(worker_db).await });
+        let pinger_db = db.clone();
+        tokio::task::spawn_local(async move { crate::notifier::pinger(pinger_db).await });
+
+        let release_dao = db.as_dao::<ReleaseDAO>();
         release_dao
             .new_release(self_update::update::Release {
                 name: "".into(),
@@ -49,11 +54,16 @@ pub mod notifier {
                 body: None,
                 assets: vec![],
             })
-            .await?;
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!("Storing current Yagna version as Release to DB: {}", e)
+            })?;
         Ok(())
     }
-    pub async fn worker(db: DbExecutor) {
-        let mut interval = time::interval(Duration::from_secs(3600 * 24));
+
+    pub(crate) async fn worker(db: DbExecutor) {
+        // TODO: make interval configurable
+        let mut interval = tokio::time::interval(Duration::from_secs(3600 * 24));
         let release_dao = db.as_dao::<crate::db::dao::ReleaseDAO>();
         loop {
             interval.tick().await;
@@ -64,10 +74,11 @@ pub mod notifier {
                 ),
                 Ok(releases) => {
                     for r in releases.into_iter() {
+                        counter!("version.new", 1);
                         release_dao
                             .new_release(r)
                             .await
-                            .map_err(|e| log::debug!("Problem storing new release. {}", e))
+                            .map_err(|e| log::error!("Storing new Yagna release to DB. {}", e))
                             .ok();
                     }
                 }
@@ -75,14 +86,26 @@ pub mod notifier {
         }
     }
 
-    pub async fn pinger(db: DbExecutor) {
-        let mut interval = time::interval(Duration::from_secs(60 * 24));
-        let release_dao = db.as_dao::<crate::db::dao::ReleaseDAO>();
+    pub(crate) async fn pinger(db: DbExecutor) -> ! {
+        // TODO: make interval configurable
+        // TODO: after test make it 30min instead 30sec
+        let mut interval = tokio::time::interval(Duration::from_secs(30));
         loop {
+            let release_dao = db.as_dao::<ReleaseDAO>();
             interval.tick().await;
-            if let Ok(Some(db_release)) = release_dao.pending_release().await {
-                log::warn!("New version of yagna available {}! Close yagna and run `{}` to install or `{}` to mute this notification", db_release, UPDATE_CURL, SILENCE_CMD);
-            };
+            match release_dao.pending_release().await {
+                Ok(Some(release)) => {
+                    if !release.seen {
+                        log::warn!(
+                            "New Yagna version {} ({}) is available. TODO: add howto here",
+                            release.name,
+                            release.version
+                        )
+                    }
+                }
+                Ok(None) => log::trace!("Your Yagna is up to date"),
+                Err(e) => log::error!("Fetching new Yagna release from DB: {}", e),
+            }
         }
     }
 }

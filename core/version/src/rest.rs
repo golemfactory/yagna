@@ -3,8 +3,6 @@ use crate::db::model::Release;
 
 use ya_client::model::ErrorMessage;
 use ya_persistence::executor::DbExecutor;
-use ya_service_api_interfaces::{Provider, Service};
-use ya_service_api_web::middleware::Identity;
 
 use actix_web::{web, HttpResponse, ResponseError};
 use anyhow::anyhow;
@@ -12,33 +10,20 @@ use serde::{Deserialize, Serialize};
 
 pub const VERSION_API_PATH: &str = "";
 
-pub struct VersionService;
-
-impl Service for VersionService {
-    type Cli = ();
-}
-
-impl VersionService {
-    pub fn rest<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> actix_web::Scope {
-        actix_web::web::scope(VERSION_API_PATH)
-            .data(ctx.component())
-            .service(get_version)
-    }
-}
-
 #[derive(Serialize, Deserialize)]
 struct VersionInfo {
     pub current: Release,
     pub pending: Option<Release>,
 }
 
-#[actix_web::get("/version")]
-async fn get_version(
-    db: web::Data<DbExecutor>,
-    _id: Identity,
-) -> Result<HttpResponse, VersionError> {
-    // TODO: Should we validate identity??
+pub fn web_scope(db: DbExecutor) -> actix_web::Scope {
+    actix_web::web::scope(VERSION_API_PATH)
+        .data(db)
+        .service(get_version)
+}
 
+#[actix_web::get("/version")]
+async fn get_version(db: web::Data<DbExecutor>) -> Result<HttpResponse, VersionError> {
     Ok(HttpResponse::Ok().json(VersionInfo {
         current: db
             .as_dao::<ReleaseDAO>()
