@@ -14,6 +14,7 @@ pub fn bind_service(db: &DbExecutor, processor: GNTDriverProcessor) {
 
     bus::ServiceBinder::new(&driver_bus_id(DRIVER_NAME), db, processor)
         .bind_with_processor(account_event)
+        .bind_with_processor(fund)
         .bind_with_processor(init)
         .bind_with_processor(get_account_balance)
         .bind_with_processor(get_transaction_balance)
@@ -43,6 +44,23 @@ pub async fn register_in_payment_service() -> anyhow::Result<()> {
     log::debug!("Successfully registered driver in payment service.");
 
     Ok(())
+}
+
+async fn fund(
+    _db: DbExecutor,
+    processor: GNTDriverProcessor,
+    _caller: String,
+    msg: Fund,
+) -> Result<String, GenericError> {
+    log::info!("fund: {:?}", msg);
+
+    let address = msg.address();
+    let network = parse_network(msg.network())?;
+
+    processor
+        .fund(address.as_str(), network)
+        .await
+        .map_err(GenericError::new)
 }
 
 async fn init(

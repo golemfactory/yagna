@@ -38,6 +38,17 @@ impl GNTDriverProcessor {
         self.mainnet_driver.account_unlocked(identity).await
     }
 
+    pub async fn fund(&self, address: &str, network: Network) -> GNTDriverResult<String> {
+        match network {
+            Network::Rinkeby => { self.rinkeby_driver.fund(address).await },
+            Network::Mainnet => { Ok(format!(
+                "Your mainnet ethereum address is {}. Send some GLM tokens and ETH for gas to this address \
+                to be able to use this driver. Using this driver is not recommended. If you want to easily \
+                acquire some GLM to try Golem on mainnet please use zksync driver.", address
+            )) }
+        }
+    }
+
     pub async fn init(
         &self,
         mode: AccountMode,

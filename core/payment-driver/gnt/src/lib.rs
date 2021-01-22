@@ -27,7 +27,7 @@ use crate::models::{PaymentEntity, TxType};
 use crate::networks::Network;
 use crate::utils::PAYMENT_STATUS_NOT_YET;
 use actix::Addr;
-use bigdecimal::BigDecimal;
+use bigdecimal::{BigDecimal, Zero};
 use chrono::{DateTime, Utc};
 
 use crate::gnt::config::EnvConfiguration;
@@ -233,43 +233,55 @@ impl GntDriver {
         .unwrap())))
     }
 
+    /// Obtains funds from faucet
+    fn fund<'a>(
+        &self,
+        address: &str,
+    ) -> Pin<Box<dyn Future<Output = GNTDriverResult<String>> + 'a>> {
+        let address = utils::str_to_addr(address).unwrap();
+        let wait_for_eth = self.wait_for_eth(address);
+        let request_gnt_from_faucet = self.request_gnt_from_faucet(address);
+        Box::pin(async move {
+            faucet::EthFaucetConfig::from_env()
+                .await?
+                .request_eth(address)
+                .await?;
+            wait_for_eth.await?;
+            request_gnt_from_faucet.await?;
+
+            Ok("Funds obtained from faucet.".to_string())
+        })
+    }
+
     /// Initializes account
     fn init<'a>(
         &self,
         mode: AccountMode,
         address: &str,
     ) -> Pin<Box<dyn Future<Output = GNTDriverResult<()>> + 'a>> {
-        use futures3::prelude::*;
-
-        let addr: String = address.into();
+        let address = address.to_string();
         let network = self.network.to_string();
         let token = self.network.default_token();
-        Box::pin(
-            if mode.contains(AccountMode::SEND) && self.network == Network::Rinkeby {
-                let address = utils::str_to_addr(address).unwrap();
-                let wait_for_eth = self.wait_for_eth(address);
-                let request_gnt = self.request_gnt_from_faucet(address);
-                let fut = async move {
-                    faucet::EthFaucetConfig::from_env()
-                        .await?
-                        .request_eth(address)
-                        .await?;
-                    wait_for_eth.await?;
-                    request_gnt.await?;
+        let gnt_contract = self.gnt_contract.clone();
+        let eth_client = self.ethereum_client.clone();
 
-                    gnt::register_account(addr, network, token, mode).await?;
-                    Ok(())
-                };
+        Box::pin(async move {
+            if mode.contains(AccountMode::SEND) {
+                let h160_addr = utils::str_to_addr(&address)?;
 
-                fut.left_future()
-            } else {
-                let fut = async move {
-                    gnt::register_account(addr, network, token, mode).await?;
-                    Ok(())
-                };
-                fut.right_future()
-            },
-        )
+                let gnt_balance = common::get_gnt_balance(&gnt_contract, h160_addr).await?;
+                if gnt_balance == BigDecimal::zero() {
+                    return Err(GNTDriverError::InsufficientFunds);
+                }
+
+                let eth_balance = eth_client.get_balance(h160_addr).await?;
+                if eth_balance == U256::zero() {
+                    return Err(GNTDriverError::InsufficientGas);
+                }
+            }
+
+            gnt::register_account(address, network, token, mode).await
+        })
     }
 
     /// Notification when identity gets locked and the driver cannot send transactions
