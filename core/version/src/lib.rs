@@ -14,7 +14,7 @@ pub mod notifier {
 
     const UPDATE_CURL: &'static str = "curl -sSf https://join.golem.network/as-provider | bash -";
     const SILENCE_CMD: &'static str = "yagna update skip";
-    const DEFAULT_RELEASE_TS: &'static str = "2015-10-13T15:43:00GMT+2";
+    pub(crate) const DEFAULT_RELEASE_TS: &'static str = "2015-10-13T15:43:00GMT+2";
 
     pub async fn check_release(
     ) -> Result<Vec<self_update::update::Release>, self_update::errors::Error> {
@@ -88,8 +88,16 @@ pub mod notifier {
 
 #[cfg(test)]
 mod tests {
-    /*
     use anyhow::Result;
+    use chrono::NaiveDateTime;
+
+    #[test]
+    fn test_default_release_ts() -> Result<()> {
+        NaiveDateTime::parse_from_str(&crate::notifier::DEFAULT_RELEASE_TS, "%Y-%m-%dT%H:%M:%S%Z")?;
+        Ok(())
+    }
+
+    /*
 
     #[tokio::test]
     async fn test_check_release() -> Result<()> {
