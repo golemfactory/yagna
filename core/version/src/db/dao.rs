@@ -1,9 +1,7 @@
 use anyhow::anyhow;
-use chrono::NaiveDateTime;
-use diesel::dsl::{exists, select};
 use diesel::prelude::*;
-use self_update::update::Release;
 
+use ya_core_model::version::{Release, VersionInfo};
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
@@ -11,7 +9,7 @@ use ya_persistence::executor::{
 use crate::db::model::DBRelease;
 use crate::db::schema::version_release::dsl as release;
 use crate::db::schema::version_release::dsl::version_release;
-use ya_core_model::version::VersionInfo;
+use self_update::version::bump_is_greater;
 
 pub struct ReleaseDAO<'c> {
     pool: &'c PoolType,
@@ -23,31 +21,22 @@ impl<'a> AsDao<'a> for ReleaseDAO<'a> {
 }
 
 impl<'c> ReleaseDAO<'c> {
-    pub async fn new_release(&self, r: &Release) -> anyhow::Result<DBRelease> {
-        let db_release = DBRelease {
-            version: r.version.clone(),
-            name: r.name.clone(),
-            seen: false,
-            release_ts: NaiveDateTime::parse_from_str(&r.date, "%Y-%m-%dT%H:%M:%S%Z")?,
-            insertion_ts: None,
-            update_ts: None,
-        };
+    pub async fn save(&self, db_rel: DBRelease) -> anyhow::Result<Release> {
         do_with_transaction(self.pool, move |conn| {
-            if !select(exists(
-                version_release.filter(release::version.eq(&db_release.version)),
-            ))
-            .get_result(conn)?
-            {
-                diesel::insert_into(version_release)
-                    .values(&db_release)
-                    .execute(conn)?;
-            };
-            Ok(db_release)
+            match get_release(conn, &db_rel.version)? {
+                Some(rel) => Ok(rel),
+                None => {
+                    diesel::insert_into(version_release)
+                        .values(&db_rel)
+                        .execute(conn)?;
+                    Ok(db_rel.into())
+                }
+            }
         })
         .await
     }
 
-    pub async fn pending_release(&self) -> anyhow::Result<Option<DBRelease>> {
+    pub async fn pending_release(&self) -> anyhow::Result<Option<Release>> {
         readonly_transaction(self.pool, move |conn| get_pending_release(conn)).await
     }
 
@@ -55,61 +44,69 @@ impl<'c> ReleaseDAO<'c> {
         log::debug!("Getting Yagna version: current and pending from DB");
         readonly_transaction(self.pool, move |conn| {
             Ok(VersionInfo {
-                current: get_current_release(conn)?
-                    .ok_or(anyhow!("Can't determine current release."))?
-                    .into(),
-                pending: get_pending_release(conn)?.map(|r| r.into()),
+                current: get_current_release(conn)?.ok_or(anyhow!("Can't get current release."))?,
+                pending: get_pending_release(conn)?,
             })
         })
         .await
     }
 
-    pub async fn skip_pending_release(&self) -> anyhow::Result<Option<DBRelease>> {
+    pub async fn skip_pending_release(&self) -> anyhow::Result<Option<Release>> {
         log::debug!("Skipping latest pending Yagna release");
         do_with_transaction(self.pool, move |conn| {
-            let mut pending_release = match get_pending_release(conn)? {
-                Some(r) => r,
+            let mut pending_rel = match get_pending_release(conn)? {
+                Some(rel) => rel,
                 None => return Ok(None),
             };
-            let num_updated = diesel::update(version_release.find(&pending_release.version))
+            let num_updated = diesel::update(version_release.find(&pending_rel.version))
                 .set(release::seen.eq(true))
                 .execute(conn)?;
-            pending_release.seen = true;
+            pending_rel.seen = true;
             match num_updated {
-                0 => anyhow::bail!("Release not skipped: {}", pending_release),
-                1 => Ok(Some(pending_release)),
-                _ => anyhow::bail!("More than one release skipped: {}", pending_release),
+                0 => anyhow::bail!("Release not skipped: {}", pending_rel),
+                1 => Ok(Some(pending_rel)),
+                _ => anyhow::bail!("More than one release skipped: {}", pending_rel),
             }
         })
         .await
     }
 }
 
-fn get_current_release(conn: &ConnType) -> anyhow::Result<Option<DBRelease>> {
-    Ok(version_release
-        .filter(release::version.eq(ya_compile_time_utils::semver_str()))
-        .first::<DBRelease>(conn)
-        .optional()?)
+fn get_current_release(conn: &ConnType) -> anyhow::Result<Option<Release>> {
+    get_release(conn, ya_compile_time_utils::semver_str())
 }
 
-fn get_pending_release(conn: &ConnType) -> anyhow::Result<Option<DBRelease>> {
+fn get_release(conn: &ConnType, ver: &str) -> anyhow::Result<Option<Release>> {
+    Ok(version_release
+        .filter(release::version.eq(&ver))
+        .first::<DBRelease>(conn)
+        .optional()?
+        .map(|db_rel| db_rel.into()))
+}
+
+fn get_pending_release(conn: &ConnType) -> anyhow::Result<Option<Release>> {
     let query = version_release
         .filter(release::seen.eq(false))
         .order((release::release_ts.desc(), release::version.desc()))
         .into_boxed();
 
     match query.first::<DBRelease>(conn).optional()? {
-        Some(r) => {
-            if !self_update::version::bump_is_greater(
-                ya_compile_time_utils::semver_str(),
-                r.version.as_str(),
-            )
-            .map_err(|e| log::warn!("Stored version parse error. {}", e))
-            .unwrap_or(false)
+        Some(db_rel) => {
+            let running_ver = ya_compile_time_utils::semver_str();
+            if !bump_is_greater(running_ver, &db_rel.version)
+                .map_err(|e| {
+                    log::error!(
+                        "Failed to compare if version {} > {}: {}",
+                        running_ver,
+                        db_rel.version,
+                        e
+                    )
+                })
+                .unwrap_or(false)
             {
                 return Ok(None);
             }
-            Ok(Some(r))
+            Ok(Some(db_rel.into()))
         }
         None => Ok(None),
     }

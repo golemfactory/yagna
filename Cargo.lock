@@ -7900,7 +7900,7 @@ dependencies = [
 
 [[package]]
 name = "ya-version"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "actix-web 3.3.2",
  "anyhow",

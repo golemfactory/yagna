@@ -46,7 +46,7 @@ ya-sgx = "0.1"
 ya-utils-path = "0.1"
 ya-utils-futures = "0.1"
 ya-utils-process = { version = "0.1", features = ["lock"] }
-ya-version = "0.0.1"
+ya-version = "0.1"
 
 actix-rt = "1.0"
 actix-service = "1.0"

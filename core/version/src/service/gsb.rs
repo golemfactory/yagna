@@ -42,7 +42,7 @@ async fn get_version_gsb(
     msg: version::Get,
 ) -> RpcMessageResult<version::Get> {
     if msg.check {
-        crate::notifier::check_latest_release(&db)
+        crate::github::check_latest_release(&db)
             .await
             .map_err(|e| e.to_string())?;
     }

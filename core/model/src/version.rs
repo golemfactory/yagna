@@ -41,8 +41,9 @@ impl RpcMessage for Get {
     type Error = ErrorMessage;
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, thiserror::Error)]
 #[serde(rename_all = "camelCase")]
+#[error("Version {version} '{name}' released @ {release_ts}")]
 pub struct Release {
     pub version: String,
     pub name: String,

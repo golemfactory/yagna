@@ -4,6 +4,7 @@ extern crate diesel;
 extern crate diesel_migrations;
 
 mod db;
+mod github;
 mod notifier;
 mod service;
 
