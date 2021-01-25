@@ -31,7 +31,11 @@ pub fn build_number() -> Option<u64> {
 
 /// convert tag to a semantic version
 pub fn semver_str() -> &'static str {
-    let mut version = git_tag();
+    tag2semver(git_tag())
+}
+
+pub fn tag2semver(tag: &str) -> &str {
+    let mut version = tag;
     for prefix in ["pre-rel-", "v"].iter() {
         if version.starts_with(prefix) {
             version = &version[prefix.len()..];

@@ -9,6 +9,7 @@ use std::process::Stdio;
 
 use tokio::process::{Child, Command};
 use ya_core_model::payment::local::{InvoiceStats, InvoiceStatusNotes, StatusNotes, StatusResult};
+use ya_core_model::version::VersionInfo;
 
 pub struct PaymentType {
     pub platform: &'static str,
@@ -17,11 +18,11 @@ pub struct PaymentType {
 
 impl PaymentType {
     pub const ZK: PaymentType = PaymentType {
-        platform: "ZK-NGNT",
+        platform: "zksync-rinkeby-tglm",
         driver: "zksync",
     };
     pub const PLAIN: PaymentType = PaymentType {
-        platform: "NGNT",
+        platform: "erc20-rinkeby-tglm",
         driver: "ngnt",
     };
 }
@@ -106,6 +107,7 @@ impl YagnaCommand {
             .output()
             .await?;
         if output.status.success() {
+            log::trace!("{}", String::from_utf8_lossy(&output.stdout));
             Ok(serde_json::from_slice(&output.stdout)?)
         } else {
             Err(anyhow::anyhow!(
@@ -119,6 +121,11 @@ impl YagnaCommand {
         self.cmd.args(&["--json", "id", "show"]);
         let output: Result<Id, String> = self.run().await?;
         output.map_err(anyhow::Error::msg)
+    }
+
+    pub async fn version(mut self) -> anyhow::Result<VersionInfo> {
+        self.cmd.args(&["--json", "version", "show"]);
+        self.run().await
     }
 
     pub async fn payment_status(

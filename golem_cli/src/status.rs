@@ -82,7 +82,15 @@ pub async fn run() -> Result</*exit code*/ i32> {
                 Style::new().fg(Colour::Red).paint("is not running")
             ]);
         }
+
         table.add_row(row!["Version", ya_compile_time_utils::version_describe!()]);
+        if let Some(pending) = cmd.yagna()?.version().await?.pending {
+            let ver = format!("{} released!", pending.version);
+            table.add_row(row![
+                "New Version",
+                Style::new().fg(Colour::Fixed(220)).paint(ver)
+            ]);
+        }
 
         table.add_empty_row();
         table.add_row(row!["Node Name", &config.node_name.unwrap_or_default()]);

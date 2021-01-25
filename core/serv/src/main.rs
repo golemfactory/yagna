@@ -19,8 +19,6 @@ use ya_market::MarketService;
 use ya_metrics::{MetricsPusherOpts, MetricsService};
 use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
-use ya_version::VersionService;
-
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
@@ -32,6 +30,7 @@ use ya_service_api_web::{
 use ya_sgx::SgxService;
 use ya_utils_path::data_dir::DataDir;
 use ya_utils_process::lock::ProcLock;
+use ya_version::VersionService;
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
@@ -189,10 +188,10 @@ enum Services {
     // other services to initialize counters and other metrics.
     #[enable(gsb, rest)]
     Metrics(MetricsService),
+    #[enable(gsb, rest, cli)]
+    Version(VersionService),
     #[enable(gsb, cli(flatten))]
     Identity(IdentityService),
-    #[enable(rest)]
-    Version(VersionService),
     #[enable(gsb)]
     Net(NetService),
     #[enable(gsb, rest)]
