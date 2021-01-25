@@ -3,11 +3,10 @@
 */
 
 // External uses
+use std::convert::TryInto;
 use bigdecimal::BigDecimal;
 use lazy_static::lazy_static;
-use num::bigint::ToBigInt;
-use num::pow::pow;
-use num::{BigInt, BigUint};
+use num_bigint::{BigInt, BigUint, ToBigInt};
 use zksync::utils::{closest_packable_token_amount, is_token_amount_packable};
 
 // Workspace uses
@@ -45,9 +44,9 @@ pub fn pack_up(amount: &BigUint) -> BigUint {
 
 fn increase_least_significant_digit(amount: &BigUint) -> BigUint {
     let digits = amount.to_radix_le(10);
-    for i in 0..(digits.len()) {
+    for i in 0..digits.len() {
         if digits[i] != 0 {
-            return amount + pow(BigUint::from(10u32), i);
+            return amount + BigUint::from(10u32).pow(i.try_into().unwrap());
         }
     }
     amount.clone() // zero
