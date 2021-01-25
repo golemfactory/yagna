@@ -152,12 +152,12 @@ pub async fn setup(run_config: &mut RunConfig, force: bool) -> Result<i32> {
             .map(|p| p.name)
             .collect();
 
-        let default_glm_per_h = 1.0;
+        let default_glm_per_h = 0.1;
         let glm_per_h = promptly::prompt_default("Price GLM per hour", default_glm_per_h)?;
 
         let usage = UsageDef {
             cpu: glm_per_h / 3600.0,
-            duration: glm_per_h / 3600.0 / default_glm_per_h,
+            duration: glm_per_h / 3600.0 / 5,
             initial: 0.0,
         };
 
