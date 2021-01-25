@@ -22,6 +22,7 @@ use ya_service_api_web::middleware::auth::dummy::DummyAuth;
 use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::rest_api_addr;
 use ya_service_api_web::scope::ExtendableScope;
+use ya_service_bus::connection::ClientInfo;
 use ya_service_bus::typed as bus;
 use ya_zksync_driver as zksync;
 
@@ -297,8 +298,11 @@ async fn main() -> anyhow::Result<()> {
 
     let provider_id = provider_id.parse()?;
     let requestor_id = requestor_id.parse()?;
+    let client_info = ClientInfo::new("payment");
     log::info!("bind remote...");
-    ya_net::bind_remote(provider_id, vec![provider_id, requestor_id]).await?;
+    ya_net::bind_remote(client_info, provider_id, vec![provider_id, requestor_id])
+        .await?
+        .await?;
 
     log::info!("get_rest_addr...");
     let rest_addr = rest_api_addr();
