@@ -68,12 +68,17 @@ pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
     let network = Network::from_str(&network).map_err(|e| GenericError::new(e))?;
 
     if mode.contains(AccountMode::SEND) {
-        if network != Network::Mainnet {
-            faucet::request_ngnt(&address, network).await?;
-        }
         let wallet = get_wallet(&address, network).await?;
         unlock_wallet(wallet, network).await?;
     }
+    Ok(())
+}
+
+pub async fn fund(address: &str, network: Network) -> Result<(), GenericError> {
+    if network == Network::Mainnet {
+        return Err(GenericError::new("Wallet can not be funded on mainnet."));
+    }
+    faucet::request_ngnt(address, network).await?;
     Ok(())
 }
 

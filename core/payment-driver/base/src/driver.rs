@@ -58,6 +58,8 @@ pub trait PaymentDriver {
     ) -> Result<BigDecimal, GenericError>;
 
     async fn init(&self, db: DbExecutor, caller: String, msg: Init) -> Result<Ack, GenericError>;
+    async fn fund(&self, db: DbExecutor, caller: String, msg: Fund)
+        -> Result<String, GenericError>;
 
     async fn transfer(
         &self,
