@@ -184,14 +184,15 @@ impl TryFrom<CliCtx> for ServiceContext {
 
 #[ya_service_api_derive::services(ServiceContext)]
 enum Services {
-    // Metrics service must be activated first, to allow all
-    // other services to initialize counters and other metrics.
+    // Metrics service must be activated before all other services
+    // to that will use it. Identity service is used by the Metrics,
+    // so must be initialized before.
+    #[enable(gsb, cli(flatten))]
+    Identity(IdentityService),
     #[enable(gsb, rest)]
     Metrics(MetricsService),
     #[enable(gsb, rest, cli)]
     Version(VersionService),
-    #[enable(gsb, cli(flatten))]
-    Identity(IdentityService),
     #[enable(gsb)]
     Net(NetService),
     #[enable(gsb, rest)]
