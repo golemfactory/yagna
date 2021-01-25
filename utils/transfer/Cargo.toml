@@ -9,7 +9,7 @@ edition = "2018"
 ya-client-model = "0.2"
 ya-core-model = "0.2"
 ya-net = "0.1"
-ya-service-bus = "0.2"
+ya-service-bus = "0.3"
 ya-utils-path = "0.1"
 gftp = "0.1"
 
