@@ -30,16 +30,3 @@
 # Provider
 /agent/provider                          @golemfactory/ya-provider
 /golem_cli                               @golemfactory/ya-provider
-
-# Utils
-/core/metrics/                           @golemfactory/ya-utils
-/core/version/                           @golemfactory/ya-utils
-/core/model/src/version.rs               @golemfactory/ya-utils
-/utils/compile-time-utils                @golemfactory/ya-utils
-/utils/actix_utils                       @golemfactory/ya-utils
-/utils/path                              @golemfactory/ya-utils
-/utils/diesel-utils                      @golemfactory/ya-utils
-/utils/std-utils                         @golemfactory/ya-utils
-/utils/file-logging                      @golemfactory/ya-utils
-/utils/agreement-utils                   @golemfactory/ya-utils
-/utils/process                           @golemfactory/ya-utils
