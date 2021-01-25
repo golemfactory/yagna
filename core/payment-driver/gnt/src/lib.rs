@@ -236,9 +236,8 @@ impl GntDriver {
     /// Obtains funds from faucet
     fn fund<'a>(
         &self,
-        address: &str,
+        address: Address,
     ) -> Pin<Box<dyn Future<Output = GNTDriverResult<String>> + 'a>> {
-        let address = utils::str_to_addr(address).unwrap();
         let wait_for_eth = self.wait_for_eth(address);
         let request_gnt_from_faucet = self.request_gnt_from_faucet(address);
         Box::pin(async move {

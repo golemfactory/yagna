@@ -1,5 +1,6 @@
 use crate::config::{MAINNET_CONFIG, RINKEBY_CONFIG};
 use crate::networks::Network;
+use crate::utils;
 use crate::GNTDriverResult;
 use crate::GntDriver;
 use bigdecimal::BigDecimal;
@@ -40,12 +41,22 @@ impl GNTDriverProcessor {
 
     pub async fn fund(&self, address: &str, network: Network) -> GNTDriverResult<String> {
         match network {
-            Network::Rinkeby => { self.rinkeby_driver.fund(address).await },
+            Network::Rinkeby => {
+                let address = utils::str_to_addr(address)?;
+                self.rinkeby_driver.fund(address).await
+            },
             Network::Mainnet => { Ok(format!(
                 "Your mainnet ethereum address is {}. Send some GLM tokens and ETH for gas to this address \
                 to be able to use this driver. Using this driver is not recommended. If you want to easily \
                 acquire some GLM to try Golem on mainnet please use zksync driver.", address
             )) }
+        }
+    }
+
+    fn driver(&self, network: Network) -> &Arc<GntDriver> {
+        match network {
+            Network::Rinkeby => &self.rinkeby_driver,
+            Network::Mainnet => &self.mainnet_driver,
         }
     }
 
@@ -55,10 +66,7 @@ impl GNTDriverProcessor {
         address: &str,
         network: Network,
     ) -> GNTDriverResult<()> {
-        match network {
-            Network::Rinkeby => self.rinkeby_driver.init(mode, address).await,
-            Network::Mainnet => self.mainnet_driver.init(mode, address).await,
-        }
+        self.driver(network).init(mode, address).await
     }
 
     pub async fn get_account_balance(
@@ -66,10 +74,7 @@ impl GNTDriverProcessor {
         address: &str,
         network: Network,
     ) -> GNTDriverResult<BigDecimal> {
-        match network {
-            Network::Rinkeby => self.rinkeby_driver.get_account_balance(address).await,
-            Network::Mainnet => self.mainnet_driver.get_account_balance(address).await,
-        }
+        self.driver(network).get_account_balance(address).await
     }
 
     pub async fn get_transaction_balance(
@@ -78,18 +83,9 @@ impl GNTDriverProcessor {
         recipient: &str,
         network: Network,
     ) -> GNTDriverResult<BigDecimal> {
-        match network {
-            Network::Rinkeby => {
-                self.rinkeby_driver
-                    .get_transaction_balance(sender, recipient)
-                    .await
-            }
-            Network::Mainnet => {
-                self.mainnet_driver
-                    .get_transaction_balance(sender, recipient)
-                    .await
-            }
-        }
+        self.driver(network)
+            .get_transaction_balance(sender, recipient)
+            .await
     }
 
     pub async fn schedule_payment(
@@ -100,18 +96,9 @@ impl GNTDriverProcessor {
         network: Network,
         due_date: DateTime<Utc>,
     ) -> GNTDriverResult<String> {
-        match network {
-            Network::Rinkeby => {
-                self.rinkeby_driver
-                    .schedule_payment(amount, sender, recipient, due_date)
-                    .await
-            }
-            Network::Mainnet => {
-                self.mainnet_driver
-                    .schedule_payment(amount, sender, recipient, due_date)
-                    .await
-            }
-        }
+        self.driver(network)
+            .schedule_payment(amount, sender, recipient, due_date)
+            .await
     }
 
     pub async fn verify_payment(
@@ -119,10 +106,7 @@ impl GNTDriverProcessor {
         confirmation: PaymentConfirmation,
         network: Network,
     ) -> GNTDriverResult<PaymentDetails> {
-        match network {
-            Network::Rinkeby => self.rinkeby_driver.verify_payment(&confirmation).await,
-            Network::Mainnet => self.mainnet_driver.verify_payment(&confirmation).await,
-        }
+        self.driver(network).verify_payment(&confirmation).await
     }
 
     pub async fn validate_allocation(
@@ -132,17 +116,8 @@ impl GNTDriverProcessor {
         amount: BigDecimal,
         existing_allocations: Vec<Allocation>,
     ) -> GNTDriverResult<bool> {
-        match network {
-            Network::Rinkeby => {
-                self.rinkeby_driver
-                    .validate_allocation(address, amount, existing_allocations)
-                    .await
-            }
-            Network::Mainnet => {
-                self.mainnet_driver
-                    .validate_allocation(address, amount, existing_allocations)
-                    .await
-            }
-        }
+        self.driver(network)
+            .validate_allocation(address, amount, existing_allocations)
+            .await
     }
 }

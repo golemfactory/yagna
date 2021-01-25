@@ -46,7 +46,6 @@ pub(crate) async fn register_account(
     token: String,
     mode: AccountMode,
 ) -> GNTDriverResult<()> {
-    log::info!("Register account: {}, mode: {:?}", address, mode);
     let msg = payment::RegisterAccount {
         address,
         driver: DRIVER_NAME.to_string(),
@@ -54,6 +53,8 @@ pub(crate) async fn register_account(
         token,
         mode,
     };
+
+    log::info!("Register account: {:?}", msg);
     bus::service(payment::BUS_ID)
         .send(msg)
         .await

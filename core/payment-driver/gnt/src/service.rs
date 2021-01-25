@@ -52,7 +52,7 @@ async fn fund(
     _caller: String,
     msg: Fund,
 ) -> Result<String, GenericError> {
-    log::info!("fund: {:?}", msg);
+    log::debug!("Funding account: {:?}", msg);
 
     let address = msg.address();
     let network = parse_network(msg.network())?;
@@ -69,7 +69,7 @@ async fn init(
     _caller: String,
     msg: Init,
 ) -> Result<Ack, GenericError> {
-    log::info!("init: {:?}", msg);
+    log::debug!("Initializing account: {:?}", msg);
 
     let address = msg.address();
     let mode = msg.mode();
@@ -213,6 +213,7 @@ fn parse_network(network: Option<String>) -> Result<Network, GenericError> {
 }
 
 fn parse_platform(platform: String) -> Result<Network, GenericError> {
+    // NOTE: This parsing method is not universally applicable
     let parts: Vec<&str> = platform.split("-").collect();
     let parts: [&str; 3] = parts
         .try_into()
