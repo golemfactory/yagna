@@ -13,14 +13,16 @@ async fn main() -> anyhow::Result<()> {
     log::debug!("account_list: {:?}", account_list);
 
     for account in account_list.into_iter() {
+        log::info!("Address: {:?}", account.address);
+
         let payer_status = bus::service(pay::BUS_ID)
             .call(pay::GetStatus {
-                platform: account.platform.to_string(),
-                address: account.address.to_string(),
+                address: account.address,
+                driver: account.driver,
+                network: Some(account.network),
+                token: Some(account.token),
             })
             .await??;
-
-        log::info!("Address: {:?}", account.address);
         log::info!("Balance: {:?}", payer_status.amount);
         log::debug!("payer_status: {:?}", payer_status);
     }

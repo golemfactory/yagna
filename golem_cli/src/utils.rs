@@ -10,7 +10,7 @@ pub async fn get_command_raw_output(program: &str, args: &[&str]) -> Result<Vec<
     let command_output = command
         .output()
         .await
-        .with_context(|| format!("Failed to spawn {:?}", program))?;
+        .with_context(|| format!("Failed to spawn {:?} {:?}", program, args))?;
     if !command_output.status.success() {
         log::debug!("subcommand failed");
         bail!("subcommand failed: {:?}", command);

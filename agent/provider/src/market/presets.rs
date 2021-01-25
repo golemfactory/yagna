@@ -414,7 +414,7 @@ impl fmt::Display for Preset {
         for (name, coeff) in self.usage_coeffs.iter() {
             write!(
                 f,
-                "    {:width$}{} NGNT\n",
+                "    {:width$}{} GLM\n",
                 name.to_readable(),
                 coeff,
                 width = align_coeff

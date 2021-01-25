@@ -10,6 +10,8 @@ use ya_client_model::payment::{Acceptance, DocumentStatus, NewAllocation, NewInv
 struct Args {
     #[structopt(long)]
     app_session_id: Option<String>,
+    #[structopt(long)]
+    platform: Option<String>,
 }
 
 #[actix_rt::main]
@@ -68,8 +70,8 @@ async fn main() -> anyhow::Result<()> {
     log::info!("Creating allocation...");
     let allocation = requestor
         .create_allocation(&NewAllocation {
-            address: None,          // Use default address (i.e. identity)
-            payment_platform: None, // Use default payment platform
+            address: None, // Use default address (i.e. identity)
+            payment_platform: args.platform,
             total_amount: BigDecimal::from(10u64),
             timeout: None,
             make_deposit: false,
@@ -118,13 +120,13 @@ async fn main() -> anyhow::Result<()> {
     log::debug!("events 2: {:?}", &invoice_events_accepted);
 
     log::info!("Waiting for payment...");
-    let timeout = Some(Duration::from_secs(300)); // Should be enough for GNT transfer
+    let timeout = Some(Duration::from_secs(300)); // Should be enough for GLM transfer
     let mut payments = provider
         .get_payments(Some(&now), timeout, None, args.app_session_id.clone())
         .await?;
     assert_eq!(payments.len(), 1);
     let payment = payments.pop().unwrap();
-    assert_eq!(&payment.amount, &invoice.amount);
+    assert!(&payment.amount >= &invoice.amount);
     log::info!("Payment verified correctly.");
 
     log::info!("Verifying invoice status...");

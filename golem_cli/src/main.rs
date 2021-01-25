@@ -44,7 +44,7 @@ enum Commands {
     /// Show provider status
     ///
     /// Requires golem running.
-    Status,
+    Status(status::StatusCommand),
 }
 
 #[derive(StructOpt)]
@@ -77,7 +77,7 @@ async fn my_main() -> Result</*exit code*/ i32> {
             SettingsCommand::Set(set) => settings::run(set).await,
             SettingsCommand::Show => settings_show::run().await,
         },
-        Commands::Status => status::run().await,
+        Commands::Status(config) => status::run(config).await,
     }
 }
 
@@ -86,8 +86,8 @@ pub fn banner() {
         include_str!("banner.txt"),
         version = ya_compile_time_utils::semver_str(),
         git_commit = ya_compile_time_utils::git_rev(),
+        date = ya_compile_time_utils::build_date(),
         build = ya_compile_time_utils::build_number_str().unwrap_or("-"),
-        date = ya_compile_time_utils::build_date()
     ))
     .unwrap();
 }
