@@ -1,5 +1,5 @@
 use crate::appkey;
-use crate::command::{PaymentType, YaCommand};
+use crate::command::{YaCommand, ERC20_DRIVER, ZKSYNC_DRIVER};
 use crate::setup::RunConfig;
 use anyhow::{Context, Result};
 use futures::channel::{mpsc, oneshot};
@@ -117,18 +117,18 @@ pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
     if let Some(account) = provider_config.account {
         let address = account.address.to_lowercase();
         cmd.yagna()?
-            .payment_init(&address, &PaymentType::PLAIN)
+            .payment_init(&address, &config.network, &ERC20_DRIVER)
             .await?;
         cmd.yagna()?
-            .payment_init(&address, &PaymentType::ZK)
+            .payment_init(&address, &config.network, &ZKSYNC_DRIVER)
             .await?;
     } else {
         let id = cmd.yagna()?.default_id().await?;
         cmd.yagna()?
-            .payment_init(&id.node_id, &PaymentType::PLAIN)
+            .payment_init(&id.node_id, &config.network, &ERC20_DRIVER)
             .await?;
         cmd.yagna()?
-            .payment_init(&id.node_id, &PaymentType::ZK)
+            .payment_init(&id.node_id, &config.network, &ZKSYNC_DRIVER)
             .await?;
     }
 

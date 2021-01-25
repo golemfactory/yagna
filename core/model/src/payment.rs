@@ -232,8 +232,10 @@ pub mod local {
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct GetStatus {
-        pub platform: String,
         pub address: String,
+        pub driver: String,
+        pub network: Option<String>,
+        pub token: Option<String>,
     }
 
     impl RpcMessage for GetStatus {
@@ -248,6 +250,9 @@ pub mod local {
         pub reserved: BigDecimal,
         pub outgoing: StatusNotes,
         pub incoming: StatusNotes,
+        pub driver: String,
+        pub network: String,
+        pub token: String,
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize, Default)]

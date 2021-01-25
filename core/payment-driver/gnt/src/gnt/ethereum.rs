@@ -1,8 +1,7 @@
 use ethereum_types::{Address, H256, U256, U64};
-use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
-use std::env;
 
+use crate::networks::Network;
 use crate::GNTDriverError;
 use std::time::Duration;
 use web3::contract::Contract;
@@ -10,52 +9,14 @@ use web3::transports::Http;
 use web3::types::{Bytes, TransactionId, TransactionReceipt};
 use web3::Web3;
 
-const MAINNET_ID: u64 = 1;
-const RINKEBY_ID: u64 = 4;
-
-const MAINNET_NAME: &str = "mainnet";
-const RINKEBY_NAME: &str = "rinkeby";
-
-const CHAIN_ENV_VAR: &str = "CHAIN";
-const GETH_ADDRESS_ENV_VAR: &str = "GETH_ADDRESS";
-
-fn default_geth_address(chain: Chain) -> &'static str {
-    match chain {
-        Chain::Rinkeby => "http://1.geth.testnet.golem.network:55555",
-        Chain::Mainnet => "https://geth.golem.network:55555",
-    }
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub enum Chain {
-    Mainnet,
-    Rinkeby,
-}
-
-impl Default for Chain {
-    fn default() -> Self {
-        Chain::Rinkeby
-    }
-}
-
-impl Chain {
-    pub fn from_env() -> Result<Chain, GNTDriverError> {
-        if let Some(chain_name) = env::var(CHAIN_ENV_VAR).ok() {
-            match chain_name.as_str() {
-                MAINNET_NAME => Ok(Chain::Mainnet),
-                RINKEBY_NAME => Ok(Chain::Rinkeby),
-                _chain => Err(GNTDriverError::UnknownChain(_chain.into())),
-            }
-        } else {
-            Ok(Default::default())
-        }
-    }
-
-    pub fn id(&self) -> u64 {
-        match &self {
-            Chain::Mainnet => MAINNET_ID,
-            Chain::Rinkeby => RINKEBY_ID,
-        }
+fn geth_address(network: Network) -> Cow<'static, str> {
+    match network {
+        Network::Rinkeby => std::env::var("ERC20_RINKEBY_GETH_ADDR")
+            .map(Cow::Owned)
+            .unwrap_or(Cow::Borrowed("http://1.geth.testnet.golem.network:55555")),
+        Network::Mainnet => std::env::var("ERC20_MAINNET_GETH_ADDR")
+            .map(Cow::Owned)
+            .unwrap_or(Cow::Borrowed("https://geth.golem.network:55555")),
     }
 }
 
@@ -66,30 +27,20 @@ pub struct EthereumClientBuilder {
 }
 
 impl EthereumClientBuilder {
-    pub fn from_env() -> EthereumClientResult<Self> {
-        let chain = Chain::from_env()?;
-        Self::with_chain(chain)
-    }
-
-    pub fn with_chain(chain: Chain) -> EthereumClientResult<Self> {
-        let geth_address = env::var(GETH_ADDRESS_ENV_VAR)
-            .ok()
-            .map(Cow::Owned)
-            .unwrap_or_else(|| Cow::Borrowed(default_geth_address(chain)));
-        Ok(Self { geth_address })
+    pub fn with_network(network: Network) -> Self {
+        let geth_address = geth_address(network);
+        Self { geth_address }
     }
 
     pub fn build(self) -> EthereumClientResult<EthereumClient> {
         let transport = web3::transports::Http::new(self.geth_address.as_ref())?;
         Ok(EthereumClient {
-            chain: Chain::from_env()?,
             web3: Web3::new(transport),
         })
     }
 }
 
 pub struct EthereumClient {
-    chain: Chain,
     web3: Web3<Http>,
 }
 
@@ -146,10 +97,6 @@ impl EthereumClient {
         }
     }
 
-    pub fn chain_id(&self) -> u64 {
-        self.chain.id()
-    }
-
     pub async fn get_next_nonce(&self, eth_address: Address) -> EthereumClientResult<U256> {
         let nonce = self.web3.eth().transaction_count(eth_address, None).await?;
         Ok(nonce)
@@ -180,14 +127,7 @@ mod tests {
     const ETH_ADDRESS: &str = "0x2f7681bfd7c4f0bf59ad1907d754f93b63492b4e";
 
     fn eth_client() -> anyhow::Result<EthereumClient> {
-        Ok(EthereumClientBuilder::with_chain(Chain::Rinkeby)?.build()?)
-    }
-
-    #[test]
-    fn test_get_rinkeby_chain_id() -> anyhow::Result<()> {
-        let ethereum_client = eth_client()?;
-        assert_eq!(ethereum_client.chain_id(), Chain::Rinkeby.id());
-        Ok(())
+        Ok(EthereumClientBuilder::with_network(Network::Rinkeby).build()?)
     }
 
     #[tokio::test]
