@@ -1,19 +1,32 @@
 
-.github/                                @prekucki
-.github/workflows/rust.yml              @golemfactory/ya-integration
+/.github/                                @prekucki
+/.github/workflows/rust.yml              @golemfactory/ya-integration
 
-core/activity/                          @golemfactory/exe-unit
-core/model/src/activity.rs              @golemfactory/exe-unit
-exe-unit/                               @golemfactory/exe-unit
+# Activity
+/core/activity/                          @golemfactory/exe-unit
+/core/model/src/activity.rs              @golemfactory/exe-unit
 
-core/market/                            @golemfactory/ya-market
-core/model/src/market.rs                @golemfactory/ya-market
+/core/sgx/                               @golemfactory/exe-unit
+/core/model/src/sgx.rs                   @golemfactory/exe-unit
 
-core/net/                               @golemfactory/ya-net
-core/model/src/net.rs                   @golemfactory/ya-net
+/exe-unit/                               @golemfactory/exe-unit
 
-core/payment-driver                     @golemfactory/ya-payment
-core/payment                            @golemfactory/ya-payment
-core/model/src/payment.rs               @golemfactory/ya-payment
+/utils/transfer                          @golemfactory/exe-unit
 
-agent/provider                          @golemfactory/ya-provider
+# Market
+/core/market/                            @golemfactory/ya-market
+/core/model/src/market.rs                @golemfactory/ya-market
+
+# Net
+/core/net/                               @golemfactory/ya-net
+/core/model/src/net.rs                   @golemfactory/ya-net
+
+# Payment
+/core/payment-driver                     @golemfactory/ya-payment
+/core/payment                            @golemfactory/ya-payment
+/core/model/src/payment.rs               @golemfactory/ya-payment
+
+# Provider
+/agent/provider                          @golemfactory/ya-provider
+/golem_cli                               @golemfactory/ya-provider
+/utils/agreement-utils                   @golemfactory/ya-provider
