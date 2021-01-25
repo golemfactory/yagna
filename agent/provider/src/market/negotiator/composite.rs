@@ -115,6 +115,7 @@ impl Handler<ReactToAgreement> for CompositeNegotiator {
     type Result = anyhow::Result<AgreementResponse>;
 
     fn handle(&mut self, msg: ReactToAgreement, _: &mut Context<Self>) -> Self::Result {
+        let agreement_id = msg.agreement.agreement_id.clone();
         let (demand_proposal, offer_proposal) = to_proposal_views(msg.agreement).map_err(|e| {
             anyhow!(
                 "Negotiator failed to extract Proposals from Agreement. {}",
@@ -128,7 +129,10 @@ impl Handler<ReactToAgreement> for CompositeNegotiator {
             .components
             .negotiate_step(&demand_proposal, offer_proposal)?
         {
-            NegotiationResult::Ready { .. } => Ok(AgreementResponse::ApproveAgreement),
+            NegotiationResult::Ready { .. } => {
+                self.components.on_agreement_approved(&agreement_id)?;
+                Ok(AgreementResponse::ApproveAgreement)
+            }
             NegotiationResult::Reject { reason } => {
                 Ok(AgreementResponse::RejectAgreement { reason })
             }
