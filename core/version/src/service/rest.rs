@@ -13,7 +13,7 @@ pub fn web_scope(db: DbExecutor) -> actix_web::Scope {
         .service(get_version)
 }
 
-#[actix_web::get("")]
+#[actix_web::get("/get")]
 async fn get_version(db: web::Data<DbExecutor>) -> impl Responder {
     match db.as_dao::<ReleaseDAO>().version().await {
         Ok(v) => HttpResponse::Ok().json(v),
