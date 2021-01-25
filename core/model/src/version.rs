@@ -43,14 +43,10 @@ impl RpcMessage for Get {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, thiserror::Error)]
 #[serde(rename_all = "camelCase")]
-#[error("Version {version}{} '{name}' released {}",
-    gitrev.as_ref().map(|r| format!(" ({})",r)).unwrap_or("".into()),
-    release_ts.format("%Y-%m-%d")
-)]
+#[error("Version {version} '{name}' released {}", release_ts.format("%Y-%m-%d"))]
 pub struct Release {
     pub version: String,
     pub name: String,
-    pub gitrev: Option<String>,
     pub seen: bool,
     pub release_ts: NaiveDateTime,
     pub insertion_ts: Option<NaiveDateTime>,
@@ -69,13 +65,12 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_release_no_gitrev_to_string() {
+    fn test_release_to_string() {
         let now = NaiveDateTime::parse_from_str("2015-10-13T15:43:00GMT+2", "%Y-%m-%dT%H:%M:%S%Z")
             .unwrap();
         let r = Release {
             version: "0.6.1".to_string(),
             name: "some code name".to_string(),
-            gitrev: None,
             seen: false,
             release_ts: now,
             insertion_ts: None,
@@ -85,26 +80,6 @@ mod test {
         assert_eq!(
             r.to_string(),
             "Version 0.6.1 'some code name' released 2015-10-13"
-        );
-    }
-
-    #[test]
-    fn test_release_gitrev_to_string() {
-        let now = NaiveDateTime::parse_from_str("2015-10-13T15:43:00GMT+2", "%Y-%m-%dT%H:%M:%S%Z")
-            .unwrap();
-        let r = Release {
-            version: "0.6.1".to_string(),
-            name: "some code name".to_string(),
-            gitrev: Some("0032bb27".into()),
-            seen: false,
-            release_ts: now,
-            insertion_ts: None,
-            update_ts: None,
-        };
-
-        assert_eq!(
-            r.to_string(),
-            "Version 0.6.1 (0032bb27) 'some code name' released 2015-10-13"
         );
     }
 }

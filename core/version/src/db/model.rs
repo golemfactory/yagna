@@ -24,8 +24,8 @@ impl DBRelease {
         Ok(DBRelease {
             version: ya_compile_time_utils::semver_str().into(),
             name: format!(
-                "{} {}{}",
-                ya_compile_time_utils::semver_str(),
+                "({} {}{})",
+                ya_compile_time_utils::git_rev(),
                 ya_compile_time_utils::build_date(),
                 ya_compile_time_utils::build_number_str()
                     .map(|bn| format!(" build #{}", bn))
@@ -44,7 +44,6 @@ impl From<DBRelease> for ya_core_model::version::Release {
         Self {
             version: db_rel.version,
             name: db_rel.name,
-            gitrev: None,
             seen: db_rel.seen,
             release_ts: db_rel.release_ts,
             insertion_ts: db_rel.insertion_ts,

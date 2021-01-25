@@ -76,7 +76,6 @@ mod test {
         let r = Release {
             version: "0.6.1".to_string(),
             name: "some code name".to_string(),
-            gitrev: None,
             seen: false,
             release_ts: now,
             insertion_ts: None,

@@ -1,6 +1,7 @@
 use anyhow::anyhow;
 use metrics::counter;
 use self_update::backends::github::UpdateBuilder;
+use std::convert::TryFrom;
 
 use ya_core_model::version::Release;
 use ya_persistence::executor::DbExecutor;
@@ -8,7 +9,6 @@ use ya_persistence::executor::DbExecutor;
 use crate::db::dao::ReleaseDAO;
 use crate::db::model::DBRelease;
 use crate::service::cli::ReleaseMessage;
-use std::convert::TryFrom;
 
 const REPO_OWNER: &'static str = "golemfactory";
 const REPO_NAME: &'static str = "yagna";
