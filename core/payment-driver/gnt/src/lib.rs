@@ -388,7 +388,7 @@ impl GntDriver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gnt::ethereum::*;
+    use crate::gnt::config::RINKEBY_CONFIG;
     use crate::utils;
     use ya_persistence::executor::DbExecutor;
 
@@ -398,7 +398,12 @@ mod tests {
     #[actix_rt::test]
     async fn test_new_driver() -> anyhow::Result<()> {
         {
-            let driver = GntDriver::new(DbExecutor::new(":memory:").unwrap()).await;
+            let driver = GntDriver::new(
+                DbExecutor::new(":memory:").unwrap(),
+                Network::Rinkeby,
+                *RINKEBY_CONFIG,
+            )
+            .await;
             assert!(driver.is_ok());
         }
 
@@ -408,7 +413,7 @@ mod tests {
 
     #[actix_rt::test]
     async fn test_get_gnt_balance() -> anyhow::Result<()> {
-        let ethereum_client = EthereumClientBuilder::with_chain(Chain::Rinkeby)?.build()?;
+        let ethereum_client = EthereumClientBuilder::with_network(Network::Rinkeby).build()?;
         let gnt_contract = common::prepare_gnt_contract(&ethereum_client, &config::RINKEBY_CONFIG)?;
         let gnt_balance =
             common::get_gnt_balance(&gnt_contract, utils::str_to_addr(ETH_ADDRESS)?).await?;
@@ -419,7 +424,13 @@ mod tests {
     #[ignore]
     #[actix_rt::test]
     async fn test_get_account_balance() -> anyhow::Result<()> {
-        let driver = GntDriver::new(DbExecutor::new(":memory:")?).await.unwrap();
+        let driver = GntDriver::new(
+            DbExecutor::new(":memory:")?,
+            Network::Rinkeby,
+            *RINKEBY_CONFIG,
+        )
+        .await
+        .unwrap();
         let gnt_balance = driver.get_account_balance(ETH_ADDRESS).await.unwrap();
         assert!(gnt_balance >= utils::str_to_big_dec("0")?);
         Ok(())
@@ -428,7 +439,13 @@ mod tests {
     #[ignore]
     #[actix_rt::test]
     async fn test_verify_payment() -> anyhow::Result<()> {
-        let driver = GntDriver::new(DbExecutor::new(":memory:")?).await.unwrap();
+        let driver = GntDriver::new(
+            DbExecutor::new(":memory:")?,
+            Network::Rinkeby,
+            *RINKEBY_CONFIG,
+        )
+        .await
+        .unwrap();
         let tx_hash: Vec<u8> =
             hex::decode("bb7f9fbf3fd08e75f1f3bda035b8d3109edce96dc6bab5624503146217a79c24")
                 .unwrap();

@@ -127,14 +127,7 @@ mod tests {
     const ETH_ADDRESS: &str = "0x2f7681bfd7c4f0bf59ad1907d754f93b63492b4e";
 
     fn eth_client() -> anyhow::Result<EthereumClient> {
-        Ok(EthereumClientBuilder::with_chain(Chain::Rinkeby)?.build()?)
-    }
-
-    #[test]
-    fn test_get_rinkeby_chain_id() -> anyhow::Result<()> {
-        let ethereum_client = eth_client()?;
-        assert_eq!(ethereum_client.chain_id(), Chain::Rinkeby.id());
-        Ok(())
+        Ok(EthereumClientBuilder::with_network(Network::Rinkeby).build()?)
     }
 
     #[tokio::test]

@@ -251,7 +251,8 @@ impl PaymentDriver for ZksyncDriver {
             DbNetwork::Mainnet => Ok(format!(
                 "Your mainnet zksync address is {}. \
                 Go to https://chat.golem.network and channel #funding \
-                Paste your address and we will fund it after some short verification.", address
+                Paste your address and we will fund it after some short verification.",
+                address
             )),
         }
     }
