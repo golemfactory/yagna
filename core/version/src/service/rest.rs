@@ -5,7 +5,7 @@ use ya_persistence::executor::DbExecutor;
 
 use actix_web::{web, HttpResponse, Responder};
 
-pub const VERSION_API_PATH: &str = "";
+pub const VERSION_API_PATH: &str = "/version";
 
 pub fn web_scope(db: DbExecutor) -> actix_web::Scope {
     actix_web::web::scope(VERSION_API_PATH)
@@ -13,7 +13,7 @@ pub fn web_scope(db: DbExecutor) -> actix_web::Scope {
         .service(get_version)
 }
 
-#[actix_web::get("/version")]
+#[actix_web::get("")]
 async fn get_version(db: web::Data<DbExecutor>) -> impl Responder {
     match db.as_dao::<ReleaseDAO>().version().await {
         Ok(v) => HttpResponse::Ok().json(v),
