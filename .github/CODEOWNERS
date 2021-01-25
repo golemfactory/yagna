@@ -1,36 +1,45 @@
 
-.github/                                @prekucki
-.github/workflows/rust.yml              @golemfactory/ya-integration
+/.github/                                @prekucki
+/.github/workflows/rust.yml              @golemfactory/ya-integration
 
 # Activity
-core/activity/                          @golemfactory/exe-unit
-core/model/src/activity.rs              @golemfactory/exe-unit
+/core/activity/                          @golemfactory/exe-unit
+/core/model/src/activity.rs              @golemfactory/exe-unit
 
-core/sgx/                               @golemfactory/exe-unit
-core/model/src/sgx.rs                   @golemfactory/exe-unit
+/core/sgx/                               @golemfactory/exe-unit
+/core/model/src/sgx.rs                   @golemfactory/exe-unit
 
-exe-unit/                               @golemfactory/exe-unit
+/exe-unit/                               @golemfactory/exe-unit
+
+/utils/transfer                          @golemfactory/exe-unit
 
 # Market
-core/market/                            @golemfactory/ya-market
-core/model/src/market.rs                @golemfactory/ya-market
+/core/market/                            @golemfactory/ya-market
+/core/model/src/market.rs                @golemfactory/ya-market
 
 # Net
-service-bus/                            @golemfactory/ya-net
-core/net/                               @golemfactory/ya-net
-core/model/src/net.rs                   @golemfactory/ya-net
+/service-bus/                            @golemfactory/ya-net
+/core/net/                               @golemfactory/ya-net
+/core/model/src/net.rs                   @golemfactory/ya-net
 
 # Payment
-core/payment-driver                     @golemfactory/ya-payment
-core/payment                            @golemfactory/ya-payment
-core/model/src/payment.rs               @golemfactory/ya-payment
+/core/payment-driver                     @golemfactory/ya-payment
+/core/payment                            @golemfactory/ya-payment
+/core/model/src/payment.rs               @golemfactory/ya-payment
 
 # Provider
-agent/provider                          @golemfactory/ya-provider
-golem_cli                               @golemfactory/ya-provider
+/agent/provider                          @golemfactory/ya-provider
+/golem_cli                               @golemfactory/ya-provider
 
 # Utils
-core/metrics/                           @golemfactory/ya-utils
-core/version/                           @golemfactory/ya-utils
-core/model/src/version.rs               @golemfactory/ya-utils
-utils                                   @golemfactory/ya-utils
+/core/metrics/                           @golemfactory/ya-utils
+/core/version/                           @golemfactory/ya-utils
+/core/model/src/version.rs               @golemfactory/ya-utils
+/utils/compile-time-utils                @golemfactory/ya-utils
+/utils/actix_utils                       @golemfactory/ya-utils
+/utils/path                              @golemfactory/ya-utils
+/utils/diesel-utils                      @golemfactory/ya-utils
+/utils/std-utils                         @golemfactory/ya-utils
+/utils/file-logging                      @golemfactory/ya-utils
+/utils/agreement-utils                   @golemfactory/ya-utils
+/utils/process                           @golemfactory/ya-utils
