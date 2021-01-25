@@ -6,7 +6,6 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4af87564ff659dee8f9981540cac9418c45e910c8072fdedd643a262a38fcaf"
 dependencies = [
- "actix-http 1.0.1",
  "actix-rt",
  "actix_derive",
  "bitflags 1.2.1",
@@ -21,8 +20,6 @@ dependencies = [
  "smallvec 1.6.1",
  "tokio 0.2.24",
  "tokio-util 0.2.0",
- "trust-dns-proto 0.18.0-alpha.2",
- "trust-dns-resolver 0.18.0-alpha.2",
 ]
 
 [[package]]
@@ -2693,7 +2690,7 @@ dependencies = [
  "tokio 0.2.24",
  "url 2.2.0",
  "ya-core-model",
- "ya-service-bus 0.3.0",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -7084,7 +7081,7 @@ dependencies = [
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-api-web",
- "ya-service-bus 0.3.0",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -7169,7 +7166,7 @@ dependencies = [
  "serde_bytes",
  "thiserror",
  "ya-client-model",
- "ya-service-bus 0.3.0",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -7199,7 +7196,7 @@ dependencies = [
  "ya-core-model",
  "ya-persistence",
  "ya-service-api-interfaces",
- "ya-service-bus 0.3.0",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -7249,7 +7246,7 @@ dependencies = [
  "ya-core-model",
  "ya-runtime-api",
  "ya-sb-router",
- "ya-service-bus 0.3.0",
+ "ya-service-bus",
  "ya-transfer",
  "ya-utils-path",
 ]
@@ -7310,7 +7307,7 @@ dependencies = [
  "ya-core-model",
  "ya-persistence",
  "ya-service-api-interfaces",
- "ya-service-bus 0.3.0",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -7349,7 +7346,7 @@ dependencies = [
  "ya-service-api",
  "ya-service-api-derive",
  "ya-service-api-interfaces",
- "ya-service-bus 0.3.0",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -7401,7 +7398,7 @@ dependencies = [
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-api-web",
- "ya-service-bus 0.3.0",
+ "ya-service-bus",
  "ya-std-utils",
 ]
 
@@ -7441,7 +7438,7 @@ dependencies = [
  "ya-core-model",
  "ya-service-api",
  "ya-service-api-interfaces",
- "ya-service-bus 0.3.0",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -7464,7 +7461,7 @@ dependencies = [
  "ya-sb-router",
  "ya-service-api",
  "ya-service-api-interfaces",
- "ya-service-bus 0.3.0",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -7512,7 +7509,7 @@ dependencies = [
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-api-web",
- "ya-service-bus 0.3.0",
+ "ya-service-bus",
  "ya-zksync-driver",
 ]
 
@@ -7537,7 +7534,7 @@ dependencies = [
  "ya-client-model",
  "ya-core-model",
  "ya-persistence",
- "ya-service-bus 0.3.0",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -7749,28 +7746,7 @@ dependencies = [
  "ya-service-api-cache",
  "ya-service-api-derive",
  "ya-service-api-interfaces",
- "ya-service-bus 0.3.0",
-]
-
-[[package]]
-name = "ya-service-bus"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c395d57daee092f248a649e72d4039d19a0c1688c03cf9172c9b3ffa45a1661"
-dependencies = [
- "actix",
- "futures 0.3.12",
- "lazy_static",
- "log",
- "rand 0.7.3",
- "serde",
- "serde_json",
- "thiserror",
- "tokio 0.2.24",
- "tokio-util 0.2.0",
- "url 2.2.0",
- "ya-sb-proto",
- "ya-sb-util",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -7803,7 +7779,7 @@ dependencies = [
  "graphene-sgx",
  "ya-client-model",
  "ya-core-model",
- "ya-service-bus 0.3.0",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -7850,7 +7826,7 @@ dependencies = [
  "ya-client-model",
  "ya-core-model",
  "ya-net",
- "ya-service-bus 0.3.0",
+ "ya-service-bus",
  "ya-utils-path",
  "zip",
 ]
@@ -7928,7 +7904,7 @@ dependencies = [
  "ya-persistence",
  "ya-service-api",
  "ya-service-api-interfaces",
- "ya-service-bus 0.2.2",
+ "ya-service-bus",
 ]
 
 [[package]]
@@ -7999,7 +7975,7 @@ dependencies = [
  "ya-service-api-derive",
  "ya-service-api-interfaces",
  "ya-service-api-web",
- "ya-service-bus 0.3.0",
+ "ya-service-bus",
  "ya-sgx",
  "ya-utils-futures",
  "ya-utils-path",
