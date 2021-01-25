@@ -10,12 +10,14 @@ use uuid::Uuid;
 use ya_payment_driver::{
     dao::{payment::PaymentDao, transaction::TransactionDao, DbExecutor},
     db::models::{
-        PaymentEntity, TransactionEntity, TransactionStatus, PAYMENT_STATUS_FAILED,
+        Network, PaymentEntity, TransactionEntity, TransactionStatus, PAYMENT_STATUS_FAILED,
         PAYMENT_STATUS_NOT_YET, TX_CREATED,
     },
     model::{GenericError, PaymentDetails, SchedulePayment},
     utils,
 };
+
+use crate::network::platform_to_network_token;
 
 pub struct ZksyncDao {
     db: DbExecutor,
@@ -34,10 +36,14 @@ impl ZksyncDao {
         self.db.as_dao::<TransactionDao>()
     }
 
-    pub async fn get_pending_payments(&self, node_id: &str) -> Vec<PaymentEntity> {
+    pub async fn get_pending_payments(
+        &self,
+        node_id: &str,
+        network: Network,
+    ) -> Vec<PaymentEntity> {
         match self
             .payment()
-            .get_pending_payments(node_id.to_string())
+            .get_pending_payments(node_id.to_string(), network)
             .await
         {
             Ok(payments) => payments,
@@ -52,10 +58,11 @@ impl ZksyncDao {
         }
     }
 
-    pub async fn insert_payment(&self, order_id: &str, msg: &SchedulePayment) {
+    pub async fn insert_payment(&self, order_id: &str, msg: &SchedulePayment) -> Result<(), GenericError> {
         let recipient = msg.recipient().to_owned();
         let gnt_amount = utils::big_dec_to_u256(msg.amount());
         let gas_amount = Default::default();
+        let (network, _token) = platform_to_network_token(msg.platform())?;
 
         let payment = PaymentEntity {
             amount: utils::u256_to_big_endian_hex(gnt_amount),
@@ -66,6 +73,7 @@ impl ZksyncDao {
             recipient: recipient.clone(),
             status: PAYMENT_STATUS_NOT_YET,
             tx_id: None,
+            network,
         };
         if let Err(e) = self.payment().insert(payment).await {
             log::error!(
@@ -73,9 +81,10 @@ impl ZksyncDao {
                 order_id,
                 msg,
                 e
-            )
-            // TO CHECK: Should it continue or stop the process...
+            );
+            return Err(GenericError::new(e));
         }
+        Ok(())
     }
 
     pub async fn insert_transaction(
@@ -127,6 +136,17 @@ impl ZksyncDao {
             };
         }
         vec![]
+    }
+
+    pub async fn get_first_payment(&self, tx_hash: &str) -> Option<PaymentEntity> {
+        match self
+            .payment()
+            .get_first_by_tx_hash(tx_hash.to_string())
+            .await
+        {
+            Ok(payment) => Some(payment),
+            Err(_) => None,
+        }
     }
 
     pub async fn transaction_success(&self, tx_id: &str, tx_hash: &str, order_id: &str) {

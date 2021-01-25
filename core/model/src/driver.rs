@@ -396,6 +396,9 @@ impl Exit {
     pub fn to(&self) -> Option<String> {
         self.to.clone()
     }
+    pub fn network(&self) -> Option<String> {
+        self.network.clone()
+    }
 }
 
 impl RpcMessage for Exit {
