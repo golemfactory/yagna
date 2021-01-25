@@ -9,7 +9,6 @@ exe-unit/                               @golemfactory/exe-unit
 core/market/                            @golemfactory/ya-market
 core/model/src/market.rs                @golemfactory/ya-market
 
-service-bus/                            @golemfactory/ya-net
 core/net/                               @golemfactory/ya-net
 core/model/src/net.rs                   @golemfactory/ya-net
 

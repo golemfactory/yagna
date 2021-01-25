@@ -21,6 +21,12 @@ pub mod local {
     }
 
     #[derive(Serialize, Deserialize)]
+    pub struct SendBroadcastStub {
+        pub id: Option<String>,
+        pub topic: String,
+    }
+
+    #[derive(Serialize, Deserialize)]
     pub struct SendBroadcastMessage<M> {
         id: Option<String>,
         topic: String,
