@@ -16,7 +16,7 @@ const DEFAULT_FORMAT: &str = "json";
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AgreementView {
     pub json: Value,
-    pub id: String,
+    pub agreement_id: String,
 }
 
 impl AgreementView {
@@ -122,7 +122,7 @@ impl TryFrom<Value> for AgreementView {
 
         Ok(AgreementView {
             json: value,
-            id: agreement_id,
+            agreement_id: agreement_id,
         })
     }
 }
@@ -744,7 +744,7 @@ constraints: |
         });
         let mut view = AgreementView {
             json: try_from_json(REMOVE_EXAMPLE).unwrap(),
-            id: Default::default(),
+            agreement_id: Default::default(),
         };
         view.remove_property("/properties/golem/srv/caps/multi-activity")
             .unwrap();
@@ -773,7 +773,7 @@ constraints: |
         });
         let mut view = AgreementView {
             json: try_from_json(REMOVE_EXAMPLE).unwrap(),
-            id: Default::default(),
+            agreement_id: Default::default(),
         };
         view.remove_property("/properties/golem/activity/caps/transfer/protocol/1")
             .unwrap();
@@ -799,7 +799,7 @@ constraints: |
         });
         let mut view = AgreementView {
             json: try_from_json(REMOVE_EXAMPLE).unwrap(),
-            id: Default::default(),
+            agreement_id: Default::default(),
         };
         view.remove_property("/properties/golem/inf").unwrap();
 

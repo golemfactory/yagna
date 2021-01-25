@@ -30,7 +30,7 @@ pub enum NegotiationResult {
 ///
 /// Future goal is to allow developers to create their own specifications and implement
 /// components, that are able to negotiate this specification.
-/// It would be useful to have `NegotiatorComponenta`, that can be loaded from shared library
+/// It would be useful to have `NegotiatorComponent`, that can be loaded from shared library
 /// or can communicate with negotiation logic in external process (maybe RPC or TCP??).
 pub trait NegotiatorComponent {
     /// Push forward negotiations as far as you can.
@@ -96,7 +96,7 @@ impl NegotiatorComponent for NegotiatorsPack {
                     log::info!(
                         "Negotiator component '{}' is still negotiating Proposal [{}].",
                         name,
-                        demand.id
+                        demand.agreement_id
                     );
                     all_ready = false;
                     offer

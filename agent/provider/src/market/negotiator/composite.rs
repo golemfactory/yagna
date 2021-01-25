@@ -57,13 +57,13 @@ impl Handler<ReactToProposal> for CompositeNegotiator {
         // them from initial Offer.
         let constraints = msg.prev_proposal.constraints;
         let proposal = ProposalView {
-            id: msg.demand.proposal_id,
+            agreement_id: msg.demand.proposal_id,
             json: expand(msg.demand.properties),
         };
 
         let offer_proposal = ProposalView {
             json: expand(msg.prev_proposal.properties),
-            id: msg.prev_proposal.proposal_id,
+            agreement_id: msg.prev_proposal.proposal_id,
         };
 
         let result = self.components.negotiate_step(&proposal, offer_proposal)?;
@@ -84,6 +84,7 @@ pub fn to_proposal_views(
     mut agreement: AgreementView,
 ) -> anyhow::Result<(ProposalView, ProposalView)> {
     // Dispatch Agreement into separate Demand-Offer Proposal pair.
+    // TODO: We should get ProposalId here, but Agreement doen't store it anywhere.
     let offer_id = agreement.pointer_typed("/offer/offerId")?;
     let demand_id = agreement.pointer_typed("/demand/demandId")?;
     let offer_proposal = agreement
@@ -100,12 +101,12 @@ pub fn to_proposal_views(
 
     let offer_proposal = ProposalView {
         json: offer_proposal,
-        id: offer_id,
+        agreement_id: offer_id,
     };
 
     let demand_proposal = ProposalView {
         json: demand_proposal,
-        id: demand_id,
+        agreement_id: demand_id,
     };
     Ok((demand_proposal, offer_proposal))
 }

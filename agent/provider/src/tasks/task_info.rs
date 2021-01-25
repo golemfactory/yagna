@@ -43,7 +43,7 @@ fn multi_activity_from(agreement: &AgreementView) -> Result<bool> {
 impl TaskInfo {
     pub fn from(agreement: &AgreementView) -> Result<TaskInfo> {
         Ok(TaskInfo {
-            agreement_id: agreement.id.clone(),
+            agreement_id: agreement.agreement_id.clone(),
             expiration: agreement_expiration_from(agreement)?,
             multi_activity: multi_activity_from(agreement)?,
         })

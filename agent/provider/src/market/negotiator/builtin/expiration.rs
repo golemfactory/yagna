@@ -81,7 +81,7 @@ impl NegotiatorComponent for LimitExpiration {
         if req_expiration > max_expiration || req_expiration < min_expiration {
             log::info!(
                 "Negotiator: Reject proposal [{}] due to expiration limits.",
-                demand.id
+                demand.agreement_id
             );
             return Ok(NegotiationResult::Reject {
                 reason: Some(Reason::new(format!(
@@ -170,7 +170,7 @@ mod test_expiration_negotiator {
 
     fn properties_to_proposal(value: serde_json::Value) -> ProposalView {
         ProposalView {
-            id: "2332850934yer".to_string(),
+            agreement_id: "2332850934yer".to_string(),
             json: expand(value),
         }
     }
@@ -191,7 +191,7 @@ mod test_expiration_negotiator {
     impl ToProposal for OfferDefinition {
         fn to_proposal(self) -> ProposalView {
             ProposalView {
-                id: "sagdshgdfgd".to_string(),
+                agreement_id: "sagdshgdfgd".to_string(),
                 json: expand(self.into_json()),
             }
         }
