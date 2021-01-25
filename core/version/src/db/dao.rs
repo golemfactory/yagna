@@ -36,6 +36,10 @@ impl<'c> ReleaseDAO<'c> {
         .await
     }
 
+    pub async fn current_release(&self) -> anyhow::Result<Option<Release>> {
+        readonly_transaction(self.pool, move |conn| get_current_release(conn)).await
+    }
+
     pub async fn pending_release(&self) -> anyhow::Result<Option<Release>> {
         readonly_transaction(self.pool, move |conn| get_pending_release(conn)).await
     }

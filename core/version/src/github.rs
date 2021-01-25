@@ -48,6 +48,11 @@ pub async fn check_latest_release(db: &DbExecutor) -> anyhow::Result<Release> {
 
 pub(crate) async fn check_running_release(db: &DbExecutor) -> anyhow::Result<Release> {
     let running_tag = ya_compile_time_utils::git_tag();
+
+    if let Some(release) = db.as_dao::<ReleaseDAO>().current_release().await? {
+        return Ok(release);
+    }
+
     log::debug!("Checking release for running tag: {}", running_tag);
 
     let release = match UpdateBuilder::new()

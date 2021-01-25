@@ -5,17 +5,16 @@ use ya_core_model::version;
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
-const UPDATE_CURL: &'static str = "curl -sSf https://join.golem.network/as-provider | bash -";
-const SILENCE_CMD: &'static str = "yagna version skip";
+const UPDATE_CMD: &'static str = "curl -sSf https://join.golem.network/as-provider | bash -";
+const SKIP_CMD: &'static str = "yagna version skip";
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub(crate) enum ReleaseMessage<'a> {
-    #[error("New Yagna release is available: '{}' (v{}).\n\
-    Update via\n\t`{}`\nor skip\n\t`{}`", .0.name, .0.version, UPDATE_CURL, SILENCE_CMD)]
+    #[error("New Yagna {0} is available!\nUpdate via\n\t`{UPDATE_CMD}`\nor skip\n\t`{SKIP_CMD}`")]
     Available(&'a version::Release),
-    #[error("Your Yagna is up to date -- '{}' (v{})", .0.name, .0.version)]
+    #[error("Your Yagna is up to date: {0}")]
     UpToDate(&'a version::Release),
-    #[error("Release skipped: '{}' (v{})", .0.name, .0.version)]
+    #[error("Release skipped: {0}")]
     Skipped(&'a version::Release),
     #[error("No pending release to skip")]
     NotSkipped,
@@ -62,4 +61,37 @@ async fn show(msg: version::Get, ctx: &CliCtx) -> anyhow::Result<CommandOutput> 
         Some(r) => ReleaseMessage::Available(r).to_string(),
         None => ReleaseMessage::UpToDate(&version_info.current).to_string(),
     })
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use chrono::NaiveDateTime;
+    use ya_core_model::version::Release;
+
+    #[test]
+    fn test_release_available_to_string() {
+        let now = NaiveDateTime::parse_from_str("2015-10-13T15:43:00GMT+2", "%Y-%m-%dT%H:%M:%S%Z")
+            .unwrap();
+        let r = Release {
+            version: "0.6.1".to_string(),
+            name: "some code name".to_string(),
+            gitrev: None,
+            seen: false,
+            release_ts: now,
+            insertion_ts: None,
+            update_ts: None,
+        };
+
+        assert_eq!(
+            ReleaseMessage::Available(&r).to_string(),
+            format!(
+                "New Yagna Version 0.6.1 'some code name' released 2015-10-13 is available!\n\
+                Update via\n\
+                \t`curl -sSf https://join.golem.network/as-provider | bash -`\n\
+                or skip\n\
+                \t`yagna version skip`"
+            )
+        );
+    }
 }

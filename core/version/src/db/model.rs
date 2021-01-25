@@ -40,6 +40,7 @@ impl From<DBRelease> for ya_core_model::version::Release {
         Self {
             version: db_rel.version,
             name: db_rel.name,
+            gitrev: None,
             seen: db_rel.seen,
             release_ts: db_rel.release_ts,
             insertion_ts: db_rel.insertion_ts,
