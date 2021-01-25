@@ -58,12 +58,11 @@ impl ZksyncDao {
         }
     }
 
-    pub async fn insert_payment(&self, order_id: &str, msg: &SchedulePayment) {
+    pub async fn insert_payment(&self, order_id: &str, msg: &SchedulePayment) -> Result<(), GenericError> {
         let recipient = msg.recipient().to_owned();
         let gnt_amount = utils::big_dec_to_u256(msg.amount());
         let gas_amount = Default::default();
-        // TODO: Remove unwrap? default to rinkeby?
-        let (network, _token) = platform_to_network_token(msg.platform()).unwrap();
+        let (network, _token) = platform_to_network_token(msg.platform())?;
 
         let payment = PaymentEntity {
             amount: utils::u256_to_big_endian_hex(gnt_amount),
@@ -82,9 +81,10 @@ impl ZksyncDao {
                 order_id,
                 msg,
                 e
-            )
-            // TO CHECK: Should it continue or stop the process...
+            );
+            return Err(GenericError::new(e));
         }
+        Ok(())
     }
 
     pub async fn insert_transaction(

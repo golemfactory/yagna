@@ -255,7 +255,7 @@ impl PaymentDriver for ZksyncDriver {
         }
 
         let order_id = Uuid::new_v4().to_string();
-        self.dao.insert_payment(&order_id, &msg).await;
+        self.dao.insert_payment(&order_id, &msg).await?;
         Ok(order_id)
     }
 

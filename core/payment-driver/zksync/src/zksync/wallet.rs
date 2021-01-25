@@ -151,7 +151,7 @@ pub async fn make_transfer(
         .nonce(nonce)
         .str_to(&details.recipient[2..])
         .map_err(GenericError::new)?
-        .token(token.as_ref()) // TODO: use `token`
+        .token(token.as_ref())
         .map_err(GenericError::new)?
         .amount(amount)
         .send()
