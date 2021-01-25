@@ -249,8 +249,9 @@ impl PaymentDriver for ZksyncDriver {
                 ))
             }
             DbNetwork::Mainnet => Ok(format!(
-                "Your mainnet zksync address is {}. Send some GLM tokens to this address on zksync \
-                to be able to use this driver.", address
+                "Your mainnet zksync address is {}. \
+                Go to https://chat.golem.network and channel #funding \
+                Paste your address and we will fund it after some short verification.", address
             )),
         }
     }
