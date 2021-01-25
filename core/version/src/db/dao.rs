@@ -21,7 +21,7 @@ impl<'a> AsDao<'a> for ReleaseDAO<'a> {
 }
 
 impl<'c> ReleaseDAO<'c> {
-    pub async fn save(&self, db_rel: DBRelease) -> anyhow::Result<Release> {
+    pub async fn save_new(&self, db_rel: DBRelease) -> anyhow::Result<Release> {
         do_with_transaction(self.pool, move |conn| {
             match get_release(conn, &db_rel.version)? {
                 Some(rel) => Ok(rel),
@@ -91,7 +91,8 @@ fn get_release(conn: &ConnType, ver: &str) -> anyhow::Result<Option<Release>> {
 fn get_pending_release(conn: &ConnType) -> anyhow::Result<Option<Release>> {
     let query = version_release
         .filter(release::seen.eq(false))
-        .order(release::release_ts.desc())
+        // insertion_ts is to distinguish among fake-entries of `DBRelease::current`
+        .order((release::release_ts.desc(), release::insertion_ts.desc()))
         .into_boxed();
 
     match query.first::<DBRelease>(conn).optional()? {

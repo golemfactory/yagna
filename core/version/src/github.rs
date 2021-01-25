@@ -14,7 +14,7 @@ const REPO_OWNER: &'static str = "golemfactory";
 const REPO_NAME: &'static str = "yagna";
 
 pub async fn check_latest_release(db: &DbExecutor) -> anyhow::Result<Release> {
-    log::trace!("Checking latest Yagna release");
+    log::debug!("Checking latest Yagna release");
     let gh_rel = UpdateBuilder::new()
         .repo_owner(REPO_OWNER)
         .repo_name(REPO_NAME)
@@ -23,9 +23,18 @@ pub async fn check_latest_release(db: &DbExecutor) -> anyhow::Result<Release> {
         .build()?
         .get_latest_release()?;
 
+    log::trace!("Got latest Yagna release {:?}", gh_rel);
+
     let db_rel = DBRelease::try_from(gh_rel)?;
-    let rel = Release::from(db_rel.clone());
-    log::trace!("Got latest Yagna release {}", rel);
+    let rel = match db.as_dao::<ReleaseDAO>().save_new(db_rel.clone()).await {
+        Err(e) => {
+            let r = db_rel.into();
+            log::error!("Storing new Yagna release {} to DB. {}", r, e);
+            r
+        }
+        Ok(r) => r,
+    };
+
     if self_update::version::bump_is_greater(ya_compile_time_utils::semver_str(), &rel.version)
         .map_err(|e| {
             anyhow!(
@@ -35,13 +44,8 @@ pub async fn check_latest_release(db: &DbExecutor) -> anyhow::Result<Release> {
             )
         })?
     {
-        match db.as_dao::<ReleaseDAO>().save(db_rel).await {
-            Err(e) => log::error!("Storing new Yagna release {} to DB. {}", rel, e),
-            Ok(r) => {
-                counter!("version.new", 1);
-                log::warn!("{}", ReleaseMessage::Available(&r));
-            }
-        }
+        counter!("version.new", 1);
+        log::warn!("{}", ReleaseMessage::Available(&rel));
     };
     Ok(rel)
 }
@@ -54,7 +58,7 @@ pub(crate) async fn check_running_release(db: &DbExecutor) -> anyhow::Result<Rel
     let running_tag = ya_compile_time_utils::git_tag();
     log::debug!("Checking release for running tag: {}", running_tag);
 
-    let release = match UpdateBuilder::new()
+    let db_rel = match UpdateBuilder::new()
         .repo_owner(REPO_OWNER)
         .repo_name(REPO_NAME)
         .bin_name("") // seems required by builder but unused
@@ -63,14 +67,12 @@ pub(crate) async fn check_running_release(db: &DbExecutor) -> anyhow::Result<Rel
         .get_release_version(running_tag)
     {
         Ok(gh_rel) => {
-            let db_rel = DBRelease::try_from(gh_rel)?;
-            let rel = Release::from(db_rel.clone());
-            log::trace!("Got currently running release: '{}'", rel);
-            db_rel
+            log::trace!("Got currently running release: {:?}", gh_rel);
+            DBRelease::try_from(gh_rel)?
         }
         Err(e) => {
             log::trace!(
-                "Failed to get release for running tag: '{}': {}",
+                "Failed to get release for running tag: '{}': {}. Using current",
                 running_tag,
                 e
             );
@@ -78,9 +80,9 @@ pub(crate) async fn check_running_release(db: &DbExecutor) -> anyhow::Result<Rel
         }
     };
 
-    let rel = match db.as_dao::<ReleaseDAO>().save(release.clone()).await {
+    let rel = match db.as_dao::<ReleaseDAO>().save_new(db_rel.clone()).await {
         Err(e) => {
-            let r = release.into();
+            let r = db_rel.into();
             log::error!("Storing running Yagna release {} to DB: {}", r, e);
             r
         }
