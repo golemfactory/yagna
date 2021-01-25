@@ -70,3 +70,14 @@ impl TryFrom<self_update::update::Release> for DBRelease {
 fn parse_release_ts(ts: &str) -> anyhow::Result<NaiveDateTime> {
     Ok(NaiveDateTime::parse_from_str(&ts, "%Y-%m-%dT%H:%M:%S%Z")?)
 }
+
+#[cfg(test)]
+mod test {
+    use crate::db::model::DBRelease;
+
+    #[test]
+    fn test_current() {
+        let c = DBRelease::current().unwrap();
+        println!("{:?}", c)
+    }
+}
