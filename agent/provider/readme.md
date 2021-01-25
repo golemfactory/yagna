@@ -24,7 +24,7 @@ It is rather straightforward and minimal:
   * requires `golem.srv.comp.expiration` to be set
   * if provided (via env or CLI) sets also `golem.node.debug.subnet`
 *  properties:
-  * linear pricing (see sample below: 0.01 NGNT/sec + 1.2 NGNT/CPUsec + 1.5 NGNT const)
+  * linear pricing (see sample below: 0.01 GLM/sec + 1.2 GLM/CPUsec + 1.5 GLM const)
   * hardware: memory and storage (sample below: 1 gib RAM and 10 gib disk)
   * node name set via env or CLI
   * runtime (sample below: wasmtime)
@@ -203,9 +203,9 @@ Name:               default
 ExeUnit:            wasmtime
 Pricing model:      linear
 Coefficients:
-    Duration        0.1 NGNT
-    CPU             0.2 NGNT
-    Init price        1 NGNT
+    Duration        0.1 GLM
+    CPU             0.2 GLM
+    Init price        1 GLM
 
 ```
 
@@ -404,12 +404,6 @@ ya-provider profile activate some_other_profile
 While the yagna service is still running (and you are in the `ya-prov` directory)
 you can now start Provider Agent.
 
-At first, you need to register provider's payment account:
-```bash
-cargo run payment init -p
-```
-
-Then start the Provider Agent:
 ```bash
 cargo run -p ya-provider run
 ```

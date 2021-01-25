@@ -29,7 +29,7 @@ use ya_zksync_driver as zksync;
 #[derive(Clone, Debug, StructOpt)]
 enum Driver {
     Dummy,
-    Ngnt,
+    Erc20,
     Zksync,
 }
 
@@ -39,7 +39,7 @@ impl FromStr for Driver {
     fn from_str(s: &str) -> anyhow::Result<Self> {
         match s.to_lowercase().as_str() {
             "dummy" => Ok(Driver::Dummy),
-            "ngnt" => Ok(Driver::Ngnt),
+            "erc20" => Ok(Driver::Erc20),
             "zksync" => Ok(Driver::Zksync),
             s => Err(anyhow::Error::msg(format!("Invalid driver: {}", s))),
         }
@@ -50,7 +50,7 @@ impl std::fmt::Display for Driver {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Driver::Dummy => write!(f, "dummy"),
-            Driver::Ngnt => write!(f, "ngnt"),
+            Driver::Erc20 => write!(f, "erc20"),
             Driver::Zksync => write!(f, "zksync"),
         }
     }
@@ -60,6 +60,10 @@ impl std::fmt::Display for Driver {
 struct Args {
     #[structopt(long, default_value = "dummy")]
     driver: Driver,
+    #[structopt(long)]
+    network: Option<String>,
+    #[structopt(long, default_value = "dummy-glm")]
+    platform: String,
     #[structopt(long, default_value = "provider.key")]
     provider_key_path: String,
     #[structopt(long, default_value = "")]
@@ -177,12 +181,18 @@ async fn main() -> anyhow::Result<()> {
     let provider_pass: Password = args.provider_pass.clone().into();
     let provider_account = EthAccount::load_or_generate(&args.provider_key_path, provider_pass)?;
     let provider_id = provider_account.address().to_string();
-    let provider_addr = args.provider_addr.unwrap_or(provider_id.clone());
+    let provider_addr = args
+        .provider_addr
+        .unwrap_or(provider_id.clone())
+        .to_lowercase();
 
     let requestor_pass: Password = args.requestor_pass.clone().into();
     let requestor_account = EthAccount::load_or_generate(&args.requestor_key_path, requestor_pass)?;
     let requestor_id = requestor_account.address().to_string();
-    let requestor_addr = args.requestor_addr.unwrap_or(requestor_id.clone());
+    let requestor_addr = args
+        .requestor_addr
+        .unwrap_or(requestor_id.clone())
+        .to_lowercase();
 
     log::info!(
         "Provider ID: {}\nProvider address: {}\nRequestor ID: {}\nRequestor address: {}",
@@ -203,25 +213,25 @@ async fn main() -> anyhow::Result<()> {
     ya_payment::service::bind_service(&db, processor);
     log::debug!("bind_service()");
 
-    let (driver_name, platform) = match args.driver {
+    let driver_name = match args.driver {
         Driver::Dummy => {
             start_dummy_driver().await?;
-            (dummy::DRIVER_NAME, dummy::PLATFORM_NAME)
+            dummy::DRIVER_NAME
         }
-        Driver::Ngnt => {
+        Driver::Erc20 => {
             start_gnt_driver(&db, requestor_account).await?;
-            (gnt::DRIVER_NAME, gnt::DEFAULT_PLATFORM)
+            gnt::DRIVER_NAME
         }
         Driver::Zksync => {
             start_zksync_driver(&db, requestor_account).await?;
-            (zksync::DRIVER_NAME, zksync::DEFAULT_PLATFORM)
+            zksync::DRIVER_NAME
         }
     };
 
     bus::service(driver_bus_id(driver_name))
         .call(Init::new(
             provider_id.clone(),
-            None,
+            args.network.clone(),
             None,
             AccountMode::RECV,
         ))
@@ -229,16 +239,16 @@ async fn main() -> anyhow::Result<()> {
     bus::service(driver_bus_id(driver_name))
         .call(Init::new(
             requestor_id.clone(),
-            None,
+            args.network.clone(),
             None,
             AccountMode::SEND,
         ))
         .await??;
 
-    let address_property = format!("platform.{}.address", platform);
+    let address_property = format!("platform.{}.address", args.platform);
     let demand_properties = serde_json::json!({
         "golem.com.payment": {
-            "chosen-platform": &platform,
+            "chosen-platform": &args.platform,
             &address_property: &requestor_addr,
         }
     });

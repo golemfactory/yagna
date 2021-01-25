@@ -15,7 +15,7 @@ use ya_core_model::driver::{
     self, driver_bus_id, AccountMode, PaymentConfirmation, PaymentDetails, ValidateAllocation,
 };
 use ya_core_model::payment::local::{
-    DriverDetails, NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver,
+    DriverDetails, Network, NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver,
     RegisterDriverError, SchedulePayment, UnregisterAccount, UnregisterDriver,
 };
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
@@ -50,7 +50,7 @@ async fn validate_orders(
         total_amount += &order.amount.0;
     }
 
-    if &total_amount != amount {
+    if &total_amount > amount {
         return OrderValidationError::amount(&total_amount, amount);
     }
 
@@ -191,6 +191,47 @@ impl DriverRegistry {
             .collect()
     }
 
+    pub fn get_driver(&self, driver: &str) -> Result<&DriverDetails, RegisterAccountError> {
+        match self.drivers.get(driver) {
+            None => Err(RegisterAccountError::DriverNotRegistered(driver.into())),
+            Some(details) => Ok(details),
+        }
+    }
+
+    pub fn get_network(
+        &self,
+        driver: String,
+        network: Option<String>,
+    ) -> Result<(String, Network), RegisterAccountError> {
+        let driver_details = self.get_driver(&driver)?;
+        let network_name = network.unwrap_or(driver_details.default_network.to_owned());
+        match driver_details.networks.get(&network_name) {
+            None => Err(RegisterAccountError::UnsupportedNetwork(
+                network_name,
+                driver.into(),
+            )),
+            Some(network_details) => Ok((network_name, network_details.clone())),
+        }
+    }
+
+    pub fn get_platform(
+        &self,
+        driver: String,
+        network: Option<String>,
+        token: Option<String>,
+    ) -> Result<String, RegisterAccountError> {
+        let (network_name, network_details) = self.get_network(driver.clone(), network)?;
+        let token = token.unwrap_or(network_details.default_token.to_owned());
+        match network_details.tokens.get(&token) {
+            None => Err(RegisterAccountError::UnsupportedToken(
+                token,
+                network_name,
+                driver,
+            )),
+            Some(platform) => Ok(platform.into()),
+        }
+    }
+
     pub fn driver(
         &self,
         platform: &str,
@@ -254,6 +295,26 @@ impl PaymentProcessor {
 
     pub async fn get_accounts(&self) -> Vec<Account> {
         self.registry.lock().await.get_accounts()
+    }
+
+    pub async fn get_network(
+        &self,
+        driver: String,
+        network: Option<String>,
+    ) -> Result<(String, Network), RegisterAccountError> {
+        self.registry.lock().await.get_network(driver, network)
+    }
+
+    pub async fn get_platform(
+        &self,
+        driver: String,
+        network: Option<String>,
+        token: Option<String>,
+    ) -> Result<String, RegisterAccountError> {
+        self.registry
+            .lock()
+            .await
+            .get_platform(driver, network, token)
     }
 
     pub async fn notify_payment(&self, msg: NotifyPayment) -> Result<(), NotifyPaymentError> {
@@ -350,6 +411,7 @@ impl PaymentProcessor {
                 amount,
                 msg.payer_addr.clone(),
                 msg.payee_addr.clone(),
+                msg.payment_platform.clone(),
                 msg.due_date.clone(),
             ))
             .await??;
@@ -369,24 +431,25 @@ impl PaymentProcessor {
             Ok(confirmation) => PaymentConfirmation { confirmation },
             Err(e) => return Err(VerifyPaymentError::ConfirmationEncoding),
         };
+        let platform = payment.payment_platform.clone();
         let driver = self.registry.lock().await.driver(
             &payment.payment_platform,
             &payment.payee_addr,
             AccountMode::RECV,
         )?;
         let details: PaymentDetails = driver_endpoint(&driver)
-            .send(driver::VerifyPayment::from(confirmation))
+            .send(driver::VerifyPayment::new(confirmation, platform.clone()))
             .await??;
 
         // Verify if amount declared in message matches actual amount transferred on blockchain
-        if &details.amount != &payment.amount {
+        if &details.amount < &payment.amount {
             return VerifyPaymentError::amount(&details.amount, &payment.amount);
         }
 
         // Verify if payment shares for agreements and activities sum up to the total amount
         let agreement_sum = payment.agreement_payments.iter().map(|p| &p.amount).sum();
         let activity_sum = payment.activity_payments.iter().map(|p| &p.amount).sum();
-        if &details.amount != &(&agreement_sum + &activity_sum) {
+        if &details.amount < &(&agreement_sum + &activity_sum) {
             return VerifyPaymentError::shares(&details.amount, &agreement_sum, &activity_sum);
         }
 
@@ -415,6 +478,12 @@ impl PaymentProcessor {
                 }
                 Some(agreement) if &agreement.payer_addr != payer_addr => {
                     return VerifyPaymentError::agreement_payer(&agreement, payer_addr)
+                }
+                Some(agreement) if &agreement.payment_platform != &payment.payment_platform => {
+                    return VerifyPaymentError::agreement_platform(
+                        &agreement,
+                        &payment.payment_platform,
+                    )
                 }
                 _ => (),
             }
@@ -446,6 +515,7 @@ impl PaymentProcessor {
             .send(driver::GetTransactionBalance::new(
                 payer_addr.clone(),
                 payee_addr.clone(),
+                platform,
             ))
             .await??;
 
@@ -470,7 +540,7 @@ impl PaymentProcessor {
                 .await
                 .driver(&platform, &address, AccountMode::empty())?;
         let amount = driver_endpoint(&driver)
-            .send(driver::GetAccountBalance::from(address))
+            .send(driver::GetAccountBalance::new(address, platform))
             .await??;
         Ok(amount)
     }
@@ -493,6 +563,7 @@ impl PaymentProcessor {
                 .driver(&platform, &address, AccountMode::empty())?;
         let msg = ValidateAllocation {
             address,
+            platform,
             amount,
             existing_allocations,
         };

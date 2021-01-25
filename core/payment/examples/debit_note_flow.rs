@@ -10,6 +10,8 @@ use ya_client_model::payment::{Acceptance, DocumentStatus, NewAllocation, NewDeb
 struct Args {
     #[structopt(long)]
     app_session_id: Option<String>,
+    #[structopt(long)]
+    platform: Option<String>,
 }
 
 #[actix_rt::main]
@@ -41,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
         payment_due_date: Some(Utc::now()),
     };
     log::info!(
-        "Issuing debit note (total amount due: {} NGNT)...",
+        "Issuing debit note (total amount due: {} GLM)...",
         &debit_note.total_amount_due
     );
     let debit_note = provider.issue_debit_note(&debit_note).await?;
@@ -69,8 +71,8 @@ async fn main() -> anyhow::Result<()> {
     log::info!("Creating allocation...");
     let allocation = requestor
         .create_allocation(&NewAllocation {
-            address: None,          // Use default address (i.e. identity)
-            payment_platform: None, // Use default payment platform
+            address: None, // Use default address (i.e. identity)
+            payment_platform: args.platform,
             total_amount: BigDecimal::from(10u64),
             timeout: None,
             make_deposit: false,
@@ -109,7 +111,7 @@ async fn main() -> anyhow::Result<()> {
     log::info!("Debit note accepted.");
 
     log::info!("Waiting for payment...");
-    let timeout = Some(Duration::from_secs(300)); // Should be enough for GNT transfer
+    let timeout = Some(Duration::from_secs(300)); // Should be enough for GLM transfer
     let mut payments = provider
         .get_payments(Some(&now), timeout, None, None)
         .await?;
@@ -130,7 +132,7 @@ async fn main() -> anyhow::Result<()> {
         payment_due_date: Some(Utc::now()),
     };
     log::info!(
-        "Issuing debit note (total amount due: {} NGNT)...",
+        "Issuing debit note (total amount due: {} GLM)...",
         debit_note2.total_amount_due
     );
     let debit_note2 = provider.issue_debit_note(&debit_note2).await?;
@@ -154,7 +156,7 @@ async fn main() -> anyhow::Result<()> {
     log::info!("Debit note accepted.");
 
     log::info!("Waiting for payment...");
-    let timeout = Some(Duration::from_secs(300)); // Should be enough for GNT transfer
+    let timeout = Some(Duration::from_secs(300)); // Should be enough for GLM transfer
     let mut payments = provider
         .get_payments(Some(&now), timeout, None, args.app_session_id.clone())
         .await?;

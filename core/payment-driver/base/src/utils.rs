@@ -19,8 +19,8 @@ pub fn msg_to_payment_details(
     date: Option<DateTime<Utc>>,
 ) -> PaymentDetails {
     PaymentDetails {
-        recipient: msg.recipient().to_string(),
-        sender: msg.sender().to_string(),
+        recipient: msg.recipient(),
+        sender: msg.sender(),
         amount: msg.amount(),
         date,
     }

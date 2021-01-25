@@ -15,8 +15,8 @@
        `````````
      ```       ```          commit: {git_commit}
      ``          ``
-    ```          ``         build: {build}
+    ```          ``         date: {date}
      ``          ``
-     ````      ```          date: {date}
+     ````      ```          build: {build}
        `````````
 
