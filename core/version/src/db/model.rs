@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, Utc};
 use self_update::update::Release;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -21,14 +21,9 @@ impl DBRelease {
     pub(crate) fn current() -> anyhow::Result<Self> {
         Ok(DBRelease {
             version: ya_compile_time_utils::semver_str().into(),
-            name: ya_compile_time_utils::build_number_str()
-                .map(|n| format!("{} build #{}", ya_compile_time_utils::git_rev(), n))
-                .unwrap_or(ya_compile_time_utils::git_rev().into()),
-            seen: false,
-            release_ts: NaiveDateTime::parse_from_str(
-                ya_compile_time_utils::build_date(),
-                "%Y-%m-%d",
-            )?,
+            name: ya_compile_time_utils::version_describe!().into(),
+            seen: true,
+            release_ts: Utc::now().naive_utc(),
             insertion_ts: None,
             update_ts: None,
         })
