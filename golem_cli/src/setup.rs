@@ -157,7 +157,7 @@ pub async fn setup(run_config: &mut RunConfig, force: bool) -> Result<i32> {
 
         let usage = UsageDef {
             cpu: glm_per_h / 3600.0,
-            duration: glm_per_h / 3600.0 / default_glm_per_h,
+            duration: glm_per_h / 3600.0 / 5,
             initial: 0.0,
         };
 
