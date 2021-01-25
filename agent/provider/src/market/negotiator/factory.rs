@@ -1,13 +1,12 @@
 use actix::Addr;
 use humantime;
+use std::sync::Arc;
 use structopt::StructOpt;
 
 use super::common::NegotiatorAddr;
 use crate::market::config::MarketConfig;
-use crate::market::negotiator::LimitAgreementsNegotiator;
 use crate::market::negotiator::{AcceptAllNegotiator, CompositeNegotiator};
 use crate::market::ProviderMarket;
-use std::sync::Arc;
 
 /// Configuration for LimitAgreements Negotiator.
 #[derive(StructOpt, Clone, Debug)]
@@ -49,13 +48,6 @@ pub fn create_negotiator(
     config: &MarketConfig,
 ) -> Arc<NegotiatorAddr> {
     let negotiator = match &config.negotiator_type[..] {
-        "LimitAgreements" => NegotiatorAddr::from(LimitAgreementsNegotiator::new(
-            market,
-            &config
-                .negotiator_config
-                .composite_config
-                .limit_agreements_config,
-        )),
         "Composite" => NegotiatorAddr::from(
             CompositeNegotiator::new(market, &config.negotiator_config.composite_config).unwrap(),
         ),
