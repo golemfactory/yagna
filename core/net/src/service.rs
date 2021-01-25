@@ -1,35 +1,68 @@
 use actix_rt::Arbiter;
-use anyhow::{anyhow, Context};
+use anyhow::anyhow;
+use futures::channel::oneshot;
 use futures::prelude::*;
+use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::rc::Rc;
+use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
+use trust_dns_resolver::TokioAsyncResolver;
 
 use ya_core_model::identity::{self, IdentityInfo};
-use ya_core_model::net::{self, local as local_net, local::SendBroadcastMessage};
+use ya_core_model::net;
+use ya_core_model::net::local::{self as local_net, SendBroadcastMessage, SendBroadcastStub};
 use ya_core_model::NodeId;
+use ya_service_bus::connection::ClientInfo;
 use ya_service_bus::{
-    connection, typed as bus, untyped as local_bus, Error, RpcEndpoint, RpcMessage,
+    connection, serialization, typed as bus, untyped as local_bus, Error, RpcEndpoint, RpcMessage,
 };
 
 use crate::api::{net_service, parse_from_addr};
+use crate::handler::{auto_rebind, CentralBusHandler};
 
 pub const CENTRAL_ADDR_ENV_VAR: &str = "CENTRAL_NET_HOST";
-pub const DEFAULT_CENTRAL_ADDR: &str = "3.249.139.167:7464";
+const DEFAULT_LOOKUP_DOMAIN: &'static str = "dev.golem.network";
 
-pub fn central_net_addr() -> std::io::Result<SocketAddr> {
-    Ok(std::env::var(CENTRAL_ADDR_ENV_VAR)
-        .unwrap_or(DEFAULT_CENTRAL_ADDR.into())
-        .to_socket_addrs()?
+async fn central_net_addr() -> std::io::Result<SocketAddr> {
+    Ok(match std::env::var(CENTRAL_ADDR_ENV_VAR) {
+        Ok(v) => v,
+        Err(_) => resolve_net_addr().await?,
+    }
+    .to_socket_addrs()?
+    .next()
+    .expect("central net hub addr needed"))
+}
+
+async fn resolve_net_addr() -> std::io::Result<String> {
+    let resolver: TokioAsyncResolver =
+        TokioAsyncResolver::tokio(ResolverConfig::google(), ResolverOpts::default()).await?;
+    let lookup = resolver
+        .srv_lookup(format!("_net._tcp.{}", DEFAULT_LOOKUP_DOMAIN))
+        .await?;
+    let srv = lookup
+        .iter()
         .next()
-        .expect("central net hub addr needed"))
+        .ok_or_else(|| IoError::from(IoErrorKind::NotFound))?;
+    let addr = format!(
+        "{}:{}",
+        srv.target().to_string().trim_end_matches('.'),
+        srv.port()
+    );
+
+    log::debug!("Central net address: {}", addr);
+    Ok(addr)
 }
 
 /// Initialize net module on a hub.
-pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io::Result<()> {
-    let hub_addr = central_net_addr()?;
+pub async fn bind_remote(
+    client_info: ClientInfo,
+    default_node_id: NodeId,
+    nodes: Vec<NodeId>,
+) -> std::io::Result<oneshot::Receiver<()>> {
+    let hub_addr = central_net_addr().await?;
     let conn = connection::tcp(hub_addr).await?;
     let bcast = super::bcast::BCastService::default();
-    let bcast_service_id = <SendBroadcastMessage<serde_json::Value> as RpcMessage>::ID;
+    let bcast_service_id = <SendBroadcastMessage<()> as RpcMessage>::ID;
 
     // connect to hub with forwarding handler
     let own_net_nodes: Vec<_> = nodes.iter().map(|id| net_service(id)).collect();
@@ -75,7 +108,8 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
         }
     };
 
-    let central_bus = connection::connect_with_handler(conn, (forward_call, broadcast_handler));
+    let (handler, done_rx) = CentralBusHandler::new(forward_call, broadcast_handler);
+    let central_bus = connection::connect_with_handler(client_info, conn, handler);
 
     // bind my local net service(s) on remote centralised bus under /net/<my_identity>
     for node in &nodes {
@@ -205,36 +239,43 @@ pub async fn bind_remote(default_node_id: NodeId, nodes: Vec<NodeId>) -> std::io
     {
         let central_bus = central_bus.clone();
         let addr = format!("{}/{}", local_net::BUS_ID, bcast_service_id);
-        let resp: Rc<[u8]> = serde_json::to_vec(&Ok::<(), ()>(())).unwrap().into();
+        let resp: Rc<[u8]> = serialization::to_vec(&Ok::<(), ()>(())).unwrap().into();
         let _ = local_bus::subscribe(
             &addr,
             move |caller: &str, _addr: &str, msg: &[u8]| {
-                // TODO: remove unwrap here.
-                let ent: SendBroadcastMessage<serde_json::Value> =
-                    serde_json::from_slice(msg).unwrap();
+                let stub: SendBroadcastStub = match serialization::from_slice(msg) {
+                    Ok(m) => m,
+                    Err(e) => {
+                        return async move {
+                            let err = Error::GsbFailure(format!("invalid bcast message: {}", e));
+                            Err::<Vec<u8>, _>(err)
+                        }
+                        .right_future()
+                    }
+                };
 
                 log::trace!(
                     "Broadcast msg related to topic {} from [{}].",
-                    ent.topic(),
+                    stub.topic,
                     &caller
                 );
 
-                let fut =
-                    central_bus.broadcast(caller.to_owned(), ent.topic().to_owned(), msg.into());
+                let fut = central_bus.broadcast(caller.to_owned(), stub.topic, msg.into());
                 let resp = resp.clone();
                 async move {
                     if let Err(e) = fut.await {
-                        Err(Error::GsbFailure(format!("broadcast send failure {}", e)))
+                        Err(Error::GsbFailure(format!("bcast send failure: {}", e)))
                     } else {
                         Ok(Vec::from(resp.as_ref()))
                     }
                 }
+                .left_future()
             },
             (),
         );
     }
 
-    Ok(())
+    Ok(done_rx)
 }
 
 pub struct Net;
@@ -246,16 +287,20 @@ impl Net {
             .await
             .map_err(anyhow::Error::msg)??;
 
+        let client_info = ClientInfo::new("sb-client-net");
         let default_id = ids
             .iter()
             .find(|i| i.is_default)
             .map(|i| i.node_id)
             .ok_or_else(|| anyhow!("no default identity"))?;
         log::info!("using default identity as network id: {:?}", default_id);
-        let ids = ids.into_iter().map(|id| id.node_id).collect();
+        let ids = ids
+            .into_iter()
+            .map(|id| id.node_id)
+            .collect::<Vec<NodeId>>();
 
-        bind_remote(default_id, ids)
-            .await
-            .context(format!("Error binding network service"))
+        auto_rebind(move || bind_remote(client_info.clone(), default_id.clone(), ids.clone()))
+            .await;
+        Ok(())
     }
 }
