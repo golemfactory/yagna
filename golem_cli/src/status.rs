@@ -105,13 +105,21 @@ pub async fn run(args: StatusCommand) -> Result</*exit code*/ i32> {
                 Style::new().fg(Colour::Red).paint("is not running")
             ]);
         }
-        table.add_row(row!["version", ya_compile_time_utils::semver_str()]);
-        table.add_row(row!["commit", ya_compile_time_utils::git_rev()]);
-        table.add_row(row!["date", ya_compile_time_utils::build_date()]);
+        table.add_row(row!["Version", ya_compile_time_utils::semver_str()]);
+        table.add_row(row!["Commit", ya_compile_time_utils::git_rev()]);
+        table.add_row(row!["Date", ya_compile_time_utils::build_date()]);
         table.add_row(row![
-            "build",
+            "Build",
             ya_compile_time_utils::build_number_str().unwrap_or("-")
         ]);
+
+        if let Some(pending) = cmd.yagna()?.version().await?.pending {
+            let ver = format!("{} released!", pending.version);
+            table.add_row(row![
+                "New Version",
+                Style::new().fg(Colour::Fixed(220)).paint(ver)
+            ]);
+        }
 
         table.add_empty_row();
         table.add_row(row!["Node Name", &config.node_name.unwrap_or_default()]);

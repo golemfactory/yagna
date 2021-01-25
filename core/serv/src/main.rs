@@ -30,6 +30,7 @@ use ya_service_api_web::{
 use ya_sgx::SgxService;
 use ya_utils_path::data_dir::DataDir;
 use ya_utils_process::lock::ProcLock;
+use ya_version::VersionService;
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
@@ -183,12 +184,15 @@ impl TryFrom<CliCtx> for ServiceContext {
 
 #[ya_service_api_derive::services(ServiceContext)]
 enum Services {
-    // Metrics service must be activated first, to allow all
-    // other services to initialize counters and other metrics.
-    #[enable(gsb, rest)]
-    Metrics(MetricsService),
+    // Metrics service must be activated before all other services
+    // to that will use it. Identity service is used by the Metrics,
+    // so must be initialized before.
     #[enable(gsb, cli(flatten))]
     Identity(IdentityService),
+    #[enable(gsb, rest)]
+    Metrics(MetricsService),
+    #[enable(gsb, rest, cli)]
+    Version(VersionService),
     #[enable(gsb)]
     Net(NetService),
     #[enable(gsb, rest)]
