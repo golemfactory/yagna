@@ -58,7 +58,11 @@ impl ZksyncDao {
         }
     }
 
-    pub async fn insert_payment(&self, order_id: &str, msg: &SchedulePayment) -> Result<(), GenericError> {
+    pub async fn insert_payment(
+        &self,
+        order_id: &str,
+        msg: &SchedulePayment,
+    ) -> Result<(), GenericError> {
         let recipient = msg.recipient().to_owned();
         let gnt_amount = utils::big_dec_to_u256(msg.amount());
         let gas_amount = Default::default();

@@ -5,7 +5,6 @@
 */
 // Extrnal crates
 use chrono::Utc;
-use serde_json;
 use std::collections::HashMap;
 use std::str::FromStr;
 use uuid::Uuid;
@@ -266,14 +265,10 @@ impl PaymentDriver for ZksyncDriver {
         msg: VerifyPayment,
     ) -> Result<PaymentDetails, GenericError> {
         log::debug!("verify_payment: {:?}", msg);
-        // TODO: Get transaction details from zksync
-        // let tx_hash = hex::encode(msg.confirmation().confirmation);
-        // match wallet::check_tx(&tx_hash).await {
-        //     Some(true) => Ok(wallet::build_payment_details(tx_hash)),
-        //     Some(false) => Err(GenericError::new("Payment did not succeed")),
-        //     None => Err(GenericError::new("Payment not ready to be checked")),
-        // }
-        from_confirmation(msg.confirmation())
+        let (network, _) = platform_to_network_token(msg.platform())?;
+        let tx_hash = hex::encode(msg.confirmation().confirmation);
+        log::info!("Verifying transaction: {}", tx_hash);
+        wallet::verify_tx(&tx_hash, network).await
     }
 
     async fn validate_allocation(
@@ -318,26 +313,33 @@ impl PaymentDriverCron for ZksyncDriver {
                     log::warn!("Payment failed, will be re-tried.");
                     continue;
                 }
-
                 let order_ids = payments
                     .iter()
                     .map(|payment| payment.order_id.clone())
                     .collect();
 
-                // Create bespoke payment details:
-                // - Sender + receiver are the same
-                // - Date is always now
-                // - Amount needs to be updated to total of all PaymentEntity's
-
                 // TODO: Add token support
                 let platform =
                     network_token_to_platform(Some(first_payment.network), None).unwrap(); // TODO: Catch error?
-                let mut details = utils::db_to_payment_details(&first_payment);
-                details.amount = payments
-                    .into_iter()
-                    .map(|payment| utils::db_amount_to_big_dec(payment.amount))
-                    .sum::<BigDecimal>();
-                let tx_hash = to_confirmation(&details).unwrap();
+                let details = match wallet::verify_tx(&tx_hash, first_payment.network).await {
+                    Ok(a) => a,
+                    Err(e) => {
+                        log::warn!("Failed to get transaction details from zksync, creating bespoke details. Error={}", e);
+
+                        // Create bespoke payment details:
+                        // - Sender + receiver are the same
+                        // - Date is always now
+                        // - Amount needs to be updated to total of all PaymentEntity's
+
+                        let mut details = utils::db_to_payment_details(&first_payment);
+                        details.amount = payments
+                            .into_iter()
+                            .map(|payment| utils::db_amount_to_big_dec(payment.amount.clone()))
+                            .sum::<BigDecimal>();
+                        details
+                    }
+                };
+                let tx_hash = hex::decode(&tx_hash).unwrap();
                 if let Err(e) =
                     bus::notify_payment(&self.get_name(), &platform, order_ids, &details, tx_hash)
                         .await
@@ -353,18 +355,4 @@ impl PaymentDriverCron for ZksyncDriver {
             self.process_payments_for_account(&node_id).await;
         }
     }
-}
-
-// Used by the DummyDriver to have a 2 way conversion between details & confirmation
-fn to_confirmation(details: &PaymentDetails) -> Result<Vec<u8>, GenericError> {
-    Ok(serde_json::to_string(details)
-        .map_err(GenericError::new)?
-        .into_bytes())
-}
-
-fn from_confirmation(confirmation: PaymentConfirmation) -> Result<PaymentDetails, GenericError> {
-    let json_str =
-        std::str::from_utf8(confirmation.confirmation.as_slice()).map_err(GenericError::new)?;
-    let details = serde_json::from_str(&json_str).map_err(GenericError::new)?;
-    Ok(details)
 }

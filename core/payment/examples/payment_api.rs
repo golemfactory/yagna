@@ -180,12 +180,18 @@ async fn main() -> anyhow::Result<()> {
     let provider_pass: Password = args.provider_pass.clone().into();
     let provider_account = EthAccount::load_or_generate(&args.provider_key_path, provider_pass)?;
     let provider_id = provider_account.address().to_string();
-    let provider_addr = args.provider_addr.unwrap_or(provider_id.clone());
+    let provider_addr = args
+        .provider_addr
+        .unwrap_or(provider_id.clone())
+        .to_lowercase();
 
     let requestor_pass: Password = args.requestor_pass.clone().into();
     let requestor_account = EthAccount::load_or_generate(&args.requestor_key_path, requestor_pass)?;
     let requestor_id = requestor_account.address().to_string();
-    let requestor_addr = args.requestor_addr.unwrap_or(requestor_id.clone());
+    let requestor_addr = args
+        .requestor_addr
+        .unwrap_or(requestor_id.clone())
+        .to_lowercase();
 
     log::info!(
         "Provider ID: {}\nProvider address: {}\nRequestor ID: {}\nRequestor address: {}",

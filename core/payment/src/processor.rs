@@ -50,7 +50,7 @@ async fn validate_orders(
         total_amount += &order.amount.0;
     }
 
-    if &total_amount != amount {
+    if &total_amount > amount {
         return OrderValidationError::amount(&total_amount, amount);
     }
 
@@ -442,14 +442,14 @@ impl PaymentProcessor {
             .await??;
 
         // Verify if amount declared in message matches actual amount transferred on blockchain
-        if &details.amount != &payment.amount {
+        if &details.amount < &payment.amount {
             return VerifyPaymentError::amount(&details.amount, &payment.amount);
         }
 
         // Verify if payment shares for agreements and activities sum up to the total amount
         let agreement_sum = payment.agreement_payments.iter().map(|p| &p.amount).sum();
         let activity_sum = payment.activity_payments.iter().map(|p| &p.amount).sum();
-        if &details.amount != &(&agreement_sum + &activity_sum) {
+        if &details.amount < &(&agreement_sum + &activity_sum) {
             return VerifyPaymentError::shares(&details.amount, &agreement_sum, &activity_sum);
         }
 
