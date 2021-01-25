@@ -72,6 +72,7 @@ where
     loop {
         match f().await {
             Ok(dc_rx) => {
+                reconnect.replace(Default::default());
                 Arbiter::spawn(async move {
                     if let Ok(_) = dc_rx.await {
                         log::warn!("Handlers disconnected");
