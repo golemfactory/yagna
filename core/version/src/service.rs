@@ -10,7 +10,7 @@ mod rest;
 pub struct VersionService;
 
 impl Service for VersionService {
-    type Cli = cli::UpgradeCLI;
+    type Cli = cli::VersionCLI;
 }
 
 impl VersionService {

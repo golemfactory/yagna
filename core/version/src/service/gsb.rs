@@ -10,7 +10,6 @@ use crate::service::cli::ReleaseMessage;
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
 
 pub fn bind_gsb(db: &DbExecutor) {
-    // public for remote requestors interactions
     bus::ServiceBinder::new(version::BUS_ID, db, ())
         .bind(skip_version_gsb)
         .bind(get_version_gsb);

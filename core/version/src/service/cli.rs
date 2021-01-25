@@ -21,7 +21,7 @@ pub(crate) enum ReleaseMessage<'a> {
 
 /// Yagna version management.
 #[derive(StructOpt, Debug)]
-pub enum UpgradeCLI {
+pub enum VersionCLI {
     /// Show current Yagna version and updates if available.
     Show,
     /// Checks if there is new Yagna version available and shows it.
@@ -31,12 +31,12 @@ pub enum UpgradeCLI {
     Skip,
 }
 
-impl UpgradeCLI {
+impl VersionCLI {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
-            UpgradeCLI::Show => show(version::Get::show_only(), ctx).await,
-            UpgradeCLI::Check => show(version::Get::with_check(), ctx).await,
-            UpgradeCLI::Skip => CommandOutput::object(
+            VersionCLI::Show => show(version::Get::show_only(), ctx).await,
+            VersionCLI::Check => show(version::Get::with_check(), ctx).await,
+            VersionCLI::Skip => CommandOutput::object(
                 match bus::service(version::BUS_ID)
                     .send(version::Skip())
                     .await??
