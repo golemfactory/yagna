@@ -201,9 +201,7 @@ async fn send_debit_note(
         activity_id: debit_note_info.activity_id.clone(),
         total_amount_due: cost_info.cost,
         usage_counter_vector: Some(json!(cost_info.usage)),
-        payment_due_date: debit_note_info
-            .payment_deadline
-            .map(|deadline| Utc::now() + deadline),
+        payment_due_date: None,
     };
 
     log::debug!(
@@ -246,7 +244,10 @@ async fn send_debit_note(
         &debit_note_info.activity_id
     );
 
-    if let Some(deadline) = debit_note.payment_due_date {
+    if let Some(deadline) = debit_note_info
+        .payment_deadline
+        .map(|deadline| Utc::now() + deadline)
+    {
         provider_context
             .debit_checker
             .send(TrackDeadline {
