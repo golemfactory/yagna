@@ -122,6 +122,7 @@ jobs:
         run: |
           mkdir build
           copy target\debug\yagna.exe build
+          copy target\debug\ya-provider.exe build
           copy target\debug\exe-unit.exe build
 
       - name: Upload binaries
