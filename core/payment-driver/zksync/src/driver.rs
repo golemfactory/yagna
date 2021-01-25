@@ -228,6 +228,33 @@ impl PaymentDriver for ZksyncDriver {
         Ok(Ack {})
     }
 
+    async fn fund(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        msg: Fund,
+    ) -> Result<String, GenericError> {
+        let address = msg.address();
+        let network = DbNetwork::from_str(&msg.network().unwrap_or(DEFAULT_NETWORK.to_string()))
+            .map_err(GenericError::new)?;
+        match network {
+            DbNetwork::Rinkeby => {
+                wallet::fund(&address, network)
+                    .timeout(Some(180))
+                    .await
+                    .map_err(GenericError::new)??;
+                Ok(format!(
+                    "Received funds from the faucet. address={}",
+                    &address
+                ))
+            }
+            DbNetwork::Mainnet => Ok(format!(
+                "Your mainnet zksync address is {}. Send some GLM tokens to this address on zksync \
+                to be able to use this driver.", address
+            )),
+        }
+    }
+
     async fn transfer(
         &self,
         _db: DbExecutor,
