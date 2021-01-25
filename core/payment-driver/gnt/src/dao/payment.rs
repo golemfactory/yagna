@@ -7,6 +7,7 @@ use crate::utils::PAYMENT_STATUS_OK;
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
 use crate::dao::DbResult;
+use crate::networks::Network;
 
 #[allow(unused)]
 pub struct PaymentDao<'c> {
@@ -20,10 +21,15 @@ impl<'c> AsDao<'c> for PaymentDao<'c> {
 }
 
 impl<'c> PaymentDao<'c> {
-    pub async fn get_pending_payments(&self, address: String) -> DbResult<Vec<PaymentEntity>> {
+    pub async fn get_pending_payments(
+        &self,
+        address: String,
+        network: Network,
+    ) -> DbResult<Vec<PaymentEntity>> {
         readonly_transaction(self.pool, move |conn| {
             let payments: Vec<PaymentEntity> = dsl::gnt_driver_payment
                 .filter(dsl::sender.eq(address))
+                .filter(dsl::network.eq(network))
                 .filter(dsl::status.eq(crate::utils::PAYMENT_STATUS_NOT_YET))
                 .order(dsl::payment_due_date.asc())
                 .load(conn)?;

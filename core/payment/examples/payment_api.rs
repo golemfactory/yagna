@@ -28,7 +28,7 @@ use ya_zksync_driver as zksync;
 #[derive(Clone, Debug, StructOpt)]
 enum Driver {
     Dummy,
-    Ngnt,
+    Erc20,
     Zksync,
 }
 
@@ -38,7 +38,7 @@ impl FromStr for Driver {
     fn from_str(s: &str) -> anyhow::Result<Self> {
         match s.to_lowercase().as_str() {
             "dummy" => Ok(Driver::Dummy),
-            "ngnt" => Ok(Driver::Ngnt),
+            "erc20" => Ok(Driver::Erc20),
             "zksync" => Ok(Driver::Zksync),
             s => Err(anyhow::Error::msg(format!("Invalid driver: {}", s))),
         }
@@ -49,7 +49,7 @@ impl std::fmt::Display for Driver {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Driver::Dummy => write!(f, "dummy"),
-            Driver::Ngnt => write!(f, "ngnt"),
+            Driver::Erc20 => write!(f, "erc20"),
             Driver::Zksync => write!(f, "zksync"),
         }
     }
@@ -211,7 +211,7 @@ async fn main() -> anyhow::Result<()> {
             start_dummy_driver().await?;
             dummy::DRIVER_NAME
         }
-        Driver::Ngnt => {
+        Driver::Erc20 => {
             start_gnt_driver(&db, requestor_account).await?;
             gnt::DRIVER_NAME
         }
