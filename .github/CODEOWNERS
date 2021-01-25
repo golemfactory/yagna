@@ -15,12 +15,6 @@ exe-unit/                               @golemfactory/exe-unit
 core/market/                            @golemfactory/ya-market
 core/model/src/market.rs                @golemfactory/ya-market
 
-core/metrics/                           @golemfactory/ya-market
-
-core/version/                           @golemfactory/ya-market
-core/model/src/version.rs               @golemfactory/ya-market
-utils/compile-tome-utils                @golemfactory/ya-market
-
 # Net
 service-bus/                            @golemfactory/ya-net
 core/net/                               @golemfactory/ya-net
@@ -33,3 +27,10 @@ core/model/src/payment.rs               @golemfactory/ya-payment
 
 # Provider
 agent/provider                          @golemfactory/ya-provider
+golem_cli                               @golemfactory/ya-provider
+
+# Utils
+core/metrics/                           @golemfactory/ya-utils
+core/version/                           @golemfactory/ya-utils
+core/model/src/version.rs               @golemfactory/ya-utils
+utils                                   @golemfactory/ya-utils
