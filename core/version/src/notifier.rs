@@ -8,11 +8,11 @@ use crate::github::check_running_release;
 use crate::service::cli::ReleaseMessage;
 
 pub async fn on_start(db: &DbExecutor) -> anyhow::Result<()> {
+    check_running_release(&db).await?;
+
     if let Err(e) = github::check_latest_release(&db).await {
         log::error!("Failed to check for new Yagna release: {}", e);
     };
-
-    check_running_release(&db).await?;
 
     let worker_db = db.clone();
     tokio::task::spawn_local(async move { crate::notifier::worker(worker_db).await });
