@@ -18,7 +18,6 @@
 /core/model/src/market.rs                @golemfactory/ya-market
 
 # Net
-/service-bus/                            @golemfactory/ya-net
 /core/net/                               @golemfactory/ya-net
 /core/model/src/net.rs                   @golemfactory/ya-net
 
@@ -30,3 +29,4 @@
 # Provider
 /agent/provider                          @golemfactory/ya-provider
 /golem_cli                               @golemfactory/ya-provider
+/utils/agreement-utils                   @golemfactory/ya-provider

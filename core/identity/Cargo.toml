@@ -11,7 +11,7 @@ ya-core-model = { features = ["identity", "appkey"], path="../model" }
 ya-persistence = "0.2"
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.1"
-ya-service-bus = "0.2"
+ya-service-bus = "0.3"
 
 actix-rt = "1.0"
 anyhow = "1.0"

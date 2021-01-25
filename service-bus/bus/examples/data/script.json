@@ -1,6 +1,0 @@
-[
-	{"deploy": {}},
-	{"transfer": {"from": "dumy-src", "to": "dummy-dst"}},
-	{"start": {}}
-]
-
