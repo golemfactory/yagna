@@ -1,16 +1,15 @@
 use metrics::counter;
-use structopt::StructOpt;
+use structopt::{clap::AppSettings, StructOpt};
 
 use ya_core_model::version;
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 const UPDATE_CMD: &'static str = "curl -sSf https://join.golem.network/as-provider | bash -";
-const SKIP_CMD: &'static str = "yagna version skip";
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub(crate) enum ReleaseMessage<'a> {
-    #[error("New Yagna {0} is available!\nUpdate via\n\t`{UPDATE_CMD}`\nor skip\n\t`{SKIP_CMD}`")]
+    #[error("New Yagna {0} is available!\nUpdate via\n\t`{UPDATE_CMD}`")]
     Available(&'a version::Release),
     #[error("Your Yagna is up to date: {0}")]
     UpToDate(&'a version::Release),
@@ -20,7 +19,7 @@ pub(crate) enum ReleaseMessage<'a> {
     NotSkipped,
 }
 
-// Yagna version management.
+/// Yagna version management.
 #[derive(StructOpt, Debug)]
 pub enum UpgradeCLI {
     /// Show current Yagna version and updates if available.
@@ -28,6 +27,7 @@ pub enum UpgradeCLI {
     /// Checks if there is new Yagna version available and shows it.
     Check,
     /// Stop logging warnings about latest Yagna release availability.
+    #[structopt(setting = AppSettings::Hidden)]
     Skip,
 }
 
@@ -88,9 +88,7 @@ mod test {
             format!(
                 "New Yagna Version 0.6.1 'some code name' released 2015-10-13 is available!\n\
                 Update via\n\
-                \t`curl -sSf https://join.golem.network/as-provider | bash -`\n\
-                or skip\n\
-                \t`yagna version skip`"
+                \t`curl -sSf https://join.golem.network/as-provider | bash -`"
             )
         );
     }
