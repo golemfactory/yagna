@@ -33,10 +33,9 @@ impl<'a> PaymentDescription<'a> {
     }
 
     pub fn get_debit_note_deadline(&self) -> Result<Option<chrono::Duration>> {
-        match self
-            .agreement
-            .pointer_typed::<i64>("/demand/properties/golem/com/payment/debit-notes/accept-timeout")
-        {
+        match self.agreement.pointer_typed::<i64>(
+            "/demand/properties/golem/com/payment/debit-notes/acceptance-timeout",
+        ) {
             Ok(deadline) => Ok(Some(chrono::Duration::seconds(deadline))),
             Err(Error::NoKey(_)) => Ok(None),
             Err(e) => Err(e.into()),
