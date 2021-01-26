@@ -2701,7 +2701,6 @@ dependencies = [
  "dotenv",
  "env_logger 0.7.1",
  "futures 0.3.12",
- "git-version",
  "log",
  "rand 0.7.3",
  "serde",
@@ -2712,6 +2711,7 @@ dependencies = [
  "thiserror",
  "tokio 0.2.24",
  "url 2.2.0",
+ "ya-compile-time-utils",
  "ya-core-model",
  "ya-service-bus",
 ]
