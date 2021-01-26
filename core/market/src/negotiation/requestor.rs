@@ -352,20 +352,6 @@ impl RequestorBroker {
         app_session_id: AppSessionId,
     ) -> Result<(), AgreementError> {
         let dao = self.common.db.as_dao::<AgreementDao>();
-
-        let agreement = match dao
-            .select(
-                agreement_id,
-                Some(id.identity.clone()),
-                Utc::now().naive_utc(),
-            )
-            .await
-            .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
-        {
-            None => return Err(AgreementError::NotFound(agreement_id.to_string())),
-            Some(agreement) => agreement,
-        };
-
         {
             // We won't be able to process `on_agreement_approved`, before we
             // finish execution under this lock. This avoids errors related to
@@ -376,6 +362,19 @@ impl RequestorBroker {
                 .await
                 .lock()
                 .await;
+
+            let agreement = match dao
+                .select(
+                    agreement_id,
+                    Some(id.identity.clone()),
+                    Utc::now().naive_utc(),
+                )
+                .await
+                .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
+            {
+                None => return Err(AgreementError::NotFound(agreement_id.to_string())),
+                Some(agreement) => agreement,
+            };
 
             validate_transition(&agreement, AgreementState::Pending)?;
 

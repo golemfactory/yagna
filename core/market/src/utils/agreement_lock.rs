@@ -18,7 +18,7 @@ impl AgreementLock {
 
     pub async fn get_lock(&self, agreement_id: &AgreementId) -> Arc<Mutex<()>> {
         // Note how important are '{}' around this statement. Otherwise lock isn't freed
-        // and we can't aqquire write lock
+        // and we can't acquire write lock
         let potencial_lock = {
             self.lock_map
                 .read()
