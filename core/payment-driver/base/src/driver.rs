@@ -20,6 +20,9 @@ pub use ya_core_model::payment::local::Network;
 
 #[async_trait(?Send)]
 pub trait PaymentDriver {
+    /// Called by the Identity service to notify the driver that specified
+    /// account is _locked_ / _unlocked_. Identity service holds
+    /// accounts private keys and signs transactions.
     async fn account_event(
         &self,
         _db: DbExecutor,
@@ -27,6 +30,7 @@ pub trait PaymentDriver {
         msg: IdentityEvent,
     ) -> Result<(), IdentityError>;
 
+    /// Gets the balance of the account.
     async fn get_account_balance(
         &self,
         db: DbExecutor,
@@ -34,6 +38,7 @@ pub trait PaymentDriver {
         msg: GetAccountBalance,
     ) -> Result<BigDecimal, GenericError>;
 
+    /// Deposits the funds into the driver's supported network. Called by CLI.
     async fn enter(
         &self,
         db: DbExecutor,
@@ -41,6 +46,8 @@ pub trait PaymentDriver {
         msg: Enter,
     ) -> Result<String, GenericError>;
 
+    /// Exits the funds outside the driver's supported network (most likely L1).
+    /// Called by CLI.
     async fn exit(&self, db: DbExecutor, caller: String, msg: Exit)
         -> Result<String, GenericError>;
 
@@ -48,8 +55,12 @@ pub trait PaymentDriver {
     fn get_name(&self) -> String;
     fn get_default_network(&self) -> String;
     fn get_networks(&self) -> HashMap<String, Network>;
+
+    /// Tells whether funds are available for spent just after depositing
+    /// on the driver's supported network or the additional unlocking is needed.
     fn recv_init_required(&self) -> bool;
 
+    /// Gets the balance of the funds sent from the sender to the recipient.
     async fn get_transaction_balance(
         &self,
         db: DbExecutor,
@@ -57,10 +68,14 @@ pub trait PaymentDriver {
         msg: GetTransactionBalance,
     ) -> Result<BigDecimal, GenericError>;
 
+    /// Initializes the driver service. It should call
+    /// `bus::register_account` to notify Payment service about
+    /// the driver readiness.
     async fn init(&self, db: DbExecutor, caller: String, msg: Init) -> Result<Ack, GenericError>;
     async fn fund(&self, db: DbExecutor, caller: String, msg: Fund)
         -> Result<String, GenericError>;
 
+    /// Transfers the funds between specified accounts. Called by CLI.
     async fn transfer(
         &self,
         db: DbExecutor,
@@ -68,6 +83,9 @@ pub trait PaymentDriver {
         msg: Transfer,
     ) -> Result<String, GenericError>;
 
+    /// Schedules the payment between specified accounts. Payments
+    /// are processed by the `cron` job. Payment tracking is done by
+    /// cron job, see: `PaymentDriverCron::confirm_payments`.
     async fn schedule_payment(
         &self,
         db: DbExecutor,
@@ -75,6 +93,7 @@ pub trait PaymentDriver {
         msg: SchedulePayment,
     ) -> Result<String, GenericError>;
 
+    /// Verifies the payment transaction specified by transaction's hash.
     async fn verify_payment(
         &self,
         db: DbExecutor,
@@ -82,6 +101,9 @@ pub trait PaymentDriver {
         msg: VerifyPayment,
     ) -> Result<PaymentDetails, GenericError>;
 
+    /// Validates that allocated funds are still sufficient to cover
+    /// the costs of the task (including the cost of the Gas).
+    /// Allocation is created when the requestor publishes the task on the market.
     async fn validate_allocation(
         &self,
         db: DbExecutor,
