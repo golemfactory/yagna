@@ -114,7 +114,7 @@ pub async fn list_unlocked_identities() -> Result<Vec<NodeId>, GenericError> {
     Ok(unlocked_list)
 }
 
-/// Notifies the Payment service that the driver is ready.
+/// Notifies the Payment service that the account is ready to sending / receiving funds.
 pub async fn register_account(
     driver: &(dyn PaymentDriver),
     address: &str,

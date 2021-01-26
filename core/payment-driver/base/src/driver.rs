@@ -56,10 +56,12 @@ pub trait PaymentDriver {
     fn get_default_network(&self) -> String;
     fn get_networks(&self) -> HashMap<String, Network>;
 
-    /// Tells whether funds are available for spent just after depositing
-    /// on the driver's supported network or the additional unlocking is needed.
+    /// Tells whether account initialization is needed for receiving payments.
     fn recv_init_required(&self) -> bool;
 
+    #[deprecated(
+        note = "Drivers should return very big number (e.g. `1_000_000_000_000_000_000u64` or the whole token supply)."
+    )]
     /// Gets the balance of the funds sent from the sender to the recipient.
     async fn get_transaction_balance(
         &self,
@@ -68,9 +70,8 @@ pub trait PaymentDriver {
         msg: GetTransactionBalance,
     ) -> Result<BigDecimal, GenericError>;
 
-    /// Initializes the driver service. It should call
-    /// `bus::register_account` to notify Payment service about
-    /// the driver readiness.
+    /// Initializes the account to be used with the driver service. It should call
+    /// `bus::register_account` to notify Payment service about the driver readiness. Driver can handle multiple accounts.
     async fn init(&self, db: DbExecutor, caller: String, msg: Init) -> Result<Ack, GenericError>;
     async fn fund(&self, db: DbExecutor, caller: String, msg: Fund)
         -> Result<String, GenericError>;
