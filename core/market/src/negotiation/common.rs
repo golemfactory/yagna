@@ -725,10 +725,21 @@ pub fn validate_match(
         error: e.to_string(),
     })? {
         Match::Yes => Ok(()),
-        _ => {
+        Match::No {
+            demand_mismatch,
+            offer_mismatch,
+        }
+        | Match::Undefined {
+            demand_mismatch,
+            offer_mismatch,
+        } => {
             return Err(MatchValidationError::NotMatching {
                 new: new_proposal.body.id.clone(),
                 prev: prev_proposal.body.id.clone(),
+                mismatches: format!(
+                    "Mismatched constraints - Offer: {:?}, Demand: {:?}",
+                    offer_mismatch, demand_mismatch
+                ),
             })
         }
     }

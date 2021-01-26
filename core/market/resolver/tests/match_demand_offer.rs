@@ -65,7 +65,10 @@ fn match_wrong_property_value_should_not_match() {
             "(foo=bar)",
         )
         .unwrap(),
-        Match::No
+        Match::No {
+            demand_mismatch: vec![],
+            offer_mismatch: vec![],
+        }
     );
 }
 
@@ -80,7 +83,10 @@ fn match_wrong_property_key_should_undefined_match() {
             "(foo=bar)",
         )
         .unwrap(),
-        Match::Undefined
+        Match::Undefined {
+            demand_mismatch: vec!["foo".to_string()],
+            offer_mismatch: vec![],
+        }
     );
 }
 
