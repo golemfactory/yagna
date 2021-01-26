@@ -4,6 +4,7 @@ use structopt::{clap, StructOpt};
 
 mod cli;
 mod dir;
+mod display;
 mod events;
 mod execution;
 mod hardware;

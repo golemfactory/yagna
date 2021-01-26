@@ -21,7 +21,7 @@ use ya_client_model::activity::{ActivityState, ProviderEvent, State};
 use ya_core_model::activity;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
-use ya_utils_actix::forward_actix_handler;
+use ya_utils_actix::{actix_signal_handler, forward_actix_handler};
 use ya_utils_path::SecurePath;
 use ya_utils_process::ExeUnitExitStatus;
 
@@ -462,22 +462,6 @@ impl TaskRunner {
         Ok(())
     }
 
-    pub fn on_subscribe_activity_created(
-        &mut self,
-        msg: Subscribe<ActivityCreated>,
-        _ctx: &mut Context<Self>,
-    ) -> Result<()> {
-        Ok(self.activity_created.on_subscribe(msg))
-    }
-
-    pub fn on_subscribe_activity_destroyed(
-        &mut self,
-        msg: Subscribe<ActivityDestroyed>,
-        _ctx: &mut Context<Self>,
-    ) -> Result<()> {
-        Ok(self.activity_destroyed.on_subscribe(msg))
-    }
-
     fn list_activities(&self, agreement_id: &str) -> Vec<String> {
         self.tasks
             .iter()
@@ -557,6 +541,8 @@ impl Actor for TaskRunner {
 forward_actix_handler!(TaskRunner, AgreementApproved, on_agreement_approved);
 forward_actix_handler!(TaskRunner, ExeUnitProcessFinished, on_exeunit_exited);
 forward_actix_handler!(TaskRunner, GetExeUnit, get_exeunit);
+actix_signal_handler!(TaskRunner, ActivityCreated, activity_created);
+actix_signal_handler!(TaskRunner, ActivityDestroyed, activity_destroyed);
 
 impl Handler<GetOfferTemplates> for TaskRunner {
     type Result = ResponseFuture<Result<HashMap<String, OfferTemplate>>>;
@@ -581,17 +567,6 @@ impl Handler<GetOfferTemplates> for TaskRunner {
         .boxed_local()
     }
 }
-
-forward_actix_handler!(
-    TaskRunner,
-    Subscribe<ActivityCreated>,
-    on_subscribe_activity_created
-);
-forward_actix_handler!(
-    TaskRunner,
-    Subscribe<ActivityDestroyed>,
-    on_subscribe_activity_destroyed
-);
 
 impl Handler<UpdateActivity> for TaskRunner {
     type Result = ActorResponse<Self, (), Error>;

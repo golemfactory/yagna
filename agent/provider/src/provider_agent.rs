@@ -159,8 +159,9 @@ impl ProviderAgent {
 
         // Generate session id from node name and process id to make sure it's unique.
         let name = args.node.node_name.clone().unwrap_or(app_name.to_string());
-        args.market.session_id = format!("{}-[{}]", name, std::process::id());
-        args.runner.session_id = args.market.session_id.clone(); // TODO: unwind this dirty fix
+        args.market.session_id = format!("{}-{}", name, std::process::id());
+        args.runner.session_id = args.market.session_id.clone();
+        args.payment.session_id = args.market.session_id.clone();
 
         let mut globals = GlobalsManager::try_new(&config.globals_file, args.node)?;
         globals.spawn_monitor(&config.globals_file)?;
@@ -170,7 +171,7 @@ impl ProviderAgent {
         hardware.spawn_monitor(&config.hardware_file)?;
 
         let market = ProviderMarket::new(api.market, args.market).start();
-        let payments = Payments::new(api.activity.clone(), api.payment).start();
+        let payments = Payments::new(api.activity.clone(), api.payment, args.payment).start();
         let runner = TaskRunner::new(api.activity, args.runner, registry, data_dir)?.start();
         let task_manager = TaskManager::new(market.clone(), runner.clone(), payments)?.start();
 
