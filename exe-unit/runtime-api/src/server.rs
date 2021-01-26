@@ -2,6 +2,8 @@ use std::future::Future;
 use std::pin::Pin;
 
 pub mod proto {
+    use std::fmt;
+
     include!(concat!(env!("OUT_DIR"), "/ya_runtime_api.rs"));
 
     impl response::Error {
@@ -10,6 +12,24 @@ pub mod proto {
             e.set_code(response::ErrorCode::Internal);
             e.message = msg.to_string();
             e
+        }
+    }
+
+    impl fmt::Display for Response {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match &self.command {
+                Some(response::Command::Status(status)) => {
+                    write!(f, "event: {}, id: {}, status: ", self.event, self.id)?;
+                    write!(
+                        f,
+                        "[pid: {}, running: {}, return_code: {}], ",
+                        status.pid, status.running, status.return_code
+                    )?;
+                    write!(f, "stdout: {:?}, ", status.stdout.as_slice())?;
+                    write!(f, "stderr: {:?}", status.stderr.as_slice())
+                }
+                _ => write!(f, "{:?}", self),
+            }
         }
     }
 }
