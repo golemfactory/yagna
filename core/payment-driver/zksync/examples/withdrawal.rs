@@ -5,6 +5,7 @@ use bigdecimal::BigDecimal;
 use hex::ToHex;
 use std::str::FromStr;
 use structopt::StructOpt;
+use ya_payment_driver::db::models::Network as DbNetwork;
 use ya_zksync_driver::zksync::faucet;
 use ya_zksync_driver::zksync::wallet as driver_wallet;
 use zksync::zksync_types::H256;
@@ -44,7 +45,7 @@ async fn main() -> anyhow::Result<()> {
     info!("Account address {}", addr_hex);
 
     info!("Funding an account");
-    faucet::request_ngnt(&addr_hex).await?;
+    faucet::request_ngnt(&addr_hex, DbNetwork::Rinkeby).await?;
 
     info!("Creating wallet");
     let provider = Provider::new(Network::Rinkeby);

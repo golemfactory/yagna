@@ -41,11 +41,12 @@ ya-service-api = "0.1"
 ya-service-api-derive = "0.1"
 ya-service-api-interfaces = "0.1"
 ya-service-api-web = "0.1"
-ya-service-bus = "0.2"
+ya-service-bus = "0.3"
 ya-sgx = "0.1"
 ya-utils-path = "0.1"
 ya-utils-futures = "0.1"
 ya-utils-process = { version = "0.1", features = ["lock"] }
+ya-version = "0.1"
 
 actix-rt = "1.0"
 actix-service = "1.0"
@@ -119,15 +120,11 @@ members = [
     "core/serv-api/interfaces",
     "core/serv-api/web",
     "core/sgx",
+    "core/version",
     "exe-unit",
     "exe-unit/runtime-api",
     "exe-unit/tokio-process-ns",
     "golem_cli",
-    "service-bus/bus",
-    "service-bus/derive",
-    "service-bus/proto",
-    "service-bus/router",
-    "service-bus/util",
     "utils/actix_utils",
     "utils/agreement-utils",
     "utils/compile-time-utils",
@@ -143,17 +140,18 @@ members = [
 
 [patch.crates-io]
 ## SERVICES
+ya-identity = { path = "core/identity" }
+ya-net = { path = "core/net" }
+ya-market = { path = "core/market" }
+ya-market-resolver = { path = "core/market/resolver" }
 ya-activity = { path = "core/activity" }
+ya-sgx = { path = "core/sgx" }
+ya-payment = { path = "core/payment" }
 ya-payment-driver = { path = "core/payment-driver/base" }
 ya-dummy-driver = { path = "core/payment-driver/dummy" }
 ya-gnt-driver = { path = "core/payment-driver/gnt" }
 ya-zksync-driver = { path = "core/payment-driver/zksync" }
-ya-identity = { path = "core/identity" }
-ya-market = { path = "core/market" }
-ya-market-resolver = { path = "core/market/resolver" }
-ya-net = { path = "core/net" }
-ya-payment = { path = "core/payment" }
-ya-sgx = { path = "core/sgx" }
+ya-version = { path = "core/version" }
 
 ## CORE UTILS
 ya-core-model = { path = "core/model" }
@@ -165,14 +163,14 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## SERVICE BUS
-ya-service-bus = { path = "service-bus/bus/" }
-ya-sb-proto = { path = "service-bus/proto" }
-ya-sb-router = { path = "service-bus/router" }
-ya-sb-util = { path = "service-bus/util" }
+ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "89236a2fec0f5cef335d4637df6e0f6e4da0e542"}
+ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "89236a2fec0f5cef335d4637df6e0f6e4da0e542"}
+ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "89236a2fec0f5cef335d4637df6e0f6e4da0e542"}
+ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "89236a2fec0f5cef335d4637df6e0f6e4da0e542"}
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "a5bfc61da8f3a5cdcafcacf3d48a9f706571a9d7"}
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "a5bfc61da8f3a5cdcafcacf3d48a9f706571a9d7"}
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "4099adb99dadbc8929caba33538806f5e10d5920"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "4099adb99dadbc8929caba33538806f5e10d5920"}
 
 #ya-client = { path = "../ya-client" }
 #ya-client-model = { path = "../ya-client/model" }

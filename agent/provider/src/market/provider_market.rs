@@ -8,27 +8,29 @@ use futures::prelude::*;
 use futures_util::FutureExt;
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use ya_agreement_utils::{AgreementView, OfferDefinition};
 use ya_client::market::MarketProviderApi;
+use ya_client_model::market::agreement_event::AgreementEventType;
+use ya_client_model::market::proposal::State;
 use ya_client_model::market::{
     agreement_event::AgreementTerminator, Agreement, NewOffer, Proposal, ProviderEvent, Reason,
 };
+use ya_client_model::NodeId;
 use ya_utils_actix::{
     actix_handler::ResultTypeGetter,
     actix_signal::{SignalSlot, Subscribe},
-    forward_actix_handler,
+    actix_signal_handler, forward_actix_handler,
 };
 
-use super::mock_negotiator::AcceptAllNegotiator;
-use super::negotiator::{AgreementResponse, AgreementResult, Negotiator, ProposalResponse};
+use super::negotiator::factory;
+use super::negotiator::{AgreementResponse, AgreementResult, NegotiatorAddr, ProposalResponse};
 use super::Preset;
 use crate::market::config::MarketConfig;
-use crate::market::mock_negotiator::LimitAgreementsNegotiator;
 use crate::market::termination_reason::GolemReason;
 use crate::tasks::{AgreementBroken, AgreementClosed, CloseAgreement};
-use ya_client_model::market::agreement_event::AgreementEventType;
 
 // =========================================== //
 // Public exposed messages
@@ -78,20 +80,6 @@ struct Subscription {
 }
 
 #[derive(Message)]
-#[rtype(result = "Result<ProposalResponse>")]
-struct GotProposal {
-    subscription: Subscription,
-    proposal: Proposal,
-}
-
-#[derive(Message)]
-#[rtype(result = "Result<AgreementResponse>")]
-struct GotAgreement {
-    subscription: Subscription,
-    agreement: AgreementView,
-}
-
-#[derive(Message)]
 #[rtype(result = "Result<()>")]
 struct AgreementFinalized {
     id: String,
@@ -114,7 +102,7 @@ struct OnAgreementTerminated {
 #[derive(Display)]
 #[display(fmt = "")]
 pub struct ProviderMarket {
-    negotiator: Box<dyn Negotiator>,
+    negotiator: Arc<NegotiatorAddr>,
     api: Arc<MarketProviderApi>,
     subscriptions: HashMap<String, Subscription>,
     config: Arc<MarketConfig>,
@@ -132,6 +120,7 @@ struct AsyncCtx {
     market: Addr<ProviderMarket>,
     config: Arc<MarketConfig>,
     api: Arc<MarketProviderApi>,
+    negotiator: Arc<NegotiatorAddr>,
 }
 
 impl ProviderMarket {
@@ -142,7 +131,7 @@ impl ProviderMarket {
     pub fn new(api: MarketProviderApi, config: MarketConfig) -> ProviderMarket {
         return ProviderMarket {
             api: Arc::new(api),
-            negotiator: create_negotiator(&config.negotiator_type),
+            negotiator: Arc::new(NegotiatorAddr::default()),
             config: Arc::new(config),
             subscriptions: HashMap::new(),
             agreement_signed_signal: SignalSlot::<AgreementApproved>::new(),
@@ -156,6 +145,7 @@ impl ProviderMarket {
             config: self.config.clone(),
             api: self.api.clone(),
             market: ctx.address(),
+            negotiator: self.negotiator.clone(),
         }
     }
 
@@ -179,47 +169,6 @@ impl ProviderMarket {
     // Market internals - proposals and agreements reactions
     // =========================================== //
 
-    fn on_proposal(
-        &mut self,
-        msg: GotProposal,
-        _ctx: &mut Context<Self>,
-    ) -> Result<ProposalResponse> {
-        log::debug!(
-            "Got proposal event {:?} with state {:?}",
-            msg.proposal.proposal_id,
-            msg.proposal.state
-        );
-
-        let response = self
-            .negotiator
-            .react_to_proposal(&msg.subscription.offer, &msg.proposal)?;
-
-        log::info!(
-            "Decided to {} proposal [{:?}] for subscription [{}].",
-            response,
-            msg.proposal.proposal_id,
-            msg.subscription.preset.name
-        );
-        Ok(response)
-    }
-
-    fn on_agreement(
-        &mut self,
-        msg: GotAgreement,
-        _ctx: &mut Context<Self>,
-    ) -> Result<AgreementResponse> {
-        log::debug!("Got agreement event {:?}.", msg.agreement.agreement_id,);
-        let response = self.negotiator.react_to_agreement(&msg.agreement)?;
-
-        log::info!(
-            "Decided to {} agreement [{}] for subscription [{}].",
-            response,
-            msg.agreement.agreement_id,
-            msg.subscription.preset.name
-        );
-        Ok(response)
-    }
-
     fn on_agreement_approved(
         &mut self,
         msg: AgreementApproved,
@@ -228,28 +177,6 @@ impl ProviderMarket {
         log::info!("Got approved agreement [{}].", msg.agreement.agreement_id,);
         // At this moment we only forward agreement to outside world.
         self.agreement_signed_signal.send_signal(msg)
-    }
-
-    // =========================================== //
-    // Market internals - event subscription
-    // =========================================== //
-
-    pub fn on_subscribe_approved(
-        &mut self,
-        msg: Subscribe<AgreementApproved>,
-        _ctx: &mut Context<Self>,
-    ) -> Result<()> {
-        self.agreement_signed_signal.on_subscribe(msg);
-        Ok(())
-    }
-
-    pub fn on_subscribe_terminated(
-        &mut self,
-        msg: Subscribe<CloseAgreement>,
-        _ctx: &mut Context<Self>,
-    ) -> Result<()> {
-        self.agreement_terminated_signal.on_subscribe(msg);
-        Ok(())
     }
 }
 
@@ -330,35 +257,68 @@ async fn process_proposal(
         subscription.preset.name,
     );
 
-    match ctx
-        .market
-        .send(GotProposal::new(subscription.clone(), demand.clone()))
-        .await?
-    {
-        Ok(action) => match action {
-            ProposalResponse::CounterProposal { offer } => {
-                ctx.api
-                    .counter_proposal(&offer, &subscription.id, proposal_id)
-                    .await?;
-            }
-            ProposalResponse::AcceptProposal => {
-                ctx.api
-                    .counter_proposal(&subscription.offer, &subscription.id, proposal_id)
-                    .await?;
-            }
-            ProposalResponse::IgnoreProposal => log::info!("Ignoring proposal {:?}", proposal_id),
-            ProposalResponse::RejectProposal { reason } => {
-                ctx.api
-                    .reject_proposal(&subscription.id, proposal_id, &reason)
-                    .await?;
-            }
+    let prev_proposal = match &demand.prev_proposal_id {
+        Some(prev_proposal_id) => ctx
+            .api
+            .get_proposal(&subscription.id, prev_proposal_id)
+            .await
+            .map_err(|e| {
+                anyhow!(
+                    "Failed to get previous proposal [{}] for Requestor proposal [{}]. {}",
+                    prev_proposal_id,
+                    proposal_id,
+                    e
+                )
+            })?,
+        // It's first Proposal from Requestor, so we have to use our initial Offer.
+        None => Proposal {
+            properties: subscription.offer.properties.clone(),
+            constraints: subscription.offer.constraints.clone(),
+            proposal_id: subscription.id.clone(),
+            issuer_id: NodeId::from_str("0x000000000000000000000000000000000000000")?, // How to set?
+            state: State::Initial,
+            timestamp: Utc::now(), // How to set?
+            prev_proposal_id: None,
         },
-        Err(error) => log::error!(
-            "Negotiator error while processing proposal {:?}. Error: {}",
-            proposal_id,
-            error
-        ),
-    }
+    };
+
+    let action = ctx
+        .negotiator
+        .react_to_proposal(prev_proposal, demand.clone())
+        .await
+        .map_err(|e| {
+            anyhow!(
+                "Negotiator error while processing proposal {}. Error: {}",
+                proposal_id,
+                e
+            )
+        })?;
+
+    log::info!(
+        "Decided to {} [{}] for subscription [{}].",
+        action,
+        proposal_id,
+        subscription.preset.name
+    );
+
+    match action {
+        ProposalResponse::CounterProposal { offer } => {
+            ctx.api
+                .counter_proposal(&offer, &subscription.id, proposal_id)
+                .await?;
+        }
+        ProposalResponse::AcceptProposal => {
+            ctx.api
+                .counter_proposal(&subscription.offer, &subscription.id, proposal_id)
+                .await?;
+        }
+        ProposalResponse::IgnoreProposal => log::info!("Ignoring proposal {:?}", proposal_id),
+        ProposalResponse::RejectProposal { reason } => {
+            ctx.api
+                .reject_proposal(&subscription.id, proposal_id, &reason)
+                .await?;
+        }
+    };
     Ok(())
 }
 
@@ -378,58 +338,66 @@ async fn process_agreement(
     let agreement = AgreementView::try_from(agreement)
         .map_err(|e| anyhow!("Invalid agreement. Error: {}", e))?;
 
-    let response = ctx
-        .market
-        .send(GotAgreement::new(subscription, agreement.clone()))
-        .await?;
-    match response {
-        Ok(action) => match action {
-            AgreementResponse::ApproveAgreement => {
-                // TODO: We should retry approval, but only a few times, than we should
-                //       give up since it's better to take another agreement.
-                let result = ctx
-                    .api
-                    .approve_agreement(
-                        &agreement.agreement_id,
-                        Some(config.session_id.clone()),
-                        Some(config.agreement_approve_timeout),
-                    )
-                    .await;
+    let action = ctx
+        .negotiator
+        .react_to_agreement(&agreement)
+        .await
+        .map_err(|e| {
+            anyhow!(
+                "Negotiator error while processing agreement [{}]. Error: {}",
+                agreement.agreement_id,
+                e
+            )
+        })?;
 
-                if let Err(error) = result {
-                    // Notify negotiator, that we couldn't approve.
-                    let msg = AgreementFinalized {
-                        id: agreement.agreement_id.clone(),
-                        result: AgreementResult::ApprovalFailed,
-                    };
-                    let _ = ctx.market.send(msg).await;
-                    return Err(anyhow!(
-                        "Failed to approve agreement [{}]. Error: {}",
-                        agreement.agreement_id,
-                        error
-                    ));
-                }
+    log::info!(
+        "Decided to {} [{}] for subscription [{}].",
+        action,
+        agreement.agreement_id,
+        subscription.preset.name
+    );
 
-                // We negotiated agreement and here responsibility of ProviderMarket ends.
-                // Notify outside world about agreement for further processing.
-                let message = AgreementApproved {
-                    agreement: agreement.clone(),
+    match action {
+        AgreementResponse::ApproveAgreement => {
+            // TODO: We should retry approval, but only a few times, than we should
+            //       give up since it's better to take another agreement.
+            let result = ctx
+                .api
+                .approve_agreement(
+                    &agreement.agreement_id,
+                    Some(config.session_id.clone()),
+                    Some(config.agreement_approve_timeout),
+                )
+                .await;
+
+            if let Err(error) = result {
+                // Notify negotiator, that we couldn't approve.
+                let msg = AgreementFinalized {
+                    id: agreement.agreement_id.clone(),
+                    result: AgreementResult::ApprovalFailed,
                 };
+                let _ = ctx.market.send(msg).await;
+                return Err(anyhow!(
+                    "Failed to approve agreement [{}]. Error: {}",
+                    agreement.agreement_id,
+                    error
+                ));
+            }
 
-                let _ = ctx.market.send(message).await?;
-            }
-            AgreementResponse::RejectAgreement { reason } => {
-                ctx.api
-                    .reject_agreement(&agreement.agreement_id, &reason)
-                    .await?;
-            }
-        },
-        Err(error) => log::error!(
-            "Negotiator error while processing agreement {}. Error: {}",
-            agreement.agreement_id,
-            error
-        ),
-    }
+            // We negotiated agreement and here responsibility of ProviderMarket ends.
+            // Notify outside world about agreement for further processing.
+            let message = AgreementApproved {
+                agreement: agreement.clone(),
+            };
+
+            let _ = ctx.market.send(message).await?;
+        }
+        AgreementResponse::RejectAgreement { reason } => {
+            ctx.api
+                .reject_agreement(&agreement.agreement_id, &reason)
+                .await?;
+        }
+    };
     Ok(())
 }
 
@@ -559,6 +527,8 @@ impl Actor for ProviderMarket {
             "collect-agreement-events".to_string(),
             ctx.spawn(collect_agreement_events(actx).into_actor(self)),
         );
+
+        self.negotiator = factory::create_negotiator(ctx.address(), &self.config);
     }
 }
 
@@ -584,7 +554,7 @@ impl Handler<Shutdown> for ProviderMarket {
 }
 
 impl Handler<OnAgreementTerminated> for ProviderMarket {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = anyhow::Result<()>;
 
     fn handle(&mut self, msg: OnAgreementTerminated, _ctx: &mut Context<Self>) -> Self::Result {
         let id = msg.id;
@@ -612,46 +582,46 @@ impl Handler<OnAgreementTerminated> for ProviderMarket {
                 )
             })
             .ok();
-        ActorResponse::reply(Ok(()))
+        Ok(())
     }
 }
 
 impl Handler<CreateOffer> for ProviderMarket {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ResponseFuture<Result<(), Error>>;
 
     fn handle(&mut self, msg: CreateOffer, ctx: &mut Context<Self>) -> Self::Result {
-        log::info!(
-            "Creating offer for preset [{}] and ExeUnit [{}]. Usage coeffs: {:?}",
-            msg.preset.name,
-            msg.preset.exeunit_name,
-            msg.preset.usage_coeffs
-        );
+        let ctx = self.async_context(ctx);
 
-        let offer = match self.negotiator.create_offer(&msg.offer_definition) {
-            Ok(offer) => offer,
-            Err(error) => {
-                log::error!(
-                    "Negotiator failed to create offer for preset [{}]. Error: {}",
-                    msg.preset.name,
-                    error
-                );
-                return ActorResponse::reply(Err(error));
-            }
-        };
+        async move {
+            log::info!(
+                "Creating offer for preset [{}] and ExeUnit [{}]. Usage coeffs: {:?}",
+                msg.preset.name,
+                msg.preset.exeunit_name,
+                msg.preset.usage_coeffs
+            );
 
-        let myself = ctx.address();
-        let client = self.api.clone();
+            let offer = ctx
+                .negotiator
+                .create_offer(&msg.offer_definition)
+                .await
+                .map_err(|e| {
+                    log::error!(
+                        "Negotiator failed to create offer for preset [{}]. Error: {}",
+                        msg.preset.name,
+                        e
+                    );
+                    e
+                })?;
 
-        log::debug!(
-            "Offer created: {}",
-            serde_json::to_string_pretty(&offer).unwrap()
-        );
+            log::debug!(
+                "Offer created: {}",
+                serde_json::to_string_pretty(&offer).unwrap()
+            );
 
-        log::info!("Subscribing to events... [{}]", msg.preset.name);
+            log::info!("Subscribing to events... [{}]", msg.preset.name);
 
-        let future = async move {
             let preset_name = msg.preset.name.clone();
-            subscribe(myself, client, offer, msg.preset)
+            subscribe(ctx.market, ctx.api, offer, msg.preset)
                 .await
                 .map_err(|error| {
                     log::error!(
@@ -660,10 +630,10 @@ impl Handler<CreateOffer> for ProviderMarket {
                         error
                     );
                     error
-                })
-        };
-
-        ActorResponse::r#async(future.into_actor(self))
+                })?;
+            Ok(())
+        }
+        .boxed_local()
     }
 }
 
@@ -743,50 +713,62 @@ async fn resubscribe_offers(
 }
 
 impl Handler<AgreementFinalized> for ProviderMarket {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ResponseActFuture<Self, Result<()>>;
 
     fn handle(&mut self, msg: AgreementFinalized, ctx: &mut Context<Self>) -> Self::Result {
-        if let Err(error) = self.negotiator.agreement_finalized(&msg.id, &msg.result) {
-            log::warn!(
-                "Negotiator failed while handling agreement [{}] finalize. Error: {}",
-                &msg.id,
-                error,
-            );
+        let ctx = self.async_context(ctx);
+        let agreement_id = msg.id.clone();
+        let result = msg.result.clone();
+
+        let future = async move {
+            if let Err(error) = ctx
+                .negotiator
+                .agreement_finalized(&agreement_id, result)
+                .await
+            {
+                log::warn!(
+                    "Negotiator failed while handling agreement [{}] finalize. Error: {}",
+                    &agreement_id,
+                    error,
+                );
+            }
         }
+        .into_actor(self)
+        .map(|_, myself, ctx| {
+            ctx.spawn(terminate_agreement(myself.api.clone(), msg).into_actor(myself));
 
-        ctx.spawn(terminate_agreement(self.api.clone(), msg).into_actor(self));
+            log::info!("Re-subscribing all active offers to get fresh proposals from the Market");
 
-        log::info!("Re-subscribing all active offers to get fresh proposals from the Market");
-
-        let subscriptions = std::mem::replace(&mut self.subscriptions, HashMap::new());
-        ctx.spawn(
-            resubscribe_offers(ctx.address(), self.api.clone(), subscriptions).into_actor(self),
-        );
-
-        // Don't forward error.
-        ActorResponse::reply(Ok(()))
+            let subscriptions = std::mem::replace(&mut myself.subscriptions, HashMap::new());
+            ctx.spawn(
+                resubscribe_offers(ctx.address(), myself.api.clone(), subscriptions)
+                    .into_actor(myself),
+            );
+            Ok(())
+        });
+        Box::pin(future)
     }
 }
 
 impl Handler<AgreementClosed> for ProviderMarket {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ResponseFuture<anyhow::Result<()>>;
 
     fn handle(&mut self, msg: AgreementClosed, ctx: &mut Context<Self>) -> Self::Result {
         let msg = AgreementFinalized::from(msg);
         let myself = ctx.address().clone();
 
-        ActorResponse::r#async(async move { myself.send(msg).await? }.into_actor(self))
+        async move { myself.send(msg).await? }.boxed_local()
     }
 }
 
 impl Handler<AgreementBroken> for ProviderMarket {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ResponseFuture<anyhow::Result<()>>;
 
     fn handle(&mut self, msg: AgreementBroken, ctx: &mut Context<Self>) -> Self::Result {
         let msg = AgreementFinalized::from(msg);
         let myself = ctx.address().clone();
 
-        ActorResponse::r#async(async move { myself.send(msg).await? }.into_actor(self))
+        async move { myself.send(msg).await? }.boxed_local()
     }
 }
 
@@ -835,20 +817,10 @@ impl Handler<Unsubscribe> for ProviderMarket {
     }
 }
 
-forward_actix_handler!(ProviderMarket, GotProposal, on_proposal);
-forward_actix_handler!(ProviderMarket, GotAgreement, on_agreement);
 forward_actix_handler!(ProviderMarket, Subscription, on_subscription);
-forward_actix_handler!(
-    ProviderMarket,
-    Subscribe<AgreementApproved>,
-    on_subscribe_approved
-);
-forward_actix_handler!(
-    ProviderMarket,
-    Subscribe<CloseAgreement>,
-    on_subscribe_terminated
-);
 forward_actix_handler!(ProviderMarket, AgreementApproved, on_agreement_approved);
+actix_signal_handler!(ProviderMarket, CloseAgreement, agreement_terminated_signal);
+actix_signal_handler!(ProviderMarket, AgreementApproved, agreement_signed_signal);
 
 fn get_backoff() -> backoff::ExponentialBackoff {
     // TODO: We could have config for Market actor to be able to set at least initial interval.
@@ -862,41 +834,8 @@ fn get_backoff() -> backoff::ExponentialBackoff {
 }
 
 // =========================================== //
-// Negotiators factory
-// =========================================== //
-
-fn create_negotiator(name: &str) -> Box<dyn Negotiator> {
-    match name {
-        "AcceptAll" => Box::new(AcceptAllNegotiator::new()),
-        "LimitAgreements" => Box::new(LimitAgreementsNegotiator::new(1)),
-        _ => {
-            log::warn!("Unknown negotiator type {}. Using default: AcceptAll", name);
-            Box::new(AcceptAllNegotiator::new())
-        }
-    }
-}
-
-// =========================================== //
 // Messages creation helpers
 // =========================================== //
-
-impl GotProposal {
-    fn new(subscription: Subscription, proposal: Proposal) -> Self {
-        Self {
-            subscription,
-            proposal,
-        }
-    }
-}
-
-impl GotAgreement {
-    fn new(subscription: Subscription, agreement: AgreementView) -> Self {
-        Self {
-            subscription,
-            agreement,
-        }
-    }
-}
 
 impl From<AgreementBroken> for AgreementFinalized {
     fn from(msg: AgreementBroken) -> Self {

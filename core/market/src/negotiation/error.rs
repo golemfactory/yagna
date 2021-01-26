@@ -28,8 +28,12 @@ pub struct NegotiationInitError(#[from] NegotiationApiInitError);
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum MatchValidationError {
-    #[error("Proposal properties [{new}] doesn't match previous Proposal [{prev}].")]
-    NotMatching { new: ProposalId, prev: ProposalId },
+    #[error("Proposal properties [{new}] doesn't match previous Proposal [{prev}]. {mismatches}")]
+    NotMatching {
+        new: ProposalId,
+        prev: ProposalId,
+        mismatches: String,
+    },
     #[error("Can't match Proposal [{new}] with previous Proposal [{prev}]. Error: {error}")]
     MatchingFailed {
         new: ProposalId,

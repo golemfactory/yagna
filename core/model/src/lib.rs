@@ -28,6 +28,9 @@ pub mod gftp;
 #[cfg(feature = "sgx")]
 pub mod sgx;
 
+#[cfg(feature = "version")]
+pub mod version;
+
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 pub use ya_client_model::NodeId;

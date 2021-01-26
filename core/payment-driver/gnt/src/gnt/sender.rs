@@ -10,6 +10,7 @@ use crate::{utils, GNTDriverError, GNTDriverResult};
 use crate::dao::payment::PaymentDao;
 use crate::gnt::config::EnvConfiguration;
 use crate::gnt::{common, notify_payment, SignTx};
+use crate::networks::Network;
 use actix::prelude::*;
 use bigdecimal::{BigDecimal, Zero};
 use chrono::Utc;
@@ -131,6 +132,7 @@ impl Message for WaitForTx {
 
 pub struct TransactionSender {
     active_accounts: Rc<RefCell<Accounts>>,
+    network: Network,
     ethereum_client: Arc<EthereumClient>,
     gnt_contract: Arc<Contract<Http>>,
     nonces: HashMap<Address, U256>,
@@ -145,6 +147,7 @@ pub struct TransactionSender {
 
 impl TransactionSender {
     pub fn new(
+        network: Network,
         ethereum_client: Arc<EthereumClient>,
         gnt_contract: Arc<Contract<Http>>,
         db: DbExecutor,
@@ -155,6 +158,7 @@ impl TransactionSender {
         }));
         let me = TransactionSender {
             active_accounts,
+            network,
             ethereum_client,
             gnt_contract,
             db,
@@ -362,7 +366,7 @@ impl Handler<TxSave> for TransactionSender {
         } else {
             return transaction_error("reservation missing");
         };
-        let chain_id = self.ethereum_client.chain_id();
+        let chain_id = self.network.chain_id();
         let now = Utc::now();
         let tx_type = msg.tx_type;
         let db_transactions: Vec<_> = msg
@@ -454,7 +458,7 @@ impl Handler<Retry> for TransactionSender {
     fn handle(&mut self, msg: Retry, _ctx: &mut Self::Context) -> Self::Result {
         let db = self.db.clone();
         let client = self.ethereum_client.clone();
-        let chain_id = client.chain_id();
+        let chain_id = self.network.chain_id();
         // TODO: catch different states.
         let fut = async move {
             if let Some(tx) = db.as_dao::<TransactionDao>().get(msg.tx_id).await? {
@@ -597,6 +601,7 @@ impl TransactionSender {
                     None => continue,
                     Some(node_id) => {
                         let account = address.clone();
+                        let network = act.network;
                         let client = act.ethereum_client.clone();
                         let gnt_contract = act.gnt_contract.clone();
                         let tx_sender = ctx.address();
@@ -605,6 +610,7 @@ impl TransactionSender {
                         Arbiter::spawn(async move {
                             process_payments(
                                 account,
+                                network,
                                 client,
                                 gnt_contract,
                                 tx_sender,
@@ -819,6 +825,7 @@ impl Handler<AccountUnlocked> for TransactionSender {
 
 async fn process_payments(
     account: String,
+    network: Network,
     client: Arc<EthereumClient>,
     gnt_contract: Arc<Contract<Http>>,
     tx_sender: Addr<TransactionSender>,
@@ -827,7 +834,7 @@ async fn process_payments(
 ) {
     match db
         .as_dao::<PaymentDao>()
-        .get_pending_payments(account.clone())
+        .get_pending_payments(account.clone(), network)
         .await
     {
         Err(e) => log::error!(
@@ -868,7 +875,7 @@ async fn process_payment(
 ) -> GNTDriverResult<()> {
     log::info!("Processing payment: {:?}", payment);
     let gas_price = client.get_gas_price().await?;
-    let chain_id = client.chain_id();
+    let chain_id = payment.network.chain_id();
     match transfer_gnt(
         gnt_contract,
         tx_sender,
@@ -953,6 +960,7 @@ async fn notify_tx_confirmed(db: DbExecutor, tx_id: String) -> GNTDriverResult<(
         .get_by_tx_id(tx_id.clone())
         .await?;
     assert_ne!(payments.len(), 0);
+    let platform = payments[0].network.default_platform();
 
     let mut amount = BigDecimal::zero();
     for payment in payments.iter() {
@@ -979,5 +987,5 @@ async fn notify_tx_confirmed(db: DbExecutor, tx_id: String) -> GNTDriverResult<(
         }
     };
 
-    notify_payment(amount, sender, recipient, order_ids, confirmation).await
+    notify_payment(amount, sender, recipient, platform, order_ids, confirmation).await
 }

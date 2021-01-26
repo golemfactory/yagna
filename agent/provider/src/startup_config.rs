@@ -13,6 +13,7 @@ use crate::execution::{ExeUnitsRegistry, TaskRunnerConfig};
 use crate::hardware::{Resources, UpdateResources};
 use crate::market::config::MarketConfig;
 
+use crate::payments::PaymentsConfig;
 use ya_client::cli::ApiOpts;
 use ya_utils_path::data_dir::DataDir;
 
@@ -159,6 +160,8 @@ pub struct RunConfig {
     pub runner: TaskRunnerConfig,
     #[structopt(flatten)]
     pub market: MarketConfig,
+    #[structopt(flatten)]
+    pub payment: PaymentsConfig,
 }
 
 #[derive(StructOpt)]
