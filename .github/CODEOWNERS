@@ -13,6 +13,8 @@
 
 /utils/transfer                          @golemfactory/exe-unit
 
+/core/gftp/                              @golemfactory/exe-unit
+
 # Market
 /core/market/                            @golemfactory/ya-market
 /core/model/src/market.rs                @golemfactory/ya-market
