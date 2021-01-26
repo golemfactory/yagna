@@ -73,6 +73,8 @@ pub trait PaymentDriver {
     /// Initializes the account to be used with the driver service. It should call
     /// `bus::register_account` to notify Payment service about the driver readiness. Driver can handle multiple accounts.
     async fn init(&self, db: DbExecutor, caller: String, msg: Init) -> Result<Ack, GenericError>;
+
+    /// Funds the account from faucet when run on testnet. Provides instructions how to fund on mainnet.
     async fn fund(&self, db: DbExecutor, caller: String, msg: Fund)
         -> Result<String, GenericError>;
 
