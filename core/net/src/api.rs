@@ -1,3 +1,4 @@
+use crate::SUBSCRIPTIONS;
 use std::future::Future;
 use ya_core_model::net;
 use ya_core_model::net::local::{
@@ -30,6 +31,11 @@ where
     // and add broadcast_address to be endpoint, which will be called, when someone
     // will broadcast any Message related to this Topic.
     let subscribe_msg = MsgType::into_subscribe_msg(broadcast_address);
+    {
+        let mut subscriptions = SUBSCRIPTIONS.lock().unwrap();
+        subscriptions.insert(subscribe_msg.clone());
+    }
+
     bus::service(net::local::BUS_ID)
         .send(subscribe_msg)
         .await??;
