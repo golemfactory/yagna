@@ -111,7 +111,7 @@ async fn main() -> anyhow::Result<()> {
     log::info!("Debit note accepted.");
 
     log::info!("Waiting for payment...");
-    let timeout = Some(Duration::from_secs(300)); // Should be enough for GLM transfer
+    let timeout = Some(Duration::from_secs(1000)); // Should be enough for GLM transfer
     let mut payments = provider
         .get_payments(Some(&now), timeout, None, None)
         .await?;
@@ -156,7 +156,7 @@ async fn main() -> anyhow::Result<()> {
     log::info!("Debit note accepted.");
 
     log::info!("Waiting for payment...");
-    let timeout = Some(Duration::from_secs(300)); // Should be enough for GLM transfer
+    let timeout = Some(Duration::from_secs(1000)); // Should be enough for GLM transfer
     let mut payments = provider
         .get_payments(Some(&now), timeout, None, args.app_session_id.clone())
         .await?;
