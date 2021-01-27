@@ -114,6 +114,7 @@ pub async fn list_unlocked_identities() -> Result<Vec<NodeId>, GenericError> {
     Ok(unlocked_list)
 }
 
+/// Notifies the Payment service that the account is ready to sending / receiving funds.
 pub async fn register_account(
     driver: &(dyn PaymentDriver),
     address: &str,
@@ -136,6 +137,7 @@ pub async fn register_account(
     Ok(())
 }
 
+/// Delegates signing of the transaction's payload to the Identity service.
 pub async fn sign(node_id: NodeId, payload: Vec<u8>) -> Result<Vec<u8>, GenericError> {
     let signature = service(identity::BUS_ID)
         .send(identity::Sign { node_id, payload })
@@ -145,6 +147,9 @@ pub async fn sign(node_id: NodeId, payload: Vec<u8>) -> Result<Vec<u8>, GenericE
     Ok(signature)
 }
 
+/// Notifies the Payment service that the scheduled payment is processed successfully.
+/// It also links the PaymentDriver::schedule_payment `order_id` with the `confirmation` (e.g. transaction's hash).
+/// This notification leads to `verify_payment` call on the provider side.
 pub async fn notify_payment(
     driver_name: &str,
     platform: &str,
