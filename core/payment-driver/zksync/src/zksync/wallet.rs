@@ -139,11 +139,7 @@ pub async fn make_transfer(
 
     let sender = details.sender.clone();
     let wallet = get_wallet(&sender, network).await?;
-    let mut token = get_network_token(network, None);
-    // TODO Investiggate and fix tGLM ticker name on rinkeby
-    if token == "tGLM" {
-        token = ZKSYNC_TOKEN_NAME.to_string();
-    }
+    let token = get_network_token(network, None);
 
     let balance = wallet
         .get_balance(BlockStatus::Committed, token.as_ref())
@@ -262,11 +258,8 @@ async fn unlock_wallet<S: EthereumSigner + Clone>(
         .map_err(GenericError::new)?
     {
         log::info!("Unlocking wallet... address = {}", wallet.signer.address);
-        let mut token = get_network_token(network, None);
-        // TODO Investiggate and fix tGLM ticker name on rinkeby
-        if token == "tGLM" {
-            token = ZKSYNC_TOKEN_NAME.to_string();
-        }
+        let token = get_network_token(network, None);
+
         let unlock = wallet
             .start_change_pubkey()
             .fee_token(token.as_ref())
