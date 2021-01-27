@@ -8,7 +8,16 @@ cd core/payment
 cp ../../.env-template .env
 cargo run --example payment_api
 ```
-To use GNT instead of dummy driver us `cargo run --example payment_api -- --driver=gnt` instead.
+To use GLM instead of dummy driver use: 
+- ERC-20 driver on rinkeby:
+  `cargo run --example payment_api -- --driver=erc20 --platform=erc20-rinkeby-tglm`
+- ERC-20 driver on mainnet: 
+  `cargo run --example payment_api -- --driver=erc20 --network=mainnet --platform=erc20-mainnet-glm`
+- ZkSync driver on rinkeby: 
+  `cargo run --example payment_api -- --driver=zksync --platform=zksync-rinkeby-tglm`
+- ZkSync driver on mainnet: 
+  `cargo run --example payment_api -- --driver=zksync --network=mainnet --platform=zksync-mainnet-glm`
+
 
 **:warning: Remember! Each example expects a clean database so might need to remove payment.db and restart the API server.**
 
@@ -18,7 +27,7 @@ To test the whole flow start the API server (see above) and run the debit_note_f
 example in another terminal:
 ```shell script
 cd core/payment
-cargo run --example debit_note_flow
+cargo run --example debit_note_flow -- --platform=dummy-glm
 ```
 (**:warning: NOTE:** The example expects a clean database so might need to remove `payment.db`
 and restart the API server.)
@@ -75,7 +84,7 @@ Payload:
 To test the whole flow start the API server (see above) and run the invoice_flow
 example in another terminal:
 ```shell script
-cargo run --example invoice_flow
+cargo run --example invoice_flow -- --platform=dummy-glm
 ```
 (**:warning: NOTE:** The example expects a clean database so might need to remove `payment.db`
 and restart the API server.)
