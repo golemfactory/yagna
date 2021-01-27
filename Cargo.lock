@@ -41,7 +41,7 @@ dependencies = [
  "parking_lot 0.11.1",
  "pin-project 0.4.27",
  "smallvec 1.6.1",
- "tokio",
+ "tokio 0.2.24",
  "tokio-util 0.3.1",
 ]
 
@@ -3931,6 +3931,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-derive"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "876a53fff98e03a936a674b29568b0e605f06b29372c2489ff4de23f1949743d"
+dependencies = [
+ "proc-macro2 1.0.24",
+ "quote 1.0.8",
+ "syn 1.0.60",
+]
+
+[[package]]
 name = "num-integer"
 version = "0.1.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7314,6 +7325,8 @@ dependencies = [
  "log",
  "maplit",
  "num-bigint 0.2.6",
+ "num-derive 0.3.3",
+ "num-traits",
  "r2d2",
  "rlp",
  "secp256k1 0.19.0",
@@ -7397,7 +7410,7 @@ dependencies = [
  "libsqlite3-sys",
  "log",
  "metrics",
- "num-derive",
+ "num-derive 0.2.5",
  "num-traits",
  "r2d2",
  "rand 0.7.3",

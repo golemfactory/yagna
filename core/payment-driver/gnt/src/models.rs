@@ -69,6 +69,7 @@ pub struct TransactionEntity {
     pub encoded: String,
     pub signature: String,
     pub tx_hash: Option<String>,
+    pub network: Network,
 }
 
 #[derive(Queryable, Clone, Debug, Identifiable, Insertable, PartialEq)]
