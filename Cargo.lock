@@ -7563,6 +7563,7 @@ dependencies = [
  "diesel",
  "diesel_migrations",
  "ethereum-types 0.6.0",
+ "futures 0.3.12",
  "hex",
  "log",
  "num",
