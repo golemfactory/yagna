@@ -39,16 +39,28 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
     #[rustfmt::skip] // Keep move's neatly aligned
     ServiceBinder::new(&bus_id, db, driver.clone())
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.init(db, c, m).await }
+            move |db, dr, c, m| async move { dr.account_event(db, c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.account_event(db, c, m).await }
+            move |db, dr, c, m| async move { dr.enter(db, c, m).await }
+        )
+        .bind_with_processor(
+            move |db, dr, c, m| async move { dr.exit(db, c, m).await }
+        )
+        .bind_with_processor(
+            move |db, dr, c, m| async move { dr.fund(db, c, m).await }
         )
         .bind_with_processor(
             move |db, dr, c, m| async move { dr.get_account_balance(db, c, m).await }
         )
         .bind_with_processor(
             move |db, dr, c, m| async move { dr.get_transaction_balance(db, c, m).await }
+        )
+        .bind_with_processor(
+            move |db, dr, c, m| async move { dr.init(db, c, m).await }
+        )
+        .bind_with_processor(
+            move |db, dr, c, m| async move { dr.transfer(db, c, m).await }
         )
         .bind_with_processor(
             move |db, dr, c, m| async move { dr.schedule_payment(db, c, m).await }
@@ -70,8 +82,11 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
     log::debug!("Registering driver in payment service...");
     let message = payment_srv::RegisterDriver {
         driver_name: driver.get_name(),
-        platform: driver.get_platform(),
-        recv_init_required: driver.recv_init_required(),
+        details: payment_srv::DriverDetails {
+            default_network: driver.get_default_network(),
+            networks: driver.get_networks(),
+            recv_init_required: driver.recv_init_required(),
+        },
     };
     service(payment_srv::BUS_ID).send(message).await?.unwrap(); // Unwrap on purpose because it's NoError
     log::debug!("Successfully registered driver in payment service.");
@@ -99,16 +114,19 @@ pub async fn list_unlocked_identities() -> Result<Vec<NodeId>, GenericError> {
     Ok(unlocked_list)
 }
 
+/// Notifies the Payment service that the account is ready to sending / receiving funds.
 pub async fn register_account(
     driver: &(dyn PaymentDriver),
     address: &str,
+    network: &str,
+    token: &str,
     mode: AccountMode,
 ) -> Result<(), GenericError> {
-    let address = address.to_string();
     let msg = payment_srv::RegisterAccount {
-        platform: driver.get_platform(),
-        address,
+        address: address.to_string(),
         driver: driver.get_name(),
+        network: network.to_string(),
+        token: token.to_string(),
         mode,
     };
     service(payment_srv::BUS_ID)
@@ -119,6 +137,7 @@ pub async fn register_account(
     Ok(())
 }
 
+/// Delegates signing of the transaction's payload to the Identity service.
 pub async fn sign(node_id: NodeId, payload: Vec<u8>) -> Result<Vec<u8>, GenericError> {
     let signature = service(identity::BUS_ID)
         .send(identity::Sign { node_id, payload })
@@ -128,18 +147,23 @@ pub async fn sign(node_id: NodeId, payload: Vec<u8>) -> Result<Vec<u8>, GenericE
     Ok(signature)
 }
 
+/// Notifies the Payment service that the scheduled payment is processed successfully.
+/// It also links the PaymentDriver::schedule_payment `order_id` with the `confirmation` (e.g. transaction's hash).
+/// This notification leads to `verify_payment` call on the provider side.
 pub async fn notify_payment(
     driver_name: &str,
-    order_id: &str,
+    platform: &str,
+    order_ids: Vec<String>,
     details: &PaymentDetails,
     confirmation: Vec<u8>,
 ) -> Result<(), GenericError> {
     let msg = payment_srv::NotifyPayment {
         driver: driver_name.to_string(),
+        platform: platform.to_string(),
         amount: details.amount.clone(),
         sender: details.sender.clone(),
         recipient: details.recipient.clone(),
-        order_ids: vec![order_id.to_string()],
+        order_ids,
         confirmation: PaymentConfirmation { confirmation },
     };
     service(payment_srv::BUS_ID)

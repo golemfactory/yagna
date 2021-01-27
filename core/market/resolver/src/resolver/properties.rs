@@ -472,6 +472,6 @@ fn decode_implied_ref_type(impl_type: Option<&str>) -> PropertyRefType {
         Some("v") => PropertyRefType::Version,
         Some("t") => PropertyRefType::DateTime,
         None => PropertyRefType::Any,
-        _ => panic!("Unknown implied type code!"),
+        e => panic!("Unknown implied type code!, got: {:?}", e),
     }
 }

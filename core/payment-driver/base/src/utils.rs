@@ -19,8 +19,8 @@ pub fn msg_to_payment_details(
     date: Option<DateTime<Utc>>,
 ) -> PaymentDetails {
     PaymentDetails {
-        recipient: msg.recipient().to_string(),
-        sender: msg.sender().to_string(),
+        recipient: msg.recipient(),
+        sender: msg.sender(),
         amount: msg.amount(),
         date,
     }
@@ -29,14 +29,16 @@ pub fn msg_to_payment_details(
 pub fn db_to_payment_details(payment: &PaymentEntity) -> PaymentDetails {
     // TODO: Put date in database?
     let date = Utc::now();
-    let amount = u256_from_big_endian_hex(payment.amount.clone());
-    let amount = u256_to_big_dec(amount);
     PaymentDetails {
         recipient: payment.recipient.clone(),
         sender: payment.sender.clone(),
-        amount,
+        amount: db_amount_to_big_dec(payment.amount.clone()),
         date: Some(date),
     }
+}
+
+pub fn db_amount_to_big_dec(amount: String) -> BigDecimal {
+    u256_to_big_dec(u256_from_big_endian_hex(amount))
 }
 
 pub fn u256_to_big_endian_hex(value: U256) -> String {

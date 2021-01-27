@@ -2,8 +2,10 @@ use actix_web::{HttpResponse, ResponseError};
 
 use ya_client::model::ErrorMessage;
 
-use crate::db::dao::SaveProposalError;
-use crate::negotiation::error::AgreementEventsError;
+use crate::db::dao::{AgreementDaoError, SaveProposalError};
+use crate::db::model::AgreementState;
+use crate::negotiation::error::{AgreementEventsError, ProposalValidationError};
+use crate::protocol::negotiation::error::RejectProposalError;
 use crate::{
     db::dao::TakeEventsError,
     market::MarketError,
@@ -12,8 +14,8 @@ use crate::{
         QueryOffersError, ResolverError, SaveOfferError,
     },
     negotiation::error::{
-        AgreementError, AgreementStateError, GetProposalError, NegotiationError, ProposalError,
-        QueryEventsError, WaitForApprovalError,
+        AgreementError, GetProposalError, NegotiationError, ProposalError, QueryEventsError,
+        WaitForApprovalError,
     },
 };
 
@@ -120,9 +122,8 @@ impl ResponseError for QueryEventsError {
     fn error_response(&self) -> HttpResponse {
         let msg = ErrorMessage::new(self.to_string());
         match self {
-            QueryEventsError::Unsubscribed(_)
-            | QueryEventsError::TakeEvents(TakeEventsError::SubscriptionNotFound(_))
-            | QueryEventsError::TakeEvents(TakeEventsError::SubscriptionExpired(_)) => {
+            QueryEventsError::TakeEvents(TakeEventsError::NotFound(_))
+            | QueryEventsError::TakeEvents(TakeEventsError::Expired(_)) => {
                 HttpResponse::NotFound().json(msg)
             }
             QueryEventsError::InvalidSubscriptionId(_) | QueryEventsError::InvalidMaxEvents(..) => {
@@ -137,13 +138,42 @@ impl ResponseError for ProposalError {
     fn error_response(&self) -> HttpResponse {
         let msg = ErrorMessage::new(self.to_string());
         match self {
-            ProposalError::NoSubscription(..)
-            | ProposalError::SubscriptionExpired(..)
-            | ProposalError::Unsubscribed(..) => HttpResponse::NotFound().json(msg),
-            ProposalError::Save(SaveProposalError::AlreadyCountered(..))
-            | ProposalError::NotMatching(..) => HttpResponse::Gone().json(msg),
+            ProposalError::Validation(e) => e.error_response(),
+            ProposalError::Save(SaveProposalError::AlreadyCountered(..)) => {
+                HttpResponse::Gone().json(msg)
+            }
             ProposalError::Get(e) => e.error_response(),
+            ProposalError::Reject(e) => e.error_response(),
+            // TODO: get rid of those `_` patterns as they do not break when error is extended
             _ => HttpResponse::InternalServerError().json(msg),
+        }
+    }
+}
+
+impl ResponseError for RejectProposalError {
+    fn error_response(&self) -> HttpResponse {
+        let msg = ErrorMessage::new(self.to_string());
+        match self {
+            RejectProposalError::Validation(_) => HttpResponse::BadRequest().json(msg),
+            RejectProposalError::Gsb(_)
+            | RejectProposalError::Get(_)
+            | RejectProposalError::ChangeState(_)
+            | RejectProposalError::CallerParse(_) => HttpResponse::InternalServerError().json(msg),
+        }
+    }
+}
+
+impl ResponseError for ProposalValidationError {
+    fn error_response(&self) -> HttpResponse {
+        let msg = ErrorMessage::new(self.to_string());
+        match self {
+            ProposalValidationError::NoSubscription(_)
+            | ProposalValidationError::Unsubscribed(_)
+            | ProposalValidationError::NotMatching(_)
+            | ProposalValidationError::OwnProposal(_) => HttpResponse::BadRequest().json(msg),
+            ProposalValidationError::SubscriptionExpired(_) => HttpResponse::Gone().json(msg),
+            ProposalValidationError::Unauthorized(_, _) => HttpResponse::Unauthorized().json(msg),
+            ProposalValidationError::Internal(_) => HttpResponse::InternalServerError().json(msg),
         }
     }
 }
@@ -164,30 +194,41 @@ impl ResponseError for AgreementError {
         match self {
             AgreementError::NotFound(_) => HttpResponse::NotFound().json(msg),
             AgreementError::AlreadyExists(_, _) => HttpResponse::Conflict().json(msg),
-            AgreementError::InvalidState(e) => match e {
-                AgreementStateError::Confirmed(_)
-                | AgreementStateError::Cancelled(_)
-                | AgreementStateError::Approved(_)
-                | AgreementStateError::Proposed(_) => HttpResponse::Conflict().json(msg),
-                AgreementStateError::Rejected(_)
-                | AgreementStateError::Expired(_)
-                | AgreementStateError::Terminated(_) => HttpResponse::Gone().json(msg),
-            },
+            AgreementError::UpdateState(_, e) => e.error_response(),
             AgreementError::NoNegotiations(_)
             | AgreementError::OwnProposal(..)
             | AgreementError::ProposalNotFound(..)
             | AgreementError::ProposalCountered(..)
-            | AgreementError::ReasonError(..)
             | AgreementError::InvalidId(..) => HttpResponse::BadRequest().json(msg),
             AgreementError::GetProposal(..)
             | AgreementError::Save(..)
             | AgreementError::Get(..)
-            | AgreementError::UpdateState(..)
             | AgreementError::Gsb(_)
             | AgreementError::ProtocolCreate(_)
             | AgreementError::ProtocolApprove(_)
             | AgreementError::ProtocolTerminate(_)
             | AgreementError::Internal(_) => HttpResponse::InternalServerError().json(msg),
+        }
+    }
+}
+
+impl ResponseError for AgreementDaoError {
+    fn error_response(&self) -> HttpResponse {
+        let msg = ErrorMessage::new(self.to_string());
+        match self {
+            AgreementDaoError::InvalidTransition { from, .. } => match from {
+                AgreementState::Proposal => HttpResponse::Conflict().json(msg),
+                AgreementState::Pending
+                | AgreementState::Cancelled
+                | AgreementState::Rejected
+                | AgreementState::Expired
+                | AgreementState::Approved
+                | AgreementState::Terminated => HttpResponse::Gone().json(msg),
+            },
+            AgreementDaoError::InvalidId(_) => HttpResponse::BadRequest().json(msg),
+            AgreementDaoError::DbError(_)
+            | AgreementDaoError::SessionId(_)
+            | AgreementDaoError::EventError(_) => HttpResponse::InternalServerError().json(msg),
         }
     }
 }

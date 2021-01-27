@@ -13,7 +13,7 @@ const DEFAULT_FORMAT: &str = "json";
 //  - 2 fields for parsed properties (demand, offer)
 //  - other fields for agreement remain typed.
 // TODO: Move to ya-client to make it available for third party developers.
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AgreementView {
     pub json: Value,
     pub agreement_id: String,
@@ -22,6 +22,10 @@ pub struct AgreementView {
 impl AgreementView {
     pub fn pointer(&self, pointer: &str) -> Option<&Value> {
         self.json.pointer(pointer)
+    }
+
+    pub fn pointer_mut(&mut self, pointer: &str) -> Option<&mut Value> {
+        self.json.pointer_mut(pointer)
     }
 
     pub fn pointer_typed<'a, T: Deserialize<'a>>(&self, pointer: &str) -> Result<T, Error> {
@@ -51,6 +55,60 @@ impl AgreementView {
             .collect();
         Ok(map)
     }
+
+    pub fn remove_property(&mut self, pointer: &str) -> Result<(), Error> {
+        let path: Vec<&str> = pointer.split('/').collect();
+        Ok(
+            // Path should start with '/', so we must omit first element, which will be empty.
+            remove_property_impl(&mut self.json, &path[1..]).map_err(|e| match e {
+                Error::NoKey(_) => Error::NoKey(pointer.to_string()),
+                _ => e,
+            })?,
+        )
+    }
+}
+
+fn remove_property_impl(value: &mut serde_json::Value, path: &[&str]) -> Result<(), Error> {
+    assert_ne!(path.len(), 0);
+    if path.len() == 1 {
+        remove_value(value, path[0])?;
+        Ok(())
+    } else {
+        let nested_value = value
+            .pointer_mut(&["/", path[0]].concat())
+            .ok_or(Error::NoKey(path[0].to_string()))?;
+        remove_property_impl(nested_value, &path[1..])?;
+
+        // Check if nested_value contains anything else.
+        // We remove this key if Value was empty.
+        match nested_value {
+            Value::Array(array) => {
+                if array.is_empty() {
+                    remove_value(value, path[0]).ok();
+                }
+            }
+            Value::Object(object) => {
+                if object.is_empty() {
+                    remove_value(value, path[0]).ok();
+                }
+            }
+            _ => (),
+        };
+        Ok(())
+    }
+}
+
+fn remove_value(value: &mut Value, name: &str) -> Result<Value, Error> {
+    Ok(match value {
+        Value::Array(array) => array.remove(
+            name.parse::<usize>()
+                .map_err(|_| Error::InvalidValue(name.to_string()))?,
+        ),
+        Value::Object(object) => object
+            .remove(name)
+            .ok_or(Error::InvalidValue(name.to_string()))?,
+        _ => Err(Error::InvalidValue(name.to_string()))?,
+    })
 }
 
 impl TryFrom<Value> for AgreementView {
@@ -64,7 +122,7 @@ impl TryFrom<Value> for AgreementView {
 
         Ok(AgreementView {
             json: value,
-            agreement_id,
+            agreement_id: agreement_id,
         })
     }
 }
@@ -197,7 +255,6 @@ pub fn try_from_path(path: &PathBuf) -> Result<Value, Error> {
         None => DEFAULT_FORMAT,
     };
 
-    eprintln!("Parsing agreement at {}", path.display());
     match ext.to_lowercase().as_str() {
         "json" => try_from_json(&contents),
         "yaml" => try_from_yaml(&contents),
@@ -645,5 +702,107 @@ constraints: |
                 .as_typed(Value::as_f64)
                 .unwrap()
         );
+    }
+
+    const REMOVE_EXAMPLE: &str = r#"{
+        "properties": {
+            "golem": {
+                "srv.caps.multi-activity": true,
+                "inf": {
+                    "mem.gib": 0.5,
+                    "storage.gib": 5
+                },
+                "activity.caps": {
+                    "transfer.protocol": [
+                        "http",
+                        "https",
+                        "container"
+                    ]
+                }
+            }
+        }
+    }"#;
+
+    #[test]
+    fn remove_property_from_object() {
+        let reference = serde_json::json!({
+            "properties": {
+                "golem": {
+                    "inf": {
+                        "mem.gib": 0.5,
+                        "storage.gib": 5
+                    },
+                    "activity.caps": {
+                        "transfer.protocol": [
+                            "http",
+                            "https",
+                            "container"
+                        ]
+                    }
+                }
+            }
+        });
+        let mut view = AgreementView {
+            json: try_from_json(REMOVE_EXAMPLE).unwrap(),
+            agreement_id: Default::default(),
+        };
+        view.remove_property("/properties/golem/srv/caps/multi-activity")
+            .unwrap();
+
+        assert_eq!(view.json, expand(reference));
+    }
+
+    #[test]
+    fn remove_property_from_array() {
+        let reference = serde_json::json!({
+            "properties": {
+                "golem": {
+                    "srv.caps.multi-activity": true,
+                    "inf": {
+                        "mem.gib": 0.5,
+                        "storage.gib": 5
+                    },
+                    "activity.caps": {
+                        "transfer.protocol": [
+                            "http",
+                            "container"
+                        ]
+                    }
+                }
+            }
+        });
+        let mut view = AgreementView {
+            json: try_from_json(REMOVE_EXAMPLE).unwrap(),
+            agreement_id: Default::default(),
+        };
+        view.remove_property("/properties/golem/activity/caps/transfer/protocol/1")
+            .unwrap();
+
+        assert_eq!(view.json, expand(reference));
+    }
+
+    #[test]
+    fn remove_property_tree() {
+        let reference = serde_json::json!({
+            "properties": {
+                "golem": {
+                    "srv.caps.multi-activity": true,
+                    "activity.caps": {
+                        "transfer.protocol": [
+                            "http",
+                            "https",
+                            "container"
+                        ]
+                    }
+                }
+            }
+        });
+        let mut view = AgreementView {
+            json: try_from_json(REMOVE_EXAMPLE).unwrap(),
+            agreement_id: Default::default(),
+        };
+        view.remove_property("/properties/golem/inf").unwrap();
+
+        assert_eq!(view.json, expand(reference));
     }
 }

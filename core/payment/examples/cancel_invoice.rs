@@ -1,32 +1,48 @@
 use bigdecimal::BigDecimal;
 use chrono::Utc;
 use std::time::Duration;
-use ya_client::payment::{PaymentProviderApi, PaymentRequestorApi};
-use ya_client::web::WebClient;
+use structopt::StructOpt;
+use ya_client::payment::PaymentApi;
+use ya_client::web::{rest_api_url, WebClient};
 use ya_client_model::payment::{
-    Acceptance, DocumentStatus, EventType, NewAllocation, NewDebitNote, NewInvoice,
+    Acceptance, DocumentStatus, InvoiceEventType, NewAllocation, NewDebitNote, NewInvoice,
 };
 use ya_core_model::payment::local as pay;
 use ya_service_bus::typed as bus;
 
+#[derive(Clone, Debug, StructOpt)]
+struct Args {
+    #[structopt(long, default_value = "dummy")]
+    driver: String,
+    #[structopt(long)]
+    network: Option<String>,
+    #[structopt(long)]
+    app_session_id: Option<String>,
+}
+
 async fn assert_requested_amount(
     payer_addr: &str,
     payee_addr: &str,
-    payment_platform: &str,
+    driver: &str,
+    network: &Option<String>,
     amount: &BigDecimal,
 ) -> anyhow::Result<()> {
     let payer_status = bus::service(pay::BUS_ID)
         .call(pay::GetStatus {
-            platform: payment_platform.to_string(),
             address: payer_addr.to_string(),
+            driver: driver.to_string(),
+            network: network.clone(),
+            token: None,
         })
         .await??;
     assert_eq!(&payer_status.outgoing.requested.total_amount, amount);
 
     let payee_status = bus::service(pay::BUS_ID)
         .call(pay::GetStatus {
-            platform: payment_platform.to_string(),
             address: payee_addr.to_string(),
+            driver: driver.to_string(),
+            network: network.clone(),
+            token: None,
         })
         .await??;
     assert_eq!(&payee_status.incoming.requested.total_amount, amount);
@@ -39,9 +55,19 @@ async fn main() -> anyhow::Result<()> {
     std::env::set_var("RUST_LOG", log_level);
     env_logger::init();
 
-    let client = WebClient::builder().build();
-    let provider: PaymentProviderApi = client.interface()?;
-    let requestor: PaymentRequestorApi = client.interface()?;
+    let args: Args = Args::from_args();
+
+    // Create requestor / provider PaymentApi
+    let provider_url = format!("{}provider/", rest_api_url()).parse().unwrap();
+    let provider: PaymentApi = WebClient::builder()
+        .api_url(provider_url)
+        .build()
+        .interface()?;
+    let requestor_url = format!("{}requestor/", rest_api_url()).parse().unwrap();
+    let requestor: PaymentApi = WebClient::builder()
+        .api_url(requestor_url)
+        .build()
+        .interface()?;
 
     let debit_note = NewDebitNote {
         activity_id: "activity1".to_string(),
@@ -50,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
         payment_due_date: Some(Utc::now()),
     };
     log::info!(
-        "Issuing debit note for activity 1 (total amount due: {} NGNT)...",
+        "Issuing debit note for activity 1 (total amount due: {} GLM)...",
         &debit_note.total_amount_due
     );
     let debit_note = provider.issue_debit_note(&debit_note).await?;
@@ -67,7 +93,7 @@ async fn main() -> anyhow::Result<()> {
         payment_due_date: Some(Utc::now()),
     };
     log::info!(
-        "Issuing debit note for activity 2 (total amount due: {} NGNT)...",
+        "Issuing debit note for activity 2 (total amount due: {} GLM)...",
         debit_note2.total_amount_due
     );
     let debit_note2 = provider.issue_debit_note(&debit_note2).await?;
@@ -79,10 +105,16 @@ async fn main() -> anyhow::Result<()> {
 
     let payer_addr = debit_note.payer_addr;
     let payee_addr = debit_note.payee_addr;
-    let payment_platform = debit_note.payment_platform;
     let amount = &debit_note.total_amount_due + &debit_note2.total_amount_due;
 
-    assert_requested_amount(&payer_addr, &payee_addr, &payment_platform, &amount).await?;
+    assert_requested_amount(
+        &payer_addr,
+        &payee_addr,
+        &args.driver,
+        &args.network,
+        &amount,
+    )
+    .await?;
 
     let invoice = NewInvoice {
         agreement_id: "agreement_id".to_string(),
@@ -90,7 +122,7 @@ async fn main() -> anyhow::Result<()> {
         amount: BigDecimal::from(3u64),
         payment_due_date: Utc::now(),
     };
-    log::info!("Issuing invoice (amount: {} NGNT)...", &invoice.amount);
+    log::info!("Issuing invoice (amount: {} GLM)...", &invoice.amount);
     let invoice = provider.issue_invoice(&invoice).await?;
     log::info!("Invoice issued.");
 
@@ -98,7 +130,14 @@ async fn main() -> anyhow::Result<()> {
     provider.send_invoice(&invoice.invoice_id).await?;
     log::info!("Invoice sent.");
 
-    assert_requested_amount(&payer_addr, &payee_addr, &payment_platform, &invoice.amount).await?;
+    assert_requested_amount(
+        &payer_addr,
+        &payee_addr,
+        &args.driver,
+        &args.network,
+        &invoice.amount,
+    )
+    .await?;
 
     log::info!("Cancelling invoice...");
     let now = Utc::now();
@@ -107,12 +146,20 @@ async fn main() -> anyhow::Result<()> {
 
     log::info!("Listening for invoice cancelled event...");
     let mut events = requestor
-        .get_invoice_events(Some(&now), Some(Duration::from_secs(5)))
+        .get_invoice_events(
+            Some(&now),
+            Some(Duration::from_secs(5)),
+            None,
+            args.app_session_id.clone(),
+        )
         .await?;
     assert_eq!(events.len(), 1);
     let event = events.pop().unwrap();
     assert_eq!(&event.invoice_id, &invoice.invoice_id);
-    assert_eq!(&event.event_type, &EventType::Cancelled);
+    assert!(matches!(
+        &event.event_type,
+        &InvoiceEventType::InvoiceCancelledEvent
+    ));
     log::info!("Event received and verified.");
 
     log::info!("Verifying invoice status...");
@@ -122,7 +169,14 @@ async fn main() -> anyhow::Result<()> {
     assert_eq!(invoice.status, DocumentStatus::Cancelled);
     log::info!("Invoice status verified correctly.");
 
-    assert_requested_amount(&payer_addr, &payee_addr, &payment_platform, &amount).await?;
+    assert_requested_amount(
+        &payer_addr,
+        &payee_addr,
+        &args.driver,
+        &args.network,
+        &amount,
+    )
+    .await?;
 
     log::info!("Creating allocation...");
     let allocation = requestor
@@ -153,7 +207,7 @@ async fn main() -> anyhow::Result<()> {
         amount: BigDecimal::from(3u64),
         payment_due_date: Utc::now(),
     };
-    log::info!("Issuing invoice (amount: {} NGNT)...", &invoice.amount);
+    log::info!("Issuing invoice (amount: {} GLM)...", &invoice.amount);
     let invoice = provider.issue_invoice(&invoice).await?;
     log::info!("Invoice issued.");
 

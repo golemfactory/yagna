@@ -64,7 +64,7 @@ impl PresetUpdater {
                 .cloned()
                 .unwrap_or(0.);
             let price = Input::<f64>::new()
-                .with_prompt(&format!("{} (NGNT)", coefficient.to_readable()))
+                .with_prompt(&format!("{} (GLM)", coefficient.to_readable()))
                 .default(prev_price)
                 .show_default(true)
                 .interact()?;

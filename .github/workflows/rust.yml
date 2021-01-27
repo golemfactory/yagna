@@ -110,19 +110,11 @@ jobs:
           command: build
           args: --workspace
 
-      - name: cargo build router
-        uses: actions-rs/cargo@v1
-        if: runner.os != 'Windows'
-        with:
-          command: build
-          args: -p ya-sb-router --example ya_sb_router
-
       - name: Copy binaries Unix
         if: runner.os != 'Windows'
         run: |
           mkdir build
-          cp target/debug/{yagna,ya-provider,ya-requestor,exe-unit,golemsp} build
-          cp target/debug/examples/ya_sb_router build
+          cp target/debug/{yagna,ya-provider,exe-unit,golemsp} build
           strip -x build/*
 
       - name: Copy binaries Windows
@@ -131,7 +123,6 @@ jobs:
           mkdir build
           copy target\debug\yagna.exe build
           copy target\debug\ya-provider.exe build
-          copy target\debug\ya-requestor.exe build
           copy target\debug\exe-unit.exe build
 
       - name: Upload binaries
@@ -191,3 +182,8 @@ jobs:
         with:
           name: goth-logs
           path: /tmp/goth-tests
+
+      # Only relevant for self-hosted runners
+      - name: Remove test logs
+        if: always()
+        run: rm -rf /tmp/goth-tests

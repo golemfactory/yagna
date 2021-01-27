@@ -10,7 +10,7 @@ ya-client = "0.4"
 ya-core-model = { path = "../../model", features = ["appkey"] }
 ya-service-api = "0.1"
 ya-service-api-cache = "0.1"
-ya-service-bus = "0.2"
+ya-service-bus = "0.3"
 
 actix-service = "1.0.0"
 actix-web = "3.2"

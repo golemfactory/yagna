@@ -21,13 +21,15 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::auth::dummy::DummyAuth;
 use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::rest_api_addr;
+use ya_service_api_web::scope::ExtendableScope;
+use ya_service_bus::connection::ClientInfo;
 use ya_service_bus::typed as bus;
 use ya_zksync_driver as zksync;
 
 #[derive(Clone, Debug, StructOpt)]
 enum Driver {
     Dummy,
-    Ngnt,
+    Erc20,
     Zksync,
 }
 
@@ -37,7 +39,7 @@ impl FromStr for Driver {
     fn from_str(s: &str) -> anyhow::Result<Self> {
         match s.to_lowercase().as_str() {
             "dummy" => Ok(Driver::Dummy),
-            "ngnt" => Ok(Driver::Ngnt),
+            "erc20" => Ok(Driver::Erc20),
             "zksync" => Ok(Driver::Zksync),
             s => Err(anyhow::Error::msg(format!("Invalid driver: {}", s))),
         }
@@ -48,7 +50,7 @@ impl std::fmt::Display for Driver {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Driver::Dummy => write!(f, "dummy"),
-            Driver::Ngnt => write!(f, "ngnt"),
+            Driver::Erc20 => write!(f, "erc20"),
             Driver::Zksync => write!(f, "zksync"),
         }
     }
@@ -58,6 +60,10 @@ impl std::fmt::Display for Driver {
 struct Args {
     #[structopt(long, default_value = "dummy")]
     driver: Driver,
+    #[structopt(long)]
+    network: Option<String>,
+    #[structopt(long, default_value = "dummy-glm")]
+    platform: String,
     #[structopt(long, default_value = "provider.key")]
     provider_key_path: String,
     #[structopt(long, default_value = "")]
@@ -72,6 +78,8 @@ struct Args {
     requestor_addr: Option<String>,
     #[structopt(long, default_value = "agreement_id")]
     agreement_id: String,
+    #[structopt(long)]
+    app_session_id: Option<String>,
 }
 
 pub async fn start_dummy_driver() -> anyhow::Result<()> {
@@ -173,12 +181,18 @@ async fn main() -> anyhow::Result<()> {
     let provider_pass: Password = args.provider_pass.clone().into();
     let provider_account = EthAccount::load_or_generate(&args.provider_key_path, provider_pass)?;
     let provider_id = provider_account.address().to_string();
-    let provider_addr = args.provider_addr.unwrap_or(provider_id.clone());
+    let provider_addr = args
+        .provider_addr
+        .unwrap_or(provider_id.clone())
+        .to_lowercase();
 
     let requestor_pass: Password = args.requestor_pass.clone().into();
     let requestor_account = EthAccount::load_or_generate(&args.requestor_key_path, requestor_pass)?;
     let requestor_id = requestor_account.address().to_string();
-    let requestor_addr = args.requestor_addr.unwrap_or(requestor_id.clone());
+    let requestor_addr = args
+        .requestor_addr
+        .unwrap_or(requestor_id.clone())
+        .to_lowercase();
 
     log::info!(
         "Provider ID: {}\nProvider address: {}\nRequestor ID: {}\nRequestor address: {}",
@@ -199,32 +213,42 @@ async fn main() -> anyhow::Result<()> {
     ya_payment::service::bind_service(&db, processor);
     log::debug!("bind_service()");
 
-    let (driver_name, platform) = match args.driver {
+    let driver_name = match args.driver {
         Driver::Dummy => {
             start_dummy_driver().await?;
-            (dummy::DRIVER_NAME, dummy::PLATFORM_NAME)
+            dummy::DRIVER_NAME
         }
-        Driver::Ngnt => {
+        Driver::Erc20 => {
             start_gnt_driver(&db, requestor_account).await?;
-            (gnt::DRIVER_NAME, gnt::PLATFORM_NAME)
+            gnt::DRIVER_NAME
         }
         Driver::Zksync => {
             start_zksync_driver(&db, requestor_account).await?;
-            (zksync::DRIVER_NAME, zksync::PLATFORM_NAME)
+            zksync::DRIVER_NAME
         }
     };
 
     bus::service(driver_bus_id(driver_name))
-        .call(Init::new(provider_id.clone(), AccountMode::RECV))
+        .call(Init::new(
+            provider_id.clone(),
+            args.network.clone(),
+            None,
+            AccountMode::RECV,
+        ))
         .await??;
     bus::service(driver_bus_id(driver_name))
-        .call(Init::new(requestor_id.clone(), AccountMode::SEND))
+        .call(Init::new(
+            requestor_id.clone(),
+            args.network.clone(),
+            None,
+            AccountMode::SEND,
+        ))
         .await??;
 
-    let address_property = format!("platform.{}.address", platform);
+    let address_property = format!("platform.{}.address", args.platform);
     let demand_properties = serde_json::json!({
         "golem.com.payment": {
-            "chosen-platform": &platform,
+            "chosen-platform": &args.platform,
             &address_property: &requestor_addr,
         }
     });
@@ -264,7 +288,7 @@ async fn main() -> anyhow::Result<()> {
         approved_date: None,
         state: market::agreement::State::Proposal,
         timestamp: Utc::now(),
-        app_session_id: None,
+        app_session_id: args.app_session_id,
         proposed_signature: None,
         approved_signature: None,
         committed_signature: None,
@@ -274,8 +298,9 @@ async fn main() -> anyhow::Result<()> {
 
     let provider_id = provider_id.parse()?;
     let requestor_id = requestor_id.parse()?;
+    let client_info = ClientInfo::new("payment");
     log::info!("bind remote...");
-    ya_net::bind_remote(provider_id, vec![provider_id, requestor_id]).await?;
+    let _ = ya_net::bind_remote(client_info, provider_id, vec![provider_id, requestor_id]).await?;
 
     log::info!("get_rest_addr...");
     let rest_addr = rest_api_addr();
@@ -293,17 +318,18 @@ async fn main() -> anyhow::Result<()> {
             role: "".to_string(),
         };
 
-        let provider_scope =
-            ya_payment::api::provider_scope().wrap(DummyAuth::new(provider_identity));
-        let requestor_scope =
-            ya_payment::api::requestor_scope().wrap(DummyAuth::new(requestor_identity));
-        let payment_service = Scope::new(PAYMENT_API_PATH)
+        let provider_api_scope = Scope::new(&format!("provider/{}", PAYMENT_API_PATH))
             .data(db.clone())
-            .service(provider_scope)
-            .service(requestor_scope);
+            .extend(ya_payment::api::api_scope)
+            .wrap(DummyAuth::new(provider_identity));
+        let requestor_api_scope = Scope::new(&format!("requestor/{}", PAYMENT_API_PATH))
+            .data(db.clone())
+            .extend(ya_payment::api::api_scope)
+            .wrap(DummyAuth::new(requestor_identity));
         App::new()
             .wrap(middleware::Logger::default())
-            .service(payment_service)
+            .service(provider_api_scope)
+            .service(requestor_api_scope)
     })
     .bind(rest_addr)?
     .run()

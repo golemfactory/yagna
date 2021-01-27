@@ -3,14 +3,14 @@ use std::str::FromStr;
 
 use ya_client::model::market::Proposal;
 
-use crate::db::model::{DbProposal, IssuerType, Negotiation, ProposalState};
+use crate::db::model::{DbProposal, Issuer, Negotiation, ProposalState};
 use crate::db::model::{ProposalId, SubscriptionId};
 use crate::testing::events_helper::{provider, requestor};
 use crate::testing::mock_offer::client::{
     exclusive_demand, exclusive_offer, sample_demand, sample_offer,
 };
 use crate::testing::MarketsNetwork;
-use crate::testing::OwnerType;
+use crate::testing::Owner;
 
 use ya_client::model::market::{NewDemand, NewOffer};
 use ya_client::model::NodeId;
@@ -27,10 +27,10 @@ pub fn generate_proposal(
             &SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53",).unwrap(),
             // Add parametrized integer - unifier to ensure unique ids
             &(Utc::now() + Duration::days(unifier)).naive_utc(),
-            OwnerType::Requestor,
+            Owner::Requestor,
         ),
         prev_proposal_id: None,
-        issuer: IssuerType::Them,
+        issuer: Issuer::Them,
         negotiation_id,
         properties: "".to_string(),
         constraints: "".to_string(),
@@ -137,7 +137,7 @@ pub async fn exchange_proposals_impl(
     let offer_id = prov_mkt.subscribe_offer(offer, &prov_id).await?;
 
     // Expect events generated on requestor market.
-    let req_offer_proposal1 = requestor::query_proposal(&req_mkt, &demand_id, 1).await?;
+    let req_offer_proposal1 = requestor::query_proposal(&req_mkt, &demand_id, "Initial #R").await?;
 
     // Requestor counters initial proposal. We expect that provider will get proposal event.
     let req_demand_proposal1_id = req_mkt
@@ -151,10 +151,9 @@ pub async fn exchange_proposals_impl(
         .await?;
 
     // Provider receives Proposal
-    let _prov_demand_proposal1 = provider::query_proposal(&prov_mkt, &offer_id, 2).await?;
-    let prov_demand_proposal1_id = req_demand_proposal1_id
-        .clone()
-        .translate(OwnerType::Provider);
+    let _prov_demand_proposal1 =
+        provider::query_proposal(&prov_mkt, &offer_id, "Initial #P").await?;
+    let prov_demand_proposal1_id = req_demand_proposal1_id.clone().translate(Owner::Provider);
 
     // Provider counters proposal.
     let _offer_proposal_id = prov_mkt
@@ -163,7 +162,7 @@ pub async fn exchange_proposals_impl(
         .await?;
 
     // Requestor receives proposal.
-    let req_offer_proposal2 = requestor::query_proposal(&req_mkt, &demand_id, 3).await?;
+    let req_offer_proposal2 = requestor::query_proposal(&req_mkt, &demand_id, "Counter #R").await?;
     Ok(NegotiationHelper {
         proposal_id: ProposalId::from_str(&req_offer_proposal2.proposal_id)?,
         proposal: req_offer_proposal2,

@@ -32,8 +32,8 @@ impl From<ya_client_model::payment::document_status::InvalidOption> for DbError 
     }
 }
 
-impl From<ya_client_model::payment::event_type::InvalidOption> for DbError {
-    fn from(e: ya_client_model::payment::event_type::InvalidOption) -> Self {
+impl From<serde_json::Error> for DbError {
+    fn from(e: serde_json::Error) -> Self {
         DbError::Integrity(e.to_string())
     }
 }
@@ -121,8 +121,8 @@ pub mod processor {
 
     #[derive(thiserror::Error, Debug)]
     #[error(
-        "Account not registered. Hint: Did you run `yagna payment init -{}` after restarting? platform={platform} address={address} mode={mode:?}",
-        if *.mode == AccountMode::SEND {"r"} else {"p"}
+        "Account not registered. Hint: Did you run `yagna payment init --{}` after restarting? platform={platform} address={address} mode={mode:?}",
+        if *.mode == AccountMode::SEND {"sender"} else {"receiver"}
     )]
     pub struct AccountNotRegistered {
         platform: String,
@@ -137,16 +137,6 @@ pub mod processor {
                 address: address.to_owned(),
                 mode,
             }
-        }
-    }
-
-    #[derive(thiserror::Error, Debug)]
-    #[error("Driver '{0}' not registered.")]
-    pub struct DriverNotRegistered(String);
-
-    impl DriverNotRegistered {
-        pub fn new(driver: &str) -> Self {
-            Self(driver.to_owned())
         }
     }
 
@@ -208,8 +198,6 @@ pub mod processor {
 
     #[derive(thiserror::Error, Debug)]
     pub enum NotifyPaymentError {
-        #[error("{0}")]
-        DriverNotRegistered(#[from] DriverNotRegistered),
         #[error("{0}")]
         Validation(#[from] OrderValidationError),
         #[error("Service bus error: {0}")]
@@ -302,6 +290,13 @@ pub mod processor {
             Err(Self::Validation(format!(
                 "Invalid payer address for agreement {}: {} != {}",
                 agreement.id, agreement.payer_addr, payer_addr
+            )))
+        }
+
+        pub fn agreement_platform(agreement: &Agreement, platform: &str) -> Result<(), Self> {
+            Err(Self::Validation(format!(
+                "Invalid payment platform for agreement {}: {} != {}",
+                agreement.id, agreement.payment_platform, platform
             )))
         }
 

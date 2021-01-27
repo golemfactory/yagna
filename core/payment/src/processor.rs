@@ -1,7 +1,7 @@
 use crate::dao::{ActivityDao, AgreementDao, AllocationDao, OrderDao, PaymentDao};
 use crate::error::processor::{
-    AccountNotRegistered, DriverNotRegistered, GetStatusError, NotifyPaymentError,
-    OrderValidationError, SchedulePaymentError, ValidateAllocationError, VerifyPaymentError,
+    AccountNotRegistered, GetStatusError, NotifyPaymentError, OrderValidationError,
+    SchedulePaymentError, ValidateAllocationError, VerifyPaymentError,
 };
 use crate::models::order::ReadObj as DbOrder;
 use bigdecimal::{BigDecimal, Zero};
@@ -10,13 +10,13 @@ use metrics::counter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
-use ya_client_model::payment::{ActivityPayment, AgreementPayment, Payment};
+use ya_client_model::payment::{Account, ActivityPayment, AgreementPayment, Payment};
 use ya_core_model::driver::{
     self, driver_bus_id, AccountMode, PaymentConfirmation, PaymentDetails, ValidateAllocation,
 };
 use ya_core_model::payment::local::{
-    Account, NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver, SchedulePayment,
-    UnregisterAccount, UnregisterDriver,
+    DriverDetails, Network, NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver,
+    RegisterDriverError, SchedulePayment, UnregisterAccount, UnregisterDriver,
 };
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_net::RemoteEndpoint;
@@ -50,51 +50,123 @@ async fn validate_orders(
         total_amount += &order.amount.0;
     }
 
-    if &total_amount != amount {
+    if &total_amount > amount {
         return OrderValidationError::amount(&total_amount, amount);
     }
 
     Ok(())
 }
 
+#[derive(Clone, Debug)]
+struct AccountDetails {
+    pub driver: String,
+    pub network: String,
+    pub token: String,
+    pub mode: AccountMode,
+}
+
 #[derive(Clone, Default)]
 struct DriverRegistry {
-    accounts: HashMap<(String, String), (String, AccountMode)>, // (platform, address) -> (driver, mode)
-    drivers: HashMap<String, (String, bool)>, // driver -> (platform, recv_init_required)
+    accounts: HashMap<(String, String), AccountDetails>, // (platform, address) -> details
+    drivers: HashMap<String, DriverDetails>,             // driver_name -> details
+    platforms: HashMap<String, HashMap<String, bool>>, // platform -> (driver_name -> recv_init_required)
 }
 
 impl DriverRegistry {
-    pub fn register_driver(&mut self, msg: RegisterDriver) {
-        self.drivers
-            .insert(msg.driver_name, (msg.platform, msg.recv_init_required));
+    pub fn register_driver(&mut self, msg: RegisterDriver) -> Result<(), RegisterDriverError> {
+        let RegisterDriver {
+            driver_name,
+            details,
+        } = msg;
+        log::trace!(
+            "register_driver: driver_name={} details={:?}",
+            driver_name,
+            details
+        );
+
+        if !details.networks.contains_key(&details.default_network) {
+            return Err(RegisterDriverError::InvalidDefaultNetwork(
+                details.default_network,
+            ));
+        }
+        for (network_name, network) in details.networks.iter() {
+            if !network.tokens.contains_key(&network.default_token) {
+                return Err(RegisterDriverError::InvalidDefaultToken(
+                    network.default_token.clone(),
+                    network_name.to_string(),
+                ));
+            }
+            for (token, platform) in network.tokens.iter() {
+                self.platforms
+                    .entry(platform.clone())
+                    .or_default()
+                    .insert(driver_name.clone(), details.recv_init_required);
+            }
+        }
+        self.drivers.insert(driver_name, details);
+        Ok(())
     }
 
     pub fn unregister_driver(&mut self, msg: UnregisterDriver) {
         let driver_name = msg.0;
-        self.drivers.remove(&driver_name);
+        let details = self.drivers.remove(&driver_name);
+        if let Some(details) = details {
+            for (network_name, network) in details.networks.iter() {
+                for (token, platform) in network.tokens.iter() {
+                    self.platforms
+                        .entry(platform.clone())
+                        .or_default()
+                        .remove(&driver_name);
+                }
+            }
+        }
         self.accounts
-            .retain(|_, (driver, _)| driver != &driver_name);
+            .retain(|_, details| details.driver != driver_name);
     }
 
     pub fn register_account(&mut self, msg: RegisterAccount) -> Result<(), RegisterAccountError> {
-        let platform = match self.drivers.get(&msg.driver) {
+        let driver_details = match self.drivers.get(&msg.driver) {
             None => return Err(RegisterAccountError::DriverNotRegistered(msg.driver)),
-            Some((platform, _)) => platform.clone(),
+            Some(details) => details,
+        };
+        let network = match driver_details.networks.get(&msg.network) {
+            None => {
+                return Err(RegisterAccountError::UnsupportedNetwork(
+                    msg.network,
+                    msg.driver,
+                ))
+            }
+            Some(network) => network,
+        };
+        let platform = match network.tokens.get(&msg.token) {
+            None => {
+                return Err(RegisterAccountError::UnsupportedToken(
+                    msg.token,
+                    msg.network,
+                    msg.driver,
+                ))
+            }
+            Some(platform) => platform.clone(),
         };
 
         match self.accounts.entry((platform, msg.address.clone())) {
             Entry::Occupied(mut entry) => {
-                let (driver, mode) = entry.get_mut();
-                if driver != &msg.driver {
+                let details = entry.get_mut();
+                if details.driver != msg.driver {
                     return Err(RegisterAccountError::AlreadyRegistered(
                         msg.address,
-                        driver.to_string(),
+                        details.driver.to_string(),
                     ));
                 }
-                *mode |= msg.mode;
+                details.mode |= msg.mode;
             }
             Entry::Vacant(entry) => {
-                entry.insert((msg.driver, msg.mode));
+                entry.insert(AccountDetails {
+                    driver: msg.driver,
+                    network: msg.network,
+                    token: msg.token,
+                    mode: msg.mode,
+                });
             }
         };
         Ok(())
@@ -107,14 +179,57 @@ impl DriverRegistry {
     pub fn get_accounts(&self) -> Vec<Account> {
         self.accounts
             .iter()
-            .map(|((platform, address), (driver, mode))| Account {
+            .map(|((platform, address), details)| Account {
                 platform: platform.clone(),
                 address: address.clone(),
-                driver: driver.clone(),
-                send: mode.contains(AccountMode::SEND),
-                receive: mode.contains(AccountMode::RECV),
+                driver: details.driver.clone(),
+                network: details.network.clone(),
+                token: details.token.clone(),
+                send: details.mode.contains(AccountMode::SEND),
+                receive: details.mode.contains(AccountMode::RECV),
             })
             .collect()
+    }
+
+    pub fn get_driver(&self, driver: &str) -> Result<&DriverDetails, RegisterAccountError> {
+        match self.drivers.get(driver) {
+            None => Err(RegisterAccountError::DriverNotRegistered(driver.into())),
+            Some(details) => Ok(details),
+        }
+    }
+
+    pub fn get_network(
+        &self,
+        driver: String,
+        network: Option<String>,
+    ) -> Result<(String, Network), RegisterAccountError> {
+        let driver_details = self.get_driver(&driver)?;
+        let network_name = network.unwrap_or(driver_details.default_network.to_owned());
+        match driver_details.networks.get(&network_name) {
+            None => Err(RegisterAccountError::UnsupportedNetwork(
+                network_name,
+                driver.into(),
+            )),
+            Some(network_details) => Ok((network_name, network_details.clone())),
+        }
+    }
+
+    pub fn get_platform(
+        &self,
+        driver: String,
+        network: Option<String>,
+        token: Option<String>,
+    ) -> Result<String, RegisterAccountError> {
+        let (network_name, network_details) = self.get_network(driver.clone(), network)?;
+        let token = token.unwrap_or(network_details.default_token.to_owned());
+        match network_details.tokens.get(&token) {
+            None => Err(RegisterAccountError::UnsupportedToken(
+                token,
+                network_name,
+                driver,
+            )),
+            Some(platform) => Ok(platform.into()),
+        }
     }
 
     pub fn driver(
@@ -123,40 +238,28 @@ impl DriverRegistry {
         address: &str,
         mode: AccountMode,
     ) -> Result<String, AccountNotRegistered> {
-        if let Some((driver, reg_mode)) = self
+        if let Some(details) = self
             .accounts
             .get(&(platform.to_owned(), address.to_owned()))
         {
-            if reg_mode.contains(mode) {
-                return Ok(driver.to_owned());
+            if details.mode.contains(mode) {
+                return Ok(details.driver.clone());
             }
         }
 
         // If it's recv-only mode or no-mode (i.e. checking status) we can use any driver that
         // supports the given platform and doesn't require init for receiving.
         if !mode.contains(AccountMode::SEND) {
-            for (driver, (driver_platform, recv_init_required)) in self.drivers.iter() {
-                if driver_platform == platform && !*recv_init_required {
-                    return Ok(driver.to_owned());
+            if let Some(drivers) = self.platforms.get(platform) {
+                for (driver, recv_init_required) in drivers.iter() {
+                    if !*recv_init_required {
+                        return Ok(driver.clone());
+                    }
                 }
             }
         }
 
         Err(AccountNotRegistered::new(platform, address, mode))
-    }
-
-    pub fn platform(&self, driver: &str) -> Result<String, DriverNotRegistered> {
-        match self.drivers.get(driver) {
-            Some((platform, _)) => Ok(platform.to_owned()),
-            None => Err(DriverNotRegistered::new(driver)),
-        }
-    }
-
-    pub fn recv_init_required(&self, driver: &str) -> Result<bool, DriverNotRegistered> {
-        match self.drivers.get(driver) {
-            Some((_, required)) => Ok(*required),
-            None => Err(DriverNotRegistered::new(driver)),
-        }
     }
 }
 
@@ -174,7 +277,7 @@ impl PaymentProcessor {
         }
     }
 
-    pub async fn register_driver(&self, msg: RegisterDriver) {
+    pub async fn register_driver(&self, msg: RegisterDriver) -> Result<(), RegisterDriverError> {
         self.registry.lock().await.register_driver(msg)
     }
 
@@ -194,8 +297,28 @@ impl PaymentProcessor {
         self.registry.lock().await.get_accounts()
     }
 
+    pub async fn get_network(
+        &self,
+        driver: String,
+        network: Option<String>,
+    ) -> Result<(String, Network), RegisterAccountError> {
+        self.registry.lock().await.get_network(driver, network)
+    }
+
+    pub async fn get_platform(
+        &self,
+        driver: String,
+        network: Option<String>,
+        token: Option<String>,
+    ) -> Result<String, RegisterAccountError> {
+        self.registry
+            .lock()
+            .await
+            .get_platform(driver, network, token)
+    }
+
     pub async fn notify_payment(&self, msg: NotifyPayment) -> Result<(), NotifyPaymentError> {
-        let payment_platform = self.registry.lock().await.platform(&msg.driver)?;
+        let payment_platform = msg.platform;
         let payer_addr = msg.sender;
         let payee_addr = msg.recipient;
 
@@ -288,6 +411,7 @@ impl PaymentProcessor {
                 amount,
                 msg.payer_addr.clone(),
                 msg.payee_addr.clone(),
+                msg.payment_platform.clone(),
                 msg.due_date.clone(),
             ))
             .await??;
@@ -307,24 +431,25 @@ impl PaymentProcessor {
             Ok(confirmation) => PaymentConfirmation { confirmation },
             Err(e) => return Err(VerifyPaymentError::ConfirmationEncoding),
         };
+        let platform = payment.payment_platform.clone();
         let driver = self.registry.lock().await.driver(
             &payment.payment_platform,
             &payment.payee_addr,
             AccountMode::RECV,
         )?;
         let details: PaymentDetails = driver_endpoint(&driver)
-            .send(driver::VerifyPayment::from(confirmation))
+            .send(driver::VerifyPayment::new(confirmation, platform.clone()))
             .await??;
 
         // Verify if amount declared in message matches actual amount transferred on blockchain
-        if &details.amount != &payment.amount {
+        if &details.amount < &payment.amount {
             return VerifyPaymentError::amount(&details.amount, &payment.amount);
         }
 
         // Verify if payment shares for agreements and activities sum up to the total amount
         let agreement_sum = payment.agreement_payments.iter().map(|p| &p.amount).sum();
         let activity_sum = payment.activity_payments.iter().map(|p| &p.amount).sum();
-        if &details.amount != &(&agreement_sum + &activity_sum) {
+        if &details.amount < &(&agreement_sum + &activity_sum) {
             return VerifyPaymentError::shares(&details.amount, &agreement_sum, &activity_sum);
         }
 
@@ -353,6 +478,12 @@ impl PaymentProcessor {
                 }
                 Some(agreement) if &agreement.payer_addr != payer_addr => {
                     return VerifyPaymentError::agreement_payer(&agreement, payer_addr)
+                }
+                Some(agreement) if &agreement.payment_platform != &payment.payment_platform => {
+                    return VerifyPaymentError::agreement_platform(
+                        &agreement,
+                        &payment.payment_platform,
+                    )
                 }
                 _ => (),
             }
@@ -384,6 +515,7 @@ impl PaymentProcessor {
             .send(driver::GetTransactionBalance::new(
                 payer_addr.clone(),
                 payee_addr.clone(),
+                platform,
             ))
             .await??;
 
@@ -408,7 +540,7 @@ impl PaymentProcessor {
                 .await
                 .driver(&platform, &address, AccountMode::empty())?;
         let amount = driver_endpoint(&driver)
-            .send(driver::GetAccountBalance::from(address))
+            .send(driver::GetAccountBalance::new(address, platform))
             .await??;
         Ok(amount)
     }
@@ -431,6 +563,7 @@ impl PaymentProcessor {
                 .driver(&platform, &address, AccountMode::empty())?;
         let msg = ValidateAllocation {
             address,
+            platform,
             amount,
             existing_allocations,
         };

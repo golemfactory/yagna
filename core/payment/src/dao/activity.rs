@@ -9,7 +9,7 @@ use diesel::{
     BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
 };
 use std::collections::HashMap;
-use ya_client_model::payment::{DocumentStatus, EventType};
+use ya_client_model::payment::{DebitNoteEventType, DocumentStatus};
 use ya_client_model::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
@@ -90,7 +90,7 @@ pub fn increase_amount_paid(
             debit_note_event::create::<()>(
                 debit_note_id,
                 owner_id.clone(),
-                EventType::Settled,
+                DebitNoteEventType::DebitNoteSettledEvent,
                 None,
                 conn,
             )?;

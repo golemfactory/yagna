@@ -1,6 +1,7 @@
 use crate::processor::PaymentProcessor;
 use futures::prelude::*;
 use metrics::counter;
+use ya_core_model as core;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::ServiceBinder;
 
@@ -17,7 +18,7 @@ mod local {
     use super::*;
     use crate::dao::*;
     use std::collections::BTreeMap;
-    use ya_client_model::payment::DocumentStatus;
+    use ya_client_model::payment::{Account, DocumentStatus};
     use ya_core_model::payment::local::*;
     use ya_persistence::types::Role;
 
@@ -74,9 +75,8 @@ mod local {
         processor: PaymentProcessor,
         sender: String,
         msg: RegisterDriver,
-    ) -> Result<(), NoError> {
-        processor.register_driver(msg).await;
-        Ok(())
+    ) -> Result<(), RegisterDriverError> {
+        processor.register_driver(msg).await
     }
 
     async fn unregister_driver(
@@ -134,7 +134,27 @@ mod local {
         msg: GetStatus,
     ) -> Result<StatusResult, GenericError> {
         log::info!("get status: {:?}", msg);
-        let GetStatus { platform, address } = msg;
+        let GetStatus {
+            address,
+            driver,
+            network,
+            token,
+        } = msg;
+
+        let (network, network_details) = processor
+            .get_network(driver.clone(), network)
+            .await
+            .map_err(GenericError::new)?;
+        let token = token.unwrap_or(network_details.default_token.clone());
+        let platform = match network_details.tokens.get(&token) {
+            Some(platform) => platform.clone(),
+            None => {
+                return Err(GenericError::new(format!(
+                    "Unsupported token. driver={} network={} token={}",
+                    driver, network, token
+                )))
+            }
+        };
 
         let incoming_fut = async {
             db.as_dao::<AgreementDao>()
@@ -169,6 +189,9 @@ mod local {
             reserved,
             outgoing,
             incoming,
+            driver,
+            network,
+            token,
         })
     }
 
@@ -277,7 +300,7 @@ mod public {
         let activity_id = debit_note.activity_id.clone();
         let agreement_id = debit_note.agreement_id.clone();
 
-        let agreement = match get_agreement(agreement_id.clone()).await {
+        let agreement = match get_agreement(agreement_id.clone(), core::Role::Requestor).await {
             Err(e) => {
                 return Err(SendError::ServiceError(e.to_string()));
             }
@@ -308,7 +331,7 @@ mod public {
                 .insert_received(debit_note)
                 .await?;
 
-            counter!("payment.debit_notes.received", 1);
+            counter!("payment.debit_notes.requestor.received", 1);
             Ok(())
         }
         .await
@@ -396,7 +419,7 @@ mod public {
         let agreement_id = invoice.agreement_id.clone();
         let activity_ids = invoice.activity_ids.clone();
 
-        let agreement = match get_agreement(agreement_id.clone()).await {
+        let agreement = match get_agreement(agreement_id.clone(), core::Role::Requestor).await {
             Err(e) => {
                 return Err(SendError::ServiceError(e.to_string()));
             }
@@ -410,7 +433,7 @@ mod public {
         };
 
         for activity_id in activity_ids.iter() {
-            match provider::get_agreement_id(activity_id.clone()).await {
+            match provider::get_agreement_id(activity_id.clone(), core::Role::Requestor).await {
                 Ok(Some(id)) if id != agreement_id => {
                     return Err(SendError::BadRequest(format!(
                         "Activity {} belongs to agreement {} not {}",

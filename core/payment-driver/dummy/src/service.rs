@@ -1,7 +1,8 @@
-use crate::{DRIVER_NAME, PLATFORM_NAME};
+use crate::{DRIVER_NAME, NETWORK_NAME, PLATFORM_NAME, TOKEN_NAME};
 use actix::Arbiter;
 use bigdecimal::BigDecimal;
 use chrono::Utc;
+use maplit::hashmap;
 use std::str::FromStr;
 use uuid::Uuid;
 use ya_core_model::driver::*;
@@ -25,10 +26,21 @@ pub fn bind_service() {
 
 pub async fn register_in_payment_service() -> anyhow::Result<()> {
     log::debug!("Registering driver in payment service...");
+    let details = payment_srv::DriverDetails {
+        default_network: NETWORK_NAME.to_string(),
+        networks: hashmap! {
+            NETWORK_NAME.to_string() => payment_srv::Network {
+                default_token: TOKEN_NAME.to_string(),
+                tokens: hashmap! {
+                    TOKEN_NAME.to_string() => PLATFORM_NAME.to_string()
+                }
+            }
+        },
+        recv_init_required: false,
+    };
     let message = payment_srv::RegisterDriver {
         driver_name: DRIVER_NAME.to_string(),
-        platform: PLATFORM_NAME.to_string(),
-        recv_init_required: false,
+        details,
     };
     service(payment_srv::BUS_ID).send(message).await?.unwrap(); // Unwrap on purpose because it's NoError
     log::debug!("Successfully registered driver in payment service.");
@@ -43,9 +55,10 @@ async fn init(_db: (), _caller: String, msg: Init) -> Result<Ack, GenericError> 
     let mode = msg.mode();
 
     let msg = payment_srv::RegisterAccount {
-        platform: PLATFORM_NAME.to_string(),
         address,
         driver: DRIVER_NAME.to_string(),
+        network: NETWORK_NAME.to_string(),
+        token: TOKEN_NAME.to_string(),
         mode,
     };
     bus::service(payment_srv::BUS_ID)
@@ -84,8 +97,8 @@ async fn schedule_payment(
     log::info!("schedule payment: {:?}", msg);
 
     let details = PaymentDetails {
-        recipient: msg.recipient().to_string(),
-        sender: msg.sender().to_string(),
+        recipient: msg.recipient(),
+        sender: msg.sender(),
         amount: msg.amount(),
         date: Some(Utc::now()),
     };
@@ -95,6 +108,7 @@ async fn schedule_payment(
     let order_id = Uuid::new_v4().to_string();
     let msg = payment_srv::NotifyPayment {
         driver: DRIVER_NAME.to_string(),
+        platform: PLATFORM_NAME.to_string(),
         amount: details.amount,
         sender: details.sender,
         recipient: details.recipient,

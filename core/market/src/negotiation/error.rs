@@ -1,16 +1,22 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use ya_client::model::NodeId;
 use ya_market_resolver::flatten::JsonObjectExpected;
 
-use crate::db::dao::StateError;
+use crate::db::dao::AgreementDaoError;
 use crate::db::model::{
     AgreementId, ProposalId, ProposalIdParseError, SubscriptionId, SubscriptionParseError,
 };
-use crate::db::{dao::SaveProposalError, dao::TakeEventsError, DbError};
+use crate::db::{
+    dao::TakeEventsError,
+    dao::{ChangeProposalStateError, SaveProposalError},
+    DbError,
+};
+use crate::matcher::error::{DemandError, QueryOfferError};
 use crate::protocol::negotiation::error::{
     ApproveAgreementError, CounterProposalError as ProtocolProposalError, GsbAgreementError,
-    NegotiationApiInitError, ProposeAgreementError, TerminateAgreementError,
+    NegotiationApiInitError, ProposeAgreementError, RejectProposalError, TerminateAgreementError,
 };
 
 #[derive(Error, Debug)]
@@ -22,8 +28,12 @@ pub struct NegotiationInitError(#[from] NegotiationApiInitError);
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum MatchValidationError {
-    #[error("Proposal properties [{new}] doesn't match previous Proposal [{prev}].")]
-    NotMatching { new: ProposalId, prev: ProposalId },
+    #[error("Proposal properties [{new}] doesn't match previous Proposal [{prev}]. {mismatches}")]
+    NotMatching {
+        new: ProposalId,
+        prev: ProposalId,
+        mismatches: String,
+    },
     #[error("Can't match Proposal [{new}] with previous Proposal [{prev}]. Error: {error}")]
     MatchingFailed {
         new: ProposalId,
@@ -33,27 +43,9 @@ pub enum MatchValidationError {
 }
 
 #[derive(Error, Debug)]
-pub enum AgreementStateError {
-    #[error("Agreement [{0}] proposed.")]
-    Proposed(AgreementId),
-    #[error("Agreement [{0}] already confirmed.")]
-    Confirmed(AgreementId),
-    #[error("Agreement [{0}] cancelled.")]
-    Cancelled(AgreementId),
-    #[error("Agreement [{0}] rejected.")]
-    Rejected(AgreementId),
-    #[error("Agreement [{0}] already approved.")]
-    Approved(AgreementId),
-    #[error("Agreement [{0}] expired.")]
-    Expired(AgreementId),
-    #[error("Agreement [{0}] terminated.")]
-    Terminated(AgreementId),
-}
-
-#[derive(Error, Debug)]
 pub enum AgreementError {
     #[error("Agreement [{0}] not found.")]
-    NotFound(AgreementId),
+    NotFound(String),
     #[error("Can't create Agreement for Proposal {0}. Proposal {1} not found.")]
     ProposalNotFound(ProposalId, ProposalId),
     #[error("Can't create second Agreement [{0}] for Proposal [{1}].")]
@@ -69,11 +61,9 @@ pub enum AgreementError {
     #[error("Failed to save Agreement for Proposal [{0}]. Error: {1}")]
     Save(ProposalId, DbError),
     #[error("Failed to get Agreement [{0}]. Error: {1}")]
-    Get(AgreementId, DbError),
+    Get(String, AgreementDaoError),
     #[error("Agreement [{0}]. Error: {1}")]
-    UpdateState(AgreementId, StateError),
-    #[error("Invalid state. {0}")]
-    InvalidState(#[from] AgreementStateError),
+    UpdateState(AgreementId, AgreementDaoError),
     #[error("Invalid Agreement id. {0}")]
     InvalidId(#[from] ProposalIdParseError),
     #[error(transparent)]
@@ -84,15 +74,9 @@ pub enum AgreementError {
     ProtocolApprove(#[from] ApproveAgreementError),
     #[error("Protocol error while terminating: {0}")]
     ProtocolTerminate(#[from] TerminateAgreementError),
-    #[error(transparent)]
-    ReasonError(#[from] ReasonError),
     #[error("Internal error: {0}")]
     Internal(String),
 }
-
-#[derive(Error, Debug)]
-#[error("Reason parse error: {0}")]
-pub struct ReasonError(#[from] pub serde_json::Error);
 
 #[derive(Error, Debug)]
 pub enum WaitForApprovalError {
@@ -109,15 +93,13 @@ pub enum WaitForApprovalError {
     #[error("Invalid agreement id. {0}")]
     InvalidId(#[from] ProposalIdParseError),
     #[error("Failed to get Agreement [{0}]. Error: {1}")]
-    Get(AgreementId, DbError),
+    Get(AgreementId, AgreementDaoError),
     #[error("Waiting for approval failed. Error: {0}.")]
     Internal(String),
 }
 
 #[derive(Error, Debug)]
 pub enum QueryEventsError {
-    #[error("Subscription [{0}] was already unsubscribed.")]
-    Unsubscribed(SubscriptionId),
     #[error("Invalid subscription id. {0}")]
     InvalidSubscriptionId(#[from] SubscriptionParseError),
     #[error(transparent)]
@@ -136,7 +118,7 @@ pub enum AgreementEventsError {
     Internal(String),
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Serialize, Deserialize)]
 pub enum GetProposalError {
     #[error("Proposal [{0}] not found (subscription [{1:?}]).")]
     NotFound(ProposalId, Option<SubscriptionId>),
@@ -144,28 +126,48 @@ pub enum GetProposalError {
     Internal(ProposalId, Option<SubscriptionId>, String),
 }
 
-#[derive(Error, Debug)]
-pub enum ProposalError {
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum ProposalValidationError {
     #[error("Subscription [{0}] wasn't found.")]
     NoSubscription(SubscriptionId),
     #[error("Subscription [{0}] was already unsubscribed.")]
     Unsubscribed(SubscriptionId),
     #[error("Subscription [{0}] expired.")]
     SubscriptionExpired(SubscriptionId),
-    #[error("Can't counter own Proposal [{0}].")]
-    OwnProposal(ProposalId),
     #[error(transparent)]
     NotMatching(#[from] MatchValidationError),
+    #[error("Can't react to own Proposal [{0}].")]
+    OwnProposal(ProposalId),
+    #[error("Unauthorized operation attempt on Proposal [{0}] from [{1}].")]
+    Unauthorized(ProposalId, NodeId),
+    #[error("Internal error processing Proposal: {0}.")]
+    Internal(String),
+}
+
+#[derive(Error, Debug)]
+pub enum ProposalError {
+    #[error(transparent)]
+    Validation(#[from] ProposalValidationError),
     #[error(transparent)]
     Get(#[from] GetProposalError),
     #[error(transparent)]
     JsonObjectExpected(#[from] JsonObjectExpected),
     #[error(transparent)]
     Save(#[from] SaveProposalError),
-    #[error("Failed to send counter Proposal for Proposal [{0}]. Error: {1}")]
+    #[error(transparent)]
+    ChangeState(#[from] ChangeProposalStateError),
+    #[error(transparent)]
+    Reject(#[from] RejectProposalError),
+    #[error("Failed to send response for Proposal [{0}]. Error: {1}")]
     Send(ProposalId, ProtocolProposalError),
-    #[error("Can't counter Proposal [{0}]. Error: {1}.")]
-    Internal(ProposalId, String),
+}
+
+#[derive(Error, Debug)]
+#[error("Failed regenerate proposal: {0}.")]
+pub enum RegenerateProposalError {
+    Offer(#[from] QueryOfferError),
+    Demand(#[from] DemandError),
+    Save(#[from] SaveProposalError),
 }
 
 impl AgreementError {
@@ -177,6 +179,32 @@ impl AgreementError {
             GetProposalError::Internal(proposal_id, _, err_msg) => {
                 AgreementError::GetProposal(promoted_proposal.clone(), proposal_id, err_msg)
             }
+        }
+    }
+}
+
+impl From<MatchValidationError> for ProposalError {
+    fn from(e: MatchValidationError) -> Self {
+        ProposalValidationError::NotMatching(e).into()
+    }
+}
+
+impl From<QueryOfferError> for ProposalValidationError {
+    fn from(e: QueryOfferError) -> Self {
+        match e {
+            QueryOfferError::NotFound(id) => ProposalValidationError::NoSubscription(id),
+            QueryOfferError::Unsubscribed(id) => ProposalValidationError::Unsubscribed(id),
+            QueryOfferError::Expired(id) => ProposalValidationError::SubscriptionExpired(id),
+            _ => ProposalValidationError::Internal(format!("Offer: {}", e)),
+        }
+    }
+}
+
+impl From<DemandError> for ProposalValidationError {
+    fn from(e: DemandError) -> Self {
+        match e {
+            DemandError::NotFound(id) => ProposalValidationError::NoSubscription(id),
+            _ => ProposalValidationError::Internal(format!("Demand: {}", e)),
         }
     }
 }

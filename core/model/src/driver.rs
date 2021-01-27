@@ -68,17 +68,23 @@ impl PaymentConfirmation {
 // ************************** GET ACCOUNT BALANCE **************************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct GetAccountBalance(String);
+pub struct GetAccountBalance {
+    address: String,
+    platform: String,
+}
 
-impl From<String> for GetAccountBalance {
-    fn from(address: String) -> Self {
-        GetAccountBalance(address)
+impl GetAccountBalance {
+    pub fn new(address: String, platform: String) -> Self {
+        GetAccountBalance { address, platform }
     }
 }
 
 impl GetAccountBalance {
     pub fn address(&self) -> String {
-        self.0.clone()
+        self.address.clone()
+    }
+    pub fn platform(&self) -> String {
+        self.platform.clone()
     }
 }
 
@@ -91,17 +97,26 @@ impl RpcMessage for GetAccountBalance {
 // ************************** VERIFY PAYMENT **************************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct VerifyPayment(PaymentConfirmation);
+pub struct VerifyPayment {
+    pub confirmation: PaymentConfirmation,
+    pub platform: String,
+}
 
-impl From<PaymentConfirmation> for VerifyPayment {
-    fn from(confirmation: PaymentConfirmation) -> Self {
-        VerifyPayment(confirmation)
+impl VerifyPayment {
+    pub fn new(confirmation: PaymentConfirmation, platform: String) -> Self {
+        Self {
+            confirmation,
+            platform,
+        }
     }
 }
 
 impl VerifyPayment {
     pub fn confirmation(&self) -> PaymentConfirmation {
-        self.0.clone()
+        self.confirmation.clone()
+    }
+    pub fn platform(&self) -> String {
+        self.platform.clone()
     }
 }
 
@@ -111,20 +126,72 @@ impl RpcMessage for VerifyPayment {
     type Error = GenericError;
 }
 
+// ************************** FUND **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Fund {
+    address: String,
+    network: Option<String>,
+    token: Option<String>,
+}
+
+impl Fund {
+    pub fn new(address: String, network: Option<String>, token: Option<String>) -> Self {
+        Self {
+            address,
+            network,
+            token,
+        }
+    }
+    pub fn address(&self) -> String {
+        self.address.clone()
+    }
+    pub fn network(&self) -> Option<String> {
+        self.network.clone()
+    }
+    pub fn token(&self) -> Option<String> {
+        self.token.clone()
+    }
+}
+
+impl RpcMessage for Fund {
+    const ID: &'static str = "Fund";
+    type Item = String;
+    type Error = GenericError;
+}
+
 // ************************** INIT **************************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Init {
     address: String,
+    network: Option<String>,
+    token: Option<String>,
     mode: AccountMode,
 }
 
 impl Init {
-    pub fn new(address: String, mode: AccountMode) -> Init {
-        Init { address, mode }
+    pub fn new(
+        address: String,
+        network: Option<String>,
+        token: Option<String>,
+        mode: AccountMode,
+    ) -> Init {
+        Init {
+            address,
+            network,
+            token,
+            mode,
+        }
     }
     pub fn address(&self) -> String {
         self.address.clone()
+    }
+    pub fn network(&self) -> Option<String> {
+        self.network.clone()
+    }
+    pub fn token(&self) -> Option<String> {
+        self.token.clone()
     }
     pub fn mode(&self) -> AccountMode {
         self.mode.clone()
@@ -144,6 +211,7 @@ pub struct SchedulePayment {
     amount: BigDecimal,
     sender: String,
     recipient: String,
+    platform: String,
     due_date: DateTime<Utc>,
 }
 
@@ -152,12 +220,14 @@ impl SchedulePayment {
         amount: BigDecimal,
         sender: String,
         recipient: String,
+        platform: String,
         due_date: DateTime<Utc>,
     ) -> SchedulePayment {
         SchedulePayment {
             amount,
             sender,
             recipient,
+            platform,
             due_date,
         }
     }
@@ -172,6 +242,10 @@ impl SchedulePayment {
 
     pub fn recipient(&self) -> String {
         self.recipient.clone()
+    }
+
+    pub fn platform(&self) -> String {
+        self.platform.clone()
     }
 
     pub fn due_date(&self) -> DateTime<Utc> {
@@ -191,11 +265,16 @@ impl RpcMessage for SchedulePayment {
 pub struct GetTransactionBalance {
     pub sender: String,
     pub recipient: String,
+    pub platform: String,
 }
 
 impl GetTransactionBalance {
-    pub fn new(sender: String, recipient: String) -> GetTransactionBalance {
-        GetTransactionBalance { sender, recipient }
+    pub fn new(sender: String, recipient: String, platform: String) -> GetTransactionBalance {
+        GetTransactionBalance {
+            sender,
+            recipient,
+            platform,
+        }
     }
     pub fn sender(&self) -> String {
         self.sender.clone()
@@ -203,6 +282,10 @@ impl GetTransactionBalance {
 
     pub fn recipient(&self) -> String {
         self.recipient.clone()
+    }
+
+    pub fn platform(&self) -> String {
+        self.platform.clone()
     }
 }
 
@@ -217,14 +300,21 @@ impl RpcMessage for GetTransactionBalance {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ValidateAllocation {
     pub address: String,
+    pub platform: String,
     pub amount: BigDecimal,
     pub existing_allocations: Vec<Allocation>,
 }
 
 impl ValidateAllocation {
-    pub fn new(address: String, amount: BigDecimal, existing: Vec<Allocation>) -> Self {
+    pub fn new(
+        address: String,
+        platform: String,
+        amount: BigDecimal,
+        existing: Vec<Allocation>,
+    ) -> Self {
         ValidateAllocation {
             address,
+            platform,
             amount,
             existing_allocations: existing,
         }
@@ -234,5 +324,120 @@ impl ValidateAllocation {
 impl RpcMessage for ValidateAllocation {
     const ID: &'static str = "ValidateAllocation";
     type Item = bool;
+    type Error = GenericError;
+}
+
+// ************************** ENTER **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Enter {
+    amount: BigDecimal,
+    address: String,
+    network: Option<String>,
+    token: Option<String>,
+}
+
+impl Enter {
+    pub fn new(
+        amount: BigDecimal,
+        address: String,
+        network: Option<String>,
+        token: Option<String>,
+    ) -> Enter {
+        Enter {
+            amount,
+            address,
+            network,
+            token,
+        }
+    }
+}
+
+impl RpcMessage for Enter {
+    const ID: &'static str = "Enter";
+    type Item = String; // Transaction Identifier
+    type Error = GenericError;
+}
+
+// ************************** EXIT **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Exit {
+    sender: String,
+    to: Option<String>,
+    amount: Option<BigDecimal>,
+    network: Option<String>,
+    token: Option<String>,
+}
+
+impl Exit {
+    pub fn new(
+        sender: String,
+        to: Option<String>,
+        amount: Option<BigDecimal>,
+        network: Option<String>,
+        token: Option<String>,
+    ) -> Exit {
+        Exit {
+            sender,
+            to,
+            amount,
+            network,
+            token,
+        }
+    }
+
+    pub fn amount(&self) -> Option<BigDecimal> {
+        self.amount.clone()
+    }
+    pub fn sender(&self) -> String {
+        self.sender.clone()
+    }
+    pub fn to(&self) -> Option<String> {
+        self.to.clone()
+    }
+    pub fn network(&self) -> Option<String> {
+        self.network.clone()
+    }
+}
+
+impl RpcMessage for Exit {
+    const ID: &'static str = "Exit";
+    type Item = String; // Transaction Identifier
+    type Error = GenericError;
+}
+
+// ************************** TRANSFER **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Transfer {
+    sender: String,
+    to: String,
+    amount: BigDecimal,
+    network: Option<String>,
+    token: Option<String>,
+}
+
+impl Transfer {
+    pub fn new(
+        sender: String,
+        to: String,
+        amount: BigDecimal,
+        network: Option<String>,
+        token: Option<String>,
+    ) -> Transfer {
+        Transfer {
+            sender,
+            to,
+            amount,
+            network,
+            token,
+        }
+    }
+}
+
+impl RpcMessage for Transfer {
+    const ID: &'static str = "Transfer";
+    type Item = String; // Transaction Identifier
     type Error = GenericError;
 }

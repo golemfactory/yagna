@@ -2,6 +2,7 @@ use actix_http::{body::Body, Request};
 use actix_service::Service as ActixService;
 use actix_web::{dev::ServiceResponse, test, App};
 use anyhow::{anyhow, bail, Context, Result};
+use regex::Regex;
 use std::collections::HashMap;
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 
@@ -91,6 +92,19 @@ impl MockNodeKind {
     }
 }
 
+fn testname_from_backtrace(bn: &str) -> String {
+    log::info!("Test name to regex match: {}", &bn);
+    // Extract test name
+    let captures = Regex::new(r"(.*)::(.*)::\{\{.*")
+        .unwrap()
+        .captures(&bn)
+        .unwrap();
+    let filename = captures.get(1).unwrap().as_str().to_string();
+    let testname = captures.get(2).unwrap().as_str().to_string();
+
+    format!("{}.{}", filename, testname)
+}
+
 impl MarketsNetwork {
     /// Remember that test_name should be unique between all tests.
     /// It will be used to create directories and GSB binding points,
@@ -107,7 +121,9 @@ impl MarketsNetwork {
         if !bn.starts_with("test_") {
             bn = crate::testing::backtrace_util::generate_backtraced_name(Some(2));
         }
-        let tn = test_name.unwrap_or(bn.as_str());
+        bn = testname_from_backtrace(&bn);
+
+        let tn = test_name.unwrap_or(&bn);
         log::info!("Intializing MarketsNetwork. tn={}", tn);
         let test_dir = prepare_test_dir(&tn).unwrap();
 
@@ -137,8 +153,8 @@ impl MarketsNetwork {
         name: &str,
         identity_api: Arc<MockIdentity>,
         node_kind: MockNodeKind,
-    ) -> Result<MarketsNetwork> {
-        let public_gsb_prefix = node_kind.bind_gsb(&self.test_name, name).await?;
+    ) -> MarketsNetwork {
+        let public_gsb_prefix = node_kind.bind_gsb(&self.test_name, name).await.unwrap();
 
         let node = MockNode {
             name: name.to_string(),
@@ -152,7 +168,7 @@ impl MarketsNetwork {
         MockNet::default().register_node(&node_id, &public_gsb_prefix);
 
         self.nodes.push(node);
-        Ok(self)
+        self
     }
 
     pub fn break_networking_for(&self, node_name: &str) -> Result<()> {
@@ -170,25 +186,29 @@ impl MarketsNetwork {
         Ok(())
     }
 
-    pub async fn add_market_instance(self, name: &str) -> Result<Self> {
-        let db = self.create_database(name)?;
+    pub async fn add_market_instance(self, name: &str) -> Self {
+        let db = self.create_database(name);
         let identity_api = MockIdentity::new(name);
-        let market = Arc::new(MarketService::new(
-            &db,
-            identity_api.clone() as Arc<dyn IdentityApi>,
-            self.config.clone(),
-        )?);
+        let market = Arc::new(
+            MarketService::new(
+                &db,
+                identity_api.clone() as Arc<dyn IdentityApi>,
+                self.config.clone(),
+            )
+            .unwrap(),
+        );
         self.add_node(name, identity_api, MockNodeKind::Market(market))
             .await
     }
 
-    pub async fn add_matcher_instance(self, name: &str) -> Result<Self> {
-        let db = self.init_database(name)?;
+    pub async fn add_matcher_instance(self, name: &str) -> Self {
+        let db = self.init_database(name);
 
         let store = SubscriptionStore::new(db.clone(), self.config.clone());
         let identity_api = MockIdentity::new(name);
 
-        let (matcher, listeners) = Matcher::new(store, identity_api.clone(), self.config.clone())?;
+        let (matcher, listeners) =
+            Matcher::new(store, identity_api.clone(), self.config.clone()).unwrap();
         self.add_node(
             name,
             identity_api,
@@ -197,11 +217,7 @@ impl MarketsNetwork {
         .await
     }
 
-    pub async fn add_discovery_instance(
-        self,
-        name: &str,
-        builder: DiscoveryBuilder,
-    ) -> Result<Self> {
+    pub async fn add_discovery_instance(self, name: &str, builder: DiscoveryBuilder) -> Self {
         let identity_api = MockIdentity::new(name);
         let discovery = builder
             .add_data(identity_api.clone() as Arc<dyn IdentityApi>)
@@ -227,7 +243,7 @@ impl MarketsNetwork {
         prov_agreement_received: impl CallbackHandler<AgreementReceived>,
         prov_agreement_cancelled: impl CallbackHandler<AgreementCancelled>,
         prov_agreement_terminated: impl CallbackHandler<AgreementTerminated>,
-    ) -> Result<Self> {
+    ) -> Self {
         self.add_negotiation_api(
             name,
             prov_initial_proposal_received,
@@ -253,7 +269,7 @@ impl MarketsNetwork {
         req_agreement_approved: impl CallbackHandler<AgreementApproved>,
         req_agreement_rejected: impl CallbackHandler<AgreementRejected>,
         req_agreement_terminated: impl CallbackHandler<AgreementTerminated>,
-    ) -> Result<Self> {
+    ) -> Self {
         self.add_negotiation_api(
             name,
             default::empty_on_initial_proposal,
@@ -285,7 +301,7 @@ impl MarketsNetwork {
         req_agreement_approved: impl CallbackHandler<AgreementApproved>,
         req_agreement_rejected: impl CallbackHandler<AgreementRejected>,
         req_agreement_terminated: impl CallbackHandler<AgreementTerminated>,
-    ) -> Result<Self> {
+    ) -> Self {
         let provider = provider::NegotiationApi::new(
             prov_initial_proposal_received,
             prov_proposal_received,
@@ -435,17 +451,19 @@ impl MarketsNetwork {
         .await
     }
 
-    fn create_database(&self, name: &str) -> Result<DbExecutor> {
+    fn create_database(&self, name: &str) -> DbExecutor {
         let db_path = self.instance_dir(name);
         let db = DbExecutor::from_data_dir(&db_path, "yagna")
-            .map_err(|e| anyhow!("Failed to create db [{:?}]. Error: {}", db_path, e))?;
-        Ok(db)
+            .map_err(|e| anyhow!("Failed to create db [{:?}]. Error: {}", db_path, e))
+            .unwrap();
+        db
     }
 
-    pub fn init_database(&self, name: &str) -> Result<DbExecutor> {
-        let db = self.create_database(name)?;
-        db.apply_migration(crate::db::migrations::run_with_output)?;
-        Ok(db)
+    pub fn init_database(&self, name: &str) -> DbExecutor {
+        let db = self.create_database(name);
+        db.apply_migration(crate::db::migrations::run_with_output)
+            .unwrap();
+        db
     }
 
     fn instance_dir(&self, name: &str) -> PathBuf {
@@ -570,8 +588,8 @@ impl MarketServiceExt for MarketService {
 pub mod default {
     use super::*;
     use crate::protocol::negotiation::error::{
-        ApproveAgreementError, CounterProposalError, GsbAgreementError, GsbProposalError,
-        ProposeAgreementError, TerminateAgreementError,
+        ApproveAgreementError, CounterProposalError, GsbAgreementError, ProposeAgreementError,
+        RejectProposalError, TerminateAgreementError,
     };
 
     pub async fn empty_on_offers_retrieved(
@@ -619,7 +637,7 @@ pub mod default {
     pub async fn empty_on_proposal_rejected(
         _caller: String,
         _msg: ProposalRejected,
-    ) -> Result<(), GsbProposalError> {
+    ) -> Result<(), RejectProposalError> {
         Ok(())
     }
 

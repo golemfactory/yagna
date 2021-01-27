@@ -1,5 +1,5 @@
 use chrono::Utc;
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
+use diesel::{sql_types, ExpressionMethods, QueryDsl, RunQueryDsl};
 use thiserror::Error;
 
 use ya_persistence::executor::ConnType;
@@ -8,10 +8,11 @@ use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 use crate::db::dao::demand::{demand_status, DemandState};
 use crate::db::dao::offer::{query_state, OfferState};
 use crate::db::dao::sql_functions::datetime;
-use crate::db::model::{Agreement, MarketEvent, OwnerType, Proposal, SubscriptionId};
+use crate::db::model::{Agreement, MarketEvent, Owner, Proposal, SubscriptionId};
 use crate::db::schema::market_negotiation_event::dsl;
 use crate::db::{DbError, DbResult};
 use crate::market::EnvConfig;
+use diesel::dsl::sql;
 
 const EVENT_STORE_DAYS: EnvConfig<'static, u64> = EnvConfig {
     name: "YAGNA_MARKET_EVENT_STORE_DAYS",
@@ -22,11 +23,11 @@ const EVENT_STORE_DAYS: EnvConfig<'static, u64> = EnvConfig {
 #[derive(Error, Debug)]
 pub enum TakeEventsError {
     #[error("Subscription [{0}] not found. Could be unsubscribed.")]
-    SubscriptionNotFound(SubscriptionId),
+    NotFound(SubscriptionId),
     #[error("Subscription [{0}] expired.")]
-    SubscriptionExpired(SubscriptionId),
-    #[error("Failed to get events from database. Error: {0}.")]
-    DatabaseError(DbError),
+    Expired(SubscriptionId),
+    #[error("Failed to get events from DB: {0}.")]
+    Db(DbError),
 }
 
 pub struct NegotiationEventsDao<'c> {
@@ -40,17 +41,28 @@ impl<'c> AsDao<'c> for NegotiationEventsDao<'c> {
 }
 
 impl<'c> NegotiationEventsDao<'c> {
-    pub async fn add_proposal_event(
-        &self,
-        proposal: Proposal,
-        owner: OwnerType,
-    ) -> DbResult<Proposal> {
+    pub async fn add_proposal_event(&self, proposal: &Proposal, role: Owner) -> DbResult<()> {
+        let event = MarketEvent::from_proposal(proposal, role);
         do_with_transaction(self.pool, move |conn| {
-            let event = MarketEvent::from_proposal(&proposal, owner);
             diesel::insert_into(dsl::market_negotiation_event)
                 .values(event)
                 .execute(conn)?;
-            Ok(proposal)
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn add_proposal_rejected_event(
+        &self,
+        proposal: &Proposal,
+        reason: Option<String>,
+    ) -> DbResult<()> {
+        let event = MarketEvent::proposal_rejected(proposal, reason);
+        do_with_transaction(self.pool, move |conn| {
+            diesel::insert_into(dsl::market_negotiation_event)
+                .values(event)
+                .execute(conn)?;
+            Ok(())
         })
         .await
     }
@@ -70,16 +82,19 @@ impl<'c> NegotiationEventsDao<'c> {
         &self,
         subscription_id: &SubscriptionId,
         max_events: i32,
-        owner: OwnerType,
+        owner: Owner,
     ) -> Result<Vec<MarketEvent>, TakeEventsError> {
         let subscription_id = subscription_id.clone();
         do_with_transaction(self.pool, move |conn| {
             // Check subscription wasn't unsubscribed or expired.
             validate_subscription(conn, &subscription_id, owner)?;
 
+            // TODO: Only ProposalEvents should be in random order.
+            //  AgreementEvent and rejections events should be sorted with higher
+            //  priority.
             let events = dsl::market_negotiation_event
                 .filter(dsl::subscription_id.eq(&subscription_id))
-                .order_by(dsl::timestamp.asc())
+                .order_by(sql::<sql_types::Bool>("RANDOM()"))
                 .limit(max_events as i64)
                 .load::<MarketEvent>(conn)?;
 
@@ -130,34 +145,24 @@ impl<'c> NegotiationEventsDao<'c> {
 fn validate_subscription(
     conn: &ConnType,
     subscription_id: &SubscriptionId,
-    owner: OwnerType,
+    owner: Owner,
 ) -> Result<(), TakeEventsError> {
     match owner {
-        OwnerType::Requestor => match demand_status(conn, &subscription_id)? {
-            DemandState::NotFound => Err(TakeEventsError::SubscriptionNotFound(
-                subscription_id.clone(),
-            ))?,
-            DemandState::Expired(_) => Err(TakeEventsError::SubscriptionExpired(
-                subscription_id.clone(),
-            ))?,
+        Owner::Requestor => match demand_status(conn, &subscription_id)? {
+            DemandState::NotFound => Err(TakeEventsError::NotFound(subscription_id.clone()))?,
+            DemandState::Expired(_) => Err(TakeEventsError::Expired(subscription_id.clone()))?,
             _ => Ok(()),
         },
-        OwnerType::Provider => {
-            match query_state(conn, &subscription_id, &Utc::now().naive_utc())? {
-                OfferState::NotFound => Err(TakeEventsError::SubscriptionNotFound(
-                    subscription_id.clone(),
-                ))?,
-                OfferState::Expired(_) => Err(TakeEventsError::SubscriptionExpired(
-                    subscription_id.clone(),
-                ))?,
-                _ => Ok(()),
-            }
-        }
+        Owner::Provider => match query_state(conn, &subscription_id, &Utc::now().naive_utc())? {
+            OfferState::NotFound => Err(TakeEventsError::NotFound(subscription_id.clone()))?,
+            OfferState::Expired(_) => Err(TakeEventsError::Expired(subscription_id.clone()))?,
+            _ => Ok(()),
+        },
     }
 }
 
 impl<ErrorType: Into<DbError>> From<ErrorType> for TakeEventsError {
     fn from(err: ErrorType) -> Self {
-        TakeEventsError::DatabaseError(err.into())
+        TakeEventsError::Db(err.into())
     }
 }

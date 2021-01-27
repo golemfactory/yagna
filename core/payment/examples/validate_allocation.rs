@@ -1,6 +1,6 @@
 use bigdecimal::BigDecimal;
-use ya_client::payment::PaymentRequestorApi;
-use ya_client::web::WebClient;
+use ya_client::payment::PaymentApi;
+use ya_client::web::{rest_api_url, WebClient};
 use ya_client_model::payment::NewAllocation;
 use ya_core_model::payment::local as pay;
 use ya_service_bus::typed as bus;
@@ -14,8 +14,10 @@ async fn get_requestor_balance_and_platform() -> anyhow::Result<(BigDecimal, Str
         if account.send {
             let status = bus::service(pay::BUS_ID)
                 .call(pay::GetStatus {
-                    platform: account.platform.clone(),
                     address: account.address.clone(),
+                    driver: account.driver,
+                    network: Some(account.network),
+                    token: Some(account.token),
                 })
                 .await??;
             return Ok((status.amount, account.platform));
@@ -31,8 +33,11 @@ async fn main() -> anyhow::Result<()> {
     std::env::set_var("RUST_LOG", log_level);
     env_logger::init();
 
-    let client = WebClient::builder().build();
-    let requestor: PaymentRequestorApi = client.interface()?;
+    let requestor_url = format!("{}requestor/", rest_api_url()).parse().unwrap();
+    let requestor: PaymentApi = WebClient::builder()
+        .api_url(requestor_url)
+        .build()
+        .interface()?;
 
     let (requestor_balance, payment_platform) = get_requestor_balance_and_platform().await?;
     let payment_platform = Some(payment_platform);

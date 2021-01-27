@@ -8,7 +8,7 @@ use ya_service_api_web::middleware::Identity;
 use ya_std_utils::LogErr;
 
 use super::PathAgreement;
-use crate::db::model::OwnerType;
+use crate::db::model::Owner;
 use crate::market::MarketService;
 use crate::negotiation::error::AgreementError;
 use crate::rest_api::QueryAgreementEvents;
@@ -30,14 +30,14 @@ async fn get_agreement(
     // and check, if any will be returned. Note that we won't get Agreement if we aren't
     // owner, so here is no danger, that Provider gets Requestor's Offer and opposite.
     let path = path.into_inner();
-    let r_agreement_id = path.clone().to_id(OwnerType::Requestor)?;
-    let p_agreement_id = path.to_id(OwnerType::Provider)?;
+    let r_agreement_id = path.clone().to_id(Owner::Requestor)?;
+    let p_agreement_id = r_agreement_id.clone().swap_owner();
 
     let r_result = market.get_agreement(&r_agreement_id, &id).await;
     let p_result = market.get_agreement(&p_agreement_id, &id).await;
 
     if p_result.is_err() && r_result.is_err() {
-        Err(AgreementError::NotFound(r_agreement_id)).log_err()
+        Err(AgreementError::NotFound(path.agreement_id)).log_err()
     } else if r_result.is_err() {
         p_result.map(|agreement| HttpResponse::Ok().json(agreement))
     } else if p_result.is_err() {
@@ -79,10 +79,9 @@ async fn terminate_agreement(
     id: Identity,
     body: Json<Option<Reason>>,
 ) -> impl Responder {
-    // We won't attach ourselves too much to owner type here. It will be replaced in CommonBroker
-    let agreement_id = path.into_inner().to_id(OwnerType::Requestor)?;
+    let client_agreement_id = path.into_inner().agreement_id;
     market
-        .terminate_agreement(id, agreement_id, body.into_inner())
+        .terminate_agreement(id, client_agreement_id, body.into_inner())
         .await
         .log_err()
         .map(|_| HttpResponse::Ok().finish())

@@ -11,7 +11,7 @@ default = []
 ya-core-model = { version = "0.2", features = ["driver", "identity", "payment"] }
 ya-persistence = "0.2"
 ya-service-api-interfaces = "0.1"
-ya-service-bus = "0.2"
+ya-service-bus = "0.3"
 
 actix = { version = "0.9", default-features = false }
 anyhow = "1.0"
@@ -19,5 +19,6 @@ bigdecimal = "0.1.0"
 chrono = { version = "0.4", features = ["serde"] }
 futures3 = { version = "0.3", features = ["compat"], package = "futures" }
 log = "0.4.8"
+maplit = "1.0"
 serde_json = "1.0"
 uuid = { version = "0.8", features = ["v4"] }

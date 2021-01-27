@@ -4,10 +4,6 @@ use crate::db::model::{AgreementId, SubscriptionId};
 
 use ya_service_api_web::middleware::Identity;
 
-/// Pretty display vector, as list with all elements in separate row.
-/// Implementation uses Display trait for all elements (not Debug) to make
-/// them more readable.
-
 pub struct DisplayEnabler<'a, Type>(pub &'a Type);
 
 pub trait EnableDisplay<Type> {

@@ -10,7 +10,7 @@ use std::{env, time};
 use tokio::time::delay_for;
 
 // Workspace uses
-use ya_payment_driver::model::GenericError;
+use ya_payment_driver::{db::models::Network, model::GenericError};
 
 // Local uses
 use crate::zksync::wallet::account_balance;
@@ -25,8 +25,8 @@ lazy_static! {
     static ref MAX_WAIT: Duration = Duration::minutes(1);
 }
 
-pub async fn request_ngnt(address: &str) -> Result<(), GenericError> {
-    let balance = account_balance(address).await?;
+pub async fn request_ngnt(address: &str, network: Network) -> Result<(), GenericError> {
+    let balance = account_balance(address, network).await?;
     if balance >= *MIN_BALANCE {
         return Ok(());
     }
@@ -37,7 +37,7 @@ pub async fn request_ngnt(address: &str) -> Result<(), GenericError> {
     );
 
     for i in 0..MAX_FAUCET_REQUESTS {
-        match faucet_donate(address).await {
+        match faucet_donate(address, network).await {
             Ok(()) => break,
             Err(e) => {
                 // Do not warn nor sleep at the last try.
@@ -60,15 +60,15 @@ pub async fn request_ngnt(address: &str) -> Result<(), GenericError> {
             }
         }
     }
-    wait_for_ngnt(address).await?;
+    wait_for_ngnt(address, network).await?;
     Ok(())
 }
 
-async fn wait_for_ngnt(address: &str) -> Result<(), GenericError> {
+async fn wait_for_ngnt(address: &str, network: Network) -> Result<(), GenericError> {
     log::info!("Waiting for NGNT from faucet...");
     let wait_until = Utc::now() + *MAX_WAIT;
     while Utc::now() < wait_until {
-        if account_balance(address).await? >= *MIN_BALANCE {
+        if account_balance(address, network).await? >= *MIN_BALANCE {
             log::info!("Received NGNT from faucet.");
             return Ok(());
         }
@@ -79,7 +79,7 @@ async fn wait_for_ngnt(address: &str) -> Result<(), GenericError> {
     Err(GenericError::new(msg))
 }
 
-async fn faucet_donate(address: &str) -> Result<(), GenericError> {
+async fn faucet_donate(address: &str, _network: Network) -> Result<(), GenericError> {
     let client = awc::Client::new();
     let response = client
         .get(format!("{}/{}", *FAUCET_ADDR, address))

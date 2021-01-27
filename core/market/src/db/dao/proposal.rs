@@ -1,6 +1,6 @@
-#![allow(dead_code)]
 use diesel::expression::dsl::now as sql_now;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use serde::{Deserialize, Serialize};
 
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
@@ -15,10 +15,19 @@ use crate::db::{DbError, DbResult};
 pub enum SaveProposalError {
     #[error("Proposal [{0}] already has counter proposal. Can't counter for the second time.")]
     AlreadyCountered(ProposalId),
-    #[error("Failed to save proposal to database. Error: {0}.")]
-    DbError(DbError),
+    #[error("Failed to save proposal to db: {0}.")]
+    Db(ProposalId, DbError),
+    #[error("Internal DB error: {0}.")]
+    DbInternal(DbError),
     #[error("Proposal [{0}] has no previous proposal. This should not happened when calling save_proposal.")]
     NoPrevious(ProposalId),
+}
+
+#[derive(thiserror::Error, Debug, Serialize, Deserialize)]
+pub enum ChangeProposalStateError {
+    #[error("Failed to change proposal [{0}] state to `{1}` in db: {0}.")]
+    Db(ProposalId, ProposalState, String),
+    //TODO: state transition error
 }
 
 pub struct ProposalDao<'c> {
@@ -32,7 +41,11 @@ impl<'c> AsDao<'c> for ProposalDao<'c> {
 }
 
 impl<'c> ProposalDao<'c> {
-    pub async fn save_initial_proposal(&self, proposal: Proposal) -> DbResult<Proposal> {
+    pub async fn save_initial_proposal(
+        &self,
+        proposal: Proposal,
+    ) -> Result<Proposal, SaveProposalError> {
+        let proposal_id = proposal.body.id.clone();
         do_with_transaction(self.pool, move |conn| {
             diesel::insert_into(dsl_negotiation::market_negotiation)
                 .values(&proposal.negotiation)
@@ -44,6 +57,7 @@ impl<'c> ProposalDao<'c> {
             Ok(proposal)
         })
         .await
+        .map_err(|e| SaveProposalError::Db(proposal_id, e))
     }
 
     pub async fn save_proposal(&self, proposal: &Proposal) -> Result<(), SaveProposalError> {
@@ -60,10 +74,24 @@ impl<'c> ProposalDao<'c> {
 
             diesel::insert_into(dsl::market_proposal)
                 .values(&proposal)
-                .execute(conn)?;
+                .execute(conn)
+                .map_err(|e| SaveProposalError::Db(proposal.id, e.into()))?;
             Ok(())
         })
         .await
+    }
+
+    pub async fn change_proposal_state(
+        &self,
+        proposal_id: &ProposalId,
+        state: ProposalState,
+    ) -> Result<(), ChangeProposalStateError> {
+        let id = proposal_id.clone();
+        do_with_transaction(self.pool, move |conn| {
+            update_proposal_state(conn, &id, state)
+        })
+        .await
+        .map_err(|e| ChangeProposalStateError::Db(proposal_id.clone(), state, e.to_string()))
     }
 
     pub async fn get_proposal(&self, proposal_id: &ProposalId) -> DbResult<Option<Proposal>> {
@@ -146,16 +174,12 @@ pub(super) fn has_counter_proposal(conn: &ConnType, proposal_id: &ProposalId) ->
     Ok(proposal.is_some())
 }
 
-pub(super) fn set_proposal_accepted(conn: &ConnType, proposal_id: &ProposalId) -> DbResult<()> {
-    // TODO: Check if we can do transition to this state.
-    update_proposal_state(conn, proposal_id, ProposalState::Accepted)
-}
-
-fn update_proposal_state(
+pub(super) fn update_proposal_state(
     conn: &ConnType,
     proposal_id: &ProposalId,
     new_state: ProposalState,
 ) -> DbResult<()> {
+    // TODO: Check if transition from current to new state is valid.
     diesel::update(dsl::market_proposal.filter(dsl::id.eq(&proposal_id)))
         .set(dsl::state.eq(new_state))
         .execute(conn)?;
@@ -164,6 +188,6 @@ fn update_proposal_state(
 
 impl<ErrorType: Into<DbError>> From<ErrorType> for SaveProposalError {
     fn from(err: ErrorType) -> Self {
-        SaveProposalError::DbError(err.into())
+        SaveProposalError::DbInternal(err.into())
     }
 }

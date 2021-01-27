@@ -7,7 +7,7 @@ use std::sync::Arc;
 pub struct PaymentModelFactory;
 
 impl PaymentModelFactory {
-    pub fn create(commercials: PaymentDescription) -> Result<Arc<dyn PaymentModel>> {
+    pub fn create<'a>(commercials: &'a PaymentDescription<'a>) -> Result<Arc<dyn PaymentModel>> {
         Ok(Arc::new(LinearPricing::new(commercials)?))
     }
 }

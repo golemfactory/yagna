@@ -2,11 +2,12 @@ use chrono::NaiveDateTime;
 use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl, RunQueryDsl};
 
 use ya_client::model::NodeId;
-use ya_persistence::executor::readonly_transaction;
+use ya_persistence::executor::{readonly_transaction, ConnType};
 use ya_persistence::executor::{AsDao, PoolType};
 
-use crate::db::model::AgreementEvent;
-use crate::db::model::AppSessionId;
+use crate::db::dao::AgreementDaoError;
+use crate::db::model::{Agreement, AgreementEvent, NewAgreementEvent};
+use crate::db::model::{AppSessionId, Owner};
 use crate::db::schema::market_agreement::dsl as agreement;
 use crate::db::schema::market_agreement::dsl::market_agreement;
 use crate::db::schema::market_agreement_event::dsl as event;
@@ -61,4 +62,33 @@ impl<'c> AgreementEventsDao<'c> {
         })
         .await
     }
+}
+
+pub(crate) fn create_event(
+    conn: &ConnType,
+    agreement: &Agreement,
+    reason: Option<String>,
+    terminator: Owner,
+) -> Result<(), AgreementDaoError> {
+    let event = NewAgreementEvent::new(agreement, reason, terminator)
+        .map_err(|e| AgreementDaoError::EventError(e.to_string()))?;
+
+    diesel::insert_into(market_agreement_event)
+        .values(&event)
+        .execute(conn)
+        .map_err(|e| AgreementDaoError::EventError(e.to_string()))?;
+
+    let events = market_agreement_event
+        .filter(event::agreement_id.eq(&agreement.id))
+        .load::<AgreementEvent>(conn)?;
+
+    for event in events.iter() {
+        log::debug!(
+            "Event timestamp: {}, type: {}",
+            event.timestamp,
+            event.event_type
+        );
+    }
+
+    Ok(())
 }

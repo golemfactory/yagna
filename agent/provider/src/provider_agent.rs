@@ -1,3 +1,4 @@
+use crate::dir::clean_provider_dir;
 use crate::events::Event;
 use crate::execution::{
     GetExeUnit, GetOfferTemplates, Shutdown as ShutdownExecution, TaskRunner, UpdateActivity,
@@ -5,7 +6,7 @@ use crate::execution::{
 use crate::hardware;
 use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
-use crate::payments::{LinearPricingOffer, Payments, PricingOffer};
+use crate::payments::{AccountView, LinearPricingOffer, Payments, PricingOffer};
 use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RecvAccount, RunConfig};
 use crate::tasks::task_manager::{InitializeTaskManager, TaskManager};
 
@@ -23,7 +24,7 @@ use std::{fs, io};
 use ya_agreement_utils::agreement::TypedArrayPointer;
 use ya_agreement_utils::*;
 use ya_client::cli::ProviderApi;
-use ya_client_model::payment::Account;
+use ya_file_logging::{start_logger, LoggerHandle};
 use ya_utils_actix::actix_handler::send_message;
 use ya_utils_path::SwapSave;
 
@@ -34,7 +35,8 @@ pub struct ProviderAgent {
     task_manager: Addr<TaskManager>,
     presets: PresetManager,
     hardware: hardware::Manager,
-    accounts: Vec<Account>,
+    accounts: Vec<AccountView>,
+    log_handler: LoggerHandle,
 }
 
 struct GlobalsManager {
@@ -123,22 +125,43 @@ impl GlobalsState {
 
 impl ProviderAgent {
     pub async fn new(mut args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
-        let data_dir = config.data_dir.get_or_create()?.as_path().to_path_buf();
+        let data_dir = config.data_dir.get_or_create()?;
+        let log_handler = start_logger("info", Some(&data_dir), &vec![])?;
+        let app_name = structopt::clap::crate_name!();
+        log::info!(
+            "Starting {}. Version: {}.",
+            structopt::clap::crate_name!(),
+            ya_compile_time_utils::version_describe!()
+        );
+        log::info!("Data directory: {}", data_dir.display());
+
+        {
+            log::info!("Performing disk cleanup...");
+            let freed = clean_provider_dir(&data_dir, "30d", false, false)?;
+            let human_freed = bytesize::to_string(freed, false);
+            log::info!("Freed {} of disk space", human_freed);
+        }
+
         let api = ProviderApi::try_from(&args.api)?;
 
         log::info!("Loading payment accounts...");
-        let accounts: Vec<Account> = api.payment.get_accounts().await?;
+        let accounts: Vec<AccountView> = api
+            .payment
+            .get_provider_accounts()
+            .await?
+            .into_iter()
+            .map(Into::into)
+            .collect();
         log::info!("Payment accounts: {:#?}", accounts);
         let registry = config.registry()?;
         registry.validate()?;
+        registry.test_runtimes()?;
 
         // Generate session id from node name and process id to make sure it's unique.
-        let name = args
-            .node
-            .node_name
-            .clone()
-            .unwrap_or("provider".to_string());
-        args.market.session_id = format!("{}-[{}]", name, std::process::id());
+        let name = args.node.node_name.clone().unwrap_or(app_name.to_string());
+        args.market.session_id = format!("{}-{}", name, std::process::id());
+        args.runner.session_id = args.market.session_id.clone();
+        args.payment.session_id = args.market.session_id.clone();
 
         let mut globals = GlobalsManager::try_new(&config.globals_file, args.node)?;
         globals.spawn_monitor(&config.globals_file)?;
@@ -148,7 +171,7 @@ impl ProviderAgent {
         hardware.spawn_monitor(&config.hardware_file)?;
 
         let market = ProviderMarket::new(api.market, args.market).start();
-        let payments = Payments::new(api.activity.clone(), api.payment).start();
+        let payments = Payments::new(api.activity.clone(), api.payment, args.payment).start();
         let runner = TaskRunner::new(api.activity, args.runner, registry, data_dir)?.start();
         let task_manager = TaskManager::new(market.clone(), runner.clone(), payments)?.start();
 
@@ -160,6 +183,7 @@ impl ProviderAgent {
             presets,
             hardware,
             accounts,
+            log_handler,
         })
     }
 
@@ -169,7 +193,7 @@ impl ProviderAgent {
         inf_node_info: InfNodeInfo,
         runner: Addr<TaskRunner>,
         market: Addr<ProviderMarket>,
-        accounts: Vec<Account>,
+        accounts: Vec<AccountView>,
     ) -> anyhow::Result<()> {
         if presets.is_empty() {
             return Err(anyhow!("No Presets were selected. Can't create offers."));
@@ -250,19 +274,19 @@ impl ProviderAgent {
         node_info
     }
 
-    fn accounts(&self) -> Vec<Account> {
+    fn accounts(&self) -> Vec<AccountView> {
         let globals = self.globals.get_state();
         if let Some(account) = &globals.account {
             let mut accounts = Vec::new();
             if account.platform.is_some() {
-                let zkaddr = Account {
+                let zkaddr = AccountView {
                     platform: account.platform.clone().unwrap(),
                     address: account.address.to_lowercase(),
                 };
                 accounts.push(zkaddr);
             } else {
-                for &platform in &["NGNT", "ZK-NGNT"] {
-                    accounts.push(Account {
+                for &platform in &["erc20-rinkeby-tglm", "zksync-rinkeby-tglm"] {
+                    accounts.push(AccountView {
                         platform: platform.to_string(),
                         address: account.address.to_lowercase(),
                     })
@@ -414,10 +438,12 @@ impl Handler<Shutdown> for ProviderAgent {
     fn handle(&mut self, _: Shutdown, _: &mut Context<Self>) -> Self::Result {
         let market = self.market.clone();
         let runner = self.runner.clone();
+        let log_handler = self.log_handler.clone();
 
         async move {
             market.send(MarketShutdown).await??;
             runner.send(ShutdownExecution).await??;
+            log_handler.shutdown();
             Ok(())
         }
         .boxed_local()

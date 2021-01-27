@@ -1,9 +1,10 @@
 use chrono::{DateTime, Duration, Utc};
 
 use crate::db::model::AgreementId;
+use crate::testing::events_helper::provider::expect_agreement;
 use crate::testing::proposal_util::{exchange_proposals_exclusive_with_ids, NegotiationHelper};
 use crate::testing::MarketsNetwork;
-use crate::testing::OwnerType;
+use crate::testing::Owner;
 
 use ya_client::model::market::Reason;
 use ya_service_api_web::middleware::Identity;
@@ -65,7 +66,15 @@ pub async fn negotiate_agreement_with_ids(
         .confirm_agreement(req_id.clone(), &r_agreement, Some(r_session.to_string()))
         .await?;
 
-    let p_agreement = r_agreement.clone().translate(OwnerType::Provider);
+    // We don't need to query AgreementEvent on Provider side, because we know the id,
+    // but we should eat Event from queue.
+    let events = prov_mkt
+        .provider_engine
+        .query_events(&negotiation.offer_id, 2.0, Some(5))
+        .await?;
+    let _ = expect_agreement(events, "To approve #P").unwrap();
+
+    let p_agreement = r_agreement.clone().translate(Owner::Provider);
     prov_mkt
         .provider_engine
         .approve_agreement(

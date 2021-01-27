@@ -4,7 +4,14 @@
 
 // External crates
 use chrono::NaiveDateTime;
+use diesel::backend::Backend;
+use diesel::deserialize;
+use diesel::serialize::Output;
+use diesel::sql_types::Integer;
+use diesel::types::{FromSql, ToSql};
 use std::convert::TryFrom;
+use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::str::FromStr;
 
 // Local uses
 use crate::dao::{DbError, DbResult};
@@ -83,4 +90,65 @@ pub struct PaymentEntity {
     pub payment_due_date: NaiveDateTime,
     pub status: i32,
     pub tx_id: Option<String>,
+    pub network: Network,
+}
+
+#[derive(AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy)]
+#[sql_type = "Integer"]
+pub enum Network {
+    Mainnet = 1,
+    Rinkeby = 4,
+}
+
+impl Default for Network {
+    fn default() -> Self {
+        Network::Rinkeby
+    }
+}
+
+impl FromStr for Network {
+    type Err = DbError;
+
+    fn from_str(s: &str) -> DbResult<Self> {
+        match s.to_lowercase().as_str() {
+            "mainnet" => Ok(Network::Mainnet),
+            "rinkeby" => Ok(Network::Rinkeby),
+            _ => Err(DbError::InvalidData(format!(
+                "Invalid network: {}",
+                s.to_string()
+            ))),
+        }
+    }
+}
+
+impl Display for Network {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        match *self {
+            Network::Mainnet => f.write_str("mainnet"),
+            Network::Rinkeby => f.write_str("rinkeby"),
+        }
+    }
+}
+
+impl<DB: Backend> ToSql<Integer, DB> for Network
+where
+    i32: ToSql<Integer, DB>,
+{
+    fn to_sql<W: std::io::Write>(&self, out: &mut Output<W, DB>) -> diesel::serialize::Result {
+        (*self as i32).to_sql(out)
+    }
+}
+
+impl<DB> FromSql<Integer, DB> for Network
+where
+    i32: FromSql<Integer, DB>,
+    DB: Backend,
+{
+    fn from_sql(bytes: Option<&DB::RawValue>) -> deserialize::Result<Self> {
+        Ok(match i32::from_sql(bytes)? {
+            1 => Network::Mainnet,
+            4 => Network::Rinkeby,
+            _ => return Err(anyhow::anyhow!("invalid value").into()),
+        })
+    }
 }

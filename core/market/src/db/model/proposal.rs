@@ -1,5 +1,6 @@
 use chrono::{Duration, NaiveDateTime, TimeZone, Utc};
 use diesel::sql_types::Text;
+use serde::{Deserialize, Serialize};
 
 use ya_client::model::market::proposal::{Proposal as ClientProposal, State};
 use ya_client::model::market::NewProposal;
@@ -8,7 +9,7 @@ use ya_diesel_utils::DbTextField;
 use ya_market_resolver::flatten::{flatten_json, JsonObjectExpected};
 
 use super::{generate_random_id, SubscriptionId};
-use super::{OwnerType, ProposalId};
+use super::{Owner, ProposalId};
 use crate::db::model::agreement::AgreementId;
 use crate::db::model::proposal_id::ProposalIdValidationError;
 use crate::db::model::Demand as ModelDemand;
@@ -28,6 +29,8 @@ use crate::protocol::negotiation::messages::ProposalContent;
     Debug,
     Clone,
     Copy,
+    Serialize,
+    Deserialize,
 )]
 #[sql_type = "Text"]
 pub enum ProposalState {
@@ -55,7 +58,7 @@ pub enum ProposalState {
     Copy,
 )]
 #[sql_type = "Text"]
-pub enum IssuerType {
+pub enum Issuer {
     Us = 0,
     Them = 1,
 }
@@ -104,7 +107,7 @@ pub struct DbProposal {
     pub id: ProposalId,
     pub prev_proposal_id: Option<ProposalId>,
 
-    pub issuer: IssuerType,
+    pub issuer: Issuer,
     pub negotiation_id: String,
 
     pub properties: String,
@@ -124,17 +127,17 @@ pub struct Proposal {
 
 impl Proposal {
     pub fn new_requestor(demand: ModelDemand, offer: ModelOffer) -> Proposal {
-        let negotiation = Negotiation::from_subscriptions(&demand, &offer, OwnerType::Requestor);
+        let negotiation = Negotiation::from_subscriptions(&demand, &offer, Owner::Requestor);
         let creation_ts = Utc::now().naive_utc();
         // TODO: How to set expiration? Config?
         let expiration_ts = creation_ts + Duration::minutes(10);
         let proposal_id =
-            ProposalId::generate_id(&offer.id, &demand.id, &creation_ts, OwnerType::Requestor);
+            ProposalId::generate_id(&offer.id, &demand.id, &creation_ts, Owner::Requestor);
 
         let proposal = DbProposal {
             id: proposal_id,
             prev_proposal_id: None,
-            issuer: IssuerType::Them,
+            issuer: Issuer::Them,
             negotiation_id: negotiation.id.clone(),
             properties: offer.properties,
             constraints: offer.constraints,
@@ -142,7 +145,6 @@ impl Proposal {
             creation_ts,
             expiration_ts,
         };
-
         Proposal {
             body: proposal,
             negotiation,
@@ -159,18 +161,18 @@ impl Proposal {
             requestor_id,
             &offer.id,
             offer.node_id,
-            OwnerType::Provider,
+            Owner::Provider,
         );
 
         // TODO: Initial proposal id will differ on Requestor and Provider!!
         let creation_ts = Utc::now().naive_utc();
         let proposal_id =
-            ProposalId::generate_id(&offer.id, &demand_id, &creation_ts, OwnerType::Provider);
+            ProposalId::generate_id(&offer.id, &demand_id, &creation_ts, Owner::Provider);
 
         let proposal = DbProposal {
             id: proposal_id,
             prev_proposal_id: None,
-            issuer: IssuerType::Us, // Requestor market generated this Offer originally, but it's like we are issuer.
+            issuer: Issuer::Us, // Requestor market generated this Offer originally, but it's like we are issuer.
             negotiation_id: negotiation.id.clone(),
             properties: offer.properties,
             constraints: offer.constraints,
@@ -189,7 +191,7 @@ impl Proposal {
         // TODO: validate demand_proposal.proposal_id with newly generated proposal_id
         let proposal = DbProposal {
             id: proposal.proposal_id,
-            issuer: IssuerType::Them,
+            issuer: Issuer::Them,
             prev_proposal_id: Some(self.body.id.clone()),
             negotiation_id: self.negotiation.id.clone(),
             properties: proposal.properties,
@@ -220,7 +222,7 @@ impl Proposal {
         let proposal = DbProposal {
             id: proposal_id,
             prev_proposal_id: Some(self.body.id.clone()),
-            issuer: IssuerType::Us,
+            issuer: Issuer::Us,
             negotiation_id: self.negotiation.id.clone(),
             properties: flatten_json(&proposal.properties)?.to_string(),
             constraints: proposal.constraints.clone(),
@@ -257,13 +259,13 @@ impl Proposal {
 
     pub fn issuer(&self) -> NodeId {
         match self.body.issuer {
-            IssuerType::Us => match self.body.id.owner() {
-                OwnerType::Requestor => self.negotiation.requestor_id.clone(),
-                OwnerType::Provider => self.negotiation.provider_id.clone(),
+            Issuer::Us => match self.body.id.owner() {
+                Owner::Requestor => self.negotiation.requestor_id.clone(),
+                Owner::Provider => self.negotiation.provider_id.clone(),
             },
-            IssuerType::Them => match self.body.id.owner() {
-                OwnerType::Requestor => self.negotiation.provider_id.clone(),
-                OwnerType::Provider => self.negotiation.requestor_id.clone(),
+            Issuer::Them => match self.body.id.owner() {
+                Owner::Requestor => self.negotiation.provider_id.clone(),
+                Owner::Provider => self.negotiation.requestor_id.clone(),
             },
         }
     }
@@ -278,11 +280,7 @@ impl Proposal {
 }
 
 impl Negotiation {
-    fn from_subscriptions(
-        demand: &ModelDemand,
-        offer: &ModelOffer,
-        role: OwnerType,
-    ) -> Negotiation {
+    fn from_subscriptions(demand: &ModelDemand, offer: &ModelOffer, role: Owner) -> Negotiation {
         Negotiation::new(&demand.id, demand.node_id, &offer.id, offer.node_id, role)
     }
 
@@ -291,11 +289,11 @@ impl Negotiation {
         requestor_id: NodeId,
         offer_id: &SubscriptionId,
         provider_id: NodeId,
-        role: OwnerType,
+        role: Owner,
     ) -> Negotiation {
         let subscription_id = match role {
-            OwnerType::Provider => offer_id.clone(),
-            OwnerType::Requestor => demand_id.clone(),
+            Owner::Provider => offer_id.clone(),
+            Owner::Requestor => demand_id.clone(),
         };
 
         Negotiation {

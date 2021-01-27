@@ -5,16 +5,15 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 
-use ya_client::model::market::{event::RequestorEvent, NewProposal};
+use ya_client::model::market::{event::RequestorEvent, NewProposal, Reason};
 use ya_client::model::{node_id::ParseError, NodeId};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::db::{
-    dao::{AgreementDao, NegotiationEventsDao, ProposalDao, SaveAgreementError, StateError},
+    dao::{AgreementDao, AgreementDaoError, SaveAgreementError},
     model::{Agreement, AgreementId, AgreementState, AppSessionId},
-    model::{Demand, IssuerType, OwnerType, Proposal, ProposalId, SubscriptionId},
-    DbResult,
+    model::{Demand, Issuer, Owner, ProposalId, SubscriptionId},
 };
 use crate::matcher::{store::SubscriptionStore, RawProposal};
 use crate::protocol::negotiation::{error::*, messages::*, requestor::NegotiationApi};
@@ -51,16 +50,20 @@ impl RequestorBroker {
 
         let broker1 = broker.clone();
         let broker2 = broker.clone();
+        let broker_proposal_reject = broker.clone();
         let broker_terminated = broker.clone();
-        let notifier = broker.negotiation_notifier.clone();
 
         let api = NegotiationApi::new(
             move |caller: String, msg: ProposalReceived| {
                 broker1
                     .clone()
-                    .on_proposal_received(caller, msg, OwnerType::Requestor)
+                    .on_proposal_received(msg, caller, Owner::Provider)
             },
-            move |_caller: String, _msg: ProposalRejected| async move { unimplemented!() },
+            move |caller: String, msg: ProposalRejected| {
+                broker_proposal_reject
+                    .clone()
+                    .on_proposal_rejected(msg, caller, Owner::Provider)
+            },
             move |caller: String, msg: AgreementApproved| {
                 on_agreement_approved(broker2.clone(), caller, msg)
             },
@@ -68,32 +71,35 @@ impl RequestorBroker {
             move |caller: String, msg: AgreementTerminated| {
                 broker_terminated
                     .clone()
-                    .on_agreement_terminated(caller, msg, OwnerType::Requestor)
+                    .on_agreement_terminated(msg, caller, Owner::Provider)
             },
         );
 
         let engine = RequestorBroker {
             api,
-            common: broker,
+            common: broker.clone(),
         };
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
         // until first change to value will be made.
-        counter!("market.agreements.requestor.created", 0);
-        counter!("market.agreements.requestor.confirmed", 0);
-        counter!("market.agreements.requestor.approved", 0);
-        counter!("market.agreements.requestor.rejected", 0);
-        counter!("market.agreements.requestor.cancelled", 0);
-        counter!("market.proposals.requestor.generated", 0);
-        counter!("market.proposals.requestor.received", 0);
-        counter!("market.proposals.requestor.countered", 0);
-        counter!("market.events.requestor.queried", 0);
         counter!("market.agreements.events.queried", 0);
+        counter!("market.agreements.requestor.approved", 0);
+        counter!("market.agreements.requestor.cancelled", 0);
+        counter!("market.agreements.requestor.confirmed", 0);
+        counter!("market.agreements.requestor.created", 0);
+        counter!("market.agreements.requestor.rejected", 0);
         counter!("market.agreements.requestor.terminated", 0);
         counter!("market.agreements.requestor.terminated.reason", 0, "reason" => "NotSpecified");
         counter!("market.agreements.requestor.terminated.reason", 0, "reason" => "Success");
+        counter!("market.events.requestor.queried", 0);
+        counter!("market.proposals.requestor.countered", 0);
+        counter!("market.proposals.requestor.generated", 0);
+        counter!("market.proposals.requestor.received", 0);
+        counter!("market.proposals.requestor.rejected.by-them", 0);
+        counter!("market.proposals.requestor.rejected.by-us", 0);
+        counter!("market.proposals.self-reaction-attempt", 0);
 
-        tokio::spawn(proposal_receiver_thread(db, proposal_receiver, notifier));
+        tokio::spawn(proposal_receiver_thread(broker, proposal_receiver));
         Ok(engine)
     }
 
@@ -111,32 +117,8 @@ impl RequestorBroker {
         Ok(())
     }
 
-    pub async fn unsubscribe_demand(
-        &self,
-        demand_id: &SubscriptionId,
-    ) -> Result<(), NegotiationError> {
-        self.common
-            .negotiation_notifier
-            .stop_notifying(demand_id)
-            .await;
-
-        // We can ignore error, if removing events failed, because they will be never
-        // queried again and don't collide with other subscriptions.
-        let _ = self
-            .common
-            .db
-            .as_dao::<NegotiationEventsDao>()
-            .remove_events(demand_id)
-            .await
-            .map_err(|e| {
-                log::warn!(
-                    "Failed to remove events related to subscription [{}]. Error: {}.",
-                    demand_id,
-                    e
-                )
-            });
-        // TODO: We could remove all resources related to Proposals.
-        Ok(())
+    pub async fn unsubscribe_demand(&self, id: &SubscriptionId) -> Result<(), NegotiationError> {
+        self.common.unsubscribe(id).await
     }
 
     pub async fn counter_proposal(
@@ -148,7 +130,13 @@ impl RequestorBroker {
     ) -> Result<ProposalId, ProposalError> {
         let (new_proposal, is_first) = self
             .common
-            .counter_proposal(demand_id, prev_proposal_id, proposal, OwnerType::Requestor)
+            .counter_proposal(
+                demand_id,
+                prev_proposal_id,
+                proposal,
+                &id.identity,
+                Owner::Requestor,
+            )
             .await?;
 
         let proposal_id = new_proposal.body.id.clone();
@@ -171,28 +159,30 @@ impl RequestorBroker {
         Ok(proposal_id)
     }
 
-    // TODO: this is only mock implementation not to throw 501
     pub async fn reject_proposal(
         &self,
-        _demand_id: &SubscriptionId,
+        demand_id: &SubscriptionId,
         proposal_id: &ProposalId,
         id: &Identity,
+        reason: Option<Reason>,
     ) -> Result<(), ProposalError> {
-        // self.common
-        //     .reject_proposal(demand_id, proposal_id, OwnerType::Requestor)
-        //     .await?;
-        //
-        // self.api
-        //     .reject_proposal(id, proposal_id, TODO: provider_id)
-        //     .await
-        //     .map_err(|e| ProposalError::Send(proposal_id.clone(), e))?;
+        let proposal = self
+            .common
+            .reject_proposal(
+                Some(demand_id),
+                proposal_id,
+                &id.identity,
+                Owner::Requestor,
+                &reason,
+            )
+            .await?;
 
-        counter!("market.proposals.requestor.rejected", 1);
-        log::info!(
-            "Requestor {} rejected Proposal [{}]",
-            id.display(),
-            &proposal_id,
-        );
+        self.api
+            .reject_proposal(id.identity, &proposal, reason.clone())
+            .await?;
+
+        counter!("market.proposals.requestor.rejected.by-us", 1);
+
         Ok(())
     }
 
@@ -204,7 +194,7 @@ impl RequestorBroker {
     ) -> Result<Vec<RequestorEvent>, QueryEventsError> {
         let events = self
             .common
-            .query_events(demand_id, timeout, max_events, OwnerType::Requestor)
+            .query_events(demand_id, timeout, max_events, Owner::Requestor)
             .await?;
 
         // Map model events to client RequestorEvent.
@@ -212,7 +202,7 @@ impl RequestorBroker {
             .then(|event| event.into_client_requestor_event(&self.common.db))
             .inspect(|result| {
                 if let Err(error) = result {
-                    log::warn!("Error converting event to client type: {}", error);
+                    log::error!("Error converting event to client type: {}", error);
                 }
             })
             .filter_map(|event| async move { event.ok() })
@@ -249,7 +239,7 @@ impl RequestorBroker {
 
         // We can promote only Proposals, that we got from Provider.
         // Can't promote our own Proposal.
-        if offer_proposal.body.issuer != IssuerType::Them {
+        if offer_proposal.body.issuer != Issuer::Them {
             return Err(AgreementError::OwnProposal(proposal_id.clone()));
         }
 
@@ -268,7 +258,7 @@ impl RequestorBroker {
             demand_proposal,
             offer_proposal,
             valid_to.naive_utc(),
-            OwnerType::Requestor,
+            Owner::Requestor,
         );
         let agreement_id = agreement.id.clone();
         self.common
@@ -363,25 +353,24 @@ impl RequestorBroker {
     ) -> Result<(), AgreementError> {
         let dao = self.common.db.as_dao::<AgreementDao>();
 
-        let mut agreement = match dao
+        let agreement = match dao
             .select(
                 agreement_id,
                 Some(id.identity.clone()),
                 Utc::now().naive_utc(),
             )
             .await
-            .map_err(|e| AgreementError::Get(agreement_id.clone(), e))?
+            .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
         {
-            None => return Err(AgreementError::NotFound(agreement_id.clone())),
+            None => return Err(AgreementError::NotFound(agreement_id.to_string())),
             Some(agreement) => agreement,
         };
 
-        expect_state(&agreement, AgreementState::Proposal)?;
+        validate_transition(&agreement, AgreementState::Pending)?;
 
         // TODO : possible race condition here ISSUE#430
         // 1. this state check should be also `db.update_state`
         // 2. `db.update_state` must be invoked after successful propose_agreement
-        agreement.state = AgreementState::Pending;
         self.api.propose_agreement(&agreement).await?;
         dao.confirm(agreement_id, &app_session_id)
             .await
@@ -449,12 +438,14 @@ async fn agreement_approved(
         .approve(&msg.agreement_id, &None)
         .await
         .map_err(|err| match err {
-            StateError::InvalidTransition { id, from, .. } => {
+            AgreementDaoError::InvalidTransition { from, .. } => {
                 match from {
                     // Expired Agreement could be InvalidState either, but we want to explicit
                     // say to provider, that Agreement has expired.
-                    AgreementState::Expired => RemoteAgreementError::Expired(id),
-                    _ => RemoteAgreementError::InvalidState(id, from),
+                    AgreementState::Expired => {
+                        RemoteAgreementError::Expired(msg.agreement_id.clone())
+                    }
+                    _ => RemoteAgreementError::InvalidState(msg.agreement_id.clone(), from),
                 }
             }
             e => {
@@ -478,40 +469,14 @@ async fn agreement_approved(
 }
 
 pub async fn proposal_receiver_thread(
-    db: DbExecutor,
+    broker: CommonBroker,
     mut proposal_receiver: UnboundedReceiver<RawProposal>,
-    notifier: EventNotifier<SubscriptionId>,
 ) {
     while let Some(proposal) = proposal_receiver.recv().await {
-        let db = db.clone();
-        let notifier = notifier.clone();
+        let broker = broker.clone();
         match async move {
             log::debug!("Got matching Offer-Demand pair; emitting as Proposal to Requestor.");
-
-            // Add proposal to database together with Negotiation record.
-            let proposal = Proposal::new_requestor(proposal.demand, proposal.offer);
-            let proposal = db
-                .as_dao::<ProposalDao>()
-                .save_initial_proposal(proposal)
-                .await?;
-
-            log::info!(
-                "New Proposal [{}] (Offer [{}], Demand [{}])",
-                proposal.body.id,
-                proposal.negotiation.offer_id,
-                proposal.negotiation.demand_id
-            );
-
-            // Create Proposal Event and add it to queue (database).
-            let subscription_id = proposal.negotiation.subscription_id.clone();
-            db.as_dao::<NegotiationEventsDao>()
-                .add_proposal_event(proposal, OwnerType::Requestor)
-                .await?;
-
-            // Send channel message to wake all query_events waiting for proposals.
-            counter!("market.proposals.requestor.generated", 1);
-            notifier.notify(&subscription_id).await;
-            DbResult::<()>::Ok(())
+            broker.generate_proposal(proposal).await
         }
         .await
         {
