@@ -59,9 +59,7 @@ pub trait PaymentDriver {
     /// Tells whether account initialization is needed for receiving payments.
     fn recv_init_required(&self) -> bool;
 
-    #[deprecated(
-        note = "Drivers should return very big number (e.g. `1_000_000_000_000_000_000u64` or the whole token supply)."
-    )]
+    /// NOTE: DEPRECATED. Drivers should return very big number (e.g. `1_000_000_000_000_000_000u64` or the whole token supply)
     /// Gets the balance of the funds sent from the sender to the recipient.
     async fn get_transaction_balance(
         &self,
@@ -96,7 +94,7 @@ pub trait PaymentDriver {
         msg: SchedulePayment,
     ) -> Result<String, GenericError>;
 
-    /// Verifies the payment transaction specified by transaction's hash.
+    /// Verifies the payment transaction by transaction's confirmation (transaction's identifier).
     async fn verify_payment(
         &self,
         db: DbExecutor,
@@ -105,7 +103,7 @@ pub trait PaymentDriver {
     ) -> Result<PaymentDetails, GenericError>;
 
     /// Validates that allocated funds are still sufficient to cover
-    /// the costs of the task (including the cost of the Gas).
+    /// the costs of the task (including the transaction fees, e.g. Ethereum's Gas).
     /// Allocation is created when the requestor publishes the task on the market.
     async fn validate_allocation(
         &self,

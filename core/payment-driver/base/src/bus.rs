@@ -149,6 +149,7 @@ pub async fn sign(node_id: NodeId, payload: Vec<u8>) -> Result<Vec<u8>, GenericE
 
 /// Notifies the Payment service that the scheduled payment is processed successfully.
 /// It also links the PaymentDriver::schedule_payment `order_id` with the `confirmation` (e.g. transaction's hash).
+/// This notification leads to `verify_payment` call on the provider side.
 pub async fn notify_payment(
     driver_name: &str,
     platform: &str,
