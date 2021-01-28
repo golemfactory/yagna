@@ -47,7 +47,7 @@ ya-utils-futures = "0.1"
 ya-utils-process = { version = "0.1", features = ["lock"] }
 ya-version = "0.1"
 
-gftp = "0.1" # just to enable gftp build for cargo-deb
+gftp = { version = "0.1", optional = true } # just to enable gftp build for cargo-deb
 ya-provider = { version = "0.1", optional = true } # just to enable conditionally running some tests
 
 actix-rt = "1.0"
