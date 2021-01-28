@@ -29,6 +29,7 @@ async fn skip_version_gsb(
         Ok(r) => Ok(r.map(|r| {
             let r = r.into();
             log::info!("{}", ReleaseMessage::Skipped(&r));
+            counter!("version.skip", 1);
             r
         })),
         Err(e) => Err(e.to_string().into()),

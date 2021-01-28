@@ -1,4 +1,3 @@
-use metrics::counter;
 use structopt::{clap::AppSettings, StructOpt};
 
 use ya_core_model::version;
@@ -41,10 +40,7 @@ impl VersionCLI {
                     .send(version::Skip())
                     .await??
                 {
-                    Some(r) => {
-                        counter!("version.skip", 1);
-                        ReleaseMessage::Skipped(&r).to_string()
-                    }
+                    Some(r) => ReleaseMessage::Skipped(&r).to_string(),
                     None => ReleaseMessage::NotSkipped.to_string(),
                 },
             ),

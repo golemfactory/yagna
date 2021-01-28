@@ -273,6 +273,7 @@ mod test {
         checker
     }
 
+    #[cfg_attr(not(feature = "time-dependent-tests"), ignore)]
     #[actix_rt::test]
     async fn test_deadline_checker_single_agreement() {
         let receiver = DeadlineReceiver::new();
@@ -326,6 +327,7 @@ mod test {
         assert_eq!(deadlined[0].id, 6.to_string());
     }
 
+    #[cfg_attr(not(feature = "time-dependent-tests"), ignore)]
     #[actix_rt::test]
     async fn test_deadline_checker_near_deadlines() {
         let receiver = DeadlineReceiver::new();
@@ -366,6 +368,7 @@ mod test {
         assert_eq!(deadlined[5].id, 5.to_string());
     }
 
+    #[cfg_attr(not(feature = "time-dependent-tests"), ignore)]
     #[actix_rt::test]
     async fn test_deadline_checker_insert_deadlines_between() {
         let receiver = DeadlineReceiver::new();
@@ -424,6 +427,7 @@ mod test {
         assert_eq!(deadlined[3].id, 3.to_string());
     }
 
+    #[cfg_attr(not(feature = "time-dependent-tests"), ignore)]
     #[actix_rt::test]
     async fn test_deadline_checker_multi_agreements() {
         let receiver = DeadlineReceiver::new();
@@ -455,6 +459,7 @@ mod test {
         assert_eq!(deadlined[4].id, 1.to_string());
     }
 
+    #[cfg_attr(not(feature = "time-dependent-tests"), ignore)]
     #[actix_rt::test]
     async fn test_deadline_checker_stop_tracking() {
         let receiver = DeadlineReceiver::new();
