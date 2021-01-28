@@ -7995,6 +7995,7 @@ dependencies = [
  "ya-net",
  "ya-payment",
  "ya-persistence",
+ "ya-provider",
  "ya-sb-proto",
  "ya-sb-router",
  "ya-service-api",
