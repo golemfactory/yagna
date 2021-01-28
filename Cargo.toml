@@ -22,7 +22,6 @@ name = "yagna"
 path = "core/serv/src/main.rs"
 
 [dependencies]
-gftp = "0.1" # just to enable gftp build for cargo-deb
 ya-activity = "0.2"
 ya-compile-time-utils = "0.1"
 ya-dummy-driver = { version = "0.1", optional = true }
@@ -47,6 +46,9 @@ ya-utils-path = "0.1"
 ya-utils-futures = "0.1"
 ya-utils-process = { version = "0.1", features = ["lock"] }
 ya-version = "0.1"
+
+gftp = "0.1" # just to enable gftp build for cargo-deb
+ya-provider = { version = "0.1", optional = true } # just to enable conditionally running some tests
 
 actix-rt = "1.0"
 actix-service = "1.0"
@@ -191,3 +193,4 @@ ya-utils-path = { path = "utils/path"}
 ya-utils-process = { path = "utils/process"}
 ya-diesel-utils = { path = "utils/diesel-utils"}
 ya-metrics = { path = "core/metrics" }
+ya-provider = { path = "agent/provider"}
