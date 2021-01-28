@@ -386,9 +386,10 @@ mod local {
             .await
             .map_err(Error::from)?;
 
+        let map_entry = |(k, v): (State, _)| (format!("{:?}", k), v);
         Ok(StatsResult {
-            total,
-            last_1h,
+            total: total.into_iter().map(map_entry).collect(),
+            last_1h: last_1h.into_iter().map(map_entry).collect(),
             last_activity_ts: None,
         })
     }
