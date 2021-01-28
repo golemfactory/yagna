@@ -211,6 +211,25 @@ impl RpcMessage for Subscribe {
     type Error = Error;
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupId {
+    pub node_id: NodeId,
+    pub file_path: Option<String>,
+}
+
+impl BackupId {
+    pub fn new(node_id: NodeId, file_path: Option<String>) -> Self {
+        Self { node_id, file_path }
+    }
+}
+
+impl RpcMessage for BackupId {
+    const ID: &'static str = "BackupId";
+    type Item = Option<IdentityInfo>;
+    type Error = Error;
+}
+
 pub mod event {
     use super::Error;
     use serde::{Deserialize, Serialize};

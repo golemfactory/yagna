@@ -119,7 +119,6 @@ pub enum IdentityCommand {
     /// Update given identity
     Update {
         /// Identity to update
-        #[structopt(default_value = "")]
         alias_or_id: NodeOrAlias,
         #[structopt(long)]
         alias: Option<String>,
@@ -131,6 +130,16 @@ pub enum IdentityCommand {
     Drop {
         /// Identity alias to drop
         node_or_alias: NodeOrAlias,
+    },
+
+    /// Backup given identity to a file
+    Backup {
+        /// Identity alias to backup
+        node_or_alias: Option<NodeOrAlias>,
+
+        /// File path where identity will be written. Defaults to `stdout`
+        #[structopt(long = "file-path")]
+        file_path: Option<PathBuf>,
     },
 }
 
@@ -261,6 +270,34 @@ impl IdentityCommand {
                     bus::service(identity::BUS_ID)
                         .send(identity::DropId::with_id(id.node_id))
                         .await
+                        .map_err(|e| anyhow::Error::msg(e))?,
+                )
+            }
+            IdentityCommand::Backup {
+                node_or_alias,
+                file_path,
+            } => {
+                let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
+                let file_path = if let Some(file) = file_path {
+                    let parent = file.parent().unwrap();
+                    if !parent.is_dir() {
+                        anyhow::bail!(
+                            "Directory '{:?}' does not exists or is write protected",
+                            parent
+                        )
+                    }
+                    if file.is_file() {
+                        anyhow::bail!("File already exists")
+                    }
+                    Some(file.to_str().unwrap().to_owned())
+                } else {
+                    None
+                };
+
+                CommandOutput::object(
+                    bus::service(identity::BUS_ID)
+                        .send(identity::BackupId::new(node_id, file_path))
+                        .await?
                         .map_err(|e| anyhow::Error::msg(e))?,
                 )
             }
