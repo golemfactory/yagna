@@ -132,9 +132,9 @@ pub enum IdentityCommand {
         node_or_alias: NodeOrAlias,
     },
 
-    /// Backup given identity to a file
-    Backup {
-        /// Identity alias to backup
+    /// Exports given identity to a file | stdout
+    Export {
+        /// Identity alias to export
         node_or_alias: Option<NodeOrAlias>,
 
         /// File path where identity will be written. Defaults to `stdout`
@@ -273,7 +273,7 @@ impl IdentityCommand {
                         .map_err(|e| anyhow::Error::msg(e))?,
                 )
             }
-            IdentityCommand::Backup {
+            IdentityCommand::Export {
                 node_or_alias,
                 file_path,
             } => {
