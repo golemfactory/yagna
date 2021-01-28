@@ -119,6 +119,7 @@ pub enum IdentityCommand {
     /// Update given identity
     Update {
         /// Identity to update
+        #[structopt(default_value = "")]
         alias_or_id: NodeOrAlias,
         #[structopt(long)]
         alias: Option<String>,
