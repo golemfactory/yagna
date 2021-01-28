@@ -56,6 +56,24 @@ pub fn set_amount_accepted(
     agreement::increase_amount_accepted(&agreement_id, owner_id, &amount_delta, conn)
 }
 
+pub fn increase_amount_scheduled(
+    activity_id: &String,
+    owner_id: &NodeId,
+    amount: &BigDecimal,
+    conn: &ConnType,
+) -> DbResult<()> {
+    assert!(amount > &BigDecimal::zero().into()); // TODO: Remove when payment service is production-ready.
+    let activity: WriteObj = dsl::pay_activity
+        .find((activity_id, owner_id))
+        .first(conn)?;
+    let total_amount_scheduled: BigDecimalField =
+        (&activity.total_amount_scheduled.0 + amount).into();
+    diesel::update(&activity)
+        .set(dsl::total_amount_scheduled.eq(total_amount_scheduled))
+        .execute(conn)?;
+    agreement::increase_amount_scheduled(&activity.agreement_id, owner_id, amount, conn)
+}
+
 pub fn increase_amount_paid(
     activity_id: &String,
     owner_id: &NodeId,
@@ -140,6 +158,7 @@ impl<'a> ActivityDao<'a> {
                     dsl::agreement_id,
                     dsl::total_amount_due,
                     dsl::total_amount_accepted,
+                    dsl::total_amount_scheduled,
                     dsl::total_amount_paid,
                     agreement_dsl::peer_id,
                     agreement_dsl::payee_addr,

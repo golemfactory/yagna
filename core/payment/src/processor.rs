@@ -322,6 +322,9 @@ impl PaymentProcessor {
         let payer_addr = msg.sender;
         let payee_addr = msg.recipient;
 
+        if msg.order_ids.len() == 0 {
+            return Err(OrderValidationError::new("order_ids is empty").into());
+        }
         let orders = self
             .db_executor
             .as_dao::<OrderDao>()

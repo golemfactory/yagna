@@ -314,7 +314,7 @@ async fn accept_invoice(
         }
         Err(e) => return response::server_error(&e),
     };
-    let amount_to_pay = &invoice.amount - &agreement.total_amount_accepted.0;
+    let amount_to_pay = &invoice.amount - &agreement.total_amount_scheduled.0;
 
     let allocation = match db
         .as_dao::<AllocationDao>()
@@ -327,7 +327,6 @@ async fn accept_invoice(
         }
         Err(e) => return response::server_error(&e),
     };
-    // FIXME: remaining amount should be 'locked' until payment is done to avoid double spending
     if amount_to_pay > allocation.remaining_amount {
         let msg = format!(
             "Not enough funds. Allocated: {} Needed: {}",
@@ -347,7 +346,9 @@ async fn accept_invoice(
                 .service(PUBLIC_SERVICE)
                 .call(accept_msg)
                 .await??;
-            bus::service(LOCAL_SERVICE).send(schedule_msg).await??;
+            if let Some(msg) = schedule_msg {
+                bus::service(LOCAL_SERVICE).send(msg).await??;
+            }
             dao.accept(invoice_id, node_id).await?;
 
             counter!("payment.invoices.requestor.accepted", 1);
