@@ -1,20 +1,23 @@
+use crate::SUBSCRIPTIONS;
 use actix_rt::Arbiter;
 use futures::channel::oneshot;
-use futures::{future, Future, FutureExt};
+use futures::{future, Future, FutureExt, StreamExt, TryFutureExt};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
+use ya_core_model::net;
+use ya_core_model::net::local::BindBroadcastError;
 use ya_service_bus::connection::CallRequestHandler;
-use ya_service_bus::{Error, ResponseChunk};
+use ya_service_bus::{typed as bus, Error, ResponseChunk, RpcEndpoint};
 
-pub struct CentralBusHandler<F1, F2> {
-    call_handler: F1,
-    event_handler: F2,
+pub struct CentralBusHandler<C, E> {
+    call_handler: C,
+    event_handler: E,
     tx: Option<oneshot::Sender<()>>,
 }
 
-impl<F1, F2> CentralBusHandler<F1, F2> {
-    pub fn new(call_handler: F1, event_handler: F2) -> (Self, oneshot::Receiver<()>) {
+impl<C, E> CentralBusHandler<C, E> {
+    pub fn new(call_handler: C, event_handler: E) -> (Self, oneshot::Receiver<()>) {
         let (tx, rx) = oneshot::channel();
         (
             Self {
@@ -27,13 +30,13 @@ impl<F1, F2> CentralBusHandler<F1, F2> {
     }
 }
 
-impl<R, F1, F2> CallRequestHandler for CentralBusHandler<F1, F2>
+impl<C, E, S> CallRequestHandler for CentralBusHandler<C, E>
 where
-    R: futures::Stream<Item = Result<ResponseChunk, Error>> + Unpin,
-    F1: FnMut(String, String, String, Vec<u8>) -> R,
-    F2: FnMut(String, String, Vec<u8>),
+    C: FnMut(String, String, String, Vec<u8>) -> S,
+    E: FnMut(String, String, Vec<u8>),
+    S: futures::Stream<Item = Result<ResponseChunk, Error>> + Unpin,
 {
-    type Reply = R;
+    type Reply = S;
 
     fn do_call(
         &mut self,
@@ -54,28 +57,44 @@ where
     }
 }
 
-pub(crate) async fn auto_rebind<F, Fut>(f: F)
+#[inline]
+pub(crate) async fn auto_rebind<B, U, Fb, Fu, Fr, E>(bind: B, unbind: U)
 where
-    F: FnMut() -> Fut + 'static,
-    Fut: Future<Output = std::io::Result<oneshot::Receiver<()>>> + 'static,
+    B: FnMut() -> Fb + 'static,
+    U: FnMut() -> Fu + 'static,
+    Fb: Future<Output = std::io::Result<Fr>> + 'static,
+    Fu: Future<Output = ()> + 'static,
+    Fr: Future<Output = Result<(), E>> + 'static,
+    E: 'static,
 {
-    rebind(Default::default(), f).await
+    rebind(Default::default(), bind, Rc::new(RefCell::new(unbind))).await;
 }
 
-async fn rebind<F, Fut>(reconnect: Rc<RefCell<ReconnectContext>>, mut f: F)
-where
-    F: FnMut() -> Fut + 'static,
-    Fut: Future<Output = std::io::Result<oneshot::Receiver<()>>> + 'static,
+async fn rebind<B, U, Fb, Fu, Fr, E>(
+    reconnect: Rc<RefCell<ReconnectContext>>,
+    mut bind: B,
+    unbind: Rc<RefCell<U>>,
+) where
+    B: FnMut() -> Fb + 'static,
+    U: FnMut() -> Fu + 'static,
+    Fb: Future<Output = std::io::Result<Fr>> + 'static,
+    Fu: Future<Output = ()> + 'static,
+    Fr: Future<Output = Result<(), E>> + 'static,
+    E: 'static,
 {
     let (tx, rx) = oneshot::channel();
+    let unbind_clone = unbind.clone();
 
     loop {
-        match f().await {
+        match bind().await {
             Ok(dc_rx) => {
                 reconnect.replace(Default::default());
+                resubscribe().await;
+
                 Arbiter::spawn(async move {
                     if let Ok(_) = dc_rx.await {
                         log::warn!("Handlers disconnected");
+                        (*unbind_clone.borrow_mut())().await;
                         let _ = tx.send(());
                     }
                 });
@@ -92,7 +111,20 @@ where
             }
         }
     }
-    Arbiter::spawn(rx.then(move |_| rebind(reconnect, f).then(|_| future::ready(()))));
+    Arbiter::spawn(rx.then(move |_| rebind(reconnect, bind, unbind).then(|_| future::ready(()))));
+}
+
+async fn resubscribe() {
+    futures::stream::iter({ SUBSCRIPTIONS.lock().unwrap().clone() }.into_iter())
+        .for_each(|msg| {
+            let topic = msg.topic().to_owned();
+            async move {
+                Ok::<_, BindBroadcastError>(bus::service(net::local::BUS_ID).send(msg).await??)
+            }
+            .map_err(move |e| log::error!("Failed to subscribe {}: {}", topic, e))
+            .then(|_| futures::future::ready(()))
+        })
+        .await;
 }
 
 pub struct ReconnectContext {
