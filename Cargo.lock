@@ -7994,6 +7994,7 @@ dependencies = [
  "lazy_static",
  "log",
  "openssl",
+ "openssl-probe",
  "structopt",
  "tokio 0.2.24",
  "url 2.2.0",
