@@ -334,6 +334,14 @@ impl IdentityService {
         Ok(model::Ack {})
     }
 
+    pub async fn get_key_file(
+        &mut self,
+        key_id: model::GetKeyFile,
+    ) -> Result<String, model::Error> {
+        let key = self.get_key_by_id(&key_id.node_id)?;
+        key.to_key_file().map_err(|e| model::Error::new_err_msg(e))
+    }
+
     pub fn bind_service(me: Arc<Mutex<Self>>) {
         let this = me.clone();
         let _ = bus::bind(model::BUS_ID, move |_list: model::List| {
@@ -432,6 +440,11 @@ impl IdentityService {
         let _ = bus::bind(model::BUS_ID, move |subscribe: model::Subscribe| {
             let this = this.clone();
             async move { this.lock().await.subscribe(subscribe).await }
+        });
+        let this = me.clone();
+        let _ = bus::bind(model::BUS_ID, move |node_id: model::GetKeyFile| {
+            let this = this.clone();
+            async move { this.lock().await.get_key_file(node_id).await }
         });
     }
 }

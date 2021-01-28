@@ -213,20 +213,19 @@ impl RpcMessage for Subscribe {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BackupId {
+pub struct GetKeyFile {
     pub node_id: NodeId,
-    pub file_path: Option<String>,
 }
 
-impl BackupId {
-    pub fn new(node_id: NodeId, file_path: Option<String>) -> Self {
-        Self { node_id, file_path }
+impl GetKeyFile {
+    pub fn new(node_id: NodeId) -> Self {
+        Self { node_id }
     }
 }
 
-impl RpcMessage for BackupId {
-    const ID: &'static str = "BackupId";
-    type Item = Option<IdentityInfo>;
+impl RpcMessage for GetKeyFile {
+    const ID: &'static str = "GetKeyFile";
+    type Item = String;
     type Error = Error;
 }
 
