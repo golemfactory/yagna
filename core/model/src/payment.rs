@@ -59,8 +59,15 @@ pub mod local {
     }
 
     impl SchedulePayment {
-        pub fn from_invoice(invoice: Invoice, allocation_id: String, amount: BigDecimal) -> Self {
-            Self {
+        pub fn from_invoice(
+            invoice: Invoice,
+            allocation_id: String,
+            amount: BigDecimal,
+        ) -> Option<Self> {
+            if amount <= BigDecimal::zero() {
+                return None;
+            }
+            Some(Self {
                 title: PaymentTitle::Invoice(InvoicePayment {
                     invoice_id: invoice.invoice_id,
                     agreement_id: invoice.agreement_id,
@@ -73,7 +80,7 @@ pub mod local {
                 allocation_id,
                 amount,
                 due_date: invoice.payment_due_date,
-            }
+            })
         }
 
         pub fn from_debit_note(
@@ -81,6 +88,9 @@ pub mod local {
             allocation_id: String,
             amount: BigDecimal,
         ) -> Option<Self> {
+            if amount <= BigDecimal::zero() {
+                return None;
+            }
             debit_note.payment_due_date.map(|due_date| Self {
                 title: PaymentTitle::DebitNote(DebitNotePayment {
                     debit_note_id: debit_note.debit_note_id,

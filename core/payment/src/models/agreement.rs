@@ -19,6 +19,7 @@ pub struct WriteObj {
     pub payment_platform: String,
     pub total_amount_due: BigDecimalField,
     pub total_amount_accepted: BigDecimalField,
+    pub total_amount_scheduled: BigDecimalField,
     pub total_amount_paid: BigDecimalField,
     pub app_session_id: Option<String>,
 }
@@ -61,6 +62,7 @@ impl WriteObj {
             payment_platform,
             total_amount_due: Default::default(),
             total_amount_accepted: Default::default(),
+            total_amount_scheduled: Default::default(),
             total_amount_paid: Default::default(),
             app_session_id: agreement.app_session_id,
         }
