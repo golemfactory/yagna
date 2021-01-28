@@ -22,10 +22,17 @@ pub struct EnvConfiguration {
 
 lazy_static! {
     pub static ref RINKEBY_CONFIG: EnvConfiguration = EnvConfiguration {
-        gnt_contract_address: utils::str_to_addr("0xd94e3DC39d4Cad1DAd634e7eb585A57A19dC7EFE")
-            .unwrap(),
+        gnt_contract_address: utils::str_to_addr(
+            &env::var("RINKEBY_TGLM_CONTRACT_ADDRESS")
+                .unwrap_or("0xd94e3DC39d4Cad1DAd634e7eb585A57A19dC7EFE".to_string())
+        )
+        .unwrap(),
         gnt_faucet_address: Some(
-            utils::str_to_addr("0x59259943616265A03d775145a2eC371732E2B06C").unwrap()
+            utils::str_to_addr(
+                &env::var("RINKEBY_TGLM_FAUCET_ADDRESS")
+                    .unwrap_or("0x59259943616265A03d775145a2eC371732E2B06C".to_string())
+            )
+            .unwrap()
         ),
         required_confirmations: {
             match env::var("ERC20_RINKEBY_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
@@ -35,8 +42,11 @@ lazy_static! {
         }
     };
     pub static ref MAINNET_CONFIG: EnvConfiguration = EnvConfiguration {
-        gnt_contract_address: utils::str_to_addr("0x7DD9c5Cba05E151C895FDe1CF355C9A1D5DA6429")
-            .unwrap(),
+        gnt_contract_address: utils::str_to_addr(
+            &env::var("MAINNET_GLM_CONTRACT_ADDRESS")
+                .unwrap_or("0x7DD9c5Cba05E151C895FDe1CF355C9A1D5DA6429".to_string())
+        )
+        .unwrap(),
         gnt_faucet_address: None,
         required_confirmations: {
             match env::var("ERC20_MAINNET_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {

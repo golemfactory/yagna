@@ -278,6 +278,30 @@ pub async fn bind_remote(
     Ok(done_rx)
 }
 
+async fn unbind_remote(nodes: Vec<NodeId>) {
+    let addrs = nodes
+        .into_iter()
+        .map(|node_id| net_service(node_id))
+        .chain(std::iter::once(format!(
+            "{}/{}",
+            local_net::BUS_ID,
+            <SendBroadcastMessage<()> as RpcMessage>::ID
+        )))
+        .chain(
+            [net::BUS_ID, local_net::BUS_ID, "/from"]
+                .iter()
+                .map(|s| s.to_string()),
+        )
+        .collect::<Vec<_>>();
+
+    log::debug!("Unbinding remote handlers");
+    for addr in addrs {
+        if let Err(e) = bus::unbind(addr.as_str()).await {
+            log::error!("Unable to unbind {}: {:?}", addr, e);
+        }
+    }
+}
+
 pub struct Net;
 
 impl Net {
@@ -298,9 +322,13 @@ impl Net {
             .into_iter()
             .map(|id| id.node_id)
             .collect::<Vec<NodeId>>();
+        let ids_clone = ids.clone();
 
-        auto_rebind(move || bind_remote(client_info.clone(), default_id.clone(), ids.clone()))
-            .await;
+        auto_rebind(
+            move || bind_remote(client_info.clone(), default_id.clone(), ids.clone()),
+            move || unbind_remote(ids_clone.clone()),
+        )
+        .await;
         Ok(())
     }
 }

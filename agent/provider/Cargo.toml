@@ -5,6 +5,9 @@ version = "0.1.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
+[features]
+time-dependent-tests = []
+
 [dependencies]
 ya-agreement-utils = "0.2"
 ya-client = { version = "0.4", features = ['cli'] }
