@@ -720,3 +720,54 @@ async fn test_reject_negotiations_same_identity() {
         .unwrap();
     assert_eq!(events.len(), 0);
 }
+
+/// Requestor tries to reject initial Proposal
+/// (Provider Node does not even know that there is a Proposal).
+/// Negotiation attempt should be rejected by Provider Node.
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
+async fn test_reject_initial_offer() {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance("Req-1")
+        .await
+        .add_market_instance("Prov-1")
+        .await;
+
+    let req_mkt = network.get_market("Req-1");
+    let prov_mkt = network.get_market("Prov-1");
+
+    let req_id = network.get_default_id("Req-1");
+    let prov_id = network.get_default_id("Prov-1");
+
+    let demand_id = req_mkt
+        .subscribe_demand(&sample_demand(), &req_id)
+        .await
+        .unwrap();
+    let offer_id = prov_mkt
+        .subscribe_offer(&sample_offer(), &prov_id)
+        .await
+        .unwrap();
+
+    let proposal0 = requestor::query_proposal(&req_mkt, &demand_id, "Initial #R")
+        .await
+        .unwrap();
+
+    let result = req_mkt
+        .requestor_engine
+        .reject_proposal(
+            &demand_id,
+            &proposal0.get_proposal_id().unwrap(),
+            &req_id,
+            Some("dblah".into()),
+        )
+        .await;
+
+    assert!(result.is_err());
+    match result.err().unwrap() {
+        ProposalError::Validation(ProposalValidationError::Unsubscribed(id)) => {
+            assert_eq!(id, offer_id)
+        }
+        e => panic!("Expected ProposalValidationError::Unsubscribed, got: {}", e),
+    }
+}
