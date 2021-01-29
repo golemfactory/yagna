@@ -32,6 +32,9 @@ pub static AGREEMENT_EXPIRATION_PROPERTY: &'static str = "/golem/srv/comp/expira
 // TODO: We should unify properties access in agreement-utils, because it is annoying to use both forms.
 pub static DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY_FLAT: &'static str =
     "golem.com.payment.debit-notes.accept-timeout?";
+
+// Note: Tests are using this.
+#[allow(dead_code)]
 pub static AGREEMENT_EXPIRATION_PROPERTY_FLAT: &'static str = "golem.srv.comp.expiration";
 
 impl LimitExpiration {
