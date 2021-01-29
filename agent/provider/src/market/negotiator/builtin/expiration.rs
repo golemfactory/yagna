@@ -25,6 +25,15 @@ pub struct LimitExpiration {
     min_deadline: i64,
 }
 
+pub static DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY: &'static str =
+    "/golem/com/payment/debit-notes/accept-timeout?";
+pub static AGREEMENT_EXPIRATION_PROPERTY: &'static str = "/golem/srv/comp/expiration";
+
+// TODO: We should unify properties access in agreement-utils, because it is annoying to use both forms.
+pub static DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY_FLAT: &'static str =
+    "golem.com.payment.debit-notes.accept-timeout?";
+pub static AGREEMENT_EXPIRATION_PROPERTY_FLAT: &'static str = "golem.srv.comp.expiration";
+
 impl LimitExpiration {
     pub fn new(config: &AgreementExpirationNegotiatorConfig) -> anyhow::Result<LimitExpiration> {
         let component = LimitExpiration {
@@ -49,9 +58,8 @@ impl LimitExpiration {
 }
 
 fn proposal_expiration_from(proposal: &ProposalView) -> Result<DateTime<Utc>> {
-    let expiration_key_str = "/golem/srv/comp/expiration";
     let value = proposal
-        .pointer(expiration_key_str)
+        .pointer(AGREEMENT_EXPIRATION_PROPERTY)
         .ok_or_else(|| anyhow::anyhow!("Missing expiration key in Proposal"))?
         .clone();
     let timestamp: i64 = serde_json::from_value(value)?;
@@ -59,7 +67,7 @@ fn proposal_expiration_from(proposal: &ProposalView) -> Result<DateTime<Utc>> {
 }
 
 fn debit_deadline_from(proposal: &ProposalView) -> Result<Option<Duration>> {
-    match proposal.pointer_typed::<i64>("/golem/com/payment/debit-notes/acceptance-timeout") {
+    match proposal.pointer_typed::<i64>(DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY) {
         // Requestor is able to accept DebitNotes, because he set this property.
         Ok(deadline) => Ok(Some(Duration::seconds(deadline))),
         // If he didn't set this property, he is unable to accept DebitNotes.
@@ -134,7 +142,7 @@ impl NegotiatorComponent for LimitExpiration {
                     // Requestor proposed better deadline, than we required.
                     // We are expected to set property to the same value if we agree.
                     let deadline_prop = offer
-                        .pointer_mut("/golem/com/payment/debit-notes/acceptance-timeout")
+                        .pointer_mut(DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY)
                         .unwrap();
                     *deadline_prop = serde_json::Value::Number(req_deadline.num_seconds().into());
 
@@ -145,7 +153,7 @@ impl NegotiatorComponent for LimitExpiration {
             // Requestor doesn't support DebitNotes acceptance, so we should
             // remove our property from Proposal to match with his.
             (None, Some(_)) => {
-                offer.remove_property("/golem/com/payment/debit-notes/acceptance-timeout")?;
+                offer.remove_property(DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY)?;
                 NegotiationResult::Negotiating { offer }
             }
             // We agree with Requestor, that he won't accept DebitNotes.
@@ -156,7 +164,7 @@ impl NegotiatorComponent for LimitExpiration {
 
     fn fill_template(&mut self, mut template: OfferDefinition) -> anyhow::Result<OfferDefinition> {
         template.offer.set_property(
-            "golem.com.payment.debit-notes.acceptance-timeout",
+            DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY_FLAT,
             serde_json::Value::Number(self.payment_deadline.num_seconds().into()),
         );
         Ok(template)
@@ -233,8 +241,8 @@ mod test_expiration_negotiator {
             .to_proposal();
 
         let proposal = properties_to_proposal(serde_json::json!({
-            "golem.srv.comp.expiration": (Utc::now() + Duration::minutes(15)).timestamp_millis(),
-            "golem.com.payment.debit-notes.acceptance-timeout": 50,
+            AGREEMENT_EXPIRATION_PROPERTY_FLAT: (Utc::now() + Duration::minutes(15)).timestamp_millis(),
+            DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY_FLAT: 50,
         }));
 
         match negotiator
@@ -264,8 +272,8 @@ mod test_expiration_negotiator {
             .to_proposal();
 
         let proposal = properties_to_proposal(serde_json::json!({
-            "golem.srv.comp.expiration": (Utc::now() + Duration::minutes(7)).timestamp_millis(),
-            "golem.com.payment.debit-notes.acceptance-timeout": 130,
+            AGREEMENT_EXPIRATION_PROPERTY_FLAT: (Utc::now() + Duration::minutes(7)).timestamp_millis(),
+            DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY_FLAT: 130,
         }));
 
         match negotiator
@@ -295,8 +303,8 @@ mod test_expiration_negotiator {
             .to_proposal();
 
         let proposal = properties_to_proposal(serde_json::json!({
-            "golem.srv.comp.expiration": (Utc::now() + Duration::minutes(7)).timestamp_millis(),
-            "golem.com.payment.debit-notes.acceptance-timeout": 120,
+            AGREEMENT_EXPIRATION_PROPERTY_FLAT: (Utc::now() + Duration::minutes(7)).timestamp_millis(),
+            DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY_FLAT: 120,
         }));
 
         match negotiator
@@ -328,7 +336,7 @@ mod test_expiration_negotiator {
             .to_proposal();
 
         let proposal = properties_to_proposal(serde_json::json!({
-            "golem.srv.comp.expiration": (Utc::now() + Duration::minutes(15)).timestamp_millis(),
+            AGREEMENT_EXPIRATION_PROPERTY_FLAT: (Utc::now() + Duration::minutes(15)).timestamp_millis(),
         }));
 
         match negotiator
@@ -357,7 +365,7 @@ mod test_expiration_negotiator {
             .to_proposal();
 
         let proposal = properties_to_proposal(serde_json::json!({
-            "golem.srv.comp.expiration": (Utc::now() + Duration::minutes(7)).timestamp_millis(),
+            AGREEMENT_EXPIRATION_PROPERTY_FLAT: (Utc::now() + Duration::minutes(7)).timestamp_millis(),
         }));
 
         match negotiator
