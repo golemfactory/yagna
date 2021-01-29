@@ -757,14 +757,14 @@ async fn test_reject_initial_offer() {
         .requestor_engine
         .reject_proposal(&demand_id, &proposal0id, &req_id, Some("dblah".into()))
         .await
-        .map_err(|e| panic!("Expected Ok(()), got: {}\nDEBUG:{:?}", e.to_string(), e))
+        .map_err(|e| panic!("Expected Ok(()), got: {}\nDEBUG: {:?}", e.to_string(), e))
         .unwrap();
 
     req_mkt
         .requestor_engine
         .query_events(&demand_id, 1.2, Some(5))
         .await
-        .map_err(|e| panic!("Expected Ok(()), got: {}\nDEBUG:{:?}", e.to_string(), e))
+        .map_err(|e| panic!("Expected Ok([]), got: {}\nDEBUG: {:?}", e.to_string(), e))
         .map(|events| assert_eq!(events.len(), 0))
         .unwrap();
 
@@ -773,9 +773,8 @@ async fn test_reject_initial_offer() {
     assert_eq!(proposal0updated.body.state, ProposalState::Rejected);
 }
 
-/// Requestor tries to reject initial Proposal
-/// (Provider Node does not even know that there is a Proposal).
-/// Negotiation attempt should be rejected by Provider Node.
+/// Provider rejects draft Proposal and succeeds.
+/// As a result Proposal is in Rejected state on both sides.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_reject_demand() {
@@ -833,7 +832,7 @@ async fn test_reject_demand() {
         .requestor_engine
         .query_events(&demand_id, 1.2, Some(5))
         .await
-        .map_err(|e| panic!("Expected Ok(()), got: {}\nDEBUG:{:?}", e.to_string(), e))
+        .map_err(|e| panic!("Expected Ok([ev]), got: {}\nDEBUG: {:?}", e.to_string(), e))
         .map(|events| {
             assert_eq!(events.len(), 1);
             match &events[0] {
