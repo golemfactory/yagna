@@ -41,7 +41,7 @@ impl<'c> ReleaseDAO<'c> {
     }
 
     pub async fn pending_release(&self) -> anyhow::Result<Option<Release>> {
-        readonly_transaction(self.pool, move |conn| get_pending_release(conn)).await
+        readonly_transaction(self.pool, move |conn| get_pending_release(conn, false)).await
     }
 
     pub async fn version(&self) -> anyhow::Result<VersionInfo> {
@@ -49,7 +49,7 @@ impl<'c> ReleaseDAO<'c> {
         readonly_transaction(self.pool, move |conn| {
             Ok(VersionInfo {
                 current: get_current_release(conn)?.ok_or(anyhow!("Can't get current release."))?,
-                pending: get_pending_release(conn)?,
+                pending: get_pending_release(conn, true)?,
             })
         })
         .await
@@ -58,7 +58,7 @@ impl<'c> ReleaseDAO<'c> {
     pub async fn skip_pending_release(&self) -> anyhow::Result<Option<Release>> {
         log::debug!("Skipping latest pending Yagna release");
         do_with_transaction(self.pool, move |conn| {
-            let mut pending_rel = match get_pending_release(conn)? {
+            let mut pending_rel = match get_pending_release(conn, false)? {
                 Some(rel) => rel,
                 None => return Ok(None),
             };
@@ -88,12 +88,14 @@ fn get_release(conn: &ConnType, ver: &str) -> anyhow::Result<Option<Release>> {
         .map(|db_rel| db_rel.into()))
 }
 
-fn get_pending_release(conn: &ConnType) -> anyhow::Result<Option<Release>> {
-    let query = version_release
-        .filter(release::seen.eq(false))
+fn get_pending_release(conn: &ConnType, include_seen: bool) -> anyhow::Result<Option<Release>> {
+    let mut query = version_release
         // insertion_ts is to distinguish among fake-entries of `DBRelease::current`
         .order((release::release_ts.desc(), release::insertion_ts.desc()))
         .into_boxed();
+    if !include_seen {
+        query = query.filter(release::seen.eq(false));
+    }
 
     match query.first::<DBRelease>(conn).optional()? {
         Some(db_rel) => {
