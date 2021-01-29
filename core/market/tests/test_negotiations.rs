@@ -2,6 +2,7 @@ use ya_client::model::market::{proposal::State, RequestorEvent};
 use ya_market::testing::{
     events_helper::{provider, requestor, ClientProposalHelper},
     mock_offer::client::{not_matching_demand, not_matching_offer, sample_demand, sample_offer},
+    negotiation::error::{CounterProposalError, RemoteProposalError},
     proposal_util::{exchange_draft_proposals, NegotiationHelper},
     MarketServiceExt, MarketsNetwork, Owner, ProposalError, ProposalState, ProposalValidationError,
     SaveProposalError,
@@ -466,6 +467,7 @@ async fn test_counter_initial_unsubscribed_remote_offer() {
     let proposal0 = requestor::query_proposal(&market1, &demand_id, "Initial #R")
         .await
         .unwrap();
+    let proposal0_id = proposal0.get_proposal_id().unwrap();
 
     // When we will counter this Proposal, Provider will have it already unsubscribed.
     market2
@@ -476,18 +478,23 @@ async fn test_counter_initial_unsubscribed_remote_offer() {
     let proposal1 = sample_demand();
     let result = market1
         .requestor_engine
-        .counter_proposal(
-            &demand_id,
-            &proposal0.get_proposal_id().unwrap(),
-            &proposal1,
-            &identity1,
-        )
+        .counter_proposal(&demand_id, &proposal0_id, &proposal1, &identity1)
         .await;
 
     assert!(result.is_err());
     match result.err().unwrap() {
         ProposalError::Validation(ProposalValidationError::Unsubscribed(id)) => {
             assert_eq!(id, offer_id)
+        }
+        ProposalError::Send(
+            proposal_id_send,
+            CounterProposalError::Remote(
+                RemoteProposalError::Validation(ProposalValidationError::Unsubscribed(unsubs_id)),
+                _,
+            ),
+        ) => {
+            assert_eq!(proposal_id_send, proposal0_id);
+            assert_eq!(unsubs_id, offer_id);
         }
         e => panic!("Expected ProposalValidationError::Unsubscribed, got: {}", e),
     }
@@ -535,6 +542,16 @@ async fn test_counter_draft_unsubscribed_remote_offer() {
     match result.err().unwrap() {
         ProposalError::Validation(ProposalValidationError::Unsubscribed(id)) => {
             assert_eq!(id, offer_id)
+        }
+        ProposalError::Send(
+            proposal_id_send,
+            CounterProposalError::Remote(
+                RemoteProposalError::Validation(ProposalValidationError::Unsubscribed(unsubs_id)),
+                _,
+            ),
+        ) => {
+            assert_eq!(proposal_id_send, proposal0_id);
+            assert_eq!(unsubs_id, offer_id);
         }
         e => panic!("Expected ProposalValidationError::Unsubscribed, got: {}", e),
     }
