@@ -62,7 +62,7 @@ where
         EventNotifier { sender }
     }
 
-    pub async fn notify(&self, subscription_id: &Type) {
+    pub fn notify(&self, subscription_id: &Type) {
         let sender = self.sender.clone();
         let to_send = Notification::<Type>::NewEvent(subscription_id.clone());
         // TODO: How to handle this error?

@@ -482,7 +482,7 @@ async fn agreement_approved(
         agreement
     };
 
-    broker.notify_agreement(&agreement).await;
+    broker.notify_agreement(&agreement);
     log::info!("Agreement [{}] approved by [{}].", &agreement.id, &caller);
     Ok(())
 }

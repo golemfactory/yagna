@@ -55,7 +55,7 @@ pub struct CommonBroker {
     pub(super) session_notifier: EventNotifier<AppSessionId>,
     pub(super) agreement_notifier: EventNotifier<AgreementId>,
     pub(super) config: Arc<Config>,
-    pub(super) agreement_lock: AgreementLock,
+    pub(crate) agreement_lock: AgreementLock,
 }
 
 impl CommonBroker {
@@ -373,7 +373,7 @@ impl CommonBroker {
                 .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?;
         }
 
-        self.notify_agreement(&agreement).await;
+        self.notify_agreement(&agreement);
         self.agreement_lock.clear_locks(&agreement.id).await;
 
         inc_terminate_metrics(&reason, agreement.id.owner());
@@ -474,7 +474,7 @@ impl CommonBroker {
             agreement
         };
 
-        self.notify_agreement(&agreement).await;
+        self.notify_agreement(&agreement);
         self.agreement_lock.clear_locks(&agreement_id).await;
 
         inc_terminate_metrics(&msg.reason, agreement.id.owner());
@@ -571,7 +571,7 @@ impl CommonBroker {
             })?;
 
         // Send channel message to wake all query_events waiting for proposals.
-        self.negotiation_notifier.notify(&subscription_id).await;
+        self.negotiation_notifier.notify(&subscription_id);
 
         match caller_role {
             Owner::Requestor => counter!("market.proposals.requestor.received", 1),
@@ -632,7 +632,7 @@ impl CommonBroker {
             })?;
 
         // Send channel message to wake all query_events waiting for proposals.
-        self.negotiation_notifier.notify(&subscription_id).await;
+        self.negotiation_notifier.notify(&subscription_id);
 
         match caller_role {
             Owner::Provider => counter!("market.proposals.requestor.rejected.by-them", 1),
@@ -682,19 +682,19 @@ impl CommonBroker {
         Ok(())
     }
 
-    pub async fn notify_agreement(&self, agreement: &Agreement) {
+    pub fn notify_agreement(&self, agreement: &Agreement) {
         let session_notifier = &self.session_notifier;
 
         // Notify everyone waiting on Agreement events endpoint.
         if let Some(_) = &agreement.session_id {
-            session_notifier.notify(&agreement.session_id.clone()).await;
+            session_notifier.notify(&agreement.session_id.clone());
         }
         // Even if session_id was not None, we want to notify everyone else,
         // that waits without specifying session_id.
-        session_notifier.notify(&None).await;
+        session_notifier.notify(&None);
 
         // This notifies wait_for_agreement endpoint.
-        self.agreement_notifier.notify(&agreement.id).await;
+        self.agreement_notifier.notify(&agreement.id);
     }
 
     pub async fn generate_proposal(&self, proposal: RawProposal) -> Result<(), SaveProposalError> {
@@ -723,7 +723,7 @@ impl CommonBroker {
 
         // Send channel message to wake all query_events waiting for proposals.
         counter!("market.proposals.requestor.generated", 1);
-        notifier.notify(&subscription_id).await;
+        notifier.notify(&subscription_id);
         Ok(())
     }
 

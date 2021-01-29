@@ -210,7 +210,7 @@ impl ProviderBroker {
         timeout: f32,
     ) -> Result<ApprovalResult, AgreementError> {
         let dao = self.common.db.as_dao::<AgreementDao>();
-        let agreement = {
+        {
             self.common
                 .agreement_lock
                 .get_lock(&agreement_id)
@@ -236,25 +236,23 @@ impl ProviderBroker {
                 .await
                 .map_err(|e| AgreementError::UpdateState(agreement_id.clone(), e))?;
 
-            agreement
-        };
+            self.common.notify_agreement(&agreement);
 
-        self.common.notify_agreement(&agreement).await;
-
-        counter!("market.agreements.provider.approved", 1);
-        log::info!(
-            "Provider {} approved Agreement [{}].",
-            id.display(),
-            &agreement_id,
-        );
-        if let Some(session) = app_session_id {
+            counter!("market.agreements.provider.approved", 1);
             log::info!(
-                "AppSession id [{}] set for Agreement [{}].",
-                &session,
-                &agreement_id
+                "Provider {} approved Agreement [{}].",
+                id.display(),
+                &agreement_id,
             );
+            if let Some(session) = app_session_id {
+                log::info!(
+                    "AppSession id [{}] set for Agreement [{}].",
+                    &session,
+                    &agreement_id
+                );
+            }
+            return Ok(ApprovalResult::Approved);
         }
-        return Ok(ApprovalResult::Approved);
     }
 }
 
@@ -395,7 +393,7 @@ async fn agreement_received(
         })?;
 
     // Send channel message to wake all query_events waiting for proposals.
-    broker.negotiation_notifier.notify(&offer_id).await;
+    broker.negotiation_notifier.notify(&offer_id);
 
     counter!("market.agreements.provider.proposed", 1);
     log::info!(

@@ -124,6 +124,7 @@ impl MarketService {
 
     pub async fn bind_gsb(
         &self,
+        market: Arc<Self>,
         public_prefix: &str,
         local_prefix: &str,
     ) -> Result<(), MarketInitError> {
@@ -134,7 +135,7 @@ impl MarketService {
         self.requestor_engine
             .bind_gsb(public_prefix, local_prefix)
             .await?;
-        agreement::bind_gsb(self.db.clone(), public_prefix, local_prefix).await;
+        agreement::bind_gsb(market, self.db.clone(), public_prefix, local_prefix).await;
 
         counter!("market.offers.subscribed", 0);
         counter!("market.offers.unsubscribed", 0);
@@ -145,7 +146,9 @@ impl MarketService {
 
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> anyhow::Result<()> {
         let market = MARKET.get_or_init_market(&ctx.component())?;
-        Ok(market.bind_gsb(BUS_ID, local::BUS_ID).await?)
+        Ok(market
+            .bind_gsb(market.clone(), BUS_ID, local::BUS_ID)
+            .await?)
     }
 
     pub fn rest<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> actix_web::Scope {
