@@ -8,7 +8,7 @@ use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 use crate::db::dao::demand::{demand_status, DemandState};
 use crate::db::dao::offer::{query_state, OfferState};
 use crate::db::dao::sql_functions::datetime;
-use crate::db::model::{Agreement, MarketEvent, Owner, Proposal, SubscriptionId};
+use crate::db::model::{Agreement, EventType, MarketEvent, Owner, Proposal, SubscriptionId};
 use crate::db::schema::market_negotiation_event::dsl;
 use crate::db::{DbError, DbResult};
 use crate::market::EnvConfig;
@@ -85,18 +85,44 @@ impl<'c> NegotiationEventsDao<'c> {
         owner: Owner,
     ) -> Result<Vec<MarketEvent>, TakeEventsError> {
         let subscription_id = subscription_id.clone();
+        println!("take_events {}", max_events);
         do_with_transaction(self.pool, move |conn| {
             // Check subscription wasn't unsubscribed or expired.
             validate_subscription(conn, &subscription_id, owner)?;
 
-            // TODO: Only ProposalEvents should be in random order.
+            // Only ProposalEvents should be in random order.
             //  AgreementEvent and rejections events should be sorted with higher
             //  priority.
-            let events = dsl::market_negotiation_event
-                .filter(dsl::subscription_id.eq(&subscription_id))
-                .order_by(sql::<sql_types::Bool>("RANDOM()"))
+            let basic_query =
+                dsl::market_negotiation_event.filter(dsl::subscription_id.eq(&subscription_id));
+            let mut events = basic_query
+                .clone()
+                .filter(dsl::event_type.ne_all(vec![
+                    EventType::ProviderNewProposal,
+                    EventType::RequestorNewProposal,
+                ]))
+                .order_by(dsl::timestamp.asc())
                 .limit(max_events as i64)
                 .load::<MarketEvent>(conn)?;
+            println!("basic events {}", events.len());
+            if (events.len() as i32) < max_events {
+                let limit_left: i32 = max_events - (events.len() as i32);
+                println!("Limit left {}", limit_left);
+                let proposal_events = basic_query
+                    .filter(dsl::event_type.eq_any(vec![
+                        EventType::ProviderNewProposal,
+                        EventType::RequestorNewProposal,
+                    ]))
+                    .order_by(sql::<sql_types::Bool>("RANDOM()"))
+                    .limit(limit_left as i64)
+                    .load::<MarketEvent>(conn)?;
+
+                println!("Extend {}", proposal_events.len());
+                events.extend(proposal_events.into_iter());
+            }
+            let debug_events = basic_query
+                .load::<MarketEvent>(conn)?;
+            println!("debug events {:#?}", debug_events);
 
             // Remove returned events from queue.
             if !events.is_empty() {
