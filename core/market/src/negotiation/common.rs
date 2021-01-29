@@ -43,6 +43,7 @@ use crate::protocol::negotiation::{
     messages::{AgreementTerminated, ProposalReceived},
 };
 use crate::utils::display::EnableDisplay;
+use crate::utils::AgreementLock;
 
 type IsFirst = bool;
 
@@ -54,6 +55,7 @@ pub struct CommonBroker {
     pub(super) session_notifier: EventNotifier<AppSessionId>,
     pub(super) agreement_notifier: EventNotifier<AgreementId>,
     pub(super) config: Arc<Config>,
+    pub(super) agreement_lock: AgreementLock,
 }
 
 impl CommonBroker {
@@ -70,6 +72,7 @@ impl CommonBroker {
             session_notifier,
             agreement_notifier: EventNotifier::new(),
             config,
+            agreement_lock: AgreementLock::new(),
         }
     }
 
@@ -349,16 +352,29 @@ impl CommonBroker {
             Some(agreement) => agreement,
         };
 
-        validate_transition(&agreement, AgreementState::Terminated)?;
+        {
+            // This must be under lock to avoid conflicts with `terminate_agreement`,
+            // that could have been called by other party at the same time. Termination
+            // consists of 2 operations: sending message to other party and updating state.
+            // Race conditions could appear in this situation.
+            self.agreement_lock
+                .get_lock(&agreement.id)
+                .await
+                .lock()
+                .await;
 
-        protocol_common::propagate_terminate_agreement(&agreement, reason.clone()).await?;
+            validate_transition(&agreement, AgreementState::Terminated)?;
 
-        let reason_string = CommonBroker::reason2string(&reason);
+            protocol_common::propagate_terminate_agreement(&agreement, reason.clone()).await?;
 
-        dao.terminate(&agreement.id, reason_string, agreement.id.owner())
-            .await
-            .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?;
+            let reason_string = CommonBroker::reason2string(&reason);
+            dao.terminate(&agreement.id, reason_string, agreement.id.owner())
+                .await
+                .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?;
+        }
+
         self.notify_agreement(&agreement).await;
+        self.agreement_lock.clear_locks(&agreement.id).await;
 
         inc_terminate_metrics(&reason, agreement.id.owner());
         log::info!(
@@ -415,36 +431,51 @@ impl CommonBroker {
     ) -> Result<(), RemoteAgreementError> {
         let dao = self.db.as_dao::<AgreementDao>();
         let agreement_id = msg.agreement_id.clone();
-        let agreement = dao
-            .select(&agreement_id, None, Utc::now().naive_utc())
-            .await
-            .map_err(|_e| RemoteAgreementError::NotFound(agreement_id.clone()))?
-            .ok_or(RemoteAgreementError::NotFound(agreement_id.clone()))?;
 
-        let auth_id = match caller_role {
-            Owner::Provider => agreement.provider_id,
-            Owner::Requestor => agreement.requestor_id,
+        let agreement = {
+            // This must be under lock to avoid conflicts with `terminate_agreement`,
+            // that could have been called by one of our Agents. Termination consists
+            // of 2 operations: sending message to other party and updating state.
+            // Race conditions could appear in this situation.
+            self.agreement_lock
+                .get_lock(&agreement_id)
+                .await
+                .lock()
+                .await;
+
+            let agreement = dao
+                .select(&agreement_id, None, Utc::now().naive_utc())
+                .await
+                .map_err(|_e| RemoteAgreementError::NotFound(agreement_id.clone()))?
+                .ok_or(RemoteAgreementError::NotFound(agreement_id.clone()))?;
+
+            let auth_id = match caller_role {
+                Owner::Provider => agreement.provider_id,
+                Owner::Requestor => agreement.requestor_id,
+            };
+
+            if auth_id != caller_id {
+                // Don't reveal, that we know this Agreement id.
+                Err(RemoteAgreementError::NotFound(agreement_id.clone()))?
+            }
+
+            let reason_string = CommonBroker::reason2string(&msg.reason);
+            dao.terminate(&agreement_id, reason_string, caller_role)
+                .await
+                .map_err(|e| {
+                    log::warn!(
+                        "Couldn't terminate agreement. id: {}, e: {}",
+                        agreement_id,
+                        e
+                    );
+                    RemoteAgreementError::InternalError(agreement_id.clone())
+                })?;
+
+            agreement
         };
 
-        if auth_id != caller_id {
-            // Don't reveal, that we know this Agreement id.
-            Err(RemoteAgreementError::NotFound(agreement_id.clone()))?
-        }
-
-        let reason_string = CommonBroker::reason2string(&msg.reason);
-
-        dao.terminate(&agreement_id, reason_string, caller_role)
-            .await
-            .map_err(|e| {
-                log::warn!(
-                    "Couldn't terminate agreement. id: {}, e: {}",
-                    agreement_id,
-                    e
-                );
-                RemoteAgreementError::InternalError(agreement_id.clone())
-            })?;
-
         self.notify_agreement(&agreement).await;
+        self.agreement_lock.clear_locks(&agreement_id).await;
 
         inc_terminate_metrics(&msg.reason, agreement.id.owner());
         log::info!(

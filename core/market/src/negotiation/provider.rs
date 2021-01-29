@@ -210,25 +210,34 @@ impl ProviderBroker {
         timeout: f32,
     ) -> Result<ApprovalResult, AgreementError> {
         let dao = self.common.db.as_dao::<AgreementDao>();
-        let agreement = match dao
-            .select(agreement_id, None, Utc::now().naive_utc())
-            .await
-            .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
-        {
-            None => Err(AgreementError::NotFound(agreement_id.to_string()))?,
-            Some(agreement) => agreement,
+        let agreement = {
+            self.common
+                .agreement_lock
+                .get_lock(&agreement_id)
+                .await
+                .lock()
+                .await;
+
+            let agreement = match dao
+                .select(agreement_id, None, Utc::now().naive_utc())
+                .await
+                .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
+            {
+                None => Err(AgreementError::NotFound(agreement_id.to_string()))?,
+                Some(agreement) => agreement,
+            };
+
+            validate_transition(&agreement, AgreementState::Approved)?;
+
+            // `db.update_state` must be invoked after successful approve_agreement
+            // TODO: if dao.approve fails, Provider and Requestor have inconsistent state.
+            self.api.approve_agreement(&agreement, timeout).await?;
+            dao.approve(agreement_id, &app_session_id)
+                .await
+                .map_err(|e| AgreementError::UpdateState(agreement_id.clone(), e))?;
+
+            agreement
         };
-
-        validate_transition(&agreement, AgreementState::Approved)?;
-
-        // TODO: possible race condition here ISSUE#430
-        // 1. this state check should be also `db.update_state`
-        // 2. `db.update_state` must be invoked after successful propose_agreement
-        // TODO: if dao.approve fails, Provider and Requestor have inconsistent state.
-        self.api.approve_agreement(&agreement, timeout).await?;
-        dao.approve(agreement_id, &app_session_id)
-            .await
-            .map_err(|e| AgreementError::UpdateState(agreement_id.clone(), e))?;
 
         self.common.notify_agreement(&agreement).await;
 
@@ -357,6 +366,7 @@ async fn agreement_received(
         Err(RemoteProposeAgreementError::InvalidId(id.clone()))?
     }
 
+    // This is creation of Agreement, so lock is not needed yet.
     let agreement = broker
         .db
         .as_dao::<AgreementDao>()
