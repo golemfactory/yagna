@@ -16,10 +16,7 @@ pub use async_trait::async_trait;
 
 #[async_trait(?Send)]
 pub trait PaymentDriverCron {
-    /// Confirms scheduled payments.
     async fn confirm_payments(&self);
-
-    /// Processes scheduled payments.
     async fn process_payments(&self);
 }
 
