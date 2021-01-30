@@ -92,14 +92,10 @@ impl NegotiationApi {
         proposal: &Proposal,
         reason: Option<Reason>,
     ) -> Result<(), RejectProposalError> {
-        let msg = ProposalRejected {
-            proposal_id: proposal.body.id.clone(),
-            reason,
-        };
         net::from(id)
             .to(proposal.negotiation.requestor_id)
             .service(&requestor::proposal_addr(BUS_ID))
-            .send(msg)
+            .send(ProposalRejected::of(proposal, reason))
             .await
             .map_err(|e| GsbProposalError(e.to_string(), proposal.body.id.clone()))??;
         Ok(())

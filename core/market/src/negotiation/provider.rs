@@ -88,6 +88,7 @@ impl ProviderBroker {
         counter!("market.proposals.provider.countered", 0);
         counter!("market.proposals.provider.init-negotiation", 0);
         counter!("market.proposals.provider.received", 0);
+        counter!("market.proposals.provider.rejected.initial", 0);
         counter!("market.proposals.provider.rejected.by-them", 0);
         counter!("market.proposals.provider.rejected.by-us", 0);
 

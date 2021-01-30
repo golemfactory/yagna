@@ -602,6 +602,23 @@ impl CommonBroker {
         caller_id: NodeId,
         caller_role: Owner,
     ) -> Result<(), RejectProposalError> {
+        if msg.initial {
+            // This is case when Requestor rejects initial Proposal.
+            // Provider is not yet aware this Proposal ever exists.
+            // We could add rejected event here, but most probably it would
+            // not be beneficial to Provider, so instead just counting such
+            // cases to see how often does it happens, and decide
+            // in the next releases, if adding event is worth considering.
+            match caller_role {
+                Owner::Provider => {
+                    log::error!("Provider rejected Initial Proposal, but should not see it.");
+                    counter!("market.proposals.provider.rejected.initial", 1);
+                }
+                Owner::Requestor => counter!("market.proposals.requestor.rejected.initial", 1),
+            };
+            return Ok(());
+        }
+
         let proposal = CommonBroker::reject_proposal(
             &self,
             None,

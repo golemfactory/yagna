@@ -95,6 +95,7 @@ impl RequestorBroker {
         counter!("market.proposals.requestor.countered", 0);
         counter!("market.proposals.requestor.generated", 0);
         counter!("market.proposals.requestor.received", 0);
+        counter!("market.proposals.requestor.rejected.initial", 0);
         counter!("market.proposals.requestor.rejected.by-them", 0);
         counter!("market.proposals.requestor.rejected.by-us", 0);
         counter!("market.proposals.self-reaction-attempt", 0);
