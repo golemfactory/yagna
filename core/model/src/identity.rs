@@ -213,15 +213,7 @@ impl RpcMessage for Subscribe {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GetKeyFile {
-    pub node_id: NodeId,
-}
-
-impl GetKeyFile {
-    pub fn new(node_id: NodeId) -> Self {
-        Self { node_id }
-    }
-}
+pub struct GetKeyFile(pub NodeId);
 
 impl RpcMessage for GetKeyFile {
     const ID: &'static str = "GetKeyFile";

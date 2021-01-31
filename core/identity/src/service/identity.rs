@@ -338,7 +338,7 @@ impl IdentityService {
         &mut self,
         key_id: model::GetKeyFile,
     ) -> Result<String, model::Error> {
-        let key = self.get_key_by_id(&key_id.node_id)?;
+        let key = self.get_key_by_id(&key_id.0)?;
         key.to_key_file().map_err(|e| model::Error::new_err_msg(e))
     }
 

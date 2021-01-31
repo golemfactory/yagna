@@ -280,26 +280,26 @@ impl IdentityCommand {
             } => {
                 let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
                 let key_file = bus::service(identity::BUS_ID)
-                    .send(identity::GetKeyFile::new(node_id))
+                    .send(identity::GetKeyFile(node_id))
                     .await?
                     .map_err(|e| anyhow::Error::msg(e))?;
 
-                if let Some(file) = file_path {
-                    let parent = file.parent().unwrap();
-                    if !parent.is_dir() {
-                        anyhow::bail!(
-                            "Directory '{:?}' does not exists or is write protected",
-                            parent
-                        )
-                    }
-                    if file.is_file() {
-                        anyhow::bail!("File already exists")
-                    }
+                match file_path {
+                    Some(file) => {
+                        if file.parent().map_or(false, |parent| !parent.is_dir()) {
+                            anyhow::bail!(
+                                "Directory '{:?}' does not exists or is write protected",
+                                file.parent()
+                            )
+                        }
+                        if file.is_file() {
+                            anyhow::bail!("File already exists")
+                        }
 
-                    std::fs::write(file, key_file).map_err(|e| anyhow::Error::msg(e))?;
-                    CommandOutput::object(format!("Written to {:?}", file))
-                } else {
-                    CommandOutput::object(key_file)
+                        std::fs::write(file, key_file).map_err(|e| anyhow::Error::msg(e))?;
+                        CommandOutput::object(format!("Written to {:?}", file))
+                    }
+                    None => CommandOutput::object(key_file),
                 }
             }
         }
