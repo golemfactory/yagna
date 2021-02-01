@@ -286,18 +286,12 @@ impl IdentityCommand {
 
                 match file_path {
                     Some(file) => {
-                        if file.parent().map_or(false, |parent| !parent.is_dir()) {
-                            anyhow::bail!(
-                                "Directory '{:?}' does not exists or is write protected",
-                                file.parent()
-                            )
-                        }
                         if file.is_file() {
                             anyhow::bail!("File already exists")
                         }
 
-                        std::fs::write(file, key_file).map_err(|e| anyhow::Error::msg(e))?;
-                        CommandOutput::object(format!("Written to {:?}", file))
+                        std::fs::write(file, key_file)?;
+                        CommandOutput::object(format!("Written to '{}'", file.display()))
                     }
                     None => CommandOutput::object(key_file),
                 }
