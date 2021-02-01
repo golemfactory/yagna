@@ -201,9 +201,6 @@ impl<'c> AgreementDao<'c> {
             if let Some(session) = session {
                 update_session(conn, &mut agreement, session)?;
             }
-            // Always Provider approves.
-            create_event(conn, &agreement, None, Owner::Provider)?;
-
             Ok(())
         })
         .await
