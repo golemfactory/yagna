@@ -19,6 +19,7 @@ use ya_client_model::market::{
     agreement_event::AgreementTerminator, Agreement, NewOffer, Proposal, ProviderEvent, Reason,
 };
 use ya_client_model::NodeId;
+use ya_std_utils::LogErr;
 use ya_utils_actix::{
     actix_handler::ResultTypeGetter,
     actix_signal::{SignalSlot, Subscribe},
@@ -359,6 +360,16 @@ async fn process_agreement(
 
     match action {
         AgreementResponse::ApproveAgreement => {
+            // Prepare Provider for Agreement. We aren't sure here, that approval will
+            // succeed, but we are obligated to reserve all promised resources for Requestor,
+            // so after `approve_agreement` will return, we are ready to create activities.
+            ctx.market
+                .send(AgreementApproved {
+                    agreement: agreement.clone(),
+                })
+                .await?
+                .ok();
+
             // TODO: We should retry approval, but only a few times, than we should
             //       give up since it's better to take another agreement.
             let result = ctx
@@ -386,11 +397,6 @@ async fn process_agreement(
 
             // We negotiated agreement and here responsibility of ProviderMarket ends.
             // Notify outside world about agreement for further processing.
-            let message = AgreementApproved {
-                agreement: agreement.clone(),
-            };
-
-            let _ = ctx.market.send(message).await?;
         }
         AgreementResponse::RejectAgreement { reason } => {
             ctx.api
@@ -574,13 +580,10 @@ impl Handler<OnAgreementTerminated> for ProviderMarket {
                 is_terminated: true,
                 agreement_id: id.clone(),
             })
-            .map_err(|e| {
-                log::error!(
-                    "Failed to propagate termination info for agreement [{}]. {}",
-                    id,
-                    e
-                )
-            })
+            .log_err_msg(&format!(
+                "Failed to propagate termination info for agreement [{}]",
+                id
+            ))
             .ok();
         Ok(())
     }
@@ -604,14 +607,10 @@ impl Handler<CreateOffer> for ProviderMarket {
                 .negotiator
                 .create_offer(&msg.offer_definition)
                 .await
-                .map_err(|e| {
-                    log::error!(
-                        "Negotiator failed to create offer for preset [{}]. Error: {}",
-                        msg.preset.name,
-                        e
-                    );
-                    e
-                })?;
+                .log_err_msg(&format!(
+                    "Negotiator failed to create offer for preset [{}]",
+                    msg.preset.name,
+                ))?;
 
             log::debug!(
                 "Offer created: {}",
@@ -623,14 +622,10 @@ impl Handler<CreateOffer> for ProviderMarket {
             let preset_name = msg.preset.name.clone();
             subscribe(ctx.market, ctx.api, offer, msg.preset)
                 .await
-                .map_err(|error| {
-                    log::error!(
-                        "Can't subscribe new offer for preset [{}], error: {}",
-                        preset_name,
-                        error
-                    );
-                    error
-                })?;
+                .log_err_msg(&format!(
+                    "Can't subscribe new offer for preset [{}]",
+                    preset_name,
+                ))?;
             Ok(())
         }
         .boxed_local()
@@ -702,13 +697,13 @@ async fn resubscribe_offers(
         let preset = sub.preset;
         let preset_name = preset.name.clone();
 
-        if let Err(e) = subscribe(market.clone(), api.clone(), offer, preset).await {
-            log::warn!(
-                "Unable to create subscription for preset {}: {}",
+        subscribe(market.clone(), api.clone(), offer, preset)
+            .await
+            .log_warn_msg(&format!(
+                "Unable to create subscription for preset {}",
                 preset_name,
-                e
-            );
-        }
+            ))
+            .ok();
     }
 }
 
@@ -720,18 +715,28 @@ impl Handler<AgreementFinalized> for ProviderMarket {
         let agreement_id = msg.id.clone();
         let result = msg.result.clone();
 
+        if let AgreementResult::ApprovalFailed = &msg.result {
+            self.agreement_terminated_signal
+                .send_signal(CloseAgreement {
+                    is_terminated: true,
+                    agreement_id: agreement_id.clone(),
+                })
+                .log_err_msg(&format!(
+                    "Failed to propagate ApprovalFailed info for agreement [{}]",
+                    agreement_id
+                ))
+                .ok();
+        }
+
         let future = async move {
-            if let Err(error) = ctx
-                .negotiator
+            ctx.negotiator
                 .agreement_finalized(&agreement_id, result)
                 .await
-            {
-                log::warn!(
-                    "Negotiator failed while handling agreement [{}] finalize. Error: {}",
+                .log_err_msg(&format!(
+                    "Negotiator failed while handling agreement [{}] finalize",
                     &agreement_id,
-                    error,
-                );
-            }
+                ))
+                .ok();
         }
         .into_actor(self)
         .map(|_, myself, ctx| {
