@@ -209,6 +209,33 @@ impl<'c> AgreementDao<'c> {
         .await
     }
 
+    pub async fn create_approve_event(&self, id: &AgreementId) -> Result<(), AgreementDaoError> {
+        let id = id.clone();
+
+        do_with_transaction(self.pool, move |conn| {
+            let agreement: Agreement =
+                market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
+
+            // Always Provider approves.
+            create_event(conn, &agreement, None, Owner::Provider)?;
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn reverse_approve(&self, id: &AgreementId) -> Result<bool, AgreementDaoError> {
+        let id = id.clone();
+
+        do_with_transaction(self.pool, move |conn| {
+            let num_updated = diesel::update(market_agreement.find(&id))
+                .set(agreement::state.eq(&AgreementState::Pending))
+                .execute(conn)
+                .map_err(|e| AgreementDaoError::DbError(e.into()))?;
+            Ok(num_updated > 0)
+        })
+        .await
+    }
+
     pub async fn terminate(
         &self,
         id: &AgreementId,

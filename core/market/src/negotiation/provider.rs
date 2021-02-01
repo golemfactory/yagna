@@ -6,6 +6,7 @@ use std::sync::Arc;
 use ya_client::model::market::{event::ProviderEvent, NewProposal, Reason};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
+use ya_std_utils::LogErr;
 
 use crate::db::{
     dao::{AgreementDao, NegotiationEventsDao, ProposalDao, SaveAgreementError},
@@ -229,12 +230,36 @@ impl ProviderBroker {
 
             validate_transition(&agreement, AgreementState::Approved)?;
 
-            // `db.update_state` must be invoked after successful approve_agreement
-            // TODO: if dao.approve fails, Provider and Requestor have inconsistent state.
-            self.api.approve_agreement(&agreement, timeout).await?;
+            // Since Agreement was already approved, at this point Provider should be ready to receive
+            // CreateActivity event. We can't change state after notifying Requestor about approval,
+            // because CreateActivity could appear for Agreement in `Pending` state and would be rejected.
+            // This means races between Provider and Requestor, depending which function will return earlier:
+            // `wait_for_approval` or `approve_agreement`.
+            // If GSB call to Requestor fails, we reverse Agreement state to `Pending` and Provider can
+            // approve this Agreement for the second time later.
+
             dao.approve(agreement_id, &app_session_id)
                 .await
                 .map_err(|e| AgreementError::UpdateState(agreement_id.clone(), e))?;
+
+            match self.api.approve_agreement(&agreement, timeout).await {
+                Ok(_) => Ok(dao
+                    .create_approve_event(agreement_id)
+                    .await
+                    .log_err_msg(&format!(
+                        "Failed to create AgreementApproved event for [{}]",
+                        agreement_id,
+                    ))
+                    .ok()),
+                Err(e) => {
+                    dao.reverse_approve(agreement_id)
+                        .await
+                        .map_err(|e| AgreementError::UpdateState(agreement_id.clone(), e))
+                        .log_err()
+                        .ok(); // Approval failure is more important error than this.
+                    Err(e)
+                }
+            }?;
 
             agreement
         };
