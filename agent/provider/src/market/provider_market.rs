@@ -31,6 +31,7 @@ use super::negotiator::{AgreementResponse, AgreementResult, NegotiatorAddr, Prop
 use super::Preset;
 use crate::market::config::MarketConfig;
 use crate::market::termination_reason::GolemReason;
+use crate::tasks::task_manager::ClosingCause;
 use crate::tasks::{AgreementBroken, AgreementClosed, CloseAgreement};
 
 // =========================================== //
@@ -63,7 +64,7 @@ pub enum OfferKind {
 /// and broadcasts same event to external world.
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<()>")]
-pub struct AgreementApproved {
+pub struct NewAgreement {
     pub agreement: AgreementView,
 }
 
@@ -109,7 +110,7 @@ pub struct ProviderMarket {
     config: Arc<MarketConfig>,
 
     /// External actors can listen on this signal.
-    pub agreement_signed_signal: SignalSlot<AgreementApproved>,
+    pub agreement_signed_signal: SignalSlot<NewAgreement>,
     pub agreement_terminated_signal: SignalSlot<CloseAgreement>,
 
     /// Infinite tasks requiring to be killed on shutdown.
@@ -135,7 +136,7 @@ impl ProviderMarket {
             negotiator: Arc::new(NegotiatorAddr::default()),
             config: Arc::new(config),
             subscriptions: HashMap::new(),
-            agreement_signed_signal: SignalSlot::<AgreementApproved>::new(),
+            agreement_signed_signal: SignalSlot::<NewAgreement>::new(),
             agreement_terminated_signal: SignalSlot::<CloseAgreement>::new(),
             handles: HashMap::new(),
         };
@@ -170,11 +171,7 @@ impl ProviderMarket {
     // Market internals - proposals and agreements reactions
     // =========================================== //
 
-    fn on_agreement_approved(
-        &mut self,
-        msg: AgreementApproved,
-        _ctx: &mut Context<Self>,
-    ) -> Result<()> {
+    fn on_agreement_approved(&mut self, msg: NewAgreement, _ctx: &mut Context<Self>) -> Result<()> {
         log::info!("Got approved agreement [{}].", msg.agreement.agreement_id,);
         // At this moment we only forward agreement to outside world.
         self.agreement_signed_signal.send_signal(msg)
@@ -364,7 +361,7 @@ async fn process_agreement(
             // succeed, but we are obligated to reserve all promised resources for Requestor,
             // so after `approve_agreement` will return, we are ready to create activities.
             ctx.market
-                .send(AgreementApproved {
+                .send(NewAgreement {
                     agreement: agreement.clone(),
                 })
                 .await?
@@ -577,7 +574,7 @@ impl Handler<OnAgreementTerminated> for ProviderMarket {
 
         self.agreement_terminated_signal
             .send_signal(CloseAgreement {
-                is_terminated: true,
+                cause: ClosingCause::Termination,
                 agreement_id: id.clone(),
             })
             .log_err_msg(&format!(
@@ -718,7 +715,7 @@ impl Handler<AgreementFinalized> for ProviderMarket {
         if let AgreementResult::ApprovalFailed = &msg.result {
             self.agreement_terminated_signal
                 .send_signal(CloseAgreement {
-                    is_terminated: true,
+                    cause: ClosingCause::ApprovalFail,
                     agreement_id: agreement_id.clone(),
                 })
                 .log_err_msg(&format!(
@@ -823,9 +820,9 @@ impl Handler<Unsubscribe> for ProviderMarket {
 }
 
 forward_actix_handler!(ProviderMarket, Subscription, on_subscription);
-forward_actix_handler!(ProviderMarket, AgreementApproved, on_agreement_approved);
+forward_actix_handler!(ProviderMarket, NewAgreement, on_agreement_approved);
 actix_signal_handler!(ProviderMarket, CloseAgreement, agreement_terminated_signal);
-actix_signal_handler!(ProviderMarket, AgreementApproved, agreement_signed_signal);
+actix_signal_handler!(ProviderMarket, NewAgreement, agreement_signed_signal);
 
 fn get_backoff() -> backoff::ExponentialBackoff {
     // TODO: We could have config for Market actor to be able to set at least initial interval.
