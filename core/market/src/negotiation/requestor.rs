@@ -21,6 +21,7 @@ use crate::protocol::negotiation::{error::*, messages::*, requestor::Negotiation
 use super::{common::*, error::*, notifier::NotifierError, EventNotifier};
 use crate::config::Config;
 use crate::utils::display::EnableDisplay;
+use ya_std_utils::LogErr;
 
 #[derive(Clone, derive_more::Display, Debug, PartialEq)]
 pub enum ApprovalStatus {
@@ -453,10 +454,8 @@ async fn agreement_approved(
         // TODO: Validate agreement signature.
         // Note: session must be None, because either we already set this value in ConfirmAgreement,
         // or we purposely left it None.
-        broker
-            .db
-            .as_dao::<AgreementDao>()
-            .approve(&msg.agreement_id, &None)
+        let dao = broker.db.as_dao::<AgreementDao>();
+        dao.approve(&msg.agreement_id, &None)
             .await
             .map_err(|err| match err {
                 AgreementDaoError::InvalidTransition { from, .. } => {
@@ -479,6 +478,15 @@ async fn agreement_approved(
                     RemoteAgreementError::InternalError(msg.agreement_id.clone())
                 }
             })?;
+
+        dao.create_approve_event(&agreement.id)
+            .await
+            .log_err_msg(&format!(
+                "Failed to create AgreementApproved event for [{}]",
+                agreement.id,
+            ))
+            .ok();
+
         agreement
     };
 
