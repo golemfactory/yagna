@@ -24,8 +24,8 @@ pub mod local {
     use std::collections::HashMap;
     use std::fmt::Display;
     use structopt::*;
-    use strum::VariantNames;
-    use strum_macros::{EnumString, EnumVariantNames, IntoStaticStr, ToString};
+    use strum::{EnumProperty, VariantNames};
+    use strum_macros::{EnumProperty, EnumString, EnumVariantNames, IntoStaticStr, ToString};
 
     use ya_client_model::NodeId;
 
@@ -405,10 +405,14 @@ pub mod local {
         Other(String),
     }
 
-    #[derive(EnumString, ToString, EnumVariantNames, IntoStaticStr, Debug, Clone, PartialEq)]
+    #[derive(
+        EnumString, ToString, EnumVariantNames, IntoStaticStr, EnumProperty, Debug, Clone, PartialEq,
+    )]
     #[strum(serialize_all = "lowercase")]
     pub enum NetworkName {
+        #[strum(props(token = "GLM"))]
         Mainnet,
+        #[strum(props(token = "tGLM"))]
         Rinkeby,
     }
 
@@ -439,6 +443,27 @@ pub mod local {
 
         pub fn network(&self) -> Option<String> {
             self.network.as_ref().map(|net| net.to_string())
+        }
+
+        pub fn token(&self) -> Option<String> {
+            self.network
+                .as_ref()
+                .map(|net| net.get_str("token").unwrap().to_string())
+        }
+    }
+
+    #[cfg(test)]
+    mod test {
+        use super::*;
+
+        #[test]
+        fn test_token() {
+            let a = AccountCli {
+                account: None,
+                driver: DriverName::ZkSync,
+                network: Some(NetworkName::Rinkeby),
+            };
+            assert_eq!(Some("tGLM".into()), a.token());
         }
     }
 }
