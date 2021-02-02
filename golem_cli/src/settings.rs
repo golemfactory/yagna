@@ -1,7 +1,9 @@
-use crate::command::{ProviderConfig, RecvAccount, YaCommand};
+use crate::command::{ProviderConfig, YaCommand};
 use anyhow::Result;
 use byte_unit::{Byte as Bytes, ByteUnit};
 use structopt::{clap, StructOpt};
+
+use ya_provider::ReceiverAccount;
 
 /// Manage settings
 #[derive(StructOpt, Debug)]
@@ -36,33 +38,36 @@ pub struct Settings {
     /// Price for CPU per hour
     #[structopt(long, group = "set", value_name = "GLM (float)")]
     cpu_per_hour: Option<f64>,
-    /// Wallet address
-    #[structopt(long, group = "set")]
-    address: Option<String>,
+
+    #[structopt(flatten)]
+    pub account: ReceiverAccount,
 }
 
 pub async fn run(settings: Settings) -> Result</*exit code*/ i32> {
     log::debug!("settings: {:?}", settings);
     let cmd = YaCommand::new()?;
 
-    if let Some(node_name) = settings.node_name {
+    if settings.node_name.is_some() {
         cmd.ya_provider()?
-            .set_config(&ProviderConfig {
-                node_name: Some(node_name),
-                ..ProviderConfig::default()
-            })
+            .set_config(
+                &ProviderConfig {
+                    node_name: settings.node_name,
+                    ..ProviderConfig::default()
+                },
+                &settings.account.network,
+            )
             .await?;
     }
 
-    if let Some(address) = settings.address {
+    if settings.account.account.is_some() {
         cmd.ya_provider()?
-            .set_config(&ProviderConfig {
-                account: Some(RecvAccount {
-                    platform: None,
-                    address,
-                }),
-                ..ProviderConfig::default()
-            })
+            .set_config(
+                &ProviderConfig {
+                    account: settings.account.account,
+                    ..ProviderConfig::default()
+                },
+                &settings.account.network,
+            )
             .await?;
     }
 

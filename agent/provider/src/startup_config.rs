@@ -29,7 +29,7 @@ pub(crate) const PRESETS_JSON: &'static str = "presets.json";
 pub(crate) const HARDWARE_JSON: &'static str = "hardware.json";
 
 /// Common configuration for all Provider commands.
-#[derive(StructOpt, Clone)]
+#[derive(StructOpt, Clone, Debug)]
 pub struct ProviderConfig {
     /// Descriptor file (JSON) for available ExeUnits
     #[structopt(
@@ -89,7 +89,12 @@ impl ProviderConfig {
     }
 }
 
-#[derive(StructOpt, Clone, Debug, Serialize, Deserialize)]
+#[derive(StructOpt, Clone, Debug, Serialize, Deserialize, derive_more::Display)]
+#[display(
+    fmt = "{}Network: {}",
+    "account.map(|a| format!(\"Address: {}\n\", a)).unwrap_or(\"\".into())",
+    network
+)]
 pub struct ReceiverAccount {
     /// Account for payments.
     #[structopt(long, env = "YA_ACCOUNT")]
@@ -99,7 +104,7 @@ pub struct ReceiverAccount {
     pub network: NetworkName,
 }
 
-#[derive(StructOpt)]
+#[derive(StructOpt, Clone, Debug)]
 pub struct NodeConfig {
     /// Your human readable identity in the network.
     #[structopt(long, env = "NODE_NAME", hide_env_values = true)]
@@ -113,7 +118,7 @@ pub struct NodeConfig {
     pub account: ReceiverAccount,
 }
 
-#[derive(StructOpt)]
+#[derive(StructOpt, Clone)]
 pub struct RunConfig {
     #[structopt(flatten)]
     pub api: ApiOpts,
@@ -127,7 +132,7 @@ pub struct RunConfig {
     pub payment: PaymentsConfig,
 }
 
-#[derive(StructOpt)]
+#[derive(StructOpt, Clone, Debug)]
 pub enum ConfigConfig {
     Get {
         /// 'node_name' or 'subnet'. If unspecified all config is printed.
@@ -136,7 +141,7 @@ pub enum ConfigConfig {
     Set(NodeConfig),
 }
 
-#[derive(StructOpt, Clone)]
+#[derive(StructOpt, Clone, Debug)]
 pub struct PresetNoInteractive {
     #[structopt(long)]
     pub preset_name: Option<String>,
@@ -148,7 +153,7 @@ pub struct PresetNoInteractive {
     pub price: Vec<(String, f64)>,
 }
 
-#[derive(StructOpt)]
+#[derive(StructOpt, Clone, Debug)]
 #[structopt(group = clap::ArgGroup::with_name("update_names").multiple(true).required(true))]
 pub struct UpdateNames {
     #[structopt(long, group = "update_names")]
@@ -158,7 +163,7 @@ pub struct UpdateNames {
     pub names: Vec<String>,
 }
 
-#[derive(StructOpt)]
+#[derive(StructOpt, Clone, Debug)]
 #[structopt(rename_all = "kebab-case")]
 pub enum PresetsConfig {
     /// List available presets
@@ -191,7 +196,7 @@ pub enum PresetsConfig {
     ListMetrics,
 }
 
-#[derive(StructOpt)]
+#[derive(StructOpt, Clone, Debug)]
 #[structopt(rename_all = "kebab-case")]
 pub enum ProfileConfig {
     /// List available profiles
@@ -217,7 +222,7 @@ pub enum ProfileConfig {
     Activate { name: String },
 }
 
-#[derive(StructOpt)]
+#[derive(StructOpt, Clone, Debug)]
 #[structopt(rename_all = "kebab-case")]
 pub enum ExeUnitsConfig {
     List,
@@ -225,7 +230,7 @@ pub enum ExeUnitsConfig {
     // TODO: Update command - could update ExeUnit.
 }
 
-#[derive(StructOpt)]
+#[derive(StructOpt, Clone)]
 #[structopt(rename_all = "kebab-case")]
 #[structopt(about = clap::crate_description!())]
 #[structopt(global_setting = clap::AppSettings::ColoredHelp)]
@@ -238,7 +243,7 @@ pub struct StartupConfig {
     pub commands: Commands,
 }
 
-#[derive(StructOpt)]
+#[derive(StructOpt, Clone, Debug)]
 #[structopt(rename_all = "kebab-case")]
 pub struct CleanConfig {
     /// Expression in the following format:
@@ -251,7 +256,7 @@ pub struct CleanConfig {
     pub dry_run: bool,
 }
 
-#[derive(StructOpt)]
+#[derive(StructOpt, Clone)]
 pub enum Commands {
     /// Run provider agent
     Run(RunConfig),

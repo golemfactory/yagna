@@ -1,4 +1,4 @@
-use crate::command::{RecvAccount, UsageDef, DEFAULT_NETWORK};
+use crate::command::UsageDef;
 use crate::terminal::clear_stdin;
 use anyhow::Result;
 use directories::ProjectDirs;
@@ -7,10 +7,12 @@ use std::path::PathBuf;
 
 use std::fs;
 use structopt::StructOpt;
-use ya_core_model::NodeId;
 
-const OLD_DEFAULT_SUBNET: &str = "community";
-const DEFAULT_SUBNET: &str = "community.3";
+use ya_core_model::NodeId;
+use ya_provider::ReceiverAccount;
+
+const OLD_DEFAULT_SUBNETS: &[&'static str] = &["community", "community.3"];
+const DEFAULT_SUBNET: &str = "community.4";
 
 #[derive(StructOpt)]
 pub struct RunConfig {
@@ -20,10 +22,9 @@ pub struct RunConfig {
     pub subnet: Option<String>,
     #[structopt(long, env = "YA_CONF_PRICES", hidden = true)]
     pub prices_configured: bool,
-    #[structopt(long, env = "YA_ACCOUNT")]
-    pub account: Option<NodeId>,
-    #[structopt(long = "payment-network", env = "YA_PAYMENT_NETWORK", default_value = &DEFAULT_NETWORK)]
-    pub network: String,
+
+    #[structopt(flatten)]
+    pub account: ReceiverAccount,
 }
 
 impl RunConfig {
@@ -57,9 +58,10 @@ fn config_file() -> PathBuf {
     project_dirs.config_dir().join("provider.env")
 }
 
-pub fn init() -> Result<()> {
-    dotenv::from_path(config_file()).ok();
-    Ok(())
+pub fn init() -> Result<PathBuf> {
+    let config_file = config_file();
+    dotenv::from_path(&config_file).ok();
+    Ok(config_file)
 }
 
 pub async fn setup(run_config: &mut RunConfig, force: bool) -> Result<i32> {
@@ -71,6 +73,8 @@ pub async fn setup(run_config: &mut RunConfig, force: bool) -> Result<i32> {
     let cmd = crate::command::YaCommand::new()?;
     let mut config = cmd.ya_provider()?.get_config().await?;
 
+    log::debug!("Got initial config: {:?}", config);
+
     if config.node_name.is_none()
         || config
             .node_name
@@ -78,8 +82,10 @@ pub async fn setup(run_config: &mut RunConfig, force: bool) -> Result<i32> {
             .map(String::is_empty)
             .unwrap_or_default()
     {
+        log::debug!("Using node name: {:?}", run_config.node_name);
         config.node_name = run_config.node_name.clone();
     }
+
     if config.subnet.is_none() {
         config.subnet = run_config.subnet.clone();
     }
@@ -93,35 +99,40 @@ pub async fn setup(run_config: &mut RunConfig, force: bool) -> Result<i32> {
                 .unwrap_or_else(|| names::Generator::default().next().unwrap_or_default()),
         )?;
         // Force subnet upgade.
-        if config.subnet.as_deref() == Some(OLD_DEFAULT_SUBNET) {
-            config.subnet = None;
+        if let Some(subn) = config.subnet.as_deref() {
+            if OLD_DEFAULT_SUBNETS.iter().any(|n| n == &subn) {
+                config.subnet = None;
+            }
         }
         let subnet = promptly::prompt_default(
             "Subnet ",
             config.subnet.unwrap_or_else(|| DEFAULT_SUBNET.to_string()),
         )?;
 
-        let message = match &config.account {
-            Some(account) => format!("Ethereum wallet address (default={})", &account.address),
-            None => "Ethereum wallet address (default=internal golem wallet)".to_string(),
-        };
+        let account_msg = &config
+            .account
+            .map(|n| n.to_string())
+            .unwrap_or("Internal Golem wallet".into());
+        let message = format!(
+            "Ethereum {} wallet address (default={})",
+            run_config.account.network, account_msg
+        );
 
         while let Some(account) = promptly::prompt_opt::<String, _>(&message)? {
-            let r: Result<NodeId, _> = account.parse::<NodeId>();
-            if let Err(_) = r {
-                eprintln!("invalid ethereum address, is should be 20-byte hex (example 0xB1974E1F44EAD2d22bB995167A709b89Fc466B6c)")
-            } else {
-                config.account = Some(RecvAccount {
-                    address: account.to_string(),
-                    platform: None,
-                });
-                break;
+            match account.parse::<NodeId>() {
+                Err(e) => eprintln!("Invalid ethereum address, is should be 20-byte hex (example 0xB1974E1F44EAD2d22bB995167A709b89Fc466B6c): {}", e),
+                Ok(account) => {
+                    config.account = Some(account);
+                    break;
+                }
             }
         }
 
         config.node_name = Some(node_name);
         config.subnet = Some(subnet);
-        cmd.ya_provider()?.set_config(&config).await?;
+        cmd.ya_provider()?
+            .set_config(&config, &run_config.account.network)
+            .await?;
     }
 
     let is_configured = {

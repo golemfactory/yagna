@@ -2803,10 +2803,12 @@ dependencies = [
  "serde_json",
  "strip-ansi-escapes",
  "structopt",
+ "strum 0.20.0",
  "tokio 0.2.24",
  "url 2.2.0",
  "ya-compile-time-utils",
  "ya-core-model",
+ "ya-provider",
  "ya-utils-path",
  "ya-utils-process",
 ]
@@ -7619,7 +7621,7 @@ dependencies = [
 
 [[package]]
 name = "ya-provider"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix 0.10.0",
  "actix-rt",
@@ -7651,8 +7653,8 @@ dependencies = [
  "shared_child",
  "signal-hook",
  "structopt",
- "strum 0.19.5",
- "strum_macros 0.19.4",
+ "strum 0.20.0",
+ "strum_macros 0.20.1",
  "sys-info",
  "thiserror",
  "tokio 0.2.24",

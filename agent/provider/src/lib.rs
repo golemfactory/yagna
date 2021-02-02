@@ -12,4 +12,5 @@ pub mod signal;
 pub mod startup_config;
 pub mod tasks;
 
+pub use provider_agent::GlobalsState;
 pub use startup_config::ReceiverAccount;
