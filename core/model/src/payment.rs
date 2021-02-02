@@ -405,10 +405,12 @@ pub mod local {
         Other(String),
     }
 
+    /// Experimental. In future releases this might change or be removed.
     #[derive(
         EnumString, EnumVariantNames, IntoStaticStr, EnumProperty, Display, Debug, Clone, PartialEq,
     )]
     #[strum(serialize_all = "lowercase")]
+    #[non_exhaustive]
     pub enum NetworkName {
         #[strum(props(token = "GLM"))]
         Mainnet,
@@ -416,8 +418,10 @@ pub mod local {
         Rinkeby,
     }
 
+    /// Experimental. In future releases this might change or be removed.
     #[derive(EnumString, EnumVariantNames, IntoStaticStr, Display, Debug, Clone, PartialEq)]
     #[strum(serialize_all = "lowercase")]
+    #[non_exhaustive]
     pub enum DriverName {
         ZkSync,
         Erc20,
