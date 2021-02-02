@@ -27,7 +27,7 @@ async fn get_provider_accounts(id: Identity) -> HttpResponse {
     let recv_accounts: Vec<Account> = all_accounts
         .into_iter()
         .filter(|account| account.receive)
-        .filter(|account| account.address == node_id) // TODO: Implement proper account permission system
+        //.filter(|account| account.address == node_id) // TODO: Implement proper account permission system
         .collect();
     response::ok(recv_accounts)
 }
