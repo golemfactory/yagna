@@ -91,9 +91,9 @@ impl PaymentCli {
         match self {
             PaymentCli::Fund { account } => CommandOutput::object(
                 wallet::fund(
-                    resolve_address(&account.account).await?,
+                    resolve_address(account.address()).await?,
                     account.driver(),
-                    account.network(),
+                    Some(account.network()),
                     None,
                 )
                 .await?,
@@ -105,8 +105,8 @@ impl PaymentCli {
             } => {
                 let account = Account {
                     driver: account.driver(),
-                    address: resolve_address(&account.account).await?,
-                    network: account.network(),
+                    address: resolve_address(account.address()).await?,
+                    network: Some(account.network()),
                     token: None, // Use default -- we don't yet support other tokens than GLM
                     send: sender,
                     receive: receiver,
@@ -115,12 +115,12 @@ impl PaymentCli {
                 Ok(CommandOutput::NoOutput)
             }
             PaymentCli::Status { account } => {
-                let address = resolve_address(&account.account).await?;
+                let address = resolve_address(account.address()).await?;
                 let status = bus::service(pay::BUS_ID)
                     .call(pay::GetStatus {
                         address: address.clone(),
                         driver: account.driver(),
-                        network: account.network(),
+                        network: Some(account.network()),
                         token: None,
                     })
                     .await??;
@@ -204,7 +204,7 @@ impl PaymentCli {
                 command: InvoiceCommand::Status { last },
             } => {
                 let seconds = last.map(|d| d.as_secs() as i64).unwrap_or(3600);
-                let address = resolve_address(&address).await?;
+                let address = resolve_address(address).await?;
                 CommandOutput::object(
                     bus::service(pay::BUS_ID)
                         .call(pay::GetInvoiceStats::new(
@@ -236,11 +236,11 @@ impl PaymentCli {
                 };
                 CommandOutput::object(
                     wallet::exit(
-                        resolve_address(&account.account).await?,
+                        resolve_address(account.address()).await?,
                         to_address,
                         amount,
                         account.driver(),
-                        account.network(),
+                        Some(account.network()),
                         None,
                     )
                     .await?,
@@ -261,9 +261,9 @@ impl PaymentCli {
     }
 }
 
-async fn resolve_address(address: &Option<String>) -> anyhow::Result<String> {
+async fn resolve_address(address: Option<String>) -> anyhow::Result<String> {
     if let Some(id) = address {
-        return Ok(id.clone());
+        return Ok(id);
     }
 
     let id = bus::service(id_api::BUS_ID)

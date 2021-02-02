@@ -426,29 +426,31 @@ pub mod local {
     #[derive(StructOpt, Debug, Clone)]
     pub struct AccountCli {
         /// Wallet address [default: <DEFAULT_IDENTIDITY>]
-        #[structopt(long)]
-        pub account: Option<String>,
+        #[structopt(long, env = "YA_ACCOUNT")]
+        pub account: Option<NodeId>,
         /// Payment driver
         #[structopt(long, possible_values = DriverName::VARIANTS, default_value = DriverName::ZkSync.into())]
         pub driver: DriverName,
         /// Payment network
-        #[structopt(long, possible_values = NetworkName::VARIANTS)]
-        pub network: Option<NetworkName>,
+        #[structopt(long, possible_values = NetworkName::VARIANTS, default_value = NetworkName::Rinkeby.into())]
+        pub network: NetworkName,
     }
 
     impl AccountCli {
+        pub fn address(&self) -> Option<String> {
+            self.account.map(|a| a.to_string())
+        }
+
         pub fn driver(&self) -> String {
             self.driver.to_string()
         }
 
-        pub fn network(&self) -> Option<String> {
-            self.network.as_ref().map(|net| net.to_string())
+        pub fn network(&self) -> String {
+            self.network.to_string()
         }
 
-        pub fn token(&self) -> Option<String> {
-            self.network
-                .as_ref()
-                .map(|net| net.get_str("token").unwrap().to_string())
+        pub fn token(&self) -> String {
+            self.network.get_str("token").unwrap().to_string()
         }
     }
 
@@ -457,13 +459,12 @@ pub mod local {
         use super::*;
 
         #[test]
-        fn test_token() {
-            let a = AccountCli {
-                account: None,
-                driver: DriverName::ZkSync,
-                network: Some(NetworkName::Rinkeby),
-            };
-            assert_eq!(Some("tGLM".into()), a.token());
+        fn test_cli_defaults() {
+            let a = AccountCli::from_iter(&[""]);
+            assert_eq!(None, a.address());
+            assert_eq!("zksync", a.driver());
+            assert_eq!("rinkeby", a.network());
+            assert_eq!("tGLM", a.token());
         }
     }
 }
