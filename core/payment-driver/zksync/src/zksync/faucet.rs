@@ -11,16 +11,16 @@ use tokio::time::delay_for;
 
 // Workspace uses
 use ya_payment_driver::{db::models::Network, model::GenericError};
+use ya_utils_networking::srv_resolver;
 
 // Local uses
 use crate::zksync::wallet::account_balance;
 
-const DEFAULT_FAUCET_ADDR: &str = "http://3.249.139.167:5778/zk/donatex";
+const DEFAULT_FAUCET_SRV_PREFIX: &str = "_zk-faucet._tcp.";
+const FAUCET_ADDR_ENVAR: &str = "ZKSYNC_FAUCET_ADDR";
 const MAX_FAUCET_REQUESTS: u32 = 6;
 
 lazy_static! {
-    static ref FAUCET_ADDR: String =
-        env::var("ZKSYNC_FAUCET_ADDR").unwrap_or(DEFAULT_FAUCET_ADDR.to_string());
     static ref MIN_BALANCE: BigDecimal = BigDecimal::from(50);
     static ref MAX_WAIT: Duration = Duration::minutes(1);
 }
@@ -81,8 +81,9 @@ async fn wait_for_ngnt(address: &str, network: Network) -> Result<(), GenericErr
 
 async fn faucet_donate(address: &str, _network: Network) -> Result<(), GenericError> {
     let client = awc::Client::new();
+    let faucet_url = resolve_faucet_url().await?;
     let response = client
-        .get(format!("{}/{}", *FAUCET_ADDR, address))
+        .get(format!("{}/{}", faucet_url, address))
         .send()
         .await
         .map_err(GenericError::new)?
@@ -93,4 +94,13 @@ async fn faucet_donate(address: &str, _network: Network) -> Result<(), GenericEr
     log::debug!("Funds requested. Response = {}", response);
     // TODO: Verify tx hash
     Ok(())
+}
+
+async fn resolve_faucet_url() -> Result<String, GenericError> {
+    match env::var(FAUCET_ADDR_ENVAR) {
+        Ok(addr) => Ok(addr),
+        _ => srv_resolver::resolve_record(DEFAULT_FAUCET_SRV_PREFIX)
+            .await
+            .map_err(|_| GenericError::new("Faucet SRV record cannot be resolved")),
+    }
 }

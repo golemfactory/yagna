@@ -45,6 +45,7 @@ ya-sgx = "0.1"
 ya-utils-path = "0.1"
 ya-utils-futures = "0.1"
 ya-utils-process = { version = "0.1", features = ["lock"] }
+ya-utils-networking = "0.1"
 ya-version = "0.1"
 
 gftp = { version = "0.1", optional = true } # just to enable gftp build for cargo-deb
@@ -132,6 +133,7 @@ members = [
     "utils/agreement-utils",
     "utils/compile-time-utils",
     "utils/futures",
+    "utils/networking",
     "utils/path",
     "utils/process",
     "utils/std-utils",
@@ -188,8 +190,9 @@ ya-exe-unit = { path = "exe-unit" }
 ya-file-logging = { path = "utils/file-logging" }
 ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
-ya-utils-futures = { path = "utils/futures"}
-ya-utils-path = { path = "utils/path"}
+ya-utils-futures = { path = "utils/futures" }
+ya-utils-networking = { path = "utils/networking" }
+ya-utils-path = { path = "utils/path" }
 ya-utils-process = { path = "utils/process"}
 ya-diesel-utils = { path = "utils/diesel-utils"}
 ya-metrics = { path = "core/metrics" }
