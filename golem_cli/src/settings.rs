@@ -1,42 +1,38 @@
 use crate::command::{ProviderConfig, YaCommand};
 use anyhow::Result;
 use byte_unit::{Byte as Bytes, ByteUnit};
-use structopt::{clap, StructOpt};
+use structopt::StructOpt;
 
 use ya_provider::ReceiverAccount;
 
 /// Manage settings
 #[derive(StructOpt, Debug)]
-// "set" group requires at least one value
-// see also https://github.com/TeXitoi/structopt/issues/110
-// https://github.com/TeXitoi/structopt/issues/104
-#[structopt(group = clap::ArgGroup::with_name("set").multiple(true).required(true))]
 pub struct Settings {
-    #[structopt(long, group = "set")]
+    #[structopt(long)]
     node_name: Option<String>,
 
     /// Number of shared CPU cores
-    #[structopt(long, group = "set", value_name = "num")]
+    #[structopt(long, value_name = "num")]
     cores: Option<usize>,
 
     /// Size of shared RAM
-    #[structopt(long, group = "set", value_name = "bytes (like \"1.5GiB\")")]
+    #[structopt(long, value_name = "bytes (like \"1.5GiB\")")]
     memory: Option<Bytes>,
 
     /// Size of shared disk space
-    #[structopt(long, group = "set", value_name = "bytes (like \"1.5GiB\")")]
+    #[structopt(long, value_name = "bytes (like \"1.5GiB\")")]
     disk: Option<Bytes>,
 
     /// Price for starting a task
-    #[structopt(long, group = "set", value_name = "GLM (float)")]
+    #[structopt(long, value_name = "GLM (float)")]
     starting_fee: Option<f64>,
 
     /// Price for working environment per hour
-    #[structopt(long, group = "set", value_name = "GLM (float)")]
+    #[structopt(long, value_name = "GLM (float)")]
     env_per_hour: Option<f64>,
 
     /// Price for CPU per hour
-    #[structopt(long, group = "set", value_name = "GLM (float)")]
+    #[structopt(long, value_name = "GLM (float)")]
     cpu_per_hour: Option<f64>,
 
     #[structopt(flatten)]
@@ -44,7 +40,7 @@ pub struct Settings {
 }
 
 pub async fn run(settings: Settings) -> Result</*exit code*/ i32> {
-    log::debug!("settings: {:?}", settings);
+    log::debug!("Settings: {:?}", settings);
     let cmd = YaCommand::new()?;
 
     if settings.node_name.is_some() {
