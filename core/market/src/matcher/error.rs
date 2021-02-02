@@ -115,6 +115,8 @@ pub enum MatcherError {
 pub enum MatcherInitError {
     #[error("Failed to initialize Discovery interface. Error: {0}.")]
     DiscoveryInitError(#[from] DiscoveryInitError),
+    #[error("Failed to initialize expiration tracker. Error: {0}.")]
+    ExpirationTrackerError(String),
 }
 
 #[derive(thiserror::Error, Debug)]

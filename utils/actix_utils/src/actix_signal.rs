@@ -78,25 +78,25 @@ where
 #[macro_export]
 macro_rules! actix_signal_handler {
     ($ActorType:ty, $MessageType:ty, $SignalFieldName:tt) => {
-        impl Handler<ya_utils_actix::actix_signal::Subscribe<$MessageType>> for $ActorType {
+        impl Handler<$crate::actix_signal::Subscribe<$MessageType>> for $ActorType {
             type Result = ();
 
             fn handle(
                 &mut self,
-                msg: ya_utils_actix::actix_signal::Subscribe<$MessageType>,
-                ctx: &mut <Self as Actor>::Context,
+                msg: $crate::actix_signal::Subscribe<$MessageType>,
+                _ctx: &mut <Self as Actor>::Context,
             ) -> Self::Result {
                 self.$SignalFieldName.subscribe(msg.0);
             }
         }
 
-        impl Handler<ya_utils_actix::actix_signal::Signal<$MessageType>> for $ActorType {
+        impl Handler<$crate::actix_signal::Signal<$MessageType>> for $ActorType {
             type Result = Result<()>;
 
             fn handle(
                 &mut self,
-                msg: ya_utils_actix::actix_signal::Signal<$MessageType>,
-                ctx: &mut <Self as Actor>::Context,
+                msg: $crate::actix_signal::Signal<$MessageType>,
+                _ctx: &mut <Self as Actor>::Context,
             ) -> Self::Result {
                 self.$SignalFieldName.send_signal(msg.0)
             }
