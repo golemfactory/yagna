@@ -23,9 +23,14 @@ pub mod local {
     use chrono::{DateTime, Utc};
     use std::collections::HashMap;
     use std::fmt::Display;
+    use structopt::*;
+    use strum::VariantNames;
+    use strum_macros::{EnumString, EnumVariantNames, IntoStaticStr, ToString};
+
     use ya_client_model::NodeId;
 
     pub const BUS_ID: &'static str = "/local/payment";
+    pub const DEFAULT_PAYMENT_DRIVER: &str = "zksync";
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct DebitNotePayment {
@@ -398,6 +403,43 @@ pub mod local {
         AccountNotRegistered,
         #[error("Error while validating allocation: {0}")]
         Other(String),
+    }
+
+    #[derive(EnumString, ToString, EnumVariantNames, IntoStaticStr, Debug, Clone, PartialEq)]
+    #[strum(serialize_all = "lowercase")]
+    pub enum NetworkName {
+        Mainnet,
+        Rinkeby,
+    }
+
+    #[derive(EnumString, ToString, EnumVariantNames, IntoStaticStr, Debug, Clone, PartialEq)]
+    #[strum(serialize_all = "lowercase")]
+    pub enum DriverName {
+        ZkSync,
+        Erc20,
+    }
+
+    #[derive(StructOpt, Debug, Clone)]
+    pub struct AccountCli {
+        /// Wallet address [default: <DEFAULT_IDENTIDITY>]
+        #[structopt(long)]
+        pub account: Option<String>,
+        /// Payment driver
+        #[structopt(long, possible_values = DriverName::VARIANTS, default_value = DriverName::ZkSync.into())]
+        pub driver: DriverName,
+        /// Payment network
+        #[structopt(long, possible_values = NetworkName::VARIANTS)]
+        pub network: Option<NetworkName>,
+    }
+
+    impl AccountCli {
+        pub fn driver(&self) -> String {
+            self.driver.to_string()
+        }
+
+        pub fn network(&self) -> Option<String> {
+            self.network.as_ref().map(|net| net.to_string())
+        }
     }
 }
 

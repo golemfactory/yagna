@@ -11,7 +11,7 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
 use crate::accounts::{init_account, Account};
-use crate::{wallet, DEFAULT_PAYMENT_DRIVER};
+use crate::wallet;
 
 /// Payment management.
 #[derive(StructOpt, Debug)]
@@ -21,57 +21,37 @@ pub enum PaymentCli {
 
     /// Supply payment account with funds
     Fund {
-        #[structopt(long, help = "Wallet address [default: <DEFAULT_IDENTIDITY>]")]
-        account: Option<String>,
-        #[structopt(long, help = "Payment driver (zksync or erc20)", default_value = DEFAULT_PAYMENT_DRIVER)]
-        driver: String,
-        #[structopt(long, help = "Payment network (rinkeby or mainnet) [default: rinkeby]")]
-        network: Option<String>,
+        #[structopt(flatten)]
+        account: pay::AccountCli,
     },
 
     /// Initialize payment account (i.e. make it ready for sending/receiving funds)
     Init {
-        #[structopt(long, help = "Wallet address [default: <DEFAULT_IDENTIDITY>]")]
-        account: Option<String>,
+        #[structopt(flatten)]
+        account: pay::AccountCli,
         #[structopt(long, help = "Initialize account for sending")]
         sender: bool,
         #[structopt(long, help = "Initialize account for receiving")]
         receiver: bool,
-        #[structopt(long, help = "Payment driver (zksync or erc20)", default_value = DEFAULT_PAYMENT_DRIVER)]
-        driver: String,
-        #[structopt(long, help = "Payment network (rinkeby or mainnet) [default: rinkeby]")]
-        network: Option<String>,
     },
 
     /// Display account balance and a summary of sent/received payments
     Status {
-        #[structopt(long, help = "Wallet address [default: <DEFAULT_IDENTIDITY>]")]
-        account: Option<String>,
-        #[structopt(long, help = "Payment driver (zksync or erc20)", default_value = DEFAULT_PAYMENT_DRIVER)]
-        driver: String,
-        #[structopt(long, help = "Payment network (rinkeby or mainnet) [default: rinkeby]")]
-        network: Option<String>,
+        #[structopt(flatten)]
+        account: pay::AccountCli,
     },
 
     // TODO: Uncomment when operation is supported by drivers
     // Enter {
-    //     #[structopt(long)]
-    //     account: Option<String>,
-    //     #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
-    //     driver: String,
-    //     #[structopt(long)]
-    //     network: Option<String>,
+    //     #[structopt(flatten)]
+    //     account: AccountCli,
     //     #[structopt(long)]
     //     amount: String,
     // },
     /// Exit layer 2 (withdraw funds to Ethereum)
     Exit {
-        #[structopt(long, help = "Wallet address [default: <DEFAULT_IDENTIDITY>]")]
-        account: Option<String>,
-        #[structopt(long, help = "Payment driver (zksync or erc20)", default_value = DEFAULT_PAYMENT_DRIVER)]
-        driver: String,
-        #[structopt(long, help = "Payment network (rinkeby or mainnet) [default: rinkeby]")]
-        network: Option<String>,
+        #[structopt(flatten)]
+        account: pay::AccountCli,
         #[structopt(
             long,
             help = "Optional address to exit to [default: <DEFAULT_IDENTIDITY>]"
@@ -83,11 +63,8 @@ pub enum PaymentCli {
 
     // TODO: Uncomment when operation is supported by drivers
     // Transfer {
-    //     #[structopt(long)]
-    //     account: Option<String>,
-    //     #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
-    //     driver: String,
-    //     #[structopt(long)]
+    //     #[structopt(flatten)]
+    //     account: AccountCli,
     //     network: Option<String>,
     //     #[structopt(long)]
     //     to_address: String,
@@ -112,28 +89,24 @@ pub enum InvoiceCommand {
 impl PaymentCli {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
-            PaymentCli::Fund {
-                account,
-                driver,
-                network,
-            } => {
-                let address = resolve_address(account).await?;
-                let driver = driver.to_lowercase();
-                CommandOutput::object(wallet::fund(address, driver, network, None).await?)
-            }
+            PaymentCli::Fund { account } => CommandOutput::object(
+                wallet::fund(
+                    resolve_address(&account.account).await?,
+                    account.driver(),
+                    account.network(),
+                    None,
+                )
+                .await?,
+            ),
             PaymentCli::Init {
                 account,
-                driver,
-                network,
                 sender,
                 receiver,
             } => {
-                let address = resolve_address(account).await?;
-                let driver = driver.to_lowercase();
                 let account = Account {
-                    driver,
-                    address,
-                    network,
+                    driver: account.driver(),
+                    address: resolve_address(&account.account).await?,
+                    network: account.network(),
                     token: None, // Use default -- we don't yet support other tokens than GLM
                     send: sender,
                     receive: receiver,
@@ -141,66 +114,66 @@ impl PaymentCli {
                 init_account(account).await?;
                 Ok(CommandOutput::NoOutput)
             }
-            PaymentCli::Status {
-                account,
-                driver,
-                network,
-            } => {
-                let address = resolve_address(account).await?;
+            PaymentCli::Status { account } => {
+                let address = resolve_address(&account.account).await?;
                 let status = bus::service(pay::BUS_ID)
                     .call(pay::GetStatus {
-                        address,
-                        driver,
-                        network,
+                        address: address.clone(),
+                        driver: account.driver(),
+                        network: account.network(),
                         token: None,
                     })
                     .await??;
                 if ctx.json_output {
-                    CommandOutput::object(status)
-                } else {
-                    Ok(ResponseTable {
-                        columns: vec![
-                            "platform".to_owned(),
-                            "total amount".to_owned(),
-                            "reserved".to_owned(),
-                            "amount".to_owned(),
-                            "incoming".to_owned(),
-                            "outgoing".to_owned(),
-                        ],
-                        values: vec![
-                            serde_json::json! {[
-                                format!("driver: {}", status.driver),
-                                format!("{} {}", status.amount, status.token),
-                                format!("{} {}", status.reserved, status.token),
-                                "accepted",
-                                format!("{} {}", status.incoming.accepted.total_amount, status.token),
-                                format!("{} {}", status.outgoing.accepted.total_amount, status.token),
-                            ]},
-                            serde_json::json! {[
-                                format!("network: {}", status.network),
-                                "",
-                                "",
-                                "confirmed",
-                                format!("{} {}", status.incoming.confirmed.total_amount, status.token),
-                                format!("{} {}", status.outgoing.confirmed.total_amount, status.token),
-                            ]},
-                            serde_json::json! {[
-                                format!("token: {}", status.token),
-                                "",
-                                "",
-                                "requested",
-                                format!("{} {}", status.incoming.requested.total_amount, status.token),
-                                format!("{} {}", status.outgoing.requested.total_amount, status.token),
-                            ]},
-                        ],
-                    }
-                    .into())
+                    return CommandOutput::object(status);
                 }
+
+                Ok(ResponseTable {
+                    columns: vec![
+                        "platform".to_owned(),
+                        "total amount".to_owned(),
+                        "reserved".to_owned(),
+                        "amount".to_owned(),
+                        "incoming".to_owned(),
+                        "outgoing".to_owned(),
+                    ],
+                    values: vec![
+                        serde_json::json! {[
+                            format!("driver: {}", status.driver),
+                            format!("{} {}", status.amount, status.token),
+                            format!("{} {}", status.reserved, status.token),
+                            "accepted",
+                            format!("{} {}", status.incoming.accepted.total_amount, status.token),
+                            format!("{} {}", status.outgoing.accepted.total_amount, status.token),
+                        ]},
+                        serde_json::json! {[
+                            format!("network: {}", status.network),
+                            "",
+                            "",
+                            "confirmed",
+                            format!("{} {}", status.incoming.confirmed.total_amount, status.token),
+                            format!("{} {}", status.outgoing.confirmed.total_amount, status.token),
+                        ]},
+                        serde_json::json! {[
+                            format!("token: {}", status.token),
+                            "",
+                            "",
+                            "requested",
+                            format!("{} {}", status.incoming.requested.total_amount, status.token),
+                            format!("{} {}", status.outgoing.requested.total_amount, status.token),
+                        ]},
+                    ],
+                }
+                .with_header(format!("\nStatus for account: {}\n", address)))
             }
             PaymentCli::Accounts => {
                 let accounts = bus::service(pay::BUS_ID)
                     .call(pay::GetAccounts {})
                     .await??;
+                if ctx.json_output {
+                    return CommandOutput::object(accounts);
+                }
+
                 Ok(ResponseTable {
                     columns: vec![
                         "address".to_owned(),
@@ -231,7 +204,7 @@ impl PaymentCli {
                 command: InvoiceCommand::Status { last },
             } => {
                 let seconds = last.map(|d| d.as_secs() as i64).unwrap_or(3600);
-                let address = resolve_address(address).await?;
+                let address = resolve_address(&address).await?;
                 CommandOutput::object(
                     bus::service(pay::BUS_ID)
                         .call(pay::GetInvoiceStats::new(
@@ -254,18 +227,23 @@ impl PaymentCli {
             // }
             PaymentCli::Exit {
                 account,
-                driver,
-                network,
                 to_address,
                 amount,
             } => {
-                let address = resolve_address(account).await?;
                 let amount = match amount {
                     None => None,
                     Some(a) => Some(BigDecimal::from_str(&a)?),
                 };
                 CommandOutput::object(
-                    wallet::exit(address, to_address, amount, driver, network, None).await?,
+                    wallet::exit(
+                        resolve_address(&account.account).await?,
+                        to_address,
+                        amount,
+                        account.driver(),
+                        account.network(),
+                        None,
+                    )
+                    .await?,
                 )
             } // TODO: Uncomment when operation is supported by drivers
               // PaymentCli::Transfer {
@@ -283,9 +261,9 @@ impl PaymentCli {
     }
 }
 
-async fn resolve_address(address: Option<String>) -> anyhow::Result<String> {
+async fn resolve_address(address: &Option<String>) -> anyhow::Result<String> {
     if let Some(id) = address {
-        return Ok(id);
+        return Ok(id.clone());
     }
 
     let id = bus::service(id_api::BUS_ID)
