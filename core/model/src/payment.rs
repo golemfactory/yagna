@@ -407,7 +407,16 @@ pub mod local {
 
     /// Experimental. In future releases this might change or be removed.
     #[derive(
-        EnumString, EnumVariantNames, IntoStaticStr, EnumProperty, Display, Debug, Clone, PartialEq,
+        EnumString,
+        EnumVariantNames,
+        IntoStaticStr,
+        EnumProperty,
+        Display,
+        Debug,
+        Clone,
+        PartialEq,
+        Serialize,
+        Deserialize,
     )]
     #[strum(serialize_all = "lowercase")]
     #[non_exhaustive]
@@ -419,7 +428,17 @@ pub mod local {
     }
 
     /// Experimental. In future releases this might change or be removed.
-    #[derive(EnumString, EnumVariantNames, IntoStaticStr, Display, Debug, Clone, PartialEq)]
+    #[derive(
+        EnumString,
+        EnumVariantNames,
+        IntoStaticStr,
+        Display,
+        Debug,
+        Clone,
+        PartialEq,
+        Serialize,
+        Deserialize,
+    )]
     #[strum(serialize_all = "lowercase")]
     #[non_exhaustive]
     pub enum DriverName {
