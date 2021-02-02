@@ -7378,6 +7378,7 @@ dependencies = [
 name = "ya-market"
 version = "0.2.0"
 dependencies = [
+ "actix 0.10.0",
  "actix-http 2.2.0",
  "actix-rt",
  "actix-service",
@@ -7425,6 +7426,7 @@ dependencies = [
  "ya-service-api-web",
  "ya-service-bus",
  "ya-std-utils",
+ "ya-utils-actix",
 ]
 
 [[package]]
@@ -7861,9 +7863,12 @@ name = "ya-utils-actix"
 version = "0.1.0"
 dependencies = [
  "actix 0.10.0",
+ "actix-rt",
  "anyhow",
+ "chrono",
  "futures 0.3.12",
  "log",
+ "tokio 0.2.24",
 ]
 
 [[package]]
@@ -7995,7 +8000,6 @@ dependencies = [
  "ya-net",
  "ya-payment",
  "ya-persistence",
- "ya-provider",
  "ya-sb-proto",
  "ya-sb-router",
  "ya-service-api",
@@ -8004,6 +8008,7 @@ dependencies = [
  "ya-service-api-web",
  "ya-service-bus",
  "ya-sgx",
+ "ya-utils-actix",
  "ya-utils-futures",
  "ya-utils-path",
  "ya-utils-process",
