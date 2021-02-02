@@ -287,6 +287,11 @@ impl ProviderAgent {
     fn accounts(&self, network: &NetworkName) -> anyhow::Result<Vec<AccountView>> {
         let globals = self.globals.get_state();
         if let Some(address) = &globals.account {
+            log::debug!(
+                "Filtering payment accounts by address={} and network={}",
+                address,
+                network
+            );
             let accounts: Vec<AccountView> = self
                 .accounts
                 .iter()
@@ -296,8 +301,8 @@ impl ProviderAgent {
 
             if accounts.is_empty() {
                 anyhow::bail!(
-                    "Payment account {} not initialized. Please run \
-                    `yagna payment init --receiver --network {} --account {}` \
+                    "Payment account {} not initialized. Please run\n\
+                    \t`yagna payment init --receiver --network {} --account {}`\n\
                     for all drivers you want to use.",
                     address,
                     network,
@@ -307,7 +312,27 @@ impl ProviderAgent {
 
             Ok(accounts)
         } else {
-            Ok(self.accounts.clone())
+            log::debug!("Filtering payment accounts by network={}", network);
+            let accounts: Vec<AccountView> = self
+                .accounts
+                .iter()
+                // FIXME: this is dirty fix -- we can get more that one address from this filter
+                // FIXME: use /me endpoint and filter out only accounts bound to given app-key
+                // FIXME: or introduce param to getProviderAccounts to filter out external account above
+                .filter(|acc| &acc.network == network)
+                .cloned()
+                .collect();
+
+            if accounts.is_empty() {
+                anyhow::bail!(
+                    "Default payment account not initialized. Please run\n\
+                    \t`yagna payment init --receiver --network {}`\n\
+                    for all drivers you want to use.",
+                    network,
+                )
+            }
+
+            Ok(accounts)
         }
     }
 }
