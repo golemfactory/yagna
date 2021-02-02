@@ -7,7 +7,7 @@ use crate::hardware;
 use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{AccountView, LinearPricingOffer, Payments, PricingOffer};
-use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RecvAccount, RunConfig};
+use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, ReceiverAccount, RunConfig};
 use crate::tasks::task_manager::{InitializeTaskManager, TaskManager};
 
 use actix::prelude::*;
@@ -77,7 +77,7 @@ impl GlobalsManager {
 pub struct GlobalsState {
     pub node_name: String,
     pub subnet: Option<String>,
-    pub account: Option<RecvAccount>,
+    pub account: Option<ReceiverAccount>,
 }
 
 impl GlobalsState {
@@ -112,8 +112,8 @@ impl GlobalsState {
         if node_config.subnet.is_some() {
             self.subnet = node_config.subnet;
         }
-        if node_config.account.is_some() {
-            self.account = node_config.account;
+        if node_config.account.account.is_some() {
+            self.account = Some(node_config.account);
         }
         self.save(path)
     }
@@ -276,24 +276,16 @@ impl ProviderAgent {
 
     fn accounts(&self) -> Vec<AccountView> {
         let globals = self.globals.get_state();
-        if let Some(account) = &globals.account {
-            let mut accounts = Vec::new();
-            if account.platform.is_some() {
-                let zkaddr = AccountView {
-                    platform: account.platform.clone().unwrap(),
-                    address: account.address.to_lowercase(),
-                };
-                accounts.push(zkaddr);
-            } else {
-                for &platform in &["erc20-rinkeby-tglm", "zksync-rinkeby-tglm"] {
-                    accounts.push(AccountView {
-                        platform: platform.to_string(),
-                        address: account.address.to_lowercase(),
-                    })
-                }
-            }
-
-            accounts
+        if let Some(ReceiverAccount {
+            account: Some(address),
+            network,
+        }) = &globals.account
+        {
+            self.accounts
+                .iter()
+                .filter(|acc| &acc.address == address && &acc.network == network)
+                .cloned()
+                .collect()
         } else {
             self.accounts.clone()
         }

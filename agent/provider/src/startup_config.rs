@@ -4,18 +4,19 @@ use notify::*;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::sync::mpsc;
 use std::time::Duration;
 use structopt::{clap, StructOpt};
+use strum::VariantNames;
+
+use ya_client::{cli::ApiOpts, model::node_id::NodeId};
+use ya_core_model::payment::local::NetworkName;
+use ya_utils_path::data_dir::DataDir;
 
 use crate::execution::{ExeUnitsRegistry, TaskRunnerConfig};
 use crate::hardware::{Resources, UpdateResources};
 use crate::market::config::MarketConfig;
-
 use crate::payments::PaymentsConfig;
-use ya_client::cli::ApiOpts;
-use ya_utils_path::data_dir::DataDir;
 
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
@@ -88,49 +89,14 @@ impl ProviderConfig {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-pub struct RecvAccount {
-    pub platform: Option<String>,
-    pub address: String,
-}
-
-impl FromStr for RecvAccount {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> anyhow::Result<Self> {
-        let mut it = s.split("/").fuse();
-        match (it.next(), it.next(), it.next()) {
-            (Some(addr), None, None) => {
-                if addr.starts_with("0x") {
-                    Ok(RecvAccount {
-                        platform: None,
-                        address: addr.to_string(),
-                    })
-                } else {
-                    anyhow::bail!("invalid address format expected  0x..")
-                }
-            }
-            (Some(driver), Some(addr), None) => {
-                let platform = Some(
-                    match driver {
-                        "zksync" | "zk" => "zksync-rinkeby-tglm",
-                        "eth" | "l1" => "erc20-rinkeby-tglm",
-                        _ => anyhow::bail!("unknown driver: {}", driver),
-                    }
-                    .to_string(),
-                );
-                if addr.starts_with("0x") {
-                    Ok(RecvAccount {
-                        platform,
-                        address: addr.to_string(),
-                    })
-                } else {
-                    anyhow::bail!("invalid address format expected  0x..")
-                }
-            }
-            _ => anyhow::bail!("invalid account desription: {}", s),
-        }
-    }
+#[derive(StructOpt, Clone, Debug, Serialize, Deserialize)]
+pub struct ReceiverAccount {
+    /// Account for payments.
+    #[structopt(long, env = "YA_ACCOUNT")]
+    pub account: Option<NodeId>,
+    /// Payment network.
+    #[structopt(long = "payment-network", env = "YA_PAYMENT_NETWORK", possible_values = NetworkName::VARIANTS, default_value = NetworkName::Mainnet.into())]
+    pub network: NetworkName,
 }
 
 #[derive(StructOpt)]
@@ -143,11 +109,8 @@ pub struct NodeConfig {
     #[structopt(long, env = "SUBNET")]
     pub subnet: Option<String>,
 
-    /// Account for payments
-    /// Format: `[<driver>/]<address>`
-    ///
-    #[structopt(long, env = "YA_ACCOUNT")]
-    pub account: Option<RecvAccount>,
+    #[structopt(flatten)]
+    pub account: ReceiverAccount,
 }
 
 #[derive(StructOpt)]

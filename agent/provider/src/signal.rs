@@ -5,7 +5,7 @@ use std::pin::Pin;
 
 pub(crate) type Signal = (i32, &'static str);
 
-pub(crate) struct SignalMonitor {
+pub struct SignalMonitor {
     rx: mpsc::Receiver<Signal>,
     hooks: Vec<signal_hook::SigId>,
 }
