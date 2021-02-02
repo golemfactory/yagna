@@ -419,6 +419,7 @@ pub mod local {
         Deserialize,
     )]
     #[strum(serialize_all = "lowercase")]
+    #[serde(rename_all = "lowercase")]
     #[non_exhaustive]
     pub enum NetworkName {
         #[strum(props(token = "GLM"))]
@@ -440,6 +441,7 @@ pub mod local {
         Deserialize,
     )]
     #[strum(serialize_all = "lowercase")]
+    #[serde(rename_all = "lowercase")]
     #[non_exhaustive]
     pub enum DriverName {
         ZkSync,
