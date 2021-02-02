@@ -25,7 +25,7 @@ pub mod local {
     use std::fmt::Display;
     use structopt::*;
     use strum::{EnumProperty, VariantNames};
-    use strum_macros::{EnumProperty, EnumString, EnumVariantNames, IntoStaticStr, ToString};
+    use strum_macros::{Display, EnumProperty, EnumString, EnumVariantNames, IntoStaticStr};
 
     use ya_client_model::NodeId;
 
@@ -406,7 +406,7 @@ pub mod local {
     }
 
     #[derive(
-        EnumString, ToString, EnumVariantNames, IntoStaticStr, EnumProperty, Debug, Clone, PartialEq,
+        EnumString, EnumVariantNames, IntoStaticStr, EnumProperty, Display, Debug, Clone, PartialEq,
     )]
     #[strum(serialize_all = "lowercase")]
     pub enum NetworkName {
@@ -416,7 +416,7 @@ pub mod local {
         Rinkeby,
     }
 
-    #[derive(EnumString, ToString, EnumVariantNames, IntoStaticStr, Debug, Clone, PartialEq)]
+    #[derive(EnumString, EnumVariantNames, IntoStaticStr, Display, Debug, Clone, PartialEq)]
     #[strum(serialize_all = "lowercase")]
     pub enum DriverName {
         ZkSync,
