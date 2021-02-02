@@ -44,7 +44,6 @@ tiny-keccak = { version = "2.0", features = ["keccak"] }
 tokio = { version = "0.2", features = ["macros"] }
 trust-dns-resolver="0.19"
 uint = "0.7"
-ureq = { version = "0.11", features = ["charset"] }
 uuid = { version = "0.8", features = ["v4"] }
 web3 = "0.13"
 
