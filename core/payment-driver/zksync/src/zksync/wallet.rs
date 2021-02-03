@@ -182,7 +182,6 @@ struct TxRespObj {
 }
 
 pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails, GenericError> {
-
     let provider_url = match env::var("ZKSYNC_RPC_ADDRESS").ok() {
         Some(rpc_addr) => rpc_addr,
         None => get_rpc_addr(get_zk_network(network)).to_string(),
