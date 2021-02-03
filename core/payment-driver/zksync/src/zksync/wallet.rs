@@ -182,7 +182,10 @@ struct TxRespObj {
 }
 
 pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails, GenericError> {
-    let provider_url = get_rpc_addr(get_zk_network(network));
+    let provider_url = match env::var("ZKSYNC_RPC_ADDRESS").ok() {
+        Some(rpc_addr) => rpc_addr,
+        None => get_rpc_addr(get_zk_network(network)).to_string(),
+    };
     // HACK: Get the transaction data from v0.1 api
     let api_url = provider_url.replace("/jsrpc", "/api/v0.1");
     let req_url = format!("{}/transactions_all/{}", api_url, tx_hash);
