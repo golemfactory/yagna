@@ -82,6 +82,8 @@ async fn wait_for_ngnt(address: &str, network: Network) -> Result<(), GenericErr
 async fn faucet_donate(address: &str, _network: Network) -> Result<(), GenericError> {
     let client = awc::Client::new();
     let faucet_url = resolve_faucet_url().await?;
+    debug!("Faucet url: {}/{}", faucet_url, address);
+
     let response = client
         .get(format!("{}/{}", faucet_url, address))
         .send()
@@ -99,8 +101,12 @@ async fn faucet_donate(address: &str, _network: Network) -> Result<(), GenericEr
 async fn resolve_faucet_url() -> Result<String, GenericError> {
     match env::var(FAUCET_ADDR_ENVAR) {
         Ok(addr) => Ok(addr),
-        _ => srv_resolver::resolve_record(DEFAULT_FAUCET_SRV_PREFIX)
-            .await
-            .map_err(|_| GenericError::new("Faucet SRV record cannot be resolved")),
+        _ => {
+            let faucet_host = srv_resolver::resolve_yagna_record(DEFAULT_FAUCET_SRV_PREFIX)
+                .await
+                .map_err(|_| GenericError::new("Faucet SRV record cannot be resolved"))?;
+
+            Ok(format!("http://{}/zk/donatex", faucet_host))
+        }
     }
 }

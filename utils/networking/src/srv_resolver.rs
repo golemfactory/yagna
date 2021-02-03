@@ -4,16 +4,22 @@ use trust_dns_resolver::TokioAsyncResolver;
 
 const DEFAULT_LOOKUP_DOMAIN: &'static str = "dev.golem.network";
 
-pub async fn resolve_record(record: &str) -> std::io::Result<String> {
+/// Resolves prefixes in the `DEFAULT_LOOKUP_DOMAIN`, see also `resolve_record`
+pub async fn resolve_yagna_record(prefix: &str) -> std::io::Result<String> {
+    resolve_record(format!(
+        "{}.{}",
+        prefix.trim_end_matches('.'),
+        DEFAULT_LOOKUP_DOMAIN
+    ))
+    .await
+}
+
+/// Performs lookup of the Service Record (SRV) in the Domain Name System
+/// If successful responds in the format of `hostname:port`
+pub async fn resolve_record(record: String) -> std::io::Result<String> {
     let resolver: TokioAsyncResolver =
         TokioAsyncResolver::tokio(ResolverConfig::google(), ResolverOpts::default()).await?;
-    let lookup = resolver
-        .srv_lookup(format!(
-            "{}.{}",
-            record.trim_end_matches('.'),
-            DEFAULT_LOOKUP_DOMAIN
-        ))
-        .await?;
+    let lookup = resolver.srv_lookup(record).await?;
     let srv = lookup
         .iter()
         .next()
@@ -24,6 +30,6 @@ pub async fn resolve_record(record: &str) -> std::io::Result<String> {
         srv.port()
     );
 
-    log::debug!("Central net address: {}", addr);
+    log::debug!("Resolved address: {}", addr);
     Ok(addr)
 }

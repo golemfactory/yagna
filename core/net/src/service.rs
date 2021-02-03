@@ -23,7 +23,7 @@ pub const CENTRAL_ADDR_ENV_VAR: &str = "CENTRAL_NET_HOST";
 async fn central_net_addr() -> std::io::Result<SocketAddr> {
     Ok(match std::env::var(CENTRAL_ADDR_ENV_VAR) {
         Ok(v) => v,
-        Err(_) => srv_resolver::resolve_record("_net._tcp.").await?,
+        Err(_) => srv_resolver::resolve_yagna_record("_net._tcp.").await?,
     }
     .to_socket_addrs()?
     .next()
