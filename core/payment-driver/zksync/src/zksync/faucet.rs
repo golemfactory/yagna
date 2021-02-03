@@ -16,7 +16,7 @@ use ya_utils_networking::srv_resolver;
 // Local uses
 use crate::zksync::wallet::account_balance;
 
-const DEFAULT_FAUCET_SRV_PREFIX: &str = "_zk-faucet._tcp.";
+const DEFAULT_FAUCET_SRV_PREFIX: &str = "_zk-faucet._tcp";
 const FAUCET_ADDR_ENVAR: &str = "ZKSYNC_FAUCET_ADDR";
 const MAX_FAUCET_REQUESTS: u32 = 6;
 
