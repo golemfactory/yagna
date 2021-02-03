@@ -7494,13 +7494,13 @@ dependencies = [
  "structopt",
  "thiserror",
  "tokio 0.2.24",
- "trust-dns-resolver 0.19.6",
  "ya-core-model",
  "ya-sb-proto",
  "ya-sb-router",
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-bus",
+ "ya-utils-networking",
 ]
 
 [[package]]
@@ -7890,6 +7890,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-utils-networking"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "trust-dns-resolver 0.19.6",
+]
+
+[[package]]
 name = "ya-utils-path"
 version = "0.1.0"
 dependencies = [
@@ -7976,6 +7984,7 @@ dependencies = [
  "ya-payment-driver",
  "ya-service-api-interfaces",
  "ya-utils-futures",
+ "ya-utils-networking",
  "zksync",
  "zksync_eth_signer",
 ]
@@ -8021,6 +8030,7 @@ dependencies = [
  "ya-service-bus",
  "ya-sgx",
  "ya-utils-futures",
+ "ya-utils-networking",
  "ya-utils-path",
  "ya-utils-process",
  "ya-version",

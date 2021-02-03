@@ -13,6 +13,7 @@ ya-core-model = { path = "../model", features=["net", "identity"] }
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.1"
 ya-service-bus = "0.3"
+ya-utils-networking = "0.1"
 
 actix-rt = "1.0"
 anyhow = "1.0"
@@ -22,7 +23,6 @@ log = "0.4"
 serde_json = "1.0"
 thiserror = "1.0"
 tokio = { version = "0.2", features = ["time"] }
-trust-dns-resolver = { version = "0.19", features = ["mdns"] }
 
 [dev-dependencies]
 ya-sb-proto = "0.1"
