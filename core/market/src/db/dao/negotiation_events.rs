@@ -85,7 +85,6 @@ impl<'c> NegotiationEventsDao<'c> {
         owner: Owner,
     ) -> Result<Vec<MarketEvent>, TakeEventsError> {
         let subscription_id = subscription_id.clone();
-        println!("take_events {}", max_events);
         do_with_transaction(self.pool, move |conn| {
             // Check subscription wasn't unsubscribed or expired.
             validate_subscription(conn, &subscription_id, owner)?;
@@ -104,10 +103,8 @@ impl<'c> NegotiationEventsDao<'c> {
                 .order_by(dsl::timestamp.asc())
                 .limit(max_events as i64)
                 .load::<MarketEvent>(conn)?;
-            println!("basic events {}", events.len());
             if (events.len() as i32) < max_events {
                 let limit_left: i32 = max_events - (events.len() as i32);
-                println!("Limit left {}", limit_left);
                 let proposal_events = basic_query
                     .filter(dsl::event_type.eq_any(vec![
                         EventType::ProviderNewProposal,
@@ -117,12 +114,8 @@ impl<'c> NegotiationEventsDao<'c> {
                     .limit(limit_left as i64)
                     .load::<MarketEvent>(conn)?;
 
-                println!("Extend {}", proposal_events.len());
                 events.extend(proposal_events.into_iter());
             }
-            let debug_events = basic_query
-                .load::<MarketEvent>(conn)?;
-            println!("debug events {:#?}", debug_events);
 
             // Remove returned events from queue.
             if !events.is_empty() {
