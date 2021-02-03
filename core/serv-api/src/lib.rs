@@ -31,6 +31,7 @@ pub enum CommandOutput {
         columns: Vec<String>,
         values: Vec<serde_json::Value>,
         summary: Vec<serde_json::Value>,
+        header: Option<String>,
     },
     FormattedObject(Box<dyn FormattedObject>),
 }
@@ -51,6 +52,7 @@ impl CommandOutput {
                 columns,
                 values,
                 summary,
+                header,
             } => {
                 if json_output {
                     println!(
@@ -62,6 +64,9 @@ impl CommandOutput {
                         .unwrap()
                     )
                 } else {
+                    if let Some(txt) = header {
+                        println!("{}", txt);
+                    }
                     print_table(columns, values, summary);
                 }
             }
@@ -173,6 +178,7 @@ impl From<ResponseTable> for CommandOutput {
             columns: table.columns,
             values: table.values,
             summary: Vec::new(),
+            header: None,
         }
     }
 }
@@ -214,6 +220,16 @@ impl ResponseTable {
             columns: self.columns,
             values: self.values,
             summary,
+            header: None,
+        }
+    }
+
+    pub fn with_header(self, header: String) -> CommandOutput {
+        CommandOutput::Table {
+            columns: self.columns,
+            values: self.values,
+            summary: Vec::new(),
+            header: Some(header),
         }
     }
 }
