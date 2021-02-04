@@ -141,6 +141,22 @@ pub enum RemoteAgreementError {
     InternalError(AgreementId),
 }
 
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum CommitAgreementError {
+    #[error("Remote Commit Agreement [{1}] error: {0}")]
+    Remote(RemoteCommitAgreementError, AgreementId),
+    #[error(transparent)]
+    CallerParse(#[from] CallerParseError),
+}
+
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum RemoteCommitAgreementError {
+    #[error("Agreement [{0}] expired.")]
+    Expired(AgreementId),
+    #[error("Agreement [{0}] cancelled.")]
+    Cancelled(AgreementId),
+}
+
 impl RemoteSensitiveError for RemoteProposeAgreementError {
     fn hide_sensitive_info(self) -> RemoteProposeAgreementError {
         match self {

@@ -21,6 +21,7 @@ use super::notifier::EventNotifier;
 use crate::config::Config;
 use crate::negotiation::common::validate_transition;
 use crate::utils::display::EnableDisplay;
+use ya_core_model::NodeId;
 
 #[derive(Clone, Debug, Eq, PartialEq, derive_more::Display)]
 pub enum ApprovalResult {
@@ -51,6 +52,7 @@ impl ProviderBroker {
         let broker3 = broker.clone();
         let broker_proposal_reject = broker.clone();
         let broker_terminated = broker.clone();
+        let commit_broker = broker.clone();
 
         let api = NegotiationApi::new(
             move |caller: String, msg: InitialProposalReceived| {
@@ -74,6 +76,11 @@ impl ProviderBroker {
                 broker_terminated
                     .clone()
                     .on_agreement_terminated(msg, caller, Owner::Requestor)
+            },
+            move |caller: String, msg: AgreementCommitted| {
+                commit_broker
+                    .clone()
+                    .on_agreement_committed(msg, caller, Owner::Requestor)
             },
         );
 
@@ -223,35 +230,108 @@ impl ProviderBroker {
                 Some(agreement) => agreement,
             };
 
-            validate_transition(&agreement, AgreementState::Approved)?;
+            validate_transition(&agreement, AgreementState::Approving)?;
 
-            // `db.update_state` must be invoked after successful approve_agreement
-            // TODO: if dao.approve fails, Provider and Requestor have inconsistent state.
-            self.api.approve_agreement(&agreement, timeout).await?;
-            dao.approve(agreement_id, &app_session_id)
-                .await
-                .map_err(|e| AgreementError::UpdateState(agreement_id.clone(), e))?;
+            // TODO: Update app_session_id here.
+            if let Some(session) = app_session_id {
+                log::info!(
+                    "AppSession id [{}] set for Agreement [{}].",
+                    &session,
+                    &agreement.id
+                );
+            }
+
+            // TODO: Update state to `AgreementState::Approving`.
 
             agreement
         };
 
-        self.common.notify_agreement(&agreement).await;
+        // It doesn't have to be under lock, since we have `Approving` state.
+        // Note that this state change between `Approving` and `Pending` in both
+        // ways is invisible for REST and GSB user, because `Approving` is only our
+        // internal state and is mapped to `Pending`.
+        //
+        // Note: There's reason, that it CAN'T  be done under lock. If we hold lock whole time
+        // Requestor won't be able to cancel his Agreement proposal and he is allowed to do it.
+        // TODO: Send signature and `approved_ts` from Agreement.
+        self.api.approve_agreement(&agreement, timeout).await?;
+        // TODO: Reverse state to `Pending` in case of error (reverse under lock).
+        // TODO: During reversing it can turn out, that we are in `Cancelled` or `Approved` state
+        //  since we weren't under lock during `self.api.approve_agreement` execution. In such a case,
+        //  we shouldn't return error from here.
 
-        counter!("market.agreements.provider.approved", 1);
         log::info!(
-            "Provider {} approved Agreement [{}].",
+            "Provider {} approved Agreement [{}]. Waiting for commit from Requestor [{}].",
             id.display(),
-            &agreement_id,
+            &agreement.id,
+            agreement.requestor_id
         );
-        if let Some(session) = app_session_id {
-            log::info!(
-                "AppSession id [{}] set for Agreement [{}].",
-                &session,
-                &agreement_id
-            );
-        }
+
+        // TODO: Here we must wait until `AgreementCommitted` message, since `approve_agreement`
+        //  is supposed to return after approval.
+        // TODO: Waiting should set timeout.
+        // TODO: What in case of timeout?? Reverse to `Pending` state?
+        // Note: This function isn't responsible for changing Agreement state to `Approved`.
+
+        // TODO: Check Agreement state here, because it could be `Cancelled`.
         return Ok(ApprovalResult::Approved);
     }
+}
+
+async fn on_agreement_committed(
+    broker: CommonBroker,
+    caller: String,
+    msg: AgreementCommitted,
+) -> Result<(), CommitAgreementError> {
+    let agreement_id = msg.agreement_id.clone();
+    let caller_id = CommonBroker::parse_caller(&caller)?;
+    agreement_committed(broker, caller_id, msg)
+        .await
+        .map_err(|e| CommitAgreementError::Remote(e, agreement_id))
+}
+
+async fn agreement_committed(
+    broker: CommonBroker,
+    caller: NodeId,
+    msg: AgreementCommitted,
+) -> Result<(), RemoteCommitAgreementError> {
+    let dao = broker.db.as_dao::<AgreementDao>();
+    let agreement = {
+        let _hold = broker.agreement_lock.lock(&msg.agreement_id).await;
+
+        // Note: we still validate caller here, because we can't be sure, that we were caller
+        // by the same Requestor.
+        let agreement = match dao
+            .select(&msg.agreement_id, Some(caller), Utc::now().naive_utc())
+            .await
+            .map_err(|e| AgreementError::Get(msg.agreement_id.to_string(), e))?
+        {
+            None => Err(AgreementError::NotFound(msg.agreement_id.to_string()))?,
+            Some(agreement) => agreement,
+        };
+
+        // Note: We can find out here, that our Agreement is already in `Cancelled` state, because
+        // Requestor is allowed to call `cancel_agreement` at any time, before we commit Agreement.
+        // In this case we should return here, but we still must call `notify_agreement` to wake other threads.
+        validate_transition(&agreement, AgreementState::Approving)?;
+
+        // TODO: Validate committed signature from message.
+
+        // TODO: `approve` shouldn't set AppSessionId anymore.
+        dao.approve(&msg.agreement_id, &app_session_id)
+            .await
+            .map_err(|e| AgreementError::UpdateState(msg.agreement_id.clone(), e))?;
+        agreement
+    };
+
+    broker.notify_agreement(&agreement).await;
+    counter!("market.agreements.provider.approved", 1);
+    log::info!(
+        "Agreement [{}] approved (committed) by [{}].",
+        &agreement.id,
+        &caller
+    );
+    Ok(())
 }
 
 // TODO: We need more elegant solution than this. This function still returns

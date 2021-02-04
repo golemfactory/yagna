@@ -19,6 +19,7 @@ use super::messages::{
     ProposalReceived, ProposalRejected,
 };
 use crate::protocol::negotiation::error::{ProposeAgreementError, RejectProposalError};
+use crate::testing::negotiation::messages::AgreementCommitted;
 use ya_client::model::market::Reason;
 
 /// Responsible for communication with markets on other nodes
@@ -35,6 +36,7 @@ struct NegotiationImpl {
     agreement_received: HandlerSlot<AgreementReceived>,
     agreement_cancelled: HandlerSlot<AgreementCancelled>,
     agreement_terminated: HandlerSlot<AgreementTerminated>,
+    agreement_committed: HandlerSlot<AgreementCommitted>,
 }
 
 impl NegotiationApi {
@@ -45,6 +47,7 @@ impl NegotiationApi {
         agreement_received: impl CallbackHandler<AgreementReceived>,
         agreement_cancelled: impl CallbackHandler<AgreementCancelled>,
         agreement_terminated: impl CallbackHandler<AgreementTerminated>,
+        agreement_committed: impl CallbackHandler<AgreementCommitted>,
     ) -> NegotiationApi {
         let negotiation_impl = NegotiationImpl {
             initial_proposal_received: HandlerSlot::new(initial_proposal_received),
@@ -53,6 +56,7 @@ impl NegotiationApi {
             agreement_received: HandlerSlot::new(agreement_received),
             agreement_cancelled: HandlerSlot::new(agreement_cancelled),
             agreement_terminated: HandlerSlot::new(agreement_terminated),
+            agreement_committed: HandlerSlot::new(agreement_committed),
         };
         NegotiationApi {
             inner: Arc::new(negotiation_impl),

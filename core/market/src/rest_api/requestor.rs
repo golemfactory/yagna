@@ -205,5 +205,7 @@ async fn cancel_agreement(
     _id: Identity,
     _body: Json<Option<Reason>>,
 ) -> HttpResponse {
+    // TODO: Move to final implementation.
+    counter!("market.agreements.requestor.cancelled", 1);
     HttpResponse::NotImplemented().finish()
 }

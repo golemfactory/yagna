@@ -67,7 +67,10 @@ impl RequestorBroker {
             move |caller: String, msg: AgreementApproved| {
                 on_agreement_approved(broker2.clone(), caller, msg)
             },
-            move |_caller: String, _msg: AgreementRejected| async move { unimplemented!() },
+            move |_caller: String, _msg: AgreementRejected| async move {
+                counter!("market.agreements.requestor.rejected", 1);
+                unimplemented!()
+            },
             move |caller: String, msg: AgreementTerminated| {
                 broker_terminated
                     .clone()
@@ -311,15 +314,12 @@ impl RequestorBroker {
 
             match agreement.state {
                 AgreementState::Approved => {
-                    counter!("market.agreements.requestor.approved", 1);
                     return Ok(ApprovalStatus::Approved);
                 }
                 AgreementState::Rejected => {
-                    counter!("market.agreements.requestor.rejected", 1);
                     return Ok(ApprovalStatus::Rejected);
                 }
                 AgreementState::Cancelled => {
-                    counter!("market.agreements.requestor.cancelled", 1);
                     return Ok(ApprovalStatus::Cancelled);
                 }
                 AgreementState::Expired => return Err(WaitForApprovalError::Expired(id.clone())),
@@ -423,6 +423,8 @@ async fn agreement_approved(
     caller: NodeId,
     msg: AgreementApproved,
 ) -> Result<(), RemoteAgreementError> {
+    // TODO: We should check as many conditions here, as possible, because we want
+    //  to return meaningful message to Provider, what is impossible from `commit_agreement`.
     let agreement = {
         // We aren't sure, if `confirm_agreement` execution is finished,
         // so we must lock, to avoid attempt to change database state before.
@@ -441,13 +443,54 @@ async fn agreement_approved(
             Err(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
         }
 
+        // TODO: Validate Agreement `valid_to` timestamp. In previous version we got
+        //  error from database update, but know we want to escape early, because
+        //  otherwise we can't response with this error to Provider.
+        validate_transition(&agreement, AgreementState::Approving)?;
+
         // TODO: Validate agreement signature.
+        // TODO: Sign Agreement and update `approved_signature`.
+        // TODO: Update `approved_ts` Agreement field.
+        // TODO: Update state to `AgreementState::Approving`.
+
+        agreement
+    };
+
+    /// TODO: Commit Agreement. We must spawn committing later, because we need to
+    ///  return from this function to provider.
+    tokio::task::spawn_local(commit_agreement(broker, agreement.id));
+    log::info!(
+        "Agreement [{}] approved by [{}].",
+        &agreement.id,
+        &agreement.provider_id
+    );
+    Ok(())
+}
+
+async fn commit_agreement(broker: CommonBroker, agreement_id: AgreementId) {
+    // Note: in this scenario, we update database after Provider already
+    // got `AgreementCommitted` and updated Agreement state to `Approved`, so we will
+    // wake up `wait_for_agreement` after Provider.
+    let agreement = match {
+        let _hold = broker.agreement_lock.lock(&agreement_id).await;
+
+        let dao = broker.db.as_dao::<AgreementDao>();
+        let agreement = dao
+            .select(&msg.agreement_id, None, Utc::now().naive_utc())
+            .await
+            .map_err(|_e| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
+            .ok_or(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
+
+        // TODO: Send `AgreementCommited` message to Provider.
+        // TODO: We have problem to make GSB call here, since we don't have `api` object.
+        //  we must place this function in `protocol/negotiation/common`
+
+        // Note: This GSB call is racing with potential `cancel_agreement` call.
+        // In this case Provider code will decide, which call won the race.
+
         // Note: session must be None, because either we already set this value in ConfirmAgreement,
         // or we purposely left it None.
-        broker
-            .db
-            .as_dao::<AgreementDao>()
-            .approve(&msg.agreement_id, &None)
+        dao.approve(&agreement_id, &None)
             .await
             .map_err(|err| match err {
                 AgreementDaoError::InvalidTransition { from, .. } => {
@@ -455,27 +498,37 @@ async fn agreement_approved(
                         // Expired Agreement could be InvalidState either, but we want to explicit
                         // say to provider, that Agreement has expired.
                         AgreementState::Expired => {
-                            RemoteAgreementError::Expired(msg.agreement_id.clone())
+                            RemoteAgreementError::Expired(agreement_id.clone())
                         }
-                        _ => RemoteAgreementError::InvalidState(msg.agreement_id.clone(), from),
+                        _ => RemoteAgreementError::InvalidState(agreement_id.clone(), from),
                     }
                 }
                 e => {
                     // Log our internal error, but don't reveal error message to Provider.
                     log::warn!(
                         "Approve Agreement [{}] internal error: {}",
-                        &msg.agreement_id,
+                        &agreement_id,
                         e
                     );
-                    RemoteAgreementError::InternalError(msg.agreement_id.clone())
+                    RemoteAgreementError::InternalError(agreement_id.clone())
                 }
             })?;
-        agreement
+        Ok(agreement)
+    } {
+        Ok(agreement) => agreement,
+        Err(e) => {
+            // TODO: Return to pending state here.
+        }
     };
 
     broker.notify_agreement(&agreement).await;
-    log::info!("Agreement [{}] approved by [{}].", &agreement.id, &caller);
-    Ok(())
+
+    counter!("market.agreements.requestor.approved", 1);
+    log::info!(
+        "Agreement [{}] approved (committed) by [{}].",
+        &agreement.id,
+        &agreement.provider_id
+    );
 }
 
 pub async fn proposal_receiver_thread(
