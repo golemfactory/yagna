@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::{Mutex, OwnedMutexGuard, RwLock};
 
 use crate::db::model::AgreementId;
 
@@ -16,7 +16,7 @@ impl AgreementLock {
         }
     }
 
-    pub async fn get_lock(&self, agreement_id: &AgreementId) -> Arc<Mutex<()>> {
+    pub async fn lock(&self, agreement_id: &AgreementId) -> OwnedMutexGuard<()> {
         // Note how important are '{}' around this statement. Otherwise lock isn't freed
         // and we can't acquire write lock
         let potencial_lock = {
@@ -36,7 +36,8 @@ impl AgreementLock {
                     .clone()
             }
         }
-        .clone()
+        .lock_owned()
+        .await
     }
 
     pub async fn clear_locks(&self, agreement_id: &AgreementId) {
