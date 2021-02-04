@@ -8,7 +8,7 @@ cd core/payment
 cp ../../.env-template .env
 cargo run --example payment_api
 ```
-To use GNT instead of dummy driver us `cargo run --example payment_api -- --driver=gnt` instead.
+To use Erc-20 instead of ZkSync driver us `cargo run --example payment_api -- --driver=gnt` instead.
 
 ### Debit note flow
 

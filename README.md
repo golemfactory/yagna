@@ -34,7 +34,7 @@ Other ExeUnit types are to come (see below).
 ## MVP Requirements
 
 * Clean and easy UX, most specifically during onboarding.
-* NGNT-centric.
+* Erc20-centric.
 * Production-ready, modular and easy to maintain architecture and code base.  
 _Modular_ means that all the building blocks can be easily replaceable.
 * Documentation and SDK for developers.
@@ -51,7 +51,7 @@ _Modular_ means that all the building blocks can be easily replaceable.
    * [ ] Docker on Linux _(optional)_
    * [ ] SGX on Graphene _(optional)_
 1. Payment platform
-    * [x] **Payments with NGNT**
+    * [x] **Payments with Erc-20**
     * [x] **Gasless transactions**
     * [x] **ERC20 token**
     * [ ] payment matching _(optional)_
