@@ -357,7 +357,7 @@ impl RequestorBroker {
             // We won't be able to process `on_agreement_approved`, before we
             // finish execution under this lock. This avoids errors related to
             // Provider approving Agreement before we set proper state in database.
-            self.common.agreement_lock.lock(&agreement_id).await;
+            let _hold = self.common.agreement_lock.lock(&agreement_id).await;
 
             let agreement = match dao
                 .select(
@@ -426,7 +426,7 @@ async fn agreement_approved(
     let agreement = {
         // We aren't sure, if `confirm_agreement` execution is finished,
         // so we must lock, to avoid attempt to change database state before.
-        broker.agreement_lock.lock(&msg.agreement_id).await;
+        let _hold = broker.agreement_lock.lock(&msg.agreement_id).await;
 
         let agreement = broker
             .db
