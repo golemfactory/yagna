@@ -34,7 +34,7 @@ Other ExeUnit types are to come (see below).
 ## MVP Requirements
 
 * Clean and easy UX, most specifically during onboarding.
-* Erc20-centric.
+* GLM-centric.
 * Production-ready, modular and easy to maintain architecture and code base.  
 _Modular_ means that all the building blocks can be easily replaceable.
 * Documentation and SDK for developers.
@@ -68,4 +68,3 @@ _Modular_ means that all the building blocks can be easily replaceable.
     * [ ] Verification by humans _(optional)_
 1. Back compatibility
     * [ ] Golem Brass/Clay interoperability _(optional)_
-
