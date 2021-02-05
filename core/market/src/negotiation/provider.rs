@@ -212,12 +212,7 @@ impl ProviderBroker {
     ) -> Result<ApprovalResult, AgreementError> {
         let dao = self.common.db.as_dao::<AgreementDao>();
         let agreement = {
-            self.common
-                .agreement_lock
-                .get_lock(&agreement_id)
-                .await
-                .lock()
-                .await;
+            let _hold = self.common.agreement_lock.lock(&agreement_id).await;
 
             let agreement = match dao
                 .select(agreement_id, None, Utc::now().naive_utc())

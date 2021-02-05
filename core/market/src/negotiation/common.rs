@@ -357,11 +357,7 @@ impl CommonBroker {
             // that could have been called by other party at the same time. Termination
             // consists of 2 operations: sending message to other party and updating state.
             // Race conditions could appear in this situation.
-            self.agreement_lock
-                .get_lock(&agreement.id)
-                .await
-                .lock()
-                .await;
+            let _hold = self.agreement_lock.lock(&agreement.id).await;
 
             validate_transition(&agreement, AgreementState::Terminated)?;
 
@@ -437,11 +433,7 @@ impl CommonBroker {
             // that could have been called by one of our Agents. Termination consists
             // of 2 operations: sending message to other party and updating state.
             // Race conditions could appear in this situation.
-            self.agreement_lock
-                .get_lock(&agreement_id)
-                .await
-                .lock()
-                .await;
+            let _hold = self.agreement_lock.lock(&agreement_id).await;
 
             let agreement = dao
                 .select(&agreement_id, None, Utc::now().naive_utc())
