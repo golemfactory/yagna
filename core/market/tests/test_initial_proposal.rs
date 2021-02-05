@@ -554,64 +554,65 @@ async fn test_counter_initial_proposal() {
     assert!(proposal.prev_proposal_id.is_some());
 }
 
-#[cfg_attr(not(feature = "test-suite"), ignore)]
-#[serial_test::serial]
-async fn test_respawn_proposal_after_terminate_by_requestor() -> anyhow::Result<()> {
-    let network = MarketsNetwork::new(None)
-        .await
-        .add_market_instance(REQ_NAME)
-        .await
-        .add_market_instance(PROV_NAME)
-        .await;
-
-    let info = negotiate_agreement(
-        &network,
-        REQ_NAME,
-        PROV_NAME,
-        "negotiation",
-        "r-session",
-        "p-session",
-    )
-    .await
-    .unwrap();
-
-    let req_market = network.get_market(REQ_NAME);
-    let prov_market = network.get_market(PROV_NAME);
-    let req_id = network.get_default_id(REQ_NAME);
-    let agreement_id = info.r_agreement;
-
-    let timestamp = Utc::now();
-
-    req_market
-        .terminate_agreement(
-            req_id,
-            agreement_id.into_client(),
-            Some(gen_reason("Success")),
-        )
-        .await
-        .unwrap();
-
-    let proposal =
-        requestor::query_proposal(&req_market, &info.negotiation.demand_id, "Respawn #R")
-            .await
-            .unwrap();
-
-    assert!(timestamp <= proposal.timestamp);
-    assert_eq!(
-        proposal.issuer_id,
-        network.get_default_id(PROV_NAME).identity
-    );
-    assert_eq!(proposal.state, State::Initial);
-
-    // No new Proposal should appear on Provider Daemon side.
-    assert!(prov_market
-        .provider_engine
-        .query_events(&info.negotiation.offer_id, 0.2, Some(2))
-        .await
-        .unwrap()
-        .is_empty());
-    Ok(())
-}
+// Respawn proposal disabled temporary
+// #[cfg_attr(not(feature = "test-suite"), ignore)]
+// #[serial_test::serial]
+// async fn test_respawn_proposal_after_terminate_by_requestor() -> anyhow::Result<()> {
+//     let network = MarketsNetwork::new(None)
+//         .await
+//         .add_market_instance(REQ_NAME)
+//         .await
+//         .add_market_instance(PROV_NAME)
+//         .await;
+//
+//     let info = negotiate_agreement(
+//         &network,
+//         REQ_NAME,
+//         PROV_NAME,
+//         "negotiation",
+//         "r-session",
+//         "p-session",
+//     )
+//     .await
+//     .unwrap();
+//
+//     let req_market = network.get_market(REQ_NAME);
+//     let prov_market = network.get_market(PROV_NAME);
+//     let req_id = network.get_default_id(REQ_NAME);
+//     let agreement_id = info.r_agreement;
+//
+//     let timestamp = Utc::now();
+//
+//     req_market
+//         .terminate_agreement(
+//             req_id,
+//             agreement_id.into_client(),
+//             Some(gen_reason("Success")),
+//         )
+//         .await
+//         .unwrap();
+//
+//     let proposal =
+//         requestor::query_proposal(&req_market, &info.negotiation.demand_id, "Respawn #R")
+//             .await
+//             .unwrap();
+//
+//     assert!(timestamp <= proposal.timestamp);
+//     assert_eq!(
+//         proposal.issuer_id,
+//         network.get_default_id(PROV_NAME).identity
+//     );
+//     assert_eq!(proposal.state, State::Initial);
+//
+//     // No new Proposal should appear on Provider Daemon side.
+//     assert!(prov_market
+//         .provider_engine
+//         .query_events(&info.negotiation.offer_id, 0.2, Some(2))
+//         .await
+//         .unwrap()
+//         .is_empty());
+//     Ok(())
+// }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
