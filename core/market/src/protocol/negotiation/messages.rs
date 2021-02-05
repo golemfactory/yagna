@@ -5,7 +5,9 @@ use ya_client::model::market::Reason;
 use ya_service_bus::RpcMessage;
 
 use crate::db::model::{AgreementId, DbProposal, Owner, Proposal, ProposalId, SubscriptionId};
-use crate::protocol::negotiation::error::{ProposeAgreementError, RejectProposalError};
+use crate::protocol::negotiation::error::{
+    CommitAgreementError, ProposeAgreementError, RejectProposalError,
+};
 
 use super::super::callback::CallbackMessage;
 use super::error::{
@@ -197,9 +199,9 @@ pub struct AgreementCommitted {
 }
 
 impl RpcMessage for AgreementCommitted {
-    const ID: &'static str = "CommitAgreement";
+    const ID: &'static str = "AgreementCommitted";
     type Item = ();
-    type Error = AgreementCommitted;
+    type Error = CommitAgreementError;
 }
 
 /// The same messaged will be used on GSB and as messages in callbacks.

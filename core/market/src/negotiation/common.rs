@@ -361,7 +361,13 @@ impl CommonBroker {
 
             validate_transition(&agreement, AgreementState::Terminated)?;
 
-            protocol_common::propagate_terminate_agreement(&agreement, reason.clone()).await?;
+            protocol_common::propagate_terminate_agreement(
+                &agreement,
+                reason.clone(),
+                "NotSigned".to_string(),
+                Utc::now().naive_utc(),
+            )
+            .await?;
 
             let reason_string = CommonBroker::reason2string(&reason);
             dao.terminate(&agreement.id, reason_string, agreement.id.owner())

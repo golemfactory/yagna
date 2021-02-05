@@ -1,9 +1,11 @@
 use actix_web::web::{Data, Json, Path, Query};
 use actix_web::{HttpResponse, Responder, Scope};
+use metrics::counter;
 use std::str::FromStr;
 use std::sync::Arc;
 
 use ya_client::model::market::{AgreementProposal, NewDemand, NewProposal, Reason};
+use ya_client::model::ErrorMessage;
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::LogErr;
 
@@ -16,7 +18,6 @@ use super::{
 };
 use crate::negotiation::ApprovalStatus;
 use crate::rest_api::QueryAppSessionId;
-use ya_client::model::ErrorMessage;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope

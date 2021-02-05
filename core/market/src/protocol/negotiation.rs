@@ -14,14 +14,20 @@ pub mod common {
     use ya_net::{self as net, RemoteEndpoint};
     use ya_service_bus::RpcEndpoint;
 
+    use chrono::NaiveDateTime;
+
     /// Sent to notify other side about termination.
     pub async fn propagate_terminate_agreement(
         agreement: &Agreement,
         reason: Option<Reason>,
+        signature: String,
+        timestamp: NaiveDateTime,
     ) -> Result<(), TerminateAgreementError> {
         let msg = AgreementTerminated {
             agreement_id: agreement.id.clone().swap_owner(),
             reason,
+            signature,
+            termination_ts: timestamp,
         };
 
         log::debug!(
