@@ -9,7 +9,7 @@ use std::env;
 use std::str::FromStr;
 use zksync::operations::SyncTransactionHandle;
 use zksync::types::BlockStatus;
-use zksync::zksync_types::{tx::TxHash, Address, TxFeeTypes};
+use zksync::zksync_types::{tx::TxHash, Address, TxFeeTypes, Nonce};
 use zksync::{provider::get_rpc_addr, Network as ZkNetwork, provider::{Provider, RpcProvider}, Wallet, WalletCredentials};
 use zksync_eth_signer::EthereumSigner;
 
@@ -149,7 +149,7 @@ pub async fn make_transfer(
 
     let transfer = wallet
         .start_transfer()
-        .nonce(nonce)
+        .nonce(Nonce(nonce))
         .str_to(&details.recipient[2..])
         .map_err(GenericError::new)?
         .token(token.as_ref())
