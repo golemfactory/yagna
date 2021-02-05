@@ -3,7 +3,6 @@
 */
 
 // External uses
-use std::convert::TryInto;
 use bigdecimal::BigDecimal;
 use lazy_static::lazy_static;
 use num_bigint::{BigInt, BigUint, ToBigInt};
@@ -46,7 +45,7 @@ fn increase_least_significant_digit(amount: &BigUint) -> BigUint {
     let digits = amount.to_radix_le(10);
     for i in 0..digits.len() {
         if digits[i] != 0 {
-            return amount + BigUint::from(10u32).pow(i.try_into().unwrap());
+            return amount + BigUint::from(10u32).pow(i as u32);
         }
     }
     amount.clone() // zero

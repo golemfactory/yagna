@@ -124,7 +124,7 @@ pub async fn get_nonce(address: &str, network: Network) -> u32 {
             return 0;
         }
     };
-    account_info.committed.nonce
+    *account_info.committed.nonce
 }
 
 pub async fn make_transfer(
