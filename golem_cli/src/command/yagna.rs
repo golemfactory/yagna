@@ -10,76 +10,71 @@ use std::collections::HashMap;
 use std::process::Stdio;
 
 use tokio::process::{Child, Command};
-use ya_core_model::payment::local::{InvoiceStats, InvoiceStatusNotes, StatusNotes, StatusResult};
+use ya_core_model::payment::local::{
+    InvoiceStats, InvoiceStatusNotes, NetworkName, StatusNotes, StatusResult,
+};
 use ya_core_model::version::VersionInfo;
 
-pub static DEFAULT_DRIVER: &'static str = "zksync";
-pub static DEFAULT_NETWORK: &'static str = "mainnet";
+pub const DEFAULT_DRIVER: &'static str = "zksync";
 
-pub struct PaymentType {
+pub struct PaymentPlatform {
     pub platform: &'static str,
     pub driver: &'static str,
     pub token: &'static str,
 }
 
-pub struct DriverDescriptor(pub HashMap<&'static str, PaymentType>);
+pub struct PaymentDriver(pub HashMap<&'static str, PaymentPlatform>);
 
 lazy_static! {
-    pub static ref ZKSYNC_DRIVER: DriverDescriptor = {
+    pub static ref ZKSYNC_DRIVER: PaymentDriver = {
         let mut zksync = HashMap::new();
         zksync.insert(
-            "mainnet",
-            PaymentType {
+            NetworkName::Mainnet.into(),
+            PaymentPlatform {
                 platform: "zksync-mainnet-glm",
                 driver: "zksync",
                 token: "GLM",
             },
         );
         zksync.insert(
-            "rinkeby",
-            PaymentType {
+            NetworkName::Rinkeby.into(),
+            PaymentPlatform {
                 platform: "zksync-rinkeby-tglm",
                 driver: "zksync",
                 token: "tGLM",
             },
         );
-        DriverDescriptor(zksync)
+        PaymentDriver(zksync)
     };
-    pub static ref ERC20_DRIVER: DriverDescriptor = {
+    pub static ref ERC20_DRIVER: PaymentDriver = {
         let mut erc20 = HashMap::new();
         erc20.insert(
-            "mainnet",
-            PaymentType {
+            NetworkName::Mainnet.into(),
+            PaymentPlatform {
                 platform: "erc20-mainnet-glm",
                 driver: "erc20",
                 token: "GLM",
             },
         );
         erc20.insert(
-            "rinkeby",
-            PaymentType {
+            NetworkName::Rinkeby.into(),
+            PaymentPlatform {
                 platform: "erc20-rinkeby-tglm",
                 driver: "erc20",
                 token: "tGLM",
             },
         );
-        DriverDescriptor(erc20)
+        PaymentDriver(erc20)
     };
 }
 
-impl DriverDescriptor {
-    pub fn payment_type(&self, network: Option<&str>) -> anyhow::Result<&PaymentType> {
-        Ok(self
-            .0
-            .get(network.as_deref().unwrap_or(DEFAULT_NETWORK))
-            .ok_or(anyhow!(
-                "Network '{}' not found.",
-                network.unwrap_or(DEFAULT_NETWORK)
-            ))?)
-    }
-
-    pub fn token_name(&self, network: Option<&str>) -> anyhow::Result<&str> {
-        Ok(self.payment_type(network)?.token)
+impl PaymentDriver {
+    pub fn platform(&self, network: &NetworkName) -> anyhow::Result<&PaymentPlatform> {
+        let net: &str = network.into();
+        Ok(self.0.get(net).ok_or(anyhow!(
+            "Payment driver config for network '{}' not found.",
+            network
+        ))?)
     }
 }
 
@@ -188,19 +183,16 @@ impl YagnaCommand {
 
     pub async fn payment_status(
         mut self,
-        address: Option<&str>,
-        network: &str,
-        driver_desc: &DriverDescriptor,
+        address: &str,
+        network: &NetworkName,
+        payment_driver: &PaymentDriver,
     ) -> anyhow::Result<StatusResult> {
         self.cmd.args(&["--json", "payment", "status"]);
-        if let Some(addr) = address {
-            self.cmd.args(&["--account", addr]);
-        }
+        self.cmd.args(&["--account", address]);
 
-        let payment_type = driver_desc.payment_type(Some(network))?;
-
-        self.cmd.args(&["--network", network]);
-        self.cmd.args(&["--driver", payment_type.driver]);
+        let payment_platform = payment_driver.platform(network)?;
+        self.cmd.args(&["--network", &network.to_string()]);
+        self.cmd.args(&["--driver", payment_platform.driver]);
 
         self.run().await
     }
@@ -208,19 +200,16 @@ impl YagnaCommand {
     pub async fn payment_init(
         mut self,
         address: &str,
-        network: &str,
-        payment_type: &DriverDescriptor,
+        network: &NetworkName,
+        payment_driver: &PaymentDriver,
     ) -> anyhow::Result<()> {
-        self.cmd.args(&[
-            "--json",
-            "payment",
-            "init",
-            "--receiver", // provider is a receiver
-            "--driver",
-            payment_type.payment_type(Some(network))?.driver,
-            "--account",
-            address,
-        ]);
+        self.cmd.args(&["--json", "payment", "init", "--receiver"]); // provider is a receiver
+        self.cmd.args(&["--account", address]);
+
+        let payment_platform = payment_driver.platform(network)?;
+        self.cmd.args(&["--network", &network.to_string()]);
+        self.cmd.args(&["--driver", payment_platform.driver]);
+
         self.run().await
     }
 

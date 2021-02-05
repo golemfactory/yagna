@@ -23,9 +23,14 @@ pub mod local {
     use chrono::{DateTime, Utc};
     use std::collections::HashMap;
     use std::fmt::Display;
+    use structopt::*;
+    use strum::{EnumProperty, VariantNames};
+    use strum_macros::{Display, EnumProperty, EnumString, EnumVariantNames, IntoStaticStr};
+
     use ya_client_model::NodeId;
 
     pub const BUS_ID: &'static str = "/local/payment";
+    pub const DEFAULT_PAYMENT_DRIVER: &str = "zksync";
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct DebitNotePayment {
@@ -398,6 +403,94 @@ pub mod local {
         AccountNotRegistered,
         #[error("Error while validating allocation: {0}")]
         Other(String),
+    }
+
+    /// Experimental. In future releases this might change or be removed.
+    #[derive(
+        EnumString,
+        EnumVariantNames,
+        IntoStaticStr,
+        EnumProperty,
+        Display,
+        Debug,
+        Clone,
+        PartialEq,
+        Serialize,
+        Deserialize,
+    )]
+    #[strum(serialize_all = "lowercase")]
+    #[serde(rename_all = "lowercase")]
+    #[non_exhaustive]
+    pub enum NetworkName {
+        #[strum(props(token = "GLM"))]
+        Mainnet,
+        #[strum(props(token = "tGLM"))]
+        Rinkeby,
+    }
+
+    /// Experimental. In future releases this might change or be removed.
+    #[derive(
+        EnumString,
+        EnumVariantNames,
+        IntoStaticStr,
+        Display,
+        Debug,
+        Clone,
+        PartialEq,
+        Serialize,
+        Deserialize,
+    )]
+    #[strum(serialize_all = "lowercase")]
+    #[serde(rename_all = "lowercase")]
+    #[non_exhaustive]
+    pub enum DriverName {
+        ZkSync,
+        Erc20,
+    }
+
+    #[derive(StructOpt, Debug, Clone)]
+    pub struct AccountCli {
+        /// Wallet address [default: <DEFAULT_IDENTIDITY>]
+        #[structopt(long, env = "YA_ACCOUNT")]
+        pub account: Option<NodeId>,
+        /// Payment driver
+        #[structopt(long, possible_values = DriverName::VARIANTS, default_value = DriverName::ZkSync.into())]
+        pub driver: DriverName,
+        /// Payment network
+        #[structopt(long, possible_values = NetworkName::VARIANTS, default_value = NetworkName::Rinkeby.into())]
+        pub network: NetworkName,
+    }
+
+    impl AccountCli {
+        pub fn address(&self) -> Option<String> {
+            self.account.map(|a| a.to_string())
+        }
+
+        pub fn driver(&self) -> String {
+            self.driver.to_string()
+        }
+
+        pub fn network(&self) -> String {
+            self.network.to_string()
+        }
+
+        pub fn token(&self) -> String {
+            self.network.get_str("token").unwrap().to_string()
+        }
+    }
+
+    #[cfg(test)]
+    mod test {
+        use super::*;
+
+        #[test]
+        fn test_cli_defaults() {
+            let a = AccountCli::from_iter(&[""]);
+            assert_eq!(None, a.address());
+            assert_eq!("zksync", a.driver());
+            assert_eq!("rinkeby", a.network());
+            assert_eq!("tGLM", a.token());
+        }
     }
 }
 
