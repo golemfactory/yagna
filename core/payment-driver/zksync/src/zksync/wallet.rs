@@ -9,8 +9,12 @@ use std::env;
 use std::str::FromStr;
 use zksync::operations::SyncTransactionHandle;
 use zksync::types::BlockStatus;
-use zksync::zksync_types::{tx::TxHash, Address, TxFeeTypes, Nonce};
-use zksync::{provider::get_rpc_addr, Network as ZkNetwork, provider::{Provider, RpcProvider}, Wallet, WalletCredentials};
+use zksync::zksync_types::{tx::TxHash, Address, Nonce, TxFeeTypes};
+use zksync::{
+    provider::get_rpc_addr,
+    provider::{Provider, RpcProvider},
+    Network as ZkNetwork, Wallet, WalletCredentials,
+};
 use zksync_eth_signer::EthereumSigner;
 
 // Workspace uses
@@ -147,17 +151,22 @@ pub async fn make_transfer(
         .map_err(GenericError::new)?;
     log::debug!("balance before transfer={}", balance);
 
-    let transfer = wallet
+    let transfer_builder = wallet
         .start_transfer()
         .nonce(Nonce(nonce))
         .str_to(&details.recipient[2..])
         .map_err(GenericError::new)?
         .token(token.as_ref())
         .map_err(GenericError::new)?
-        .amount(amount)
-        .send()
-        .await
-        .map_err(GenericError::new)?;
+        .amount(amount.clone());
+    log::debug!(
+        "transfer raw data. nonce={}, to={}, token={}, amount={}",
+        nonce,
+        &details.recipient,
+        token,
+        amount
+    );
+    let transfer = transfer_builder.send().await.map_err(GenericError::new)?;
 
     let tx_hash = hex::encode(transfer.hash());
     log::info!("Created zksync transaction with hash={}", tx_hash);
@@ -333,16 +342,19 @@ pub async fn withdraw<S: EthereumSigner + Clone, P: Provider + Clone>(
         None => address,
     };
 
-    let withdraw_handle = wallet
+    let withdraw_builder = wallet
         .start_withdraw()
         .token(ZKSYNC_TOKEN_NAME)
         .map_err(GenericError::new)?
-        .amount(withdraw_amount)
-        .to(recipient_address)
-        .send()
-        .await
-        .map_err(GenericError::new)?;
+        .amount(withdraw_amount.clone())
+        .to(recipient_address);
+    log::debug!(
+        "Withdrawal raw data. token={}, amount={}, to={}",
+        ZKSYNC_TOKEN_NAME,
+        withdraw_amount,
+        recipient_address
+    );
+    let withdraw_handle = withdraw_builder.send().await.map_err(GenericError::new)?;
 
-    // TODO: Do we need this handle debugged? debug!("Withdraw handle: {:?}", withdraw_handle);
     Ok(withdraw_handle)
 }

@@ -1,7 +1,7 @@
 use bigdecimal::BigDecimal;
 use chrono::Utc;
-use std::time::Duration;
 use std::str::FromStr;
+use std::time::Duration;
 use structopt::StructOpt;
 use ya_client::payment::PaymentApi;
 use ya_client::web::{rest_api_url, WebClient};
