@@ -182,7 +182,7 @@ struct TxRespObj {
 }
 
 pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails, GenericError> {
-    let provider_url = match env::var("ZKSYNC_RPC_ADDRESS").ok() {
+    let provider_url = match get_rpc_from_env(network) {
         Some(rpc_addr) => rpc_addr,
         None => get_rpc_addr(get_zk_network(network)).to_string(),
     };
@@ -222,11 +222,18 @@ pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails
 }
 
 fn get_provider(network: Network) -> Provider {
-    let provider: Provider = match env::var("ZKSYNC_RPC_ADDRESS").ok() {
+    let provider: Provider = match get_rpc_from_env(network) {
         Some(rpc_addr) => Provider::from_addr(rpc_addr),
         None => Provider::new(get_zk_network(network)),
     };
     provider.clone()
+}
+
+fn get_rpc_from_env(network: Network) -> Option<String> {
+    match network {
+        Network::Mainnet => env::var("ZKSYNC_MAINNET_RPC_ADDRESS").ok(),
+        Network::Rinkeby => env::var("ZKSYNC_RINKEBY_RPC_ADDRESS").ok(),
+    }
 }
 
 async fn get_wallet(
