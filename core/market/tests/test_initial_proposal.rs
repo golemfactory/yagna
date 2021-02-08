@@ -174,7 +174,7 @@ async fn test_query_events_timeout() {
         .unwrap();
 
     // Protect from eternal waiting.
-    tokio::time::timeout(Duration::from_millis(1250), query_handle)
+    tokio::time::timeout(Duration::from_millis(1500), query_handle)
         .await
         .unwrap()
         .unwrap();
@@ -219,7 +219,7 @@ async fn test_query_events_unsubscribe_notification() {
         .unwrap();
 
     // Protect from eternal waiting.
-    tokio::time::timeout(Duration::from_millis(1250), query_handle)
+    tokio::time::timeout(Duration::from_millis(1500), query_handle)
         .await
         .unwrap()
         .unwrap();
@@ -388,12 +388,12 @@ async fn test_simultaneous_query_events() {
         .await
         .unwrap();
 
-    let mut events1 = tokio::time::timeout(Duration::from_millis(1250), query1)
+    let mut events1 = tokio::time::timeout(Duration::from_millis(1500), query1)
         .await
         .unwrap()
         .unwrap()
         .unwrap();
-    let events2 = tokio::time::timeout(Duration::from_millis(1250), query2)
+    let events2 = tokio::time::timeout(Duration::from_millis(1500), query2)
         .await
         .unwrap()
         .unwrap()
@@ -466,7 +466,7 @@ async fn test_unsubscribe_demand_while_query_events_for_other() {
         .unwrap();
 
     // Query events for first demand should return single Proposal.
-    let events = tokio::time::timeout(Duration::from_millis(1250), query)
+    let events = tokio::time::timeout(Duration::from_millis(1500), query)
         .await
         .unwrap()
         .unwrap()

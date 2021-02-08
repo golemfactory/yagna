@@ -4,6 +4,8 @@ use std::time::Duration;
 
 use ya_agreement_utils::{AgreementView, Error};
 
+use crate::market::negotiator::builtin::expiration::DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY;
+
 /// Implementation of payment model which knows, how to compute amount
 /// of money, that requestor should pay for computations.
 pub trait PaymentModel {
@@ -33,9 +35,10 @@ impl<'a> PaymentDescription<'a> {
     }
 
     pub fn get_debit_note_deadline(&self) -> Result<Option<chrono::Duration>> {
-        match self.agreement.pointer_typed::<i64>(
-            "/demand/properties/golem/com/payment/debit-notes/acceptance-timeout",
-        ) {
+        match self
+            .agreement
+            .pointer_typed::<i64>(DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY)
+        {
             Ok(deadline) => Ok(Some(chrono::Duration::seconds(deadline))),
             Err(Error::NoKey(_)) => Ok(None),
             Err(e) => Err(e.into()),

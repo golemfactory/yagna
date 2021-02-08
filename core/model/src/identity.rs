@@ -211,6 +211,16 @@ impl RpcMessage for Subscribe {
     type Error = Error;
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetKeyFile(pub NodeId);
+
+impl RpcMessage for GetKeyFile {
+    const ID: &'static str = "GetKeyFile";
+    type Item = String;
+    type Error = Error;
+}
+
 pub mod event {
     use super::Error;
     use serde::{Deserialize, Serialize};

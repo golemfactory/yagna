@@ -227,7 +227,6 @@ pub mod local {
     use super::*;
     use chrono::{DateTime, Utc};
     use std::collections::BTreeMap;
-    use ya_client_model::activity::State;
 
     /// Local activity bus address.
     pub const BUS_ID: &str = "/local/activity";
@@ -242,8 +241,8 @@ pub mod local {
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct StatsResult {
-        pub total: BTreeMap<State, u64>,
-        pub last_1h: BTreeMap<State, u64>,
+        pub total: BTreeMap<String, u64>,
+        pub last_1h: BTreeMap<String, u64>,
         pub last_activity_ts: Option<DateTime<Utc>>,
     }
 

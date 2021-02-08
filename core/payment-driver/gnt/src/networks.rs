@@ -10,7 +10,7 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::str::FromStr;
 use ya_core_model::payment::local as pay_srv;
 
-#[derive(AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy)]
+#[derive(AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy, FromPrimitive)]
 #[sql_type = "Integer"]
 pub enum Network {
     Mainnet = 1,
