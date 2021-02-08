@@ -630,7 +630,7 @@ async fn second_approval_should_fail() {
             agreement_id,
             AgreementDaoError::InvalidTransition {
                 from: AgreementState::Approved,
-                to: AgreementState::Approved
+                to: AgreementState::Approving
             }
         ),
         result

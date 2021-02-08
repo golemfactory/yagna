@@ -49,6 +49,7 @@ pub enum RejectProposalError {
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum RemoteProposalError {
     #[error(transparent)]
     Validation(#[from] ProposalValidationError),
@@ -72,9 +73,12 @@ pub enum ProposeAgreementError {
     Gsb(#[from] GsbAgreementError),
     #[error("Agreement [{1}] remote error: {0}")]
     Remote(RemoteProposeAgreementError, AgreementId),
+    #[error("Agreement [{0}] not signed.")]
+    NotSigned(AgreementId),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum RemoteProposeAgreementError {
     #[error("Proposal [{0}] not found.")]
     NotFound(ProposalId),
@@ -110,6 +114,10 @@ pub enum ApproveAgreementError {
     },
     #[error("Timeout while sending approval of Agreement [{0}]")]
     Timeout(AgreementId),
+    #[error("Agreement [{0}] doesn't contain approval timestamp.")]
+    NoApprovalTimestamp(AgreementId),
+    #[error("Agreement [{0}] not signed.")]
+    NotSigned(AgreementId),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
@@ -130,6 +138,7 @@ pub enum TerminateAgreementError {
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum RemoteAgreementError {
     #[error("Agreement [{0}] not found.")]
     NotFound(AgreementId),
@@ -139,6 +148,36 @@ pub enum RemoteAgreementError {
     InvalidState(AgreementId, AgreementState),
     #[error("Can't approve Agreement [{0}] due to internal error.")]
     InternalError(AgreementId),
+}
+
+#[derive(Error, Debug, Serialize, Deserialize)]
+pub enum CommitAgreementError {
+    #[error("Commit Agreement {0}.")]
+    Gsb(#[from] GsbAgreementError),
+    #[error("Remote commit Agreement [{1}] error: {0}")]
+    Remote(RemoteCommitAgreementError, AgreementId),
+    #[error(transparent)]
+    CallerParse(#[from] CallerParseError),
+    #[error("Agreement [{0}] not signed.")]
+    NotSigned(AgreementId),
+}
+
+#[derive(Error, Debug, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum RemoteCommitAgreementError {
+    #[error("Agreement expired.")]
+    Expired,
+    #[error("Agreement cancelled.")]
+    Cancelled,
+    #[error("Agreement not found.")]
+    NotFound,
+    #[error("Agreement in state {0}, can't be committed.")]
+    InvalidState(AgreementState),
+    #[error("Unexpected error: {public_msg} {original_msg}.")]
+    Unexpected {
+        public_msg: String,
+        original_msg: String,
+    },
 }
 
 impl RemoteSensitiveError for RemoteProposeAgreementError {

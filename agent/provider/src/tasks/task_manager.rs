@@ -11,7 +11,7 @@ use ya_utils_actix::forward_actix_handler;
 use super::task_info::TaskInfo;
 use super::task_state::{AgreementState, TasksStates};
 use crate::execution::{ActivityCreated, ActivityDestroyed, TaskRunner};
-use crate::market::provider_market::{AgreementApproved, ProviderMarket};
+use crate::market::provider_market::{NewAgreement, ProviderMarket};
 use crate::market::termination_reason::BreakReason;
 use crate::payments::Payments;
 
@@ -36,12 +36,19 @@ pub struct BreakAgreement {
     pub reason: BreakReason,
 }
 
+#[derive(Clone, PartialEq)]
+pub enum ClosingCause {
+    ApprovalFail,
+    Termination,
+    SingleActivity,
+}
+
 /// Notifies TaskManager that Requestor close agreement.
 #[derive(Message, Clone)]
 #[rtype(result = "Result<()>")]
 pub struct CloseAgreement {
     pub agreement_id: String,
-    pub is_terminated: bool,
+    pub cause: ClosingCause,
 }
 
 // =========================================== //
@@ -200,7 +207,7 @@ impl TaskManager {
         }
     }
 
-    fn add_new_agreement(&mut self, msg: &AgreementApproved) -> anyhow::Result<TaskInfo> {
+    fn add_new_agreement(&mut self, msg: &NewAgreement) -> anyhow::Result<TaskInfo> {
         let agreement_id = msg.agreement.agreement_id.clone();
         self.tasks.new_agreement(&agreement_id)?;
 
@@ -235,7 +242,7 @@ impl Handler<InitializeTaskManager> for TaskManager {
 
         let future = async move {
             // Listen to AgreementApproved event.
-            let msg = Subscribe::<AgreementApproved>(actx.myself.clone().recipient());
+            let msg = Subscribe::<NewAgreement>(actx.myself.clone().recipient());
             actx.market.send(msg).await?;
 
             // Listen to Agreement terminated event from market.
@@ -263,10 +270,10 @@ impl Handler<InitializeTaskManager> for TaskManager {
 // Messages modifying agreement state
 // =========================================== //
 
-impl Handler<AgreementApproved> for TaskManager {
+impl Handler<NewAgreement> for TaskManager {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, msg: AgreementApproved, ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: NewAgreement, ctx: &mut Context<Self>) -> Self::Result {
         // Add new agreement with it's state.
         let task_info = match self.add_new_agreement(&msg) {
             Err(error) => {
@@ -398,7 +405,7 @@ impl Handler<ActivityDestroyed> for TaskManager {
 
                 actx.myself.do_send(CloseAgreement {
                     agreement_id: agreement_id.to_string(),
-                    is_terminated: false,
+                    cause: ClosingCause::SingleActivity,
                 });
             }
             Ok(())
@@ -462,14 +469,18 @@ impl Handler<CloseAgreement> for TaskManager {
         let future = async move {
             start_transition(&actx.myself, &msg.agreement_id, AgreementState::Closed).await?;
 
-            let msg = AgreementClosed {
+            let closed_msg = AgreementClosed {
                 agreement_id: msg.agreement_id.clone(),
-                send_terminate: !msg.is_terminated,
+                send_terminate: msg.cause == ClosingCause::Termination,
             };
 
-            actx.runner.do_send(msg.clone());
-            actx.market.do_send(msg.clone());
-            actx.payments.send(msg.clone()).await??;
+            // No need to notify market.
+            if msg.cause != ClosingCause::ApprovalFail {
+                actx.market.do_send(closed_msg.clone());
+            }
+
+            actx.runner.do_send(closed_msg.clone());
+            actx.payments.send(closed_msg.clone()).await??;
 
             finish_transition(&actx.myself, &msg.agreement_id, AgreementState::Closed).await?;
 
