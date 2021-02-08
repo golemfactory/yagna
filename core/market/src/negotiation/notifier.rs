@@ -1,5 +1,5 @@
 use std::fmt::Debug;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::sync::broadcast::{channel, Receiver, Sender};
 
@@ -114,5 +114,19 @@ where
         tokio::time::timeout(timeout, self.wait_for_event())
             .await
             .map_err(|_| NotifierError::Timeout(self.subscription_id.clone()))?
+    }
+
+    pub async fn wait_for_event_until(
+        &mut self,
+        timeout: Instant,
+    ) -> Result<(), NotifierError<Type>> {
+        let now = Instant::now();
+        let timeout = if timeout > now {
+            timeout - Instant::now()
+        } else {
+            Duration::from_millis(0)
+        };
+
+        self.wait_for_event_with_timeout(timeout).await
     }
 }

@@ -93,6 +93,8 @@ impl ProviderBroker {
         counter!("market.agreements.provider.terminated", 0);
         counter!("market.agreements.provider.terminated.reason", 0, "reason" => "NotSpecified");
         counter!("market.agreements.provider.terminated.reason", 0, "reason" => "Success");
+        counter!("market.agreements.provider.approving", 0);
+        counter!("market.agreements.provider.committing", 0);
         counter!("market.events.provider.queried", 0);
         counter!("market.proposals.provider.countered", 0);
         counter!("market.proposals.provider.init-negotiation", 0);
@@ -219,8 +221,9 @@ impl ProviderBroker {
         app_session_id: AppSessionId,
         timeout: f32,
     ) -> Result<ApprovalResult, AgreementError> {
-        let start_now = Instant::now();
+        let stop_time = Instant::now() + std::time::Duration::from_secs_f64(timeout as f64);
         let dao = self.common.db.as_dao::<AgreementDao>();
+
         let agreement = {
             let _hold = self.common.agreement_lock.lock(&agreement_id).await;
 
@@ -245,6 +248,7 @@ impl ProviderBroker {
                 .await
                 .map_err(|e| AgreementError::UpdateState(agreement.id.clone(), e))?;
 
+            counter!("market.agreements.provider.approving", 1);
             if let Some(session) = app_session_id {
                 log::info!(
                     "AppSession id [{}] set for Agreement [{}].",
@@ -287,11 +291,8 @@ impl ProviderBroker {
                 Err(e)?
             }
         }
-        // TODO: Reverse state to `Pending` in case of error (reverse under lock).
-        // TODO: During reversing it can turn out, that we are in `Cancelled` or `Approved` state
-        //  since we weren't under lock during `self.api.approve_agreement` execution. In such a case,
-        //  we shouldn't return error from here.
 
+        counter!("market.agreements.provider.committing", 1);
         log::info!(
             "Provider {} approved Agreement [{}]. Waiting for commit from Requestor [{}].",
             id.display(),
@@ -301,10 +302,7 @@ impl ProviderBroker {
 
         // Here we must wait until `AgreementCommitted` message, since `approve_agreement`
         // is supposed to return after approval.
-        let timeout =
-            std::time::Duration::from_secs_f64(timeout as f64) - (Instant::now() - start_now);
-
-        match notifier.wait_for_event_with_timeout(timeout).await {
+        match notifier.wait_for_event_until(stop_time).await {
             Err(NotifierError::Timeout(_)) => {
                 let _hold = self.common.agreement_lock.lock(&agreement_id).await;
                 dao.revert_approving(agreement_id).await.log_err().ok();

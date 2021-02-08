@@ -95,6 +95,7 @@ impl RequestorBroker {
         counter!("market.agreements.requestor.terminated", 0);
         counter!("market.agreements.requestor.terminated.reason", 0, "reason" => "NotSpecified");
         counter!("market.agreements.requestor.terminated.reason", 0, "reason" => "Success");
+        counter!("market.agreements.requestor.committing", 0);
         counter!("market.events.requestor.queried", 0);
         counter!("market.proposals.requestor.countered", 0);
         counter!("market.proposals.requestor.generated", 0);
@@ -486,6 +487,8 @@ async fn agreement_approved(
             })?
     };
 
+    counter!("market.agreements.requestor.committing", 1);
+
     // Commit Agreement. We must spawn committing later, because we need to
     // return from this function to provider.
     tokio::task::spawn_local(commit_agreement(broker, agreement.id.clone()));
@@ -535,7 +538,7 @@ async fn commit_agreement(broker: CommonBroker, agreement_id: AgreementId) {
             _,
         ))) => {
             return log::info!(
-                "Didn't commit Agreement [{}] since it was cancelled.",
+                "Can't commit Agreement [{}] since it was canceled already.",
                 agreement_id
             );
         }
