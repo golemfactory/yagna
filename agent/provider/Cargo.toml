@@ -25,6 +25,7 @@ ya-file-logging = "0.1"
 ya-utils-actix = "0.1"
 ya-utils-path = "0.1"
 ya-utils-process = { version = "0.1", features = ['lock'] }
+ya-std-utils = "0.1"
 
 actix = { version = "0.10", default-features = false }
 actix-rt = "1.1.1"

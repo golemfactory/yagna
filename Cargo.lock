@@ -7667,6 +7667,7 @@ dependencies = [
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-file-logging",
+ "ya-std-utils",
  "ya-utils-actix",
  "ya-utils-path",
  "ya-utils-process",

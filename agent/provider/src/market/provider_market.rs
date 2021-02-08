@@ -19,6 +19,7 @@ use ya_client_model::market::{
     agreement_event::AgreementTerminator, Agreement, NewOffer, Proposal, ProviderEvent, Reason,
 };
 use ya_client_model::NodeId;
+use ya_std_utils::LogErr;
 use ya_utils_actix::{
     actix_handler::ResultTypeGetter,
     actix_signal::{SignalSlot, Subscribe},
@@ -30,6 +31,7 @@ use super::negotiator::{AgreementResponse, AgreementResult, NegotiatorAddr, Prop
 use super::Preset;
 use crate::market::config::MarketConfig;
 use crate::market::termination_reason::GolemReason;
+use crate::tasks::task_manager::ClosingCause;
 use crate::tasks::{AgreementBroken, AgreementClosed, CloseAgreement};
 
 // =========================================== //
@@ -62,7 +64,7 @@ pub enum OfferKind {
 /// and broadcasts same event to external world.
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<()>")]
-pub struct AgreementApproved {
+pub struct NewAgreement {
     pub agreement: AgreementView,
 }
 
@@ -108,7 +110,7 @@ pub struct ProviderMarket {
     config: Arc<MarketConfig>,
 
     /// External actors can listen on this signal.
-    pub agreement_signed_signal: SignalSlot<AgreementApproved>,
+    pub agreement_signed_signal: SignalSlot<NewAgreement>,
     pub agreement_terminated_signal: SignalSlot<CloseAgreement>,
 
     /// Infinite tasks requiring to be killed on shutdown.
@@ -134,7 +136,7 @@ impl ProviderMarket {
             negotiator: Arc::new(NegotiatorAddr::default()),
             config: Arc::new(config),
             subscriptions: HashMap::new(),
-            agreement_signed_signal: SignalSlot::<AgreementApproved>::new(),
+            agreement_signed_signal: SignalSlot::<NewAgreement>::new(),
             agreement_terminated_signal: SignalSlot::<CloseAgreement>::new(),
             handles: HashMap::new(),
         };
@@ -169,11 +171,7 @@ impl ProviderMarket {
     // Market internals - proposals and agreements reactions
     // =========================================== //
 
-    fn on_agreement_approved(
-        &mut self,
-        msg: AgreementApproved,
-        _ctx: &mut Context<Self>,
-    ) -> Result<()> {
+    fn on_agreement_approved(&mut self, msg: NewAgreement, _ctx: &mut Context<Self>) -> Result<()> {
         log::info!("Got approved agreement [{}].", msg.agreement.agreement_id,);
         // At this moment we only forward agreement to outside world.
         self.agreement_signed_signal.send_signal(msg)
@@ -359,6 +357,16 @@ async fn process_agreement(
 
     match action {
         AgreementResponse::ApproveAgreement => {
+            // Prepare Provider for Agreement. We aren't sure here, that approval will
+            // succeed, but we are obligated to reserve all promised resources for Requestor,
+            // so after `approve_agreement` will return, we are ready to create activities.
+            ctx.market
+                .send(NewAgreement {
+                    agreement: agreement.clone(),
+                })
+                .await?
+                .ok();
+
             // TODO: We should retry approval, but only a few times, than we should
             //       give up since it's better to take another agreement.
             let result = ctx
@@ -386,11 +394,6 @@ async fn process_agreement(
 
             // We negotiated agreement and here responsibility of ProviderMarket ends.
             // Notify outside world about agreement for further processing.
-            let message = AgreementApproved {
-                agreement: agreement.clone(),
-            };
-
-            let _ = ctx.market.send(message).await?;
         }
         AgreementResponse::RejectAgreement { reason } => {
             ctx.api
@@ -571,16 +574,13 @@ impl Handler<OnAgreementTerminated> for ProviderMarket {
 
         self.agreement_terminated_signal
             .send_signal(CloseAgreement {
-                is_terminated: true,
+                cause: ClosingCause::Termination,
                 agreement_id: id.clone(),
             })
-            .map_err(|e| {
-                log::error!(
-                    "Failed to propagate termination info for agreement [{}]. {}",
-                    id,
-                    e
-                )
-            })
+            .log_err_msg(&format!(
+                "Failed to propagate termination info for agreement [{}]",
+                id
+            ))
             .ok();
         Ok(())
     }
@@ -604,14 +604,10 @@ impl Handler<CreateOffer> for ProviderMarket {
                 .negotiator
                 .create_offer(&msg.offer_definition)
                 .await
-                .map_err(|e| {
-                    log::error!(
-                        "Negotiator failed to create offer for preset [{}]. Error: {}",
-                        msg.preset.name,
-                        e
-                    );
-                    e
-                })?;
+                .log_err_msg(&format!(
+                    "Negotiator failed to create offer for preset [{}]",
+                    msg.preset.name,
+                ))?;
 
             log::debug!(
                 "Offer created: {}",
@@ -623,14 +619,10 @@ impl Handler<CreateOffer> for ProviderMarket {
             let preset_name = msg.preset.name.clone();
             subscribe(ctx.market, ctx.api, offer, msg.preset)
                 .await
-                .map_err(|error| {
-                    log::error!(
-                        "Can't subscribe new offer for preset [{}], error: {}",
-                        preset_name,
-                        error
-                    );
-                    error
-                })?;
+                .log_err_msg(&format!(
+                    "Can't subscribe new offer for preset [{}]",
+                    preset_name,
+                ))?;
             Ok(())
         }
         .boxed_local()
@@ -702,13 +694,13 @@ async fn resubscribe_offers(
         let preset = sub.preset;
         let preset_name = preset.name.clone();
 
-        if let Err(e) = subscribe(market.clone(), api.clone(), offer, preset).await {
-            log::warn!(
-                "Unable to create subscription for preset {}: {}",
+        subscribe(market.clone(), api.clone(), offer, preset)
+            .await
+            .log_warn_msg(&format!(
+                "Unable to create subscription for preset {}",
                 preset_name,
-                e
-            );
-        }
+            ))
+            .ok();
     }
 }
 
@@ -720,18 +712,28 @@ impl Handler<AgreementFinalized> for ProviderMarket {
         let agreement_id = msg.id.clone();
         let result = msg.result.clone();
 
+        if let AgreementResult::ApprovalFailed = &msg.result {
+            self.agreement_terminated_signal
+                .send_signal(CloseAgreement {
+                    cause: ClosingCause::ApprovalFail,
+                    agreement_id: agreement_id.clone(),
+                })
+                .log_err_msg(&format!(
+                    "Failed to propagate ApprovalFailed info for agreement [{}]",
+                    agreement_id
+                ))
+                .ok();
+        }
+
         let future = async move {
-            if let Err(error) = ctx
-                .negotiator
+            ctx.negotiator
                 .agreement_finalized(&agreement_id, result)
                 .await
-            {
-                log::warn!(
-                    "Negotiator failed while handling agreement [{}] finalize. Error: {}",
+                .log_err_msg(&format!(
+                    "Negotiator failed while handling agreement [{}] finalize",
                     &agreement_id,
-                    error,
-                );
-            }
+                ))
+                .ok();
         }
         .into_actor(self)
         .map(|_, myself, ctx| {
@@ -818,9 +820,9 @@ impl Handler<Unsubscribe> for ProviderMarket {
 }
 
 forward_actix_handler!(ProviderMarket, Subscription, on_subscription);
-forward_actix_handler!(ProviderMarket, AgreementApproved, on_agreement_approved);
+forward_actix_handler!(ProviderMarket, NewAgreement, on_agreement_approved);
 actix_signal_handler!(ProviderMarket, CloseAgreement, agreement_terminated_signal);
-actix_signal_handler!(ProviderMarket, AgreementApproved, agreement_signed_signal);
+actix_signal_handler!(ProviderMarket, NewAgreement, agreement_signed_signal);
 
 fn get_backoff() -> backoff::ExponentialBackoff {
     // TODO: We could have config for Market actor to be able to set at least initial interval.
