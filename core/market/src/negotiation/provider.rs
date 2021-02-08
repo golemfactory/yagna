@@ -230,7 +230,10 @@ impl ProviderBroker {
                 .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
                 .ok_or(AgreementError::NotFound(agreement_id.to_string()))?;
 
-            // TODO: Return ApprovalResult::Cancelled if cancelled.
+            if agreement.state == AgreementState::Cancelled {
+                return Ok(ApprovalResult::Cancelled);
+            }
+
             validate_transition(&agreement, AgreementState::Approving)?;
 
             // TODO: Sign Agreement.
@@ -263,7 +266,27 @@ impl ProviderBroker {
         //
         // Note: There's reason, that it CAN'T be done under lock. If we hold lock whole time
         // Requestor won't be able to cancel his Agreement proposal and he is allowed to do it.
-        self.api.approve_agreement(&agreement, timeout).await?;
+        match self.api.approve_agreement(&agreement, timeout).await {
+            Ok(_) => (),
+            // It can turn out, that we are in `Cancelled` state since we weren't under
+            // lock during `self.api.approve_agreement` execution. In such a case,
+            // we shouldn't return error from here.
+            Err(ApproveAgreementError::Remote(RemoteAgreementError::InvalidState(
+                _,
+                AgreementState::Cancelled,
+            ))) => return Ok(ApprovalResult::Cancelled),
+            Err(e) => {
+                let _hold = self.common.agreement_lock.lock(&agreement_id).await;
+
+                log::warn!(
+                    "Failed to send Approve Agreement [{}] to Requestor. {}. Reverting state to `Pending`.",
+                    agreement_id,
+                    e,
+                );
+                dao.revert_approving(agreement_id).await.log_err().ok();
+                Err(e)?
+            }
+        }
         // TODO: Reverse state to `Pending` in case of error (reverse under lock).
         // TODO: During reversing it can turn out, that we are in `Cancelled` or `Approved` state
         //  since we weren't under lock during `self.api.approve_agreement` execution. In such a case,
@@ -276,24 +299,26 @@ impl ProviderBroker {
             agreement.requestor_id
         );
 
-        // TODO: Adjust timeout to elapsed time.
         // Here we must wait until `AgreementCommitted` message, since `approve_agreement`
         // is supposed to return after approval.
         let timeout =
             std::time::Duration::from_secs_f64(timeout as f64) - (Instant::now() - start_now);
+
         match notifier.wait_for_event_with_timeout(timeout).await {
             Err(NotifierError::Timeout(_)) => {
-                // TODO: What in case of timeout?? Reverse to `Pending` state?
-                Err(ApproveAgreementError::Timeout(agreement.id.clone()))?
+                let _hold = self.common.agreement_lock.lock(&agreement_id).await;
+                dao.revert_approving(agreement_id).await.log_err().ok();
+
+                Err(ApproveAgreementError::Timeout(agreement.id.clone()).into())
             }
             Err(error) => Err(AgreementError::Internal(format!(
                 "Code logic error. Agreement events notifier shouldn't return: {}.",
                 error
-            )))?,
-            Ok(_) => (),
+            ))),
+            Ok(_) => Ok(()),
         }
+        .log_err()?;
 
-        // TODO: Check Agreement state here, because it could be `Cancelled`.
         {
             let _hold = self.common.agreement_lock.lock(&agreement_id).await;
 
@@ -340,7 +365,7 @@ async fn agreement_committed(
     let agreement = {
         let _hold = broker.agreement_lock.lock(&msg.agreement_id).await;
 
-        // Note: we still validate caller here, because we can't be sure, that we were caller
+        // Note: we still validate caller here, because we can't be sure, that we were called
         // by the same Requestor.
         let agreement = dao
             .select(&msg.agreement_id, None, Utc::now().naive_utc())
