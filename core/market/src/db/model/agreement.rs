@@ -211,6 +211,7 @@ pub fn check_transition(from: AgreementState, to: AgreementState) -> Result<(), 
             _ => (),
         },
         AgreementState::Approving => match to {
+            // Reverse transition from `Approving` to `Pending` is forbidden on purpose. It is handled solely in `revert_approving()`
             AgreementState::Cancelled => return Ok(()),
             AgreementState::Approved => return Ok(()),
             AgreementState::Expired => return Ok(()),
