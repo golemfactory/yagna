@@ -25,7 +25,7 @@ pub mod migrations {
 }
 
 pub const DEFAULT_PAYMENT_PLATFORM: &str = "zksync-rinkeby-tglm"; // TODO: remove
-pub const DEFAULT_PAYMENT_DRIVER: &str = "zksync";
+pub use ya_core_model::payment::local::DEFAULT_PAYMENT_DRIVER;
 
 pub struct PaymentService;
 

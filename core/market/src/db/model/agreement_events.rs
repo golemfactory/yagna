@@ -64,7 +64,10 @@ impl NewAgreementEvent {
         Ok(Self {
             agreement_id: agreement.id.clone(),
             event_type: match agreement.state {
-                AgreementState::Pending | AgreementState::Proposal | AgreementState::Expired => {
+                AgreementState::Pending
+                | AgreementState::Proposal
+                | AgreementState::Expired
+                | AgreementState::Approving => {
                     let msg = format!("Wrong [{}] state {}", agreement.id, agreement.state);
                     log::error!("{}", msg);
                     return Err(EventFromAgreementError(msg));

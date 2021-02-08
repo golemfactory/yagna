@@ -3,21 +3,24 @@ use bigdecimal::BigDecimal;
 use serde_json::json;
 
 use ya_agreement_utils::ComInfo;
-use ya_client_model::payment::Account;
+use ya_client_model::{payment::Account, NodeId};
+use ya_core_model::payment::local::NetworkName;
 
 use super::model::{PaymentDescription, PaymentModel};
 use crate::market::presets::{Coefficient, Preset};
 
 #[derive(Clone, Debug)]
 pub struct AccountView {
-    pub address: String,
+    pub address: NodeId,
+    pub network: NetworkName,
     pub platform: String,
 }
 
 impl From<Account> for AccountView {
     fn from(account: Account) -> Self {
         Self {
-            address: account.address,
+            address: account.address.parse().unwrap(), // TODO: use TryFrom
+            network: account.network.parse().unwrap(), // TODO: use TryFrom
             platform: account.platform,
         }
     }

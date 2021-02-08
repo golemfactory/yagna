@@ -40,7 +40,7 @@ async fn get_resources() -> Result<Resources> {
 
 pub async fn show_resources() -> Result<()> {
     let resources = get_resources().await?;
-    println!("shared resources:");
+    println!("Shared resources:");
     println!("\tcores:\t{}", resources.cpu_threads);
     println!("\tmemory:\t{} GiB", resources.mem_gib);
     println!("\tdisk:\t{} GiB", resources.storage_gib);
