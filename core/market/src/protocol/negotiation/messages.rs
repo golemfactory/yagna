@@ -137,7 +137,8 @@ pub struct AgreementApproved {
     pub signature: String,
     /// This timestamp will differ from timestamp, when Agreement will be updated in
     /// database to `Approved` state and `AgreementApprovedEvent` timestamp either.
-    /// But we can't set it to any value, because we should include this field in signature.
+    /// But we can't set it to time value, when state changes to `Approved`, because we
+    /// must include this field in signature.
     pub approved_ts: NaiveDateTime,
 }
 

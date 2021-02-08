@@ -211,7 +211,6 @@ pub fn check_transition(from: AgreementState, to: AgreementState) -> Result<(), 
             _ => (),
         },
         AgreementState::Approving => match to {
-            AgreementState::Pending => return Ok(()),
             AgreementState::Cancelled => return Ok(()),
             AgreementState::Approved => return Ok(()),
             AgreementState::Expired => return Ok(()),
