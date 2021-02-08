@@ -11,7 +11,7 @@ use structopt::StructOpt;
 use ya_client_model::market;
 use ya_client_model::payment::PAYMENT_API_PATH;
 use ya_client_model::NodeId;
-use ya_core_model::driver::{driver_bus_id, AccountMode, Init};
+use ya_core_model::driver::{driver_bus_id, AccountMode, Init, Fund};
 use ya_core_model::identity;
 use ya_dummy_driver as dummy;
 use ya_gnt_driver as gnt;
@@ -227,18 +227,25 @@ async fn main() -> anyhow::Result<()> {
             zksync::DRIVER_NAME
         }
     };
-
     bus::service(driver_bus_id(driver_name))
         .call(Init::new(
-            provider_id.clone(),
+            provider_addr.clone(),
             args.network.clone(),
             None,
             AccountMode::RECV,
         ))
         .await??;
+
+    bus::service(driver_bus_id(driver_name))
+        .call(Fund::new(
+            requestor_addr.clone(),
+            args.network.clone(),
+            None
+        ))
+        .await??;
     bus::service(driver_bus_id(driver_name))
         .call(Init::new(
-            requestor_id.clone(),
+            requestor_addr.clone(),
             args.network.clone(),
             None,
             AccountMode::SEND,

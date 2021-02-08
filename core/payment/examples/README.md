@@ -8,7 +8,7 @@ cd core/payment
 cp ../../.env-template .env
 cargo run --example payment_api
 ```
-To use Erc-20 instead of ZkSync driver us `cargo run --example payment_api -- --driver=erc20` instead.
+To use Erc-20 instead of ZkSync driver us `cargo run --example payment_api -- --driver=erc20 --platform=erc20-rinkeby-tglm` instead.
 
 ### Debit note flow
 
@@ -20,6 +20,8 @@ cargo run --example debit_note_flow
 ```
 (**NOTE:** The example expects a clean database so might need to remove `payment.db`
 and restart the API server.)
+
+Running examples with erc-20 payment driver, please wait until `payment_api` get funded and then run `debit_note_flow` with `--driver=erc20` parameter.
 
 ##### Issue a debit node:  
 `POST` `http://127.0.0.1:7465/payment-api/v1/provider/debitNotes`
@@ -73,6 +75,8 @@ cargo run --example invoice_flow
 ```
 (**NOTE:** The example expects a clean database so might need to remove `payment.db`
 and restart the API server.)
+
+Running examples with erc-20 payment driver, please wait until `payment_api` get funded and then run `invoice_flow` with `--driver=erc20` parameter.
 
 ##### Issue an invoice:  
 `POST` `http://127.0.0.1:7465/payment-api/v1/provider/invoices`
