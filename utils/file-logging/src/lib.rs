@@ -35,7 +35,7 @@ fn log_format_color(
         DateTime::<Utc>::from(*now.now()).to_rfc3339_opts(SecondsFormat::Secs, true),
         style(level, level),
         record.module_path().unwrap_or("<unnamed>"),
-        record.args()
+        style(level, &record.args())
     )
 }
 

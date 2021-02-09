@@ -17,7 +17,7 @@ const DEFAULT_SUBNET: &str = "community.4";
 
 #[derive(StructOpt, Debug, Clone, Serialize, Deserialize)]
 pub struct RunConfig {
-    #[structopt(long, env = "NODE_NAME")]
+    #[structopt(env = "NODE_NAME", hidden = true)]
     pub node_name: Option<String>,
     #[structopt(long, env = "SUBNET")]
     pub subnet: Option<String>,
