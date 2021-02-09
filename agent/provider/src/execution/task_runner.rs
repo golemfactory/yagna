@@ -357,12 +357,13 @@ impl TaskRunner {
         Ok(())
     }
 
-    #[logfn_inputs(Debug, fmt = "{}Got {:?} {:?}")]
     pub fn on_agreement_approved(
         &mut self,
         msg: NewAgreement,
         _ctx: &mut Context<Self>,
     ) -> Result<()> {
+        log::debug!("[TaskRunner] Got new Agreement: {}", msg.agreement);
+
         // Agreement waits for first create activity event.
         let agreement_id = msg.agreement.agreement_id.clone();
         self.active_agreements.insert(agreement_id, msg.agreement);
