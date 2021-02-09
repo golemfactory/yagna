@@ -29,6 +29,7 @@ use ya_utils_actix::{
 use super::negotiator::factory;
 use super::negotiator::{AgreementResponse, AgreementResult, NegotiatorAddr, ProposalResponse};
 use super::Preset;
+use crate::display::EnableDisplay;
 use crate::market::config::MarketConfig;
 use crate::market::termination_reason::GolemReason;
 use crate::tasks::task_manager::ClosingCause;
@@ -609,10 +610,7 @@ impl Handler<CreateOffer> for ProviderMarket {
                     msg.preset.name,
                 ))?;
 
-            log::debug!(
-                "Offer created: {}",
-                serde_json::to_string_pretty(&offer).unwrap()
-            );
+            log::debug!("Offer created: {}", offer.display());
 
             log::info!("Subscribing to events... [{}]", msg.preset.name);
 

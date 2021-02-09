@@ -169,6 +169,19 @@ impl Default for OfferTemplate {
     }
 }
 
+impl<'a> std::fmt::Display for OfferTemplate {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FormatError> {
+        let mut template = self.clone();
+        template.properties = flatten_value(template.properties);
+
+        // Display not pretty version as fallback.
+        match serde_json::to_string_pretty(&template) {
+            Ok(json) => write!(f, "{}", json),
+            Err(_) => write!(f, "{}", template),
+        }
+    }
+}
+
 impl OfferTemplate {
     pub fn new(properties: Value) -> Self {
         OfferTemplate {
