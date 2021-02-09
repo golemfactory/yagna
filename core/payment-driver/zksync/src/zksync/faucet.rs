@@ -32,7 +32,7 @@ pub async fn request_ngnt(address: &str, network: Network) -> Result<(), Generic
     }
 
     log::info!(
-        "Requesting NGNT from zkSync faucet... address = {}",
+        "Requesting tGLM from zkSync faucet... address = {}",
         address
     );
 
@@ -43,14 +43,14 @@ pub async fn request_ngnt(address: &str, network: Network) -> Result<(), Generic
                 // Do not warn nor sleep at the last try.
                 if i >= MAX_FAUCET_REQUESTS - 1 {
                     log::error!(
-                        "Failed to request NGNT from Faucet, tried {} times.: {:?}",
+                        "Failed to request tGLM from Faucet, tried {} times.: {:?}",
                         MAX_FAUCET_REQUESTS,
                         e
                     );
                     return Err(e);
                 } else {
                     log::warn!(
-                        "Retrying ({}/{}) to request NGNT from Faucet after failure: {:?}",
+                        "Retrying ({}/{}) to request tGLM from Faucet after failure: {:?}",
                         i + 1,
                         MAX_FAUCET_REQUESTS,
                         e
@@ -65,16 +65,16 @@ pub async fn request_ngnt(address: &str, network: Network) -> Result<(), Generic
 }
 
 async fn wait_for_ngnt(address: &str, network: Network) -> Result<(), GenericError> {
-    log::info!("Waiting for NGNT from faucet...");
+    log::info!("Waiting for tGLM from faucet...");
     let wait_until = Utc::now() + *MAX_WAIT;
     while Utc::now() < wait_until {
         if account_balance(address, network).await? >= *MIN_BALANCE {
-            log::info!("Received NGNT from faucet.");
+            log::info!("Received tGLM from faucet.");
             return Ok(());
         }
         delay_for(time::Duration::from_secs(3)).await;
     }
-    let msg = "Waiting for NGNT timed out.";
+    let msg = "Waiting for tGLM timed out.";
     log::error!("{}", msg);
     Err(GenericError::new(msg))
 }
