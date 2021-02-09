@@ -1,6 +1,9 @@
 #[macro_use]
 extern crate diesel;
 
+#[macro_use]
+extern crate num_derive;
+
 pub mod migrations {
     #[derive(diesel_migrations::EmbedMigrations)]
     struct _Dummy;

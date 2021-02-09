@@ -1,12 +1,12 @@
-use ya_client::model::market::proposal::State;
-use ya_market::testing::events_helper::{provider, requestor, ClientProposalHelper};
-use ya_market::testing::mock_offer::client::{
-    not_matching_demand, not_matching_offer, sample_demand, sample_offer,
+use ya_client::model::market::{proposal::State, RequestorEvent};
+use ya_market::testing::{
+    events_helper::{provider, requestor, ClientProposalHelper},
+    mock_offer::client::{not_matching_demand, not_matching_offer, sample_demand, sample_offer},
+    negotiation::error::{CounterProposalError, RemoteProposalError},
+    proposal_util::{exchange_draft_proposals, NegotiationHelper},
+    MarketServiceExt, MarketsNetwork, Owner, ProposalError, ProposalState, ProposalValidationError,
+    SaveProposalError,
 };
-use ya_market::testing::proposal_util::{exchange_draft_proposals, NegotiationHelper};
-use ya_market::testing::MarketsNetwork;
-use ya_market::testing::Owner;
-use ya_market::testing::{ProposalError, ProposalValidationError, SaveProposalError};
 use ya_market_resolver::flatten::flatten_json;
 
 /// Test countering initial and draft proposals on both Provider and Requestor side.
@@ -467,6 +467,7 @@ async fn test_counter_initial_unsubscribed_remote_offer() {
     let proposal0 = requestor::query_proposal(&market1, &demand_id, "Initial #R")
         .await
         .unwrap();
+    let proposal0_id = proposal0.get_proposal_id().unwrap();
 
     // When we will counter this Proposal, Provider will have it already unsubscribed.
     market2
@@ -477,18 +478,23 @@ async fn test_counter_initial_unsubscribed_remote_offer() {
     let proposal1 = sample_demand();
     let result = market1
         .requestor_engine
-        .counter_proposal(
-            &demand_id,
-            &proposal0.get_proposal_id().unwrap(),
-            &proposal1,
-            &identity1,
-        )
+        .counter_proposal(&demand_id, &proposal0_id, &proposal1, &identity1)
         .await;
 
     assert!(result.is_err());
     match result.err().unwrap() {
         ProposalError::Validation(ProposalValidationError::Unsubscribed(id)) => {
             assert_eq!(id, offer_id)
+        }
+        ProposalError::Send(
+            proposal_id_send,
+            CounterProposalError::Remote(
+                RemoteProposalError::Validation(ProposalValidationError::Unsubscribed(unsubs_id)),
+                _,
+            ),
+        ) => {
+            assert_eq!(proposal_id_send, proposal0_id);
+            assert_eq!(unsubs_id, offer_id);
         }
         e => panic!("Expected ProposalValidationError::Unsubscribed, got: {}", e),
     }
@@ -536,6 +542,16 @@ async fn test_counter_draft_unsubscribed_remote_offer() {
     match result.err().unwrap() {
         ProposalError::Validation(ProposalValidationError::Unsubscribed(id)) => {
             assert_eq!(id, offer_id)
+        }
+        ProposalError::Send(
+            proposal_id_send,
+            CounterProposalError::Remote(
+                RemoteProposalError::Validation(ProposalValidationError::Unsubscribed(unsubs_id)),
+                _,
+            ),
+        ) => {
+            assert_eq!(proposal_id_send, proposal0_id);
+            assert_eq!(unsubs_id, offer_id);
         }
         e => panic!("Expected ProposalValidationError::Unsubscribed, got: {}", e),
     }
@@ -719,4 +735,135 @@ async fn test_reject_negotiations_same_identity() {
         .await
         .unwrap();
     assert_eq!(events.len(), 0);
+}
+
+/// Requestor tries to reject initial Proposal
+/// (Provider Node does not even know that there is a Proposal).
+/// Negotiation attempt should be rejected by Provider Node.
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
+async fn test_reject_initial_offer() {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance("Req-1")
+        .await
+        .add_market_instance("Prov-1")
+        .await;
+
+    let req_mkt = network.get_market("Req-1");
+    let prov_mkt = network.get_market("Prov-1");
+
+    let req_id = network.get_default_id("Req-1");
+    let prov_id = network.get_default_id("Prov-1");
+
+    let demand_id = req_mkt
+        .subscribe_demand(&sample_demand(), &req_id)
+        .await
+        .unwrap();
+    let _offer_id = prov_mkt
+        .subscribe_offer(&sample_offer(), &prov_id)
+        .await
+        .unwrap();
+
+    let proposal0 = requestor::query_proposal(&req_mkt, &demand_id, "Initial #R")
+        .await
+        .unwrap();
+    let proposal0id = &proposal0.get_proposal_id().unwrap();
+
+    req_mkt
+        .requestor_engine
+        .reject_proposal(&demand_id, &proposal0id, &req_id, Some("dblah".into()))
+        .await
+        .map_err(|e| panic!("Expected Ok(()), got: {}\nDEBUG: {:?}", e.to_string(), e))
+        .unwrap();
+
+    req_mkt
+        .requestor_engine
+        .query_events(&demand_id, 1.2, Some(5))
+        .await
+        .map_err(|e| panic!("Expected Ok([]), got: {}\nDEBUG: {:?}", e.to_string(), e))
+        .map(|events| assert_eq!(events.len(), 0))
+        .unwrap();
+
+    let proposal0updated = req_mkt.get_proposal(&proposal0id).await.unwrap();
+
+    assert_eq!(proposal0updated.body.state, ProposalState::Rejected);
+}
+
+/// Provider rejects draft Proposal and succeeds.
+/// As a result Proposal is in Rejected state on both sides.
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
+async fn test_reject_demand() {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance("Req-1")
+        .await
+        .add_market_instance("Prov-1")
+        .await;
+
+    let req_mkt = network.get_market("Req-1");
+    let prov_mkt = network.get_market("Prov-1");
+
+    let req_id = network.get_default_id("Req-1");
+    let prov_id = network.get_default_id("Prov-1");
+
+    let demand = sample_demand();
+    let demand_id = req_mkt.subscribe_demand(&demand, &req_id).await.unwrap();
+    let offer_id = prov_mkt
+        .subscribe_offer(&sample_offer(), &prov_id)
+        .await
+        .unwrap();
+
+    let proposal0 = requestor::query_proposal(&req_mkt, &demand_id, "Initial #R")
+        .await
+        .unwrap();
+    let proposal0id = &proposal0.get_proposal_id().unwrap();
+
+    let req_demand_proposal1_id = req_mkt
+        .requestor_engine
+        .counter_proposal(&demand_id, &proposal0id, &demand, &req_id)
+        .await
+        .unwrap();
+
+    // Provider receives Proposal
+    let _prov_demand_proposal1 = provider::query_proposal(&prov_mkt, &offer_id, "Initial #P")
+        .await
+        .unwrap();
+    let prov_demand_proposal1_id = req_demand_proposal1_id.clone().translate(Owner::Provider);
+
+    // Provider rejects Proposal with reason.
+    prov_mkt
+        .provider_engine
+        .reject_proposal(
+            &offer_id,
+            &prov_demand_proposal1_id,
+            &prov_id,
+            Some("zima".into()),
+        )
+        .await
+        .unwrap();
+
+    // Requestor receives Rejection with reason
+    req_mkt
+        .requestor_engine
+        .query_events(&demand_id, 1.2, Some(5))
+        .await
+        .map_err(|e| panic!("Expected Ok([ev]), got: {}\nDEBUG: {:?}", e.to_string(), e))
+        .map(|events| {
+            assert_eq!(events.len(), 1);
+            match &events[0] {
+                RequestorEvent::ProposalRejectedEvent { reason, .. } => {
+                    assert_eq!(reason, &Some("zima".into()))
+                }
+                event => panic!("Expected ProposalRejectedEvent, got: {:?}", event),
+            }
+        })
+        .unwrap();
+
+    let proposal0updated = prov_mkt
+        .get_proposal(&prov_demand_proposal1_id)
+        .await
+        .unwrap();
+    assert_eq!(proposal0updated.body.state, ProposalState::Rejected);
 }

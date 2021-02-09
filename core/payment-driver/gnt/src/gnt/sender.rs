@@ -197,23 +197,27 @@ impl TransactionSender {
         let db = self.db.clone();
         let client = self.ethereum_client.clone();
         let address_str = crate::utils::addr_to_str(&address);
+        let network = self.network;
 
         future::try_join(
             async move {
-                Ok::<_, GNTDriverError>(
-                    db.as_dao::<TransactionDao>()
-                        .get_used_nonces(address_str)
-                        .await?
-                        .into_iter()
-                        .map(u256_from_big_endian_hex)
-                        .max(),
-                )
+                let db_nonce = db
+                    .as_dao::<TransactionDao>()
+                    .get_used_nonces(address_str, network)
+                    .await?
+                    .into_iter()
+                    .map(u256_from_big_endian_hex)
+                    .max();
+                log::trace!("DB nonce: {:?}", db_nonce);
+                Ok::<_, GNTDriverError>(db_nonce)
             },
             async move {
-                client
+                let client_nonce = client
                     .get_next_nonce(address)
                     .map_err(GNTDriverError::from)
-                    .await
+                    .await;
+                log::trace!("Client nonce: {:?}", client_nonce);
+                client_nonce
             },
         )
         .and_then(|r| {
@@ -395,6 +399,9 @@ impl Handler<TxSave> for TransactionSender {
             })
             .collect::<Vec<_>>();
 
+        db_transactions
+            .iter()
+            .for_each(|tx| log::trace!("Creating db transaction: {:?}", tx));
         let db = self.db.clone();
         let fut = {
             let db = db.clone();
@@ -434,7 +441,8 @@ impl Handler<TxSave> for TransactionSender {
                                 confirmations: required_confirmations,
                             });
                         }
-                        Err(_e) => {
+                        Err(e) => {
+                            log::error!("Error sending transaction: {:?}", e);
                             db.as_dao::<TransactionDao>()
                                 .update_tx_status(tx_id, TransactionStatus::Failed.into())
                                 .await
@@ -762,10 +770,11 @@ impl TransactionSender {
         let db = self.db.clone();
         let me = ctx.address();
         let required_confirmations = self.required_confirmations;
+        let network = self.network;
         let job = async move {
             let txs = db
                 .as_dao::<TransactionDao>()
-                .get_unconfirmed_txs()
+                .get_unconfirmed_txs(network)
                 .await
                 .unwrap();
             for tx in txs {
@@ -904,7 +913,7 @@ async fn process_payment(
                     },
                 )
                 .await?;
-            log::error!("NGNT transfer failed: {}", e);
+            log::error!("GLM transfer failed: {}", e);
             return Err(e);
         }
     }
@@ -936,7 +945,12 @@ async fn transfer_gnt(
         GNT_TRANSFER_GAS.into(),
     );
     let r = batch.send_to(tx_sender, sign_tx).await?;
-    Ok(r.into_iter().next().unwrap())
+    match r.into_iter().next() {
+        Some(tx) => Ok(tx),
+        None => Err(GNTDriverError::LibraryError(
+            "GLM transfer failed".to_string(),
+        )),
+    }
 }
 
 async fn notify_tx_confirmed(db: DbExecutor, tx_id: String) -> GNTDriverResult<()> {

@@ -8,27 +8,24 @@ use anyhow::{anyhow, bail};
 use std::convert::TryFrom;
 
 pub fn config_get(config: ProviderConfig, name: Option<String>) -> anyhow::Result<()> {
-    let state = serde_json::to_value(provider_agent::GlobalsState::load(&config.globals_file)?)?;
+    let globals_state = provider_agent::GlobalsState::load(&config.globals_file)?;
     match name {
         None => {
             if config.json {
-                println!("{}", serde_json::to_string_pretty(&state)?);
+                println!("{}", serde_json::to_string_pretty(&globals_state)?);
             } else {
-                for (key, v) in state.as_object().unwrap().iter() {
-                    if v.is_string() {
-                        println!("{}: {}", key, v.as_str().unwrap());
-                    }
-                }
+                println!("{}", &globals_state)
             }
         }
         Some(name) => {
+            let state = serde_json::to_value(globals_state)?;
             let value = state
-                .get(name)
-                .ok_or_else(|| anyhow::anyhow!("invalid name"))?;
+                .get(&name)
+                .ok_or_else(|| anyhow::anyhow!("Invalid name global state property: {}", name))?;
             if config.json {
                 println!("{}", serde_json::to_string_pretty(&value)?);
             } else {
-                println!("{}", value.as_str().unwrap());
+                println!("{}: {}", name, serde_json::to_string_pretty(value)?);
             }
         }
     }

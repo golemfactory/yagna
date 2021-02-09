@@ -67,7 +67,7 @@ openssl= { version = "0.10", optional = true }
 
 [dev-dependencies]
 ya-runtime-api = { version = "0.1", path = "runtime-api", features = ["codec", "server"] }
-ya-sb-router = "0.1"
+ya-sb-router = "0.3"
 
 actix-files = "0.4"
 actix-rt = "1.0.1"

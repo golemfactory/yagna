@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use ya_client::model::market::Reason;
 use ya_service_bus::RpcMessage;
 
-use crate::db::model::{AgreementId, DbProposal, Owner, ProposalId, SubscriptionId};
+use crate::db::model::{AgreementId, DbProposal, Owner, Proposal, ProposalId, SubscriptionId};
 use crate::protocol::negotiation::error::{ProposeAgreementError, RejectProposalError};
 
 use super::super::callback::CallbackMessage;
@@ -90,6 +90,7 @@ impl RpcMessage for InitialProposalReceived {
 #[serde(rename_all = "camelCase")]
 pub struct ProposalRejected {
     pub proposal_id: ProposalId,
+    pub initial: bool,
     pub reason: Option<Reason>,
 }
 
@@ -97,6 +98,16 @@ impl RpcMessage for ProposalRejected {
     const ID: &'static str = "ProposalRejected";
     type Item = ();
     type Error = RejectProposalError;
+}
+
+impl ProposalRejected {
+    pub fn of(proposal: &Proposal, reason: Option<Reason>) -> Self {
+        Self {
+            proposal_id: proposal.body.id.clone(),
+            initial: proposal.body.prev_proposal_id.is_none(),
+            reason,
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]

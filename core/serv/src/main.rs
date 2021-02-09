@@ -1,6 +1,8 @@
 use actix_web::{middleware, web, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use futures::prelude::*;
+#[cfg(feature = "static-openssl")]
+extern crate openssl_probe;
 use std::{
     any::TypeId,
     collections::HashMap,
@@ -450,6 +452,8 @@ async fn me(id: Identity) -> impl Responder {
 #[actix_rt::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
+    #[cfg(feature = "static-openssl")]
+    openssl_probe::init_ssl_cert_env_vars();
     let args = CliArgs::from_args();
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
