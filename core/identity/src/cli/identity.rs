@@ -132,6 +132,16 @@ pub enum IdentityCommand {
         /// Identity alias to drop
         node_or_alias: NodeOrAlias,
     },
+
+    /// Exports given identity to a file | stdout
+    Export {
+        /// Identity alias to export
+        node_or_alias: Option<NodeOrAlias>,
+
+        /// File path where identity will be written. Defaults to `stdout`
+        #[structopt(long = "file-path")]
+        file_path: Option<PathBuf>,
+    },
 }
 
 impl IdentityCommand {
@@ -263,6 +273,28 @@ impl IdentityCommand {
                         .await
                         .map_err(|e| anyhow::Error::msg(e))?,
                 )
+            }
+            IdentityCommand::Export {
+                node_or_alias,
+                file_path,
+            } => {
+                let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
+                let key_file = bus::service(identity::BUS_ID)
+                    .send(identity::GetKeyFile(node_id))
+                    .await?
+                    .map_err(|e| anyhow::Error::msg(e))?;
+
+                match file_path {
+                    Some(file) => {
+                        if file.is_file() {
+                            anyhow::bail!("File already exists")
+                        }
+
+                        std::fs::write(file, key_file)?;
+                        CommandOutput::object(format!("Written to '{}'", file.display()))
+                    }
+                    None => CommandOutput::object(key_file),
+                }
             }
         }
     }

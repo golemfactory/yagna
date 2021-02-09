@@ -95,7 +95,12 @@ impl DbExecutor {
         migration: T,
     ) -> anyhow::Result<()> {
         let c = self.conn()?;
-        Ok(migration(&c, &mut std::io::stderr())?)
+        // Some migrations require disabling foreign key checks for advanced table manipulation.
+        // Unfortunately, disabling foreign keys within migration doesn't work correctly.
+        c.batch_execute("PRAGMA foreign_keys = OFF;")?;
+        migration(&c, &mut std::io::stderr())?;
+        c.batch_execute("PRAGMA foreign_keys = ON;")?;
+        Ok(())
     }
 
     pub async fn with_connection<R: Send + 'static, Error, F>(&self, f: F) -> Result<R, Error>

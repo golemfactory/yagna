@@ -35,6 +35,8 @@ pub fn generate_event(id: i32, timestamp: NaiveDateTime) -> TestMarketEvent {
     }
 }
 
+const QUERY_EVENTS_TIMEOUT: f32 = 1.3;
+
 pub mod requestor {
     use super::*;
     use ya_client::model::market::event::RequestorEvent;
@@ -62,7 +64,7 @@ pub mod requestor {
     ) -> anyhow::Result<Proposal> {
         let events = market
             .requestor_engine
-            .query_events(&demand_id, 3.8, Some(5))
+            .query_events(&demand_id, QUERY_EVENTS_TIMEOUT, Some(5))
             .await?;
         expect_proposal(events, stage)
     }
@@ -125,7 +127,7 @@ pub mod provider {
     ) -> anyhow::Result<Proposal> {
         let events = market
             .provider_engine
-            .query_events(&offer_id, 3.8, Some(5))
+            .query_events(&offer_id, QUERY_EVENTS_TIMEOUT, Some(5))
             .await?;
         expect_proposal(events, stage)
     }

@@ -1,5 +1,5 @@
 mod accept_all;
-mod builtin;
+pub mod builtin;
 mod common;
 mod component;
 mod composite;

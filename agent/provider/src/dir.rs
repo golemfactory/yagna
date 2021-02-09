@@ -4,7 +4,7 @@ use std::path::Path;
 use std::time::{Duration, SystemTime};
 use walkdir::WalkDir;
 
-pub(crate) fn clean_provider_dir<P: AsRef<Path>, S: AsRef<str>>(
+pub fn clean_provider_dir<P: AsRef<Path>, S: AsRef<str>>(
     dir: P,
     expr: S,
     check_dir: bool,

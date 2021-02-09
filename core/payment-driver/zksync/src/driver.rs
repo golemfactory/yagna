@@ -249,9 +249,14 @@ impl PaymentDriver for ZksyncDriver {
                 ))
             }
             DbNetwork::Mainnet => Ok(format!(
-                "Your mainnet zksync address is {}. \
-                Go to https://chat.golem.network and channel #funding \
-                Paste your address and we will fund it after some short verification.",
+                r#"Your mainnet zkSync address is {}.
+
+To fund your wallet and be able to pay for your activities on Golem head to
+the https://chat.golem.network, join the #funding channel and type /terms
+and follow instructions to request GLMs.
+
+Mind that to be eligible you have to run your app at least once on testnet -
+- we will verify if that is true so we can avoid people requesting "free GLMs"."#,
                 address
             )),
         }

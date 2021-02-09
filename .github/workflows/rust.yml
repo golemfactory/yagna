@@ -50,18 +50,24 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-index-
 
-      - name: Cache cargo build
-        uses: actions/cache@v1
-        if: matrix.os != 'macos-latest'
+      - name: cargo tree - to check lockfile validity
+        uses: actions-rs/cargo@v1
         with:
-          path: target
-          key: ${{ runner.os }}-cargo-build-target1-${{ hashFiles('**/Cargo.lock') }}
+          command: tree
+          args: --locked
 
       - name: cargo fmt
         uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
+
+      - name: Cache cargo build
+        uses: actions/cache@v1
+        if: matrix.os != 'macos-latest'
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target1-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cache vcpkg's artifacts
         uses: actions/cache@v1
@@ -83,7 +89,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --workspace
+          args: --workspace --locked
 
       - name: cargo test sgx
         if: matrix.os == 'ubuntu-latest'

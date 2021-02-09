@@ -23,7 +23,7 @@ url = "2.1.1"
 [dev-dependencies]
 ya-identity = "0.2"
 ya-persistence = "0.2"
-ya-sb-router = "0.1"
+ya-sb-router = "0.3"
 ya-service-api-derive = "0.1"
 ya-service-api-interfaces = "0.1"
 
