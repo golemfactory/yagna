@@ -173,10 +173,12 @@ impl ProviderAgent {
         args.payment.session_id = args.market.session_id.clone();
 
         let network = args.node.account.network.clone();
-        log::info!(
-            "Using payment network: {}",
-            yansi::Color::Fixed(163).paint(&network),
-        );
+        let net_color = match network {
+            NetworkName::Mainnet => yansi::Color::Magenta,
+            NetworkName::Rinkeby => yansi::Color::Cyan,
+            _ => yansi::Color::Red,
+        };
+        log::info!("Using payment network: {}", net_color.paint(&network));
         let mut globals = GlobalsManager::try_new(&config.globals_file, args.node)?;
         globals.spawn_monitor(&config.globals_file)?;
         let mut presets = PresetManager::load_or_create(&config.presets_file)?;

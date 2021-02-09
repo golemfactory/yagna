@@ -2806,6 +2806,7 @@ dependencies = [
  "strum 0.20.0",
  "tokio 0.2.24",
  "url 2.2.0",
+ "ya-client",
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-provider",
