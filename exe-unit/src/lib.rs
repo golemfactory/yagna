@@ -255,7 +255,7 @@ impl<R: Runtime> RuntimeRef<R> {
                 };
                 transfer_service.send(msg).await??;
             }
-            ExeScriptCommand::Deploy {} => {
+            ExeScriptCommand::Deploy { .. } => {
                 let msg = DeployImage {};
                 let path = transfer_service.send(msg).await??;
                 runtime.send(SetTaskPackagePath(path)).await?;

@@ -17,7 +17,8 @@ mod codec;
 
 #[cfg(feature = "codec")]
 pub use codec::Codec;
-pub use proto::request::{KillProcess, RunProcess};
+pub use proto::request::{CreateNetwork, KillProcess, RunProcess};
+pub use proto::response::CreateNetwork as CreateNetworkResp;
 pub use proto::response::Error as ErrorResponse;
 pub use proto::response::RunProcess as RunProcessResp;
 pub use proto::response::{ErrorCode, ProcessStatus};
@@ -37,6 +38,8 @@ pub trait RuntimeService {
     fn run_process(&self, run: RunProcess) -> AsyncResponse<'_, RunProcessResp>;
 
     fn kill_process(&self, kill: KillProcess) -> AsyncResponse<'_, ()>;
+
+    fn create_network(&self, network: CreateNetwork) -> AsyncResponse<'_, CreateNetworkResp>;
 
     fn shutdown(&self) -> AsyncResponse<'_, ()>;
 }

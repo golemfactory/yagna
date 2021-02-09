@@ -24,6 +24,9 @@ async fn handle_command(
             service.kill_process(kill).await?;
             proto::response::Command::Kill(Default::default())
         }
+        proto::request::Command::Network(network) => {
+            proto::response::Command::Network(service.create_network(network).await?)
+        }
         proto::request::Command::Shutdown(_) => {
             service.shutdown().await?;
             proto::response::Command::Shutdown(Default::default())

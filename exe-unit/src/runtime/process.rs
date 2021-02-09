@@ -113,7 +113,7 @@ impl RuntimeProcess {
         let evt_tx = cmd.tx.clone();
 
         let cmd_args = match cmd.command {
-            ExeScriptCommand::Deploy {} => {
+            ExeScriptCommand::Deploy { .. } => {
                 let cmd_args = vec![OsString::from("deploy")];
                 cmd_args
             }
@@ -314,7 +314,7 @@ impl Handler<ExecuteCommand> for RuntimeProcess {
     fn handle(&mut self, cmd: ExecuteCommand, ctx: &mut Self::Context) -> Self::Result {
         let address = ctx.address();
         match &cmd.command {
-            ExeScriptCommand::Deploy {} => self.handle_process_command(cmd, address),
+            ExeScriptCommand::Deploy { .. } => self.handle_process_command(cmd, address),
             _ => match &self.mode {
                 RuntimeMode::ProcessPerCommand => self.handle_process_command(cmd, address),
                 RuntimeMode::Service => self.handle_service_command(cmd, address),
