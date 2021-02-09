@@ -7308,6 +7308,7 @@ dependencies = [
  "ya-service-bus",
  "ya-transfer",
  "ya-utils-path",
+ "yansi",
 ]
 
 [[package]]
