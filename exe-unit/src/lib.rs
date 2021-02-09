@@ -138,29 +138,32 @@ impl<R: Runtime> RuntimeRef<R> {
         mut events: mpsc::Sender<RuntimeEvent>,
         mut control: oneshot::Receiver<()>,
     ) {
-        for (idx, cmd) in exec.exe_script.into_iter().enumerate() {
+        let batch_id = exec.batch_id.clone();
+        for (idx, command) in exec.exe_script.into_iter().enumerate() {
             if let Ok(Some(_)) = control.try_recv() {
-                log::warn!("Batch {} execution aborted", exec.batch_id);
+                log::warn!("Batch {} execution aborted", batch_id);
                 break;
-            }
-
-            let batch_id = exec.batch_id.clone();
-            let evt = RuntimeEvent::started(batch_id.clone(), idx, cmd.clone());
-            if let Err(e) = events.send(evt).await {
-                log::error!("Unable to report event: {:?}", e);
             }
 
             let runtime_cmd = ExecuteCommand {
                 batch_id: batch_id.clone(),
-                idx,
-                command: cmd.clone(),
+                command: command.clone(),
                 tx: events.clone(),
+                idx,
             };
-            let result = self
-                .exec_cmd(runtime_cmd, runtime.clone(), transfers.clone())
-                .await;
 
-            let (return_code, message) = match result {
+            let evt = RuntimeEvent::started(batch_id.clone(), idx, command.clone());
+            if let Err(e) = events.send(evt).await {
+                log::error!("Unable to report event: {:?}", e);
+            }
+
+            let (return_code, message) = match {
+                if runtime_cmd.stateless() {
+                    self.exec_stateless(&runtime_cmd).await
+                } else {
+                    self.exec_stateful(runtime_cmd, &runtime, &transfers).await
+                }
+            } {
                 Ok(_) => (0, None),
                 Err(ref err) => match err {
                     Error::CommandExitCodeError(c) => (*c, Some(err.to_string())),
@@ -181,13 +184,8 @@ impl<R: Runtime> RuntimeRef<R> {
         }
     }
 
-    async fn exec_cmd(
-        &self,
-        runtime_cmd: ExecuteCommand,
-        runtime: Addr<R>,
-        transfer_service: Addr<TransferService>,
-    ) -> Result<()> {
-        match &runtime_cmd.command {
+    async fn exec_stateless(&self, runtime_cmd: &ExecuteCommand) -> Result<()> {
+        match runtime_cmd.command {
             ExeScriptCommand::Sign {} => {
                 let batch_id = runtime_cmd.batch_id.clone();
                 let signature = self.send(SignExeScript { batch_id }).await??;
@@ -203,19 +201,24 @@ impl<R: Runtime> RuntimeRef<R> {
                     ))
                     .await
                     .map_err(|e| Error::runtime(format!("Unable to send stdout event: {:?}", e)))?;
-
-                return Ok(());
             }
             ExeScriptCommand::Terminate {} => {
                 log::debug!("Terminating running ExeScripts");
-                let exclude_batches = vec![runtime_cmd.batch_id];
+                let exclude_batches = vec![runtime_cmd.batch_id.clone()];
                 self.send(Stop { exclude_batches }).await??;
                 self.send(SetState::from(State::Initialized)).await?;
-                return Ok(());
             }
             _ => (),
         }
+        Ok(())
+    }
 
+    async fn exec_stateful(
+        &self,
+        runtime_cmd: ExecuteCommand,
+        runtime: &Addr<R>,
+        transfer_service: &Addr<TransferService>,
+    ) -> Result<()> {
         let state = self.send(GetState {}).await?.0;
         let state_pre = match (&state.0, &state.1) {
             (_, Some(_)) => {
@@ -241,11 +244,40 @@ impl<R: Runtime> RuntimeRef<R> {
                 _ => StatePair(*s, Some(*s)),
             },
         };
+        self.send(SetState::from(state_pre.clone())).await?;
 
         log::info!("Executing command: {:?}", runtime_cmd.command);
 
-        self.send(SetState::from(state_pre.clone())).await?;
+        self.pre_runtime(&runtime_cmd, &runtime, &transfer_service)
+            .await?;
 
+        let exit_code = runtime.send(runtime_cmd.clone()).await??;
+        if exit_code != 0 {
+            return Err(Error::CommandExitCodeError(exit_code));
+        }
+
+        self.post_runtime(&runtime_cmd, &runtime, &transfer_service)
+            .await?;
+
+        let state_cur = self.send(GetState {}).await?.0;
+        if state_cur != state_pre {
+            return Err(StateError::UnexpectedState {
+                current: state_cur,
+                expected: state_pre,
+            }
+            .into());
+        }
+
+        self.send(SetState::from(state_pre.1.unwrap())).await?;
+        Ok(())
+    }
+
+    async fn pre_runtime(
+        &self,
+        runtime_cmd: &ExecuteCommand,
+        runtime: &Addr<R>,
+        transfer_service: &Addr<TransferService>,
+    ) -> Result<()> {
         match &runtime_cmd.command {
             ExeScriptCommand::Transfer { from, to, args } => {
                 let msg = TransferResource {
@@ -262,12 +294,15 @@ impl<R: Runtime> RuntimeRef<R> {
             }
             _ => (),
         }
+        Ok(())
+    }
 
-        let exit_code = runtime.send(runtime_cmd.clone()).await??;
-        if exit_code != 0 {
-            return Err(Error::CommandExitCodeError(exit_code));
-        }
-
+    async fn post_runtime(
+        &self,
+        runtime_cmd: &ExecuteCommand,
+        runtime: &Addr<R>,
+        transfer_service: &Addr<TransferService>,
+    ) -> Result<()> {
         if let ExeScriptCommand::Deploy { .. } = &runtime_cmd.command {
             let mut runtime_mode = RuntimeMode::ProcessPerCommand;
             let stdout = self
@@ -289,17 +324,6 @@ impl<R: Runtime> RuntimeRef<R> {
             }
             runtime.send(SetRuntimeMode(runtime_mode)).await??;
         }
-
-        let state_cur = self.send(GetState {}).await?.0;
-        if state_cur != state_pre {
-            return Err(StateError::UnexpectedState {
-                current: state_cur,
-                expected: state_pre,
-            }
-            .into());
-        }
-
-        self.send(SetState::from(state_pre.1.unwrap())).await?;
         Ok(())
     }
 }

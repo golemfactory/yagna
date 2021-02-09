@@ -76,6 +76,15 @@ pub struct ExecuteCommand {
     pub tx: mpsc::Sender<RuntimeEvent>,
 }
 
+impl ExecuteCommand {
+    pub fn stateless(&self) -> bool {
+        match &self.command {
+            ExeScriptCommand::Sign { .. } | ExeScriptCommand::Terminate { .. } => true,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, Message)]
 #[rtype(result = "()")]
 pub struct SetTaskPackagePath(pub PathBuf);
