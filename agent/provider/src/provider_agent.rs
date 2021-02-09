@@ -274,7 +274,11 @@ impl ProviderAgent {
         let globals = self.globals.get_state();
 
         if let Some(subnet) = &globals.subnet {
-            log::info!("Using subnet: {}", subnet);
+            log::warn!(
+                "Using payment network: {} and subnet: {}",
+                self.network,
+                subnet
+            );
         }
 
         NodeInfo {
@@ -287,7 +291,7 @@ impl ProviderAgent {
     fn accounts(&self, network: &NetworkName) -> anyhow::Result<Vec<AccountView>> {
         let globals = self.globals.get_state();
         if let Some(address) = &globals.account {
-            log::debug!(
+            log::info!(
                 "Filtering payment accounts by address={} and network={}",
                 address,
                 network
