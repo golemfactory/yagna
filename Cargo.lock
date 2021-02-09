@@ -2803,10 +2803,12 @@ dependencies = [
  "serde_json",
  "strip-ansi-escapes",
  "structopt",
+ "strum 0.20.0",
  "tokio 0.2.24",
  "url 2.2.0",
  "ya-compile-time-utils",
  "ya-core-model",
+ "ya-provider",
  "ya-utils-path",
  "ya-utils-process",
 ]
@@ -3928,6 +3930,17 @@ dependencies = [
  "proc-macro2 0.4.30",
  "quote 0.6.13",
  "syn 0.15.44",
+]
+
+[[package]]
+name = "num-derive"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "876a53fff98e03a936a674b29568b0e605f06b29372c2489ff4de23f1949743d"
+dependencies = [
+ "proc-macro2 1.0.24",
+ "quote 1.0.8",
+ "syn 1.0.60",
 ]
 
 [[package]]
@@ -5877,10 +5890,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b89a286a7e3b5720b9a477b23253bc50debac207c8d21505f8e70b36792f11b5"
 
 [[package]]
+name = "strum"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7318c509b5ba57f18533982607f24070a55d353e90d4cae30c467cdb2ad5ac5c"
+
+[[package]]
 name = "strum_macros"
 version = "0.19.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e61bb0be289045cb80bfce000512e32d09f8337e54c186725da381377ad1f8d5"
+dependencies = [
+ "heck",
+ "proc-macro2 1.0.24",
+ "quote 1.0.8",
+ "syn 1.0.60",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee8bc6b87a5112aeeab1f4a9f7ab634fe6cbefc4850006df31267f4cfb9e3149"
 dependencies = [
  "heck",
  "proc-macro2 1.0.24",
@@ -7162,8 +7193,8 @@ dependencies = [
  "secp256k1 0.19.0",
  "serde",
  "serde_json",
- "strum",
- "strum_macros",
+ "strum 0.19.5",
+ "strum_macros 0.19.4",
  "thiserror",
 ]
 
@@ -7189,6 +7220,9 @@ dependencies = [
  "log",
  "serde",
  "serde_bytes",
+ "structopt",
+ "strum 0.20.0",
+ "strum_macros 0.20.1",
  "thiserror",
  "ya-client-model",
  "ya-service-bus",
@@ -7314,6 +7348,8 @@ dependencies = [
  "log",
  "maplit",
  "num-bigint 0.2.6",
+ "num-derive 0.3.3",
+ "num-traits",
  "r2d2",
  "rlp",
  "secp256k1 0.19.0",
@@ -7398,7 +7434,7 @@ dependencies = [
  "libsqlite3-sys",
  "log",
  "metrics",
- "num-derive",
+ "num-derive 0.2.5",
  "num-traits",
  "r2d2",
  "rand 0.7.3",
@@ -7408,8 +7444,8 @@ dependencies = [
  "serial_test",
  "sha3",
  "structopt",
- "strum",
- "strum_macros",
+ "strum 0.19.5",
+ "strum_macros 0.19.4",
  "thiserror",
  "tokio 0.2.24",
  "uuid 0.8.2",
@@ -7476,6 +7512,7 @@ dependencies = [
  "anyhow",
  "env_logger 0.7.1",
  "futures 0.3.12",
+ "lazy_static",
  "log",
  "serde",
  "serde_json",
@@ -7552,6 +7589,7 @@ dependencies = [
  "diesel",
  "diesel_migrations",
  "ethereum-types 0.6.0",
+ "futures 0.3.12",
  "hex",
  "log",
  "num",
@@ -7585,7 +7623,7 @@ dependencies = [
 
 [[package]]
 name = "ya-provider"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix 0.10.0",
  "actix-rt",
@@ -7617,8 +7655,8 @@ dependencies = [
  "shared_child",
  "signal-hook",
  "structopt",
- "strum",
- "strum_macros",
+ "strum 0.20.0",
+ "strum_macros 0.20.1",
  "sys-info",
  "thiserror",
  "tokio 0.2.24",
@@ -7656,7 +7694,7 @@ dependencies = [
 [[package]]
 name = "ya-sb-proto"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=89236a2fec0f5cef335d4637df6e0f6e4da0e542#89236a2fec0f5cef335d4637df6e0f6e4da0e542"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=6b494e17d7a662e0b710af8c5a2e99ab4007fdb9#6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"
 dependencies = [
  "bytes 0.5.6",
  "prost",
@@ -7669,8 +7707,8 @@ dependencies = [
 
 [[package]]
 name = "ya-sb-router"
-version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=89236a2fec0f5cef335d4637df6e0f6e4da0e542#89236a2fec0f5cef335d4637df6e0f6e4da0e542"
+version = "0.3.1"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=6b494e17d7a662e0b710af8c5a2e99ab4007fdb9#6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"
 dependencies = [
  "anyhow",
  "bytes 0.4.12",
@@ -7691,7 +7729,7 @@ dependencies = [
 [[package]]
 name = "ya-sb-util"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=89236a2fec0f5cef335d4637df6e0f6e4da0e542#89236a2fec0f5cef335d4637df6e0f6e4da0e542"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=6b494e17d7a662e0b710af8c5a2e99ab4007fdb9#6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"
 dependencies = [
  "futures 0.3.12",
  "pin-project 0.4.27",
@@ -7733,8 +7771,8 @@ dependencies = [
  "proc-macro2 1.0.24",
  "quote 1.0.8",
  "structopt",
- "strum",
- "strum_macros",
+ "strum 0.19.5",
+ "strum_macros 0.19.4",
  "syn 1.0.60",
  "ya-service-api-interfaces",
 ]
@@ -7778,8 +7816,8 @@ dependencies = [
 
 [[package]]
 name = "ya-service-bus"
-version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=89236a2fec0f5cef335d4637df6e0f6e4da0e542#89236a2fec0f5cef335d4637df6e0f6e4da0e542"
+version = "0.3.1"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=6b494e17d7a662e0b710af8c5a2e99ab4007fdb9#6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"
 dependencies = [
  "actix 0.9.0",
  "flexbuffers",
@@ -7986,6 +8024,7 @@ dependencies = [
  "lazy_static",
  "log",
  "openssl",
+ "openssl-probe",
  "structopt",
  "tokio 0.2.24",
  "url 2.2.0",

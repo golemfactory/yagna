@@ -1,4 +1,3 @@
-use metrics::counter;
 use structopt::{clap::AppSettings, StructOpt};
 
 use ya_core_model::version;
@@ -9,7 +8,7 @@ const UPDATE_CMD: &'static str = "curl -sSf https://join.golem.network/as-provid
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub(crate) enum ReleaseMessage<'a> {
-    #[error("New Yagna {0} is available!\nUpdate via\n\t`{UPDATE_CMD}`")]
+    #[error("New Yagna {0} is available! Update via `{UPDATE_CMD}`")]
     Available(&'a version::Release),
     #[error("Your Yagna is up to date: {0}")]
     UpToDate(&'a version::Release),
@@ -41,10 +40,7 @@ impl VersionCLI {
                     .send(version::Skip())
                     .await??
                 {
-                    Some(r) => {
-                        counter!("version.skip", 1);
-                        ReleaseMessage::Skipped(&r).to_string()
-                    }
+                    Some(r) => ReleaseMessage::Skipped(&r).to_string(),
                     None => ReleaseMessage::NotSkipped.to_string(),
                 },
             ),
@@ -85,9 +81,7 @@ mod test {
         assert_eq!(
             ReleaseMessage::Available(&r).to_string(),
             format!(
-                "New Yagna Version 0.6.1 'some code name' released 2015-10-13 is available!\n\
-                Update via\n\
-                \t`curl -sSf https://join.golem.network/as-provider | bash -`"
+                "New Yagna Version 0.6.1 'some code name' released 2015-10-13 is available! Update via `curl -sSf https://join.golem.network/as-provider | bash -`"
             )
         );
     }

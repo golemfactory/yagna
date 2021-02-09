@@ -63,7 +63,7 @@ pub mod local {
         type Error = ();
     }
 
-    #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
     #[serde(rename_all = "camelCase")]
     pub struct Subscribe {
         topic: String,

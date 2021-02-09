@@ -1,5 +1,5 @@
 pub mod config;
-mod negotiator;
+pub mod negotiator;
 pub mod presets;
 pub mod provider_market;
 pub mod termination_reason;

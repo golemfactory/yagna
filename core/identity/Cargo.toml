@@ -34,7 +34,7 @@ uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]
 ya-service-api-derive = "0.1"
-ya-sb-router = "0.1"
+ya-sb-router = "0.3"
 
 actix-service = "1.0.5"
 actix-web = "3.2"

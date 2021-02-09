@@ -1,4 +1,4 @@
-use crate::dao::{activity, agreement, allocation};
+use crate::dao::{activity, agreement};
 use crate::error::DbResult;
 use crate::models::payment::{
     ActivityPayment as DbActivityPayment, AgreementPayment as DbAgreementPayment, ReadObj, WriteObj,
@@ -37,13 +37,6 @@ fn insert_activity_payments(
 
         activity::increase_amount_paid(&activity_payment.activity_id, &owner_id, &amount, conn)?;
 
-        // Update spent & remaining amount for allocation (if applicable)
-        if let Some(allocation_id) = &allocation_id {
-            log::trace!("Updating spent & remaining amount for allocation...");
-            allocation::spend_from_allocation(allocation_id, &amount, conn)?;
-            log::trace!("Allocation updated.");
-        }
-
         diesel::insert_into(activity_pay_dsl::pay_activity_payment)
             .values(DbActivityPayment {
                 payment_id: payment_id.clone(),
@@ -71,13 +64,6 @@ fn insert_agreement_payments(
         let allocation_id = agreement_payment.allocation_id;
 
         agreement::increase_amount_paid(&agreement_payment.agreement_id, &owner_id, &amount, conn)?;
-
-        // Update spent & remaining amount for allocation (if applicable)
-        if let Some(allocation_id) = &allocation_id {
-            log::trace!("Updating spent & remaining amount for allocation...");
-            allocation::spend_from_allocation(allocation_id, &amount, conn)?;
-            log::trace!("Allocation updated.");
-        }
 
         diesel::insert_into(agreement_pay_dsl::pay_agreement_payment)
             .values(DbAgreementPayment {

@@ -1,78 +1,49 @@
-use crate::command::{
-    PaymentSummary, RecvAccount, YaCommand, DEFAULT_NETWORK, ERC20_DRIVER, ZKSYNC_DRIVER,
-};
-use crate::platform::Status as KvmStatus;
-use crate::utils::is_yagna_running;
-
 use ansi_term::{Colour, Style};
 use anyhow::Result;
 use futures::prelude::*;
 use prettytable::{cell, format, row, Table};
 use structopt::StructOpt;
-use ya_core_model::payment::local::StatusResult;
+use strum::VariantNames;
+
+use ya_core_model::payment::local::{NetworkName, StatusResult};
+use ya_core_model::NodeId;
+
+use crate::command::{PaymentSummary, YaCommand, ERC20_DRIVER, ZKSYNC_DRIVER};
+use crate::platform::Status as KvmStatus;
+use crate::utils::{is_yagna_running, payment_account};
 
 #[derive(StructOpt, Debug)]
 pub struct StatusCommand {
-    #[structopt(long = "payment-network", env = "YA_PAYMENT_NETWORK", default_value = &DEFAULT_NETWORK)]
-    pub network: String,
+    #[structopt(long = "payment-network", env = "YA_PAYMENT_NETWORK", possible_values = NetworkName::VARIANTS, default_value = NetworkName::Mainnet.into())]
+    pub network: NetworkName,
 }
 
 async fn payment_status(
     cmd: &YaCommand,
-    network: &str,
-    account: &Option<RecvAccount>,
+    network: &NetworkName,
+    account: &Option<NodeId>,
 ) -> anyhow::Result<(StatusResult, StatusResult)> {
-    if let Some(account) = account {
-        let address = account.address.to_lowercase();
-        let (status_zk, status_erc20) = future::join(
-            cmd.yagna()?
-                .payment_status(Some(&address), network, &ZKSYNC_DRIVER),
-            cmd.yagna()?
-                .payment_status(Some(&address), network, &ERC20_DRIVER),
-        )
-        .await;
+    let address = payment_account(&cmd, account).await?;
 
-        let is_zk = account
-            .platform
-            .as_ref()
-            .map(|platform| {
-                (*ZKSYNC_DRIVER)
-                    .payment_type(Some(network))
-                    .map(|desc| desc.platform == platform)
-                    .ok()
-            })
-            .flatten()
-            .unwrap_or(true);
-        let is_erc20 = account
-            .platform
-            .as_ref()
-            .map(|platform| {
-                (*ERC20_DRIVER)
-                    .payment_type(Some(network))
-                    .map(|desc| desc.platform == platform)
-                    .ok()
-            })
-            .flatten()
-            .unwrap_or(true);
-        match (status_zk, status_erc20) {
-            (Ok(zk), Ok(eth)) => Ok((zk, eth)),
-            (Err(e), _) if is_zk => Err(e),
-            (_, Err(e)) if is_erc20 => Err(e),
-            (Ok(zk), Err(_)) => Ok((zk, StatusResult::default())),
-            (Err(_), Ok(plain)) => Ok((StatusResult::default(), plain)),
-            (Err(e), _) => Err(e),
+    let (status_zk, status_erc20) = future::join(
+        cmd.yagna()?
+            .payment_status(&address, network, &ZKSYNC_DRIVER),
+        cmd.yagna()?
+            .payment_status(&address, network, &ERC20_DRIVER),
+    )
+    .await;
+
+    match (status_zk, status_erc20) {
+        (Ok(zk), Ok(eth)) => Ok((zk, eth)),
+        (Ok(zk), Err(e)) => {
+            log::warn!("yagna payment status for ERC-20 {} failed: {}", network, e);
+            Ok((zk, StatusResult::default()))
         }
-    } else {
-        let (status_zk, status_erc20) = future::join(
-            cmd.yagna()?.payment_status(None, network, &ZKSYNC_DRIVER),
-            cmd.yagna()?.payment_status(None, network, &ERC20_DRIVER),
-        )
-        .await;
-        match (status_zk, status_erc20) {
-            (Ok(zk), Ok(eth)) => Ok((zk, eth)),
-            (Err(e), _) => Err(e),
-            (Ok(zk), Err(_)) => Ok((zk, StatusResult::default())),
+        (Err(e), Ok(erc20)) => {
+            log::warn!("yagna payment status for zkSync {} failed: {}", network, e);
+            Ok((StatusResult::default(), erc20))
         }
+        (Err(e), _) => Err(e),
     }
 }
 
@@ -99,6 +70,13 @@ pub async fn run(args: StatusCommand) -> Result</*exit code*/ i32> {
                 "Service",
                 Style::new().fg(Colour::Green).paint("is running")
             ]);
+            if let Some(pending) = cmd.yagna()?.version().await?.pending {
+                let ver = format!("{} released!", pending.version);
+                table.add_row(row![
+                    "New Version",
+                    Style::new().fg(Colour::Fixed(220)).paint(ver)
+                ]);
+            }
         } else {
             table.add_row(row![
                 "Service",
@@ -112,14 +90,6 @@ pub async fn run(args: StatusCommand) -> Result</*exit code*/ i32> {
             "Build",
             ya_compile_time_utils::build_number_str().unwrap_or("-")
         ]);
-
-        if let Some(pending) = cmd.yagna()?.version().await?.pending {
-            let ver = format!("{} released!", pending.version);
-            table.add_row(row![
-                "New Version",
-                Style::new().fg(Colour::Fixed(220)).paint(ver)
-            ]);
-        }
 
         table.add_empty_row();
         table.add_row(row!["Node Name", &config.node_name.unwrap_or_default()]);
@@ -160,12 +130,14 @@ pub async fn run(args: StatusCommand) -> Result</*exit code*/ i32> {
                 .fg(Colour::Yellow)
                 .underline()
                 .paint("Wallet")]);
-            let account = config.account.map(|a| a.address).unwrap_or(id.node_id);
+            let account = config.account.map(|a| a.to_string()).unwrap_or(id.node_id);
             table.add_row(row![H2->Style::new().fg(Colour::Fixed(63)).paint(&account)]);
             table.add_empty_row();
             table.add_row(row![
                 "network",
-                Style::new().fg(Colour::Purple).paint(&args.network)
+                Style::new()
+                    .fg(Colour::Purple)
+                    .paint(&args.network.to_string())
             ]);
             let total_amount = &zk_payment_status.amount + &erc20_payment_status.amount;
             table.add_row(row![
