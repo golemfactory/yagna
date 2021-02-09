@@ -7319,6 +7319,7 @@ dependencies = [
  "chrono",
  "flexi_logger",
  "log",
+ "yansi",
 ]
 
 [[package]]
