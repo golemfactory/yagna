@@ -4,7 +4,6 @@ use flexi_logger::{DeferredNow, Record};
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use structopt::{clap, StructOpt};
-use yansi::{Color, Style};
 
 use ya_core_model::activity;
 use ya_exe_unit::agreement::Agreement;
@@ -233,7 +232,7 @@ pub fn colored_stderr_exeunit_prefixed_format(
     now: &mut DeferredNow,
     record: &Record,
 ) -> Result<(), std::io::Error> {
-    write!(w, "{}", Color::Fixed(92).paint("[ExeUnit] "));
+    write!(w, "{}", yansi::Color::Fixed(92).paint("[ExeUnit] "))?;
     flexi_logger::colored_opt_format(w, now, record)
 }
 
@@ -271,9 +270,6 @@ fn main() {
 mod test {
     #[test]
     fn test_paint() {
-        use yansi::{Color, Style};
-
-        let alert = Style::new(Color::Fixed(92));
-        println!("Alert: {}", alert.paint("This thing happened!"));
+        println!("Some: {}", yansi::Color::Fixed(92).paint("violet text!"));
     }
 }
