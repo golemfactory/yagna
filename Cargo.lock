@@ -7672,6 +7672,7 @@ dependencies = [
  "ya-utils-actix",
  "ya-utils-path",
  "ya-utils-process",
+ "yansi",
 ]
 
 [[package]]

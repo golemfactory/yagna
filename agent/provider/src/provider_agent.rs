@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::{fs, io};
+use yansi::{Color, Style};
 
 use ya_agreement_utils::agreement::TypedArrayPointer;
 use ya_agreement_utils::*;
@@ -172,6 +173,10 @@ impl ProviderAgent {
         args.payment.session_id = args.market.session_id.clone();
 
         let network = args.node.account.network.clone();
+        log::info!(
+            "Using payment network: {}",
+            Style::new(Color::Fixed(163)).paint(&network),
+        );
         let mut globals = GlobalsManager::try_new(&config.globals_file, args.node)?;
         globals.spawn_monitor(&config.globals_file)?;
         let mut presets = PresetManager::load_or_create(&config.presets_file)?;
@@ -274,10 +279,9 @@ impl ProviderAgent {
         let globals = self.globals.get_state();
 
         if let Some(subnet) = &globals.subnet {
-            log::warn!(
-                "Using payment network: {} and subnet: {}",
-                self.network,
-                subnet
+            log::info!(
+                "Using subnet: {}",
+                Style::new(Color::Fixed(184)).paint(subnet)
             );
         }
 
