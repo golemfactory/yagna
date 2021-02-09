@@ -92,6 +92,7 @@ pub struct Presets {
 impl Presets {
     pub fn load_from_file<P: AsRef<Path>>(presets_file: P) -> Result<Presets> {
         let path = presets_file.as_ref();
+        log::debug!("Loading presets from: {}", path.display());
         let json = std::fs::read_to_string(path)?;
         let presets: Presets = serde_json::from_str::<PresetsFile>(json.as_str())
             .map_err(|e| anyhow!("Can't deserialize Presets from file {:?}: {}", path, e))?

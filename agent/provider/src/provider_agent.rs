@@ -78,7 +78,7 @@ impl GlobalsManager {
 #[derive(Clone, Debug, Default, Serialize, Deserialize, derive_more::Display)]
 #[display(
     fmt = "{}{}{}",
-    "node_name.as_ref().map(|nn| format!(\"\nNode name: {}\", nn)).unwrap_or(\"\".into())",
+    "node_name.as_ref().map(|nn| format!(\"Node name: {}\", nn)).unwrap_or(\"\".into())",
     "subnet.as_ref().map(|s| format!(\"\nSubnet: {}\", s)).unwrap_or(\"\".into())",
     "account.as_ref().map(|a| format!(\"\nAccount: {}\", a)).unwrap_or(\"\".into())"
 )]
@@ -91,6 +91,7 @@ pub struct GlobalsState {
 impl GlobalsState {
     pub fn load(path: &Path) -> anyhow::Result<Self> {
         if path.exists() {
+            log::debug!("Loading global state from: {}", path.display());
             Ok(serde_json::from_reader(io::BufReader::new(
                 fs::OpenOptions::new().read(true).open(path)?,
             ))?)
