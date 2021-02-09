@@ -76,7 +76,7 @@ cargo run --example invoice_flow
 (**NOTE:** The example expects a clean database so might need to remove `payment.db`
 and restart the API server.)
 
-Running examples with erc-20 payment driver, please wait until `payment_api` get funded and then run `invoice_flow` with `--driver=erc20` parameter.
+Running examples with erc-20 payment driver, please wait until `payment_api` get funded and then run `invoice_flow` with `--platform=erc20-rinkeby-tglm` parameter.
 
 ##### Issue an invoice:  
 `POST` `http://127.0.0.1:7465/payment-api/v1/provider/invoices`
