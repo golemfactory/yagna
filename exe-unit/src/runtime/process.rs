@@ -19,11 +19,11 @@ use tokio::process::Command;
 use ya_agreement_utils::agreement::OfferTemplate;
 use ya_client_model::activity::{CommandOutput, ExeScriptCommand, RuntimeEvent};
 use ya_runtime_api::server::{spawn, ProcessControl, RunProcess, RuntimeService, RuntimeStatus};
+use ya_runtime_api::PROTOCOL_VERSION;
 
 const PROCESS_KILL_TIMEOUT_SECONDS_ENV_VAR: &str = "PROCESS_KILL_TIMEOUT_SECONDS";
 const DEFAULT_PROCESS_KILL_TIMEOUT_SECONDS: i64 = 5;
 const MIN_PROCESS_KILL_TIMEOUT_SECONDS: i64 = 1;
-const SERVICE_PROTOCOL_VERSION: &str = "0.1.0";
 
 fn process_kill_timeout_seconds() -> i64 {
     let limit = std::env::var(PROCESS_KILL_TIMEOUT_SECONDS_ENV_VAR)
@@ -109,33 +109,23 @@ impl RuntimeProcess {
         cmd: ExecuteCommand,
         address: Addr<Self>,
     ) -> LocalBoxFuture<'f, Result<i32, Error>> {
-        let idx = cmd.idx;
-        let evt_tx = cmd.tx.clone();
-
-        let cmd_args = match cmd.command {
-            ExeScriptCommand::Deploy { .. } => {
-                let cmd_args = vec![OsString::from("deploy")];
-                cmd_args
-            }
-            ExeScriptCommand::Start { args } => {
-                let mut cmd_args = vec![OsString::from("start"), OsString::from("--")];
-                cmd_args.extend(args.into_iter().map(OsString::from));
-                cmd_args
-            }
+        let cmd_args = match &cmd.command {
+            ExeScriptCommand::Deploy { .. } => vec![OsString::from("deploy")],
+            ExeScriptCommand::Start { args } => ["start", "--"]
+                .iter()
+                .map(OsString::from)
+                .chain(args.into_iter().map(OsString::from))
+                .collect(),
             ExeScriptCommand::Run {
                 entry_point, args, ..
-            } => {
-                let mut cmd_args = vec![
-                    OsString::from("run"),
-                    OsString::from("--entrypoint"),
-                    OsString::from(entry_point),
-                    OsString::from("--"),
-                ];
-                cmd_args.extend(args.into_iter().map(OsString::from));
-                cmd_args
-            }
+            } => ["run", "--entrypoint", entry_point.as_str(), "--"]
+                .iter()
+                .map(OsString::from)
+                .chain(args.into_iter().map(OsString::from))
+                .collect(),
             _ => return future::ok(0).boxed_local(),
         };
+
         let binary = self.binary.clone();
         let args = self.args(cmd_args);
 
@@ -146,8 +136,8 @@ impl RuntimeProcess {
             std::env::current_dir()
         );
 
-        let batch_id = cmd.batch_id.clone();
         async move {
+            let idx = cmd.idx;
             let mut child = Command::new(binary)
                 .kill_on_drop(true)
                 .args(args?)
@@ -155,12 +145,12 @@ impl RuntimeProcess {
                 .stderr(Stdio::piped())
                 .spawn()?;
 
-            let id = batch_id.clone();
-            let stdout = forward_output(child.stdout.take().unwrap(), &evt_tx, move |out| {
+            let id = cmd.batch_id.clone();
+            let stdout = forward_output(child.stdout.take().unwrap(), &cmd.tx, move |out| {
                 RuntimeEvent::stdout(id.clone(), idx, CommandOutput::Bin(out))
             });
-            let id = batch_id.clone();
-            let stderr = forward_output(child.stderr.take().unwrap(), &evt_tx, move |out| {
+            let id = cmd.batch_id.clone();
+            let stderr = forward_output(child.stderr.take().unwrap(), &cmd.tx, move |out| {
                 RuntimeEvent::stderr(id.clone(), idx, CommandOutput::Bin(out))
             });
 
@@ -183,114 +173,120 @@ impl RuntimeProcess {
         cmd: ExecuteCommand,
         address: Addr<Self>,
     ) -> LocalBoxFuture<'f, Result<i32, Error>> {
-        let binary = self.binary.clone();
-        match cmd.command {
-            ExeScriptCommand::Start { args } => {
-                let mut cmd_args = vec![OsString::from("start")];
-                cmd_args.extend(args.into_iter().map(OsString::from));
-                let args = match self.args(cmd_args) {
-                    Ok(args) => args,
-                    Err(error) => {
-                        let msg = format!("invalid START arguments: {:?}", error);
-                        return future::err(Error::runtime(msg)).boxed_local();
-                    }
-                };
-
-                log::info!("Executing {:?} with {:?}", binary, args);
-
-                let monitor = self.monitor.get_or_insert_with(Default::default).clone();
-                let mut command = Command::new(binary);
-                command.args(args);
-
-                async move {
-                    let service = spawn(command, monitor).map_err(Error::runtime).await?;
-                    let hello = service
-                        .hello(SERVICE_PROTOCOL_VERSION)
-                        .map_err(|e| Error::runtime(format!("service hello error: {:?}", e)));
-
-                    match future::select(service.exited(), hello).await {
-                        future::Either::Left((result, _)) => return Ok(result),
-                        future::Either::Right((result, _)) => result.map(|_| ())?,
-                    }
-
-                    address
-                        .send(SetProcessService(ProcessService::new(service)))
-                        .await?;
-                    Ok(0)
-                }
-                .boxed_local()
-            }
+        match cmd.command.clone() {
+            ExeScriptCommand::Start { args } => self.handle_service_start(args, address),
             ExeScriptCommand::Run {
-                entry_point,
-                mut args,
-                capture: _,
-            } => {
-                let (service, status) = match self.service.as_ref() {
-                    Some(svc) => (svc.service.clone(), svc.status.clone()),
-                    None => {
-                        return future::err(Error::runtime("START command not run")).boxed_local()
-                    }
-                };
-
-                log::info!("Executing {:?} with {} {:?}", binary, entry_point, args);
-
-                let mut monitor = self.monitor.get_or_insert_with(Default::default).clone();
-                let batch_id = cmd.batch_id.clone();
-                let idx = cmd.idx;
-                let mut tx = cmd.tx.clone();
-
-                let exec = async move {
-                    let name = Path::new(&entry_point)
-                        .file_name()
-                        .ok_or_else(|| Error::runtime("Invalid binary name"))?;
-                    args.insert(0, name.to_string_lossy().to_string());
-
-                    let mut run_process = RunProcess::default();
-                    run_process.bin = entry_point;
-                    run_process.args = args;
-
-                    let process = match service.run_process(run_process).await {
-                        Ok(result) => result,
-                        Err(error) => return Err(Error::RuntimeError(format!("{:?}", error))),
-                    };
-                    let mut events = match monitor.events(process.pid) {
-                        Some(events) => events,
-                        _ => return Err(Error::runtime("Process already monitored")),
-                    };
-
-                    while let Some(status) = events.rx.next().await {
-                        if !status.stdout.is_empty() {
-                            let evt = RuntimeEvent::stdout(
-                                batch_id.clone(),
-                                idx,
-                                CommandOutput::Bin(status.stdout),
-                            );
-                            let _ = tx.send(evt).await;
-                        }
-                        if !status.stderr.is_empty() {
-                            let evt = RuntimeEvent::stderr(
-                                batch_id.clone(),
-                                idx,
-                                CommandOutput::Bin(status.stderr),
-                            );
-                            let _ = tx.send(evt).await;
-                        }
-                        if !status.running {
-                            return Ok(status.return_code);
-                        }
-                    }
-                    Ok(0)
-                };
-
-                async move {
-                    futures::pin_mut!(exec);
-                    let exited = status.exited().map(Ok);
-                    future::select(exited, exec).await.factor_first().0
-                }
-                .boxed_local()
-            }
+                entry_point, args, ..
+            } => self.handle_service_run(cmd, entry_point, args),
             _ => future::ok(0).boxed_local(),
         }
+    }
+
+    fn handle_service_start<'f>(
+        &mut self,
+        args: Vec<String>,
+        address: Addr<Self>,
+    ) -> LocalBoxFuture<'f, Result<i32, Error>> {
+        let args = self.args(
+            std::iter::once("start")
+                .map(|s| OsString::from(s))
+                .chain(args.into_iter().map(OsString::from))
+                .collect(),
+        );
+
+        log::info!("Executing {:?} with {:?}", self.binary, args);
+
+        let monitor = self.monitor.get_or_insert_with(Default::default).clone();
+        let mut command = Command::new(self.binary.clone());
+
+        async move {
+            command.args(args?);
+            let service = spawn(command, monitor).map_err(Error::runtime).await?;
+            let hello = service
+                .hello(PROTOCOL_VERSION)
+                .map_err(|e| Error::runtime(format!("service hello error: {:?}", e)));
+
+            match future::select(service.exited(), hello).await {
+                future::Either::Left((result, _)) => return Ok(result),
+                future::Either::Right((result, _)) => result.map(|_| ())?,
+            }
+
+            address
+                .send(SetProcessService(ProcessService::new(service)))
+                .await?;
+            Ok(0)
+        }
+        .boxed_local()
+    }
+
+    fn handle_service_run<'f>(
+        &mut self,
+        cmd: ExecuteCommand,
+        entry_point: String,
+        mut args: Vec<String>,
+    ) -> LocalBoxFuture<'f, Result<i32, Error>> {
+        let (service, status) = match self.service.as_ref() {
+            Some(svc) => (svc.service.clone(), svc.status.clone()),
+            None => return future::err(Error::runtime("START command not run")).boxed_local(),
+        };
+
+        log::info!(
+            "Executing {} with {} {:?}",
+            self.binary.display(),
+            entry_point,
+            args
+        );
+
+        let mut monitor = self.monitor.get_or_insert_with(Default::default).clone();
+        let mut tx = cmd.tx.clone();
+
+        let exec = async move {
+            args.insert(
+                0,
+                Path::new(&entry_point)
+                    .file_name()
+                    .ok_or_else(|| Error::runtime("Invalid binary name"))?
+                    .to_string_lossy()
+                    .to_string(),
+            );
+
+            let mut run_process = RunProcess::default();
+            run_process.bin = entry_point;
+            run_process.args = args;
+
+            let process = match service.run_process(run_process).await {
+                Ok(result) => result,
+                Err(error) => return Err(Error::RuntimeError(format!("{:?}", error))),
+            };
+            let mut events = match monitor.events(process.pid) {
+                Some(events) => events,
+                _ => return Err(Error::runtime("Process already monitored")),
+            };
+
+            while let Some(status) = events.rx.next().await {
+                if !status.stdout.is_empty() {
+                    let out = CommandOutput::Bin(status.stdout);
+                    let evt = RuntimeEvent::stdout(cmd.batch_id.clone(), cmd.idx, out);
+                    let _ = tx.send(evt).await;
+                }
+                if !status.stderr.is_empty() {
+                    let out = CommandOutput::Bin(status.stderr);
+                    let evt = RuntimeEvent::stderr(cmd.batch_id.clone(), cmd.idx, out);
+                    let _ = tx.send(evt).await;
+                }
+                if !status.running {
+                    return Ok(status.return_code);
+                }
+            }
+            Ok(0)
+        };
+
+        async move {
+            futures::pin_mut!(exec);
+            let exited = status.exited().map(Ok);
+            future::select(exited, exec).await.factor_first().0
+        }
+        .boxed_local()
     }
 }
 
