@@ -146,8 +146,17 @@ impl TryFrom<&Agreement> for AgreementView {
 
 impl<'a> std::fmt::Display for AgreementView {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FormatError> {
+        let mut agreement = self.json.clone();
+
+        if let Some(props) = agreement.pointer_mut("/offer/properties") {
+            *props = flatten_value(props.clone());
+        }
+        if let Some(props) = agreement.pointer_mut("/demand/properties") {
+            *props = flatten_value(props.clone());
+        }
+
         // Display not pretty version as fallback.
-        match serde_json::to_string_pretty(&flatten_value(self.json.clone())) {
+        match serde_json::to_string_pretty(&agreement) {
             Ok(json) => write!(f, "{}", json),
             Err(_) => write!(f, "{}", self.json),
         }
