@@ -471,7 +471,7 @@ impl Handler<CloseAgreement> for TaskManager {
 
             let closed_msg = AgreementClosed {
                 agreement_id: msg.agreement_id.clone(),
-                send_terminate: msg.cause == ClosingCause::Termination,
+                send_terminate: msg.cause != ClosingCause::Termination,
             };
 
             // No need to notify market.
