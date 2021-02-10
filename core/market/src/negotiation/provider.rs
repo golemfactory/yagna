@@ -95,6 +95,7 @@ impl ProviderBroker {
         counter!("market.agreements.provider.terminated.reason", 0, "reason" => "Success");
         counter!("market.agreements.provider.approving", 0);
         counter!("market.agreements.provider.committing", 0);
+        counter!("market.agreements.provider.rejected", 0);
         counter!("market.events.provider.queried", 0);
         counter!("market.proposals.provider.countered", 0);
         counter!("market.proposals.provider.init-negotiation", 0);
@@ -183,7 +184,6 @@ impl ProviderBroker {
             .await?;
 
         counter!("market.proposals.provider.rejected.by-us", 1);
-
         Ok(())
     }
 
@@ -275,7 +275,7 @@ impl ProviderBroker {
             // It can turn out, that we are in `Cancelled` state since we weren't under
             // lock during `self.api.approve_agreement` execution. In such a case,
             // we shouldn't return error from here.
-            Err(ApproveAgreementError::Remote(RemoteAgreementError::InvalidState(
+            Err(AgreementProtocolError::Remote(RemoteAgreementError::InvalidState(
                 _,
                 AgreementState::Cancelled,
             ))) => return Ok(ApprovalResult::Cancelled),
@@ -307,7 +307,7 @@ impl ProviderBroker {
                 let _hold = self.common.agreement_lock.lock(&agreement_id).await;
                 dao.revert_approving(agreement_id).await.log_err().ok();
 
-                Err(ApproveAgreementError::Timeout(agreement.id.clone()).into())
+                Err(AgreementProtocolError::Timeout(agreement.id.clone()).into())
             }
             Err(error) => Err(AgreementError::Internal(format!(
                 "Code logic error. Agreement events notifier shouldn't return: {}.",
@@ -339,6 +339,44 @@ impl ProviderBroker {
                 ))),
             }
         }
+    }
+
+    pub async fn reject_agreement(
+        &self,
+        id: Identity,
+        agreement_id: &AgreementId,
+        reason: Option<Reason>,
+    ) -> Result<(), AgreementError> {
+        let dao = self.common.db.as_dao::<AgreementDao>();
+        let agreement = {
+            let _hold = self.common.agreement_lock.lock(&agreement_id).await;
+
+            let agreement = dao
+                .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
+                .await
+                .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
+                .ok_or(AgreementError::NotFound(agreement_id.to_string()))?;
+
+            validate_transition(&agreement, AgreementState::Rejected)?;
+
+            self.api
+                .reject_agreement(&agreement, reason.clone())
+                .await?;
+
+            let reason_string = CommonBroker::reason2string(&reason);
+            dao.reject(&agreement.id, reason_string)
+                .await
+                .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?
+        };
+
+        counter!("market.agreements.provider.rejected", 1);
+        log::info!(
+            "Provider {} rejected Agreement [{}]. Reason: {}",
+            id.display(),
+            &agreement.id,
+            reason.display(),
+        );
+        Ok(())
     }
 }
 

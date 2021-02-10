@@ -160,10 +160,7 @@ impl CommonBroker {
             caller_role,
             caller_id,
             &proposal_id,
-            reason
-                .as_ref()
-                .map(|r| format!("with reason: {}", r))
-                .unwrap_or("without reason".into()),
+            reason.display()
         );
 
         Ok(proposal)
@@ -406,7 +403,7 @@ impl CommonBroker {
         Ok(())
     }
 
-    fn reason2string(reason: &Option<Reason>) -> Option<String> {
+    pub(crate) fn reason2string(reason: &Option<Reason>) -> Option<String> {
         reason.as_ref().map(|reason| {
             serde_json::to_string::<Reason>(reason).unwrap_or(reason.message.to_string())
         })

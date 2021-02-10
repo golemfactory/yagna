@@ -240,6 +240,25 @@ impl<'c> AgreementDao<'c> {
         .await
     }
 
+    pub async fn reject(
+        &self,
+        id: &AgreementId,
+        reason: Option<String>,
+    ) -> Result<Agreement, AgreementDaoError> {
+        let id = id.clone();
+        do_with_transaction(self.pool, move |conn| {
+            log::debug!("Termination reason: {:?}", reason);
+            let mut agreement: Agreement =
+                market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
+
+            update_state(conn, &mut agreement, AgreementState::Rejected)?;
+            create_event(conn, &agreement, reason, Owner::Provider)?;
+
+            Ok(agreement)
+        })
+        .await
+    }
+
     pub async fn terminate(
         &self,
         id: &AgreementId,

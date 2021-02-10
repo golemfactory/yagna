@@ -11,7 +11,7 @@ use crate::protocol::negotiation::error::{
 
 use super::super::callback::CallbackMessage;
 use super::error::{
-    ApproveAgreementError, CounterProposalError, GsbAgreementError, TerminateAgreementError,
+    AgreementProtocolError, CounterProposalError, GsbAgreementError, TerminateAgreementError,
 };
 
 pub mod provider {
@@ -145,7 +145,7 @@ pub struct AgreementApproved {
 impl RpcMessage for AgreementApproved {
     const ID: &'static str = "AgreementApproved";
     type Item = ();
-    type Error = ApproveAgreementError;
+    type Error = AgreementProtocolError;
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -158,7 +158,7 @@ pub struct AgreementRejected {
 impl RpcMessage for AgreementRejected {
     const ID: &'static str = "AgreementRejected";
     type Item = ();
-    type Error = GsbAgreementError;
+    type Error = AgreementProtocolError;
 }
 
 #[derive(Clone, Serialize, Deserialize)]

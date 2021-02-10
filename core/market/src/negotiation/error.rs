@@ -15,7 +15,7 @@ use crate::db::{
 };
 use crate::matcher::error::{DemandError, QueryOfferError};
 use crate::protocol::negotiation::error::{
-    ApproveAgreementError, CommitAgreementError, CounterProposalError as ProtocolProposalError,
+    AgreementProtocolError, CommitAgreementError, CounterProposalError as ProtocolProposalError,
     GsbAgreementError, NegotiationApiInitError, ProposeAgreementError, RejectProposalError,
     TerminateAgreementError,
 };
@@ -74,7 +74,7 @@ pub enum AgreementError {
     #[error("Protocol error: {0}")]
     ProtocolCreate(#[from] ProposeAgreementError),
     #[error("Protocol error while approving: {0}")]
-    ProtocolApprove(#[from] ApproveAgreementError),
+    ProtocolApprove(#[from] AgreementProtocolError),
     #[error("Protocol error while terminating: {0}")]
     ProtocolTerminate(#[from] TerminateAgreementError),
     #[error("Protocol error while committing: {0}")]
