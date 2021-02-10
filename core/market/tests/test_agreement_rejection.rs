@@ -1,14 +1,12 @@
 use chrono::{Duration, Utc};
 
-use ya_client::model::market::agreement::State as AgreementState;
+use ya_client::model::market::agreement::State as ClientAgreementState;
 
 use ya_market::assert_err_eq;
 use ya_market::testing::{
     agreement_utils::{gen_reason, negotiate_agreement},
-    events_helper::*,
-    mock_node::MarketServiceExt,
-    proposal_util::{exchange_draft_proposals, NegotiationHelper},
-    ApprovalStatus, MarketsNetwork, Owner, WaitForApprovalError,
+    proposal_util::exchange_draft_proposals,
+    AgreementDaoError, AgreementError, AgreementState, ApprovalStatus, MarketsNetwork, Owner,
 };
 
 const REQ_NAME: &str = "Node-1";
@@ -64,13 +62,13 @@ async fn test_agreement_rejected() {
         .get_agreement(&agreement_id, &req_id)
         .await
         .unwrap();
-    assert_eq!(agreement.state, AgreementState::Rejected);
+    assert_eq!(agreement.state, ClientAgreementState::Rejected);
 
     let agreement = prov_market
         .get_agreement(&agreement_id.clone().translate(Owner::Provider), &prov_id)
         .await
         .unwrap();
-    assert_eq!(agreement.state, AgreementState::Rejected);
+    assert_eq!(agreement.state, ClientAgreementState::Rejected);
 }
 
 /// `wait_for_approval` should wake up after rejection.
@@ -133,4 +131,83 @@ async fn test_agreement_rejected_wait_for_approval() {
         .await
         .unwrap()
         .unwrap();
+}
+
+/// Rejecting `Approved` and `Terminated` Agreement is not allowed.
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
+async fn test_reject_agreement_in_wrong_state() {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await
+        .add_market_instance(PROV_NAME)
+        .await;
+
+    let prov_id = network.get_default_id(PROV_NAME);
+    let prov_market = network.get_market(PROV_NAME);
+    let req_market = network.get_market(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME);
+
+    let negotiation = negotiate_agreement(
+        &network,
+        REQ_NAME,
+        PROV_NAME,
+        "negotiation",
+        "r-session",
+        "p-session",
+    )
+    .await
+    .unwrap();
+
+    let result = prov_market
+        .provider_engine
+        .reject_agreement(
+            &prov_id,
+            &negotiation.p_agreement,
+            Some(gen_reason("Not-interested")),
+        )
+        .await;
+
+    assert!(result.is_err());
+    assert_err_eq!(
+        AgreementError::UpdateState(
+            negotiation.p_agreement.clone(),
+            AgreementDaoError::InvalidTransition {
+                from: AgreementState::Approved,
+                to: AgreementState::Rejected
+            }
+        ),
+        result
+    );
+
+    req_market
+        .terminate_agreement(
+            req_id.clone(),
+            negotiation.r_agreement.clone().into_client(),
+            Some(gen_reason("Failure")),
+        )
+        .await
+        .unwrap();
+
+    let result = prov_market
+        .provider_engine
+        .reject_agreement(
+            &prov_id,
+            &negotiation.p_agreement,
+            Some(gen_reason("Not-interested")),
+        )
+        .await;
+
+    assert!(result.is_err());
+    assert_err_eq!(
+        AgreementError::UpdateState(
+            negotiation.p_agreement.clone(),
+            AgreementDaoError::InvalidTransition {
+                from: AgreementState::Terminated,
+                to: AgreementState::Rejected
+            }
+        ),
+        result
+    );
 }
