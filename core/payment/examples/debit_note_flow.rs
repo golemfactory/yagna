@@ -10,8 +10,8 @@ use ya_client_model::payment::{Acceptance, DocumentStatus, NewAllocation, NewDeb
 struct Args {
     #[structopt(long)]
     app_session_id: Option<String>,
-    #[structopt(long)]
-    platform: Option<String>,
+    #[structopt(long, default_value = "dummy-glm")]
+    platform: String,
 }
 
 #[actix_rt::main]
@@ -72,7 +72,7 @@ async fn main() -> anyhow::Result<()> {
     let allocation = requestor
         .create_allocation(&NewAllocation {
             address: None, // Use default address (i.e. identity)
-            payment_platform: args.platform,
+            payment_platform: Some(args.platform),
             total_amount: BigDecimal::from(10u64),
             timeout: None,
             make_deposit: false,
