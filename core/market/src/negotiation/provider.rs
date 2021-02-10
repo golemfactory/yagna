@@ -340,6 +340,26 @@ impl ProviderBroker {
             }
         }
     }
+
+    pub async fn reject_agreement(
+        &self,
+        id: Identity,
+        agreement_id: &AgreementId,
+    ) -> Result<bool, AgreementError> {
+        let dao = self.common.db.as_dao::<AgreementDao>();
+
+        let _hold = self.common.agreement_lock.lock(&agreement_id).await;
+
+        let agreement = dao
+            .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
+            .await
+            .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
+            .ok_or(AgreementError::NotFound(agreement_id.to_string()))?;
+        log::info!("Agreement rejected. id:{}", agreement.id);
+        // TODO: Actually implement agreement rejection
+        // https://github.com/golemfactory/yagna/pull/1035
+        Ok(true)
+    }
 }
 
 async fn on_agreement_committed(
