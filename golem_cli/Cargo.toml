@@ -15,7 +15,7 @@ ya-utils-process = { version = "0.1.0", features = ["lock"] }
 actix-rt="1.1"
 ansi_term="0.12.1"
 anyhow = "1.0"
-bigdecimal = { version = "0.1.0"}
+bigdecimal = "0.2"
 byte-unit = "4.0"
 chrono = { version = "0.4", features=["serde"] }
 crossterm="0.18.0"

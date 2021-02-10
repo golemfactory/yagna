@@ -1,5 +1,6 @@
 use bigdecimal::BigDecimal;
 use chrono::Utc;
+use std::str::FromStr;
 use std::time::Duration;
 use structopt::StructOpt;
 use ya_client::payment::PaymentApi;
@@ -41,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
         .issue_invoice(&NewInvoice {
             agreement_id: "agreement_id".to_string(),
             activity_ids: None,
-            amount: BigDecimal::from(1.230028519070000),
+            amount: BigDecimal::from_str("1.230028519070000")?,
             payment_due_date: Utc::now(),
         })
         .await?;
