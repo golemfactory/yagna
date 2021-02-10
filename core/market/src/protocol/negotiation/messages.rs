@@ -252,6 +252,20 @@ impl AgreementApproved {
     }
 }
 
+impl AgreementRejected {
+    pub fn translate(mut self, owner: Owner) -> Self {
+        self.agreement_id = self.agreement_id.translate(owner);
+        self
+    }
+}
+
+impl AgreementCancelled {
+    pub fn translate(mut self, owner: Owner) -> Self {
+        self.agreement_id = self.agreement_id.translate(owner);
+        self
+    }
+}
+
 impl AgreementReceived {
     pub fn translate(mut self, owner: Owner) -> Self {
         self.agreement_id = self.agreement_id.translate(owner);

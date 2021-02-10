@@ -171,7 +171,7 @@ async fn reject_agreement(
     let agreement_id = path.into_inner().to_id(Owner::Provider)?;
     market
         .provider_engine
-        .reject_agreement(id, &agreement_id, body.into_inner())
+        .reject_agreement(&id, &agreement_id, body.into_inner())
         .await
         .log_err()
         .map(|_| HttpResponse::Ok().finish())

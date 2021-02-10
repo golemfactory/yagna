@@ -792,7 +792,7 @@ async fn net_err_while_approving() {
         .await;
 
     match result.unwrap_err() {
-        AgreementError::ProtocolApprove(_) => (),
+        AgreementError::Protocol(_) => (),
         e => panic!("expected protocol error, but got: {}", e),
     };
 }

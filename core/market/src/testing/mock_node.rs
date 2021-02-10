@@ -663,7 +663,7 @@ pub mod default {
     pub async fn empty_on_agreement_rejected(
         _caller: String,
         _msg: AgreementRejected,
-    ) -> Result<(), GsbAgreementError> {
+    ) -> Result<(), AgreementProtocolError> {
         Ok(())
     }
 

@@ -610,6 +610,8 @@ async fn agreement_rejected(
             })?
     };
 
+    broker.notify_agreement(&agreement).await;
+
     counter!("market.agreements.requestor.rejected", 1);
     log::info!(
         "Agreement [{}] rejected by [{}]. Reason: {}",

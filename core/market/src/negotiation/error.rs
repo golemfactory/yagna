@@ -74,7 +74,7 @@ pub enum AgreementError {
     #[error("Protocol error: {0}")]
     ProtocolCreate(#[from] ProposeAgreementError),
     #[error("Protocol error while approving: {0}")]
-    ProtocolApprove(#[from] AgreementProtocolError),
+    Protocol(#[from] AgreementProtocolError),
     #[error("Protocol error while terminating: {0}")]
     ProtocolTerminate(#[from] TerminateAgreementError),
     #[error("Protocol error while committing: {0}")]

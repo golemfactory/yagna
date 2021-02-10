@@ -239,7 +239,10 @@ impl NegotiationApi {
             &msg.agreement_id,
             &caller
         );
-        self.inner.agreement_cancelled.call(caller, msg).await
+        self.inner
+            .agreement_cancelled
+            .call(caller, msg.translate(Owner::Provider))
+            .await
     }
 
     async fn on_agreement_terminated(

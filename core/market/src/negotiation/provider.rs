@@ -343,7 +343,7 @@ impl ProviderBroker {
 
     pub async fn reject_agreement(
         &self,
-        id: Identity,
+        id: &Identity,
         agreement_id: &AgreementId,
         reason: Option<Reason>,
     ) -> Result<(), AgreementError> {
