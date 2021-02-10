@@ -5373,6 +5373,7 @@ checksum = "2932dc07acd2066ff2e3921a4419606b220ba6cd03a9935123856cc534877056"
 dependencies = [
  "rand 0.6.5",
  "secp256k1-sys 0.1.2",
+ "serde",
 ]
 
 [[package]]
@@ -5383,7 +5384,6 @@ checksum = "c6179428c22c73ac0fbb7b5579a56353ce78ba29759b3b8575183336ea74cdfb"
 dependencies = [
  "rand 0.6.5",
  "secp256k1-sys 0.3.0",
- "serde",
 ]
 
 [[package]]
@@ -7251,7 +7251,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=2fa007d898433b13a472830cb4d5734455ea0a04#2fa007d898433b13a472830cb4d5734455ea0a04"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=c3f3419e48eade7f4d491c71948a1a50446d87d5#c3f3419e48eade7f4d491c71948a1a50446d87d5"
 dependencies = [
  "awc 1.0.1",
  "bytes 0.5.6",
@@ -7276,7 +7276,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=2fa007d898433b13a472830cb4d5734455ea0a04#2fa007d898433b13a472830cb4d5734455ea0a04"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=c3f3419e48eade7f4d491c71948a1a50446d87d5#c3f3419e48eade7f4d491c71948a1a50446d87d5"
 dependencies = [
  "bigdecimal 0.2.0",
  "chrono",
@@ -7285,7 +7285,7 @@ dependencies = [
  "hex",
  "openssl",
  "rand 0.7.3",
- "secp256k1 0.19.0",
+ "secp256k1 0.17.2",
  "serde",
  "serde_json",
  "strum 0.19.5",
