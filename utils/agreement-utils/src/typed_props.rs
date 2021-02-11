@@ -1,4 +1,5 @@
 use crate::OfferTemplate;
+
 use serde_json::Value;
 
 pub trait OfferBuilder {
@@ -15,13 +16,17 @@ pub struct OfferDefinition {
 
 impl OfferDefinition {
     pub fn into_json(self) -> Value {
+        self.into_template().properties
+    }
+
+    pub fn into_template(self) -> OfferTemplate {
         let mut base = serde_json::Map::new();
         self.node_info.write_json(&mut base);
         self.srv_info.write_json(&mut base);
         self.com_info.write_json(&mut base);
 
         let template = OfferTemplate::new(serde_json::json!({ "golem": base }));
-        template.patch(self.offer).properties
+        template.patch(self.offer)
     }
 }
 

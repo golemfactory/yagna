@@ -115,7 +115,8 @@ pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
     let app_key = appkey::get_app_key().await?;
 
     let provider_config = cmd.ya_provider()?.get_config().await?;
-    let address = payment_account(&cmd, &provider_config.account).await?;
+    let address =
+        payment_account(&cmd, &config.account.account.or(provider_config.account)).await?;
     cmd.yagna()?
         .payment_init(&address, &config.account.network, &ERC20_DRIVER)
         .await?;
@@ -123,10 +124,7 @@ pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
         .payment_init(&address, &config.account.network, &ZKSYNC_DRIVER)
         .await?;
 
-    let provider = cmd
-        .ya_provider()?
-        .spawn(&app_key, &config.account.network)
-        .await?;
+    let provider = cmd.ya_provider()?.spawn(&app_key, &config).await?;
     let ctrl_c = tokio::signal::ctrl_c();
 
     log::info!("Golem provider is running");

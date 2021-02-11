@@ -867,3 +867,79 @@ async fn test_reject_demand() {
         .unwrap();
     assert_eq!(proposal0updated.body.state, ProposalState::Rejected);
 }
+
+// Events with proposals should come last
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
+async fn test_proposal_events_last() {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance("Node-1")
+        .await
+        .add_market_instance("Node-2")
+        .await
+        .add_market_instance("Node-3")
+        .await;
+
+    let market1 = network.get_market("Node-1");
+    let market2 = network.get_market("Node-2");
+    let market3 = network.get_market("Node-3");
+
+    let identity1 = network.get_default_id("Node-1");
+    let identity2 = network.get_default_id("Node-2");
+    let identity3 = network.get_default_id("Node-3");
+
+    let demand_id = market1
+        .subscribe_demand(&sample_demand(), &identity1)
+        .await
+        .unwrap();
+
+    let offer2_id = market2
+        .subscribe_offer(&sample_offer(), &identity2)
+        .await
+        .unwrap();
+
+    // REQUESTOR side.
+    let proposal0 = requestor::query_proposal(&market1, &demand_id, "Initial #R")
+        .await
+        .unwrap();
+    let proposal0_id = proposal0.get_proposal_id().unwrap();
+
+    // Counter proposal
+    let proposal1 = sample_demand();
+    market1
+        .requestor_engine
+        .counter_proposal(&demand_id, &proposal0_id, &proposal1, &identity1)
+        .await
+        .unwrap();
+
+    market3
+        .subscribe_offer(&sample_offer(), &identity3)
+        .await
+        .unwrap();
+
+    let proposal2 = provider::query_proposal(&market2, &offer2_id, "Initial #P")
+        .await
+        .unwrap();
+    let proposal2_id = proposal2.get_proposal_id().unwrap();
+    market2
+        .provider_engine
+        .reject_proposal(&offer2_id, &proposal2_id, &identity2, None)
+        .await
+        .unwrap();
+
+    let events = market1
+        .requestor_engine
+        .query_events(&demand_id, 3.0, Some(5))
+        .await
+        .unwrap();
+    assert_eq!(events.len(), 2);
+    match events[0] {
+        RequestorEvent::ProposalRejectedEvent { .. } => {}
+        _ => assert!(false, format!("Invalid first event_type: {:#?}", events[0])),
+    }
+    match events[events.len() - 1] {
+        RequestorEvent::ProposalEvent { .. } => {}
+        _ => assert!(false, format!("Invalid last event_type: {:#?}", events[0])),
+    }
+}

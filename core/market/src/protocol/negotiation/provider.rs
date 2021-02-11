@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use ya_client::model::market::Reason;
 use ya_client::model::NodeId;
 use ya_core_model::market::BUS_ID;
 use ya_net::{self as net, RemoteEndpoint};
@@ -14,12 +15,13 @@ use super::error::{
     NegotiationApiInitError, TerminateAgreementError,
 };
 use super::messages::{
-    provider, requestor, AgreementApproved, AgreementCancelled, AgreementReceived,
-    AgreementRejected, AgreementTerminated, InitialProposalReceived, ProposalContent,
-    ProposalReceived, ProposalRejected,
+    provider, requestor, AgreementApproved, AgreementCancelled, AgreementCommitted,
+    AgreementReceived, AgreementRejected, AgreementTerminated, InitialProposalReceived,
+    ProposalContent, ProposalReceived, ProposalRejected,
 };
-use crate::protocol::negotiation::error::{ProposeAgreementError, RejectProposalError};
-use ya_client::model::market::Reason;
+use crate::protocol::negotiation::error::{
+    CommitAgreementError, ProposeAgreementError, RejectProposalError,
+};
 
 /// Responsible for communication with markets on other nodes
 /// during negotiation phase.
@@ -35,8 +37,12 @@ struct NegotiationImpl {
     agreement_received: HandlerSlot<AgreementReceived>,
     agreement_cancelled: HandlerSlot<AgreementCancelled>,
     agreement_terminated: HandlerSlot<AgreementTerminated>,
+    agreement_committed: HandlerSlot<AgreementCommitted>,
 }
 
+// TODO: Most of these functions don't need to be members of NegotiationApi.
+//  We should make them plain functions in `provider` module, since it doesn't
+//  seem, that they will ever need self.
 impl NegotiationApi {
     pub fn new(
         initial_proposal_received: impl CallbackHandler<InitialProposalReceived>,
@@ -45,6 +51,7 @@ impl NegotiationApi {
         agreement_received: impl CallbackHandler<AgreementReceived>,
         agreement_cancelled: impl CallbackHandler<AgreementCancelled>,
         agreement_terminated: impl CallbackHandler<AgreementTerminated>,
+        agreement_committed: impl CallbackHandler<AgreementCommitted>,
     ) -> NegotiationApi {
         let negotiation_impl = NegotiationImpl {
             initial_proposal_received: HandlerSlot::new(initial_proposal_received),
@@ -53,6 +60,7 @@ impl NegotiationApi {
             agreement_received: HandlerSlot::new(agreement_received),
             agreement_cancelled: HandlerSlot::new(agreement_cancelled),
             agreement_terminated: HandlerSlot::new(agreement_terminated),
+            agreement_committed: HandlerSlot::new(agreement_committed),
         };
         NegotiationApi {
             inner: Arc::new(negotiation_impl),
@@ -101,15 +109,23 @@ impl NegotiationApi {
         Ok(())
     }
 
-    /// TODO: pass agreement signature.
     pub async fn approve_agreement(
         &self,
         agreement: &Agreement,
         timeout: f32,
     ) -> Result<(), ApproveAgreementError> {
         let timeout = Duration::from_secs_f32(timeout.max(0.0));
+        let id = agreement.id.clone();
+
         let msg = AgreementApproved {
-            agreement_id: agreement.id.clone(),
+            agreement_id: id.clone(),
+            signature: agreement
+                .approved_signature
+                .clone()
+                .ok_or(ApproveAgreementError::NotSigned(id.clone()))?,
+            approved_ts: agreement
+                .approved_ts
+                .ok_or(ApproveAgreementError::NoApprovalTimestamp(id.clone()))?,
         };
         let net_send_fut = net::from(agreement.provider_id)
             .to(agreement.requestor_id)
@@ -117,8 +133,8 @@ impl NegotiationApi {
             .send(msg);
         tokio::time::timeout(timeout, net_send_fut)
             .await
-            .map_err(|_| ApproveAgreementError::Timeout(agreement.id.clone()))?
-            .map_err(|e| GsbAgreementError(e.to_string(), agreement.id.clone()))??;
+            .map_err(|_| ApproveAgreementError::Timeout(id.clone()))?
+            .map_err(|e| GsbAgreementError(e.to_string(), id.clone()))??;
         Ok(())
     }
 
@@ -130,6 +146,7 @@ impl NegotiationApi {
     ) -> Result<(), GsbAgreementError> {
         let msg = AgreementRejected {
             agreement_id: agreement_id.clone(),
+            reason: None,
         };
         net::from(id)
             .to(owner)
@@ -242,6 +259,22 @@ impl NegotiationApi {
             .await
     }
 
+    async fn on_agreement_committed(
+        self,
+        caller: String,
+        msg: AgreementCommitted,
+    ) -> Result<(), CommitAgreementError> {
+        log::debug!(
+            "Negotiation API: Agreement [{}] committed by [{}].",
+            &msg.agreement_id,
+            &caller
+        );
+        self.inner
+            .agreement_committed
+            .call(caller, msg.translate(Owner::Provider))
+            .await
+    }
+
     pub async fn bind_gsb(
         &self,
         public_prefix: &str,
@@ -277,6 +310,10 @@ impl NegotiationApi {
             .bind_with_processor(move |_, myself, caller: String, msg: AgreementTerminated| {
                 let myself = myself.clone();
                 myself.on_agreement_terminated(caller, msg)
+            })
+            .bind_with_processor(move |_, myself, caller: String, msg: AgreementCommitted| {
+                let myself = myself.clone();
+                myself.on_agreement_committed(caller, msg)
             });
         Ok(())
     }

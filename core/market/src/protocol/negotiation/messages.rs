@@ -5,7 +5,9 @@ use ya_client::model::market::Reason;
 use ya_service_bus::RpcMessage;
 
 use crate::db::model::{AgreementId, DbProposal, Owner, Proposal, ProposalId, SubscriptionId};
-use crate::protocol::negotiation::error::{ProposeAgreementError, RejectProposalError};
+use crate::protocol::negotiation::error::{
+    CommitAgreementError, ProposeAgreementError, RejectProposalError,
+};
 
 use super::super::callback::CallbackMessage;
 use super::error::{
@@ -117,7 +119,8 @@ pub struct AgreementReceived {
     pub agreement_id: AgreementId,
     pub creation_ts: NaiveDateTime,
     pub valid_to: NaiveDateTime,
-    // TODO: We should send here signature.
+    /// This will be placed in `proposed_signature` Agreement field.
+    pub signature: String,
 }
 
 impl RpcMessage for AgreementReceived {
@@ -130,7 +133,13 @@ impl RpcMessage for AgreementReceived {
 #[serde(rename_all = "camelCase")]
 pub struct AgreementApproved {
     pub agreement_id: AgreementId,
-    // TODO: We should send here signature.
+    /// This will be placed in `approved_signature` Agreement field.
+    pub signature: String,
+    /// This timestamp will differ from timestamp, when Agreement will be updated in
+    /// database to `Approved` state and `AgreementApprovedEvent` timestamp either.
+    /// But we can't set it to time value, when state changes to `Approved`, because we
+    /// must include this field in signature.
+    pub approved_ts: NaiveDateTime,
 }
 
 impl RpcMessage for AgreementApproved {
@@ -143,6 +152,7 @@ impl RpcMessage for AgreementApproved {
 #[serde(rename_all = "camelCase")]
 pub struct AgreementRejected {
     pub agreement_id: AgreementId,
+    pub reason: Option<Reason>,
 }
 
 impl RpcMessage for AgreementRejected {
@@ -155,6 +165,7 @@ impl RpcMessage for AgreementRejected {
 #[serde(rename_all = "camelCase")]
 pub struct AgreementCancelled {
     pub agreement_id: AgreementId,
+    pub reason: Option<Reason>,
 }
 
 impl RpcMessage for AgreementCancelled {
@@ -168,12 +179,30 @@ impl RpcMessage for AgreementCancelled {
 pub struct AgreementTerminated {
     pub agreement_id: AgreementId,
     pub reason: Option<Reason>,
+    /// Signature for `AgreementTerminatedEvent`.
+    pub signature: String,
+    /// Termination timestamp, that will be included in signature.
+    pub termination_ts: NaiveDateTime,
 }
 
 impl RpcMessage for AgreementTerminated {
     const ID: &'static str = "AgreementTerminated";
     type Item = ();
     type Error = TerminateAgreementError;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgreementCommitted {
+    pub agreement_id: AgreementId,
+    /// This will be placed in `committed_signature` Agreement field.
+    pub signature: String,
+}
+
+impl RpcMessage for AgreementCommitted {
+    const ID: &'static str = "AgreementCommitted";
+    type Item = ();
+    type Error = CommitAgreementError;
 }
 
 /// The same messaged will be used on GSB and as messages in callbacks.
@@ -232,6 +261,13 @@ impl AgreementReceived {
 }
 
 impl AgreementTerminated {
+    pub fn translate(mut self, owner: Owner) -> Self {
+        self.agreement_id = self.agreement_id.translate(owner);
+        self
+    }
+}
+
+impl AgreementCommitted {
     pub fn translate(mut self, owner: Owner) -> Self {
         self.agreement_id = self.agreement_id.translate(owner);
         self
