@@ -6,7 +6,7 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-ya-client = "0.4"
+ya-client = "0.5"
 ya-core-model = { path = "../../model", features = ["appkey"] }
 ya-service-api = "0.1"
 ya-service-api-cache = "0.1"
