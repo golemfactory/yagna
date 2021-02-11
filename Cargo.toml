@@ -168,10 +168,10 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## SERVICE BUS
-ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"}
-ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"}
-ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"}
-ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"}
+ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "707e4f9a64c8ede5b371d10dd8d564dba64bfa4c" }
+ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "707e4f9a64c8ede5b371d10dd8d564dba64bfa4c" }
+ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "707e4f9a64c8ede5b371d10dd8d564dba64bfa4c" }
+ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "707e4f9a64c8ede5b371d10dd8d564dba64bfa4c" }
 
 ## CLIENT
 ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "c3f3419e48eade7f4d491c71948a1a50446d87d5"}
