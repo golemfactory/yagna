@@ -48,7 +48,7 @@ CREATE TABLE market_agreement(
     approved_signature TEXT,
     committed_signature TEXT,
 
-    CHECK (state in ('Proposal','Pending','Cancelled','Rejected','Approved','Expired','Terminated'))
+    CHECK (state in ('Proposal','Pending','Cancelled','Rejected','Approved','Expired','Terminated', 'Approving'))
 );
 
 -- Change Proposal state from enum to Text value for better database introspection.

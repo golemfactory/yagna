@@ -237,6 +237,7 @@ impl Profiles {
     }
 
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
+        log::debug!("Loading profile from: {}", path.as_ref().display());
         let contents = std::fs::read_to_string(&path)?;
         let new: Profiles = serde_json::from_str(contents.as_str())?;
         if new.profiles.contains_key(&new.active).not() {

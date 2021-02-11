@@ -2806,6 +2806,7 @@ dependencies = [
  "strum 0.20.0",
  "tokio 0.2.24",
  "url 2.2.0",
+ "ya-client",
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-provider",
@@ -7308,6 +7309,7 @@ dependencies = [
  "ya-service-bus",
  "ya-transfer",
  "ya-utils-path",
+ "yansi",
 ]
 
 [[package]]
@@ -7318,6 +7320,7 @@ dependencies = [
  "chrono",
  "flexi_logger",
  "log",
+ "yansi",
 ]
 
 [[package]]
@@ -7667,9 +7670,11 @@ dependencies = [
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-file-logging",
+ "ya-std-utils",
  "ya-utils-actix",
  "ya-utils-path",
  "ya-utils-process",
+ "yansi",
 ]
 
 [[package]]

@@ -1,22 +1,16 @@
 use ansi_term::{Colour, Style};
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use futures::prelude::*;
 use prettytable::{cell, format, row, Table};
-use structopt::StructOpt;
 use strum::VariantNames;
 
 use ya_core_model::payment::local::{NetworkName, StatusResult};
 use ya_core_model::NodeId;
 
+use crate::appkey;
 use crate::command::{PaymentSummary, YaCommand, ERC20_DRIVER, ZKSYNC_DRIVER};
 use crate::platform::Status as KvmStatus;
 use crate::utils::{is_yagna_running, payment_account};
-
-#[derive(StructOpt, Debug)]
-pub struct StatusCommand {
-    #[structopt(long = "payment-network", env = "YA_PAYMENT_NETWORK", possible_values = NetworkName::VARIANTS, default_value = NetworkName::Mainnet.into())]
-    pub network: NetworkName,
-}
 
 async fn payment_status(
     cmd: &YaCommand,
@@ -47,7 +41,7 @@ async fn payment_status(
     }
 }
 
-pub async fn run(args: StatusCommand) -> Result</*exit code*/ i32> {
+pub async fn run() -> Result</*exit code*/ i32> {
     let size = crossterm::terminal::size().ok().unwrap_or_else(|| (80, 50));
     let cmd = YaCommand::new()?;
     let kvm_status = crate::platform::kvm_status();
@@ -112,11 +106,13 @@ pub async fn run(args: StatusCommand) -> Result</*exit code*/ i32> {
     table.set_format(*format::consts::FORMAT_BOX_CHARS);
 
     if is_running {
+        let (offers_cnt, network) = get_payment_network().await?;
+
         let payments = {
             let (id, invoice_status) =
                 future::try_join(cmd.yagna()?.default_id(), cmd.yagna()?.invoice_status()).await?;
             let (zk_payment_status, erc20_payment_status) =
-                payment_status(&cmd, &args.network, &config.account).await?;
+                payment_status(&cmd, &network, &config.account).await?;
 
             let token = match zk_payment_status.token.len() {
                 0 => erc20_payment_status.token,
@@ -133,11 +129,16 @@ pub async fn run(args: StatusCommand) -> Result</*exit code*/ i32> {
             let account = config.account.map(|a| a.to_string()).unwrap_or(id.node_id);
             table.add_row(row![H2->Style::new().fg(Colour::Fixed(63)).paint(&account)]);
             table.add_empty_row();
+
+            let net_color = match network {
+                NetworkName::Mainnet => Colour::Purple,
+                NetworkName::Rinkeby => Colour::Cyan,
+                _ => Colour::Red,
+            };
+
             table.add_row(row![
                 "network",
-                Style::new()
-                    .fg(Colour::Purple)
-                    .paint(&args.network.to_string())
+                Style::new().fg(net_color).paint(network.to_string())
             ]);
             let total_amount = &zk_payment_status.amount + &erc20_payment_status.amount;
             table.add_row(row![
@@ -177,6 +178,13 @@ pub async fn run(args: StatusCommand) -> Result</*exit code*/ i32> {
             table.add_row(row![Style::new()
                 .fg(Colour::Yellow)
                 .underline()
+                .paint("Offers")]);
+            table.add_empty_row();
+            table.add_row(row!["Subscribed", offers_cnt]);
+            table.add_empty_row();
+            table.add_row(row![Style::new()
+                .fg(Colour::Yellow)
+                .underline()
                 .paint("Tasks")]);
             table.add_empty_row();
             table.add_row(row!["last 1h processed", status.last1h_processed()]);
@@ -201,4 +209,32 @@ pub async fn run(args: StatusCommand) -> Result</*exit code*/ i32> {
         println!("\n VM problem: {}", msg);
     }
     Ok(0)
+}
+
+async fn get_payment_network() -> Result<(usize, NetworkName)> {
+    // Dirty hack: we determine currently used payment network by checking latest offer properties
+    let app_key = appkey::get_app_key().await?;
+    let mkt_api: ya_client::market::MarketProviderApi =
+        ya_client::web::WebClient::with_token(&app_key).interface()?;
+    let offers = mkt_api.get_offers().await?;
+
+    let latest_offer = offers.iter().max_by_key(|o| o.timestamp).ok_or(anyhow!(
+        "Provider is not functioning properly. No offers Subscribed."
+    ))?;
+    let mut network = None;
+    for net in NetworkName::VARIANTS {
+        let net_to_check = net.parse()?;
+        let platform_property = &format!(
+            "golem.com.payment.platform.{}.address",
+            ZKSYNC_DRIVER.platform(&net_to_check)?.platform
+        );
+        if latest_offer.properties.get(platform_property).is_some() {
+            network = Some(net_to_check)
+        };
+    }
+
+    let network = network.ok_or(anyhow!(
+        "Unable to determine payment network used by the Yagna Provider."
+    ))?;
+    Ok((offers.len(), network))
 }

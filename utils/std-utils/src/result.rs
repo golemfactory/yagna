@@ -1,18 +1,30 @@
 use log::{Level, Record};
+use std::fmt::{Debug, Display};
 
-pub trait LogErr<T, E: std::error::Error> {
+pub trait LogErr<T, E: Debug + Display> {
     /// If Result is `Err`, this function logs it on error level
     /// and returns the same Result. In case of `Ok` nothing happens.
     fn log_err(self) -> Result<T, E>;
     fn log_err_msg(self, message: &str) -> Result<T, E>;
+    fn log_warn_msg(self, message: &str) -> Result<T, E>;
+
+    fn log_error(self, message: &str, log_level: Level) -> Result<T, E>;
 }
 
-impl<T, E: std::error::Error> LogErr<T, E> for Result<T, E> {
+impl<T, E: Debug + Display> LogErr<T, E> for Result<T, E> {
     fn log_err(self) -> Result<T, E> {
         self.log_err_msg("")
     }
 
     fn log_err_msg(self, message: &str) -> Result<T, E> {
+        self.log_error(message, Level::Error)
+    }
+
+    fn log_warn_msg(self, message: &str) -> Result<T, E> {
+        self.log_error(message, Level::Warn)
+    }
+
+    fn log_error(self, message: &str, log_level: Level) -> Result<T, E> {
         if let Err(e) = self {
             backtrace::trace(|frame| {
                 let mut cont = true;
@@ -28,7 +40,7 @@ impl<T, E: std::error::Error> LogErr<T, E> for Result<T, E> {
                             }
                             log::logger().log(
                                 &Record::builder()
-                                    .level(Level::Error)
+                                    .level(log_level)
                                     .args(format_args!("{}: {}", msg, e))
                                     .module_path(Some(module_path))
                                     .build(),
