@@ -4,6 +4,7 @@ use crate::models::debit_note::{ReadObj, WriteObj};
 use crate::schema::pay_activity::dsl as activity_dsl;
 use crate::schema::pay_agreement::dsl as agreement_dsl;
 use crate::schema::pay_debit_note::dsl;
+use bigdecimal::BigDecimal;
 use chrono::NaiveDateTime;
 use diesel::{
     self, BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl,
@@ -245,13 +246,32 @@ impl<'c> DebitNoteDao<'c> {
             activity::set_amount_accepted(&activity_id, &owner_id, &amount, conn)?;
             if let Role::Provider = role {
                 debit_note_event::create::<()>(
-                    debit_note_id,
+                    debit_note_id.clone(),
                     owner_id,
                     DebitNoteEventType::DebitNoteAcceptedEvent,
                     None,
                     conn,
                 )?;
             }
+
+            if amount.0 == BigDecimal::from(0) {
+                update_status(
+                    &vec![debit_note_id.clone()],
+                    &owner_id,
+                    &DocumentStatus::Settled,
+                    conn,
+                )?;
+                if let Role::Provider = role {
+                    debit_note_event::create::<()>(
+                        debit_note_id,
+                        owner_id,
+                        DebitNoteEventType::DebitNoteSettledEvent,
+                        None,
+                        conn,
+                    )?;
+                }
+            }
+
             Ok(())
         })
         .await
