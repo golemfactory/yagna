@@ -237,13 +237,28 @@ impl<'c> InvoiceDao<'c> {
             agreement::set_amount_accepted(&agreement_id, &owner_id, &amount, conn)?;
             if let Role::Provider = role {
                 invoice_event::create::<()>(
-                    invoice_id,
-                    owner_id,
+                    invoice_id.clone(),
+                    owner_id.clone(),
                     InvoiceEventType::InvoiceAcceptedEvent,
                     None,
                     conn,
                 )?;
             }
+
+            // Settle the invoice immediately if it's 0-amount
+            if amount.0 == BigDecimal::from(0) {
+                update_status(&invoice_id, &owner_id, &DocumentStatus::Settled, conn)?;
+                if let Role::Provider = role {
+                    invoice_event::create::<()>(
+                        invoice_id,
+                        owner_id,
+                        InvoiceEventType::InvoiceSettledEvent,
+                        None,
+                        conn,
+                    )?;
+                }
+            }
+
             Ok(())
         })
         .await
