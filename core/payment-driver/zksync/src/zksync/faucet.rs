@@ -80,7 +80,10 @@ async fn wait_for_ngnt(address: &str, network: Network) -> Result<(), GenericErr
 }
 
 async fn faucet_donate(address: &str, _network: Network) -> Result<(), GenericError> {
-    let client = awc::Client::new();
+    // TODO: Reduce timeout to 20-30 seconds when transfer is used.
+    let client = awc::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .finish();
     let response = client
         .get(format!("{}/{}", *FAUCET_ADDR, address))
         .send()
