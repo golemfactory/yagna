@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::fmt::{Error as FormatError, Formatter};
 use std::path::PathBuf;
 
 pub const PROPERTY_TAG: &str = "@tag";
@@ -122,7 +123,7 @@ impl TryFrom<Value> for AgreementView {
 
         Ok(AgreementView {
             json: value,
-            agreement_id: agreement_id,
+            agreement_id,
         })
     }
 }
@@ -143,6 +144,25 @@ impl TryFrom<&Agreement> for AgreementView {
     }
 }
 
+impl<'a> std::fmt::Display for AgreementView {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FormatError> {
+        let mut agreement = self.json.clone();
+
+        if let Some(props) = agreement.pointer_mut("/offer/properties") {
+            *props = flatten_value(props.clone());
+        }
+        if let Some(props) = agreement.pointer_mut("/demand/properties") {
+            *props = flatten_value(props.clone());
+        }
+
+        // Display not pretty version as fallback.
+        match serde_json::to_string_pretty(&agreement) {
+            Ok(json) => write!(f, "{}", json),
+            Err(_) => write!(f, "{}", self.json),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct OfferTemplate {
     pub properties: Value,
@@ -154,6 +174,19 @@ impl Default for OfferTemplate {
         OfferTemplate {
             properties: Value::Object(Map::new()),
             constraints: String::new(),
+        }
+    }
+}
+
+impl<'a> std::fmt::Display for OfferTemplate {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FormatError> {
+        let mut template = self.clone();
+        template.properties = flatten_value(template.properties);
+
+        // Display not pretty version as fallback.
+        match serde_json::to_string_pretty(&template) {
+            Ok(json) => write!(f, "{}", json),
+            Err(_) => write!(f, "{}", template),
         }
     }
 }
@@ -341,6 +374,10 @@ pub fn flatten(value: Value) -> Map<String, Value> {
     let mut map = Map::new();
     flatten_inner(String::new(), &mut map, value);
     map
+}
+
+pub fn flatten_value(value: Value) -> serde_json::Value {
+    serde_json::Value::Object(flatten(value))
 }
 
 fn flatten_inner(prefix: String, result: &mut Map<String, Value>, value: Value) {

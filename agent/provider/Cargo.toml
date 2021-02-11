@@ -25,6 +25,7 @@ ya-file-logging = "0.1"
 ya-utils-actix = "0.1"
 ya-utils-path = "0.1"
 ya-utils-process = { version = "0.1", features = ['lock'] }
+ya-std-utils = "0.1"
 
 actix = { version = "0.10", default-features = false }
 actix-rt = "1.1.1"
@@ -62,6 +63,7 @@ thiserror = "1.0.14"
 tokio = { version = "0.2.10", features = ["process", "signal"] }
 url = "2.1.1"
 walkdir = "2.3.1"
+yansi = "0.5.0"
 
 [target.'cfg(target_family = "unix")'.dependencies]
 nix = "0.17.0"

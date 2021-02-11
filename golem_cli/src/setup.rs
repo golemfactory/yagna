@@ -1,27 +1,26 @@
-use crate::command::UsageDef;
-use crate::terminal::clear_stdin;
 use anyhow::Result;
 use directories::ProjectDirs;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
-
 use std::fs;
+use std::path::PathBuf;
 use structopt::StructOpt;
 
 use ya_core_model::NodeId;
 use ya_provider::ReceiverAccount;
 
+use crate::command::UsageDef;
+use crate::terminal::clear_stdin;
+
 const OLD_DEFAULT_SUBNETS: &[&'static str] = &["community", "community.3"];
 const DEFAULT_SUBNET: &str = "community.4";
 
-#[derive(StructOpt)]
+#[derive(StructOpt, Debug, Clone, Serialize, Deserialize)]
 pub struct RunConfig {
-    #[structopt(long, env = "NODE_NAME")]
+    #[structopt(env = "NODE_NAME", hidden = true)]
     pub node_name: Option<String>,
     #[structopt(long, env = "SUBNET")]
     pub subnet: Option<String>,
-    #[structopt(long, env = "YA_CONF_PRICES", hidden = true)]
-    pub prices_configured: bool,
 
     #[structopt(flatten)]
     pub account: ReceiverAccount,
@@ -39,9 +38,6 @@ impl RunConfig {
         }
         if let Some(subnet) = &self.subnet {
             vars.push(format!("SUBNET={}", subnet))
-        }
-        if self.prices_configured {
-            vars.push("YA_CONF_PRICES=1".into())
         }
 
         fs::write(env_path, vars.join("\n"))?;
@@ -64,7 +60,7 @@ pub fn init() -> Result<PathBuf> {
     Ok(config_file)
 }
 
-pub async fn setup(run_config: &mut RunConfig, force: bool) -> Result<i32> {
+pub async fn setup(run_config: &RunConfig, force: bool) -> Result<i32> {
     if force {
         super::banner();
         eprintln!("Initial node setup");
@@ -98,7 +94,7 @@ pub async fn setup(run_config: &mut RunConfig, force: bool) -> Result<i32> {
                 .clone()
                 .unwrap_or_else(|| names::Generator::default().next().unwrap_or_default()),
         )?;
-        // Force subnet upgade.
+        // Force subnet upgrade.
         if let Some(subn) = config.subnet.as_deref() {
             if OLD_DEFAULT_SUBNETS.iter().any(|n| n == &subn) {
                 config.subnet = None;
@@ -207,7 +203,6 @@ pub async fn setup(run_config: &mut RunConfig, force: bool) -> Result<i32> {
                 .set_profile_activity("default", false)
                 .await?;
         }
-        run_config.prices_configured = true;
         run_config.save()?;
     }
 

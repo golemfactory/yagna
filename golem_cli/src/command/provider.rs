@@ -6,6 +6,8 @@ use tokio::process::{Child, Command};
 use ya_core_model::payment::local::NetworkName;
 pub use ya_provider::GlobalsState as ProviderConfig;
 
+use crate::setup::RunConfig;
+
 pub struct YaProviderCommand {
     pub(super) cmd: Command,
 }
@@ -269,10 +271,25 @@ impl YaProviderCommand {
         }
     }
 
-    pub async fn spawn(mut self, app_key: &str, network: &NetworkName) -> anyhow::Result<Child> {
+    pub async fn spawn(mut self, app_key: &str, run_cfg: &RunConfig) -> anyhow::Result<Child> {
         self.cmd
-            .args(&["run", "--payment-network", &network.to_string()])
+            .args(&[
+                "run",
+                "--payment-network",
+                &run_cfg.account.network.to_string(),
+            ])
             .env("YAGNA_APPKEY", app_key);
+
+        if let Some(node_name) = &run_cfg.node_name {
+            self.cmd.arg("--node-name").arg(node_name);
+        }
+        if let Some(subnet) = &run_cfg.subnet {
+            self.cmd.arg("--subnet").arg(subnet);
+        }
+
+        if let Some(account) = run_cfg.account.account {
+            self.cmd.arg("--account").arg(account.to_string());
+        }
 
         log::debug!("spawning: {:?}", self.cmd);
 
