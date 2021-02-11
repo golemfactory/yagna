@@ -7105,7 +7105,7 @@ dependencies = [
 
 [[package]]
 name = "ya-activity"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "actix-rt",
  "actix-web 3.3.2",
@@ -7415,7 +7415,7 @@ dependencies = [
 
 [[package]]
 name = "ya-market"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "actix-http 2.2.0",
  "actix-rt",
@@ -7531,7 +7531,7 @@ dependencies = [
 
 [[package]]
 name = "ya-payment"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix-rt",
  "actix-web 3.3.2",
