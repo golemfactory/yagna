@@ -1,6 +1,7 @@
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 
+use ya_client::model::market::Reason;
 use ya_client::model::NodeId;
 use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
 
@@ -243,7 +244,7 @@ impl<'c> AgreementDao<'c> {
     pub async fn reject(
         &self,
         id: &AgreementId,
-        reason: Option<String>,
+        reason: Option<Reason>,
     ) -> Result<Agreement, AgreementDaoError> {
         let id = id.clone();
         do_with_transaction(self.pool, move |conn| {
@@ -262,7 +263,7 @@ impl<'c> AgreementDao<'c> {
     pub async fn terminate(
         &self,
         id: &AgreementId,
-        reason: Option<String>,
+        reason: Option<Reason>,
         terminator: Owner,
     ) -> Result<bool, AgreementDaoError> {
         let id = id.clone();

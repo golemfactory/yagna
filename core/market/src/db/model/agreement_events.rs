@@ -1,10 +1,12 @@
 use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::sql_types::Text;
+use std::fmt;
 use std::fmt::Debug;
 
 use crate::db::model::{Agreement, AgreementId, AgreementState, Owner};
 use crate::db::schema::market_agreement_event;
 
+use std::str::FromStr;
 use ya_client::model::market::agreement_event::AgreementTerminator;
 use ya_client::model::market::{
     AgreementEventType as ClientEventType, AgreementOperationEvent as ClientEvent, Reason,
@@ -30,6 +32,10 @@ pub enum AgreementEventType {
     Terminated,
 }
 
+#[derive(DbTextField, Debug, Clone, AsExpression, FromSqlRow)]
+#[sql_type = "Text"]
+pub struct DbReason(pub Reason);
+
 #[derive(Clone, Debug, Queryable)]
 pub struct AgreementEvent {
     pub id: i32,
@@ -37,7 +43,7 @@ pub struct AgreementEvent {
     pub event_type: AgreementEventType,
     pub timestamp: NaiveDateTime,
     pub issuer: Owner,
-    pub reason: Option<String>,
+    pub reason: Option<DbReason>,
     pub signature: Option<String>,
 }
 
@@ -48,7 +54,7 @@ pub struct NewAgreementEvent {
     pub event_type: AgreementEventType,
     pub timestamp: NaiveDateTime,
     pub issuer: Owner,
-    pub reason: Option<String>,
+    pub reason: Option<DbReason>,
 }
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -58,7 +64,7 @@ pub struct EventFromAgreementError(pub String);
 impl NewAgreementEvent {
     pub(crate) fn new(
         agreement: &Agreement,
-        reason: Option<String>,
+        reason: Option<Reason>,
         terminator: Owner,
     ) -> Result<Self, EventFromAgreementError> {
         Ok(Self {
@@ -79,7 +85,7 @@ impl NewAgreementEvent {
             },
             timestamp: Utc::now().naive_utc(),
             issuer: terminator,
-            reason,
+            reason: reason.map(|reason| DbReason(reason)),
         })
     }
 }
@@ -88,16 +94,7 @@ impl AgreementEvent {
     pub fn into_client(self) -> ClientEvent {
         let agreement_id = self.agreement_id.into_client();
         let event_date = DateTime::<Utc>::from_utc(self.timestamp, Utc);
-        let reason = self
-            .reason
-            .map(|reason| serde_json::from_str::<Reason>(&reason))
-            .map(|result| result.map_err(|e| {
-                log::warn!(
-                    "Agreement Event with not parsable Reason in database. Error: {}. Shouldn't happen \
-                     because market is responsible for rejecting invalid Reasons.", e
-                )
-            }).ok())
-            .flatten();
+        let reason = self.reason.map(|reason| reason.0);
 
         match self.event_type {
             AgreementEventType::Approved => ClientEvent {
@@ -131,6 +128,34 @@ impl AgreementEvent {
                     }),
                 }
             },
+        }
+    }
+}
+
+impl FromStr for DbReason {
+    type Err = serde_json::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(DbReason(serde_json::from_str::<Reason>(s)
+            .map_err(|e| {
+                log::warn!(
+                    "Agreement Event with not parsable Reason in database. Error: {}. Shouldn't happen \
+                     because market is responsible for rejecting invalid Reasons.", e
+                )
+            }
+            ).ok().unwrap_or(Reason {
+            message: "Invalid Reason in DB".into(),
+            extra: Default::default()
+        })))
+    }
+}
+
+impl fmt::Display for DbReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match serde_json::to_string(&self.0) {
+            Ok(reason) => write!(f, "{}", reason),
+            // It's impossible since Reason is serializable.
+            Err(_) => write!(f, "Serialization failed!"),
         }
     }
 }

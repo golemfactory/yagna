@@ -363,8 +363,7 @@ impl ProviderBroker {
                 .reject_agreement(&agreement, reason.clone())
                 .await?;
 
-            let reason_string = CommonBroker::reason2string(&reason);
-            dao.reject(&agreement.id, reason_string)
+            dao.reject(&agreement.id, reason.clone())
                 .await
                 .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?
         };

@@ -2,7 +2,7 @@ use chrono::{Duration, Utc};
 
 use ya_client::model::market::agreement::State as ClientAgreementState;
 
-use ya_client::model::market::AgreementEventType;
+use ya_client::model::market::{AgreementEventType, Reason};
 use ya_market::assert_err_eq;
 use ya_market::testing::{
     agreement_utils::{gen_reason, negotiate_agreement},
@@ -126,7 +126,12 @@ async fn test_agreement_rejected_wait_for_approval() {
         .wait_for_approval(&agreement_id, 0.3)
         .await
         .unwrap();
-    assert_eq!(result, ApprovalStatus::Rejected);
+    assert_eq!(
+        result,
+        ApprovalStatus::Rejected {
+            reason: Some(Reason::new("Not-interested"))
+        }
+    );
 
     tokio::time::timeout(Duration::milliseconds(600).to_std().unwrap(), reject_handle)
         .await

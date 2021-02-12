@@ -21,6 +21,8 @@ use crate::protocol::negotiation::{error::*, messages::*, requestor::Negotiation
 
 use super::{common::*, error::*, notifier::NotifierError, EventNotifier};
 use crate::config::Config;
+use crate::db::dao::AgreementEventsDao;
+use crate::db::model::AgreementEventType;
 use crate::utils::display::EnableDisplay;
 
 #[derive(Clone, derive_more::Display, Debug, PartialEq)]
@@ -30,7 +32,7 @@ pub enum ApprovalStatus {
     #[display(fmt = "Cancelled")]
     Cancelled,
     #[display(fmt = "Rejected")]
-    Rejected,
+    Rejected { reason: Option<Reason> },
 }
 
 /// Requestor part of negotiation logic.
@@ -319,7 +321,26 @@ impl RequestorBroker {
                     return Ok(ApprovalStatus::Approved);
                 }
                 AgreementState::Rejected => {
-                    return Ok(ApprovalStatus::Rejected);
+                    // `AgreementRejectedEvent` should be last and the only event for this
+                    // Agreement. If it' not
+                    return Ok(ApprovalStatus::Rejected {
+                        reason: self
+                            .common
+                            .db
+                            .as_dao::<AgreementEventsDao>()
+                            .select_for_agreement(&agreement.id)
+                            .await
+                            .map(|events| {
+                                events.last().cloned().map(|event| {
+                                    if event.event_type != AgreementEventType::Rejected { log::error!("Expected AgreementRejected event in DB for Agreement [{}].", &agreement.id);
+                                    };
+                                    event.reason.map(|reason| reason.0)
+                                })
+                            })
+                            .ok()
+                            .flatten()
+                            .flatten(),
+                    });
                 }
                 AgreementState::Cancelled => {
                     return Ok(ApprovalStatus::Cancelled);
@@ -598,8 +619,7 @@ async fn agreement_rejected(
             RemoteAgreementError::InvalidState(agreement.id.clone(), agreement.state.clone())
         })?;
 
-        let reason_string = CommonBroker::reason2string(&msg.reason);
-        dao.reject(&agreement.id, reason_string)
+        dao.reject(&agreement.id, msg.reason.clone())
             .await
             .log_err()
             .map_err(|e| match e {
