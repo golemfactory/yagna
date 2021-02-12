@@ -7242,7 +7242,7 @@ dependencies = [
 
 [[package]]
 name = "ya-dummy-driver"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix 0.9.0",
  "anyhow",
@@ -7325,7 +7325,7 @@ dependencies = [
 
 [[package]]
 name = "ya-gnt-driver"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix 0.9.0",
  "actix-connect 1.0.2",
@@ -7531,7 +7531,7 @@ dependencies = [
 
 [[package]]
 name = "ya-payment"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "actix-rt",
  "actix-web 3.3.2",
@@ -7580,7 +7580,7 @@ dependencies = [
 
 [[package]]
 name = "ya-payment-driver"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix 0.9.0",
  "anyhow",
@@ -7977,7 +7977,7 @@ dependencies = [
 
 [[package]]
 name = "ya-zksync-driver"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix-rt",
  "anyhow",
