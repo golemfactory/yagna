@@ -43,13 +43,10 @@ thiserror = "1.0"
 tiny-keccak = { version = "2.0", features = ["keccak"] }
 tokio = { version = "0.2", features = ["macros"] }
 trust-dns-resolver="0.19"
-uint = "0.7"
-ureq = { version = "0.11", features = ["charset"] }
 uuid = { version = "0.8", features = ["v4"] }
 web3 = "0.13"
 
 [dev-dependencies]
 dotenv = "0.15"
 env_logger = "0.7"
-ethkey = "0.3"
 libsqlite3-sys = { version = "0.9", features = ["bundled"] }
