@@ -39,7 +39,7 @@ async fn test_agreement_rejected() {
         .create_agreement(
             req_id.clone(),
             &proposal_id,
-            Utc::now() + Duration::milliseconds(30),
+            Utc::now() + Duration::milliseconds(300),
         )
         .await
         .unwrap();
@@ -97,7 +97,7 @@ async fn test_agreement_rejected_wait_for_approval() {
         .create_agreement(
             req_id.clone(),
             &proposal_id,
-            Utc::now() + Duration::milliseconds(30),
+            Utc::now() + Duration::milliseconds(1500),
         )
         .await
         .unwrap();
@@ -109,7 +109,7 @@ async fn test_agreement_rejected_wait_for_approval() {
 
     let agr_id = agreement_id.clone().translate(Owner::Provider);
     let reject_handle = tokio::task::spawn_local(async move {
-        tokio::time::delay_for(std::time::Duration::from_millis(20)).await;
+        tokio::time::delay_for(std::time::Duration::from_millis(50)).await;
         prov_market
             .provider_engine
             .reject_agreement(
@@ -123,7 +123,7 @@ async fn test_agreement_rejected_wait_for_approval() {
 
     // wait_for_approval should wake up after rejection.
     let result = req_engine
-        .wait_for_approval(&agreement_id, 0.3)
+        .wait_for_approval(&agreement_id, 1.4)
         .await
         .unwrap();
     assert_eq!(
@@ -243,7 +243,7 @@ async fn test_reject_rejected_agreement() {
         .create_agreement(
             req_id.clone(),
             &proposal_id,
-            Utc::now() + Duration::milliseconds(30),
+            Utc::now() + Duration::milliseconds(300),
         )
         .await
         .unwrap();
