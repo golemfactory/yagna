@@ -11,7 +11,7 @@ default = []
 ya-core-model = { version = "0.3", features = ["driver", "identity", "payment"] }
 ya-persistence = "0.2"
 ya-service-api-interfaces = "0.1"
-ya-service-bus = "0.3"
+ya-service-bus = "0.4"
 
 actix = { version = "0.9", default-features = false }
 anyhow = "1.0"

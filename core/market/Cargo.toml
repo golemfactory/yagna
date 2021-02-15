@@ -22,7 +22,7 @@ ya-persistence = "0.2"
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.1"
 ya-service-api-web = "0.1"
-ya-service-bus = "0.3"
+ya-service-bus = "0.4"
 
 actix-web = "3.2"
 async-trait = { version = "0.1.33" }

@@ -7696,8 +7696,9 @@ dependencies = [
 
 [[package]]
 name = "ya-sb-proto"
-version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=6b494e17d7a662e0b710af8c5a2e99ab4007fdb9#6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba491b25b0ca2d03f697c7a734f79f7bb9550e570132bd95af53f62d52668424"
 dependencies = [
  "bytes 0.5.6",
  "prost",
@@ -7710,8 +7711,9 @@ dependencies = [
 
 [[package]]
 name = "ya-sb-router"
-version = "0.3.1"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=6b494e17d7a662e0b710af8c5a2e99ab4007fdb9#6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d10e05cad4f3d9eb46c48e5ae6a6ecfe49c1373707b886a167e2dac130b86075"
 dependencies = [
  "anyhow",
  "bytes 0.4.12",
@@ -7732,7 +7734,8 @@ dependencies = [
 [[package]]
 name = "ya-sb-util"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=6b494e17d7a662e0b710af8c5a2e99ab4007fdb9#6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20b2e7cfeacabb607fe1fd1dc8e653c3ee853f2e127cb1ed72955ea4cb84f951"
 dependencies = [
  "futures 0.3.12",
  "pin-project 0.4.27",
@@ -7819,8 +7822,9 @@ dependencies = [
 
 [[package]]
 name = "ya-service-bus"
-version = "0.3.1"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=6b494e17d7a662e0b710af8c5a2e99ab4007fdb9#6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7650b19a2f73f5d6cded3045756fc35048abc094781154d3145ca21dd68ce8c6"
 dependencies = [
  "actix 0.9.0",
  "flexbuffers",
