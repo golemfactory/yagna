@@ -11,7 +11,7 @@ ya-core-model = "0.3"
 ya-net = "0.2"
 ya-service-bus = "0.4"
 ya-utils-path = "0.1"
-gftp = "0.2"
+gftp = { version = "0.1" }
 
 actix-http = "1.0.1"
 actix-rt = "1.0.0"
