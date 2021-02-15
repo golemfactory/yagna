@@ -233,17 +233,30 @@ impl<'c> InvoiceDao<'c> {
                 .find((&invoice_id, &owner_id))
                 .select((dsl::agreement_id, dsl::amount, dsl::role))
                 .first(conn)?;
-            update_status(&invoice_id, &owner_id, &DocumentStatus::Accepted, conn)?;
+            let mut events = vec![InvoiceEventType::InvoiceAcceptedEvent];
+
+            // Zero-amount invoices should be settled immediately.
+            let status = if amount.0 == BigDecimal::from(0) {
+                events.push(InvoiceEventType::InvoiceSettledEvent);
+                DocumentStatus::Settled
+            } else {
+                DocumentStatus::Accepted
+            };
+
+            update_status(&invoice_id, &owner_id, &status, conn)?;
             agreement::set_amount_accepted(&agreement_id, &owner_id, &amount, conn)?;
             if let Role::Provider = role {
-                invoice_event::create::<()>(
-                    invoice_id,
-                    owner_id,
-                    InvoiceEventType::InvoiceAcceptedEvent,
-                    None,
-                    conn,
-                )?;
+                for event in events {
+                    invoice_event::create::<()>(
+                        invoice_id.clone(),
+                        owner_id.clone(),
+                        event,
+                        None,
+                        conn,
+                    )?;
+                }
             }
+
             Ok(())
         })
         .await
