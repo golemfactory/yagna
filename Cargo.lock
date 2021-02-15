@@ -7157,7 +7157,8 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.5.0"
-source = "git+https://github.com/golemfactory/ya-client.git?branch=release/v0.5#62e4757d5e1748e6606c3d7992a1a7956e52d8b8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43cf68fa232c9de768f3a8041d7725b6817e7561fdab22d462d485da37c65f4a"
 dependencies = [
  "awc 1.0.1",
  "bytes 0.5.6",
@@ -7182,7 +7183,8 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-client.git?branch=release/v0.5#62e4757d5e1748e6606c3d7992a1a7956e52d8b8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d166700c6215a0a80f6e75bd33d74a5a4adb3715114bb3d47e4f9a33bb2a2fa2"
 dependencies = [
  "bigdecimal 0.1.2",
  "chrono",
