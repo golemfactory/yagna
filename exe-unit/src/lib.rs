@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate derive_more;
+
 use actix::prelude::*;
 use chrono::Utc;
 use futures::channel::{mpsc, oneshot};
@@ -30,6 +33,7 @@ pub mod error;
 mod handlers;
 pub mod message;
 pub mod metrics;
+mod network;
 mod notify;
 mod output;
 pub mod process;
@@ -287,10 +291,17 @@ impl<R: Runtime> RuntimeRef<R> {
                 };
                 transfer_service.send(msg).await??;
             }
-            ExeScriptCommand::Deploy { .. } => {
-                let msg = DeployImage {};
-                let path = transfer_service.send(msg).await??;
-                runtime.send(SetTaskPackagePath(path)).await?;
+            ExeScriptCommand::Deploy { net, hosts, nodes } => {
+                let task_package = transfer_service.send(DeployImage {}).await??;
+                runtime
+                    .send(UpdateDeployment {
+                        task_package: Some(task_package),
+                        networks: Some(net.clone()),
+                        hosts: Some(hosts.clone()),
+                        nodes: Some(nodes.clone()),
+                        ..Default::default()
+                    })
+                    .await??;
             }
             _ => (),
         }
@@ -314,7 +325,7 @@ impl<R: Runtime> RuntimeRef<R> {
 
             if let Some(output) = stdout {
                 let deployment = deploy::DeployResult::from_bytes(output).map_err(|e| {
-                    log::error!("Deploy failed: {}", e);
+                    log::error!("Deployment failed: {}", e);
                     Error::CommandError(e.to_string())
                 })?;
                 transfer_service
@@ -322,7 +333,12 @@ impl<R: Runtime> RuntimeRef<R> {
                     .await??;
                 runtime_mode = deployment.start_mode.into();
             }
-            runtime.send(SetRuntimeMode(runtime_mode)).await??;
+            runtime
+                .send(UpdateDeployment {
+                    runtime_mode: Some(runtime_mode),
+                    ..Default::default()
+                })
+                .await??;
         }
         Ok(())
     }

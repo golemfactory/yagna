@@ -3,6 +3,7 @@
 //! Top level objects constitutes public activity API.
 //! Local and Exeunit are in dedicated submodules.
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 
 use crate::Role;
 use ya_client_model::activity::{
@@ -21,9 +22,16 @@ pub const BUS_ID: &str = "/public/activity";
 
 /// Public Exe Unit service bus API.
 pub mod exeunit {
+    use crate::net::PUBLIC_PREFIX;
+
     /// Public exeunit bus address for given `activity_id`.
     pub fn bus_id(activity_id: &str) -> String {
-        format!("/public/exeunit/{}", activity_id)
+        format!("{}/exeunit/{}", PUBLIC_PREFIX, activity_id)
+    }
+
+    /// Public network VPN bus address for given `network_id`.
+    pub fn network_id(network_id: &str) -> String {
+        format!("{}/vpn/{}", PUBLIC_PREFIX, network_id)
     }
 }
 
@@ -135,6 +143,31 @@ pub struct GetUsage {
 impl RpcMessage for GetUsage {
     const ID: &'static str = "GetActivityUsage";
     type Item = ActivityUsage;
+    type Error = RpcMessageError;
+}
+
+/// Update remote network configuration
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum VpnControl {
+    UpdateNodes(HashMap<String, String>), // IP -> NodeId
+    RemoveNodes(HashSet<String>),         // NodeId
+}
+
+impl RpcMessage for VpnControl {
+    const ID: &'static str = "VpnControl";
+    type Item = ();
+    type Error = RpcMessageError;
+}
+
+/// Network data
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VpnPacket(pub Vec<u8>);
+
+impl RpcMessage for VpnPacket {
+    const ID: &'static str = "VpnPacket";
+    type Item = ();
     type Error = RpcMessageError;
 }
 

@@ -1,9 +1,11 @@
-use crate::error::Error;
-use crate::message::{ExecuteCommand, SetRuntimeMode, SetTaskPackagePath, Shutdown};
+use crate::error::{Error, VpnError};
+use crate::message::{ExecuteCommand, Shutdown, ShutdownReason, UpdateDeployment};
+use crate::network::{gateway, Vpn, VpnEndpoint};
 use crate::output::{forward_output, vec_to_string};
 use crate::process::{kill, ProcessTree, SystemError};
 use crate::runtime::event::EventMonitor;
 use crate::runtime::{Runtime, RuntimeArgs, RuntimeMode};
+use crate::state::Deployment;
 use crate::ExeUnitContext;
 use actix::prelude::*;
 use futures::future::{self, LocalBoxFuture};
@@ -18,8 +20,12 @@ use std::sync::Arc;
 use tokio::process::Command;
 use ya_agreement_utils::agreement::OfferTemplate;
 use ya_client_model::activity::{CommandOutput, ExeScriptCommand, RuntimeEvent};
-use ya_runtime_api::server::{spawn, ProcessControl, RunProcess, RuntimeService, RuntimeStatus};
-use ya_runtime_api::PROTOCOL_VERSION;
+use ya_runtime_api::{
+    server::{
+        spawn, CreateNetwork, Network, ProcessControl, RunProcess, RuntimeService, RuntimeStatus,
+    },
+    PROTOCOL_VERSION,
+};
 
 const PROCESS_KILL_TIMEOUT_SECONDS_ENV_VAR: &str = "PROCESS_KILL_TIMEOUT_SECONDS";
 const DEFAULT_PROCESS_KILL_TIMEOUT_SECONDS: i64 = 5;
@@ -33,25 +39,27 @@ fn process_kill_timeout_seconds() -> i64 {
 }
 
 pub struct RuntimeProcess {
+    activity_id: Option<String>,
     binary: PathBuf,
     runtime_args: RuntimeArgs,
-    task_package_path: Option<PathBuf>,
-    mode: RuntimeMode,
+    deployment: Deployment,
     children: HashSet<ChildProcess>,
     service: Option<ProcessService>,
     monitor: Option<EventMonitor>,
+    vpn: Option<Addr<Vpn>>,
 }
 
 impl RuntimeProcess {
     pub fn new(ctx: &ExeUnitContext, binary: PathBuf) -> Self {
         Self {
+            activity_id: ctx.activity_id.clone(),
             binary,
             runtime_args: ctx.runtime_args.clone(),
-            task_package_path: None,
-            mode: RuntimeMode::default(),
+            deployment: Default::default(),
             children: HashSet::new(),
             service: None,
             monitor: None,
+            vpn: None,
         }
     }
 
@@ -93,7 +101,8 @@ impl RuntimeProcess {
 
     fn args(&self, cmd_args: Vec<OsString>) -> Result<Vec<OsString>, Error> {
         let pkg_path = self
-            .task_package_path
+            .deployment
+            .task_package
             .clone()
             .ok_or(Error::runtime("missing task package path"))?;
 
@@ -188,14 +197,15 @@ impl RuntimeProcess {
         address: Addr<Self>,
     ) -> LocalBoxFuture<'f, Result<i32, Error>> {
         let args = self.args(
-            std::iter::once("start")
-                .map(|s| OsString::from(s))
+            std::iter::once(OsString::from("start"))
                 .chain(args.into_iter().map(OsString::from))
                 .collect(),
         );
 
         log::info!("Executing {:?} with {:?}", self.binary, args);
 
+        let activity_id = self.activity_id.clone();
+        let deployment = self.deployment.clone();
         let monitor = self.monitor.get_or_insert_with(Default::default).clone();
         let mut command = Command::new(self.binary.clone());
 
@@ -207,6 +217,20 @@ impl RuntimeProcess {
                 .map_err(|e| Error::runtime(format!("service hello error: {:?}", e)));
 
             match future::select(service.exited(), hello).await {
+                future::Either::Left((result, _)) => return Ok(result),
+                future::Either::Right((result, _)) => result.map(|_| ())?,
+            }
+
+            let service_ = service.clone();
+            let vpn = async {
+                if let Some(vpn) = start_vpn(&service_, activity_id, deployment).await? {
+                    address.send(SetVpnService(vpn)).await?;
+                }
+                Ok::<_, Error>(())
+            };
+
+            futures::pin_mut!(vpn);
+            match future::select(service.exited(), vpn).await {
                 future::Either::Left((result, _)) => return Ok(result),
                 future::Either::Right((result, _)) => result.map(|_| ())?,
             }
@@ -290,6 +314,50 @@ impl RuntimeProcess {
     }
 }
 
+async fn start_vpn<R: RuntimeService>(
+    service: &R,
+    activity_id: Option<String>,
+    deployment: Deployment,
+) -> Result<Option<Addr<Vpn>>, Error> {
+    if activity_id.is_none() || !deployment.networking() {
+        return Ok(None);
+    }
+
+    let activity_id = activity_id.unwrap();
+    let response = service
+        .create_network(CreateNetwork {
+            networks: deployment
+                .networks
+                .iter()
+                .map(|net| {
+                    let gateway = gateway(&net.ip, &net.mask)?;
+                    Ok(Network {
+                        ipv6: gateway.is_ipv6(),
+                        addr: net.ip.clone(),
+                        gateway: gateway.to_string(),
+                        mask: net.mask.clone(),
+                    })
+                })
+                .collect::<Result<_, Error>>()?,
+            hosts: deployment.hosts.clone(),
+        })
+        .await
+        .map_err(|e| Error::Other(format!("Network setup error: {:?}", e)))?;
+
+    let endpoint = match response.endpoint {
+        Some(endpoint) => endpoint,
+        None => return Err(VpnError::EndpointInvalid("missing socket path".into()).into()),
+    };
+
+    let vpn = Vpn::try_new(
+        activity_id,
+        VpnEndpoint::connect(endpoint).await?,
+        deployment,
+    )?;
+
+    Ok(Some(vpn.start()))
+}
+
 impl Runtime for RuntimeProcess {}
 
 impl Actor for RuntimeProcess {
@@ -311,7 +379,7 @@ impl Handler<ExecuteCommand> for RuntimeProcess {
         let address = ctx.address();
         match &cmd.command {
             ExeScriptCommand::Deploy { .. } => self.handle_process_command(cmd, address),
-            _ => match &self.mode {
+            _ => match &self.deployment.runtime_mode {
                 RuntimeMode::ProcessPerCommand => self.handle_process_command(cmd, address),
                 RuntimeMode::Service => self.handle_service_command(cmd, address),
             },
@@ -319,20 +387,25 @@ impl Handler<ExecuteCommand> for RuntimeProcess {
     }
 }
 
-impl Handler<SetTaskPackagePath> for RuntimeProcess {
-    type Result = <SetTaskPackagePath as Message>::Result;
+impl Handler<UpdateDeployment> for RuntimeProcess {
+    type Result = <UpdateDeployment as Message>::Result;
 
-    fn handle(&mut self, msg: SetTaskPackagePath, _: &mut Self::Context) -> Self::Result {
-        self.task_package_path = Some(msg.0);
-    }
-}
-
-impl Handler<SetRuntimeMode> for RuntimeProcess {
-    type Result = <SetRuntimeMode as Message>::Result;
-
-    fn handle(&mut self, msg: SetRuntimeMode, _: &mut Self::Context) -> Self::Result {
-        log::info!("Setting runtime mode to: {:?}", msg.0);
-        self.mode = msg.0;
+    fn handle(&mut self, msg: UpdateDeployment, _: &mut Self::Context) -> Self::Result {
+        if let Some(task_package) = msg.task_package {
+            self.deployment.task_package = Some(task_package);
+        }
+        if let Some(runtime_mode) = msg.runtime_mode {
+            self.deployment.runtime_mode = runtime_mode;
+        }
+        if let Some(networks) = msg.networks {
+            self.deployment.networks.extend(networks.into_iter());
+        }
+        if let Some(hosts) = msg.hosts {
+            self.deployment.hosts.extend(hosts.into_iter());
+        }
+        if let Some(nodes) = msg.nodes {
+            self.deployment.nodes.extend(nodes.into_iter());
+        }
         Ok(())
     }
 }
@@ -344,6 +417,16 @@ impl Handler<SetProcessService> for RuntimeProcess {
         let add_child = AddChildProcess(ChildProcess::from(msg.0.clone()));
         ctx.address().do_send(add_child);
         self.service = Some(msg.0);
+    }
+}
+
+impl Handler<SetVpnService> for RuntimeProcess {
+    type Result = <SetVpnService as Message>::Result;
+
+    fn handle(&mut self, msg: SetVpnService, _: &mut Self::Context) -> Self::Result {
+        if let Some(vpn) = self.vpn.replace(msg.0) {
+            vpn.do_send(Shutdown(ShutdownReason::Interrupted(0)));
+        }
     }
 }
 
@@ -366,12 +449,16 @@ impl Handler<RemoveChildProcess> for RuntimeProcess {
 impl Handler<Shutdown> for RuntimeProcess {
     type Result = ResponseFuture<Result<(), Error>>;
 
-    fn handle(&mut self, _: Shutdown, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: Shutdown, _: &mut Self::Context) -> Self::Result {
         let timeout = process_kill_timeout_seconds();
         let service = self.service.take();
+        let vpn = self.vpn.take();
         let mut children = std::mem::replace(&mut self.children, HashSet::new());
 
         async move {
+            if let Some(vpn) = vpn {
+                let _ = vpn.send(msg).await;
+            }
             if let Some(svc) = service {
                 let _ = svc.service.shutdown().await;
             }
@@ -382,10 +469,13 @@ impl Handler<Shutdown> for RuntimeProcess {
     }
 }
 
-#[derive(Clone, Hash, Eq, PartialEq)]
+#[derive(Clone, Hash, Eq, PartialEq, From)]
 enum ChildProcess {
+    #[from]
     Single { pid: u32 },
+    #[from]
     Tree(ProcessTree),
+    #[from]
     Service(ProcessService),
 }
 
@@ -400,24 +490,6 @@ impl ChildProcess {
             ChildProcess::Tree(tree) => tree.kill(timeout).boxed_local(),
             ChildProcess::Single { pid } => kill(pid as i32, timeout).boxed_local(),
         }
-    }
-}
-
-impl From<ProcessTree> for ChildProcess {
-    fn from(process: ProcessTree) -> Self {
-        ChildProcess::Tree(process)
-    }
-}
-
-impl From<ProcessService> for ChildProcess {
-    fn from(service: ProcessService) -> Self {
-        ChildProcess::Service(service)
-    }
-}
-
-impl From<u32> for ChildProcess {
-    fn from(pid: u32) -> Self {
-        ChildProcess::Single { pid }
     }
 }
 
@@ -479,6 +551,10 @@ impl Eq for ProcessService {}
 #[derive(Message)]
 #[rtype("()")]
 struct SetProcessService(ProcessService);
+
+#[derive(Message)]
+#[rtype("()")]
+struct SetVpnService(Addr<Vpn>);
 
 #[derive(Message)]
 #[rtype("()")]

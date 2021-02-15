@@ -1,20 +1,24 @@
 use crate::error::Error;
 use crate::notify::Notify;
 use crate::output::CapturedOutput;
+use crate::runtime::RuntimeMode;
 use actix::Arbiter;
 use chrono::{DateTime, Utc};
 use futures::channel::{mpsc, oneshot};
 use futures::{SinkExt, StreamExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use thiserror::Error;
 use tokio::sync::broadcast;
-pub use ya_client_model::activity::activity_state::{State, StatePair};
+use ya_client_model::activity::exe_script_command::Network;
 use ya_client_model::activity::{
     Capture, CommandOutput, CommandResult, ExeScriptCommand, ExeScriptCommandResult,
     ExeScriptCommandState, RuntimeEvent, RuntimeEventKind,
 };
 use ya_core_model::activity::Exec;
+
+pub use ya_client_model::activity::activity_state::{State, StatePair};
 
 #[derive(Error, Debug, Serialize)]
 pub enum StateError {
@@ -352,5 +356,20 @@ fn output_bytes(output: &CommandOutput) -> &[u8] {
     match output {
         CommandOutput::Bin(vec) => vec.as_slice(),
         CommandOutput::Str(string) => string.as_bytes(),
+    }
+}
+
+#[derive(Clone, Default)]
+pub(crate) struct Deployment {
+    pub runtime_mode: RuntimeMode,
+    pub task_package: Option<PathBuf>,
+    pub networks: Vec<Network>,
+    pub hosts: HashMap<String, String>,
+    pub nodes: HashMap<String, String>,
+}
+
+impl Deployment {
+    pub fn networking(&self) -> bool {
+        !self.networks.is_empty()
     }
 }

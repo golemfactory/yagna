@@ -34,13 +34,6 @@ message Request {
         map<string, string> hosts = 2;
     }
 
-    message Network {
-        bool ipv6 = 1;
-        string addr = 2;
-        string gateway = 3;
-        string mask = 4;
-    }
-
     message Shutdown {
 
     }
@@ -98,7 +91,7 @@ message Response {
     }
 
     message CreateNetwork {
-        oneof connector {
+        oneof endpoint {
             string socket = 1;
         }
     }
@@ -106,6 +99,13 @@ message Response {
     message Shutdown {
 
     }
+}
+
+message Network {
+    bool ipv6 = 1;
+    string addr = 2;
+    string gateway = 3;
+    string mask = 4;
 }
 
 message Output {
