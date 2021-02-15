@@ -11,7 +11,7 @@ bcast-singleton = []
 testing = ["actix-http", "actix-rt", "actix-service", "env_logger"]
 
 [dependencies]
-ya-agreement-utils = { version = "0.1" }
+ya-agreement-utils = { version = "^0.2"}
 ya-diesel-utils = { version = "0.1" }
 ya-std-utils = "0.1"
 ya-client = "0.5"

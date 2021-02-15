@@ -16,7 +16,7 @@ path = "src/main.rs"
 time-dependent-tests = []
 
 [dependencies]
-ya-agreement-utils = { version = "0.1" }
+ya-agreement-utils = { version = "^0.2"}
 ya-client = { version = "0.5", features = ['cli'] }
 ya-client-model = "0.3"
 ya-compile-time-utils = "0.1"
