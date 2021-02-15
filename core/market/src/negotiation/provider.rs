@@ -54,6 +54,7 @@ impl ProviderBroker {
         let broker1 = broker.clone();
         let broker2 = broker.clone();
         let broker3 = broker.clone();
+        let broker4 = broker.clone();
         let broker_proposal_reject = broker.clone();
         let broker_terminated = broker.clone();
         let commit_broker = broker.clone();
@@ -75,7 +76,9 @@ impl ProviderBroker {
             move |caller: String, msg: AgreementReceived| {
                 on_agreement_received(broker3.clone(), caller, msg)
             },
-            move |_caller: String, _msg: AgreementCancelled| async move { unimplemented!() },
+            move |caller: String, msg: AgreementCancelled| {
+                on_agreement_cancelled(broker4.clone(), caller, msg)
+            },
             move |caller: String, msg: AgreementTerminated| {
                 broker_terminated
                     .clone()
@@ -96,6 +99,7 @@ impl ProviderBroker {
         counter!("market.agreements.provider.approving", 0);
         counter!("market.agreements.provider.committing", 0);
         counter!("market.agreements.provider.rejected", 0);
+        counter!("market.agreements.provider.cancelled", 0);
         counter!("market.events.provider.queried", 0);
         counter!("market.proposals.provider.countered", 0);
         counter!("market.proposals.provider.init-negotiation", 0);
@@ -606,6 +610,64 @@ async fn agreement_received(
         "Agreement proposal [{}] received from [{}].",
         &msg.agreement_id,
         &caller
+    );
+    Ok(())
+}
+
+async fn on_agreement_cancelled(
+    broker: CommonBroker,
+    caller: String,
+    msg: AgreementCancelled,
+) -> Result<(), AgreementProtocolError> {
+    let caller: NodeId = CommonBroker::parse_caller(&caller)?;
+    Ok(agreement_cancelled(broker, caller, msg)
+        .await
+        .map_err(|e| AgreementProtocolError::Remote(e))?)
+}
+
+async fn agreement_cancelled(
+    broker: CommonBroker,
+    caller: NodeId,
+    msg: AgreementCancelled,
+) -> Result<(), RemoteAgreementError> {
+    let dao = broker.db.as_dao::<AgreementDao>();
+    let agreement = {
+        let _hold = broker.agreement_lock.lock(&msg.agreement_id).await;
+
+        let agreement = dao
+            .select(&msg.agreement_id, None, Utc::now().naive_utc())
+            .await
+            .map_err(|_e| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
+            .ok_or(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
+
+        if agreement.provider_id != caller {
+            // Don't reveal, that we know this Agreement id.
+            Err(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
+        }
+
+        validate_transition(&agreement, AgreementState::Cancelled).map_err(|_| {
+            RemoteAgreementError::InvalidState(agreement.id.clone(), agreement.state.clone())
+        })?;
+
+        dao.cancel(&agreement.id, msg.reason.clone())
+            .await
+            .log_err()
+            .map_err(|e| match e {
+                AgreementDaoError::InvalidTransition { from, .. } => {
+                    RemoteAgreementError::InvalidState(agreement.id.clone(), from)
+                }
+                _ => RemoteAgreementError::InternalError(agreement.id.clone()),
+            })?
+    };
+
+    broker.notify_agreement(&agreement).await;
+
+    counter!("market.agreements.provider.cancelled", 1);
+    log::info!(
+        "Agreement [{}] rejected by [{}]. Reason: {}",
+        &agreement.id,
+        caller,
+        msg.reason.display(),
     );
     Ok(())
 }

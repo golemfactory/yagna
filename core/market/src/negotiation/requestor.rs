@@ -292,6 +292,45 @@ impl RequestorBroker {
         Ok(agreement_id)
     }
 
+    pub async fn cancel_agreement(
+        &self,
+        id: &Identity,
+        agreement_id: &AgreementId,
+        reason: Option<Reason>,
+    ) -> Result<(), AgreementError> {
+        let dao = self.common.db.as_dao::<AgreementDao>();
+        let agreement = {
+            let _hold = self.common.agreement_lock.lock(&agreement_id).await;
+
+            let agreement = dao
+                .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
+                .await
+                .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
+                .ok_or(AgreementError::NotFound(agreement_id.to_string()))?;
+
+            validate_transition(&agreement, AgreementState::Cancelled)?;
+
+            self.api
+                .cancel_agreement(&agreement, reason.clone())
+                .await?;
+
+            dao.cancel(&agreement.id, reason.clone())
+                .await
+                .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?
+        };
+
+        self.common.notify_agreement(&agreement).await;
+
+        counter!("market.agreements.requestor.cancelled", 1);
+        log::info!(
+            "Provider {} cancelled Agreement [{}]. Reason: {}",
+            id.display(),
+            &agreement.id,
+            reason.display(),
+        );
+        Ok(())
+    }
+
     pub async fn wait_for_approval(
         &self,
         id: &AgreementId,

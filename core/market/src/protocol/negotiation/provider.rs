@@ -233,7 +233,7 @@ impl NegotiationApi {
         self,
         caller: String,
         msg: AgreementCancelled,
-    ) -> Result<(), GsbAgreementError> {
+    ) -> Result<(), AgreementProtocolError> {
         log::debug!(
             "Negotiation API: Agreement [{}] cancelled by [{}].",
             &msg.agreement_id,

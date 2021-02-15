@@ -248,12 +248,29 @@ impl<'c> AgreementDao<'c> {
     ) -> Result<Agreement, AgreementDaoError> {
         let id = id.clone();
         do_with_transaction(self.pool, move |conn| {
-            log::debug!("Termination reason: {:?}", reason);
             let mut agreement: Agreement =
                 market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
 
             update_state(conn, &mut agreement, AgreementState::Rejected)?;
             create_event(conn, &agreement, reason, Owner::Provider)?;
+
+            Ok(agreement)
+        })
+        .await
+    }
+
+    pub async fn cancel(
+        &self,
+        id: &AgreementId,
+        reason: Option<Reason>,
+    ) -> Result<Agreement, AgreementDaoError> {
+        let id = id.clone();
+        do_with_transaction(self.pool, move |conn| {
+            let mut agreement: Agreement =
+                market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
+
+            update_state(conn, &mut agreement, AgreementState::Cancelled)?;
+            create_event(conn, &agreement, reason, Owner::Requestor)?;
 
             Ok(agreement)
         })

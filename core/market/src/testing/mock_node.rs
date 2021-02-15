@@ -593,8 +593,8 @@ impl MarketServiceExt for MarketService {
 pub mod default {
     use super::*;
     use crate::protocol::negotiation::error::{
-        AgreementProtocolError, CommitAgreementError, CounterProposalError, GsbAgreementError,
-        ProposeAgreementError, RejectProposalError, TerminateAgreementError,
+        AgreementProtocolError, CommitAgreementError, CounterProposalError, ProposeAgreementError,
+        RejectProposalError, TerminateAgreementError,
     };
 
     pub async fn empty_on_offers_retrieved(
@@ -670,7 +670,7 @@ pub mod default {
     pub async fn empty_on_agreement_cancelled(
         _caller: String,
         _msg: AgreementCancelled,
-    ) -> Result<(), GsbAgreementError> {
+    ) -> Result<(), AgreementProtocolError> {
         Ok(())
     }
 

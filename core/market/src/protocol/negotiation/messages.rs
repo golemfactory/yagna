@@ -10,9 +10,7 @@ use crate::protocol::negotiation::error::{
 };
 
 use super::super::callback::CallbackMessage;
-use super::error::{
-    AgreementProtocolError, CounterProposalError, GsbAgreementError, TerminateAgreementError,
-};
+use super::error::{AgreementProtocolError, CounterProposalError, TerminateAgreementError};
 
 pub mod provider {
     pub fn proposal_addr(prefix: &str) -> String {
@@ -171,7 +169,7 @@ pub struct AgreementCancelled {
 impl RpcMessage for AgreementCancelled {
     const ID: &'static str = "AgreementCancelled";
     type Item = ();
-    type Error = GsbAgreementError;
+    type Error = AgreementProtocolError;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
