@@ -1,13 +1,13 @@
-use actix::{Actor, System};
+use actix::{Actor, Addr, Arbiter, System};
 use anyhow::bail;
 use flexi_logger::{DeferredNow, Record};
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use structopt::{clap, StructOpt};
-
+use ya_client_model::activity::ExeScriptCommand;
 use ya_core_model::activity;
 use ya_exe_unit::agreement::Agreement;
-use ya_exe_unit::message::Register;
+use ya_exe_unit::message::{GetState, GetStateResponse, Register};
 use ya_exe_unit::runtime::process::RuntimeProcess;
 use ya_exe_unit::runtime::RuntimeArgs;
 use ya_exe_unit::service::metrics::MetricsService;
@@ -56,6 +56,12 @@ struct Cli {
 enum Command {
     /// Execute commands from file
     FromFile {
+        /// ExeUnit daemon GSB URL
+        #[structopt(long)]
+        report_url: Option<String>,
+        /// ExeUnit service ID
+        #[structopt(long)]
+        service_id: Option<String>,
         /// Command file path
         input: PathBuf,
         #[structopt(flatten)]
@@ -114,6 +120,43 @@ fn init_crypto(
     }
 }
 
+async fn send_script(
+    exe_unit: Addr<ExeUnit<RuntimeProcess>>,
+    activity_id: Option<String>,
+    exe_script: Vec<ExeScriptCommand>,
+) {
+    use std::time::Duration;
+    use ya_exe_unit::state::{State, StatePair};
+
+    let delay = Duration::from_secs_f32(0.5);
+    loop {
+        match exe_unit.send(GetState).await {
+            Ok(GetStateResponse(StatePair(State::Initialized, None))) => break,
+            Ok(GetStateResponse(StatePair(State::Terminated, _)))
+            | Ok(GetStateResponse(StatePair(_, Some(State::Terminated))))
+            | Err(_) => {
+                return log::error!("ExeUnit has terminated");
+            }
+            _ => tokio::time::delay_for(delay).await,
+        }
+    }
+
+    log::debug!("Executing commands: {:?}", exe_script);
+
+    let msg = activity::Exec {
+        activity_id: activity_id.unwrap_or_else(Default::default),
+        batch_id: hex::encode(&rand::random::<[u8; 16]>()),
+        exe_script,
+        timeout: None,
+    };
+    if let Err(e) = exe_unit
+        .send(RpcEnvelope::with_caller(String::new(), msg))
+        .await
+    {
+        log::error!("Unable to execute exe script: {:?}", e);
+    }
+}
+
 fn run() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
     #[allow(unused_mut)]
@@ -124,10 +167,16 @@ fn run() -> anyhow::Result<()> {
     }
 
     let mut commands = None;
-    let mut ctx_activity_id = None;
-    let mut ctx_report_url = None;
+    let ctx_activity_id;
+    let ctx_report_url;
+
     let args = match &cli.command {
-        Command::FromFile { args, input } => {
+        Command::FromFile {
+            args,
+            service_id,
+            report_url,
+            input,
+        } => {
             let contents = std::fs::read_to_string(input).map_err(|e| {
                 anyhow::anyhow!("Cannot read commands from file {}: {}", input.display(), e)
             })?;
@@ -138,6 +187,8 @@ fn run() -> anyhow::Result<()> {
                     e
                 )
             })?;
+            ctx_activity_id = service_id.clone();
+            ctx_report_url = report_url.clone();
             commands = Some(contents);
             args
         }
@@ -187,7 +238,7 @@ fn run() -> anyhow::Result<()> {
 
     let runtime_args = RuntimeArgs::new(&args.work_dir, &agreement, !cli.supervise_caps);
     let ctx = ExeUnitContext {
-        activity_id: ctx_activity_id,
+        activity_id: ctx_activity_id.clone(),
         report_url: ctx_report_url,
         credentials: None,
         agreement,
@@ -214,13 +265,7 @@ fn run() -> anyhow::Result<()> {
     exe_unit.do_send(Register(signals));
 
     if let Some(exe_script) = commands {
-        let msg = activity::Exec {
-            activity_id: String::new(),
-            batch_id: hex::encode(&rand::random::<[u8; 16]>()),
-            exe_script,
-            timeout: None,
-        };
-        exe_unit.do_send(RpcEnvelope::with_caller(String::new(), msg));
+        Arbiter::spawn(send_script(exe_unit, ctx_activity_id, exe_script));
     }
 
     sys.run()?;
