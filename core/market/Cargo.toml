@@ -1,6 +1,6 @@
 [package]
 name = "ya-market"
-version = "0.2.0"
+version = "0.3.0"
 description = "The Distributed Marketplace implementation for Yagna."
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
@@ -11,18 +11,18 @@ bcast-singleton = []
 testing = ["actix-http", "actix-rt", "actix-service", "env_logger"]
 
 [dependencies]
-ya-agreement-utils = "0.2"
+ya-agreement-utils = { version = "^0.2"}
 ya-diesel-utils = { version = "0.1" }
 ya-std-utils = "0.1"
-ya-client = "0.4"
-ya-core-model = { version = "0.2", features = ["market", "net"] }
+ya-client = "0.5"
+ya-core-model = { version = "^0.3", features = ["market", "net"] }
 ya-market-resolver = "0.2"
-ya-net = "0.1"
+ya-net = "0.2"
 ya-persistence = "0.2"
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.1"
 ya-service-api-web = "0.1"
-ya-service-bus = "0.3"
+ya-service-bus = "0.4"
 
 actix-web = "3.2"
 async-trait = { version = "0.1.33" }

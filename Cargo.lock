@@ -2693,7 +2693,7 @@ dependencies = [
 
 [[package]]
 name = "gftp"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "actix-rt",
  "anyhow",
@@ -2778,7 +2778,7 @@ dependencies = [
 
 [[package]]
 name = "golemsp"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix-rt",
  "ansi_term 0.12.1",
@@ -7105,7 +7105,7 @@ dependencies = [
 
 [[package]]
 name = "ya-activity"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "actix-rt",
  "actix-web 3.3.2",
@@ -7156,8 +7156,9 @@ dependencies = [
 
 [[package]]
 name = "ya-client"
-version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=4099adb99dadbc8929caba33538806f5e10d5920#4099adb99dadbc8929caba33538806f5e10d5920"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43cf68fa232c9de768f3a8041d7725b6817e7561fdab22d462d485da37c65f4a"
 dependencies = [
  "awc 1.0.1",
  "bytes 0.5.6",
@@ -7181,8 +7182,9 @@ dependencies = [
 
 [[package]]
 name = "ya-client-model"
-version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=4099adb99dadbc8929caba33538806f5e10d5920#4099adb99dadbc8929caba33538806f5e10d5920"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d166700c6215a0a80f6e75bd33d74a5a4adb3715114bb3d47e4f9a33bb2a2fa2"
 dependencies = [
  "bigdecimal 0.1.2",
  "chrono",
@@ -7201,7 +7203,7 @@ dependencies = [
 
 [[package]]
 name = "ya-compile-time-utils"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "git-version",
  "metrics",
@@ -7211,7 +7213,7 @@ dependencies = [
 
 [[package]]
 name = "ya-core-model"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "bigdecimal 0.1.2",
  "bitflags 1.2.1",
@@ -7242,7 +7244,7 @@ dependencies = [
 
 [[package]]
 name = "ya-dummy-driver"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix 0.9.0",
  "anyhow",
@@ -7325,7 +7327,7 @@ dependencies = [
 
 [[package]]
 name = "ya-gnt-driver"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix 0.9.0",
  "actix-connect 1.0.2",
@@ -7415,7 +7417,7 @@ dependencies = [
 
 [[package]]
 name = "ya-market"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "actix-http 2.2.0",
  "actix-rt",
@@ -7507,7 +7509,7 @@ dependencies = [
 
 [[package]]
 name = "ya-net"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "actix-rt",
  "anyhow",
@@ -7531,7 +7533,7 @@ dependencies = [
 
 [[package]]
 name = "ya-payment"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix-rt",
  "actix-web 3.3.2",
@@ -7580,7 +7582,7 @@ dependencies = [
 
 [[package]]
 name = "ya-payment-driver"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix 0.9.0",
  "anyhow",
@@ -7696,8 +7698,9 @@ dependencies = [
 
 [[package]]
 name = "ya-sb-proto"
-version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=6b494e17d7a662e0b710af8c5a2e99ab4007fdb9#6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba491b25b0ca2d03f697c7a734f79f7bb9550e570132bd95af53f62d52668424"
 dependencies = [
  "bytes 0.5.6",
  "prost",
@@ -7710,8 +7713,9 @@ dependencies = [
 
 [[package]]
 name = "ya-sb-router"
-version = "0.3.1"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=6b494e17d7a662e0b710af8c5a2e99ab4007fdb9#6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d10e05cad4f3d9eb46c48e5ae6a6ecfe49c1373707b886a167e2dac130b86075"
 dependencies = [
  "anyhow",
  "bytes 0.4.12",
@@ -7732,7 +7736,8 @@ dependencies = [
 [[package]]
 name = "ya-sb-util"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=6b494e17d7a662e0b710af8c5a2e99ab4007fdb9#6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20b2e7cfeacabb607fe1fd1dc8e653c3ee853f2e127cb1ed72955ea4cb84f951"
 dependencies = [
  "futures 0.3.12",
  "pin-project 0.4.27",
@@ -7819,8 +7824,9 @@ dependencies = [
 
 [[package]]
 name = "ya-service-bus"
-version = "0.3.1"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=6b494e17d7a662e0b710af8c5a2e99ab4007fdb9#6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7650b19a2f73f5d6cded3045756fc35048abc094781154d3145ca21dd68ce8c6"
 dependencies = [
  "actix 0.9.0",
  "flexbuffers",
@@ -7977,7 +7983,7 @@ dependencies = [
 
 [[package]]
 name = "ya-zksync-driver"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix-rt",
  "anyhow",
