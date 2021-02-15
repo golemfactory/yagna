@@ -189,8 +189,8 @@ impl NegotiationApi {
             agreement_id: agreement.id.clone(),
             reason,
         };
-        net::from(agreement.provider_id)
-            .to(agreement.requestor_id)
+        net::from(agreement.requestor_id)
+            .to(agreement.provider_id)
             .service(&provider::agreement_addr(BUS_ID))
             .send(msg)
             .await

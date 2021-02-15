@@ -637,10 +637,11 @@ async fn agreement_cancelled(
         let agreement = dao
             .select(&msg.agreement_id, None, Utc::now().naive_utc())
             .await
+            .log_err()
             .map_err(|_e| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
             .ok_or(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
 
-        if agreement.provider_id != caller {
+        if agreement.requestor_id != caller {
             // Don't reveal, that we know this Agreement id.
             Err(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
         }
@@ -664,7 +665,7 @@ async fn agreement_cancelled(
 
     counter!("market.agreements.provider.cancelled", 1);
     log::info!(
-        "Agreement [{}] rejected by [{}]. Reason: {}",
+        "Agreement [{}] cancelled by [{}]. Reason: {}",
         &agreement.id,
         caller,
         msg.reason.display(),
