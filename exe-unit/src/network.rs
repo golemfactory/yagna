@@ -47,6 +47,8 @@ impl Vpn {
             .map(|net| Ok((net.id, map_ip_net(&net.ip, &net.mask)?)))
             .collect::<Result<_>>()?;
 
+        log::info!("Registered VPN networks: {:?}", networks);
+
         let mut vpn = Self {
             activity_id,
             endpoint,
@@ -56,6 +58,8 @@ impl Vpn {
             packet_buf: Default::default(),
         };
         vpn.add(deployment.nodes)?;
+
+        log::info!("Registered VPN nodes ({})", vpn.nodes.len());
 
         Ok(vpn)
     }
@@ -195,12 +199,17 @@ impl StreamHandler<Result<Vec<u8>>> for Vpn {
         };
 
         if let PeekResult::Packet { ip, len } = peeked {
+            log::trace!("Egress packet to {:?}", ip);
+
             if ip.len() == 4 && &ip[0..4] == &[255, 255, 255, 255] {
                 self.broadcast(len, ctx);
             } else {
                 match self.nodes.get(ip).cloned() {
                     Some(endpoint) => self.unicast(endpoint, len, ctx),
-                    None => return,
+                    None => {
+                        log::trace!("No endpoint for {:?}", ip);
+                        return;
+                    }
                 }
             }
         }
@@ -216,6 +225,8 @@ impl Handler<RpcEnvelope<activity::VpnPacket>> for Vpn {
         packet: RpcEnvelope<activity::VpnPacket>,
         ctx: &mut Context<Self>,
     ) -> Self::Result {
+        log::trace!("Ingress packet");
+
         let mut tx = self.endpoint.tx.clone();
         ctx.spawn(
             async move {
@@ -403,7 +414,7 @@ fn peek_ip6_pkt(data: &[u8]) -> StdResult<PeekResult, VpnError> {
 #[inline(always)]
 fn hton(ip: IpAddr) -> Box<[u8]> {
     match ip {
-        IpAddr::V4(ip) => u32::from_ne_bytes(ip.octets()).to_be_bytes().into(),
+        IpAddr::V4(ip) => ip.octets().into(),
         IpAddr::V6(ip) => ip.octets().into(),
     }
 }
