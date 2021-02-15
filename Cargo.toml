@@ -32,7 +32,7 @@ ya-identity = "0.2"
 ya-market = "0.3"
 ya-metrics = "0.1"
 ya-net = { version = "0.2", features = ["service"] }
-ya-payment = "0.3"
+ya-payment = "0.2"
 ya-persistence = "0.2"
 ya-sb-proto = "0.1"
 ya-sb-router = "0.3"
