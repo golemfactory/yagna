@@ -309,11 +309,12 @@ impl RequestorBroker {
 
             validate_transition(&agreement, AgreementState::Cancelled)?;
 
+            let timestamp = Utc::now().naive_utc();
             self.api
-                .cancel_agreement(&agreement, reason.clone())
+                .cancel_agreement(&agreement, reason.clone(), timestamp.clone())
                 .await?;
 
-            dao.cancel(&agreement.id, reason.clone())
+            dao.cancel(&agreement.id, reason.clone(), &timestamp)
                 .await
                 .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?
         };
@@ -655,7 +656,7 @@ async fn agreement_rejected(
             RemoteAgreementError::InvalidState(agreement.id.clone(), agreement.state.clone())
         })?;
 
-        dao.reject(&agreement.id, msg.reason.clone())
+        dao.reject(&agreement.id, msg.reason.clone(), &msg.rejection_ts)
             .await
             .log_err()
             .map_err(|e| match e {

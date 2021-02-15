@@ -84,8 +84,9 @@ pub(crate) fn create_event(
     agreement: &Agreement,
     reason: Option<Reason>,
     terminator: Owner,
+    timestamp: NaiveDateTime,
 ) -> Result<(), AgreementDaoError> {
-    let event = NewAgreementEvent::new(agreement, reason, terminator)
+    let event = NewAgreementEvent::new(agreement, reason, terminator, timestamp)
         .map_err(|e| AgreementDaoError::EventError(e.to_string()))?;
 
     diesel::insert_into(market_agreement_event)

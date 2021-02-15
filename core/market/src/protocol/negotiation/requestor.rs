@@ -23,6 +23,7 @@ use crate::protocol::negotiation::error::{
     CommitAgreementError, ProposeAgreementError, RejectProposalError,
 };
 use crate::protocol::negotiation::messages::AgreementCommitted;
+use chrono::NaiveDateTime;
 
 /// Responsible for communication with markets on other nodes
 /// during negotiation phase.
@@ -184,10 +185,12 @@ impl NegotiationApi {
         &self,
         agreement: &Agreement,
         reason: Option<Reason>,
+        timestamp: NaiveDateTime,
     ) -> Result<(), AgreementProtocolError> {
         let msg = AgreementCancelled {
             agreement_id: agreement.id.clone(),
             reason,
+            cancellation_ts: timestamp,
         };
         net::from(agreement.requestor_id)
             .to(agreement.provider_id)

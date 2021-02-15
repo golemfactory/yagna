@@ -151,6 +151,7 @@ impl RpcMessage for AgreementApproved {
 pub struct AgreementRejected {
     pub agreement_id: AgreementId,
     pub reason: Option<Reason>,
+    pub rejection_ts: NaiveDateTime,
 }
 
 impl RpcMessage for AgreementRejected {
@@ -164,6 +165,7 @@ impl RpcMessage for AgreementRejected {
 pub struct AgreementCancelled {
     pub agreement_id: AgreementId,
     pub reason: Option<Reason>,
+    pub cancellation_ts: NaiveDateTime,
 }
 
 impl RpcMessage for AgreementCancelled {

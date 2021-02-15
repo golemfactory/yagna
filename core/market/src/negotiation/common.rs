@@ -358,17 +358,23 @@ impl CommonBroker {
 
             validate_transition(&agreement, AgreementState::Terminated)?;
 
+            let timestamp = Utc::now().naive_utc();
             protocol_common::propagate_terminate_agreement(
                 &agreement,
                 reason.clone(),
                 "NotSigned".to_string(),
-                Utc::now().naive_utc(),
+                timestamp.clone(),
             )
             .await?;
 
-            dao.terminate(&agreement.id, reason.clone(), agreement.id.owner())
-                .await
-                .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?;
+            dao.terminate(
+                &agreement.id,
+                reason.clone(),
+                agreement.id.owner(),
+                &timestamp,
+            )
+            .await
+            .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?;
         }
 
         self.notify_agreement(&agreement).await;
@@ -447,16 +453,23 @@ impl CommonBroker {
                 Err(RemoteAgreementError::NotFound(agreement_id.clone()))?
             }
 
-            dao.terminate(&agreement_id, msg.reason.clone(), caller_role)
-                .await
-                .map_err(|e| {
-                    log::warn!(
-                        "Couldn't terminate agreement. id: {}, e: {}",
-                        agreement_id,
-                        e
-                    );
-                    RemoteAgreementError::InternalError(agreement_id.clone())
-                })?;
+            // TODO: Validate signature.
+
+            dao.terminate(
+                &agreement_id,
+                msg.reason.clone(),
+                caller_role,
+                &msg.termination_ts,
+            )
+            .await
+            .map_err(|e| {
+                log::warn!(
+                    "Couldn't terminate agreement. id: {}, e: {}",
+                    agreement_id,
+                    e
+                );
+                RemoteAgreementError::InternalError(agreement_id.clone())
+            })?;
 
             agreement
         };

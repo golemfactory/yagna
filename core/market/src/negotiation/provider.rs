@@ -363,11 +363,12 @@ impl ProviderBroker {
 
             validate_transition(&agreement, AgreementState::Rejected)?;
 
+            let timestamp = Utc::now().naive_utc();
             self.api
-                .reject_agreement(&agreement, reason.clone())
+                .reject_agreement(&agreement, reason.clone(), timestamp.clone())
                 .await?;
 
-            dao.reject(&agreement.id, reason.clone())
+            dao.reject(&agreement.id, reason.clone(), &timestamp)
                 .await
                 .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?
         };
@@ -650,7 +651,7 @@ async fn agreement_cancelled(
             RemoteAgreementError::InvalidState(agreement.id.clone(), agreement.state.clone())
         })?;
 
-        dao.cancel(&agreement.id, msg.reason.clone())
+        dao.cancel(&agreement.id, msg.reason.clone(), &msg.cancellation_ts)
             .await
             .log_err()
             .map_err(|e| match e {
