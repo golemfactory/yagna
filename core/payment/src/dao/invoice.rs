@@ -234,6 +234,8 @@ impl<'c> InvoiceDao<'c> {
                 .select((dsl::agreement_id, dsl::amount, dsl::role))
                 .first(conn)?;
             let mut events = vec![InvoiceEventType::InvoiceAcceptedEvent];
+
+            // Zero-amount invoices should be settled immediately.
             let status = if amount.0 == BigDecimal::from(0) {
                 events.push(InvoiceEventType::InvoiceSettledEvent);
                 DocumentStatus::Settled

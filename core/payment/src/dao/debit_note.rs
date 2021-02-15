@@ -238,6 +238,8 @@ impl<'c> DebitNoteDao<'c> {
                 .select((dsl::activity_id, dsl::total_amount_due, dsl::role))
                 .first(conn)?;
             let mut events = vec![DebitNoteEventType::DebitNoteAcceptedEvent];
+
+            // Zero-amount debit notes should be settled immediately.
             let status = if amount.0 == BigDecimal::from(0) {
                 events.push(DebitNoteEventType::DebitNoteSettledEvent);
                 DocumentStatus::Settled
