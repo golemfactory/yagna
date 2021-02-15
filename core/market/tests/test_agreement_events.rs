@@ -433,3 +433,88 @@ async fn test_agreement_rejected_event() {
         .unwrap()
         .unwrap();
 }
+
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
+async fn test_agreement_cancelled_event() {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await
+        .add_market_instance(PROV_NAME)
+        .await;
+
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await
+        .unwrap()
+        .proposal_id;
+
+    let req_market = network.get_market(REQ_NAME);
+    let req_engine = &req_market.requestor_engine;
+    let req_id = network.get_default_id(REQ_NAME);
+    let prov_id = network.get_default_id(PROV_NAME);
+    let prov_market = network.get_market(PROV_NAME);
+
+    let agreement_id = req_engine
+        .create_agreement(
+            req_id.clone(),
+            &proposal_id,
+            Utc::now() + Duration::hours(1),
+        )
+        .await
+        .unwrap();
+
+    req_engine
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
+        .await
+        .unwrap();
+
+    let confirm_timestamp = Utc::now();
+    req_engine
+        .cancel_agreement(
+            &req_id,
+            &agreement_id.clone(),
+            Some(gen_reason("Changed my mind")),
+        )
+        .await
+        .unwrap();
+
+    // We expect, that both Provider and Requestor will get event.
+    let events = prov_market
+        .query_agreement_events(&None, 0.1, Some(2), confirm_timestamp, &prov_id)
+        .await
+        .unwrap();
+
+    // Expect single event
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].agreement_id, agreement_id.into_client());
+
+    match &events[0].event_type {
+        AgreementEventType::AgreementCancelledEvent { reason } => {
+            assert_eq!(reason.as_ref().unwrap().message, "Changed my mind");
+        }
+        e => panic!(
+            "Expected AgreementEventType::AgreementCancelledEvent, got: {:?}",
+            e
+        ),
+    };
+
+    let events = req_market
+        .query_agreement_events(&None, 0.5, Some(2), confirm_timestamp, &req_id)
+        .await
+        .unwrap();
+
+    // Expect single event
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].agreement_id, agreement_id.into_client());
+
+    match &events[0].event_type {
+        AgreementEventType::AgreementCancelledEvent { reason } => {
+            assert_eq!(reason.as_ref().unwrap().message, "Changed my mind");
+        }
+        e => panic!(
+            "Expected AgreementEventType::AgreementCancelledEvent, got: {:?}",
+            e
+        ),
+    };
+}
