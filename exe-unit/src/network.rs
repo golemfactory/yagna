@@ -17,7 +17,7 @@ use ya_core_model::activity::VpnControl;
 use ya_runtime_api::server::NetworkEndpoint;
 use ya_service_bus::{actix_rpc, typed, typed::Endpoint, RpcEnvelope};
 
-const DEFAULT_CHUNK_SIZE: usize = 1500;
+const DEFAULT_CHUNK_SIZE: usize = 65535;
 
 pub fn gateway(ip: &str, mask: &str) -> Result<IpAddr> {
     let net = map_ip_net(ip, mask)?;
@@ -32,7 +32,7 @@ pub(crate) struct Vpn {
     networks: HashMap<String, IpNet>,
     nodes: BTreeMap<Box<[u8]>, Endpoint>, // IP_BYTES_BE -> NODE_GSB_ADDR (for routing)
     nodes_rev: BTreeMap<String, Vec<Box<[u8]>>>, // NODE_ID -> Vec<IP_BYTES_BE> (for removal)
-    packet_buf: Vec<u8>,
+    packet_buf: PacketBuf,
 }
 
 impl Vpn {
@@ -106,32 +106,46 @@ impl Vpn {
         });
     }
 
-    fn unicast(&mut self, endpoint: Endpoint, len: usize, ctx: &mut Context<Self>) {
-        let pkt = self.packet_buf.drain(..len).as_slice().to_vec();
-        ctx.spawn(
-            async move {
-                if let Err(err) = endpoint.call(activity::VpnPacket(pkt)).await {
-                    log::debug!("Egress VPN call to {} error: {}", endpoint.addr(), err);
+    fn handle_packet<'a>(
+        &'a mut self,
+        ip_off: usize,
+        ip_len: usize,
+        pkt: Vec<u8>,
+        ctx: &'a mut Context<Self>,
+    ) {
+        let ip = &pkt[ip_off..ip_off + ip_len];
+        log::trace!("Egress packet to {:?}", ip);
+
+        if ip_len == 4 && &ip[0..4] == &[255, 255, 255, 255] {
+            let fut_vec = self
+                .nodes
+                .values()
+                .map(|e| e.call(activity::VpnPacket(pkt.clone())))
+                .collect::<Vec<_>>();
+            if !fut_vec.is_empty() {
+                ctx.spawn(
+                    async move {
+                        let _ = futures::future::join_all(fut_vec).await;
+                    }
+                    .into_actor(self),
+                );
+            }
+        } else {
+            match self.nodes.get(ip) {
+                Some(endpoint) => {
+                    let fut = endpoint.call(activity::VpnPacket(pkt));
+                    ctx.spawn(
+                        async move {
+                            if let Err(err) = fut.await {
+                                log::debug!("Egress VPN call error: {}", err);
+                            }
+                        }
+                        .into_actor(self),
+                    );
                 }
+                None => log::trace!("No endpoint for {:?}", ip),
             }
-            .into_actor(self),
-        );
-    }
-
-    fn broadcast(&mut self, len: usize, ctx: &mut Context<Self>) {
-        let pkt = self.packet_buf.drain(..len).as_slice().to_vec();
-        let fut_vec = self
-            .nodes
-            .values()
-            .map(|e| e.call(activity::VpnPacket(pkt.clone())))
-            .collect::<Vec<_>>();
-
-        ctx.spawn(
-            async move {
-                let _ = futures::future::join_all(fut_vec).await;
-            }
-            .into_actor(self),
-        );
+        }
     }
 }
 
@@ -184,34 +198,50 @@ impl Actor for Vpn {
 /// Egress traffic handler (VM -> VPN)
 impl StreamHandler<Result<Vec<u8>>> for Vpn {
     fn handle(&mut self, result: Result<Vec<u8>>, ctx: &mut Context<Self>) {
-        let prev_size = self.packet_buf.len();
-        match result {
-            Ok(mut data) => self.packet_buf.append(&mut data),
+        let mut data = match result {
+            Ok(data) => data,
             Err(err) => return log::error!("Egress VPN error: {}", err),
+        };
+        let mut to_append = None;
+
+        if let Ok(PeekResult::Packet {
+            ip_off,
+            ip_len,
+            len,
+        }) = peek_ip_pkt(&data[..])
+        {
+            self.packet_buf.clear();
+            if data.len() > len {
+                to_append.replace(data.split_off(len));
+            }
+            self.handle_packet(ip_off, ip_len, data, ctx);
+        } else {
+            to_append.replace(data);
         }
 
-        let peeked = match peek_ip_pkt(&self.packet_buf) {
-            Ok(peek) => peek,
-            Err(_) => {
-                let _ = self.packet_buf.split_off(prev_size);
+        if let Some(to_append) = to_append {
+            let len = to_append.len();
+
+            if self.packet_buf.capacity() < len {
+                log::trace!("Received packet is too large: {}", len);
                 return;
-            }
-        };
-
-        if let PeekResult::Packet { ip, len } = peeked {
-            log::trace!("Egress packet to {:?}", ip);
-
-            if ip.len() == 4 && &ip[0..4] == &[255, 255, 255, 255] {
-                self.broadcast(len, ctx);
+            } else if self.packet_buf.remaining() < len {
+                log::trace!("Invalid packet read sequence from the network endpoint");
+                self.packet_buf.clear();
+                return;
             } else {
-                match self.nodes.get(ip).cloned() {
-                    Some(endpoint) => self.unicast(endpoint, len, ctx),
-                    None => {
-                        log::trace!("No endpoint for {:?}", ip);
-                        return;
-                    }
-                }
+                self.packet_buf.append(&to_append);
             }
+        }
+
+        while let Ok(PeekResult::Packet {
+            ip_off,
+            ip_len,
+            len,
+        }) = peek_ip_pkt(&self.packet_buf.inner)
+        {
+            let data = self.packet_buf.take(len);
+            self.handle_packet(ip_off, ip_len, data, ctx);
         }
     }
 }
@@ -342,10 +372,10 @@ where
 {
     addrs.into_iter().map(|(addr, val)| {
         let ip = IpAddr::from_str(addr.as_ref()).map_err(VpnError::from)?;
+
         if ip.is_loopback() || ip.is_unspecified() || ip.is_multicast() {
             return Err(VpnError::IpAddrNotAllowed(ip).into());
         }
-
         // further checks require feature stabilization
         if let IpAddr::V4(ip4) = &ip {
             if ip4.is_broadcast() {
@@ -357,10 +387,61 @@ where
     })
 }
 
-enum PeekResult<'a> {
+struct PacketBuf {
+    inner: [u8; 2 * DEFAULT_CHUNK_SIZE],
+    size: usize,
+}
+
+impl Default for PacketBuf {
+    fn default() -> Self {
+        Self {
+            inner: [0u8; 2 * DEFAULT_CHUNK_SIZE],
+            size: 0,
+        }
+    }
+}
+
+impl PacketBuf {
+    #[inline(always)]
+    fn append(&mut self, data: &[u8]) {
+        let len = data.len();
+        let inner = &mut self.inner[self.size..self.size + len];
+        inner.copy_from_slice(data);
+        self.size += len;
+    }
+
+    #[inline(always)]
+    fn take(&mut self, len: usize) -> Vec<u8> {
+        let res = self.inner[..len].into();
+        self.inner.rotate_left(len.min(self.size));
+        self.size -= len;
+        res
+    }
+
+    #[inline(always)]
+    fn clear(&mut self) {
+        self.size = 0;
+    }
+
+    #[inline(always)]
+    fn remaining(&self) -> usize {
+        self.capacity() - self.size
+    }
+
+    #[inline(always)]
+    fn capacity(&self) -> usize {
+        4 * DEFAULT_CHUNK_SIZE
+    }
+}
+
+enum PeekResult {
     IncompleteHeader,
     IncompletePayload,
-    Packet { ip: &'a [u8], len: usize },
+    Packet {
+        ip_off: usize,
+        ip_len: usize,
+        len: usize,
+    },
 }
 
 fn peek_ip_pkt(data: &[u8]) -> StdResult<PeekResult, VpnError> {
@@ -387,7 +468,8 @@ fn peek_ip4_pkt(data: &[u8]) -> StdResult<PeekResult, VpnError> {
     }
 
     Ok(PeekResult::Packet {
-        ip: &data[16..20],
+        ip_off: 16,
+        ip_len: 4,
         len: total_len,
     })
 }
@@ -406,7 +488,8 @@ fn peek_ip6_pkt(data: &[u8]) -> StdResult<PeekResult, VpnError> {
     }
 
     Ok(PeekResult::Packet {
-        ip: &data[24..40],
+        ip_off: 24,
+        ip_len: 16,
         len: total_len,
     })
 }
