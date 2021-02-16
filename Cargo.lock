@@ -7786,7 +7786,7 @@ dependencies = [
 [[package]]
 name = "ya-sb-proto"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=6b494e17d7a662e0b710af8c5a2e99ab4007fdb9#6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=707e4f9a64c8ede5b371d10dd8d564dba64bfa4c#707e4f9a64c8ede5b371d10dd8d564dba64bfa4c"
 dependencies = [
  "bytes 0.5.6",
  "prost",
@@ -7800,7 +7800,7 @@ dependencies = [
 [[package]]
 name = "ya-sb-router"
 version = "0.3.1"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=6b494e17d7a662e0b710af8c5a2e99ab4007fdb9#6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=707e4f9a64c8ede5b371d10dd8d564dba64bfa4c#707e4f9a64c8ede5b371d10dd8d564dba64bfa4c"
 dependencies = [
  "anyhow",
  "bytes 0.4.12",
@@ -7821,7 +7821,7 @@ dependencies = [
 [[package]]
 name = "ya-sb-util"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=6b494e17d7a662e0b710af8c5a2e99ab4007fdb9#6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=707e4f9a64c8ede5b371d10dd8d564dba64bfa4c#707e4f9a64c8ede5b371d10dd8d564dba64bfa4c"
 dependencies = [
  "futures 0.3.12",
  "pin-project 0.4.27",
@@ -7909,7 +7909,7 @@ dependencies = [
 [[package]]
 name = "ya-service-bus"
 version = "0.3.1"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=6b494e17d7a662e0b710af8c5a2e99ab4007fdb9#6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=707e4f9a64c8ede5b371d10dd8d564dba64bfa4c#707e4f9a64c8ede5b371d10dd8d564dba64bfa4c"
 dependencies = [
  "actix 0.9.0",
  "flexbuffers",
