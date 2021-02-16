@@ -55,7 +55,9 @@ where
             param.id = id;
             let _ = inner.response_callbacks.insert(id, tx);
             log::debug!("sending request: {:?}", param);
-            SinkExt::send(&mut inner.output, param).await.unwrap();
+            if let Err(e) = SinkExt::send(&mut inner.output, param).await {
+                log::error!("Runtime client write error: {:?}", e);
+            }
         }
         log::debug!("waiting for response");
         let response = rx.await.unwrap();
