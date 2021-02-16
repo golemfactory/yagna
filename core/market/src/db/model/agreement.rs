@@ -38,6 +38,10 @@ pub enum AgreementState {
     Proposal,
     /// Confirmed by a Requestor and sent to Provider for approval
     Pending,
+    /// Additional internal state mapped to `Pending` in client structures.
+    /// This state will appear after Provider will call `approve_agreement`,
+    /// but before Requestor will send back `AgreementCommitted`.
+    Approving,
     /// Cancelled by a Requestor
     Cancelled,
     /// Rejected by a Provider
@@ -180,6 +184,7 @@ impl From<AgreementState> for ClientAgreementState {
         match agreement_state {
             AgreementState::Proposal => ClientAgreementState::Proposal,
             AgreementState::Pending => ClientAgreementState::Pending,
+            AgreementState::Approving => ClientAgreementState::Pending,
             AgreementState::Cancelled => ClientAgreementState::Cancelled,
             AgreementState::Rejected => ClientAgreementState::Rejected,
             AgreementState::Approved => ClientAgreementState::Approved,
@@ -199,8 +204,15 @@ pub fn check_transition(from: AgreementState, to: AgreementState) -> Result<(), 
             _ => (),
         },
         AgreementState::Pending => match to {
+            AgreementState::Approving => return Ok(()),
             AgreementState::Cancelled => return Ok(()),
             AgreementState::Rejected => return Ok(()),
+            AgreementState::Expired => return Ok(()),
+            _ => (),
+        },
+        AgreementState::Approving => match to {
+            // Reverse transition from `Approving` to `Pending` is forbidden on purpose. It is handled solely in `revert_approving()`
+            AgreementState::Cancelled => return Ok(()),
             AgreementState::Approved => return Ok(()),
             AgreementState::Expired => return Ok(()),
             _ => (),

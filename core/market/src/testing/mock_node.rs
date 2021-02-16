@@ -243,6 +243,7 @@ impl MarketsNetwork {
         prov_agreement_received: impl CallbackHandler<AgreementReceived>,
         prov_agreement_cancelled: impl CallbackHandler<AgreementCancelled>,
         prov_agreement_terminated: impl CallbackHandler<AgreementTerminated>,
+        prov_agreement_committed: impl CallbackHandler<AgreementCommitted>,
     ) -> Self {
         self.add_negotiation_api(
             name,
@@ -252,6 +253,7 @@ impl MarketsNetwork {
             prov_agreement_received,
             prov_agreement_cancelled,
             prov_agreement_terminated,
+            prov_agreement_committed,
             default::empty_on_proposal_received,
             default::empty_on_proposal_rejected,
             default::empty_on_agreement_approved,
@@ -278,6 +280,7 @@ impl MarketsNetwork {
             default::empty_on_agreement_received,
             default::empty_on_agreement_cancelled,
             default::empty_on_agreement_terminated,
+            default::empty_on_agreement_committed,
             req_proposal_received,
             req_proposal_rejected,
             req_agreement_approved,
@@ -296,6 +299,7 @@ impl MarketsNetwork {
         prov_agreement_received: impl CallbackHandler<AgreementReceived>,
         prov_agreement_cancelled: impl CallbackHandler<AgreementCancelled>,
         prov_agreement_terminated: impl CallbackHandler<AgreementTerminated>,
+        prov_agreement_committed: impl CallbackHandler<AgreementCommitted>,
         req_proposal_received: impl CallbackHandler<ProposalReceived>,
         req_proposal_rejected: impl CallbackHandler<ProposalRejected>,
         req_agreement_approved: impl CallbackHandler<AgreementApproved>,
@@ -309,6 +313,7 @@ impl MarketsNetwork {
             prov_agreement_received,
             prov_agreement_cancelled,
             prov_agreement_terminated,
+            prov_agreement_committed,
         );
 
         let requestor = requestor::NegotiationApi::new(
@@ -588,8 +593,8 @@ impl MarketServiceExt for MarketService {
 pub mod default {
     use super::*;
     use crate::protocol::negotiation::error::{
-        ApproveAgreementError, CounterProposalError, GsbAgreementError, ProposeAgreementError,
-        RejectProposalError, TerminateAgreementError,
+        ApproveAgreementError, CommitAgreementError, CounterProposalError, GsbAgreementError,
+        ProposeAgreementError, RejectProposalError, TerminateAgreementError,
     };
 
     pub async fn empty_on_offers_retrieved(
@@ -666,6 +671,13 @@ pub mod default {
         _caller: String,
         _msg: AgreementCancelled,
     ) -> Result<(), GsbAgreementError> {
+        Ok(())
+    }
+
+    pub async fn empty_on_agreement_committed(
+        _caller: String,
+        _msg: AgreementCommitted,
+    ) -> Result<(), CommitAgreementError> {
         Ok(())
     }
 

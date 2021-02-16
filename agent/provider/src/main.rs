@@ -17,8 +17,17 @@ async fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
 
     let cli_args = StartupConfig::from_args();
+    match &cli_args.commands {
+        Commands::Run(_) => (), // logging is handled by ProviderAgent
+        _ => {
+            ya_file_logging::start_logger("info", None, &vec![])?;
+            ()
+        }
+    }
+
     let mut config = cli_args.config;
     let data_dir = config.data_dir.get_or_create()?;
+
     config.globals_file = data_dir.join(config.globals_file);
     config.presets_file = data_dir.join(config.presets_file);
     config.hardware_file = data_dir.join(config.hardware_file);

@@ -1,6 +1,7 @@
 use futures::future::TryFutureExt;
 use std::sync::Arc;
 
+use ya_client::model::market::Reason;
 use ya_client::model::NodeId;
 use ya_core_model::market::BUS_ID;
 use ya_net::{self as net, RemoteEndpoint};
@@ -18,8 +19,10 @@ use super::messages::{
     AgreementRejected, AgreementTerminated, InitialProposalReceived, ProposalContent,
     ProposalReceived, ProposalRejected,
 };
-use crate::protocol::negotiation::error::{ProposeAgreementError, RejectProposalError};
-use ya_client::model::market::Reason;
+use crate::protocol::negotiation::error::{
+    CommitAgreementError, ProposeAgreementError, RejectProposalError,
+};
+use crate::protocol::negotiation::messages::AgreementCommitted;
 
 /// Responsible for communication with markets on other nodes
 /// during negotiation phase.
@@ -36,6 +39,9 @@ struct NegotiationImpl {
     agreement_terminated: HandlerSlot<AgreementTerminated>,
 }
 
+// TODO: Most of these functions don't need to be members of NegotiationApi.
+//  We should make them plain functions in `requestor` module, since it doesn't
+//  seem, that they will ever need self.
 impl NegotiationApi {
     pub fn new(
         proposal_received: impl CallbackHandler<ProposalReceived>,
@@ -132,18 +138,42 @@ impl NegotiationApi {
     ) -> Result<(), ProposeAgreementError> {
         let requestor_id = agreement.requestor_id.clone();
         let provider_id = agreement.provider_id.clone();
-        let agreement_id = agreement.id.clone();
+        let id = agreement.id.clone();
         let msg = AgreementReceived {
             agreement_id: agreement.id.clone(),
             valid_to: agreement.valid_to.clone(),
             creation_ts: agreement.creation_ts.clone(),
             proposal_id: agreement.offer_proposal_id.clone(),
+            signature: agreement
+                .proposed_signature
+                .clone()
+                .ok_or(ProposeAgreementError::NotSigned(id.clone()))?,
         };
         net::from(requestor_id)
             .to(provider_id)
             .service(&provider::agreement_addr(BUS_ID))
             .send(msg)
-            .map_err(|e| GsbAgreementError(e.to_string(), agreement_id))
+            .map_err(|e| GsbAgreementError(e.to_string(), id))
+            .await??;
+        Ok(())
+    }
+
+    pub async fn commit_agreement(agreement: &Agreement) -> Result<(), CommitAgreementError> {
+        let requestor_id = agreement.requestor_id.clone();
+        let provider_id = agreement.provider_id.clone();
+        let id = agreement.id.clone();
+        let msg = AgreementCommitted {
+            agreement_id: agreement.id.clone(),
+            signature: agreement
+                .committed_signature
+                .clone()
+                .ok_or(CommitAgreementError::NotSigned(id.clone()))?,
+        };
+        net::from(requestor_id)
+            .to(provider_id)
+            .service(&provider::agreement_addr(BUS_ID))
+            .send(msg)
+            .map_err(|e| GsbAgreementError(e.to_string(), id))
             .await??;
         Ok(())
     }
@@ -159,6 +189,7 @@ impl NegotiationApi {
     ) -> Result<(), GsbAgreementError> {
         let msg = AgreementCancelled {
             agreement_id: agreement_id.clone(),
+            reason: None,
         };
         net::from(id)
             .to(owner)
