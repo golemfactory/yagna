@@ -1,6 +1,6 @@
 use zksync::zksync_types::Address;
 use zksync::Network;
-use zksync::Provider;
+use zksync::{provider::Provider, RpcProvider};
 
 use std::str::FromStr;
 
@@ -18,7 +18,7 @@ async fn main() {
     info!("Public key. {}", pub_key);
     let pub_address = Address::from_str(pub_key).unwrap();
     info!("Public address. {}", pub_address);
-    let provider = Provider::new(Network::Rinkeby);
+    let provider = RpcProvider::new(Network::Rinkeby);
 
     let acc_info = provider.account_info(pub_address).await.unwrap();
     debug!("{:?}", acc_info);
