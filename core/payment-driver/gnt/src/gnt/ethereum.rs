@@ -13,7 +13,7 @@ fn geth_address(network: Network) -> Cow<'static, str> {
     match network {
         Network::Rinkeby => std::env::var("ERC20_RINKEBY_GETH_ADDR")
             .map(Cow::Owned)
-            .unwrap_or(Cow::Borrowed("http://1.geth.testnet.golem.network:55555")),
+            .unwrap_or(Cow::Borrowed("http://geth.testnet.golem.network:55555")),
         Network::Mainnet => std::env::var("ERC20_MAINNET_GETH_ADDR")
             .map(Cow::Owned)
             .unwrap_or(Cow::Borrowed("https://geth.golem.network:55555")),

@@ -14,7 +14,7 @@ use super::agreement::{compute_cost, ActivityPayment, AgreementPayment, CostInfo
 use super::model::PaymentModel;
 use super::payment_checker::{DeadlineChecker, DeadlineElapsed, StopTracking, TrackDeadline};
 use crate::execution::{ActivityCreated, ActivityDestroyed};
-use crate::market::provider_market::AgreementApproved;
+use crate::market::provider_market::NewAgreement;
 use crate::market::termination_reason::BreakReason;
 use crate::tasks::{AgreementBroken, AgreementClosed, BreakAgreement};
 
@@ -165,7 +165,7 @@ impl Payments {
 
     pub fn on_signed_agreement(
         &mut self,
-        msg: AgreementApproved,
+        msg: NewAgreement,
         _ctx: &mut Context<Self>,
     ) -> Result<()> {
         log::info!(
@@ -383,7 +383,7 @@ async fn compute_cost_and_send_debit_note(
     Ok((debit_note, cost_info))
 }
 
-forward_actix_handler!(Payments, AgreementApproved, on_signed_agreement);
+forward_actix_handler!(Payments, NewAgreement, on_signed_agreement);
 
 impl Handler<ActivityCreated> for Payments {
     type Result = anyhow::Result<()>;
