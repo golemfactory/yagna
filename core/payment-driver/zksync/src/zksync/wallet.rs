@@ -293,7 +293,6 @@ async fn unlock_wallet<S: EthereumSigner + Clone, P: Provider + Clone>(
             .send()
             .await
             .map_err(|e| GenericError::new(format!("Failed to send change_pubkey request: '{}'. HINT: Did you run `yagna payment fund` and follow the instructions?", e)))?;
-        // DO WE NEED DEBUG? log::debug!("Unlock tx: {:?}", unlock);
         log::info!("Unlock send. tx_hash= {}", unlock.hash().to_string());
 
         let tx_info = unlock.wait_for_commit().await.map_err(GenericError::new)?;
