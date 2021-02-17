@@ -259,14 +259,14 @@ mod tests {
     fn test_round() {
         let x = BigDecimal::from_str("12345.123456789").unwrap();
         let y = BigDecimal::from_str("12345.12346").unwrap();
-        assert_eq!(round(x, 5), y);
+        assert_eq!(x.round(5), y);
 
         let x = BigDecimal::from_str("12345.123456789").unwrap();
         let y = BigDecimal::from_str("12345").unwrap();
-        assert_eq!(round(x, 0), y);
+        assert_eq!(x.round(0), y);
 
         let x = BigDecimal::from_str("12345").unwrap();
         let y = BigDecimal::from_str("12345").unwrap();
-        assert_eq!(round(x, 15), y);
+        assert_eq!(x.round(15), y);
     }
 }
