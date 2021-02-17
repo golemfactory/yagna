@@ -65,21 +65,21 @@ async fn main() -> anyhow::Result<()> {
     };
 
     log::info!(
-        "Creating allocation for {} NGNT...",
+        "Creating allocation for {} tGLM...",
         &new_allocation.total_amount
     );
     requestor.create_allocation(&new_allocation).await?;
     log::info!("Allocation created.");
 
     log::info!(
-        "Creating another allocation for {} NGNT...",
+        "Creating another allocation for {} tGLM...",
         &new_allocation.total_amount
     );
     let allocation = requestor.create_allocation(&new_allocation).await?;
     log::info!("Allocation created.");
 
     log::info!(
-        "Attempting to create another allocation for {} NGNT...",
+        "Attempting to create another allocation for {} tGLM...",
         &new_allocation.total_amount
     );
     let result = requestor.create_allocation(&new_allocation).await;
@@ -93,7 +93,7 @@ async fn main() -> anyhow::Result<()> {
     log::info!("Allocation released.");
 
     log::info!(
-        "Creating another allocation for {} NGNT...",
+        "Creating another allocation for {} tGLM...",
         &new_allocation.total_amount
     );
     requestor.create_allocation(&new_allocation).await?;

@@ -7,11 +7,11 @@ The payments are made by drivers loaded in the service.
 ### Drivers
 
 Currently these drivers are available to use:
-- NGNT
+- Erc20
 - Dummy
-- ZK-NGNT
+- ZkSync
 
-By default the NGNT driver is selected, extra drivers need to be specifically loaded with a feature flag.
+By default the Erc20 and ZkSync drivers are selected, extra drivers need to be specifically loaded with a feature flag.
 
 ## DO NOT USE DUMMY DRIVER FOR BUILDS THAT WILL BE DISTRIBUTED!!!
 
@@ -25,7 +25,7 @@ You can enable multiple drivers at the same time, use this table for the require
 
 ### Examples:
 
-Build with zksync + ngnt driver:
+Build with zksync + erc20 driver:
 ```
 cargo build --release
 ```

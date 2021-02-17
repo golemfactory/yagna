@@ -11,7 +11,7 @@ default = []
 actix = { version = "0.9", default-features = false }
 anyhow = "1.0"
 async-trait = "0.1"
-bigdecimal = { version = "0.1.0" }
+bigdecimal = { version = "0.2" }
 chrono = { version = "0.4", features = ["serde"] }
 diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
 diesel_migrations = "1.4"
@@ -19,7 +19,7 @@ ethereum-types = "0.6.0"
 futures = "0.3"
 hex = "0.4"
 log = "0.4.8"
-num = { version = "0.2", features = ["serde"] }
+num-bigint = { version = "0.3", features = ["serde"] }
 r2d2 = "0.8"
 thiserror = "1.0"
 tokio = { version = "0.2", features = ["macros"] }

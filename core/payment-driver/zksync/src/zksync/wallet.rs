@@ -4,13 +4,17 @@
 
 // External crates
 use bigdecimal::{BigDecimal, Zero};
-use num::BigUint;
+use num_bigint::BigUint;
 use std::env;
 use std::str::FromStr;
 use zksync::operations::SyncTransactionHandle;
 use zksync::types::BlockStatus;
-use zksync::zksync_types::{tx::TxHash, Address, TxFeeTypes};
-use zksync::{provider::get_rpc_addr, Network as ZkNetwork, Provider, Wallet, WalletCredentials};
+use zksync::zksync_types::{tx::TxHash, Address, Nonce, TxFeeTypes};
+use zksync::{
+    provider::get_rpc_addr,
+    provider::{Provider, RpcProvider},
+    Network as ZkNetwork, Wallet, WalletCredentials,
+};
 use zksync_eth_signer::EthereumSigner;
 
 // Workspace uses
@@ -124,7 +128,7 @@ pub async fn get_nonce(address: &str, network: Network) -> u32 {
             return 0;
         }
     };
-    account_info.committed.nonce
+    *account_info.committed.nonce
 }
 
 pub async fn make_transfer(
@@ -147,30 +151,42 @@ pub async fn make_transfer(
         .map_err(GenericError::new)?;
     log::debug!("balance before transfer={}", balance);
 
-    let transfer = wallet
+    let transfer_builder = wallet
         .start_transfer()
-        .nonce(nonce)
+        .nonce(Nonce(nonce))
         .str_to(&details.recipient[2..])
         .map_err(GenericError::new)?
         .token(token.as_ref())
         .map_err(GenericError::new)?
-        .amount(amount)
-        .send()
-        .await
-        .map_err(GenericError::new)?;
+        .amount(amount.clone());
+    log::debug!(
+        "transfer raw data. nonce={}, to={}, token={}, amount={}",
+        nonce,
+        &details.recipient,
+        token,
+        amount
+    );
+    let transfer = transfer_builder.send().await.map_err(GenericError::new)?;
 
     let tx_hash = hex::encode(transfer.hash());
     log::info!("Created zksync transaction with hash={}", tx_hash);
     Ok(tx_hash)
 }
 
-pub async fn check_tx(tx_hash: &str, network: Network) -> Option<bool> {
+pub async fn check_tx(tx_hash: &str, network: Network) -> Option<Result<(), String>> {
     let provider = get_provider(network);
     let tx_hash = format!("sync-tx:{}", tx_hash);
     let tx_hash = TxHash::from_str(&tx_hash).unwrap();
     let tx_info = provider.tx_info(tx_hash).await.unwrap();
     log::trace!("tx_info: {:?}", tx_info);
-    tx_info.success
+    match tx_info.success {
+        None => None,
+        Some(true) => Some(Ok(())),
+        Some(false) => match tx_info.fail_reason {
+            Some(err) => Some(Err(err)),
+            None => Some(Err("Unknown failure".to_string())),
+        },
+    }
 }
 
 #[derive(serde::Deserialize)]
@@ -221,10 +237,10 @@ pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails
     Ok(details)
 }
 
-fn get_provider(network: Network) -> Provider {
-    let provider: Provider = match get_rpc_addr_from_env(network) {
-        Some(rpc_addr) => Provider::from_addr(rpc_addr),
-        None => Provider::new(get_zk_network(network)),
+fn get_provider(network: Network) -> RpcProvider {
+    let provider: RpcProvider = match get_rpc_addr_from_env(network) {
+        Some(rpc_addr) => RpcProvider::from_addr(rpc_addr),
+        None => RpcProvider::new(get_zk_network(network)),
     };
     provider.clone()
 }
@@ -239,7 +255,7 @@ fn get_rpc_addr_from_env(network: Network) -> Option<String> {
 async fn get_wallet(
     address: &str,
     network: Network,
-) -> Result<Wallet<YagnaEthSigner>, GenericError> {
+) -> Result<Wallet<YagnaEthSigner, RpcProvider>, GenericError> {
     log::debug!("get_wallet {:?}", address);
     let addr = Address::from_str(&address[2..]).map_err(GenericError::new)?;
     let provider = get_provider(network);
@@ -257,8 +273,8 @@ fn get_zk_network(network: Network) -> ZkNetwork {
     ZkNetwork::from_str(&network.to_string()).unwrap() // _or(ZkNetwork::Rinkeby)
 }
 
-async fn unlock_wallet<S: EthereumSigner + Clone>(
-    wallet: Wallet<S>,
+async fn unlock_wallet<S: EthereumSigner + Clone, P: Provider + Clone>(
+    wallet: Wallet<S, P>,
     network: Network,
 ) -> Result<(), GenericError> {
     log::debug!("unlock_wallet");
@@ -277,7 +293,6 @@ async fn unlock_wallet<S: EthereumSigner + Clone>(
             .send()
             .await
             .map_err(|e| GenericError::new(format!("Failed to send change_pubkey request: '{}'. HINT: Did you run `yagna payment fund` and follow the instructions?", e)))?;
-        log::debug!("Unlock tx: {:?}", unlock);
         log::info!("Unlock send. tx_hash= {}", unlock.hash().to_string());
 
         let tx_info = unlock.wait_for_commit().await.map_err(GenericError::new)?;
@@ -291,11 +306,11 @@ async fn unlock_wallet<S: EthereumSigner + Clone>(
     Ok(())
 }
 
-pub async fn withdraw<S: EthereumSigner + Clone>(
-    wallet: Wallet<S>,
+pub async fn withdraw<S: EthereumSigner + Clone, P: Provider + Clone>(
+    wallet: Wallet<S, P>,
     amount: Option<BigDecimal>,
     recipient: Option<String>,
-) -> Result<SyncTransactionHandle, GenericError> {
+) -> Result<SyncTransactionHandle<P>, GenericError> {
     let balance = wallet
         .get_balance(BlockStatus::Committed, ZKSYNC_TOKEN_NAME)
         .await
@@ -333,16 +348,19 @@ pub async fn withdraw<S: EthereumSigner + Clone>(
         None => address,
     };
 
-    let withdraw_handle = wallet
+    let withdraw_builder = wallet
         .start_withdraw()
         .token(ZKSYNC_TOKEN_NAME)
         .map_err(GenericError::new)?
-        .amount(withdraw_amount)
-        .to(recipient_address)
-        .send()
-        .await
-        .map_err(GenericError::new)?;
+        .amount(withdraw_amount.clone())
+        .to(recipient_address);
+    log::debug!(
+        "Withdrawal raw data. token={}, amount={}, to={}",
+        ZKSYNC_TOKEN_NAME,
+        withdraw_amount,
+        recipient_address
+    );
+    let withdraw_handle = withdraw_builder.send().await.map_err(GenericError::new)?;
 
-    debug!("Withdraw handle: {:?}", withdraw_handle);
     Ok(withdraw_handle)
 }

@@ -45,6 +45,7 @@ ya-sgx = "0.1"
 ya-utils-path = "0.1"
 ya-utils-futures = "0.1"
 ya-utils-process = { version = "0.1", features = ["lock"] }
+ya-utils-networking = "0.1"
 ya-version = "0.1"
 
 gftp = { version = "^0.2", optional = true } # just to enable gftp build for cargo-deb
@@ -132,6 +133,7 @@ members = [
     "utils/agreement-utils",
     "utils/compile-time-utils",
     "utils/futures",
+    "utils/networking",
     "utils/path",
     "utils/process",
     "utils/std-utils",
@@ -172,11 +174,11 @@ ya-service-api-web = { path = "core/serv-api/web" }
 #ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"}
 
 ## CLIENT
-#ya-client = { git = "https://github.com/golemfactory/ya-client.git", branch = "release/v0.5"}
-#ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", branch = "release/v0.5"}
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", branch = "release/v0.6"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", branch = "release/v0.6"}
 
-#ya-client = { path = "../ya-client" }
-#ya-client-model = { path = "../ya-client/model" }
+# ya-client = { path = "../ya-client" }
+# ya-client-model = { path = "../ya-client/model" }
 
 ## OTHERS
 gftp = { path = "core/gftp" }
@@ -188,8 +190,9 @@ ya-exe-unit = { path = "exe-unit" }
 ya-file-logging = { path = "utils/file-logging" }
 ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
-ya-utils-futures = { path = "utils/futures"}
-ya-utils-path = { path = "utils/path"}
+ya-utils-futures = { path = "utils/futures" }
+ya-utils-networking = { path = "utils/networking" }
+ya-utils-path = { path = "utils/path" }
 ya-utils-process = { path = "utils/process"}
 ya-diesel-utils = { path = "utils/diesel-utils"}
 ya-metrics = { path = "core/metrics" }
