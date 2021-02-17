@@ -4,7 +4,6 @@
 
 // External uses
 use bigdecimal::BigDecimal;
-use lazy_static::lazy_static;
 use num_bigint::{BigInt, BigUint, ToBigInt};
 use zksync::utils::{closest_packable_token_amount, is_token_amount_packable};
 

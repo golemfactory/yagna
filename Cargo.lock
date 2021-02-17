@@ -6896,7 +6896,7 @@ checksum = "b5a972e5669d67ba988ce3dc826706fb0a8b01471c088cb0b6110b805cc36aed"
 [[package]]
 name = "vlog"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?rev=1cda8c7c1a9bfbec6491a1e4634b0fc33b206834#1cda8c7c1a9bfbec6491a1e4634b0fc33b206834"
+source = "git+https://github.com/golemfactory/zksync?rev=ae6559b966295213c5fd0d7bfa846c7c65289ebf#ae6559b966295213c5fd0d7bfa846c7c65289ebf"
 dependencies = [
  "tracing",
  "tracing-subscriber",
@@ -8220,7 +8220,7 @@ dependencies = [
 [[package]]
 name = "zksync"
 version = "0.2.2"
-source = "git+https://github.com/matter-labs/zksync?rev=1cda8c7c1a9bfbec6491a1e4634b0fc33b206834#1cda8c7c1a9bfbec6491a1e4634b0fc33b206834"
+source = "git+https://github.com/golemfactory/zksync?rev=ae6559b966295213c5fd0d7bfa846c7c65289ebf#ae6559b966295213c5fd0d7bfa846c7c65289ebf"
 dependencies = [
  "async-trait",
  "ethabi",
@@ -8244,7 +8244,7 @@ dependencies = [
 [[package]]
 name = "zksync_basic_types"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?rev=1cda8c7c1a9bfbec6491a1e4634b0fc33b206834#1cda8c7c1a9bfbec6491a1e4634b0fc33b206834"
+source = "git+https://github.com/golemfactory/zksync?rev=ae6559b966295213c5fd0d7bfa846c7c65289ebf#ae6559b966295213c5fd0d7bfa846c7c65289ebf"
 dependencies = [
  "serde",
  "web3",
@@ -8253,7 +8253,7 @@ dependencies = [
 [[package]]
 name = "zksync_config"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?rev=1cda8c7c1a9bfbec6491a1e4634b0fc33b206834#1cda8c7c1a9bfbec6491a1e4634b0fc33b206834"
+source = "git+https://github.com/golemfactory/zksync?rev=ae6559b966295213c5fd0d7bfa846c7c65289ebf#ae6559b966295213c5fd0d7bfa846c7c65289ebf"
 dependencies = [
  "envy",
  "num",
@@ -8269,7 +8269,7 @@ dependencies = [
 [[package]]
 name = "zksync_contracts"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?rev=1cda8c7c1a9bfbec6491a1e4634b0fc33b206834#1cda8c7c1a9bfbec6491a1e4634b0fc33b206834"
+source = "git+https://github.com/golemfactory/zksync?rev=ae6559b966295213c5fd0d7bfa846c7c65289ebf#ae6559b966295213c5fd0d7bfa846c7c65289ebf"
 dependencies = [
  "ethabi",
  "serde_json",
@@ -8278,7 +8278,7 @@ dependencies = [
 [[package]]
 name = "zksync_crypto"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?rev=1cda8c7c1a9bfbec6491a1e4634b0fc33b206834#1cda8c7c1a9bfbec6491a1e4634b0fc33b206834"
+source = "git+https://github.com/golemfactory/zksync?rev=ae6559b966295213c5fd0d7bfa846c7c65289ebf#ae6559b966295213c5fd0d7bfa846c7c65289ebf"
 dependencies = [
  "anyhow",
  "fnv",
@@ -8295,7 +8295,7 @@ dependencies = [
 [[package]]
 name = "zksync_eth_client"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?rev=1cda8c7c1a9bfbec6491a1e4634b0fc33b206834#1cda8c7c1a9bfbec6491a1e4634b0fc33b206834"
+source = "git+https://github.com/golemfactory/zksync?rev=ae6559b966295213c5fd0d7bfa846c7c65289ebf#ae6559b966295213c5fd0d7bfa846c7c65289ebf"
 dependencies = [
  "anyhow",
  "ethabi",
@@ -8315,7 +8315,7 @@ dependencies = [
 [[package]]
 name = "zksync_eth_signer"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?rev=1cda8c7c1a9bfbec6491a1e4634b0fc33b206834#1cda8c7c1a9bfbec6491a1e4634b0fc33b206834"
+source = "git+https://github.com/golemfactory/zksync?rev=ae6559b966295213c5fd0d7bfa846c7c65289ebf#ae6559b966295213c5fd0d7bfa846c7c65289ebf"
 dependencies = [
  "async-trait",
  "hex",
@@ -8333,7 +8333,7 @@ dependencies = [
 [[package]]
 name = "zksync_types"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?rev=1cda8c7c1a9bfbec6491a1e4634b0fc33b206834#1cda8c7c1a9bfbec6491a1e4634b0fc33b206834"
+source = "git+https://github.com/golemfactory/zksync?rev=ae6559b966295213c5fd0d7bfa846c7c65289ebf#ae6559b966295213c5fd0d7bfa846c7c65289ebf"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8352,7 +8352,7 @@ dependencies = [
 [[package]]
 name = "zksync_utils"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?rev=1cda8c7c1a9bfbec6491a1e4634b0fc33b206834#1cda8c7c1a9bfbec6491a1e4634b0fc33b206834"
+source = "git+https://github.com/golemfactory/zksync?rev=ae6559b966295213c5fd0d7bfa846c7c65289ebf#ae6559b966295213c5fd0d7bfa846c7c65289ebf"
 dependencies = [
  "anyhow",
  "bigdecimal 0.2.0",

@@ -6,10 +6,10 @@ use hex::ToHex;
 use std::str::FromStr;
 use structopt::StructOpt;
 use ya_payment_driver::db::models::Network as DbNetwork;
-use ya_zksync_driver::zksync::faucet;
-use ya_zksync_driver::zksync::wallet as driver_wallet;
+use ya_zksync_driver::zksync::client::ZkSyncClient;
+use ya_zksync_driver::ZKSYNC_CONFIG;
 use zksync::zksync_types::H256;
-use zksync::{Network, Provider, Wallet, WalletCredentials};
+use zksync::{Network, RpcProvider, Wallet, WalletCredentials};
 use zksync_eth_signer::{EthereumSigner, PrivateKeySigner};
 
 const TOKEN: &str = "GNT";
@@ -45,10 +45,12 @@ async fn main() -> anyhow::Result<()> {
     info!("Account address {}", addr_hex);
 
     info!("Funding an account");
-    faucet::request_ngnt(&addr_hex, DbNetwork::Rinkeby).await?;
+    let net_config = ZKSYNC_CONFIG.networks.get(&DbNetwork::Rinkeby).unwrap();
+    let client = ZkSyncClient::new(DbNetwork::Rinkeby, net_config.to_owned());
+    client.request_ngnt(&addr_hex).await?;
 
     info!("Creating wallet");
-    let provider = Provider::new(Network::Rinkeby);
+    let provider = RpcProvider::new(Network::Rinkeby);
     let cred = WalletCredentials::from_eth_signer(address, signer, Network::Rinkeby).await?;
     let wallet = Wallet::new(provider, cred).await?;
 
@@ -68,7 +70,7 @@ async fn main() -> anyhow::Result<()> {
         .parse()
         .expect("Cannot parse 'amount' parameter to BigDecimal");
 
-    let withdraw_handle = driver_wallet::withdraw(wallet, Some(amount), None).await?;
+    let withdraw_handle = client.withdraw(wallet, Some(amount), None).await?;
 
     let tx_info = withdraw_handle.wait_for_commit().await?;
     if tx_info.success.unwrap_or(false) {

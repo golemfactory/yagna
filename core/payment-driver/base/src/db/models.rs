@@ -93,7 +93,7 @@ pub struct PaymentEntity {
     pub network: Network,
 }
 
-#[derive(AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy)]
+#[derive(AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy, Eq, Hash)]
 #[sql_type = "Integer"]
 pub enum Network {
     Mainnet = 1,

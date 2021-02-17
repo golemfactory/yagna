@@ -69,8 +69,8 @@ impl PaymentConfirmation {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GetAccountBalance {
-    address: String,
-    platform: String,
+    pub address: String,
+    pub platform: String,
 }
 
 impl GetAccountBalance {
@@ -130,9 +130,9 @@ impl RpcMessage for VerifyPayment {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Fund {
-    address: String,
-    network: Option<String>,
-    token: Option<String>,
+    pub address: String,
+    pub network: Option<String>,
+    pub token: Option<String>,
 }
 
 impl Fund {
@@ -164,10 +164,10 @@ impl RpcMessage for Fund {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Init {
-    address: String,
-    network: Option<String>,
-    token: Option<String>,
-    mode: AccountMode,
+    pub address: String,
+    pub network: Option<String>,
+    pub token: Option<String>,
+    pub mode: AccountMode,
 }
 
 impl Init {
@@ -208,11 +208,11 @@ impl RpcMessage for Init {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SchedulePayment {
-    amount: BigDecimal,
-    sender: String,
-    recipient: String,
-    platform: String,
-    due_date: DateTime<Utc>,
+    pub amount: BigDecimal,
+    pub sender: String,
+    pub recipient: String,
+    pub platform: String,
+    pub due_date: DateTime<Utc>,
 }
 
 impl SchedulePayment {
@@ -363,11 +363,11 @@ impl RpcMessage for Enter {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Exit {
-    sender: String,
-    to: Option<String>,
-    amount: Option<BigDecimal>,
-    network: Option<String>,
-    token: Option<String>,
+    pub sender: String,
+    pub to: Option<String>,
+    pub amount: Option<BigDecimal>,
+    pub network: Option<String>,
+    pub token: Option<String>,
 }
 
 impl Exit {

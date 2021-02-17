@@ -31,6 +31,7 @@ enum Driver {
     Dummy,
     Erc20,
     Zksync,
+    Glmsync,
 }
 
 impl FromStr for Driver {
@@ -41,6 +42,7 @@ impl FromStr for Driver {
             "dummy" => Ok(Driver::Dummy),
             "erc20" => Ok(Driver::Erc20),
             "zksync" => Ok(Driver::Zksync),
+            "glmsync" => Ok(Driver::Glmsync),
             s => Err(anyhow::Error::msg(format!("Invalid driver: {}", s))),
         }
     }
@@ -52,6 +54,7 @@ impl std::fmt::Display for Driver {
             Driver::Dummy => write!(f, "dummy"),
             Driver::Erc20 => write!(f, "erc20"),
             Driver::Zksync => write!(f, "zksync"),
+            Driver::Glmsync => write!(f, "glmsync"),
         }
     }
 }
@@ -105,12 +108,13 @@ pub async fn start_gnt_driver(
 pub async fn start_zksync_driver(
     db: &DbExecutor,
     requestor_account: Box<EthAccount>,
+    config: zksync::DriverConfig,
 ) -> anyhow::Result<()> {
     let requestor = NodeId::from(requestor_account.address().as_ref());
     fake_list_identities(vec![requestor]);
     fake_subscribe_to_events();
 
-    zksync::PaymentDriverService::gsb(db).await?;
+    zksync::PaymentDriverService::gsb(db, config).await?;
     let requestor_sign_tx = get_sign_tx(requestor_account);
     fake_sign_tx(Box::new(requestor_sign_tx));
     Ok(())
@@ -216,18 +220,22 @@ async fn main() -> anyhow::Result<()> {
     let driver_name = match args.driver {
         Driver::Dummy => {
             start_dummy_driver().await?;
-            dummy::DRIVER_NAME
+            dummy::DRIVER_NAME.to_string()
         }
         Driver::Erc20 => {
             start_gnt_driver(&db, requestor_account).await?;
-            gnt::DRIVER_NAME
+            gnt::DRIVER_NAME.to_string()
         }
         Driver::Zksync => {
-            start_zksync_driver(&db, requestor_account).await?;
-            zksync::DRIVER_NAME
+            start_zksync_driver(&db, requestor_account, zksync::ZKSYNC_CONFIG.clone()).await?;
+            zksync::ZKSYNC_CONFIG.name.to_string()
+        }
+        Driver::Glmsync => {
+            start_zksync_driver(&db, requestor_account, zksync::GLMSYNC_CONFIG.clone()).await?;
+            zksync::GLMSYNC_CONFIG.name.to_string()
         }
     };
-    bus::service(driver_bus_id(driver_name))
+    bus::service(driver_bus_id(&driver_name))
         .call(Init::new(
             provider_addr.clone(),
             args.network.clone(),
@@ -236,14 +244,14 @@ async fn main() -> anyhow::Result<()> {
         ))
         .await??;
 
-    bus::service(driver_bus_id(driver_name))
+    bus::service(driver_bus_id(&driver_name))
         .call(Fund::new(
             requestor_addr.clone(),
             args.network.clone(),
             None,
         ))
         .await??;
-    bus::service(driver_bus_id(driver_name))
+    bus::service(driver_bus_id(&driver_name))
         .call(Init::new(
             requestor_addr.clone(),
             args.network.clone(),

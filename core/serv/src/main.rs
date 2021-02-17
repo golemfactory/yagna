@@ -232,10 +232,17 @@ async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<Vec<String>> {
     }
     #[cfg(feature = "zksync-driver")]
     {
-        use ya_zksync_driver::{PaymentDriverService, DRIVER_NAME};
+        use ya_zksync_driver::{PaymentDriverService, ZKSYNC_CONFIG};
         let db_executor = DbExecutor::from_data_dir(data_dir, "zksync-driver")?;
-        PaymentDriverService::gsb(&db_executor).await?;
-        drivers.push(DRIVER_NAME.to_owned());
+        PaymentDriverService::gsb(&db_executor, ZKSYNC_CONFIG.clone()).await?;
+        drivers.push(ZKSYNC_CONFIG.name.clone());
+    }
+    #[cfg(feature = "glmsync-driver")]
+    {
+        use ya_zksync_driver::{PaymentDriverService, GLMSYNC_CONFIG};
+        let db_executor = DbExecutor::from_data_dir(data_dir, "zksync-driver")?;
+        PaymentDriverService::gsb(&db_executor, GLMSYNC_CONFIG.clone()).await?;
+        drivers.push(GLMSYNC_CONFIG.name.clone());
     }
     Ok(drivers)
 }

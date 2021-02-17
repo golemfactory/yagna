@@ -15,12 +15,16 @@ use ya_payment_driver::{
 use ya_service_api_interfaces::Provider;
 
 // Local uses
+use crate::config::DriverConfig;
 use crate::driver::ZksyncDriver;
 
 pub struct ZksyncService;
 
 impl ZksyncService {
-    pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
+    pub async fn gsb<Context: Provider<Self, DbExecutor>>(
+        context: &Context,
+        config: DriverConfig,
+    ) -> anyhow::Result<()> {
         log::debug!("Connecting ZksyncService to gsb...");
 
         // TODO: Read and validate env
@@ -32,7 +36,7 @@ impl ZksyncService {
         log::debug!("Database initialised");
 
         // Load driver
-        let driver = ZksyncDriver::new(db.clone());
+        let driver = ZksyncDriver::new(db.clone(), config);
         driver.load_active_accounts().await;
         let driver_rc = Arc::new(driver);
         bus::bind_service(&db, driver_rc.clone()).await?;

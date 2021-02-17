@@ -3,7 +3,8 @@
 */
 
 // Extrernal crates
-use chrono::{DateTime, Utc};
+use bigdecimal::BigDecimal;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use uuid::Uuid;
 
 // Workspace uses
@@ -13,11 +14,9 @@ use ya_payment_driver::{
         Network, PaymentEntity, TransactionEntity, TransactionStatus, PAYMENT_STATUS_FAILED,
         PAYMENT_STATUS_NOT_YET, TX_CREATED,
     },
-    model::{GenericError, PaymentDetails, SchedulePayment},
+    model::{GenericError, PaymentDetails},
     utils,
 };
-
-use crate::network::platform_to_network_token;
 
 pub struct ZksyncDao {
     db: DbExecutor,
@@ -60,31 +59,33 @@ impl ZksyncDao {
 
     pub async fn insert_payment(
         &self,
-        order_id: &str,
-        msg: &SchedulePayment,
+        order_id: String,
+        sender: String,
+        recipient: String,
+        network: Network,
+        amount: BigDecimal,
+        payment_due_date: NaiveDateTime,
     ) -> Result<(), GenericError> {
-        let recipient = msg.recipient().to_owned();
-        let gnt_amount = utils::big_dec_to_u256(msg.amount());
+        let gnt_amount = utils::big_dec_to_u256(amount);
         let gas_amount = Default::default();
-        let (network, _token) = platform_to_network_token(msg.platform())?;
 
         let payment = PaymentEntity {
             amount: utils::u256_to_big_endian_hex(gnt_amount),
             gas: utils::u256_to_big_endian_hex(gas_amount),
-            order_id: order_id.to_string(),
-            payment_due_date: msg.due_date().naive_utc(),
-            sender: msg.sender().clone(),
-            recipient: recipient.clone(),
+            order_id,
+            payment_due_date,
+            sender,
+            recipient,
             status: PAYMENT_STATUS_NOT_YET,
             tx_id: None,
             network,
         };
+        let details_str = format!("{:?}", payment);
         if let Err(e) = self.payment().insert(payment).await {
             log::error!(
-                "Failed to store transaction for {:?} , msg={:?}, err={:?}",
-                order_id,
-                msg,
-                e
+                "Failed to store transaction: {:?}, details={}",
+                e,
+                details_str
             );
             return Err(GenericError::new(e));
         }

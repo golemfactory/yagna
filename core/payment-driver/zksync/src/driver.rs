@@ -5,9 +5,7 @@
 */
 // Extrnal crates
 use chrono::{Duration, TimeZone, Utc};
-use lazy_static::lazy_static;
 use std::collections::HashMap;
-use std::str::FromStr;
 use uuid::Uuid;
 
 // Workspace uses
@@ -24,14 +22,7 @@ use ya_payment_driver::{
 use ya_utils_futures::timeout::IntoTimeoutFuture;
 
 // Local uses
-use crate::{
-    dao::ZksyncDao,
-    network::{
-        get_network_token, network_token_to_platform, platform_to_network_token, SUPPORTED_NETWORKS,
-    },
-    zksync::wallet,
-    DEFAULT_NETWORK, DRIVER_NAME,
-};
+use crate::{config::DriverConfig, dao::ZksyncDao, zksync::client::ZkSyncClient};
 
 lazy_static! {
     static ref TX_SUMBIT_TIMEOUT: Duration = Duration::minutes(15);
@@ -40,14 +31,21 @@ lazy_static! {
 pub struct ZksyncDriver {
     active_accounts: AccountsRc,
     dao: ZksyncDao,
+    config: DriverConfig,
 }
 
 impl ZksyncDriver {
-    pub fn new(db: DbExecutor) -> Self {
+    pub fn new(db: DbExecutor, config: DriverConfig) -> Self {
         Self {
             active_accounts: Accounts::new_rc(),
             dao: ZksyncDao::new(db),
+            config,
         }
+    }
+
+    fn client(&self, network: DbNetwork) -> ZkSyncClient {
+        let config = self.config.networks.get(&network).unwrap();
+        ZkSyncClient::new(network, config.to_owned())
     }
 
     pub async fn load_active_accounts(&self) {
@@ -70,8 +68,8 @@ impl ZksyncDriver {
 
     async fn process_payments_for_account(&self, node_id: &str) {
         log::trace!("Processing payments for node_id={}", node_id);
-        for network_key in self.get_networks().keys() {
-            let network = DbNetwork::from_str(&network_key).unwrap();
+        for network in self.config.networks.keys() {
+            let network = network.to_owned();
             let payments: Vec<PaymentEntity> =
                 self.dao.get_pending_payments(node_id, network).await;
             let mut nonce = 0;
@@ -79,11 +77,11 @@ impl ZksyncDriver {
                 log::info!(
                     "Processing payments. count={}, network={} node_id={}",
                     payments.len(),
-                    network_key,
+                    network,
                     node_id
                 );
 
-                nonce = wallet::get_nonce(node_id, network).await;
+                nonce = self.client(network).get_nonce(node_id).await;
                 log::debug!("Payments: nonce={}, details={:?}", &nonce, payments);
             }
             for payment in payments {
@@ -96,7 +94,11 @@ impl ZksyncDriver {
         let details = utils::db_to_payment_details(&payment);
         let tx_nonce = nonce.to_owned();
 
-        match wallet::make_transfer(&details, tx_nonce, payment.network).await {
+        match self
+            .client(payment.network)
+            .make_transfer(&details, tx_nonce)
+            .await
+        {
             Ok(tx_hash) => {
                 let tx_id = self.dao.insert_transaction(&details, Utc::now()).await;
                 self.dao
@@ -149,13 +151,16 @@ impl PaymentDriver for ZksyncDriver {
         _caller: String,
         msg: Exit,
     ) -> Result<String, GenericError> {
-        if !self.is_account_active(&msg.sender()) {
+        if !self.is_account_active(&msg.sender) {
             return Err(GenericError::new(
                 "Cannot start withdrawal, account is not active",
             ));
         }
-
-        let tx_hash = wallet::exit(&msg).await?;
+        let network = self.config.resolve_network(msg.network.as_deref())?;
+        let tx_hash = self
+            .client(network)
+            .exit(&msg.sender, msg.to.as_deref(), msg.amount)
+            .await?;
         Ok(format!(
             "Withdrawal has been accepted by the zkSync operator. \
         It may take some time until the funds are available on Ethereum blockchain. \
@@ -171,24 +176,24 @@ impl PaymentDriver for ZksyncDriver {
         msg: GetAccountBalance,
     ) -> Result<BigDecimal, GenericError> {
         log::debug!("get_account_balance: {:?}", msg);
-        let (network, _) = platform_to_network_token(msg.platform())?;
+        let (network, _) = self.config.platform_to_network_token(&msg.platform)?;
 
-        let balance = wallet::account_balance(&msg.address(), network).await?;
+        let balance = self.client(network).account_balance(&msg.address).await?;
 
         log::debug!("get_account_balance - result: {}", &balance);
         Ok(balance)
     }
 
     fn get_name(&self) -> String {
-        DRIVER_NAME.to_string()
+        self.config.name.clone()
     }
 
     fn get_default_network(&self) -> String {
-        DEFAULT_NETWORK.to_string()
+        self.config.default_network.to_string()
     }
 
     fn get_networks(&self) -> HashMap<String, Network> {
-        SUPPORTED_NETWORKS.clone()
+        self.config.supported_networks()
     }
 
     fn recv_init_required(&self) -> bool {
@@ -208,31 +213,30 @@ impl PaymentDriver for ZksyncDriver {
 
     async fn init(&self, _db: DbExecutor, _caller: String, msg: Init) -> Result<Ack, GenericError> {
         log::debug!("init: {:?}", msg);
-        let address = msg.address().clone();
+        let address = msg.address;
 
         // TODO: payment_api fails to start due to provider account not unlocked
         // if !self.is_account_active(&address) {
         //     return Err(GenericError::new("Can not init, account not active"));
         // }
 
-        wallet::init_wallet(&msg)
+        let network = self.config.resolve_network(msg.network.as_deref())?;
+        let token = self.config.get_network_token(network, msg.token);
+        let mode = msg.mode;
+
+        self.client(network)
+            .init_wallet(&address, mode)
             .timeout(Some(180))
             .await
             .map_err(GenericError::new)??;
 
-        let mode = msg.mode();
-        let network = msg.network().unwrap_or(DEFAULT_NETWORK.to_string());
-        let token = get_network_token(
-            DbNetwork::from_str(&network).map_err(GenericError::new)?,
-            msg.token(),
-        );
-        bus::register_account(self, &address, &network, &token, mode).await?;
+        bus::register_account(self, &address, &network.to_string(), &token, mode).await?;
 
         log::info!(
             "Initialised payment account. mode={:?}, address={}, driver={}, network={}, token={}",
             mode,
             &address,
-            DRIVER_NAME,
+            self.config.name,
             network,
             token
         );
@@ -245,12 +249,12 @@ impl PaymentDriver for ZksyncDriver {
         _caller: String,
         msg: Fund,
     ) -> Result<String, GenericError> {
-        let address = msg.address();
-        let network = DbNetwork::from_str(&msg.network().unwrap_or(DEFAULT_NETWORK.to_string()))
-            .map_err(GenericError::new)?;
+        let address = msg.address;
+        let network = self.config.resolve_network(msg.network.as_deref())?;
         match network {
             DbNetwork::Rinkeby => {
-                wallet::fund(&address, network)
+                self.client(network)
+                    .fund(&address)
                     .timeout(Some(180))
                     .await
                     .map_err(GenericError::new)??;
@@ -291,15 +295,24 @@ Mind that to be eligible you have to run your app at least once on testnet -
     ) -> Result<String, GenericError> {
         log::debug!("schedule_payment: {:?}", msg);
 
-        let sender = msg.sender().to_owned();
-        if !self.is_account_active(&sender) {
+        if !self.is_account_active(&msg.sender) {
             return Err(GenericError::new(
                 "Can not schedule_payment, account not active",
             ));
         }
 
         let order_id = Uuid::new_v4().to_string();
-        self.dao.insert_payment(&order_id, &msg).await?;
+        let (network, _) = self.config.platform_to_network_token(&msg.platform)?;
+        self.dao
+            .insert_payment(
+                order_id.clone(),
+                msg.sender,
+                msg.recipient,
+                network,
+                msg.amount,
+                msg.due_date.naive_utc(),
+            )
+            .await?;
         Ok(order_id)
     }
 
@@ -310,10 +323,10 @@ Mind that to be eligible you have to run your app at least once on testnet -
         msg: VerifyPayment,
     ) -> Result<PaymentDetails, GenericError> {
         log::debug!("verify_payment: {:?}", msg);
-        let (network, _) = platform_to_network_token(msg.platform())?;
-        let tx_hash = hex::encode(msg.confirmation().confirmation);
+        let (network, _) = self.config.platform_to_network_token(&msg.platform)?;
+        let tx_hash = hex::encode(msg.confirmation.confirmation);
         log::info!("Verifying transaction: {}", tx_hash);
-        wallet::verify_tx(&tx_hash, network).await
+        self.client(network).verify_tx(&tx_hash).await
     }
 
     async fn validate_allocation(
@@ -322,8 +335,8 @@ Mind that to be eligible you have to run your app at least once on testnet -
         _caller: String,
         msg: ValidateAllocation,
     ) -> Result<bool, GenericError> {
-        let (network, _) = platform_to_network_token(msg.platform)?;
-        let account_balance = wallet::account_balance(&msg.address, network).await?;
+        let (network, _) = self.config.platform_to_network_token(&msg.platform)?;
+        let account_balance = self.client(network).account_balance(&msg.address).await?;
         let total_allocated_amount: BigDecimal = msg
             .existing_allocations
             .into_iter()
@@ -351,7 +364,7 @@ impl PaymentDriverCron for ZksyncDriver {
                 None => continue,
             };
 
-            let tx_success = match wallet::check_tx(&tx_hash, first_payment.network).await {
+            let tx_success = match self.client(first_payment.network).check_tx(&tx_hash).await {
                 None => continue, // Check_tx returns None when the result is unknown
                 Some(tx_success) => tx_success,
             };
@@ -376,8 +389,11 @@ impl PaymentDriverCron for ZksyncDriver {
             }
 
             // TODO: Add token support
-            let platform = network_token_to_platform(Some(first_payment.network), None).unwrap(); // TODO: Catch error?
-            let details = match wallet::verify_tx(&tx_hash, first_payment.network).await {
+            let platform = self
+                .config
+                .network_token_to_platform(Some(first_payment.network), None)
+                .unwrap(); // TODO: Catch error?
+            let details = match self.client(first_payment.network).verify_tx(&tx_hash).await {
                 Ok(a) => a,
                 Err(e) => {
                     log::warn!("Failed to get transaction details from zksync, creating bespoke details. Error={}", e);

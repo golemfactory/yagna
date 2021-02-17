@@ -5,14 +5,14 @@ use std::convert::TryInto;
 use std::str::FromStr;
 
 use async_trait::async_trait;
-use num::BigUint;
+use num_bigint::BigUint;
 
 use zksync::zksync_types::{
     tx::{PackedEthSignature, TxEthSignature},
     Address,
 };
 use zksync::{types::BlockStatus, Network};
-use zksync::{Provider, Wallet, WalletCredentials};
+use zksync::{RpcProvider, Wallet, WalletCredentials};
 use zksync_eth_signer::{error::SignerError, EthereumSigner, RawTransaction};
 
 use ethkey::EthAccount;
@@ -85,7 +85,7 @@ async fn main() {
 
     let pub_key_str = "917605f5e18817ca72cab34dfbb34fe197fc2616";
     let pub_key_addr = Address::from_str(pub_key_str).unwrap();
-    let provider = Provider::new(Network::Rinkeby);
+    let provider = RpcProvider::new(Network::Rinkeby);
     let ext_eth_signer = YagnaEthSigner::new(pub_key_addr);
     info!("connected to zksync provider");
 
