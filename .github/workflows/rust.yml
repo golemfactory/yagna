@@ -145,7 +145,7 @@ jobs:
 
   integration-test:
     name: Run integration tests
-    runs-on: ubuntu-latest
+    runs-on: goth
     needs: build
     steps:
       - name: Checkout
@@ -180,7 +180,7 @@ jobs:
         env:
           GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # --assets-path: https://github.com/golemfactory/goth/issues/336
-        run: poetry run poe ci_test
+        run: poetry run poe ci_test_self_hosted
 
       - name: Upload test logs
         uses: actions/upload-artifact@v2
