@@ -2,12 +2,9 @@ use git_version::git_version;
 use metrics::gauge;
 use semver::Version;
 
-/// Returns latest tag (via `git describe --tag --abbrev=0`) or version from Cargo.toml`.
+/// Returns latest tag (via `git describe --tag --abbrev=0`).
 pub fn git_tag() -> &'static str {
-    git_version!(
-        args = ["--tag", "--abbrev=0"],
-        fallback = env!("CARGO_PKG_VERSION")
-    )
+    git_version!(args = ["--tag", "--abbrev=0"], cargo_prefix = "")
 }
 
 /// Returns latest commit short hash.
@@ -87,6 +84,11 @@ macro_rules! version_describe {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn test_git_tag() {
+        println!("git tag: {:?}", git_tag());
+    }
 
     #[test]
     fn test_git_rev() {
