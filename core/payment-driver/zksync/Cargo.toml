@@ -1,6 +1,6 @@
 [package]
 name = "ya-zksync-driver"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
@@ -28,8 +28,8 @@ zksync = { git = "https://github.com/matter-labs/zksync", rev = "1cda8c7c1a9bfbe
 zksync_eth_signer = { git = "https://github.com/matter-labs/zksync", rev = "1cda8c7c1a9bfbec6491a1e4634b0fc33b206834"}
 
 ## yagna dependencies
-ya-payment-driver = "0.1.0"
-ya-client-model = "0.2.0"
+ya-payment-driver = "0.2"
+ya-client-model = "0.3"
 ya-service-api-interfaces = "0.1"
 ya-utils-futures = "0.1"
 ya-utils-networking = "0.1"
