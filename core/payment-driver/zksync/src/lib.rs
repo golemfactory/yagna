@@ -6,6 +6,7 @@
 
 // Public
 pub const DRIVER_NAME: &'static str = "zksync";
+// TODO: Remove legacy token name after 0.6.1 (beta-1) is released
 pub const ZKSYNC_TOKEN_NAME: &'static str = "GNT";
 
 pub const DEFAULT_NETWORK: &'static str = "rinkeby";
