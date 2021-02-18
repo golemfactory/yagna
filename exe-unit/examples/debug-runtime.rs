@@ -8,6 +8,7 @@ use std::fs::{create_dir_all, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use structopt::{clap, StructOpt};
 use tokio::process::Command;
@@ -16,47 +17,35 @@ use ya_runtime_api::server::{spawn, ProcessStatus, RunProcess, RuntimeEvent, Run
 use ya_utils_path::data_dir::DataDir;
 
 lazy_static::lazy_static! {
-    static ref COLOR_MISC: ansi_term::Style = ansi_term::Color::Purple.bold();
-    static ref COLOR_INFO: ansi_term::Style = ansi_term::Color::White.bold();
+    static ref COLOR_INFO: ansi_term::Style = ansi_term::Color::Green.bold();
     static ref COLOR_ERR: ansi_term::Style = ansi_term::Color::Red.bold();
-    static ref COLOR_PROMPT: ansi_term::Style = ansi_term::Color::Purple.bold();
+    static ref COLOR_PROMPT: ansi_term::Style = ansi_term::Color::Green.bold();
 }
 
-macro_rules! misc {
+macro_rules! ui_info {
     ($dst:expr, $($arg:tt)*) => (
         writeln!(
             $dst,
-            "{}{} {}",
-            (*COLOR_MISC).prefix(),
-            format!($($arg)*),
-            (*COLOR_MISC).suffix()
-        ).expect("unable to write to stdout")
-    );
-}
-
-macro_rules! info {
-    ($dst:expr, $($arg:tt)*) => (
-        writeln!(
-            $dst,
-            "{}[INFO] {} {}",
+            "[{}INFO{}] {}",
             (*COLOR_INFO).prefix(),
+            (*COLOR_INFO).suffix(),
             format!($($arg)*),
-            (*COLOR_INFO).suffix()
         ).expect("unable to write to stdout")
     );
 }
 
-macro_rules! err {
+macro_rules! ui_err {
     ($dst:expr, $($arg:tt)*) => (
         writeln!(
             $dst,
-            "{}[ERR ] {} {}",
+            "[{} ERR{}] {}",
             (*COLOR_ERR).prefix(),
+            (*COLOR_ERR).suffix(),
             format!($($arg)*),
-            (*COLOR_ERR).suffix()
         ).expect("unable to write to stdout")
     );
 }
+
 /// Deploys and starts a runtime with an interactive prompt{n}
 /// debug-runtime --runtime /usr/lib/yagna/plugins/ya-runtime-vm/ya-runtime-vm \{n}
 /// --task-package /tmp/image.gvmi \{n}
@@ -126,7 +115,7 @@ impl<T: Terminal + 'static> RuntimeEvent for EventHandler<T> {
         if !status.running {
             match status.return_code {
                 0 => (),
-                c => err!(self.ui, "command failed with code {}", c),
+                c => ui_err!(self.ui, "command failed with code {}", c),
             }
 
             let mut tx = self.tx.clone();
@@ -174,23 +163,24 @@ where
     let mut rt_args = args.to_runtime_args();
     rt_args.push(OsString::from("deploy"));
 
-    info!(ui, "Deploying");
+    ui_info!(ui, "Deploying");
 
     let _ = create_dir_all(&args.workdir);
     let mut child = runtime_command(&args)?
         .kill_on_drop(true)
         .args(rt_args)
-        .stdout(Stdio::null())
+        .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
 
-    // forward_output(child.stdout.take().unwrap(), ui.clone());
+    forward_output(child.stdout.take().unwrap(), ui.clone());
     forward_output(child.stderr.take().unwrap(), ui.clone());
 
     if !child.await?.success() {
         return Err(anyhow::anyhow!("deployment failed"));
     }
 
+    writeln!(ui, "").unwrap();
     Ok(())
 }
 
@@ -198,7 +188,7 @@ async fn start<T>(
     args: Args,
     mut input_rx: mpsc::Receiver<String>,
     start_tx: oneshot::Sender<()>,
-    ui: UI<T>,
+    mut ui: UI<T>,
 ) -> Result<()>
 where
     T: Terminal + 'static,
@@ -206,7 +196,7 @@ where
     let mut rt_args = args.to_runtime_args();
     rt_args.push(OsString::from("start"));
 
-    info!(ui, "Starting");
+    ui_info!(ui, "Starting");
 
     let mut command = runtime_command(&args)?;
     command.args(rt_args);
@@ -215,18 +205,21 @@ where
     let service = spawn(command, EventHandler::new(tx, ui.clone()))
         .await
         .context("unable to spawn runtime")?;
+
+    // FIXME: handle hello result with newer version of runtime api
     let _ = service.hello(args.version.as_str()).await;
 
-    info!(ui, "Entering prompt, press C-d to exit");
-    let _ = start_tx.send(());
+    ui_info!(ui, "Entering prompt, press C-d to exit");
 
+    let _ = start_tx.send(());
     while let Some(input) = input_rx.next().await {
         if let Err(e) = run(service.clone(), input).await {
             let message = e.root_cause().to_string();
-            err!(ui, "Command error: {}", message);
+            ui_err!(ui, "{}", message);
             // runtime apis do not allow us to recover from this error
             // and does not provide machine-readable error codes
-            if message.find("Broken pipe (os error 32)").is_some() {
+            if is_broken_pipe(&message) {
+                ui_err!(ui, "Unrecoverable error, please restart");
                 break;
             }
         } else {
@@ -234,9 +227,12 @@ where
         }
     }
 
-    info!(ui, "Shutting down...");
+    ui.close();
     if let Err(e) = service.shutdown().await {
-        err!(ui, "Shutdown error: {:?}", e);
+        let message = format!("{:?}", e);
+        if !is_broken_pipe(&message) {
+            ui_err!(ui, "Shutdown error: {}", message);
+        }
     }
 
     Ok(())
@@ -269,6 +265,10 @@ async fn run(service: impl RuntimeService, input: String) -> Result<()> {
     Ok(())
 }
 
+fn is_broken_pipe(message: &str) -> bool {
+    message.find("Broken pipe (os error 32)").is_some()
+}
+
 fn runtime_command(args: &Args) -> Result<Command> {
     let rt_dir = args
         .runtime
@@ -282,6 +282,7 @@ fn runtime_command(args: &Args) -> Result<Command> {
 struct UI<T: Terminal> {
     interface: Arc<Interface<T>>,
     history_path: PathBuf,
+    running: Arc<AtomicBool>,
 }
 
 impl<T: Terminal> Clone for UI<T> {
@@ -289,6 +290,7 @@ impl<T: Terminal> Clone for UI<T> {
         Self {
             interface: self.interface.clone(),
             history_path: self.history_path.clone(),
+            running: self.running.clone(),
         }
     }
 }
@@ -324,12 +326,15 @@ impl<T: Terminal + 'static> UI<T> {
         Ok(Self {
             interface: Arc::new(interface),
             history_path: history_path.as_ref().to_path_buf(),
+            running: Arc::new(AtomicBool::new(true)),
         })
     }
 
     async fn enter_prompt(&mut self, mut tx: mpsc::Sender<String>) {
         while let Ok(ReadResult::Input(line)) = self.read_line() {
-            if !line.trim().is_empty() {
+            if !self.running.load(Ordering::SeqCst) {
+                break;
+            } else if !line.trim().is_empty() {
                 self.add_history(&line);
                 let _ = tx.send(line).await;
             }
@@ -337,8 +342,9 @@ impl<T: Terminal + 'static> UI<T> {
     }
 
     pub fn close(&mut self) {
+        self.running.swap(false, Ordering::SeqCst);
         if let Err(e) = self.interface.save_history(&self.history_path) {
-            err!(self, "Error saving history to file: {}", e);
+            ui_err!(self, "Error saving history to file: {}", e);
         }
         let _ = self.interface.set_prompt("");
         let _ = self.interface.cancel_read_line();
@@ -378,9 +384,15 @@ async fn main() -> Result<()> {
         .map(|s: OsString| s.as_os_str().to_string_lossy().to_string())
         .collect::<Vec<_>>();
 
-    misc!(
+    ui_info!(
         ui,
-        "Invocation : {} {}",
+        "{} {}",
+        structopt::clap::crate_name!(),
+        env!("CARGO_PKG_VERSION")
+    );
+    ui_info!(
+        ui,
+        "Arguments: {} {}",
         args.runtime.display(),
         rt_args.join(" ")
     );
@@ -391,23 +403,24 @@ async fn main() -> Result<()> {
             .context("deployment failed")?;
     }
 
-    let (started_tx, started_rx) = oneshot::channel();
+    let (start_tx, start_rx) = oneshot::channel();
     let (input_tx, input_rx) = mpsc::channel(1);
 
     std::thread::spawn({
         let ui = ui.clone();
         move || {
             System::new("runtime").block_on(async move {
-                if let Err(e) = start(args, input_rx, started_tx, ui.clone()).await {
-                    err!(ui, "Runtime error: {}", e);
+                if let Err(e) = start(args, input_rx, start_tx, ui.clone()).await {
+                    ui_err!(ui, "Runtime error: {}", e);
                 }
             })
         }
     });
 
-    started_rx.await?;
+    start_rx.await?;
     ui.enter_prompt(input_tx).await;
-    ui.close();
 
+    ui_info!(ui, "Shutting down");
+    ui.close();
     Ok(())
 }
