@@ -248,7 +248,7 @@ impl<'c> AgreementDao<'c> {
     ) -> Result<Agreement, AgreementDaoError> {
         let id = id.clone();
         do_with_transaction(self.pool, move |conn| {
-            log::debug!("Termination reason: {:?}", reason);
+            log::debug!("Rejection reason: {:?}", reason);
             let mut agreement: Agreement =
                 market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
 
