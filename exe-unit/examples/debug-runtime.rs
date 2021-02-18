@@ -38,7 +38,7 @@ macro_rules! ui_err {
     ($dst:expr, $($arg:tt)*) => (
         writeln!(
             $dst,
-            "[{} ERR{}] {}",
+            "[{}ERROR{}] {}",
             (*COLOR_ERR).prefix(),
             (*COLOR_ERR).suffix(),
             format!($($arg)*),
@@ -152,7 +152,8 @@ where
     let cow = String::from_utf8_lossy(out.as_slice());
     let out = cow.trim();
     if !out.is_empty() {
-        write!(writer, "{}", out).unwrap();
+        let nl = if out.ends_with("\n") { "" } else { "\n" };
+        write!(writer, "{}{}", out, nl).unwrap();
     }
 }
 
@@ -216,8 +217,8 @@ where
         if let Err(e) = run(service.clone(), input).await {
             let message = e.root_cause().to_string();
             ui_err!(ui, "{}", message);
-            // runtime apis do not allow us to recover from this error
-            // and does not provide machine-readable error codes
+            // runtime apis do not allow us to recover from this error,
+            // also do not provide machine-readable error codes
             if is_broken_pipe(&message) {
                 ui_err!(ui, "Unrecoverable error, please restart");
                 break;
@@ -309,7 +310,7 @@ impl<T: Terminal + 'static> UI<T> {
         interface.set_prompt(&format!(
             "\x01{prefix}\x02{text}\x01{suffix}\x02",
             prefix = (*COLOR_PROMPT).prefix(),
-            text = "\n▶ ",
+            text = "▶ ",
             suffix = (*COLOR_PROMPT).suffix()
         ))?;
 
