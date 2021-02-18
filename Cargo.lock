@@ -1036,7 +1036,6 @@ dependencies = [
  "num-bigint 0.2.6",
  "num-integer",
  "num-traits",
- "serde",
 ]
 
 [[package]]
@@ -1048,6 +1047,7 @@ dependencies = [
  "num-bigint 0.3.1",
  "num-integer",
  "num-traits",
+ "serde",
 ]
 
 [[package]]
@@ -2598,7 +2598,7 @@ dependencies = [
 
 [[package]]
 name = "gftp"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "actix-rt",
  "anyhow",
@@ -2683,12 +2683,12 @@ dependencies = [
 
 [[package]]
 name = "golemsp"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix-rt",
  "ansi_term 0.12.1",
  "anyhow",
- "bigdecimal 0.1.2",
+ "bigdecimal 0.2.0",
  "byte-unit",
  "chrono",
  "crossterm",
@@ -3330,6 +3330,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ffbee8634e0d45d258acb448e7eaab3fce7a0a467395d4d9f228e3c1f01fb2e4"
 
 [[package]]
+name = "matchers"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f099785f7595cc4b4553a174ce30dd7589ef93391ff414dbb67f62392b9e0ce1"
+dependencies = [
+ "regex-automata",
+]
+
+[[package]]
 name = "matches"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3375,6 +3384,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "metrics"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6d31b8f6fe04ed4ac33f735f97576b37750df3baf684107d545a8d30efcf584"
+dependencies = [
+ "metrics-macros",
+ "proc-macro-hack",
+]
+
+[[package]]
 name = "metrics-core"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3400,6 +3419,20 @@ dependencies = [
  "log",
  "metrics-core",
  "tokio 0.2.24",
+]
+
+[[package]]
+name = "metrics-macros"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "487119a99660e9b2879132f1b84e067b6d68c85cc228e31789567c14bcaa6a1a"
+dependencies = [
+ "lazy_static",
+ "proc-macro-hack",
+ "proc-macro2 1.0.24",
+ "quote 1.0.8",
+ "regex",
+ "syn 1.0.60",
 ]
 
 [[package]]
@@ -3447,7 +3480,7 @@ dependencies = [
  "atomic-shim",
  "crossbeam-utils 0.7.2",
  "im",
- "metrics",
+ "metrics 0.12.1",
  "metrics-core",
  "metrics-exporter-http",
  "metrics-exporter-log",
@@ -3770,11 +3803,11 @@ dependencies = [
 
 [[package]]
 name = "num"
-version = "0.2.1"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8536030f9fea7127f841b45bb6243b27255787fb4eb83958aa1ef9d2fdc0c36"
+checksum = "8b7a8e9be5e039e2ff869df49155f1c06bd01ade2117ec783e56ab0932b67a8f"
 dependencies = [
- "num-bigint 0.2.6",
+ "num-bigint 0.3.1",
  "num-complex",
  "num-integer",
  "num-iter",
@@ -3791,7 +3824,6 @@ dependencies = [
  "autocfg 1.0.1",
  "num-integer",
  "num-traits",
- "serde",
 ]
 
 [[package]]
@@ -3803,28 +3835,17 @@ dependencies = [
  "autocfg 1.0.1",
  "num-integer",
  "num-traits",
-]
-
-[[package]]
-name = "num-complex"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6b19411a9719e753aff12e5187b74d60d3dc449ec3f4dc21e3989c3f554bc95"
-dependencies = [
- "autocfg 1.0.1",
- "num-traits",
  "serde",
 ]
 
 [[package]]
-name = "num-derive"
-version = "0.2.5"
+name = "num-complex"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eafd0b45c5537c3ba526f79d3e75120036502bebacbb3f3220914067ce39dbf2"
+checksum = "747d632c0c558b87dbabbe6a82f3b4ae03720d0646ac5b7b4dae89394be5f2c5"
 dependencies = [
- "proc-macro2 0.4.30",
- "quote 0.6.13",
- "syn 0.15.44",
+ "num-traits",
+ "serde",
 ]
 
 [[package]]
@@ -3861,12 +3882,12 @@ dependencies = [
 
 [[package]]
 name = "num-rational"
-version = "0.2.4"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c000134b5dbf44adc5cb772486d335293351644b801551abe8f75c84cfa4aef"
+checksum = "12ac428b1cb17fce6f731001d307d351ec70a6d202fc2e60f7d4c5e42d8f4f07"
 dependencies = [
  "autocfg 1.0.1",
- "num-bigint 0.2.6",
+ "num-bigint 0.3.1",
  "num-integer",
  "num-traits",
  "serde",
@@ -4870,6 +4891,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae1ded71d66a4a97f5e961fd0cb25a5f366a42a41570d16a763a69c092c26ae4"
 dependencies = [
  "byteorder",
+ "regex-syntax",
 ]
 
 [[package]]
@@ -5486,6 +5508,15 @@ dependencies = [
  "digest 0.8.1",
  "keccak",
  "opaque-debug 0.2.3",
+]
+
+[[package]]
+name = "sharded-slab"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "79c719719ee05df97490f80a45acfc99e5a30ce98a1e4fb67aee422745ae14e3"
+dependencies = [
+ "lazy_static",
 ]
 
 [[package]]
@@ -6269,7 +6300,19 @@ dependencies = [
  "cfg-if 1.0.0",
  "log",
  "pin-project-lite 0.2.4",
+ "tracing-attributes",
  "tracing-core",
+]
+
+[[package]]
+name = "tracing-attributes"
+version = "0.1.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43f080ea7e4107844ef4766459426fa2d5c1ada2e47edba05dc7fa99d9629f47"
+dependencies = [
+ "proc-macro2 1.0.24",
+ "quote 1.0.8",
+ "syn 1.0.60",
 ]
 
 [[package]]
@@ -6289,6 +6332,49 @@ checksum = "ab7bb6f14721aa00656086e9335d363c5c8747bae02ebe32ea2c7dece5689b4c"
 dependencies = [
  "pin-project 0.4.27",
  "tracing",
+]
+
+[[package]]
+name = "tracing-log"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e0f8c7178e13481ff6765bd169b33e8d554c5d2bbede5e32c356194be02b9b9"
+dependencies = [
+ "lazy_static",
+ "log",
+ "tracing-core",
+]
+
+[[package]]
+name = "tracing-serde"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb65ea441fbb84f9f6748fd496cf7f63ec9af5bca94dd86456978d055e8eb28b"
+dependencies = [
+ "serde",
+ "tracing-core",
+]
+
+[[package]]
+name = "tracing-subscriber"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1fa8f0c8f4c594e4fc9debc1990deab13238077271ba84dd853d54902ee3401"
+dependencies = [
+ "ansi_term 0.12.1",
+ "chrono",
+ "lazy_static",
+ "matchers",
+ "regex",
+ "serde",
+ "serde_json",
+ "sharded-slab",
+ "smallvec 1.6.1",
+ "thread_local",
+ "tracing",
+ "tracing-core",
+ "tracing-log",
+ "tracing-serde",
 ]
 
 [[package]]
@@ -6624,6 +6710,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5a972e5669d67ba988ce3dc826706fb0a8b01471c088cb0b6110b805cc36aed"
 
 [[package]]
+name = "vlog"
+version = "1.0.0"
+source = "git+https://github.com/matter-labs/zksync?rev=1cda8c7c1a9bfbec6491a1e4634b0fc33b206834#1cda8c7c1a9bfbec6491a1e4634b0fc33b206834"
+dependencies = [
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "void"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6901,7 +6996,7 @@ dependencies = [
 
 [[package]]
 name = "ya-activity"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "actix-rt",
  "actix-web 3.3.2",
@@ -6916,7 +7011,7 @@ dependencies = [
  "lazy_static",
  "libsqlite3-sys",
  "log",
- "metrics",
+ "metrics 0.12.1",
  "mime",
  "r2d2",
  "serde",
@@ -6952,8 +7047,8 @@ dependencies = [
 
 [[package]]
 name = "ya-client"
-version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=4099adb99dadbc8929caba33538806f5e10d5920#4099adb99dadbc8929caba33538806f5e10d5920"
+version = "0.5.0"
+source = "git+https://github.com/golemfactory/ya-client.git?branch=release/v0.6#0fcd83c1b034284ecdb0341242ac19c57245b777"
 dependencies = [
  "awc 1.0.1",
  "bytes 0.5.6",
@@ -6977,10 +7072,10 @@ dependencies = [
 
 [[package]]
 name = "ya-client-model"
-version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=4099adb99dadbc8929caba33538806f5e10d5920#4099adb99dadbc8929caba33538806f5e10d5920"
+version = "0.3.0"
+source = "git+https://github.com/golemfactory/ya-client.git?branch=release/v0.6#0fcd83c1b034284ecdb0341242ac19c57245b777"
 dependencies = [
- "bigdecimal 0.1.2",
+ "bigdecimal 0.2.0",
  "chrono",
  "derive_more",
  "diesel",
@@ -6997,19 +7092,19 @@ dependencies = [
 
 [[package]]
 name = "ya-compile-time-utils"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "git-version",
- "metrics",
+ "metrics 0.12.1",
  "semver 0.11.0",
  "vergen",
 ]
 
 [[package]]
 name = "ya-core-model"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
- "bigdecimal 0.1.2",
+ "bigdecimal 0.2.0",
  "bitflags 1.2.1",
  "chrono",
  "derive_more",
@@ -7038,11 +7133,11 @@ dependencies = [
 
 [[package]]
 name = "ya-dummy-driver"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix 0.9.0",
  "anyhow",
- "bigdecimal 0.1.2",
+ "bigdecimal 0.2.0",
  "chrono",
  "futures 0.3.12",
  "log",
@@ -7121,7 +7216,7 @@ dependencies = [
 
 [[package]]
 name = "ya-gnt-driver"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix 0.9.0",
  "actix-connect 1.0.2",
@@ -7129,7 +7224,7 @@ dependencies = [
  "actix-rt",
  "anyhow",
  "awc 2.0.3",
- "bigdecimal 0.1.2",
+ "bigdecimal 0.2.0",
  "bitflags 1.2.1",
  "chrono",
  "diesel",
@@ -7145,8 +7240,8 @@ dependencies = [
  "libsqlite3-sys",
  "log",
  "maplit",
- "num-bigint 0.2.6",
- "num-derive 0.3.3",
+ "num-bigint 0.3.1",
+ "num-derive",
  "num-traits",
  "r2d2",
  "rlp",
@@ -7208,7 +7303,7 @@ dependencies = [
 
 [[package]]
 name = "ya-market"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "actix-http 2.2.0",
  "actix-rt",
@@ -7228,8 +7323,8 @@ dependencies = [
  "lazy_static",
  "libsqlite3-sys",
  "log",
- "metrics",
- "num-derive 0.2.5",
+ "metrics 0.12.1",
+ "num-derive",
  "num-traits",
  "r2d2",
  "rand 0.7.3",
@@ -7273,6 +7368,7 @@ dependencies = [
  "semver 0.11.0",
  "serde_json",
  "thiserror",
+ "ya-agreement-utils",
 ]
 
 [[package]]
@@ -7281,11 +7377,11 @@ version = "0.1.0"
 dependencies = [
  "actix-web 3.3.2",
  "anyhow",
- "bigdecimal 0.1.2",
+ "bigdecimal 0.2.0",
  "futures 0.3.12",
  "lazy_static",
  "log",
- "metrics",
+ "metrics 0.12.1",
  "metrics-core",
  "metrics-runtime",
  "percent-encoding",
@@ -7300,7 +7396,7 @@ dependencies = [
 
 [[package]]
 name = "ya-net"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "actix-rt",
  "anyhow",
@@ -7313,24 +7409,24 @@ dependencies = [
  "structopt",
  "thiserror",
  "tokio 0.2.24",
- "trust-dns-resolver 0.19.6",
  "ya-core-model",
  "ya-sb-proto",
  "ya-sb-router",
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-bus",
+ "ya-utils-networking",
 ]
 
 [[package]]
 name = "ya-payment"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix-rt",
  "actix-web 3.3.2",
  "anyhow",
  "base64 0.12.3",
- "bigdecimal 0.1.2",
+ "bigdecimal 0.2.0",
  "chrono",
  "diesel",
  "diesel_migrations",
@@ -7343,8 +7439,8 @@ dependencies = [
  "lazy_static",
  "libsqlite3-sys",
  "log",
- "metrics",
- "num-bigint 0.2.6",
+ "metrics 0.12.1",
+ "num-bigint 0.3.1",
  "r2d2",
  "serde",
  "serde_json",
@@ -7371,12 +7467,12 @@ dependencies = [
 
 [[package]]
 name = "ya-payment-driver"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix 0.9.0",
  "anyhow",
  "async-trait",
- "bigdecimal 0.1.2",
+ "bigdecimal 0.2.0",
  "chrono",
  "diesel",
  "diesel_migrations",
@@ -7384,7 +7480,7 @@ dependencies = [
  "futures 0.3.12",
  "hex",
  "log",
- "num",
+ "num-bigint 0.3.1",
  "r2d2",
  "thiserror",
  "tokio 0.2.24",
@@ -7399,7 +7495,7 @@ name = "ya-persistence"
 version = "0.2.0"
 dependencies = [
  "anyhow",
- "bigdecimal 0.1.2",
+ "bigdecimal 0.2.0",
  "chrono",
  "diesel",
  "dotenv",
@@ -7422,7 +7518,7 @@ dependencies = [
  "actix_derive",
  "anyhow",
  "backoff",
- "bigdecimal 0.1.2",
+ "bigdecimal 0.2.0",
  "bytesize",
  "chrono",
  "derive_more",
@@ -7438,7 +7534,6 @@ dependencies = [
  "log-derive",
  "nix 0.17.0",
  "notify",
- "num-bigint 0.2.6",
  "num_cpus",
  "path-clean",
  "semver 0.11.0",
@@ -7487,8 +7582,9 @@ dependencies = [
 
 [[package]]
 name = "ya-sb-proto"
-version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=6b494e17d7a662e0b710af8c5a2e99ab4007fdb9#6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba491b25b0ca2d03f697c7a734f79f7bb9550e570132bd95af53f62d52668424"
 dependencies = [
  "bytes 0.5.6",
  "prost",
@@ -7501,8 +7597,9 @@ dependencies = [
 
 [[package]]
 name = "ya-sb-router"
-version = "0.3.1"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=6b494e17d7a662e0b710af8c5a2e99ab4007fdb9#6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d10e05cad4f3d9eb46c48e5ae6a6ecfe49c1373707b886a167e2dac130b86075"
 dependencies = [
  "anyhow",
  "bytes 0.4.12",
@@ -7523,7 +7620,8 @@ dependencies = [
 [[package]]
 name = "ya-sb-util"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=6b494e17d7a662e0b710af8c5a2e99ab4007fdb9#6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20b2e7cfeacabb607fe1fd1dc8e653c3ee853f2e127cb1ed72955ea4cb84f951"
 dependencies = [
  "futures 0.3.12",
  "pin-project 0.4.27",
@@ -7610,8 +7708,9 @@ dependencies = [
 
 [[package]]
 name = "ya-service-bus"
-version = "0.3.1"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=6b494e17d7a662e0b710af8c5a2e99ab4007fdb9#6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7650b19a2f73f5d6cded3045756fc35048abc094781154d3145ca21dd68ce8c6"
 dependencies = [
  "actix 0.9.0",
  "flexbuffers",
@@ -7709,6 +7808,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-utils-networking"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "trust-dns-resolver 0.19.6",
+]
+
+[[package]]
 name = "ya-utils-path"
 version = "0.1.0"
 dependencies = [
@@ -7750,7 +7857,7 @@ dependencies = [
  "diesel",
  "diesel_migrations",
  "log",
- "metrics",
+ "metrics 0.12.1",
  "self_update",
  "serde",
  "serde_json",
@@ -7768,13 +7875,13 @@ dependencies = [
 
 [[package]]
 name = "ya-zksync-driver"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix-rt",
  "anyhow",
  "async-trait",
  "awc 2.0.3",
- "bigdecimal 0.1.2",
+ "bigdecimal 0.2.0",
  "chrono",
  "dotenv",
  "env_logger 0.7.1",
@@ -7784,7 +7891,7 @@ dependencies = [
  "lazy_static",
  "log",
  "maplit",
- "num",
+ "num-bigint 0.3.1",
  "serde",
  "serde_json",
  "structopt",
@@ -7795,6 +7902,7 @@ dependencies = [
  "ya-payment-driver",
  "ya-service-api-interfaces",
  "ya-utils-futures",
+ "ya-utils-networking",
  "zksync",
  "zksync_eth_signer",
 ]
@@ -7840,6 +7948,7 @@ dependencies = [
  "ya-service-bus",
  "ya-sgx",
  "ya-utils-futures",
+ "ya-utils-networking",
  "ya-utils-path",
  "ya-utils-process",
  "ya-version",
@@ -7906,9 +8015,10 @@ dependencies = [
 
 [[package]]
 name = "zksync"
-version = "0.1.1"
-source = "git+https://github.com/matter-labs/zksync?rev=9b4263c883c0f57c75068a0cc6339d051157a306#9b4263c883c0f57c75068a0cc6339d051157a306"
+version = "0.2.2"
+source = "git+https://github.com/matter-labs/zksync?rev=1cda8c7c1a9bfbec6491a1e4634b0fc33b206834#1cda8c7c1a9bfbec6491a1e4634b0fc33b206834"
 dependencies = [
+ "async-trait",
  "ethabi",
  "jsonrpc-core",
  "num",
@@ -7919,6 +8029,7 @@ dependencies = [
  "thiserror",
  "tokio 0.2.24",
  "web3",
+ "zksync_config",
  "zksync_crypto",
  "zksync_eth_client",
  "zksync_eth_signer",
@@ -7929,15 +8040,41 @@ dependencies = [
 [[package]]
 name = "zksync_basic_types"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?rev=9b4263c883c0f57c75068a0cc6339d051157a306#9b4263c883c0f57c75068a0cc6339d051157a306"
+source = "git+https://github.com/matter-labs/zksync?rev=1cda8c7c1a9bfbec6491a1e4634b0fc33b206834#1cda8c7c1a9bfbec6491a1e4634b0fc33b206834"
 dependencies = [
+ "serde",
  "web3",
+]
+
+[[package]]
+name = "zksync_config"
+version = "1.0.0"
+source = "git+https://github.com/matter-labs/zksync?rev=1cda8c7c1a9bfbec6491a1e4634b0fc33b206834#1cda8c7c1a9bfbec6491a1e4634b0fc33b206834"
+dependencies = [
+ "envy",
+ "num",
+ "serde",
+ "serde_json",
+ "toml",
+ "tracing",
+ "url",
+ "zksync_types",
+ "zksync_utils",
+]
+
+[[package]]
+name = "zksync_contracts"
+version = "1.0.0"
+source = "git+https://github.com/matter-labs/zksync?rev=1cda8c7c1a9bfbec6491a1e4634b0fc33b206834#1cda8c7c1a9bfbec6491a1e4634b0fc33b206834"
+dependencies = [
+ "ethabi",
+ "serde_json",
 ]
 
 [[package]]
 name = "zksync_crypto"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?rev=9b4263c883c0f57c75068a0cc6339d051157a306#9b4263c883c0f57c75068a0cc6339d051157a306"
+source = "git+https://github.com/matter-labs/zksync?rev=1cda8c7c1a9bfbec6491a1e4634b0fc33b206834#1cda8c7c1a9bfbec6491a1e4634b0fc33b206834"
 dependencies = [
  "anyhow",
  "fnv",
@@ -7954,14 +8091,19 @@ dependencies = [
 [[package]]
 name = "zksync_eth_client"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?rev=9b4263c883c0f57c75068a0cc6339d051157a306#9b4263c883c0f57c75068a0cc6339d051157a306"
+source = "git+https://github.com/matter-labs/zksync?rev=1cda8c7c1a9bfbec6491a1e4634b0fc33b206834#1cda8c7c1a9bfbec6491a1e4634b0fc33b206834"
 dependencies = [
  "anyhow",
  "ethabi",
- "log",
+ "hex",
+ "metrics 0.13.1",
  "parity-crypto 0.6.2",
  "serde",
+ "tokio 0.2.24",
+ "vlog",
  "web3",
+ "zksync_config",
+ "zksync_contracts",
  "zksync_eth_signer",
  "zksync_types",
 ]
@@ -7969,7 +8111,7 @@ dependencies = [
 [[package]]
 name = "zksync_eth_signer"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?rev=9b4263c883c0f57c75068a0cc6339d051157a306#9b4263c883c0f57c75068a0cc6339d051157a306"
+source = "git+https://github.com/matter-labs/zksync?rev=1cda8c7c1a9bfbec6491a1e4634b0fc33b206834#1cda8c7c1a9bfbec6491a1e4634b0fc33b206834"
 dependencies = [
  "async-trait",
  "hex",
@@ -7987,17 +8129,17 @@ dependencies = [
 [[package]]
 name = "zksync_types"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?rev=9b4263c883c0f57c75068a0cc6339d051157a306#9b4263c883c0f57c75068a0cc6339d051157a306"
+source = "git+https://github.com/matter-labs/zksync?rev=1cda8c7c1a9bfbec6491a1e4634b0fc33b206834#1cda8c7c1a9bfbec6491a1e4634b0fc33b206834"
 dependencies = [
  "anyhow",
  "chrono",
  "ethabi",
  "hex",
- "log",
  "num",
  "parity-crypto 0.6.2",
  "serde",
  "serde_json",
+ "vlog",
  "zksync_basic_types",
  "zksync_crypto",
  "zksync_utils",
@@ -8006,11 +8148,12 @@ dependencies = [
 [[package]]
 name = "zksync_utils"
 version = "1.0.0"
-source = "git+https://github.com/matter-labs/zksync?rev=9b4263c883c0f57c75068a0cc6339d051157a306#9b4263c883c0f57c75068a0cc6339d051157a306"
+source = "git+https://github.com/matter-labs/zksync?rev=1cda8c7c1a9bfbec6491a1e4634b0fc33b206834#1cda8c7c1a9bfbec6491a1e4634b0fc33b206834"
 dependencies = [
  "anyhow",
- "bigdecimal 0.1.2",
+ "bigdecimal 0.2.0",
  "futures 0.3.12",
+ "hex",
  "num",
  "serde",
 ]

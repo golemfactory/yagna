@@ -18,10 +18,10 @@ use ya_market::testing::{
     agreement_utils::gen_reason,
     client::{sample_demand, sample_offer},
     mock_node::{wait_for_bcast, MarketServiceExt},
+    mock_offer::flatten_json,
     proposal_util::exchange_draft_proposals,
     DemandError, MarketsNetwork, ModifyOfferError, Owner, SubscriptionId, SubscriptionParseError,
 };
-use ya_market_resolver::flatten::flatten_json;
 
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";
@@ -178,10 +178,7 @@ async fn test_rest_subscribe_unsubscribe_offer() {
     assert_eq!(got_offer.offer_id, subscription_id.to_string());
     assert_eq!(got_offer.provider_id, id.identity);
     assert_eq!(&got_offer.constraints, &client_offer.constraints);
-    assert_eq!(
-        got_offer.properties,
-        flatten_json(&client_offer.properties).unwrap()
-    );
+    assert_eq!(got_offer.properties, flatten_json(&client_offer.properties));
 
     // given
     let req = test::TestRequest::delete()
@@ -245,7 +242,7 @@ async fn test_rest_subscribe_unsubscribe_demand() {
     assert_eq!(&got_demand.constraints, &client_demand.constraints);
     assert_eq!(
         got_demand.properties,
-        flatten_json(&client_demand.properties).unwrap()
+        flatten_json(&client_demand.properties)
     );
 
     // given

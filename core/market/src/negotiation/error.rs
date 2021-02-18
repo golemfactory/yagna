@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use ya_client::model::NodeId;
-use ya_market_resolver::flatten::JsonObjectExpected;
 
 use crate::db::dao::AgreementDaoError;
 use crate::db::model::{
@@ -156,7 +155,7 @@ pub enum ProposalError {
     #[error(transparent)]
     Get(#[from] GetProposalError),
     #[error(transparent)]
-    JsonObjectExpected(#[from] JsonObjectExpected),
+    JsonObjectExpected(#[from] serde_json::error::Error),
     #[error(transparent)]
     Save(#[from] SaveProposalError),
     #[error(transparent)]

@@ -6,7 +6,7 @@
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use ethereum_types::U256;
-use num::bigint::ToBigInt;
+use num_bigint::ToBigInt;
 
 // Local uses
 use crate::db::models::PaymentEntity;

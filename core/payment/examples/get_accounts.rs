@@ -4,7 +4,7 @@ use ya_client::web::{rest_api_url, WebClient};
 
 #[derive(Clone, Debug, StructOpt)]
 struct Args {
-    #[structopt(short, long, default_value = "NGNT")]
+    #[structopt(short, long, default_value = "zksync-rinkeby-tglm")]
     platform: String,
     #[structopt()]
     provider_addr: String,
