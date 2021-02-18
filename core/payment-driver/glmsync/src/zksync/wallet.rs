@@ -11,7 +11,6 @@ use zksync::operations::SyncTransactionHandle;
 use zksync::types::BlockStatus;
 use zksync::zksync_types::{tx::TxHash, Address, Nonce, TxFeeTypes};
 use zksync::{
-    provider::get_rpc_addr,
     provider::{Provider, RpcProvider},
     Network as ZkNetwork, Wallet, WalletCredentials,
 };
@@ -25,10 +24,12 @@ use ya_payment_driver::{
 
 // Local uses
 use crate::{
-    network::get_network_token,
     zksync::{faucet, signer::YagnaEthSigner, utils},
     DEFAULT_NETWORK, ZKSYNC_TOKEN_NAME,
 };
+
+const DEFAULT_RINKEBY_RPC_ADDR: &str = "http://rinkeby-api.zksync.imapp.pl/jsrpc";
+const DEFAULT_MAINNET_RPC_ADDR: &str = "https://api.zksync.imapp.pl/jsrpc";
 
 pub async fn account_balance(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
     let pub_address = Address::from_str(&address[2..]).map_err(GenericError::new)?;
@@ -36,24 +37,12 @@ pub async fn account_balance(address: &str, network: Network) -> Result<BigDecim
         .account_info(pub_address)
         .await
         .map_err(GenericError::new)?;
-    // TODO: implement tokens, replace None
-    let token = get_network_token(network, None);
-    let mut balance_com = acc_info
+    let balance_com = acc_info
         .committed
         .balances
-        .get(&token)
+        .get(ZKSYNC_TOKEN_NAME)
         .map(|x| x.0.clone())
         .unwrap_or(BigUint::zero());
-    // Hack to get GNT balance for backwards compatability
-    // TODO: Remove this if {} and the `mut` from `let mut balance_com`
-    if network == Network::Rinkeby && balance_com == BigUint::zero() {
-        balance_com = acc_info
-            .committed
-            .balances
-            .get(ZKSYNC_TOKEN_NAME)
-            .map(|x| x.0.clone())
-            .unwrap_or(BigUint::zero());
-    }
     let balance = utils::big_uint_to_big_dec(balance_com);
     log::debug!(
         "account_balance. address={}, network={}, balance={}",
@@ -143,10 +132,9 @@ pub async fn make_transfer(
 
     let sender = details.sender.clone();
     let wallet = get_wallet(&sender, network).await?;
-    let token = get_network_token(network, None);
 
     let balance = wallet
-        .get_balance(BlockStatus::Committed, token.as_ref())
+        .get_balance(BlockStatus::Committed, ZKSYNC_TOKEN_NAME)
         .await
         .map_err(GenericError::new)?;
     log::debug!("balance before transfer={}", balance);
@@ -156,14 +144,14 @@ pub async fn make_transfer(
         .nonce(Nonce(nonce))
         .str_to(&details.recipient[2..])
         .map_err(GenericError::new)?
-        .token(token.as_ref())
+        .token(ZKSYNC_TOKEN_NAME)
         .map_err(GenericError::new)?
         .amount(amount.clone());
     log::debug!(
         "transfer raw data. nonce={}, to={}, token={}, amount={}",
         nonce,
         &details.recipient,
-        token,
+        ZKSYNC_TOKEN_NAME,
         amount
     );
     let transfer = transfer_builder.send().await.map_err(GenericError::new)?;
@@ -198,10 +186,7 @@ struct TxRespObj {
 }
 
 pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails, GenericError> {
-    let provider_url = match get_rpc_addr_from_env(network) {
-        Some(rpc_addr) => rpc_addr,
-        None => get_rpc_addr(get_zk_network(network)).to_string(),
-    };
+    let provider_url = get_rpc_addr(network);
     // HACK: Get the transaction data from v0.1 api
     let api_url = provider_url.replace("/jsrpc", "/api/v0.1");
     let req_url = format!("{}/transactions_all/{}", api_url, tx_hash);
@@ -238,18 +223,19 @@ pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails
 }
 
 fn get_provider(network: Network) -> RpcProvider {
+    let rpc_addr = get_rpc_addr(network);
     let zk_network = get_zk_network(network);
-    let provider: RpcProvider = match get_rpc_addr_from_env(network) {
-        Some(rpc_addr) => RpcProvider::from_addr(rpc_addr, zk_network),
-        None => RpcProvider::new(zk_network),
-    };
-    provider.clone()
+    RpcProvider::from_addr(rpc_addr, zk_network)
 }
 
-fn get_rpc_addr_from_env(network: Network) -> Option<String> {
+fn get_rpc_addr(network: Network) -> String {
     match network {
-        Network::Mainnet => env::var("ZKSYNC_MAINNET_RPC_ADDRESS").ok(),
-        Network::Rinkeby => env::var("ZKSYNC_RINKEBY_RPC_ADDRESS").ok(),
+        Network::Mainnet => env::var("GLMSYNC_MAINNET_RPC_ADDRESS")
+            .ok()
+            .unwrap_or_else(|| DEFAULT_MAINNET_RPC_ADDR.to_string()),
+        Network::Rinkeby => env::var("GLMSYNC_RINKEBY_RPC_ADDRESS")
+            .ok()
+            .unwrap_or_else(|| DEFAULT_RINKEBY_RPC_ADDR.to_string()),
     }
 }
 
@@ -276,7 +262,7 @@ fn get_zk_network(network: Network) -> ZkNetwork {
 
 async fn unlock_wallet<S: EthereumSigner + Clone, P: Provider + Clone>(
     wallet: Wallet<S, P>,
-    network: Network,
+    _network: Network,
 ) -> Result<(), GenericError> {
     log::debug!("unlock_wallet");
     if !wallet
@@ -285,11 +271,10 @@ async fn unlock_wallet<S: EthereumSigner + Clone, P: Provider + Clone>(
         .map_err(GenericError::new)?
     {
         log::info!("Unlocking wallet... address = {}", wallet.signer.address);
-        let token = get_network_token(network, None);
 
         let unlock = wallet
             .start_change_pubkey()
-            .fee_token(token.as_ref())
+            .fee_token(ZKSYNC_TOKEN_NAME)
             .map_err(|e| GenericError::new(format!("Failed to create change_pubkey request: {}", e)))?
             .send()
             .await
@@ -317,7 +302,7 @@ pub async fn withdraw<S: EthereumSigner + Clone, P: Provider + Clone>(
         .await
         .map_err(GenericError::new)?;
     info!(
-        "Wallet funded with {} tGLM available for withdrawal",
+        "Wallet funded with {} GLM available for withdrawal",
         utils::big_uint_to_big_dec(balance.clone())
     );
 
@@ -340,7 +325,7 @@ pub async fn withdraw<S: EthereumSigner + Clone, P: Provider + Clone>(
     };
     let withdraw_amount = std::cmp::min(balance - withdraw_fee, amount);
     info!(
-        "Withdrawal of {:.5} tGLM started",
+        "Withdrawal of {:.5} GLM started",
         utils::big_uint_to_big_dec(withdraw_amount.clone())
     );
 

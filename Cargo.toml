@@ -10,9 +10,10 @@ license = "GPL-3.0"
 edition = "2018"
 
 [features]
-default = ['zksync-driver', 'gnt-driver', 'gftp/bin']
+default = ['zksync-driver', 'gnt-driver', 'glmsync-driver', 'gftp/bin']
 static-openssl = ["openssl/vendored", "openssl-probe"]
 dummy-driver = ['ya-dummy-driver']
+glmsync-driver = ['ya-glmsync-driver']
 gnt-driver = ['ya-gnt-driver']
 zksync-driver = ['ya-zksync-driver']
 tos = []
@@ -26,6 +27,7 @@ ya-activity = "0.3"
 ya-compile-time-utils = "0.1"
 ya-dummy-driver = { version = "0.2", optional = true }
 ya-file-logging = "0.1"
+ya-glmsync-driver = { version = "0.1", optional = true }
 ya-gnt-driver = { version = "0.2", optional = true }
 ya-zksync-driver = { version = "0.2", optional = true }
 ya-identity = "0.2"
@@ -115,6 +117,7 @@ members = [
     "core/payment",
     "core/payment-driver/base",
     "core/payment-driver/dummy",
+    "core/payment-driver/glmsync",
     "core/payment-driver/gnt",
     "core/payment-driver/zksync",
     "core/persistence",
@@ -154,6 +157,7 @@ ya-sgx = { path = "core/sgx" }
 ya-payment = { path = "core/payment" }
 ya-payment-driver = { path = "core/payment-driver/base" }
 ya-dummy-driver = { path = "core/payment-driver/dummy" }
+ya-glmsync-driver = { path = "core/payment-driver/glmsync" }
 ya-gnt-driver = { path = "core/payment-driver/gnt" }
 ya-zksync-driver = { path = "core/payment-driver/zksync" }
 ya-version = { path = "core/version" }
