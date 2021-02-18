@@ -4,6 +4,7 @@ use crate::models::debit_note::{ReadObj, WriteObj};
 use crate::schema::pay_activity::dsl as activity_dsl;
 use crate::schema::pay_agreement::dsl as agreement_dsl;
 use crate::schema::pay_debit_note::dsl;
+use bigdecimal::BigDecimal;
 use chrono::NaiveDateTime;
 use diesel::{
     self, BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl,
@@ -236,22 +237,30 @@ impl<'c> DebitNoteDao<'c> {
                 .find((&debit_note_id, &owner_id))
                 .select((dsl::activity_id, dsl::total_amount_due, dsl::role))
                 .first(conn)?;
-            update_status(
-                &vec![debit_note_id.clone()],
-                &owner_id,
-                &DocumentStatus::Accepted,
-                conn,
-            )?;
+            let mut events = vec![DebitNoteEventType::DebitNoteAcceptedEvent];
+
+            // Zero-amount debit notes should be settled immediately.
+            let status = if amount.0 == BigDecimal::from(0) {
+                events.push(DebitNoteEventType::DebitNoteSettledEvent);
+                DocumentStatus::Settled
+            } else {
+                DocumentStatus::Accepted
+            };
+
+            update_status(&vec![debit_note_id.clone()], &owner_id, &status, conn)?;
             activity::set_amount_accepted(&activity_id, &owner_id, &amount, conn)?;
             if let Role::Provider = role {
-                debit_note_event::create::<()>(
-                    debit_note_id,
-                    owner_id,
-                    DebitNoteEventType::DebitNoteAcceptedEvent,
-                    None,
-                    conn,
-                )?;
+                for event in events {
+                    debit_note_event::create::<()>(
+                        debit_note_id.clone(),
+                        owner_id,
+                        event,
+                        None,
+                        conn,
+                    )?;
+                }
             }
+
             Ok(())
         })
         .await
