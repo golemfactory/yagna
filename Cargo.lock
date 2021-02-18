@@ -7273,6 +7273,7 @@ dependencies = [
  "semver 0.11.0",
  "serde_json",
  "thiserror",
+ "ya-agreement-utils",
 ]
 
 [[package]]
