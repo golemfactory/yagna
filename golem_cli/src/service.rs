@@ -1,6 +1,7 @@
 use crate::appkey;
-use crate::command::{PaymentType, YaCommand};
+use crate::command::{YaCommand, ERC20_DRIVER, ZKSYNC_DRIVER};
 use crate::setup::RunConfig;
+use crate::utils::payment_account;
 use anyhow::{Context, Result};
 use futures::channel::{mpsc, oneshot};
 use futures::prelude::*;
@@ -114,25 +115,16 @@ pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
     let app_key = appkey::get_app_key().await?;
 
     let provider_config = cmd.ya_provider()?.get_config().await?;
-    if let Some(account) = provider_config.account {
-        let address = account.address.to_lowercase();
-        cmd.yagna()?
-            .payment_init(&address, &PaymentType::PLAIN)
-            .await?;
-        cmd.yagna()?
-            .payment_init(&address, &PaymentType::ZK)
-            .await?;
-    } else {
-        let id = cmd.yagna()?.default_id().await?;
-        cmd.yagna()?
-            .payment_init(&id.node_id, &PaymentType::PLAIN)
-            .await?;
-        cmd.yagna()?
-            .payment_init(&id.node_id, &PaymentType::ZK)
-            .await?;
-    }
+    let address =
+        payment_account(&cmd, &config.account.account.or(provider_config.account)).await?;
+    cmd.yagna()?
+        .payment_init(&address, &config.account.network, &ERC20_DRIVER)
+        .await?;
+    cmd.yagna()?
+        .payment_init(&address, &config.account.network, &ZKSYNC_DRIVER)
+        .await?;
 
-    let provider = cmd.ya_provider()?.spawn(&app_key).await?;
+    let provider = cmd.ya_provider()?.spawn(&app_key, &config).await?;
     let ctrl_c = tokio::signal::ctrl_c();
 
     log::info!("Golem provider is running");

@@ -26,9 +26,7 @@ async fn test_single_not_resolve_offer() {
 
     // then
     let listener = network.get_event_listeners("Node-1");
-    assert!(timeout200ms(listener.proposal_receiver.recv())
-        .await
-        .is_err());
+    assert!(timeout1s(listener.proposal_receiver.recv()).await.is_err());
 }
 
 /// Test adds Offer and Demand. Resolver should emit Proposal on Demand node.
@@ -62,7 +60,7 @@ async fn test_resolve_offer_demand() {
 
     // then: It should be resolved on Requestor
     let listener = network.get_event_listeners("Requestor-1");
-    let proposal = timeout200ms(listener.proposal_receiver.recv())
+    let proposal = timeout1s(listener.proposal_receiver.recv())
         .await
         .unwrap()
         .unwrap();
@@ -71,9 +69,7 @@ async fn test_resolve_offer_demand() {
 
     // and: but not resolved on Provider.
     let listener = network.get_event_listeners("Provider-1");
-    assert!(timeout200ms(listener.proposal_receiver.recv())
-        .await
-        .is_err());
+    assert!(timeout1s(listener.proposal_receiver.recv()).await.is_err());
 }
 
 /// Test adds Demand on single node. Resolver should not emit Proposal.
@@ -96,9 +92,7 @@ async fn test_single_not_resolve_demand() {
 
     // then
     let listener = network.get_event_listeners("Node-1");
-    assert!(timeout200ms(listener.proposal_receiver.recv())
-        .await
-        .is_err());
+    assert!(timeout1s(listener.proposal_receiver.recv()).await.is_err());
 }
 
 /// Test adds Offer on two nodes and Demand third. Resolver should emit two Proposals on Demand node.
@@ -141,11 +135,11 @@ async fn test_resolve_2xoffer_demand() {
 
     // then: It should be resolved on Requestor two times
     let listener = network.get_event_listeners("Requestor-1");
-    let proposal1 = timeout200ms(listener.proposal_receiver.recv())
+    let proposal1 = timeout1s(listener.proposal_receiver.recv())
         .await
         .unwrap()
         .unwrap();
-    let proposal2 = timeout200ms(listener.proposal_receiver.recv())
+    let proposal2 = timeout1s(listener.proposal_receiver.recv())
         .await
         .unwrap()
         .unwrap();
@@ -161,16 +155,12 @@ async fn test_resolve_2xoffer_demand() {
 
     // and: but not resolved on Provider-1
     let listener = network.get_event_listeners("Provider-1");
-    assert!(timeout200ms(listener.proposal_receiver.recv())
-        .await
-        .is_err());
+    assert!(timeout1s(listener.proposal_receiver.recv()).await.is_err());
     // and: not on Provider-2.
     let listener = network.get_event_listeners("Provider-2");
-    assert!(timeout200ms(listener.proposal_receiver.recv())
-        .await
-        .is_err());
+    assert!(timeout1s(listener.proposal_receiver.recv()).await.is_err());
 }
 
-fn timeout200ms<T: Future>(fut: T) -> Timeout<T> {
-    timeout(Duration::from_millis(200), fut)
+fn timeout1s<T: Future>(fut: T) -> Timeout<T> {
+    timeout(Duration::from_secs(1), fut)
 }

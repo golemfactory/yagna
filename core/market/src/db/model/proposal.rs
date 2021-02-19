@@ -6,7 +6,6 @@ use ya_client::model::market::proposal::{Proposal as ClientProposal, State};
 use ya_client::model::market::NewProposal;
 use ya_client::model::{ErrorMessage, NodeId};
 use ya_diesel_utils::DbTextField;
-use ya_market_resolver::flatten::{flatten_json, JsonObjectExpected};
 
 use super::{generate_random_id, SubscriptionId};
 use super::{Owner, ProposalId};
@@ -145,7 +144,6 @@ impl Proposal {
             creation_ts,
             expiration_ts,
         };
-
         Proposal {
             body: proposal,
             negotiation,
@@ -208,7 +206,10 @@ impl Proposal {
         }
     }
 
-    pub fn from_client(&self, proposal: &NewProposal) -> Result<Proposal, JsonObjectExpected> {
+    pub fn from_client(
+        &self,
+        proposal: &NewProposal,
+    ) -> Result<Proposal, serde_json::error::Error> {
         let owner = self.body.id.owner();
         let creation_ts = Utc::now().naive_utc();
         // TODO: How to set expiration? Config?
@@ -225,7 +226,9 @@ impl Proposal {
             prev_proposal_id: Some(self.body.id.clone()),
             issuer: Issuer::Us,
             negotiation_id: self.negotiation.id.clone(),
-            properties: flatten_json(&proposal.properties)?.to_string(),
+            properties: serde_json::to_string(&ya_agreement_utils::agreement::flatten(
+                proposal.properties.clone(),
+            ))?,
             constraints: proposal.constraints.clone(),
             state: ProposalState::Draft,
             creation_ts,

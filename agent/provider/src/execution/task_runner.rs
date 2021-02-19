@@ -21,13 +21,13 @@ use ya_client_model::activity::{ActivityState, ProviderEvent, State};
 use ya_core_model::activity;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
-use ya_utils_actix::forward_actix_handler;
+use ya_utils_actix::{actix_signal_handler, forward_actix_handler};
 use ya_utils_path::SecurePath;
 use ya_utils_process::ExeUnitExitStatus;
 
 use super::exeunits_registry::{ExeUnitDesc, ExeUnitsRegistry};
 use super::task::Task;
-use crate::market::provider_market::AgreementApproved;
+use crate::market::provider_market::NewAgreement;
 use crate::market::Preset;
 use crate::tasks::{AgreementBroken, AgreementClosed};
 
@@ -357,12 +357,13 @@ impl TaskRunner {
         Ok(())
     }
 
-    #[logfn_inputs(Debug, fmt = "{}Got {:?} {:?}")]
     pub fn on_agreement_approved(
         &mut self,
-        msg: AgreementApproved,
+        msg: NewAgreement,
         _ctx: &mut Context<Self>,
     ) -> Result<()> {
+        log::debug!("[TaskRunner] Got new Agreement: {}", msg.agreement);
+
         // Agreement waits for first create activity event.
         let agreement_id = msg.agreement.agreement_id.clone();
         self.active_agreements.insert(agreement_id, msg.agreement);
@@ -462,22 +463,6 @@ impl TaskRunner {
         Ok(())
     }
 
-    pub fn on_subscribe_activity_created(
-        &mut self,
-        msg: Subscribe<ActivityCreated>,
-        _ctx: &mut Context<Self>,
-    ) -> Result<()> {
-        Ok(self.activity_created.on_subscribe(msg))
-    }
-
-    pub fn on_subscribe_activity_destroyed(
-        &mut self,
-        msg: Subscribe<ActivityDestroyed>,
-        _ctx: &mut Context<Self>,
-    ) -> Result<()> {
-        Ok(self.activity_destroyed.on_subscribe(msg))
-    }
-
     fn list_activities(&self, agreement_id: &str) -> Vec<String> {
         self.tasks
             .iter()
@@ -554,9 +539,11 @@ impl Actor for TaskRunner {
     type Context = Context<Self>;
 }
 
-forward_actix_handler!(TaskRunner, AgreementApproved, on_agreement_approved);
+forward_actix_handler!(TaskRunner, NewAgreement, on_agreement_approved);
 forward_actix_handler!(TaskRunner, ExeUnitProcessFinished, on_exeunit_exited);
 forward_actix_handler!(TaskRunner, GetExeUnit, get_exeunit);
+actix_signal_handler!(TaskRunner, ActivityCreated, activity_created);
+actix_signal_handler!(TaskRunner, ActivityDestroyed, activity_destroyed);
 
 impl Handler<GetOfferTemplates> for TaskRunner {
     type Result = ResponseFuture<Result<HashMap<String, OfferTemplate>>>;
@@ -581,17 +568,6 @@ impl Handler<GetOfferTemplates> for TaskRunner {
         .boxed_local()
     }
 }
-
-forward_actix_handler!(
-    TaskRunner,
-    Subscribe<ActivityCreated>,
-    on_subscribe_activity_created
-);
-forward_actix_handler!(
-    TaskRunner,
-    Subscribe<ActivityDestroyed>,
-    on_subscribe_activity_destroyed
-);
 
 impl Handler<UpdateActivity> for TaskRunner {
     type Result = ActorResponse<Self, (), Error>;

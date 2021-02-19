@@ -8,13 +8,14 @@ use std::sync::{Arc, Mutex};
 use ya_client::model::NodeId;
 use ya_core_model::net;
 use ya_core_model::net::{local as local_net, local::SendBroadcastMessage};
-use ya_service_bus::{typed as bus, untyped as local_bus, Error, RpcMessage};
+use ya_service_bus::{serialization, typed as bus, untyped as local_bus, Error, RpcMessage};
 
 #[cfg(feature = "bcast-singleton")]
 use super::bcast::singleton::BCastService;
 use super::bcast::BCast;
 #[cfg(not(feature = "bcast-singleton"))]
 use super::bcast::BCastService;
+use ya_core_model::net::local::SendBroadcastStub;
 
 #[derive(Clone)]
 pub struct MockNet {
@@ -117,7 +118,7 @@ impl MockNetInner {
         let bcast = BCastService::default();
         log::info!("initializing BCast on mock net");
 
-        let bcast_service_id = <SendBroadcastMessage<serde_json::Value> as RpcMessage>::ID;
+        let bcast_service_id = <SendBroadcastMessage<()> as RpcMessage>::ID;
 
         let bcast1 = bcast.clone();
         let _ = bus::bind(local_net::BUS_ID, move |subscribe: local_net::Subscribe| {
@@ -130,7 +131,7 @@ impl MockNetInner {
         });
 
         let addr = format!("{}/{}", local_net::BUS_ID, bcast_service_id);
-        let resp: Rc<[u8]> = serde_json::to_vec(&Ok::<(), ()>(())).unwrap().into();
+        let resp: Rc<[u8]> = serialization::to_vec(&Ok::<(), ()>(())).unwrap().into();
         let _ = local_bus::subscribe(
             &addr,
             move |caller: &str, _addr: &str, msg: &[u8]| {
@@ -138,12 +139,12 @@ impl MockNetInner {
                 let resp = resp.clone();
                 let bcast = bcast.clone();
 
-                let msg_json: SendBroadcastMessage<serde_json::Value> =
-                    serde_json::from_slice(msg).unwrap();
+                let stub: SendBroadcastStub = serialization::from_slice(msg).unwrap();
                 let caller = caller.to_string();
 
-                let msg = serde_json::to_vec(&msg_json).unwrap();
-                let topic = msg_json.topic().to_owned();
+                let msg = msg.iter().copied().collect::<Vec<_>>();
+
+                let topic = stub.topic;
                 let endpoints = bcast.resolve(&caller, &topic);
 
                 log::debug!("BCasting on {} to {:?} from {}", topic, endpoints, caller);
@@ -155,7 +156,7 @@ impl MockNetInner {
                         None => {
                             log::debug!(
                                 "Not broadcasting on topic {} to {}. Node not found on list. \
-                         Probably networking was disabled for this Node.",
+                                Probably networking was disabled for this Node.",
                                 topic,
                                 addr
                             );

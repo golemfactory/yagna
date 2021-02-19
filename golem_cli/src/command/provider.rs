@@ -1,24 +1,15 @@
 use anyhow::Context;
-
 use serde::Deserialize;
 use std::process::Stdio;
 use tokio::process::{Child, Command};
 
+use ya_core_model::payment::local::NetworkName;
+pub use ya_provider::GlobalsState as ProviderConfig;
+
+use crate::setup::RunConfig;
+
 pub struct YaProviderCommand {
     pub(super) cmd: Command,
-}
-
-#[derive(Deserialize)]
-pub struct RecvAccount {
-    pub platform: Option<String>,
-    pub address: String,
-}
-
-#[derive(Deserialize, Default)]
-pub struct ProviderConfig {
-    pub node_name: Option<String>,
-    pub subnet: Option<String>,
-    pub account: Option<RecvAccount>,
 }
 
 #[derive(Deserialize)]
@@ -61,7 +52,11 @@ impl YaProviderCommand {
         serde_json::from_slice(output.stdout.as_slice()).context("parsing ya-provider config get")
     }
 
-    pub async fn set_config(self, config: &ProviderConfig) -> anyhow::Result<()> {
+    pub async fn set_config(
+        self,
+        config: &ProviderConfig,
+        network: &NetworkName,
+    ) -> anyhow::Result<()> {
         let mut cmd = self.cmd;
 
         cmd.args(&["--json", "config", "set"]);
@@ -74,13 +69,11 @@ impl YaProviderCommand {
         }
 
         if let Some(account) = &config.account {
-            if let Some(platform) = &account.platform {
-                cmd.arg("--account")
-                    .arg(format!("{}/{}", platform, &account.address));
-            } else {
-                cmd.arg("--account").arg(&account.address);
-            }
+            cmd.args(&["--account", &account.to_string()]);
         }
+        cmd.args(&["--payment-network", &network.to_string()]);
+
+        log::debug!("executing: {:?}", cmd);
 
         let output = cmd
             .stderr(Stdio::piped())
@@ -88,7 +81,7 @@ impl YaProviderCommand {
             .stdout(Stdio::piped())
             .output()
             .await
-            .context("failed to get ya-provider configuration")?;
+            .context("failed to set ya-provider configuration")?;
 
         if output.status.success() {
             Ok(())
@@ -278,11 +271,30 @@ impl YaProviderCommand {
         }
     }
 
-    pub async fn spawn(self, app_key: &str) -> anyhow::Result<Child> {
-        let mut cmd = self.cmd;
-        Ok(cmd
-            .arg("run")
-            .env("YAGNA_APPKEY", app_key)
+    pub async fn spawn(mut self, app_key: &str, run_cfg: &RunConfig) -> anyhow::Result<Child> {
+        self.cmd
+            .args(&[
+                "run",
+                "--payment-network",
+                &run_cfg.account.network.to_string(),
+            ])
+            .env("YAGNA_APPKEY", app_key);
+
+        if let Some(node_name) = &run_cfg.node_name {
+            self.cmd.arg("--node-name").arg(node_name);
+        }
+        if let Some(subnet) = &run_cfg.subnet {
+            self.cmd.arg("--subnet").arg(subnet);
+        }
+
+        if let Some(account) = run_cfg.account.account {
+            self.cmd.arg("--account").arg(account.to_string());
+        }
+
+        log::debug!("spawning: {:?}", self.cmd);
+
+        Ok(self
+            .cmd
             .stdin(Stdio::null())
             .stderr(Stdio::inherit())
             .stdout(Stdio::inherit())

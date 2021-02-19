@@ -12,8 +12,8 @@ use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao,
 use crate::{
     dao::DbResult,
     db::{
-        models::{PaymentEntity, PAYMENT_STATUS_NOT_YET, PAYMENT_STATUS_OK},
-        schema::payment::dsl,
+        models::{Network, PaymentEntity, PAYMENT_STATUS_NOT_YET, PAYMENT_STATUS_OK},
+        schema::{payment, payment::dsl, transaction},
     },
 };
 
@@ -29,11 +29,16 @@ impl<'c> AsDao<'c> for PaymentDao<'c> {
 }
 
 impl<'c> PaymentDao<'c> {
-    pub async fn get_pending_payments(&self, address: String) -> DbResult<Vec<PaymentEntity>> {
+    pub async fn get_pending_payments(
+        &self,
+        address: String,
+        network: Network,
+    ) -> DbResult<Vec<PaymentEntity>> {
         readonly_transaction(self.pool, move |conn| {
             let payments: Vec<PaymentEntity> = dsl::payment
                 .filter(dsl::sender.eq(address))
                 .filter(dsl::status.eq(PAYMENT_STATUS_NOT_YET))
+                .filter(dsl::network.eq(network))
                 .order(dsl::payment_due_date.asc())
                 .load(conn)?;
             Ok(payments)
@@ -75,6 +80,18 @@ impl<'c> PaymentDao<'c> {
         readonly_transaction(self.pool, move |conn| {
             let payments: Vec<PaymentEntity> =
                 dsl::payment.filter(dsl::tx_id.eq(tx_id)).load(conn)?;
+            Ok(payments)
+        })
+        .await
+    }
+
+    pub async fn get_first_by_tx_hash(&self, tx_hash: String) -> DbResult<PaymentEntity> {
+        readonly_transaction(self.pool, move |conn| {
+            let payments: PaymentEntity = dsl::payment
+                .inner_join(transaction::table)
+                .select(payment::all_columns)
+                .filter(transaction::dsl::tx_hash.eq(tx_hash))
+                .first(conn)?;
             Ok(payments)
         })
         .await

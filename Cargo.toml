@@ -11,7 +11,7 @@ edition = "2018"
 
 [features]
 default = ['zksync-driver', 'gnt-driver', 'gftp/bin']
-static-openssl = ["openssl/vendored"]
+static-openssl = ["openssl/vendored", "openssl-probe"]
 dummy-driver = ['ya-dummy-driver']
 gnt-driver = ['ya-gnt-driver']
 zksync-driver = ['ya-zksync-driver']
@@ -22,30 +22,34 @@ name = "yagna"
 path = "core/serv/src/main.rs"
 
 [dependencies]
-gftp = "0.1" # just to enable gftp build for cargo-deb
-ya-activity = "0.2"
+ya-activity = "0.3"
 ya-compile-time-utils = "0.1"
-ya-dummy-driver = { version = "0.1", optional = true }
+ya-dummy-driver = { version = "0.2", optional = true }
 ya-file-logging = "0.1"
-ya-gnt-driver = { version = "0.1", optional = true }
-ya-zksync-driver = { version = "0.1", optional = true }
+ya-gnt-driver = { version = "0.2", optional = true }
+ya-zksync-driver = { version = "0.2", optional = true }
 ya-identity = "0.2"
-ya-market = "0.2"
+ya-market = "0.3"
 ya-metrics = "0.1"
-ya-net = { version = "0.1", features = ["service"] }
-ya-payment = "0.1"
+ya-net = { version = "0.2", features = ["service"] }
+ya-payment = "0.2"
 ya-persistence = "0.2"
-ya-sb-proto = "0.1"
-ya-sb-router = "0.1"
+ya-sb-proto = "0.2"
+ya-sb-router = "0.4"
 ya-service-api = "0.1"
 ya-service-api-derive = "0.1"
 ya-service-api-interfaces = "0.1"
 ya-service-api-web = "0.1"
-ya-service-bus = "0.2"
+ya-service-bus = "0.4"
 ya-sgx = "0.1"
 ya-utils-path = "0.1"
 ya-utils-futures = "0.1"
 ya-utils-process = { version = "0.1", features = ["lock"] }
+ya-utils-networking = "0.1"
+ya-version = "0.1"
+
+gftp = { version = "^0.2", optional = true } # just to enable gftp build for cargo-deb
+ya-provider = { version = "0.2", optional = true } # just to enable conditionally running some tests
 
 actix-rt = "1.0"
 actix-service = "1.0"
@@ -58,9 +62,10 @@ futures = "0.3"
 lazy_static = "1.4"
 log = "0.4"
 openssl = "0.10"
+openssl-probe = { version = "0.1", optional = true }
 structopt = "0.3"
-url = "2.1.1"
 tokio = {version = "0.2.22", features=["uds"]}
+url = "2.1.1"
 
 [package.metadata.deb]
 name="golem-requestor"
@@ -119,19 +124,16 @@ members = [
     "core/serv-api/interfaces",
     "core/serv-api/web",
     "core/sgx",
+    "core/version",
     "exe-unit",
     "exe-unit/runtime-api",
     "exe-unit/tokio-process-ns",
     "golem_cli",
-    "service-bus/bus",
-    "service-bus/derive",
-    "service-bus/proto",
-    "service-bus/router",
-    "service-bus/util",
     "utils/actix_utils",
     "utils/agreement-utils",
     "utils/compile-time-utils",
     "utils/futures",
+    "utils/networking",
     "utils/path",
     "utils/process",
     "utils/std-utils",
@@ -143,17 +145,18 @@ members = [
 
 [patch.crates-io]
 ## SERVICES
+ya-identity = { path = "core/identity" }
+ya-net = { path = "core/net" }
+ya-market = { path = "core/market" }
+ya-market-resolver = { path = "core/market/resolver" }
 ya-activity = { path = "core/activity" }
+ya-sgx = { path = "core/sgx" }
+ya-payment = { path = "core/payment" }
 ya-payment-driver = { path = "core/payment-driver/base" }
 ya-dummy-driver = { path = "core/payment-driver/dummy" }
 ya-gnt-driver = { path = "core/payment-driver/gnt" }
 ya-zksync-driver = { path = "core/payment-driver/zksync" }
-ya-identity = { path = "core/identity" }
-ya-market = { path = "core/market" }
-ya-market-resolver = { path = "core/market/resolver" }
-ya-net = { path = "core/net" }
-ya-payment = { path = "core/payment" }
-ya-sgx = { path = "core/sgx" }
+ya-version = { path = "core/version" }
 
 ## CORE UTILS
 ya-core-model = { path = "core/model" }
@@ -165,17 +168,17 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## SERVICE BUS
-ya-service-bus = { path = "service-bus/bus/" }
-ya-sb-proto = { path = "service-bus/proto" }
-ya-sb-router = { path = "service-bus/router" }
-ya-sb-util = { path = "service-bus/util" }
+#ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"}
+#ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"}
+#ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"}
+#ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"}
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "a5bfc61da8f3a5cdcafcacf3d48a9f706571a9d7"}
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "a5bfc61da8f3a5cdcafcacf3d48a9f706571a9d7"}
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", branch = "release/v0.6"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", branch = "release/v0.6"}
 
-#ya-client = { path = "../ya-client" }
-#ya-client-model = { path = "../ya-client/model" }
+# ya-client = { path = "../ya-client" }
+# ya-client-model = { path = "../ya-client/model" }
 
 ## OTHERS
 gftp = { path = "core/gftp" }
@@ -187,8 +190,10 @@ ya-exe-unit = { path = "exe-unit" }
 ya-file-logging = { path = "utils/file-logging" }
 ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
-ya-utils-futures = { path = "utils/futures"}
-ya-utils-path = { path = "utils/path"}
+ya-utils-futures = { path = "utils/futures" }
+ya-utils-networking = { path = "utils/networking" }
+ya-utils-path = { path = "utils/path" }
 ya-utils-process = { path = "utils/process"}
 ya-diesel-utils = { path = "utils/diesel-utils"}
 ya-metrics = { path = "core/metrics" }
+ya-provider = { path = "agent/provider"}

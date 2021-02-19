@@ -27,12 +27,12 @@ libproc = "0.7"
 winapi = { version = "0.3.8", features = ["jobapi2", "processthreadsapi"] }
 
 [dependencies]
-ya-agreement-utils = "0.2"
-ya-client-model = "0.2"
+ya-agreement-utils = { version = "^0.2"}
+ya-client-model = "0.3"
 ya-compile-time-utils = "0.1"
-ya-core-model = { version = "0.2", features = ["activity", "appkey"], path="../core/model" }
+ya-core-model = { version = "^0.3", features = ["activity", "appkey"] }
 ya-runtime-api = { version = "0.1", path = "runtime-api", features = ["server"] }
-ya-service-bus = "0.2"
+ya-service-bus = "0.4"
 ya-transfer = "0.1"
 ya-utils-path = "0.1"
 
@@ -48,6 +48,7 @@ graphene-sgx = { version = "0.3", optional = true }
 hex = "0.4.2"
 lazy_static = "1.4.0"
 log = "0.4.8"
+openssl= { version = "0.10", optional = true }
 rand = "0.6"
 regex = "1.3.4"
 reqwest = { version = "0.10.7", optional = true }
@@ -62,12 +63,11 @@ thiserror = "1.0.10"
 tokio = { version = "0.2.11", features = ["process", "signal", "time"] }
 tokio-util = { version = "0.2", features = ["codec"] }
 url = "2.1.1"
-openssl= { version = "0.10", optional = true }
-
+yansi = "0.5.0"
 
 [dev-dependencies]
 ya-runtime-api = { version = "0.1", path = "runtime-api", features = ["codec", "server"] }
-ya-sb-router = "0.1"
+ya-sb-router = "0.4"
 
 actix-files = "0.4"
 actix-rt = "1.0.1"

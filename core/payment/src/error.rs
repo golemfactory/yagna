@@ -121,8 +121,8 @@ pub mod processor {
 
     #[derive(thiserror::Error, Debug)]
     #[error(
-        "Account not registered. Hint: Did you run `yagna payment init -{}` after restarting? platform={platform} address={address} mode={mode:?}",
-        if *.mode == AccountMode::SEND {"r"} else {"p"}
+        "Account not registered. Hint: Did you run `yagna payment init --{}` after restarting? platform={platform} address={address} mode={mode:?}",
+        if *.mode == AccountMode::SEND {"sender"} else {"receiver"}
     )]
     pub struct AccountNotRegistered {
         platform: String,
@@ -290,6 +290,13 @@ pub mod processor {
             Err(Self::Validation(format!(
                 "Invalid payer address for agreement {}: {} != {}",
                 agreement.id, agreement.payer_addr, payer_addr
+            )))
+        }
+
+        pub fn agreement_platform(agreement: &Agreement, platform: &str) -> Result<(), Self> {
+            Err(Self::Validation(format!(
+                "Invalid payment platform for agreement {}: {} != {}",
+                agreement.id, agreement.payment_platform, platform
             )))
         }
 

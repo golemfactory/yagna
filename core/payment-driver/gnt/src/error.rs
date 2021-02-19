@@ -14,9 +14,9 @@ pub enum DbError {
 
 #[derive(Debug, Clone, Error)]
 pub enum GNTDriverError {
-    #[error("Insufficient gas")]
+    #[error("Insufficient gas. Did you run `yagna payment fund`?")]
     InsufficientGas,
-    #[error("Insufficient funds")]
+    #[error("Insufficient funds. Did you run `yagna payment fund`?")]
     InsufficientFunds,
     #[error("Payment: {0} already scheduled")]
     PaymentAlreadyScheduled(String),

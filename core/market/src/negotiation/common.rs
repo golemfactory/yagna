@@ -18,8 +18,8 @@ use crate::db::{
         TakeEventsError,
     },
     model::{
-        Agreement, AgreementEvent, AgreementId, AgreementState, AppSessionId, Issuer, MarketEvent,
-        Owner, Proposal, ProposalId, ProposalState, SubscriptionId,
+        Agreement, AgreementEvent, AgreementId, AgreementState, AppSessionId, MarketEvent, Owner,
+        Proposal, ProposalId, ProposalState, SubscriptionId,
     },
 };
 use crate::matcher::{store::SubscriptionStore, RawProposal};
@@ -43,6 +43,7 @@ use crate::protocol::negotiation::{
     messages::{AgreementTerminated, ProposalReceived},
 };
 use crate::utils::display::EnableDisplay;
+use crate::utils::AgreementLock;
 
 type IsFirst = bool;
 
@@ -54,6 +55,7 @@ pub struct CommonBroker {
     pub(super) session_notifier: EventNotifier<AppSessionId>,
     pub(super) agreement_notifier: EventNotifier<AgreementId>,
     pub(super) config: Arc<Config>,
+    pub(super) agreement_lock: AgreementLock,
 }
 
 impl CommonBroker {
@@ -70,6 +72,7 @@ impl CommonBroker {
             session_notifier,
             agreement_notifier: EventNotifier::new(),
             config,
+            agreement_lock: AgreementLock::new(),
         }
     }
 
@@ -116,12 +119,6 @@ impl CommonBroker {
         self.validate_proposal(&prev_proposal, caller_id, caller_role)
             .await?;
 
-        if prev_proposal.body.issuer == Issuer::Us {
-            Err(ProposalValidationError::OwnProposal(
-                prev_proposal.body.id.clone(),
-            ))?;
-        }
-
         let is_first = prev_proposal.body.prev_proposal_id.is_none();
         let new_proposal = prev_proposal.from_client(proposal)?;
 
@@ -152,12 +149,6 @@ impl CommonBroker {
 
         self.validate_proposal(&proposal, caller_id, caller_role)
             .await?;
-
-        if proposal.body.issuer == Issuer::Us && proposal_id.owner() == caller_role {
-            let e = ProposalValidationError::OwnProposal(proposal.body.id.clone());
-            log::warn!("{}", e);
-            Err(e)?;
-        }
 
         self.db
             .as_dao::<ProposalDao>()
@@ -361,16 +352,31 @@ impl CommonBroker {
             Some(agreement) => agreement,
         };
 
-        validate_transition(&agreement, AgreementState::Terminated)?;
+        {
+            // This must be under lock to avoid conflicts with `terminate_agreement`,
+            // that could have been called by other party at the same time. Termination
+            // consists of 2 operations: sending message to other party and updating state.
+            // Race conditions could appear in this situation.
+            let _hold = self.agreement_lock.lock(&agreement.id).await;
 
-        protocol_common::propagate_terminate_agreement(&agreement, reason.clone()).await?;
+            validate_transition(&agreement, AgreementState::Terminated)?;
 
-        let reason_string = CommonBroker::reason2string(&reason);
+            protocol_common::propagate_terminate_agreement(
+                &agreement,
+                reason.clone(),
+                "NotSigned".to_string(),
+                Utc::now().naive_utc(),
+            )
+            .await?;
 
-        dao.terminate(&agreement.id, reason_string, agreement.id.owner())
-            .await
-            .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?;
+            let reason_string = CommonBroker::reason2string(&reason);
+            dao.terminate(&agreement.id, reason_string, agreement.id.owner())
+                .await
+                .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?;
+        }
+
         self.notify_agreement(&agreement).await;
+        self.agreement_lock.clear_locks(&agreement.id).await;
 
         inc_terminate_metrics(&reason, agreement.id.owner());
         log::info!(
@@ -385,18 +391,18 @@ impl CommonBroker {
         // provider for the second time, so we must generate new Proposal for him.
         // Note: Regeneration failure isn't propagated to Requestor, because termination
         // succeeded at this point.
-        if let Owner::Requestor = agreement.id.owner() {
-            self.regenerate_proposal(&agreement)
-                .await
-                .map_err(|e| {
-                    log::warn!(
-                        "Failed to regenerate Proposal after Agreement [{}] termination. {}",
-                        &agreement.id,
-                        e
-                    )
-                })
-                .ok();
-        }
+        // if let Owner::Requestor = agreement.id.owner() {
+        //     self.regenerate_proposal(&agreement)
+        //         .await
+        //         .map_err(|e| {
+        //             log::warn!(
+        //                 "Failed to regenerate Proposal after Agreement [{}] termination. {}",
+        //                 &agreement.id,
+        //                 e
+        //             )
+        //         })
+        //         .ok();
+        // }
         Ok(())
     }
 
@@ -427,36 +433,47 @@ impl CommonBroker {
     ) -> Result<(), RemoteAgreementError> {
         let dao = self.db.as_dao::<AgreementDao>();
         let agreement_id = msg.agreement_id.clone();
-        let agreement = dao
-            .select(&agreement_id, None, Utc::now().naive_utc())
-            .await
-            .map_err(|_e| RemoteAgreementError::NotFound(agreement_id.clone()))?
-            .ok_or(RemoteAgreementError::NotFound(agreement_id.clone()))?;
 
-        let auth_id = match caller_role {
-            Owner::Provider => agreement.provider_id,
-            Owner::Requestor => agreement.requestor_id,
+        let agreement = {
+            // This must be under lock to avoid conflicts with `terminate_agreement`,
+            // that could have been called by one of our Agents. Termination consists
+            // of 2 operations: sending message to other party and updating state.
+            // Race conditions could appear in this situation.
+            let _hold = self.agreement_lock.lock(&agreement_id).await;
+
+            let agreement = dao
+                .select(&agreement_id, None, Utc::now().naive_utc())
+                .await
+                .map_err(|_e| RemoteAgreementError::NotFound(agreement_id.clone()))?
+                .ok_or(RemoteAgreementError::NotFound(agreement_id.clone()))?;
+
+            let auth_id = match caller_role {
+                Owner::Provider => agreement.provider_id,
+                Owner::Requestor => agreement.requestor_id,
+            };
+
+            if auth_id != caller_id {
+                // Don't reveal, that we know this Agreement id.
+                Err(RemoteAgreementError::NotFound(agreement_id.clone()))?
+            }
+
+            let reason_string = CommonBroker::reason2string(&msg.reason);
+            dao.terminate(&agreement_id, reason_string, caller_role)
+                .await
+                .map_err(|e| {
+                    log::warn!(
+                        "Couldn't terminate agreement. id: {}, e: {}",
+                        agreement_id,
+                        e
+                    );
+                    RemoteAgreementError::InternalError(agreement_id.clone())
+                })?;
+
+            agreement
         };
 
-        if auth_id != caller_id {
-            // Don't reveal, that we know this Agreement id.
-            Err(RemoteAgreementError::NotFound(agreement_id.clone()))?
-        }
-
-        let reason_string = CommonBroker::reason2string(&msg.reason);
-
-        dao.terminate(&agreement_id, reason_string, caller_role)
-            .await
-            .map_err(|e| {
-                log::warn!(
-                    "Couldn't terminate agreement. id: {}, e: {}",
-                    agreement_id,
-                    e
-                );
-                RemoteAgreementError::InternalError(agreement_id.clone())
-            })?;
-
         self.notify_agreement(&agreement).await;
+        self.agreement_lock.clear_locks(&agreement_id).await;
 
         inc_terminate_metrics(&msg.reason, agreement.id.owner());
         log::info!(
@@ -583,6 +600,23 @@ impl CommonBroker {
         caller_id: NodeId,
         caller_role: Owner,
     ) -> Result<(), RejectProposalError> {
+        if msg.initial {
+            // This is case when Requestor rejects initial Proposal.
+            // Provider is not yet aware this Proposal ever exists.
+            // We could add rejected event here, but most probably it would
+            // not be beneficial to Provider, so instead just counting such
+            // cases to see how often does it happens, and decide
+            // in the next releases, if adding event is worth considering.
+            match caller_role {
+                Owner::Provider => {
+                    log::error!("Provider rejected Initial Proposal, but should not see it.");
+                    counter!("market.proposals.provider.rejected.initial", 1);
+                }
+                Owner::Requestor => counter!("market.proposals.requestor.rejected.initial", 1),
+            };
+            return Ok(());
+        }
+
         let proposal = CommonBroker::reject_proposal(
             &self,
             None,
@@ -641,6 +675,13 @@ impl CommonBroker {
             Owner::Requestor => &proposal.negotiation.requestor_id != caller_id,
         } {
             ProposalValidationError::Unauthorized(proposal.body.id.clone(), caller_id.clone());
+        }
+
+        if &proposal.issuer() == caller_id {
+            let e = ProposalValidationError::OwnProposal(proposal.body.id.clone());
+            log::warn!("{}", e);
+            counter!("market.proposals.self-reaction-attempt", 1);
+            Err(e)?;
         }
 
         // check Offer
@@ -730,10 +771,21 @@ pub fn validate_match(
         error: e.to_string(),
     })? {
         Match::Yes => Ok(()),
-        _ => {
+        Match::No {
+            demand_mismatch,
+            offer_mismatch,
+        }
+        | Match::Undefined {
+            demand_mismatch,
+            offer_mismatch,
+        } => {
             return Err(MatchValidationError::NotMatching {
                 new: new_proposal.body.id.clone(),
                 prev: prev_proposal.body.id.clone(),
+                mismatches: format!(
+                    "Mismatched constraints - Offer: {:?}, Demand: {:?}",
+                    offer_mismatch, demand_mismatch
+                ),
             })
         }
     }

@@ -1,13 +1,14 @@
 use crate::error::GNTDriverError;
-use crate::GNTDriverResult;
-
 use crate::models::{TransactionEntity, TransactionStatus, TxType};
+use crate::networks::Network;
+use crate::GNTDriverResult;
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use ethereum_tx_sign::RawTransaction;
 use ethereum_types::{Address, H160, H256, U256};
 use futures3::{Future, FutureExt};
 use num_bigint::ToBigInt;
+use num_traits::FromPrimitive;
 use sha3::{Digest, Sha3_512};
 use std::pin::Pin;
 use std::str::FromStr;
@@ -93,6 +94,7 @@ pub fn raw_tx_to_entity(
         tx_type: tx_type.into(),
         signature: hex::encode(signature),
         tx_hash: None,
+        network: Network::from_u64(chain_id).unwrap(),
     }
 }
 

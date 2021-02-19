@@ -1,7 +1,10 @@
 use anyhow::{bail, Context, Result};
-
 use tokio::{net::TcpStream, process::Command};
 use url::Url;
+
+use ya_core_model::NodeId;
+
+use crate::command::YaCommand;
 
 pub async fn get_command_raw_output(program: &str, args: &[&str]) -> Result<Vec<u8>> {
     let mut command = Command::new(program);
@@ -10,7 +13,7 @@ pub async fn get_command_raw_output(program: &str, args: &[&str]) -> Result<Vec<
     let command_output = command
         .output()
         .await
-        .with_context(|| format!("Failed to spawn {:?}", program))?;
+        .with_context(|| format!("Failed to spawn {:?} {:?}", program, args))?;
     if !command_output.status.success() {
         log::debug!("subcommand failed");
         bail!("subcommand failed: {:?}", command);
@@ -87,4 +90,11 @@ pub async fn wait_for_yagna() -> Result<()> {
 
 pub async fn is_yagna_running() -> Result<bool> {
     Ok(TcpStream::connect(yagna_addr()?).await.is_ok())
+}
+
+pub async fn payment_account(cmd: &YaCommand, address: &Option<NodeId>) -> Result<String> {
+    Ok(match address {
+        Some(address) => address.to_string(),
+        _ => cmd.yagna()?.default_id().await?.node_id,
+    })
 }

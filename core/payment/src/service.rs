@@ -52,10 +52,16 @@ mod local {
         counter!("payment.invoices.provider.cancelled", 0);
         counter!("payment.invoices.provider.paid", 0);
         counter!("payment.invoices.provider.accepted", 0);
-        counter!("payment.amount.received", 0, "platform" => "NGNT");
-        // TODO: counter!("payment.amount.received", 0, "platform" => "ZKSYNC");
-        counter!("payment.amount.sent", 0, "platform" => "NGNT");
-        // TODO: counter!("payment.amount.sent", 0, "platform" => "ZKSYNC");
+
+        counter!("payment.amount.received", 0, "platform" => "erc20-rinkeby-tglm");
+        counter!("payment.amount.received", 0, "platform" => "erc20-mainnet-glm");
+        counter!("payment.amount.received", 0, "platform" => "zksync-rinkeby-tglm");
+        counter!("payment.amount.received", 0, "platform" => "zksync-mainnet-glm");
+
+        counter!("payment.amount.sent", 0, "platform" => "erc20-rinkeby-tglm");
+        counter!("payment.amount.sent", 0, "platform" => "erc20-mainnet-glm");
+        counter!("payment.amount.sent", 0, "platform" => "zksync-rinkeby-tglm");
+        counter!("payment.amount.sent", 0, "platform" => "zksync-mainnet-glm");
 
         log::debug!("Successfully bound payment local service to service bus");
     }
@@ -134,7 +140,27 @@ mod local {
         msg: GetStatus,
     ) -> Result<StatusResult, GenericError> {
         log::info!("get status: {:?}", msg);
-        let GetStatus { platform, address } = msg;
+        let GetStatus {
+            address,
+            driver,
+            network,
+            token,
+        } = msg;
+
+        let (network, network_details) = processor
+            .get_network(driver.clone(), network)
+            .await
+            .map_err(GenericError::new)?;
+        let token = token.unwrap_or(network_details.default_token.clone());
+        let platform = match network_details.tokens.get(&token) {
+            Some(platform) => platform.clone(),
+            None => {
+                return Err(GenericError::new(format!(
+                    "Unsupported token. driver={} network={} token={}",
+                    driver, network, token
+                )))
+            }
+        };
 
         let incoming_fut = async {
             db.as_dao::<AgreementDao>()
@@ -169,6 +195,9 @@ mod local {
             reserved,
             outgoing,
             incoming,
+            driver,
+            network,
+            token,
         })
     }
 

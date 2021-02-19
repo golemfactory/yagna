@@ -10,6 +10,7 @@ use crate::{utils, GNTDriverError, GNTDriverResult};
 use crate::dao::payment::PaymentDao;
 use crate::gnt::config::EnvConfiguration;
 use crate::gnt::{common, notify_payment, SignTx};
+use crate::networks::Network;
 use actix::prelude::*;
 use bigdecimal::{BigDecimal, Zero};
 use chrono::Utc;
@@ -131,6 +132,7 @@ impl Message for WaitForTx {
 
 pub struct TransactionSender {
     active_accounts: Rc<RefCell<Accounts>>,
+    network: Network,
     ethereum_client: Arc<EthereumClient>,
     gnt_contract: Arc<Contract<Http>>,
     nonces: HashMap<Address, U256>,
@@ -145,6 +147,7 @@ pub struct TransactionSender {
 
 impl TransactionSender {
     pub fn new(
+        network: Network,
         ethereum_client: Arc<EthereumClient>,
         gnt_contract: Arc<Contract<Http>>,
         db: DbExecutor,
@@ -155,6 +158,7 @@ impl TransactionSender {
         }));
         let me = TransactionSender {
             active_accounts,
+            network,
             ethereum_client,
             gnt_contract,
             db,
@@ -193,23 +197,27 @@ impl TransactionSender {
         let db = self.db.clone();
         let client = self.ethereum_client.clone();
         let address_str = crate::utils::addr_to_str(&address);
+        let network = self.network;
 
         future::try_join(
             async move {
-                Ok::<_, GNTDriverError>(
-                    db.as_dao::<TransactionDao>()
-                        .get_used_nonces(address_str)
-                        .await?
-                        .into_iter()
-                        .map(u256_from_big_endian_hex)
-                        .max(),
-                )
+                let db_nonce = db
+                    .as_dao::<TransactionDao>()
+                    .get_used_nonces(address_str, network)
+                    .await?
+                    .into_iter()
+                    .map(u256_from_big_endian_hex)
+                    .max();
+                log::trace!("DB nonce: {:?}", db_nonce);
+                Ok::<_, GNTDriverError>(db_nonce)
             },
             async move {
-                client
+                let client_nonce = client
                     .get_next_nonce(address)
                     .map_err(GNTDriverError::from)
-                    .await
+                    .await;
+                log::trace!("Client nonce: {:?}", client_nonce);
+                client_nonce
             },
         )
         .and_then(|r| {
@@ -362,7 +370,7 @@ impl Handler<TxSave> for TransactionSender {
         } else {
             return transaction_error("reservation missing");
         };
-        let chain_id = self.ethereum_client.chain_id();
+        let chain_id = self.network.chain_id();
         let now = Utc::now();
         let tx_type = msg.tx_type;
         let db_transactions: Vec<_> = msg
@@ -391,6 +399,9 @@ impl Handler<TxSave> for TransactionSender {
             })
             .collect::<Vec<_>>();
 
+        db_transactions
+            .iter()
+            .for_each(|tx| log::trace!("Creating db transaction: {:?}", tx));
         let db = self.db.clone();
         let fut = {
             let db = db.clone();
@@ -430,7 +441,8 @@ impl Handler<TxSave> for TransactionSender {
                                 confirmations: required_confirmations,
                             });
                         }
-                        Err(_e) => {
+                        Err(e) => {
+                            log::error!("Error sending transaction: {:?}", e);
                             db.as_dao::<TransactionDao>()
                                 .update_tx_status(tx_id, TransactionStatus::Failed.into())
                                 .await
@@ -454,7 +466,7 @@ impl Handler<Retry> for TransactionSender {
     fn handle(&mut self, msg: Retry, _ctx: &mut Self::Context) -> Self::Result {
         let db = self.db.clone();
         let client = self.ethereum_client.clone();
-        let chain_id = client.chain_id();
+        let chain_id = self.network.chain_id();
         // TODO: catch different states.
         let fut = async move {
             if let Some(tx) = db.as_dao::<TransactionDao>().get(msg.tx_id).await? {
@@ -597,6 +609,7 @@ impl TransactionSender {
                     None => continue,
                     Some(node_id) => {
                         let account = address.clone();
+                        let network = act.network;
                         let client = act.ethereum_client.clone();
                         let gnt_contract = act.gnt_contract.clone();
                         let tx_sender = ctx.address();
@@ -605,6 +618,7 @@ impl TransactionSender {
                         Arbiter::spawn(async move {
                             process_payments(
                                 account,
+                                network,
                                 client,
                                 gnt_contract,
                                 tx_sender,
@@ -756,10 +770,11 @@ impl TransactionSender {
         let db = self.db.clone();
         let me = ctx.address();
         let required_confirmations = self.required_confirmations;
+        let network = self.network;
         let job = async move {
             let txs = db
                 .as_dao::<TransactionDao>()
-                .get_unconfirmed_txs()
+                .get_unconfirmed_txs(network)
                 .await
                 .unwrap();
             for tx in txs {
@@ -819,6 +834,7 @@ impl Handler<AccountUnlocked> for TransactionSender {
 
 async fn process_payments(
     account: String,
+    network: Network,
     client: Arc<EthereumClient>,
     gnt_contract: Arc<Contract<Http>>,
     tx_sender: Addr<TransactionSender>,
@@ -827,7 +843,7 @@ async fn process_payments(
 ) {
     match db
         .as_dao::<PaymentDao>()
-        .get_pending_payments(account.clone())
+        .get_pending_payments(account.clone(), network)
         .await
     {
         Err(e) => log::error!(
@@ -868,7 +884,7 @@ async fn process_payment(
 ) -> GNTDriverResult<()> {
     log::info!("Processing payment: {:?}", payment);
     let gas_price = client.get_gas_price().await?;
-    let chain_id = client.chain_id();
+    let chain_id = payment.network.chain_id();
     match transfer_gnt(
         gnt_contract,
         tx_sender,
@@ -897,7 +913,7 @@ async fn process_payment(
                     },
                 )
                 .await?;
-            log::error!("NGNT transfer failed: {}", e);
+            log::error!("GLM transfer failed: {}", e);
             return Err(e);
         }
     }
@@ -929,7 +945,12 @@ async fn transfer_gnt(
         GNT_TRANSFER_GAS.into(),
     );
     let r = batch.send_to(tx_sender, sign_tx).await?;
-    Ok(r.into_iter().next().unwrap())
+    match r.into_iter().next() {
+        Some(tx) => Ok(tx),
+        None => Err(GNTDriverError::LibraryError(
+            "GLM transfer failed".to_string(),
+        )),
+    }
 }
 
 async fn notify_tx_confirmed(db: DbExecutor, tx_id: String) -> GNTDriverResult<()> {
@@ -953,6 +974,7 @@ async fn notify_tx_confirmed(db: DbExecutor, tx_id: String) -> GNTDriverResult<(
         .get_by_tx_id(tx_id.clone())
         .await?;
     assert_ne!(payments.len(), 0);
+    let platform = payments[0].network.default_platform();
 
     let mut amount = BigDecimal::zero();
     for payment in payments.iter() {
@@ -979,5 +1001,5 @@ async fn notify_tx_confirmed(db: DbExecutor, tx_id: String) -> GNTDriverResult<(
         }
     };
 
-    notify_payment(amount, sender, recipient, order_ids, confirmation).await
+    notify_payment(amount, sender, recipient, platform, order_ids, confirmation).await
 }

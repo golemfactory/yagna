@@ -4,6 +4,7 @@ use crate::models::{TransactionEntity, TransactionStatus};
 use crate::schema::gnt_driver_transaction::dsl;
 
 use crate::dao::DbResult;
+use crate::networks::Network;
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 
 #[allow(unused)]
@@ -44,10 +45,15 @@ impl<'c> TransactionDao<'c> {
         .await
     }
 
-    pub async fn get_used_nonces(&self, address: String) -> DbResult<Vec<String>> {
+    pub async fn get_used_nonces(
+        &self,
+        address: String,
+        network: Network,
+    ) -> DbResult<Vec<String>> {
         do_with_transaction(self.pool, move |conn| {
             let nonces: Vec<String> = dsl::gnt_driver_transaction
                 .filter(dsl::sender.eq(address))
+                .filter(dsl::network.eq(network))
                 .select(dsl::nonce)
                 .load(conn)?;
             Ok(nonces)
@@ -55,14 +61,20 @@ impl<'c> TransactionDao<'c> {
         .await
     }
 
-    pub async fn get_unconfirmed_txs(&self) -> DbResult<Vec<TransactionEntity>> {
-        self.get_by_status(TransactionStatus::Sent.into()).await
+    pub async fn get_unconfirmed_txs(&self, network: Network) -> DbResult<Vec<TransactionEntity>> {
+        self.get_by_status(TransactionStatus::Sent.into(), network)
+            .await
     }
 
-    pub async fn get_by_status(&self, status: i32) -> DbResult<Vec<TransactionEntity>> {
+    pub async fn get_by_status(
+        &self,
+        status: i32,
+        network: Network,
+    ) -> DbResult<Vec<TransactionEntity>> {
         do_with_transaction(self.pool, move |conn| {
             let txs: Vec<TransactionEntity> = dsl::gnt_driver_transaction
                 .filter(dsl::status.eq(status))
+                .filter(dsl::network.eq(network))
                 .load(conn)?;
             Ok(txs)
         })

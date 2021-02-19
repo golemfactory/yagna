@@ -88,6 +88,24 @@ pub fn increase_amount_accepted(
     Ok(())
 }
 
+pub fn increase_amount_scheduled(
+    agreement_id: &String,
+    owner_id: &NodeId,
+    amount: &BigDecimal,
+    conn: &ConnType,
+) -> DbResult<()> {
+    assert!(amount > &BigDecimal::zero().into()); // TODO: Remove when payment service is production-ready.
+    let agreement: ReadObj = dsl::pay_agreement
+        .find((agreement_id, owner_id))
+        .first(conn)?;
+    let total_amount_scheduled: BigDecimalField =
+        (&agreement.total_amount_scheduled.0 + amount).into();
+    diesel::update(&agreement)
+        .set(dsl::total_amount_scheduled.eq(total_amount_scheduled))
+        .execute(conn)?;
+    Ok(())
+}
+
 pub fn set_amount_accepted(
     agreement_id: &String,
     owner_id: &NodeId,

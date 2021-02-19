@@ -1,20 +1,8 @@
-use crate::dir::clean_provider_dir;
-use crate::events::Event;
-use crate::execution::{
-    GetExeUnit, GetOfferTemplates, Shutdown as ShutdownExecution, TaskRunner, UpdateActivity,
-};
-use crate::hardware;
-use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
-use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
-use crate::payments::{AccountView, LinearPricingOffer, Payments, PricingOffer};
-use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RecvAccount, RunConfig};
-use crate::tasks::task_manager::{InitializeTaskManager, TaskManager};
-
 use actix::prelude::*;
 use actix::utils::IntervalFunc;
 use anyhow::{anyhow, Error};
-use futures::{FutureExt, StreamExt, TryFutureExt};
-use serde::{Deserialize, Serialize};
+use futures::{future, FutureExt, StreamExt, TryFutureExt};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -24,9 +12,22 @@ use std::{fs, io};
 use ya_agreement_utils::agreement::TypedArrayPointer;
 use ya_agreement_utils::*;
 use ya_client::cli::ProviderApi;
+use ya_core_model::{payment::local::NetworkName, NodeId};
 use ya_file_logging::{start_logger, LoggerHandle};
 use ya_utils_actix::actix_handler::send_message;
 use ya_utils_path::SwapSave;
+
+use crate::dir::clean_provider_dir;
+use crate::events::Event;
+use crate::execution::{
+    GetExeUnit, GetOfferTemplates, Shutdown as ShutdownExecution, TaskRunner, UpdateActivity,
+};
+use crate::hardware;
+use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
+use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
+use crate::payments::{AccountView, LinearPricingOffer, Payments, PricingOffer};
+use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RunConfig};
+use crate::tasks::task_manager::{InitializeTaskManager, TaskManager};
 
 pub struct ProviderAgent {
     globals: GlobalsManager,
@@ -37,6 +38,7 @@ pub struct ProviderAgent {
     hardware: hardware::Manager,
     accounts: Vec<AccountView>,
     log_handler: LoggerHandle,
+    network: NetworkName,
 }
 
 struct GlobalsManager {
@@ -73,16 +75,62 @@ impl GlobalsManager {
     }
 }
 
-#[derive(Clone, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, derive_more::Display)]
+#[display(
+    fmt = "{}{}{}",
+    "node_name.as_ref().map(|nn| format!(\"Node name: {}\", nn)).unwrap_or(\"\".into())",
+    "subnet.as_ref().map(|s| format!(\"\nSubnet: {}\", s)).unwrap_or(\"\".into())",
+    "account.as_ref().map(|a| format!(\"\nAccount: {}\", a)).unwrap_or(\"\".into())"
+)]
 pub struct GlobalsState {
-    pub node_name: String,
+    pub node_name: Option<String>,
     pub subnet: Option<String>,
-    pub account: Option<RecvAccount>,
+    pub account: Option<NodeId>,
+}
+
+impl<'de> Deserialize<'de> for GlobalsState {
+    fn deserialize<D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Self, <D as Deserializer<'de>>::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        pub enum Account {
+            NodeId(NodeId),
+            Deprecated {
+                platform: Option<String>,
+                address: NodeId,
+            },
+        }
+
+        impl Account {
+            pub fn address(self) -> NodeId {
+                match self {
+                    Account::NodeId(address) => address,
+                    Account::Deprecated { address, .. } => address,
+                }
+            }
+        }
+
+        #[derive(Deserialize)]
+        pub struct GenericGlobalsState {
+            pub node_name: Option<String>,
+            pub subnet: Option<String>,
+            pub account: Option<Account>,
+        }
+
+        let s = GenericGlobalsState::deserialize(deserializer)?;
+        Ok(GlobalsState {
+            node_name: s.node_name,
+            subnet: s.subnet,
+            account: s.account.map(|a| a.address()),
+        })
+    }
 }
 
 impl GlobalsState {
     pub fn load(path: &Path) -> anyhow::Result<Self> {
         if path.exists() {
+            log::debug!("Loading global state from: {}", path.display());
             Ok(serde_json::from_reader(io::BufReader::new(
                 fs::OpenOptions::new().read(true).open(path)?,
             ))?)
@@ -106,14 +154,14 @@ impl GlobalsState {
     }
 
     pub fn update_and_save(&mut self, node_config: NodeConfig, path: &Path) -> anyhow::Result<()> {
-        if let Some(node_name) = node_config.node_name {
-            self.node_name = node_name;
+        if node_config.node_name.is_some() {
+            self.node_name = node_config.node_name;
         }
         if node_config.subnet.is_some() {
             self.subnet = node_config.subnet;
         }
-        if node_config.account.is_some() {
-            self.account = node_config.account;
+        if node_config.account.account.is_some() {
+            self.account = node_config.account.account;
         }
         self.save(path)
     }
@@ -159,9 +207,17 @@ impl ProviderAgent {
 
         // Generate session id from node name and process id to make sure it's unique.
         let name = args.node.node_name.clone().unwrap_or(app_name.to_string());
-        args.market.session_id = format!("{}-[{}]", name, std::process::id());
-        args.runner.session_id = args.market.session_id.clone(); // TODO: unwind this dirty fix
+        args.market.session_id = format!("{}-{}", name, std::process::id());
+        args.runner.session_id = args.market.session_id.clone();
+        args.payment.session_id = args.market.session_id.clone();
 
+        let network = args.node.account.network.clone();
+        let net_color = match network {
+            NetworkName::Mainnet => yansi::Color::Magenta,
+            NetworkName::Rinkeby => yansi::Color::Cyan,
+            _ => yansi::Color::Red,
+        };
+        log::info!("Using payment network: {}", net_color.paint(&network));
         let mut globals = GlobalsManager::try_new(&config.globals_file, args.node)?;
         globals.spawn_monitor(&config.globals_file)?;
         let mut presets = PresetManager::load_or_create(&config.presets_file)?;
@@ -170,7 +226,7 @@ impl ProviderAgent {
         hardware.spawn_monitor(&config.hardware_file)?;
 
         let market = ProviderMarket::new(api.market, args.market).start();
-        let payments = Payments::new(api.activity.clone(), api.payment).start();
+        let payments = Payments::new(api.activity.clone(), api.payment, args.payment).start();
         let runner = TaskRunner::new(api.activity, args.runner, registry, data_dir)?.start();
         let task_manager = TaskManager::new(market.clone(), runner.clone(), payments)?.start();
 
@@ -183,6 +239,7 @@ impl ProviderAgent {
             hardware,
             accounts,
             log_handler,
+            network,
         })
     }
 
@@ -262,39 +319,66 @@ impl ProviderAgent {
     fn create_node_info(&self) -> NodeInfo {
         let globals = self.globals.get_state();
 
-        // TODO: Get node name from identity API.
-        let mut node_info = NodeInfo::with_name(globals.node_name);
-
-        // Debug subnet to filter foreign nodes.
         if let Some(subnet) = &globals.subnet {
-            log::info!("Using subnet: {}", subnet);
-            node_info.with_subnet(subnet.clone());
+            log::info!("Using subnet: {}", yansi::Color::Fixed(184).paint(subnet));
         }
-        node_info
+
+        NodeInfo {
+            name: globals.node_name,
+            subnet: globals.subnet,
+            geo_country_code: None,
+        }
     }
 
-    fn accounts(&self) -> Vec<AccountView> {
+    fn accounts(&self, network: &NetworkName) -> anyhow::Result<Vec<AccountView>> {
         let globals = self.globals.get_state();
-        if let Some(account) = &globals.account {
-            let mut accounts = Vec::new();
-            if account.platform.is_some() {
-                let zkaddr = AccountView {
-                    platform: account.platform.clone().unwrap(),
-                    address: account.address.to_lowercase(),
-                };
-                accounts.push(zkaddr);
-            } else {
-                for &platform in &["erc20-rinkeby-tglm", "zksync-rinkeby-tglm"] {
-                    accounts.push(AccountView {
-                        platform: platform.to_string(),
-                        address: account.address.to_lowercase(),
-                    })
-                }
+        if let Some(address) = &globals.account {
+            log::info!(
+                "Filtering payment accounts by address={} and network={}",
+                address,
+                network
+            );
+            let accounts: Vec<AccountView> = self
+                .accounts
+                .iter()
+                .filter(|acc| &acc.address == address && &acc.network == network)
+                .cloned()
+                .collect();
+
+            if accounts.is_empty() {
+                anyhow::bail!(
+                    "Payment account {} not initialized. Please run\n\
+                    \t`yagna payment init --receiver --network {} --account {}`\n\
+                    for all drivers you want to use.",
+                    address,
+                    network,
+                    address,
+                )
             }
 
-            accounts
+            Ok(accounts)
         } else {
-            self.accounts.clone()
+            log::debug!("Filtering payment accounts by network={}", network);
+            let accounts: Vec<AccountView> = self
+                .accounts
+                .iter()
+                // FIXME: this is dirty fix -- we can get more that one address from this filter
+                // FIXME: use /me endpoint and filter out only accounts bound to given app-key
+                // FIXME: or introduce param to getProviderAccounts to filter out external account above
+                .filter(|acc| &acc.network == network)
+                .cloned()
+                .collect();
+
+            if accounts.is_empty() {
+                anyhow::bail!(
+                    "Default payment account not initialized. Please run\n\
+                    \t`yagna payment init --receiver --network {}`\n\
+                    for all drivers you want to use.",
+                    network,
+                )
+            }
+
+            Ok(accounts)
         }
     }
 }
@@ -457,7 +541,10 @@ impl Handler<CreateOffers> for ProviderAgent {
         let runner = self.runner.clone();
         let market = self.market.clone();
         let node_info = self.create_node_info();
-        let accounts = self.accounts();
+        let accounts = match self.accounts(&self.network) {
+            Ok(acc) => acc,
+            Err(e) => return future::err(e).boxed_local(),
+        };
         let inf_node_info = InfNodeInfo::from(self.hardware.capped());
         let preset_names = match msg.0 {
             OfferKind::Any => self.presets.active(),
@@ -487,3 +574,81 @@ pub struct Shutdown;
 #[derive(Message)]
 #[rtype(result = "Result<(), Error>")]
 struct CreateOffers(pub OfferKind);
+
+#[cfg(test)]
+mod test {
+    use crate::GlobalsState;
+
+    const GLOBALS_JSON_ALPHA_3: &str = r#"
+{
+  "node_name": "amusing-crate",
+  "subnet": "community.3",
+  "account": {
+    "platform": null,
+    "address": "0x979db95461652299c34e15df09441b8dfc4edf7a"
+  }
+}
+"#;
+
+    const GLOBALS_JSON_ALPHA_4: &str = r#"
+{
+  "node_name": "amusing-crate",
+  "subnet": "community.4",
+  "account": "0x979db95461652299c34e15df09441b8dfc4edf7a"
+}
+"#;
+
+    #[test]
+    fn deserialize_globals() {
+        let mut g3: GlobalsState = serde_json::from_str(GLOBALS_JSON_ALPHA_3).unwrap();
+        let g4: GlobalsState = serde_json::from_str(GLOBALS_JSON_ALPHA_4).unwrap();
+        assert_eq!(g3.node_name, Some("amusing-crate".into()));
+        assert_eq!(g3.node_name, g4.node_name);
+        assert_eq!(g3.subnet, Some("community.3".into()));
+        assert_eq!(g4.subnet, Some("community.4".into()));
+        g3.subnet = Some("community.4".into());
+        assert_eq!(
+            serde_json::to_string(&g3).unwrap(),
+            serde_json::to_string(&g4).unwrap()
+        );
+        assert_eq!(
+            g3.account.unwrap().to_string(),
+            g4.account.unwrap().to_string()
+        );
+    }
+
+    #[test]
+    fn deserialize_no_account() {
+        let g: GlobalsState = serde_json::from_str(
+            r#"
+    {
+      "node_name": "amusing-crate",
+      "subnet": "community.3"
+    }
+    "#,
+        )
+        .unwrap();
+
+        assert_eq!(g.node_name, Some("amusing-crate".into()));
+        assert_eq!(g.subnet, Some("community.3".into()));
+        assert!(g.account.is_none())
+    }
+
+    #[test]
+    fn deserialize_null_account() {
+        let g: GlobalsState = serde_json::from_str(
+            r#"
+    {
+      "node_name": "amusing-crate",
+      "subnet": "community.4",
+      "account": null
+    }
+    "#,
+        )
+        .unwrap();
+
+        assert_eq!(g.node_name, Some("amusing-crate".into()));
+        assert_eq!(g.subnet, Some("community.4".into()));
+        assert!(g.account.is_none())
+    }
+}

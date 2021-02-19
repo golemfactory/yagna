@@ -40,7 +40,7 @@ async fn get_resources() -> Result<Resources> {
 
 pub async fn show_resources() -> Result<()> {
     let resources = get_resources().await?;
-    println!("shared resources:");
+    println!("Shared resources:");
     println!("\tcores:\t{}", resources.cpu_threads);
     println!("\tmemory:\t{} GiB", resources.mem_gib);
     println!("\tdisk:\t{} GiB", resources.storage_gib);
@@ -76,9 +76,9 @@ async fn get_prices(cmd: &YaCommand) -> Result<Prices> {
 pub async fn show_prices(cmd: &YaCommand) -> Result<()> {
     let prices = get_prices(cmd).await?;
     println!("\n\nPricing:\n");
-    println!("\t{:5} NGNT for start", prices.initial);
-    println!("\t{:5} NGNT per hour", prices.duration * 3600.0);
-    println!("\t{:5} NGNT per cpu hour", prices.cpu * 3600.0);
+    println!("\t{:5} GLM for start", prices.initial);
+    println!("\t{:5} GLM per hour", prices.duration * 3600.0);
+    println!("\t{:5} GLM per cpu hour", prices.cpu * 3600.0);
     Ok(())
 }
 

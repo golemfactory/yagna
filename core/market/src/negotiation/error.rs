@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use ya_client::model::NodeId;
-use ya_market_resolver::flatten::JsonObjectExpected;
 
 use crate::db::dao::AgreementDaoError;
 use crate::db::model::{
@@ -15,8 +14,9 @@ use crate::db::{
 };
 use crate::matcher::error::{DemandError, QueryOfferError};
 use crate::protocol::negotiation::error::{
-    ApproveAgreementError, CounterProposalError as ProtocolProposalError, GsbAgreementError,
-    NegotiationApiInitError, ProposeAgreementError, RejectProposalError, TerminateAgreementError,
+    ApproveAgreementError, CommitAgreementError, CounterProposalError as ProtocolProposalError,
+    GsbAgreementError, NegotiationApiInitError, ProposeAgreementError, RejectProposalError,
+    TerminateAgreementError,
 };
 
 #[derive(Error, Debug)]
@@ -28,8 +28,12 @@ pub struct NegotiationInitError(#[from] NegotiationApiInitError);
 
 #[derive(Error, Debug, Serialize, Deserialize)]
 pub enum MatchValidationError {
-    #[error("Proposal properties [{new}] doesn't match previous Proposal [{prev}].")]
-    NotMatching { new: ProposalId, prev: ProposalId },
+    #[error("Proposal properties [{new}] doesn't match previous Proposal [{prev}]. {mismatches}")]
+    NotMatching {
+        new: ProposalId,
+        prev: ProposalId,
+        mismatches: String,
+    },
     #[error("Can't match Proposal [{new}] with previous Proposal [{prev}]. Error: {error}")]
     MatchingFailed {
         new: ProposalId,
@@ -42,6 +46,8 @@ pub enum MatchValidationError {
 pub enum AgreementError {
     #[error("Agreement [{0}] not found.")]
     NotFound(String),
+    #[error("Agreement [{0}] expired.")]
+    Expired(AgreementId),
     #[error("Can't create Agreement for Proposal {0}. Proposal {1} not found.")]
     ProposalNotFound(ProposalId, ProposalId),
     #[error("Can't create second Agreement [{0}] for Proposal [{1}].")]
@@ -70,6 +76,8 @@ pub enum AgreementError {
     ProtocolApprove(#[from] ApproveAgreementError),
     #[error("Protocol error while terminating: {0}")]
     ProtocolTerminate(#[from] TerminateAgreementError),
+    #[error("Protocol error while committing: {0}")]
+    ProtocolCommit(#[from] CommitAgreementError),
     #[error("Internal error: {0}")]
     Internal(String),
 }
@@ -147,7 +155,7 @@ pub enum ProposalError {
     #[error(transparent)]
     Get(#[from] GetProposalError),
     #[error(transparent)]
-    JsonObjectExpected(#[from] JsonObjectExpected),
+    JsonObjectExpected(#[from] serde_json::error::Error),
     #[error(transparent)]
     Save(#[from] SaveProposalError),
     #[error(transparent)]

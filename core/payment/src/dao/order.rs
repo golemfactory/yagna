@@ -1,3 +1,4 @@
+use crate::dao::{activity, agreement, allocation};
 use crate::error::DbResult;
 use crate::models::order::{ReadObj, WriteObj};
 use crate::schema::pay_debit_note::dsl as debit_note_dsl;
@@ -7,7 +8,9 @@ use diesel::{
     self, BoolExpressionMethods, ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl,
     RunQueryDsl,
 };
-use ya_core_model::payment::local::SchedulePayment;
+use ya_core_model::payment::local::{
+    DebitNotePayment, InvoicePayment, PaymentTitle, SchedulePayment,
+};
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
 pub struct OrderDao<'c> {
@@ -22,8 +25,27 @@ impl<'c> AsDao<'c> for OrderDao<'c> {
 
 impl<'c> OrderDao<'c> {
     pub async fn create(&self, msg: SchedulePayment, id: String, driver: String) -> DbResult<()> {
-        let order = WriteObj::new(msg, id, driver);
         do_with_transaction(self.pool, move |conn| {
+            match &msg.title {
+                PaymentTitle::DebitNote(DebitNotePayment { activity_id, .. }) => {
+                    activity::increase_amount_scheduled(
+                        activity_id,
+                        &msg.payer_id,
+                        &msg.amount,
+                        conn,
+                    )?
+                }
+                PaymentTitle::Invoice(InvoicePayment { agreement_id, .. }) => {
+                    agreement::increase_amount_scheduled(
+                        agreement_id,
+                        &msg.payer_id,
+                        &msg.amount,
+                        conn,
+                    )?
+                }
+            };
+            let order = WriteObj::new(msg, id, driver);
+            allocation::spend_from_allocation(&order.allocation_id, &order.amount, conn)?;
             diesel::insert_into(dsl::pay_order)
                 .values(order)
                 .execute(conn)?;

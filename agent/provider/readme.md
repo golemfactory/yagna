@@ -24,7 +24,7 @@ It is rather straightforward and minimal:
   * requires `golem.srv.comp.expiration` to be set
   * if provided (via env or CLI) sets also `golem.node.debug.subnet`
 *  properties:
-  * linear pricing (see sample below: 0.01 NGNT/sec + 1.2 NGNT/CPUsec + 1.5 NGNT const)
+  * linear pricing (see sample below: 0.01 GLM/sec + 1.2 GLM/CPUsec + 1.5 GLM const)
   * hardware: memory and storage (sample below: 1 gib RAM and 10 gib disk)
   * node name set via env or CLI
   * runtime (sample below: wasmtime)
@@ -203,9 +203,9 @@ Name:               default
 ExeUnit:            wasmtime
 Pricing model:      linear
 Coefficients:
-    Duration        0.1 NGNT
-    CPU             0.2 NGNT
-    Init price        1 NGNT
+    Duration        0.1 GLM
+    CPU             0.2 GLM
+    Init price        1 GLM
 
 ```
 
@@ -404,12 +404,6 @@ ya-provider profile activate some_other_profile
 While the yagna service is still running (and you are in the `ya-prov` directory)
 you can now start Provider Agent.
 
-At first, you need to register provider's payment account:
-```bash
-cargo run payment init -p
-```
-
-Then start the Provider Agent:
 ```bash
 cargo run -p ya-provider run
 ```
@@ -417,7 +411,8 @@ cargo run -p ya-provider run
 ## Central setup
 We have centrally deployed (@ ip: `3.249.139.167`) three independent standalone modules/apps:
  - [net Mk1](https://github.com/golemfactory/yagna/blob/master/docs/net-api/net-mk1-hub.md) @ 3.249.139.167:7464 \
-   (can be run locally with `cargo run --release -p ya-sb-router --example ya_sb_router -- -l tcp://0.0.0.0:7464`)
+   (can be run locally with `cargo run --release -p ya-sb-router --example ya_sb_router -- -l tcp://0.0.0.0:7464` 
+   from the [ya-service-bus](http://github.com/golemfactory/ya-service-bus) repository)
  - simple "images store" @ 3.249.139.167:8000 \
    this is a http server that has two purposes: to serve binary `.zip`/`.yimg` packages (GET) and receive computation results (PUT)
    (can be run locally with `cargo run --release -p ya-exe-unit --example http-get-put -- --root-dir <DIR-WITH-WASM-BINARY-IMAGES>`)

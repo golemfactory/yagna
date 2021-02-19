@@ -37,13 +37,9 @@ enum Commands {
     Stop,
 
     /// Manage settings
-    ///
-    /// This can be used regardless of whether golem is running or not.
     Settings(SettingsCommand),
 
     /// Show provider status
-    ///
-    /// Requires golem running.
     Status,
 }
 
@@ -60,12 +56,13 @@ struct StartupConfig {
 
 async fn my_main() -> Result</*exit code*/ i32> {
     dotenv::dotenv().ok();
-    setup::init()?;
+    let config_file = setup::init()?;
 
     if env::var_os(env_logger::DEFAULT_FILTER_ENV).is_none() {
         env::set_var(env_logger::DEFAULT_FILTER_ENV, "info");
     }
     env_logger::init();
+    log::debug!("Using config file: {}", config_file.display());
 
     let cli_args: StartupConfig = StartupConfig::from_args();
 
@@ -84,10 +81,10 @@ async fn my_main() -> Result</*exit code*/ i32> {
 pub fn banner() {
     terminal::fade_in(&format!(
         include_str!("banner.txt"),
-        version = ya_compile_time_utils::semver(),
+        version = ya_compile_time_utils::semver_str(),
         git_commit = ya_compile_time_utils::git_rev(),
-        build = ya_compile_time_utils::build_number().unwrap_or("-"),
-        date = ya_compile_time_utils::build_date()
+        date = ya_compile_time_utils::build_date(),
+        build = ya_compile_time_utils::build_number_str().unwrap_or("-"),
     ))
     .unwrap();
 }

@@ -11,64 +11,70 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
 use crate::accounts::{init_account, Account};
-use crate::{wallet, DEFAULT_PAYMENT_DRIVER, DEFAULT_PAYMENT_PLATFORM};
+use crate::wallet;
 
 /// Payment management.
 #[derive(StructOpt, Debug)]
 pub enum PaymentCli {
+    /// List active payment accounts
     Accounts,
-    Enter {
-        amount: String,
-        #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
-        driver: String,
-        #[structopt(long, short)]
-        network: Option<String>,
-        #[structopt(long, short)]
-        token: Option<String>,
+
+    /// Supply payment account with funds
+    Fund {
+        #[structopt(flatten)]
+        account: pay::AccountCli,
     },
-    Exit {
-        #[structopt(help = "Optional address to exit to. [default: <DEFAULT_IDENTIDITY>]")]
-        to: Option<String>,
-        #[structopt(long, short, help = "Optional amount to exit. [default: <ALL_FUNDS>]")]
-        amount: Option<String>,
-        #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
-        driver: String,
-        #[structopt(long, short)]
-        network: Option<String>,
-        #[structopt(long, short)]
-        token: Option<String>,
-    },
+
+    /// Initialize payment account (i.e. make it ready for sending/receiving funds)
     Init {
-        address: Option<String>,
-        #[structopt(long, short)]
-        requestor: bool,
-        #[structopt(long, short)]
-        provider: bool,
-        #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
-        driver: String,
-        #[structopt(long)]
-        network: Option<String>,
+        #[structopt(flatten)]
+        account: pay::AccountCli,
+        #[structopt(long, help = "Initialize account for sending")]
+        sender: bool,
+        #[structopt(long, help = "Initialize account for receiving")]
+        receiver: bool,
     },
+
+    /// Display account balance and a summary of sent/received payments
+    Status {
+        #[structopt(flatten)]
+        account: pay::AccountCli,
+    },
+
+    // TODO: Uncomment when operation is supported by drivers
+    // Enter {
+    //     #[structopt(flatten)]
+    //     account: AccountCli,
+    //     #[structopt(long)]
+    //     amount: String,
+    // },
+    /// Exit layer 2 (withdraw funds to Ethereum)
+    Exit {
+        #[structopt(flatten)]
+        account: pay::AccountCli,
+        #[structopt(
+            long,
+            help = "Optional address to exit to [default: <DEFAULT_IDENTIDITY>]"
+        )]
+        to_address: Option<String>,
+        #[structopt(long, help = "Optional amount to exit [default: <ALL_FUNDS>]")]
+        amount: Option<String>,
+    },
+
+    // TODO: Uncomment when operation is supported by drivers
+    // Transfer {
+    //     #[structopt(flatten)]
+    //     account: AccountCli,
+    //     network: Option<String>,
+    //     #[structopt(long)]
+    //     to_address: String,
+    //     #[structopt(long)]
+    //     amount: String,
+    // },
     Invoice {
         address: Option<String>,
         #[structopt(subcommand)]
         command: InvoiceCommand,
-    },
-    Transfer {
-        to: String,
-        #[structopt(long, short)]
-        amount: String,
-        #[structopt(long, default_value = DEFAULT_PAYMENT_DRIVER)]
-        driver: String,
-        #[structopt(long, short)]
-        network: Option<String>,
-        #[structopt(long, short)]
-        token: Option<String>,
-    },
-    Status {
-        address: Option<String>,
-        #[structopt(long, short)]
-        platform: Option<String>,
     },
 }
 
@@ -83,44 +89,97 @@ pub enum InvoiceCommand {
 impl PaymentCli {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
+            PaymentCli::Fund { account } => CommandOutput::object(
+                wallet::fund(
+                    resolve_address(account.address()).await?,
+                    account.driver(),
+                    Some(account.network()),
+                    None,
+                )
+                .await?,
+            ),
             PaymentCli::Init {
-                address,
-                driver,
-                network,
-                requestor,
-                provider,
+                account,
+                sender,
+                receiver,
             } => {
-                let address = resolve_address(address).await?;
-                let driver = driver.to_lowercase();
                 let account = Account {
-                    driver,
-                    address,
-                    network,
+                    driver: account.driver(),
+                    address: resolve_address(account.address()).await?,
+                    network: Some(account.network()),
                     token: None, // Use default -- we don't yet support other tokens than GLM
-                    send: requestor,
-                    receive: provider,
+                    send: sender,
+                    receive: receiver,
                 };
                 init_account(account).await?;
                 Ok(CommandOutput::NoOutput)
             }
-            PaymentCli::Status { address, platform } => {
-                let address = resolve_address(address).await?;
-                let platform = platform.unwrap_or(DEFAULT_PAYMENT_PLATFORM.to_owned());
-                CommandOutput::object(
-                    bus::service(pay::BUS_ID)
-                        .call(pay::GetStatus { address, platform })
-                        .await??,
-                )
+            PaymentCli::Status { account } => {
+                let address = resolve_address(account.address()).await?;
+                let status = bus::service(pay::BUS_ID)
+                    .call(pay::GetStatus {
+                        address: address.clone(),
+                        driver: account.driver(),
+                        network: Some(account.network()),
+                        token: None,
+                    })
+                    .await??;
+                if ctx.json_output {
+                    return CommandOutput::object(status);
+                }
+
+                Ok(ResponseTable {
+                    columns: vec![
+                        "platform".to_owned(),
+                        "total amount".to_owned(),
+                        "reserved".to_owned(),
+                        "amount".to_owned(),
+                        "incoming".to_owned(),
+                        "outgoing".to_owned(),
+                    ],
+                    values: vec![
+                        serde_json::json! {[
+                            format!("driver: {}", status.driver),
+                            format!("{} {}", status.amount, status.token),
+                            format!("{} {}", status.reserved, status.token),
+                            "accepted",
+                            format!("{} {}", status.incoming.accepted.total_amount, status.token),
+                            format!("{} {}", status.outgoing.accepted.total_amount, status.token),
+                        ]},
+                        serde_json::json! {[
+                            format!("network: {}", status.network),
+                            "",
+                            "",
+                            "confirmed",
+                            format!("{} {}", status.incoming.confirmed.total_amount, status.token),
+                            format!("{} {}", status.outgoing.confirmed.total_amount, status.token),
+                        ]},
+                        serde_json::json! {[
+                            format!("token: {}", status.token),
+                            "",
+                            "",
+                            "requested",
+                            format!("{} {}", status.incoming.requested.total_amount, status.token),
+                            format!("{} {}", status.outgoing.requested.total_amount, status.token),
+                        ]},
+                    ],
+                }
+                .with_header(format!("\nStatus for account: {}\n", address)))
             }
             PaymentCli::Accounts => {
                 let accounts = bus::service(pay::BUS_ID)
                     .call(pay::GetAccounts {})
                     .await??;
+                if ctx.json_output {
+                    return CommandOutput::object(accounts);
+                }
+
                 Ok(ResponseTable {
                     columns: vec![
-                        "platform".to_owned(),
                         "address".to_owned(),
                         "driver".to_owned(),
+                        "network".to_owned(),
+                        "token".to_owned(),
                         "send".to_owned(),
                         "recv".to_owned(),
                     ],
@@ -128,9 +187,10 @@ impl PaymentCli {
                         .into_iter()
                         .map(|account| {
                             serde_json::json! {[
-                                account.platform,
                                 account.address,
                                 account.driver,
+                                account.network,
+                                account.token,
                                 if account.send { "X" } else { "" },
                                 if account.receive { "X" } else { "" }
                             ]}
@@ -154,38 +214,49 @@ impl PaymentCli {
                         .await??,
                 )
             }
-            PaymentCli::Enter {
-                amount,
-                driver,
-                network,
-                token,
-            } => {
-                let amount = BigDecimal::from_str(&amount)?;
-                CommandOutput::object(wallet::enter(amount, driver, network, token).await?)
-            }
+            // TODO: Uncomment when operation is supported by drivers
+            // PaymentCli::Enter {
+            //     account,
+            //     driver,
+            //     network,
+            //     amount
+            // } => {
+            //     let address = resolve_address(account).await?;
+            //     let amount = BigDecimal::from_str(&amount)?;
+            //     CommandOutput::object(wallet::enter(amount, address, driver, network, token).await?)
+            // }
             PaymentCli::Exit {
-                to,
+                account,
+                to_address,
                 amount,
-                driver,
-                network,
-                token,
             } => {
                 let amount = match amount {
                     None => None,
                     Some(a) => Some(BigDecimal::from_str(&a)?),
                 };
-                CommandOutput::object(wallet::exit(to, amount, driver, network, token).await?)
-            }
-            PaymentCli::Transfer {
-                to,
-                amount,
-                driver,
-                network,
-                token,
-            } => {
-                let amount = BigDecimal::from_str(&amount)?;
-                CommandOutput::object(wallet::transfer(to, amount, driver, network, token).await?)
-            }
+                CommandOutput::object(
+                    wallet::exit(
+                        resolve_address(account.address()).await?,
+                        to_address,
+                        amount,
+                        account.driver(),
+                        Some(account.network()),
+                        None,
+                    )
+                    .await?,
+                )
+            } // TODO: Uncomment when operation is supported by drivers
+              // PaymentCli::Transfer {
+              //     account,
+              //     driver,
+              //     network,
+              //     to_address,
+              //     amount
+              // } => {
+              //     let address = resolve_address(account).await?;
+              //     let amount = BigDecimal::from_str(&amount)?;
+              //     CommandOutput::object(wallet::transfer(address, to_address, amount, driver, network, token).await?)
+              // }
         }
     }
 }

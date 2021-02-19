@@ -2,27 +2,14 @@ use actix::Actor;
 use std::env;
 use structopt::{clap, StructOpt};
 
-mod cli;
-mod dir;
-mod events;
-mod execution;
-mod hardware;
-mod market;
-mod payments;
-mod preset_cli;
-mod provider_agent;
-mod signal;
-mod startup_config;
-mod tasks;
-
-use crate::dir::clean_provider_dir;
-use crate::hardware::Profiles;
-use crate::provider_agent::{Initialize, Shutdown};
-use crate::signal::SignalMonitor;
-use provider_agent::ProviderAgent;
-use startup_config::{
+use ya_provider::dir::clean_provider_dir;
+use ya_provider::hardware::Profiles;
+use ya_provider::provider_agent::{GlobalsState, Initialize, ProviderAgent, Shutdown};
+use ya_provider::signal::SignalMonitor;
+use ya_provider::startup_config::{
     Commands, ConfigConfig, ExeUnitsConfig, PresetsConfig, ProfileConfig, StartupConfig,
 };
+use ya_provider::{cli, hardware};
 use ya_utils_process::lock::ProcLock;
 
 #[actix_rt::main]
@@ -30,8 +17,17 @@ async fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
 
     let cli_args = StartupConfig::from_args();
+    match &cli_args.commands {
+        Commands::Run(_) => (), // logging is handled by ProviderAgent
+        _ => {
+            ya_file_logging::start_logger("info", None, &vec![])?;
+            ()
+        }
+    }
+
     let mut config = cli_args.config;
     let data_dir = config.data_dir.get_or_create()?;
+
     config.globals_file = data_dir.join(config.globals_file);
     config.presets_file = data_dir.join(config.presets_file);
     config.hardware_file = data_dir.join(config.hardware_file);
@@ -51,7 +47,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::Config(config_cmd) => match config_cmd {
             ConfigConfig::Get { name } => cli::config_get(config, name),
             ConfigConfig::Set(node_config) => {
-                let mut state = provider_agent::GlobalsState::load_or_create(&config.globals_file)?;
+                let mut state = GlobalsState::load_or_create(&config.globals_file)?;
                 state.update_and_save(node_config, &config.globals_file)?;
                 Ok(())
             }

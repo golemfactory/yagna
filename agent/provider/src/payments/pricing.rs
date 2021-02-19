@@ -1,23 +1,26 @@
-use anyhow::Result;
-use bigdecimal::BigDecimal;
+use anyhow::{anyhow, Result};
+use bigdecimal::{BigDecimal, FromPrimitive};
 use serde_json::json;
 
 use ya_agreement_utils::ComInfo;
-use ya_client_model::payment::Account;
+use ya_client_model::{payment::Account, NodeId};
+use ya_core_model::payment::local::NetworkName;
 
 use super::model::{PaymentDescription, PaymentModel};
 use crate::market::presets::{Coefficient, Preset};
 
 #[derive(Clone, Debug)]
 pub struct AccountView {
-    pub address: String,
+    pub address: NodeId,
+    pub network: NetworkName,
     pub platform: String,
 }
 
 impl From<Account> for AccountView {
     fn from(account: Account) -> Self {
         Self {
-            address: account.address,
+            address: account.address.parse().unwrap(), // TODO: use TryFrom
+            network: account.network.parse().unwrap(), // TODO: use TryFrom
             platform: account.platform,
         }
     }
@@ -49,7 +52,8 @@ impl PaymentModel for LinearPricing {
                 .zip(usage.iter())
                 .map(|(coeff, usage_value)| coeff * usage_value)
                 .sum::<f64>();
-        Ok(BigDecimal::from(cost))
+
+        BigDecimal::from_f64(cost).ok_or(anyhow!("Failed to convert to BigDecimal: {}", cost))
     }
 
     fn expected_usage_len(&self) -> usize {
@@ -58,7 +62,7 @@ impl PaymentModel for LinearPricing {
 }
 
 impl LinearPricing {
-    pub fn new(commercials: PaymentDescription) -> Result<LinearPricing> {
+    pub fn new<'a>(commercials: &'a PaymentDescription<'a>) -> Result<LinearPricing> {
         let usage: Vec<f64> = commercials.get_usage_coefficients()?;
 
         log::info!(

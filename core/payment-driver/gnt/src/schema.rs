@@ -8,6 +8,7 @@ table! {
         payment_due_date -> Timestamp,
         status -> Integer,
         tx_id -> Nullable<Text>,
+        network -> Integer,
     }
 }
 
@@ -29,6 +30,7 @@ table! {
         encoded -> Text,
         signature -> Text,
         tx_hash -> Nullable<Text>,
+        network -> Integer,
     }
 }
 

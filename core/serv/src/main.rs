@@ -1,6 +1,8 @@
 use actix_web::{middleware, web, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use futures::prelude::*;
+#[cfg(feature = "static-openssl")]
+extern crate openssl_probe;
 use std::{
     any::TypeId,
     collections::HashMap,
@@ -11,15 +13,14 @@ use std::{
 };
 use structopt::{clap, StructOpt};
 use url::Url;
+
 use ya_activity::service::Activity as ActivityService;
+use ya_file_logging::start_logger;
 use ya_identity::service::Identity as IdentityService;
 use ya_market::MarketService;
 use ya_metrics::{MetricsPusherOpts, MetricsService};
 use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
-use ya_sgx::SgxService;
-
-use ya_file_logging::start_logger;
 use ya_persistence::executor::DbExecutor;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
@@ -28,8 +29,10 @@ use ya_service_api_web::{
     middleware::{auth, Identity},
     rest_api_host_port, DEFAULT_YAGNA_API_URL, YAGNA_API_URL_ENV_VAR,
 };
+use ya_sgx::SgxService;
 use ya_utils_path::data_dir::DataDir;
 use ya_utils_process::lock::ProcLock;
+use ya_version::VersionService;
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
@@ -183,12 +186,15 @@ impl TryFrom<CliCtx> for ServiceContext {
 
 #[ya_service_api_derive::services(ServiceContext)]
 enum Services {
-    // Metrics service must be activated first, to allow all
-    // other services to initialize counters and other metrics.
-    #[enable(gsb, rest)]
-    Metrics(MetricsService),
+    // Metrics service must be activated before all other services
+    // to that will use it. Identity service is used by the Metrics,
+    // so must be initialized before.
     #[enable(gsb, cli(flatten))]
     Identity(IdentityService),
+    #[enable(gsb, rest)]
+    Metrics(MetricsService),
+    #[enable(gsb, rest, cli)]
+    Version(VersionService),
     #[enable(gsb)]
     Net(NetService),
     #[enable(gsb, rest)]
@@ -371,8 +377,10 @@ impl ServiceCommand {
                 let mut context: ServiceContext = ctx.clone().try_into()?;
                 context.set_metrics_ctx(metrics_opts);
                 Services::gsb(&context).await?;
-                let drivers = start_payment_drivers(&ctx.data_dir).await?;
 
+                ya_compile_time_utils::report_version_to_metrics();
+
+                let drivers = start_payment_drivers(&ctx.data_dir).await?;
                 payment_accounts::save_default_account(&ctx.data_dir, drivers)
                     .await
                     .unwrap_or_else(|e| {
@@ -444,6 +452,8 @@ async fn me(id: Identity) -> impl Responder {
 #[actix_rt::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
+    #[cfg(feature = "static-openssl")]
+    openssl_probe::init_ssl_cert_env_vars();
     let args = CliArgs::from_args();
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
