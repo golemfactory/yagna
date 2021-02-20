@@ -22,16 +22,14 @@ pub const BUS_ID: &str = "/public/activity";
 
 /// Public Exe Unit service bus API.
 pub mod exeunit {
-    use crate::net::PUBLIC_PREFIX;
-
     /// Public exeunit bus address for given `activity_id`.
     pub fn bus_id(activity_id: &str) -> String {
-        format!("{}/exeunit/{}", PUBLIC_PREFIX, activity_id)
+        format!("/public/exeunit/{}", activity_id)
     }
 
     /// Public network VPN bus address for given `network_id`.
     pub fn network_id(network_id: &str) -> String {
-        format!("{}/vpn/{}", PUBLIC_PREFIX, network_id)
+        format!("/public/vpn/{}", network_id)
     }
 }
 
