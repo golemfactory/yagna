@@ -87,10 +87,10 @@ where
         let output = output.clone();
         async move {
             while let Some(event) = rx.next().await {
-                log::debug!("event: {:?}", event);
+                log::trace!("event: {:?}", event);
                 let mut output = output.lock().await;
                 let r = SinkExt::send(&mut *output, event).await;
-                log::debug!("sending event done: {:?}", r);
+                log::trace!("sending event done: {:?}", r);
             }
         }
     });
@@ -103,13 +103,13 @@ where
                         let service = service.clone();
                         let output = output.clone();
                         tokio::task::spawn_local(async move {
-                            log::debug!("received request: {:?}", request);
+                            log::trace!("received request: {:?}", request);
                             let resp = handle(service.as_ref(), request).await;
-                            log::debug!("response to send: {:?}", resp);
+                            log::trace!("response to send: {:?}", resp);
                             let mut output = output.lock().await;
-                            log::debug!("sending");
+                            log::trace!("sending");
                             let r = SinkExt::send(&mut *output, resp).await;
-                            log::debug!("sending done: {:?}", r);
+                            log::trace!("sending done: {:?}", r);
                         });
                     }
                     Err(e) => {
