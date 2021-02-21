@@ -19,8 +19,8 @@ use ya_service_bus::{actix_rpc, typed, typed::Endpoint, RpcEnvelope};
 
 const DEFAULT_CHUNK_SIZE: usize = 65535;
 
-pub fn gateway(ip: &str, mask: &str) -> Result<IpAddr> {
-    let net = map_ip_net(ip, mask)?;
+pub fn gateway(net_addr: &str, net_mask: &str) -> Result<IpAddr> {
+    let net = map_ip_net(net_addr, net_mask)?;
     net.hosts()
         .next()
         .ok_or_else(|| VpnError::NetAddrInvalid(net.addr()).into())
@@ -412,8 +412,9 @@ impl PacketBuf {
 
     #[inline(always)]
     fn take(&mut self, len: usize) -> Vec<u8> {
+        let len = len.min(self.size);
         let res = self.inner[..len].into();
-        self.inner.rotate_left(len.min(self.size));
+        self.inner.rotate_left(len);
         self.size -= len;
         res
     }
@@ -430,7 +431,7 @@ impl PacketBuf {
 
     #[inline(always)]
     fn capacity(&self) -> usize {
-        4 * DEFAULT_CHUNK_SIZE
+        self.inner.len()
     }
 }
 
