@@ -1,6 +1,6 @@
 [package]
-name = "ya-zksync-driver"
-version = "0.2.0"
+name = "ya-glmsync-driver"
+version = "0.1.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
@@ -33,10 +33,3 @@ ya-client-model = "0.3"
 ya-service-api-interfaces = "0.1"
 ya-utils-futures = "0.1"
 ya-utils-networking = "0.1"
-
-[dev-dependencies]
-actix-rt = "1.0"
-dotenv = "0.15.0"
-env_logger = "0.7.1"
-ethkey = "0.3.1"
-structopt = "0.3"
