@@ -146,7 +146,7 @@ pub async fn make_transfer(
     let token = get_network_token(network, None);
 
     let balance = wallet
-        .get_balance(BlockStatus::Committed, token.as_ref())
+        .get_balance(BlockStatus::Committed, token.as_str())
         .await
         .map_err(GenericError::new)?;
     log::debug!("balance before transfer={}", balance);
@@ -156,7 +156,7 @@ pub async fn make_transfer(
         .nonce(Nonce(nonce))
         .str_to(&details.recipient[2..])
         .map_err(GenericError::new)?
-        .token(token.as_ref())
+        .token(token.as_str())
         .map_err(GenericError::new)?
         .amount(amount.clone());
     log::debug!(
@@ -240,7 +240,7 @@ pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails
 fn get_provider(network: Network) -> RpcProvider {
     let zk_network = get_zk_network(network);
     let provider: RpcProvider = match get_rpc_addr_from_env(network) {
-        Some(rpc_addr) => RpcProvider::from_addr(rpc_addr, zk_network),
+        Some(rpc_addr) => RpcProvider::from_addr_and_network(rpc_addr, zk_network),
         None => RpcProvider::new(zk_network),
     };
     provider.clone()
@@ -289,7 +289,7 @@ async fn unlock_wallet<S: EthereumSigner + Clone, P: Provider + Clone>(
 
         let unlock = wallet
             .start_change_pubkey()
-            .fee_token(token.as_ref())
+            .fee_token(token.as_str())
             .map_err(|e| GenericError::new(format!("Failed to create change_pubkey request: {}", e)))?
             .send()
             .await
