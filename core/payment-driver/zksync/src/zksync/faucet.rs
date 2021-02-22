@@ -11,7 +11,7 @@ use tokio::time::delay_for;
 
 // Workspace uses
 use ya_payment_driver::{db::models::Network, model::GenericError};
-use ya_utils_networking::srv_resolver;
+use ya_utils_networking::resolver;
 
 // Local uses
 use crate::zksync::wallet::account_balance;
@@ -85,9 +85,13 @@ async fn faucet_donate(address: &str, _network: Network) -> Result<(), GenericEr
         .timeout(std::time::Duration::from_secs(60))
         .finish();
     let faucet_url = resolve_faucet_url().await?;
-    debug!("Faucet url: {}/{}", faucet_url, address);
+    let request_url = format!("{}/{}", faucet_url, address);
+    let request_url = resolver::resolve_dns_record(&request_url)
+        .await
+        .map_err(GenericError::new)?;
+    debug!("Faucet request url: {}", request_url);
     let response = client
-        .get(format!("{}/{}", faucet_url, address))
+        .get(request_url)
         .send()
         .await
         .map_err(GenericError::new)?
@@ -104,7 +108,7 @@ async fn resolve_faucet_url() -> Result<String, GenericError> {
     match env::var(FAUCET_ADDR_ENVAR) {
         Ok(addr) => Ok(addr),
         _ => {
-            let faucet_host = srv_resolver::resolve_yagna_record(DEFAULT_FAUCET_SRV_PREFIX)
+            let faucet_host = resolver::resolve_yagna_srv_record(DEFAULT_FAUCET_SRV_PREFIX)
                 .await
                 .map_err(|_| GenericError::new("Faucet SRV record cannot be resolved"))?;
 

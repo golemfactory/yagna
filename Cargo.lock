@@ -7704,7 +7704,6 @@ dependencies = [
  "thiserror",
  "tiny-keccak 2.0.2",
  "tokio 0.2.24",
- "trust-dns-resolver 0.19.6",
  "uint 0.7.1",
  "ureq",
  "uuid 0.8.2",
@@ -7714,6 +7713,7 @@ dependencies = [
  "ya-persistence",
  "ya-service-api-interfaces",
  "ya-service-bus",
+ "ya-utils-networking",
 ]
 
 [[package]]
@@ -8267,8 +8267,10 @@ dependencies = [
 name = "ya-utils-networking"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "log",
  "trust-dns-resolver 0.19.6",
+ "url 2.2.0",
 ]
 
 [[package]]

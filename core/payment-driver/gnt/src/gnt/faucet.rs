@@ -7,33 +7,12 @@ use ethereum_types::Address;
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::{cmp::min, env, time};
-use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
-use trust_dns_resolver::TokioAsyncResolver;
+use ya_utils_networking::resolver;
 
 const MAX_ETH_FAUCET_REQUESTS: u32 = 6;
 const ETH_FAUCET_SLEEP: time::Duration = time::Duration::from_secs(2);
 const ETH_FAUCET_ADDRESS_ENV_VAR: &str = "ETH_FAUCET_ADDRESS";
 const DEFAULT_ETH_FAUCET_ADDRESS: &str = "http://faucet.testnet.golem.network:4000/donate";
-
-// Hack required on windows to bypass failing trust_dns resolution on windows 10
-// Remove when https://github.com/actix/actix-web/issues/1047 is resolved
-async fn resolve_host(request_url: String) -> GNTDriverResult<String> {
-    let uri: awc::http::Uri = request_url.parse().unwrap();
-    let request_host = uri.host().ok_or(GNTDriverError::LibraryError(
-        "Env variable 'ETH_FAUCET_ADDRESS' is not a valid URI.".to_string(),
-    ))?;
-
-    let resolver = TokioAsyncResolver::tokio(ResolverConfig::google(), ResolverOpts::default())
-        .await
-        .map_err(|e| GNTDriverError::LibraryError(format!("failed to connect resolver: {}", e)))?;
-
-    let response = resolver.lookup_ip(request_host).await.unwrap();
-    let address = response.iter().next().ok_or(GNTDriverError::LibraryError(
-        "Env variable 'ETH_FAUCET_ADDRESS' does not resolve in DNS.".to_string(),
-    ))?;
-
-    Ok(request_url.replace(request_host, &address.to_string()))
-}
 
 #[derive(Serialize, Deserialize)]
 struct FaucetResponse {
@@ -51,7 +30,11 @@ impl EthFaucetConfig {
         let faucet_address_str = env::var(ETH_FAUCET_ADDRESS_ENV_VAR)
             .ok()
             .unwrap_or_else(|| DEFAULT_ETH_FAUCET_ADDRESS.to_string());
-        let faucet_address_str = resolve_host(faucet_address_str).await?;
+        let faucet_address_str = resolver::resolve_dns_record(&faucet_address_str)
+            .await
+            .map_err(|e| {
+                GNTDriverError::DatabaseError(format!("Error resolving tGLM faucet address: {}", e))
+            })?;
         let faucet_address = faucet_address_str
             .parse()
             .map_err(|e| GNTDriverError::LibraryError(format!("invalid faucet address: {}", e)))?;
