@@ -86,9 +86,7 @@ async fn faucet_donate(address: &str, _network: Network) -> Result<(), GenericEr
         .finish();
     let faucet_url = resolve_faucet_url().await?;
     let request_url = format!("{}/{}", faucet_url, address);
-    let request_url = resolver::resolve_dns_record(&request_url)
-        .await
-        .map_err(GenericError::new)?;
+    let request_url = resolver::try_resolve_dns_record(&request_url).await;
     debug!("Faucet request url: {}", request_url);
     let response = client
         .get(request_url)

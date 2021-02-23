@@ -59,3 +59,14 @@ pub async fn resolve_dns_record(request_url: &str) -> anyhow::Result<String> {
 
     Ok(request_url.replace(&request_host, &address))
 }
+
+/// Try resolving hostname with `resolve_dns_record`. Return the original URL if it fails
+pub async fn try_resolve_dns_record(request_url: &str) -> String {
+    match resolve_dns_record(request_url).await {
+        Ok(url) => url,
+        Err(e) => {
+            log::warn!("Error resolving hostname: {} url={}", e, request_url);
+            request_url.to_owned()
+        }
+    }
+}
