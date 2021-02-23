@@ -30,11 +30,7 @@ impl EthFaucetConfig {
         let faucet_address_str = env::var(ETH_FAUCET_ADDRESS_ENV_VAR)
             .ok()
             .unwrap_or_else(|| DEFAULT_ETH_FAUCET_ADDRESS.to_string());
-        let faucet_address_str = resolver::resolve_dns_record(&faucet_address_str)
-            .await
-            .map_err(|e| {
-                GNTDriverError::DatabaseError(format!("Error resolving tGLM faucet address: {}", e))
-            })?;
+        let faucet_address_str = resolver::try_resolve_dns_record(&faucet_address_str).await;
         let faucet_address = faucet_address_str
             .parse()
             .map_err(|e| GNTDriverError::LibraryError(format!("invalid faucet address: {}", e)))?;
