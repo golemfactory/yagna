@@ -8164,9 +8164,9 @@ dependencies = [
 
 [[package]]
 name = "ya-service-bus"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a50ec86e8772b46b183ad6874a266d944eb32a5e6fc7db8182bfda5f3a4f7519"
+checksum = "4d6a8147bc05117b64c27d0509640375ceda3496525619a72b66f69ac8951ac1"
 dependencies = [
  "actix 0.9.0",
  "flexbuffers",
