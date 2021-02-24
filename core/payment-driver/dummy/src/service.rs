@@ -19,7 +19,8 @@ pub fn bind_service() {
         .bind(get_transaction_balance)
         .bind(schedule_payment)
         .bind(verify_payment)
-        .bind(validate_allocation);
+        .bind(validate_allocation)
+        .bind(fund);
 
     log::debug!("Successfully bound payment driver service to service bus");
 }
@@ -117,8 +118,9 @@ async fn schedule_payment(
     };
 
     // Spawned because calling payment service while handling a call from payment service
-    // would result in a deadlock.
+    // would result in a deadlock. We need to wait a bit, so parent scope be able to answer
     Arbiter::spawn(async move {
+        std::thread::sleep(actix::clock::Duration::from_millis(100));
         let _ = bus::service(payment_srv::BUS_ID)
             .send(msg)
             .await
@@ -147,4 +149,8 @@ async fn validate_allocation(
     _msg: ValidateAllocation,
 ) -> Result<bool, GenericError> {
     Ok(true)
+}
+
+async fn fund(_db: (), _caller: String, _msg: Fund) -> Result<String, GenericError> {
+    Ok("Dummy driver is always funded.".to_owned())
 }
