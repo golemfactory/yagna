@@ -7863,7 +7863,7 @@ dependencies = [
  "thiserror",
  "tokio 0.2.24",
  "ya-core-model",
- "ya-sb-proto 0.3.0",
+ "ya-sb-proto",
  "ya-sb-router",
  "ya-service-api",
  "ya-service-api-interfaces",
@@ -8038,21 +8038,6 @@ dependencies = [
 
 [[package]]
 name = "ya-sb-proto"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba491b25b0ca2d03f697c7a734f79f7bb9550e570132bd95af53f62d52668424"
-dependencies = [
- "bytes 0.5.6",
- "prost",
- "prost-build",
- "thiserror",
- "tokio 0.2.24",
- "tokio-util 0.2.0",
- "url 2.2.0",
-]
-
-[[package]]
-name = "ya-sb-proto"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1eaa297ee64562ccd1041bb9d2c666a73b92329f83edfdc3bb2e78aad1087b0c"
@@ -8068,9 +8053,9 @@ dependencies = [
 
 [[package]]
 name = "ya-sb-router"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d10e05cad4f3d9eb46c48e5ae6a6ecfe49c1373707b886a167e2dac130b86075"
+checksum = "ac0d78a11d51aa4695a534f330b5a4719761b885c5a01ed201072c1bfd0cff06"
 dependencies = [
  "anyhow",
  "bytes 0.4.12",
@@ -8084,7 +8069,7 @@ dependencies = [
  "tokio-util 0.2.0",
  "url 2.2.0",
  "uuid 0.8.2",
- "ya-sb-proto 0.2.0",
+ "ya-sb-proto",
  "ya-sb-util",
 ]
 
@@ -8196,7 +8181,7 @@ dependencies = [
  "tokio-util 0.2.0",
  "url 2.2.0",
  "uuid 0.8.2",
- "ya-sb-proto 0.3.0",
+ "ya-sb-proto",
  "ya-sb-util",
 ]
 
@@ -8414,7 +8399,7 @@ dependencies = [
  "ya-payment",
  "ya-persistence",
  "ya-provider",
- "ya-sb-proto 0.3.0",
+ "ya-sb-proto",
  "ya-sb-router",
  "ya-service-api",
  "ya-service-api-derive",
