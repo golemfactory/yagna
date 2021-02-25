@@ -7,6 +7,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1.0"
 log = "0.4"
+url = "2.2"
 trust-dns-resolver = { version = "0.19", features = ["mdns"] }
 

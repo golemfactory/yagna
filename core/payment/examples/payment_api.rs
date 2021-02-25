@@ -14,6 +14,7 @@ use ya_client_model::NodeId;
 use ya_core_model::driver::{driver_bus_id, AccountMode, Fund, Init};
 use ya_core_model::identity;
 use ya_dummy_driver as dummy;
+use ya_glmsync_driver as glmsync;
 use ya_gnt_driver as gnt;
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::{migrations, utils};
@@ -31,6 +32,7 @@ enum Driver {
     Dummy,
     Erc20,
     Zksync,
+    Glmsync,
 }
 
 impl FromStr for Driver {
@@ -41,6 +43,7 @@ impl FromStr for Driver {
             "dummy" => Ok(Driver::Dummy),
             "erc20" => Ok(Driver::Erc20),
             "zksync" => Ok(Driver::Zksync),
+            "glmsync" => Ok(Driver::Glmsync),
             s => Err(anyhow::Error::msg(format!("Invalid driver: {}", s))),
         }
     }
@@ -52,6 +55,7 @@ impl std::fmt::Display for Driver {
             Driver::Dummy => write!(f, "dummy"),
             Driver::Erc20 => write!(f, "erc20"),
             Driver::Zksync => write!(f, "zksync"),
+            Driver::Glmsync => write!(f, "glmsync"),
         }
     }
 }
@@ -111,6 +115,20 @@ pub async fn start_zksync_driver(
     fake_subscribe_to_events();
 
     zksync::PaymentDriverService::gsb(db).await?;
+    let requestor_sign_tx = get_sign_tx(requestor_account);
+    fake_sign_tx(Box::new(requestor_sign_tx));
+    Ok(())
+}
+
+pub async fn start_glmsync_driver(
+    db: &DbExecutor,
+    requestor_account: Box<EthAccount>,
+) -> anyhow::Result<()> {
+    let requestor = NodeId::from(requestor_account.address().as_ref());
+    fake_list_identities(vec![requestor]);
+    fake_subscribe_to_events();
+
+    glmsync::PaymentDriverService::gsb(db).await?;
     let requestor_sign_tx = get_sign_tx(requestor_account);
     fake_sign_tx(Box::new(requestor_sign_tx));
     Ok(())
@@ -225,6 +243,10 @@ async fn main() -> anyhow::Result<()> {
         Driver::Zksync => {
             start_zksync_driver(&db, requestor_account).await?;
             zksync::DRIVER_NAME
+        }
+        Driver::Glmsync => {
+            start_glmsync_driver(&db, requestor_account).await?;
+            glmsync::DRIVER_NAME
         }
     };
     bus::service(driver_bus_id(driver_name))
