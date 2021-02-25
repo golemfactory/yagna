@@ -5,10 +5,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
 
-use crate::common::{
-    agreement_provider_service, authorize_activity_initiator, get_activity_agreement, PathActivity,
-    QueryTimeout,
-};
+use crate::common::*;
 use crate::error::Error;
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
@@ -33,7 +30,7 @@ async fn get_running_command(
 
     let cmd = agreement_provider_service(&id, &agreement)?
         .send(msg)
-        .timeout(query.timeout)
+        .timeout(timeout_margin(query.timeout))
         .await???;
 
     Ok::<_, Error>(web::Json(cmd))

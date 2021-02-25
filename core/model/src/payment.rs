@@ -446,6 +446,7 @@ pub mod local {
     pub enum DriverName {
         ZkSync,
         Erc20,
+        GlmSync,
     }
 
     #[derive(StructOpt, Debug, Clone)]

@@ -16,8 +16,8 @@ use ya_utils_networking::resolver;
 // Local uses
 use crate::zksync::wallet::account_balance;
 
-const DEFAULT_FAUCET_SRV_PREFIX: &str = "_zk-faucet._tcp";
-const FAUCET_ADDR_ENVAR: &str = "ZKSYNC_FAUCET_ADDR";
+const DEFAULT_FAUCET_SRV_PREFIX: &str = "_glmsync-faucet._tcp";
+const FAUCET_ADDR_ENVAR: &str = "GLMSYNC_FAUCET_ADDR";
 const MAX_FAUCET_REQUESTS: u32 = 6;
 
 lazy_static! {

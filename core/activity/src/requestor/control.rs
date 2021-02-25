@@ -96,7 +96,7 @@ async fn create_activity(
         .to(provider_id)
         .service(activity::BUS_ID)
         .send(msg)
-        .timeout(query.timeout)
+        .timeout(timeout_margin(query.timeout))
         .await???;
 
     log::debug!("activity created: {}, inserting", create_resp.activity_id());
@@ -134,7 +134,7 @@ async fn destroy_activity(
     };
     agreement_provider_service(&id, &agreement)?
         .send(msg)
-        .timeout(query.timeout)
+        .timeout(timeout_margin(query.timeout))
         .await???;
 
     set_persisted_state(
@@ -179,7 +179,7 @@ async fn exec(
         .to(agreement.provider_id().clone())
         .service(&activity::exeunit::bus_id(&path.activity_id))
         .send(msg)
-        .timeout(query.timeout)
+        .timeout(timeout_margin(query.timeout))
         .await???;
 
     counter!("activity.requestor.run-exescript", 1);
@@ -224,7 +224,7 @@ async fn await_results(
         .to(agreement.provider_id().clone())
         .service(&activity::exeunit::bus_id(&path.activity_id))
         .send(msg)
-        .timeout(query.timeout)
+        .timeout(timeout_margin(query.timeout))
         .await???;
 
     Ok::<_, Error>(web::Json(results))
