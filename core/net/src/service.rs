@@ -13,7 +13,7 @@ use ya_service_bus::connection::ClientInfo;
 use ya_service_bus::{
     connection, serialization, typed as bus, untyped as local_bus, Error, RpcEndpoint, RpcMessage,
 };
-use ya_utils_networking::srv_resolver;
+use ya_utils_networking::resolver;
 
 use crate::api::{net_service, parse_from_addr};
 use crate::handler::{auto_rebind, CentralBusHandler};
@@ -23,7 +23,7 @@ pub const CENTRAL_ADDR_ENV_VAR: &str = "CENTRAL_NET_HOST";
 async fn central_net_addr() -> std::io::Result<SocketAddr> {
     Ok(match std::env::var(CENTRAL_ADDR_ENV_VAR) {
         Ok(v) => v,
-        Err(_) => srv_resolver::resolve_yagna_record("_net._tcp").await?,
+        Err(_) => resolver::resolve_yagna_srv_record("_net._tcp").await?,
     }
     .to_socket_addrs()?
     .next()
