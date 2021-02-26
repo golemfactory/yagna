@@ -18,14 +18,15 @@ hex = "0.4"
 lazy_static = "1.4"
 log = "0.4.8"
 maplit = "1.0"
+metrics-macros = "=0.1.0-alpha.5"
 num-bigint = { version = "0.3", features = ["serde"] }
 serde = "1.0"
 serde_json = "^1.0"
 tiny-keccak = "1.4.2"
 tokio = { version = "0.2", features = ["full"] }
 uuid = { version = "0.8", features = ["v4"] }
-zksync = { git = "https://github.com/golemfactory/zksync", rev = "ae6559b966295213c5fd0d7bfa846c7c65289ebf"}
-zksync_eth_signer = { git = "https://github.com/golemfactory/zksync", rev = "ae6559b966295213c5fd0d7bfa846c7c65289ebf"}
+zksync = { git = "https://github.com/matter-labs/zksync", rev = "c9858084e20d722cbec9792539a6f55117caeb75"}
+zksync_eth_signer = { git = "https://github.com/matter-labs/zksync", rev = "c9858084e20d722cbec9792539a6f55117caeb75"}
 
 ## yagna dependencies
 ya-payment-driver = "0.2"
