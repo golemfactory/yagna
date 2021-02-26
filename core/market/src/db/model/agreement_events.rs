@@ -88,7 +88,7 @@ impl NewAgreementEvent {
             // and we use this timestamp for sorting events, when returning them to caller.
             // On the other side, we should sign AgreementTerminated event together with timestamp,
             // so we need to have the same value on both nodes.
-            // I don't know, how to solve this problem now, so I leave code that makes possible to
+            // I don't know, how to solve this problem now, so I leave code that makes it possible to
             // add this external timestamp to database, but here I will use generated value.
             timestamp: Utc::now().naive_utc(),
             issuer: terminator,
