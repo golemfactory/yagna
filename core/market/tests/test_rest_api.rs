@@ -5,6 +5,7 @@ use chrono::Utc;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 
+use ya_client::model::market::agreement::State as ClientAgreementState;
 use ya_client::model::market::{
     agreement as client_agreement, Agreement, AgreementOperationEvent, Demand, NewDemand, NewOffer,
     Offer, Proposal, Reason,
@@ -14,6 +15,7 @@ use ya_client::web::QueryParamsBuilder;
 use ya_market::testing::agreement_utils::negotiate_agreement;
 use ya_market::testing::events_helper::requestor::expect_approve;
 use ya_market::testing::{
+    agreement_utils::gen_reason,
     client::{sample_demand, sample_offer},
     mock_node::{wait_for_bcast, MarketServiceExt},
     mock_offer::flatten_json,
@@ -541,6 +543,68 @@ async fn test_terminate_agreement_without_reason() {
             .state,
         client_agreement::State::Terminated
     );
+}
+
+/// Agreement rejection happy path.
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
+async fn test_rest_agreement_rejected() {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await
+        .add_market_instance(PROV_NAME)
+        .await;
+
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await
+        .unwrap()
+        .proposal_id;
+
+    let prov_market = network.get_market(PROV_NAME);
+    let req_market = network.get_market(REQ_NAME);
+    let req_engine = &req_market.requestor_engine;
+    let req_id = network.get_default_id(REQ_NAME);
+    let prov_id = network.get_default_id(PROV_NAME);
+
+    let agreement_id = req_engine
+        .create_agreement(
+            req_id.clone(),
+            &proposal_id,
+            Utc::now() + chrono::Duration::milliseconds(300),
+        )
+        .await
+        .unwrap();
+
+    req_engine
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
+        .await
+        .unwrap();
+
+    let url = format!(
+        "/market-api/v1/agreements/{}/reject",
+        agreement_id.into_client(),
+    );
+    let req = test::TestRequest::post()
+        .uri(&url)
+        .set_json(&Some(gen_reason("Not-interested")))
+        .to_request();
+    let mut app = network.get_rest_app(PROV_NAME).await;
+    let resp = test::call_service(&mut app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let agreement = req_market
+        .get_agreement(&agreement_id, &req_id)
+        .await
+        .unwrap();
+    assert_eq!(agreement.state, ClientAgreementState::Rejected);
+
+    let agreement = prov_market
+        .get_agreement(&agreement_id.clone().translate(Owner::Provider), &prov_id)
+        .await
+        .unwrap();
+    assert_eq!(agreement.state, ClientAgreementState::Rejected);
 }
 
 // #[cfg_attr(not(feature = "test-suite"), ignore)]

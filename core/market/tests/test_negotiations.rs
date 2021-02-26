@@ -5,8 +5,8 @@ use ya_market::testing::{
     mock_offer::flatten_json,
     negotiation::error::{CounterProposalError, RemoteProposalError},
     proposal_util::{exchange_draft_proposals, NegotiationHelper},
-    MarketServiceExt, MarketsNetwork, Owner, ProposalError, ProposalState, ProposalValidationError,
-    SaveProposalError,
+    wait_for_bcast, MarketServiceExt, MarketsNetwork, Owner, ProposalError, ProposalState,
+    ProposalValidationError, SaveProposalError,
 };
 
 /// Test countering initial and draft proposals on both Provider and Requestor side.
@@ -910,7 +910,7 @@ async fn test_proposal_events_last() {
         .await
         .unwrap();
 
-    market3
+    let sub3 = market3
         .subscribe_offer(&sample_offer(), &identity3)
         .await
         .unwrap();
@@ -924,6 +924,9 @@ async fn test_proposal_events_last() {
         .reject_proposal(&offer2_id, &proposal2_id, &identity2, None)
         .await
         .unwrap();
+
+    // Make sure, that broadcast will reach Requestor.
+    wait_for_bcast(1000, &market1, &sub3, true).await;
 
     let events = market1
         .requestor_engine

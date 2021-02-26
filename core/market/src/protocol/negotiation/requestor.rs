@@ -11,7 +11,7 @@ use crate::db::model::{Agreement, AgreementId, Owner, Proposal};
 
 use super::super::callback::{CallbackHandler, HandlerSlot};
 use super::error::{
-    ApproveAgreementError, CounterProposalError, GsbAgreementError, GsbProposalError,
+    AgreementProtocolError, CounterProposalError, GsbAgreementError, GsbProposalError,
     NegotiationApiInitError, TerminateAgreementError,
 };
 use super::messages::{
@@ -236,7 +236,7 @@ impl NegotiationApi {
         self,
         caller: String,
         msg: AgreementApproved,
-    ) -> Result<(), ApproveAgreementError> {
+    ) -> Result<(), AgreementProtocolError> {
         log::debug!(
             "Negotiation API: Agreement [{}] approved by [{}].",
             &msg.agreement_id,
@@ -252,13 +252,16 @@ impl NegotiationApi {
         self,
         caller: String,
         msg: AgreementRejected,
-    ) -> Result<(), GsbAgreementError> {
+    ) -> Result<(), AgreementProtocolError> {
         log::debug!(
             "Negotiation API: Agreement [{}] rejected by [{}].",
             &msg.agreement_id,
             &caller
         );
-        self.inner.agreement_rejected.call(caller, msg).await
+        self.inner
+            .agreement_rejected
+            .call(caller, msg.translate(Owner::Requestor))
+            .await
     }
 
     async fn on_agreement_terminated(

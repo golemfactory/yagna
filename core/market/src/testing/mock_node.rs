@@ -593,7 +593,7 @@ impl MarketServiceExt for MarketService {
 pub mod default {
     use super::*;
     use crate::protocol::negotiation::error::{
-        ApproveAgreementError, CommitAgreementError, CounterProposalError, GsbAgreementError,
+        AgreementProtocolError, CommitAgreementError, CounterProposalError, GsbAgreementError,
         ProposeAgreementError, RejectProposalError, TerminateAgreementError,
     };
 
@@ -656,14 +656,14 @@ pub mod default {
     pub async fn empty_on_agreement_approved(
         _caller: String,
         _msg: AgreementApproved,
-    ) -> Result<(), ApproveAgreementError> {
+    ) -> Result<(), AgreementProtocolError> {
         Ok(())
     }
 
     pub async fn empty_on_agreement_rejected(
         _caller: String,
         _msg: AgreementRejected,
-    ) -> Result<(), GsbAgreementError> {
+    ) -> Result<(), AgreementProtocolError> {
         Ok(())
     }
 

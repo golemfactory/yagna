@@ -160,10 +160,7 @@ impl CommonBroker {
             caller_role,
             caller_id,
             &proposal_id,
-            reason
-                .as_ref()
-                .map(|r| format!("with reason: {}", r))
-                .unwrap_or("without reason".into()),
+            reason.display()
         );
 
         Ok(proposal)
@@ -369,8 +366,7 @@ impl CommonBroker {
             )
             .await?;
 
-            let reason_string = CommonBroker::reason2string(&reason);
-            dao.terminate(&agreement.id, reason_string, agreement.id.owner())
+            dao.terminate(&agreement.id, reason.clone(), agreement.id.owner())
                 .await
                 .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?;
         }
@@ -404,12 +400,6 @@ impl CommonBroker {
         //         .ok();
         // }
         Ok(())
-    }
-
-    fn reason2string(reason: &Option<Reason>) -> Option<String> {
-        reason.as_ref().map(|reason| {
-            serde_json::to_string::<Reason>(reason).unwrap_or(reason.message.to_string())
-        })
     }
 
     // Called remotely via GSB
@@ -457,8 +447,7 @@ impl CommonBroker {
                 Err(RemoteAgreementError::NotFound(agreement_id.clone()))?
             }
 
-            let reason_string = CommonBroker::reason2string(&msg.reason);
-            dao.terminate(&agreement_id, reason_string, caller_role)
+            dao.terminate(&agreement_id, msg.reason.clone(), caller_role)
                 .await
                 .map_err(|e| {
                     log::warn!(
@@ -631,10 +620,9 @@ impl CommonBroker {
         // TODO: If creating Proposal succeeds, but event can't be added, provider
         // TODO: will never answer to this Proposal. Solve problem when Event API will be available.
         let subscription_id = proposal.negotiation.subscription_id.clone();
-        let reason = CommonBroker::reason2string(&msg.reason);
         self.db
             .as_dao::<NegotiationEventsDao>()
-            .add_proposal_rejected_event(&proposal, reason)
+            .add_proposal_rejected_event(&proposal, msg.reason.clone())
             .await
             .map_err(|e| {
                 // TODO: Don't leak our database error, but send meaningful message as response.
