@@ -20,11 +20,7 @@ mod common {
     use ya_service_api_web::middleware::Identity;
     use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
 
-    use crate::common::{
-        agreement_provider_service, authorize_activity_executor, authorize_activity_initiator,
-        get_activity_agreement, get_persisted_state, get_persisted_usage, set_persisted_state,
-        set_persisted_usage, PathActivity, QueryTimeout,
-    };
+    use crate::common::*;
 
     pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
         scope
@@ -81,7 +77,7 @@ mod common {
                 activity_id: path.activity_id.to_string(),
                 timeout: query.timeout.clone(),
             })
-            .timeout(query.timeout)
+            .timeout(timeout_margin(query.timeout))
             .await???;
 
         set_persisted_state(&db, &path.activity_id, state)
@@ -124,7 +120,7 @@ mod common {
                 activity_id: path.activity_id.to_string(),
                 timeout: query.timeout.clone(),
             })
-            .timeout(query.timeout)
+            .timeout(timeout_margin(query.timeout))
             .await???;
 
         set_persisted_usage(&db, &path.activity_id, usage)

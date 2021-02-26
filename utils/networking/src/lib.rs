@@ -1,1 +1,1 @@
-pub mod srv_resolver;
+pub mod resolver;
