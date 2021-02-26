@@ -22,6 +22,7 @@ use super::messages::{
 use crate::protocol::negotiation::error::{
     CommitAgreementError, ProposeAgreementError, RejectProposalError,
 };
+use chrono::NaiveDateTime;
 
 /// Responsible for communication with markets on other nodes
 /// during negotiation phase.
@@ -142,10 +143,12 @@ impl NegotiationApi {
         &self,
         agreement: &Agreement,
         reason: Option<Reason>,
+        timestamp: NaiveDateTime,
     ) -> Result<(), AgreementProtocolError> {
         let msg = AgreementRejected {
             agreement_id: agreement.id.clone(),
             reason,
+            rejection_ts: timestamp,
         };
         net::from(agreement.provider_id)
             .to(agreement.requestor_id)
@@ -233,7 +236,7 @@ impl NegotiationApi {
         self,
         caller: String,
         msg: AgreementCancelled,
-    ) -> Result<(), GsbAgreementError> {
+    ) -> Result<(), AgreementProtocolError> {
         log::debug!(
             "Negotiation API: Agreement [{}] cancelled by [{}].",
             &msg.agreement_id,

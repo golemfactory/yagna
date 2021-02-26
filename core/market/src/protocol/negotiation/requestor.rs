@@ -7,7 +7,7 @@ use ya_core_model::market::BUS_ID;
 use ya_net::{self as net, RemoteEndpoint};
 use ya_service_bus::{typed::ServiceBinder, RpcEndpoint};
 
-use crate::db::model::{Agreement, AgreementId, Owner, Proposal};
+use crate::db::model::{Agreement, Owner, Proposal};
 
 use super::super::callback::{CallbackHandler, HandlerSlot};
 use super::error::{
@@ -23,6 +23,7 @@ use crate::protocol::negotiation::error::{
     CommitAgreementError, ProposeAgreementError, RejectProposalError,
 };
 use crate::protocol::negotiation::messages::AgreementCommitted;
+use chrono::NaiveDateTime;
 
 /// Responsible for communication with markets on other nodes
 /// during negotiation phase.
@@ -180,23 +181,23 @@ impl NegotiationApi {
 
     /// Sent to provider, when Requestor will call cancel Agreement,
     /// while waiting for approval.
-    /// TODO: Use model Agreement struct in api.
     pub async fn cancel_agreement(
         &self,
-        id: NodeId,
-        agreement_id: AgreementId,
-        owner: NodeId,
-    ) -> Result<(), GsbAgreementError> {
+        agreement: &Agreement,
+        reason: Option<Reason>,
+        timestamp: NaiveDateTime,
+    ) -> Result<(), AgreementProtocolError> {
         let msg = AgreementCancelled {
-            agreement_id: agreement_id.clone(),
-            reason: None,
+            agreement_id: agreement.id.clone(),
+            reason,
+            cancellation_ts: timestamp,
         };
-        net::from(id)
-            .to(owner)
+        net::from(agreement.requestor_id)
+            .to(agreement.provider_id)
             .service(&provider::agreement_addr(BUS_ID))
             .send(msg)
             .await
-            .map_err(|e| GsbAgreementError(e.to_string(), agreement_id))??;
+            .map_err(|e| GsbAgreementError(e.to_string(), agreement.id.clone()))??;
         Ok(())
     }
 

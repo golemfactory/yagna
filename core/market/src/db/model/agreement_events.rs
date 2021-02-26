@@ -66,6 +66,7 @@ impl NewAgreementEvent {
         agreement: &Agreement,
         reason: Option<Reason>,
         terminator: Owner,
+        _timestamp: NaiveDateTime,
     ) -> Result<Self, EventFromAgreementError> {
         Ok(Self {
             agreement_id: agreement.id.clone(),
@@ -83,6 +84,12 @@ impl NewAgreementEvent {
                 AgreementState::Approved => AgreementEventType::Approved,
                 AgreementState::Terminated => AgreementEventType::Terminated,
             },
+            // We don't use timestamp from parameter here, because it came from other party
+            // and we use this timestamp for sorting events, when returning them to caller.
+            // On the other side, we should sign AgreementTerminated event together with timestamp,
+            // so we need to have the same value on both nodes.
+            // I don't know, how to solve this problem now, so I leave code that makes it possible to
+            // add this external timestamp to database, but here I will use generated value.
             timestamp: Utc::now().naive_utc(),
             issuer: terminator,
             reason: reason.map(|reason| DbReason(reason)),

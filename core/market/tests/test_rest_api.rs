@@ -607,6 +607,68 @@ async fn test_rest_agreement_rejected() {
     assert_eq!(agreement.state, ClientAgreementState::Rejected);
 }
 
+/// Agreement cancellation happy path.
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
+async fn test_rest_agreement_cancelled() {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await
+        .add_market_instance(PROV_NAME)
+        .await;
+
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await
+        .unwrap()
+        .proposal_id;
+
+    let prov_market = network.get_market(PROV_NAME);
+    let req_market = network.get_market(REQ_NAME);
+    let req_engine = &req_market.requestor_engine;
+    let req_id = network.get_default_id(REQ_NAME);
+    let prov_id = network.get_default_id(PROV_NAME);
+
+    let agreement_id = req_engine
+        .create_agreement(
+            req_id.clone(),
+            &proposal_id,
+            Utc::now() + chrono::Duration::milliseconds(300),
+        )
+        .await
+        .unwrap();
+
+    req_engine
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
+        .await
+        .unwrap();
+
+    let url = format!(
+        "/market-api/v1/agreements/{}/cancel",
+        agreement_id.into_client(),
+    );
+    let req = test::TestRequest::post()
+        .uri(&url)
+        .set_json(&Some(gen_reason("Changed my mind")))
+        .to_request();
+    let mut app = network.get_rest_app(REQ_NAME).await;
+    let resp = test::call_service(&mut app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let agreement = req_market
+        .get_agreement(&agreement_id, &req_id)
+        .await
+        .unwrap();
+    assert_eq!(agreement.state, ClientAgreementState::Cancelled);
+
+    let agreement = prov_market
+        .get_agreement(&agreement_id.clone().translate(Owner::Provider), &prov_id)
+        .await
+        .unwrap();
+    assert_eq!(agreement.state, ClientAgreementState::Cancelled);
+}
+
 // #[cfg_attr(not(feature = "test-suite"), ignore)]
 // #[actix_rt::test]
 // #[serial_test::serial]
