@@ -9,7 +9,7 @@ ya-client-model = { version = "0.3", features = ["with-diesel"] }
 ya-core-model = { version = "^0.3", features = ["driver", "identity", "payment"] }
 ya-persistence = "0.2"
 ya-service-api-interfaces = "0.1"
-ya-service-bus = "0.4"
+ya-service-bus = "0.5"
 ya-utils-networking = "0.1"
 
 actix = { version = "0.9", default-features = false }

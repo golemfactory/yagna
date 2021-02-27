@@ -1,5 +1,6 @@
 use actix::Arbiter;
 use futures::channel::mpsc::{channel, Receiver, Sender};
+use futures::future::BoxFuture;
 use futures::{FutureExt, SinkExt};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -44,7 +45,7 @@ struct EventChannel {
 
 impl Default for EventChannel {
     fn default() -> Self {
-        let (tx, rx) = channel(32);
+        let (tx, rx) = channel(1);
         EventChannel { tx, rx: Some(rx) }
     }
 }
@@ -55,7 +56,7 @@ impl EventMonitor {
         inner
             .map
             .entry(pid)
-            .or_insert_with(|| EventChannel::default())
+            .or_insert_with(Default::default)
             .rx
             .take()
             .map(|rx| EventReceiver {
@@ -79,22 +80,20 @@ impl Default for EventMonitor {
 }
 
 impl RuntimeEvent for EventMonitor {
-    fn on_process_status(&self, status: ProcessStatus) {
+    fn on_process_status<'a>(&self, status: ProcessStatus) -> BoxFuture<'a, ()> {
         let mut inner = self.inner.lock().unwrap();
         let mut tx = inner
             .map
             .entry(status.pid)
-            .or_insert_with(|| EventChannel::default())
+            .or_insert_with(Default::default)
             .tx
             .clone();
 
-        inner.arbiter.send(
-            async move {
-                if let Err(err) = tx.send(status).await {
-                    log::error!("Event channel error: {:?}", err);
-                }
+        async move {
+            if let Err(err) = tx.send(status).await {
+                log::error!("Event channel error: {:?}", err);
             }
-            .boxed(),
-        );
+        }
+        .boxed()
     }
 }

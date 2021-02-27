@@ -5489,6 +5489,7 @@ checksum = "2932dc07acd2066ff2e3921a4419606b220ba6cd03a9935123856cc534877056"
 dependencies = [
  "rand 0.6.5",
  "secp256k1-sys 0.1.2",
+ "serde",
 ]
 
 [[package]]
@@ -5499,7 +5500,6 @@ checksum = "c6179428c22c73ac0fbb7b5579a56353ce78ba29759b3b8575183336ea74cdfb"
 dependencies = [
  "rand 0.6.5",
  "secp256k1-sys 0.3.0",
- "serde",
 ]
 
 [[package]]
@@ -7407,7 +7407,7 @@ dependencies = [
  "hex",
  "openssl",
  "rand 0.7.3",
- "secp256k1 0.19.0",
+ "secp256k1 0.17.2",
  "serde",
  "serde_json",
  "strum 0.19.5",
@@ -7477,7 +7477,7 @@ dependencies = [
 
 [[package]]
 name = "ya-exe-unit"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "actix 0.9.0",
  "actix-files 0.4.1",
@@ -7925,7 +7925,7 @@ dependencies = [
 
 [[package]]
 name = "ya-runtime-api"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "bytes 0.5.6",
@@ -7942,9 +7942,8 @@ dependencies = [
 
 [[package]]
 name = "ya-sb-proto"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1eaa297ee64562ccd1041bb9d2c666a73b92329f83edfdc3bb2e78aad1087b0c"
+version = "0.4.0"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?branch=mf/reply-sequence#35324fbb0642f5ae3ffa21fbcf1c0744099cd93b"
 dependencies = [
  "bytes 0.5.6",
  "prost",
@@ -7957,9 +7956,8 @@ dependencies = [
 
 [[package]]
 name = "ya-sb-router"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac0d78a11d51aa4695a534f330b5a4719761b885c5a01ed201072c1bfd0cff06"
+version = "0.5.0"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?branch=mf/reply-sequence#35324fbb0642f5ae3ffa21fbcf1c0744099cd93b"
 dependencies = [
  "anyhow",
  "bytes 0.4.12",
@@ -7980,8 +7978,7 @@ dependencies = [
 [[package]]
 name = "ya-sb-util"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20b2e7cfeacabb607fe1fd1dc8e653c3ee853f2e127cb1ed72955ea4cb84f951"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?branch=mf/reply-sequence#35324fbb0642f5ae3ffa21fbcf1c0744099cd93b"
 dependencies = [
  "futures 0.3.12",
  "pin-project 0.4.27",
@@ -8068,9 +8065,8 @@ dependencies = [
 
 [[package]]
 name = "ya-service-bus"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d6a8147bc05117b64c27d0509640375ceda3496525619a72b66f69ac8951ac1"
+version = "0.5.0"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?branch=mf/reply-sequence#35324fbb0642f5ae3ffa21fbcf1c0744099cd93b"
 dependencies = [
  "actix 0.9.0",
  "flexbuffers",
