@@ -12,11 +12,11 @@ pub type PoolType = Pool<ConnectionManager<InnerConnType>>;
 pub type ConnType = PooledConnection<ConnectionManager<InnerConnType>>;
 pub type InnerConnType = SqliteConnection;
 
+const TIMEOUT_INIT: &str = "PRAGMA busy_timeout = 15000;";
 const CONNECTION_INIT: &str = r"
 PRAGMA synchronous = NORMAL;
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
-PRAGMA busy_timeout = 15000;
 ";
 
 #[derive(thiserror::Error, Debug)]
@@ -44,6 +44,9 @@ fn connection_customizer() -> impl CustomizeConnection<SqliteConnection, diesel:
         fn on_acquire(&self, conn: &mut SqliteConnection) -> Result<(), diesel::r2d2::Error> {
             let _lock = self.0.lock().unwrap();
             log::trace!("on_acquire connection");
+            // https://github.com/diesel-rs/diesel/issues/2365
+            conn.execute(TIMEOUT_INIT)
+                .map_err(diesel::r2d2::Error::QueryError)?;
             Ok(conn
                 .batch_execute(CONNECTION_INIT)
                 .map_err(diesel::r2d2::Error::QueryError)?)
