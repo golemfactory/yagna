@@ -117,7 +117,10 @@ pub async fn get_tx_fee(address: &str, network: Network) -> Result<BigDecimal, G
         .await
         .map_err(GenericError::new)?
         .total_fee;
-    Ok(utils::big_uint_to_big_dec(tx_fee))
+    let tx_fee_bigdec = utils::big_uint_to_big_dec(tx_fee);
+
+    log::debug!("Transaction fee {:.5} {}", tx_fee_bigdec, token.as_str());
+    Ok(tx_fee_bigdec)
 }
 
 fn hash_to_hex(hash: TxHash) -> String {

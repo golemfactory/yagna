@@ -324,14 +324,19 @@ Mind that to be eligible you have to run your app at least once on testnet -
     ) -> Result<bool, GenericError> {
         let (network, _) = platform_to_network_token(msg.platform)?;
         let tx_fee_cost = wallet::get_tx_fee(&msg.address, network).await?;
+        let total_txs_cost = BigDecimal::from(20) * tx_fee_cost;
         let account_balance = wallet::account_balance(&msg.address, network).await?;
         let total_allocated_amount: BigDecimal = msg
             .existing_allocations
             .into_iter()
             .map(|allocation| allocation.remaining_amount)
             .sum();
-        Ok(msg.amount
-            <= (account_balance - total_allocated_amount - BigDecimal::from(20) * tx_fee_cost))
+
+        log::debug!(
+            "Attempting to create allocation with {:.5} available, already allocated {:.5} allocating {:.5} with txs cost of {:.5}",
+            account_balance, total_allocated_amount, msg.amount, total_txs_cost
+        );
+        Ok(msg.amount <= (account_balance - total_allocated_amount - total_txs_cost))
     }
 }
 
