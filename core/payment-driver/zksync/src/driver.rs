@@ -331,11 +331,6 @@ Mind that to be eligible you have to run your app at least once on testnet -
             .into_iter()
             .map(|allocation| allocation.remaining_amount)
             .sum();
-
-        log::debug!(
-            "Attempting to create allocation with {:.5} available, already allocated {:.5} allocating {:.5} with txs cost of {:.5}",
-            account_balance, total_allocated_amount, msg.amount, total_txs_cost
-        );
         Ok(msg.amount <= (account_balance - total_allocated_amount - total_txs_cost))
     }
 }
