@@ -323,13 +323,15 @@ Mind that to be eligible you have to run your app at least once on testnet -
         msg: ValidateAllocation,
     ) -> Result<bool, GenericError> {
         let (network, _) = platform_to_network_token(msg.platform)?;
+        let tx_fee_cost = wallet::get_tx_fee(&msg.address, network).await?;
         let account_balance = wallet::account_balance(&msg.address, network).await?;
         let total_allocated_amount: BigDecimal = msg
             .existing_allocations
             .into_iter()
             .map(|allocation| allocation.remaining_amount)
             .sum();
-        Ok(msg.amount <= (account_balance - total_allocated_amount))
+        Ok(msg.amount
+            <= (account_balance - total_allocated_amount - BigDecimal::from(20) * tx_fee_cost))
     }
 }
 

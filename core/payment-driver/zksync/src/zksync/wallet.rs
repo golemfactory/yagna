@@ -108,6 +108,18 @@ pub async fn exit(msg: &Exit) -> Result<String, GenericError> {
     }
 }
 
+pub async fn get_tx_fee(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
+    let token = get_network_token(network, None);
+    let wallet = get_wallet(&address, network).await?;
+    let tx_fee = wallet
+        .provider
+        .get_tx_fee(TxFeeTypes::Transfer, wallet.address(), token.as_str())
+        .await
+        .map_err(GenericError::new)?
+        .total_fee;
+    Ok(utils::big_uint_to_big_dec(tx_fee))
+}
+
 fn hash_to_hex(hash: TxHash) -> String {
     // TxHash::to_string adds a prefix to the hex value
     hex::encode(hash.as_ref())
