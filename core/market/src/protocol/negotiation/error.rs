@@ -101,17 +101,13 @@ pub enum RemoteProposeAgreementError {
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
-pub enum ApproveAgreementError {
+pub enum AgreementProtocolError {
     #[error("Approve {0}.")]
     Gsb(#[from] GsbAgreementError),
     #[error("Remote failed to approve. Error: {0}")]
     Remote(RemoteAgreementError),
-    #[error("Can't parse {caller} for Agreement [{id}]: {e}")]
-    CallerParseError {
-        e: String,
-        caller: String,
-        id: AgreementId,
-    },
+    #[error(transparent)]
+    CallerParse(#[from] CallerParseError),
     #[error("Timeout while sending approval of Agreement [{0}]")]
     Timeout(AgreementId),
     #[error("Agreement [{0}] doesn't contain approval timestamp.")]
@@ -146,7 +142,7 @@ pub enum RemoteAgreementError {
     Expired(AgreementId),
     #[error("Agreement [{0}] in state {1}, can't be approved.")]
     InvalidState(AgreementId, AgreementState),
-    #[error("Can't approve Agreement [{0}] due to internal error.")]
+    #[error("Can't finish operation on Agreement [{0}] due to internal error.")]
     InternalError(AgreementId),
 }
 

@@ -32,7 +32,8 @@ fn log_format_color(
     write!(
         w,
         "[{} {:5} {}] {}",
-        DateTime::<Utc>::from(*now.now()).to_rfc3339_opts(SecondsFormat::Secs, true),
+        yansi::Color::Fixed(247)
+            .paint(DateTime::<Utc>::from(*now.now()).to_rfc3339_opts(SecondsFormat::Secs, true)),
         style(level, level),
         yansi::Color::Fixed(247).paint(record.module_path().unwrap_or("<unnamed>")),
         &record.args()
