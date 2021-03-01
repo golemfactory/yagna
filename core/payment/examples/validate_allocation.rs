@@ -58,12 +58,11 @@ async fn main() -> anyhow::Result<()> {
     assert!(result.is_err());
     log::info!("Failed to create allocation (as expected).");
 
-    // We need to take ZkSync's transaction fees into account
-    let estimated_txs_cost = BigDecimal::from(20) * BigDecimal::from_str("0.033").unwrap();
+    // We need to take ZkSync's transaction fees into account (allowing 45% of funds per allocation)
     let new_allocation = NewAllocation {
         address: None, // Use default address (i.e. identity)
         payment_platform,
-        total_amount: requestor_balance / 2 - estimated_txs_cost,
+        total_amount: requestor_balance * BigDecimal::from_str("0.45").unwrap(),
         timeout: None,
         make_deposit: false,
     };
