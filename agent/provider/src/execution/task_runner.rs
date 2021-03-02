@@ -19,8 +19,9 @@ use ya_client::activity::ActivityProviderApi;
 use ya_client_model::activity::provider_event::ProviderEventType;
 use ya_client_model::activity::{ActivityState, ProviderEvent, State};
 use ya_core_model::activity;
+use ya_std_utils::LogErr;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
-use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
+use ya_utils_actix::actix_signal::{Signal, SignalSlot};
 use ya_utils_actix::{actix_signal_handler, forward_actix_handler};
 use ya_utils_path::SecurePath;
 use ya_utils_process::ExeUnitExitStatus;
@@ -86,18 +87,18 @@ pub struct ActivityDestroyed {
 // =========================================== //
 
 /// Called when we got createActivity event.
-#[derive(Message, Debug)]
+#[derive(Message, Clone, Debug)]
 #[rtype(result = "Result<()>")]
-struct CreateActivity {
+pub struct CreateActivity {
     pub activity_id: String,
     pub agreement_id: String,
     pub requestor_pub_key: Option<String>,
 }
 
 /// Called when we got destroyActivity event.
-#[derive(Message, Debug)]
+#[derive(Message, Clone, Debug)]
 #[rtype(result = "Result<()>")]
-struct DestroyActivity {
+pub struct DestroyActivity {
     pub activity_id: String,
     pub agreement_id: String,
 }
@@ -143,7 +144,7 @@ pub struct TaskRunner {
     active_agreements: HashMap<String, AgreementView>,
 
     /// External actors can listen on these signals.
-    pub activity_created: SignalSlot<ActivityCreated>,
+    pub activity_created: SignalSlot<CreateActivity>,
     pub activity_destroyed: SignalSlot<ActivityDestroyed>,
 
     config: Arc<TaskRunnerConfig>,
@@ -194,7 +195,7 @@ impl TaskRunner {
             registry,
             tasks: vec![],
             active_agreements: HashMap::new(),
-            activity_created: SignalSlot::<ActivityCreated>::new(),
+            activity_created: SignalSlot::<CreateActivity>::new(),
             activity_destroyed: SignalSlot::<ActivityDestroyed>::new(),
             config: Arc::new(config),
             event_ts: Utc::now(),
@@ -230,11 +231,11 @@ impl TaskRunner {
                 let _ = match event.event_type {
                     ProviderEventType::CreateActivity { requestor_pub_key } => {
                         myself
-                            .send(CreateActivity {
+                            .send(Signal(CreateActivity {
                                 activity_id: event.activity_id,
                                 agreement_id: event.agreement_id,
                                 requestor_pub_key,
-                            })
+                            }))
                             .await?
                     }
                     ProviderEventType::DestroyActivity {} => {
@@ -246,7 +247,7 @@ impl TaskRunner {
                             .await?
                     }
                 }
-                .map_err(|error| log::warn!("{}", error));
+                .log_warn();
                 Result::<(), anyhow::Error>::Ok(())
             })
             .collect::<Vec<_>>();
@@ -280,11 +281,6 @@ impl TaskRunner {
 
         let process = task.exeunit.get_process_handle();
         self.tasks.push(task);
-
-        let _ = self.activity_created.send_signal(ActivityCreated {
-            agreement_id: msg.agreement_id.clone(),
-            activity_id: msg.activity_id.clone(),
-        });
 
         // We need to discover that ExeUnit process finished.
         // We can't be sure that Requestor will send DestroyActivity.
@@ -542,7 +538,7 @@ impl Actor for TaskRunner {
 forward_actix_handler!(TaskRunner, NewAgreement, on_agreement_approved);
 forward_actix_handler!(TaskRunner, ExeUnitProcessFinished, on_exeunit_exited);
 forward_actix_handler!(TaskRunner, GetExeUnit, get_exeunit);
-actix_signal_handler!(TaskRunner, ActivityCreated, activity_created);
+actix_signal_handler!(TaskRunner, CreateActivity, activity_created);
 actix_signal_handler!(TaskRunner, ActivityDestroyed, activity_destroyed);
 
 impl Handler<GetOfferTemplates> for TaskRunner {

@@ -10,7 +10,7 @@ use ya_utils_actix::forward_actix_handler;
 
 use super::task_info::TaskInfo;
 use super::task_state::{AgreementState, TasksStates};
-use crate::execution::{ActivityCreated, ActivityDestroyed, TaskRunner};
+use crate::execution::{ActivityDestroyed, CreateActivity, TaskRunner};
 use crate::market::provider_market::{NewAgreement, ProviderMarket};
 use crate::market::termination_reason::BreakReason;
 use crate::payments::Payments;
@@ -254,7 +254,7 @@ impl Handler<InitializeTaskManager> for TaskManager {
             actx.payments.send(msg).await?;
 
             // Get info about Activity creation and destruction.
-            let msg = Subscribe::<ActivityCreated>(actx.myself.clone().recipient());
+            let msg = Subscribe::<CreateActivity>(actx.myself.clone().recipient());
             actx.runner.send(msg).await?;
 
             let msg = Subscribe::<ActivityDestroyed>(actx.myself.clone().recipient());
@@ -326,30 +326,35 @@ impl Handler<NewAgreement> for TaskManager {
     }
 }
 
-impl Handler<ActivityCreated> for TaskManager {
+impl Handler<CreateActivity> for TaskManager {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, msg: ActivityCreated, _ctx: &mut Context<Self>) -> Self::Result {
-        // TODO: Consider different flow: TaskRunner sends us request for creating activity
-        //       and TaskManager is responsible for sending CreateActivity to runner.
+    fn handle(&mut self, msg: CreateActivity, ctx: &mut Context<Self>) -> Self::Result {
+        let actx = self.async_context(ctx);
         let listener = self.tasks.changes_listener(&msg.agreement_id);
+
         let future = async move {
             // ActivityCreated event can come, before Task initialization will be finished.
             // In this case we must wait, because otherwise transition to Computing will fail.
             let mut state = listener?;
-            state.transition_finished().await
+            state.transition_finished().await?;
+
+            // Note: we allow only one activity on the same time.
+            start_transition(&actx.myself, &msg.agreement_id, AgreementState::Computing).await?;
+
+            // Activity will be created by runner here.
+            actx.runner.send(msg.clone()).await??;
+            Ok(msg)
         }
         .into_actor(self)
-        .map(move |result, myself, _| {
+        .map(move |result: Result<_, Error>, myself, _| {
             // Return, if waiting for transition failed.
             // This indicates, that State was already dropped.
-            result
+            // TODO: If transition to `Computing` failed, probably we already have 1 Activity.
+            //  We should set Activity state to terminated
+            let msg = result
                 .map_err(|e| anyhow!("[ActivityCreated] Can't change state to Computing. {}", e))?;
             let agreement_id = msg.agreement_id.clone();
-
-            myself
-                .tasks
-                .start_transition(&agreement_id, AgreementState::Computing)?;
 
             // Forward information to Payments for cost computing.
             myself.payments.do_send(msg);
@@ -391,6 +396,8 @@ impl Handler<ActivityDestroyed> for TaskManager {
         let need_close = closing_allowed && close_after_1st_activity;
 
         let future = async move {
+            start_transition(&actx.myself, &agreement_id, AgreementState::Idle).await?;
+
             // Forward information to Payments to send last DebitNote in activity.
             // TODO: What can we do in case of fail? Payments are expected to retry
             //       after they will succeed.
@@ -408,6 +415,8 @@ impl Handler<ActivityDestroyed> for TaskManager {
                     cause: ClosingCause::SingleActivity,
                 });
             }
+
+            finish_transition(&actx.myself, &agreement_id, AgreementState::Idle).await?;
             Ok(())
         };
         ActorResponse::r#async(future.into_actor(self))

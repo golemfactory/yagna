@@ -38,6 +38,8 @@ pub enum AgreementState {
     Initialized,
     /// First activity arrived
     Computing,
+    /// No active Activities.
+    Idle,
     /// Requestor closed agreement satisfied.
     Closed,
     /// Provider broke agreement.
@@ -106,6 +108,12 @@ impl TaskState {
                 _ => false,
             },
             Transition(AgreementState::Computing, None) => match new_state {
+                AgreementState::Idle | AgreementState::Broken { .. } | AgreementState::Closed => {
+                    true
+                }
+                _ => false,
+            },
+            Transition(AgreementState::Idle, None) => match new_state {
                 AgreementState::Computing
                 | AgreementState::Broken { .. }
                 | AgreementState::Closed => true,
