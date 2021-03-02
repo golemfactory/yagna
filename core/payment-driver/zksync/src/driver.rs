@@ -7,6 +7,7 @@
 use chrono::{Duration, TimeZone, Utc};
 use lazy_static::lazy_static;
 use std::collections::HashMap;
+use std::env;
 use std::str::FromStr;
 use uuid::Uuid;
 
@@ -35,6 +36,18 @@ use crate::{
 
 lazy_static! {
     static ref TX_SUMBIT_TIMEOUT: Duration = Duration::minutes(15);
+    static ref MAX_ALLOCATION_SURCHARGE: u32 =
+        match env::var("MAX_ALLOCATION_SURCHARGE").map(|s| s.parse()) {
+            Ok(Ok(x)) => x,
+            _ => 200,
+        };
+
+    // Environment variable will be replaced by allocation parameter in PAY-82
+    static ref ALLOCATE_FOR_N_TRANSACTIONS: u32 =
+        match env::var("ALLOCATE_FOR_N_TRANSACTIONS").map(|s| s.parse()) {
+            Ok(Ok(x)) => x,
+            _ => 10,
+        };
 }
 
 pub struct ZksyncDriver {
@@ -323,15 +336,34 @@ Mind that to be eligible you have to run your app at least once on testnet -
         msg: ValidateAllocation,
     ) -> Result<bool, GenericError> {
         let (network, _) = platform_to_network_token(msg.platform)?;
-        let tx_fee_cost = wallet::get_tx_fee(&msg.address, network).await?;
-        let total_txs_cost = BigDecimal::from(20) * tx_fee_cost;
         let account_balance = wallet::account_balance(&msg.address, network).await?;
         let total_allocated_amount: BigDecimal = msg
             .existing_allocations
             .into_iter()
             .map(|allocation| allocation.remaining_amount)
             .sum();
-        Ok(msg.amount <= (account_balance - total_allocated_amount - total_txs_cost))
+
+        // NOTE: `wallet::get_tx_fee` accepts an _recipient_ address which is unknown at the moment
+        // so the _sender_ address is provider. This might bias fee calculation, because transaction
+        // to new account is little more expensive.
+        let tx_fee_cost = wallet::get_tx_fee(&msg.address, network).await?;
+        let total_txs_cost = BigDecimal::from(*ALLOCATE_FOR_N_TRANSACTIONS) * tx_fee_cost;
+        let max_allocation_surcharge =
+            BigDecimal::min(BigDecimal::from(*MAX_ALLOCATION_SURCHARGE), total_txs_cost);
+
+        log::info!(
+            "Allocation validation: \
+            - allocating: {:.5}\n \
+            - account_balance: {:.5}\n \
+            - total_allocated_amount: {:.5}\n \
+            - max_allocation_surcharge: {:.5} \
+            ",
+            msg.amount,
+            account_balance,
+            total_allocated_amount,
+            max_allocation_surcharge,
+        );
+        Ok(msg.amount <= (account_balance - total_allocated_amount - max_allocation_surcharge))
     }
 }
 
