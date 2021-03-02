@@ -98,9 +98,9 @@ pub async fn exit(msg: &Exit) -> Result<String, GenericError> {
     }
 }
 
-pub async fn get_tx_fee(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
+pub async fn get_tx_fee(recipient: &str, network: Network) -> Result<BigDecimal, GenericError> {
     let token = get_network_token(network, None);
-    let wallet = get_wallet(&address, network).await?;
+    let wallet = get_wallet(&recipient, network).await?;
     let tx_fee = wallet
         .provider
         .get_tx_fee(TxFeeTypes::Transfer, wallet.address(), token.as_str())
