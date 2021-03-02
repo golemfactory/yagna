@@ -29,6 +29,9 @@ pub enum BreakReason {
     )]
     #[strum(message = "DebitNotesDeadline")]
     DebitNotesDeadline(chrono::Duration),
+    #[display(fmt = "Requestor is unreachable more than {}", "_0.display()")]
+    #[strum(message = "RequestorUnreachable")]
+    RequestorUnreachable(chrono::Duration),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
