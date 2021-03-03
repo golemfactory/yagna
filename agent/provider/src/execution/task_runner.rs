@@ -61,15 +61,6 @@ pub struct Shutdown;
 // Public signals sent by TaskRunner
 // =========================================== //
 
-/// Signal emitted when TaskRunner finished processing
-/// of CreateActivity event. That means, that ExeUnit is already created.
-#[derive(Message, Clone)]
-#[rtype(result = "Result<()>")]
-pub struct ActivityCreated {
-    pub agreement_id: String,
-    pub activity_id: String,
-}
-
 /// Signal emitted when TaskRunner destroys activity and ExeUnit process exited.
 /// It can happen in several situations:
 /// - Requestor sends terminate command to ExeUnit
@@ -101,6 +92,15 @@ pub struct CreateActivity {
 pub struct DestroyActivity {
     pub activity_id: String,
     pub agreement_id: String,
+}
+
+#[derive(Message, Clone, Debug)]
+#[rtype(result = "()")]
+pub struct TerminateActivity {
+    pub activity_id: String,
+    pub agreement_id: String,
+    pub reason: String,
+    pub message: String,
 }
 
 /// Called when process exited. There are 3 reasons for process to exit:
@@ -605,6 +605,27 @@ impl Handler<UpdateActivity> for TaskRunner {
         });
 
         ActorResponse::r#async(fut)
+    }
+}
+
+impl Handler<TerminateActivity> for TaskRunner {
+    type Result = ResponseFuture<()>;
+
+    fn handle(&mut self, msg: TerminateActivity, _ctx: &mut Context<Self>) -> Self::Result {
+        let api = self.api.clone();
+        let state_retry_interval = self.config.exeunit_state_retry_interval.clone();
+
+        async move {
+            set_activity_terminated(
+                api,
+                &msg.activity_id,
+                msg.reason,
+                msg.message,
+                state_retry_interval,
+            )
+            .await
+        }
+        .boxed_local()
     }
 }
 

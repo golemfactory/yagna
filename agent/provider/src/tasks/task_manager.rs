@@ -11,7 +11,7 @@ use ya_utils_actix::forward_actix_handler;
 
 use super::task_info::TaskInfo;
 use super::task_state::{AgreementState, TasksStates};
-use crate::execution::{ActivityDestroyed, CreateActivity, TaskRunner};
+use crate::execution::{ActivityDestroyed, CreateActivity, TaskRunner, TerminateActivity};
 use crate::market::provider_market::{NewAgreement, ProviderMarket};
 use crate::market::termination_reason::BreakReason;
 use crate::payments::Payments;
@@ -170,15 +170,16 @@ impl TaskManager {
             }
         });
 
-        self.schedule_idle_expiration(msg, ctx)
+        self.schedule_idle_expiration(ScheduleIdleExpiration(msg.0), ctx)
     }
 
     fn schedule_idle_expiration(
         &mut self,
-        msg: ScheduleExpiration,
+        msg: ScheduleIdleExpiration,
         ctx: &mut Context<Self>,
     ) -> Result<()> {
         let idle_timeout = msg.0.idle_agreement_timeout;
+        let agreement_id = msg.0.agreement_id;
 
         // Schedule agreement termination when there is no activity created within timeout.
         ctx.run_later(idle_timeout.clone(), move |myself, ctx| {
@@ -356,7 +357,19 @@ impl Handler<CreateActivity> for TaskManager {
             state.transition_finished().await?;
 
             // Note: we allow only one activity on the same time.
-            start_transition(&actx.myself, &msg.agreement_id, AgreementState::Computing).await?;
+            if let Err(e) =
+                start_transition(&actx.myself, &msg.agreement_id, AgreementState::Computing).await
+            {
+                actx.runner
+                    .send(TerminateActivity {
+                        activity_id: msg.activity_id.clone(),
+                        agreement_id: msg.agreement_id.clone(),
+                        reason: "Only single Activity allowed".to_string(),
+                        message: "Can't create 2 simultaneous Activities.".to_string(),
+                    })
+                    .await?;
+                return Err(e);
+            }
 
             // Activity will be created by runner here.
             actx.runner.send(msg.clone()).await??;
@@ -366,8 +379,6 @@ impl Handler<CreateActivity> for TaskManager {
         .map(move |result: Result<_, Error>, myself, _| {
             // Return, if waiting for transition failed.
             // This indicates, that State was already dropped.
-            // TODO: If transition to `Computing` failed, probably we already have 1 Activity.
-            //  We should set Activity state to terminated
             let msg = result.map_err(|e| anyhow!("Can't change state to Computing. {}", e))?;
             let agreement_id = msg.agreement_id.clone();
 
