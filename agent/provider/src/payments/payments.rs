@@ -398,7 +398,7 @@ impl Handler<ActivityCreated> for Payments {
                 "Agreement [{}] wasn't registered.",
                 &msg.agreement_id
             ))
-            .log_warn()?;
+            .log_warn_msg("[ActivityCreated]")?;
 
         log::info!(
             "Payments - activity [{}] created. Start computing costs.",
@@ -435,7 +435,7 @@ impl Handler<ActivityDestroyed> for Payments {
                 &msg.activity_id,
                 &msg.agreement_id
             ))
-            .log_warn()
+            .log_warn_msg("[ActivityDestroyed]")?;
         {
             Ok(agreement) => agreement,
             Err(e) => return ActorResponse::reply(Err(e)),
