@@ -159,7 +159,7 @@ impl PaymentDriver for ZksyncDriver {
         Ok(format!(
             "Withdrawal has been accepted by the zkSync operator. \
         It may take some time until the funds are available on Ethereum blockchain. \
-        Tracking link: https://rinkeby.zkscan.io/explorer/transactions/{}",
+        Tracking link: http://rinkeby.zksync.imapp.pl/explorer/transactions/{}",
             tx_hash
         ))
     }

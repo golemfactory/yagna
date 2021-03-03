@@ -62,7 +62,7 @@ pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
 
     if mode.contains(AccountMode::SEND) {
         let wallet = get_wallet(&address, network).await?;
-        unlock_wallet(wallet, network).await?;
+        unlock_wallet(&wallet, network).await?;
     }
     Ok(())
 }
@@ -79,6 +79,7 @@ pub async fn exit(msg: &Exit) -> Result<String, GenericError> {
     let network = msg.network().unwrap_or(DEFAULT_NETWORK.to_string());
     let network = Network::from_str(&network).map_err(|e| GenericError::new(e))?;
     let wallet = get_wallet(&msg.sender(), network).await?;
+    unlock_wallet(&wallet, network).await?;
     let tx_handle = withdraw(wallet, msg.amount(), msg.to()).await?;
     let tx_info = tx_handle
         .wait_for_commit()
@@ -225,7 +226,7 @@ pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails
 fn get_provider(network: Network) -> RpcProvider {
     let rpc_addr = get_rpc_addr(network);
     let zk_network = get_zk_network(network);
-    RpcProvider::from_addr(rpc_addr, zk_network)
+    RpcProvider::from_addr_and_network(rpc_addr, zk_network)
 }
 
 fn get_rpc_addr(network: Network) -> String {
@@ -261,7 +262,7 @@ fn get_zk_network(network: Network) -> ZkNetwork {
 }
 
 async fn unlock_wallet<S: EthereumSigner + Clone, P: Provider + Clone>(
-    wallet: Wallet<S, P>,
+    wallet: &Wallet<S, P>,
     _network: Network,
 ) -> Result<(), GenericError> {
     log::debug!("unlock_wallet");
