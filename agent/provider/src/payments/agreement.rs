@@ -52,7 +52,7 @@ pub struct AgreementPayment {
     pub activities: HashMap<String, ActivityPayment>,
 
     pub update_interval: std::time::Duration,
-    pub payment_deadline: Option<chrono::Duration>,
+    pub payment_timeout: Option<chrono::Duration>,
     // If at least one deadline elapses, we don't want to generate any
     // new unnecessary events.
     pub deadline_elapsed: bool,
@@ -94,7 +94,7 @@ impl AgreementPayment {
             activities: HashMap::new(),
             payment_model,
             update_interval,
-            payment_deadline: debit_deadline,
+            payment_timeout: debit_deadline,
             deadline_elapsed: false,
             last_send_debit_note: Utc::now(),
             watch_sender: sender,
