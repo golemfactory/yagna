@@ -216,6 +216,7 @@ impl TasksStates {
             match task_state.state {
                 Transition(AgreementState::New, _) => true,
                 Transition(AgreementState::Initialized, None) => true,
+                Transition(AgreementState::Idle, None) => true,
                 _ => false,
             }
         } else {

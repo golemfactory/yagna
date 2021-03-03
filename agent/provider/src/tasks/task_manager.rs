@@ -1,9 +1,10 @@
 use actix::prelude::*;
 use anyhow::{anyhow, bail, Error, Result};
-use chrono::{Duration, Utc};
+use chrono::Utc;
 use futures::future::TryFutureExt;
 use std::collections::HashMap;
 
+use ya_std_utils::LogErr;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::Subscribe;
 use ya_utils_actix::forward_actix_handler;
@@ -95,6 +96,10 @@ struct ScheduleExpiration(TaskInfo);
 
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
+struct ScheduleIdleExpiration(TaskInfo);
+
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
 struct StartUpdateState {
     pub agreement_id: String,
     pub new_state: AgreementState,
@@ -143,8 +148,8 @@ impl TaskManager {
         msg: ScheduleExpiration,
         ctx: &mut Context<Self>,
     ) -> Result<()> {
-        let agreement_id = msg.0.agreement_id;
-        let expiration = msg.0.expiration;
+        let agreement_id = msg.0.agreement_id.clone();
+        let expiration = msg.0.expiration.clone();
 
         if Utc::now() > expiration {
             bail!(
@@ -165,13 +170,22 @@ impl TaskManager {
             }
         });
 
-        // Schedule agreement termination when there is no activity created within 90s.
-        let s90 = Duration::seconds(90).to_std()?;
-        ctx.run_later(s90.clone(), move |myself, ctx| {
+        self.schedule_idle_expiration(msg, ctx)
+    }
+
+    fn schedule_idle_expiration(
+        &mut self,
+        msg: ScheduleExpiration,
+        ctx: &mut Context<Self>,
+    ) -> Result<()> {
+        let idle_timeout = msg.0.idle_agreement_timeout;
+
+        // Schedule agreement termination when there is no activity created within timeout.
+        ctx.run_later(idle_timeout.clone(), move |myself, ctx| {
             if myself.tasks.not_active(&agreement_id) {
                 ctx.address().do_send(BreakAgreement {
                     agreement_id,
-                    reason: BreakReason::NoActivity(s90),
+                    reason: BreakReason::NoActivity(idle_timeout),
                 });
             }
         });
@@ -227,6 +241,11 @@ impl Actor for TaskManager {
 }
 
 forward_actix_handler!(TaskManager, ScheduleExpiration, schedule_expiration);
+forward_actix_handler!(
+    TaskManager,
+    ScheduleIdleExpiration,
+    schedule_idle_expiration
+);
 forward_actix_handler!(TaskManager, StartUpdateState, start_update_agreement_state);
 forward_actix_handler!(
     TaskManager,
@@ -275,11 +294,8 @@ impl Handler<NewAgreement> for TaskManager {
 
     fn handle(&mut self, msg: NewAgreement, ctx: &mut Context<Self>) -> Self::Result {
         // Add new agreement with it's state.
-        let task_info = match self.add_new_agreement(&msg) {
-            Err(error) => {
-                log::error!("{}", error);
-                return ActorResponse::reply(Err(error));
-            }
+        let task_info = match self.add_new_agreement(&msg).log_err() {
+            Err(e) => return ActorResponse::reply(Err(e)),
             Ok(task_info) => task_info,
         };
 
@@ -314,7 +330,7 @@ impl Handler<NewAgreement> for TaskManager {
                     let msg = BreakAgreement {
                         agreement_id: agreement_id.clone(),
                         reason: BreakReason::InitializationError {
-                            error: format!("{}", error),
+                            error: error.to_string(),
                         },
                     };
                     context.address().do_send(msg);
@@ -352,8 +368,7 @@ impl Handler<CreateActivity> for TaskManager {
             // This indicates, that State was already dropped.
             // TODO: If transition to `Computing` failed, probably we already have 1 Activity.
             //  We should set Activity state to terminated
-            let msg = result
-                .map_err(|e| anyhow!("[ActivityCreated] Can't change state to Computing. {}", e))?;
+            let msg = result.map_err(|e| anyhow!("Can't change state to Computing. {}", e))?;
             let agreement_id = msg.agreement_id.clone();
 
             // Forward information to Payments for cost computing.
@@ -385,11 +400,12 @@ impl Handler<ActivityDestroyed> for TaskManager {
             .allowed_transition(&agreement_id, &AgreementState::Closed)
             .is_ok();
 
-        let close_after_1st_activity = self
-            .tasks_props
-            .get(&agreement_id)
-            .map(|info| !info.multi_activity)
-            .unwrap_or(false);
+        let task_info = match self.tasks_props.get(&agreement_id).cloned() {
+            Some(info) => info,
+            None => return ActorResponse::reply(Err(anyhow!("No agreement {}", agreement_id))),
+        };
+
+        let close_after_1st_activity = !task_info.multi_activity;
 
         // Provider is responsible for closing Agreement, if multi_activity flag wasn't
         // set in Agreement. Otherwise Requestor should terminate.
@@ -397,6 +413,10 @@ impl Handler<ActivityDestroyed> for TaskManager {
 
         let future = async move {
             start_transition(&actx.myself, &agreement_id, AgreementState::Idle).await?;
+
+            actx.myself
+                .send(ScheduleIdleExpiration(task_info))
+                .await??;
 
             // Forward information to Payments to send last DebitNote in activity.
             // TODO: What can we do in case of fail? Payments are expected to retry
