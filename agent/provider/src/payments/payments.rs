@@ -101,7 +101,7 @@ struct CostsSummary {
 pub struct DebitNoteInfo {
     pub agreement_id: String,
     pub activity_id: String,
-    pub payment_deadline: Option<chrono::Duration>,
+    pub payment_timeout: Option<chrono::Duration>,
 }
 
 /// Configuration for Payments actor.
@@ -247,8 +247,8 @@ async fn send_debit_note(
     );
 
     if let Some(deadline) = debit_note_info
-        .payment_deadline
-        .map(|deadline| Utc::now() + deadline)
+        .payment_timeout
+        .map(|timeout| Utc::now() + timeout)
     {
         provider_context
             .debit_checker
@@ -411,7 +411,7 @@ impl Handler<ActivityCreated> for Payments {
             invoice_info: DebitNoteInfo {
                 agreement_id: msg.agreement_id.clone(),
                 activity_id: msg.activity_id.clone(),
-                payment_deadline: None, // Will be added in UpdateCost handler.
+                payment_timeout: None, // Will be added in UpdateCost handler.
             },
         };
 
@@ -435,7 +435,7 @@ impl Handler<ActivityDestroyed> for Payments {
                 &msg.activity_id,
                 &msg.agreement_id
             ))
-            .log_warn_msg("[ActivityDestroyed]")?;
+            .log_warn_msg("[ActivityDestroyed]")
         {
             Ok(agreement) => agreement,
             Err(e) => return ActorResponse::reply(Err(e)),
@@ -449,7 +449,7 @@ impl Handler<ActivityDestroyed> for Payments {
         let debit_note_info = DebitNoteInfo {
             activity_id: msg.activity_id.clone(),
             agreement_id: msg.agreement_id.clone(),
-            payment_deadline: agreement.payment_deadline,
+            payment_timeout: agreement.payment_timeout,
         };
 
         let future = async move {
@@ -521,9 +521,9 @@ impl Handler<UpdateCost> for Payments {
 
                 let update_interval = agreement.update_interval;
                 let last_debit_note = agreement.last_send_debit_note.clone();
-                let deadline = agreement.payment_deadline.clone();
+                let timeout = agreement.payment_timeout.clone();
                 let invoice_info = DebitNoteInfo {
-                    payment_deadline: deadline.clone(),
+                    payment_timeout: timeout.clone(),
                     ..msg.invoice_info.clone()
                 };
 
@@ -541,11 +541,11 @@ impl Handler<UpdateCost> for Payments {
                 .map(move |result: Result<_, anyhow::Error>, myself, ctx| {
                     // We break Agreement, if we weren't able to send any DebitNote lately.
                     if result.is_err() {
-                        if deadline.is_some() && Utc::now() > last_debit_note + deadline.unwrap() {
+                        if timeout.is_some() && Utc::now() > last_debit_note + timeout.unwrap() {
                             myself.break_agreement_signal
                                 .send_signal(BreakAgreement {
                                     agreement_id: msg.invoice_info.agreement_id.clone(),
-                                    reason: BreakReason::RequestorUnreachable(deadline.unwrap()),
+                                    reason: BreakReason::RequestorUnreachable(timeout.unwrap()),
                                 })
                                 .log_err_msg(&format!(
                                     "Failed to send BreakAgreement for [{}], when Requestor is unreachable.",
@@ -802,13 +802,13 @@ impl Handler<DeadlineElapsed> for Payments {
     type Result = ();
 
     fn handle(&mut self, msg: DeadlineElapsed, _ctx: &mut Context<Self>) -> Self::Result {
-        let deadline = match self.agreements.get_mut(&msg.agreement_id) {
-            Some(agreement) => match agreement.payment_deadline {
-                Some(deadline) => {
+        let timeout = match self.agreements.get_mut(&msg.agreement_id) {
+            Some(agreement) => match agreement.payment_timeout {
+                Some(timeout) => {
                     match agreement.deadline_elapsed {
                         false => {
                             agreement.deadline_elapsed = true;
-                            deadline
+                            timeout
                         }
                         // If at least one deadline elapses, we don't want to generate any
                         // new unnecessary events.
@@ -846,15 +846,12 @@ impl Handler<DeadlineElapsed> for Payments {
         self.break_agreement_signal
             .send_signal(BreakAgreement {
                 agreement_id: msg.agreement_id.clone(),
-                reason: BreakReason::DebitNotesDeadline(deadline),
+                reason: BreakReason::DebitNotesDeadline(timeout),
             })
-            .map_err(|e| {
-                log::error!(
-                    "Failed to send BreakAgreement when deadline elapsed for [{}]. {}",
-                    msg.agreement_id,
-                    e
-                )
-            })
+            .log_err_msg(&format!(
+                "Failed to send BreakAgreement when deadline elapsed for [{}]",
+                msg.agreement_id,
+            ))
             .ok();
     }
 }
