@@ -46,8 +46,8 @@ pub struct QueryEvents {
     #[serde(rename = "appSessionId")]
     pub app_session_id: Option<String>,
     /// number of milliseconds to wait
-    #[serde(rename = "pollTimeout", default = "default_query_timeout")]
-    pub poll_timeout: Option<f32>,
+    #[serde(rename = "timeout", default = "default_query_timeout")]
+    pub timeout: Option<f32>,
     /// select events past the specified point in time
     #[serde(rename = "afterTimestamp")]
     pub after_timestamp: DateTime<Utc>,

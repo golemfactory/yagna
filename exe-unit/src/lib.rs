@@ -412,19 +412,21 @@ impl<T> Default for Channel<T> {
 }
 
 pub(crate) async fn report<M: RpcMessage + Unpin + 'static>(url: String, msg: M) -> bool {
-    let result = match ya_service_bus::typed::service(&url).send(msg).await {
-        Err(ya_service_bus::Error::Closed(_)) => {
-            log::error!("{}", "Reporting endpoint is not available");
-            return false;
+    match ya_service_bus::typed::service(&url).send(msg).await {
+        Err(ya_service_bus::Error::Timeout(msg)) => {
+            log::warn!("Timed out reporting to {}: {}", url, msg);
+            true
         }
-        v => v,
+        Err(e) => {
+            log::error!("Error reporting to {}: {:?}", url, e);
+            false
+        }
+        Ok(Err(e)) => {
+            log::error!("Error response while reporting to {}: {:?}", url, e);
+            false
+        }
+        Ok(Ok(_)) => true,
     }
-    .map_err(Error::from);
-
-    if let Err(e) = result {
-        log::warn!("Error reporting to {}: {:?}", url, e);
-    }
-    true
 }
 
 async fn report_usage<R: Runtime>(

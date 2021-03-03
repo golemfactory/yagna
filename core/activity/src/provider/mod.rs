@@ -48,7 +48,7 @@ async fn get_events(
             query.after_timestamp,
             query.max_events,
         )
-        .timeout(query.poll_timeout)
+        .timeout(query.timeout)
         .await??
         .into_iter()
         .collect::<Vec<ProviderEvent>>();
