@@ -43,8 +43,8 @@ lazy_static! {
         };
 
     // Environment variable will be replaced by allocation parameter in PAY-82
-    static ref ALLOCATE_FOR_N_TRANSACTIONS: u32 =
-        match env::var("ALLOCATE_FOR_N_TRANSACTIONS").map(|s| s.parse()) {
+    static ref TRANSACTIONS_PER_ALLOCATION: u32 =
+        match env::var("TRANSACTIONS_PER_ALLOCATION").map(|s| s.parse()) {
             Ok(Ok(x)) => x,
             _ => 10,
         };
@@ -347,23 +347,23 @@ Mind that to be eligible you have to run your app at least once on testnet -
         // so the _sender_ address is provider. This might bias fee calculation, because transaction
         // to new account is little more expensive.
         let tx_fee_cost = wallet::get_tx_fee(&msg.address, network).await?;
-        let total_txs_cost = BigDecimal::from(*ALLOCATE_FOR_N_TRANSACTIONS) * tx_fee_cost;
-        let max_allocation_surcharge =
+        let total_txs_cost = BigDecimal::from(*TRANSACTIONS_PER_ALLOCATION) * tx_fee_cost;
+        let allocation_surcharge =
             BigDecimal::min(BigDecimal::from(*MAX_ALLOCATION_SURCHARGE), total_txs_cost);
 
         log::info!(
             "Allocation validation: \
-            - allocating: {:.5}\n \
-            - account_balance: {:.5}\n \
-            - total_allocated_amount: {:.5}\n \
-            - max_allocation_surcharge: {:.5} \
+            allocating: {:.5}, \
+            account_balance: {:.5}, \
+            total_allocated_amount: {:.5}, \
+            allocation_surcharge: {:.5} \
             ",
             msg.amount,
             account_balance,
             total_allocated_amount,
-            max_allocation_surcharge,
+            allocation_surcharge,
         );
-        Ok(msg.amount <= (account_balance - total_allocated_amount - max_allocation_surcharge))
+        Ok(msg.amount <= (account_balance - total_allocated_amount - allocation_surcharge))
     }
 }
 
