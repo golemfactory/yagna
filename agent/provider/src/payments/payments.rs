@@ -2,6 +2,7 @@ use actix::prelude::*;
 use anyhow::{anyhow, Error, Result};
 use bigdecimal::{BigDecimal, Zero};
 use chrono::Utc;
+use futures_util::FutureExt;
 use humantime;
 use log;
 use serde_json::json;
@@ -23,6 +24,7 @@ use ya_client::activity::ActivityProviderApi;
 use ya_client::model::payment::{DebitNote, Invoice, NewDebitNote, NewInvoice};
 use ya_client::payment::PaymentApi;
 use ya_client_model::payment::{DebitNoteEventType, InvoiceEventType};
+use ya_std_utils::LogErr;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
 use ya_utils_actix::{actix_signal_handler, forward_actix_handler};
@@ -99,7 +101,7 @@ struct CostsSummary {
 pub struct DebitNoteInfo {
     pub agreement_id: String,
     pub activity_id: String,
-    pub payment_deadline: Option<chrono::Duration>,
+    pub payment_timeout: Option<chrono::Duration>,
 }
 
 /// Configuration for Payments actor.
@@ -245,8 +247,8 @@ async fn send_debit_note(
     );
 
     if let Some(deadline) = debit_note_info
-        .payment_deadline
-        .map(|deadline| Utc::now() + deadline)
+        .payment_timeout
+        .map(|timeout| Utc::now() + timeout)
     {
         provider_context
             .debit_checker
@@ -389,32 +391,35 @@ impl Handler<ActivityCreated> for Payments {
     type Result = anyhow::Result<()>;
 
     fn handle(&mut self, msg: ActivityCreated, ctx: &mut Context<Self>) -> Self::Result {
-        if let Some(agreement) = self.agreements.get_mut(&msg.agreement_id) {
-            log::info!(
-                "Payments - activity [{}] created. Start computing costs.",
-                &msg.activity_id
-            );
+        let agreement = self
+            .agreements
+            .get_mut(&msg.agreement_id)
+            .ok_or(anyhow!(
+                "Agreement [{}] wasn't registered.",
+                &msg.agreement_id
+            ))
+            .log_warn_msg("[ActivityCreated]")?;
 
-            // Sending UpdateCost with last_debit_note: None will start new
-            // DebitNotes chain for this activity.
-            let msg = UpdateCost {
-                invoice_info: DebitNoteInfo {
-                    agreement_id: msg.agreement_id.clone(),
-                    activity_id: msg.activity_id.clone(),
-                    payment_deadline: None, // Will be added in UpdateCost handler.
-                },
-            };
+        log::info!(
+            "Payments - activity [{}] created. Start computing costs.",
+            &msg.activity_id
+        );
 
-            // Add activity to list and send debit note after update_interval.
-            agreement.add_created_activity(&msg.invoice_info.activity_id);
-            ctx.notify_later(msg, agreement.update_interval);
+        // Sending UpdateCost with last_debit_note: None will start new
+        // DebitNotes chain for this activity.
+        let msg = UpdateCost {
+            invoice_info: DebitNoteInfo {
+                agreement_id: msg.agreement_id.clone(),
+                activity_id: msg.activity_id.clone(),
+                payment_timeout: None, // Will be added in UpdateCost handler.
+            },
+        };
 
-            Ok(())
-        } else {
-            let error = format!("Agreement [{}] wasn't registered.", &msg.agreement_id);
-            log::warn!("{}", error);
-            Err(anyhow!(error))
-        }
+        // Add activity to list and send debit note after update_interval.
+        agreement.add_created_activity(&msg.invoice_info.activity_id);
+        ctx.notify_later(msg, agreement.update_interval);
+
+        Ok(())
     }
 }
 
@@ -422,16 +427,18 @@ impl Handler<ActivityDestroyed> for Payments {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: ActivityDestroyed, ctx: &mut Context<Self>) -> Self::Result {
-        let agreement = match self.agreements.get_mut(&msg.agreement_id) {
-            Some(agreement) => agreement,
-            None => {
-                log::warn!(
-                    "Can't find activity [{}] and agreement [{}].",
-                    &msg.activity_id,
-                    &msg.agreement_id
-                );
-                return ActorResponse::reply(Err(anyhow!("")));
-            }
+        let agreement = match self
+            .agreements
+            .get_mut(&msg.agreement_id)
+            .ok_or(anyhow!(
+                "Can't find activity [{}] and agreement [{}].",
+                &msg.activity_id,
+                &msg.agreement_id
+            ))
+            .log_warn_msg("[ActivityDestroyed]")
+        {
+            Ok(agreement) => agreement,
+            Err(e) => return ActorResponse::reply(Err(e)),
         };
 
         agreement.activity_destroyed(&msg.activity_id).unwrap();
@@ -442,7 +449,7 @@ impl Handler<ActivityDestroyed> for Payments {
         let debit_note_info = DebitNoteInfo {
             activity_id: msg.activity_id.clone(),
             agreement_id: msg.agreement_id.clone(),
-            payment_deadline: agreement.payment_deadline,
+            payment_timeout: agreement.payment_timeout,
         };
 
         let future = async move {
@@ -494,28 +501,31 @@ impl Handler<UpdateCost> for Payments {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: UpdateCost, _ctx: &mut Context<Self>) -> Self::Result {
-        let agreement = match self.agreements.get(&msg.invoice_info.agreement_id) {
-            Some(agreement) => agreement,
-            None => {
-                let err_msg = format!(
-                    "Not my activity - agreement [{}].",
-                    &msg.invoice_info.agreement_id
-                );
-                log::warn!("{}", &err_msg);
-
-                return ActorResponse::reply(Err(anyhow!(err_msg)));
-            }
+        let agreement = match self
+            .agreements
+            .get(&msg.invoice_info.agreement_id)
+            .ok_or(anyhow!(
+                "Not my activity - agreement [{}].",
+                &msg.invoice_info.agreement_id
+            ))
+            .log_warn_msg("[UpdateCost]")
+        {
+            Ok(agreement) => agreement,
+            Err(e) => return ActorResponse::reply(Err(e)),
         };
 
-        if let Some(activity) = agreement.activities.get(&msg.invoice_info.activity_id) {
-            if let ActivityPayment::Running { .. } = activity {
+        return match agreement.activities.get(&msg.invoice_info.activity_id) {
+            Some(ActivityPayment::Running { .. }) => {
                 let payment_model = agreement.payment_model.clone();
                 let context = self.context.clone();
+
+                let update_interval = agreement.update_interval;
+                let last_debit_note = agreement.last_send_debit_note.clone();
+                let timeout = agreement.payment_timeout.clone();
                 let invoice_info = DebitNoteInfo {
-                    payment_deadline: agreement.payment_deadline.clone(),
+                    payment_timeout: timeout.clone(),
                     ..msg.invoice_info.clone()
                 };
-                let update_interval = agreement.update_interval;
 
                 let debit_note_future = async move {
                     let (debit_note, _cost) = compute_cost_and_send_debit_note(
@@ -523,34 +533,53 @@ impl Handler<UpdateCost> for Payments {
                         payment_model.clone(),
                         &invoice_info,
                     )
-                    .await?;
+                    .await
+                    .log_err()?;
                     Ok(debit_note)
                 }
                 .into_actor(self)
-                .map(move |result: Result<DebitNote, Error>, _, ctx| {
-                    if let Err(error) = result {
-                        log::error!("{}", error)
+                .map(move |result: Result<_, anyhow::Error>, myself, ctx| {
+                    // We break Agreement, if we weren't able to send any DebitNote lately.
+                    if result.is_err() {
+                        if timeout.is_some() && Utc::now() > last_debit_note + timeout.unwrap() {
+                            myself.break_agreement_signal
+                                .send_signal(BreakAgreement {
+                                    agreement_id: msg.invoice_info.agreement_id.clone(),
+                                    reason: BreakReason::RequestorUnreachable(timeout.unwrap()),
+                                })
+                                .log_err_msg(&format!(
+                                    "Failed to send BreakAgreement for [{}], when Requestor is unreachable.",
+                                    msg.invoice_info.agreement_id
+                                ))
+                                .ok();
+                        }
+                    } else {
+                        myself.agreements
+                            .get_mut(&msg.invoice_info.agreement_id)
+                            .map(|agreement| agreement.last_send_debit_note = Utc::now());
                     }
+
                     // Don't bother, if previous debit note was sent successfully or not.
                     // Schedule UpdateCost for later.
                     ctx.notify_later(msg, update_interval);
                     Ok(())
                 });
-                return ActorResponse::r#async(debit_note_future);
-            } else {
+                ActorResponse::r#async(debit_note_future)
+            }
+            Some(_) => {
                 // Activity is not running anymore. We don't send here new UpdateCost
                 // message, what stops further updates.
                 log::info!(
                     "Stopped sending debit notes, because activity [{}] was destroyed.",
                     &msg.invoice_info.activity_id
                 );
-                return ActorResponse::reply(Ok(()));
+                ActorResponse::reply(Ok(()))
             }
-        }
-        return ActorResponse::reply(Err(anyhow!(
-            "We shouldn't be here. Activity [{}], not found.",
-            &msg.invoice_info.activity_id
-        )));
+            None => ActorResponse::reply(Err(anyhow!(
+                "We shouldn't be here. Activity [{}], not found.",
+                &msg.invoice_info.activity_id
+            ))),
+        };
     }
 }
 
@@ -558,18 +587,20 @@ impl Handler<FinalizeActivity> for Payments {
     type Result = <FinalizeActivity as Message>::Result;
 
     fn handle(&mut self, msg: FinalizeActivity, _ctx: &mut Context<Self>) -> Self::Result {
-        if let Some(agreement) = self.agreements.get_mut(&msg.debit_info.agreement_id) {
-            log::info!("Activity [{}] finished.", &msg.debit_info.activity_id);
-
-            let result = agreement.finish_activity(&msg.debit_info.activity_id, msg.cost_summary);
-            if let Err(error) = result {
-                log::error!("Finalizing activity failed. Error: {}", error);
-            }
-        } else {
-            log::warn!(
+        if let Ok(agreement) = self
+            .agreements
+            .get_mut(&msg.debit_info.agreement_id)
+            .ok_or(anyhow!(
                 "Not my activity - agreement [{}].",
                 &msg.debit_info.agreement_id
-            );
+            ))
+            .log_warn_msg("[FinalizeActivity]")
+        {
+            agreement
+                .finish_activity(&msg.debit_info.activity_id, msg.cost_summary)
+                .log_err_msg("Finalizing activity failed")
+                .ok();
+            log::info!("Activity [{}] finished.", &msg.debit_info.activity_id)
         }
     }
 }
@@ -620,7 +651,7 @@ impl Handler<AgreementClosed> for Payments {
 }
 
 impl Handler<IssueInvoice> for Payments {
-    type Result = ActorResponse<Self, Invoice, Error>;
+    type Result = ResponseFuture<Result<Invoice, Error>>;
 
     fn handle(&mut self, msg: IssueInvoice, _ctx: &mut Context<Self>) -> Self::Result {
         let agreement_id = msg.costs_summary.agreement_id;
@@ -643,7 +674,7 @@ impl Handler<IssueInvoice> for Payments {
         };
 
         let provider_ctx = self.context.clone();
-        let future = async move {
+        async move {
             log::debug!("Issuing invoice {}.", serde_json::to_string(&invoice)?);
 
             loop {
@@ -659,18 +690,17 @@ impl Handler<IssueInvoice> for Payments {
                     }
                 }
             }
-        };
-
-        return ActorResponse::r#async(future.into_actor(self));
+        }
+        .boxed_local()
     }
 }
 
 impl Handler<SendInvoice> for Payments {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ResponseFuture<Result<(), Error>>;
 
     fn handle(&mut self, msg: SendInvoice, _ctx: &mut Context<Self>) -> Self::Result {
         let provider_ctx = self.context.clone();
-        let future = async move {
+        async move {
             log::info!("Sending invoice [{}] to requestor...", msg.invoice_id);
 
             loop {
@@ -686,9 +716,8 @@ impl Handler<SendInvoice> for Payments {
                     }
                 }
             }
-        };
-
-        return ActorResponse::r#async(future.into_actor(self));
+        }
+        .boxed_local()
     }
 }
 
@@ -773,13 +802,13 @@ impl Handler<DeadlineElapsed> for Payments {
     type Result = ();
 
     fn handle(&mut self, msg: DeadlineElapsed, _ctx: &mut Context<Self>) -> Self::Result {
-        let deadline = match self.agreements.get_mut(&msg.agreement_id) {
-            Some(agreement) => match agreement.payment_deadline {
-                Some(deadline) => {
+        let timeout = match self.agreements.get_mut(&msg.agreement_id) {
+            Some(agreement) => match agreement.payment_timeout {
+                Some(timeout) => {
                     match agreement.deadline_elapsed {
                         false => {
                             agreement.deadline_elapsed = true;
-                            deadline
+                            timeout
                         }
                         // If at least one deadline elapses, we don't want to generate any
                         // new unnecessary events.
@@ -817,15 +846,12 @@ impl Handler<DeadlineElapsed> for Payments {
         self.break_agreement_signal
             .send_signal(BreakAgreement {
                 agreement_id: msg.agreement_id.clone(),
-                reason: BreakReason::DebitNotesDeadline(deadline),
+                reason: BreakReason::DebitNotesDeadline(timeout),
             })
-            .map_err(|e| {
-                log::error!(
-                    "Failed to send BreakAgreement when deadline elapsed for [{}]. {}",
-                    msg.agreement_id,
-                    e
-                )
-            })
+            .log_err_msg(&format!(
+                "Failed to send BreakAgreement when deadline elapsed for [{}]",
+                msg.agreement_id,
+            ))
             .ok();
     }
 }
