@@ -595,7 +595,8 @@ mod public {
         sender_id: String,
         msg: SendPayment,
     ) -> Result<Ack, SendError> {
-        let payment = msg.0;
+        let payment = msg.payment;
+        let signature = msg.signature;
         if sender_id != payment.payer_id.to_string() {
             return Err(SendError::BadRequest("Invalid payer ID".to_owned()));
         }
@@ -603,7 +604,7 @@ mod public {
         let platform = payment.payment_platform.clone();
         let amount = payment.amount.clone();
         let num_paid_invoices = payment.agreement_payments.len() as u64;
-        match processor.verify_payment(payment).await {
+        match processor.verify_payment(payment, signature).await {
             Ok(_) => {
                 counter!("payment.amount.received", ya_metrics::utils::cryptocurrency_to_u64(&amount), "platform" => platform);
                 counter!("payment.invoices.provider.paid", num_paid_invoices);

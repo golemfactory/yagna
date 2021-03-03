@@ -318,6 +318,7 @@ impl PaymentProcessor {
     }
 
     pub async fn notify_payment(&self, msg: NotifyPayment) -> Result<(), NotifyPaymentError> {
+        let driver = msg.driver;
         let payment_platform = msg.platform;
         let payer_addr = msg.sender;
         let payee_addr = msg.recipient;
@@ -328,7 +329,7 @@ impl PaymentProcessor {
         let orders = self
             .db_executor
             .as_dao::<OrderDao>()
-            .get_many(msg.order_ids, msg.driver.clone())
+            .get_many(msg.order_ids, driver.clone())
             .await?;
         validate_orders(
             &orders,
@@ -388,8 +389,12 @@ impl PaymentProcessor {
             activity_payment.allocation_id = None;
         }
 
-        counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "driver" => msg.driver);
-        let msg = SendPayment(payment);
+        let signature = driver_endpoint(&driver)
+            .send(driver::SignPayment(payment.clone()))
+            .await??;
+
+        counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "driver" => driver);
+        let msg = SendPayment::new(payment, signature);
         ya_net::from(payer_id)
             .to(payee_id)
             .service(BUS_ID)
@@ -427,19 +432,30 @@ impl PaymentProcessor {
         Ok(())
     }
 
-    pub async fn verify_payment(&self, payment: Payment) -> Result<(), VerifyPaymentError> {
+    pub async fn verify_payment(
+        &self,
+        payment: Payment,
+        signature: Vec<u8>,
+    ) -> Result<(), VerifyPaymentError> {
         // TODO: Split this into smaller functions
-
-        let confirmation = match base64::decode(&payment.details) {
-            Ok(confirmation) => PaymentConfirmation { confirmation },
-            Err(e) => return Err(VerifyPaymentError::ConfirmationEncoding),
-        };
         let platform = payment.payment_platform.clone();
         let driver = self.registry.lock().await.driver(
             &payment.payment_platform,
             &payment.payee_addr,
             AccountMode::RECV,
         )?;
+
+        if !driver_endpoint(&driver)
+            .send(driver::VerifySignature::new(payment.clone(), signature))
+            .await??
+        {
+            return Err(VerifyPaymentError::InvalidSignature);
+        }
+
+        let confirmation = match base64::decode(&payment.details) {
+            Ok(confirmation) => PaymentConfirmation { confirmation },
+            Err(e) => return Err(VerifyPaymentError::ConfirmationEncoding),
+        };
         let details: PaymentDetails = driver_endpoint(&driver)
             .send(driver::VerifyPayment::new(confirmation, platform.clone()))
             .await??;
@@ -507,23 +523,6 @@ impl PaymentProcessor {
                 }
                 _ => (),
             }
-        }
-
-        // Verify if transaction hash hasn't been re-used by comparing transaction balance
-        // between payer and payee in database and on blockchain
-        let db_balance = agreement_dao
-            .get_transaction_balance(payee_id, payee_addr.clone(), payer_addr.clone())
-            .await?;
-        let bc_balance = driver_endpoint(&driver)
-            .send(driver::GetTransactionBalance::new(
-                payer_addr.clone(),
-                payee_addr.clone(),
-                platform,
-            ))
-            .await??;
-
-        if bc_balance < db_balance + &details.amount {
-            return VerifyPaymentError::balance();
         }
 
         // Insert payment into database (this operation creates and updates all related entities)

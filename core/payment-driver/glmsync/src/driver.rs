@@ -209,17 +209,6 @@ impl PaymentDriver for ZksyncDriver {
         false
     }
 
-    async fn get_transaction_balance(
-        &self,
-        _db: DbExecutor,
-        _caller: String,
-        msg: GetTransactionBalance,
-    ) -> Result<BigDecimal, GenericError> {
-        log::debug!("get_transaction_balance: {:?}", msg);
-        // TODO: Get real transaction balance
-        Ok(BigDecimal::from(1_000_000_000_000_000_000u64))
-    }
-
     async fn init(&self, _db: DbExecutor, _caller: String, msg: Init) -> Result<Ack, GenericError> {
         log::debug!("init: {:?}", msg);
         let address = msg.address().clone();
