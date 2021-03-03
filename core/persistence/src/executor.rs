@@ -5,6 +5,7 @@ use diesel::{Connection, SqliteConnection};
 use dotenv::dotenv;
 use r2d2::CustomizeConnection;
 use std::env;
+use std::fmt::Display;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 
@@ -26,10 +27,9 @@ pub type ConnType = PooledConnection<ConnectionManager<InnerConnType>>;
 pub type InnerConnType = SqliteConnection;
 
 const CONNECTION_INIT: &str = r"
-PRAGMA synchronous = NORMAL;
-PRAGMA journal_mode = WAL;
-PRAGMA foreign_keys = ON;
 PRAGMA busy_timeout = 15000;
+PRAGMA synchronous = NORMAL;
+PRAGMA foreign_keys = ON;
 ";
 
 #[derive(thiserror::Error, Debug)]
@@ -62,7 +62,12 @@ fn connection_customizer(
             *lock_cnt += 1;
             log::trace!("on_acquire connection [rw:{}]", *lock_cnt);
             Ok(conn.batch_execute(CONNECTION_INIT).map_err(|e| {
-                log::error!("error: {:?}, on: {}", e, self.1.as_str());
+                log::error!(
+                    "error: {:?}, on: {}, [lock: {}]",
+                    e,
+                    self.1.as_str(),
+                    *lock_cnt
+                );
                 diesel::r2d2::Error::QueryError(e)
             })?)
         }
@@ -78,8 +83,8 @@ fn connection_customizer(
 // -
 
 impl DbExecutor {
-    pub fn new<S: Into<String>>(database_url: S) -> Result<Self, Error> {
-        let database_url = database_url.into();
+    pub fn new<S: Display>(database_url: S) -> Result<Self, Error> {
+        let database_url = format!("{}", database_url);
         log::info!("using database at: {}", database_url);
         let manager = ConnectionManager::new(database_url.clone());
         let tx_lock: TxLock = Arc::new(RwLock::new(0));
@@ -89,6 +94,11 @@ impl DbExecutor {
                 tx_lock.clone(),
             )))
             .build(manager)?;
+
+        {
+            let connection = inner.get()?;
+            let _ = connection.execute("PRAGMA journal_mode = WAL;")?;
+        }
 
         let pool = ProtectedPool { inner, tx_lock };
 
@@ -107,7 +117,7 @@ impl DbExecutor {
         Self::new(db.to_string_lossy())
     }
 
-    pub fn conn(&self) -> Result<ConnType, Error> {
+    fn conn(&self) -> Result<ConnType, Error> {
         Ok(self.pool.get()?)
     }
 
@@ -190,8 +200,7 @@ where
     let pool = pool.clone();
     match tokio::task::spawn_blocking(move || {
         let conn = pool.get()?;
-        let cnt = pool.tx_lock.read().unwrap();
-        log::trace!("connection [init {}]", *cnt);
+        let _ = pool.tx_lock.read().unwrap();
         f(&conn)
     })
     .await
