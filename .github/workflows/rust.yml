@@ -34,7 +34,7 @@ jobs:
 
       - name: Cache cargo registry
         uses: actions/cache@v1
-        if: matrix.os != 'macos-latest'
+        if: matrix.os != 'macos-latest' && !startsWith( github.head_ref, 'market/' )
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
@@ -43,7 +43,7 @@ jobs:
 
       - name: Cache cargo index
         uses: actions/cache@v1
-        if: matrix.os != 'macos-latest'
+        if: matrix.os != 'macos-latest' && !startsWith( github.head_ref, 'market/' )
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
@@ -64,14 +64,14 @@ jobs:
 
       - name: Cache cargo build
         uses: actions/cache@v1
-        if: matrix.os != 'macos-latest'
+        if: matrix.os != 'macos-latest' && !startsWith( github.head_ref, 'market/' )
         with:
           path: target
           key: ${{ runner.os }}-cargo-build-target1-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cache vcpkg's artifacts
         uses: actions/cache@v1
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-latest' && !startsWith( github.head_ref, 'market/' )
         with:
           path: c:/vcpkg/installed
           key: vcpkg-${{ runner.os }}-v0
@@ -179,8 +179,7 @@ jobs:
       - name: Run test suite
         env:
           GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # --assets-path: https://github.com/golemfactory/goth/issues/336
-        run: poetry run poe ci_test_self_hosted
+        run: poetry run poe ci_test_self_hosted --yagna-binary-path=/tmp/yagna-build
 
       - name: Upload test logs
         uses: actions/upload-artifact@v2
