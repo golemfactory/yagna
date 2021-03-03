@@ -226,6 +226,7 @@ impl Deadlineable for String {}
 #[cfg(test)]
 mod test {
     use super::*;
+    use ya_utils_actix::actix_signal::Subscribe;
 
     struct DeadlineReceiver {
         elapsed: Vec<DeadlineElapsed>,
