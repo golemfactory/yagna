@@ -163,9 +163,16 @@ async fn approve_agreement(
 
 #[actix_web::post("/agreements/{agreement_id}/reject")]
 async fn reject_agreement(
-    _market: Data<Arc<MarketService>>,
-    _path: Path<PathAgreement>,
-    _id: Identity,
-) -> HttpResponse {
-    HttpResponse::NotImplemented().finish()
+    market: Data<Arc<MarketService>>,
+    path: Path<PathAgreement>,
+    id: Identity,
+    body: Json<Option<Reason>>,
+) -> impl Responder {
+    let agreement_id = path.into_inner().to_id(Owner::Provider)?;
+    market
+        .provider_engine
+        .reject_agreement(&id, &agreement_id, body.into_inner())
+        .await
+        .log_err()
+        .map(|_| HttpResponse::Ok().finish())
 }

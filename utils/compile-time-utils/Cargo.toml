@@ -1,9 +1,13 @@
 [package]
 name = "ya-compile-time-utils"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
-description = "Compile-time utilities"
+homepage = "https://github.com/golemfactory/yagna/utils/compile-time-utils"
+repository = "https://github.com/golemfactory/yagna"
+license = "LGPL-3.0"
+description = "Yagna Compile-time utilities"
+keywords=["golem", "yagna", "compile", "compile-time"]
 
 [dependencies]
 git-version = "0.3.4"

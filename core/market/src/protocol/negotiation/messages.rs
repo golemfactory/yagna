@@ -10,9 +10,7 @@ use crate::protocol::negotiation::error::{
 };
 
 use super::super::callback::CallbackMessage;
-use super::error::{
-    ApproveAgreementError, CounterProposalError, GsbAgreementError, TerminateAgreementError,
-};
+use super::error::{AgreementProtocolError, CounterProposalError, TerminateAgreementError};
 
 pub mod provider {
     pub fn proposal_addr(prefix: &str) -> String {
@@ -145,7 +143,7 @@ pub struct AgreementApproved {
 impl RpcMessage for AgreementApproved {
     const ID: &'static str = "AgreementApproved";
     type Item = ();
-    type Error = ApproveAgreementError;
+    type Error = AgreementProtocolError;
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -153,12 +151,13 @@ impl RpcMessage for AgreementApproved {
 pub struct AgreementRejected {
     pub agreement_id: AgreementId,
     pub reason: Option<Reason>,
+    pub rejection_ts: NaiveDateTime,
 }
 
 impl RpcMessage for AgreementRejected {
     const ID: &'static str = "AgreementRejected";
     type Item = ();
-    type Error = GsbAgreementError;
+    type Error = AgreementProtocolError;
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -166,12 +165,13 @@ impl RpcMessage for AgreementRejected {
 pub struct AgreementCancelled {
     pub agreement_id: AgreementId,
     pub reason: Option<Reason>,
+    pub cancellation_ts: NaiveDateTime,
 }
 
 impl RpcMessage for AgreementCancelled {
     const ID: &'static str = "AgreementCancelled";
     type Item = ();
-    type Error = GsbAgreementError;
+    type Error = AgreementProtocolError;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -246,6 +246,20 @@ impl ProposalRejected {
 }
 
 impl AgreementApproved {
+    pub fn translate(mut self, owner: Owner) -> Self {
+        self.agreement_id = self.agreement_id.translate(owner);
+        self
+    }
+}
+
+impl AgreementRejected {
+    pub fn translate(mut self, owner: Owner) -> Self {
+        self.agreement_id = self.agreement_id.translate(owner);
+        self
+    }
+}
+
+impl AgreementCancelled {
     pub fn translate(mut self, owner: Owner) -> Self {
         self.agreement_id = self.agreement_id.translate(owner);
         self
