@@ -6,6 +6,7 @@
 // Extrnal crates
 use chrono::{Duration, TimeZone, Utc};
 use lazy_static::lazy_static;
+use num_bigint::BigInt;
 use std::collections::HashMap;
 use std::env;
 use std::str::FromStr;
@@ -36,17 +37,17 @@ use crate::{
 
 lazy_static! {
     static ref TX_SUMBIT_TIMEOUT: Duration = Duration::minutes(15);
-    static ref MAX_ALLOCATION_SURCHARGE: u32 =
+    static ref MAX_ALLOCATION_SURCHARGE: BigDecimal =
         match env::var("MAX_ALLOCATION_SURCHARGE").map(|s| s.parse()) {
             Ok(Ok(x)) => x,
-            _ => 200,
+            _ => BigDecimal::from(200),
         };
 
     // Environment variable will be replaced by allocation parameter in PAY-82
-    static ref TRANSACTIONS_PER_ALLOCATION: u32 =
+    static ref TRANSACTIONS_PER_ALLOCATION: BigInt =
         match env::var("TRANSACTIONS_PER_ALLOCATION").map(|s| s.parse()) {
             Ok(Ok(x)) => x,
-            _ => 10,
+            _ => BigInt::from(10),
         };
 }
 
@@ -347,9 +348,9 @@ Mind that to be eligible you have to run your app at least once on testnet -
         // so the _sender_ address is provider. This might bias fee calculation, because transaction
         // to new account is little more expensive.
         let tx_fee_cost = wallet::get_tx_fee(&msg.address, network).await?;
-        let total_txs_cost = BigDecimal::from(*TRANSACTIONS_PER_ALLOCATION) * tx_fee_cost;
+        let total_txs_cost = tx_fee_cost * &(*TRANSACTIONS_PER_ALLOCATION);
         let allocation_surcharge =
-            BigDecimal::min(BigDecimal::from(*MAX_ALLOCATION_SURCHARGE), total_txs_cost);
+            BigDecimal::min((*MAX_ALLOCATION_SURCHARGE).clone(), total_txs_cost);
 
         log::info!(
             "Allocation validation: \
