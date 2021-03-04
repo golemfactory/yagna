@@ -188,7 +188,7 @@ impl TaskManager {
         let handle = ctx.run_later(idle_timeout.clone(), move |myself, ctx| {
             if myself.tasks.not_active(&agreement_id) {
                 ctx.address().do_send(BreakAgreement {
-                    agreement_id: agreement_id.clone(),
+                    agreement_id,
                     reason: BreakReason::NoActivity(idle_timeout),
                 });
             }
@@ -480,6 +480,8 @@ impl Handler<BreakAgreement> for TaskManager {
     fn handle(&mut self, msg: BreakAgreement, ctx: &mut Context<Self>) -> Self::Result {
         let actx = self.async_context(ctx);
 
+        self.cancel_handles(ctx, &msg.agreement_id);
+
         let future = async move {
             let new_state = AgreementState::Broken {
                 reason: msg.reason.clone(),
@@ -523,6 +525,8 @@ impl Handler<CloseAgreement> for TaskManager {
 
     fn handle(&mut self, msg: CloseAgreement, ctx: &mut Context<Self>) -> Self::Result {
         let actx = self.async_context(ctx);
+
+        self.cancel_handles(ctx, &msg.agreement_id);
 
         // TODO: Probably if closing agreement fails, we should break agreement.
         //       Here lacks this error handling, we just log message.
