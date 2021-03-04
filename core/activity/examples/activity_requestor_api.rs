@@ -10,7 +10,7 @@ async fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     let db = DbExecutor::new(":memory:")?;
-    migrations::run_with_output(&db.conn()?, &mut std::io::stdout())?;
+    db.apply_migration(migrations::run_with_output)?;
 
     HttpServer::new(move || {
         App::new()
