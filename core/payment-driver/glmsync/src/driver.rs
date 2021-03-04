@@ -348,9 +348,8 @@ Mind that to be eligible you have to run your app at least once on testnet -
         // so the _sender_ address is provider. This might bias fee calculation, because transaction
         // to new account is little more expensive.
         let tx_fee_cost = wallet::get_tx_fee(&msg.address, network).await?;
-        let total_txs_cost = tx_fee_cost * &(*TRANSACTIONS_PER_ALLOCATION);
-        let allocation_surcharge =
-            BigDecimal::min((*MAX_ALLOCATION_SURCHARGE).clone(), total_txs_cost);
+        let total_txs_cost = tx_fee_cost * &*TRANSACTIONS_PER_ALLOCATION;
+        let allocation_surcharge = (&*MAX_ALLOCATION_SURCHARGE).min(&total_txs_cost);
 
         log::info!(
             "Allocation validation: \
