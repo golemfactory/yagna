@@ -126,6 +126,8 @@ pub struct TaskManager {
 
     tasks: TasksStates,
     tasks_props: HashMap<String, TaskInfo>,
+
+    tasks_handles: HashMap<String, Vec<SpawnHandle>>,
 }
 
 impl TaskManager {
@@ -140,6 +142,7 @@ impl TaskManager {
             payments,
             tasks: TasksStates::new(),
             tasks_props: HashMap::new(),
+            tasks_handles: HashMap::new(),
         })
     }
 
@@ -179,18 +182,31 @@ impl TaskManager {
         ctx: &mut Context<Self>,
     ) -> Result<()> {
         let idle_timeout = msg.0.idle_agreement_timeout;
-        let agreement_id = msg.0.agreement_id;
+        let agreement_id = msg.0.agreement_id.clone();
 
         // Schedule agreement termination when there is no activity created within timeout.
-        ctx.run_later(idle_timeout.clone(), move |myself, ctx| {
+        let handle = ctx.run_later(idle_timeout.clone(), move |myself, ctx| {
             if myself.tasks.not_active(&agreement_id) {
                 ctx.address().do_send(BreakAgreement {
-                    agreement_id,
+                    agreement_id: agreement_id.clone(),
                     reason: BreakReason::NoActivity(idle_timeout),
                 });
             }
         });
+
+        self.tasks_handles
+            .entry(msg.0.agreement_id)
+            .or_insert(vec![])
+            .push(handle);
         Ok(())
+    }
+
+    fn cancel_handles(&mut self, ctx: &mut Context<Self>, agreement_id: &str) {
+        if let Some(handles) = self.tasks_handles.remove(agreement_id) {
+            for handle in handles {
+                ctx.cancel_future(handle);
+            }
+        }
     }
 
     fn start_update_agreement_state(
@@ -349,6 +365,10 @@ impl Handler<CreateActivity> for TaskManager {
     fn handle(&mut self, msg: CreateActivity, ctx: &mut Context<Self>) -> Self::Result {
         let actx = self.async_context(ctx);
         let listener = self.tasks.changes_listener(&msg.agreement_id);
+
+        // Remove idle Agreement expiration checker future. We will spawn new future
+        // after Activity will be destroyed.
+        self.cancel_handles(ctx, &msg.agreement_id);
 
         let future = async move {
             // ActivityCreated event can come, before Task initialization will be finished.
