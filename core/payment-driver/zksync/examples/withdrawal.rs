@@ -68,7 +68,8 @@ async fn main() -> anyhow::Result<()> {
         .parse()
         .expect("Cannot parse 'amount' parameter to BigDecimal");
 
-    let withdraw_handle = driver_wallet::withdraw(wallet, Some(amount), None).await?;
+    let withdraw_handle =
+        driver_wallet::withdraw(wallet, DbNetwork::Rinkeby, Some(amount), None).await?;
 
     let tx_info = withdraw_handle.wait_for_commit().await?;
     if tx_info.success.unwrap_or(false) {

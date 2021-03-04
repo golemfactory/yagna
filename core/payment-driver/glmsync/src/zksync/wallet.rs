@@ -226,7 +226,7 @@ pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails
 fn get_provider(network: Network) -> RpcProvider {
     let rpc_addr = get_rpc_addr(network);
     let zk_network = get_zk_network(network);
-    RpcProvider::from_addr(rpc_addr, zk_network)
+    RpcProvider::from_addr_and_network(rpc_addr, zk_network)
 }
 
 fn get_rpc_addr(network: Network) -> String {
