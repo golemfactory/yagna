@@ -1,8 +1,8 @@
 use ya_market::assert_err_eq;
 use ya_market::testing::client::{sample_demand, sample_offer};
+use ya_market::testing::mock_offer::flatten_json;
 use ya_market::testing::{DemandError, QueryOfferError};
 use ya_market::testing::{MarketServiceExt, MarketsNetwork};
-use ya_market_resolver::flatten::flatten_json;
 
 /// Test subscribes offers, checks if offer is available
 /// and than unsubscribes. Checking broadcasting behavior is out of scope.
@@ -26,10 +26,7 @@ async fn test_subscribe_offer() {
     assert_eq!(client_offer.offer_id, subscription_id.to_string());
     assert_eq!(client_offer.provider_id, identity1.identity);
     assert_eq!(client_offer.constraints, offer.constraints);
-    assert_eq!(
-        client_offer.properties,
-        flatten_json(&offer.properties).unwrap()
-    );
+    assert_eq!(client_offer.properties, flatten_json(&offer.properties));
 
     // Unsubscribe should fail on not existing subscription id.
     let not_existent_subscription_id = "00000000000000000000000000000001-0000000000000000000000000000000000000000000000000000000000000002".parse().unwrap();
@@ -72,10 +69,7 @@ async fn test_subscribe_demand() {
     assert_eq!(client_demand.demand_id, subscription_id.to_string());
     assert_eq!(client_demand.requestor_id, identity1.identity);
     assert_eq!(client_demand.constraints, demand.constraints);
-    assert_eq!(
-        client_demand.properties,
-        flatten_json(&demand.properties).unwrap()
-    );
+    assert_eq!(client_demand.properties, flatten_json(&demand.properties));
     // Unsubscribe should fail on not existing subscription id.
     let not_existent_subscription_id = "00000000000000000000000000000002-0000000000000000000000000000000000000000000000000000000000000003".parse().unwrap();
     assert!(market1

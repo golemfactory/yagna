@@ -160,10 +160,7 @@ impl CommonBroker {
             caller_role,
             caller_id,
             &proposal_id,
-            reason
-                .as_ref()
-                .map(|r| format!("with reason: {}", r))
-                .unwrap_or("without reason".into()),
+            reason.display()
         );
 
         Ok(proposal)
@@ -357,20 +354,27 @@ impl CommonBroker {
             // that could have been called by other party at the same time. Termination
             // consists of 2 operations: sending message to other party and updating state.
             // Race conditions could appear in this situation.
-            self.agreement_lock
-                .get_lock(&agreement.id)
-                .await
-                .lock()
-                .await;
+            let _hold = self.agreement_lock.lock(&agreement.id).await;
 
             validate_transition(&agreement, AgreementState::Terminated)?;
 
-            protocol_common::propagate_terminate_agreement(&agreement, reason.clone()).await?;
+            let timestamp = Utc::now().naive_utc();
+            protocol_common::propagate_terminate_agreement(
+                &agreement,
+                reason.clone(),
+                "NotSigned".to_string(),
+                timestamp.clone(),
+            )
+            .await?;
 
-            let reason_string = CommonBroker::reason2string(&reason);
-            dao.terminate(&agreement.id, reason_string, agreement.id.owner())
-                .await
-                .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?;
+            dao.terminate(
+                &agreement.id,
+                reason.clone(),
+                agreement.id.owner(),
+                &timestamp,
+            )
+            .await
+            .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?;
         }
 
         self.notify_agreement(&agreement).await;
@@ -389,25 +393,19 @@ impl CommonBroker {
         // provider for the second time, so we must generate new Proposal for him.
         // Note: Regeneration failure isn't propagated to Requestor, because termination
         // succeeded at this point.
-        if let Owner::Requestor = agreement.id.owner() {
-            self.regenerate_proposal(&agreement)
-                .await
-                .map_err(|e| {
-                    log::warn!(
-                        "Failed to regenerate Proposal after Agreement [{}] termination. {}",
-                        &agreement.id,
-                        e
-                    )
-                })
-                .ok();
-        }
+        // if let Owner::Requestor = agreement.id.owner() {
+        //     self.regenerate_proposal(&agreement)
+        //         .await
+        //         .map_err(|e| {
+        //             log::warn!(
+        //                 "Failed to regenerate Proposal after Agreement [{}] termination. {}",
+        //                 &agreement.id,
+        //                 e
+        //             )
+        //         })
+        //         .ok();
+        // }
         Ok(())
-    }
-
-    fn reason2string(reason: &Option<Reason>) -> Option<String> {
-        reason.as_ref().map(|reason| {
-            serde_json::to_string::<Reason>(reason).unwrap_or(reason.message.to_string())
-        })
     }
 
     // Called remotely via GSB
@@ -437,11 +435,7 @@ impl CommonBroker {
             // that could have been called by one of our Agents. Termination consists
             // of 2 operations: sending message to other party and updating state.
             // Race conditions could appear in this situation.
-            self.agreement_lock
-                .get_lock(&agreement_id)
-                .await
-                .lock()
-                .await;
+            let _hold = self.agreement_lock.lock(&agreement_id).await;
 
             let agreement = dao
                 .select(&agreement_id, None, Utc::now().naive_utc())
@@ -459,17 +453,23 @@ impl CommonBroker {
                 Err(RemoteAgreementError::NotFound(agreement_id.clone()))?
             }
 
-            let reason_string = CommonBroker::reason2string(&msg.reason);
-            dao.terminate(&agreement_id, reason_string, caller_role)
-                .await
-                .map_err(|e| {
-                    log::warn!(
-                        "Couldn't terminate agreement. id: {}, e: {}",
-                        agreement_id,
-                        e
-                    );
-                    RemoteAgreementError::InternalError(agreement_id.clone())
-                })?;
+            // TODO: Validate signature.
+
+            dao.terminate(
+                &agreement_id,
+                msg.reason.clone(),
+                caller_role,
+                &msg.termination_ts,
+            )
+            .await
+            .map_err(|e| {
+                log::warn!(
+                    "Couldn't terminate agreement. id: {}, e: {}",
+                    agreement_id,
+                    e
+                );
+                RemoteAgreementError::InternalError(agreement_id.clone())
+            })?;
 
             agreement
         };
@@ -633,10 +633,9 @@ impl CommonBroker {
         // TODO: If creating Proposal succeeds, but event can't be added, provider
         // TODO: will never answer to this Proposal. Solve problem when Event API will be available.
         let subscription_id = proposal.negotiation.subscription_id.clone();
-        let reason = CommonBroker::reason2string(&msg.reason);
         self.db
             .as_dao::<NegotiationEventsDao>()
-            .add_proposal_rejected_event(&proposal, reason)
+            .add_proposal_rejected_event(&proposal, msg.reason.clone())
             .await
             .map_err(|e| {
                 // TODO: Don't leak our database error, but send meaningful message as response.

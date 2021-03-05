@@ -193,6 +193,7 @@ impl ResponseError for AgreementError {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             AgreementError::NotFound(_) => HttpResponse::NotFound().json(msg),
+            AgreementError::Expired(_) => HttpResponse::Gone().json(msg),
             AgreementError::AlreadyExists(_, _) => HttpResponse::Conflict().json(msg),
             AgreementError::UpdateState(_, e) => e.error_response(),
             AgreementError::NoNegotiations(_)
@@ -205,8 +206,9 @@ impl ResponseError for AgreementError {
             | AgreementError::Get(..)
             | AgreementError::Gsb(_)
             | AgreementError::ProtocolCreate(_)
-            | AgreementError::ProtocolApprove(_)
+            | AgreementError::Protocol(_)
             | AgreementError::ProtocolTerminate(_)
+            | AgreementError::ProtocolCommit(_)
             | AgreementError::Internal(_) => HttpResponse::InternalServerError().json(msg),
         }
     }
@@ -219,6 +221,7 @@ impl ResponseError for AgreementDaoError {
             AgreementDaoError::InvalidTransition { from, .. } => match from {
                 AgreementState::Proposal => HttpResponse::Conflict().json(msg),
                 AgreementState::Pending
+                | AgreementState::Approving
                 | AgreementState::Cancelled
                 | AgreementState::Rejected
                 | AgreementState::Expired

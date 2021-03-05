@@ -4,6 +4,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use ya_client::model::market::{AgreementProposal, NewDemand, NewProposal, Reason};
+use ya_client::model::ErrorMessage;
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::LogErr;
 
@@ -16,7 +17,6 @@ use super::{
 };
 use crate::negotiation::ApprovalStatus;
 use crate::rest_api::QueryAppSessionId;
-use ya_client::model::ErrorMessage;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -200,10 +200,16 @@ async fn wait_for_approval(
 
 #[actix_web::post("/agreements/{agreement_id}/cancel")]
 async fn cancel_agreement(
-    _market: Data<Arc<MarketService>>,
-    _path: Path<PathAgreement>,
-    _id: Identity,
-    _body: Json<Option<Reason>>,
-) -> HttpResponse {
-    HttpResponse::NotImplemented().finish()
+    market: Data<Arc<MarketService>>,
+    path: Path<PathAgreement>,
+    id: Identity,
+    body: Json<Option<Reason>>,
+) -> impl Responder {
+    let agreement_id = path.into_inner().to_id(Owner::Requestor)?;
+    market
+        .requestor_engine
+        .cancel_agreement(&id, &agreement_id, body.into_inner())
+        .await
+        .log_err()
+        .map(|_| HttpResponse::Ok().finish())
 }

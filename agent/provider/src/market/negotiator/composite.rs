@@ -2,7 +2,7 @@ use actix::{Actor, Addr, Context, Handler};
 use anyhow::anyhow;
 use serde_json::Value;
 
-use ya_agreement_utils::agreement::{expand, flatten};
+use ya_agreement_utils::agreement::{expand, flatten_value};
 use ya_agreement_utils::AgreementView;
 use ya_client_model::market::{NewOffer, Reason};
 
@@ -71,7 +71,7 @@ impl Handler<ReactToProposal> for CompositeNegotiator {
             NegotiationResult::Reject { reason } => Ok(ProposalResponse::RejectProposal { reason }),
             NegotiationResult::Ready { offer } | NegotiationResult::Negotiating { offer } => {
                 let offer = NewOffer {
-                    properties: serde_json::Value::Object(flatten(offer.json)),
+                    properties: flatten_value(offer.json),
                     constraints,
                 };
                 Ok(ProposalResponse::CounterProposal { offer })

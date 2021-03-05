@@ -1,13 +1,10 @@
 use git_version::git_version;
-use metrics::value;
+use metrics::gauge;
 use semver::Version;
 
-/// Returns latest tag (via `git describe --tag --abbrev=0`) or version from Cargo.toml`.
+/// Returns latest tag (via `git describe --tag --abbrev=0`).
 pub fn git_tag() -> &'static str {
-    git_version!(
-        args = ["--tag", "--abbrev=0"],
-        fallback = env!("CARGO_PKG_VERSION")
-    )
+    git_version!(args = ["--tag", "--abbrev=0"], cargo_prefix = "")
 }
 
 /// Returns latest commit short hash.
@@ -25,7 +22,7 @@ pub fn build_number_str() -> Option<&'static str> {
     option_env!("GITHUB_RUN_NUMBER")
 }
 
-pub fn build_number() -> Option<u64> {
+pub fn build_number() -> Option<i64> {
     build_number_str().map(|s| s.parse().ok()).flatten()
 }
 
@@ -50,15 +47,15 @@ pub fn semver() -> std::result::Result<Version, semver::SemVerError> {
 
 pub fn report_version_to_metrics() {
     if let Ok(version) = semver() {
-        value!("yagna.version.major", version.major);
-        value!("yagna.version.minor", version.minor);
-        value!("yagna.version.patch", version.patch);
-        value!(
+        gauge!("yagna.version.major", version.major as i64);
+        gauge!("yagna.version.minor", version.minor as i64);
+        gauge!("yagna.version.patch", version.patch as i64);
+        gauge!(
             "yagna.version.is_prerelease",
-            (!version.pre.is_empty()) as u64
+            (!version.pre.is_empty()) as i64
         );
         if let Some(build_number) = build_number() {
-            value!("yagna.version.build_number", build_number);
+            gauge!("yagna.version.build_number", build_number);
         }
     }
 }
@@ -87,6 +84,11 @@ macro_rules! version_describe {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn test_git_tag() {
+        println!("git tag: {:?}", git_tag());
+    }
 
     #[test]
     fn test_git_rev() {

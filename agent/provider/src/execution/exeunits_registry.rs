@@ -156,6 +156,8 @@ impl ExeUnitsRegistry {
     }
 
     pub fn register_from_file_pattern(&mut self, pattern: &Path) -> Result<()> {
+        log::debug!("Loading ExeUnit-s from: {}", pattern.display());
+
         for file in expand_filename(pattern)? {
             self.register_exeunits_from_file(&file)?;
         }

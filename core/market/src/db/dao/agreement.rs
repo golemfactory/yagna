@@ -1,6 +1,7 @@
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, Utc};
 use diesel::prelude::*;
 
+use ya_client::model::market::Reason;
 use ya_client::model::NodeId;
 use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
 
@@ -162,38 +163,48 @@ impl<'c> AgreementDao<'c> {
         &self,
         id: &AgreementId,
         session: &AppSessionId,
-    ) -> Result<(), AgreementDaoError> {
+        signature: &String,
+    ) -> Result<Agreement, AgreementDaoError> {
         let id = id.clone();
         let session = session.clone();
+        let signature = signature.clone();
 
         do_with_transaction(self.pool, move |conn| {
             let mut agreement: Agreement =
                 market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
 
             update_state(conn, &mut agreement, AgreementState::Pending)?;
+            update_proposed_signature(conn, &mut agreement, signature)?;
 
             if let Some(session) = session {
                 update_session(conn, &mut agreement, session)?;
             }
-            Ok(())
+            Ok(agreement)
         })
         .await
     }
 
     /// Function won't change appSessionId, if session parameter is None.
-    pub async fn approve(
+    /// Signature will be placed in `approved_signature` field.
+    pub async fn approving(
         &self,
         id: &AgreementId,
         session: &AppSessionId,
-    ) -> Result<(), AgreementDaoError> {
+        signature: &String,
+        timestamp: &NaiveDateTime,
+    ) -> Result<Agreement, AgreementDaoError> {
         let id = id.clone();
         let session = session.clone();
+        let signature = signature.clone();
+        let timestamp = timestamp.clone();
 
         do_with_transaction(self.pool, move |conn| {
             let mut agreement: Agreement =
                 market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
 
-            update_state(conn, &mut agreement, AgreementState::Approved)?;
+            update_state(conn, &mut agreement, AgreementState::Approving)?;
+            update_approved_signature(conn, &mut agreement, signature)?;
+            update_approve_timestamp(conn, &mut agreement, timestamp)?;
 
             // It's important, that if None AppSessionId comes, we shouldn't update Agreement
             // appSessionId field to None. This function can be called in different context, for example
@@ -201,10 +212,79 @@ impl<'c> AgreementDao<'c> {
             if let Some(session) = session {
                 update_session(conn, &mut agreement, session)?;
             }
-            // Always Provider approves.
-            create_event(conn, &agreement, None, Owner::Provider)?;
+            Ok(agreement)
+        })
+        .await
+    }
 
-            Ok(())
+    /// Signature will be placed in `committed_signature` field.
+    pub async fn approve(
+        &self,
+        id: &AgreementId,
+        signature: &String,
+    ) -> Result<Agreement, AgreementDaoError> {
+        let id = id.clone();
+        let signature = signature.clone();
+
+        do_with_transaction(self.pool, move |conn| {
+            let mut agreement: Agreement =
+                market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
+
+            update_state(conn, &mut agreement, AgreementState::Approved)?;
+            update_committed_signature(conn, &mut agreement, signature)?;
+
+            // Always Provider approves.
+            create_event(
+                conn,
+                &agreement,
+                None,
+                Owner::Provider,
+                agreement.approved_ts.unwrap_or(Utc::now().naive_utc()),
+            )?;
+
+            Ok(agreement)
+        })
+        .await
+    }
+
+    pub async fn reject(
+        &self,
+        id: &AgreementId,
+        reason: Option<Reason>,
+        timestamp: &NaiveDateTime,
+    ) -> Result<Agreement, AgreementDaoError> {
+        let id = id.clone();
+        let timestamp = timestamp.clone();
+
+        do_with_transaction(self.pool, move |conn| {
+            let mut agreement: Agreement =
+                market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
+
+            update_state(conn, &mut agreement, AgreementState::Rejected)?;
+            create_event(conn, &agreement, reason, Owner::Provider, timestamp)?;
+
+            Ok(agreement)
+        })
+        .await
+    }
+
+    pub async fn cancel(
+        &self,
+        id: &AgreementId,
+        reason: Option<Reason>,
+        timestamp: &NaiveDateTime,
+    ) -> Result<Agreement, AgreementDaoError> {
+        let id = id.clone();
+        let timestamp = timestamp.clone();
+
+        do_with_transaction(self.pool, move |conn| {
+            let mut agreement: Agreement =
+                market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
+
+            update_state(conn, &mut agreement, AgreementState::Cancelled)?;
+            create_event(conn, &agreement, reason, Owner::Requestor, timestamp)?;
+
+            Ok(agreement)
         })
         .await
     }
@@ -212,19 +292,44 @@ impl<'c> AgreementDao<'c> {
     pub async fn terminate(
         &self,
         id: &AgreementId,
-        reason: Option<String>,
+        reason: Option<Reason>,
         terminator: Owner,
+        timestamp: &NaiveDateTime,
     ) -> Result<bool, AgreementDaoError> {
         let id = id.clone();
+        let timestamp = timestamp.clone();
+
         do_with_transaction(self.pool, move |conn| {
-            log::debug!("Termination reason: {:?}", reason);
             let mut agreement: Agreement =
                 market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
 
             update_state(conn, &mut agreement, AgreementState::Terminated)?;
-            create_event(conn, &agreement, reason, terminator)?;
+            create_event(conn, &agreement, reason, terminator, timestamp)?;
 
             Ok(true)
+        })
+        .await
+    }
+
+    pub async fn revert_approving(&self, id: &AgreementId) -> Result<bool, AgreementDaoError> {
+        let id = id.clone();
+
+        do_with_transaction(self.pool, move |conn| {
+            let agreement: Agreement =
+                market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
+
+            if agreement.state != AgreementState::Approving {
+                return Err(AgreementDaoError::InvalidTransition {
+                    from: agreement.state,
+                    to: AgreementState::Pending,
+                });
+            }
+
+            let num_updated = diesel::update(market_agreement.find(&id))
+                .set(agreement::state.eq(&AgreementState::Pending))
+                .execute(conn)
+                .map_err(|e| AgreementDaoError::DbError(e.into()))?;
+            Ok(num_updated > 0)
         })
         .await
     }
@@ -293,6 +398,65 @@ fn update_state(
 
     agreement.state = to_state;
 
+    Ok(num_updated > 0)
+}
+
+fn update_proposed_signature(
+    conn: &ConnType,
+    agreement: &mut Agreement,
+    signature: String,
+) -> Result<bool, AgreementDaoError> {
+    let signature = Some(signature);
+    let num_updated = diesel::update(market_agreement.find(&agreement.id))
+        .set(agreement::proposed_signature.eq(&signature))
+        .execute(conn)
+        .map_err(|e| AgreementDaoError::DbError(e.into()))?;
+
+    agreement.proposed_signature = signature;
+    Ok(num_updated > 0)
+}
+
+fn update_approved_signature(
+    conn: &ConnType,
+    agreement: &mut Agreement,
+    signature: String,
+) -> Result<bool, AgreementDaoError> {
+    let signature = Some(signature);
+    let num_updated = diesel::update(market_agreement.find(&agreement.id))
+        .set(agreement::approved_signature.eq(&signature))
+        .execute(conn)
+        .map_err(|e| AgreementDaoError::DbError(e.into()))?;
+
+    agreement.approved_signature = signature;
+    Ok(num_updated > 0)
+}
+
+fn update_committed_signature(
+    conn: &ConnType,
+    agreement: &mut Agreement,
+    signature: String,
+) -> Result<bool, AgreementDaoError> {
+    let signature = Some(signature);
+    let num_updated = diesel::update(market_agreement.find(&agreement.id))
+        .set(agreement::committed_signature.eq(&signature))
+        .execute(conn)
+        .map_err(|e| AgreementDaoError::DbError(e.into()))?;
+
+    agreement.committed_signature = signature;
+    Ok(num_updated > 0)
+}
+
+fn update_approve_timestamp(
+    conn: &ConnType,
+    agreement: &mut Agreement,
+    timestamp: NaiveDateTime,
+) -> Result<bool, AgreementDaoError> {
+    let num_updated = diesel::update(market_agreement.find(&agreement.id))
+        .set(agreement::approved_ts.eq(&timestamp))
+        .execute(conn)
+        .map_err(|e| AgreementDaoError::DbError(e.into()))?;
+
+    agreement.approved_ts = Some(timestamp);
     Ok(num_updated > 0)
 }
 

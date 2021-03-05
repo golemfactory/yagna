@@ -35,7 +35,7 @@ pub fn config_get(config: ProviderConfig, name: Option<String>) -> anyhow::Resul
 pub fn list_exeunits(config: ProviderConfig) -> anyhow::Result<()> {
     let registry = config.registry()?;
     if let Err(errors) = registry.validate() {
-        eprintln!("Encountered errors while checking ExeUnits:\n{}", errors);
+        log::error!("Encountered errors while checking ExeUnits:\n{}", errors);
     }
 
     if config.json {

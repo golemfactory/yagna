@@ -200,7 +200,7 @@ impl GntDriver {
         async move {
             let balance = common::get_gnt_balance(&contract, address).await?;
             if balance < max_testnet_balance {
-                log::info!("Requesting NGNT from Faucet...");
+                log::info!("Requesting tGLM from Faucet...");
                 let gas_price = client.get_gas_price().await?;
                 let mut b =
                     sender::Builder::new(address, gas_price, chain_id).with_tx_type(TxType::Faucet);
