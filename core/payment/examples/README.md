@@ -6,9 +6,9 @@ To start the API server (both provider & requestor) run the following commands:
 ```shell script
 cd core/payment
 cp ../../.env-template .env
-cargo run --example payment_api
+(rm payment.db* || true) && cargo run --example payment_api
 ```
-To use Erc-20 instead of ZkSync driver us `cargo run --example payment_api -- --driver=erc20 --platform=erc20-rinkeby-tglm` instead.
+To use ZkSync instead of Dummy driver use `cargo run --example payment_api -- --driver=zksync --platform=zksync-rinkeby-tglm` instead.
 
 ### Debit note flow
 
