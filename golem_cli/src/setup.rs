@@ -12,8 +12,8 @@ use ya_provider::ReceiverAccount;
 use crate::command::UsageDef;
 use crate::terminal::clear_stdin;
 
-const OLD_DEFAULT_SUBNETS: &[&'static str] = &["community", "community.3"];
-const DEFAULT_SUBNET: &str = "community.4";
+const OLD_DEFAULT_SUBNETS: &[&'static str] = &["community", "community.3", "community.4"];
+const DEFAULT_SUBNET: &str = "public-beta";
 
 #[derive(StructOpt, Debug, Clone, Serialize, Deserialize)]
 pub struct RunConfig {
