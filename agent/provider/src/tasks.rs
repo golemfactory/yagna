@@ -1,3 +1,4 @@
+pub mod config;
 mod task_info;
 pub mod task_manager;
 mod task_state;

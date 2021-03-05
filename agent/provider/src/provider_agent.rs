@@ -226,7 +226,8 @@ impl ProviderAgent {
         let market = ProviderMarket::new(api.market, args.market).start();
         let payments = Payments::new(api.activity.clone(), api.payment, args.payment).start();
         let runner = TaskRunner::new(api.activity, args.runner, registry, data_dir)?.start();
-        let task_manager = TaskManager::new(market.clone(), runner.clone(), payments)?.start();
+        let task_manager =
+            TaskManager::new(market.clone(), runner.clone(), payments, args.tasks)?.start();
 
         Ok(ProviderAgent {
             globals,

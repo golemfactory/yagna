@@ -21,6 +21,7 @@ pub struct TaskInfo {
     /// Terminate Agreement, if he finished computations.
     pub multi_activity: bool,
     /// Max allowed time Agreement can have no Activities.
+    /// TODO: This could be negotiated between Provider and Requestor.
     pub idle_agreement_timeout: Duration,
 }
 
@@ -51,6 +52,11 @@ impl TaskInfo {
             multi_activity: multi_activity_from(agreement)?,
             idle_agreement_timeout: Duration::from_secs(90),
         })
+    }
+
+    pub fn with_idle_agreement_timeout(mut self, timeout: Duration) -> Self {
+        self.idle_agreement_timeout = timeout;
+        self
     }
 }
 

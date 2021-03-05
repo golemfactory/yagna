@@ -15,6 +15,7 @@ use crate::execution::{ActivityDestroyed, CreateActivity, TaskRunner, TerminateA
 use crate::market::provider_market::{NewAgreement, ProviderMarket};
 use crate::market::termination_reason::BreakReason;
 use crate::payments::Payments;
+use crate::tasks::config::TaskConfig;
 
 // =========================================== //
 // Messages modifying agreement state
@@ -124,6 +125,8 @@ pub struct TaskManager {
     runner: Addr<TaskRunner>,
     payments: Addr<Payments>,
 
+    config: TaskConfig,
+
     tasks: TasksStates,
     tasks_props: HashMap<String, TaskInfo>,
 
@@ -135,11 +138,13 @@ impl TaskManager {
         market: Addr<ProviderMarket>,
         runner: Addr<TaskRunner>,
         payments: Addr<Payments>,
+        config: TaskConfig,
     ) -> Result<TaskManager> {
         Ok(TaskManager {
             market,
             runner,
             payments,
+            config,
             tasks: TasksStates::new(),
             tasks_props: HashMap::new(),
             tasks_handles: HashMap::new(),
@@ -243,7 +248,8 @@ impl TaskManager {
         self.tasks.new_agreement(&agreement_id)?;
 
         let props = TaskInfo::from(&msg.agreement)
-            .map_err(|e| anyhow!("Failed to create TaskInfo from Agreement. {}", e))?;
+            .map_err(|e| anyhow!("Failed to create TaskInfo from Agreement. {}", e))?
+            .with_idle_agreement_timeout(self.config.idle_agreement_timeout.clone());
 
         self.tasks_props.insert(agreement_id.clone(), props.clone());
 
