@@ -8,8 +8,9 @@ use ya_core_model::market::BUS_ID;
 use ya_core_model::net::local as local_net;
 use ya_core_model::net::local::{BroadcastMessage, SendBroadcastMessage};
 use ya_net::{self as net, RemoteEndpoint};
+use ya_service_bus::timeout::{IntoDuration, IntoTimeoutFuture};
 use ya_service_bus::typed::ServiceBinder;
-use ya_service_bus::{typed as bus, RpcEndpoint};
+use ya_service_bus::{typed as bus, Error as BusError, RpcEndpoint, RpcMessage};
 
 use super::callback::HandlerSlot;
 use crate::db::model::{Offer as ModelOffer, SubscriptionId};
@@ -21,6 +22,7 @@ pub mod message;
 
 use crate::PROTOCOL_VERSION;
 use error::*;
+use futures::TryFutureExt;
 use message::*;
 
 /// Responsible for communication with markets on other nodes
@@ -62,6 +64,7 @@ impl Discovery {
         &self,
         target_node_id: String,
         offer_ids: Vec<SubscriptionId>,
+        timeout: impl IntoDuration,
     ) -> Result<Vec<ModelOffer>, DiscoveryError> {
         let target_node = NodeId::from_str(&target_node_id)
             .map_err(|e| DiscoveryError::InternalError(e.to_string()))?;
@@ -70,7 +73,18 @@ impl Discovery {
             .to(target_node)
             .service(&get_offers_addr(BUS_ID))
             .send(RetrieveOffers { offer_ids })
-            .await??)
+            .timeout(Some(timeout))
+            .map_err(|_| {
+                DiscoveryError::GsbError(
+                    BusError::Timeout(format!(
+                        "{}/{}",
+                        get_offers_addr(BUS_ID),
+                        RetrieveOffers::ID
+                    ))
+                    .to_string(),
+                )
+            })
+            .await???)
     }
 
     pub async fn bcast_unsubscribes(
@@ -152,7 +166,7 @@ impl Discovery {
 
             if !unknown_offer_ids.is_empty() {
                 let offers = self
-                    .get_remote_offers(caller.clone(), unknown_offer_ids)
+                    .get_remote_offers(caller.clone(), unknown_offer_ids, 3)
                     .await
                     .map_err(|e| {
                         log::debug!("Can't get Offers from [{}]. Error: {}", &caller, e)
