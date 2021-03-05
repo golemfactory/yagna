@@ -21,7 +21,7 @@ pub struct TaskInfo {
     /// Terminate Agreement, if he finished computations.
     pub multi_activity: bool,
     /// Max allowed time Agreement can have no Activities.
-    /// TODO: This could be negotiated between Provide and Requestor.
+    /// TODO: This could be negotiated between Provider and Requestor.
     pub idle_agreement_timeout: Duration,
 }
 
