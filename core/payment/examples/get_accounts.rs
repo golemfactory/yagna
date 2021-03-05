@@ -49,5 +49,6 @@ async fn main() -> anyhow::Result<()> {
     );
     log::info!("OK.");
 
+    log::info!(" 👍🏻 Example completed successfully ❤️");
     Ok(())
 }

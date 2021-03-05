@@ -26,5 +26,6 @@ async fn main() -> anyhow::Result<()> {
         log::info!("Balance: {:?}", payer_status.amount);
         log::debug!("payer_status: {:?}", payer_status);
     }
+    log::info!(" 👍🏻 Example completed successfully ❤️");
     Ok(())
 }
