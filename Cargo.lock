@@ -7437,6 +7437,7 @@ dependencies = [
 name = "ya-market"
 version = "0.3.0"
 dependencies = [
+ "actix 0.10.0",
  "actix-http 2.2.0",
  "actix-rt",
  "actix-service",
@@ -7484,6 +7485,7 @@ dependencies = [
  "ya-service-api-web",
  "ya-service-bus",
  "ya-std-utils",
+ "ya-utils-actix",
 ]
 
 [[package]]
@@ -7927,9 +7929,12 @@ name = "ya-utils-actix"
 version = "0.1.0"
 dependencies = [
  "actix 0.10.0",
+ "actix-rt",
  "anyhow",
+ "chrono",
  "futures 0.3.13",
  "log",
+ "tokio 0.2.25",
 ]
 
 [[package]]
