@@ -7429,7 +7429,7 @@ dependencies = [
 
 [[package]]
 name = "ya-core-model"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "bigdecimal 0.2.0",
  "bitflags 1.2.1",
