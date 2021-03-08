@@ -1,151 +1,131 @@
-use crate::error::{Error, VpnError};
+use crate::error::Error;
 use crate::message::Shutdown;
 use crate::state::Deployment;
 use crate::Result;
 use actix::prelude::*;
 use futures::channel::mpsc;
-use futures::{SinkExt, Stream, StreamExt, TryStreamExt};
-use ipnet::IpNet;
-use std::collections::{BTreeMap, HashMap};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use futures::future;
+use futures::{FutureExt, SinkExt, Stream, StreamExt, TryFutureExt, TryStreamExt};
+use std::convert::TryFrom;
+use std::net::IpAddr;
 use std::path::Path;
-use std::result::Result as StdResult;
 use std::str::FromStr;
 use tokio::io;
+
 use ya_core_model::activity;
-use ya_core_model::activity::VpnControl;
-use ya_runtime_api::server::NetworkEndpoint;
-use ya_service_bus::{actix_rpc, typed, typed::Endpoint, RpcEnvelope};
+use ya_core_model::activity::{RpcMessageError, VpnControl};
+use ya_runtime_api::server::{CreateNetwork, Network, NetworkEndpoint, RuntimeService};
+use ya_service_bus::{actix_rpc, typed, typed::Endpoint as GsbEndpoint, RpcEnvelope};
+use ya_utils_networking::vpn::common::to_net;
+use ya_utils_networking::vpn::error::Error as VpnError;
+use ya_utils_networking::vpn::{
+    ArpPacket, EtherFrame, EtherType, IpPacket, State as VpnState, MTU,
+};
 
-const DEFAULT_CHUNK_SIZE: usize = 65535;
+type VpnResult<T> = std::result::Result<T, VpnError>;
 
-pub fn gateway(net_addr: &str, net_mask: &str) -> Result<IpAddr> {
-    let net = map_ip_net(net_addr, net_mask)?;
-    net.hosts()
-        .next()
-        .ok_or_else(|| VpnError::NetAddrInvalid(net.addr()).into())
+pub(crate) async fn start_vpn<R: RuntimeService>(
+    service: &R,
+    activity_id: Option<String>,
+    deployment: Deployment,
+) -> Result<Option<Addr<Vpn>>> {
+    if activity_id.is_none() || !deployment.networking() {
+        return Ok(None);
+    }
+
+    let activity_id = activity_id.unwrap();
+    let networks = networks(&deployment)?;
+    let hosts = deployment.hosts.clone();
+    let response = service
+        .create_network(CreateNetwork { networks, hosts })
+        .await
+        .map_err(|e| Error::Other(format!("Network setup error: {:?}", e)))?;
+
+    let endpoint = match response.endpoint {
+        Some(endpoint) => VpnEndpoint::connect(endpoint).await?,
+        None => return Err(Error::Other("VPN endpoint already connected".into()).into()),
+    };
+    let vpn = Vpn::try_new(activity_id, endpoint, deployment)?;
+
+    Ok(Some(vpn.start()))
 }
 
 pub(crate) struct Vpn {
     activity_id: String,
+    state: VpnState<GsbEndpoint>,
     endpoint: VpnEndpoint,
-    networks: HashMap<String, IpNet>,
-    nodes: BTreeMap<Box<[u8]>, Endpoint>, // IP_BYTES_BE -> NODE_GSB_ADDR (for routing)
-    nodes_rev: BTreeMap<String, Vec<Box<[u8]>>>, // NODE_ID -> Vec<IP_BYTES_BE> (for removal)
-    packet_buf: PacketBuf,
 }
 
 impl Vpn {
-    pub(crate) fn try_new(
-        activity_id: String,
-        endpoint: VpnEndpoint,
-        deployment: Deployment,
-    ) -> Result<Self> {
+    fn try_new(activity_id: String, endpoint: VpnEndpoint, deployment: Deployment) -> Result<Self> {
         let networks = deployment
             .networks
             .into_iter()
-            .map(|net| Ok((net.id, map_ip_net(&net.ip, &net.mask)?)))
+            .map(|net| Ok((net.id, to_net(&net.ip, &net.mask)?)))
             .collect::<Result<_>>()?;
 
-        log::info!("Registered VPN networks: {:?}", networks);
+        let mut state = VpnState::new(networks);
+        state.join(deployment.nodes, gsb_endpoint)?;
 
-        let mut vpn = Self {
+        Ok(Self {
             activity_id,
+            state,
             endpoint,
-            networks,
-            nodes: Default::default(),
-            nodes_rev: Default::default(),
-            packet_buf: Default::default(),
-        };
-        vpn.add(deployment.nodes)?;
-
-        log::info!("Registered VPN nodes ({})", vpn.nodes.len());
-
-        Ok(vpn)
+        })
     }
 
-    #[allow(unused)]
-    pub fn get<B: AsRef<[u8]>>(&self, addr: B) -> Option<&Endpoint> {
-        self.nodes.get(addr.as_ref())
-    }
+    fn handle_ip(&mut self, frame: EtherFrame, ctx: &mut Context<Self>) {
+        let ip_pkt = IpPacket::packet(frame.payload());
+        log::trace!("Egress packet to {:?}", ip_pkt.dst_address());
 
-    pub fn add<I, K>(&mut self, nodes: I) -> Result<()>
-    where
-        I: IntoIterator<Item = (K, String)>,
-        K: AsRef<str>,
-    {
-        for result in map_ip_keys(nodes.into_iter()) {
-            let (ip, node_id) = result?;
-            let (net_id, _) = self
-                .networks
-                .iter()
-                .find(|(_, net)| net.contains(&ip))
-                .ok_or_else(|| VpnError::NetAddrInvalid(ip))?;
-            let ip: Box<[u8]> = hton(ip).into();
-
-            let endpoint = typed::service(format!("/net/{}/vpn/{}", node_id, net_id));
-            let rev_entry = self.nodes_rev.entry(node_id).or_insert_with(Vec::new);
-            rev_entry.push(ip.clone());
-            self.nodes.insert(ip, endpoint);
-        }
-
-        Ok(())
-    }
-
-    pub fn remove<I, K>(&mut self, ids: I)
-    where
-        I: Iterator<Item = K>,
-        K: AsRef<str>,
-    {
-        ids.for_each(|id| {
-            self.nodes_rev.remove(id.as_ref()).map(|addrs| {
-                addrs.into_iter().for_each(|a| {
-                    self.nodes.remove(&a);
-                });
-            });
-        });
-    }
-
-    fn handle_packet<'a>(
-        &'a mut self,
-        ip_off: usize,
-        ip_len: usize,
-        pkt: Vec<u8>,
-        ctx: &'a mut Context<Self>,
-    ) {
-        let ip = &pkt[ip_off..ip_off + ip_len];
-        log::trace!("Egress packet to {:?}", ip);
-
-        if ip_len == 4 && &ip[0..4] == &[255, 255, 255, 255] {
-            let fut_vec = self
-                .nodes
-                .values()
+        if ip_pkt.is_broadcast() {
+            let pkt: Vec<_> = frame.into();
+            let futs = self
+                .state
+                .endpoints()
                 .map(|e| e.call(activity::VpnPacket(pkt.clone())))
                 .collect::<Vec<_>>();
-            if !fut_vec.is_empty() {
+            if !futs.is_empty() {
                 ctx.spawn(
-                    async move {
-                        let _ = futures::future::join_all(fut_vec).await;
-                    }
-                    .into_actor(self),
+                    future::join_all(futs)
+                        .then(|_| future::ready(()))
+                        .into_actor(self),
                 );
             }
         } else {
-            match self.nodes.get(ip) {
-                Some(endpoint) => {
-                    let fut = endpoint.call(activity::VpnPacket(pkt));
-                    ctx.spawn(
-                        async move {
-                            if let Err(err) = fut.await {
-                                log::debug!("Egress VPN call error: {}", err);
-                            }
-                        }
-                        .into_actor(self),
-                    );
-                }
-                None => log::trace!("No endpoint for {:?}", ip),
+            let ip = ip_pkt.dst_address();
+            let endpoint = self.state.endpoint(ip).cloned();
+            match endpoint {
+                Some(endpoint) => self.forward_frame(endpoint, frame, ctx),
+                None => log::debug!("No endpoint for {:?}", ip),
             }
         }
+    }
+
+    fn handle_arp(&mut self, frame: EtherFrame, ctx: &mut Context<Self>) {
+        let arp = ArpPacket::packet(frame.payload());
+        // forward only for the IP protocol type
+        if &arp.ptype[0..2] != &[08, 00] {
+            return;
+        }
+
+        let ip = arp.tpa;
+        let endpoint = self.state.endpoint(ip).cloned();
+        match endpoint {
+            Some(endpoint) => self.forward_frame(endpoint, frame, ctx),
+            None => log::debug!("No endpoint for {:?}", ip),
+        }
+    }
+
+    fn forward_frame(&mut self, endpoint: GsbEndpoint, frame: EtherFrame, ctx: &mut Context<Self>) {
+        let pkt: Vec<_> = frame.into();
+        ctx.spawn(
+            endpoint
+                .call(activity::VpnPacket(pkt))
+                .map_err(|err| log::debug!("VPN call error: {}", err))
+                .then(|_| future::ready(()))
+                .into_actor(self),
+        );
     }
 }
 
@@ -153,38 +133,37 @@ impl Actor for Vpn {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        let addr = ctx.address();
         let srv_id = activity::exeunit::bus_id(&self.activity_id);
-        actix_rpc::bind::<activity::VpnControl>(&srv_id, addr.clone().recipient());
+        actix_rpc::bind::<activity::VpnControl>(&srv_id, ctx.address().recipient());
 
-        self.networks.keys().for_each(|net| {
+        self.state.networks().keys().for_each(|net| {
             let vpn_id = activity::exeunit::network_id(net);
-            actix_rpc::bind::<activity::VpnPacket>(&vpn_id, addr.clone().recipient());
+            actix_rpc::bind::<activity::VpnPacket>(&vpn_id, ctx.address().recipient());
         });
 
-        let rx = match self.endpoint.rx.take() {
-            Some(rx) => rx,
+        match self.endpoint.rx.take() {
+            Some(rx) => {
+                Self::add_stream(rx, ctx);
+                log::info!("Started VPN service")
+            }
             None => {
+                ctx.stop();
                 log::error!("No local VPN endpoint");
-                return ctx.stop();
             }
         };
-
-        Self::add_stream(rx, ctx);
-        log::info!("Started VPN service");
     }
 
     fn stopping(&mut self, ctx: &mut Self::Context) -> Running {
         log::info!("Stopping VPN service");
 
         let srv_id = activity::exeunit::bus_id(&self.activity_id);
-        let networks = self.networks.keys().cloned().collect::<Vec<_>>();
+        let networks = self.state.networks().clone();
 
         ctx.wait(
             async move {
                 let _ = typed::unbind(&srv_id).await;
-                for net in networks {
-                    let vpn_id = activity::exeunit::network_id(&net);
+                for net in networks.keys() {
+                    let vpn_id = activity::exeunit::network_id(net);
                     let _ = typed::unbind(&vpn_id).await;
                 }
             }
@@ -198,50 +177,18 @@ impl Actor for Vpn {
 /// Egress traffic handler (VM -> VPN)
 impl StreamHandler<Result<Vec<u8>>> for Vpn {
     fn handle(&mut self, result: Result<Vec<u8>>, ctx: &mut Context<Self>) {
-        let mut data = match result {
+        let data = match result {
             Ok(data) => data,
-            Err(err) => return log::error!("Egress VPN error: {}", err),
+            Err(err) => return log::debug!("VPN error (egress): {}", err),
         };
-        let mut to_append = None;
-
-        if let Ok(PeekResult::Packet {
-            ip_off,
-            ip_len,
-            len,
-        }) = peek_ip_pkt(&data[..])
-        {
-            self.packet_buf.clear();
-            if data.len() > len {
-                to_append.replace(data.split_off(len));
-            }
-            self.handle_packet(ip_off, ip_len, data, ctx);
-        } else {
-            to_append.replace(data);
-        }
-
-        if let Some(to_append) = to_append {
-            let len = to_append.len();
-
-            if self.packet_buf.capacity() < len {
-                log::trace!("Received packet is too large: {}", len);
-                return;
-            } else if self.packet_buf.remaining() < len {
-                log::trace!("Invalid packet read sequence from the network endpoint");
-                self.packet_buf.clear();
-                return;
-            } else {
-                self.packet_buf.append(&to_append);
-            }
-        }
-
-        while let Ok(PeekResult::Packet {
-            ip_off,
-            ip_len,
-            len,
-        }) = peek_ip_pkt(&self.packet_buf.inner)
-        {
-            let data = self.packet_buf.take(len);
-            self.handle_packet(ip_off, ip_len, data, ctx);
+        let frame = match EtherFrame::try_from(data) {
+            Ok(frame) => frame,
+            Err(err) => return log::debug!("{}", err),
+        };
+        match &frame {
+            EtherFrame::Arp(_) => self.handle_arp(frame, ctx),
+            EtherFrame::Ip(_) => self.handle_ip(frame, ctx),
+            frame => log::debug!("VPN: unimplemented EtherType: {}", frame),
         }
     }
 }
@@ -261,7 +208,7 @@ impl Handler<RpcEnvelope<activity::VpnPacket>> for Vpn {
         ctx.spawn(
             async move {
                 if let Err(e) = tx.send(Ok(packet.into_inner().0)).await {
-                    log::error!("Ingress VPN error: {}", e);
+                    log::debug!("Ingress VPN error: {}", e);
                 }
             }
             .into_actor(self),
@@ -279,8 +226,11 @@ impl Handler<RpcEnvelope<activity::VpnControl>> for Vpn {
         _: &mut Context<Self>,
     ) -> Self::Result {
         match msg.into_inner() {
-            VpnControl::UpdateNodes(nodes) => self.add(nodes)?,
-            VpnControl::RemoveNodes(ids) => self.remove(ids.iter()),
+            VpnControl::UpdateNodes(nodes) => self
+                .state
+                .join(nodes, gsb_endpoint)
+                .map_err(|e| RpcMessageError::BadRequest(e.to_string()))?,
+            VpnControl::RemoveNodes(ids) => self.state.leave(ids.iter()),
         }
         Ok(())
     }
@@ -296,7 +246,7 @@ impl Handler<Shutdown> for Vpn {
     }
 }
 
-pub struct VpnEndpoint {
+struct VpnEndpoint {
     tx: mpsc::Sender<Result<Vec<u8>>>,
     rx: Option<Box<dyn Stream<Item = Result<Vec<u8>>> + Unpin>>,
 }
@@ -318,20 +268,20 @@ impl VpnEndpoint {
             use bytes::Bytes;
             use tokio_util::codec::{BytesCodec, FramedRead, FramedWrite};
 
-            let socket = tokio::net::UnixStream::connect(path.as_ref()).await?;
-            let (read, write) = io::split(socket);
+            let uss = tokio::net::UnixStream::connect(path.as_ref()).await?;
+            let (read, write) = io::split(uss);
 
-            let stream = FramedRead::with_capacity(read, BytesCodec::new(), DEFAULT_CHUNK_SIZE)
+            let stream = FramedRead::with_capacity(read, BytesCodec::new(), MTU)
                 .into_stream()
                 .map_ok(|b| b.to_vec())
                 .map_err(|e| Error::from(e));
-            let sink = FramedWrite::new(write, BytesCodec::new())
-                .with(|v| futures::future::ok(Bytes::from(v)));
+            let sink =
+                FramedWrite::new(write, BytesCodec::new()).with(|v| future::ok(Bytes::from(v)));
 
             let (tx_si, rx_si) = mpsc::channel(1);
             Arbiter::spawn(async move {
                 if let Err(e) = rx_si.forward(sink).await {
-                    log::warn!("VPN socket sink forward error: {}", e);
+                    log::error!("VPN socket forward error: {}", e);
                 }
             });
 
@@ -343,180 +293,30 @@ impl VpnEndpoint {
     }
 }
 
-fn map_ip_net(ip: &str, mask: &str) -> StdResult<IpNet, VpnError> {
-    let (ip, prefix_len) = match ip.find('/') {
-        Some(idx) => {
-            let ip_addr = IpAddr::from_str(&ip[..idx])?;
-            let prefix_len = u32::from_str(&ip[idx + 1..])
-                .map_err(|_| VpnError::IpAddrInvalidPrefix(ip.into()))?;
-            (ip_addr, prefix_len)
-        }
-        None => match IpAddr::from_str(&ip)? {
-            IpAddr::V4(ipv4) => {
-                let mask = Ipv4Addr::from_str(&mask)?;
-                let prefix_len = u32::from_ne_bytes(mask.octets()).to_be().leading_ones();
-                (IpAddr::V4(ipv4), prefix_len)
-            }
-            IpAddr::V6(ipv6) => (IpAddr::V6(ipv6), 128),
-        },
-    };
-    let net = IpNet::from_str(&format!("{}/{}", ip, prefix_len))
-        .map_err(|_| VpnError::NetAddrInvalid(ip))?;
-    Ok(net)
+fn networks(deployment: &Deployment) -> VpnResult<Vec<Network>> {
+    deployment
+        .networks
+        .iter()
+        .map(|net| {
+            let gateway = net_gateway(&net.ip, &net.mask)?;
+            Ok(Network {
+                ipv6: gateway.is_ipv6(),
+                addr: net.ip.clone(),
+                gateway: gateway.to_string(),
+                mask: net.mask.clone(),
+            })
+        })
+        .collect()
 }
 
-fn map_ip_keys<I, A, V>(addrs: I) -> impl Iterator<Item = Result<(IpAddr, V)>>
-where
-    I: IntoIterator<Item = (A, V)>,
-    A: AsRef<str>,
-{
-    addrs.into_iter().map(|(addr, val)| {
-        let ip = IpAddr::from_str(addr.as_ref()).map_err(VpnError::from)?;
-
-        if ip.is_loopback() || ip.is_unspecified() || ip.is_multicast() {
-            return Err(VpnError::IpAddrNotAllowed(ip).into());
-        }
-        // further checks require feature stabilization
-        if let IpAddr::V4(ip4) = &ip {
-            if ip4.is_broadcast() {
-                return Err(VpnError::IpAddrNotAllowed(ip).into());
-            }
-        }
-
-        Ok((ip, val))
-    })
+fn net_gateway(addr: &str, net_mask: &str) -> VpnResult<IpAddr> {
+    let ip = IpAddr::from_str(addr)?;
+    let net = to_net(addr, net_mask)?;
+    net.hosts()
+        .find(|ip_| ip_ != &ip)
+        .ok_or_else(|| VpnError::NetAddrInvalid(net.addr().to_string()).into())
 }
 
-struct PacketBuf {
-    inner: [u8; 2 * DEFAULT_CHUNK_SIZE],
-    size: usize,
-}
-
-impl Default for PacketBuf {
-    fn default() -> Self {
-        Self {
-            inner: [0u8; 2 * DEFAULT_CHUNK_SIZE],
-            size: 0,
-        }
-    }
-}
-
-impl PacketBuf {
-    #[inline(always)]
-    fn append(&mut self, data: &[u8]) {
-        let len = data.len();
-        let inner = &mut self.inner[self.size..self.size + len];
-        inner.copy_from_slice(data);
-        self.size += len;
-    }
-
-    #[inline(always)]
-    fn take(&mut self, len: usize) -> Vec<u8> {
-        let len = len.min(self.size);
-        let res = self.inner[..len].into();
-        self.inner.rotate_left(len);
-        self.size -= len;
-        res
-    }
-
-    #[inline(always)]
-    fn clear(&mut self) {
-        self.size = 0;
-    }
-
-    #[inline(always)]
-    fn remaining(&self) -> usize {
-        self.capacity() - self.size
-    }
-
-    #[inline(always)]
-    fn capacity(&self) -> usize {
-        self.inner.len()
-    }
-}
-
-enum PeekResult {
-    IncompleteHeader,
-    IncompletePayload,
-    Packet {
-        ip_off: usize,
-        ip_len: usize,
-        len: usize,
-    },
-}
-
-fn peek_ip_pkt(data: &[u8]) -> StdResult<PeekResult, VpnError> {
-    match data.len() {
-        0 => Ok(PeekResult::IncompleteHeader),
-        _ => match data[0] >> 4 {
-            4 => peek_ip4_pkt(data),
-            6 => peek_ip6_pkt(data),
-            _ => {
-                Err(VpnError::PacketMalformed("Malformed IP header: invalid version".into()).into())
-            }
-        },
-    }
-}
-
-fn peek_ip4_pkt(data: &[u8]) -> StdResult<PeekResult, VpnError> {
-    if data.len() < 20 {
-        return Ok(PeekResult::IncompleteHeader);
-    }
-
-    let total_len = u16::from_be_bytes([data[2], data[3]]) as usize;
-    if data.len() < total_len {
-        return Ok(PeekResult::IncompletePayload);
-    }
-
-    Ok(PeekResult::Packet {
-        ip_off: 16,
-        ip_len: 4,
-        len: total_len,
-    })
-}
-
-fn peek_ip6_pkt(data: &[u8]) -> StdResult<PeekResult, VpnError> {
-    if data.len() < 40 {
-        return Ok(PeekResult::IncompleteHeader);
-    }
-
-    let payload_len = u16::from_be_bytes([data[4], data[5]]);
-    let total_len = 40 + payload_len as usize;
-    if payload_len == 0 {
-        return Err(VpnError::PacketNotSupported("IPv6 jumbogram not supported".into()).into());
-    } else if data.len() < total_len {
-        return Ok(PeekResult::IncompletePayload);
-    }
-
-    Ok(PeekResult::Packet {
-        ip_off: 24,
-        ip_len: 16,
-        len: total_len,
-    })
-}
-
-#[inline(always)]
-fn hton(ip: IpAddr) -> Box<[u8]> {
-    match ip {
-        IpAddr::V4(ip) => ip.octets().into(),
-        IpAddr::V6(ip) => ip.octets().into(),
-    }
-}
-
-#[allow(unused)]
-#[inline(always)]
-fn ntoh(data: &[u8]) -> Option<IpAddr> {
-    if data.len() == 4 {
-        let mut bytes = [0u8; 4];
-        bytes.copy_from_slice(&data[0..4]);
-        let ip = Ipv4Addr::from(u32::from_be_bytes(bytes));
-        Some(IpAddr::V4(ip))
-    } else if data.len() == 16 {
-        let mut bytes = [0u8; 16];
-        bytes.copy_from_slice(&data[0..16]);
-        let ip = Ipv6Addr::from(bytes);
-        Some(IpAddr::V6(ip))
-    } else {
-        None
-    }
+fn gsb_endpoint(node_id: &str, net_id: &str) -> GsbEndpoint {
+    typed::service(format!("/net/{}/vpn/{}", node_id, net_id))
 }

@@ -1,6 +1,6 @@
-use crate::error::{Error, VpnError};
+use crate::error::Error;
 use crate::message::{ExecuteCommand, Shutdown, ShutdownReason, UpdateDeployment};
-use crate::network::{gateway, Vpn, VpnEndpoint};
+use crate::network::{start_vpn, Vpn};
 use crate::output::{forward_output, vec_to_string};
 use crate::process::{kill, ProcessTree, SystemError};
 use crate::runtime::event::EventMonitor;
@@ -20,12 +20,8 @@ use std::sync::Arc;
 use tokio::process::Command;
 use ya_agreement_utils::agreement::OfferTemplate;
 use ya_client_model::activity::{CommandOutput, ExeScriptCommand, RuntimeEvent};
-use ya_runtime_api::{
-    server::{
-        spawn, CreateNetwork, Network, ProcessControl, RunProcess, RuntimeService, RuntimeStatus,
-    },
-    PROTOCOL_VERSION,
-};
+use ya_runtime_api::server::{spawn, ProcessControl, RunProcess, RuntimeService, RuntimeStatus};
+use ya_runtime_api::PROTOCOL_VERSION;
 
 const PROCESS_KILL_TIMEOUT_SECONDS_ENV_VAR: &str = "PROCESS_KILL_TIMEOUT_SECONDS";
 const DEFAULT_PROCESS_KILL_TIMEOUT_SECONDS: i64 = 5;
@@ -314,50 +310,6 @@ impl RuntimeProcess {
     }
 }
 
-async fn start_vpn<R: RuntimeService>(
-    service: &R,
-    activity_id: Option<String>,
-    deployment: Deployment,
-) -> Result<Option<Addr<Vpn>>, Error> {
-    if activity_id.is_none() || !deployment.networking() {
-        return Ok(None);
-    }
-
-    let activity_id = activity_id.unwrap();
-    let response = service
-        .create_network(CreateNetwork {
-            networks: deployment
-                .networks
-                .iter()
-                .map(|net| {
-                    let gateway = gateway(&net.ip, &net.mask)?;
-                    Ok(Network {
-                        ipv6: gateway.is_ipv6(),
-                        addr: net.ip.clone(),
-                        gateway: gateway.to_string(),
-                        mask: net.mask.clone(),
-                    })
-                })
-                .collect::<Result<_, Error>>()?,
-            hosts: deployment.hosts.clone(),
-        })
-        .await
-        .map_err(|e| Error::Other(format!("Network setup error: {:?}", e)))?;
-
-    let endpoint = match response.endpoint {
-        Some(endpoint) => endpoint,
-        None => return Err(VpnError::EndpointInvalid("missing socket path".into()).into()),
-    };
-
-    let vpn = Vpn::try_new(
-        activity_id,
-        VpnEndpoint::connect(endpoint).await?,
-        deployment,
-    )?;
-
-    Ok(Some(vpn.start()))
-}
-
 impl Runtime for RuntimeProcess {}
 
 impl Actor for RuntimeProcess {
@@ -451,7 +403,7 @@ impl Handler<Shutdown> for RuntimeProcess {
 
     fn handle(&mut self, msg: Shutdown, _: &mut Self::Context) -> Self::Result {
         let timeout = process_kill_timeout_seconds();
-        let service = self.service.take();
+        let proc = self.service.take();
         let vpn = self.vpn.take();
         let mut children = std::mem::replace(&mut self.children, HashSet::new());
 
@@ -459,8 +411,8 @@ impl Handler<Shutdown> for RuntimeProcess {
             if let Some(vpn) = vpn {
                 let _ = vpn.send(msg).await;
             }
-            if let Some(svc) = service {
-                let _ = svc.service.shutdown().await;
+            if let Some(proc) = proc {
+                let _ = proc.service.shutdown().await;
             }
             let _ = future::join_all(children.drain().map(move |t| t.kill(timeout))).await;
             Ok(())

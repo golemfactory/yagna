@@ -1,14 +1,21 @@
 [package]
 name = "ya-utils-networking"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+default = ["dns"]
+dns = ["anyhow",  "url", "trust-dns-resolver/mdns"]
+vpn = ["ipnet", "thiserror"]
 
 [dependencies]
-anyhow = "1.0"
+futures = "0.3"
 log = "0.4"
-url = "2.2"
-trust-dns-resolver = { version = "0.19", features = ["mdns"] }
 
+anyhow = { version = "1.0", optional = true }
+trust-dns-resolver = { version = "0.19", optional = true }
+url = { version = "2.2", optional = true }
+
+ipnet = { version = "2.3", optional = true }
+thiserror ={ version = "1.0", optional = true }

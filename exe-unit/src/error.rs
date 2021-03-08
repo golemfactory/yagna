@@ -5,7 +5,6 @@ pub use ya_transfer::error::Error as TransferError;
 use crate::metrics::error::MetricError;
 use crate::state::StateError;
 use hex::FromHexError;
-use std::net::{AddrParseError, IpAddr};
 
 #[derive(thiserror::Error, Debug)]
 pub enum LocalServiceError {
@@ -31,26 +30,6 @@ pub enum ChannelError {
     TrySendError(String),
     #[error("Send timeout: {0}")]
     SendTimeoutError(String),
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum VpnError {
-    #[error("Invalid IP address: {0}")]
-    IpAddrInvalid(#[from] AddrParseError),
-    #[error("IP address not allowed: {0}")]
-    IpAddrNotAllowed(IpAddr),
-    #[error("Invalid IP prefix: {0}")]
-    IpAddrInvalidPrefix(String),
-    #[error("Invalid IP network: {0}")]
-    NetAddrInvalid(IpAddr),
-    #[error("Invalid IPv4 network mask: {0}")]
-    NetMaskInvalid(String),
-    #[error("Packet not supported: {0}")]
-    PacketNotSupported(String),
-    #[error("Malformed packet: {0}")]
-    PacketMalformed(String),
-    #[error("Invalid endpoint: {0}")]
-    EndpointInvalid(String),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -81,6 +60,8 @@ pub enum Error {
     UsageLimitExceeded(String),
     #[error("Agreement error: {0}")]
     AgreementError(#[from] agreement::Error),
+    #[error("VPN error: {0}")]
+    Vpn(#[from] ya_utils_networking::vpn::Error),
     #[error("{0}")]
     Other(String),
     #[cfg(feature = "sgx")]
@@ -89,8 +70,6 @@ pub enum Error {
     #[cfg(feature = "sgx")]
     #[error("Attestation error: {0}")]
     Attestation(String),
-    #[error("VPN error: {0}")]
-    Vpn(#[from] VpnError),
 }
 
 impl Error {
@@ -152,12 +131,12 @@ impl From<Error> for RpcError {
             Error::RemoteServiceError(e) => RpcError::Service(e),
             Error::GsbError(e) => RpcError::Service(e),
             Error::UsageLimitExceeded(e) => RpcError::UsageLimitExceeded(e),
+            Error::Vpn(e) => RpcError::Service(e.to_string()),
             Error::Other(e) => RpcError::Service(e),
             #[cfg(feature = "sgx")]
             Error::Crypto(e) => RpcError::Service(e.to_string()),
             #[cfg(feature = "sgx")]
             Error::Attestation(e) => RpcError::Service(e.to_string()),
-            Error::Vpn(e) => RpcError::Service(e.to_string()),
         }
     }
 }
