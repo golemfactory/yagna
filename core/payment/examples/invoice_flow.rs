@@ -146,5 +146,6 @@ async fn main() -> anyhow::Result<()> {
         .unwrap();
     log::debug!("events 3: {:?}", &invoice_events_settled);
 
+    log::info!(" 👍🏻 Example completed successfully ❤️");
     Ok(())
 }
