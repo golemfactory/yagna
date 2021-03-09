@@ -371,7 +371,7 @@ impl PaymentProcessor {
                 payee_id,
                 payer_addr,
                 payee_addr,
-                payment_platform,
+                payment_platform.clone(),
                 msg.amount.clone(),
                 msg.confirmation.confirmation,
                 activity_payments,
@@ -388,7 +388,7 @@ impl PaymentProcessor {
             activity_payment.allocation_id = None;
         }
 
-        counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "driver" => msg.driver);
+        counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "platform" => payment_platform);
         let msg = SendPayment(payment);
         ya_net::from(payer_id)
             .to(payee_id)
