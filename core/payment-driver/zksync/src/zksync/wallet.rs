@@ -29,6 +29,8 @@ use crate::{
     zksync::{faucet, signer::YagnaEthSigner, utils},
     DEFAULT_NETWORK, ZKSYNC_TOKEN_NAME,
 };
+use std::cell::RefCell;
+use std::time::{Duration, Instant};
 
 pub async fn account_balance(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
     let pub_address = Address::from_str(&address[2..]).map_err(GenericError::new)?;
@@ -208,7 +210,13 @@ pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails
     let req_url = format!("{}/transactions_all/{}", api_url, tx_hash);
     log::debug!("Request URL: {}", &req_url);
 
-    let client = awc::Client::new();
+    let connector = awc::Connector::new().timeout(Duration::from_secs(5));
+    let connector = RefCell::new(Box::new(connector.finish()));
+    let client = awc::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .connector(connector)
+        .finish();
+    log::debug!("Verify tx time: {:?}", Instant::now());
     let response = client
         .get(req_url)
         .send()
