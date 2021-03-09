@@ -1,4 +1,5 @@
 use chrono::{NaiveDateTime, Utc};
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use ya_client::model::market::{Demand as ClientDemand, NewDemand, NewOffer, Offer as ClientOffer};
@@ -13,17 +14,16 @@ use crate::matcher::error::{
     DemandError, ModifyOfferError, QueryDemandsError, QueryOfferError, QueryOffersError,
     SaveOfferError,
 };
-use std::collections::HashSet;
 
 #[derive(Clone)]
 pub struct SubscriptionStore {
-    db: DbExecutor,
+    pub(crate) db: DbExecutor,
     config: Arc<Config>,
 }
 
 impl SubscriptionStore {
     pub fn new(db: DbExecutor, config: Arc<Config>) -> Self {
-        Self { db, config }
+        SubscriptionStore { db, config }
     }
 
     /// returns newly created offer with insertion_ts

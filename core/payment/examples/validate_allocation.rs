@@ -5,6 +5,8 @@ use ya_client_model::payment::NewAllocation;
 use ya_core_model::payment::local as pay;
 use ya_service_bus::typed as bus;
 
+use std::str::FromStr;
+
 async fn get_requestor_balance_and_platform() -> anyhow::Result<(BigDecimal, String)> {
     let account_list = bus::service(pay::BUS_ID)
         .call(pay::GetAccounts {})
@@ -40,8 +42,20 @@ async fn main() -> anyhow::Result<()> {
         .interface()?;
 
     let (requestor_balance, payment_platform) = get_requestor_balance_and_platform().await?;
+    log::info!(
+        "Requestor balance: {}, platform: {}",
+        requestor_balance,
+        payment_platform
+    );
+
+    if "dummy-glm" == &payment_platform {
+        log::info!(
+            " 🖐  Example will not work with Dummy driver as it does not validate requests 💛"
+        );
+        return Ok(());
+    }
+
     let payment_platform = Some(payment_platform);
-    log::info!("Requestor balance: {}", requestor_balance);
 
     log::info!("Attempting to create allocation with invalid address...");
     let result = requestor
@@ -56,10 +70,11 @@ async fn main() -> anyhow::Result<()> {
     assert!(result.is_err());
     log::info!("Failed to create allocation (as expected).");
 
+    // We need to take ZkSync's transaction fees into account (allowing 45% of funds per allocation)
     let new_allocation = NewAllocation {
         address: None, // Use default address (i.e. identity)
         payment_platform,
-        total_amount: requestor_balance / 2,
+        total_amount: requestor_balance * BigDecimal::from_str("0.45").unwrap(),
         timeout: None,
         make_deposit: false,
     };
@@ -99,5 +114,6 @@ async fn main() -> anyhow::Result<()> {
     requestor.create_allocation(&new_allocation).await?;
     log::info!("Allocation created.");
 
+    log::info!(" 👍🏻 Example completed successfully ❤️");
     Ok(())
 }
