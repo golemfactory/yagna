@@ -23,7 +23,7 @@ from `payment_api` with is required to run any other example with payment platfo
 | account_ballance    |                                                | Same as `payment_api`                                                                          |
 | cancel_invoice      | driver, network                                | driver=`dummy`, network=None                                                                   |
 | debit_note_flow     | platform                                       | platform=`dummy-glm`                                                                           |
-| get_accounts        | <`provider_addr`><br/>  <`requestor_addr`><br/> platform | `provider_addr` and `requestor_addr` are required  positional parameters. Platform=`dummy-glm` |
+| get_accounts        | <`provider_addr`><br/>  <`requestor_addr`><br/> platform | `provider_addr` and `requestor_addr` are required,  positional, `0x`-hex-encoded parameters. Platform=`dummy-glm` |
 | invoice_flow        | platform                                       | platform=`dummy-glm`                                                                           |
 | market_decoration   |                                                | Same as `payment_api`                                                                          |
 | release_allocation  |                                                | Same as `payment_api`                                                                          |
