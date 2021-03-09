@@ -350,13 +350,13 @@ impl Handler<UpdateDeployment> for RuntimeProcess {
             self.deployment.runtime_mode = runtime_mode;
         }
         if let Some(networks) = msg.networks {
-            self.deployment.networks.extend(networks.into_iter());
+            self.deployment.extend_networks(networks)?;
         }
         if let Some(hosts) = msg.hosts {
             self.deployment.hosts.extend(hosts.into_iter());
         }
         if let Some(nodes) = msg.nodes {
-            self.deployment.nodes.extend(nodes.into_iter());
+            self.deployment.extend_nodes(nodes)?;
         }
         Ok(())
     }

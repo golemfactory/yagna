@@ -4,7 +4,7 @@ use std::convert::TryInto;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 
-pub const MTU: usize = 14 + 65521; // ether frame + payload
+pub const MAX_FRAME_SIZE: usize = 14 + 65521; // Ethernet II + payload
 
 #[inline(always)]
 pub fn hton(ip: IpAddr) -> Box<[u8]> {
@@ -27,9 +27,25 @@ pub fn ntoh(data: &[u8]) -> Option<IpAddr> {
     }
 }
 
-#[inline(always)]
-pub fn to_cidr(mask: [u8; 4]) -> u32 {
-    u32::from_ne_bytes(mask).to_be().leading_ones()
+pub fn to_ip(ip: &str) -> Result<IpAddr, Error> {
+    let ip = IpAddr::from_str(ip.as_ref()).map_err(Error::from)?;
+
+    if ip.is_loopback() || ip.is_unspecified() || ip.is_multicast() {
+        return Err(Error::IpAddrNotAllowed(ip).into());
+    } else if let IpAddr::V4(ip4) = &ip {
+        if ip4.is_broadcast() {
+            return Err(Error::IpAddrNotAllowed(ip).into());
+        }
+    }
+
+    Ok(ip)
+}
+
+pub fn to_octets(ip: IpAddr) -> Box<[u8]> {
+    match ip {
+        IpAddr::V4(ipv4) => ipv4.octets().into(),
+        IpAddr::V6(ipv6) => ipv6.octets().into(),
+    }
 }
 
 pub fn to_net(ip: &str, mask: &str) -> Result<IpNet, Error> {
@@ -44,5 +60,10 @@ pub fn to_net(ip: &str, mask: &str) -> Result<IpNet, Error> {
             IpNet::from_str(&format!("{}/{}", ip, cidr))
         }
     };
-    Ok(result.map_err(|_| Error::NetAddrInvalid(ip.to_string()))?)
+    Ok(result.map_err(|_| Error::NetAddr(ip.to_string()))?)
+}
+
+#[inline(always)]
+pub fn to_cidr(mask: [u8; 4]) -> u32 {
+    u32::from_ne_bytes(mask).to_be().leading_ones()
 }

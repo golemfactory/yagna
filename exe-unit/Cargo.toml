@@ -49,6 +49,7 @@ flexi_logger = { version = "0.17", features = ["colors"] }
 futures = "0.3"
 graphene-sgx = { version = "0.3", optional = true }
 hex = "0.4.2"
+ipnet = "2.3"
 lazy_static = "1.4.0"
 log = "0.4.8"
 openssl= { version = "0.10", optional = true }

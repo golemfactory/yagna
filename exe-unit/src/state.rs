@@ -6,8 +6,10 @@ use actix::Arbiter;
 use chrono::{DateTime, Utc};
 use futures::channel::{mpsc, oneshot};
 use futures::{SinkExt, StreamExt, TryStreamExt};
+use ipnet::IpNet;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::path::PathBuf;
 use thiserror::Error;
 use tokio::sync::broadcast;
@@ -17,6 +19,8 @@ use ya_client_model::activity::{
     ExeScriptCommandState, RuntimeEvent, RuntimeEventKind,
 };
 use ya_core_model::activity::Exec;
+use ya_utils_networking::vpn::common::{to_ip, to_net};
+use ya_utils_networking::vpn::error::Error as VpnError;
 
 pub use ya_client_model::activity::activity_state::{State, StatePair};
 
@@ -363,13 +367,31 @@ fn output_bytes(output: &CommandOutput) -> &[u8] {
 pub(crate) struct Deployment {
     pub runtime_mode: RuntimeMode,
     pub task_package: Option<PathBuf>,
-    pub networks: Vec<Network>,
+    pub networks: HashMap<String, IpNet>,
     pub hosts: HashMap<String, String>,
-    pub nodes: HashMap<String, String>,
+    pub nodes: HashMap<IpAddr, String>,
 }
 
 impl Deployment {
     pub fn networking(&self) -> bool {
         !self.networks.is_empty()
+    }
+
+    pub fn extend_networks(&mut self, networks: Vec<Network>) -> Result<(), Error> {
+        let networks = networks
+            .into_iter()
+            .map(|net| to_net(&net.ip, &net.mask).map(|n| (net.id, n)))
+            .collect::<Result<Vec<_>, VpnError>>()?;
+        self.networks.extend(networks.into_iter());
+        Ok(())
+    }
+
+    pub fn extend_nodes(&mut self, nodes: HashMap<String, String>) -> Result<(), Error> {
+        let nodes = nodes
+            .into_iter()
+            .map(|(ip, id)| to_ip(ip.as_ref()).map(|ip| (ip, id)))
+            .collect::<Result<Vec<_>, VpnError>>()?;
+        self.nodes.extend(nodes.into_iter());
+        Ok(())
     }
 }
