@@ -4,7 +4,7 @@ use ya_client::web::{rest_api_url, WebClient};
 
 #[derive(Clone, Debug, StructOpt)]
 struct Args {
-    #[structopt(short, long, default_value = "zksync-rinkeby-tglm")]
+    #[structopt(short, long, default_value = "dummy-glm")]
     platform: String,
     #[structopt()]
     provider_addr: String,
@@ -49,5 +49,6 @@ async fn main() -> anyhow::Result<()> {
     );
     log::info!("OK.");
 
+    log::info!(" 👍🏻 Example completed successfully ❤️");
     Ok(())
 }

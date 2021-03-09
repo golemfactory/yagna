@@ -42,8 +42,20 @@ async fn main() -> anyhow::Result<()> {
         .interface()?;
 
     let (requestor_balance, payment_platform) = get_requestor_balance_and_platform().await?;
+    log::info!(
+        "Requestor balance: {}, platform: {}",
+        requestor_balance,
+        payment_platform
+    );
+
+    if "dummy-glm" == &payment_platform {
+        log::info!(
+            " 🖐  Example will not work with Dummy driver as it does not validate requests 💛"
+        );
+        return Ok(());
+    }
+
     let payment_platform = Some(payment_platform);
-    log::info!("Requestor balance: {}", requestor_balance);
 
     log::info!("Attempting to create allocation with invalid address...");
     let result = requestor
@@ -102,5 +114,6 @@ async fn main() -> anyhow::Result<()> {
     requestor.create_allocation(&new_allocation).await?;
     log::info!("Allocation created.");
 
+    log::info!(" 👍🏻 Example completed successfully ❤️");
     Ok(())
 }
