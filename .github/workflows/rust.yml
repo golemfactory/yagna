@@ -71,7 +71,7 @@ jobs:
 
       - name: Cache vcpkg's artifacts
         uses: actions/cache@v1
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'disable-cache'
         with:
           path: c:/vcpkg/installed
           key: vcpkg-${{ runner.os }}-v0
