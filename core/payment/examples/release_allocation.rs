@@ -23,10 +23,12 @@ async fn main() -> anyhow::Result<()> {
         .interface()?;
 
     log::info!("Creating allocation...");
+    let accounts = requestor.get_requestor_accounts().await?;
+    let account = accounts.first().expect("No account available");
     let allocation = requestor
         .create_allocation(&NewAllocation {
-            address: None,          // Use default address (i.e. identity)
-            payment_platform: None, // Use default payment platform
+            address: Some(account.address.clone()),
+            payment_platform: Some(account.platform.clone()),
             total_amount: BigDecimal::from(10u64),
             timeout: None,
             make_deposit: false,
@@ -86,8 +88,8 @@ async fn main() -> anyhow::Result<()> {
     log::info!("Creating another allocation...");
     let allocation = requestor
         .create_allocation(&NewAllocation {
-            address: None,          // Use default address (i.e. identity)
-            payment_platform: None, // Use default payment platform
+            address: Some(account.address.clone()),
+            payment_platform: Some(account.platform.clone()),
             total_amount: BigDecimal::from(10u64),
             timeout: None,
             make_deposit: false,
@@ -120,5 +122,6 @@ async fn main() -> anyhow::Result<()> {
     assert!(result.is_err());
     log::info!("Done.");
 
+    log::info!(" 👍🏻 Example completed successfully ❤️");
     Ok(())
 }
