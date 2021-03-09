@@ -34,7 +34,7 @@ jobs:
 
       - name: Cache cargo registry
         uses: actions/cache@v1
-        if: matrix.os != 'macos-latest'
+        if: matrix.os == 'disable-cache'
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-workaround-${{ hashFiles('**/Cargo.lock') }}
@@ -43,7 +43,7 @@ jobs:
 
       - name: Cache cargo index
         uses: actions/cache@v1
-        if: matrix.os != 'macos-latest'
+        if: matrix.os == 'disable-cache'
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-index-workaround-${{ hashFiles('**/Cargo.lock') }}
@@ -64,7 +64,7 @@ jobs:
 
       - name: Cache cargo build
         uses: actions/cache@v1
-        if: matrix.os != 'macos-latest'
+        if: matrix.os == 'disable-cache'
         with:
           path: target
           key: ${{ runner.os }}-cargo-build-workaround-${{ hashFiles('**/Cargo.lock') }}
