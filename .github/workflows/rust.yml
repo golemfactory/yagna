@@ -37,7 +37,7 @@ jobs:
         if: matrix.os != 'macos-latest'
         with:
           path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-registry-workaround-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-registry-
 
@@ -46,7 +46,7 @@ jobs:
         if: matrix.os != 'macos-latest'
         with:
           path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-index-workaround-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-index-
 
@@ -67,7 +67,7 @@ jobs:
         if: matrix.os != 'macos-latest'
         with:
           path: target
-          key: ${{ runner.os }}-cargo-build-target1-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-build-workaround-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cache vcpkg's artifacts
         uses: actions/cache@v1
