@@ -10,13 +10,15 @@ use futures::FutureExt;
 use metrics::counter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use ya_client_model::payment::driver_details::DriverDetails;
+use ya_client_model::payment::network::Network;
 use ya_client_model::payment::{Account, ActivityPayment, AgreementPayment, Payment};
 use ya_core_model::driver::{
     self, driver_bus_id, AccountMode, PaymentConfirmation, PaymentDetails, ValidateAllocation,
 };
 use ya_core_model::payment::local::{
-    DriverDetails, Network, NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver,
-    RegisterDriverError, SchedulePayment, UnregisterAccount, UnregisterDriver,
+    NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver, RegisterDriverError,
+    SchedulePayment, UnregisterAccount, UnregisterDriver,
 };
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_net::RemoteEndpoint;
