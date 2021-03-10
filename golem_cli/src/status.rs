@@ -106,7 +106,7 @@ pub async fn run() -> Result</*exit code*/ i32> {
     table.set_format(*format::consts::FORMAT_BOX_CHARS);
 
     if is_running {
-        let (offers_cnt, network) = get_payment_network().await?;
+        let (_offers_cnt, network) = get_payment_network().await?;
 
         let payments = {
             let (id, invoice_status) =
@@ -175,13 +175,13 @@ pub async fn run() -> Result</*exit code*/ i32> {
             let mut table = Table::new();
             let format = format::FormatBuilder::new().padding(1, 1).build();
             table.set_format(format);
-            table.add_row(row![Style::new()
-                .fg(Colour::Yellow)
-                .underline()
-                .paint("Offers")]);
-            table.add_empty_row();
-            table.add_row(row!["Subscribed", offers_cnt]);
-            table.add_empty_row();
+            // table.add_row(row![Style::new()
+            //     .fg(Colour::Yellow)
+            //     .underline()
+            //     .paint("Offers")]);
+            // table.add_empty_row();
+            // table.add_row(row!["Subscribed", offers_cnt]);
+            // table.add_empty_row();
             table.add_row(row![Style::new()
                 .fg(Colour::Yellow)
                 .underline()

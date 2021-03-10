@@ -588,14 +588,22 @@ impl TransactionSender {
     fn start_block_traces(&mut self, ctx: &mut Context<Self>) {
         let client = self.ethereum_client.clone();
         let fut = async move {
-            let blocks = client.blocks().await.unwrap();
-            blocks
+            let blocks = match client.blocks().await {
+                Ok(b) => b,
+                Err(e) => {
+                    log::warn!("Error getting blocks: {:?}", e);
+                    return;
+                }
+            };
+            let result = blocks
                 .try_for_each(|b| {
                     log::trace!("new block: {:?}", b);
                     future::ok(())
                 })
-                .await
-                .unwrap();
+                .await;
+            if let Err(e) = result {
+                log::warn!("Error tracing blocks: {:?}", e);
+            }
         }
         .into_actor(self);
         let _ = ctx.spawn(fut);
