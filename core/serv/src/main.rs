@@ -223,13 +223,6 @@ async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<Vec<String>> {
         PaymentDriverService::gsb(&()).await?;
         drivers.push(DRIVER_NAME.to_owned());
     }
-    #[cfg(feature = "glmsync-driver")]
-    {
-        use ya_glmsync_driver::{PaymentDriverService, DRIVER_NAME};
-        let db_executor = DbExecutor::from_data_dir(data_dir, "glmsync-driver")?;
-        PaymentDriverService::gsb(&db_executor).await?;
-        drivers.push(DRIVER_NAME.to_owned());
-    }
     #[cfg(feature = "gnt-driver")]
     {
         use ya_gnt_driver::{PaymentDriverService, DRIVER_NAME};
