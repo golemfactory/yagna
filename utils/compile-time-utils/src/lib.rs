@@ -2,9 +2,9 @@ use git_version::git_version;
 use metrics::gauge;
 use semver::Version;
 
-/// Returns latest tag (via `git describe --tag --abbrev=0`).
+/// Returns latest version tag.
 pub fn git_tag() -> &'static str {
-    git_version!(args = ["--tag", "--abbrev=0"], cargo_prefix = "")
+    git_version!(args = ["--tag", "--abbrev=0", "--match=v[0-9]*", "--match=pre-rel-[0-9]*"], cargo_prefix = "")
 }
 
 /// Returns latest commit short hash.
