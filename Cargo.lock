@@ -7362,8 +7362,9 @@ dependencies = [
 
 [[package]]
 name = "ya-client"
-version = "0.5.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=6916938177b860eb646b082f0784370863802231#6916938177b860eb646b082f0784370863802231"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6be6d483d72a51534830a30df9471622d30686144b40677d158d781a0c74f545"
 dependencies = [
  "awc 1.0.1",
  "bytes 0.5.6",
@@ -7387,8 +7388,9 @@ dependencies = [
 
 [[package]]
 name = "ya-client-model"
-version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=6916938177b860eb646b082f0784370863802231#6916938177b860eb646b082f0784370863802231"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f399f4c6753e090751b06f5937ce45bb6188ba0f9ba436383591c51af3347082"
 dependencies = [
  "bigdecimal 0.2.0",
  "chrono",
@@ -7417,7 +7419,7 @@ dependencies = [
 
 [[package]]
 name = "ya-core-model"
-version = "0.3.0"
+version = "0.3.2"
 dependencies = [
  "bigdecimal 0.2.0",
  "bitflags 1.2.1",
@@ -8266,7 +8268,7 @@ dependencies = [
 
 [[package]]
 name = "yagna"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "actix-rt",
  "actix-service",
