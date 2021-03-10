@@ -17,7 +17,6 @@ pub fn bind_service(db: &DbExecutor, processor: GNTDriverProcessor) {
         .bind_with_processor(fund)
         .bind_with_processor(init)
         .bind_with_processor(get_account_balance)
-        .bind_with_processor(get_transaction_balance)
         .bind_with_processor(schedule_payment)
         .bind_with_processor(verify_payment)
         .bind_with_processor(validate_allocation);
@@ -99,24 +98,6 @@ async fn get_account_balance(
             |e| Err(GenericError::new(e)),
             |account_balance| Ok(account_balance),
         )
-}
-
-async fn get_transaction_balance(
-    _db: DbExecutor,
-    processor: GNTDriverProcessor,
-    _caller: String,
-    msg: GetTransactionBalance,
-) -> Result<BigDecimal, GenericError> {
-    log::info!("get transaction balance: {:?}", msg);
-
-    let sender = msg.sender();
-    let recipient = msg.recipient();
-    let network = parse_platform(msg.platform())?;
-
-    processor
-        .get_transaction_balance(sender.as_str(), recipient.as_str(), network)
-        .await
-        .map_or_else(|e| Err(GenericError::new(e)), |balance| Ok(balance))
 }
 
 async fn schedule_payment(
