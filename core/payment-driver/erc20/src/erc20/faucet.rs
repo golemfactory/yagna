@@ -1,5 +1,5 @@
 /*
-    Top up new accounts from the rinkeby zksync faucet and wait for the funds to arive.
+    Top up new accounts from the rinkeby erc20 faucet and wait for the funds to arive.
 */
 
 // External crates
@@ -14,7 +14,7 @@ use ya_payment_driver::{db::models::Network, model::GenericError};
 use ya_utils_networking::resolver;
 
 // Local uses
-use crate::zksync::wallet::account_balance;
+use crate::erc20::wallet::account_balance;
 
 const DEFAULT_FAUCET_SRV_PREFIX: &str = "_zk-faucet._tcp";
 const FAUCET_ADDR_ENVAR: &str = "ZKSYNC_FAUCET_ADDR";

@@ -19,11 +19,11 @@ use ya_payment_driver::{
 
 use crate::network::platform_to_network_token;
 
-pub struct ZksyncDao {
+pub struct Erc20Dao {
     db: DbExecutor,
 }
 
-impl ZksyncDao {
+impl Erc20Dao {
     pub fn new(db: DbExecutor) -> Self {
         Self { db }
     }
@@ -96,7 +96,7 @@ impl ZksyncDao {
         details: &PaymentDetails,
         date: DateTime<Utc>,
     ) -> String {
-        // TO CHECK: No difference between tx_id and tx_hash on zksync
+        // TO CHECK: No difference between tx_id and tx_hash on erc20
         // TODO: Implement pre-sign
         let tx_id = Uuid::new_v4().to_string();
         let tx = TransactionEntity {
@@ -105,7 +105,7 @@ impl ZksyncDao {
             nonce: "".to_string(), // not used till pre-sign
             status: TX_CREATED,
             timestamp: date.naive_utc(),
-            tx_type: 0,                // Zksync only knows transfers, unused field
+            tx_type: 0,                // Erc20 only knows transfers, unused field
             encoded: "".to_string(),   // not used till pre-sign
             signature: "".to_string(), // not used till pre-sign
             tx_hash: None,

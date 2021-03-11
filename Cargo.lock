@@ -2188,22 +2188,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ethereum-tx-sign"
-version = "3.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bdcbb5f48282fa71ba2864818a442d0ee0ca04ebc9ef9eb1837c48298c3b8cbf"
-dependencies = [
- "ethereum-types 0.9.2",
- "num-traits",
- "rlp",
- "secp256k1 0.19.0",
- "serde",
- "serde_derive",
- "serde_json",
- "tiny-keccak 2.0.2",
-]
-
-[[package]]
 name = "ethereum-types"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7468,6 +7452,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-erc20-driver"
+version = "0.2.0"
+dependencies = [
+ "actix-rt",
+ "anyhow",
+ "async-trait",
+ "awc 2.0.3",
+ "bigdecimal 0.2.0",
+ "chrono",
+ "dotenv",
+ "env_logger 0.7.1",
+ "ethkey",
+ "futures 0.3.13",
+ "hex",
+ "lazy_static",
+ "log",
+ "maplit",
+ "metrics-macros",
+ "num-bigint 0.3.1",
+ "serde",
+ "serde_json",
+ "structopt",
+ "tiny-keccak 1.5.0",
+ "tokio 0.2.25",
+ "uuid 0.8.2",
+ "ya-client-model",
+ "ya-payment-driver",
+ "ya-service-api-interfaces",
+ "ya-utils-futures",
+ "ya-utils-networking",
+]
+
+[[package]]
 name = "ya-exe-unit"
 version = "0.1.0"
 dependencies = [
@@ -7529,54 +7546,6 @@ dependencies = [
  "flexi_logger",
  "log",
  "yansi",
-]
-
-[[package]]
-name = "ya-gnt-driver"
-version = "0.2.0"
-dependencies = [
- "actix 0.9.0",
- "actix-connect 1.0.2",
- "actix-http 1.0.1",
- "actix-rt",
- "anyhow",
- "awc 2.0.3",
- "bigdecimal 0.2.0",
- "bitflags 1.2.1",
- "chrono",
- "diesel",
- "diesel_migrations",
- "dotenv",
- "env_logger 0.7.1",
- "ethabi",
- "ethereum-tx-sign",
- "ethereum-types 0.9.2",
- "futures 0.3.13",
- "hex",
- "lazy_static",
- "libsqlite3-sys",
- "log",
- "maplit",
- "num-bigint 0.3.1",
- "num-derive",
- "num-traits",
- "r2d2",
- "rlp",
- "secp256k1 0.19.0",
- "serde",
- "serde_json",
- "sha3 0.8.2",
- "thiserror",
- "tiny-keccak 2.0.2",
- "tokio 0.2.25",
- "uuid 0.8.2",
- "web3",
- "ya-client-model",
- "ya-core-model",
- "ya-persistence",
- "ya-service-api-interfaces",
- "ya-service-bus",
- "ya-utils-networking",
 ]
 
 [[package]]
@@ -7772,7 +7741,7 @@ dependencies = [
  "ya-client-model",
  "ya-core-model",
  "ya-dummy-driver",
- "ya-gnt-driver",
+ "ya-erc20-driver",
  "ya-metrics",
  "ya-net",
  "ya-persistence",
@@ -8257,8 +8226,8 @@ dependencies = [
  "ya-activity",
  "ya-compile-time-utils",
  "ya-dummy-driver",
+ "ya-erc20-driver",
  "ya-file-logging",
- "ya-gnt-driver",
  "ya-identity",
  "ya-market",
  "ya-metrics",

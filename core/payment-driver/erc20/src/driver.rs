@@ -1,5 +1,5 @@
 /*
-    ZksyncDriver to handle payments on the zksync network.
+    Erc20Driver to handle payments on the erc20 network.
 
     Please limit the logic in this file, use local mods to handle the calls.
 */
@@ -27,11 +27,11 @@ use ya_utils_futures::timeout::IntoTimeoutFuture;
 
 // Local uses
 use crate::{
-    dao::ZksyncDao,
+    dao::Erc20Dao,
     network::{
         get_network_token, network_token_to_platform, platform_to_network_token, SUPPORTED_NETWORKS,
     },
-    zksync::wallet,
+    erc20::wallet,
     DEFAULT_NETWORK, DRIVER_NAME,
 };
 
@@ -51,16 +51,16 @@ lazy_static! {
         };
 }
 
-pub struct ZksyncDriver {
+pub struct Erc20Driver {
     active_accounts: AccountsRc,
-    dao: ZksyncDao,
+    dao: Erc20Dao,
 }
 
-impl ZksyncDriver {
+impl Erc20Driver {
     pub fn new(db: DbExecutor) -> Self {
         Self {
             active_accounts: Accounts::new_rc(),
-            dao: ZksyncDao::new(db),
+            dao: Erc20Dao::new(db),
         }
     }
 
@@ -136,7 +136,7 @@ impl ZksyncDriver {
 }
 
 #[async_trait(?Send)]
-impl PaymentDriver for ZksyncDriver {
+impl PaymentDriver for Erc20Driver {
     async fn account_event(
         &self,
         _db: DbExecutor,
@@ -163,19 +163,8 @@ impl PaymentDriver for ZksyncDriver {
         _caller: String,
         msg: Exit,
     ) -> Result<String, GenericError> {
-        if !self.is_account_active(&msg.sender()) {
-            return Err(GenericError::new(
-                "Cannot start withdrawal, account is not active",
-            ));
-        }
-
-        let tx_hash = wallet::exit(&msg).await?;
-        Ok(format!(
-            "Withdrawal has been accepted by the zkSync operator. \
-        It may take some time until the funds are available on Ethereum blockchain. \
-        Tracking link: https://rinkeby.zkscan.io/explorer/transactions/{}",
-            tx_hash
-        ))
+        log::info!("EXIT = Not Implemented: {:?}", msg);
+        Ok("NOT_IMPLEMENTED".to_string())
     }
 
     async fn get_account_balance(
@@ -357,7 +346,7 @@ Mind that to be eligible you have to run your app at least once on testnet -
 }
 
 #[async_trait(?Send)]
-impl PaymentDriverCron for ZksyncDriver {
+impl PaymentDriverCron for Erc20Driver {
     async fn confirm_payments(&self) {
         let txs = self.dao.get_unconfirmed_txs().await;
         log::trace!("confirm_payments {:?}", txs);
@@ -403,7 +392,7 @@ impl PaymentDriverCron for ZksyncDriver {
             let details = match wallet::verify_tx(&tx_hash, first_payment.network).await {
                 Ok(a) => a,
                 Err(e) => {
-                    log::warn!("Failed to get transaction details from zksync, creating bespoke details. Error={}", e);
+                    log::warn!("Failed to get transaction details from erc20, creating bespoke details. Error={}", e);
 
                     //Create bespoke payment details:
                     // - Sender + receiver are the same

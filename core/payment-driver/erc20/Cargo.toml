@@ -1,5 +1,5 @@
 [package]
-name = "ya-zksync-driver"
+name = "ya-erc20-driver"
 version = "0.2.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
@@ -25,8 +25,6 @@ serde_json = "^1.0"
 tiny-keccak = "1.4.2"
 tokio = { version = "0.2", features = ["full"] }
 uuid = { version = "0.8", features = ["v4"] }
-zksync = { git = "https://github.com/matter-labs/zksync", rev = "c9858084e20d722cbec9792539a6f55117caeb75"}
-zksync_eth_signer = { git = "https://github.com/matter-labs/zksync", rev = "c9858084e20d722cbec9792539a6f55117caeb75"}
 
 ## yagna dependencies
 ya-payment-driver = "0.2"
