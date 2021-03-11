@@ -5,6 +5,7 @@ use chrono::Utc;
 use maplit::hashmap;
 use std::str::FromStr;
 use uuid::Uuid;
+use ya_client_model::payment::{DriverDetails, Network};
 use ya_core_model::driver::*;
 use ya_core_model::payment::local as payment_srv;
 use ya_service_bus::typed::service;
@@ -28,10 +29,10 @@ pub fn bind_service() {
 
 pub async fn register_in_payment_service() -> anyhow::Result<()> {
     log::debug!("Registering driver in payment service...");
-    let details = payment_srv::DriverDetails {
+    let details = DriverDetails {
         default_network: NETWORK_NAME.to_string(),
         networks: hashmap! {
-            NETWORK_NAME.to_string() => payment_srv::Network {
+            NETWORK_NAME.to_string() => Network {
                 default_token: TOKEN_NAME.to_string(),
                 tokens: hashmap! {
                     TOKEN_NAME.to_string() => PLATFORM_NAME.to_string()

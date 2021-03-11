@@ -7459,6 +7459,7 @@ dependencies = [
  "maplit",
  "serde_json",
  "uuid 0.8.2",
+ "ya-client-model",
  "ya-core-model",
  "ya-payment-driver",
  "ya-persistence",
