@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use ya_client_model::payment::*;
 use ya_service_bus::RpcMessage;
 
@@ -389,6 +390,15 @@ pub mod local {
         AccountNotRegistered,
         #[error("Error while validating allocation: {0}")]
         Other(String),
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct GetDrivers {}
+
+    impl RpcMessage for GetDrivers {
+        const ID: &'static str = "GetDrivers";
+        type Item = HashMap<String, DriverDetails>;
+        type Error = GenericError;
     }
 
     /// Experimental. In future releases this might change or be removed.

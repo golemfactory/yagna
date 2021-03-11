@@ -2,6 +2,7 @@ use crate::processor::PaymentProcessor;
 use futures::lock::Mutex;
 use futures::prelude::*;
 use metrics::counter;
+use std::collections::HashMap;
 use std::sync::Arc;
 use ya_core_model as core;
 use ya_persistence::executor::DbExecutor;
@@ -21,7 +22,7 @@ mod local {
     use super::*;
     use crate::dao::*;
     use std::collections::BTreeMap;
-    use ya_client_model::payment::{Account, DocumentStatus};
+    use ya_client_model::payment::{Account, DocumentStatus, DriverDetails};
     use ya_core_model::payment::local::*;
     use ya_persistence::types::Role;
 
@@ -38,7 +39,8 @@ mod local {
             .bind_with_processor(get_status)
             .bind_with_processor(get_invoice_stats)
             .bind_with_processor(get_accounts)
-            .bind_with_processor(validate_allocation);
+            .bind_with_processor(validate_allocation)
+            .bind_with_processor(get_drivers);
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
         // until first change to value will be made.
@@ -274,6 +276,21 @@ mod local {
             .await
             .validate_allocation(msg.platform, msg.address, msg.amount)
             .await?)
+    }
+
+    async fn get_drivers(
+        db: DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        _caller: String,
+        msg: GetDrivers,
+    ) -> Result<HashMap<String, DriverDetails>, GenericError> {
+        let mut c = HashMap::new();
+        c.insert("MyAwesomeDriver".to_owned(), DriverDetails {
+            default_network: "Hello from the otherside!".to_string(),
+            networks: Default::default(),
+            recv_init_required: false,
+        });
+        Ok(c)
     }
 }
 

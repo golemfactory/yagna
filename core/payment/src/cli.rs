@@ -76,6 +76,9 @@ pub enum PaymentCli {
         #[structopt(subcommand)]
         command: InvoiceCommand,
     },
+
+    /// List registered drivers, networks, tokens and platforms
+    Drivers,
 }
 
 #[derive(StructOpt, Debug)]
@@ -246,17 +249,24 @@ impl PaymentCli {
                     .await?,
                 )
             } // TODO: Uncomment when operation is supported by drivers
-              // PaymentCli::Transfer {
-              //     account,
-              //     driver,
-              //     network,
-              //     to_address,
-              //     amount
-              // } => {
-              //     let address = resolve_address(account).await?;
-              //     let amount = BigDecimal::from_str(&amount)?;
-              //     CommandOutput::object(wallet::transfer(address, to_address, amount, driver, network, token).await?)
-              // }
+            // PaymentCli::Transfer {
+            //     account,
+            //     driver,
+            //     network,
+            //     to_address,
+            //     amount
+            // } => {
+            //     let address = resolve_address(account).await?;
+            //     let amount = BigDecimal::from_str(&amount)?;
+            //     CommandOutput::object(wallet::transfer(address, to_address, amount, driver, network, token).await?)
+            // }
+            PaymentCli::Drivers => {
+                let accounts = bus::service(pay::BUS_ID).call(pay::GetDrivers {}).await??;
+                if ctx.json_output {
+                    return CommandOutput::object(accounts);
+                }
+                Ok(CommandOutput::NoOutput)
+            }
         }
     }
 }
