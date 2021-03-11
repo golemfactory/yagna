@@ -449,16 +449,18 @@ impl Handler<ActivityDestroyed> for TaskManager {
         let need_close = closing_allowed && close_after_1st_activity;
 
         let future = async move {
+            // Forward information to Payments to send last DebitNote in activity.
+            // Note: we do this no matter, if we will be able to make transition, because
+            // payments must close activities anyway.
+            // TODO: What can we do in case of fail? Payments are expected to retry
+            //       after they will succeed.
+            actx.payments.send(msg).await??;
+
             start_transition(&actx.myself, &agreement_id, AgreementState::Idle).await?;
 
             actx.myself
                 .send(ScheduleIdleExpiration(task_info))
                 .await??;
-
-            // Forward information to Payments to send last DebitNote in activity.
-            // TODO: What can we do in case of fail? Payments are expected to retry
-            //       after they will succeed.
-            actx.payments.send(msg).await??;
 
             if need_close {
                 log::info!(
