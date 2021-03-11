@@ -7533,36 +7533,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ya-glmsync-driver"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "awc 2.0.3",
- "bigdecimal 0.2.0",
- "chrono",
- "futures 0.3.13",
- "hex",
- "lazy_static",
- "log",
- "maplit",
- "metrics-macros",
- "num-bigint 0.3.1",
- "serde",
- "serde_json",
- "tiny-keccak 1.5.0",
- "tokio 0.2.25",
- "uuid 0.8.2",
- "ya-client-model",
- "ya-payment-driver",
- "ya-service-api-interfaces",
- "ya-utils-futures",
- "ya-utils-networking",
- "zksync",
- "zksync_eth_signer",
-]
-
-[[package]]
 name = "ya-gnt-driver"
 version = "0.2.0"
 dependencies = [
@@ -7803,7 +7773,6 @@ dependencies = [
  "ya-client-model",
  "ya-core-model",
  "ya-dummy-driver",
- "ya-glmsync-driver",
  "ya-gnt-driver",
  "ya-metrics",
  "ya-net",
@@ -8290,7 +8259,6 @@ dependencies = [
  "ya-compile-time-utils",
  "ya-dummy-driver",
  "ya-file-logging",
- "ya-glmsync-driver",
  "ya-gnt-driver",
  "ya-identity",
  "ya-market",
