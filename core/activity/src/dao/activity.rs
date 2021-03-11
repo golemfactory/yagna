@@ -3,7 +3,7 @@ use diesel::prelude::*;
 use serde_json;
 
 use ya_client_model::activity::{State, StatePair};
-use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
+use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
 use crate::dao::{last_insert_rowid, DaoError, Result};
 use crate::db::schema;
@@ -25,7 +25,7 @@ impl<'c> ActivityDao<'c> {
 
         let activity_id = activity_id.to_owned();
 
-        do_with_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, move |conn| {
             dsl::activity
                 .select(dsl::agreement_id)
                 .filter(dsl::natural_id.eq(&activity_id))
@@ -104,7 +104,7 @@ impl<'c> ActivityDao<'c> {
         let activity_id = activity_id.to_owned();
         let agreement_id = agreement_id.to_owned();
 
-        do_with_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, move |conn| {
             Ok(diesel::select(exists(
                 dsl::activity
                     .filter(dsl::natural_id.eq(activity_id))
@@ -117,7 +117,7 @@ impl<'c> ActivityDao<'c> {
 
     pub async fn _get_activity_ids(&self) -> Result<Vec<String>> {
         use schema::activity::dsl;
-        do_with_transaction(self.pool, |conn| {
+        readonly_transaction(self.pool, |conn| {
             dsl::activity
                 .select(dsl::natural_id)
                 .get_results(conn)

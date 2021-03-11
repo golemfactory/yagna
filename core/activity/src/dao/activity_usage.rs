@@ -5,7 +5,7 @@ use serde_json;
 use std::convert::TryInto;
 
 use ya_client_model::activity::activity_usage::ActivityUsage;
-use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
+use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
 use crate::dao::{DaoError, Result};
 use crate::db::{models::ActivityUsage as DbActivityUsage, schema};
@@ -27,7 +27,7 @@ impl<'c> ActivityUsageDao<'c> {
 
         let activity_id = activity_id.to_owned();
 
-        do_with_transaction(self.pool, move |conn| {
+        readonly_transaction(self.pool, move |conn| {
             Ok(dsl::activity
                 .inner_join(dsl_usage::activity_usage)
                 .select(schema::activity_usage::all_columns)
