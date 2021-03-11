@@ -1,12 +1,9 @@
 use actix::prelude::*;
-use anyhow::anyhow;
+use anyhow::{anyhow, Result};
 use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
 
-use ya_utils_actix::{
-    actix_signal::{SignalSlot, Subscribe},
-    actix_signal_handler,
-};
+use ya_utils_actix::{actix_signal::SignalSlot, actix_signal_handler};
 
 pub trait Deadlineable: Clone + Ord + Sized + Send + Sync + Unpin + 'static {}
 
@@ -229,6 +226,7 @@ impl Deadlineable for String {}
 #[cfg(test)]
 mod test {
     use super::*;
+    use ya_utils_actix::actix_signal::Subscribe;
 
     struct DeadlineReceiver {
         elapsed: Vec<DeadlineElapsed>,

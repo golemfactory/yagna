@@ -1,19 +1,21 @@
 use actix::prelude::*;
 use anyhow::{anyhow, bail, Error, Result};
-use chrono::{Duration, Utc};
+use chrono::Utc;
 use futures::future::TryFutureExt;
 use std::collections::HashMap;
 
+use ya_std_utils::LogErr;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::Subscribe;
 use ya_utils_actix::forward_actix_handler;
 
 use super::task_info::TaskInfo;
 use super::task_state::{AgreementState, TasksStates};
-use crate::execution::{ActivityCreated, ActivityDestroyed, TaskRunner};
+use crate::execution::{ActivityDestroyed, CreateActivity, TaskRunner, TerminateActivity};
 use crate::market::provider_market::{NewAgreement, ProviderMarket};
 use crate::market::termination_reason::BreakReason;
 use crate::payments::Payments;
+use crate::tasks::config::TaskConfig;
 
 // =========================================== //
 // Messages modifying agreement state
@@ -95,6 +97,10 @@ struct ScheduleExpiration(TaskInfo);
 
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
+struct ScheduleIdleExpiration(TaskInfo);
+
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
 struct StartUpdateState {
     pub agreement_id: String,
     pub new_state: AgreementState,
@@ -119,8 +125,12 @@ pub struct TaskManager {
     runner: Addr<TaskRunner>,
     payments: Addr<Payments>,
 
+    config: TaskConfig,
+
     tasks: TasksStates,
     tasks_props: HashMap<String, TaskInfo>,
+
+    tasks_handles: HashMap<String, Vec<SpawnHandle>>,
 }
 
 impl TaskManager {
@@ -128,13 +138,16 @@ impl TaskManager {
         market: Addr<ProviderMarket>,
         runner: Addr<TaskRunner>,
         payments: Addr<Payments>,
+        config: TaskConfig,
     ) -> Result<TaskManager> {
         Ok(TaskManager {
             market,
             runner,
             payments,
+            config,
             tasks: TasksStates::new(),
             tasks_props: HashMap::new(),
+            tasks_handles: HashMap::new(),
         })
     }
 
@@ -143,8 +156,8 @@ impl TaskManager {
         msg: ScheduleExpiration,
         ctx: &mut Context<Self>,
     ) -> Result<()> {
-        let agreement_id = msg.0.agreement_id;
-        let expiration = msg.0.expiration;
+        let agreement_id = msg.0.agreement_id.clone();
+        let expiration = msg.0.expiration.clone();
 
         if Utc::now() > expiration {
             bail!(
@@ -165,17 +178,40 @@ impl TaskManager {
             }
         });
 
-        // Schedule agreement termination when there is no activity created within 90s.
-        let s90 = Duration::seconds(90).to_std()?;
-        ctx.run_later(s90.clone(), move |myself, ctx| {
+        self.schedule_idle_expiration(ScheduleIdleExpiration(msg.0), ctx)
+    }
+
+    fn schedule_idle_expiration(
+        &mut self,
+        msg: ScheduleIdleExpiration,
+        ctx: &mut Context<Self>,
+    ) -> Result<()> {
+        let idle_timeout = msg.0.idle_agreement_timeout;
+        let agreement_id = msg.0.agreement_id.clone();
+
+        // Schedule agreement termination when there is no activity created within timeout.
+        let handle = ctx.run_later(idle_timeout.clone(), move |myself, ctx| {
             if myself.tasks.not_active(&agreement_id) {
                 ctx.address().do_send(BreakAgreement {
                     agreement_id,
-                    reason: BreakReason::NoActivity(s90),
+                    reason: BreakReason::NoActivity(idle_timeout),
                 });
             }
         });
+
+        self.tasks_handles
+            .entry(msg.0.agreement_id)
+            .or_insert(vec![])
+            .push(handle);
         Ok(())
+    }
+
+    fn cancel_handles(&mut self, ctx: &mut Context<Self>, agreement_id: &str) {
+        if let Some(handles) = self.tasks_handles.remove(agreement_id) {
+            for handle in handles {
+                ctx.cancel_future(handle);
+            }
+        }
     }
 
     fn start_update_agreement_state(
@@ -212,7 +248,8 @@ impl TaskManager {
         self.tasks.new_agreement(&agreement_id)?;
 
         let props = TaskInfo::from(&msg.agreement)
-            .map_err(|e| anyhow!("Failed to create TaskInfo from Agreement. {}", e))?;
+            .map_err(|e| anyhow!("Failed to create TaskInfo from Agreement. {}", e))?
+            .with_idle_agreement_timeout(self.config.idle_agreement_timeout.clone());
 
         self.tasks_props.insert(agreement_id.clone(), props.clone());
 
@@ -227,6 +264,11 @@ impl Actor for TaskManager {
 }
 
 forward_actix_handler!(TaskManager, ScheduleExpiration, schedule_expiration);
+forward_actix_handler!(
+    TaskManager,
+    ScheduleIdleExpiration,
+    schedule_idle_expiration
+);
 forward_actix_handler!(TaskManager, StartUpdateState, start_update_agreement_state);
 forward_actix_handler!(
     TaskManager,
@@ -254,7 +296,7 @@ impl Handler<InitializeTaskManager> for TaskManager {
             actx.payments.send(msg).await?;
 
             // Get info about Activity creation and destruction.
-            let msg = Subscribe::<ActivityCreated>(actx.myself.clone().recipient());
+            let msg = Subscribe::<CreateActivity>(actx.myself.clone().recipient());
             actx.runner.send(msg).await?;
 
             let msg = Subscribe::<ActivityDestroyed>(actx.myself.clone().recipient());
@@ -275,11 +317,8 @@ impl Handler<NewAgreement> for TaskManager {
 
     fn handle(&mut self, msg: NewAgreement, ctx: &mut Context<Self>) -> Self::Result {
         // Add new agreement with it's state.
-        let task_info = match self.add_new_agreement(&msg) {
-            Err(error) => {
-                log::error!("{}", error);
-                return ActorResponse::reply(Err(error));
-            }
+        let task_info = match self.add_new_agreement(&msg).log_err() {
+            Err(e) => return ActorResponse::reply(Err(e)),
             Ok(task_info) => task_info,
         };
 
@@ -314,7 +353,7 @@ impl Handler<NewAgreement> for TaskManager {
                     let msg = BreakAgreement {
                         agreement_id: agreement_id.clone(),
                         reason: BreakReason::InitializationError {
-                            error: format!("{}", error),
+                            error: error.to_string(),
                         },
                     };
                     context.address().do_send(msg);
@@ -326,30 +365,48 @@ impl Handler<NewAgreement> for TaskManager {
     }
 }
 
-impl Handler<ActivityCreated> for TaskManager {
+impl Handler<CreateActivity> for TaskManager {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, msg: ActivityCreated, _ctx: &mut Context<Self>) -> Self::Result {
-        // TODO: Consider different flow: TaskRunner sends us request for creating activity
-        //       and TaskManager is responsible for sending CreateActivity to runner.
+    fn handle(&mut self, msg: CreateActivity, ctx: &mut Context<Self>) -> Self::Result {
+        let actx = self.async_context(ctx);
         let listener = self.tasks.changes_listener(&msg.agreement_id);
+
+        // Remove idle Agreement expiration checker future. We will spawn new future
+        // after Activity will be destroyed.
+        self.cancel_handles(ctx, &msg.agreement_id);
+
         let future = async move {
             // ActivityCreated event can come, before Task initialization will be finished.
             // In this case we must wait, because otherwise transition to Computing will fail.
             let mut state = listener?;
-            state.transition_finished().await
+            state.transition_finished().await?;
+
+            // Note: we allow only one activity on the same time.
+            if let Err(e) =
+                start_transition(&actx.myself, &msg.agreement_id, AgreementState::Computing).await
+            {
+                actx.runner
+                    .send(TerminateActivity {
+                        activity_id: msg.activity_id.clone(),
+                        agreement_id: msg.agreement_id.clone(),
+                        reason: "Only single Activity allowed".to_string(),
+                        message: "Can't create 2 simultaneous Activities.".to_string(),
+                    })
+                    .await?;
+                return Err(e);
+            }
+
+            // Activity will be created by runner here.
+            actx.runner.send(msg.clone()).await??;
+            Ok(msg)
         }
         .into_actor(self)
-        .map(move |result, myself, _| {
+        .map(move |result: Result<_, Error>, myself, _| {
             // Return, if waiting for transition failed.
             // This indicates, that State was already dropped.
-            result
-                .map_err(|e| anyhow!("[ActivityCreated] Can't change state to Computing. {}", e))?;
+            let msg = result.map_err(|e| anyhow!("Can't change state to Computing. {}", e))?;
             let agreement_id = msg.agreement_id.clone();
-
-            myself
-                .tasks
-                .start_transition(&agreement_id, AgreementState::Computing)?;
 
             // Forward information to Payments for cost computing.
             myself.payments.do_send(msg);
@@ -380,11 +437,12 @@ impl Handler<ActivityDestroyed> for TaskManager {
             .allowed_transition(&agreement_id, &AgreementState::Closed)
             .is_ok();
 
-        let close_after_1st_activity = self
-            .tasks_props
-            .get(&agreement_id)
-            .map(|info| !info.multi_activity)
-            .unwrap_or(false);
+        let task_info = match self.tasks_props.get(&agreement_id).cloned() {
+            Some(info) => info,
+            None => return ActorResponse::reply(Err(anyhow!("No agreement {}", agreement_id))),
+        };
+
+        let close_after_1st_activity = !task_info.multi_activity;
 
         // Provider is responsible for closing Agreement, if multi_activity flag wasn't
         // set in Agreement. Otherwise Requestor should terminate.
@@ -392,9 +450,17 @@ impl Handler<ActivityDestroyed> for TaskManager {
 
         let future = async move {
             // Forward information to Payments to send last DebitNote in activity.
+            // Note: we do this no matter, if we will be able to make transition, because
+            // payments must close activities anyway.
             // TODO: What can we do in case of fail? Payments are expected to retry
             //       after they will succeed.
             actx.payments.send(msg).await??;
+
+            start_transition(&actx.myself, &agreement_id, AgreementState::Idle).await?;
+
+            actx.myself
+                .send(ScheduleIdleExpiration(task_info))
+                .await??;
 
             if need_close {
                 log::info!(
@@ -408,6 +474,8 @@ impl Handler<ActivityDestroyed> for TaskManager {
                     cause: ClosingCause::SingleActivity,
                 });
             }
+
+            finish_transition(&actx.myself, &agreement_id, AgreementState::Idle).await?;
             Ok(())
         };
         ActorResponse::r#async(future.into_actor(self))
@@ -419,6 +487,8 @@ impl Handler<BreakAgreement> for TaskManager {
 
     fn handle(&mut self, msg: BreakAgreement, ctx: &mut Context<Self>) -> Self::Result {
         let actx = self.async_context(ctx);
+
+        self.cancel_handles(ctx, &msg.agreement_id);
 
         let future = async move {
             let new_state = AgreementState::Broken {
@@ -463,6 +533,8 @@ impl Handler<CloseAgreement> for TaskManager {
 
     fn handle(&mut self, msg: CloseAgreement, ctx: &mut Context<Self>) -> Self::Result {
         let actx = self.async_context(ctx);
+
+        self.cancel_handles(ctx, &msg.agreement_id);
 
         // TODO: Probably if closing agreement fails, we should break agreement.
         //       Here lacks this error handling, we just log message.
