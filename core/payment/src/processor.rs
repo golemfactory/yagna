@@ -4,12 +4,12 @@ use crate::error::processor::{
     SchedulePaymentError, ValidateAllocationError, VerifyPaymentError,
 };
 use crate::models::order::ReadObj as DbOrder;
+use actix_web::rt::Arbiter;
 use bigdecimal::{BigDecimal, Zero};
-use futures::lock::Mutex;
+use futures::FutureExt;
 use metrics::counter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::sync::Arc;
 use ya_client_model::payment::{Account, ActivityPayment, AgreementPayment, Payment};
 use ya_core_model::driver::{
     self, driver_bus_id, AccountMode, PaymentConfirmation, PaymentDetails, ValidateAllocation,
@@ -266,7 +266,7 @@ impl DriverRegistry {
 #[derive(Clone)]
 pub struct PaymentProcessor {
     db_executor: DbExecutor,
-    registry: Arc<Mutex<DriverRegistry>>,
+    registry: DriverRegistry,
 }
 
 impl PaymentProcessor {
@@ -277,24 +277,30 @@ impl PaymentProcessor {
         }
     }
 
-    pub async fn register_driver(&self, msg: RegisterDriver) -> Result<(), RegisterDriverError> {
-        self.registry.lock().await.register_driver(msg)
+    pub async fn register_driver(
+        &mut self,
+        msg: RegisterDriver,
+    ) -> Result<(), RegisterDriverError> {
+        self.registry.register_driver(msg)
     }
 
-    pub async fn unregister_driver(&self, msg: UnregisterDriver) {
-        self.registry.lock().await.unregister_driver(msg)
+    pub async fn unregister_driver(&mut self, msg: UnregisterDriver) {
+        self.registry.unregister_driver(msg)
     }
 
-    pub async fn register_account(&self, msg: RegisterAccount) -> Result<(), RegisterAccountError> {
-        self.registry.lock().await.register_account(msg)
+    pub async fn register_account(
+        &mut self,
+        msg: RegisterAccount,
+    ) -> Result<(), RegisterAccountError> {
+        self.registry.register_account(msg)
     }
 
-    pub async fn unregister_account(&self, msg: UnregisterAccount) {
-        self.registry.lock().await.unregister_account(msg)
+    pub async fn unregister_account(&mut self, msg: UnregisterAccount) {
+        self.registry.unregister_account(msg)
     }
 
     pub async fn get_accounts(&self) -> Vec<Account> {
-        self.registry.lock().await.get_accounts()
+        self.registry.get_accounts()
     }
 
     pub async fn get_network(
@@ -302,7 +308,7 @@ impl PaymentProcessor {
         driver: String,
         network: Option<String>,
     ) -> Result<(String, Network), RegisterAccountError> {
-        self.registry.lock().await.get_network(driver, network)
+        self.registry.get_network(driver, network)
     }
 
     pub async fn get_platform(
@@ -311,10 +317,7 @@ impl PaymentProcessor {
         network: Option<String>,
         token: Option<String>,
     ) -> Result<String, RegisterAccountError> {
-        self.registry
-            .lock()
-            .await
-            .get_platform(driver, network, token)
+        self.registry.get_platform(driver, network, token)
     }
 
     pub async fn notify_payment(&self, msg: NotifyPayment) -> Result<(), NotifyPaymentError> {
@@ -395,12 +398,18 @@ impl PaymentProcessor {
 
         counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "platform" => payment_platform);
         let msg = SendPayment::new(payment, signature);
-        ya_net::from(payer_id)
-            .to(payee_id)
-            .service(BUS_ID)
-            .call(msg)
-            .await??;
 
+        // Spawning to avoid deadlock in a case that payee is the same node as payer
+        Arbiter::spawn(
+            ya_net::from(payer_id)
+                .to(payee_id)
+                .service(BUS_ID)
+                .call(msg)
+                .map(|res| match res {
+                    Ok(Ok(_)) => (),
+                    err => log::error!("Error sending payment message to provider: {:?}", err),
+                }),
+        );
         // TODO: Implement re-sending mechanism in case SendPayment fails
 
         counter!("payment.invoices.requestor.paid", 1);
@@ -409,11 +418,9 @@ impl PaymentProcessor {
 
     pub async fn schedule_payment(&self, msg: SchedulePayment) -> Result<(), SchedulePaymentError> {
         let amount = msg.amount.clone();
-        let driver = self.registry.lock().await.driver(
-            &msg.payment_platform,
-            &msg.payer_addr,
-            AccountMode::SEND,
-        )?;
+        let driver =
+            self.registry
+                .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?;
         let order_id = driver_endpoint(&driver)
             .send(driver::SchedulePayment::new(
                 amount,
@@ -439,7 +446,7 @@ impl PaymentProcessor {
     ) -> Result<(), VerifyPaymentError> {
         // TODO: Split this into smaller functions
         let platform = payment.payment_platform.clone();
-        let driver = self.registry.lock().await.driver(
+        let driver = self.registry.driver(
             &payment.payment_platform,
             &payment.payee_addr,
             AccountMode::RECV,
@@ -536,11 +543,9 @@ impl PaymentProcessor {
         platform: String,
         address: String,
     ) -> Result<BigDecimal, GetStatusError> {
-        let driver =
-            self.registry
-                .lock()
-                .await
-                .driver(&platform, &address, AccountMode::empty())?;
+        let driver = self
+            .registry
+            .driver(&platform, &address, AccountMode::empty())?;
         let amount = driver_endpoint(&driver)
             .send(driver::GetAccountBalance::new(address, platform))
             .await??;
@@ -558,11 +563,9 @@ impl PaymentProcessor {
             .as_dao::<AllocationDao>()
             .get_for_address(platform.clone(), address.clone())
             .await?;
-        let driver =
-            self.registry
-                .lock()
-                .await
-                .driver(&platform, &address, AccountMode::empty())?;
+        let driver = self
+            .registry
+            .driver(&platform, &address, AccountMode::empty())?;
         let msg = ValidateAllocation {
             address,
             platform,
