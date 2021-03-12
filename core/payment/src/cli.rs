@@ -275,10 +275,10 @@ impl PaymentCli {
                         "platform".to_owned(),
                     ], values: drivers
                         .iter()
-                        .map(|(driver, dd)| {
+                        .flat_map(|(driver, dd)| {
                             dd.networks
                                 .iter()
-                                .map(|(network, n)| {
+                                .flat_map(|(network, n)| {
                                     n.tokens
                                         .iter()
                                         .map(|(token, platform)|
@@ -294,10 +294,10 @@ impl PaymentCli {
                                         )
                                         .collect::<Vec<serde_json::Value>>()
                                 })
-                                .flatten().collect::<Vec<serde_json::Value>>()
+                                .collect::<Vec<serde_json::Value>>()
                         })
-                        .flatten().collect(), }
-                .into())
+                        .collect()
+                }.into())
             }
         }
     }
