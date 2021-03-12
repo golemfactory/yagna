@@ -5,6 +5,7 @@
 // Extrernal crates
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
+use web3::types::U256;
 
 // Workspace uses
 use ya_payment_driver::{
@@ -64,12 +65,12 @@ impl Erc20Dao {
         msg: &SchedulePayment,
     ) -> Result<(), GenericError> {
         let recipient = msg.recipient().to_owned();
-        let gnt_amount = utils::big_dec_to_u256(msg.amount());
+        let glm_amount = utils::big_dec_to_u256(msg.amount());
         let gas_amount = Default::default();
         let (network, _token) = platform_to_network_token(msg.platform())?;
 
         let payment = PaymentEntity {
-            amount: utils::u256_to_big_endian_hex(gnt_amount),
+            amount: utils::u256_to_big_endian_hex(glm_amount),
             gas: utils::u256_to_big_endian_hex(gas_amount),
             order_id: order_id.to_string(),
             payment_due_date: msg.due_date().naive_utc(),
@@ -91,6 +92,28 @@ impl Erc20Dao {
         Ok(())
     }
 
+    pub async fn get_next_nonce(
+        &self,
+        address: &str,
+        network: Network,
+    ) -> Result<U256, GenericError> {
+        let max_db = self
+            .transaction()
+            .get_used_nonces(address, network)
+            .await
+            .map_err(GenericError::new)?
+            .into_iter()
+            .map(utils::u256_from_big_endian_hex)
+            .max();
+
+        let next_nonce = match max_db {
+            Some(nonce) => nonce + U256::from(1),
+            None => U256::from(0),
+        };
+
+        Ok(next_nonce)
+    }
+
     pub async fn insert_transaction(
         &self,
         details: &PaymentDetails,
@@ -109,10 +132,20 @@ impl Erc20Dao {
             encoded: "".to_string(),   // not used till pre-sign
             signature: "".to_string(), // not used till pre-sign
             tx_hash: None,
+            network: Network::Rinkeby, // TODO: update network
         };
 
         if let Err(e) = self.transaction().insert_transactions(vec![tx]).await {
             log::error!("Failed to store transaction for {:?} : {:?}", details, e)
+            // TO CHECK: Should it continue or stop the process...
+        }
+        tx_id
+    }
+
+    pub async fn insert_raw_transaction(&self, tx: TransactionEntity) -> String {
+        let tx_id = tx.tx_id.clone();
+        if let Err(e) = self.transaction().insert_transactions(vec![tx]).await {
+            log::error!("Failed to store transaction for {} : {:?}", tx_id, e)
             // TO CHECK: Should it continue or stop the process...
         }
         tx_id
@@ -145,7 +178,7 @@ impl Erc20Dao {
         }
     }
 
-    pub async fn transaction_sent(&self, tx_id: &str, tx_hash: &str, order_id: &str) {
+    pub async fn transaction_saved(&self, tx_id: &str, order_id: &str) {
         if let Err(e) = self
             .payment()
             .update_tx_id(order_id.to_string(), tx_id.to_string())
@@ -154,6 +187,9 @@ impl Erc20Dao {
             log::error!("Failed to update for transaction {:?} : {:?}", tx_id, e)
             // TO CHECK: Should it continue or stop the process...
         }
+    }
+
+    pub async fn transaction_sent(&self, tx_id: &str, tx_hash: &str) {
         if let Err(e) = self
             .transaction()
             .update_tx_sent(tx_id.to_string(), tx_hash.to_string())
@@ -194,11 +230,39 @@ impl Erc20Dao {
         }
     }
 
-    pub async fn get_unconfirmed_txs(&self) -> Vec<TransactionEntity> {
-        match self.transaction().get_unconfirmed_txs().await {
+    pub async fn get_unsend_txs(&self, network: Network) -> Vec<TransactionEntity> {
+        match self.transaction().get_unsend_txs(network).await {
             Ok(txs) => txs,
             Err(e) => {
                 log::error!("Failed to fetch unconfirmed transactions : {:?}", e);
+                vec![]
+            }
+        }
+    }
+
+    pub async fn get_unconfirmed_txs(&self, network: Network) -> Vec<TransactionEntity> {
+        match self.transaction().get_unconfirmed_txs(network).await {
+            Ok(txs) => txs,
+            Err(e) => {
+                log::error!("Failed to fetch unconfirmed transactions : {:?}", e);
+                vec![]
+            }
+        }
+    }
+
+    pub async fn get_pending_faucet_txs(
+        &self,
+        node_id: &str,
+        network: Network,
+    ) -> Vec<TransactionEntity> {
+        match self
+            .transaction()
+            .get_pending_faucet_txs(node_id, network)
+            .await
+        {
+            Ok(txs) => txs,
+            Err(e) => {
+                log::error!("Failed to fetch unsend transactions : {:?}", e);
                 vec![]
             }
         }
