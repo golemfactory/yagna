@@ -565,9 +565,20 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "54eb1d8fe354e5fc611daf4f2ea97dd45a765f4f1e4512306ec183ae2e8f20c9"
 dependencies = [
- "aes-soft",
- "aesni",
+ "aes-soft 0.3.3",
+ "aesni 0.6.0",
  "block-cipher-trait",
+]
+
+[[package]]
+name = "aes"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "884391ef1066acaa41e766ba8f596341b96e93ce34f9a43e7d24bf0a0eaf0561"
+dependencies = [
+ "aes-soft 0.6.4",
+ "aesni 0.10.0",
+ "cipher",
 ]
 
 [[package]]
@@ -576,10 +587,22 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2e5b0458ea3beae0d1d8c0f3946564f8e10f90646cf78c06b4351052058d1ee"
 dependencies = [
- "aes-soft",
- "aesni",
- "ctr",
+ "aes-soft 0.3.3",
+ "aesni 0.6.0",
+ "ctr 0.3.2",
  "stream-cipher",
+]
+
+[[package]]
+name = "aes-ctr"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7729c3cde54d67063be556aeac75a81330d802f0259500ca40cb52967f975763"
+dependencies = [
+ "aes-soft 0.6.4",
+ "aesni 0.10.0",
+ "cipher",
+ "ctr 0.6.0",
 ]
 
 [[package]]
@@ -594,6 +617,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "aes-soft"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be14c7498ea50828a38d0e24a765ed2effe92a705885b57d029cd67d45744072"
+dependencies = [
+ "cipher",
+ "opaque-debug 0.3.0",
+]
+
+[[package]]
 name = "aesni"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -602,6 +635,16 @@ dependencies = [
  "block-cipher-trait",
  "opaque-debug 0.2.3",
  "stream-cipher",
+]
+
+[[package]]
+name = "aesni"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea2e11f5e94c2f7d386164cc2aa1f97823fed6f259e486940a71c174dd01b0ce"
+dependencies = [
+ "cipher",
+ "opaque-debug 0.3.0",
 ]
 
 [[package]]
@@ -1156,7 +1199,7 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0940dc441f31689269e10ac70eb1002a3a1d3ad1390e030043662eb7fe4688b"
 dependencies = [
- "block-padding",
+ "block-padding 0.1.5",
  "byte-tools 0.3.1",
  "byteorder",
  "generic-array 0.12.4",
@@ -1168,6 +1211,7 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4152116fd6e9dadb291ae18fc1ec3575ed6d84c29642d97890f4b4a3417297e4"
 dependencies = [
+ "block-padding 0.2.1",
  "generic-array 0.14.4",
 ]
 
@@ -1187,7 +1231,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "31aa8410095e39fdb732909fb5730a48d5bd7c2e3cd76bd1b07b3dbea130c529"
 dependencies = [
  "block-cipher-trait",
- "block-padding",
+ "block-padding 0.1.5",
+]
+
+[[package]]
+name = "block-modes"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57a0e8073e8baa88212fb5823574c02ebccb395136ba9a164ab89379ec6072f0"
+dependencies = [
+ "block-padding 0.2.1",
+ "cipher",
 ]
 
 [[package]]
@@ -1198,6 +1252,12 @@ checksum = "fa79dedbb091f449f1f39e53edf88d5dbe95f895dae6135a8d7b881fb5af73f5"
 dependencies = [
  "byte-tools 0.3.1",
 ]
+
+[[package]]
+name = "block-padding"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 
 [[package]]
 name = "blocking"
@@ -1404,6 +1464,15 @@ dependencies = [
  "serde",
  "time 0.1.44",
  "winapi 0.3.9",
+]
+
+[[package]]
+name = "cipher"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12f8e7987cbd042a63249497f41aed09f8e65add917ea6566effbc56578d6801"
+dependencies = [
+ "generic-array 0.14.4",
 ]
 
 [[package]]
@@ -1722,6 +1791,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "crypto-mac"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4857fd85a0c34b3c3297875b747c1e02e06b6a0ea32dd892d8192b9ce0813ea6"
+dependencies = [
+ "generic-array 0.14.4",
+ "subtle 2.4.0",
+]
+
+[[package]]
 name = "csv"
 version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1761,6 +1840,15 @@ checksum = "022cd691704491df67d25d006fe8eca083098253c4d43516c2206479c58c6736"
 dependencies = [
  "block-cipher-trait",
  "stream-cipher",
+]
+
+[[package]]
+name = "ctr"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb4a30d54f7443bf3d6191dcd486aca19e67cb3c49fa7a06a319966346707e7f"
+dependencies = [
+ "cipher",
 ]
 
 [[package]]
@@ -2150,7 +2238,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7712c3a9ec745e651729d1923cae98240303ae25938a3a59128423266f3578ae"
 dependencies = [
  "env_logger 0.5.13",
- "ethsign",
+ "ethsign 0.7.3",
  "log",
  "parity-crypto 0.3.1",
  "rand 0.6.5",
@@ -2171,6 +2259,20 @@ dependencies = [
  "rand 0.7.3",
  "rustc-hex",
  "secp256k1 0.15.5",
+ "serde",
+ "zeroize 1.2.0",
+]
+
+[[package]]
+name = "ethsign"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4dfbd5e7c2bd7ab6758207318f4b89028d11f927219a340d9e638bf0038046b4"
+dependencies = [
+ "parity-crypto 0.8.0",
+ "rand 0.8.3",
+ "rustc-hex",
+ "secp256k1 0.20.1",
  "serde",
  "zeroize 1.2.0",
 ]
@@ -2632,7 +2734,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "serde_json",
- "sha3",
+ "sha3 0.8.2",
  "structopt",
  "tempdir",
  "thiserror",
@@ -2867,6 +2969,16 @@ checksum = "5dcb5e64cda4c23119ab41ba960d1e170a774c8e4b9d9e6a9bc18aabf5e59695"
 dependencies = [
  "crypto-mac 0.7.0",
  "digest 0.8.1",
+]
+
+[[package]]
+name = "hmac"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1441c6b1e930e2817404b5046f1f989899143a12bf92de603b69f4e0aee1e15"
+dependencies = [
+ "crypto-mac 0.10.0",
+ "digest 0.9.0",
 ]
 
 [[package]]
@@ -4104,13 +4216,13 @@ version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf1b9c063d87e1507cb3807493c8d21859ef23b5414b39f81c53f0ba267d64c1"
 dependencies = [
- "aes",
- "aes-ctr",
- "block-modes",
+ "aes 0.3.2",
+ "aes-ctr 0.3.0",
+ "block-modes 0.3.3",
  "digest 0.8.1",
  "quick-error",
  "ring",
- "ripemd160",
+ "ripemd160 0.8.0",
  "scrypt 0.1.2",
  "sha2 0.8.2",
  "tiny-keccak 1.5.0",
@@ -4122,14 +4234,14 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27a9c2b525c93d717a234eb220c26474f8d97b08ac50d79faeac4cb6c74bf0b9"
 dependencies = [
- "aes",
- "aes-ctr",
- "block-modes",
+ "aes 0.3.2",
+ "aes-ctr 0.3.0",
+ "block-modes 0.3.3",
  "digest 0.8.1",
  "hmac 0.7.1",
  "pbkdf2 0.3.0",
  "rand 0.7.3",
- "ripemd160",
+ "ripemd160 0.8.0",
  "rustc-hex",
  "scrypt 0.2.0",
  "sha2 0.8.2",
@@ -4144,20 +4256,40 @@ version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "88e15b5e11d7a4829490630a797c537a68c9e864a139f56fe7a1e6a51f0da25d"
 dependencies = [
- "aes",
- "aes-ctr",
- "block-modes",
+ "aes 0.3.2",
+ "aes-ctr 0.3.0",
+ "block-modes 0.3.3",
  "digest 0.8.1",
  "ethereum-types 0.9.2",
  "hmac 0.7.1",
  "lazy_static",
  "pbkdf2 0.3.0",
  "rand 0.7.3",
- "ripemd160",
+ "ripemd160 0.8.0",
  "rustc-hex",
  "scrypt 0.2.0",
  "secp256k1 0.17.2",
  "sha2 0.8.2",
+ "subtle 2.4.0",
+ "tiny-keccak 2.0.2",
+ "zeroize 1.2.0",
+]
+
+[[package]]
+name = "parity-crypto"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c81ac9a98f245685fdfd1c37685613ecf123cf7941e2365e9aa551622065e8e"
+dependencies = [
+ "aes 0.6.0",
+ "aes-ctr 0.6.0",
+ "block-modes 0.7.0",
+ "digest 0.9.0",
+ "hmac 0.10.1",
+ "pbkdf2 0.6.0",
+ "ripemd160 0.9.1",
+ "scrypt 0.5.0",
+ "sha2 0.9.3",
  "subtle 2.4.0",
  "tiny-keccak 2.0.2",
  "zeroize 1.2.0",
@@ -4286,6 +4418,21 @@ dependencies = [
  "rand 0.5.6",
  "sha2 0.8.2",
  "subtle 1.0.0",
+]
+
+[[package]]
+name = "pbkdf2"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3b8c0d71734018084da0c0354193a5edfb81b20d2d57a92c5b154aefc554a4a"
+dependencies = [
+ "base64 0.13.0",
+ "crypto-mac 0.10.0",
+ "hmac 0.10.1",
+ "rand 0.7.3",
+ "rand_core 0.5.1",
+ "sha2 0.9.3",
+ "subtle 2.4.0",
 ]
 
 [[package]]
@@ -5117,6 +5264,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ripemd160"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2eca4ecc81b7f313189bf73ce724400a07da2a6dac19588b03c8bd76a2dcc251"
+dependencies = [
+ "block-buffer 0.9.0",
+ "digest 0.9.0",
+ "opaque-debug 0.3.0",
+]
+
+[[package]]
 name = "rlp"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5251,6 +5409,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef703b7cb59335eae2eb93ceb664c0eb7ea6bf567079d843e09420219668e072"
 
 [[package]]
+name = "salsa20"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "399f290ffc409596022fce5ea5d4138184be4784f2b28c62c59f0d8389059a15"
+dependencies = [
+ "cipher",
+]
+
+[[package]]
 name = "same-file"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5311,6 +5478,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "scrypt"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8da492dab03f925d977776a0b7233d7b934d6dc2b94faead48928e2e9bacedb9"
+dependencies = [
+ "base64 0.13.0",
+ "hmac 0.10.1",
+ "pbkdf2 0.6.0",
+ "rand 0.7.3",
+ "rand_core 0.5.1",
+ "salsa20",
+ "sha2 0.9.3",
+ "subtle 2.4.0",
+]
+
+[[package]]
 name = "secp256k1"
 version = "0.15.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5342,6 +5525,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "secp256k1"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "733b114f058f260c0af7591434eef4272ae1a8ec2751766d3cb89c6df8d5e450"
+dependencies = [
+ "secp256k1-sys 0.4.0",
+]
+
+[[package]]
 name = "secp256k1-sys"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5355,6 +5547,15 @@ name = "secp256k1-sys"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11553d210db090930f4432bea123b31f70bbf693ace14504ea2a35e796c28dd2"
+dependencies = [
+ "cc",
+]
+
+[[package]]
+name = "secp256k1-sys"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67e4b6455ee49f5901c8985b88f98fb0a0e1d90a6661f5a03f4888bd987dad29"
 dependencies = [
  "cc",
 ]
@@ -5607,6 +5808,18 @@ dependencies = [
  "digest 0.8.1",
  "keccak",
  "opaque-debug 0.2.3",
+]
+
+[[package]]
+name = "sha3"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f81199417d4e5de3f04b1e871023acea7389672c4135918f05aa9cbf2f2fa809"
+dependencies = [
+ "block-buffer 0.9.0",
+ "digest 0.9.0",
+ "keccak",
+ "opaque-debug 0.3.0",
 ]
 
 [[package]]
@@ -7149,8 +7362,9 @@ dependencies = [
 
 [[package]]
 name = "ya-client"
-version = "0.5.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=6916938177b860eb646b082f0784370863802231#6916938177b860eb646b082f0784370863802231"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6be6d483d72a51534830a30df9471622d30686144b40677d158d781a0c74f545"
 dependencies = [
  "awc 1.0.1",
  "bytes 0.5.6",
@@ -7174,8 +7388,9 @@ dependencies = [
 
 [[package]]
 name = "ya-client-model"
-version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=6916938177b860eb646b082f0784370863802231#6916938177b860eb646b082f0784370863802231"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f399f4c6753e090751b06f5937ce45bb6188ba0f9ba436383591c51af3347082"
 dependencies = [
  "bigdecimal 0.2.0",
  "chrono",
@@ -7204,7 +7419,7 @@ dependencies = [
 
 [[package]]
 name = "ya-core-model"
-version = "0.3.0"
+version = "0.3.2"
 dependencies = [
  "bigdecimal 0.2.0",
  "bitflags 1.2.1",
@@ -7247,6 +7462,7 @@ dependencies = [
  "serde_json",
  "uuid 0.8.2",
  "ya-core-model",
+ "ya-payment-driver",
  "ya-persistence",
  "ya-service-api-interfaces",
  "ya-service-bus",
@@ -7283,7 +7499,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
- "sha3",
+ "sha3 0.8.2",
  "shell-words",
  "signal-hook",
  "structopt",
@@ -7314,36 +7530,6 @@ dependencies = [
  "flexi_logger",
  "log",
  "yansi",
-]
-
-[[package]]
-name = "ya-glmsync-driver"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "awc 2.0.3",
- "bigdecimal 0.2.0",
- "chrono",
- "futures 0.3.13",
- "hex",
- "lazy_static",
- "log",
- "maplit",
- "metrics-macros",
- "num-bigint 0.3.1",
- "serde",
- "serde_json",
- "tiny-keccak 1.5.0",
- "tokio 0.2.25",
- "uuid 0.8.2",
- "ya-client-model",
- "ya-payment-driver",
- "ya-service-api-interfaces",
- "ya-utils-futures",
- "ya-utils-networking",
- "zksync",
- "zksync_eth_signer",
 ]
 
 [[package]]
@@ -7380,7 +7566,7 @@ dependencies = [
  "secp256k1 0.19.0",
  "serde",
  "serde_json",
- "sha3",
+ "sha3 0.8.2",
  "thiserror",
  "tiny-keccak 2.0.2",
  "tokio 0.2.25",
@@ -7410,7 +7596,7 @@ dependencies = [
  "diesel_migrations",
  "dotenv",
  "env_logger 0.7.1",
- "ethsign",
+ "ethsign 0.7.3",
  "futures 0.3.13",
  "log",
  "promptly 0.1.5",
@@ -7465,7 +7651,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
- "sha3",
+ "sha3 0.8.2",
  "structopt",
  "strum 0.19.5",
  "strum_macros 0.19.4",
@@ -7587,7 +7773,6 @@ dependencies = [
  "ya-client-model",
  "ya-core-model",
  "ya-dummy-driver",
- "ya-glmsync-driver",
  "ya-gnt-driver",
  "ya-metrics",
  "ya-net",
@@ -7612,11 +7797,13 @@ dependencies = [
  "diesel",
  "diesel_migrations",
  "ethereum-types 0.6.0",
+ "ethsign 0.8.0",
  "futures 0.3.13",
  "hex",
  "log",
  "num-bigint 0.3.1",
  "r2d2",
+ "sha3 0.9.1",
  "thiserror",
  "tokio 0.2.25",
  "ya-client-model",
@@ -7907,7 +8094,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "sha2 0.8.2",
- "sha3",
+ "sha3 0.8.2",
  "structopt",
  "tempdir",
  "thiserror",
@@ -8050,7 +8237,7 @@ dependencies = [
 
 [[package]]
 name = "yagna"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "actix-rt",
  "actix-service",
@@ -8072,7 +8259,6 @@ dependencies = [
  "ya-compile-time-utils",
  "ya-dummy-driver",
  "ya-file-logging",
- "ya-glmsync-driver",
  "ya-gnt-driver",
  "ya-identity",
  "ya-market",

@@ -1,12 +1,11 @@
 use actix::prelude::*;
-use actix::utils::IntervalFunc;
 use anyhow::{anyhow, Error};
 use futures::{future, FutureExt, StreamExt, TryFutureExt};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use std::{fs, io};
 
 use ya_agreement_utils::agreement::TypedArrayPointer;
@@ -14,7 +13,6 @@ use ya_agreement_utils::*;
 use ya_client::cli::ProviderApi;
 use ya_core_model::{payment::local::NetworkName, NodeId};
 use ya_file_logging::{start_logger, LoggerHandle};
-use ya_utils_actix::actix_handler::send_message;
 use ya_utils_path::SwapSave;
 
 use crate::dir::clean_provider_dir;
@@ -312,10 +310,6 @@ impl ProviderAgent {
         Ok(cnts.to_string())
     }
 
-    fn schedule_jobs(&mut self, _ctx: &mut Context<Self>) {
-        send_message(self.runner.clone(), UpdateActivity);
-    }
-
     fn create_node_info(&self) -> NodeInfo {
         let globals = self.globals.get_state();
 
@@ -428,13 +422,27 @@ fn get_usage_vector_value(prices: &Vec<(String, f64)>) -> serde_json::Value {
     serde_json::Value::Array(vec)
 }
 
+async fn process_activity_events(runner: Addr<TaskRunner>) {
+    const ZERO: Duration = Duration::from_secs(0);
+    const DEFAULT: Duration = Duration::from_secs(4);
+
+    loop {
+        let started = SystemTime::now();
+        if let Err(error) = runner.send(UpdateActivity).await {
+            log::error!("Error processing activity events: {:?}", error);
+        }
+        let elapsed = SystemTime::now().duration_since(started).unwrap_or(ZERO);
+        let delay = DEFAULT.checked_sub(elapsed).unwrap_or(ZERO);
+        tokio::time::delay_for(delay).await;
+    }
+}
+
 impl Actor for ProviderAgent {
     type Context = Context<Self>;
 
-    fn started(&mut self, context: &mut Context<Self>) {
-        IntervalFunc::new(Duration::from_secs(4), Self::schedule_jobs)
-            .finish()
-            .spawn(context);
+    fn started(&mut self, ctx: &mut Context<Self>) {
+        let runner = self.runner.clone();
+        ctx.spawn(process_activity_events(runner).into_actor(self));
     }
 }
 

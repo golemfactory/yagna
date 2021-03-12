@@ -5,6 +5,7 @@ pub trait LogErr<T, E: Debug + Display> {
     /// If Result is `Err`, this function logs it on error level
     /// and returns the same Result. In case of `Ok` nothing happens.
     fn log_err(self) -> Result<T, E>;
+    fn log_warn(self) -> Result<T, E>;
     fn log_err_msg(self, message: &str) -> Result<T, E>;
     fn log_warn_msg(self, message: &str) -> Result<T, E>;
 
@@ -14,6 +15,10 @@ pub trait LogErr<T, E: Debug + Display> {
 impl<T, E: Debug + Display> LogErr<T, E> for Result<T, E> {
     fn log_err(self) -> Result<T, E> {
         self.log_err_msg("")
+    }
+
+    fn log_warn(self) -> Result<T, E> {
+        self.log_warn_msg("")
     }
 
     fn log_err_msg(self, message: &str) -> Result<T, E> {

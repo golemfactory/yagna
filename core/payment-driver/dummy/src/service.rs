@@ -16,11 +16,12 @@ pub fn bind_service() {
     bus::ServiceBinder::new(&driver_bus_id(DRIVER_NAME), &(), ())
         .bind(init)
         .bind(get_account_balance)
-        .bind(get_transaction_balance)
         .bind(schedule_payment)
         .bind(verify_payment)
         .bind(validate_allocation)
-        .bind(fund);
+        .bind(fund)
+        .bind(sign_payment)
+        .bind(verify_signature);
 
     log::debug!("Successfully bound payment driver service to service bus");
 }
@@ -76,16 +77,6 @@ async fn get_account_balance(
     msg: GetAccountBalance,
 ) -> Result<BigDecimal, GenericError> {
     log::info!("get account balance: {:?}", msg);
-
-    BigDecimal::from_str("1000000000000000000000000").map_err(GenericError::new)
-}
-
-async fn get_transaction_balance(
-    _db: (),
-    _caller: String,
-    msg: GetTransactionBalance,
-) -> Result<BigDecimal, GenericError> {
-    log::info!("get transaction balance: {:?}", msg);
 
     BigDecimal::from_str("1000000000000000000000000").map_err(GenericError::new)
 }
@@ -153,4 +144,17 @@ async fn validate_allocation(
 
 async fn fund(_db: (), _caller: String, _msg: Fund) -> Result<String, GenericError> {
     Ok("Dummy driver is always funded.".to_owned())
+}
+
+async fn sign_payment(_db: (), _caller: String, msg: SignPayment) -> Result<Vec<u8>, GenericError> {
+    Ok(ya_payment_driver::utils::payment_hash(&msg.0))
+}
+
+async fn verify_signature(
+    _db: (),
+    _caller: String,
+    msg: VerifySignature,
+) -> Result<bool, GenericError> {
+    let hash = ya_payment_driver::utils::payment_hash(&msg.payment);
+    Ok(hash == msg.signature)
 }
