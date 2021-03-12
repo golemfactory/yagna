@@ -284,13 +284,7 @@ mod local {
         _caller: String,
         msg: GetDrivers,
     ) -> Result<HashMap<String, DriverDetails>, GenericError> {
-        let mut c = HashMap::new();
-        c.insert("MyAwesomeDriver".to_owned(), DriverDetails {
-            default_network: "Hello from the otherside!".to_string(),
-            networks: Default::default(),
-            recv_init_required: false,
-        });
-        Ok(c)
+        Ok(processor.lock().await.get_drivers().await)
     }
 }
 

@@ -200,6 +200,10 @@ impl DriverRegistry {
         }
     }
 
+    pub fn get_drivers(&self) -> HashMap<String, DriverDetails> {
+        self.drivers.clone()
+    }
+
     pub fn get_network(
         &self,
         driver: String,
@@ -303,6 +307,10 @@ impl PaymentProcessor {
 
     pub async fn get_accounts(&self) -> Vec<Account> {
         self.registry.get_accounts()
+    }
+
+    pub async fn get_drivers(&self) -> HashMap<String, DriverDetails> {
+        self.registry.get_drivers()
     }
 
     pub async fn get_network(

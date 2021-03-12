@@ -261,11 +261,43 @@ impl PaymentCli {
             //     CommandOutput::object(wallet::transfer(address, to_address, amount, driver, network, token).await?)
             // }
             PaymentCli::Drivers => {
-                let accounts = bus::service(pay::BUS_ID).call(pay::GetDrivers {}).await??;
+                let drivers = bus::service(pay::BUS_ID).call(pay::GetDrivers {}).await??;
                 if ctx.json_output {
-                    return CommandOutput::object(accounts);
+                    return CommandOutput::object(drivers);
                 }
-                Ok(CommandOutput::NoOutput)
+                Ok(ResponseTable { columns: vec![
+                        "driver".to_owned(),
+                        "recv init?".to_owned(),
+                        "network".to_owned(),
+                        "default?".to_owned(),
+                        "token".to_owned(),
+                        "default?".to_owned(),
+                        "platform".to_owned(),
+                    ], values: drivers
+                        .iter()
+                        .map(|(driver, dd)| {
+                            dd.networks
+                                .iter()
+                                .map(|(network, n)| {
+                                    n.tokens
+                                        .iter()
+                                        .map(|(token, platform)|
+                                            serde_json::json! {[
+                                                driver,
+                                                if dd.recv_init_required { "X" } else { "" },
+                                                network,
+                                                if &dd.default_network == network { "X" } else { "" },
+                                                token,
+                                                if &n.default_token == token { "X" } else { "" },
+                                                platform,
+                                            ]}
+                                        )
+                                        .collect::<Vec<serde_json::Value>>()
+                                })
+                                .flatten().collect::<Vec<serde_json::Value>>()
+                        })
+                        .flatten().collect(), }
+                .into())
             }
         }
     }
