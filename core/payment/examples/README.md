@@ -6,9 +6,29 @@ To start the API server (both provider & requestor) run the following commands:
 ```shell script
 cd core/payment
 cp ../../.env-template .env
-cargo run --example payment_api
+(rm payment.db* || true) && cargo run --example payment_api
 ```
-To use GNT instead of dummy driver us `cargo run --example payment_api -- --driver=gnt` instead.
+To use ZkSync instead of Dummy driver use `cargo run --example payment_api -- --driver=zksync --platform=zksync-rinkeby-tglm` instead.
+
+
+### Examples
+
+To make sense of the included examples it is important to understand what parameters the example accepts and how they 
+can be used to change payment platform (driver, network, token). We list examples along with their parameters starting 
+from `payment_api` with is required to run any other example with payment platform that matches the `payment_api`'s platform.
+
+| Example             | Parameters                                     | Defaults                                                                                       |
+|---------------------|------------------------------------------------|------------------------------------------------------------------------------------------------|
+| payment_api         | driver, platform                               | driver=`dummy`, platform=`dummy-glm`                                                           |
+| account_ballance    |                                                | Same as `payment_api`                                                                          |
+| cancel_invoice      | driver, network                                | driver=`dummy`, network=None                                                                   |
+| debit_note_flow     | platform                                       | platform=`dummy-glm`                                                                           |
+| get_accounts        | <`provider_addr`><br/>  <`requestor_addr`><br/> platform | `provider_addr` and `requestor_addr` are required,  positional, `0x`-hex-encoded parameters. Platform=`dummy-glm` |
+| invoice_flow        | platform                                       | platform=`dummy-glm`                                                                           |
+| market_decoration   |                                                | Same as `payment_api`                                                                          |
+| release_allocation  |                                                | Same as `payment_api`                                                                          |
+| validate_allocation |                                                | Same as `payment_api`                                                                          |
+<!-- Generated with https://www.tablesgenerator.com/markdown_tables -->
 
 ### Debit note flow
 
@@ -20,6 +40,8 @@ cargo run --example debit_note_flow
 ```
 (**NOTE:** The example expects a clean database so might need to remove `payment.db`
 and restart the API server.)
+
+Running examples with erc-20 payment driver, please wait until `payment_api` get funded and then run `debit_note_flow` with `--platform=erc20-rinkeby-tglm` parameter.
 
 ##### Issue a debit node:  
 `POST` `http://127.0.0.1:7465/payment-api/v1/provider/debitNotes`
@@ -73,6 +95,8 @@ cargo run --example invoice_flow
 ```
 (**NOTE:** The example expects a clean database so might need to remove `payment.db`
 and restart the API server.)
+
+Running examples with erc-20 payment driver, please wait until `payment_api` get funded and then run `invoice_flow` with `--platform=erc20-rinkeby-tglm` parameter.
 
 ##### Issue an invoice:  
 `POST` `http://127.0.0.1:7465/payment-api/v1/provider/invoices`

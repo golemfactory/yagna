@@ -77,17 +77,6 @@ impl GNTDriverProcessor {
         self.driver(network).get_account_balance(address).await
     }
 
-    pub async fn get_transaction_balance(
-        &self,
-        sender: &str,
-        recipient: &str,
-        network: Network,
-    ) -> GNTDriverResult<BigDecimal> {
-        self.driver(network)
-            .get_transaction_balance(sender, recipient)
-            .await
-    }
-
     pub async fn schedule_payment(
         &self,
         amount: BigDecimal,

@@ -1,5 +1,6 @@
 use bigdecimal::BigDecimal;
 use chrono::Utc;
+use std::str::FromStr;
 use std::time::Duration;
 use structopt::StructOpt;
 use ya_client::payment::PaymentApi;
@@ -10,8 +11,8 @@ use ya_client_model::payment::{Acceptance, DocumentStatus, NewAllocation, NewInv
 struct Args {
     #[structopt(long)]
     app_session_id: Option<String>,
-    #[structopt(long)]
-    platform: Option<String>,
+    #[structopt(long, default_value = "dummy-glm")]
+    platform: String,
 }
 
 #[actix_rt::main]
@@ -41,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
         .issue_invoice(&NewInvoice {
             agreement_id: "agreement_id".to_string(),
             activity_ids: None,
-            amount: BigDecimal::from(1.230028519070000),
+            amount: BigDecimal::from_str("1.230028519070000")?,
             payment_due_date: Utc::now(),
         })
         .await?;
@@ -71,7 +72,7 @@ async fn main() -> anyhow::Result<()> {
     let allocation = requestor
         .create_allocation(&NewAllocation {
             address: None, // Use default address (i.e. identity)
-            payment_platform: args.platform,
+            payment_platform: Some(args.platform),
             total_amount: BigDecimal::from(10u64),
             timeout: None,
             make_deposit: false,
@@ -145,5 +146,6 @@ async fn main() -> anyhow::Result<()> {
         .unwrap();
     log::debug!("events 3: {:?}", &invoice_events_settled);
 
+    log::info!(" 👍🏻 Example completed successfully ❤️");
     Ok(())
 }

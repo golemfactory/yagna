@@ -2,11 +2,8 @@ use actix_rt::Arbiter;
 use anyhow::anyhow;
 use futures::channel::oneshot;
 use futures::prelude::*;
-use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::rc::Rc;
-use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
-use trust_dns_resolver::TokioAsyncResolver;
 
 use ya_core_model::identity::{self, IdentityInfo};
 use ya_core_model::net;
@@ -16,41 +13,21 @@ use ya_service_bus::connection::ClientInfo;
 use ya_service_bus::{
     connection, serialization, typed as bus, untyped as local_bus, Error, RpcEndpoint, RpcMessage,
 };
+use ya_utils_networking::resolver;
 
 use crate::api::{net_service, parse_from_addr};
 use crate::handler::{auto_rebind, CentralBusHandler};
 
 pub const CENTRAL_ADDR_ENV_VAR: &str = "CENTRAL_NET_HOST";
-const DEFAULT_LOOKUP_DOMAIN: &'static str = "dev.golem.network";
 
 async fn central_net_addr() -> std::io::Result<SocketAddr> {
     Ok(match std::env::var(CENTRAL_ADDR_ENV_VAR) {
         Ok(v) => v,
-        Err(_) => resolve_net_addr().await?,
+        Err(_) => resolver::resolve_yagna_srv_record("_net._tcp").await?,
     }
     .to_socket_addrs()?
     .next()
     .expect("central net hub addr needed"))
-}
-
-async fn resolve_net_addr() -> std::io::Result<String> {
-    let resolver: TokioAsyncResolver =
-        TokioAsyncResolver::tokio(ResolverConfig::google(), ResolverOpts::default()).await?;
-    let lookup = resolver
-        .srv_lookup(format!("_net._tcp.{}", DEFAULT_LOOKUP_DOMAIN))
-        .await?;
-    let srv = lookup
-        .iter()
-        .next()
-        .ok_or_else(|| IoError::from(IoErrorKind::NotFound))?;
-    let addr = format!(
-        "{}:{}",
-        srv.target().to_string().trim_end_matches('.'),
-        srv.port()
-    );
-
-    log::debug!("Central net address: {}", addr);
-    Ok(addr)
 }
 
 /// Initialize net module on a hub.

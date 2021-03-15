@@ -11,28 +11,28 @@ use tokio::time::delay_for;
 
 // Workspace uses
 use ya_payment_driver::{db::models::Network, model::GenericError};
+use ya_utils_networking::resolver;
 
 // Local uses
 use crate::zksync::wallet::account_balance;
 
-const DEFAULT_FAUCET_ADDR: &str = "http://3.249.139.167:5778/zk/donatex";
+const DEFAULT_FAUCET_SRV_PREFIX: &str = "_zk-faucet._tcp";
+const FAUCET_ADDR_ENVAR: &str = "ZKSYNC_FAUCET_ADDR";
 const MAX_FAUCET_REQUESTS: u32 = 6;
 
 lazy_static! {
-    static ref FAUCET_ADDR: String =
-        env::var("ZKSYNC_FAUCET_ADDR").unwrap_or(DEFAULT_FAUCET_ADDR.to_string());
     static ref MIN_BALANCE: BigDecimal = BigDecimal::from(50);
     static ref MAX_WAIT: Duration = Duration::minutes(1);
 }
 
-pub async fn request_ngnt(address: &str, network: Network) -> Result<(), GenericError> {
+pub async fn request_tglm(address: &str, network: Network) -> Result<(), GenericError> {
     let balance = account_balance(address, network).await?;
     if balance >= *MIN_BALANCE {
         return Ok(());
     }
 
     log::info!(
-        "Requesting NGNT from zkSync faucet... address = {}",
+        "Requesting tGLM from zkSync faucet... address = {}",
         address
     );
 
@@ -43,14 +43,14 @@ pub async fn request_ngnt(address: &str, network: Network) -> Result<(), Generic
                 // Do not warn nor sleep at the last try.
                 if i >= MAX_FAUCET_REQUESTS - 1 {
                     log::error!(
-                        "Failed to request NGNT from Faucet, tried {} times.: {:?}",
+                        "Failed to request tGLM from Faucet, tried {} times.: {:?}",
                         MAX_FAUCET_REQUESTS,
                         e
                     );
                     return Err(e);
                 } else {
                     log::warn!(
-                        "Retrying ({}/{}) to request NGNT from Faucet after failure: {:?}",
+                        "Retrying ({}/{}) to request tGLM from Faucet after failure: {:?}",
                         i + 1,
                         MAX_FAUCET_REQUESTS,
                         e
@@ -60,29 +60,36 @@ pub async fn request_ngnt(address: &str, network: Network) -> Result<(), Generic
             }
         }
     }
-    wait_for_ngnt(address, network).await?;
+    wait_for_tglm(address, network).await?;
     Ok(())
 }
 
-async fn wait_for_ngnt(address: &str, network: Network) -> Result<(), GenericError> {
-    log::info!("Waiting for NGNT from faucet...");
+async fn wait_for_tglm(address: &str, network: Network) -> Result<(), GenericError> {
+    log::info!("Waiting for tGLM from faucet...");
     let wait_until = Utc::now() + *MAX_WAIT;
     while Utc::now() < wait_until {
         if account_balance(address, network).await? >= *MIN_BALANCE {
-            log::info!("Received NGNT from faucet.");
+            log::info!("Received tGLM from faucet.");
             return Ok(());
         }
         delay_for(time::Duration::from_secs(3)).await;
     }
-    let msg = "Waiting for NGNT timed out.";
+    let msg = "Waiting for tGLM timed out.";
     log::error!("{}", msg);
     Err(GenericError::new(msg))
 }
 
 async fn faucet_donate(address: &str, _network: Network) -> Result<(), GenericError> {
-    let client = awc::Client::new();
+    // TODO: Reduce timeout to 20-30 seconds when transfer is used.
+    let client = awc::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .finish();
+    let faucet_url = resolve_faucet_url().await?;
+    let request_url = format!("{}/{}", faucet_url, address);
+    let request_url = resolver::try_resolve_dns_record(&request_url).await;
+    debug!("Faucet request url: {}", request_url);
     let response = client
-        .get(format!("{}/{}", *FAUCET_ADDR, address))
+        .get(request_url)
         .send()
         .await
         .map_err(GenericError::new)?
@@ -93,4 +100,17 @@ async fn faucet_donate(address: &str, _network: Network) -> Result<(), GenericEr
     log::debug!("Funds requested. Response = {}", response);
     // TODO: Verify tx hash
     Ok(())
+}
+
+async fn resolve_faucet_url() -> Result<String, GenericError> {
+    match env::var(FAUCET_ADDR_ENVAR) {
+        Ok(addr) => Ok(addr),
+        _ => {
+            let faucet_host = resolver::resolve_yagna_srv_record(DEFAULT_FAUCET_SRV_PREFIX)
+                .await
+                .map_err(|_| GenericError::new("Faucet SRV record cannot be resolved"))?;
+
+            Ok(format!("http://{}/zk/donatex", faucet_host))
+        }
+    }
 }

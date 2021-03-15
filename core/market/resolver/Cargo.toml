@@ -8,7 +8,7 @@ edition = "2018"
 ya-agreement-utils = "0.2"
 
 asnom = { git = "https://github.com/dequbed/asnom.git" }
-bigdecimal = "0.2.0"
+bigdecimal = "0.2"
 chrono = "0.4"
 log = "0.4.8"
 nom = "2.0"

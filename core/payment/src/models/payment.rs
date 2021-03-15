@@ -1,3 +1,4 @@
+use crate::error::{DbError, DbResult};
 use crate::schema::{pay_activity_payment, pay_agreement_payment, pay_payment};
 use bigdecimal::BigDecimal;
 use chrono::{NaiveDateTime, TimeZone, Utc};
@@ -43,8 +44,10 @@ impl WriteObj {
         }
     }
 
-    pub fn new_received(payment: api_model::Payment) -> Self {
-        Self {
+    pub fn new_received(payment: api_model::Payment) -> DbResult<Self> {
+        let details = base64::decode(&payment.details)
+            .map_err(|_| DbError::Query("Payment details is not valid base-64".to_string()))?;
+        Ok(Self {
             id: payment.payment_id,
             owner_id: payment.payee_id,
             peer_id: payment.payer_id,
@@ -53,8 +56,8 @@ impl WriteObj {
             payment_platform: payment.payment_platform,
             role: Role::Provider,
             amount: payment.amount.into(),
-            details: base64::decode(&payment.details).unwrap(), // FIXME: unwrap
-        }
+            details,
+        })
     }
 }
 

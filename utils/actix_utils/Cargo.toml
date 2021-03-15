@@ -4,8 +4,16 @@ version = "0.1.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
+[features]
+time-dependent-tests = []
+
 [dependencies]
 actix = { version = "0.10", default-features = false }
-anyhow = "1.0"
-futures = "0.3"
-log = "0.4.8"
+anyhow = "^1.0"
+chrono = "^0.4"
+futures = "^0.3"
+log = "^0.4"
+
+[dev-dependencies]
+actix-rt = "1.1.1"
+tokio = { version = "0.2.10", features = ["process", "signal"] }

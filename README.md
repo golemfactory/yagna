@@ -1,8 +1,19 @@
-# The Next Milestone (dubbed internally as YAGNA)
+# New Golem (dubbed internally as YAGNA)
 
 ![CI](https://github.com/golemfactory/yagna/workflows/CI/badge.svg)
 
-An open platform and marketplace for distributed computations.
+Golem is a global, open-source, decentralized supercomputer that anyone can use. It is made up of the combined computing power of the users' machines, from PCs to entire data centers.
+To facilitate that exchange, Golem implements a decentralized marketplace where IT resources such as computation hardware are rented out. The actors in this decentralized network can assume one of the two non-exclusive roles:
+
+* **Requestor**
+Has a need to use IT resources such as computation hardware. Those resources are purchased in the decentralized market. The actual usage of the resources is backed by Golem's decentralized infrastructure.
+
+* **Provider**
+Has IT resources available that can be shared with other actors in the network. Those resources are sold in the decentralized market.
+
+## Documentation
+For a more in-depth look at how Golem works, head over to our [documentation.](https://handbook.golem.network/)
+
 
 ## Project Layout
 
@@ -34,7 +45,7 @@ Other ExeUnit types are to come (see below).
 ## MVP Requirements
 
 * Clean and easy UX, most specifically during onboarding.
-* NGNT-centric.
+* GLM-centric.
 * Production-ready, modular and easy to maintain architecture and code base.  
 _Modular_ means that all the building blocks can be easily replaceable.
 * Documentation and SDK for developers.
@@ -51,7 +62,7 @@ _Modular_ means that all the building blocks can be easily replaceable.
    * [ ] Docker on Linux _(optional)_
    * [ ] SGX on Graphene _(optional)_
 1. Payment platform
-    * [x] **Payments with NGNT**
+    * [x] **Payments with GLM**
     * [x] **Gasless transactions**
     * [x] **ERC20 token**
     * [ ] payment matching _(optional)_
@@ -68,4 +79,3 @@ _Modular_ means that all the building blocks can be easily replaceable.
     * [ ] Verification by humans _(optional)_
 1. Back compatibility
     * [ ] Golem Brass/Clay interoperability _(optional)_
-

@@ -2,6 +2,7 @@ use crate::dao::{ActivityDao, ActivityStateDao, ActivityUsageDao};
 use crate::error::Error;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
+use std::time::Duration;
 use uuid::Uuid;
 
 use ya_client_model::{
@@ -14,10 +15,11 @@ use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 use ya_service_bus::typed::Endpoint;
-use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
+use ya_service_bus::{timeout::IntoDuration, typed as bus, RpcEndpoint, RpcMessage};
 
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
 pub const DEFAULT_REQUEST_TIMEOUT: f32 = 5.0;
+const DEFAULT_TIMEOUT_MARGIN: f32 = 1.0;
 
 #[derive(Deserialize)]
 pub struct PathActivity {
@@ -44,8 +46,8 @@ pub struct QueryEvents {
     #[serde(rename = "appSessionId")]
     pub app_session_id: Option<String>,
     /// number of milliseconds to wait
-    #[serde(rename = "pollTimeout", default = "default_query_timeout")]
-    pub poll_timeout: Option<f32>,
+    #[serde(rename = "timeout", default = "default_query_timeout")]
+    pub timeout: Option<f32>,
     /// select events past the specified point in time
     #[serde(rename = "afterTimestamp")]
     pub after_timestamp: DateTime<Utc>,
@@ -189,4 +191,8 @@ pub(crate) fn authorize_caller(caller: &NodeId, authorized: &NodeId) -> Result<(
             Err(Error::Forbidden(msg))
         }
     }
+}
+
+pub(crate) fn timeout_margin<D: IntoDuration>(timeout: Option<D>) -> Option<Duration> {
+    timeout.map(|t| t.into_duration() + Duration::from_secs_f32(DEFAULT_TIMEOUT_MARGIN))
 }

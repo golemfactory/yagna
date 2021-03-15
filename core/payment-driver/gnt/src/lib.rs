@@ -200,7 +200,7 @@ impl GntDriver {
         async move {
             let balance = common::get_gnt_balance(&contract, address).await?;
             if balance < max_testnet_balance {
-                log::info!("Requesting NGNT from Faucet...");
+                log::info!("Requesting tGLM from Faucet...");
                 let gas_price = client.get_gas_price().await?;
                 let mut b =
                     sender::Builder::new(address, gas_price, chain_id).with_tx_type(TxType::Faucet);
@@ -221,19 +221,6 @@ impl GntDriver {
             }
             Ok(())
         }
-    }
-
-    /// Returns sum of transactions from given address
-    fn get_transaction_balance(
-        &self,
-        _payer: &str,
-        _payee: &str,
-    ) -> Pin<Box<dyn Future<Output = GNTDriverResult<BigDecimal>> + 'static>> {
-        // TODO: Get real transaction balance
-        Box::pin(future::ready(Ok(utils::str_to_big_dec(
-            "1000000000000000000000000",
-        )
-        .unwrap())))
     }
 
     /// Obtains funds from faucet

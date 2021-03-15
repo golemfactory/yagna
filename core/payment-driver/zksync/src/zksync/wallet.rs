@@ -4,13 +4,17 @@
 
 // External crates
 use bigdecimal::{BigDecimal, Zero};
-use num::BigUint;
+use num_bigint::BigUint;
 use std::env;
 use std::str::FromStr;
 use zksync::operations::SyncTransactionHandle;
 use zksync::types::BlockStatus;
-use zksync::zksync_types::{tx::TxHash, Address, TxFeeTypes};
-use zksync::{provider::get_rpc_addr, Network as ZkNetwork, Provider, Wallet, WalletCredentials};
+use zksync::zksync_types::{tx::TxHash, Address, Nonce, TxFeeTypes};
+use zksync::{
+    provider::get_rpc_addr,
+    provider::{Provider, RpcProvider},
+    Network as ZkNetwork, Wallet, WalletCredentials,
+};
 use zksync_eth_signer::EthereumSigner;
 
 // Workspace uses
@@ -69,7 +73,7 @@ pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
 
     if mode.contains(AccountMode::SEND) {
         let wallet = get_wallet(&address, network).await?;
-        unlock_wallet(wallet, network).await?;
+        unlock_wallet(&wallet, network).await?;
     }
     Ok(())
 }
@@ -78,7 +82,7 @@ pub async fn fund(address: &str, network: Network) -> Result<(), GenericError> {
     if network == Network::Mainnet {
         return Err(GenericError::new("Wallet can not be funded on mainnet."));
     }
-    faucet::request_ngnt(address, network).await?;
+    faucet::request_tglm(address, network).await?;
     Ok(())
 }
 
@@ -86,7 +90,8 @@ pub async fn exit(msg: &Exit) -> Result<String, GenericError> {
     let network = msg.network().unwrap_or(DEFAULT_NETWORK.to_string());
     let network = Network::from_str(&network).map_err(|e| GenericError::new(e))?;
     let wallet = get_wallet(&msg.sender(), network).await?;
-    let tx_handle = withdraw(wallet, msg.amount(), msg.to()).await?;
+    unlock_wallet(&wallet, network).await?;
+    let tx_handle = withdraw(wallet, network, msg.amount(), msg.to()).await?;
     let tx_info = tx_handle
         .wait_for_commit()
         .await
@@ -101,6 +106,21 @@ pub async fn exit(msg: &Exit) -> Result<String, GenericError> {
         )),
         None => Err(GenericError::new("Transaction time-outed")),
     }
+}
+
+pub async fn get_tx_fee(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
+    let token = get_network_token(network, None);
+    let wallet = get_wallet(&address, network).await?;
+    let tx_fee = wallet
+        .provider
+        .get_tx_fee(TxFeeTypes::Transfer, wallet.address(), token.as_str())
+        .await
+        .map_err(GenericError::new)?
+        .total_fee;
+    let tx_fee_bigdec = utils::big_uint_to_big_dec(tx_fee);
+
+    log::debug!("Transaction fee {:.5} {}", tx_fee_bigdec, token.as_str());
+    Ok(tx_fee_bigdec)
 }
 
 fn hash_to_hex(hash: TxHash) -> String {
@@ -124,7 +144,7 @@ pub async fn get_nonce(address: &str, network: Network) -> u32 {
             return 0;
         }
     };
-    account_info.committed.nonce
+    *account_info.committed.nonce
 }
 
 pub async fn make_transfer(
@@ -142,35 +162,47 @@ pub async fn make_transfer(
     let token = get_network_token(network, None);
 
     let balance = wallet
-        .get_balance(BlockStatus::Committed, token.as_ref())
+        .get_balance(BlockStatus::Committed, token.as_str())
         .await
         .map_err(GenericError::new)?;
     log::debug!("balance before transfer={}", balance);
 
-    let transfer = wallet
+    let transfer_builder = wallet
         .start_transfer()
-        .nonce(nonce)
+        .nonce(Nonce(nonce))
         .str_to(&details.recipient[2..])
         .map_err(GenericError::new)?
-        .token(token.as_ref())
+        .token(token.as_str())
         .map_err(GenericError::new)?
-        .amount(amount)
-        .send()
-        .await
-        .map_err(GenericError::new)?;
+        .amount(amount.clone());
+    log::debug!(
+        "transfer raw data. nonce={}, to={}, token={}, amount={}",
+        nonce,
+        &details.recipient,
+        token,
+        amount
+    );
+    let transfer = transfer_builder.send().await.map_err(GenericError::new)?;
 
     let tx_hash = hex::encode(transfer.hash());
     log::info!("Created zksync transaction with hash={}", tx_hash);
     Ok(tx_hash)
 }
 
-pub async fn check_tx(tx_hash: &str, network: Network) -> Option<bool> {
+pub async fn check_tx(tx_hash: &str, network: Network) -> Option<Result<(), String>> {
     let provider = get_provider(network);
     let tx_hash = format!("sync-tx:{}", tx_hash);
     let tx_hash = TxHash::from_str(&tx_hash).unwrap();
     let tx_info = provider.tx_info(tx_hash).await.unwrap();
     log::trace!("tx_info: {:?}", tx_info);
-    tx_info.success
+    match tx_info.success {
+        None => None,
+        Some(true) => Some(Ok(())),
+        Some(false) => match tx_info.fail_reason {
+            Some(err) => Some(Err(err)),
+            None => Some(Err("Unknown failure".to_string())),
+        },
+    }
 }
 
 #[derive(serde::Deserialize)]
@@ -221,10 +253,11 @@ pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails
     Ok(details)
 }
 
-fn get_provider(network: Network) -> Provider {
-    let provider: Provider = match get_rpc_addr_from_env(network) {
-        Some(rpc_addr) => Provider::from_addr(rpc_addr),
-        None => Provider::new(get_zk_network(network)),
+fn get_provider(network: Network) -> RpcProvider {
+    let zk_network = get_zk_network(network);
+    let provider: RpcProvider = match get_rpc_addr_from_env(network) {
+        Some(rpc_addr) => RpcProvider::from_addr_and_network(rpc_addr, zk_network),
+        None => RpcProvider::new(zk_network),
     };
     provider.clone()
 }
@@ -239,7 +272,7 @@ fn get_rpc_addr_from_env(network: Network) -> Option<String> {
 async fn get_wallet(
     address: &str,
     network: Network,
-) -> Result<Wallet<YagnaEthSigner>, GenericError> {
+) -> Result<Wallet<YagnaEthSigner, RpcProvider>, GenericError> {
     log::debug!("get_wallet {:?}", address);
     let addr = Address::from_str(&address[2..]).map_err(GenericError::new)?;
     let provider = get_provider(network);
@@ -257,8 +290,8 @@ fn get_zk_network(network: Network) -> ZkNetwork {
     ZkNetwork::from_str(&network.to_string()).unwrap() // _or(ZkNetwork::Rinkeby)
 }
 
-async fn unlock_wallet<S: EthereumSigner + Clone>(
-    wallet: Wallet<S>,
+async fn unlock_wallet<S: EthereumSigner + Clone, P: Provider + Clone>(
+    wallet: &Wallet<S, P>,
     network: Network,
 ) -> Result<(), GenericError> {
     log::debug!("unlock_wallet");
@@ -272,12 +305,11 @@ async fn unlock_wallet<S: EthereumSigner + Clone>(
 
         let unlock = wallet
             .start_change_pubkey()
-            .fee_token(token.as_ref())
+            .fee_token(token.as_str())
             .map_err(|e| GenericError::new(format!("Failed to create change_pubkey request: {}", e)))?
             .send()
             .await
             .map_err(|e| GenericError::new(format!("Failed to send change_pubkey request: '{}'. HINT: Did you run `yagna payment fund` and follow the instructions?", e)))?;
-        log::debug!("Unlock tx: {:?}", unlock);
         log::info!("Unlock send. tx_hash= {}", unlock.hash().to_string());
 
         let tx_info = unlock.wait_for_commit().await.map_err(GenericError::new)?;
@@ -291,31 +323,35 @@ async fn unlock_wallet<S: EthereumSigner + Clone>(
     Ok(())
 }
 
-pub async fn withdraw<S: EthereumSigner + Clone>(
-    wallet: Wallet<S>,
+pub async fn withdraw<S: EthereumSigner + Clone, P: Provider + Clone>(
+    wallet: Wallet<S, P>,
+    network: Network,
     amount: Option<BigDecimal>,
     recipient: Option<String>,
-) -> Result<SyncTransactionHandle, GenericError> {
+) -> Result<SyncTransactionHandle<P>, GenericError> {
+    let token = get_network_token(network, None);
     let balance = wallet
-        .get_balance(BlockStatus::Committed, ZKSYNC_TOKEN_NAME)
+        .get_balance(BlockStatus::Committed, token.as_str())
         .await
         .map_err(GenericError::new)?;
     info!(
-        "Wallet funded with {} tGLM available for withdrawal",
-        utils::big_uint_to_big_dec(balance.clone())
+        "Wallet funded with {} {} available for withdrawal",
+        utils::big_uint_to_big_dec(balance.clone()),
+        token
     );
 
     info!("Obtaining withdrawal fee");
     let address = wallet.address();
     let withdraw_fee = wallet
         .provider
-        .get_tx_fee(TxFeeTypes::Withdraw, address, ZKSYNC_TOKEN_NAME)
+        .get_tx_fee(TxFeeTypes::Withdraw, address, token.as_str())
         .await
         .map_err(GenericError::new)?
         .total_fee;
     info!(
-        "Withdrawal transaction fee {:.5}",
-        utils::big_uint_to_big_dec(withdraw_fee.clone())
+        "Withdrawal transaction fee {:.5} {}",
+        utils::big_uint_to_big_dec(withdraw_fee.clone()),
+        token
     );
 
     let amount = match amount {
@@ -324,8 +360,9 @@ pub async fn withdraw<S: EthereumSigner + Clone>(
     };
     let withdraw_amount = std::cmp::min(balance - withdraw_fee, amount);
     info!(
-        "Withdrawal of {:.5} tGLM started",
-        utils::big_uint_to_big_dec(withdraw_amount.clone())
+        "Withdrawal of {:.5} {} started",
+        utils::big_uint_to_big_dec(withdraw_amount.clone()),
+        token
     );
 
     let recipient_address = match recipient {
@@ -333,16 +370,19 @@ pub async fn withdraw<S: EthereumSigner + Clone>(
         None => address,
     };
 
-    let withdraw_handle = wallet
+    let withdraw_builder = wallet
         .start_withdraw()
-        .token(ZKSYNC_TOKEN_NAME)
+        .token(token.as_str())
         .map_err(GenericError::new)?
-        .amount(withdraw_amount)
-        .to(recipient_address)
-        .send()
-        .await
-        .map_err(GenericError::new)?;
+        .amount(withdraw_amount.clone())
+        .to(recipient_address);
+    log::debug!(
+        "Withdrawal raw data. token={}, amount={}, to={}",
+        token,
+        withdraw_amount,
+        recipient_address
+    );
+    let withdraw_handle = withdraw_builder.send().await.map_err(GenericError::new)?;
 
-    debug!("Withdraw handle: {:?}", withdraw_handle);
     Ok(withdraw_handle)
 }

@@ -3,18 +3,17 @@ use anyhow::anyhow;
 use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
 
-use ya_utils_actix::{
+use crate::{
     actix_signal::{SignalSlot, Subscribe},
     actix_signal_handler,
 };
-
-pub trait Deadlineable: Clone + Ord + Sized + Send + Sync + Unpin + 'static {}
+use std::pin::Pin;
 
 /// Will be sent when deadline elapsed.
 #[derive(Message, Clone, Debug)]
 #[rtype(result = "()")]
 pub struct DeadlineElapsed {
-    pub agreement_id: String,
+    pub category: String,
     pub deadline: DateTime<Utc>,
     pub id: String,
 }
@@ -22,7 +21,7 @@ pub struct DeadlineElapsed {
 #[derive(Message, Clone)]
 #[rtype(result = "()")]
 pub struct TrackDeadline {
-    pub agreement_id: String,
+    pub category: String,
     pub deadline: DateTime<Utc>,
     pub id: String,
 }
@@ -31,12 +30,13 @@ pub struct TrackDeadline {
 #[rtype(result = "()")]
 pub struct StopTracking {
     pub id: String,
+    pub category: Option<String>,
 }
 
 #[derive(Message, Clone)]
 #[rtype(result = "()")]
-pub struct StopTrackingAgreement {
-    pub agreement_id: String,
+pub struct StopTrackingCategory {
+    pub category: String,
 }
 
 #[derive(Clone)]
@@ -117,7 +117,7 @@ impl DeadlineChecker {
                 deadlines
                     .drain(0..idx)
                     .map(|desc| DeadlineElapsed {
-                        agreement_id: agreement_id.to_string(),
+                        category: agreement_id.to_string(),
                         deadline: desc.deadline,
                         id: desc.id,
                     })
@@ -164,11 +164,11 @@ impl Handler<TrackDeadline> for DeadlineChecker {
     type Result = ();
 
     fn handle(&mut self, msg: TrackDeadline, ctx: &mut Context<Self>) -> Self::Result {
-        if let None = self.deadlines.get(&msg.agreement_id) {
-            self.deadlines.insert(msg.agreement_id.to_string(), vec![]);
+        if let None = self.deadlines.get(&msg.category) {
+            self.deadlines.insert(msg.category.to_string(), vec![]);
         }
 
-        let deadlines = self.deadlines.get_mut(&msg.agreement_id).unwrap();
+        let deadlines = self.deadlines.get_mut(&msg.category).unwrap();
         let idx = match deadlines.binary_search_by(|element| element.deadline.cmp(&msg.deadline)) {
             // Element with this deadline existed. We add new element behind it (order shouldn't matter since timestamps
             // are the same, but it's better to keep order of calls to `track_deadline` function).
@@ -210,11 +210,11 @@ impl Handler<StopTracking> for DeadlineChecker {
     }
 }
 
-impl Handler<StopTrackingAgreement> for DeadlineChecker {
+impl Handler<StopTrackingCategory> for DeadlineChecker {
     type Result = ();
 
-    fn handle(&mut self, msg: StopTrackingAgreement, ctx: &mut Context<Self>) -> Self::Result {
-        if let Some(_) = self.deadlines.remove(&msg.agreement_id) {
+    fn handle(&mut self, msg: StopTrackingCategory, ctx: &mut Context<Self>) -> Self::Result {
+        if let Some(_) = self.deadlines.remove(&msg.category) {
             self.update_deadline(ctx).unwrap()
         }
     }
@@ -224,7 +224,34 @@ impl Actor for DeadlineChecker {
     type Context = Context<Self>;
 }
 
-impl Deadlineable for String {}
+struct DeadlineFun {
+    callback: Box<dyn FnMut(DeadlineElapsed) -> Pin<Box<dyn Future<Output = ()>>> + 'static>,
+}
+
+impl Actor for DeadlineFun {
+    type Context = Context<Self>;
+}
+
+impl Handler<DeadlineElapsed> for DeadlineFun {
+    type Result = ResponseFuture<()>;
+
+    fn handle(&mut self, msg: DeadlineElapsed, _ctx: &mut Context<Self>) -> Self::Result {
+        (self.callback)(msg)
+    }
+}
+
+pub async fn bind_deadline_reaction(
+    checker: Addr<DeadlineChecker>,
+    callback: impl FnMut(DeadlineElapsed) -> Pin<Box<dyn Future<Output = ()>>> + 'static,
+) -> anyhow::Result<()> {
+    let callback_actor = DeadlineFun {
+        callback: Box::new(callback),
+    }
+    .start();
+    Ok(checker
+        .send(Subscribe::<DeadlineElapsed>(callback_actor.recipient()))
+        .await?)
+}
 
 #[cfg(test)]
 mod test {
@@ -283,7 +310,7 @@ mod test {
         for i in 1..6 {
             checker
                 .send(TrackDeadline {
-                    agreement_id: "agrrrrr-1".to_string(),
+                    category: "agrrrrr-1".to_string(),
                     deadline: now + Duration::milliseconds(500 * i),
                     id: i.to_string(),
                 })
@@ -312,7 +339,7 @@ mod test {
         // after all deadlines elapsed.
         checker
             .send(TrackDeadline {
-                agreement_id: "agrrrrr-1".to_string(),
+                category: "agrrrrr-1".to_string(),
                 deadline: now + Duration::milliseconds(3000),
                 id: 6.to_string(),
             })
@@ -337,7 +364,7 @@ mod test {
         for i in 1..6 {
             checker
                 .send(TrackDeadline {
-                    agreement_id: "agrrrrr-1".to_string(),
+                    category: "agrrrrr-1".to_string(),
                     deadline: now + Duration::milliseconds(200) + Duration::milliseconds(1 * i),
                     id: i.to_string(),
                 })
@@ -348,7 +375,7 @@ mod test {
         // Add another deadline at the same timestamp as already existing one.
         checker
             .send(TrackDeadline {
-                agreement_id: "agrrrrr-1".to_string(),
+                category: "agrrrrr-1".to_string(),
                 deadline: now + Duration::milliseconds(200) + Duration::milliseconds(3),
                 id: 7.to_string(),
             })
@@ -378,7 +405,7 @@ mod test {
         for i in 1..6 {
             checker
                 .send(TrackDeadline {
-                    agreement_id: "agrrrrr-1".to_string(),
+                    category: "agrrrrr-1".to_string(),
                     deadline: now + Duration::milliseconds(1000) + Duration::milliseconds(500 * i),
                     id: i.to_string(),
                 })
@@ -392,7 +419,7 @@ mod test {
         // Insert deadline before all other deadlines.
         checker
             .send(TrackDeadline {
-                agreement_id: "agrrrrr-1".to_string(),
+                category: "agrrrrr-1".to_string(),
                 deadline: now + Duration::milliseconds(500),
                 id: 6.to_string(),
             })
@@ -409,7 +436,7 @@ mod test {
         // Insert deadline between all other deadlines.
         checker
             .send(TrackDeadline {
-                agreement_id: "agrrrrr-1".to_string(),
+                category: "agrrrrr-1".to_string(),
                 deadline: now + Duration::milliseconds(2300),
                 id: 7.to_string(),
             })
@@ -437,7 +464,7 @@ mod test {
         for i in 1..6 {
             checker
                 .send(TrackDeadline {
-                    agreement_id: format!("agrrrrr-{}", i),
+                    category: format!("agrrrrr-{}", i),
                     deadline: now
                         + Duration::milliseconds(100)
                         + Duration::milliseconds(6 * 3 - 3 * i),
@@ -469,7 +496,7 @@ mod test {
         for i in 1..8 {
             checker
                 .send(TrackDeadline {
-                    agreement_id: "agrrrrr-1".to_string(),
+                    category: "agrrrrr-1".to_string(),
                     deadline: now + Duration::milliseconds(500 * i),
                     id: i.to_string(),
                 })
@@ -481,11 +508,17 @@ mod test {
         tokio::time::delay_for(interval.to_std().unwrap()).await;
 
         checker
-            .send(StopTracking { id: 2.to_string() })
+            .send(StopTracking {
+                id: 2.to_string(),
+                category: None,
+            })
             .await
             .unwrap();
         checker
-            .send(StopTracking { id: 5.to_string() })
+            .send(StopTracking {
+                id: 5.to_string(),
+                category: None,
+            })
             .await
             .unwrap();
 
