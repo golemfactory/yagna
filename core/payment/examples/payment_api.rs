@@ -223,6 +223,7 @@ async fn main() -> anyhow::Result<()> {
             erc20::DRIVER_NAME
         }
         Driver::Zksync => {
+            start_dummy_driver().await?;
             start_zksync_driver(&db, requestor_account).await?;
             zksync::DRIVER_NAME
         }

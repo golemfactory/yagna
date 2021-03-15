@@ -398,7 +398,7 @@ pub mod local {
     impl RpcMessage for GetDrivers {
         const ID: &'static str = "GetDrivers";
         type Item = HashMap<String, DriverDetails>;
-        type Error = GenericError;
+        type Error = NoError;
     }
 
     /// Experimental. In future releases this might change or be removed.

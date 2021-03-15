@@ -267,7 +267,6 @@ impl PaymentCli {
                 }
                 Ok(ResponseTable { columns: vec![
                         "driver".to_owned(),
-                        "recv init?".to_owned(),
                         "network".to_owned(),
                         "default?".to_owned(),
                         "token".to_owned(),
@@ -284,7 +283,6 @@ impl PaymentCli {
                                         .map(|(token, platform)|
                                             serde_json::json! {[
                                                 driver,
-                                                if dd.recv_init_required { "X" } else { "" },
                                                 network,
                                                 if &dd.default_network == network { "X" } else { "" },
                                                 token,

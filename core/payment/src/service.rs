@@ -283,7 +283,7 @@ mod local {
         processor: Arc<Mutex<PaymentProcessor>>,
         _caller: String,
         msg: GetDrivers,
-    ) -> Result<HashMap<String, DriverDetails>, GenericError> {
+    ) -> Result<HashMap<String, DriverDetails>, NoError> {
         Ok(processor.lock().await.get_drivers().await)
     }
 }
