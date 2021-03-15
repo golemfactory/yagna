@@ -10,10 +10,10 @@ license = "GPL-3.0"
 edition = "2018"
 
 [features]
-default = ['zksync-driver', 'gnt-driver', 'gftp/bin']
+default = ['zksync-driver', 'erc20-driver', 'gftp/bin']
 static-openssl = ["openssl/vendored", "openssl-probe"]
 dummy-driver = ['ya-dummy-driver']
-gnt-driver = ['ya-gnt-driver']
+erc20-driver = ['ya-gnt-driver']
 zksync-driver = ['ya-zksync-driver']
 tos = []
 
@@ -115,7 +115,7 @@ members = [
     "core/payment",
     "core/payment-driver/base",
     "core/payment-driver/dummy",
-    "core/payment-driver/gnt",
+    "core/payment-driver/gnt", # TODO: Rename erc-20
     "core/payment-driver/zksync",
     "core/persistence",
     "core/serv-api",
@@ -154,6 +154,7 @@ ya-sgx = { path = "core/sgx" }
 ya-payment = { path = "core/payment" }
 ya-payment-driver = { path = "core/payment-driver/base" }
 ya-dummy-driver = { path = "core/payment-driver/dummy" }
+# TODO: Rename to erc20 with next refactor
 ya-gnt-driver = { path = "core/payment-driver/gnt" }
 ya-zksync-driver = { path = "core/payment-driver/zksync" }
 ya-version = { path = "core/version" }

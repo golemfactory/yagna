@@ -14,7 +14,7 @@ use ya_client_model::NodeId;
 use ya_core_model::driver::{driver_bus_id, AccountMode, Fund, Init};
 use ya_core_model::identity;
 use ya_dummy_driver as dummy;
-use ya_gnt_driver as gnt;
+use ya_gnt_driver as erc20;
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::{migrations, utils};
 use ya_persistence::executor::DbExecutor;
@@ -87,7 +87,7 @@ pub async fn start_dummy_driver() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn start_gnt_driver(
+pub async fn start_erc20_driver(
     db: &DbExecutor,
     requestor_account: Box<EthAccount>,
 ) -> anyhow::Result<()> {
@@ -95,7 +95,7 @@ pub async fn start_gnt_driver(
     fake_list_identities(vec![requestor]);
     fake_subscribe_to_events();
 
-    gnt::PaymentDriverService::gsb(db).await?;
+    erc20::PaymentDriverService::gsb(db).await?;
 
     let requestor_sign_tx = get_sign_tx(requestor_account);
     fake_sign_tx(Box::new(requestor_sign_tx));
@@ -219,8 +219,8 @@ async fn main() -> anyhow::Result<()> {
             dummy::DRIVER_NAME
         }
         Driver::Erc20 => {
-            start_gnt_driver(&db, requestor_account).await?;
-            gnt::DRIVER_NAME
+            start_erc20_driver(&db, requestor_account).await?;
+            erc20::DRIVER_NAME
         }
         Driver::Zksync => {
             start_zksync_driver(&db, requestor_account).await?;

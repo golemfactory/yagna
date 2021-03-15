@@ -34,6 +34,7 @@ async fn main() -> anyhow::Result<()> {
 
     log::info!("Checking provider account...");
     let provider_accounts = provider.get_provider_accounts().await?;
+    log::info!("provider_accounts: {:?}", &provider_accounts);
     assert!(provider_accounts
         .iter()
         .any(|account| account.platform == args.platform && account.address == args.provider_addr));
@@ -41,6 +42,7 @@ async fn main() -> anyhow::Result<()> {
 
     log::info!("Checking requestor account...");
     let requestor_accounts = requestor.get_requestor_accounts().await?;
+    log::info!("requestor_accounts: {:?}", &requestor_accounts);
     assert!(
         requestor_accounts
             .iter()

@@ -25,7 +25,7 @@ lazy_static! {
     static ref MAX_WAIT: Duration = Duration::minutes(1);
 }
 
-pub async fn request_ngnt(address: &str, network: Network) -> Result<(), GenericError> {
+pub async fn request_tglm(address: &str, network: Network) -> Result<(), GenericError> {
     let balance = account_balance(address, network).await?;
     if balance >= *MIN_BALANCE {
         return Ok(());
@@ -60,11 +60,11 @@ pub async fn request_ngnt(address: &str, network: Network) -> Result<(), Generic
             }
         }
     }
-    wait_for_ngnt(address, network).await?;
+    wait_for_tglm(address, network).await?;
     Ok(())
 }
 
-async fn wait_for_ngnt(address: &str, network: Network) -> Result<(), GenericError> {
+async fn wait_for_tglm(address: &str, network: Network) -> Result<(), GenericError> {
     log::info!("Waiting for tGLM from faucet...");
     let wait_until = Utc::now() + *MAX_WAIT;
     while Utc::now() < wait_until {
