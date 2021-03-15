@@ -943,3 +943,62 @@ async fn test_proposal_events_last() {
         _ => assert!(false, format!("Invalid last event_type: {:#?}", events[0])),
     }
 }
+
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
+async fn test_restart_negotiations() {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance("Requestor1")
+        .await
+        .add_market_instance("Provider1")
+        .await;
+
+    let req_market = network.get_market("Requestor1");
+    let prov_market = network.get_market("Provider1");
+    let req_id = network.get_default_id("Requestor1");
+
+    // Requestor side
+    let negotiation = exchange_draft_proposals(&network, "Requestor1", "Provider1")
+        .await
+        .unwrap();
+
+    req_market
+        .requestor_engine
+        .reject_proposal(
+            &negotiation.demand_id,
+            &negotiation.proposal_id,
+            &req_id,
+            None,
+        )
+        .await
+        .unwrap();
+
+    // Consume Rejected event. We need only 1 event in query_proposal later.
+    prov_market
+        .provider_engine
+        .query_events(&negotiation.offer_id, 3.0, Some(5))
+        .await
+        .unwrap();
+
+    let prov_proposal_id = req_market
+        .requestor_engine
+        .counter_proposal(
+            &negotiation.demand_id,
+            &negotiation.proposal_id,
+            &sample_demand(),
+            &req_id,
+        )
+        .await
+        .unwrap();
+
+    let re_proposal =
+        provider::query_proposal(&prov_market, &negotiation.offer_id, "Counter rejected #P")
+            .await
+            .unwrap();
+
+    assert_eq!(
+        prov_proposal_id.translate(Owner::Provider).to_string(),
+        re_proposal.proposal_id
+    );
+}
