@@ -367,8 +367,13 @@ fn output_bytes(output: &CommandOutput) -> &[u8] {
 pub(crate) struct Deployment {
     pub runtime_mode: RuntimeMode,
     pub task_package: Option<PathBuf>,
-    pub networks: HashMap<String, IpNet>,
+    pub networks: HashMap<String, DeploymentNetwork>,
     pub hosts: HashMap<String, String>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct DeploymentNetwork {
+    pub network: IpNet,
     pub nodes: HashMap<IpAddr, String>,
 }
 
@@ -380,18 +385,21 @@ impl Deployment {
     pub fn extend_networks(&mut self, networks: Vec<Network>) -> Result<(), Error> {
         let networks = networks
             .into_iter()
-            .map(|net| to_net(&net.ip, &net.mask).map(|n| (net.id, n)))
+            .map(|net| {
+                let id = net.id.clone();
+                let network = to_net(&net.ip, &net.mask)?;
+                let nodes = Self::map_nodes(net.nodes)?;
+                Ok((id, DeploymentNetwork { network, nodes }))
+            })
             .collect::<Result<Vec<_>, VpnError>>()?;
         self.networks.extend(networks.into_iter());
         Ok(())
     }
 
-    pub fn extend_nodes(&mut self, nodes: HashMap<String, String>) -> Result<(), Error> {
-        let nodes = nodes
+    pub fn map_nodes(nodes: HashMap<String, String>) -> Result<HashMap<IpAddr, String>, VpnError> {
+        nodes
             .into_iter()
             .map(|(ip, id)| to_ip(ip.as_ref()).map(|ip| (ip, id)))
-            .collect::<Result<Vec<_>, VpnError>>()?;
-        self.nodes.extend(nodes.into_iter());
-        Ok(())
+            .collect()
     }
 }

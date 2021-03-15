@@ -8,7 +8,7 @@ edition = "2018"
 default = []
 
 [dependencies]
-actix = { version = "0.9", default-features = false }
+actix = { version = "0.10", default-features = false }
 anyhow = "1.0"
 async-trait = "0.1"
 bigdecimal = { version = "0.2" }

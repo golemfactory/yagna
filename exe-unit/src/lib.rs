@@ -291,14 +291,13 @@ impl<R: Runtime> RuntimeRef<R> {
                 };
                 transfer_service.send(msg).await??;
             }
-            ExeScriptCommand::Deploy { net, hosts, nodes } => {
+            ExeScriptCommand::Deploy { net, hosts } => {
                 let task_package = transfer_service.send(DeployImage {}).await??;
                 runtime
                     .send(UpdateDeployment {
                         task_package: Some(task_package),
                         networks: Some(net.clone()),
                         hosts: Some(hosts.clone()),
-                        nodes: Some(nodes.clone()),
                         ..Default::default()
                     })
                     .await??;

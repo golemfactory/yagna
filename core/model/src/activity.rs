@@ -148,8 +148,14 @@ impl RpcMessage for GetUsage {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum VpnControl {
-    UpdateNodes(HashMap<String, String>), // IP -> NodeId
-    RemoveNodes(HashSet<String>),         // NodeId
+    AddNodes {
+        network_id: String,
+        nodes: HashMap<String, String>, // IP -> NodeId
+    },
+    RemoveNodes {
+        network_id: String,
+        node_ids: HashSet<String>, // NodeId
+    },
 }
 
 impl RpcMessage for VpnControl {

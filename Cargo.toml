@@ -49,6 +49,7 @@ ya-utils-futures = "0.1"
 ya-utils-process = { version = "0.1", features = ["lock"] }
 ya-utils-networking = "0.1"
 ya-version = "0.1"
+ya-vpn = "0.1"
 
 gftp = { version = "^0.2", optional = true } # just to enable gftp build for cargo-deb
 ya-provider = { version = "0.2", optional = true } # just to enable conditionally running some tests
@@ -128,6 +129,7 @@ members = [
     "core/serv-api/web",
     "core/sgx",
     "core/version",
+    "core/vpn",
     "exe-unit",
     "exe-unit/runtime-api",
     "exe-unit/tokio-process-ns",
@@ -161,6 +163,7 @@ ya-glmsync-driver = { path = "core/payment-driver/glmsync" }
 ya-gnt-driver = { path = "core/payment-driver/gnt" }
 ya-zksync-driver = { path = "core/payment-driver/zksync" }
 ya-version = { path = "core/version" }
+ya-vpn = { path = "core/vpn" }
 
 ## CORE UTILS
 ya-core-model = { path = "core/model" }
@@ -172,14 +175,14 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## SERVICE BUS
-#ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"}
+ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", branch = "mf/actix-0.10" }
 #ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"}
 #ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"}
 #ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"}
 
 ## CLIENT
-#ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "479a7237ccb09f766346a2421d2ae0b30c307a4f" }
-#ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "479a7237ccb09f766346a2421d2ae0b30c307a4f" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", branch = "mf/vpn"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", branch = "mf/vpn"}
 
 # ya-client = { path = "../ya-client" }
 # ya-client-model = { path = "../ya-client/model" }

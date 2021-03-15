@@ -8,12 +8,18 @@ pub enum Error {
     IpAddrNotAllowed(IpAddr),
     #[error("IP address taken: {0}")]
     IpAddrTaken(IpAddr),
-    #[error("Invalid IP network address: {0}")]
+    #[error("Invalid network IP address: {0}")]
     NetAddr(String),
     #[error("Network IP address taken: {0}")]
     NetAddrTaken(IpAddr),
-    #[error("Network IP address not found for address: {0}")]
+    #[error("Network not found for IP address: {0}")]
     NetAddrMismatch(IpAddr),
+    #[error("Network is empty")]
+    NetEmpty,
+    #[error("Network not found: {0}")]
+    NetNotFound(String),
+    #[error("Invalid network CIDR: {0}/{1}")]
+    NetCidr(IpAddr, u8),
     #[error("Network ID taken: {0}")]
     NetIdTaken(String),
     #[error("Packet malformed: {0}")]

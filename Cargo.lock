@@ -2,28 +2,6 @@
 # It is not intended for manual editing.
 [[package]]
 name = "actix"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4af87564ff659dee8f9981540cac9418c45e910c8072fdedd643a262a38fcaf"
-dependencies = [
- "actix-rt",
- "actix_derive",
- "bitflags 1.2.1",
- "bytes 0.5.6",
- "crossbeam-channel 0.4.4",
- "derive_more",
- "futures 0.3.12",
- "lazy_static",
- "log",
- "parking_lot 0.10.2",
- "pin-project 0.4.27",
- "smallvec 1.6.1",
- "tokio 0.2.24",
- "tokio-util 0.2.0",
-]
-
-[[package]]
-name = "actix"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1be241f88f3b1e7e9a3fbe3b5a8a0f6915b5a1d7ee0d9a248d3376d01068cc60"
@@ -43,6 +21,8 @@ dependencies = [
  "smallvec 1.6.1",
  "tokio 0.2.24",
  "tokio-util 0.3.1",
+ "trust-dns-proto 0.19.6",
+ "trust-dns-resolver 0.19.6",
 ]
 
 [[package]]
@@ -496,6 +476,22 @@ dependencies = [
  "time 0.2.25",
  "tinyvec",
  "url 2.2.0",
+]
+
+[[package]]
+name = "actix-web-actors"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f6edf3c2693e2a8c422800c87ee89a6a4eac7dd01109bc172a1093ce1f4f001"
+dependencies = [
+ "actix",
+ "actix-codec 0.3.0",
+ "actix-http 2.2.0",
+ "actix-web 3.3.2",
+ "bytes 0.5.6",
+ "futures-channel",
+ "futures-core",
+ "pin-project 0.4.27",
 ]
 
 [[package]]
@@ -3486,6 +3482,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "managed"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c75de51135344a4f8ed3cfe2720dc27736f7711989703a0b43aadf3753c55577"
+
+[[package]]
 name = "maplit"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5875,6 +5877,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe0f37c9e8f3c5a4a66ad655a93c74daac4ad00c441533bf5c6e7990bb42604e"
 
 [[package]]
+name = "smoltcp"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab527c390c7e107f687bd92a886a083fde61b8cdc700b37f3d7e4346ffd8fae1"
+dependencies = [
+ "bitflags 1.2.1",
+ "byteorder",
+ "libc",
+ "log",
+ "managed",
+]
+
+[[package]]
 name = "socket2"
 version = "0.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7372,9 +7387,8 @@ dependencies = [
 
 [[package]]
 name = "ya-client"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6be6d483d72a51534830a30df9471622d30686144b40677d158d781a0c74f545"
+version = "0.5.2"
+source = "git+https://github.com/golemfactory/ya-client.git?branch=mf/vpn#9fd113df73061e44295103eb776871601493eb4a"
 dependencies = [
  "awc 1.0.1",
  "bytes 0.5.6",
@@ -7398,9 +7412,8 @@ dependencies = [
 
 [[package]]
 name = "ya-client-model"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f399f4c6753e090751b06f5937ce45bb6188ba0f9ba436383591c51af3347082"
+version = "0.3.2"
+source = "git+https://github.com/golemfactory/ya-client.git?branch=mf/vpn#9fd113df73061e44295103eb776871601493eb4a"
 dependencies = [
  "bigdecimal 0.2.0",
  "chrono",
@@ -7462,7 +7475,7 @@ dependencies = [
 name = "ya-dummy-driver"
 version = "0.2.0"
 dependencies = [
- "actix 0.9.0",
+ "actix",
  "anyhow",
  "bigdecimal 0.2.0",
  "chrono",
@@ -7479,22 +7492,25 @@ dependencies = [
 
 [[package]]
 name = "ya-exe-unit"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
- "actix 0.9.0",
+ "actix",
  "actix-files 0.4.1",
  "actix-rt",
  "actix-web 3.3.2",
  "anyhow",
  "async-trait",
+ "bytes 0.5.6",
  "chrono",
  "derivative",
+ "derive_more",
  "dotenv",
  "env_logger 0.7.1",
  "flexi_logger",
  "futures 0.3.12",
  "graphene-sgx",
  "hex",
+ "ipnet",
  "lazy_static",
  "libproc",
  "log",
@@ -7515,7 +7531,7 @@ dependencies = [
  "tempdir",
  "thiserror",
  "tokio 0.2.24",
- "tokio-util 0.2.0",
+ "tokio-util 0.3.1",
  "url 2.2.0",
  "winapi 0.3.9",
  "ya-agreement-utils",
@@ -7526,6 +7542,7 @@ dependencies = [
  "ya-sb-router",
  "ya-service-bus",
  "ya-transfer",
+ "ya-utils-networking",
  "ya-utils-path",
  "yansi",
 ]
@@ -7575,7 +7592,7 @@ dependencies = [
 name = "ya-gnt-driver"
 version = "0.2.0"
 dependencies = [
- "actix 0.9.0",
+ "actix",
  "actix-connect 1.0.2",
  "actix-http 1.0.1",
  "actix-rt",
@@ -7769,7 +7786,7 @@ dependencies = [
  "thiserror",
  "tokio 0.2.24",
  "ya-core-model",
- "ya-sb-proto",
+ "ya-sb-proto 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ya-sb-router",
  "ya-service-api",
  "ya-service-api-interfaces",
@@ -7831,7 +7848,7 @@ dependencies = [
 name = "ya-payment-driver"
 version = "0.2.0"
 dependencies = [
- "actix 0.9.0",
+ "actix",
  "anyhow",
  "async-trait",
  "bigdecimal 0.2.0",
@@ -7875,7 +7892,7 @@ dependencies = [
 name = "ya-provider"
 version = "0.2.0"
 dependencies = [
- "actix 0.10.0",
+ "actix",
  "actix-rt",
  "actix_derive",
  "anyhow",
@@ -7927,7 +7944,7 @@ dependencies = [
 
 [[package]]
 name = "ya-runtime-api"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "bytes 0.5.6",
@@ -7958,6 +7975,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-sb-proto"
+version = "0.3.0"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?branch=mf/actix-0.10#c062a9a4c38176707f76266c216b884906c56916"
+dependencies = [
+ "bytes 0.5.6",
+ "prost",
+ "prost-build",
+ "thiserror",
+ "tokio 0.2.24",
+ "tokio-util 0.2.0",
+ "url 2.2.0",
+]
+
+[[package]]
 name = "ya-sb-router"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7975,8 +8006,8 @@ dependencies = [
  "tokio-util 0.2.0",
  "url 2.2.0",
  "uuid 0.8.2",
- "ya-sb-proto",
- "ya-sb-util",
+ "ya-sb-proto 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ya-sb-util 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -7984,6 +8015,11 @@ name = "ya-sb-util"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20b2e7cfeacabb607fe1fd1dc8e653c3ee853f2e127cb1ed72955ea4cb84f951"
+
+[[package]]
+name = "ya-sb-util"
+version = "0.1.0"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?branch=mf/actix-0.10#c062a9a4c38176707f76266c216b884906c56916"
 dependencies = [
  "futures 0.3.12",
  "pin-project 0.4.27",
@@ -8071,10 +8107,9 @@ dependencies = [
 [[package]]
 name = "ya-service-bus"
 version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bae4ed03b0118deb077d642c5b439f942560eabbbce602144675bf11aa0a5217"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?branch=mf/actix-0.10#c062a9a4c38176707f76266c216b884906c56916"
 dependencies = [
- "actix 0.9.0",
+ "actix",
  "flexbuffers",
  "futures 0.3.12",
  "lazy_static",
@@ -8087,8 +8122,8 @@ dependencies = [
  "tokio-util 0.2.0",
  "url 2.2.0",
  "uuid 0.8.2",
- "ya-sb-proto",
- "ya-sb-util",
+ "ya-sb-proto 0.3.0 (git+https://github.com/golemfactory/ya-service-bus.git?branch=mf/actix-0.10)",
+ "ya-sb-util 0.1.0 (git+https://github.com/golemfactory/ya-service-bus.git?branch=mf/actix-0.10)",
 ]
 
 [[package]]
@@ -8155,7 +8190,7 @@ dependencies = [
 name = "ya-utils-actix"
 version = "0.1.0"
 dependencies = [
- "actix 0.10.0",
+ "actix",
  "anyhow",
  "futures 0.3.12",
  "log",
@@ -8171,10 +8206,13 @@ dependencies = [
 
 [[package]]
 name = "ya-utils-networking"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
+ "futures 0.3.12",
+ "ipnet",
  "log",
+ "thiserror",
  "trust-dns-resolver 0.19.6",
  "url 2.2.0",
 ]
@@ -8192,7 +8230,7 @@ dependencies = [
 name = "ya-utils-process"
 version = "0.1.0"
 dependencies = [
- "actix 0.9.0",
+ "actix",
  "anyhow",
  "derive_more",
  "fs2",
@@ -8235,6 +8273,40 @@ dependencies = [
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-bus",
+]
+
+[[package]]
+name = "ya-vpn"
+version = "0.1.0"
+dependencies = [
+ "actix",
+ "actix-web 3.3.2",
+ "actix-web-actors",
+ "anyhow",
+ "bytes 0.5.6",
+ "env_logger 0.7.1",
+ "futures 0.3.12",
+ "hex",
+ "ipnet",
+ "log",
+ "managed",
+ "mime",
+ "rand 0.7.3",
+ "serde",
+ "serde_json",
+ "smoltcp",
+ "thiserror",
+ "tokio 0.2.24",
+ "ya-client-model",
+ "ya-core-model",
+ "ya-net",
+ "ya-persistence",
+ "ya-sb-router",
+ "ya-service-api",
+ "ya-service-api-interfaces",
+ "ya-service-api-web",
+ "ya-service-bus",
+ "ya-utils-networking",
 ]
 
 [[package]]
@@ -8305,7 +8377,7 @@ dependencies = [
  "ya-payment",
  "ya-persistence",
  "ya-provider",
- "ya-sb-proto",
+ "ya-sb-proto 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ya-sb-router",
  "ya-service-api",
  "ya-service-api-derive",
@@ -8318,6 +8390,7 @@ dependencies = [
  "ya-utils-path",
  "ya-utils-process",
  "ya-version",
+ "ya-vpn",
  "ya-zksync-driver",
 ]
 

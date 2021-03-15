@@ -38,7 +38,7 @@ ya-transfer = "0.1"
 ya-utils-path = "0.1"
 ya-utils-networking = { version = "0.1", default-features = false, features = ["vpn"]}
 
-actix = { version = "0.9", default-features = false }
+actix = { version = "0.10", default-features = false }
 anyhow = "1.0.19"
 async-trait = "0.1.24"
 chrono = "0.4.10"

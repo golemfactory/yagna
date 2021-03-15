@@ -1,6 +1,6 @@
 use crate::error::Error;
 use crate::message::Shutdown;
-use crate::state::Deployment;
+use crate::state::{Deployment, DeploymentNetwork};
 use crate::Result;
 use actix::prelude::*;
 use futures::channel::mpsc;
@@ -17,7 +17,7 @@ use ya_runtime_api::server::{CreateNetwork, Network, NetworkEndpoint, RuntimeSer
 use ya_service_bus::{actix_rpc, typed, typed::Endpoint as GsbEndpoint, RpcEnvelope};
 use ya_utils_networking::vpn::error::Error as VpnError;
 use ya_utils_networking::vpn::{
-    ArpField, ArpPacket, EtherFrame, EtherType, IpPacket, State as VpnState, MAX_FRAME_SIZE,
+    self, ArpField, ArpPacket, EtherFrame, IpPacket, Networks, PeekPacket, MAX_FRAME_SIZE,
 };
 
 pub(crate) async fn start_vpn<R: RuntimeService>(
@@ -33,19 +33,7 @@ pub(crate) async fn start_vpn<R: RuntimeService>(
     let networks = deployment
         .networks
         .values()
-        .map(|net| {
-            let ip = net.addr();
-            let gateway = net
-                .hosts()
-                .find(|ip_| ip_ != &ip)
-                .ok_or_else(|| VpnError::NetAddrTaken(ip))?;
-            Ok(Network {
-                ipv6: ip.is_ipv6(),
-                addr: ip.to_string(),
-                gateway: gateway.to_string(),
-                mask: net.netmask().to_string(),
-            })
-        })
+        .map(TryFrom::try_from)
         .collect::<Result<_>>()?;
 
     let response = service
@@ -63,19 +51,30 @@ pub(crate) async fn start_vpn<R: RuntimeService>(
 
 pub(crate) struct Vpn {
     activity_id: String,
-    state: VpnState<GsbEndpoint>,
+    networks: Networks<GsbEndpoint>,
     endpoint: VpnEndpoint,
 }
 
 impl Vpn {
     fn try_new(activity_id: String, endpoint: VpnEndpoint, deployment: Deployment) -> Result<Self> {
-        let mut state = VpnState::default();
-        state.create(deployment.networks)?;
-        state.join(deployment.nodes, gsb_endpoint)?;
+        let mut networks = vpn::Networks::default();
+
+        deployment
+            .networks
+            .iter()
+            .try_for_each(|(id, net)| networks.add(id.clone(), net.network))?;
+
+        deployment.networks.into_iter().try_for_each(|(id, net)| {
+            let network = networks.get_mut(&id).unwrap();
+            net.nodes
+                .into_iter()
+                .try_for_each(|(ip, id)| network.add_node(ip, &id, gsb_endpoint))?;
+            Ok::<_, VpnError>(())
+        })?;
 
         Ok(Self {
             activity_id,
-            state,
+            networks,
             endpoint,
         })
     }
@@ -85,12 +84,11 @@ impl Vpn {
         log::trace!("Egress packet to {:?}", ip_pkt.dst_address());
 
         if ip_pkt.is_broadcast() {
-            let pkt: Vec<_> = frame.into();
             let futs = self
-                .state
+                .networks
                 .endpoints()
-                .values()
-                .map(|e| e.call(activity::VpnPacket(pkt.clone())))
+                .into_iter()
+                .map(|e| e.call(activity::VpnPacket(frame.as_ref().to_vec())))
                 .collect::<Vec<_>>();
             futs.is_empty().not().then(|| {
                 let fut = future::join_all(futs).then(|_| future::ready(()));
@@ -98,8 +96,7 @@ impl Vpn {
             });
         } else {
             let ip = ip_pkt.dst_address();
-            let endpoint = self.state.endpoints().get(ip).cloned();
-            match endpoint {
+            match self.networks.endpoint(ip) {
                 Some(endpoint) => self.forward_frame(endpoint, frame, ctx),
                 None => log::debug!("No endpoint for {:?}", ip),
             }
@@ -114,7 +111,7 @@ impl Vpn {
         }
 
         let ip = arp.get_field(ArpField::TPA);
-        match self.state.endpoints().get(ip).cloned() {
+        match self.networks.endpoint(ip) {
             Some(endpoint) => self.forward_frame(endpoint, frame, ctx),
             None => log::debug!("No endpoint for {:?}", ip),
         }
@@ -139,7 +136,7 @@ impl Actor for Vpn {
         let srv_id = activity::exeunit::bus_id(&self.activity_id);
         actix_rpc::bind::<activity::VpnControl>(&srv_id, ctx.address().recipient());
 
-        self.state.networks().keys().for_each(|net| {
+        self.networks.as_ref().keys().for_each(|net| {
             let vpn_id = activity::exeunit::network_id(net);
             actix_rpc::bind::<activity::VpnPacket>(&vpn_id, ctx.address().recipient());
         });
@@ -160,13 +157,13 @@ impl Actor for Vpn {
         log::info!("Stopping VPN service");
 
         let srv_id = activity::exeunit::bus_id(&self.activity_id);
-        let networks = self.state.networks().clone();
+        let networks = self.networks.as_ref().keys().cloned().collect::<Vec<_>>();
 
         ctx.wait(
             async move {
                 let _ = typed::unbind(&srv_id).await;
-                for net in networks.keys() {
-                    let vpn_id = activity::exeunit::network_id(net);
+                for net in networks {
+                    let vpn_id = activity::exeunit::network_id(&net);
                     let _ = typed::unbind(&vpn_id).await;
                 }
             }
@@ -229,13 +226,20 @@ impl Handler<RpcEnvelope<activity::VpnControl>> for Vpn {
         _: &mut Context<Self>,
     ) -> Self::Result {
         match msg.into_inner() {
-            VpnControl::RemoveNodes(ids) => self.state.leave(ids),
-            VpnControl::AddNodes(nodes) => {
-                let mut deployment = Deployment::default();
-                deployment.extend_nodes(nodes)?;
-                self.state
-                    .join(deployment.nodes, gsb_endpoint)
-                    .map_err(Error::from)?;
+            VpnControl::AddNodes { network_id, nodes } => {
+                let network = self.networks.get_mut(&network_id).map_err(Error::from)?;
+                for (ip, id) in Deployment::map_nodes(nodes).map_err(Error::from)? {
+                    network
+                        .add_node(ip, &id, gsb_endpoint)
+                        .map_err(Error::from)?;
+                }
+            }
+            VpnControl::RemoveNodes {
+                network_id,
+                node_ids,
+            } => {
+                let network = self.networks.get_mut(&network_id).map_err(Error::from)?;
+                node_ids.into_iter().for_each(|id| network.remove_node(&id));
             }
         }
         Ok(())
@@ -288,6 +292,26 @@ impl VpnEndpoint {
         Ok(Self {
             tx: tx_si,
             rx: Some(Box::new(stream)),
+        })
+    }
+}
+
+impl<'a> TryFrom<&'a DeploymentNetwork> for Network {
+    type Error = Error;
+
+    fn try_from(net: &'a DeploymentNetwork) -> Result<Self> {
+        let ip = net.network.addr();
+        let mask = net.network.netmask();
+        let gateway = net
+            .network
+            .hosts()
+            .find(|ip_| ip_ != &ip)
+            .ok_or_else(|| VpnError::NetAddrTaken(ip))?;
+        Ok(Network {
+            ipv6: ip.is_ipv6(),
+            addr: ip.to_string(),
+            gateway: gateway.to_string(),
+            mask: mask.to_string(),
         })
     }
 }

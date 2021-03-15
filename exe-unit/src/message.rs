@@ -94,7 +94,6 @@ pub struct UpdateDeployment {
     pub runtime_mode: Option<RuntimeMode>,
     pub networks: Option<Vec<Network>>,
     pub hosts: Option<HashMap<String, String>>,
-    pub nodes: Option<HashMap<String, String>>,
 }
 
 #[derive(Clone, Debug, Message)]

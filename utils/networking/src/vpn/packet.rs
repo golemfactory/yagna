@@ -1,12 +1,16 @@
 #![allow(unused)]
 
 use crate::vpn::packet::field::*;
-use crate::vpn::Error;
+use crate::vpn::{Error, Protocol};
 use std::convert::TryFrom;
 use std::ops::Deref;
 
 mod field {
+    /// Field slice range within packet bytes
     pub type Field = std::ops::Range<usize>;
+    /// Field bit range within a packet byte
+    pub type BitField = (usize, std::ops::Range<usize>);
+    /// Unhandled packet data range
     pub type Rest = std::ops::RangeFrom<usize>;
 }
 
@@ -27,31 +31,17 @@ pub enum EtherFrame {
 }
 
 impl EtherFrame {
-    pub fn get_field(&self, field: Field) -> &[u8] {
-        &self.deref()[field]
-    }
-
     pub fn payload(&self) -> &[u8] {
-        &self[EtherField::PAYLOAD]
+        &self.as_ref()[EtherField::PAYLOAD]
     }
 
     pub fn reply(&self, mut payload: Vec<u8>) -> Vec<u8> {
-        let frame: &Box<[u8]> = self.deref();
+        let frame: &Box<[u8]> = self.as_ref();
         payload.reserve(EtherField::PAYLOAD.start);
         payload.splice(0..0, frame[EtherField::ETHER_TYPE].iter().cloned());
         payload.splice(0..0, frame[EtherField::DST_MAC].iter().cloned());
         payload.splice(0..0, frame[EtherField::SRC_MAC].iter().cloned());
         payload
-    }
-}
-
-impl Deref for EtherFrame {
-    type Target = Box<[u8]>;
-
-    fn deref(&self) -> &Self::Target {
-        match self {
-            Self::Ip(b) | Self::Arp(b) => b,
-        }
     }
 }
 
@@ -89,10 +79,24 @@ impl TryFrom<Vec<u8>> for EtherFrame {
     }
 }
 
+impl Into<Box<[u8]>> for EtherFrame {
+    fn into(self) -> Box<[u8]> {
+        match self {
+            Self::Ip(b) | Self::Arp(b) => b,
+        }
+    }
+}
+
 impl Into<Vec<u8>> for EtherFrame {
     fn into(self) -> Vec<u8> {
+        Into::<Box<[u8]>>::into(self).into()
+    }
+}
+
+impl AsRef<Box<[u8]>> for EtherFrame {
+    fn as_ref(&self) -> &Box<[u8]> {
         match self {
-            Self::Ip(b) | Self::Arp(b) => b.into_vec(),
+            Self::Ip(b) | Self::Arp(b) => b,
         }
     }
 }
@@ -106,7 +110,7 @@ impl std::fmt::Display for EtherFrame {
     }
 }
 
-pub trait EtherType<'a> {
+pub trait PeekPacket<'a> {
     fn peek(data: &'a [u8]) -> Result<(), Error>;
     fn packet(data: &'a [u8]) -> Self;
 }
@@ -117,10 +121,38 @@ pub enum IpPacket<'a> {
 }
 
 impl<'a> IpPacket<'a> {
+    pub fn src_address(&self) -> &'a [u8] {
+        match self {
+            Self::V4(ip) => ip.src_address,
+            Self::V6(ip) => ip.src_address,
+        }
+    }
+
     pub fn dst_address(&self) -> &'a [u8] {
         match self {
             Self::V4(ip) => ip.dst_address,
             Self::V6(ip) => ip.dst_address,
+        }
+    }
+
+    pub fn payload(&self) -> &'a [u8] {
+        match self {
+            Self::V4(ip) => ip.payload,
+            Self::V6(ip) => ip.payload,
+        }
+    }
+
+    pub fn protocol(&self) -> u8 {
+        match self {
+            Self::V4(ip) => ip.protocol,
+            Self::V6(ip) => ip.protocol,
+        }
+    }
+
+    pub fn to_tcp(&self) -> Option<TcpPacket> {
+        match self.protocol() {
+            6 => Some(TcpPacket::packet(self.payload())),
+            _ => None,
         }
     }
 
@@ -132,7 +164,7 @@ impl<'a> IpPacket<'a> {
     }
 }
 
-impl<'a> EtherType<'a> for IpPacket<'a> {
+impl<'a> PeekPacket<'a> for IpPacket<'a> {
     fn peek(data: &'a [u8]) -> Result<(), Error> {
         match data[0] >> 4 {
             4 => IpV4Packet::peek(data),
@@ -152,64 +184,81 @@ impl<'a> EtherType<'a> for IpPacket<'a> {
 
 pub struct Ipv4Field;
 impl Ipv4Field {
-    pub const HDR_SIZE: Field = 2..4;
+    pub const IHL: BitField = (0, 4..8);
+    pub const TOTAL_LEN: Field = 2..4;
+    pub const PROTOCOL: Field = 9..10;
+    pub const SRC_ADDR: Field = 12..16;
     pub const DST_ADDR: Field = 16..20;
 }
 
 pub struct IpV4Packet<'a> {
+    pub src_address: &'a [u8],
     pub dst_address: &'a [u8],
+    pub protocol: u8,
+    pub payload: &'a [u8],
 }
 
-impl<'a> EtherType<'a> for IpV4Packet<'a> {
-    fn peek(data: &'a [u8]) -> Result<(), Error> {
-        const HEADER_SIZE: usize = 20;
+impl<'a> IpV4Packet<'a> {
+    pub const MIN_HEADER_LEN: usize = 20;
+}
 
-        if data.len() < HEADER_SIZE {
+impl<'a> PeekPacket<'a> for IpV4Packet<'a> {
+    fn peek(data: &'a [u8]) -> Result<(), Error> {
+        let data_len = data.len();
+        if data_len < Self::MIN_HEADER_LEN {
             return Err(Error::PacketMalformed("IPv4: header too short".into()));
         }
 
-        let mut field = [0u8; 2];
-        field.copy_from_slice(&data[Ipv4Field::HDR_SIZE]);
-        let len = u16::from_be_bytes(field) as usize;
-
-        if data.len() < len {
+        let len = ntoh_u16(&data[Ipv4Field::TOTAL_LEN]).unwrap() as usize;
+        let payload_off = Self::MIN_HEADER_LEN + 4 * get_bit_field(data, Ipv4Field::IHL) as usize;
+        if data_len < len || len < payload_off {
             return Err(Error::PacketMalformed("IPv4: payload too short".into()));
         }
         Ok(())
     }
 
     fn packet(data: &'a [u8]) -> Self {
+        let payload_off = get_bit_field(data, Ipv4Field::IHL) as usize * 4 + 20;
         Self {
+            src_address: &data[Ipv4Field::SRC_ADDR],
             dst_address: &data[Ipv4Field::DST_ADDR],
+            protocol: data[Ipv4Field::PROTOCOL][0],
+            payload: &data[payload_off..],
         }
     }
 }
 
 pub struct Ipv6Field;
 impl Ipv6Field {
-    pub const HDR_SIZE: Field = 4..6;
+    pub const PAYLOAD_LEN: Field = 4..6;
+    pub const PROTOCOL: Field = 6..7;
+    pub const SRC_ADDR: Field = 8..24;
     pub const DST_ADDR: Field = 24..40;
+    pub const PAYLOAD: Rest = 40..; // extension headers are not supported
 }
 
 pub struct IpV6Packet<'a> {
+    pub src_address: &'a [u8],
     pub dst_address: &'a [u8],
+    pub protocol: u8,
+    pub payload: &'a [u8],
 }
 
-impl<'a> EtherType<'a> for IpV6Packet<'a> {
-    fn peek(data: &'a [u8]) -> Result<(), Error> {
-        const HEADER_SIZE: usize = 40;
+impl<'a> IpV6Packet<'a> {
+    pub const MIN_HEADER_LEN: usize = 40;
+}
 
-        if data.len() < HEADER_SIZE {
+impl<'a> PeekPacket<'a> for IpV6Packet<'a> {
+    fn peek(data: &'a [u8]) -> Result<(), Error> {
+        let data_len = data.len();
+        if data_len < Self::MIN_HEADER_LEN {
             return Err(Error::PacketMalformed("IPv6: header too short".into()));
         }
 
-        let mut field = [0u8; 2];
-        field.copy_from_slice(&data[Ipv6Field::HDR_SIZE]);
-        let len = HEADER_SIZE + u16::from_be_bytes(field) as usize;
-
-        if data.len() < len as usize {
+        let len = Self::MIN_HEADER_LEN + ntoh_u16(&data[Ipv6Field::PAYLOAD_LEN]).unwrap() as usize;
+        if data_len < len as usize {
             return Err(Error::PacketMalformed("IPv6: payload too short".into()));
-        } else if len == HEADER_SIZE {
+        } else if len == Self::MIN_HEADER_LEN {
             return Err(Error::ProtocolNotSupported("IPv6: jumbogram".into()));
         }
         Ok(())
@@ -217,7 +266,10 @@ impl<'a> EtherType<'a> for IpV6Packet<'a> {
 
     fn packet(data: &'a [u8]) -> Self {
         Self {
+            src_address: &data[Ipv6Field::SRC_ADDR],
             dst_address: &data[Ipv6Field::DST_ADDR],
+            protocol: data[Ipv6Field::PROTOCOL][0],
+            payload: &data[Ipv6Field::PAYLOAD],
         }
     }
 }
@@ -249,12 +301,11 @@ pub struct ArpPacket<'a> {
 }
 
 impl<'a> ArpPacket<'a> {
+    #[inline(always)]
     pub fn get_field(&self, field: Field) -> &[u8] {
         &self.inner[field]
     }
-}
 
-impl<'a> ArpPacket<'a> {
     pub fn mirror(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(ArpField::TPA.end);
         buf.extend(self.inner[0..ArpField::OP.start].iter().cloned());
@@ -282,16 +333,7 @@ impl<'a> ArpPacket<'a> {
     }
 }
 
-impl<'a> TryFrom<&'a [u8]> for ArpPacket<'a> {
-    type Error = Error;
-
-    fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
-        Self::peek(data)?;
-        Ok(Self { inner: data })
-    }
-}
-
-impl<'a> EtherType<'a> for ArpPacket<'a> {
+impl<'a> PeekPacket<'a> for ArpPacket<'a> {
     fn peek(data: &'a [u8]) -> Result<(), Error> {
         if data.len() < 28 {
             return Err(Error::PacketMalformed("ARP: packet too short".into()));
@@ -300,9 +342,18 @@ impl<'a> EtherType<'a> for ArpPacket<'a> {
     }
 
     fn packet(data: &'a [u8]) -> Self {
-        Self::try_from(data).ok().unwrap()
+        Self { inner: data }
     }
 }
+
+// impl<'a> TryFrom<&'a [u8]> for ArpPacket<'a> {
+//     type Error = Error;
+//
+//     fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+//         Self::peek(data)?;
+//         Ok(Self::packet(data))
+//     }
+// }
 
 pub struct ArpPacketMut<'a> {
     inner: &'a mut [u8],
@@ -319,13 +370,81 @@ impl<'a> ArpPacketMut<'a> {
     }
 }
 
-impl<'a> TryFrom<&'a mut [u8]> for ArpPacketMut<'a> {
-    type Error = Error;
+// impl<'a> TryFrom<&'a mut [u8]> for ArpPacketMut<'a> {
+//     type Error = Error;
+//
+//     fn try_from(data: &'a mut [u8]) -> Result<Self, Self::Error> {
+//         if data.len() < 28 {
+//             return Err(Error::PacketMalformed("ARP: packet too short".into()));
+//         }
+//         Ok(Self { inner: data })
+//     }
+// }
 
-    fn try_from(data: &'a mut [u8]) -> Result<Self, Self::Error> {
-        if data.len() < 28 {
-            return Err(Error::PacketMalformed("ARP: packet too short".into()));
-        }
-        Ok(Self { inner: data })
+pub struct TcpField;
+impl TcpField {
+    pub const SRC_PORT: Field = 0..2;
+    pub const DST_PORT: Field = 2..4;
+    pub const DATA_OFF: BitField = (12, 0..4);
+}
+
+pub struct TcpPacket<'a> {
+    pub src_port: &'a [u8],
+    pub dst_port: &'a [u8],
+}
+
+impl<'a> TcpPacket<'a> {
+    pub fn src_port(&self) -> u16 {
+        ntoh_u16(&self.src_port).unwrap()
+    }
+
+    pub fn dst_port(&self) -> u16 {
+        ntoh_u16(&self.dst_port).unwrap()
     }
 }
+
+impl<'a> PeekPacket<'a> for TcpPacket<'a> {
+    fn peek(data: &'a [u8]) -> Result<(), Error> {
+        if data.len() < 20 {
+            return Err(Error::PacketMalformed("TCP: packet too short".into()));
+        }
+
+        let off = get_bit_field(data, TcpField::DATA_OFF) as usize;
+        if data.len() < off {
+            return Err(Error::PacketMalformed("TCP: packet too short".into()));
+        }
+
+        Ok(())
+    }
+
+    fn packet(data: &'a [u8]) -> Self {
+        Self {
+            src_port: &data[TcpField::SRC_PORT],
+            dst_port: &data[TcpField::DST_PORT],
+        }
+    }
+}
+
+#[inline(always)]
+fn get_bit_field(data: &[u8], bit_field: BitField) -> u8 {
+    (data[bit_field.0] << bit_field.1.start) >> (bit_field.1.start + (8 - bit_field.1.end))
+}
+
+macro_rules! impl_ntoh_n {
+    ($ident:ident, $ty:ty, $n:tt) => {
+        fn $ident(data: &[u8]) -> Option<$ty> {
+            match data.len() {
+                $n => {
+                    let mut result = [0u8; $n];
+                    result.copy_from_slice(&data[0..$n]);
+                    Some(<$ty>::from_be_bytes(result))
+                }
+                _ => None,
+            }
+        }
+    };
+}
+
+impl_ntoh_n!(ntoh_u16, u16, 2);
+impl_ntoh_n!(ntoh_u32, u32, 4);
+impl_ntoh_n!(ntoh_u64, u64, 8);

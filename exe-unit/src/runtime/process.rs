@@ -355,9 +355,6 @@ impl Handler<UpdateDeployment> for RuntimeProcess {
         if let Some(hosts) = msg.hosts {
             self.deployment.hosts.extend(hosts.into_iter());
         }
-        if let Some(nodes) = msg.nodes {
-            self.deployment.extend_nodes(nodes)?;
-        }
         Ok(())
     }
 }
