@@ -1001,4 +1001,26 @@ async fn test_restart_negotiations() {
         prov_proposal_id.translate(Owner::Provider).to_string(),
         re_proposal.proposal_id
     );
+
+    // Proposal state should be changed back to draft.
+    assert_eq!(re_proposal.state, State::Draft);
+
+    assert_eq!(
+        prov_market
+            .get_proposal(&negotiation.proposal_id.clone().translate(Owner::Provider))
+            .await
+            .unwrap()
+            .body
+            .state,
+        ProposalState::Draft
+    );
+    assert_eq!(
+        req_market
+            .get_proposal(&negotiation.proposal_id.clone().translate(Owner::Requestor))
+            .await
+            .unwrap()
+            .body
+            .state,
+        ProposalState::Draft
+    );
 }

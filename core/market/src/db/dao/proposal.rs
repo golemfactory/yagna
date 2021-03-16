@@ -72,6 +72,10 @@ impl<'c> ProposalDao<'c> {
                 return Err(SaveProposalError::AlreadyCountered(prev_proposal));
             }
 
+            // Proposal could be in Rejected state. It is ok to counter Rejected Proposal,
+            // but we must change state of prev Proposal to Draft.
+            update_proposal_state(conn, &prev_proposal, ProposalState::Draft)?;
+
             diesel::insert_into(dsl::market_proposal)
                 .values(&proposal)
                 .execute(conn)
