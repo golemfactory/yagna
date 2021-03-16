@@ -82,7 +82,7 @@ pub async fn fund(address: &str, network: Network) -> Result<(), GenericError> {
     if network == Network::Mainnet {
         return Err(GenericError::new("Wallet can not be funded on mainnet."));
     }
-    faucet::request_ngnt(address, network).await?;
+    faucet::request_tglm(address, network).await?;
     Ok(())
 }
 
@@ -91,7 +91,7 @@ pub async fn exit(msg: &Exit) -> Result<String, GenericError> {
     let network = Network::from_str(&network).map_err(|e| GenericError::new(e))?;
     let wallet = get_wallet(&msg.sender(), network).await?;
     unlock_wallet(&wallet, network).await?;
-    let tx_handle = withdraw(wallet, msg.amount(), msg.to()).await?;
+    let tx_handle = withdraw(wallet, network, msg.amount(), msg.to()).await?;
     let tx_info = tx_handle
         .wait_for_commit()
         .await
@@ -106,6 +106,21 @@ pub async fn exit(msg: &Exit) -> Result<String, GenericError> {
         )),
         None => Err(GenericError::new("Transaction time-outed")),
     }
+}
+
+pub async fn get_tx_fee(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
+    let token = get_network_token(network, None);
+    let wallet = get_wallet(&address, network).await?;
+    let tx_fee = wallet
+        .provider
+        .get_tx_fee(TxFeeTypes::Transfer, wallet.address(), token.as_str())
+        .await
+        .map_err(GenericError::new)?
+        .total_fee;
+    let tx_fee_bigdec = utils::big_uint_to_big_dec(tx_fee);
+
+    log::debug!("Transaction fee {:.5} {}", tx_fee_bigdec, token.as_str());
+    Ok(tx_fee_bigdec)
 }
 
 fn hash_to_hex(hash: TxHash) -> String {
@@ -310,29 +325,33 @@ async fn unlock_wallet<S: EthereumSigner + Clone, P: Provider + Clone>(
 
 pub async fn withdraw<S: EthereumSigner + Clone, P: Provider + Clone>(
     wallet: Wallet<S, P>,
+    network: Network,
     amount: Option<BigDecimal>,
     recipient: Option<String>,
 ) -> Result<SyncTransactionHandle<P>, GenericError> {
+    let token = get_network_token(network, None);
     let balance = wallet
-        .get_balance(BlockStatus::Committed, ZKSYNC_TOKEN_NAME)
+        .get_balance(BlockStatus::Committed, token.as_str())
         .await
         .map_err(GenericError::new)?;
     info!(
-        "Wallet funded with {} tGLM available for withdrawal",
-        utils::big_uint_to_big_dec(balance.clone())
+        "Wallet funded with {} {} available for withdrawal",
+        utils::big_uint_to_big_dec(balance.clone()),
+        token
     );
 
     info!("Obtaining withdrawal fee");
     let address = wallet.address();
     let withdraw_fee = wallet
         .provider
-        .get_tx_fee(TxFeeTypes::Withdraw, address, ZKSYNC_TOKEN_NAME)
+        .get_tx_fee(TxFeeTypes::Withdraw, address, token.as_str())
         .await
         .map_err(GenericError::new)?
         .total_fee;
     info!(
-        "Withdrawal transaction fee {:.5}",
-        utils::big_uint_to_big_dec(withdraw_fee.clone())
+        "Withdrawal transaction fee {:.5} {}",
+        utils::big_uint_to_big_dec(withdraw_fee.clone()),
+        token
     );
 
     let amount = match amount {
@@ -341,8 +360,9 @@ pub async fn withdraw<S: EthereumSigner + Clone, P: Provider + Clone>(
     };
     let withdraw_amount = std::cmp::min(balance - withdraw_fee, amount);
     info!(
-        "Withdrawal of {:.5} tGLM started",
-        utils::big_uint_to_big_dec(withdraw_amount.clone())
+        "Withdrawal of {:.5} {} started",
+        utils::big_uint_to_big_dec(withdraw_amount.clone()),
+        token
     );
 
     let recipient_address = match recipient {
@@ -352,13 +372,13 @@ pub async fn withdraw<S: EthereumSigner + Clone, P: Provider + Clone>(
 
     let withdraw_builder = wallet
         .start_withdraw()
-        .token(ZKSYNC_TOKEN_NAME)
+        .token(token.as_str())
         .map_err(GenericError::new)?
         .amount(withdraw_amount.clone())
         .to(recipient_address);
     log::debug!(
         "Withdrawal raw data. token={}, amount={}, to={}",
-        ZKSYNC_TOKEN_NAME,
+        token,
         withdraw_amount,
         recipient_address
     );

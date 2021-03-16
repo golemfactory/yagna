@@ -20,7 +20,7 @@ You can enable multiple drivers at the same time, use this table for the require
 |Driver name|Feature flag|Public explorer|Local|Testnet|Mainnet|
 |-|-|-|-|-|-|
 |zksync|`zksync-driver`|[zkscan](https://rinkeby.zkscan.io/)|x|x||
-|erc20|`gnt-driver`|[etherscan](https://rinkeby.etherscan.io/token/0xd94e3dc39d4cad1dad634e7eb585a57a19dc7efe)|x|x||
+|erc20|`erc20-driver`|[etherscan](https://rinkeby.etherscan.io/token/0xd94e3dc39d4cad1dad634e7eb585a57a19dc7efe)|x|x||
 |dummy|`dummy-driver`|None|x|||
 
 ### Examples:

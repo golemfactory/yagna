@@ -76,7 +76,7 @@ macro_rules! actix_signal_handler {
             fn handle(
                 &mut self,
                 msg: Subscribe<$MessageType>,
-                ctx: &mut <Self as Actor>::Context,
+                _ctx: &mut <Self as Actor>::Context,
             ) -> Self::Result {
                 self.$SignalFieldName.subscribe(msg.0);
             }
