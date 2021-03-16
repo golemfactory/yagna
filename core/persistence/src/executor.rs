@@ -5,18 +5,31 @@ use diesel::{Connection, SqliteConnection};
 use dotenv::dotenv;
 use r2d2::CustomizeConnection;
 use std::env;
+use std::fmt::Display;
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Arc, RwLock};
 
-pub type PoolType = Pool<ConnectionManager<InnerConnType>>;
+#[derive(Clone)]
+pub struct ProtectedPool {
+    inner: Pool<ConnectionManager<InnerConnType>>,
+    tx_lock: TxLock,
+}
+
+impl ProtectedPool {
+    fn get(&self) -> Result<PooledConnection<ConnectionManager<InnerConnType>>, r2d2::Error> {
+        self.inner.get()
+    }
+}
+
+pub type PoolType = ProtectedPool;
+type TxLock = Arc<RwLock<u64>>;
 pub type ConnType = PooledConnection<ConnectionManager<InnerConnType>>;
 pub type InnerConnType = SqliteConnection;
 
 const CONNECTION_INIT: &str = r"
-PRAGMA synchronous = NORMAL;
-PRAGMA journal_mode = WAL;
-PRAGMA foreign_keys = ON;
 PRAGMA busy_timeout = 15000;
+PRAGMA synchronous = NORMAL;
+PRAGMA foreign_keys = ON;
 ";
 
 #[derive(thiserror::Error, Debug)]
@@ -33,20 +46,30 @@ pub enum Error {
 
 #[derive(Clone)]
 pub struct DbExecutor {
-    pub pool: Pool<ConnectionManager<InnerConnType>>,
+    pub pool: PoolType,
 }
 
-fn connection_customizer() -> impl CustomizeConnection<SqliteConnection, diesel::r2d2::Error> {
+fn connection_customizer(
+    url: String,
+    tx_lock: TxLock,
+) -> impl CustomizeConnection<SqliteConnection, diesel::r2d2::Error> {
     #[derive(Debug)]
-    struct ConnectionInit(Mutex<()>);
+    struct ConnectionInit(TxLock, String);
 
     impl CustomizeConnection<SqliteConnection, diesel::r2d2::Error> for ConnectionInit {
         fn on_acquire(&self, conn: &mut SqliteConnection) -> Result<(), diesel::r2d2::Error> {
-            let _lock = self.0.lock().unwrap();
-            log::trace!("on_acquire connection");
-            Ok(conn
-                .batch_execute(CONNECTION_INIT)
-                .map_err(diesel::r2d2::Error::QueryError)?)
+            let mut lock_cnt = self.0.write().unwrap();
+            *lock_cnt += 1;
+            log::trace!("on_acquire connection [rw:{}]", *lock_cnt);
+            Ok(conn.batch_execute(CONNECTION_INIT).map_err(|e| {
+                log::error!(
+                    "error: {:?}, on: {}, [lock: {}]",
+                    e,
+                    self.1.as_str(),
+                    *lock_cnt
+                );
+                diesel::r2d2::Error::QueryError(e)
+            })?)
         }
 
         fn on_release(&self, _conn: SqliteConnection) {
@@ -54,17 +77,31 @@ fn connection_customizer() -> impl CustomizeConnection<SqliteConnection, diesel:
         }
     }
 
-    ConnectionInit(Mutex::new(()))
+    ConnectionInit(tx_lock, url)
 }
 
+// -
+
 impl DbExecutor {
-    pub fn new<S: Into<String>>(database_url: S) -> Result<Self, Error> {
-        let database_url = database_url.into();
+    pub fn new<S: Display>(database_url: S) -> Result<Self, Error> {
+        let database_url = format!("{}", database_url);
         log::info!("using database at: {}", database_url);
-        let manager = ConnectionManager::new(database_url);
-        let pool = Pool::builder()
-            .connection_customizer(Box::new(connection_customizer()))
+        let manager = ConnectionManager::new(database_url.clone());
+        let tx_lock: TxLock = Arc::new(RwLock::new(0));
+        let inner = Pool::builder()
+            .connection_customizer(Box::new(connection_customizer(
+                database_url.clone(),
+                tx_lock.clone(),
+            )))
             .build(manager)?;
+
+        {
+            let connection = inner.get()?;
+            let _ = connection.execute("PRAGMA journal_mode = WAL;")?;
+        }
+
+        let pool = ProtectedPool { inner, tx_lock };
+
         Ok(DbExecutor { pool })
     }
 
@@ -80,7 +117,7 @@ impl DbExecutor {
         Self::new(db.to_string_lossy())
     }
 
-    pub fn conn(&self) -> Result<ConnType, Error> {
+    fn conn(&self) -> Result<ConnType, Error> {
         Ok(self.pool.get()?)
     }
 
@@ -108,7 +145,7 @@ impl DbExecutor {
         F: FnOnce(&ConnType) -> Result<R, Error> + Send + 'static,
         Error: Send + 'static + From<tokio::task::JoinError> + From<r2d2::Error>,
     {
-        do_with_connection(&self.pool, f).await
+        do_with_ro_connection(&self.pool, f).await
     }
 
     pub async fn with_transaction<R: Send + 'static, Error, F>(&self, f: F) -> Result<R, Error>
@@ -120,8 +157,7 @@ impl DbExecutor {
             + From<r2d2::Error>
             + From<diesel::result::Error>,
     {
-        self.with_connection(|conn| conn.transaction(move || f(conn)))
-            .await
+        do_with_transaction(&self.pool, f).await
     }
 }
 
@@ -129,7 +165,7 @@ pub trait AsDao<'a> {
     fn as_dao(pool: &'a PoolType) -> Self;
 }
 
-pub async fn do_with_connection<R: Send + 'static, Error, F>(
+async fn do_with_ro_connection<R: Send + 'static, Error, F>(
     pool: &PoolType,
     f: F,
 ) -> Result<R, Error>
@@ -140,6 +176,31 @@ where
     let pool = pool.clone();
     match tokio::task::spawn_blocking(move || {
         let conn = pool.get()?;
+        let rw_cnt = pool.tx_lock.read().unwrap();
+        //log::info!("start ro tx: {}", *rw_cnt);
+        let ret = f(&conn);
+        log::trace!("done ro tx: {}", *rw_cnt);
+        ret
+    })
+    .await
+    {
+        Ok(v) => v,
+        Err(join_err) => Err(From::from(join_err)),
+    }
+}
+
+async fn do_with_rw_connection<R: Send + 'static, Error, F>(
+    pool: &PoolType,
+    f: F,
+) -> Result<R, Error>
+where
+    F: FnOnce(&ConnType) -> Result<R, Error> + Send + 'static,
+    Error: Send + 'static + From<tokio::task::JoinError> + From<r2d2::Error>,
+{
+    let pool = pool.clone();
+    match tokio::task::spawn_blocking(move || {
+        let conn = pool.get()?;
+        let _ = pool.tx_lock.read().unwrap();
         f(&conn)
     })
     .await
@@ -161,10 +222,9 @@ where
         + From<r2d2::Error>
         + From<diesel::result::Error>,
 {
-    do_with_connection(pool, move |conn| conn.immediate_transaction(|| f(conn))).await
+    do_with_rw_connection(pool, move |conn| conn.immediate_transaction(|| f(conn))).await
 }
 
-#[cfg(debug_assertions)]
 pub async fn readonly_transaction<R: Send + 'static, Error, F>(
     pool: &PoolType,
     f: F,
@@ -177,30 +237,15 @@ where
         + From<r2d2::Error>
         + From<diesel::result::Error>,
 {
-    do_with_connection(pool, move |conn| {
+    do_with_ro_connection(pool, move |conn| {
         conn.transaction(|| {
+            #[cfg(debug_assertions)]
             let _ = conn.execute("PRAGMA query_only=1;")?;
             let result = f(conn);
+            #[cfg(debug_assertions)]
             let _ = conn.execute("PRAGMA query_only=0;")?;
             result
         })
     })
     .await
-}
-
-#[cfg(not(debug_assertions))]
-#[inline]
-pub async fn readonly_transaction<R: Send + 'static, Error, F>(
-    pool: &PoolType,
-    f: F,
-) -> Result<R, Error>
-where
-    F: FnOnce(&ConnType) -> Result<R, Error> + Send + 'static,
-    Error: Send
-        + 'static
-        + From<tokio::task::JoinError>
-        + From<r2d2::Error>
-        + From<diesel::result::Error>,
-{
-    do_with_connection(pool, f).await
 }
