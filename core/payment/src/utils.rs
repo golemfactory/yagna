@@ -118,11 +118,13 @@ pub async fn with_timeout<Work: Future<Output = HttpResponse>>(
 ) -> HttpResponse {
     let timeout_secs = timeout_secs.into();
     if timeout_secs > 0.0 {
+        log::trace!("Starting timeout for: {}s", timeout_secs);
         match tokio::time::timeout(Duration::from_secs_f64(timeout_secs), work).await {
             Ok(v) => v,
             Err(_) => return HttpResponse::GatewayTimeout().finish(),
         }
     } else {
+        log::trace!("Executing /wo timeout.");
         work.await
     }
 }

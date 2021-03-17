@@ -282,6 +282,8 @@ async fn accept_invoice(
     let allocation_id = acceptance.allocation_id.clone();
 
     let dao: InvoiceDao = db.as_dao();
+
+    log::trace!("Querying DB for Invoice [{}]", invoice_id);
     let invoice = match dao.get(invoice_id.clone(), node_id).await {
         Ok(Some(invoice)) => invoice,
         Ok(None) => return response::not_found(),
@@ -303,6 +305,11 @@ async fn accept_invoice(
     }
 
     let agreement_id = invoice.agreement_id.clone();
+    log::trace!(
+        "Querying DB for Agreement [{}] for Invoice [{}]",
+        agreement_id,
+        invoice_id
+    );
     let agreement = match db
         .as_dao::<AgreementDao>()
         .get(agreement_id.clone(), node_id)
@@ -316,6 +323,11 @@ async fn accept_invoice(
     };
     let amount_to_pay = &invoice.amount - &agreement.total_amount_scheduled.0;
 
+    log::trace!(
+        "Querying DB for Allocation [{}] for Invoice [{}]",
+        allocation_id,
+        invoice_id
+    );
     let allocation = match db
         .as_dao::<AllocationDao>()
         .get(allocation_id.clone(), node_id)
@@ -341,15 +353,19 @@ async fn accept_invoice(
         let accept_msg = AcceptInvoice::new(invoice_id.clone(), acceptance, issuer_id);
         let schedule_msg = SchedulePayment::from_invoice(invoice, allocation_id, amount_to_pay);
         match async move {
+            log::trace!("Sending AcceptInvoice [{}] to [{}]", invoice_id, issuer_id);
             ya_net::from(node_id)
                 .to(issuer_id)
                 .service(PUBLIC_SERVICE)
                 .call(accept_msg)
                 .await??;
             if let Some(msg) = schedule_msg {
+                log::trace!("Calling SchedulePayment [{}] locally", invoice_id);
                 bus::service(LOCAL_SERVICE).send(msg).await??;
             }
-            dao.accept(invoice_id, node_id).await?;
+            log::trace!("Accepting Invoice [{}] in DB", invoice_id);
+            dao.accept(invoice_id.clone(), node_id).await?;
+            log::trace!("Invoice accepted successfully for [{}]", invoice_id);
 
             counter!("payment.invoices.requestor.accepted", 1);
             Ok(())

@@ -404,11 +404,17 @@ impl PaymentProcessor {
 
     pub async fn schedule_payment(&self, msg: SchedulePayment) -> Result<(), SchedulePaymentError> {
         let amount = msg.amount.clone();
+        log::trace!("Getting driver for [{:?}]", msg.title);
         let driver = self.registry.lock().await.driver(
             &msg.payment_platform,
             &msg.payer_addr,
             AccountMode::SEND,
         )?;
+        log::trace!(
+            "Scheduling payment [{:?}] using driver [{}]",
+            msg.title,
+            driver
+        );
         let order_id = driver_endpoint(&driver)
             .send(driver::SchedulePayment::new(
                 amount,
@@ -419,10 +425,14 @@ impl PaymentProcessor {
             ))
             .await??;
 
+        log::trace!("Creating payment order in DB for [{:?}]", msg.title);
+        let title = msg.title.clone();
         self.db_executor
             .as_dao::<OrderDao>()
             .create(msg, order_id, driver)
             .await?;
+
+        log::trace!("Payment scheduled successfully for [{:?}]", title);
 
         Ok(())
     }
