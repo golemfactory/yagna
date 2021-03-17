@@ -19,9 +19,7 @@ type Result<T> = std::result::Result<T, ApiError>;
 type WsResult<T> = std::result::Result<T, ws::ProtocolError>;
 
 pub fn web_scope() -> actix_web::Scope {
-    let vpn = VpnSupervisor::default().start();
     actix_web::web::scope(NET_API_PATH)
-        .data(vpn)
         .service(create_network)
         .service(remove_network)
         .service(add_node)
@@ -32,12 +30,11 @@ pub fn web_scope() -> actix_web::Scope {
 /// Creates a new private network
 #[actix_web::post("/net")]
 async fn create_network(
-    vpn_sup: web::Data<Addr<VpnSupervisor>>,
     create_network: web::Json<CreateNetwork>,
     _identity: Identity,
 ) -> Result<impl Responder> {
     let create_network = create_network.into_inner();
-    vpn_sup
+    VpnSupervisor::from_registry()
         .send(VpnCreateNetwork::from(create_network))
         .await??;
     Ok(web::Json(()))
@@ -46,11 +43,10 @@ async fn create_network(
 /// Removes an existing private network
 #[actix_web::delete("/net/{net_id}")]
 async fn remove_network(
-    vpn_sup: web::Data<Addr<VpnSupervisor>>,
     path: web::Path<PathNetwork>,
     _identity: Identity,
 ) -> Result<impl Responder> {
-    vpn_sup
+    VpnSupervisor::from_registry()
         .send(VpnRemoveNetwork {
             net_id: path.into_inner().net_id,
         })
@@ -61,13 +57,12 @@ async fn remove_network(
 /// Adds a new node to an existing private network
 #[actix_web::post("/net/{net_id}/nodes")]
 async fn add_node(
-    vpn_sup: web::Data<Addr<VpnSupervisor>>,
     path: web::Path<PathNetwork>,
     add_node: web::Json<AddNode>,
     _identity: Identity,
 ) -> Result<impl Responder> {
     let add_node = add_node.into_inner();
-    vpn_sup
+    VpnSupervisor::from_registry()
         .send(VpnAddNode {
             net_id: path.into_inner().net_id,
             ip: add_node.ip,
@@ -80,12 +75,11 @@ async fn add_node(
 /// Removes an existing node from a private network
 #[actix_web::delete("/net/{net_id}/nodes/{node_id}")]
 async fn remove_node(
-    vpn_sup: web::Data<Addr<VpnSupervisor>>,
     path: web::Path<PathNetworkNode>,
     _identity: Identity,
 ) -> Result<impl Responder> {
     let model = path.into_inner();
-    vpn_sup
+    VpnSupervisor::from_registry()
         .send(VpnRemoveNode {
             net_id: model.net_id,
             id: model.node_id,
@@ -96,14 +90,15 @@ async fn remove_node(
 
 #[actix_web::get("/net/{net_id}/tcp/{ip}/{port}")]
 async fn connect_tcp(
-    vpn_sup: web::Data<Addr<VpnSupervisor>>,
     path: web::Path<PathConnect>,
     req: HttpRequest,
     stream: web::Payload,
     _identity: Identity,
 ) -> Result<HttpResponse> {
     let model = path.into_inner();
-    let vpn = vpn_sup.send(VpnGetNetwork::new(model.net_id)).await??;
+    let vpn = VpnSupervisor::from_registry()
+        .send(VpnGetNetwork::new(model.net_id))
+        .await??;
 
     let (ws_tx, ws_rx) = mpsc::channel(1);
     let vpn_rx = vpn

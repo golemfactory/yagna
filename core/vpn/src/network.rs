@@ -88,6 +88,14 @@ impl Actor for VpnSupervisor {
     }
 }
 
+impl Supervised for VpnSupervisor {
+    fn restarting(&mut self, _ctx: &mut Self::Context) {
+        log::info!("VPN supervisor is restarting");
+    }
+}
+
+impl SystemService for VpnSupervisor {}
+
 impl Handler<VpnCreateNetwork> for VpnSupervisor {
     type Result = <VpnCreateNetwork as Message>::Result;
 

@@ -5698,7 +5698,7 @@ version = "0.5.1"
 source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6c848541e89262f90ca693d9e1a84c6f3df0953b"
 dependencies = [
  "lazy_static",
- "parking_lot 0.11.1",
+ "parking_lot 0.10.2",
  "serial_test_derive",
 ]
 
@@ -7977,7 +7977,7 @@ dependencies = [
 [[package]]
 name = "ya-sb-proto"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?branch=mf/actix-0.10#c062a9a4c38176707f76266c216b884906c56916"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?branch=mf/actix-0.10#bc449559d0779dbed0216180d44423e7702463e1"
 dependencies = [
  "bytes 0.5.6",
  "prost",
@@ -8019,7 +8019,7 @@ checksum = "20b2e7cfeacabb607fe1fd1dc8e653c3ee853f2e127cb1ed72955ea4cb84f951"
 [[package]]
 name = "ya-sb-util"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?branch=mf/actix-0.10#c062a9a4c38176707f76266c216b884906c56916"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?branch=mf/actix-0.10#bc449559d0779dbed0216180d44423e7702463e1"
 dependencies = [
  "futures 0.3.12",
  "pin-project 0.4.27",
@@ -8107,7 +8107,7 @@ dependencies = [
 [[package]]
 name = "ya-service-bus"
 version = "0.4.3"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?branch=mf/actix-0.10#c062a9a4c38176707f76266c216b884906c56916"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?branch=mf/actix-0.10#bc449559d0779dbed0216180d44423e7702463e1"
 dependencies = [
  "actix",
  "flexbuffers",
