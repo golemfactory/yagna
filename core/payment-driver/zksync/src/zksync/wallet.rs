@@ -82,7 +82,7 @@ pub async fn fund(address: &str, network: Network) -> Result<(), GenericError> {
     if network == Network::Mainnet {
         return Err(GenericError::new("Wallet can not be funded on mainnet."));
     }
-    faucet::request_ngnt(address, network).await?;
+    faucet::request_tglm(address, network).await?;
     Ok(())
 }
 

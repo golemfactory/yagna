@@ -446,7 +446,6 @@ pub mod local {
     pub enum DriverName {
         ZkSync,
         Erc20,
-        GlmSync,
     }
 
     #[derive(StructOpt, Debug, Clone)]
@@ -657,7 +656,16 @@ pub mod public {
 
     // *************************** PAYMENT ****************************
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-    pub struct SendPayment(pub Payment);
+    pub struct SendPayment {
+        pub payment: Payment,
+        pub signature: Vec<u8>,
+    }
+
+    impl SendPayment {
+        pub fn new(payment: Payment, signature: Vec<u8>) -> Self {
+            Self { payment, signature }
+        }
+    }
 
     impl RpcMessage for SendPayment {
         const ID: &'static str = "SendPayment";

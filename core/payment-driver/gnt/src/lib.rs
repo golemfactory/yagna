@@ -223,19 +223,6 @@ impl GntDriver {
         }
     }
 
-    /// Returns sum of transactions from given address
-    fn get_transaction_balance(
-        &self,
-        _payer: &str,
-        _payee: &str,
-    ) -> Pin<Box<dyn Future<Output = GNTDriverResult<BigDecimal>> + 'static>> {
-        // TODO: Get real transaction balance
-        Box::pin(future::ready(Ok(utils::str_to_big_dec(
-            "1000000000000000000000000",
-        )
-        .unwrap())))
-    }
-
     /// Obtains funds from faucet
     fn fund<'a>(
         &self,

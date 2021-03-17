@@ -47,7 +47,6 @@ humantime="2.0.1"
 [dev-dependencies]
 ya-client = "0.5"
 ya-dummy-driver = "0.2"
-ya-glmsync-driver = "0.1"
 ya-gnt-driver = "0.2"
 ya-zksync-driver = "0.2"
 ya-net = { version = "0.2", features = ["service"] }

@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.6.0"
+version = "0.6.1"
 description = "Open platform and marketplace for distributed computations"
 readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
@@ -10,11 +10,10 @@ license = "GPL-3.0"
 edition = "2018"
 
 [features]
-default = ['zksync-driver', 'gnt-driver', 'gftp/bin']
+default = ['zksync-driver', 'erc20-driver', 'gftp/bin']
 static-openssl = ["openssl/vendored", "openssl-probe"]
 dummy-driver = ['ya-dummy-driver']
-glmsync-driver = ['ya-glmsync-driver']
-gnt-driver = ['ya-gnt-driver']
+erc20-driver = ['ya-gnt-driver']
 zksync-driver = ['ya-zksync-driver']
 tos = []
 
@@ -27,7 +26,6 @@ ya-activity = "0.3"
 ya-compile-time-utils = "0.1"
 ya-dummy-driver = { version = "0.2", optional = true }
 ya-file-logging = "0.1"
-ya-glmsync-driver = { version = "0.1", optional = true }
 ya-gnt-driver = { version = "0.2", optional = true }
 ya-zksync-driver = { version = "0.2", optional = true }
 ya-identity = "0.2"
@@ -117,8 +115,7 @@ members = [
     "core/payment",
     "core/payment-driver/base",
     "core/payment-driver/dummy",
-    "core/payment-driver/glmsync",
-    "core/payment-driver/gnt",
+    "core/payment-driver/gnt", # TODO: Rename erc-20
     "core/payment-driver/zksync",
     "core/persistence",
     "core/serv-api",
@@ -157,7 +154,7 @@ ya-sgx = { path = "core/sgx" }
 ya-payment = { path = "core/payment" }
 ya-payment-driver = { path = "core/payment-driver/base" }
 ya-dummy-driver = { path = "core/payment-driver/dummy" }
-ya-glmsync-driver = { path = "core/payment-driver/glmsync" }
+# TODO: Rename to erc20 with next refactor
 ya-gnt-driver = { path = "core/payment-driver/gnt" }
 ya-zksync-driver = { path = "core/payment-driver/zksync" }
 ya-version = { path = "core/version" }
@@ -178,8 +175,8 @@ ya-service-api-web = { path = "core/serv-api/web" }
 #ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"}
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "6916938177b860eb646b082f0784370863802231" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "6916938177b860eb646b082f0784370863802231" }
+#ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "479a7237ccb09f766346a2421d2ae0b30c307a4f" }
+#ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "479a7237ccb09f766346a2421d2ae0b30c307a4f" }
 
 # ya-client = { path = "../ya-client" }
 # ya-client-model = { path = "../ya-client/model" }

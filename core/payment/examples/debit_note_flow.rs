@@ -189,5 +189,6 @@ async fn main() -> anyhow::Result<()> {
     //     requestor.get_payments_for_debit_note::<Utc>(&debit_note2.debit_note_id, Some(Utc::now()), None).await
     // );
 
+    log::info!(" 👍🏻 Example completed successfully ❤️");
     Ok(())
 }

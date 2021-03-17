@@ -1,5 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use bigdecimal::BigDecimal;
+use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::watch;
@@ -51,10 +52,13 @@ pub struct AgreementPayment {
     pub activities: HashMap<String, ActivityPayment>,
 
     pub update_interval: std::time::Duration,
-    pub payment_deadline: Option<chrono::Duration>,
+    pub payment_timeout: Option<chrono::Duration>,
     // If at least one deadline elapses, we don't want to generate any
     // new unnecessary events.
     pub deadline_elapsed: bool,
+    // If we are unable to send DebitNotes, we should break Agreement the same
+    // way as in case, when Requestor doesn't accept them.
+    pub last_send_debit_note: DateTime<Utc>,
 
     // Watches for waiting for activities. You can await on receiver
     // to observe changes in number of active activities.
@@ -90,8 +94,9 @@ impl AgreementPayment {
             activities: HashMap::new(),
             payment_model,
             update_interval,
-            payment_deadline: debit_deadline,
+            payment_timeout: debit_deadline,
             deadline_elapsed: false,
+            last_send_debit_note: Utc::now(),
             watch_sender: sender,
             activities_watch: ActivitiesWaiter {
                 watch_receiver: receiver,
@@ -100,6 +105,10 @@ impl AgreementPayment {
     }
 
     pub fn add_created_activity(&mut self, activity_id: &str) {
+        // Track ability to send DebitNotes from Activity start.
+        // Note: we have single timestamp for all activities.
+        self.last_send_debit_note = Utc::now();
+
         let activity = ActivityPayment::Running {
             activity_id: activity_id.to_string(),
         };

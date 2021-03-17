@@ -64,12 +64,12 @@ impl ZksyncDao {
         msg: &SchedulePayment,
     ) -> Result<(), GenericError> {
         let recipient = msg.recipient().to_owned();
-        let gnt_amount = utils::big_dec_to_u256(msg.amount());
+        let glm_amount = utils::big_dec_to_u256(msg.amount());
         let gas_amount = Default::default();
         let (network, _token) = platform_to_network_token(msg.platform())?;
 
         let payment = PaymentEntity {
-            amount: utils::u256_to_big_endian_hex(gnt_amount),
+            amount: utils::u256_to_big_endian_hex(glm_amount),
             gas: utils::u256_to_big_endian_hex(gas_amount),
             order_id: order_id.to_string(),
             payment_due_date: msg.due_date().naive_utc(),
