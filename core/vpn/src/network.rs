@@ -393,7 +393,10 @@ impl Vpn {
         let socket = self.sockets.remove(handle);
         socket
             .tuple()
-            .map(|t| self.connections.remove(&t).map(|c| c.0))
+            .map(|t| {
+                self.ports.free(t.0, t.2);
+                self.connections.remove(&t).map(|c| c.0)
+            })
             .flatten()
     }
 
