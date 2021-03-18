@@ -1,4 +1,4 @@
-use chrono::{Duration, NaiveDateTime, TimeZone, Utc};
+use chrono::{NaiveDateTime, TimeZone, Utc};
 use diesel::sql_types::Text;
 use serde::{Deserialize, Serialize};
 
@@ -128,8 +128,11 @@ impl Proposal {
     pub fn new_requestor(demand: ModelDemand, offer: ModelOffer) -> Proposal {
         let negotiation = Negotiation::from_subscriptions(&demand, &offer, Owner::Requestor);
         let creation_ts = Utc::now().naive_utc();
-        // TODO: How to set expiration? Config?
-        let expiration_ts = creation_ts + Duration::minutes(10);
+        let expiration_ts = match demand.expiration_ts < offer.expiration_ts {
+            true => demand.expiration_ts.clone(),
+            false => offer.expiration_ts.clone(),
+        };
+
         let proposal_id =
             ProposalId::generate_id(&offer.id, &demand.id, &creation_ts, Owner::Requestor);
 
@@ -209,11 +212,10 @@ impl Proposal {
     pub fn from_client(
         &self,
         proposal: &NewProposal,
+        expiration_ts: &NaiveDateTime,
     ) -> Result<Proposal, serde_json::error::Error> {
         let owner = self.body.id.owner();
         let creation_ts = Utc::now().naive_utc();
-        // TODO: How to set expiration? Config?
-        let expiration_ts = creation_ts + Duration::minutes(10);
         let proposal_id = ProposalId::generate_id(
             &self.negotiation.offer_id,
             &self.negotiation.demand_id,
@@ -232,7 +234,7 @@ impl Proposal {
             constraints: proposal.constraints.clone(),
             state: ProposalState::Draft,
             creation_ts,
-            expiration_ts,
+            expiration_ts: expiration_ts.clone(),
         };
 
         Ok(Proposal {
