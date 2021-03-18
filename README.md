@@ -38,7 +38,7 @@ Has a need to use IT resources such as computation hardware. Those resources are
 Has IT resources available that can be shared with other actors in the network. Those resources are sold in the decentralized market.
 
 * **Developer**
-Builds applications to run for requestors on the network. Golem's potential goes much beyond a singular application. In Golem there is not a single monolithic use-case - Golem allows for a self sustainable ecosystem. A myriad of different types of users requesting digital resources, providing them and building applications on top of the platform. See [Awesome Golem](https://github.com/golemfactory/awesome-golem/blob/main/README.md#%EF%B8%8F-apps) for just a taste of the various types of applications that can be built and run on Golem!
+Builds applications to run for requestors on the network. Golem's potential goes much beyond a singular application. See [Awesome Golem](https://github.com/golemfactory/awesome-golem/blob/main/README.md#%EF%B8%8F-apps) for just a taste of the various types of applications that can be built and run on Golem!
 
 ## Documentation
 For a more in-depth look at how Golem works, head over to our [documentation.](https://handbook.golem.network/)
@@ -72,7 +72,7 @@ Other ExeUnit types are to come (see below).
 
 ## MVP
 
-With the MVP out, in the form of the Beta I ([Grace Hopper](https://github.com/golemfactory/yagna/releases/tag/v0.6.1)) release. The release includes:
+With the MVP out, in the form of the [Beta I, Grace Hopper](https://github.com/golemfactory/yagna/releases/tag/v0.6.1) release. The release includes:
 * Clean and easy UX, most specifically during onboarding.
 * GLM-centric.
 * Production-ready, modular and easy to maintain architecture and code base.  
