@@ -12,7 +12,7 @@ use zksync::zksync_types::H256;
 use zksync::{Network, RpcProvider, Wallet, WalletCredentials};
 use zksync_eth_signer::{EthereumSigner, PrivateKeySigner};
 
-const TOKEN: &str = "GNT";
+const TOKEN: &str = "tGLM";
 const PRIVATE_KEY: &str = "312776bb901c426cb62238db9015c100948534dea42f9fa1591eff4beb35cc13";
 
 #[derive(Clone, Debug, StructOpt)]
@@ -45,7 +45,7 @@ async fn main() -> anyhow::Result<()> {
     info!("Account address {}", addr_hex);
 
     info!("Funding an account");
-    faucet::request_ngnt(&addr_hex, DbNetwork::Rinkeby).await?;
+    faucet::request_tglm(&addr_hex, DbNetwork::Rinkeby).await?;
 
     info!("Creating wallet");
     let provider = RpcProvider::new(Network::Rinkeby);
