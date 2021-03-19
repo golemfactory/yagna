@@ -792,7 +792,7 @@ async fn net_err_while_approving() {
         .await;
 
     match result.unwrap_err() {
-        AgreementError::ProtocolApprove(_) => (),
+        AgreementError::Protocol(_) => (),
         e => panic!("expected protocol error, but got: {}", e),
     };
 }
@@ -1096,6 +1096,72 @@ async fn test_terminate_from_wrong_states() {
             id,
             AgreementDaoError::InvalidTransition {
                 from: AgreementState::Pending,
+                to: AgreementState::Terminated,
+            },
+        )) => assert_eq!(id, agreement_id),
+        e => panic!("Wrong error returned, got: {:?}", e),
+    };
+}
+
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
+async fn test_terminate_rejected_agreement() {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance(REQ_NAME)
+        .await
+        .add_market_instance(PROV_NAME)
+        .await;
+
+    let proposal_id = exchange_draft_proposals(&network, REQ_NAME, PROV_NAME)
+        .await
+        .unwrap()
+        .proposal_id;
+
+    let prov_market = network.get_market(PROV_NAME);
+    let req_market = network.get_market(REQ_NAME);
+    let req_engine = &req_market.requestor_engine;
+    let req_id = network.get_default_id(REQ_NAME);
+    let prov_id = network.get_default_id(PROV_NAME);
+
+    let agreement_id = req_engine
+        .create_agreement(
+            req_id.clone(),
+            &proposal_id,
+            Utc::now() + Duration::milliseconds(30),
+        )
+        .await
+        .unwrap();
+
+    req_engine
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
+        .await
+        .unwrap();
+
+    prov_market
+        .provider_engine
+        .reject_agreement(
+            &prov_id,
+            &agreement_id.clone().translate(Owner::Provider),
+            Some(gen_reason("Not-interested")),
+        )
+        .await
+        .unwrap();
+
+    let result = req_market
+        .terminate_agreement(
+            req_id.clone(),
+            agreement_id.into_client(),
+            Some(gen_reason("Failure")),
+        )
+        .await;
+
+    match result {
+        Ok(_) => panic!("Terminate Agreement should fail."),
+        Err(AgreementError::UpdateState(
+            id,
+            AgreementDaoError::InvalidTransition {
+                from: AgreementState::Rejected,
                 to: AgreementState::Terminated,
             },
         )) => assert_eq!(id, agreement_id),

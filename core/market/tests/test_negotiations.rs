@@ -2,12 +2,12 @@ use ya_client::model::market::{proposal::State, RequestorEvent};
 use ya_market::testing::{
     events_helper::{provider, requestor, ClientProposalHelper},
     mock_offer::client::{not_matching_demand, not_matching_offer, sample_demand, sample_offer},
+    mock_offer::flatten_json,
     negotiation::error::{CounterProposalError, RemoteProposalError},
     proposal_util::{exchange_draft_proposals, NegotiationHelper},
-    MarketServiceExt, MarketsNetwork, Owner, ProposalError, ProposalState, ProposalValidationError,
-    SaveProposalError,
+    wait_for_bcast, MarketServiceExt, MarketsNetwork, Owner, ProposalError, ProposalState,
+    ProposalValidationError, SaveProposalError,
 };
-use ya_market_resolver::flatten::flatten_json;
 
 /// Test countering initial and draft proposals on both Provider and Requestor side.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
@@ -37,10 +37,7 @@ async fn test_exchanging_draft_proposals() {
     let proposal0 = requestor::query_proposal(&market1, &demand_id, "Initial #R")
         .await
         .unwrap();
-    assert_eq!(
-        proposal0.properties,
-        flatten_json(&offer.properties).unwrap()
-    );
+    assert_eq!(proposal0.properties, flatten_json(&offer.properties));
     assert_eq!(proposal0.constraints, offer.constraints);
     assert_eq!(proposal0.issuer_id, identity2.identity);
     assert_eq!(proposal0.state, State::Initial);
@@ -68,7 +65,7 @@ async fn test_exchanging_draft_proposals() {
     assert_eq!(proposal1_prov.constraints, proposal1_req.constraints);
     assert_eq!(
         proposal1_prov.properties,
-        flatten_json(&proposal1_req.properties).unwrap()
+        flatten_json(&proposal1_req.properties)
     );
     assert_eq!(proposal1_prov.proposal_id, proposal1_prov_id.to_string());
     assert_eq!(proposal1_prov.issuer_id, identity1.identity);
@@ -93,7 +90,7 @@ async fn test_exchanging_draft_proposals() {
     assert_eq!(proposal2_req.constraints, proposal2_prov.constraints);
     assert_eq!(
         proposal2_req.properties,
-        flatten_json(&proposal2_prov.properties).unwrap()
+        flatten_json(&proposal2_prov.properties)
     );
     assert_eq!(proposal2_req.proposal_id, proposal2_req_id.to_string());
     assert_eq!(proposal2_req.issuer_id, identity2.identity);
@@ -120,7 +117,7 @@ async fn test_exchanging_draft_proposals() {
     assert_eq!(proposal3_prov.constraints, proposal3_req.constraints);
     assert_eq!(
         proposal3_prov.properties,
-        flatten_json(&proposal3_req.properties).unwrap()
+        flatten_json(&proposal3_req.properties)
     );
     assert_eq!(proposal3_prov.proposal_id, proposal3_prov_id.to_string());
     assert_eq!(proposal3_prov.issuer_id, identity1.identity);
@@ -913,7 +910,7 @@ async fn test_proposal_events_last() {
         .await
         .unwrap();
 
-    market3
+    let sub3 = market3
         .subscribe_offer(&sample_offer(), &identity3)
         .await
         .unwrap();
@@ -927,6 +924,9 @@ async fn test_proposal_events_last() {
         .reject_proposal(&offer2_id, &proposal2_id, &identity2, None)
         .await
         .unwrap();
+
+    // Make sure, that broadcast will reach Requestor.
+    wait_for_bcast(1000, &market1, &sub3, true).await;
 
     let events = market1
         .requestor_engine

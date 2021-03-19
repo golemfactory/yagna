@@ -13,7 +13,7 @@
         "srv": {
           "comp": {
             "expiration": 1594370429690,
-            "task_package": "hash:sha3:9a3b5d67b0b27746283cb5f287c13eab1beaa12d92a9f536b747c7ae:http://3.249.139.167:8000/local-image-c76719083b.gvmi",
+            "task_package": "hash:sha3:9a3b5d67b0b27746283cb5f287c13eab1beaa12d92a9f536b747c7ae:http://yacn2.dev.golem.network:8000/local-image-c76719083b.gvmi",
             "vm": {
               "package_format": "gvmkit-squash"
             }

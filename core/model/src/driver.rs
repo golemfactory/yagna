@@ -3,7 +3,7 @@ use bitflags::bitflags;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
-use ya_client_model::payment::Allocation;
+use ya_client_model::payment::{Allocation, Payment};
 use ya_service_bus::RpcMessage;
 
 pub fn driver_bus_id<T: Display>(driver_name: T) -> String {
@@ -259,42 +259,6 @@ impl RpcMessage for SchedulePayment {
     type Error = GenericError;
 }
 
-// ************************** GET TRANSACTION BALANCE **************************
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct GetTransactionBalance {
-    pub sender: String,
-    pub recipient: String,
-    pub platform: String,
-}
-
-impl GetTransactionBalance {
-    pub fn new(sender: String, recipient: String, platform: String) -> GetTransactionBalance {
-        GetTransactionBalance {
-            sender,
-            recipient,
-            platform,
-        }
-    }
-    pub fn sender(&self) -> String {
-        self.sender.clone()
-    }
-
-    pub fn recipient(&self) -> String {
-        self.recipient.clone()
-    }
-
-    pub fn platform(&self) -> String {
-        self.platform.clone()
-    }
-}
-
-impl RpcMessage for GetTransactionBalance {
-    const ID: &'static str = "GetTransactionBalance";
-    type Item = BigDecimal;
-    type Error = GenericError;
-}
-
 // ************************** VALIDATE ALLOCATION **************************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -439,5 +403,42 @@ impl Transfer {
 impl RpcMessage for Transfer {
     const ID: &'static str = "Transfer";
     type Item = String; // Transaction Identifier
+    type Error = GenericError;
+}
+
+// ************************ SIGN PAYMENT ************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SignPayment(pub Payment);
+
+impl From<Payment> for SignPayment {
+    fn from(payment: Payment) -> Self {
+        Self(payment)
+    }
+}
+
+impl RpcMessage for SignPayment {
+    const ID: &'static str = "SignPayment";
+    type Item = Vec<u8>;
+    type Error = GenericError;
+}
+
+// ********************** VERIFY SIGNATURE **********************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct VerifySignature {
+    pub payment: Payment,
+    pub signature: Vec<u8>,
+}
+
+impl VerifySignature {
+    pub fn new(payment: Payment, signature: Vec<u8>) -> Self {
+        Self { payment, signature }
+    }
+}
+
+impl RpcMessage for VerifySignature {
+    const ID: &'static str = "VerifySignature";
+    type Item = bool; // is signature correct
     type Error = GenericError;
 }

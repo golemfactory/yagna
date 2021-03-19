@@ -6,7 +6,9 @@
 // Extrnal crates
 use chrono::{Duration, TimeZone, Utc};
 use lazy_static::lazy_static;
+use num_bigint::BigInt;
 use std::collections::HashMap;
+use std::env;
 use std::str::FromStr;
 use uuid::Uuid;
 
@@ -35,6 +37,18 @@ use crate::{
 
 lazy_static! {
     static ref TX_SUMBIT_TIMEOUT: Duration = Duration::minutes(15);
+    static ref MAX_ALLOCATION_SURCHARGE: BigDecimal =
+        match env::var("MAX_ALLOCATION_SURCHARGE").map(|s| s.parse()) {
+            Ok(Ok(x)) => x,
+            _ => BigDecimal::from(200),
+        };
+
+    // Environment variable will be replaced by allocation parameter in PAY-82
+    static ref TRANSACTIONS_PER_ALLOCATION: BigInt =
+        match env::var("TRANSACTIONS_PER_ALLOCATION").map(|s| s.parse()) {
+            Ok(Ok(x)) => x,
+            _ => BigInt::from(10),
+        };
 }
 
 pub struct ZksyncDriver {
@@ -195,17 +209,6 @@ impl PaymentDriver for ZksyncDriver {
         false
     }
 
-    async fn get_transaction_balance(
-        &self,
-        _db: DbExecutor,
-        _caller: String,
-        msg: GetTransactionBalance,
-    ) -> Result<BigDecimal, GenericError> {
-        log::debug!("get_transaction_balance: {:?}", msg);
-        // TODO: Get real transaction balance
-        Ok(BigDecimal::from(1_000_000_000_000_000_000u64))
-    }
-
     async fn init(&self, _db: DbExecutor, _caller: String, msg: Init) -> Result<Ack, GenericError> {
         log::debug!("init: {:?}", msg);
         let address = msg.address().clone();
@@ -329,7 +332,27 @@ Mind that to be eligible you have to run your app at least once on testnet -
             .into_iter()
             .map(|allocation| allocation.remaining_amount)
             .sum();
-        Ok(msg.amount <= (account_balance - total_allocated_amount))
+
+        // NOTE: `wallet::get_tx_fee` accepts an _recipient_ address which is unknown at the moment
+        // so the _sender_ address is provider. This might bias fee calculation, because transaction
+        // to new account is little more expensive.
+        let tx_fee_cost = wallet::get_tx_fee(&msg.address, network).await?;
+        let total_txs_cost = tx_fee_cost * &*TRANSACTIONS_PER_ALLOCATION;
+        let allocation_surcharge = (&*MAX_ALLOCATION_SURCHARGE).min(&total_txs_cost);
+
+        log::info!(
+            "Allocation validation: \
+            allocating: {:.5}, \
+            account_balance: {:.5}, \
+            total_allocated_amount: {:.5}, \
+            allocation_surcharge: {:.5} \
+            ",
+            msg.amount,
+            account_balance,
+            total_allocated_amount,
+            allocation_surcharge,
+        );
+        Ok(msg.amount <= (account_balance - total_allocated_amount - allocation_surcharge))
     }
 }
 

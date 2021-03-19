@@ -3,8 +3,10 @@ use anyhow::{anyhow, Result};
 use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
 
-use crate::actix_signal::Subscribe;
-use crate::{actix_signal::SignalSlot, actix_signal_handler};
+use crate::{
+    actix_signal::{SignalSlot, Subscribe},
+    actix_signal_handler,
+};
 use std::pin::Pin;
 
 /// Will be sent when deadline elapsed.
