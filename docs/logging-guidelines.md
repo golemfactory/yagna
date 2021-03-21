@@ -54,11 +54,11 @@ The log entries should record following aspects/attributes:
 ### Generic guidelines
 - Use descriptive messages and proper casing/punctuation, ie. instead of: 
   ```
-  [2020-08-27T07:56:22Z DEBUG yagna] init gnt drv
+  [2020-08-27T07:56:22Z DEBUG yagna] init glm drv
   ```
   do this:
   ```
-  [2020-08-27T07:56:22Z DEBUG yagna] Initializing GNT payment driver
+  [2020-08-27T07:56:22Z DEBUG yagna] Initializing GLM payment driver
   ```
 
 ### Data confidentiality

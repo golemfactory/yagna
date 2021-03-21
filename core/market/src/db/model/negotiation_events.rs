@@ -10,6 +10,7 @@ use ya_persistence::executor::DbExecutor;
 
 use super::SubscriptionId;
 use crate::db::dao::{AgreementDao, ProposalDao};
+use crate::db::model::agreement_events::DbReason;
 use crate::db::model::{Agreement, AgreementId, Owner, Proposal, ProposalId};
 use crate::db::schema::market_negotiation_event;
 
@@ -63,7 +64,7 @@ pub struct MarketEvent {
     /// It can be Proposal, Agreement or structure,
     /// that will represent PropertyQuery.
     pub artifact_id: ProposalId,
-    pub reason: Option<String>,
+    pub reason: Option<DbReason>,
 }
 
 #[derive(Clone, Debug, Insertable)]
@@ -72,7 +73,7 @@ pub struct NewMarketEvent {
     pub subscription_id: SubscriptionId,
     pub event_type: EventType,
     pub artifact_id: ProposalId, // TODO: typed
-    pub reason: Option<String>,
+    pub reason: Option<DbReason>,
 }
 
 impl MarketEvent {
@@ -88,7 +89,7 @@ impl MarketEvent {
         }
     }
 
-    pub fn proposal_rejected(proposal: &Proposal, reason: Option<String>) -> NewMarketEvent {
+    pub fn proposal_rejected(proposal: &Proposal, reason: Option<Reason>) -> NewMarketEvent {
         NewMarketEvent {
             subscription_id: proposal.negotiation.subscription_id.clone(),
             event_type: match proposal.body.id.owner() {
@@ -96,7 +97,7 @@ impl MarketEvent {
                 Owner::Provider => EventType::ProviderProposalRejected,
             },
             artifact_id: proposal.body.id.clone(),
-            reason,
+            reason: reason.map(|reason| DbReason(reason)),
         }
     }
 
@@ -124,7 +125,7 @@ impl MarketEvent {
                 proposal_id: self.artifact_id.to_string(),
                 reason: match self.reason {
                     None => None,
-                    Some(r) => Some(serde_json::from_str(&r).unwrap_or_else(|_| Reason::new(r))),
+                    Some(reason) => Some(reason.0),
                 },
             }),
             EventType::RequestorPropertyQuery => unimplemented!(),
@@ -176,7 +177,7 @@ impl MarketEvent {
                 proposal_id: self.artifact_id.to_string(),
                 reason: match self.reason {
                     None => None,
-                    Some(r) => Some(serde_json::from_str(&r).unwrap_or_else(|_| Reason::new(r))),
+                    Some(reason) => Some(reason.0),
                 },
             }),
             EventType::ProviderPropertyQuery => unimplemented!(),

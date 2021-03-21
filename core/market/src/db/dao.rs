@@ -16,7 +16,7 @@ mod proposal;
 
 pub use agreement::{AgreementDao, AgreementDaoError, SaveAgreementError};
 pub use agreement_events::AgreementEventsDao;
-pub use demand::DemandDao;
+pub use demand::{DemandDao, DemandState};
 pub use negotiation_events::{NegotiationEventsDao, TakeEventsError};
 pub use offer::{OfferDao, OfferState};
 pub use proposal::{ChangeProposalStateError, ProposalDao, SaveProposalError};

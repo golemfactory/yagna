@@ -54,9 +54,6 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
             move |db, dr, c, m| async move { dr.get_account_balance(db, c, m).await }
         )
         .bind_with_processor(
-            move |db, dr, c, m| async move { dr.get_transaction_balance(db, c, m).await }
-        )
-        .bind_with_processor(
             move |db, dr, c, m| async move { dr.init(db, c, m).await }
         )
         .bind_with_processor(
@@ -70,6 +67,12 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
         )
         .bind_with_processor(
             move |db, dr, c, m| async move { dr.validate_allocation(db, c, m).await }
+        )
+        .bind_with_processor(
+            move |db, dr, c, m| async move { dr.sign_payment(db, c, m).await }
+        )
+        .bind_with_processor(
+            move |db, dr, c, m| async move { dr.verify_signature(db, c, m).await }
         );
 
     log::debug!("Successfully bound payment driver service to service bus.");

@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Result};
-use bigdecimal::{BigDecimal, Signed, ToPrimitive};
-use num_bigint::BigInt;
+use bigdecimal::BigDecimal;
+use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::watch;
@@ -22,36 +22,8 @@ pub struct CostInfo {
 
 impl CostInfo {
     pub fn new(usage: Vec<f64>, cost: BigDecimal) -> Self {
-        let cost = round(cost, PAYMENT_PRECISION);
+        let cost = cost.round(PAYMENT_PRECISION);
         CostInfo { usage, cost }
-    }
-}
-
-/// Return number rounded to round_digits precision after the decimal point
-/// Copied from https://docs.rs/bigdecimal/0.2.0/src/bigdecimal/lib.rs.html#589-612
-/// TODO: Remove when we update to bigdecimal 0.2.0
-fn round(value: BigDecimal, round_digits: i64) -> BigDecimal {
-    let (bigint, decimal_part_digits) = value.as_bigint_and_exponent();
-    let need_to_round_digits = decimal_part_digits - round_digits;
-    if round_digits >= 0 && need_to_round_digits <= 0 {
-        return value;
-    }
-
-    let mut number = bigint.to_i128().unwrap();
-    if number < 0 {
-        number = -number;
-    }
-    for _ in 0..(need_to_round_digits - 1) {
-        number /= 10;
-    }
-    let digit = number % 10;
-
-    if digit <= 4 {
-        value.with_scale(round_digits)
-    } else if bigint.is_negative() {
-        value.with_scale(round_digits) - BigDecimal::new(BigInt::from(1), round_digits)
-    } else {
-        value.with_scale(round_digits) + BigDecimal::new(BigInt::from(1), round_digits)
     }
 }
 
@@ -80,10 +52,13 @@ pub struct AgreementPayment {
     pub activities: HashMap<String, ActivityPayment>,
 
     pub update_interval: std::time::Duration,
-    pub payment_deadline: Option<chrono::Duration>,
+    pub payment_timeout: Option<chrono::Duration>,
     // If at least one deadline elapses, we don't want to generate any
     // new unnecessary events.
     pub deadline_elapsed: bool,
+    // If we are unable to send DebitNotes, we should break Agreement the same
+    // way as in case, when Requestor doesn't accept them.
+    pub last_send_debit_note: DateTime<Utc>,
 
     // Watches for waiting for activities. You can await on receiver
     // to observe changes in number of active activities.
@@ -119,8 +94,9 @@ impl AgreementPayment {
             activities: HashMap::new(),
             payment_model,
             update_interval,
-            payment_deadline: debit_deadline,
+            payment_timeout: debit_deadline,
             deadline_elapsed: false,
+            last_send_debit_note: Utc::now(),
             watch_sender: sender,
             activities_watch: ActivitiesWaiter {
                 watch_receiver: receiver,
@@ -129,6 +105,10 @@ impl AgreementPayment {
     }
 
     pub fn add_created_activity(&mut self, activity_id: &str) {
+        // Track ability to send DebitNotes from Activity start.
+        // Note: we have single timestamp for all activities.
+        self.last_send_debit_note = Utc::now();
+
         let activity = ActivityPayment::Running {
             activity_id: activity_id.to_string(),
         };
@@ -288,14 +268,14 @@ mod tests {
     fn test_round() {
         let x = BigDecimal::from_str("12345.123456789").unwrap();
         let y = BigDecimal::from_str("12345.12346").unwrap();
-        assert_eq!(round(x, 5), y);
+        assert_eq!(x.round(5), y);
 
         let x = BigDecimal::from_str("12345.123456789").unwrap();
         let y = BigDecimal::from_str("12345").unwrap();
-        assert_eq!(round(x, 0), y);
+        assert_eq!(x.round(0), y);
 
         let x = BigDecimal::from_str("12345").unwrap();
         let y = BigDecimal::from_str("12345").unwrap();
-        assert_eq!(round(x, 15), y);
+        assert_eq!(x.round(15), y);
     }
 }

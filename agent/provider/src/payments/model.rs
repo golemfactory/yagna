@@ -35,10 +35,10 @@ impl<'a> PaymentDescription<'a> {
     }
 
     pub fn get_debit_note_deadline(&self) -> Result<Option<chrono::Duration>> {
-        match self
-            .agreement
-            .pointer_typed::<i64>(DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY)
-        {
+        match self.agreement.pointer_typed::<i64>(&format!(
+            "/offer/properties{}",
+            DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY
+        )) {
             Ok(deadline) => Ok(Some(chrono::Duration::seconds(deadline))),
             Err(Error::NoKey(_)) => Ok(None),
             Err(e) => Err(e.into()),
