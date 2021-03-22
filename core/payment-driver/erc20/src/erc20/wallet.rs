@@ -150,6 +150,7 @@ pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails
     let hex_hash = H256::from_str(&tx_hash[2..]).unwrap();
     let tx = ethereum::get_tx_receipt(hex_hash, network).await?.unwrap();
 
+    // TODO: Properly parse logs after https://github.com/tomusdrw/rust-web3/issues/208
     let tx_log = &tx.logs[0];
     let sender = utils::topic_to_str_address(&tx_log.topics[1]);
     let recipient = utils::topic_to_str_address(&tx_log.topics[2]);
