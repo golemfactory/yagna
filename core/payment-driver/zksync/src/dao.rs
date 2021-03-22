@@ -95,6 +95,7 @@ impl ZksyncDao {
         &self,
         details: &PaymentDetails,
         date: DateTime<Utc>,
+        network: Network,
     ) -> String {
         // TO CHECK: No difference between tx_id and tx_hash on zksync
         // TODO: Implement pre-sign
@@ -109,7 +110,7 @@ impl ZksyncDao {
             encoded: "".to_string(),   // not used till pre-sign
             signature: "".to_string(), // not used till pre-sign
             tx_hash: None,
-            network: Network::Rinkeby, // TODO: update network
+            network,
         };
 
         if let Err(e) = self.transaction().insert_transactions(vec![tx]).await {
@@ -195,13 +196,8 @@ impl ZksyncDao {
         }
     }
 
-    pub async fn get_unconfirmed_txs(&self) -> Vec<TransactionEntity> {
-        // TODO: Pass network
-        match self
-            .transaction()
-            .get_unconfirmed_txs(Network::Rinkeby)
-            .await
-        {
+    pub async fn get_unconfirmed_txs(&self, network: Network) -> Vec<TransactionEntity> {
+        match self.transaction().get_unconfirmed_txs(network).await {
             Ok(txs) => txs,
             Err(e) => {
                 log::error!("Failed to fetch unconfirmed transactions : {:?}", e);
