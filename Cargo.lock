@@ -7419,7 +7419,7 @@ dependencies = [
 
 [[package]]
 name = "ya-compile-time-utils"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "git-version",
  "metrics 0.12.1",
