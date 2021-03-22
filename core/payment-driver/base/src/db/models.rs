@@ -28,22 +28,10 @@ pub const PAYMENT_STATUS_NOT_ENOUGH_FUNDS: i32 = 3;
 pub const PAYMENT_STATUS_NOT_ENOUGH_GAS: i32 = 4;
 pub const PAYMENT_STATUS_FAILED: i32 = 5;
 
-pub const TRANSFER_TX: i32 = 1;
-const FAUCET_TX: i32 = 0;
-
 #[derive(Clone, Copy)]
 pub enum TxType {
-    Transfer,
-    Faucet,
-}
-
-impl Into<i32> for TxType {
-    fn into(self) -> i32 {
-        match &self {
-            TxType::Transfer => TRANSFER_TX,
-            TxType::Faucet => FAUCET_TX,
-        }
-    }
+    Faucet = 0,
+    Transfer = 1,
 }
 
 pub enum TransactionStatus {

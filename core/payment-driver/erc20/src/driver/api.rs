@@ -79,10 +79,7 @@ pub async fn validate_allocation(msg: ValidateAllocation) -> Result<bool, Generi
         .map(|allocation| allocation.remaining_amount)
         .sum();
 
-    // TODO: use gas
-    // // NOTE: `wallet::get_tx_fee` accepts an _recipient_ address which is unknown at the moment
-    // // so the _sender_ address is provider. This might bias fee calculation, because transaction
-    // // to new account is little more expensive.
+    // TODO: calculate fee. Below commented out reference to zkSync implementation
     // let tx_fee_cost = wallet::get_tx_fee(&msg.address, network).await?;
     // let total_txs_cost = tx_fee_cost * &*TRANSACTIONS_PER_ALLOCATION;
     // let allocation_surcharge = (&*MAX_ALLOCATION_SURCHARGE).min(&total_txs_cost);

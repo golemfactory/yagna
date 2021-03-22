@@ -27,6 +27,7 @@ lazy_static::lazy_static! {
         }
     };
     pub static ref DEFAULT_DB_NETWORK: DbNetwork = DbNetwork::from_str(DEFAULT_NETWORK).unwrap();
+    pub static ref MAINNET_DB_NETWORK: DbNetwork = DbNetwork::from_str(MAINNET_NETWORK).unwrap();
 }
 
 pub fn platform_to_network_token(platform: String) -> Result<(DbNetwork, String), GenericError> {

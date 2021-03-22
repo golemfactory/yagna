@@ -90,7 +90,7 @@ impl<'c> TransactionDao<'c> {
         .await
     }
 
-    pub async fn get_unsend_txs(&self, network: Network) -> DbResult<Vec<TransactionEntity>> {
+    pub async fn get_unsent_txs(&self, network: Network) -> DbResult<Vec<TransactionEntity>> {
         self.get_by_status(TransactionStatus::Created.into(), network)
             .await
     }

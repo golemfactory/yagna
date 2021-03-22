@@ -94,7 +94,7 @@ pub async fn sign_faucet_tx(
         gas: *GLM_FAUCET_GAS,
         data,
     };
-    let chain_id = get_chain_id(network);
+    let chain_id = network as u64;
     let node_id = NodeId::from(address.as_ref());
     let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
 
@@ -131,7 +131,7 @@ pub async fn sign_transfer_tx(
         gas: *GLM_TRANSFER_GAS,
         data,
     };
-    let chain_id = get_chain_id(network);
+    let chain_id = network as u64;
     let node_id = NodeId::from(address.as_ref());
     let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
 
@@ -191,13 +191,6 @@ fn get_rpc_addr_from_env(network: Network) -> String {
             .unwrap_or("https://geth.golem.network:55555".to_string()),
         Network::Rinkeby => std::env::var("ERC20_RINKEBY_GETH_ADDR")
             .unwrap_or("http://geth.testnet.golem.network:55555".to_string()),
-    }
-}
-
-fn get_chain_id(network: Network) -> u64 {
-    match network {
-        Network::Mainnet => 1,
-        Network::Rinkeby => 4,
     }
 }
 
@@ -268,7 +261,7 @@ fn raw_tx_to_entity(
         timestamp: timestamp.naive_utc(),
         encoded: serde_json::to_string(raw_tx).unwrap(),
         status: TransactionStatus::Created.into(),
-        tx_type: tx_type.into(),
+        tx_type: tx_type as i32,
         signature: hex::encode(signature),
         tx_hash: None,
         network: Network::from_u64(chain_id).unwrap(),

@@ -98,6 +98,9 @@ pub async fn request_glm(
     // After inserting into the database, the tx will get send by the send_payments job
     dao.insert_raw_transaction(db_tx).await;
 
+    // Wait for tx to get mined:
+    // - send_payments job runs every 10 seconds
+    // - blocks are mined every 15 seconds
     delay_for(time::Duration::from_secs(10)).await;
 
     wait_for_glm(address, network).await?;

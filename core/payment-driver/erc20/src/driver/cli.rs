@@ -64,14 +64,12 @@ pub async fn fund(dao: &Erc20Dao, msg: Fund) -> Result<String, GenericError> {
             format!("Received funds from the faucet. address={}", &address)
         }
         Network::Mainnet => format!(
-            r#"Your mainnet erc20 address is {}.
+            r#"Your mainnet ethereum address is {}.
 
-To fund your wallet and be able to pay for your activities on Golem head to
-the https://chat.golem.network, join the #funding channel and type /terms
-and follow instructions to request GLMs.
+Send some GLM tokens and ETH for gas to this address to be able to use this driver.
 
-Mind that to be eligible you have to run your app at least once on testnet -
-- we will verify if that is true so we can avoid people requesting "free GLMs"."#,
+Using this driver is not recommended.
+If you want to easily acquire some GLM to try Golem on mainnet please use zksync driver."#,
             address
         ),
     };

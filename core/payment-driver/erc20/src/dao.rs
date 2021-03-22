@@ -230,8 +230,8 @@ impl Erc20Dao {
         }
     }
 
-    pub async fn get_unsend_txs(&self, network: Network) -> Vec<TransactionEntity> {
-        match self.transaction().get_unsend_txs(network).await {
+    pub async fn get_unsent_txs(&self, network: Network) -> Vec<TransactionEntity> {
+        match self.transaction().get_unsent_txs(network).await {
             Ok(txs) => txs,
             Err(e) => {
                 log::error!("Failed to fetch unconfirmed transactions : {:?}", e);
@@ -262,7 +262,7 @@ impl Erc20Dao {
         {
             Ok(txs) => txs,
             Err(e) => {
-                log::error!("Failed to fetch unsend transactions : {:?}", e);
+                log::error!("Failed to fetch unsent transactions : {:?}", e);
                 vec![]
             }
         }

@@ -105,7 +105,9 @@ pub async fn send_transactions(
             Ok(tx_hash) => {
                 let str_tx_hash = format!("0x{:x}", &tx_hash);
                 dao.transaction_sent(&tx.tx_id, &str_tx_hash).await;
-                log::info!("Send transaction. id={}, hash={}", &tx.tx_id, &str_tx_hash);
+                log::info!("Send transaction. hash={}", &str_tx_hash);
+                log::debug!("id={}", &tx.tx_id);
+
             }
             Err(e) => {
                 log::error!("Error sending transaction: {:?}", e);
@@ -116,21 +118,22 @@ pub async fn send_transactions(
     Ok(())
 }
 
-pub async fn get_tx_fee(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
-    // let token = get_network_token(network, None);
-    // let wallet = get_wallet(&address, network).await?;
-    // let tx_fee = wallet
-    //     .provider
-    //     .get_tx_fee(TxFeeTypes::Transfer, wallet.address(), token.as_str())
-    //     .await
-    //     .map_err(GenericError::new)?
-    //     .total_fee;
-    // let tx_fee_bigdec = utils::big_uint_to_big_dec(tx_fee);
-    //
-    // log::debug!("Transaction fee {:.5} {}", tx_fee_bigdec, token.as_str());
-    // Ok(tx_fee_bigdec)
-    todo!();
-}
+// TODO: calculate fee. Below commented out reference to zkSync implementation
+// pub async fn get_tx_fee(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
+//     // let token = get_network_token(network, None);
+//     // let wallet = get_wallet(&address, network).await?;
+//     // let tx_fee = wallet
+//     //     .provider
+//     //     .get_tx_fee(TxFeeTypes::Transfer, wallet.address(), token.as_str())
+//     //     .await
+//     //     .map_err(GenericError::new)?
+//     //     .total_fee;
+//     // let tx_fee_bigdec = utils::big_uint_to_big_dec(tx_fee);
+//     //
+//     // log::debug!("Transaction fee {:.5} {}", tx_fee_bigdec, token.as_str());
+//     // Ok(tx_fee_bigdec)
+//     todo!();
+// }
 
 pub async fn check_tx(
     tx_hash: &str,

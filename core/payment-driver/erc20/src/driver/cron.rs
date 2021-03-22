@@ -113,11 +113,7 @@ pub async fn process_payments_for_account(dao: &Erc20Dao, node_id: &str, network
                 .await
                 .unwrap();
         let db_nonce = dao.get_next_nonce(&node_id, network).await.unwrap();
-        nonce = if network_nonce > db_nonce {
-            network_nonce
-        } else {
-            db_nonce
-        };
+        nonce = std::cmp::max(network_nonce, db_nonce);
         log::debug!("Payments: nonce={}, details={:?}", &nonce, payments);
     }
     for payment in payments {
@@ -126,7 +122,7 @@ pub async fn process_payments_for_account(dao: &Erc20Dao, node_id: &str, network
 }
 
 pub async fn process_transactions(dao: &Erc20Dao, network: Network) {
-    let transactions: Vec<TransactionEntity> = dao.get_unsend_txs(network).await;
+    let transactions: Vec<TransactionEntity> = dao.get_unsent_txs(network).await;
 
     if !transactions.is_empty() {
         log::debug!("transactions: {:?}", transactions);
