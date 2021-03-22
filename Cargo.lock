@@ -7363,7 +7363,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.5.1"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=f3ae6d240b95d0ecd0b680e881af38afca2180f6#f3ae6d240b95d0ecd0b680e881af38afca2180f6"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=24d7f520267b88ae0722d50e8044bf59b20ef699#24d7f520267b88ae0722d50e8044bf59b20ef699"
 dependencies = [
  "awc 1.0.1",
  "bytes 0.5.6",
@@ -7388,7 +7388,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.3.1"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=f3ae6d240b95d0ecd0b680e881af38afca2180f6#f3ae6d240b95d0ecd0b680e881af38afca2180f6"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=24d7f520267b88ae0722d50e8044bf59b20ef699#24d7f520267b88ae0722d50e8044bf59b20ef699"
 dependencies = [
  "bigdecimal 0.2.0",
  "chrono",
