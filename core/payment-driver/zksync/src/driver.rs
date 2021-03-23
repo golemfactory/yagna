@@ -5,6 +5,7 @@
 */
 // Extrnal crates
 use chrono::{Duration, TimeZone, Utc};
+use futures::lock::Mutex;
 use lazy_static::lazy_static;
 use num_bigint::BigInt;
 use std::collections::HashMap;
@@ -54,6 +55,8 @@ lazy_static! {
 pub struct ZksyncDriver {
     active_accounts: AccountsRc,
     dao: ZksyncDao,
+    sendout_lock: Mutex<()>,
+    confirmation_lock: Mutex<()>,
 }
 
 impl ZksyncDriver {
@@ -61,6 +64,8 @@ impl ZksyncDriver {
         Self {
             active_accounts: Accounts::new_rc(),
             dao: ZksyncDao::new(db),
+            sendout_lock: Default::default(),
+            confirmation_lock: Default::default(),
         }
     }
 
@@ -357,11 +362,39 @@ Mind that to be eligible you have to run your app at least once on testnet -
         );
         Ok(msg.amount <= (account_balance - total_allocated_amount - allocation_surcharge))
     }
+
+    async fn shut_down(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        msg: ShutDown,
+    ) -> Result<(), GenericError> {
+        self.send_out_payments().await;
+        let timeout = Duration::from_std(msg.timeout)
+            .map_err(|e| GenericError::new(format!("Invalid shutdown timeout: {}", e)))?;
+        let deadline = Utc::now() + timeout - Duration::seconds(1);
+        while {
+            self.confirm_payments().await; // Run it at least once
+            Utc::now() < deadline
+        } {
+            tokio::time::delay_for(std::time::Duration::from_secs(1)).await;
+        }
+        Ok(())
+    }
 }
 
 #[async_trait(?Send)]
 impl PaymentDriverCron for ZksyncDriver {
     async fn confirm_payments(&self) {
+        let _ = match self.confirmation_lock.try_lock() {
+            None => {
+                log::trace!("ZkSync confirmation job in progress.");
+                return;
+            }
+            Some(x) => x,
+        };
+        log::trace!("Running zkSync confirmation job...");
+
         for network_key in self.get_networks().keys() {
             let network =
                 match DbNetwork::from_str(&network_key) {
@@ -450,11 +483,21 @@ impl PaymentDriverCron for ZksyncDriver {
                 }
             }
         }
+        log::trace!("ZkSync confirmation job complete.");
     }
 
-    async fn process_payments(&self) {
+    async fn send_out_payments(&self) {
+        let _ = match self.sendout_lock.try_lock() {
+            None => {
+                log::trace!("ZkSync send-out job in progress.");
+                return;
+            }
+            Some(x) => x,
+        };
+        log::trace!("Running zkSync send-out job...");
         for node_id in self.active_accounts.borrow().list_accounts() {
             self.process_payments_for_account(&node_id).await;
         }
+        log::trace!("ZkSync send-out job complete.");
     }
 }

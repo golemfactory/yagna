@@ -4,6 +4,8 @@
     Please limit the logic in this file, use local mods to handle the calls.
 */
 // Extrnal crates
+use chrono::{Duration, Utc};
+use futures::lock::Mutex;
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -31,6 +33,8 @@ mod cron;
 pub struct Erc20Driver {
     active_accounts: AccountsRc,
     dao: Erc20Dao,
+    sendout_lock: Mutex<()>,
+    confirmation_lock: Mutex<()>,
 }
 
 impl Erc20Driver {
@@ -38,6 +42,8 @@ impl Erc20Driver {
         Self {
             active_accounts: Accounts::new_rc(),
             dao: Erc20Dao::new(db),
+            sendout_lock: Default::default(),
+            confirmation_lock: Default::default(),
         }
     }
 
@@ -172,17 +178,53 @@ impl PaymentDriver for Erc20Driver {
     ) -> Result<bool, GenericError> {
         api::validate_allocation(msg).await
     }
+
+    async fn shut_down(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        msg: ShutDown,
+    ) -> Result<(), GenericError> {
+        self.send_out_payments().await;
+        let timeout = Duration::from_std(msg.timeout)
+            .map_err(|e| GenericError::new(format!("Invalid shutdown timeout: {}", e)))?;
+        let deadline = Utc::now() + timeout - Duration::seconds(1);
+        while {
+            self.confirm_payments().await; // Run it at least once
+            Utc::now() < deadline
+        } {
+            tokio::time::delay_for(std::time::Duration::from_secs(1)).await;
+        }
+        Ok(())
+    }
 }
 
 #[async_trait(?Send)]
 impl PaymentDriverCron for Erc20Driver {
     async fn confirm_payments(&self) {
+        let _ = match self.confirmation_lock.try_lock() {
+            None => {
+                log::trace!("ERC-20 confirmation job in progress.");
+                return;
+            }
+            Some(x) => x,
+        };
+        log::trace!("Running ERC-20 confirmation job...");
         for network_key in self.get_networks().keys() {
             cron::confirm_payments(&self.dao, &self.get_name(), network_key).await;
         }
+        log::trace!("ERC-20 confirmation job complete.");
     }
 
-    async fn process_payments(&self) {
+    async fn send_out_payments(&self) {
+        let _ = match self.sendout_lock.try_lock() {
+            None => {
+                log::trace!("ERC-20 send-out job in progress.");
+                return;
+            }
+            Some(x) => x,
+        };
+        log::trace!("Running ERC-20 send-out job...");
         for network_key in self.get_networks().keys() {
             let network = Network::from_str(&network_key).unwrap();
             // Process payment rows
@@ -192,5 +234,6 @@ impl PaymentDriverCron for Erc20Driver {
             // Process transaction rows
             cron::process_transactions(&self.dao, network).await;
         }
+        log::trace!("ERC-20 send-out job complete.");
     }
 }

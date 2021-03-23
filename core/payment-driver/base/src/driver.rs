@@ -119,4 +119,11 @@ pub trait PaymentDriver {
 
         Ok(pub_key.address() == &msg.payment.payer_id.into_array())
     }
+
+    async fn shut_down(
+        &self,
+        db: DbExecutor,
+        caller: String,
+        msg: ShutDown,
+    ) -> Result<(), GenericError>;
 }
