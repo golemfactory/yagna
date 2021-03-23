@@ -215,18 +215,18 @@ impl PaymentDriver for ZksyncDriver {
     async fn init(&self, _db: DbExecutor, _caller: String, msg: Init) -> Result<Ack, GenericError> {
         log::debug!("init: {:?}", msg);
         let address = msg.address().clone();
+        let mode = msg.mode();
 
-        // TODO: payment_api fails to start due to provider account not unlocked
-        // if !self.is_account_active(&address) {
-        //     return Err(GenericError::new("Can not init, account not active"));
-        // }
+        // Ensure account is unlock before initialising send mode
+        if mode.contains(AccountMode::SEND) && !self.is_account_active(&address) {
+            return Err(GenericError::new("Can not init, account not active"));
+        }
 
         wallet::init_wallet(&msg)
             .timeout(Some(180))
             .await
             .map_err(GenericError::new)??;
 
-        let mode = msg.mode();
         let network = msg.network().unwrap_or(DEFAULT_NETWORK.to_string());
         let token = get_network_token(
             DbNetwork::from_str(&network).map_err(GenericError::new)?,

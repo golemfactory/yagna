@@ -9,7 +9,7 @@
 use ya_payment_driver::{
     bus,
     db::models::Network,
-    model::{Fund, GenericError, Init},
+    model::{AccountMode, Fund, GenericError, Init},
 };
 use ya_utils_futures::timeout::IntoTimeoutFuture;
 
@@ -23,18 +23,19 @@ use crate::{
 
 pub async fn init(driver: &Erc20Driver, msg: Init) -> Result<(), GenericError> {
     log::debug!("init: {:?}", msg);
+    let mode = msg.mode();
+    let address = msg.address();
 
-    // TODO: payment_api fails to start due to provider account not unlocked
-    // if !self.is_account_active(&address) {
-    //     return Err(GenericError::new("Can not init, account not active"));
-    // }
+    // Ensure account is unlock before initialising send mode
+    if mode.contains(AccountMode::SEND) {
+        driver.is_account_active(&address)?
+    }
 
     wallet::init_wallet(&msg)
         .timeout(Some(30))
         .await
         .map_err(GenericError::new)??;
 
-    let mode = msg.mode();
     let network = network::network_like_to_network(msg.network());
     let token = network::get_network_token(network, msg.token());
     bus::register_account(driver, &msg.address(), &network.to_string(), &token, mode).await?;

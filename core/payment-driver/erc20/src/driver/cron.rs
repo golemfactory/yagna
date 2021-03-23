@@ -100,7 +100,6 @@ pub async fn process_payments_for_account(dao: &Erc20Dao, node_id: &str, network
         network
     );
     let payments: Vec<PaymentEntity> = dao.get_pending_payments(node_id, network).await;
-    let mut nonce = U256::from(0);
     if !payments.is_empty() {
         log::info!(
             "Processing payments. count={}, network={} node_id={}",
@@ -113,11 +112,11 @@ pub async fn process_payments_for_account(dao: &Erc20Dao, node_id: &str, network
                 .await
                 .unwrap();
         let db_nonce = dao.get_next_nonce(&node_id, network).await.unwrap();
-        nonce = std::cmp::max(network_nonce, db_nonce);
+        let mut nonce = std::cmp::max(network_nonce, db_nonce);
         log::debug!("Payments: nonce={}, details={:?}", &nonce, payments);
-    }
-    for payment in payments {
-        handle_payment(&dao, payment, &mut nonce).await;
+        for payment in payments {
+            handle_payment(&dao, payment, &mut nonce).await;
+        }
     }
 }
 

@@ -107,7 +107,6 @@ pub async fn send_transactions(
                 dao.transaction_sent(&tx.tx_id, &str_tx_hash).await;
                 log::info!("Send transaction. hash={}", &str_tx_hash);
                 log::debug!("id={}", &tx.tx_id);
-
             }
             Err(e) => {
                 log::error!("Error sending transaction: {:?}", e);
