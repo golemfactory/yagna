@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use ya_client_model::payment::*;
 use ya_service_bus::RpcMessage;
 
@@ -21,7 +22,6 @@ pub mod local {
     use crate::driver::{AccountMode, PaymentConfirmation};
     use bigdecimal::{BigDecimal, Zero};
     use chrono::{DateTime, Utc};
-    use std::collections::HashMap;
     use std::fmt::Display;
     use structopt::*;
     use strum::{EnumProperty, VariantNames};
@@ -144,19 +144,6 @@ pub mod local {
     #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
     #[error("")]
     pub struct NoError {} // This is needed because () doesn't implement Display
-
-    #[derive(Clone, Debug, Serialize, Deserialize)]
-    pub struct Network {
-        pub default_token: String,
-        pub tokens: HashMap<String, String>, // token -> platform
-    }
-
-    #[derive(Clone, Debug, Serialize, Deserialize)]
-    pub struct DriverDetails {
-        pub default_network: String,
-        pub networks: HashMap<String, Network>,
-        pub recv_init_required: bool, // Is account initialization required for receiving payments
-    }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct RegisterDriver {
@@ -403,6 +390,15 @@ pub mod local {
         AccountNotRegistered,
         #[error("Error while validating allocation: {0}")]
         Other(String),
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct GetDrivers {}
+
+    impl RpcMessage for GetDrivers {
+        const ID: &'static str = "GetDrivers";
+        type Item = HashMap<String, DriverDetails>;
+        type Error = NoError;
     }
 
     /// Experimental. In future releases this might change or be removed.
