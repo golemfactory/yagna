@@ -20,12 +20,12 @@ pub fn default_iface<'a>() -> CaptureInterface<'a> {
         .finalize()
 }
 
-pub fn add_iface_address(iface: &mut CaptureInterface, address: IpCidr) {
+pub fn add_iface_address(iface: &mut CaptureInterface, node_ip: IpCidr) {
     iface.update_ip_addrs(|addrs| match addrs {
-        ManagedSlice::Owned(ref mut vec) => vec.push(address),
+        ManagedSlice::Owned(ref mut vec) => vec.push(node_ip),
         ManagedSlice::Borrowed(ref slice) => {
             let mut vec = slice.to_vec();
-            vec.push(address);
+            vec.push(node_ip);
             *addrs = vec.into();
         }
     });

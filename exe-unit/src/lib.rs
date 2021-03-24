@@ -17,6 +17,7 @@ use ya_core_model::activity::local::Credentials;
 use ya_runtime_api::deploy;
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
 
+use crate::acl::Acl;
 use crate::agreement::Agreement;
 use crate::error::Error;
 use crate::message::*;
@@ -26,6 +27,7 @@ use crate::service::transfer::{AddVolumes, DeployImage, TransferResource, Transf
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError};
 
+mod acl;
 pub mod agreement;
 #[cfg(feature = "sgx")]
 pub mod crypto;
@@ -418,6 +420,7 @@ pub struct ExeUnitContext {
     pub work_dir: PathBuf,
     pub cache_dir: PathBuf,
     pub runtime_args: RuntimeArgs,
+    pub acl: Acl,
     #[cfg(feature = "sgx")]
     #[derivative(Debug = "ignore")]
     pub crypto: crate::crypto::Crypto,

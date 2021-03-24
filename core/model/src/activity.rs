@@ -154,8 +154,24 @@ pub enum VpnControl {
     },
     RemoveNodes {
         network_id: String,
-        node_ids: HashSet<String>, // NodeId
+        node_ids: HashSet<String>,
     },
+}
+
+impl VpnControl {
+    pub fn add_node(network_id: String, node_ip: String, node_id: String) -> Self {
+        VpnControl::AddNodes {
+            network_id,
+            nodes: vec![(node_ip, node_id)].into_iter().collect(),
+        }
+    }
+
+    pub fn remove_node(network_id: String, node_id: String) -> Self {
+        VpnControl::RemoveNodes {
+            network_id,
+            node_ids: vec![(node_id)].into_iter().collect(),
+        }
+    }
 }
 
 impl RpcMessage for VpnControl {

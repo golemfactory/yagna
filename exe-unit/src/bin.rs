@@ -239,6 +239,7 @@ fn run() -> anyhow::Result<()> {
     let runtime_args = RuntimeArgs::new(&args.work_dir, &agreement, !cli.supervise_caps);
     let ctx = ExeUnitContext {
         activity_id: ctx_activity_id.clone(),
+        acl: Default::default(),
         report_url: ctx_report_url,
         credentials: None,
         agreement,

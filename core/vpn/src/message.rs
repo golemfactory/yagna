@@ -1,25 +1,31 @@
 use actix::{Actor, Addr, Message};
 use futures::channel::mpsc;
+use smoltcp::socket::SocketHandle;
 use std::marker::PhantomData;
-use ya_client_model::vpn::CreateNetwork;
+use ya_client_model::net::{CreateNetwork, Network};
 use ya_utils_networking::vpn::Error;
+
+#[derive(Clone, Debug)]
+pub enum DisconnectReason {
+    SinkClosed,
+    SocketClosed,
+    ConnectionFailed,
+}
 
 #[derive(Message)]
 #[rtype(result = "Result<(), Error>")]
 pub struct VpnCreateNetwork {
-    pub node_ip: String,
-    pub net_id: String,
-    pub net_ip: String,
-    pub net_mask: String,
+    pub network: Network,
+    pub requestor_id: String,
+    pub requestor_address: String,
 }
 
-impl From<CreateNetwork> for VpnCreateNetwork {
-    fn from(create: CreateNetwork) -> Self {
+impl VpnCreateNetwork {
+    pub fn new(requestor_id: String, create: CreateNetwork) -> Self {
         Self {
-            node_ip: create.node_ip,
-            net_id: create.id,
-            net_ip: create.ip,
-            net_mask: create.mask,
+            network: create.network,
+            requestor_id,
+            requestor_address: create.requestor_address,
         }
     }
 }
@@ -46,22 +52,22 @@ pub struct VpnRemoveNetwork {
     pub net_id: String,
 }
 
-#[derive(Message)]
+#[derive(Debug, Message)]
 #[rtype(result = "Result<(), Error>")]
 pub struct VpnAddAddress {
     pub net_id: String,
-    pub ip: String,
+    pub address: String,
 }
 
-#[derive(Message)]
+#[derive(Debug, Message)]
 #[rtype(result = "Result<(), Error>")]
 pub struct VpnAddNode {
     pub net_id: String,
-    pub ip: String,
     pub id: String,
+    pub address: String,
 }
 
-#[derive(Message)]
+#[derive(Debug, Message)]
 #[rtype(result = "Result<(), Error>")]
 pub struct VpnRemoveNode {
     pub net_id: String,
@@ -72,10 +78,17 @@ pub struct VpnRemoveNode {
 #[rtype(result = "Result<mpsc::Receiver<Vec<u8>>, Error>")]
 pub(crate) struct ConnectTcp {
     pub receiver: mpsc::Receiver<Vec<u8>>,
-    pub ip: String,
+    pub address: String,
     pub port: u16,
 }
 
-#[derive(Message)]
+#[derive(Debug, Message)]
+#[rtype(result = "Result<(), Error>")]
+pub(crate) struct Disconnect {
+    pub handle: SocketHandle,
+    pub reason: DisconnectReason,
+}
+
+#[derive(Debug, Message)]
 #[rtype(result = "Result<(), Error>")]
 pub(crate) struct Shutdown;

@@ -1,3 +1,4 @@
+#![allow(unused)]
 use crate::error::Error;
 use crate::message::Shutdown;
 use crate::state::{Deployment, DeploymentNetwork};
@@ -11,6 +12,7 @@ use std::ops::Not;
 use std::path::Path;
 use tokio::io;
 
+use crate::acl::Acl;
 use ya_core_model::activity;
 use ya_core_model::activity::VpnControl;
 use ya_runtime_api::server::{CreateNetwork, Network, NetworkEndpoint, RuntimeService};
@@ -21,11 +23,11 @@ use ya_utils_networking::vpn::{
 };
 
 pub(crate) async fn start_vpn<R: RuntimeService>(
+    acl: Acl,
     service: &R,
-    activity_id: Option<String>,
     deployment: Deployment,
 ) -> Result<Option<Addr<Vpn>>> {
-    if activity_id.is_none() || !deployment.networking() {
+    if !deployment.networking() {
         return Ok(None);
     }
 
@@ -45,18 +47,18 @@ pub(crate) async fn start_vpn<R: RuntimeService>(
         None => return Err(Error::Other("VPN endpoint already connected".into()).into()),
     };
 
-    let vpn = Vpn::try_new(activity_id.unwrap(), endpoint, deployment)?;
+    let vpn = Vpn::try_new(acl, endpoint, deployment)?;
     Ok(Some(vpn.start()))
 }
 
 pub(crate) struct Vpn {
-    activity_id: String,
+    acl: Acl,
     networks: Networks<GsbEndpoint>,
     endpoint: VpnEndpoint,
 }
 
 impl Vpn {
-    fn try_new(activity_id: String, endpoint: VpnEndpoint, deployment: Deployment) -> Result<Self> {
+    fn try_new(acl: Acl, endpoint: VpnEndpoint, deployment: Deployment) -> Result<Self> {
         let mut networks = vpn::Networks::default();
 
         deployment
@@ -73,7 +75,7 @@ impl Vpn {
         })?;
 
         Ok(Self {
-            activity_id,
+            acl,
             networks,
             endpoint,
         })
@@ -133,11 +135,9 @@ impl Actor for Vpn {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        let srv_id = activity::exeunit::bus_id(&self.activity_id);
-        actix_rpc::bind::<activity::VpnControl>(&srv_id, ctx.address().recipient());
-
         self.networks.as_ref().keys().for_each(|net| {
             let vpn_id = activity::exeunit::network_id(net);
+            actix_rpc::bind::<activity::VpnControl>(&vpn_id, ctx.address().recipient());
             actix_rpc::bind::<activity::VpnPacket>(&vpn_id, ctx.address().recipient());
         });
 
@@ -156,12 +156,9 @@ impl Actor for Vpn {
     fn stopping(&mut self, ctx: &mut Self::Context) -> Running {
         log::info!("Stopping VPN service");
 
-        let srv_id = activity::exeunit::bus_id(&self.activity_id);
         let networks = self.networks.as_ref().keys().cloned().collect::<Vec<_>>();
-
         ctx.wait(
             async move {
-                let _ = typed::unbind(&srv_id).await;
                 for net in networks {
                     let vpn_id = activity::exeunit::network_id(&net);
                     let _ = typed::unbind(&vpn_id).await;
@@ -202,12 +199,13 @@ impl Handler<RpcEnvelope<activity::VpnPacket>> for Vpn {
         packet: RpcEnvelope<activity::VpnPacket>,
         ctx: &mut Context<Self>,
     ) -> Self::Result {
-        log::trace!("Ingress packet");
-
+        let packet = packet.into_inner();
         let mut tx = self.endpoint.tx.clone();
+        log::debug!("Ingress packet {:?}", packet);
+
         ctx.spawn(
             async move {
-                if let Err(e) = tx.send(Ok(packet.into_inner().0)).await {
+                if let Err(e) = tx.send(Ok(packet.0)).await {
                     log::debug!("Ingress VPN error: {}", e);
                 }
             }
@@ -225,6 +223,10 @@ impl Handler<RpcEnvelope<activity::VpnControl>> for Vpn {
         msg: RpcEnvelope<activity::VpnControl>,
         _: &mut Context<Self>,
     ) -> Self::Result {
+        // if !self.acl.has_access(msg.caller(), AccessRole::Control) {
+        //     return Err(AclError::Forbidden(msg.caller().to_string(), AccessRole::Control).into());
+        // }
+
         match msg.into_inner() {
             VpnControl::AddNodes { network_id, nodes } => {
                 let network = self.networks.get_mut(&network_id).map_err(Error::from)?;

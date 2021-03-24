@@ -26,6 +26,10 @@ pub enum Error {
     PacketMalformed(String),
     #[error("Protocol not supported: {0}")]
     ProtocolNotSupported(String),
+    #[error("Connection error: {0}")]
+    ConnectionError(String),
+    #[error("Connection timed out")]
+    ConnectionTimeout,
     #[error("{0}")]
     Other(String),
 }

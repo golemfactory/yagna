@@ -7,16 +7,20 @@ use futures::channel::mpsc;
 use futures::SinkExt;
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
-use ya_client_model::vpn::{AddNode, CreateNetwork};
+use ya_client_model::net::*;
 use ya_client_model::ErrorMessage;
 use ya_service_api_web::middleware::Identity;
 
 pub const NET_API_PATH: &str = "/net-api/v1/";
-const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
-const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
+const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
+const CLIENT_TIMEOUT: Duration = Duration::from_secs(60);
 
 type Result<T> = std::result::Result<T, ApiError>;
 type WsResult<T> = std::result::Result<T, ws::ProtocolError>;
+
+lazy_static::lazy_static! {
+    static ref VPN_SUPERVISOR: Addr<VpnSupervisor> = VpnSupervisor::from_registry();
+}
 
 pub fn web_scope() -> actix_web::Scope {
     actix_web::web::scope(NET_API_PATH)
@@ -31,11 +35,12 @@ pub fn web_scope() -> actix_web::Scope {
 #[actix_web::post("/net")]
 async fn create_network(
     create_network: web::Json<CreateNetwork>,
-    _identity: Identity,
+    identity: Identity,
 ) -> Result<impl Responder> {
+    let requestor_id = identity.identity.to_string();
     let create_network = create_network.into_inner();
-    VpnSupervisor::from_registry()
-        .send(VpnCreateNetwork::from(create_network))
+    (*VPN_SUPERVISOR)
+        .send(VpnCreateNetwork::new(requestor_id, create_network))
         .await??;
     Ok(web::Json(()))
 }
@@ -46,7 +51,7 @@ async fn remove_network(
     path: web::Path<PathNetwork>,
     _identity: Identity,
 ) -> Result<impl Responder> {
-    VpnSupervisor::from_registry()
+    (*VPN_SUPERVISOR)
         .send(VpnRemoveNetwork {
             net_id: path.into_inner().net_id,
         })
@@ -58,14 +63,14 @@ async fn remove_network(
 #[actix_web::post("/net/{net_id}/nodes")]
 async fn add_node(
     path: web::Path<PathNetwork>,
-    add_node: web::Json<AddNode>,
+    add_node: web::Json<Node>,
     _identity: Identity,
 ) -> Result<impl Responder> {
     let add_node = add_node.into_inner();
-    VpnSupervisor::from_registry()
+    (*VPN_SUPERVISOR)
         .send(VpnAddNode {
             net_id: path.into_inner().net_id,
-            ip: add_node.ip,
+            address: add_node.address,
             id: add_node.id,
         })
         .await??;
@@ -79,7 +84,7 @@ async fn remove_node(
     _identity: Identity,
 ) -> Result<impl Responder> {
     let model = path.into_inner();
-    VpnSupervisor::from_registry()
+    (*VPN_SUPERVISOR)
         .send(VpnRemoveNode {
             net_id: model.net_id,
             id: model.node_id,
@@ -96,31 +101,41 @@ async fn connect_tcp(
     _identity: Identity,
 ) -> Result<HttpResponse> {
     let model = path.into_inner();
-    let vpn = VpnSupervisor::from_registry()
-        .send(VpnGetNetwork::new(model.net_id))
+    let vpn = (*VPN_SUPERVISOR)
+        .send(VpnGetNetwork::new(model.net_id.clone()))
         .await??;
 
     let (ws_tx, ws_rx) = mpsc::channel(1);
     let vpn_rx = vpn
         .send(ConnectTcp {
             receiver: ws_rx,
-            ip: model.ip,
+            address: model.ip,
             port: model.port,
         })
         .await??;
 
-    Ok(ws::start(VpnWebSocket::new(ws_tx, vpn_rx), &req, stream)?)
+    Ok(ws::start(
+        VpnWebSocket::new(model.net_id, ws_tx, vpn_rx),
+        &req,
+        stream,
+    )?)
 }
 
 pub struct VpnWebSocket {
+    network_id: String,
     heartbeat: Instant,
     ws_tx: mpsc::Sender<Vec<u8>>,
     vpn_rx: Option<mpsc::Receiver<Vec<u8>>>,
 }
 
 impl VpnWebSocket {
-    pub fn new(ws_tx: mpsc::Sender<Vec<u8>>, vpn_rx: mpsc::Receiver<Vec<u8>>) -> Self {
+    pub fn new(
+        network_id: String,
+        ws_tx: mpsc::Sender<Vec<u8>>,
+        vpn_rx: mpsc::Receiver<Vec<u8>>,
+    ) -> Self {
         VpnWebSocket {
+            network_id,
             heartbeat: Instant::now(),
             ws_tx,
             vpn_rx: Some(vpn_rx),
@@ -133,7 +148,6 @@ impl VpnWebSocket {
 
         async move {
             if let Err(_) = tx.send(bytes).await {
-                log::error!("VPN WS endpoint: VPN service has closed, shutting down");
                 let _ = addr.send(Shutdown {}).await;
             }
         }
@@ -148,7 +162,7 @@ impl Actor for VpnWebSocket {
     fn started(&mut self, ctx: &mut Self::Context) {
         ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
             if Instant::now().duration_since(act.heartbeat) > CLIENT_TIMEOUT {
-                log::warn!("WebSocket network connection timed out");
+                log::warn!("VPN WebSocket: connection timed out");
                 ctx.stop();
             } else {
                 ctx.ping(b"");
@@ -159,7 +173,7 @@ impl Actor for VpnWebSocket {
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
-        log::warn!("Network stopped");
+        log::info!("VPN WebSocket: VPN {} connection stopped", self.network_id);
     }
 }
 
@@ -196,6 +210,7 @@ impl Handler<Shutdown> for VpnWebSocket {
     type Result = <Shutdown as Message>::Result;
 
     fn handle(&mut self, _: Shutdown, ctx: &mut Self::Context) -> Self::Result {
+        log::warn!("VPN WebSocket: VPN {} is shutting down", self.network_id);
         Ok(ctx.stop())
     }
 }

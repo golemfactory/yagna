@@ -1,3 +1,4 @@
+use crate::acl::Acl;
 use crate::error::Error;
 use crate::message::{ExecuteCommand, Shutdown, ShutdownReason, UpdateDeployment};
 use crate::network::{start_vpn, Vpn};
@@ -35,26 +36,26 @@ fn process_kill_timeout_seconds() -> i64 {
 }
 
 pub struct RuntimeProcess {
-    activity_id: Option<String>,
     binary: PathBuf,
     runtime_args: RuntimeArgs,
     deployment: Deployment,
     children: HashSet<ChildProcess>,
     service: Option<ProcessService>,
     monitor: Option<EventMonitor>,
+    acl: Acl,
     vpn: Option<Addr<Vpn>>,
 }
 
 impl RuntimeProcess {
     pub fn new(ctx: &ExeUnitContext, binary: PathBuf) -> Self {
         Self {
-            activity_id: ctx.activity_id.clone(),
             binary,
             runtime_args: ctx.runtime_args.clone(),
             deployment: Default::default(),
             children: HashSet::new(),
             service: None,
             monitor: None,
+            acl: ctx.acl.clone(),
             vpn: None,
         }
     }
@@ -200,7 +201,7 @@ impl RuntimeProcess {
 
         log::info!("Executing {:?} with {:?}", self.binary, args);
 
-        let activity_id = self.activity_id.clone();
+        let acl = self.acl.clone();
         let deployment = self.deployment.clone();
         let monitor = self.monitor.get_or_insert_with(Default::default).clone();
         let mut command = Command::new(self.binary.clone());
@@ -219,7 +220,7 @@ impl RuntimeProcess {
 
             let service_ = service.clone();
             let vpn = async {
-                if let Some(vpn) = start_vpn(&service_, activity_id, deployment).await? {
+                if let Some(vpn) = start_vpn(acl, &service_, deployment).await? {
                     address.send(SetVpnService(vpn)).await?;
                 }
                 Ok::<_, Error>(())

@@ -62,6 +62,8 @@ pub enum Error {
     AgreementError(#[from] agreement::Error),
     #[error("VPN error: {0}")]
     Vpn(#[from] ya_utils_networking::vpn::Error),
+    #[error(transparent)]
+    Acl(#[from] crate::acl::Error),
     #[error("{0}")]
     Other(String),
     #[cfg(feature = "sgx")]
@@ -132,6 +134,7 @@ impl From<Error> for RpcError {
             Error::GsbError(e) => RpcError::Service(e),
             Error::UsageLimitExceeded(e) => RpcError::UsageLimitExceeded(e),
             Error::Vpn(e) => RpcError::Service(e.to_string()),
+            Error::Acl(e) => RpcError::Forbidden(e.to_string()),
             Error::Other(e) => RpcError::Service(e),
             #[cfg(feature = "sgx")]
             Error::Crypto(e) => RpcError::Service(e.to_string()),

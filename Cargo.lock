@@ -5491,6 +5491,7 @@ checksum = "2932dc07acd2066ff2e3921a4419606b220ba6cd03a9935123856cc534877056"
 dependencies = [
  "rand 0.6.5",
  "secp256k1-sys 0.1.2",
+ "serde",
 ]
 
 [[package]]
@@ -5501,7 +5502,6 @@ checksum = "c6179428c22c73ac0fbb7b5579a56353ce78ba29759b3b8575183336ea74cdfb"
 dependencies = [
  "rand 0.6.5",
  "secp256k1-sys 0.3.0",
- "serde",
 ]
 
 [[package]]
@@ -7387,10 +7387,11 @@ dependencies = [
 
 [[package]]
 name = "ya-client"
-version = "0.5.2"
-source = "git+https://github.com/golemfactory/ya-client.git?branch=mf/vpn#9fd113df73061e44295103eb776871601493eb4a"
+version = "0.6.0"
+source = "git+https://github.com/golemfactory/ya-client.git?branch=mf/vpn#184a5edf4738da314678be074928eb2881b79287"
 dependencies = [
- "awc 1.0.1",
+ "actix-codec 0.3.0",
+ "awc 2.0.3",
  "bytes 0.5.6",
  "chrono",
  "envy",
@@ -7413,7 +7414,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.3.2"
-source = "git+https://github.com/golemfactory/ya-client.git?branch=mf/vpn#9fd113df73061e44295103eb776871601493eb4a"
+source = "git+https://github.com/golemfactory/ya-client.git?branch=mf/vpn#184a5edf4738da314678be074928eb2881b79287"
 dependencies = [
  "bigdecimal 0.2.0",
  "chrono",
@@ -7422,7 +7423,7 @@ dependencies = [
  "hex",
  "openssl",
  "rand 0.7.3",
- "secp256k1 0.19.0",
+ "secp256k1 0.17.2",
  "serde",
  "serde_json",
  "strum 0.19.5",
@@ -7648,7 +7649,7 @@ dependencies = [
  "actix-web 3.3.2",
  "anyhow",
  "appdirs",
- "awc 1.0.1",
+ "awc 2.0.3",
  "base64 0.12.3",
  "chrono",
  "diesel",
@@ -8085,7 +8086,7 @@ dependencies = [
  "actix-web 3.3.2",
  "actix-web-httpauth",
  "anyhow",
- "awc 1.0.1",
+ "awc 2.0.3",
  "env_logger 0.7.1",
  "futures 0.3.12",
  "log",
@@ -8280,6 +8281,7 @@ name = "ya-vpn"
 version = "0.1.0"
 dependencies = [
  "actix",
+ "actix-rt",
  "actix-web 3.3.2",
  "actix-web-actors",
  "anyhow",
@@ -8288,6 +8290,7 @@ dependencies = [
  "futures 0.3.12",
  "hex",
  "ipnet",
+ "lazy_static",
  "log",
  "managed",
  "mime",
@@ -8295,13 +8298,16 @@ dependencies = [
  "serde",
  "serde_json",
  "smoltcp",
+ "structopt",
  "thiserror",
  "tokio 0.2.24",
+ "url 2.2.0",
+ "uuid 0.8.2",
+ "ya-client",
  "ya-client-model",
  "ya-core-model",
  "ya-net",
  "ya-persistence",
- "ya-sb-router",
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-api-web",

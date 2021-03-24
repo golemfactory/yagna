@@ -346,15 +346,6 @@ impl<'a> PeekPacket<'a> for ArpPacket<'a> {
     }
 }
 
-// impl<'a> TryFrom<&'a [u8]> for ArpPacket<'a> {
-//     type Error = Error;
-//
-//     fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
-//         Self::peek(data)?;
-//         Ok(Self::packet(data))
-//     }
-// }
-
 pub struct ArpPacketMut<'a> {
     inner: &'a mut [u8],
 }
@@ -369,17 +360,6 @@ impl<'a> ArpPacketMut<'a> {
         ArpPacket { inner: self.inner }
     }
 }
-
-// impl<'a> TryFrom<&'a mut [u8]> for ArpPacketMut<'a> {
-//     type Error = Error;
-//
-//     fn try_from(data: &'a mut [u8]) -> Result<Self, Self::Error> {
-//         if data.len() < 28 {
-//             return Err(Error::PacketMalformed("ARP: packet too short".into()));
-//         }
-//         Ok(Self { inner: data })
-//     }
-// }
 
 pub struct TcpField;
 impl TcpField {

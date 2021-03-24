@@ -167,6 +167,7 @@ async fn main() -> anyhow::Result<()> {
     let runtime_args = RuntimeArgs::new(&work_dir, &agreement, true);
     let exe_ctx = ExeUnitContext {
         activity_id: None,
+        acl: Default::default(),
         report_url: None,
         credentials: None,
         agreement,
