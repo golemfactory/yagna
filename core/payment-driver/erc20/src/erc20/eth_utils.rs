@@ -1,9 +1,9 @@
 // PRIVATE RawTransaction.hash()
 
 use ethereum_tx_sign::RawTransaction;
-use ethereum_types::U256;
 use rlp::RlpStream;
 use tiny_keccak::{Hasher, Keccak};
+use web3::types::U256;
 
 pub fn get_tx_hash(tx: &RawTransaction, chain_id: u64) -> Vec<u8> {
     let mut hash = RlpStream::new();
@@ -81,6 +81,7 @@ fn prepare_signature_part(part: &mut Vec<u8>) {
 
 // MISSING contract.encode()
 
+use ethabi::Error;
 use web3::contract::tokens::Tokenize;
 use web3::contract::Contract;
 use web3::Transport;
@@ -89,7 +90,7 @@ pub fn contract_encode<P, T>(
     contract: &Contract<T>,
     func: &str,
     params: P,
-) -> Result<Vec<u8>, ethabi::Error>
+) -> Result<Vec<u8>, Error>
 where
     P: Tokenize,
     T: Transport,

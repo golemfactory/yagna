@@ -14,7 +14,7 @@ use ya_client_model::NodeId;
 use ya_core_model::driver::{driver_bus_id, AccountMode, Fund, Init};
 use ya_core_model::identity;
 use ya_dummy_driver as dummy;
-use ya_gnt_driver as erc20;
+use ya_erc20_driver as erc20;
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::{migrations, utils};
 use ya_persistence::executor::DbExecutor;
