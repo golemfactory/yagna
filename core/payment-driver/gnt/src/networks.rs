@@ -8,7 +8,7 @@ use maplit::hashmap;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::str::FromStr;
-use ya_core_model::payment::local as pay_srv;
+use ya_client_model::payment::network as pay_model;
 
 #[derive(AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy, FromPrimitive)]
 #[sql_type = "Integer"]
@@ -40,14 +40,14 @@ impl Default for Network {
     }
 }
 
-impl Into<pay_srv::Network> for Network {
-    fn into(self) -> pay_srv::Network {
+impl Into<pay_model::Network> for Network {
+    fn into(self) -> pay_model::Network {
         let default_token = self.default_token();
         let default_platform = self.default_platform();
         let tokens = hashmap! {
             default_token.clone() => default_platform
         };
-        pay_srv::Network {
+        pay_model::Network {
             default_token,
             tokens,
         }

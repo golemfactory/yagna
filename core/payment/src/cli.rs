@@ -76,6 +76,9 @@ pub enum PaymentCli {
         #[structopt(subcommand)]
         command: InvoiceCommand,
     },
+
+    /// List registered drivers, networks, tokens and platforms
+    Drivers,
 }
 
 #[derive(StructOpt, Debug)]
@@ -246,17 +249,54 @@ impl PaymentCli {
                     .await?,
                 )
             } // TODO: Uncomment when operation is supported by drivers
-              // PaymentCli::Transfer {
-              //     account,
-              //     driver,
-              //     network,
-              //     to_address,
-              //     amount
-              // } => {
-              //     let address = resolve_address(account).await?;
-              //     let amount = BigDecimal::from_str(&amount)?;
-              //     CommandOutput::object(wallet::transfer(address, to_address, amount, driver, network, token).await?)
-              // }
+            // PaymentCli::Transfer {
+            //     account,
+            //     driver,
+            //     network,
+            //     to_address,
+            //     amount
+            // } => {
+            //     let address = resolve_address(account).await?;
+            //     let amount = BigDecimal::from_str(&amount)?;
+            //     CommandOutput::object(wallet::transfer(address, to_address, amount, driver, network, token).await?)
+            // }
+            PaymentCli::Drivers => {
+                let drivers = bus::service(pay::BUS_ID).call(pay::GetDrivers {}).await??;
+                if ctx.json_output {
+                    return CommandOutput::object(drivers);
+                }
+                Ok(ResponseTable { columns: vec![
+                        "driver".to_owned(),
+                        "network".to_owned(),
+                        "default?".to_owned(),
+                        "token".to_owned(),
+                        "default?".to_owned(),
+                        "platform".to_owned(),
+                    ], values: drivers
+                        .iter()
+                        .flat_map(|(driver, dd)| {
+                            dd.networks
+                                .iter()
+                                .flat_map(|(network, n)| {
+                                    n.tokens
+                                        .iter()
+                                        .map(|(token, platform)|
+                                            serde_json::json! {[
+                                                driver,
+                                                network,
+                                                if &dd.default_network == network { "X" } else { "" },
+                                                token,
+                                                if &n.default_token == token { "X" } else { "" },
+                                                platform,
+                                            ]}
+                                        )
+                                        .collect::<Vec<serde_json::Value>>()
+                                })
+                                .collect::<Vec<serde_json::Value>>()
+                        })
+                        .collect()
+                }.into())
+            }
         }
     }
 }
