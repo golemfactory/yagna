@@ -10,8 +10,8 @@ use uuid::Uuid;
 use ya_payment_driver::{
     dao::{payment::PaymentDao, transaction::TransactionDao, DbExecutor},
     db::models::{
-        Network, PaymentEntity, TransactionEntity, TransactionStatus, PAYMENT_STATUS_FAILED,
-        PAYMENT_STATUS_NOT_YET, TX_CREATED,
+        Network, PaymentEntity, TransactionEntity, TransactionStatus, TxType,
+        PAYMENT_STATUS_FAILED, PAYMENT_STATUS_NOT_YET, TX_CREATED,
     },
     model::{GenericError, PaymentDetails, SchedulePayment},
     utils,
@@ -106,9 +106,9 @@ impl ZksyncDao {
             nonce: "".to_string(), // not used till pre-sign
             status: TX_CREATED,
             timestamp: date.naive_utc(),
-            tx_type: 0,                // Zksync only knows transfers, unused field
-            encoded: "".to_string(),   // not used till pre-sign
-            signature: "".to_string(), // not used till pre-sign
+            tx_type: TxType::Transfer as i32, // Zksync only knows transfers, unused field
+            encoded: "".to_string(),          // not used till pre-sign
+            signature: "".to_string(),        // not used till pre-sign
             tx_hash: None,
             network,
         };

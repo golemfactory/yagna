@@ -141,7 +141,7 @@ pub async fn sign_transfer_tx(
         chain_id,
         Utc::now(),
         &signature,
-        TxType::Faucet,
+        TxType::Transfer,
     ))
 }
 

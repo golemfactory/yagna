@@ -9,7 +9,7 @@ use web3::types::U256;
 // Workspace uses
 use ya_payment_driver::{
     bus,
-    db::models::{Network, PaymentEntity, TransactionEntity},
+    db::models::{Network, PaymentEntity, TransactionEntity, TxType},
     driver::BigDecimal,
     utils,
 };
@@ -83,12 +83,15 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                     details
                 }
             };
-            let tx_hash = hex::decode(&tx_hash[2..]).unwrap();
 
-            if let Err(e) = bus::notify_payment(name, &platform, order_ids, &details, tx_hash).await
-            {
-                log::error!("{}", e)
-            };
+            if tx.tx_type == TxType::Transfer as i32 {
+                let tx_hash = hex::decode(&tx_hash[2..]).unwrap();
+                if let Err(e) =
+                    bus::notify_payment(name, &platform, order_ids, &details, tx_hash).await
+                {
+                    log::error!("{}", e)
+                };
+            }
         }
     }
 }

@@ -18,7 +18,7 @@ use ya_payment_driver::{
     bus,
     cron::PaymentDriverCron,
     dao::DbExecutor,
-    db::models::{Network as DbNetwork, PaymentEntity},
+    db::models::{Network as DbNetwork, PaymentEntity, TxType},
     driver::{async_trait, BigDecimal, IdentityError, IdentityEvent, Network, PaymentDriver},
     model::*,
     utils,
@@ -433,14 +433,21 @@ impl PaymentDriverCron for ZksyncDriver {
                         details
                     }
                 };
-                let tx_hash = hex::decode(&tx_hash).unwrap();
+                if tx.tx_type == TxType::Transfer as i32 {
+                    let tx_hash = hex::decode(&tx_hash).unwrap();
 
-                if let Err(e) =
-                    bus::notify_payment(&self.get_name(), &platform, order_ids, &details, tx_hash)
-                        .await
-                {
-                    log::error!("{}", e)
-                };
+                    if let Err(e) = bus::notify_payment(
+                        &self.get_name(),
+                        &platform,
+                        order_ids,
+                        &details,
+                        tx_hash,
+                    )
+                    .await
+                    {
+                        log::error!("{}", e)
+                    };
+                }
             }
         }
     }
