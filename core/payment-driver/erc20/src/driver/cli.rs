@@ -58,11 +58,16 @@ pub async fn fund(dao: &Erc20Dao, msg: Fund) -> Result<String, GenericError> {
     let result = match network {
         Network::Rinkeby => {
             let address = utils::str_to_addr(&address)?;
+            log::info!(
+                "Handling fund request. network={}, address={}",
+                &network,
+                &address
+            );
             wallet::fund(dao, address, network)
-                .timeout(Some(300))
+                .timeout(Some(60)) // Regular scenario =~ 30s
                 .await
                 .map_err(GenericError::new)??;
-            format!("Received funds from the faucet. address={}", &address)
+            format!("Received funds from the faucet. address=0x{:x}", &address)
         }
         Network::Mainnet => format!(
             r#"Your mainnet ethereum address is {}.

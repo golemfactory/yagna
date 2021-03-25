@@ -164,7 +164,14 @@ pub async fn is_tx_confirmed(
     let tx = get_tx_receipt(tx_hash, network).await?;
     if let Some(tx) = tx {
         if let Some(b) = tx.block_number {
-            if b + env.required_confirmations >= *current_block {
+            // TODO: Store tx.block_number in DB and check only once after required_confirmations.
+            log::trace!(
+                "is_tx_confirmed? tb + rq <= cb. tb={}, rq={}, cb={}",
+                b,
+                env.required_confirmations,
+                current_block
+            );
+            if b + env.required_confirmations <= *current_block {
                 return Ok(true);
             }
         }

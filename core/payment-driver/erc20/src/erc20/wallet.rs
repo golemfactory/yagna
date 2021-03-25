@@ -78,7 +78,12 @@ pub async fn make_transfer(
     nonce: U256,
     network: Network,
 ) -> Result<TransactionEntity, GenericError> {
-    log::debug!("make_transfer. {:?}", details);
+    log::debug!(
+        "make_transfer(). network={}, nonce={}, details={:?}",
+        &network,
+        &nonce,
+        &details
+    );
     let amount = details.amount.clone();
     let amount = utils::big_dec_to_u256(amount)?;
 
@@ -86,7 +91,6 @@ pub async fn make_transfer(
     let recipient = utils::str_to_addr(&details.recipient)?;
     // TODO: Implement token
     //let token = get_network_token(network, None);
-    log::info!("Nonce={}", nonce);
     ethereum::sign_transfer_tx(address, recipient, amount, network, nonce).await
 }
 
