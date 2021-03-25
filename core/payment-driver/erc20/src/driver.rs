@@ -202,27 +202,28 @@ impl PaymentDriver for Erc20Driver {
 #[async_trait(?Send)]
 impl PaymentDriverCron for Erc20Driver {
     async fn confirm_payments(&self) {
-        let _ = match self.confirmation_lock.try_lock() {
+        let guard = match self.confirmation_lock.try_lock() {
             None => {
                 log::trace!("ERC-20 confirmation job in progress.");
                 return;
             }
-            Some(x) => x,
+            Some(guard) => guard,
         };
         log::trace!("Running ERC-20 confirmation job...");
         for network_key in self.get_networks().keys() {
             cron::confirm_payments(&self.dao, &self.get_name(), network_key).await;
         }
         log::trace!("ERC-20 confirmation job complete.");
+        drop(guard); // Explicit drop to tell Rust that guard is not unused variable
     }
 
     async fn send_out_payments(&self) {
-        let _ = match self.sendout_lock.try_lock() {
+        let guard = match self.sendout_lock.try_lock() {
             None => {
                 log::trace!("ERC-20 send-out job in progress.");
                 return;
             }
-            Some(x) => x,
+            Some(guard) => guard,
         };
         log::trace!("Running ERC-20 send-out job...");
         for network_key in self.get_networks().keys() {
@@ -235,5 +236,6 @@ impl PaymentDriverCron for Erc20Driver {
             cron::process_transactions(&self.dao, network).await;
         }
         log::trace!("ERC-20 send-out job complete.");
+        drop(guard); // Explicit drop to tell Rust that guard is not unused variable
     }
 }

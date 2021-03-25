@@ -386,12 +386,12 @@ Mind that to be eligible you have to run your app at least once on testnet -
 #[async_trait(?Send)]
 impl PaymentDriverCron for ZksyncDriver {
     async fn confirm_payments(&self) {
-        let _ = match self.confirmation_lock.try_lock() {
+        let guard = match self.confirmation_lock.try_lock() {
             None => {
                 log::trace!("ZkSync confirmation job in progress.");
                 return;
             }
-            Some(x) => x,
+            Some(guard) => guard,
         };
         log::trace!("Running zkSync confirmation job...");
 
@@ -484,20 +484,22 @@ impl PaymentDriverCron for ZksyncDriver {
             }
         }
         log::trace!("ZkSync confirmation job complete.");
+        drop(guard); // Explicit drop to tell Rust that guard is not unused variable
     }
 
     async fn send_out_payments(&self) {
-        let _ = match self.sendout_lock.try_lock() {
+        let guard = match self.sendout_lock.try_lock() {
             None => {
                 log::trace!("ZkSync send-out job in progress.");
                 return;
             }
-            Some(x) => x,
+            Some(guard) => guard,
         };
         log::trace!("Running zkSync send-out job...");
         for node_id in self.active_accounts.borrow().list_accounts() {
             self.process_payments_for_account(&node_id).await;
         }
         log::trace!("ZkSync send-out job complete.");
+        drop(guard); // Explicit drop to tell Rust that guard is not unused variable
     }
 }
