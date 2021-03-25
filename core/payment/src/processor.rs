@@ -4,8 +4,10 @@ use crate::error::processor::{
     SchedulePaymentError, ValidateAllocationError, VerifyPaymentError,
 };
 use crate::models::order::ReadObj as DbOrder;
+use actix_web::rt::Arbiter;
 use bigdecimal::{BigDecimal, Zero};
 use futures::lock::Mutex;
+use futures::FutureExt;
 use metrics::counter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -198,6 +200,10 @@ impl DriverRegistry {
         }
     }
 
+    pub fn get_drivers(&self) -> HashMap<String, DriverDetails> {
+        self.drivers.clone()
+    }
+
     pub fn get_network(
         &self,
         driver: String,
@@ -318,6 +324,7 @@ impl PaymentProcessor {
     }
 
     pub async fn notify_payment(&self, msg: NotifyPayment) -> Result<(), NotifyPaymentError> {
+        let driver = msg.driver;
         let payment_platform = msg.platform;
         let payer_addr = msg.sender;
         let payee_addr = msg.recipient;
@@ -328,7 +335,7 @@ impl PaymentProcessor {
         let orders = self
             .db_executor
             .as_dao::<OrderDao>()
-            .get_many(msg.order_ids, msg.driver.clone())
+            .get_many(msg.order_ids, driver.clone())
             .await?;
         validate_orders(
             &orders,
@@ -371,7 +378,7 @@ impl PaymentProcessor {
                 payee_id,
                 payer_addr,
                 payee_addr,
-                payment_platform,
+                payment_platform.clone(),
                 msg.amount.clone(),
                 msg.confirmation.confirmation,
                 activity_payments,
@@ -388,14 +395,24 @@ impl PaymentProcessor {
             activity_payment.allocation_id = None;
         }
 
-        counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "driver" => msg.driver);
-        let msg = SendPayment(payment);
-        ya_net::from(payer_id)
-            .to(payee_id)
-            .service(BUS_ID)
-            .call(msg)
+        let signature = driver_endpoint(&driver)
+            .send(driver::SignPayment(payment.clone()))
             .await??;
 
+        counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "platform" => payment_platform);
+        let msg = SendPayment::new(payment, signature);
+
+        // Spawning to avoid deadlock in a case that payee is the same node as payer
+        Arbiter::spawn(
+            ya_net::from(payer_id)
+                .to(payee_id)
+                .service(BUS_ID)
+                .call(msg)
+                .map(|res| match res {
+                    Ok(Ok(_)) => (),
+                    err => log::error!("Error sending payment message to provider: {:?}", err),
+                }),
+        );
         // TODO: Implement re-sending mechanism in case SendPayment fails
 
         counter!("payment.invoices.requestor.paid", 1);
@@ -404,17 +421,11 @@ impl PaymentProcessor {
 
     pub async fn schedule_payment(&self, msg: SchedulePayment) -> Result<(), SchedulePaymentError> {
         let amount = msg.amount.clone();
-        log::trace!("Getting driver for [{:?}]", msg.title);
         let driver = self.registry.lock().await.driver(
             &msg.payment_platform,
             &msg.payer_addr,
             AccountMode::SEND,
         )?;
-        log::trace!(
-            "Scheduling payment [{:?}] using driver [{}]",
-            msg.title,
-            driver
-        );
         let order_id = driver_endpoint(&driver)
             .send(driver::SchedulePayment::new(
                 amount,
@@ -425,19 +436,19 @@ impl PaymentProcessor {
             ))
             .await??;
 
-        log::trace!("Creating payment order in DB for [{:?}]", msg.title);
-        let title = msg.title.clone();
         self.db_executor
             .as_dao::<OrderDao>()
             .create(msg, order_id, driver)
             .await?;
 
-        log::trace!("Payment scheduled successfully for [{:?}]", title);
-
         Ok(())
     }
 
-    pub async fn verify_payment(&self, payment: Payment) -> Result<(), VerifyPaymentError> {
+    pub async fn verify_payment(
+        &self,
+        payment: Payment,
+        signature: Vec<u8>,
+    ) -> Result<(), VerifyPaymentError> {
         // TODO: Split this into smaller functions
 
         let confirmation = match base64::decode(&payment.details) {
@@ -450,6 +461,18 @@ impl PaymentProcessor {
             &payment.payee_addr,
             AccountMode::RECV,
         )?;
+
+        if !driver_endpoint(&driver)
+            .send(driver::VerifySignature::new(payment.clone(), signature))
+            .await??
+        {
+            return Err(VerifyPaymentError::InvalidSignature);
+        }
+
+        let confirmation = match base64::decode(&payment.details) {
+            Ok(confirmation) => PaymentConfirmation { confirmation },
+            Err(e) => return Err(VerifyPaymentError::ConfirmationEncoding),
+        };
         let details: PaymentDetails = driver_endpoint(&driver)
             .send(driver::VerifyPayment::new(confirmation, platform.clone()))
             .await??;
