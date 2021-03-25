@@ -16,8 +16,10 @@ pub use async_trait::async_trait;
 
 #[async_trait(?Send)]
 pub trait PaymentDriverCron {
-    async fn confirm_payments(&self);
+    fn sendout_interval(&self) -> Duration;
+    fn confirmation_interval(&self) -> Duration;
     async fn send_out_payments(&self);
+    async fn confirm_payments(&self);
 }
 
 pub struct Cron<D: PaymentDriverCron + 'static> {
@@ -32,14 +34,14 @@ impl<D: PaymentDriverCron + 'static> Cron<D> {
     }
 
     fn start_confirmation_job(&mut self, ctx: &mut Context<Self>) {
-        let _ = ctx.run_interval(Duration::from_secs(5), |act, _ctx| {
+        let _ = ctx.run_interval(self.driver.confirmation_interval(), |act, _ctx| {
             let driver = act.driver.clone();
             Arbiter::spawn(async move { driver.confirm_payments().await });
         });
     }
 
     fn start_sendout_job(&mut self, ctx: &mut Context<Self>) {
-        let _ = ctx.run_interval(Duration::from_secs(10), |act, _ctx| {
+        let _ = ctx.run_interval(self.driver.sendout_interval(), |act, _ctx| {
             let driver = act.driver.clone();
             Arbiter::spawn(async move { driver.send_out_payments().await });
         });

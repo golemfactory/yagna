@@ -50,6 +50,20 @@ lazy_static! {
             Ok(Ok(x)) => x,
             _ => BigInt::from(10),
         };
+
+    static ref TX_SENDOUT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(
+            std::env::var("ZKSYNC_SENDOUT_INTERVAL_SECS")
+                .ok()
+                .and_then(|x| x.parse().ok())
+                .unwrap_or(10),
+        );
+
+    static ref TX_CONFIRMATION_INTERVAL: std::time::Duration = std::time::Duration::from_secs(
+            std::env::var("ZKSYNC_CONFIRMATION_INTERVAL_SECS")
+                .ok()
+                .and_then(|x| x.parse().ok())
+                .unwrap_or(5),
+        );
 }
 
 pub struct ZksyncDriver {
@@ -501,5 +515,13 @@ impl PaymentDriverCron for ZksyncDriver {
         }
         log::trace!("ZkSync send-out job complete.");
         drop(guard); // Explicit drop to tell Rust that guard is not unused variable
+    }
+
+    fn sendout_interval(&self) -> std::time::Duration {
+        *TX_SENDOUT_INTERVAL
+    }
+
+    fn confirmation_interval(&self) -> std::time::Duration {
+        *TX_CONFIRMATION_INTERVAL
     }
 }

@@ -32,7 +32,12 @@ pub const DEFAULT_PAYMENT_PLATFORM: &str = "zksync-rinkeby-tglm"; // TODO: remov
 pub use ya_core_model::payment::local::DEFAULT_PAYMENT_DRIVER;
 
 lazy_static::lazy_static! {
-    static ref PAYMENT_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
+    static ref PAYMENT_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(
+            std::env::var("PAYMENT_SHUTDOWN_TIMEOUT_SECS")
+                .ok()
+                .and_then(|x| x.parse().ok())
+                .unwrap_or(10),
+        );
 }
 
 pub struct PaymentService;

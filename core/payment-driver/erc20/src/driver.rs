@@ -30,6 +30,22 @@ mod api;
 mod cli;
 mod cron;
 
+lazy_static::lazy_static! {
+    static ref TX_SENDOUT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(
+            std::env::var("ERC20_SENDOUT_INTERVAL_SECS")
+                .ok()
+                .and_then(|x| x.parse().ok())
+                .unwrap_or(10),
+        );
+
+    static ref TX_CONFIRMATION_INTERVAL: std::time::Duration = std::time::Duration::from_secs(
+            std::env::var("ERC20_CONFIRMATION_INTERVAL_SECS")
+                .ok()
+                .and_then(|x| x.parse().ok())
+                .unwrap_or(5),
+        );
+}
+
 pub struct Erc20Driver {
     active_accounts: AccountsRc,
     dao: Erc20Dao,
@@ -237,5 +253,13 @@ impl PaymentDriverCron for Erc20Driver {
         }
         log::trace!("ERC-20 send-out job complete.");
         drop(guard); // Explicit drop to tell Rust that guard is not unused variable
+    }
+
+    fn sendout_interval(&self) -> std::time::Duration {
+        *TX_SENDOUT_INTERVAL
+    }
+
+    fn confirmation_interval(&self) -> std::time::Duration {
+        *TX_CONFIRMATION_INTERVAL
     }
 }
