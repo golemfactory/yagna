@@ -12,13 +12,15 @@ use metrics::counter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
-use ya_client_model::payment::{Account, ActivityPayment, AgreementPayment, Payment};
+use ya_client_model::payment::{
+    Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
+};
 use ya_core_model::driver::{
     self, driver_bus_id, AccountMode, PaymentConfirmation, PaymentDetails, ValidateAllocation,
 };
 use ya_core_model::payment::local::{
-    DriverDetails, Network, NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver,
-    RegisterDriverError, SchedulePayment, UnregisterAccount, UnregisterDriver,
+    NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver, RegisterDriverError,
+    SchedulePayment, UnregisterAccount, UnregisterDriver,
 };
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_net::RemoteEndpoint;
@@ -303,6 +305,10 @@ impl PaymentProcessor {
         self.registry.lock().await.get_accounts()
     }
 
+    pub async fn get_drivers(&self) -> HashMap<String, DriverDetails> {
+        self.registry.lock().await.get_drivers()
+    }
+
     pub async fn get_network(
         &self,
         driver: String,
@@ -450,11 +456,6 @@ impl PaymentProcessor {
         signature: Vec<u8>,
     ) -> Result<(), VerifyPaymentError> {
         // TODO: Split this into smaller functions
-
-        let confirmation = match base64::decode(&payment.details) {
-            Ok(confirmation) => PaymentConfirmation { confirmation },
-            Err(e) => return Err(VerifyPaymentError::ConfirmationEncoding),
-        };
         let platform = payment.payment_platform.clone();
         let driver = self.registry.lock().await.driver(
             &payment.payment_platform,
@@ -540,23 +541,6 @@ impl PaymentProcessor {
                 }
                 _ => (),
             }
-        }
-
-        // Verify if transaction hash hasn't been re-used by comparing transaction balance
-        // between payer and payee in database and on blockchain
-        let db_balance = agreement_dao
-            .get_transaction_balance(payee_id, payee_addr.clone(), payer_addr.clone())
-            .await?;
-        let bc_balance = driver_endpoint(&driver)
-            .send(driver::GetTransactionBalance::new(
-                payer_addr.clone(),
-                payee_addr.clone(),
-                platform,
-            ))
-            .await??;
-
-        if bc_balance < db_balance + &details.amount {
-            return VerifyPaymentError::balance();
         }
 
         // Insert payment into database (this operation creates and updates all related entities)

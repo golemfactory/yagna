@@ -27,7 +27,7 @@ use ya_payment_driver::{
 use crate::{
     network::get_network_token,
     zksync::{faucet, signer::YagnaEthSigner, utils},
-    DEFAULT_NETWORK, ZKSYNC_TOKEN_NAME,
+    DEFAULT_NETWORK,
 };
 
 pub async fn account_balance(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
@@ -38,22 +38,12 @@ pub async fn account_balance(address: &str, network: Network) -> Result<BigDecim
         .map_err(GenericError::new)?;
     // TODO: implement tokens, replace None
     let token = get_network_token(network, None);
-    let mut balance_com = acc_info
+    let balance_com = acc_info
         .committed
         .balances
         .get(&token)
         .map(|x| x.0.clone())
         .unwrap_or(BigUint::zero());
-    // Hack to get GNT balance for backwards compatability
-    // TODO: Remove this if {} and the `mut` from `let mut balance_com`
-    if network == Network::Rinkeby && balance_com == BigUint::zero() {
-        balance_com = acc_info
-            .committed
-            .balances
-            .get(ZKSYNC_TOKEN_NAME)
-            .map(|x| x.0.clone())
-            .unwrap_or(BigUint::zero());
-    }
     let balance = utils::big_uint_to_big_dec(balance_com);
     log::debug!(
         "account_balance. address={}, network={}, balance={}",

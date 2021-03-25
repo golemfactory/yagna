@@ -18,7 +18,7 @@ use ya_payment_driver::{
     bus,
     cron::PaymentDriverCron,
     dao::DbExecutor,
-    db::models::{Network as DbNetwork, PaymentEntity},
+    db::models::{Network as DbNetwork, PaymentEntity, TxType},
     driver::{async_trait, BigDecimal, IdentityError, IdentityEvent, Network, PaymentDriver},
     model::*,
     utils,
@@ -112,7 +112,10 @@ impl ZksyncDriver {
 
         match wallet::make_transfer(&details, tx_nonce, payment.network).await {
             Ok(tx_hash) => {
-                let tx_id = self.dao.insert_transaction(&details, Utc::now()).await;
+                let tx_id = self
+                    .dao
+                    .insert_transaction(&details, Utc::now(), payment.network)
+                    .await;
                 self.dao
                     .transaction_sent(&tx_id, &tx_hash, &payment.order_id)
                     .await;
@@ -212,18 +215,18 @@ impl PaymentDriver for ZksyncDriver {
     async fn init(&self, _db: DbExecutor, _caller: String, msg: Init) -> Result<Ack, GenericError> {
         log::debug!("init: {:?}", msg);
         let address = msg.address().clone();
+        let mode = msg.mode();
 
-        // TODO: payment_api fails to start due to provider account not unlocked
-        // if !self.is_account_active(&address) {
-        //     return Err(GenericError::new("Can not init, account not active"));
-        // }
+        // Ensure account is unlock before initialising send mode
+        if mode.contains(AccountMode::SEND) && !self.is_account_active(&address) {
+            return Err(GenericError::new("Can not init, account not active"));
+        }
 
         wallet::init_wallet(&msg)
             .timeout(Some(180))
             .await
             .map_err(GenericError::new)??;
 
-        let mode = msg.mode();
         let network = msg.network().unwrap_or(DEFAULT_NETWORK.to_string());
         let token = get_network_token(
             DbNetwork::from_str(&network).map_err(GenericError::new)?,
@@ -359,71 +362,93 @@ Mind that to be eligible you have to run your app at least once on testnet -
 #[async_trait(?Send)]
 impl PaymentDriverCron for ZksyncDriver {
     async fn confirm_payments(&self) {
-        let txs = self.dao.get_unconfirmed_txs().await;
-        log::trace!("confirm_payments {:?}", txs);
+        for network_key in self.get_networks().keys() {
+            let network =
+                match DbNetwork::from_str(&network_key) {
+                    Ok(n) => n,
+                    Err(e) => {
+                        log::error!(
+                        "Failed to parse network, skipping confirmation job. key={}, error={:?}",
+                        network_key, e);
+                        continue;
+                    }
+                };
+            let txs = self.dao.get_unconfirmed_txs(network).await;
+            log::trace!("confirm_payments network={} txs={:?}", &network_key, &txs);
 
-        for tx in txs {
-            log::trace!("checking tx {:?}", &tx);
-            let tx_hash = match &tx.tx_hash {
-                None => continue,
-                Some(tx_hash) => tx_hash,
-            };
-            // Check payments before to fetch network
-            let first_payment: PaymentEntity = match self.dao.get_first_payment(&tx_hash).await {
-                Some(p) => p,
-                None => continue,
-            };
+            for tx in txs {
+                log::trace!("checking tx {:?}", &tx);
+                let tx_hash = match &tx.tx_hash {
+                    None => continue,
+                    Some(tx_hash) => tx_hash,
+                };
+                // Check payments before to fetch network
+                let first_payment: PaymentEntity = match self.dao.get_first_payment(&tx_hash).await
+                {
+                    Some(p) => p,
+                    None => continue,
+                };
 
-            let tx_success = match wallet::check_tx(&tx_hash, first_payment.network).await {
-                None => continue, // Check_tx returns None when the result is unknown
-                Some(tx_success) => tx_success,
-            };
+                let tx_success = match wallet::check_tx(&tx_hash, first_payment.network).await {
+                    None => continue, // Check_tx returns None when the result is unknown
+                    Some(tx_success) => tx_success,
+                };
 
-            let payments = self.dao.transaction_confirmed(&tx.tx_id).await;
-            let order_ids: Vec<String> = payments
-                .iter()
-                .map(|payment| payment.order_id.clone())
-                .collect();
+                let payments = self.dao.transaction_confirmed(&tx.tx_id).await;
+                let order_ids: Vec<String> = payments
+                    .iter()
+                    .map(|payment| payment.order_id.clone())
+                    .collect();
 
-            if let Err(err) = tx_success {
-                log::error!(
-                    "ZkSync transaction verification failed. tx_details={:?} error={}",
-                    tx,
-                    err
-                );
-                self.dao.transaction_failed(&tx.tx_id).await;
-                for order_id in order_ids.iter() {
-                    self.dao.payment_failed(order_id).await;
+                if let Err(err) = tx_success {
+                    log::error!(
+                        "ZkSync transaction verification failed. tx_details={:?} error={}",
+                        tx,
+                        err
+                    );
+                    self.dao.transaction_failed(&tx.tx_id).await;
+                    for order_id in order_ids.iter() {
+                        self.dao.payment_failed(order_id).await;
+                    }
+                    return;
                 }
-                return;
+
+                // TODO: Add token support
+                let platform =
+                    network_token_to_platform(Some(first_payment.network), None).unwrap(); // TODO: Catch error?
+                let details = match wallet::verify_tx(&tx_hash, first_payment.network).await {
+                    Ok(a) => a,
+                    Err(e) => {
+                        log::warn!("Failed to get transaction details from zksync, creating bespoke details. Error={}", e);
+
+                        //Create bespoke payment details:
+                        // - Sender + receiver are the same
+                        // - Date is always now
+                        // - Amount needs to be updated to total of all PaymentEntity's
+                        let mut details = utils::db_to_payment_details(&first_payment);
+                        details.amount = payments
+                            .into_iter()
+                            .map(|payment| utils::db_amount_to_big_dec(payment.amount.clone()))
+                            .sum::<BigDecimal>();
+                        details
+                    }
+                };
+                if tx.tx_type == TxType::Transfer as i32 {
+                    let tx_hash = hex::decode(&tx_hash).unwrap();
+
+                    if let Err(e) = bus::notify_payment(
+                        &self.get_name(),
+                        &platform,
+                        order_ids,
+                        &details,
+                        tx_hash,
+                    )
+                    .await
+                    {
+                        log::error!("{}", e)
+                    };
+                }
             }
-
-            // TODO: Add token support
-            let platform = network_token_to_platform(Some(first_payment.network), None).unwrap(); // TODO: Catch error?
-            let details = match wallet::verify_tx(&tx_hash, first_payment.network).await {
-                Ok(a) => a,
-                Err(e) => {
-                    log::warn!("Failed to get transaction details from zksync, creating bespoke details. Error={}", e);
-
-                    //Create bespoke payment details:
-                    // - Sender + receiver are the same
-                    // - Date is always now
-                    // - Amount needs to be updated to total of all PaymentEntity's
-                    let mut details = utils::db_to_payment_details(&first_payment);
-                    details.amount = payments
-                        .into_iter()
-                        .map(|payment| utils::db_amount_to_big_dec(payment.amount.clone()))
-                        .sum::<BigDecimal>();
-                    details
-                }
-            };
-            let tx_hash = hex::decode(&tx_hash).unwrap();
-
-            if let Err(e) =
-                bus::notify_payment(&self.get_name(), &platform, order_ids, &details, tx_hash).await
-            {
-                log::error!("{}", e)
-            };
         }
     }
 
