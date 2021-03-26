@@ -28,6 +28,12 @@ pub const PAYMENT_STATUS_NOT_ENOUGH_FUNDS: i32 = 3;
 pub const PAYMENT_STATUS_NOT_ENOUGH_GAS: i32 = 4;
 pub const PAYMENT_STATUS_FAILED: i32 = 5;
 
+#[derive(Clone, Copy)]
+pub enum TxType {
+    Faucet = 0,
+    Transfer = 1,
+}
+
 pub enum TransactionStatus {
     Created,
     Sent,
@@ -76,6 +82,7 @@ pub struct TransactionEntity {
     pub encoded: String,
     pub signature: String,
     pub tx_hash: Option<String>,
+    pub network: Network,
 }
 
 #[derive(Queryable, Clone, Debug, Identifiable, Insertable, PartialEq)]
@@ -93,7 +100,7 @@ pub struct PaymentEntity {
     pub network: Network,
 }
 
-#[derive(AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy)]
+#[derive(AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy, FromPrimitive)]
 #[sql_type = "Integer"]
 pub enum Network {
     Mainnet = 1,

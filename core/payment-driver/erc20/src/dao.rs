@@ -5,13 +5,14 @@
 // Extrernal crates
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
+use web3::types::U256;
 
 // Workspace uses
 use ya_payment_driver::{
     dao::{payment::PaymentDao, transaction::TransactionDao, DbExecutor},
     db::models::{
-        Network, PaymentEntity, TransactionEntity, TransactionStatus, TxType,
-        PAYMENT_STATUS_FAILED, PAYMENT_STATUS_NOT_YET, TX_CREATED,
+        Network, PaymentEntity, TransactionEntity, TransactionStatus, PAYMENT_STATUS_FAILED,
+        PAYMENT_STATUS_NOT_YET, TX_CREATED,
     },
     model::{GenericError, PaymentDetails, SchedulePayment},
     utils,
@@ -19,11 +20,11 @@ use ya_payment_driver::{
 
 use crate::network::platform_to_network_token;
 
-pub struct ZksyncDao {
+pub struct Erc20Dao {
     db: DbExecutor,
 }
 
-impl ZksyncDao {
+impl Erc20Dao {
     pub fn new(db: DbExecutor) -> Self {
         Self { db }
     }
@@ -91,13 +92,34 @@ impl ZksyncDao {
         Ok(())
     }
 
+    pub async fn get_next_nonce(
+        &self,
+        address: &str,
+        network: Network,
+    ) -> Result<U256, GenericError> {
+        let max_db = self
+            .transaction()
+            .get_used_nonces(address, network)
+            .await
+            .map_err(GenericError::new)?
+            .into_iter()
+            .map(utils::u256_from_big_endian_hex)
+            .max();
+
+        let next_nonce = match max_db {
+            Some(nonce) => nonce + U256::from(1),
+            None => U256::from(0),
+        };
+
+        Ok(next_nonce)
+    }
+
     pub async fn insert_transaction(
         &self,
         details: &PaymentDetails,
         date: DateTime<Utc>,
-        network: Network,
     ) -> String {
-        // TO CHECK: No difference between tx_id and tx_hash on zksync
+        // TO CHECK: No difference between tx_id and tx_hash on erc20
         // TODO: Implement pre-sign
         let tx_id = Uuid::new_v4().to_string();
         let tx = TransactionEntity {
@@ -106,15 +128,24 @@ impl ZksyncDao {
             nonce: "".to_string(), // not used till pre-sign
             status: TX_CREATED,
             timestamp: date.naive_utc(),
-            tx_type: TxType::Transfer as i32, // Zksync only knows transfers, unused field
-            encoded: "".to_string(),          // not used till pre-sign
-            signature: "".to_string(),        // not used till pre-sign
+            tx_type: 0,                // Erc20 only knows transfers, unused field
+            encoded: "".to_string(),   // not used till pre-sign
+            signature: "".to_string(), // not used till pre-sign
             tx_hash: None,
-            network,
+            network: Network::Rinkeby, // TODO: update network
         };
 
         if let Err(e) = self.transaction().insert_transactions(vec![tx]).await {
             log::error!("Failed to store transaction for {:?} : {:?}", details, e)
+            // TO CHECK: Should it continue or stop the process...
+        }
+        tx_id
+    }
+
+    pub async fn insert_raw_transaction(&self, tx: TransactionEntity) -> String {
+        let tx_id = tx.tx_id.clone();
+        if let Err(e) = self.transaction().insert_transactions(vec![tx]).await {
+            log::error!("Failed to store transaction for {} : {:?}", tx_id, e)
             // TO CHECK: Should it continue or stop the process...
         }
         tx_id
@@ -147,7 +178,7 @@ impl ZksyncDao {
         }
     }
 
-    pub async fn transaction_sent(&self, tx_id: &str, tx_hash: &str, order_id: &str) {
+    pub async fn transaction_saved(&self, tx_id: &str, order_id: &str) {
         if let Err(e) = self
             .payment()
             .update_tx_id(order_id.to_string(), tx_id.to_string())
@@ -156,6 +187,9 @@ impl ZksyncDao {
             log::error!("Failed to update for transaction {:?} : {:?}", tx_id, e)
             // TO CHECK: Should it continue or stop the process...
         }
+    }
+
+    pub async fn transaction_sent(&self, tx_id: &str, tx_hash: &str) {
         if let Err(e) = self
             .transaction()
             .update_tx_sent(tx_id.to_string(), tx_hash.to_string())
@@ -196,11 +230,39 @@ impl ZksyncDao {
         }
     }
 
+    pub async fn get_unsent_txs(&self, network: Network) -> Vec<TransactionEntity> {
+        match self.transaction().get_unsent_txs(network).await {
+            Ok(txs) => txs,
+            Err(e) => {
+                log::error!("Failed to fetch unconfirmed transactions : {:?}", e);
+                vec![]
+            }
+        }
+    }
+
     pub async fn get_unconfirmed_txs(&self, network: Network) -> Vec<TransactionEntity> {
         match self.transaction().get_unconfirmed_txs(network).await {
             Ok(txs) => txs,
             Err(e) => {
                 log::error!("Failed to fetch unconfirmed transactions : {:?}", e);
+                vec![]
+            }
+        }
+    }
+
+    pub async fn get_pending_faucet_txs(
+        &self,
+        node_id: &str,
+        network: Network,
+    ) -> Vec<TransactionEntity> {
+        match self
+            .transaction()
+            .get_pending_faucet_txs(node_id, network)
+            .await
+        {
+            Ok(txs) => txs,
+            Err(e) => {
+                log::error!("Failed to fetch unsent transactions : {:?}", e);
                 vec![]
             }
         }

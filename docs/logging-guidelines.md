@@ -164,3 +164,52 @@ log this:
 [2020-08-27T07:56:22Z ERROR yagna] E00342 - WASM ExeUnit DEPLOY: Error downloading remote file to temp folder '/tmp/yagna_data': File IO error: Path not found
 
 ```
+
+## Implementation Recommendations
+
+It is recommended to follow the uniform patterns/mechanisms as listed in this section:
+
+### Default log file naming and location
+
+Log files shall be generated in complance with following path convention:
+
+```
+${YAGNA_DATA_DIR}\logs\${component-name}-${date-YYYYMMDD}(.${file-no})?.log
+```
+
+for example:
+
+```
+${YAGNA_DATA_DIR}\logs\yagna-20210127.log
+${YAGNA_DATA_DIR}\logs\gftp-20210126.1.log
+${YAGNA_DATA_DIR}\logs\gftp-20210126.2.log
+```
+
+### CLI configuration parameters
+
+For CLI-triggered components, it is recommended to implement following, uniform log config parameters:
+
+`--debug` - Launch the component with logs on DEBUG level (INFO is the default log level)
+
+`-- log-file (file name)` - Redirect logstream into a file with given name.
+
+### Default log entry layout
+
+It is recommended to follow a uniform log entry layout pattern: 
+
+```
+[ (timestamp) (log level) (area/topic)] (message)
+```
+
+for example:
+
+```
+[2020-08-27T07:56:22Z ERROR yagna::exe_unit::wasm] E00342 - WASM ExeUnit DEPLOY: Error downloading remote file to temp folder '/tmp/yagna_data': File IO error: Path not found
+```
+
+### Log rotation
+
+It is recommended to implement log file rotation mechanisms. 
+
+**TODO** Details
+

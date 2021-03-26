@@ -8,6 +8,7 @@
 use std::sync::Arc;
 
 // Workspace uses
+use ya_client_model::payment::driver_details::DriverDetails;
 use ya_client_model::NodeId;
 use ya_core_model::driver::{
     driver_bus_id, AccountMode, GenericError, PaymentConfirmation, PaymentDetails,
@@ -85,7 +86,7 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
     log::debug!("Registering driver in payment service...");
     let message = payment_srv::RegisterDriver {
         driver_name: driver.get_name(),
-        details: payment_srv::DriverDetails {
+        details: DriverDetails {
             default_network: driver.get_default_network(),
             networks: driver.get_networks(),
             recv_init_required: driver.recv_init_required(),

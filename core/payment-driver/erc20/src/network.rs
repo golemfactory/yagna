@@ -26,8 +26,8 @@ lazy_static::lazy_static! {
             }
         }
     };
-    static ref DEFAULT_DB_NETWORK: DbNetwork = DbNetwork::from_str(DEFAULT_NETWORK).unwrap();
-    static ref MAINNET_DB_NETWORK: DbNetwork = DbNetwork::from_str(MAINNET_NETWORK).unwrap();
+    pub static ref DEFAULT_DB_NETWORK: DbNetwork = DbNetwork::from_str(DEFAULT_NETWORK).unwrap();
+    pub static ref MAINNET_DB_NETWORK: DbNetwork = DbNetwork::from_str(MAINNET_NETWORK).unwrap();
 }
 
 pub fn platform_to_network_token(platform: String) -> Result<(DbNetwork, String), GenericError> {
@@ -45,8 +45,7 @@ pub fn network_token_to_platform(
     network: Option<DbNetwork>,
     token: Option<String>,
 ) -> Result<String, GenericError> {
-    let network =
-        network.unwrap_or(DbNetwork::from_str(DEFAULT_NETWORK).map_err(GenericError::new)?);
+    let network = network.unwrap_or(*DEFAULT_DB_NETWORK);
     let network_config = (*SUPPORTED_NETWORKS).get(&(network.to_string()));
     let network_config = match network_config {
         Some(nc) => nc,
@@ -77,4 +76,11 @@ pub fn get_network_token(network: DbNetwork, token: Option<String>) -> String {
     let network_config = (*SUPPORTED_NETWORKS).get(&(network.to_string())).unwrap();
     // TODO: Check if token in network.tokens
     token.unwrap_or(network_config.default_token.clone())
+}
+
+pub fn network_like_to_network(network_like: Option<String>) -> DbNetwork {
+    match network_like {
+        Some(n) => DbNetwork::from_str(&n).unwrap_or(*DEFAULT_DB_NETWORK),
+        None => *DEFAULT_DB_NETWORK,
+    }
 }
