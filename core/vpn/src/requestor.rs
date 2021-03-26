@@ -4,8 +4,10 @@ use actix::prelude::*;
 use actix_web::{web, HttpRequest, HttpResponse, Responder, ResponseError};
 use actix_web_actors::ws;
 use futures::channel::mpsc;
+use futures::lock::Mutex;
 use futures::SinkExt;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use ya_client_model::net::*;
 use ya_client_model::ErrorMessage;
@@ -18,12 +20,9 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(60);
 type Result<T> = std::result::Result<T, ApiError>;
 type WsResult<T> = std::result::Result<T, ws::ProtocolError>;
 
-lazy_static::lazy_static! {
-    static ref VPN_SUPERVISOR: Addr<VpnSupervisor> = VpnSupervisor::from_registry();
-}
-
-pub fn web_scope() -> actix_web::Scope {
+pub fn web_scope(vpn_sup: Arc<Mutex<VpnSupervisor>>) -> actix_web::Scope {
     actix_web::web::scope(NET_API_PATH)
+        .data(vpn_sup)
         .service(create_network)
         .service(remove_network)
         .service(add_node)
@@ -34,88 +33,84 @@ pub fn web_scope() -> actix_web::Scope {
 /// Creates a new private network
 #[actix_web::post("/net")]
 async fn create_network(
+    vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
     create_network: web::Json<CreateNetwork>,
-    identity: Identity,
+    _identity: Identity,
 ) -> Result<impl Responder> {
-    let requestor_id = identity.identity.to_string();
     let create_network = create_network.into_inner();
-    (*VPN_SUPERVISOR)
-        .send(VpnCreateNetwork::new(requestor_id, create_network))
-        .await??;
+    let mut supervisor = vpn_sup.lock().await;
+    supervisor.create_network(create_network.network, create_network.requestor_address)?;
     Ok(web::Json(()))
 }
 
 /// Removes an existing private network
 #[actix_web::delete("/net/{net_id}")]
 async fn remove_network(
+    vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
     path: web::Path<PathNetwork>,
     _identity: Identity,
 ) -> Result<impl Responder> {
-    (*VPN_SUPERVISOR)
-        .send(VpnRemoveNetwork {
-            net_id: path.into_inner().net_id,
-        })
-        .await??;
+    let path = path.into_inner();
+    let mut supervisor = vpn_sup.lock().await;
+    supervisor.remove_network(&path.net_id).await?;
     Ok(web::Json(()))
 }
 
 /// Adds a new node to an existing private network
 #[actix_web::post("/net/{net_id}/nodes")]
 async fn add_node(
+    vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
     path: web::Path<PathNetwork>,
     add_node: web::Json<Node>,
     _identity: Identity,
 ) -> Result<impl Responder> {
+    let path = path.into_inner();
     let add_node = add_node.into_inner();
-    (*VPN_SUPERVISOR)
-        .send(VpnAddNode {
-            net_id: path.into_inner().net_id,
-            address: add_node.address,
-            id: add_node.id,
-        })
-        .await??;
+    let supervisor = vpn_sup.lock().await;
+    supervisor
+        .add_node(&path.net_id, add_node.id, add_node.address)
+        .await?;
     Ok(web::Json(()))
 }
 
 /// Removes an existing node from a private network
 #[actix_web::delete("/net/{net_id}/nodes/{node_id}")]
 async fn remove_node(
+    vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
     path: web::Path<PathNetworkNode>,
     _identity: Identity,
 ) -> Result<impl Responder> {
-    let model = path.into_inner();
-    (*VPN_SUPERVISOR)
-        .send(VpnRemoveNode {
-            net_id: model.net_id,
-            id: model.node_id,
-        })
-        .await??;
+    let path = path.into_inner();
+    let supervisor = vpn_sup.lock().await;
+    supervisor.remove_node(&path.net_id, path.node_id).await?;
     Ok(web::Json(()))
 }
 
 #[actix_web::get("/net/{net_id}/tcp/{ip}/{port}")]
 async fn connect_tcp(
+    vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
     path: web::Path<PathConnect>,
     req: HttpRequest,
     stream: web::Payload,
     _identity: Identity,
 ) -> Result<HttpResponse> {
-    let model = path.into_inner();
-    let vpn = (*VPN_SUPERVISOR)
-        .send(VpnGetNetwork::new(model.net_id.clone()))
-        .await??;
+    let path = path.into_inner();
+    let vpn = {
+        let supervisor = vpn_sup.lock().await;
+        supervisor.get_network(&path.net_id)?
+    };
 
     let (ws_tx, ws_rx) = mpsc::channel(1);
     let vpn_rx = vpn
         .send(ConnectTcp {
             receiver: ws_rx,
-            address: model.ip,
-            port: model.port,
+            address: path.ip,
+            port: path.port,
         })
         .await??;
 
     Ok(ws::start(
-        VpnWebSocket::new(model.net_id, ws_tx, vpn_rx),
+        VpnWebSocket::new(path.net_id, ws_tx, vpn_rx),
         &req,
         stream,
     )?)

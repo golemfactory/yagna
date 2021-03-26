@@ -31,13 +31,13 @@ pub(crate) async fn start_vpn<R: RuntimeService>(
         return Ok(None);
     }
 
-    let hosts = deployment.hosts.clone();
     let networks = deployment
         .networks
         .values()
         .map(TryFrom::try_from)
         .collect::<Result<_>>()?;
 
+    let hosts = deployment.hosts.clone();
     let response = service
         .create_network(CreateNetwork { networks, hosts })
         .await
@@ -121,6 +121,8 @@ impl Vpn {
 
     fn forward_frame(&mut self, endpoint: GsbEndpoint, frame: EtherFrame, ctx: &mut Context<Self>) {
         let pkt: Vec<_> = frame.into();
+        log::debug!("Egress frame {:?}", pkt);
+
         ctx.spawn(
             endpoint
                 .call(activity::VpnPacket(pkt))
@@ -174,13 +176,18 @@ impl Actor for Vpn {
 /// Egress traffic handler (VM -> VPN)
 impl StreamHandler<Result<Vec<u8>>> for Vpn {
     fn handle(&mut self, result: Result<Vec<u8>>, ctx: &mut Context<Self>) {
+        log::debug!("Egress packet {:?}", result);
+
         let bytes = match result {
             Ok(bytes) => bytes,
             Err(err) => return log::debug!("VPN error (egress): {}", err),
         };
         let frame = match EtherFrame::try_from(bytes) {
             Ok(frame) => frame,
-            Err(err) => return log::debug!("VPN frame error (egress): {}", err),
+            Err(err) => match &err {
+                VpnError::ProtocolNotSupported(_) => return,
+                _ => return log::debug!("VPN frame error (egress): {}", err),
+            },
         };
         match &frame {
             EtherFrame::Arp(_) => self.handle_arp(frame, ctx),
@@ -201,7 +208,11 @@ impl Handler<RpcEnvelope<activity::VpnPacket>> for Vpn {
     ) -> Self::Result {
         let packet = packet.into_inner();
         let mut tx = self.endpoint.tx.clone();
-        log::debug!("Ingress packet {:?}", packet);
+        log::debug!(
+            "Ingress packet of size {:?}: {:?}",
+            packet.0.len(),
+            packet.0
+        );
 
         ctx.spawn(
             async move {
@@ -310,7 +321,6 @@ impl<'a> TryFrom<&'a DeploymentNetwork> for Network {
             .find(|ip_| ip_ != &ip)
             .ok_or_else(|| VpnError::NetAddrTaken(ip))?;
         Ok(Network {
-            ipv6: ip.is_ipv6(),
             addr: ip.to_string(),
             gateway: gateway.to_string(),
             mask: mask.to_string(),

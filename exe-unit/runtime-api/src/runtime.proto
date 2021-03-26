@@ -102,10 +102,9 @@ message Response {
 }
 
 message Network {
-    bool ipv6 = 1;
-    string addr = 2;
-    string gateway = 3;
-    string mask = 4;
+    string addr = 1;
+    string gateway = 2;
+    string mask = 3;
 }
 
 message Output {

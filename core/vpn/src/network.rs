@@ -3,7 +3,7 @@ use crate::message::*;
 use crate::Result;
 use actix::prelude::*;
 use futures::channel::{mpsc, oneshot};
-use futures::future::{self, LocalBoxFuture};
+use futures::future;
 use futures::{FutureExt, SinkExt, StreamExt};
 use ipnet::IpNet;
 use rand::distributions::{Distribution, Uniform};
@@ -27,161 +27,93 @@ use ya_utils_networking::vpn::{
 
 // (protocol, local address, local port, remote address, remote port)
 pub type SocketTuple = (Protocol, IpAddress, u16, IpAddress, u16);
-const TCP_CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
+const TCP_CONNECTION_TIMEOUT: Duration = Duration::from_secs(3);
 
 #[derive(Default)]
 pub struct VpnSupervisor {
     networks: HashMap<String, Addr<Vpn>>,
 }
 
-impl Actor for VpnSupervisor {
-    type Context = Context<Self>;
-
-    fn started(&mut self, _: &mut Self::Context) {
-        log::info!("VPN supervisor started");
+impl VpnSupervisor {
+    pub fn get_network(&self, network_id: &str) -> Result<Addr<Vpn>> {
+        self.networks
+            .get(network_id)
+            .cloned()
+            .ok_or_else(|| Error::NetNotFound(network_id.to_owned()))
     }
 
-    fn stopping(&mut self, ctx: &mut Self::Context) -> Running {
-        let networks = std::mem::replace(&mut self.networks, Default::default());
-        let futures = networks.into_iter().map(|(_, a)| a.send(Shutdown {}));
-
-        future::join_all(futures)
-            .then(|_| future::ready(()))
-            .into_actor(self)
-            .wait(ctx);
-
-        Running::Stop
-    }
-
-    fn stopped(&mut self, _: &mut Self::Context) {
-        log::info!("VPN supervisor stopped");
-    }
-}
-
-impl Supervised for VpnSupervisor {
-    fn restarting(&mut self, _ctx: &mut Self::Context) {
-        log::info!("VPN supervisor is restarting");
-    }
-}
-
-impl SystemService for VpnSupervisor {}
-
-impl Handler<VpnCreateNetwork> for VpnSupervisor {
-    type Result = <VpnCreateNetwork as Message>::Result;
-
-    fn handle(&mut self, msg: VpnCreateNetwork, _: &mut Self::Context) -> Self::Result {
-        if self.networks.contains_key(&msg.network.id) {
-            return Err(Error::NetIdTaken(msg.network.id));
+    pub fn create_network(
+        &mut self,
+        network: ya_client_model::net::Network,
+        requestor_address: String,
+    ) -> Result<()> {
+        if self.networks.contains_key(&network.id) {
+            return Err(Error::NetIdTaken(network.id));
         }
         let net = to_net(
-            &msg.network.address,
-            &msg.network.mask.unwrap_or_else(|| "255.255.255.0".into()),
+            &network.address,
+            &network.mask.unwrap_or_else(|| "255.255.255.0".into()),
         )?;
 
         let net_ip = IpCidr::new(net.addr().into(), net.prefix_len());
-        let node_ip = node_addr(&msg.requestor_address, &net)?;
+        let node_ip = node_addr(&requestor_address, &net)?;
         let route = net_route(&net)?;
 
         let mut stack = default_iface();
         add_iface_address(&mut stack, node_ip);
         add_iface_route(&mut stack, net_ip, route);
 
-        let net = Network::new(&msg.network.id, net);
+        let net = Network::new(&network.id, net);
         let vpn = Vpn::new(stack, net).start();
 
-        vpn.do_send(VpnAddAddress {
-            net_id: msg.network.id.clone(),
+        vpn.do_send(AddAddress {
             address: node_ip.address().to_string(),
         });
 
-        self.networks.insert(msg.network.id, vpn);
+        self.networks.insert(network.id, vpn);
         Ok(())
     }
-}
 
-impl Handler<VpnGetNetwork<Vpn>> for VpnSupervisor {
-    type Result = <VpnGetNetwork<Vpn> as Message>::Result;
-
-    fn handle(&mut self, msg: VpnGetNetwork<Vpn>, _: &mut Self::Context) -> Self::Result {
-        match self.networks.get(&msg.net_id) {
-            Some(addr) => Ok(addr.clone()),
-            None => Err(Error::NetNotFound(msg.net_id)),
-        }
+    pub async fn remove_network(&mut self, network_id: &str) -> Result<()> {
+        self.networks.remove(network_id);
+        let msg = Shutdown {};
+        self.forward(network_id, msg).await??;
+        Ok(())
     }
-}
 
-impl Handler<VpnRemoveNetwork> for VpnSupervisor {
-    type Result = ActorResponse<Self, (), Error>;
-
-    fn handle(&mut self, msg: VpnRemoveNetwork, _: &mut Self::Context) -> Self::Result {
-        match self.forward(msg.net_id, Shutdown {}, "shutting down") {
-            Ok(fut) => ActorResponse::r#async(fut.into_actor(self)),
-            Err(err) => ActorResponse::reply(Err(err)),
-        }
+    #[allow(unused)]
+    pub async fn add_address(&self, network_id: &str, address: String) -> Result<()> {
+        let msg = AddAddress { address };
+        self.forward(network_id, msg).await??;
+        Ok(())
     }
-}
 
-impl Handler<VpnAddAddress> for VpnSupervisor {
-    type Result = ActorResponse<Self, (), Error>;
-
-    fn handle(&mut self, msg: VpnAddAddress, _: &mut Self::Context) -> Self::Result {
-        match self.forward(msg.net_id.clone(), msg, "adding address") {
-            Ok(fut) => ActorResponse::r#async(fut.into_actor(self)),
-            Err(err) => ActorResponse::reply(Err(err)),
-        }
+    pub async fn add_node(&self, network_id: &str, id: String, address: String) -> Result<()> {
+        let msg = AddNode { id, address };
+        self.forward(network_id, msg).await??;
+        Ok(())
     }
-}
 
-impl Handler<VpnAddNode> for VpnSupervisor {
-    type Result = ActorResponse<Self, (), Error>;
-
-    fn handle(&mut self, msg: VpnAddNode, _: &mut Self::Context) -> Self::Result {
-        match self.forward(msg.net_id.clone(), msg, "adding node") {
-            Ok(fut) => ActorResponse::r#async(fut.into_actor(self)),
-            Err(err) => ActorResponse::reply(Err(err)),
-        }
+    pub async fn remove_node(&self, network_id: &str, id: String) -> Result<()> {
+        let msg = RemoveNode { id };
+        self.forward(network_id, msg).await??;
+        Ok(())
     }
-}
 
-impl Handler<VpnRemoveNode> for VpnSupervisor {
-    type Result = ActorResponse<Self, (), Error>;
-
-    fn handle(&mut self, msg: VpnRemoveNode, _: &mut Self::Context) -> Self::Result {
-        match self.forward(msg.net_id.clone(), msg, "removing node") {
-            Ok(fut) => ActorResponse::r#async(fut.into_actor(self)),
-            Err(err) => ActorResponse::reply(Err(err)),
-        }
-    }
-}
-
-impl VpnSupervisor {
-    fn forward<T>(
-        &self,
-        net_id: String,
-        msg: T,
-        action: &str,
-    ) -> Result<LocalBoxFuture<'static, Result<()>>>
+    async fn forward<T>(&self, network_id: &str, msg: T) -> Result<<T as Message>::Result>
     where
+        Vpn: Handler<T>,
         T: Message + Send + 'static,
         <T as Message>::Result: Send,
-        Vpn: Handler<T>,
     {
-        let addr = self
+        Ok(self
             .networks
-            .get(&net_id)
+            .get(network_id)
             .cloned()
-            .ok_or_else(|| Error::NetNotFound(net_id))?;
-
-        let action = action.to_string();
-        let fut = async move {
-            if let Err(e) = addr.send(msg).await {
-                log::warn!("Error: {} failed: {}", action, e);
-            }
-            Ok(())
-        }
-        .boxed_local();
-
-        Ok(fut)
+            .ok_or_else(|| Error::NetNotFound(network_id.to_string()))?
+            .send(msg)
+            .await
+            .map_err(|_| Error::NetNotFound(network_id.to_string()))?)
     }
 }
 
@@ -482,25 +414,18 @@ impl Actor for Vpn {
     }
 }
 
-impl Handler<VpnAddAddress> for Vpn {
-    type Result = <VpnAddAddress as Message>::Result;
+impl Handler<AddAddress> for Vpn {
+    type Result = <AddAddress as Message>::Result;
 
-    fn handle(&mut self, msg: VpnAddAddress, _: &mut Self::Context) -> Self::Result {
-        if &msg.net_id != self.vpn.id() {
-            return Err(Error::Other("Invalid network ID".to_string()));
-        }
+    fn handle(&mut self, msg: AddAddress, _: &mut Self::Context) -> Self::Result {
         self.vpn.add_address(&msg.address)
     }
 }
 
-impl Handler<VpnAddNode> for Vpn {
-    type Result = <VpnAddNode as Message>::Result;
+impl Handler<AddNode> for Vpn {
+    type Result = <AddNode as Message>::Result;
 
-    fn handle(&mut self, msg: VpnAddNode, _: &mut Self::Context) -> Self::Result {
-        if &msg.net_id != self.vpn.id() {
-            return Err(Error::Other("Invalid network ID".to_string()));
-        }
-
+    fn handle(&mut self, msg: AddNode, _: &mut Self::Context) -> Self::Result {
         let ip = to_ip(&msg.address)?;
         self.vpn.add_node(ip, &msg.id, gsb_remote_url)?;
 
@@ -528,14 +453,10 @@ impl Handler<VpnAddNode> for Vpn {
     }
 }
 
-impl Handler<VpnRemoveNode> for Vpn {
-    type Result = <VpnRemoveNode as Message>::Result;
+impl Handler<RemoveNode> for Vpn {
+    type Result = <RemoveNode as Message>::Result;
 
-    fn handle(&mut self, msg: VpnRemoveNode, _: &mut Self::Context) -> Self::Result {
-        if &msg.net_id != self.vpn.id() {
-            return Err(Error::Other("Invalid network ID".to_string()));
-        }
-
+    fn handle(&mut self, msg: RemoveNode, _: &mut Self::Context) -> Self::Result {
         self.vpn.remove_node(&msg.id);
 
         let vpn_id = self.vpn.id().clone();
@@ -628,7 +549,10 @@ impl Handler<ConnectTcp> for Vpn {
                     );
                     ctx.address().do_send(Disconnect {
                         handle,
-                        reason: DisconnectReason::ConnectionFailed,
+                        reason: match e {
+                            Error::ConnectionTimeout => DisconnectReason::ConnectionTimeout,
+                            _ => DisconnectReason::ConnectionFailed,
+                        },
                     });
                 }
             }

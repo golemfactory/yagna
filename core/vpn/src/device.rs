@@ -43,7 +43,6 @@ impl<'a> phy::Device<'a> for CaptureDevice {
 
     fn capabilities(&self) -> phy::DeviceCapabilities {
         let mut caps = phy::DeviceCapabilities::default();
-        caps.checksum = phy::ChecksumCapabilities::ignored();
         caps.max_transmission_unit = MTU;
         caps
     }
