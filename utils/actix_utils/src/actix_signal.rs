@@ -18,6 +18,14 @@ where
     MessageType: Message + std::marker::Send + std::marker::Sync + std::clone::Clone,
     MessageType::Result: std::marker::Send + std::marker::Sync;
 
+/// Send signal from asynchronous code.
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+pub struct Signal<MessageType>(pub MessageType)
+where
+    MessageType: Message + std::marker::Send + std::marker::Sync + std::clone::Clone,
+    MessageType::Result: std::marker::Send + std::marker::Sync;
+
 #[allow(dead_code)]
 impl<MessageType> SignalSlot<MessageType>
 where
@@ -70,15 +78,27 @@ where
 #[macro_export]
 macro_rules! actix_signal_handler {
     ($ActorType:ty, $MessageType:ty, $SignalFieldName:tt) => {
-        impl Handler<Subscribe<$MessageType>> for $ActorType {
+        impl Handler<$crate::actix_signal::Subscribe<$MessageType>> for $ActorType {
             type Result = ();
 
             fn handle(
                 &mut self,
-                msg: Subscribe<$MessageType>,
+                msg: $crate::actix_signal::Subscribe<$MessageType>,
                 _ctx: &mut <Self as Actor>::Context,
             ) -> Self::Result {
                 self.$SignalFieldName.subscribe(msg.0);
+            }
+        }
+
+        impl Handler<$crate::actix_signal::Signal<$MessageType>> for $ActorType {
+            type Result = Result<()>;
+
+            fn handle(
+                &mut self,
+                msg: $crate::actix_signal::Signal<$MessageType>,
+                _ctx: &mut <Self as Actor>::Context,
+            ) -> Self::Result {
+                self.$SignalFieldName.send_signal(msg.0)
             }
         }
     };

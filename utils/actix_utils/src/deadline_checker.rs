@@ -1,5 +1,5 @@
 use actix::prelude::*;
-use anyhow::anyhow;
+use anyhow::{anyhow, Result};
 use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
 
@@ -256,6 +256,7 @@ pub async fn bind_deadline_reaction(
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::actix_signal::Subscribe;
 
     struct DeadlineReceiver {
         elapsed: Vec<DeadlineElapsed>,

@@ -3,11 +3,11 @@ pub use crate::db::models::{AppKey, Role};
 use chrono::Utc;
 use diesel::prelude::*;
 
-use diesel::{Connection, ExpressionMethods, RunQueryDsl};
+use diesel::{ExpressionMethods, RunQueryDsl};
 use std::cmp::max;
 use ya_client_model::NodeId;
 use ya_persistence::executor::{
-    do_with_connection, do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
+    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
 
 pub type Result<T> = std::result::Result<T, DaoError>;
@@ -27,7 +27,7 @@ impl<'c> AppKeyDao<'c> {
     where
         F: Send + 'static + FnOnce(&ConnType) -> Result<R>,
     {
-        do_with_connection(&self.pool, f).await
+        readonly_transaction(&self.pool, f).await
     }
 
     #[inline]
@@ -38,8 +38,7 @@ impl<'c> AppKeyDao<'c> {
         &self,
         f: F,
     ) -> Result<R> {
-        self.with_connection(move |conn| conn.transaction(|| f(conn)))
-            .await
+        do_with_transaction(&self.pool, f).await
     }
 
     pub async fn create(

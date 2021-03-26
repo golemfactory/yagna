@@ -1,5 +1,6 @@
 use anyhow::Result;
 use chrono::{DateTime, TimeZone, Utc};
+use std::time::Duration;
 
 use ya_agreement_utils::{AgreementView, Error};
 
@@ -19,6 +20,9 @@ pub struct TaskInfo {
     /// Agreement wasn't implemented. It is recommended, that Requestor should always call
     /// Terminate Agreement, if he finished computations.
     pub multi_activity: bool,
+    /// Max allowed time Agreement can have no Activities.
+    /// TODO: This could be negotiated between Provider and Requestor.
+    pub idle_agreement_timeout: Duration,
 }
 
 fn agreement_expiration_from(agreement: &AgreementView) -> Result<DateTime<Utc>> {
@@ -46,7 +50,13 @@ impl TaskInfo {
             agreement_id: agreement.agreement_id.clone(),
             expiration: agreement_expiration_from(agreement)?,
             multi_activity: multi_activity_from(agreement)?,
+            idle_agreement_timeout: Duration::from_secs(90),
         })
+    }
+
+    pub fn with_idle_agreement_timeout(mut self, timeout: Duration) -> Self {
+        self.idle_agreement_timeout = timeout;
+        self
     }
 }
 

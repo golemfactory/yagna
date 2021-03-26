@@ -17,11 +17,12 @@ pub struct LimitExpiration {
     min_expiration: Duration,
     max_expiration: Duration,
 
-    /// If deadline is None, we allow, that Requestor doesn't accept DebitNotes.
+    /// DebitNote acceptance timeout. Base point for negotiations.
     payment_deadline: Duration,
     /// If Requestor doesn't promise to accept DebitNotes, this alternative max_expiration will be used.
     max_expiration_without_deadline: Duration,
 
+    /// Minimal DebitNote acceptance timeout.
     min_deadline: i64,
 }
 

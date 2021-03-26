@@ -239,6 +239,7 @@ async fn accept_debit_note(
     let allocation_id = acceptance.allocation_id.clone();
 
     let dao: DebitNoteDao = db.as_dao();
+    log::trace!("Querying DB for Debit Note [{}]", debit_note_id);
     let debit_note: DebitNote = match dao.get(debit_note_id.clone(), node_id).await {
         Ok(Some(debit_note)) => debit_note,
         Ok(None) => return response::not_found(),
@@ -260,6 +261,11 @@ async fn accept_debit_note(
     }
 
     let activity_id = debit_note.activity_id.clone();
+    log::trace!(
+        "Querying DB for Activity [{}] for Debit Note [{}]",
+        activity_id,
+        debit_note_id
+    );
     let activity = match db
         .as_dao::<ActivityDao>()
         .get(activity_id.clone(), node_id)
@@ -271,6 +277,11 @@ async fn accept_debit_note(
     };
     let amount_to_pay = &debit_note.total_amount_due - &activity.total_amount_scheduled.0;
 
+    log::trace!(
+        "Querying DB for Allocation [{}] for Debit Note [{}]",
+        allocation_id,
+        debit_note_id
+    );
     let allocation = match db
         .as_dao::<AllocationDao>()
         .get(allocation_id.clone(), node_id)
@@ -297,15 +308,23 @@ async fn accept_debit_note(
         let schedule_msg =
             SchedulePayment::from_debit_note(debit_note, allocation_id, amount_to_pay);
         match async move {
+            log::trace!(
+                "Sending AcceptDebitNote [{}] to [{}]",
+                debit_note_id,
+                issuer_id
+            );
             ya_net::from(node_id)
                 .to(issuer_id)
                 .service(PUBLIC_SERVICE)
                 .call(accept_msg)
                 .await??;
             if let Some(msg) = schedule_msg {
+                log::trace!("Calling SchedulePayment [{}] locally", debit_note_id);
                 bus::service(LOCAL_SERVICE).send(msg).await??;
             }
-            dao.accept(debit_note_id, node_id).await?;
+            log::trace!("Accepting Debit Note [{}] in DB", debit_note_id);
+            dao.accept(debit_note_id.clone(), node_id).await?;
+            log::trace!("Debit Note accepted successfully for [{}]", debit_note_id);
 
             counter!("payment.debit_notes.requestor.accepted", 1);
             Ok(())
