@@ -86,14 +86,7 @@ pub async fn request_glm(
         &str_addr
     );
 
-    let network_nonce = wallet::get_network_nonce(address, network).await?;
-    let db_nonce = dao.get_next_nonce(&str_addr, network).await?;
-    let nonce = if network_nonce > db_nonce {
-        network_nonce
-    } else {
-        db_nonce
-    };
-
+    let nonce = wallet::get_next_nonce(dao, address, network).await?;
     let db_tx = ethereum::sign_faucet_tx(address, network, nonce).await?;
     // After inserting into the database, the tx will get send by the send_payments job
     dao.insert_raw_transaction(db_tx).await;

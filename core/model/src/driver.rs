@@ -434,6 +434,19 @@ impl Transfer {
             token,
         }
     }
+
+    pub fn amount(&self) -> BigDecimal {
+        self.amount.clone()
+    }
+    pub fn sender(&self) -> String {
+        self.sender.clone()
+    }
+    pub fn to(&self) -> String {
+        self.to.clone()
+    }
+    pub fn network(&self) -> Option<String> {
+        self.network.clone()
+    }
 }
 
 impl RpcMessage for Transfer {
