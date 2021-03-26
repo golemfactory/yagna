@@ -111,7 +111,7 @@ mod test {
         ($str:expr) => {
             assert!(
                 TransferUrl::parse($str, "container").is_err(),
-                format!("{} should fail", $str)
+                "should fail"
             );
         };
     }
@@ -120,7 +120,7 @@ mod test {
         ($str:expr) => {
             assert!(
                 TransferUrl::parse($str, "container").is_ok(),
-                format!("{} should succeed", $str)
+                "should succeed"
             );
         };
     }
