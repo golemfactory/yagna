@@ -17,6 +17,7 @@ use crate::execution::{ExeUnitsRegistry, TaskRunnerConfig};
 use crate::hardware::{Resources, UpdateResources};
 use crate::market::config::MarketConfig;
 use crate::payments::PaymentsConfig;
+use crate::tasks::config::TaskConfig;
 
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
@@ -130,6 +131,8 @@ pub struct RunConfig {
     pub market: MarketConfig,
     #[structopt(flatten)]
     pub payment: PaymentsConfig,
+    #[structopt(flatten)]
+    pub tasks: TaskConfig,
 }
 
 #[derive(StructOpt, Clone, Debug)]

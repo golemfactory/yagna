@@ -21,9 +21,8 @@ use ya_client_model::market::{
 use ya_client_model::NodeId;
 use ya_std_utils::LogErr;
 use ya_utils_actix::{
-    actix_handler::ResultTypeGetter,
-    actix_signal::{SignalSlot, Subscribe},
-    actix_signal_handler, forward_actix_handler,
+    actix_handler::ResultTypeGetter, actix_signal::SignalSlot, actix_signal_handler,
+    forward_actix_handler,
 };
 
 use super::negotiator::factory;

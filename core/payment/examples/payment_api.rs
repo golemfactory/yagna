@@ -169,10 +169,12 @@ fn fake_sign_tx(sign_tx: Box<dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
-    std::env::set_var(
-        "RUST_LOG",
-        "debug,tokio_core=info,tokio_reactor=info,hyper=info,reqwest=info",
-    );
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var(
+            "RUST_LOG",
+            "debug,tokio_core=info,tokio_reactor=info,hyper=info,reqwest=info",
+        );
+    }
     env_logger::init();
     dotenv::dotenv().expect("Failed to read .env file");
 
