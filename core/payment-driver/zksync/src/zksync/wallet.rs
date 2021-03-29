@@ -9,7 +9,11 @@ use std::env;
 use std::str::FromStr;
 use zksync::operations::SyncTransactionHandle;
 use zksync::types::BlockStatus;
-use zksync::zksync_types::{tx::TxHash, Address, Nonce, TxFeeTypes};
+use zksync::zksync_types::{
+    tokens::{ChangePubKeyFeeType, ChangePubKeyFeeTypeArg},
+    tx::TxHash,
+    Address, Nonce, TxFeeTypes,
+};
 use zksync::{
     provider::get_rpc_addr,
     provider::{Provider, RpcProvider},
@@ -73,7 +77,12 @@ pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
 
     if mode.contains(AccountMode::SEND) {
         let wallet = get_wallet(&address, network).await?;
-        unlock_wallet(&wallet, network).await?;
+        unlock_wallet(&wallet, network).await.map_err(|e| {
+            GenericError::new(format!(
+                "{:?}  HINT: Did you run `yagna payment fund` and follow the instructions?",
+                e
+            ))
+        })?;
     }
     Ok(())
 }
@@ -90,6 +99,20 @@ pub async fn exit(msg: &Exit) -> Result<String, GenericError> {
     let network = msg.network().unwrap_or(DEFAULT_NETWORK.to_string());
     let network = Network::from_str(&network).map_err(|e| GenericError::new(e))?;
     let wallet = get_wallet(&msg.sender(), network).await?;
+
+    let token = get_network_token(network, None);
+    let balance = get_balance(&wallet, &token).await?;
+    let unlock_fee = get_unlock_fee(&wallet, &token).await?;
+    let withdraw_fee = get_withdraw_fee(&wallet, &token).await?;
+    let total_fee = unlock_fee + withdraw_fee;
+    if balance < total_fee {
+        return Err(GenericError::new(format!(
+            "Not enough balance to exit. Minimum required balance to pay withdraw fees is {} {}",
+            utils::big_uint_to_big_dec(total_fee),
+            token
+        )));
+    }
+
     unlock_wallet(&wallet, network).await?;
     let tx_handle = withdraw(wallet, network, msg.amount(), msg.to()).await?;
     let tx_info = tx_handle
@@ -146,10 +169,7 @@ pub async fn make_transfer(
     let wallet = get_wallet(&sender, network).await?;
     let token = get_network_token(network, None);
 
-    let balance = wallet
-        .get_balance(BlockStatus::Committed, token.as_str())
-        .await
-        .map_err(GenericError::new)?;
+    let balance = get_balance(&wallet, &token).await?;
     log::debug!("balance before transfer={}", balance);
 
     let transfer_builder = wallet
@@ -287,14 +307,24 @@ async fn unlock_wallet<S: EthereumSigner + Clone, P: Provider + Clone>(
     {
         log::info!("Unlocking wallet... address = {}", wallet.signer.address);
         let token = get_network_token(network, None);
+        let balance = get_balance(&wallet, &token).await?;
+        let unlock_fee = get_unlock_fee(&wallet, &token).await?;
+        if unlock_fee > balance {
+            return Err(GenericError::new("Not enough balance to unlock account"));
+        }
 
         let unlock = wallet
             .start_change_pubkey()
+            .fee(unlock_fee)
             .fee_token(token.as_str())
-            .map_err(|e| GenericError::new(format!("Failed to create change_pubkey request: {}", e)))?
+            .map_err(|e| {
+                GenericError::new(format!("Failed to create change_pubkey request: {}", e))
+            })?
             .send()
             .await
-            .map_err(|e| GenericError::new(format!("Failed to send change_pubkey request: '{}'. HINT: Did you run `yagna payment fund` and follow the instructions?", e)))?;
+            .map_err(|e| {
+                GenericError::new(format!("Failed to send change_pubkey request: {}", e))
+            })?;
         log::info!("Unlock send. tx_hash= {}", unlock.hash().to_string());
 
         let tx_info = unlock.wait_for_commit().await.map_err(GenericError::new)?;
@@ -315,10 +345,7 @@ pub async fn withdraw<S: EthereumSigner + Clone, P: Provider + Clone>(
     recipient: Option<String>,
 ) -> Result<SyncTransactionHandle<P>, GenericError> {
     let token = get_network_token(network, None);
-    let balance = wallet
-        .get_balance(BlockStatus::Committed, token.as_str())
-        .await
-        .map_err(GenericError::new)?;
+    let balance = get_balance(&wallet, &token).await?;
     info!(
         "Wallet funded with {} {} available for withdrawal",
         utils::big_uint_to_big_dec(balance.clone()),
@@ -326,24 +353,21 @@ pub async fn withdraw<S: EthereumSigner + Clone, P: Provider + Clone>(
     );
 
     info!("Obtaining withdrawal fee");
-    let address = wallet.address();
-    let withdraw_fee = wallet
-        .provider
-        .get_tx_fee(TxFeeTypes::Withdraw, address, token.as_str())
-        .await
-        .map_err(GenericError::new)?
-        .total_fee;
+    let withdraw_fee = get_withdraw_fee(&wallet, &token).await?;
     info!(
         "Withdrawal transaction fee {:.5} {}",
         utils::big_uint_to_big_dec(withdraw_fee.clone()),
         token
     );
+    if withdraw_fee > balance {
+        return Err(GenericError::new("Not enough balance to withdraw"));
+    }
 
     let amount = match amount {
         Some(amount) => utils::big_dec_to_big_uint(amount)?,
         None => balance.clone(),
     };
-    let withdraw_amount = std::cmp::min(balance - withdraw_fee, amount);
+    let withdraw_amount = std::cmp::min(balance - &withdraw_fee, amount);
     info!(
         "Withdrawal of {:.5} {} started",
         utils::big_uint_to_big_dec(withdraw_amount.clone()),
@@ -352,11 +376,12 @@ pub async fn withdraw<S: EthereumSigner + Clone, P: Provider + Clone>(
 
     let recipient_address = match recipient {
         Some(addr) => Address::from_str(&addr[2..]).map_err(GenericError::new)?,
-        None => address,
+        None => wallet.address(),
     };
 
     let withdraw_builder = wallet
         .start_withdraw()
+        .fee(withdraw_fee)
         .token(token.as_str())
         .map_err(GenericError::new)?
         .amount(withdraw_amount.clone())
@@ -370,4 +395,54 @@ pub async fn withdraw<S: EthereumSigner + Clone, P: Provider + Clone>(
     let withdraw_handle = withdraw_builder.send().await.map_err(GenericError::new)?;
 
     Ok(withdraw_handle)
+}
+
+async fn get_balance<S: EthereumSigner + Clone, P: Provider + Clone>(
+    wallet: &Wallet<S, P>,
+    token: &str,
+) -> Result<BigUint, GenericError> {
+    let balance = wallet
+        .get_balance(BlockStatus::Committed, token)
+        .await
+        .map_err(GenericError::new)?;
+    Ok(balance)
+}
+
+async fn get_withdraw_fee<S: EthereumSigner + Clone, P: Provider + Clone>(
+    wallet: &Wallet<S, P>,
+    token: &str,
+) -> Result<BigUint, GenericError> {
+    let withdraw_fee = wallet
+        .provider
+        .get_tx_fee(TxFeeTypes::Withdraw, wallet.address(), token)
+        .await
+        .map_err(GenericError::new)?
+        .total_fee;
+    Ok(withdraw_fee)
+}
+
+async fn get_unlock_fee<S: EthereumSigner + Clone, P: Provider + Clone>(
+    wallet: &Wallet<S, P>,
+    token: &str,
+) -> Result<BigUint, GenericError> {
+    if wallet
+        .is_signing_key_set()
+        .await
+        .map_err(GenericError::new)?
+    {
+        return Ok(BigUint::zero());
+    }
+    let unlock_fee = wallet
+        .provider
+        .get_tx_fee(
+            TxFeeTypes::ChangePubKey(ChangePubKeyFeeTypeArg::ContractsV4Version(
+                ChangePubKeyFeeType::ECDSA,
+            )),
+            wallet.address(),
+            token,
+        )
+        .await
+        .map_err(GenericError::new)?
+        .total_fee;
+    Ok(unlock_fee)
 }
