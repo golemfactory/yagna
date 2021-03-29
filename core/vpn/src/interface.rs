@@ -7,10 +7,16 @@ use std::collections::BTreeMap;
 pub type CaptureInterface<'a> = EthernetInterface<'a, CaptureDevice>;
 
 pub fn default_iface<'a>() -> CaptureInterface<'a> {
-    let ethernet_addr = EthernetAddress(rand::random());
     let neighbor_cache = NeighborCache::new(BTreeMap::new());
-    let addrs = Vec::new();
     let routes = Routes::new(BTreeMap::new());
+    let addrs = Vec::new();
+
+    let ethernet_addr = loop {
+        let addr = EthernetAddress(rand::random());
+        if addr.is_unicast() {
+            break addr;
+        }
+    };
 
     EthernetInterfaceBuilder::new(CaptureDevice::default())
         .ethernet_addr(ethernet_addr)

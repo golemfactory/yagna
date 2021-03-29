@@ -3,14 +3,18 @@ use actix_web_actors::ws;
 use actix_web_actors::ws::Frame;
 use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
-use std::path::PathBuf;
+use sha3::digest::generic_array::GenericArray;
+use sha3::Digest;
+use std::path::{Path, PathBuf};
 use structopt::StructOpt;
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use url::Url;
 use ya_client::net::NetRequestorApi;
 use ya_client::web::WebClient;
-use ya_client_model::net::{Address, CreateNetwork, Network, Node};
+use ya_client_model::net::{Address, Network, Node};
+
+type HashOutput = GenericArray<u8, <sha3::Sha3_512 as Digest>::OutputSize>;
 
 #[derive(StructOpt, Clone, Debug)]
 struct Cli {
@@ -35,6 +39,23 @@ struct Cli {
     port: u16,
 }
 
+async fn file_checksum<P: AsRef<Path>>(path: P) -> anyhow::Result<HashOutput> {
+    const CHUNK_SIZE: usize = 40960;
+
+    let mut file = OpenOptions::new().read(true).open(path.as_ref()).await?;
+    let mut hasher = sha3::Sha3_512::default();
+    let mut chunk = [0u8; CHUNK_SIZE];
+
+    while let Ok(count) = file.read(&mut chunk[..]).await {
+        if count == 0 {
+            break;
+        }
+        hasher.input(&chunk[..count]);
+    }
+
+    Ok(hasher.result())
+}
+
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::from_args();
@@ -50,15 +71,20 @@ async fn main() -> anyhow::Result<()> {
     }
     .ok_or_else(|| anyhow::anyhow!("Missing application key"))?;
 
-    println!("Opening input file: {}", cli.input_file.display());
-    let mut input = OpenOptions::new().read(true).open(cli.input_file).await?;
+    println!("Calculating input hash of {}", cli.input_file.display());
+    let input_hash = file_checksum(&cli.input_file).await?;
+    println!("Input hash: {}", hex::encode(input_hash));
+
+    let mut input = OpenOptions::new().read(true).open(&cli.input_file).await?;
+    let input_sz = input.metadata().await?.len() as usize;
+    println!("Input size: {}", input_sz);
 
     println!("Opening output file: {}", cli.output_file.display());
     let mut output = OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
-        .open(cli.output_file)
+        .open(&cli.output_file)
         .await?;
 
     let net_id = cli
@@ -87,13 +113,11 @@ async fn main() -> anyhow::Result<()> {
     if cli.skip_create {
         println!("Re-using network: {}", net_id);
     } else {
-        let msg = CreateNetwork {
-            network: Network {
-                id: net_id.clone(),
-                ip: net_address,
-                mask: None,
-                gateway: None,
-            },
+        let msg = Network {
+            id: net_id.clone(),
+            ip: net_address,
+            mask: None,
+            gateway: None,
         };
 
         println!("Creating network: {}", net_id);
@@ -118,13 +142,11 @@ async fn main() -> anyhow::Result<()> {
 
     println!("Connecting to: {}:{}", cli.host, cli.port);
 
-    let (response, connection) = api.connect_tcp(&net_id, &cli.host, cli.port).await?;
+    let connection = api.connect_tcp(&net_id, &cli.host, cli.port).await?;
     let (mut sink, mut stream) = connection.split();
 
-    println!("Response status: {:?}", response.status());
-
     Arbiter::spawn(async move {
-        let mut buf = [0u8; 65535 - 14];
+        let mut buf = [0u8; 65535 - 14 - 20];
         loop {
             let read = input.read(&mut buf).await;
             let size = match read {
@@ -139,6 +161,7 @@ async fn main() -> anyhow::Result<()> {
                 }
             };
 
+            println!("Tx {} bytes", size);
             let bytes = Bytes::from(buf[..size].to_vec());
             if let Err(e) = sink.send(ws::Message::Binary(bytes)).await {
                 eprintln!("Error sending data: {}", e);
@@ -147,6 +170,7 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
+    let mut received = 0;
     while let Some(data) = stream.next().await {
         let frame = data.map_err(|e| anyhow::anyhow!("Protocol error: {}", e))?;
         let bytes = match frame {
@@ -159,8 +183,21 @@ async fn main() -> anyhow::Result<()> {
             Frame::Continuation(_) | Frame::Ping(_) | Frame::Pong(_) => continue,
         }
         .to_vec();
+
+        println!("Rx {} bytes", bytes.len());
         output.write_all(&bytes).await?;
+
+        received += bytes.len();
+        if received >= input_sz {
+            break;
+        }
     }
+    output.flush().await?;
+    drop(output);
+
+    println!("Calculating output hash...");
+    let output_hash = file_checksum(&cli.output_file).await?;
+    println!("Output hash: {}", hex::encode(output_hash));
 
     Ok(())
 }

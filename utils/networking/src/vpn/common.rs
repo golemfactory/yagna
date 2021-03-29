@@ -60,7 +60,8 @@ pub fn to_net<S: AsRef<str>>(ip: &str, mask: Option<S>) -> Result<IpNet, Error> 
                         .as_ref()
                         .map(|s| s.as_ref())
                         .unwrap_or(DEFAULT_IPV4_NET_MASK);
-                    to_cidr(Ipv4Addr::from_str(mask)?.octets())
+                    let octets = Ipv4Addr::from_str(mask)?.octets();
+                    u32::from_ne_bytes(octets).to_be().leading_ones()
                 }
                 IpAddr::V6(_) => 128,
             };
@@ -68,9 +69,4 @@ pub fn to_net<S: AsRef<str>>(ip: &str, mask: Option<S>) -> Result<IpNet, Error> 
         }
     };
     Ok(result.map_err(|_| Error::NetAddr(ip.to_string()))?)
-}
-
-#[inline(always)]
-pub fn to_cidr(mask: [u8; 4]) -> u32 {
-    u32::from_ne_bytes(mask).to_be().leading_ones()
 }

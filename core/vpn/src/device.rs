@@ -72,7 +72,9 @@ impl<'a> phy::TxToken for TxToken<'a> {
     {
         let mut buffer = vec![0u8; len];
         let result = f(&mut buffer);
-        self.queue.push_back(buffer);
+        if result.is_ok() {
+            self.queue.push_back(buffer);
+        }
         result
     }
 }

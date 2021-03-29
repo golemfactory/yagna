@@ -7,7 +7,6 @@ use futures::channel::{mpsc, oneshot};
 use futures::future;
 use futures::future::BoxFuture;
 use futures::{FutureExt, SinkExt, StreamExt};
-use ipnet::IpNet;
 use rand::distributions::{Distribution, Uniform};
 use smoltcp::iface::Route;
 use smoltcp::socket::{
@@ -86,16 +85,23 @@ impl VpnSupervisor {
         let def = network.clone();
         let net = to_net(&network.ip, network.mask.as_ref())?;
         let net_ip = IpCidr::new(net.addr().into(), net.prefix_len());
-        let net_gw = network.gateway.map(|g| IpAddr::from_str(&g)).transpose()?;
-        let route = net_route(&net, net_gw)?;
+        let net_gw = match network.gateway.map(|g| IpAddr::from_str(&g)).transpose()? {
+            Some(gw) => gw,
+            None => net
+                .hosts()
+                .next()
+                .ok_or_else(|| Error::NetCidr(net.addr(), net.prefix_len()))?,
+        };
 
+        let route = net_route(net_gw)?;
         let net = Network::new(&network.id, net);
         let mut stack = default_iface();
         add_iface_route(&mut stack, net_ip, route);
 
         let vpn = self
             .arbiter
-            .exec(move || Vpn::new(stack, net).start())
+            .clone()
+            .spawn_ext(async move { Ok::<_, Error>(Vpn::new(stack, net).start()) })
             .await?;
 
         self.networks.insert(network.id.clone(), vpn);
@@ -245,6 +251,14 @@ impl VpnSupervisor {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+enum VpnState {
+    Idle,
+    Started,
+    Stopping,
+    Stopped,
+}
+
 pub struct Vpn {
     vpn: Network<Endpoint>,
     stack: CaptureInterface<'static>,
@@ -252,6 +266,7 @@ pub struct Vpn {
     ports: Ports,
     connections: HashMap<SocketTuple, Connection>,
     pending: HashMap<SocketTuple, PendingConnection>,
+    state: VpnState,
 }
 
 impl Vpn {
@@ -263,6 +278,7 @@ impl Vpn {
             ports: Default::default(),
             connections: Default::default(),
             pending: Default::default(),
+            state: VpnState::Idle,
         }
     }
 
@@ -379,7 +395,7 @@ impl Vpn {
 
         let device = self.stack.device_mut();
         while let Some(data) = device.next_phy_rx() {
-            log::info!("Processing egress phy packet");
+            log::trace!("Processing egress phy packet");
             processed = true;
 
             let frame = match EtherFrame::try_from(data) {
@@ -393,15 +409,12 @@ impl Vpn {
             let endpoint = match &frame {
                 EtherFrame::Ip(_) => {
                     let packet = IpPacket::packet(frame.payload());
-                    log::info!("Processing egress IP packet to {:?}", packet.dst_address());
+                    log::debug!("Egress IP packet to {:?}", packet.dst_address());
                     self.vpn.endpoint(packet.dst_address())
                 }
                 EtherFrame::Arp(_) => {
                     let packet = ArpPacket::packet(frame.payload());
-                    log::info!(
-                        "Processing egress ARP packet to {:?}",
-                        packet.get_field(ArpField::TPA)
-                    );
+                    log::debug!("Egress ARP packet to {:?}", packet.get_field(ArpField::TPA));
                     self.vpn.endpoint(packet.get_field(ArpField::TPA))
                 }
                 _ => {
@@ -412,7 +425,7 @@ impl Vpn {
             let endpoint = match endpoint {
                 Some(endpoint) => endpoint,
                 None => {
-                    log::info!("No endpoint for egress packet");
+                    log::trace!("No endpoint for egress packet");
                     continue;
                 }
             };
@@ -426,8 +439,6 @@ impl Vpn {
                         endpoint.addr(),
                         err
                     );
-                } else {
-                    log::info!("Packet sent");
                 }
             });
         }
@@ -520,10 +531,16 @@ impl Actor for Vpn {
     fn started(&mut self, ctx: &mut Self::Context) {
         let vpn_id = gsb_url(self.vpn.id());
         actix_rpc::bind::<VpnPacket>(&vpn_id, ctx.address().recipient());
+
+        self.state = VpnState::Started;
         log::info!("VPN {} started", self.vpn.id());
     }
 
     fn stopping(&mut self, ctx: &mut Self::Context) -> Running {
+        if self.state != VpnState::Stopping {
+            return Running::Continue;
+        }
+
         let id = self.vpn.id().clone();
         let vpn_id = gsb_url(&id);
 
@@ -538,6 +555,7 @@ impl Actor for Vpn {
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
+        self.state = VpnState::Stopped;
         log::info!("VPN {} stopped", self.vpn.id());
     }
 }
@@ -562,7 +580,12 @@ impl Handler<AddAddress> for Vpn {
         let ip_addr: IpAddr = msg.address.parse()?;
         let ip_address = IpAddress::from(ip_addr);
 
-        let cidr = IpCidr::new(ip_address, 32);
+        let network = self.vpn.as_ref();
+        if !network.contains(&ip_addr) {
+            return Err(Error::NetAddrMismatch(ip_addr));
+        }
+
+        let cidr = IpCidr::new(ip_address, network.prefix_len());
         if !cidr.address().is_unicast() && !cidr.address().is_unspecified() {
             return Err(Error::IpAddrNotAllowed(msg.address.parse()?));
         }
@@ -807,6 +830,7 @@ impl Handler<Shutdown> for Vpn {
     type Result = <Shutdown as Message>::Result;
 
     fn handle(&mut self, _: Shutdown, ctx: &mut Self::Context) -> Self::Result {
+        self.state = VpnState::Stopping;
         ctx.stop();
         Ok(())
     }
@@ -990,14 +1014,7 @@ fn icmp_socket_tuple(_: &IcmpSocket) -> SocketTuple {
     )
 }
 
-fn net_route(net: &IpNet, net_gw: Option<IpAddr>) -> Result<Route> {
-    let ip = match net_gw {
-        Some(gw) => gw,
-        None => net
-            .hosts()
-            .next()
-            .ok_or_else(|| Error::NetCidr(net.addr(), net.prefix_len()))?,
-    };
+fn net_route(ip: IpAddr) -> Result<Route> {
     Ok(match ip {
         IpAddr::V4(a) => Route::new_ipv4_gateway(a.into()),
         IpAddr::V6(a) => Route::new_ipv6_gateway(a.into()),

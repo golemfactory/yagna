@@ -7388,7 +7388,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.6.0"
-source = "git+https://github.com/golemfactory/ya-client.git?branch=mf/vpn#9c6ae73c014494b76433bf17d51ff013c0f9ce09"
+source = "git+https://github.com/golemfactory/ya-client.git?branch=mf/vpn#4064350dc55e9dbae6d318c5deaa4bd22d27379f"
 dependencies = [
  "actix-codec 0.3.0",
  "awc 2.0.3",
@@ -7414,7 +7414,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.3.2"
-source = "git+https://github.com/golemfactory/ya-client.git?branch=mf/vpn#9c6ae73c014494b76433bf17d51ff013c0f9ce09"
+source = "git+https://github.com/golemfactory/ya-client.git?branch=mf/vpn#4064350dc55e9dbae6d318c5deaa4bd22d27379f"
 dependencies = [
  "bigdecimal 0.2.0",
  "chrono",
@@ -8297,6 +8297,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "serde_json",
+ "sha3",
  "smoltcp",
  "structopt",
  "thiserror",

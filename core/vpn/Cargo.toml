@@ -39,6 +39,7 @@ tokio = { version = "0.2.11", features = ["time"] }
 ya-client = "0.6"
 
 actix-rt = "1.0"
+sha3 = "0.8.2"
 structopt = "0.3"
 tokio = { version = "0.2.11", features = ["time", "fs"] }
 url = "2.1"
