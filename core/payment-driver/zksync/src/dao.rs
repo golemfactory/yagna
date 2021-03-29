@@ -10,8 +10,8 @@ use uuid::Uuid;
 use ya_payment_driver::{
     dao::{payment::PaymentDao, transaction::TransactionDao, DbExecutor},
     db::models::{
-        Network, PaymentEntity, TransactionEntity, TransactionStatus, PAYMENT_STATUS_FAILED,
-        PAYMENT_STATUS_NOT_YET, TX_CREATED,
+        Network, PaymentEntity, TransactionEntity, TransactionStatus, TxType,
+        PAYMENT_STATUS_FAILED, PAYMENT_STATUS_NOT_YET, TX_CREATED,
     },
     model::{GenericError, PaymentDetails, SchedulePayment},
     utils,
@@ -95,6 +95,7 @@ impl ZksyncDao {
         &self,
         details: &PaymentDetails,
         date: DateTime<Utc>,
+        network: Network,
     ) -> String {
         // TO CHECK: No difference between tx_id and tx_hash on zksync
         // TODO: Implement pre-sign
@@ -105,10 +106,11 @@ impl ZksyncDao {
             nonce: "".to_string(), // not used till pre-sign
             status: TX_CREATED,
             timestamp: date.naive_utc(),
-            tx_type: 0,                // Zksync only knows transfers, unused field
-            encoded: "".to_string(),   // not used till pre-sign
-            signature: "".to_string(), // not used till pre-sign
+            tx_type: TxType::Transfer as i32, // Zksync only knows transfers, unused field
+            encoded: "".to_string(),          // not used till pre-sign
+            signature: "".to_string(),        // not used till pre-sign
             tx_hash: None,
+            network,
         };
 
         if let Err(e) = self.transaction().insert_transactions(vec![tx]).await {
@@ -194,8 +196,8 @@ impl ZksyncDao {
         }
     }
 
-    pub async fn get_unconfirmed_txs(&self) -> Vec<TransactionEntity> {
-        match self.transaction().get_unconfirmed_txs().await {
+    pub async fn get_unconfirmed_txs(&self, network: Network) -> Vec<TransactionEntity> {
+        match self.transaction().get_unconfirmed_txs(network).await {
             Ok(txs) => txs,
             Err(e) => {
                 log::error!("Failed to fetch unconfirmed transactions : {:?}", e);

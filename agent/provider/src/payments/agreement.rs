@@ -253,6 +253,7 @@ impl ActivitiesWaiter {
         while let Some(value) = self.watch_receiver.recv().await {
             log::debug!("Num active activities left: {}.", value);
             if value == 0 {
+                log::debug!("All activities finished.");
                 break;
             }
         }

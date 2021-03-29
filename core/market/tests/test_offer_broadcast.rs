@@ -311,6 +311,7 @@ async fn test_discovery_get_offers() {
         .get_remote_offers(
             id1.identity.to_string(),
             vec![subscription_id.clone(), invalid_subscription],
+            5,
         )
         .await
         .unwrap();

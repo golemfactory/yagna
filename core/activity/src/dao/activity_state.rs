@@ -57,7 +57,7 @@ impl<'c> ActivityStateDao<'c> {
                 state: String,
                 #[sql_type = "Integer"]
                 n: i32,
-            };
+            }
 
             let stats: Vec<StatRecord> = diesel::sql_query(
                 r#"
@@ -88,7 +88,7 @@ impl<'c> ActivityStateDao<'c> {
                 state: String,
                 #[sql_type = "Integer"]
                 n: i32,
-            };
+            }
 
             let stats: Vec<StatRecord> = diesel::sql_query(
                 r#"
