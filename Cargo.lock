@@ -5491,7 +5491,6 @@ checksum = "2932dc07acd2066ff2e3921a4419606b220ba6cd03a9935123856cc534877056"
 dependencies = [
  "rand 0.6.5",
  "secp256k1-sys 0.1.2",
- "serde",
 ]
 
 [[package]]
@@ -5502,6 +5501,7 @@ checksum = "c6179428c22c73ac0fbb7b5579a56353ce78ba29759b3b8575183336ea74cdfb"
 dependencies = [
  "rand 0.6.5",
  "secp256k1-sys 0.3.0",
+ "serde",
 ]
 
 [[package]]
@@ -7388,7 +7388,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.6.0"
-source = "git+https://github.com/golemfactory/ya-client.git?branch=mf/vpn#184a5edf4738da314678be074928eb2881b79287"
+source = "git+https://github.com/golemfactory/ya-client.git?branch=mf/vpn#9c6ae73c014494b76433bf17d51ff013c0f9ce09"
 dependencies = [
  "actix-codec 0.3.0",
  "awc 2.0.3",
@@ -7414,7 +7414,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.3.2"
-source = "git+https://github.com/golemfactory/ya-client.git?branch=mf/vpn#184a5edf4738da314678be074928eb2881b79287"
+source = "git+https://github.com/golemfactory/ya-client.git?branch=mf/vpn#9c6ae73c014494b76433bf17d51ff013c0f9ce09"
 dependencies = [
  "bigdecimal 0.2.0",
  "chrono",
@@ -7423,7 +7423,7 @@ dependencies = [
  "hex",
  "openssl",
  "rand 0.7.3",
- "secp256k1 0.17.2",
+ "secp256k1 0.19.0",
  "serde",
  "serde_json",
  "strum 0.19.5",

@@ -22,6 +22,7 @@ use ya_core_model::activity::Exec;
 use ya_utils_networking::vpn::common::{to_ip, to_net};
 use ya_utils_networking::vpn::error::Error as VpnError;
 
+use std::str::FromStr;
 pub use ya_client_model::activity::activity_state::{State, StatePair};
 
 #[derive(Error, Debug, Serialize)]
@@ -374,6 +375,7 @@ pub(crate) struct Deployment {
 #[derive(Clone, Debug)]
 pub(crate) struct DeploymentNetwork {
     pub network: IpNet,
+    pub node_ip: IpAddr,
     pub nodes: HashMap<IpAddr, String>,
 }
 
@@ -387,9 +389,17 @@ impl Deployment {
             .into_iter()
             .map(|net| {
                 let id = net.id.clone();
-                let network = to_net(&net.ip, &net.mask)?;
+                let network = to_net(&net.ip, net.mask)?;
+                let node_ip = IpAddr::from_str(&net.node_ip)?;
                 let nodes = Self::map_nodes(net.nodes)?;
-                Ok((id, DeploymentNetwork { network, nodes }))
+                Ok((
+                    id,
+                    DeploymentNetwork {
+                        network,
+                        node_ip,
+                        nodes,
+                    },
+                ))
             })
             .collect::<Result<Vec<_>, VpnError>>()?;
         self.networks.extend(networks.into_iter());

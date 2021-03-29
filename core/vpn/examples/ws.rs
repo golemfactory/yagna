@@ -10,7 +10,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use url::Url;
 use ya_client::net::NetRequestorApi;
 use ya_client::web::WebClient;
-use ya_client_model::net::{CreateNetwork, Network, Node};
+use ya_client_model::net::{Address, CreateNetwork, Network, Node};
 
 #[derive(StructOpt, Clone, Debug)]
 struct Cli {
@@ -90,23 +90,30 @@ async fn main() -> anyhow::Result<()> {
         let msg = CreateNetwork {
             network: Network {
                 id: net_id.clone(),
-                address: net_address,
+                ip: net_address,
                 mask: None,
                 gateway: None,
             },
-            requestor_address: net_requestor_address,
         };
 
         println!("Creating network: {}", net_id);
+
         api.create_network(&msg).await?;
-
-        let node = Node {
-            id: cli.id.clone(),
-            address: cli.host.clone(),
-        };
-
-        println!("Adding node: {:?}", node);
-        api.add_node(&net_id, &node).await?;
+        api.add_address(
+            &net_id,
+            &Address {
+                ip: net_requestor_address,
+            },
+        )
+        .await?;
+        api.add_node(
+            &net_id,
+            &Node {
+                id: cli.id.clone(),
+                ip: cli.host.clone(),
+            },
+        )
+        .await?;
     }
 
     println!("Connecting to: {}:{}", cli.host, cli.port);
@@ -117,7 +124,7 @@ async fn main() -> anyhow::Result<()> {
     println!("Response status: {:?}", response.status());
 
     Arbiter::spawn(async move {
-        let mut buf = [0u8; 65535];
+        let mut buf = [0u8; 65535 - 14];
         loop {
             let read = input.read(&mut buf).await;
             let size = match read {

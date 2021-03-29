@@ -5,6 +5,7 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 
 pub const MAX_FRAME_SIZE: usize = 14 + 65521; // Ethernet II + payload
+pub const DEFAULT_IPV4_NET_MASK: &'static str = "255.255.255.0";
 
 #[inline(always)]
 pub fn hton(ip: IpAddr) -> Box<[u8]> {
@@ -48,13 +49,19 @@ pub fn to_octets(ip: IpAddr) -> Box<[u8]> {
     }
 }
 
-pub fn to_net(ip: &str, mask: &str) -> Result<IpNet, Error> {
+pub fn to_net<S: AsRef<str>>(ip: &str, mask: Option<S>) -> Result<IpNet, Error> {
     let result = match ip.find('/') {
         Some(_) => IpNet::from_str(ip),
         None => {
             let ip = IpAddr::from_str(&ip)?;
             let cidr = match &ip {
-                IpAddr::V4(_) => to_cidr(Ipv4Addr::from_str(&mask)?.octets()),
+                IpAddr::V4(_) => {
+                    let mask = mask
+                        .as_ref()
+                        .map(|s| s.as_ref())
+                        .unwrap_or(DEFAULT_IPV4_NET_MASK);
+                    to_cidr(Ipv4Addr::from_str(mask)?.octets())
+                }
                 IpAddr::V6(_) => 128,
             };
             IpNet::from_str(&format!("{}/{}", ip, cidr))

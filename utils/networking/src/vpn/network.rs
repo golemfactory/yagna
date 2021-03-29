@@ -103,6 +103,10 @@ impl<E> Network<E> {
         &self.endpoints
     }
 
+    pub fn nodes(&self) -> &HashMap<String, BTreeSet<IpAddr>> {
+        &self.nodes
+    }
+
     pub fn add_address(&mut self, ip: &str) -> Result<(), Error> {
         let ip = to_ip(ip.as_ref())?;
         if !self.network.contains(&ip) {

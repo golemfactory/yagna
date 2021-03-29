@@ -36,12 +36,12 @@ pub(crate) async fn start_vpn<R: RuntimeService>(
         .values()
         .map(TryFrom::try_from)
         .collect::<Result<_>>()?;
-
     let hosts = deployment.hosts.clone();
     let response = service
         .create_network(CreateNetwork { networks, hosts })
         .await
         .map_err(|e| Error::Other(format!("Network setup error: {:?}", e)))?;
+
     let endpoint = match response.endpoint {
         Some(endpoint) => VpnEndpoint::connect(endpoint).await?,
         None => return Err(Error::Other("VPN endpoint already connected".into()).into()),
@@ -324,6 +324,7 @@ impl<'a> TryFrom<&'a DeploymentNetwork> for Network {
             addr: ip.to_string(),
             gateway: gateway.to_string(),
             mask: mask.to_string(),
+            if_addr: net.node_ip.to_string(),
         })
     }
 }

@@ -14,7 +14,7 @@ pub enum AccessRole {
 
 #[derive(thiserror::Error, Clone, Debug)]
 pub enum Error {
-    #[error("Forbidden {0}: {1:?}")]
+    #[error("Forbidden call from {0}: role '{1:?}' not granted")]
     Forbidden(String, AccessRole),
 }
 

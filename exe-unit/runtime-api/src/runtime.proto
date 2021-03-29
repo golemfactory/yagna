@@ -105,6 +105,7 @@ message Network {
     string addr = 1;
     string gateway = 2;
     string mask = 3;
+    string if_addr = 4;
 }
 
 message Output {

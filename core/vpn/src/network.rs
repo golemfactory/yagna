@@ -2,8 +2,10 @@ use crate::interface::{add_iface_address, add_iface_route, default_iface, Captur
 use crate::message::*;
 use crate::Result;
 use actix::prelude::*;
+use actix_web::error::Canceled;
 use futures::channel::{mpsc, oneshot};
 use futures::future;
+use futures::future::BoxFuture;
 use futures::{FutureExt, SinkExt, StreamExt};
 use ipnet::IpNet;
 use rand::distributions::{Distribution, Uniform};
@@ -17,103 +19,229 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::convert::TryFrom;
 use std::net::IpAddr;
 use std::ops::{DerefMut, RangeInclusive};
+use std::str::FromStr;
 use ya_core_model::activity::{VpnControl, VpnPacket};
+use ya_core_model::NodeId;
 use ya_service_bus::typed::{self, Endpoint};
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcEnvelope};
 use ya_utils_networking::vpn::common::{to_ip, to_net};
-use ya_utils_networking::vpn::{
-    ArpField, ArpPacket, Error, EtherFrame, IpPacket, Network, PeekPacket, Protocol, MAX_FRAME_SIZE,
-};
+use ya_utils_networking::vpn::*;
 
 // (protocol, local address, local port, remote address, remote port)
 pub type SocketTuple = (Protocol, IpAddress, u16, IpAddress, u16);
 const TCP_CONNECTION_TIMEOUT: Duration = Duration::from_secs(3);
 
-#[derive(Default)]
 pub struct VpnSupervisor {
     networks: HashMap<String, Addr<Vpn>>,
+    blueprints: HashMap<String, ya_client_model::net::Network>,
+    ownership: HashMap<NodeId, BTreeSet<String>>,
+    arbiter: Arbiter,
+}
+
+impl Default for VpnSupervisor {
+    fn default() -> Self {
+        Self {
+            networks: Default::default(),
+            blueprints: Default::default(),
+            ownership: Default::default(),
+            arbiter: Arbiter::new(),
+        }
+    }
 }
 
 impl VpnSupervisor {
-    pub fn get_network(&self, network_id: &str) -> Result<Addr<Vpn>> {
+    pub fn get_networks<'a>(&mut self, node_id: &NodeId) -> Vec<ya_client_model::net::Network> {
+        self.ownership
+            .get(node_id)
+            .map(|ns| {
+                ns.iter()
+                    .filter_map(|id| self.blueprints.get(id.as_str()))
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_else(Vec::new)
+    }
+
+    pub fn get_network<'a>(
+        &mut self,
+        node_id: &NodeId,
+        network_id: &str,
+    ) -> Result<ya_client_model::net::Network> {
+        self.verify_owner_id(node_id, network_id)?;
+        self.blueprints
+            .get(network_id)
+            .cloned()
+            .ok_or_else(|| Error::NetNotFound(network_id.to_owned()))
+    }
+
+    pub async fn create_network(
+        &mut self,
+        node_id: &NodeId,
+        network: ya_client_model::net::Network,
+    ) -> Result<()> {
+        if self.networks.contains_key(&network.id) {
+            return Err(Error::NetIdTaken(network.id));
+        }
+
+        let def = network.clone();
+        let net = to_net(&network.ip, network.mask.as_ref())?;
+        let net_ip = IpCidr::new(net.addr().into(), net.prefix_len());
+        let net_gw = network.gateway.map(|g| IpAddr::from_str(&g)).transpose()?;
+        let route = net_route(&net, net_gw)?;
+
+        let net = Network::new(&network.id, net);
+        let mut stack = default_iface();
+        add_iface_route(&mut stack, net_ip, route);
+
+        let vpn = self
+            .arbiter
+            .exec(move || Vpn::new(stack, net).start())
+            .await?;
+
+        self.networks.insert(network.id.clone(), vpn);
+        self.blueprints.insert(network.id.clone(), def);
+        self.ownership
+            .entry(node_id.clone())
+            .or_insert_with(Default::default)
+            .insert(network.id);
+
+        Ok(())
+    }
+
+    pub fn remove_network<'a>(
+        &mut self,
+        node_id: &NodeId,
+        network_id: &str,
+    ) -> Result<BoxFuture<'a, Result<()>>> {
+        self.verify_owner_id(node_id, network_id)?;
+        self.networks.remove(network_id);
+        self.blueprints.remove(network_id);
+        self.forward(network_id, Shutdown {})
+    }
+
+    pub fn get_addresses<'a>(
+        &self,
+        node_id: &NodeId,
+        network_id: &str,
+    ) -> Result<BoxFuture<'a, Result<Vec<ya_client_model::net::Address>>>> {
+        self.verify_owner_id(node_id, network_id)?;
+        self.forward(network_id, GetAddresses {})
+    }
+
+    pub fn add_address<'a>(
+        &self,
+        node_id: &NodeId,
+        network_id: &str,
+        address: String,
+    ) -> Result<BoxFuture<'a, Result<()>>> {
+        self.verify_owner_id(node_id, network_id)?;
+        self.forward(network_id, AddAddress { address })
+    }
+
+    pub fn get_nodes<'a>(
+        &self,
+        node_id: &NodeId,
+        network_id: &str,
+    ) -> Result<BoxFuture<'a, Result<Vec<ya_client_model::net::Node>>>> {
+        self.verify_owner_id(node_id, network_id)?;
+        self.forward(network_id, GetNodes {})
+    }
+
+    pub fn add_node<'a>(
+        &self,
+        node_id: &NodeId,
+        network_id: &str,
+        id: String,
+        address: String,
+    ) -> Result<BoxFuture<'a, Result<()>>> {
+        self.verify_owner_id(node_id, network_id)?;
+        self.forward(network_id, AddNode { id, address })
+    }
+
+    pub fn remove_node<'a>(
+        &self,
+        node_id: &NodeId,
+        network_id: &str,
+        id: String,
+    ) -> Result<BoxFuture<'a, Result<()>>> {
+        self.verify_owner_id(node_id, network_id)?;
+        self.forward(network_id, RemoveNode { id })
+    }
+
+    pub fn get_connections<'a>(
+        &self,
+        node_id: &NodeId,
+        network_id: &str,
+    ) -> Result<BoxFuture<'a, Result<Vec<ya_client_model::net::Connection>>>> {
+        self.verify_owner_id(node_id, network_id)?;
+        self.forward(network_id, GetConnections {})
+    }
+
+    pub fn connect_tcp<'a>(
+        &self,
+        node_id: &NodeId,
+        network_id: &str,
+        ip: &str,
+        port: u16,
+    ) -> Result<BoxFuture<'a, Result<(mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>)>>> {
+        self.verify_owner_id(node_id, network_id)?;
+        let vpn = self.network_actor(network_id)?;
+        let network_id = network_id.to_string();
+
+        let (ws_tx, ws_rx) = mpsc::channel(1);
+        let connect = ConnectTcp {
+            receiver: ws_rx,
+            address: ip.to_string(),
+            port,
+        };
+
+        Ok(self.arbiter.clone().spawn_ext(async move {
+            let vpn_rx = vpn
+                .send(connect)
+                .await
+                .map_err(|_| Error::NetNotFound(network_id))??;
+            Ok((ws_tx, vpn_rx))
+        }))
+    }
+
+    fn network_actor(&self, network_id: &str) -> Result<Addr<Vpn>> {
         self.networks
             .get(network_id)
             .cloned()
             .ok_or_else(|| Error::NetNotFound(network_id.to_owned()))
     }
 
-    pub fn create_network(
-        &mut self,
-        network: ya_client_model::net::Network,
-        requestor_address: String,
-    ) -> Result<()> {
-        if self.networks.contains_key(&network.id) {
-            return Err(Error::NetIdTaken(network.id));
-        }
-        let net = to_net(
-            &network.address,
-            &network.mask.unwrap_or_else(|| "255.255.255.0".into()),
-        )?;
-
-        let net_ip = IpCidr::new(net.addr().into(), net.prefix_len());
-        let node_ip = node_addr(&requestor_address, &net)?;
-        let route = net_route(&net)?;
-
-        let mut stack = default_iface();
-        add_iface_address(&mut stack, node_ip);
-        add_iface_route(&mut stack, net_ip, route);
-
-        let net = Network::new(&network.id, net);
-        let vpn = Vpn::new(stack, net).start();
-
-        vpn.do_send(AddAddress {
-            address: node_ip.address().to_string(),
-        });
-
-        self.networks.insert(network.id, vpn);
-        Ok(())
-    }
-
-    pub async fn remove_network(&mut self, network_id: &str) -> Result<()> {
-        self.networks.remove(network_id);
-        let msg = Shutdown {};
-        self.forward(network_id, msg).await??;
-        Ok(())
-    }
-
-    #[allow(unused)]
-    pub async fn add_address(&self, network_id: &str, address: String) -> Result<()> {
-        let msg = AddAddress { address };
-        self.forward(network_id, msg).await??;
-        Ok(())
-    }
-
-    pub async fn add_node(&self, network_id: &str, id: String, address: String) -> Result<()> {
-        let msg = AddNode { id, address };
-        self.forward(network_id, msg).await??;
-        Ok(())
-    }
-
-    pub async fn remove_node(&self, network_id: &str, id: String) -> Result<()> {
-        let msg = RemoveNode { id };
-        self.forward(network_id, msg).await??;
-        Ok(())
-    }
-
-    async fn forward<T>(&self, network_id: &str, msg: T) -> Result<<T as Message>::Result>
+    fn forward<'a, M, T>(
+        &self,
+        network_id: &str,
+        msg: M,
+    ) -> Result<BoxFuture<'a, <M as Message>::Result>>
     where
-        Vpn: Handler<T>,
-        T: Message + Send + 'static,
-        <T as Message>::Result: Send,
+        Vpn: Handler<M>,
+        M: Message<Result = std::result::Result<T, Error>> + Send + 'static,
+        <M as Message>::Result: Send + 'static,
+        T: Send + 'static,
     {
-        Ok(self
-            .networks
-            .get(network_id)
-            .cloned()
+        let arbiter = self.arbiter.clone();
+        let vpn = self.network_actor(network_id)?;
+
+        let network_id = network_id.to_string();
+        let fut = arbiter.spawn_ext(async move {
+            match vpn.send(msg).await {
+                Ok(r) => r,
+                Err(_) => Err(Error::NetNotFound(network_id)),
+            }
+        });
+        Ok(Box::pin(fut))
+    }
+
+    fn verify_owner_id(&self, node_id: &NodeId, network_id: &str) -> Result<()> {
+        self.ownership
+            .get(node_id)
+            .map(|s| s.contains(network_id))
             .ok_or_else(|| Error::NetNotFound(network_id.to_string()))?
-            .send(msg)
-            .await
-            .map_err(|_| Error::NetNotFound(network_id.to_string()))?)
+            .then(|| ())
+            .ok_or_else(|| Error::Forbidden)
     }
 }
 
@@ -414,11 +542,54 @@ impl Actor for Vpn {
     }
 }
 
+impl Handler<GetAddresses> for Vpn {
+    type Result = <GetAddresses as Message>::Result;
+
+    fn handle(&mut self, _: GetAddresses, _: &mut Self::Context) -> Self::Result {
+        Ok(self
+            .stack
+            .ip_addrs()
+            .iter()
+            .map(|ip| ya_client_model::net::Address { ip: ip.to_string() })
+            .collect())
+    }
+}
+
 impl Handler<AddAddress> for Vpn {
     type Result = <AddAddress as Message>::Result;
 
     fn handle(&mut self, msg: AddAddress, _: &mut Self::Context) -> Self::Result {
+        let ip_addr: IpAddr = msg.address.parse()?;
+        let ip_address = IpAddress::from(ip_addr);
+
+        let cidr = IpCidr::new(ip_address, 32);
+        if !cidr.address().is_unicast() && !cidr.address().is_unspecified() {
+            return Err(Error::IpAddrNotAllowed(msg.address.parse()?));
+        }
+
+        add_iface_address(&mut self.stack, cidr);
         self.vpn.add_address(&msg.address)
+    }
+}
+
+impl Handler<GetNodes> for Vpn {
+    type Result = <GetNodes as Message>::Result;
+
+    fn handle(&mut self, _: GetNodes, _: &mut Self::Context) -> Self::Result {
+        Ok(self
+            .vpn
+            .nodes()
+            .iter()
+            .map(|(id, ips)| {
+                ips.iter()
+                    .map(|ip| ya_client_model::net::Node {
+                        id: id.clone(),
+                        ip: ip.to_string(),
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .flatten()
+            .collect())
     }
 }
 
@@ -478,6 +649,24 @@ impl Handler<RemoveNode> for Vpn {
         });
 
         Ok(())
+    }
+}
+
+impl Handler<GetConnections> for Vpn {
+    type Result = <GetConnections as Message>::Result;
+
+    fn handle(&mut self, _: GetConnections, _: &mut Self::Context) -> Self::Result {
+        Ok(self
+            .connections
+            .keys()
+            .map(|(p, la, lp, ra, rp)| ya_client_model::net::Connection {
+                protocol: *p as u16,
+                local_ip: la.to_string(),
+                local_port: *lp,
+                remote_ip: ra.to_string(),
+                remote_port: *rp,
+            })
+            .collect())
     }
 }
 
@@ -801,25 +990,14 @@ fn icmp_socket_tuple(_: &IcmpSocket) -> SocketTuple {
     )
 }
 
-fn node_addr(ip: &str, ip_net: &IpNet) -> Result<IpCidr> {
-    let ip = to_ip(ip.as_ref())?;
-    if !ip_net.contains(&ip) {
-        return Err(Error::NetAddrMismatch(ip));
-    }
-
-    let cidr = IpCidr::new(ip.clone().into(), ip_net.prefix_len());
-    if !cidr.address().is_unicast() && !cidr.address().is_unspecified() {
-        return Err(Error::IpAddrNotAllowed(ip));
-    }
-
-    Ok(cidr)
-}
-
-fn net_route(ip_net: &IpNet) -> Result<Route> {
-    let ip = ip_net
-        .hosts()
-        .next()
-        .ok_or_else(|| Error::NetCidr(ip_net.addr(), ip_net.prefix_len()))?;
+fn net_route(net: &IpNet, net_gw: Option<IpAddr>) -> Result<Route> {
+    let ip = match net_gw {
+        Some(gw) => gw,
+        None => net
+            .hosts()
+            .next()
+            .ok_or_else(|| Error::NetCidr(net.addr(), net.prefix_len()))?,
+    };
     Ok(match ip {
         IpAddr::V4(a) => Route::new_ipv4_gateway(a.into()),
         IpAddr::V6(a) => Route::new_ipv6_gateway(a.into()),
@@ -832,4 +1010,36 @@ fn gsb_url(net_id: &str) -> String {
 
 fn gsb_remote_url(node_id: &str, net_id: &str) -> Endpoint {
     typed::service(format!("/net/{}/vpn/{}", node_id, net_id))
+}
+
+trait ArbiterExt {
+    fn spawn_ext<'a, F, T, E>(self, f: F) -> BoxFuture<'a, std::result::Result<T, E>>
+    where
+        F: Future<Output = std::result::Result<T, E>> + Send + 'static,
+        T: Send + 'static,
+        E: Send + From<Canceled> + 'static;
+}
+
+impl ArbiterExt for Arbiter {
+    fn spawn_ext<'a, F, T, E>(self, f: F) -> BoxFuture<'a, std::result::Result<T, E>>
+    where
+        F: Future<Output = std::result::Result<T, E>> + Send + 'static,
+        T: Send + 'static,
+        E: Send + From<Canceled> + 'static,
+    {
+        let (tx, rx) = oneshot::channel();
+
+        let tx_fut = async move {
+            let _ = tx.send(f.await);
+        };
+        let rx_fut = rx.then(|r| async move {
+            match r {
+                Ok(r) => r,
+                Err(e) => Err(e.into()),
+            }
+        });
+
+        self.send(Box::pin(tx_fut));
+        Box::pin(rx_fut)
+    }
 }

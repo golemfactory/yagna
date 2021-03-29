@@ -12,10 +12,11 @@ use std::time::{Duration, Instant};
 use ya_client_model::net::*;
 use ya_client_model::ErrorMessage;
 use ya_service_api_web::middleware::Identity;
+use ya_utils_networking::vpn::Error as VpnError;
 
 pub const NET_API_PATH: &str = "/net-api/v1/";
-const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
-const CLIENT_TIMEOUT: Duration = Duration::from_secs(60);
+const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
+const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 type Result<T> = std::result::Result<T, ApiError>;
 type WsResult<T> = std::result::Result<T, ws::ProtocolError>;
@@ -23,92 +24,183 @@ type WsResult<T> = std::result::Result<T, ws::ProtocolError>;
 pub fn web_scope(vpn_sup: Arc<Mutex<VpnSupervisor>>) -> actix_web::Scope {
     actix_web::web::scope(NET_API_PATH)
         .data(vpn_sup)
+        .service(get_networks)
         .service(create_network)
+        .service(get_network)
         .service(remove_network)
+        .service(get_addresses)
+        .service(add_address)
+        .service(get_nodes)
         .service(add_node)
         .service(remove_node)
+        .service(get_connections)
         .service(connect_tcp)
 }
 
-/// Creates a new private network
+/// Retrieves existing virtual private networks.
+#[actix_web::get("/net")]
+async fn get_networks(
+    vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
+    identity: Identity,
+) -> impl Responder {
+    let mut supervisor = vpn_sup.lock().await;
+    let networks = supervisor.get_networks(&identity.identity);
+    Ok::<_, ApiError>(web::Json(networks))
+}
+
+/// Creates a new virtual private network.
 #[actix_web::post("/net")]
 async fn create_network(
     vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
-    create_network: web::Json<CreateNetwork>,
-    _identity: Identity,
-) -> Result<impl Responder> {
-    let create_network = create_network.into_inner();
+    model: web::Json<Network>,
+    identity: Identity,
+) -> impl Responder {
+    let network = model.into_inner();
     let mut supervisor = vpn_sup.lock().await;
-    supervisor.create_network(create_network.network, create_network.requestor_address)?;
-    Ok(web::Json(()))
+    supervisor
+        .create_network(&identity.identity, network)
+        .await?;
+    Ok::<_, ApiError>(web::Json(()))
 }
 
-/// Removes an existing private network
+/// Retrieves an existing virtual private network.
+#[actix_web::get("/net/{net_id}")]
+async fn get_network(
+    vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
+    path: web::Path<PathNetwork>,
+    identity: Identity,
+) -> impl Responder {
+    let path = path.into_inner();
+    let mut supervisor = vpn_sup.lock().await;
+    let network = supervisor.get_network(&identity.identity, &path.net_id)?;
+    Ok::<_, ApiError>(web::Json(network))
+}
+
+/// Removes an existing virtual private network.
 #[actix_web::delete("/net/{net_id}")]
 async fn remove_network(
     vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
     path: web::Path<PathNetwork>,
-    _identity: Identity,
-) -> Result<impl Responder> {
+    identity: Identity,
+) -> impl Responder {
     let path = path.into_inner();
-    let mut supervisor = vpn_sup.lock().await;
-    supervisor.remove_network(&path.net_id).await?;
-    Ok(web::Json(()))
+    let fut = {
+        let mut supervisor = vpn_sup.lock().await;
+        supervisor.remove_network(&identity.identity, &path.net_id)?
+    };
+    Ok::<_, ApiError>(web::Json(fut.await?))
 }
 
-/// Adds a new node to an existing private network
-#[actix_web::post("/net/{net_id}/nodes")]
+/// Retrieves requestor's addresses within a virtual private network.
+#[actix_web::get("/net/{net_id}/address")]
+async fn get_addresses(
+    vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
+    path: web::Path<PathNetwork>,
+    identity: Identity,
+) -> impl Responder {
+    let path = path.into_inner();
+    let fut = {
+        let supervisor = vpn_sup.lock().await;
+        supervisor.get_addresses(&identity.identity, &path.net_id)?
+    };
+    Ok::<_, ApiError>(web::Json(fut.await?))
+}
+
+/// Assigns a new address for the requestor within a virtual private network.
+#[actix_web::post("/net/{net_id}/address")]
+async fn add_address(
+    vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
+    path: web::Path<PathNetwork>,
+    model: web::Json<Address>,
+    identity: Identity,
+) -> impl Responder {
+    let path = path.into_inner();
+    let address = model.into_inner();
+    let fut = {
+        let supervisor = vpn_sup.lock().await;
+        supervisor.add_address(&identity.identity, &path.net_id, address.ip)?
+    };
+    Ok::<_, ApiError>(web::Json(fut.await?))
+}
+
+/// Retrieves requestor's addresses within a virtual private network.
+#[actix_web::get("/net/{net_id}/node")]
+async fn get_nodes(
+    vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
+    path: web::Path<PathNetwork>,
+    identity: Identity,
+) -> impl Responder {
+    let path = path.into_inner();
+    let fut = {
+        let supervisor = vpn_sup.lock().await;
+        supervisor.get_nodes(&identity.identity, &path.net_id)?
+    };
+    Ok::<_, ApiError>(web::Json(fut.await?))
+}
+
+/// Adds a node to an existing virtual private network.
+#[actix_web::post("/net/{net_id}/node")]
 async fn add_node(
     vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
     path: web::Path<PathNetwork>,
-    add_node: web::Json<Node>,
-    _identity: Identity,
-) -> Result<impl Responder> {
+    model: web::Json<Node>,
+    identity: Identity,
+) -> impl Responder {
     let path = path.into_inner();
-    let add_node = add_node.into_inner();
-    let supervisor = vpn_sup.lock().await;
-    supervisor
-        .add_node(&path.net_id, add_node.id, add_node.address)
-        .await?;
-    Ok(web::Json(()))
+    let node = model.into_inner();
+    let fut = {
+        let supervisor = vpn_sup.lock().await;
+        supervisor.add_node(&identity.identity, &path.net_id, node.id, node.ip)?
+    };
+    Ok::<_, ApiError>(web::Json(fut.await?))
 }
 
-/// Removes an existing node from a private network
-#[actix_web::delete("/net/{net_id}/nodes/{node_id}")]
+/// Removes an existing node from a virtual private network
+#[actix_web::delete("/net/{net_id}/node/{node_id}")]
 async fn remove_node(
     vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
     path: web::Path<PathNetworkNode>,
-    _identity: Identity,
-) -> Result<impl Responder> {
+    identity: Identity,
+) -> impl Responder {
     let path = path.into_inner();
-    let supervisor = vpn_sup.lock().await;
-    supervisor.remove_node(&path.net_id, path.node_id).await?;
-    Ok(web::Json(()))
+    let fut = {
+        let supervisor = vpn_sup.lock().await;
+        supervisor.remove_node(&identity.identity, &path.net_id, path.node_id)?
+    };
+    Ok::<_, ApiError>(web::Json(fut.await?))
 }
 
+/// Retrieves existing connections (socket tuples) within a private network
+#[actix_web::get("/net/{net_id}/tcp")]
+async fn get_connections(
+    vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
+    path: web::Path<PathNetwork>,
+    identity: Identity,
+) -> impl Responder {
+    let path = path.into_inner();
+    let fut = {
+        let supervisor = vpn_sup.lock().await;
+        supervisor.get_connections(&identity.identity, &path.net_id)?
+    };
+    Ok::<_, ApiError>(web::Json(fut.await?))
+}
+
+/// Initiates a new TCP connection via WebSockets to the destination address.
 #[actix_web::get("/net/{net_id}/tcp/{ip}/{port}")]
 async fn connect_tcp(
     vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
     path: web::Path<PathConnect>,
     req: HttpRequest,
     stream: web::Payload,
-    _identity: Identity,
+    identity: Identity,
 ) -> Result<HttpResponse> {
     let path = path.into_inner();
-    let vpn = {
+    let fut = {
         let supervisor = vpn_sup.lock().await;
-        supervisor.get_network(&path.net_id)?
+        supervisor.connect_tcp(&identity.identity, &path.net_id, &path.ip, path.port)?
     };
 
-    let (ws_tx, ws_rx) = mpsc::channel(1);
-    let vpn_rx = vpn
-        .send(ConnectTcp {
-            receiver: ws_rx,
-            address: path.ip,
-            port: path.port,
-        })
-        .await??;
-
+    let (ws_tx, vpn_rx) = fut.await.map_err(ApiError::from)?;
     Ok(ws::start(
         VpnWebSocket::new(path.net_id, ws_tx, vpn_rx),
         &req,
@@ -157,7 +249,7 @@ impl Actor for VpnWebSocket {
     fn started(&mut self, ctx: &mut Self::Context) {
         ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
             if Instant::now().duration_since(act.heartbeat) > CLIENT_TIMEOUT {
-                log::warn!("VPN WebSocket: connection timed out");
+                log::warn!("VPN WebSocket: VPN {} connection timed out", act.network_id);
                 ctx.stop();
             } else {
                 ctx.ping(b"");
@@ -212,19 +304,30 @@ impl Handler<Shutdown> for VpnWebSocket {
 
 #[derive(thiserror::Error, Debug)]
 enum ApiError {
-    #[error("VPN channel error: {0:?}")]
+    #[error("VPN communication error: {0:?}")]
     ChannelError(#[from] actix::MailboxError),
-    #[error("Web error: {0:?}")]
+    #[error("Request error: {0:?}")]
     WebError(#[from] actix_web::Error),
     #[error(transparent)]
-    Vpn(#[from] ya_utils_networking::vpn::Error),
+    Vpn(#[from] VpnError),
 }
 
 impl ResponseError for ApiError {
     fn error_response(&self) -> HttpResponse {
         match self {
-            Self::ChannelError(_) | Self::Vpn(_) | Self::WebError(_) => {
-                HttpResponse::BadRequest().json(ErrorMessage::new(self.to_string()))
+            Self::Vpn(err) => match err {
+                VpnError::IpAddrTaken(_) => HttpResponse::Conflict().json(ErrorMessage::new(&err)),
+                VpnError::NetNotFound(_) => HttpResponse::NotFound().json(ErrorMessage::new(&err)),
+                VpnError::NetIdTaken(_) => HttpResponse::Conflict().json(ErrorMessage::new(&err)),
+                VpnError::ConnectionTimeout => HttpResponse::GatewayTimeout().finish(),
+                VpnError::Forbidden => HttpResponse::Forbidden().finish(),
+                VpnError::Cancelled => {
+                    HttpResponse::InternalServerError().json(ErrorMessage::new(&err))
+                }
+                _ => HttpResponse::BadRequest().json(ErrorMessage::new(&err)),
+            },
+            Self::ChannelError(_) | Self::WebError(_) => {
+                HttpResponse::BadRequest().json(ErrorMessage::new(&self))
             }
         }
     }

@@ -1,3 +1,4 @@
+use futures::channel::oneshot::Canceled;
 use std::net::{AddrParseError, IpAddr};
 
 #[derive(thiserror::Error, Debug)]
@@ -22,6 +23,8 @@ pub enum Error {
     NetCidr(IpAddr, u8),
     #[error("Network ID taken: {0}")]
     NetIdTaken(String),
+    #[error("Invalid gateway address: {0}")]
+    GatewayMismatch(IpAddr),
     #[error("Packet malformed: {0}")]
     PacketMalformed(String),
     #[error("Protocol not supported: {0}")]
@@ -30,6 +33,16 @@ pub enum Error {
     ConnectionError(String),
     #[error("Connection timed out")]
     ConnectionTimeout,
+    #[error("Forbidden")]
+    Forbidden,
+    #[error("Cancelled")]
+    Cancelled,
     #[error("{0}")]
     Other(String),
+}
+
+impl From<Canceled> for Error {
+    fn from(_: Canceled) -> Self {
+        Self::Cancelled
+    }
 }
