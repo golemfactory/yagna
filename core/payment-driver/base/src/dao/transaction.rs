@@ -100,6 +100,17 @@ impl<'c> TransactionDao<'c> {
             .await
     }
 
+    pub async fn has_unconfirmed_txs(&self) -> DbResult<bool> {
+        readonly_transaction(self.pool, move |conn| {
+            let tx: Option<TransactionEntity> = dsl::transaction
+                .filter(dsl::status.eq(TransactionStatus::Sent as i32))
+                .first(conn)
+                .optional()?;
+            Ok(tx.is_some())
+        })
+        .await
+    }
+
     pub async fn get_by_status(
         &self,
         status: i32,

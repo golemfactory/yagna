@@ -205,4 +205,11 @@ impl ZksyncDao {
             }
         }
     }
+
+    pub async fn has_unconfirmed_txs(&self) -> Result<bool, GenericError> {
+        self.transaction()
+            .has_unconfirmed_txs()
+            .await
+            .map_err(GenericError::new)
+    }
 }

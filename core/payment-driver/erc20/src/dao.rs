@@ -250,6 +250,13 @@ impl Erc20Dao {
         }
     }
 
+    pub async fn has_unconfirmed_txs(&self) -> Result<bool, GenericError> {
+        self.transaction()
+            .has_unconfirmed_txs()
+            .await
+            .map_err(GenericError::new)
+    }
+
     pub async fn get_pending_faucet_txs(
         &self,
         node_id: &str,
