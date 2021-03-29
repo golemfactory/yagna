@@ -256,8 +256,13 @@ impl PaymentDriver for ZksyncDriver {
             .map_err(GenericError::new)?;
         match network {
             DbNetwork::Rinkeby => {
+                log::info!(
+                    "Handling fund request. network={}, address={}",
+                    &network,
+                    &address
+                );
                 wallet::fund(&address, network)
-                    .timeout(Some(180))
+                    .timeout(Some(15)) // Regular scenario =~ 5s
                     .await
                     .map_err(GenericError::new)??;
                 Ok(format!(
@@ -389,12 +394,22 @@ impl PaymentDriverCron for ZksyncDriver {
                     None => continue,
                 };
 
+                log::debug!(
+                    "Checking if tx was a success. network={}, hash={}",
+                    &network,
+                    &tx_hash
+                );
                 let tx_success = match wallet::check_tx(&tx_hash, first_payment.network).await {
                     None => continue, // Check_tx returns None when the result is unknown
                     Some(tx_success) => tx_success,
                 };
 
                 let payments = self.dao.transaction_confirmed(&tx.tx_id).await;
+                // Faucet can stop here IF the tx was a success.
+                if tx.tx_type == TxType::Faucet as i32 && tx_success.is_ok() {
+                    log::debug!("Faucet tx confirmed, exit early. hash={}", &tx_hash);
+                    continue;
+                }
                 let order_ids: Vec<String> = payments
                     .iter()
                     .map(|payment| payment.order_id.clone())
