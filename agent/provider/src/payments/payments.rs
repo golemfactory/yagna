@@ -711,7 +711,7 @@ impl Handler<SendInvoice> for Payments {
                     }
                     Err(e) => {
                         let interval = provider_ctx.config.invoice_resend_interval;
-                        log::error!("Error sending invoice: {} Retry in {:#?}.", e, interval);
+                        log::warn!("Error sending invoice: {} Retry in {:#?}.", e, interval);
                         tokio::time::delay_for(interval).await
                     }
                 }
