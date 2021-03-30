@@ -4,7 +4,7 @@ use crate::models::agreement::{ReadObj, WriteObj};
 use crate::schema::pay_activity::dsl as activity_dsl;
 use crate::schema::pay_agreement::dsl;
 use crate::schema::pay_invoice::dsl as invoice_dsl;
-use bigdecimal::{BigDecimal, Zero};
+use bigdecimal::BigDecimal;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use ya_client_model::market::Agreement;
 use ya_client_model::payment::{DocumentStatus, InvoiceEventType};
@@ -21,7 +21,6 @@ pub fn increase_amount_due(
     amount: &BigDecimalField,
     conn: &ConnType,
 ) -> DbResult<()> {
-    assert!(amount > &BigDecimal::zero().into()); // TODO: Remove when payment service is production-ready.
     let agreement: ReadObj = dsl::pay_agreement
         .find((agreement_id, owner_id))
         .first(conn)?;
@@ -77,7 +76,6 @@ pub fn increase_amount_accepted(
     amount: &BigDecimalField,
     conn: &ConnType,
 ) -> DbResult<()> {
-    assert!(amount > &BigDecimal::zero().into()); // TODO: Remove when payment service is production-ready.
     let agreement: ReadObj = dsl::pay_agreement
         .find((agreement_id, owner_id))
         .first(conn)?;
@@ -94,7 +92,6 @@ pub fn increase_amount_scheduled(
     amount: &BigDecimal,
     conn: &ConnType,
 ) -> DbResult<()> {
-    assert!(amount > &BigDecimal::zero().into()); // TODO: Remove when payment service is production-ready.
     let agreement: ReadObj = dsl::pay_agreement
         .find((agreement_id, owner_id))
         .first(conn)?;
@@ -115,7 +112,6 @@ pub fn set_amount_accepted(
     let agreement: ReadObj = dsl::pay_agreement
         .find((agreement_id, owner_id))
         .first(conn)?;
-    assert!(total_amount_accepted >= &agreement.total_amount_accepted); // TODO: Remove when payment service is production-ready.
     diesel::update(&agreement)
         .set(dsl::total_amount_accepted.eq(total_amount_accepted))
         .execute(conn)?;
@@ -128,7 +124,6 @@ pub fn increase_amount_paid(
     amount: &BigDecimalField,
     conn: &ConnType,
 ) -> DbResult<()> {
-    assert!(amount > &BigDecimal::zero().into()); // TODO: Remove when payment service is production-ready.
     let total_amount_paid: BigDecimalField = dsl::pay_agreement
         .find((agreement_id, owner_id))
         .select(dsl::total_amount_paid)

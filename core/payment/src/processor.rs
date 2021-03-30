@@ -443,6 +443,12 @@ impl PaymentProcessor {
             return Err(SchedulePaymentError::Shutdown);
         }
         let amount = msg.amount.clone();
+        if amount <= BigDecimal::zero() {
+            return Err(SchedulePaymentError::InvalidInput(format!(
+                "Can not schedule payment with <=0 amount: {}",
+                &amount
+            )));
+        }
         let driver =
             self.registry
                 .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?;
