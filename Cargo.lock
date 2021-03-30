@@ -91,8 +91,6 @@ dependencies = [
  "futures 0.3.12",
  "http",
  "log",
- "openssl",
- "tokio-openssl",
  "trust-dns-proto 0.18.0-alpha.2",
  "trust-dns-resolver 0.18.0-alpha.2",
 ]
@@ -120,33 +118,12 @@ dependencies = [
 
 [[package]]
 name = "actix-files"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "193b22cb1f7b4ff12a4eb2415d6d19e47e44ea93e05930b30d05375ea29d3529"
-dependencies = [
- "actix-http 1.0.1",
- "actix-service",
- "actix-web 2.0.0",
- "bitflags 1.2.1",
- "bytes 0.5.6",
- "derive_more",
- "futures-core",
- "futures-util",
- "log",
- "mime",
- "mime_guess",
- "percent-encoding 2.1.0",
- "v_htmlescape 0.4.5",
-]
-
-[[package]]
-name = "actix-files"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d031468a7859f71674e5531bd05137e0ea5de05ec9a917314330b88c582e2e0a"
 dependencies = [
  "actix-service",
- "actix-web 3.3.2",
+ "actix-web",
  "bitflags 1.2.1",
  "bytes 0.5.6",
  "derive_more",
@@ -156,7 +133,7 @@ dependencies = [
  "mime",
  "mime_guess",
  "percent-encoding 2.1.0",
- "v_htmlescape 0.11.0",
+ "v_htmlescape",
 ]
 
 [[package]]
@@ -170,19 +147,15 @@ dependencies = [
  "actix-rt",
  "actix-service",
  "actix-threadpool",
- "actix-tls 1.0.0",
  "actix-utils 1.0.6",
  "base64 0.11.0",
  "bitflags 1.2.1",
- "brotli2",
  "bytes 0.5.6",
  "chrono",
  "copyless",
  "derive_more",
  "either",
  "encoding_rs",
- "failure",
- "flate2",
  "futures-channel",
  "futures-core",
  "futures-util",
@@ -218,7 +191,7 @@ dependencies = [
  "actix-rt",
  "actix-service",
  "actix-threadpool",
- "actix-tls 2.0.0",
+ "actix-tls",
  "actix-utils 2.0.0",
  "base64 0.13.0",
  "bitflags 1.2.1",
@@ -354,24 +327,6 @@ dependencies = [
 
 [[package]]
 name = "actix-tls"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4e5b4faaf105e9a6d389c606c298dcdb033061b00d532af9df56ff3a54995a8"
-dependencies = [
- "actix-codec 0.2.0",
- "actix-rt",
- "actix-service",
- "actix-utils 1.0.6",
- "derive_more",
- "either",
- "futures 0.3.12",
- "log",
- "openssl",
- "tokio-openssl",
-]
-
-[[package]]
-name = "actix-tls"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "24789b7d7361cf5503a504ebe1c10806896f61e96eca9a7350e23001aca715fb"
@@ -424,42 +379,6 @@ dependencies = [
 
 [[package]]
 name = "actix-web"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3158e822461040822f0dbf1735b9c2ce1f95f93b651d7a7aded00b1efbb1f635"
-dependencies = [
- "actix-codec 0.2.0",
- "actix-http 1.0.1",
- "actix-macros",
- "actix-router",
- "actix-rt",
- "actix-server",
- "actix-service",
- "actix-testing",
- "actix-threadpool",
- "actix-tls 1.0.0",
- "actix-utils 1.0.6",
- "actix-web-codegen 0.2.2",
- "awc 1.0.1",
- "bytes 0.5.6",
- "derive_more",
- "encoding_rs",
- "futures 0.3.12",
- "fxhash",
- "log",
- "mime",
- "net2",
- "pin-project 0.4.27",
- "regex",
- "serde",
- "serde_json",
- "serde_urlencoded 0.6.1",
- "time 0.1.44",
- "url 2.2.0",
-]
-
-[[package]]
-name = "actix-web"
 version = "3.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e641d4a172e7faa0862241a20ff4f1f5ab0ab7c279f00c2d4587b77483477b86"
@@ -473,10 +392,10 @@ dependencies = [
  "actix-service",
  "actix-testing",
  "actix-threadpool",
- "actix-tls 2.0.0",
+ "actix-tls",
  "actix-utils 2.0.0",
- "actix-web-codegen 0.4.0",
- "awc 2.0.3",
+ "actix-web-codegen",
+ "awc",
  "bytes 0.5.6",
  "derive_more",
  "encoding_rs",
@@ -500,17 +419,6 @@ dependencies = [
 
 [[package]]
 name = "actix-web-codegen"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a71bf475cbe07281d0b3696abb48212db118e7e23219f13596ce865235ff5766"
-dependencies = [
- "proc-macro2 1.0.24",
- "quote 1.0.8",
- "syn 1.0.60",
-]
-
-[[package]]
-name = "actix-web-codegen"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ad26f77093333e0e7c6ffe54ebe3582d908a104e448723eec6d43d08b07143fb"
@@ -527,7 +435,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "536a75d767c5c2b3e64d3f569621f38ed7609359a0c82d149c88290a6ba41b22"
 dependencies = [
  "actix-service",
- "actix-web 3.3.2",
+ "actix-web",
  "base64 0.12.3",
  "bytes 0.5.6",
  "futures-util",
@@ -925,30 +833,6 @@ name = "autocfg"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
-
-[[package]]
-name = "awc"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7601d4d1d7ef2335d6597a41b5fe069f6ab799b85f53565ab390e7b7065aac5"
-dependencies = [
- "actix-codec 0.2.0",
- "actix-http 1.0.1",
- "actix-rt",
- "actix-service",
- "base64 0.11.0",
- "bytes 0.5.6",
- "derive_more",
- "futures-core",
- "log",
- "mime",
- "openssl",
- "percent-encoding 2.1.0",
- "rand 0.7.3",
- "serde",
- "serde_json",
- "serde_urlencoded 0.6.1",
-]
 
 [[package]]
 name = "awc"
@@ -6913,33 +6797,12 @@ dependencies = [
 
 [[package]]
 name = "v_escape"
-version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "660b101c07b5d0863deb9e7fb3138777e858d6d2a79f9e6049a27d1cc77c6da6"
-dependencies = [
- "v_escape_derive 0.5.6",
-]
-
-[[package]]
-name = "v_escape"
 version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccca9e73c678b882900cbaec16dae4d3662ace5a17774ac45af04e0f3988fafa"
 dependencies = [
  "buf-min",
- "v_escape_derive 0.8.4",
-]
-
-[[package]]
-name = "v_escape_derive"
-version = "0.5.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2ca2a14bc3fc5b64d188b087a7d3a927df87b152e941ccfbc66672e20c467ae"
-dependencies = [
- "nom 4.2.3",
- "proc-macro2 1.0.24",
- "quote 1.0.8",
- "syn 1.0.60",
+ "v_escape_derive",
 ]
 
 [[package]]
@@ -6956,22 +6819,12 @@ dependencies = [
 
 [[package]]
 name = "v_htmlescape"
-version = "0.4.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e33e939c0d8cf047514fb6ba7d5aac78bc56677a6938b2ee67000b91f2e97e41"
-dependencies = [
- "cfg-if 0.1.10",
- "v_escape 0.7.4",
-]
-
-[[package]]
-name = "v_htmlescape"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db00c903248abee8499af60bf20d242e7882335bbbffd2614915184cbb207402"
 dependencies = [
  "cfg-if 1.0.0",
- "v_escape 0.14.1",
+ "v_escape",
 ]
 
 [[package]]
@@ -7324,7 +7177,7 @@ name = "ya-activity"
 version = "0.3.0"
 dependencies = [
  "actix-rt",
- "actix-web 3.3.2",
+ "actix-web",
  "anyhow",
  "bytes 0.5.6",
  "chrono",
@@ -7373,14 +7226,12 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6be6d483d72a51534830a30df9471622d30686144b40677d158d781a0c74f545"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=d6c9dff732b0023c8b65635d9c647afebcf1a15a#d6c9dff732b0023c8b65635d9c647afebcf1a15a"
 dependencies = [
- "awc 1.0.1",
+ "awc",
  "bytes 0.5.6",
  "chrono",
  "envy",
- "failure",
  "futures 0.3.12",
  "heck",
  "hex",
@@ -7399,8 +7250,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f399f4c6753e090751b06f5937ce45bb6188ba0f9ba436383591c51af3347082"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=d6c9dff732b0023c8b65635d9c647afebcf1a15a#d6c9dff732b0023c8b65635d9c647afebcf1a15a"
 dependencies = [
  "bigdecimal 0.2.0",
  "chrono",
@@ -7482,9 +7332,9 @@ name = "ya-exe-unit"
 version = "0.1.0"
 dependencies = [
  "actix 0.9.0",
- "actix-files 0.4.1",
+ "actix-files",
  "actix-rt",
- "actix-web 3.3.2",
+ "actix-web",
  "anyhow",
  "async-trait",
  "chrono",
@@ -7547,7 +7397,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "awc 2.0.3",
+ "awc",
  "bigdecimal 0.2.0",
  "chrono",
  "futures 0.3.12",
@@ -7580,7 +7430,7 @@ dependencies = [
  "actix-http 1.0.1",
  "actix-rt",
  "anyhow",
- "awc 2.0.3",
+ "awc",
  "bigdecimal 0.2.0",
  "bitflags 1.2.1",
  "chrono",
@@ -7628,10 +7478,10 @@ version = "0.2.0"
 dependencies = [
  "actix-rt",
  "actix-service",
- "actix-web 3.3.2",
+ "actix-web",
  "anyhow",
  "appdirs",
- "awc 1.0.1",
+ "awc",
  "base64 0.12.3",
  "chrono",
  "diesel",
@@ -7668,7 +7518,7 @@ dependencies = [
  "actix-http 2.2.0",
  "actix-rt",
  "actix-service",
- "actix-web 3.3.2",
+ "actix-web",
  "all_asserts",
  "anyhow",
  "async-trait",
@@ -7734,7 +7584,7 @@ dependencies = [
 name = "ya-metrics"
 version = "0.1.0"
 dependencies = [
- "actix-web 3.3.2",
+ "actix-web",
  "anyhow",
  "bigdecimal 0.2.0",
  "futures 0.3.12",
@@ -7782,7 +7632,7 @@ name = "ya-payment"
 version = "0.2.0"
 dependencies = [
  "actix-rt",
- "actix-web 3.3.2",
+ "actix-web",
  "anyhow",
  "base64 0.12.3",
  "bigdecimal 0.2.0",
@@ -8014,7 +7864,7 @@ version = "0.1.0"
 dependencies = [
  "actix-rt",
  "actix-service",
- "actix-web 2.0.0",
+ "actix-web",
  "anyhow",
  "lazy_static",
  "log",
@@ -8032,7 +7882,7 @@ dependencies = [
 name = "ya-service-api-interfaces"
 version = "0.1.0"
 dependencies = [
- "actix-web 3.3.2",
+ "actix-web",
  "anyhow",
  "futures 0.3.12",
 ]
@@ -8043,10 +7893,10 @@ version = "0.1.1"
 dependencies = [
  "actix-rt",
  "actix-service",
- "actix-web 3.3.2",
+ "actix-web",
  "actix-web-httpauth",
  "anyhow",
- "awc 1.0.1",
+ "awc",
  "env_logger 0.7.1",
  "futures 0.3.12",
  "log",
@@ -8110,13 +7960,13 @@ dependencies = [
 name = "ya-transfer"
 version = "0.1.0"
 dependencies = [
- "actix-files 0.2.2",
- "actix-http 1.0.1",
+ "actix-files",
+ "actix-http 2.2.0",
  "actix-rt",
- "actix-web 3.3.2",
+ "actix-web",
  "anyhow",
  "async-compression",
- "awc 1.0.1",
+ "awc",
  "bytes 0.5.6",
  "env_logger 0.7.1",
  "futures 0.3.12",
@@ -8211,7 +8061,7 @@ dependencies = [
 name = "ya-version"
 version = "0.1.0"
 dependencies = [
- "actix-web 3.3.2",
+ "actix-web",
  "anyhow",
  "chrono",
  "diesel",
@@ -8240,7 +8090,7 @@ dependencies = [
  "actix-rt",
  "anyhow",
  "async-trait",
- "awc 2.0.3",
+ "awc",
  "bigdecimal 0.2.0",
  "chrono",
  "dotenv",
@@ -8274,7 +8124,7 @@ version = "0.6.3"
 dependencies = [
  "actix-rt",
  "actix-service",
- "actix-web 3.3.2",
+ "actix-web",
  "anyhow",
  "chrono",
  "directories",
