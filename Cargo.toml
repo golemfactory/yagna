@@ -174,8 +174,8 @@ ya-service-api-web = { path = "core/serv-api/web" }
 #ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"}
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "bbeacb4" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "bbeacb4" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "4c304836de47be0633f13246da96023979a313f8" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "4c304836de47be0633f13246da96023979a313f8" }
 
 # ya-client = { path = "../ya-client" }
 # ya-client-model = { path = "../ya-client/model" }
