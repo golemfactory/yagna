@@ -61,7 +61,8 @@ async fn spam_txs(private_key: H256) -> anyhow::Result<()> {
                 nonce += 1;
             }
             Err(err) => {
-                error!("Error sending transaction: {:?}", err)
+                error!("Error sending transaction: {:?}", err);
+                nonce = driver_wallet::get_nonce(&addr_hex, DbNetwork::Rinkeby).await;
             }
         }
     }
