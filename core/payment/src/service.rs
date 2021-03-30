@@ -294,7 +294,10 @@ mod local {
         sender: String,
         msg: ShutDown,
     ) -> Result<(), GenericError> {
-        Ok(processor.lock().await.shut_down(msg.timeout).await)
+        // It's crucial to drop the lock on processor (hence assigning the future to a variable).
+        // Otherwise, we won't be able to handle calls to `notify_payment` sent by drivers during shutdown.
+        let shutdown_future = processor.lock().await.shut_down(msg.timeout);
+        Ok(shutdown_future.await)
     }
 }
 

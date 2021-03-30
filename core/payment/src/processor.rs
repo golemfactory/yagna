@@ -600,13 +600,13 @@ impl PaymentProcessor {
         Ok(result)
     }
 
-    pub async fn shut_down(&mut self, timeout: Duration) {
+    pub fn shut_down(&mut self, timeout: Duration) -> impl futures::Future<Output = ()> + 'static {
         self.in_shutdown = true;
         let driver_shutdown_futures = self
             .registry
             .iter_drivers()
             .map(|driver| shut_down_driver(driver, timeout));
-        futures::future::join_all(driver_shutdown_futures).await;
+        futures::future::join_all(driver_shutdown_futures).map(|_| ())
     }
 }
 

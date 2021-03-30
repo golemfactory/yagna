@@ -12,7 +12,7 @@ use ya_payment_driver::{
     dao::{payment::PaymentDao, transaction::TransactionDao, DbExecutor},
     db::models::{
         Network, PaymentEntity, TransactionEntity, TransactionStatus, PAYMENT_STATUS_FAILED,
-        PAYMENT_STATUS_NOT_YET, TX_CREATED,
+        PAYMENT_STATUS_NOT_YET,
     },
     model::{GenericError, PaymentDetails, SchedulePayment},
     utils,
@@ -126,7 +126,7 @@ impl Erc20Dao {
             tx_id: tx_id.clone(),
             sender: details.sender.clone(),
             nonce: "".to_string(), // not used till pre-sign
-            status: TX_CREATED,
+            status: TransactionStatus::Created as i32,
             timestamp: date.naive_utc(),
             tx_type: 0,                // Erc20 only knows transfers, unused field
             encoded: "".to_string(),   // not used till pre-sign
@@ -248,6 +248,13 @@ impl Erc20Dao {
                 vec![]
             }
         }
+    }
+
+    pub async fn has_unconfirmed_txs(&self) -> Result<bool, GenericError> {
+        self.transaction()
+            .has_unconfirmed_txs()
+            .await
+            .map_err(GenericError::new)
     }
 
     pub async fn get_pending_faucet_txs(

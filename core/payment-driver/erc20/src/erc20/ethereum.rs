@@ -268,7 +268,7 @@ fn raw_tx_to_entity(
         nonce: base_utils::u256_to_big_endian_hex(raw_tx.nonce),
         timestamp: timestamp.naive_utc(),
         encoded: serde_json::to_string(raw_tx).unwrap(),
-        status: TransactionStatus::Created.into(),
+        status: TransactionStatus::Created as i32,
         tx_type: tx_type as i32,
         signature: hex::encode(signature),
         tx_hash: None,
