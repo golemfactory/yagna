@@ -87,12 +87,12 @@ If you want to easily acquire some GLM to try Golem on mainnet please use zksync
 
 pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericError> {
     log::debug!("transfer: {:?}", msg);
-    let network = network::network_like_to_network(msg.network());
+    let network = network::network_like_to_network(msg.network);
     let token = network::get_network_token(network, None);
-    let sender = msg.sender();
+    let sender = msg.sender;
     let sender_h160 = utils::str_to_addr(&sender)?;
-    let recipient = msg.to();
-    let amount = msg.amount();
+    let recipient = msg.to;
+    let amount = msg.amount;
     let glm_balance = wallet::account_balance(sender_h160, network).await?;
 
     if amount > glm_balance {
@@ -103,9 +103,9 @@ pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericEr
     }
 
     let details = PaymentDetails {
-        recipient: recipient.clone(),
-        sender: sender.clone(),
-        amount: amount.clone(),
+        recipient,
+        sender,
+        amount,
         date: Some(Utc::now()),
     };
 
@@ -119,8 +119,8 @@ pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericEr
     let tx_id = dao.insert_raw_transaction(db_tx).await;
 
     let message = format!(
-        "Scheduled {} transfer. from={}, to={}, amount={}, max_gas_cost={} ETH, network={}",
-        &token, &sender, &recipient, &amount, &human_gas_cost, &network
+        "Scheduled {} transfer. details={:?}, max_gas_cost={} ETH, network={}",
+        &token, &details, &human_gas_cost, &network
     );
     log::info!("{}", message);
     log::debug!("tx_id={}", tx_id);

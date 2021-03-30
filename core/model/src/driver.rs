@@ -411,11 +411,11 @@ impl RpcMessage for Exit {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Transfer {
-    sender: String,
-    to: String,
-    amount: BigDecimal,
-    network: Option<String>,
-    token: Option<String>,
+    pub sender: String,
+    pub to: String,
+    pub amount: BigDecimal,
+    pub network: Option<String>,
+    pub token: Option<String>,
 }
 
 impl Transfer {
@@ -433,19 +433,6 @@ impl Transfer {
             network,
             token,
         }
-    }
-
-    pub fn amount(&self) -> BigDecimal {
-        self.amount.clone()
-    }
-    pub fn sender(&self) -> String {
-        self.sender.clone()
-    }
-    pub fn to(&self) -> String {
-        self.to.clone()
-    }
-    pub fn network(&self) -> Option<String> {
-        self.network.clone()
     }
 }
 

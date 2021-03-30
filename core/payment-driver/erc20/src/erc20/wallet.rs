@@ -65,14 +65,6 @@ pub async fn fund(dao: &Erc20Dao, address: H160, network: Network) -> Result<(),
     Ok(())
 }
 
-pub async fn transfer(dao: &Erc20Dao, address: H160, network: Network) -> Result<(), GenericError> {
-    if network == Network::Mainnet {
-        return Err(GenericError::new("Wallet can not be funded on mainnet."));
-    }
-    faucet::request_glm(dao, address, network).await?;
-    Ok(())
-}
-
 pub async fn get_next_nonce(
     dao: &Erc20Dao,
     address: H160,

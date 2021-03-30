@@ -139,7 +139,7 @@ impl PaymentDriver for Erc20Driver {
         _caller: String,
         msg: Transfer,
     ) -> Result<String, GenericError> {
-        self.is_account_active(&msg.sender())?;
+        self.is_account_active(&msg.sender)?;
         cli::transfer(&self.dao, msg).await
     }
 
