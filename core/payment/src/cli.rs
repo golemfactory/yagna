@@ -61,16 +61,14 @@ pub enum PaymentCli {
         amount: Option<String>,
     },
 
-    // TODO: Uncomment when operation is supported by drivers
-    // Transfer {
-    //     #[structopt(flatten)]
-    //     account: AccountCli,
-    //     network: Option<String>,
-    //     #[structopt(long)]
-    //     to_address: String,
-    //     #[structopt(long)]
-    //     amount: String,
-    // },
+    Transfer {
+        #[structopt(flatten)]
+        account: pay::AccountCli,
+        #[structopt(long)]
+        to_address: String,
+        #[structopt(long)]
+        amount: String,
+    },
     Invoice {
         address: Option<String>,
         #[structopt(subcommand)]
@@ -248,18 +246,26 @@ impl PaymentCli {
                     )
                     .await?,
                 )
-            } // TODO: Uncomment when operation is supported by drivers
-            // PaymentCli::Transfer {
-            //     account,
-            //     driver,
-            //     network,
-            //     to_address,
-            //     amount
-            // } => {
-            //     let address = resolve_address(account).await?;
-            //     let amount = BigDecimal::from_str(&amount)?;
-            //     CommandOutput::object(wallet::transfer(address, to_address, amount, driver, network, token).await?)
-            // }
+            }
+            PaymentCli::Transfer {
+                account,
+                to_address,
+                amount,
+            } => {
+                let address = resolve_address(account.address()).await?;
+                let amount = BigDecimal::from_str(&amount)?;
+                CommandOutput::object(
+                    wallet::transfer(
+                        address,
+                        to_address,
+                        amount,
+                        account.driver(),
+                        Some(account.network()),
+                        None,
+                    )
+                    .await?,
+                )
+            }
             PaymentCli::Drivers => {
                 let drivers = bus::service(pay::BUS_ID).call(pay::GetDrivers {}).await??;
                 if ctx.json_output {

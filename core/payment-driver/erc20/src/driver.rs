@@ -139,8 +139,8 @@ impl PaymentDriver for Erc20Driver {
         _caller: String,
         msg: Transfer,
     ) -> Result<String, GenericError> {
-        log::info!("TRANSFER = Not Implemented: {:?}", msg);
-        Ok("NOT_IMPLEMENTED".to_string())
+        self.is_account_active(&msg.sender)?;
+        cli::transfer(&self.dao, msg).await
     }
 
     async fn schedule_payment(

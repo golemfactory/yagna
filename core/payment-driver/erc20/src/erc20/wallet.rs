@@ -65,8 +65,35 @@ pub async fn fund(dao: &Erc20Dao, address: H160, network: Network) -> Result<(),
     Ok(())
 }
 
-pub async fn get_network_nonce(address: H160, network: Network) -> Result<U256, GenericError> {
-    ethereum::get_next_nonce(address, network).await
+pub async fn get_next_nonce(
+    dao: &Erc20Dao,
+    address: H160,
+    network: Network,
+) -> Result<U256, GenericError> {
+    let network_nonce = ethereum::get_next_nonce(address, network).await?;
+    let str_addr = format!("0x{:x}", &address);
+    let db_nonce = dao.get_next_nonce(&str_addr, network).await?;
+    Ok(std::cmp::max(network_nonce, db_nonce))
+}
+
+pub async fn has_enough_eth_for_gas(
+    db_tx: &TransactionEntity,
+    network: Network,
+) -> Result<BigDecimal, GenericError> {
+    let sender_h160 = utils::str_to_addr(&db_tx.sender)?;
+    let eth_balance = ethereum::get_balance(sender_h160, network).await?;
+    let gas_costs = ethereum::get_max_gas_costs(db_tx)?;
+    let human_gas_cost = utils::u256_to_big_dec(gas_costs)?;
+    if gas_costs > eth_balance {
+        return Err(GenericError::new(format!(
+            "Not enough ETH balance for gas. balance={}, gas_cost={}, address={}, network={}",
+            utils::u256_to_big_dec(eth_balance)?,
+            &human_gas_cost,
+            &db_tx.sender,
+            &db_tx.network
+        )));
+    }
+    Ok(human_gas_cost)
 }
 
 pub async fn get_block_number(network: Network) -> Result<U64, GenericError> {
