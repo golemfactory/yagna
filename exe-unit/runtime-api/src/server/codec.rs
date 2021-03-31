@@ -35,11 +35,10 @@ impl<M: Message> Codec<M> {
     }
 }
 
-impl<M: Message> Encoder for Codec<M> {
-    type Item = M;
+impl<M: Message> Encoder<M> for Codec<M> {
     type Error = anyhow::Error;
 
-    fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
+    fn encode(&mut self, item: M, dst: &mut BytesMut) -> Result<(), Self::Error> {
         let len = item.encoded_len();
         dst.reserve(len + prost::length_delimiter_len(len));
         Message::encode_length_delimited(&item, dst)?;

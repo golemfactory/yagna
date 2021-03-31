@@ -195,7 +195,8 @@ impl VpnSupervisor {
         let network_id = network_id.to_string();
 
         let (ws_tx, ws_rx) = mpsc::channel(1);
-        let connect = ConnectTcp {
+        let connect = Connect {
+            protocol: Protocol::Tcp,
             receiver: ws_rx,
             address: ip.to_string(),
             port,
@@ -350,7 +351,7 @@ impl Vpn {
 
                 let conn = socket.tuple().map(|t| connections.get(&t)).flatten();
                 let mut user_tx = match conn {
-                    Some(conn) => conn.user_tx.clone(),
+                    Some(conn) => conn.tx.clone(),
                     None => {
                         log::warn!("VPN {}: no connection to {}:{}", self.vpn.id(), addr, port);
                         continue;
@@ -488,7 +489,7 @@ impl Vpn {
             Ok(size) => {
                 processed = true;
                 if size < packet.data.len() {
-                    self.log_send_err(ip, port, "no space in buffer");
+                    self.log_send_err(ip, port, "no space left in buffer");
                 }
             }
             Err(smoltcp::Error::Exhausted) => (),
@@ -693,26 +694,17 @@ impl Handler<GetConnections> for Vpn {
     }
 }
 
-impl Handler<ConnectTcp> for Vpn {
+impl Handler<Connect> for Vpn {
     type Result = ActorResponse<Self, mpsc::Receiver<Vec<u8>>, Error>;
 
-    fn handle(&mut self, msg: ConnectTcp, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: Connect, ctx: &mut Self::Context) -> Self::Result {
         let timeout = TCP_CONNECTION_TIMEOUT;
-        let protocol = Protocol::Tcp;
-        let tuple = match self.socket_tuple(protocol, &msg.address, Some(msg.port)) {
+        let tuple = match self.socket_tuple(msg.protocol, &msg.address, Some(msg.port)) {
             Ok(t) => t,
             Err(e) => return ActorResponse::reply(Err(e)),
         };
 
-        let tcp_socket = {
-            let tcp_rx = TcpSocketBuffer::new(vec![0; MAX_FRAME_SIZE * 4]);
-            let tcp_tx = TcpSocketBuffer::new(vec![0; MAX_FRAME_SIZE * 4]);
-            let mut socket = TcpSocket::new(tcp_rx, tcp_tx);
-            socket.set_keep_alive(Some(Duration::from_secs(60)));
-            socket
-        };
-        let handle = self.sockets.add(tcp_socket);
-
+        let handle = self.sockets.add(Socket::tcp());
         if let Err(e) = {
             let mut socket = self.sockets.get::<TcpSocket>(handle);
             socket.connect((tuple.3, tuple.4), (tuple.1, tuple.2))
@@ -741,11 +733,13 @@ impl Handler<ConnectTcp> for Vpn {
         }
         .into_actor(self)
         .map(move |result, this, ctx| {
+            let id = this.vpn.id();
             this.pending.remove(&tuple);
+
+            log::debug!("VPN {}: connection to {:?}: {:?}", id, tuple, result);
 
             match &result {
                 Ok(_) => {
-                    log::debug!("VPN {}: connected to {:?}", this.vpn.id(), tuple);
                     this.connections.insert(tuple, Connection::new(handle, tx));
                     ctx.add_stream(StreamExt::map(msg.receiver, move |data| Packet {
                         socket_tuple: tuple,
@@ -753,23 +747,16 @@ impl Handler<ConnectTcp> for Vpn {
                     }));
                 }
                 Err(e) => {
-                    log::debug!(
-                        "VPN {}: connection to {:?} failed: {}",
-                        this.vpn.id(),
-                        tuple,
-                        e
-                    );
-                    ctx.address().do_send(Disconnect {
-                        handle,
-                        reason: match e {
-                            Error::ConnectionTimeout => DisconnectReason::ConnectionTimeout,
-                            _ => DisconnectReason::ConnectionFailed,
-                        },
-                    });
+                    let reason = match e {
+                        Error::ConnectionTimeout => DisconnectReason::ConnectionTimeout,
+                        _ => DisconnectReason::ConnectionFailed,
+                    };
+                    ctx.address().do_send(Disconnect { handle, reason });
                 }
             }
             result
         });
+
         ActorResponse::r#async(connect)
     }
 }
@@ -896,12 +883,12 @@ impl PendingConnection {
 
 struct Connection {
     pub handle: SocketHandle,
-    pub user_tx: mpsc::Sender<Vec<u8>>,
+    pub tx: mpsc::Sender<Vec<u8>>,
 }
 
 impl Connection {
-    pub fn new(handle: SocketHandle, user_tx: mpsc::Sender<Vec<u8>>) -> Self {
-        Self { handle, user_tx }
+    pub fn new(handle: SocketHandle, tx: mpsc::Sender<Vec<u8>>) -> Self {
+        Self { handle, tx }
     }
 }
 
@@ -918,6 +905,14 @@ trait SocketExt {
     fn can_send(&self) -> bool;
 
     fn recv(&mut self) -> std::result::Result<Option<(IpAddress, u16, Vec<u8>)>, smoltcp::Error>;
+
+    fn tcp<'a>() -> TcpSocket<'a> {
+        let tcp_rx = TcpSocketBuffer::new(vec![0; MAX_FRAME_SIZE * 4]);
+        let tcp_tx = TcpSocketBuffer::new(vec![0; MAX_FRAME_SIZE * 4]);
+        let mut socket = TcpSocket::new(tcp_rx, tcp_tx);
+        socket.set_keep_alive(Some(Duration::from_secs(60)));
+        socket
+    }
 }
 
 impl<'a> SocketExt for Socket<'a> {

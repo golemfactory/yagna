@@ -317,8 +317,8 @@ impl ResponseError for ApiError {
         match self {
             Self::Vpn(err) => match err {
                 VpnError::IpAddrTaken(_) => HttpResponse::Conflict().json(ErrorMessage::new(&err)),
-                VpnError::NetNotFound(_) => HttpResponse::NotFound().json(ErrorMessage::new(&err)),
                 VpnError::NetIdTaken(_) => HttpResponse::Conflict().json(ErrorMessage::new(&err)),
+                VpnError::NetNotFound(_) => HttpResponse::NotFound().json(ErrorMessage::new(&err)),
                 VpnError::ConnectionTimeout => HttpResponse::GatewayTimeout().finish(),
                 VpnError::Forbidden => HttpResponse::Forbidden().finish(),
                 VpnError::Cancelled => {

@@ -3,6 +3,7 @@ use actix::Message;
 use futures::channel::mpsc;
 use smoltcp::socket::SocketHandle;
 use ya_client_model::net::*;
+use ya_utils_networking::vpn::Protocol;
 
 #[derive(Debug, Message)]
 #[rtype(result = "Result<Vec<Address>>")]
@@ -37,7 +38,8 @@ pub(crate) struct GetConnections;
 
 #[derive(Message)]
 #[rtype(result = "Result<mpsc::Receiver<Vec<u8>>>")]
-pub(crate) struct ConnectTcp {
+pub(crate) struct Connect {
+    pub protocol: Protocol,
     pub receiver: mpsc::Receiver<Vec<u8>>,
     pub address: String,
     pub port: u16,

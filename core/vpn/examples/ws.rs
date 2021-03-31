@@ -6,6 +6,7 @@ use futures::{SinkExt, StreamExt};
 use sha3::digest::generic_array::GenericArray;
 use sha3::Digest;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use structopt::StructOpt;
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -146,13 +147,14 @@ async fn main() -> anyhow::Result<()> {
     let (mut sink, mut stream) = connection.split();
 
     Arbiter::spawn(async move {
-        let mut buf = [0u8; 65535 - 14 - 20];
+        // let mut buf = [0u8; 65535 - 14 - 20];
+        let mut buf = [0u8; 1500 - 54];
         loop {
             let read = input.read(&mut buf).await;
             let size = match read {
                 Ok(0) => {
-                    println!("EOF");
-                    break;
+                    tokio::time::delay_for(Duration::from_secs(1)).await;
+                    continue;
                 }
                 Ok(s) => s,
                 Err(e) => {

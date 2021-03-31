@@ -55,6 +55,7 @@ pub(crate) struct Vpn {
     acl: Acl,
     networks: Networks<GsbEndpoint>,
     endpoint: VpnEndpoint,
+    rx_buf: Option<RxBuffer>,
 }
 
 impl Vpn {
@@ -78,6 +79,7 @@ impl Vpn {
             acl,
             networks,
             endpoint,
+            rx_buf: Some(Default::default()),
         })
     }
 
@@ -107,7 +109,7 @@ impl Vpn {
 
     fn handle_arp(&mut self, frame: EtherFrame, ctx: &mut Context<Self>) {
         let arp = ArpPacket::packet(frame.payload());
-        // forward only for the IP protocol type
+        // forward only IP ARP packets
         if arp.get_field(ArpField::PTYPE) != &[08, 00] {
             return;
         }
@@ -176,24 +178,35 @@ impl Actor for Vpn {
 /// Egress traffic handler (VM -> VPN)
 impl StreamHandler<Result<Vec<u8>>> for Vpn {
     fn handle(&mut self, result: Result<Vec<u8>>, ctx: &mut Context<Self>) {
-        log::debug!("Egress packet {:?}", result);
-
-        let bytes = match result {
-            Ok(bytes) => bytes,
+        let received = match result {
+            Ok(vec) => vec,
             Err(err) => return log::debug!("VPN error (egress): {}", err),
         };
-        let frame = match EtherFrame::try_from(bytes) {
-            Ok(frame) => frame,
-            Err(err) => match &err {
-                VpnError::ProtocolNotSupported(_) => return,
-                _ => return log::debug!("VPN frame error (egress): {}", err),
-            },
+        let mut rx_buf = match self.rx_buf.take() {
+            Some(buf) => buf,
+            None => return log::error!("Programming error: rx buffer already taken"),
         };
-        match &frame {
-            EtherFrame::Arp(_) => self.handle_arp(frame, ctx),
-            EtherFrame::Ip(_) => self.handle_ip(frame, ctx),
-            frame => log::debug!("VPN: unimplemented EtherType: {}", frame),
+
+        for packet in rx_buf.process(received) {
+            log::debug!("Egress packet [{}b]", packet.len());
+
+            let frame = match EtherFrame::try_from(packet) {
+                Ok(frame) => match &frame {
+                    EtherFrame::Arp(_) => self.handle_arp(frame, ctx),
+                    EtherFrame::Ip(_) => self.handle_ip(frame, ctx),
+                    frame => log::debug!("VPN: unimplemented EtherType: {}", frame),
+                },
+                Err(err) => {
+                    match &err {
+                        VpnError::ProtocolNotSupported(_) => (),
+                        _ => log::debug!("VPN frame error (egress): {}", err),
+                    };
+                    continue;
+                }
+            };
         }
+
+        self.rx_buf.replace(rx_buf);
     }
 }
 
@@ -206,13 +219,12 @@ impl Handler<RpcEnvelope<activity::VpnPacket>> for Vpn {
         packet: RpcEnvelope<activity::VpnPacket>,
         ctx: &mut Context<Self>,
     ) -> Self::Result {
-        let packet = packet.into_inner();
+        let mut packet = packet.into_inner();
         let mut tx = self.endpoint.tx.clone();
-        log::debug!(
-            "Ingress packet of size {:?}: {:?}",
-            packet.0.len(),
-            packet.0
-        );
+
+        log::debug!("Ingress packet [{}b]", packet.0.len());
+
+        write_prefix(&mut packet.0);
 
         ctx.spawn(
             async move {
@@ -329,6 +341,139 @@ impl<'a> TryFrom<&'a DeploymentNetwork> for Network {
     }
 }
 
+type Prefix = u16;
+const PREFIX_SIZE: usize = std::mem::size_of::<Prefix>();
+
+pub(self) struct RxBuffer {
+    expected: usize,
+    inner: Vec<u8>,
+}
+
+impl Default for RxBuffer {
+    fn default() -> Self {
+        Self {
+            expected: 0,
+            inner: Vec::with_capacity(PREFIX_SIZE + MAX_FRAME_SIZE),
+        }
+    }
+}
+
+impl RxBuffer {
+    pub fn process(&mut self, received: Vec<u8>) -> RxIterator {
+        RxIterator {
+            buffer: self,
+            received,
+        }
+    }
+}
+
+struct RxIterator<'a> {
+    buffer: &'a mut RxBuffer,
+    received: Vec<u8>,
+}
+
+impl<'a> Iterator for RxIterator<'a> {
+    type Item = Vec<u8>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.buffer.expected > 0 && self.received.len() > 0 {
+            let len = self.buffer.expected.min(self.received.len());
+            self.buffer.inner.extend(self.received.drain(..len));
+        }
+
+        if let Some(len) = read_prefix(&self.buffer.inner) {
+            if let Some(item) = take_next(&mut self.buffer.inner, len) {
+                self.buffer.expected = read_prefix(&self.buffer.inner).unwrap_or(0) as usize;
+                return Some(item);
+            }
+        }
+
+        if let Some(len) = read_prefix(&self.received) {
+            if let Some(item) = take_next(&mut self.received, len) {
+                return Some(item);
+            }
+        }
+
+        self.buffer.inner.extend(self.received.drain(..));
+        if let Some(len) = read_prefix(&self.buffer.inner) {
+            self.buffer.expected = len as usize;
+        }
+
+        None
+    }
+}
+
+fn take_next(src: &mut Vec<u8>, len: Prefix) -> Option<Vec<u8>> {
+    let p_len = PREFIX_SIZE + len as usize;
+    if src.len() >= p_len {
+        return Some(src.drain(..p_len).skip(PREFIX_SIZE).collect());
+    }
+    None
+}
+
+fn read_prefix(src: &Vec<u8>) -> Option<Prefix> {
+    if src.len() < PREFIX_SIZE {
+        return None;
+    }
+    let mut u16_buf = [0u8; PREFIX_SIZE];
+    u16_buf.copy_from_slice(&src[..PREFIX_SIZE]);
+    Some(u16::from_ne_bytes(u16_buf))
+}
+
+fn write_prefix(dst: &mut Vec<u8>) {
+    let len_u16 = dst.len() as u16;
+    dst.reserve(PREFIX_SIZE);
+    dst.splice(0..0, u16::to_ne_bytes(len_u16).to_vec());
+}
+
 fn gsb_endpoint(node_id: &str, net_id: &str) -> GsbEndpoint {
     typed::service(format!("/net/{}/vpn/{}", node_id, net_id))
+}
+
+#[cfg(test)]
+mod test {
+    use super::{write_prefix, RxBuffer};
+    use std::iter::FromIterator;
+
+    enum TxMode {
+        Full,
+        Chunked(usize),
+    }
+
+    impl TxMode {
+        fn split(&self, v: Vec<u8>) -> Vec<Vec<u8>> {
+            match self {
+                Self::Full => vec![v],
+                Self::Chunked(s) => v[..].chunks(*s).map(|c| c.to_vec()).collect(),
+            }
+        }
+    }
+
+    #[test]
+    fn rx_buffer() {
+        println!("rx_buffer");
+
+        for mut tx in vec![TxMode::Full, TxMode::Chunked(1), TxMode::Chunked(2)] {
+            for sz in vec![1, 2, 3, 5, 7, 12, 64] {
+                let src = (0..=255u8)
+                    .into_iter()
+                    .map(|e| Vec::from_iter(std::iter::repeat(e).take(sz)))
+                    .collect::<Vec<_>>();
+
+                let mut buf = RxBuffer::default();
+                let mut dst = Vec::with_capacity(src.len());
+
+                src.iter().cloned().for_each(|mut v| {
+                    write_prefix(&mut v);
+                    for received in tx.split(v) {
+                        for item in buf.process(received) {
+                            dst.push(item);
+                        }
+                    }
+                });
+
+                assert_eq!(src, dst);
+            }
+        }
+    }
 }
