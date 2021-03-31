@@ -1,7 +1,7 @@
 use actix_web::{middleware, App, HttpServer, Scope};
 use chrono::Utc;
-use ethsign::{SecretKey, KeyFile, Protected};
 use ethsign::keyfile::Bytes;
+use ethsign::{KeyFile, Protected, SecretKey};
 use futures::Future;
 use rand::Rng;
 use serde_json;
@@ -92,7 +92,7 @@ pub async fn start_dummy_driver() -> anyhow::Result<()> {
 
 pub async fn start_erc20_driver(
     db: &DbExecutor,
-    requestor_account: Box<SecretKey>,
+    requestor_account: SecretKey,
 ) -> anyhow::Result<()> {
     let requestor = NodeId::from(requestor_account.public().address().as_ref());
     fake_list_identities(vec![requestor]);
@@ -107,7 +107,7 @@ pub async fn start_erc20_driver(
 
 pub async fn start_zksync_driver(
     db: &DbExecutor,
-    requestor_account: Box<SecretKey>,
+    requestor_account: SecretKey,
 ) -> anyhow::Result<()> {
     let requestor = NodeId::from(requestor_account.public().address().as_ref());
     fake_list_identities(vec![requestor]);
@@ -142,9 +142,7 @@ fn fake_subscribe_to_events() {
     );
 }
 
-fn get_sign_tx(
-    account: Box<SecretKey>,
-) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
+fn get_sign_tx(account: SecretKey) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
     let account: Arc<SecretKey> = account.into();
     move |msg| {
         let account = account.clone();
@@ -174,15 +172,14 @@ const KEY_ITERATIONS: u32 = 2;
 const KEYSTORE_VERSION: u64 = 3;
 
 fn load_or_generate(path: &str, password: Protected) -> SecretKey {
-    log::debug!("load_or_generate({}, {:?})", &path, &password);
+    log::debug!("load_or_generate({}, {:?})", path, &password);
     if let Ok(file) = std::fs::File::open(path) {
-        log::debug!("opened file");
-
         // Broken keyfile should panic
         let key: KeyFile = serde_json::from_reader(file).unwrap();
-        log::debug!("parsed file");
         // Invalid password should panic
-        return key.to_secret_key(&password).unwrap();
+        let secret = key.to_secret_key(&password).unwrap();
+        log::info!("Loaded key. path={}", path);
+        return secret;
     }
     // File does not exist, create new key
     let random_bytes: [u8; 32] = rand::thread_rng().gen();
@@ -194,7 +191,9 @@ fn load_or_generate(path: &str, password: Protected) -> SecretKey {
         address: Some(Bytes(secret.public().address().to_vec())),
     };
     let mut file = std::fs::File::create(path).unwrap();
-    file.write_all(serde_json::to_string_pretty(&key_file).unwrap().as_ref()).unwrap();
+    file.write_all(serde_json::to_string_pretty(&key_file).unwrap().as_ref())
+        .unwrap();
+    log::info!("Generated new key. path={}", path);
     secret
 }
 
@@ -212,7 +211,7 @@ async fn main() -> anyhow::Result<()> {
     let args: Args = Args::from_args();
 
     let provider_pass: Protected = args.provider_pass.clone().into();
-    let provider_account = Box::new(load_or_generate(&args.provider_key_path, provider_pass));
+    let provider_account = load_or_generate(&args.provider_key_path, provider_pass);
     let provider_id = format!("0x{}", hex::encode(provider_account.public().address()));
     let provider_addr = args
         .provider_addr
@@ -220,7 +219,7 @@ async fn main() -> anyhow::Result<()> {
         .to_lowercase();
 
     let requestor_pass: Protected = args.requestor_pass.clone().into();
-    let requestor_account = Box::new(load_or_generate(&args.requestor_key_path, requestor_pass));
+    let requestor_account = load_or_generate(&args.requestor_key_path, requestor_pass);
     let requestor_id = format!("0x{}", hex::encode(requestor_account.public().address()));
     let requestor_addr = args
         .requestor_addr
