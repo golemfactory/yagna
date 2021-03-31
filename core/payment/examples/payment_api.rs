@@ -19,7 +19,7 @@ use ya_core_model::identity;
 use ya_dummy_driver as dummy;
 use ya_erc20_driver as erc20;
 use ya_payment::processor::PaymentProcessor;
-use ya_payment::{migrations, utils};
+use ya_payment::{migrations, utils, PaymentService};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::auth::dummy::DummyAuth;
 use ya_service_api_web::middleware::Identity;
@@ -255,7 +255,6 @@ async fn main() -> anyhow::Result<()> {
             erc20::DRIVER_NAME
         }
         Driver::Zksync => {
-            start_dummy_driver().await?;
             start_zksync_driver(&db, requestor_account).await?;
             zksync::DRIVER_NAME
         }
@@ -374,6 +373,8 @@ async fn main() -> anyhow::Result<()> {
     .bind(rest_addr)?
     .run()
     .await?;
+
+    PaymentService::shut_down().await;
 
     Ok(())
 }

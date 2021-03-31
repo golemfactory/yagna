@@ -3,6 +3,7 @@ use bitflags::bitflags;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
+use std::time::Duration;
 use ya_client_model::payment::{Allocation, Payment};
 use ya_service_bus::RpcMessage;
 
@@ -476,5 +477,24 @@ impl VerifySignature {
 impl RpcMessage for VerifySignature {
     const ID: &'static str = "VerifySignature";
     type Item = bool; // is signature correct
+    type Error = GenericError;
+}
+
+// ************************* SHUT DOWN *************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ShutDown {
+    pub timeout: Duration,
+}
+
+impl ShutDown {
+    pub fn new(timeout: Duration) -> Self {
+        Self { timeout }
+    }
+}
+
+impl RpcMessage for ShutDown {
+    const ID: &'static str = "ShutDown";
+    type Item = ();
     type Error = GenericError;
 }
