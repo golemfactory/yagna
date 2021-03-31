@@ -53,6 +53,11 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 log::debug!("Faucet tx confirmed, exit early. hash={}", &tx_hash);
                 continue;
             }
+            // CLI Transfer ( no related payments ) can stop here IF the tx was a success.
+            if tx.tx_type == TxType::Transfer as i32 && payments.is_empty() && tx_success.is_ok() {
+                log::debug!("CLI Transfer confirmed, exit early. hash={}", &tx_hash);
+                continue;
+            }
             let order_ids: Vec<String> = payments
                 .iter()
                 .map(|payment| payment.order_id.clone())
@@ -119,12 +124,13 @@ pub async fn process_payments_for_account(dao: &Erc20Dao, node_id: &str, network
             network,
             node_id
         );
-        let network_nonce =
-            wallet::get_network_nonce(crate::erc20::utils::str_to_addr(&node_id).unwrap(), network)
-                .await
-                .unwrap();
-        let db_nonce = dao.get_next_nonce(&node_id, network).await.unwrap();
-        let mut nonce = std::cmp::max(network_nonce, db_nonce);
+        let mut nonce = wallet::get_next_nonce(
+            dao,
+            crate::erc20::utils::str_to_addr(&node_id).unwrap(),
+            network,
+        )
+        .await
+        .unwrap();
         log::debug!("Payments: nonce={}, details={:?}", &nonce, payments);
         for payment in payments {
             handle_payment(&dao, payment, &mut nonce).await;
