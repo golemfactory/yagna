@@ -13,9 +13,9 @@ ya-service-bus = "0.4"
 ya-utils-networking = "0.1"
 
 actix = { version = "0.9", default-features = false }
-actix-connect="1.0"
-actix-http="1.0"
-actix-rt = "1.0"
+actix-connect="2.0"
+actix-http="2.2"
+actix-rt = "1.1"
 anyhow = "1.0"
 awc = "2.0"
 bigdecimal = "0.2"
