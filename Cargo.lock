@@ -7339,6 +7339,7 @@ dependencies = [
  "digest 0.8.1",
  "env_logger 0.7.1",
  "futures 0.3.12",
+ "humantime 2.1.0",
  "lazy_static",
  "libsqlite3-sys",
  "log",
