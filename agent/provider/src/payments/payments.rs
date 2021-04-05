@@ -13,7 +13,7 @@ use structopt::StructOpt;
 
 use super::agreement::{compute_cost, ActivityPayment, AgreementPayment, CostInfo};
 use super::model::PaymentModel;
-use crate::execution::{ActivityCreated, ActivityDestroyed};
+use crate::execution::{ActivityDestroyed, CreateActivity};
 use crate::market::provider_market::NewAgreement;
 use crate::market::termination_reason::BreakReason;
 use crate::tasks::{AgreementBroken, AgreementClosed, BreakAgreement};
@@ -389,10 +389,10 @@ async fn compute_cost_and_send_debit_note(
 
 forward_actix_handler!(Payments, NewAgreement, on_signed_agreement);
 
-impl Handler<ActivityCreated> for Payments {
+impl Handler<CreateActivity> for Payments {
     type Result = anyhow::Result<()>;
 
-    fn handle(&mut self, msg: ActivityCreated, ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: CreateActivity, ctx: &mut Context<Self>) -> Self::Result {
         let agreement = self
             .agreements
             .get_mut(&msg.agreement_id)

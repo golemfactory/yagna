@@ -48,7 +48,7 @@ Provider subscribes to the network as many Offers as presets enumerated from CLI
             },
             "scheme": "payu",
             "scheme.payu": {
-              "interval_sec": 6.0
+              "interval_sec": 120.0
             },
             "usage": {
               "vector": [
@@ -99,14 +99,30 @@ On activity finish Provider Agent will initiate Agreement termination.
 This is workaround because `terminate_agreement` operation is not supported yet in Market API.
 
 ### Payments
-Provider agent issues Debit Notes periodically (every `scheme.payu.interval_sec`; `6` in sample above).
-It issues Invoice once, after activity (ie. subordinate ExeUnit) finish. 
+Provider agent issues Debit Notes periodically (every `scheme.payu.interval_sec`;
+default value is [120s](src/payments/pricing.rs#L85): `interval` within `LinearPricingOffer`).
+It is not subject for negotiations.
+
+During negotiation Requestor and Provider both agrees on `timeout` at which Debit Notes are accepted by
+Requestor. A property responsible for this is named `golem.com.payment.debit-notes.accept-timeout?`.
+Provider starts negotiations with [4min](src/market/negotiator/factory.rs#L27) and it might be only
+lower ie. Requestor might propose lower value, which Provider will accept as long as it is more than
+`5sec`. Base value for `timeout` negotiations is controlled via [CLI](src/market/negotiator/factory.rs#L27)
+and ENV `DEBIT_NOTE_ACCEPTANCE_DEADLINE`. Provider is then entitled to break the Agreement after
+negotiated `timeout` elapses and Debit Note is **not** accepted.
+
+What's more, Provider is entitled to break the Agreement, when there is no Activity
+for [90s](src/tasks/config.rs#L7) (ie. idle Agreement).
+
+Provider issues Invoice **only once**, after the Agreement is terminated.
 
 ## Configuration
 
-Provider agent can be used with `.env` file. [Here](https://github.com/golemfactory/yagna/wiki/DotEnv-Configuration) is list of additional environment variables that can be set.
+Provider agent can be used with `.env` file. [Here](https://github.com/golemfactory/yagna/wiki/DotEnv-Configuration)
+is list of additional environment variables that can be set.
 
-Create separate working dir for the Provider Agent (please create `ya-prov` in the main yagna source code directory), and create `.env` file there by copying
+Create separate working dir for the Provider Agent (please create `ya-prov` in the main yagna source code directory),
+and create `.env` file there by copying
 [`.env-template`](https://github.com/golemfactory/yagna/blob/master/.env-template) from yagna repo main directory:
 ```bash
 mkdir ya-prov && cd ya-prov && cp ../.env-template .env

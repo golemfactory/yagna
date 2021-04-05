@@ -15,13 +15,16 @@ const REPO_NAME: &'static str = "yagna";
 
 pub async fn check_latest_release(db: &DbExecutor) -> anyhow::Result<Release> {
     log::debug!("Checking latest Yagna release");
-    let gh_rel = UpdateBuilder::new()
-        .repo_owner(REPO_OWNER)
-        .repo_name(REPO_NAME)
-        .bin_name("") // seems required by builder but unused
-        .current_version("") // similar as above
-        .build()?
-        .get_latest_release()?;
+    let gh_rel = tokio::task::spawn_blocking(|| -> anyhow::Result<self_update::update::Release> {
+        Ok(UpdateBuilder::new()
+            .repo_owner(REPO_OWNER)
+            .repo_name(REPO_NAME)
+            .bin_name("") // seems required by builder but unused
+            .current_version("") // similar as above
+            .build()?
+            .get_latest_release()?)
+    })
+    .await??;
 
     log::trace!("Got latest Yagna release {:?}", gh_rel);
 
@@ -58,13 +61,16 @@ pub(crate) async fn check_running_release(db: &DbExecutor) -> anyhow::Result<Rel
     let running_tag = ya_compile_time_utils::git_tag();
     log::debug!("Checking release for running tag: {}", running_tag);
 
-    let db_rel = match UpdateBuilder::new()
-        .repo_owner(REPO_OWNER)
-        .repo_name(REPO_NAME)
-        .bin_name("") // seems required by builder but unused
-        .current_version("") // similar as above
-        .build()?
-        .get_release_version(running_tag)
+    let db_rel = match tokio::task::spawn_blocking(move || {
+        UpdateBuilder::new()
+            .repo_owner(REPO_OWNER)
+            .repo_name(REPO_NAME)
+            .bin_name("") // seems required by builder but unused
+            .current_version("") // similar as above
+            .build()?
+            .get_release_version(running_tag)
+    })
+    .await?
     {
         Ok(gh_rel) => {
             log::trace!("Got currently running release: {:?}", gh_rel);

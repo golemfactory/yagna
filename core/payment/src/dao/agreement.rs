@@ -213,6 +213,25 @@ impl<'a> AgreementDao<'a> {
         .await
     }
 
+    pub async fn get_transaction_balance(
+        &self,
+        node_id: NodeId,
+        payee_addr: String,
+        payer_addr: String,
+    ) -> DbResult<BigDecimal> {
+        readonly_transaction(self.pool, move |conn| {
+            let balance = dsl::pay_agreement
+                .select(dsl::total_amount_paid)
+                .filter(dsl::owner_id.eq(node_id))
+                .filter(dsl::payee_addr.eq(payee_addr))
+                .filter(dsl::payer_addr.eq(payer_addr))
+                .get_results::<BigDecimalField>(conn)?
+                .sum();
+            Ok(balance)
+        })
+        .await
+    }
+
     /// Get total requested/accepted/paid amount of incoming transactions
     pub async fn incoming_transaction_summary(
         &self,

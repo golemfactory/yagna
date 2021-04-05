@@ -13,8 +13,6 @@ testing = ["actix-http", "actix-rt", "actix-service", "env_logger"]
 [dependencies]
 ya-agreement-utils = { version = "^0.2"}
 ya-diesel-utils = { version = "0.1" }
-ya-std-utils = "0.1"
-ya-utils-actix = "0.1"
 ya-client = "0.5"
 ya-core-model = { version = "^0.3", features = ["market", "net"] }
 ya-market-resolver = "0.2"
@@ -24,6 +22,9 @@ ya-service-api = "0.1"
 ya-service-api-interfaces = "0.1"
 ya-service-api-web = "0.1"
 ya-service-bus = "0.4"
+ya-std-utils = "0.1"
+ya-utils-actix = "0.1"
+
 
 actix = { version = "0.10", default-features = false }
 actix-web = "3.2"
@@ -54,7 +55,7 @@ tokio = { version = "0.2", features = ["time", "sync"] }
 uuid = { version = "0.8", features = ["v4"] }
 
 # testing
-actix-http = { version = "2.1", optional = true }
+actix-http = { version = "2.2", optional = true }
 actix-rt = { version = "1.0.0", optional = true }
 actix-service = { version = "1.0", optional = true }
 env_logger = { version = "0.7", optional = true }

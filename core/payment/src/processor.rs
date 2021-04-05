@@ -10,11 +10,13 @@ use futures::FutureExt;
 use metrics::counter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use ya_client_model::payment::driver_details::DriverDetails;
-use ya_client_model::payment::network::Network;
-use ya_client_model::payment::{Account, ActivityPayment, AgreementPayment, Payment};
+use std::time::Duration;
+use ya_client_model::payment::{
+    Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
+};
 use ya_core_model::driver::{
-    self, driver_bus_id, AccountMode, PaymentConfirmation, PaymentDetails, ValidateAllocation,
+    self, driver_bus_id, AccountMode, PaymentConfirmation, PaymentDetails, ShutDown,
+    ValidateAllocation,
 };
 use ya_core_model::payment::local::{
     NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver, RegisterDriverError,
@@ -267,12 +269,17 @@ impl DriverRegistry {
 
         Err(AccountNotRegistered::new(platform, address, mode))
     }
+
+    pub fn iter_drivers(&self) -> impl Iterator<Item = &String> {
+        self.drivers.keys()
+    }
 }
 
 #[derive(Clone)]
 pub struct PaymentProcessor {
     db_executor: DbExecutor,
     registry: DriverRegistry,
+    in_shutdown: bool,
 }
 
 impl PaymentProcessor {
@@ -280,6 +287,7 @@ impl PaymentProcessor {
         Self {
             db_executor,
             registry: Default::default(),
+            in_shutdown: false,
         }
     }
 
@@ -427,6 +435,9 @@ impl PaymentProcessor {
     }
 
     pub async fn schedule_payment(&self, msg: SchedulePayment) -> Result<(), SchedulePaymentError> {
+        if self.in_shutdown {
+            return Err(SchedulePaymentError::Shutdown);
+        }
         let amount = msg.amount.clone();
         let driver =
             self.registry
@@ -568,6 +579,9 @@ impl PaymentProcessor {
         address: String,
         amount: BigDecimal,
     ) -> Result<bool, ValidateAllocationError> {
+        if self.in_shutdown {
+            return Err(ValidateAllocationError::Shutdown);
+        }
         let existing_allocations = self
             .db_executor
             .as_dao::<AllocationDao>()
@@ -584,5 +598,30 @@ impl PaymentProcessor {
         };
         let result = driver_endpoint(&driver).send(msg).await??;
         Ok(result)
+    }
+
+    pub fn shut_down(&mut self, timeout: Duration) -> impl futures::Future<Output = ()> + 'static {
+        self.in_shutdown = true;
+        let driver_shutdown_futures = self
+            .registry
+            .iter_drivers()
+            .map(|driver| shut_down_driver(driver, timeout));
+        futures::future::join_all(driver_shutdown_futures).map(|_| ())
+    }
+}
+
+fn shut_down_driver(
+    driver: &str,
+    timeout: Duration,
+) -> impl futures::Future<Output = ()> + 'static {
+    let driver = driver.to_string();
+    let endpoint = driver_endpoint(&driver);
+    let shutdown_msg = ShutDown::new(timeout);
+    async move {
+        log::info!("Shutting down driver '{}'... timeout={:?}", driver, timeout);
+        match endpoint.call(shutdown_msg).await {
+            Ok(Ok(_)) => log::info!("Driver '{}' shut down successfully.", driver),
+            err => log::error!("Error shutting down driver '{}': {:?}", driver, err),
+        }
     }
 }
