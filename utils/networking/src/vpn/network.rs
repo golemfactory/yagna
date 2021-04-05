@@ -18,9 +18,7 @@ impl<E> Default for Networks<E> {
 
 impl<E: Clone> Networks<E> {
     pub fn get_mut(&mut self, id: &str) -> Result<&mut Network<E>, Error> {
-        self.networks
-            .get_mut(id)
-            .ok_or_else(|| Error::NetNotFound(id.to_string()))
+        self.networks.get_mut(id).ok_or_else(|| Error::NetNotFound)
     }
 
     pub fn endpoint<B: AsRef<[u8]>>(&self, ip: B) -> Option<E> {

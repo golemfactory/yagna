@@ -5,14 +5,13 @@ use actix_web::{web, HttpRequest, HttpResponse, Responder, ResponseError};
 use actix_web_actors::ws;
 use futures::channel::mpsc;
 use futures::lock::Mutex;
-use futures::SinkExt;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use ya_client_model::net::*;
 use ya_client_model::ErrorMessage;
 use ya_service_api_web::middleware::Identity;
-use ya_utils_networking::vpn::Error as VpnError;
+use ya_utils_networking::vpn::{Error as VpnError, Protocol};
 
 pub const NET_API_PATH: &str = "/net-api/v1/";
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -43,8 +42,10 @@ async fn get_networks(
     vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
     identity: Identity,
 ) -> impl Responder {
-    let mut supervisor = vpn_sup.lock().await;
-    let networks = supervisor.get_networks(&identity.identity);
+    let networks = {
+        let supervisor = vpn_sup.lock().await;
+        supervisor.get_networks(&identity.identity)
+    };
     Ok::<_, ApiError>(web::Json(networks))
 }
 
@@ -71,8 +72,10 @@ async fn get_network(
     identity: Identity,
 ) -> impl Responder {
     let path = path.into_inner();
-    let mut supervisor = vpn_sup.lock().await;
-    let network = supervisor.get_network(&identity.identity, &path.net_id)?;
+    let network = {
+        let supervisor = vpn_sup.lock().await;
+        supervisor.get_blueprint(&identity.identity, &path.net_id)?
+    };
     Ok::<_, ApiError>(web::Json(network))
 }
 
@@ -99,11 +102,12 @@ async fn get_addresses(
     identity: Identity,
 ) -> impl Responder {
     let path = path.into_inner();
-    let fut = {
+    let vpn = {
         let supervisor = vpn_sup.lock().await;
-        supervisor.get_addresses(&identity.identity, &path.net_id)?
+        supervisor.get_network(&identity.identity, &path.net_id)?
     };
-    Ok::<_, ApiError>(web::Json(fut.await?))
+    let response = vpn.send(GetAddresses {}).await??;
+    Ok::<_, ApiError>(web::Json(response))
 }
 
 /// Assigns a new address for the requestor within a virtual private network.
@@ -115,12 +119,13 @@ async fn add_address(
     identity: Identity,
 ) -> impl Responder {
     let path = path.into_inner();
-    let address = model.into_inner();
-    let fut = {
+    let vpn = {
         let supervisor = vpn_sup.lock().await;
-        supervisor.add_address(&identity.identity, &path.net_id, address.ip)?
+        supervisor.get_network(&identity.identity, &path.net_id)?
     };
-    Ok::<_, ApiError>(web::Json(fut.await?))
+    let address = model.into_inner().ip;
+    let response = vpn.send(AddAddress { address }).await??;
+    Ok::<_, ApiError>(web::Json(response))
 }
 
 /// Retrieves requestor's addresses within a virtual private network.
@@ -131,11 +136,12 @@ async fn get_nodes(
     identity: Identity,
 ) -> impl Responder {
     let path = path.into_inner();
-    let fut = {
+    let vpn = {
         let supervisor = vpn_sup.lock().await;
-        supervisor.get_nodes(&identity.identity, &path.net_id)?
+        supervisor.get_network(&identity.identity, &path.net_id)?
     };
-    Ok::<_, ApiError>(web::Json(fut.await?))
+    let response = vpn.send(GetNodes {}).await??;
+    Ok::<_, ApiError>(web::Json(response))
 }
 
 /// Adds a node to an existing virtual private network.
@@ -147,12 +153,18 @@ async fn add_node(
     identity: Identity,
 ) -> impl Responder {
     let path = path.into_inner();
-    let node = model.into_inner();
-    let fut = {
+    let vpn = {
         let supervisor = vpn_sup.lock().await;
-        supervisor.add_node(&identity.identity, &path.net_id, node.id, node.ip)?
+        supervisor.get_network(&identity.identity, &path.net_id)?
     };
-    Ok::<_, ApiError>(web::Json(fut.await?))
+    let node = model.into_inner();
+    let response = vpn
+        .send(AddNode {
+            id: node.id,
+            address: node.ip,
+        })
+        .await??;
+    Ok::<_, ApiError>(web::Json(response))
 }
 
 /// Removes an existing node from a virtual private network
@@ -164,7 +176,7 @@ async fn remove_node(
 ) -> impl Responder {
     let path = path.into_inner();
     let fut = {
-        let supervisor = vpn_sup.lock().await;
+        let mut supervisor = vpn_sup.lock().await;
         supervisor.remove_node(&identity.identity, &path.net_id, path.node_id)?
     };
     Ok::<_, ApiError>(web::Json(fut.await?))
@@ -178,11 +190,12 @@ async fn get_connections(
     identity: Identity,
 ) -> impl Responder {
     let path = path.into_inner();
-    let fut = {
+    let vpn = {
         let supervisor = vpn_sup.lock().await;
-        supervisor.get_connections(&identity.identity, &path.net_id)?
+        supervisor.get_network(&identity.identity, &path.net_id)?
     };
-    Ok::<_, ApiError>(web::Json(fut.await?))
+    let response = vpn.send(GetConnections {}).await??;
+    Ok::<_, ApiError>(web::Json(response))
 }
 
 /// Initiates a new TCP connection via WebSockets to the destination address.
@@ -195,14 +208,19 @@ async fn connect_tcp(
     identity: Identity,
 ) -> Result<HttpResponse> {
     let path = path.into_inner();
-    let fut = {
+    let vpn = {
         let supervisor = vpn_sup.lock().await;
-        supervisor.connect_tcp(&identity.identity, &path.net_id, &path.ip, path.port)?
+        supervisor.get_network(&identity.identity, &path.net_id)?
     };
-
-    let (ws_tx, vpn_rx) = fut.await.map_err(ApiError::from)?;
+    let conn = vpn
+        .send(Connect {
+            protocol: Protocol::Tcp,
+            address: path.ip.to_string(),
+            port: path.port,
+        })
+        .await??;
     Ok(ws::start(
-        VpnWebSocket::new(path.net_id, ws_tx, vpn_rx),
+        VpnWebSocket::new(path.net_id, conn),
         &req,
         stream,
     )?)
@@ -211,35 +229,34 @@ async fn connect_tcp(
 pub struct VpnWebSocket {
     network_id: String,
     heartbeat: Instant,
-    ws_tx: mpsc::Sender<Vec<u8>>,
+    vpn: Recipient<Packet>,
     vpn_rx: Option<mpsc::Receiver<Vec<u8>>>,
+    meta: ConnectionMeta,
 }
 
 impl VpnWebSocket {
-    pub fn new(
-        network_id: String,
-        ws_tx: mpsc::Sender<Vec<u8>>,
-        vpn_rx: mpsc::Receiver<Vec<u8>>,
-    ) -> Self {
+    pub fn new(network_id: String, conn: UserConnection) -> Self {
         VpnWebSocket {
             network_id,
             heartbeat: Instant::now(),
-            ws_tx,
-            vpn_rx: Some(vpn_rx),
+            vpn: conn.vpn,
+            vpn_rx: Some(conn.rx),
+            meta: conn.meta,
         }
     }
 
-    fn forward(&self, bytes: Vec<u8>, ctx: &mut <Self as Actor>::Context) {
-        let addr = ctx.address();
-        let mut tx = self.ws_tx.clone();
-
-        async move {
-            if let Err(_) = tx.send(bytes).await {
-                let _ = addr.send(Shutdown {}).await;
-            }
-        }
-        .into_actor(self)
-        .wait(ctx);
+    fn forward(&self, data: Vec<u8>, ctx: &mut <Self as Actor>::Context) {
+        let vpn = self.vpn.clone();
+        let meta = self.meta.clone();
+        vpn.send(Packet { data, meta })
+            .into_actor(self)
+            .map(move |result, this, ctx| {
+                if let Err(_) = result {
+                    log::error!("VPN WebSocket: VPN {} no longer exists", this.network_id);
+                    let _ = ctx.address().do_send(Shutdown {});
+                }
+            })
+            .wait(ctx);
     }
 }
 
@@ -265,23 +282,21 @@ impl Actor for VpnWebSocket {
 }
 
 impl StreamHandler<Vec<u8>> for VpnWebSocket {
-    fn handle(&mut self, item: Vec<u8>, ctx: &mut Self::Context) {
-        ctx.binary(item)
+    fn handle(&mut self, data: Vec<u8>, ctx: &mut Self::Context) {
+        ctx.binary(data)
     }
 }
 
 impl StreamHandler<WsResult<ws::Message>> for VpnWebSocket {
     fn handle(&mut self, msg: WsResult<ws::Message>, ctx: &mut Self::Context) {
+        self.heartbeat = Instant::now();
         match msg {
             Ok(ws::Message::Text(text)) => self.forward(text.into_bytes(), ctx),
             Ok(ws::Message::Binary(bytes)) => self.forward(bytes.to_vec(), ctx),
             Ok(ws::Message::Ping(msg)) => {
-                self.heartbeat = Instant::now();
                 ctx.pong(&msg);
             }
-            Ok(ws::Message::Pong(_)) => {
-                self.heartbeat = Instant::now();
-            }
+            Ok(ws::Message::Pong(_)) => {}
             Ok(ws::Message::Close(reason)) => {
                 ctx.close(reason);
                 ctx.stop();
@@ -318,7 +333,7 @@ impl ResponseError for ApiError {
             Self::Vpn(err) => match err {
                 VpnError::IpAddrTaken(_) => HttpResponse::Conflict().json(ErrorMessage::new(&err)),
                 VpnError::NetIdTaken(_) => HttpResponse::Conflict().json(ErrorMessage::new(&err)),
-                VpnError::NetNotFound(_) => HttpResponse::NotFound().json(ErrorMessage::new(&err)),
+                VpnError::NetNotFound => HttpResponse::NotFound().json(ErrorMessage::new(&err)),
                 VpnError::ConnectionTimeout => HttpResponse::GatewayTimeout().finish(),
                 VpnError::Forbidden => HttpResponse::Forbidden().finish(),
                 VpnError::Cancelled => {

@@ -15,6 +15,7 @@ pub use packet::{IpPacket, IpV4Packet, IpV6Packet, Ipv4Field, Ipv6Field};
 #[non_exhaustive]
 #[repr(u8)]
 pub enum Protocol {
+    HopByHop = 0,
     Icmp = 1,
     Igmp = 2,
     Tcp = 6,
@@ -36,4 +37,10 @@ pub enum Protocol {
     Smp = 121,
     Sctp = 132,
     Ethernet = 143,
+}
+
+impl std::fmt::Display for Protocol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }

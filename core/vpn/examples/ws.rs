@@ -6,7 +6,6 @@ use futures::{SinkExt, StreamExt};
 use sha3::digest::generic_array::GenericArray;
 use sha3::Digest;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 use structopt::StructOpt;
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -147,25 +146,31 @@ async fn main() -> anyhow::Result<()> {
     let (mut sink, mut stream) = connection.split();
 
     Arbiter::spawn(async move {
-        // let mut buf = [0u8; 65535 - 14 - 20];
-        let mut buf = [0u8; 1500 - 54];
-        loop {
-            let read = input.read(&mut buf).await;
-            let size = match read {
-                Ok(0) => {
-                    tokio::time::delay_for(Duration::from_secs(1)).await;
-                    continue;
-                }
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("File read error: {}", e);
-                    break Arbiter::current().stop();
-                }
-            };
+        const CHUNK_SIZE: usize = 65535;
+        let mut buf = [0u8; CHUNK_SIZE];
+        let mut remaining = input_sz as u64;
 
-            println!("Tx {} bytes", size);
-            let bytes = Bytes::from(buf[..size].to_vec());
-            if let Err(e) = sink.send(ws::Message::Binary(bytes)).await {
+        loop {
+            let vec = if remaining >= CHUNK_SIZE as u64 {
+                let count = match input.read_exact(&mut buf).await {
+                    Ok(c) => c,
+                    Err(e) => break log::error!("Input file error: {}", e),
+                };
+                buf[..count].to_vec()
+            } else {
+                let mut vec = Vec::with_capacity(remaining as usize);
+                if let Err(e) = input.read_to_end(&mut vec).await {
+                    break log::error!("Input file error: {}", e);
+                }
+                vec
+            };
+            if vec.len() == 0 {
+                break;
+            }
+            remaining -= vec.len() as u64;
+
+            println!("Tx {} bytes", vec.len());
+            if let Err(e) = sink.send(ws::Message::Binary(Bytes::from(vec))).await {
                 eprintln!("Error sending data: {}", e);
                 break Arbiter::current().stop();
             }

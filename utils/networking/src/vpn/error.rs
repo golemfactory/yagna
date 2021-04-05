@@ -17,8 +17,8 @@ pub enum Error {
     NetAddrMismatch(IpAddr),
     #[error("Network is empty")]
     NetEmpty,
-    #[error("Network not found: {0}")]
-    NetNotFound(String),
+    #[error("Network not found")]
+    NetNotFound,
     #[error("Invalid network CIDR: {0}/{1}")]
     NetCidr(IpAddr, u8),
     #[error("Network ID taken: {0}")]

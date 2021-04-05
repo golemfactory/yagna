@@ -2,7 +2,7 @@ use smoltcp::phy;
 use smoltcp::time;
 use std::collections::VecDeque;
 
-const MTU: usize = 65535 - 14;
+const MTU: usize = 65535;
 
 #[derive(Clone, Default)]
 pub struct CaptureDevice {
@@ -11,11 +11,11 @@ pub struct CaptureDevice {
 }
 
 impl CaptureDevice {
-    pub fn phy_tx(&mut self, data: Vec<u8>) {
+    pub fn phy_rx(&mut self, data: Vec<u8>) {
         self.rx_queue.push_back(data);
     }
 
-    pub fn next_phy_rx(&mut self) -> Option<Vec<u8>> {
+    pub fn next_phy_tx(&mut self) -> Option<Vec<u8>> {
         self.tx_queue.pop_front()
     }
 }
@@ -70,7 +70,8 @@ impl<'a> phy::TxToken for TxToken<'a> {
     where
         F: FnOnce(&mut [u8]) -> smoltcp::Result<R>,
     {
-        let mut buffer = vec![0u8; len];
+        let mut buffer = Vec::with_capacity(len);
+        buffer.resize(len, 0);
         let result = f(&mut buffer);
         if result.is_ok() {
             self.queue.push_back(buffer);

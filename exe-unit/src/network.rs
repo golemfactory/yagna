@@ -123,7 +123,7 @@ impl Vpn {
 
     fn forward_frame(&mut self, endpoint: GsbEndpoint, frame: EtherFrame, ctx: &mut Context<Self>) {
         let pkt: Vec<_> = frame.into();
-        log::debug!("Egress frame {:?}", pkt);
+        log::trace!("Egress {} b", pkt.len());
 
         ctx.spawn(
             endpoint
@@ -188,8 +188,6 @@ impl StreamHandler<Result<Vec<u8>>> for Vpn {
         };
 
         for packet in rx_buf.process(received) {
-            log::debug!("Egress packet [{}b]", packet.len());
-
             let frame = match EtherFrame::try_from(packet) {
                 Ok(frame) => match &frame {
                     EtherFrame::Arp(_) => self.handle_arp(frame, ctx),
@@ -222,7 +220,7 @@ impl Handler<RpcEnvelope<activity::VpnPacket>> for Vpn {
         let mut packet = packet.into_inner();
         let mut tx = self.endpoint.tx.clone();
 
-        log::debug!("Ingress packet [{}b]", packet.0.len());
+        log::trace!("Ingress {} b", packet.0.len());
 
         write_prefix(&mut packet.0);
 
@@ -332,6 +330,7 @@ impl<'a> TryFrom<&'a DeploymentNetwork> for Network {
             .hosts()
             .find(|ip_| ip_ != &ip)
             .ok_or_else(|| VpnError::NetAddrTaken(ip))?;
+
         Ok(Network {
             addr: ip.to_string(),
             gateway: gateway.to_string(),

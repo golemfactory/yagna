@@ -5,6 +5,8 @@ use crate::vpn::{Error, Protocol};
 use std::convert::TryFrom;
 use std::ops::Deref;
 
+pub const ETHERNET_HDR_SIZE: usize = 14;
+
 mod field {
     /// Field slice range within packet bytes
     pub type Field = std::ops::Range<usize>;
@@ -22,6 +24,13 @@ impl EtherField {
     pub const PAYLOAD: Rest = 14..;
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[non_exhaustive]
+pub enum EtherType {
+    Ip,
+    Arp,
+}
+
 #[non_exhaustive]
 pub enum EtherFrame {
     /// EtherType IP
@@ -31,6 +40,25 @@ pub enum EtherFrame {
 }
 
 impl EtherFrame {
+    pub fn peek_type(data: &Box<[u8]>) -> Result<EtherType, Error> {
+        if data.len() < ETHERNET_HDR_SIZE {
+            return Err(Error::PacketMalformed("Ethernet: frame too short".into()));
+        }
+
+        let proto = &data[EtherField::ETHER_TYPE];
+        match proto {
+            &[0x08, 0x00] => {
+                IpPacket::peek(&data[ETHERNET_HDR_SIZE..])?;
+                Ok(EtherType::Ip)
+            }
+            &[0x08, 0x06] => {
+                ArpPacket::peek(&data[ETHERNET_HDR_SIZE..])?;
+                Ok(EtherType::Arp)
+            }
+            _ => Err(Error::ProtocolNotSupported(format!("0x{:02x?}", proto))),
+        }
+    }
+
     pub fn payload(&self) -> &[u8] {
         &self.as_ref()[EtherField::PAYLOAD]
     }
@@ -48,24 +76,10 @@ impl EtherFrame {
 impl TryFrom<Box<[u8]>> for EtherFrame {
     type Error = Error;
 
-    fn try_from(value: Box<[u8]>) -> Result<Self, Self::Error> {
-        const HEADER_SIZE: usize = 14;
-
-        if value.len() < HEADER_SIZE {
-            return Err(Error::PacketMalformed("Ethernet: frame too short".into()));
-        }
-
-        let protocol = &value[EtherField::ETHER_TYPE];
-        match protocol {
-            &[0x08, 0x00] => {
-                IpPacket::peek(&value[HEADER_SIZE..])?;
-                Ok(EtherFrame::Ip(value))
-            }
-            &[0x08, 0x06] => {
-                ArpPacket::peek(&value[HEADER_SIZE..])?;
-                Ok(EtherFrame::Arp(value))
-            }
-            _ => Err(Error::ProtocolNotSupported(format!("0x{:02x?}", protocol))),
+    fn try_from(data: Box<[u8]>) -> Result<Self, Self::Error> {
+        match Self::peek_type(&data)? {
+            EtherType::Ip => Ok(EtherFrame::Ip(data)),
+            EtherType::Arp => Ok(EtherFrame::Arp(data)),
         }
     }
 }
