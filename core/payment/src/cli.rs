@@ -41,13 +41,14 @@ pub enum PaymentCli {
         account: pay::AccountCli,
     },
 
-    // TODO: Uncomment when operation is supported by drivers
-    // Enter {
-    //     #[structopt(flatten)]
-    //     account: AccountCli,
-    //     #[structopt(long)]
-    //     amount: String,
-    // },
+    /// Enter layer 2 (deposit funds to layer 2 network)
+    Enter {
+        #[structopt(flatten)]
+        account: pay::AccountCli,
+        #[structopt(long)]
+        amount: String,
+    },
+
     /// Exit layer 2 (withdraw funds to Ethereum)
     Exit {
         #[structopt(flatten)]
@@ -215,17 +216,16 @@ impl PaymentCli {
                         .await??,
                 )
             }
-            // TODO: Uncomment when operation is supported by drivers
-            // PaymentCli::Enter {
-            //     account,
-            //     driver,
-            //     network,
-            //     amount
-            // } => {
-            //     let address = resolve_address(account).await?;
-            //     let amount = BigDecimal::from_str(&amount)?;
-            //     CommandOutput::object(wallet::enter(amount, address, driver, network, token).await?)
-            // }
+            PaymentCli::Enter { account, amount } => CommandOutput::object(
+                wallet::enter(
+                    BigDecimal::from_str(&amount)?,
+                    resolve_address(account.address()).await?,
+                    account.driver(),
+                    Some(account.network()),
+                    None,
+                )
+                .await?,
+            ),
             PaymentCli::Exit {
                 account,
                 to_address,

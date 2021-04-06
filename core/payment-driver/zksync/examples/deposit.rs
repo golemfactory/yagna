@@ -1,8 +1,11 @@
 #[macro_use]
 extern crate log;
 
+use bigdecimal::BigDecimal;
 use hex::ToHex;
 use std::str::FromStr;
+use ya_payment_driver::db::models::Network as DbNetwork;
+use ya_zksync_driver::zksync::wallet as driver_wallet;
 use zksync::zksync_types::{H256, U256};
 use zksync::{Network, RpcProvider, Wallet, WalletCredentials};
 use zksync_eth_signer::{EthereumSigner, PrivateKeySigner};
@@ -29,29 +32,9 @@ async fn main() -> anyhow::Result<()> {
     let cred = WalletCredentials::from_eth_signer(address, signer, Network::Rinkeby).await?;
     let wallet = Wallet::new(provider, cred).await?;
 
-    let eth_node_url =
-        std::env::var("ERC20_RINKEBY_GETH_ADDR").expect("ETH node url has to be provided");
-    let mut ethereum = wallet.ethereum(eth_node_url).await?;
-    ethereum.set_confirmation_timeout(std::time::Duration::from_secs(60));
+    let one_tglm = BigDecimal::from(1);
 
-    let one_tglm = U256::from(10).pow(18.into());
-    if !ethereum
-        .is_limited_erc20_deposit_approved(TOKEN, one_tglm)
-        .await
-        .unwrap()
-    {
-        let tx = ethereum
-            .limited_approve_erc20_token_deposits(TOKEN, one_tglm)
-            .await?;
-        info!(
-            "Aprove erc20 token deposit tx\nhttps://rinkeby.etherscan.io/tx/0x{}",
-            hex::encode(tx.as_fixed_bytes())
-        );
-        ethereum.wait_for_tx(tx).await?;
-    }
-
-    let deposit_tx_hash = ethereum.deposit(TOKEN, one_tglm, wallet.address()).await?;
-
+    let deposit_tx_hash = driver_wallet::deposit(wallet, DbNetwork::Rinkeby, one_tglm).await?;
     info!(
         "Check out deposit transaction at\nhttps://rinkeby.etherscan.io/tx/0x{}",
         hex::encode(deposit_tx_hash.as_fixed_bytes())

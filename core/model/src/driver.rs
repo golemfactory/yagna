@@ -352,6 +352,16 @@ impl Enter {
             token,
         }
     }
+
+    pub fn amount(&self) -> BigDecimal {
+        self.amount.clone()
+    }
+    pub fn address(&self) -> String {
+        self.address.clone()
+    }
+    pub fn network(&self) -> Option<String> {
+        self.network.clone()
+    }
 }
 
 impl RpcMessage for Enter {

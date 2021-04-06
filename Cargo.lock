@@ -7351,6 +7351,7 @@ dependencies = [
  "maplit",
  "metrics-macros",
  "num-bigint 0.3.2",
+ "rlp",
  "serde",
  "serde_json",
  "structopt",
