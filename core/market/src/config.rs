@@ -17,9 +17,9 @@ pub struct DiscoveryConfig {
     pub max_bcasted_offers: u32,
     #[structopt(env, default_value = "200")]
     pub max_bcasted_unsubscribes: u32,
-    #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "1min")]
+    #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "4min")]
     pub mean_cyclic_bcast_interval: Duration,
-    #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "1min")]
+    #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "4min")]
     pub mean_cyclic_unsubscribes_interval: Duration,
 }
 
