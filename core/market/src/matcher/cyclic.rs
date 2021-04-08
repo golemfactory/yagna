@@ -126,7 +126,8 @@ fn randomize_ids<T: Eq + Hash + Clone>(
 
 fn randomize_interval(mean_interval: std::time::Duration) -> std::time::Duration {
     let mut rng = rand::thread_rng();
-    (2 * mean_interval).mul_f64(rng.gen::<f64>())
+    // randomize interval between 0.5 and 1.5 times the mean_interval
+    mean_interval.mul_f64(0.5f64 + rng.gen::<f64>())
 }
 
 async fn wait_random_interval(mean_interval: std::time::Duration) {
