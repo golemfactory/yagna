@@ -6,11 +6,10 @@ use hex::ToHex;
 use std::str::FromStr;
 use ya_payment_driver::db::models::Network as DbNetwork;
 use ya_zksync_driver::zksync::wallet as driver_wallet;
-use zksync::zksync_types::{H256, U256};
+use zksync::zksync_types::H256;
 use zksync::{Network, RpcProvider, Wallet, WalletCredentials};
 use zksync_eth_signer::{EthereumSigner, PrivateKeySigner};
 
-const TOKEN: &str = "tGLM";
 const PRIVATE_KEY: &str = "e0c704b6e925c3be222337f9c94610c46b7fec95c14b8f5b9800d20ed4782670";
 
 #[actix_rt::main]
