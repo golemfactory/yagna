@@ -23,6 +23,7 @@ pub mod local {
     use bigdecimal::{BigDecimal, Zero};
     use chrono::{DateTime, Utc};
     use std::fmt::Display;
+    use std::time::Duration;
     use structopt::*;
     use strum::{EnumProperty, VariantNames};
     use strum_macros::{Display, EnumProperty, EnumString, EnumVariantNames, IntoStaticStr};
@@ -399,6 +400,23 @@ pub mod local {
         const ID: &'static str = "GetDrivers";
         type Item = HashMap<String, DriverDetails>;
         type Error = NoError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct ShutDown {
+        pub timeout: Duration,
+    }
+
+    impl ShutDown {
+        pub fn new(timeout: Duration) -> Self {
+            Self { timeout }
+        }
+    }
+
+    impl RpcMessage for ShutDown {
+        const ID: &'static str = "ShutDown";
+        type Item = ();
+        type Error = GenericError;
     }
 
     /// Experimental. In future releases this might change or be removed.

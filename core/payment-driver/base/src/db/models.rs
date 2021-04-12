@@ -9,6 +9,7 @@ use diesel::deserialize;
 use diesel::serialize::Output;
 use diesel::sql_types::Integer;
 use diesel::types::{FromSql, ToSql};
+use num_traits::FromPrimitive;
 use std::convert::TryFrom;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::str::FromStr;
@@ -16,11 +17,6 @@ use std::str::FromStr;
 // Local uses
 use crate::dao::{DbError, DbResult};
 use crate::db::schema::*;
-
-pub const TX_CREATED: i32 = 1;
-pub const TX_SENT: i32 = 2;
-pub const TX_CONFIRMED: i32 = 3;
-pub const TX_FAILED: i32 = 0;
 
 pub const PAYMENT_STATUS_NOT_YET: i32 = 1;
 pub const PAYMENT_STATUS_OK: i32 = 2;
@@ -34,38 +30,20 @@ pub enum TxType {
     Transfer = 1,
 }
 
+#[derive(FromPrimitive)]
 pub enum TransactionStatus {
-    Created,
-    Sent,
-    Confirmed,
-    Failed,
+    Failed = 0,
+    Created = 1,
+    Sent = 2,
+    Confirmed = 3,
 }
 
 impl TryFrom<i32> for TransactionStatus {
     type Error = DbError;
 
     fn try_from(status: i32) -> DbResult<Self> {
-        match status {
-            TX_CREATED => Ok(TransactionStatus::Created),
-            TX_SENT => Ok(TransactionStatus::Sent),
-            TX_CONFIRMED => Ok(TransactionStatus::Confirmed),
-            TX_FAILED => Ok(TransactionStatus::Failed),
-            _ => Err(DbError::InvalidData(format!(
-                "Unknown tx status. {}",
-                status
-            ))),
-        }
-    }
-}
-
-impl Into<i32> for TransactionStatus {
-    fn into(self) -> i32 {
-        match &self {
-            TransactionStatus::Created => TX_CREATED,
-            TransactionStatus::Sent => TX_SENT,
-            TransactionStatus::Confirmed => TX_CONFIRMED,
-            TransactionStatus::Failed => TX_FAILED,
-        }
+        TransactionStatus::from_i32(status)
+            .ok_or_else(|| DbError::InvalidData(format!("Unknown tx status. {}", status)))
     }
 }
 

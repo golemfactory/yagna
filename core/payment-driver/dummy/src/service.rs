@@ -22,7 +22,8 @@ pub fn bind_service() {
         .bind(validate_allocation)
         .bind(fund)
         .bind(sign_payment)
-        .bind(verify_signature);
+        .bind(verify_signature)
+        .bind(shut_down);
 
     log::debug!("Successfully bound payment driver service to service bus");
 }
@@ -158,4 +159,11 @@ async fn verify_signature(
 ) -> Result<bool, GenericError> {
     let hash = ya_payment_driver::utils::payment_hash(&msg.payment);
     Ok(hash == msg.signature)
+}
+
+async fn shut_down(_db: (), _caller: String, msg: ShutDown) -> Result<(), GenericError> {
+    if msg.timeout > std::time::Duration::from_secs(1) {
+        tokio::time::delay_for(msg.timeout - std::time::Duration::from_secs(1)).await;
+    }
+    Ok(())
 }

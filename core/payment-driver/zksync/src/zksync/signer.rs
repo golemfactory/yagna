@@ -8,7 +8,7 @@
 
 // External uses
 use async_trait::async_trait;
-use futures3::{Future, FutureExt};
+use futures::{Future, FutureExt};
 use std::pin::Pin;
 use tiny_keccak::keccak256;
 use tokio::task;

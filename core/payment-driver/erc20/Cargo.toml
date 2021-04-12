@@ -15,6 +15,7 @@ bigdecimal = { version = "0.2" }
 chrono = { version = "0.4", features = ["serde"] }
 ethereum-tx-sign = "3.0"
 ethabi = "12.0"
+futures = "0.3"
 hex = "0.4"
 lazy_static = "1.4"
 log = "0.4.8"
@@ -41,5 +42,4 @@ ya-utils-networking = "0.1"
 actix-rt = "1.0"
 dotenv = "0.15.0"
 env_logger = "0.7.1"
-ethkey = "0.3.1"
 structopt = "0.3"

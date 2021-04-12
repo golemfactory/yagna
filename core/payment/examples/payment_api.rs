@@ -1,9 +1,12 @@
 use actix_web::{middleware, App, HttpServer, Scope};
 use chrono::Utc;
-use ethkey::{EthAccount, Password};
+use ethsign::keyfile::Bytes;
+use ethsign::{KeyFile, Protected, SecretKey};
 use futures::Future;
+use rand::Rng;
 use serde_json;
 use std::convert::TryInto;
+use std::io::Write;
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -16,7 +19,7 @@ use ya_core_model::identity;
 use ya_dummy_driver as dummy;
 use ya_erc20_driver as erc20;
 use ya_payment::processor::PaymentProcessor;
-use ya_payment::{migrations, utils};
+use ya_payment::{migrations, utils, PaymentService};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::auth::dummy::DummyAuth;
 use ya_service_api_web::middleware::Identity;
@@ -89,9 +92,9 @@ pub async fn start_dummy_driver() -> anyhow::Result<()> {
 
 pub async fn start_erc20_driver(
     db: &DbExecutor,
-    requestor_account: Box<EthAccount>,
+    requestor_account: SecretKey,
 ) -> anyhow::Result<()> {
-    let requestor = NodeId::from(requestor_account.address().as_ref());
+    let requestor = NodeId::from(requestor_account.public().address().as_ref());
     fake_list_identities(vec![requestor]);
     fake_subscribe_to_events();
 
@@ -104,9 +107,9 @@ pub async fn start_erc20_driver(
 
 pub async fn start_zksync_driver(
     db: &DbExecutor,
-    requestor_account: Box<EthAccount>,
+    requestor_account: SecretKey,
 ) -> anyhow::Result<()> {
-    let requestor = NodeId::from(requestor_account.address().as_ref());
+    let requestor = NodeId::from(requestor_account.public().address().as_ref());
     fake_list_identities(vec![requestor]);
     fake_subscribe_to_events();
 
@@ -139,10 +142,8 @@ fn fake_subscribe_to_events() {
     );
 }
 
-fn get_sign_tx(
-    account: Box<EthAccount>,
-) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
-    let account: Arc<EthAccount> = account.into();
+fn get_sign_tx(account: SecretKey) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>> {
+    let account: Arc<SecretKey> = account.into();
     move |msg| {
         let account = account.clone();
         let fut = async move {
@@ -167,6 +168,35 @@ fn fake_sign_tx(sign_tx: Box<dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<
     });
 }
 
+const KEY_ITERATIONS: u32 = 2;
+const KEYSTORE_VERSION: u64 = 3;
+
+fn load_or_generate(path: &str, password: Protected) -> SecretKey {
+    log::debug!("load_or_generate({}, {:?})", path, &password);
+    if let Ok(file) = std::fs::File::open(path) {
+        // Broken keyfile should panic
+        let key: KeyFile = serde_json::from_reader(file).unwrap();
+        // Invalid password should panic
+        let secret = key.to_secret_key(&password).unwrap();
+        log::info!("Loaded key. path={}", path);
+        return secret;
+    }
+    // File does not exist, create new key
+    let random_bytes: [u8; 32] = rand::thread_rng().gen();
+    let secret = SecretKey::from_raw(random_bytes.as_ref()).unwrap();
+    let key_file = KeyFile {
+        id: format!("{}", uuid::Uuid::new_v4()),
+        version: KEYSTORE_VERSION,
+        crypto: secret.to_crypto(&password, KEY_ITERATIONS).unwrap(),
+        address: Some(Bytes(secret.public().address().to_vec())),
+    };
+    let mut file = std::fs::File::create(path).unwrap();
+    file.write_all(serde_json::to_string_pretty(&key_file).unwrap().as_ref())
+        .unwrap();
+    log::info!("Generated new key. path={}", path);
+    secret
+}
+
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
     if std::env::var("RUST_LOG").is_err() {
@@ -180,17 +210,17 @@ async fn main() -> anyhow::Result<()> {
 
     let args: Args = Args::from_args();
 
-    let provider_pass: Password = args.provider_pass.clone().into();
-    let provider_account = EthAccount::load_or_generate(&args.provider_key_path, provider_pass)?;
-    let provider_id = provider_account.address().to_string();
+    let provider_pass: Protected = args.provider_pass.clone().into();
+    let provider_account = load_or_generate(&args.provider_key_path, provider_pass);
+    let provider_id = format!("0x{}", hex::encode(provider_account.public().address()));
     let provider_addr = args
         .provider_addr
         .unwrap_or(provider_id.clone())
         .to_lowercase();
 
-    let requestor_pass: Password = args.requestor_pass.clone().into();
-    let requestor_account = EthAccount::load_or_generate(&args.requestor_key_path, requestor_pass)?;
-    let requestor_id = requestor_account.address().to_string();
+    let requestor_pass: Protected = args.requestor_pass.clone().into();
+    let requestor_account = load_or_generate(&args.requestor_key_path, requestor_pass);
+    let requestor_id = format!("0x{}", hex::encode(requestor_account.public().address()));
     let requestor_addr = args
         .requestor_addr
         .unwrap_or(requestor_id.clone())
@@ -225,7 +255,6 @@ async fn main() -> anyhow::Result<()> {
             erc20::DRIVER_NAME
         }
         Driver::Zksync => {
-            start_dummy_driver().await?;
             start_zksync_driver(&db, requestor_account).await?;
             zksync::DRIVER_NAME
         }
@@ -344,6 +373,8 @@ async fn main() -> anyhow::Result<()> {
     .bind(rest_addr)?
     .run()
     .await?;
+
+    PaymentService::shut_down().await;
 
     Ok(())
 }

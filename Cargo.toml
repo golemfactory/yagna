@@ -24,6 +24,7 @@ path = "core/serv/src/main.rs"
 [dependencies]
 ya-activity = "0.3"
 ya-compile-time-utils = "0.1"
+ya-core-model = "0.3"
 ya-dummy-driver = { version = "0.2", optional = true }
 ya-file-logging = "0.1"
 ya-erc20-driver = { version = "0.3", optional = true }
@@ -174,8 +175,8 @@ ya-service-api-web = { path = "core/serv-api/web" }
 #ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "6b494e17d7a662e0b710af8c5a2e99ab4007fdb9"}
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "24d7f520267b88ae0722d50e8044bf59b20ef699" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "24d7f520267b88ae0722d50e8044bf59b20ef699" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "4c304836de47be0633f13246da96023979a313f8" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "4c304836de47be0633f13246da96023979a313f8" }
 
 # ya-client = { path = "../ya-client" }
 # ya-client-model = { path = "../ya-client/model" }

@@ -4,12 +4,13 @@
     Please limit the logic in this file, use local mods to handle the calls.
 */
 // Extrnal crates
+use chrono::Utc;
 
 // Workspace uses
 use ya_payment_driver::{
     bus,
     db::models::Network,
-    model::{AccountMode, Fund, GenericError, Init},
+    model::{AccountMode, Fund, GenericError, Init, PaymentDetails, Transfer},
 };
 use ya_utils_futures::timeout::IntoTimeoutFuture;
 
@@ -82,4 +83,46 @@ If you want to easily acquire some GLM to try Golem on mainnet please use zksync
 
     log::debug!("fund completed");
     Ok(result)
+}
+
+pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericError> {
+    log::debug!("transfer: {:?}", msg);
+    let network = network::network_like_to_network(msg.network);
+    let token = network::get_network_token(network, None);
+    let sender = msg.sender;
+    let sender_h160 = utils::str_to_addr(&sender)?;
+    let recipient = msg.to;
+    let amount = msg.amount;
+    let glm_balance = wallet::account_balance(sender_h160, network).await?;
+
+    if amount > glm_balance {
+        return Err(GenericError::new(format!(
+            "Not enough {} balance for transfer. balance={}, tx_amount={}, address={}, network={}",
+            token, glm_balance, amount, sender, network
+        )));
+    }
+
+    let details = PaymentDetails {
+        recipient,
+        sender,
+        amount,
+        date: Some(Utc::now()),
+    };
+
+    let nonce = wallet::get_next_nonce(dao, sender_h160, network).await?;
+    let db_tx = wallet::make_transfer(&details, nonce, network).await?;
+
+    // Check if there is enough ETH for gas
+    let human_gas_cost = wallet::has_enough_eth_for_gas(&db_tx, network).await?;
+
+    // Everything ok, put the transaction in the queue
+    let tx_id = dao.insert_raw_transaction(db_tx).await;
+
+    let message = format!(
+        "Scheduled {} transfer. details={:?}, max_gas_cost={} ETH, network={}",
+        &token, &details, &human_gas_cost, &network
+    );
+    log::info!("{}", message);
+    log::debug!("tx_id={}", tx_id);
+    Ok(message)
 }
