@@ -71,8 +71,6 @@ pub enum MarketInitError {
     Negotiation(#[from] NegotiationInitError),
     #[error("Failed to migrate market database. Error: {0}.")]
     Migration(#[from] anyhow::Error),
-    #[error("Failed to initialize config. Error: {0}.")]
-    Config(#[from] structopt::clap::Error),
 }
 
 /// Structure connecting all market objects.
@@ -318,7 +316,7 @@ impl StaticMarket {
             Ok(market.clone())
         } else {
             let identity_api = IdentityGSB::new();
-            let config = Arc::new(Config::from_env()?);
+            let config = Arc::new(Config::default());
             let market = Arc::new(MarketService::new(db, identity_api, config)?);
             *guarded_market = Some(market.clone());
             Ok(market)

@@ -1,25 +1,19 @@
 use std::time::Duration;
-use structopt::StructOpt;
 
-#[derive(Default, StructOpt)]
+/// TODO: Decide where should this config be loaded from.
+///  We could deserialize it from .json file or use structopt and
+///  configure market through env variables.
+#[derive(Default)]
 pub struct Config {
-    #[structopt(flatten)]
     pub discovery: DiscoveryConfig,
-    #[structopt(skip)]
     pub subscription: SubscriptionConfig,
-    #[structopt(skip)]
     pub events: EventsConfig,
 }
 
-#[derive(StructOpt)]
 pub struct DiscoveryConfig {
-    #[structopt(env, default_value = "200")]
     pub max_bcasted_offers: u32,
-    #[structopt(env, default_value = "200")]
     pub max_bcasted_unsubscribes: u32,
-    #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "4min")]
     pub mean_cyclic_bcast_interval: Duration,
-    #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "4min")]
     pub mean_cyclic_unsubscribes_interval: Duration,
 }
 
@@ -32,15 +26,6 @@ pub struct EventsConfig {
     pub max_events_max: i32,
 }
 
-impl Config {
-    pub fn from_env() -> Result<Config, structopt::clap::Error> {
-        // Mock command line arguments, because we want to use ENV fallback
-        // or default values if ENV variables don't exist.
-        Ok(Config::from_iter_safe(vec!["yagna"].iter())?)
-    }
-}
-
-// This default implementation will be used only in tests.
 impl Default for DiscoveryConfig {
     fn default() -> Self {
         DiscoveryConfig {
