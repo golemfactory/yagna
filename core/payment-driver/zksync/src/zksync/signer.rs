@@ -61,8 +61,6 @@ impl EthereumSigner for YagnaEthSigner {
         log::debug!("YagnaEthSigner sign_transaction");
 
         let node_id = self.eth_address.as_bytes().into();
-        // TODO: remove address logging
-        info!("Address: {}", hex::encode(self.eth_address.as_bytes()));
         let payload: Vec<u8> = raw_tx.hash().into();
         let chain_id = raw_tx.chain_id as u64;
 
