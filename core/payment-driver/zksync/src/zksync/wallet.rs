@@ -15,7 +15,6 @@ use zksync::zksync_types::{
     Address, Nonce, TxFeeTypes,
 };
 use zksync::{
-    provider::get_rpc_addr,
     provider::{Provider, RpcProvider},
     Network as ZkNetwork, Wallet, WalletCredentials,
 };
@@ -219,10 +218,8 @@ struct TxRespObj {
 }
 
 pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails, GenericError> {
-    let provider_url = match get_rpc_addr_from_env(network) {
-        Some(rpc_addr) => rpc_addr,
-        None => get_rpc_addr(get_zk_network(network)).to_string(),
-    };
+    let provider_url = get_rpc_addr(network);
+
     // HACK: Get the transaction data from v0.1 api
     let api_url = provider_url.replace("/jsrpc", "/api/v0.1");
     let req_url = format!("{}/transactions_all/{}", api_url, tx_hash);
@@ -260,17 +257,17 @@ pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails
 
 fn get_provider(network: Network) -> RpcProvider {
     let zk_network = get_zk_network(network);
-    let provider: RpcProvider = match get_rpc_addr_from_env(network) {
-        Some(rpc_addr) => RpcProvider::from_addr_and_network(rpc_addr, zk_network),
-        None => RpcProvider::new(zk_network),
-    };
+    let provider: RpcProvider =
+        RpcProvider::from_addr_and_network(get_rpc_addr(network), zk_network);
     provider.clone()
 }
 
-fn get_rpc_addr_from_env(network: Network) -> Option<String> {
+fn get_rpc_addr(network: Network) -> String {
     match network {
-        Network::Mainnet => env::var("ZKSYNC_MAINNET_RPC_ADDRESS").ok(),
-        Network::Rinkeby => env::var("ZKSYNC_RINKEBY_RPC_ADDRESS").ok(),
+        Network::Mainnet => env::var("ZKSYNC_MAINNET_RPC_ADDRESS")
+            .unwrap_or("https://api.zksync.golem.network/jsrpc".to_string()),
+        Network::Rinkeby => env::var("ZKSYNC_RINKEBY_RPC_ADDRESS")
+            .unwrap_or("https://rinkeby-api.zksync.golem.network/jsrpc".to_string()),
     }
 }
 
