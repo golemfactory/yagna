@@ -121,12 +121,12 @@ pub async fn exit(msg: &Exit) -> Result<String, GenericError> {
     }
 }
 
-pub async fn enter(msg: &Enter) -> Result<String, GenericError> {
-    let network = msg.network.clone().unwrap_or(DEFAULT_NETWORK.to_string());
+pub async fn enter(msg: Enter) -> Result<String, GenericError> {
+    let network = msg.network.unwrap_or(DEFAULT_NETWORK.to_string());
     let network = Network::from_str(&network).map_err(|e| GenericError::new(e))?;
     let wallet = get_wallet(&msg.address, network).await?;
 
-    let tx_hash = deposit(wallet, network, msg.amount.clone()).await?;
+    let tx_hash = deposit(wallet, network, msg.amount).await?;
 
     Ok(hex::encode(tx_hash.as_fixed_bytes()))
 }
@@ -289,9 +289,10 @@ fn get_rpc_addr(network: Network) -> String {
 
 fn get_ethereum_node_addr_from_env(network: Network) -> String {
     match network {
-        Network::Mainnet => env::var("ZKSYNC_MAINNET_GETH_ADDR")
-            .unwrap_or("https://geth.golem.network:55555".to_string()),
-        Network::Rinkeby => env::var("ZKSYNC_RINKEBY_GETH_ADDR")
+        Network::Mainnet => {
+            env::var("MAINNET_GETH_ADDR").unwrap_or("https://geth.golem.network:55555".to_string())
+        }
+        Network::Rinkeby => env::var("RINKEBY_GETH_ADDR")
             .unwrap_or("http://geth.testnet.golem.network:55555".to_string()),
     }
 }

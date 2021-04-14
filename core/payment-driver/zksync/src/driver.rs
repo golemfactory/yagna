@@ -175,7 +175,7 @@ impl PaymentDriver for ZksyncDriver {
         _caller: String,
         msg: Enter,
     ) -> Result<String, GenericError> {
-        let tx_hash = wallet::enter(&msg).await?;
+        let tx_hash = wallet::enter(msg).await?;
 
         Ok(format!(
             "Deposit transaction has been sent on Ethereum and soon funds should be available \

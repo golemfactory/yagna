@@ -114,7 +114,7 @@ fn sign_tx(
     Box::pin(fut)
 }
 
-pub fn encode_signed_tx(raw_tx: &RawTransaction, signature: Vec<u8>, chain_id: u64) -> Vec<u8> {
+fn encode_signed_tx(raw_tx: &RawTransaction, signature: Vec<u8>, chain_id: u64) -> Vec<u8> {
     let (sig_v, sig_r, sig_s) = prepare_signature(signature, chain_id);
 
     let mut tx = RlpStream::new();
