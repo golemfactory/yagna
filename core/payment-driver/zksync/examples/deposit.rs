@@ -2,7 +2,6 @@
 extern crate log;
 
 use bigdecimal::BigDecimal;
-use hex::ToHex;
 use std::str::FromStr;
 use ya_payment_driver::db::models::Network as DbNetwork;
 use ya_zksync_driver::zksync::wallet as driver_wallet;
@@ -23,8 +22,7 @@ async fn main() -> anyhow::Result<()> {
     let private_key = H256::from_str(PRIVATE_KEY).expect("Cannot decode bytes from hex-encoded PK");
     let signer = PrivateKeySigner::new(private_key);
     let address = signer.get_address().await?;
-    let addr_hex = format!("0x{}", address.encode_hex::<String>());
-    info!("Account address {}", addr_hex);
+    info!("Account address {:#x}", address);
 
     info!("Creating wallet");
     let provider = RpcProvider::new(Network::Rinkeby);
@@ -35,8 +33,8 @@ async fn main() -> anyhow::Result<()> {
 
     let deposit_tx_hash = driver_wallet::deposit(wallet, DbNetwork::Rinkeby, one_tglm).await?;
     info!(
-        "Check out deposit transaction at\nhttps://rinkeby.etherscan.io/tx/0x{}",
-        hex::encode(deposit_tx_hash.as_fixed_bytes())
+        "Check out deposit transaction at https://rinkeby.etherscan.io/tx/{:#x}",
+        deposit_tx_hash
     );
 
     Ok(())

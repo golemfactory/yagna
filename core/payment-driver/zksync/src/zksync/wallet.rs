@@ -289,9 +289,9 @@ fn get_rpc_addr(network: Network) -> String {
 
 fn get_ethereum_node_addr_from_env(network: Network) -> String {
     match network {
-        Network::Mainnet => std::env::var("ZKSYNC_MAINNET_GETH_ADDR")
+        Network::Mainnet => env::var("ZKSYNC_MAINNET_GETH_ADDR")
             .unwrap_or("https://geth.golem.network:55555".to_string()),
-        Network::Rinkeby => std::env::var("ZKSYNC_RINKEBY_GETH_ADDR")
+        Network::Rinkeby => env::var("ZKSYNC_RINKEBY_GETH_ADDR")
             .unwrap_or("http://geth.testnet.golem.network:55555".to_string()),
     }
 }
@@ -481,6 +481,15 @@ pub async fn deposit<S: EthereumSigner + Clone, P: Provider + Clone>(
 ) -> Result<H256, GenericError> {
     let token = get_network_token(network, None);
     let amount = base_utils::big_dec_to_u256(amount);
+    let address = wallet.address();
+
+    log::info!(
+        "Starting deposit into ZkSync network. Address {:#x}, amount: {} of {}",
+        address,
+        amount,
+        token
+    );
+
     let mut ethereum = wallet
         .ethereum(get_ethereum_node_addr_from_env(network))
         .await
@@ -497,9 +506,10 @@ pub async fn deposit<S: EthereumSigner + Clone, P: Provider + Clone>(
             .await
             .map_err(|err| GenericError::new(err))?;
         info!(
-            "Approve erc20 token for ZkSync deposit. Tx: https://rinkeby.etherscan.io/tx/0x{}",
-            hex::encode(tx.as_fixed_bytes())
+            "Approve erc20 token for ZkSync deposit. Tx: https://rinkeby.etherscan.io/tx/{:#x}",
+            tx
         );
+
         ethereum
             .wait_for_tx(tx)
             .await
@@ -507,12 +517,12 @@ pub async fn deposit<S: EthereumSigner + Clone, P: Provider + Clone>(
     }
 
     let deposit_tx_hash = ethereum
-        .deposit(token.as_str(), amount, wallet.address())
+        .deposit(token.as_str(), amount, address)
         .await
         .map_err(|err| GenericError::new(err))?;
     info!(
-        "Check out deposit transaction at\nhttps://rinkeby.etherscan.io/tx/0x{}",
-        hex::encode(deposit_tx_hash.as_fixed_bytes())
+        "Check out deposit transaction at https://rinkeby.etherscan.io/tx/{:#x}",
+        deposit_tx_hash
     );
 
     Ok(deposit_tx_hash)
