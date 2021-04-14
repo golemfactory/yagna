@@ -332,10 +332,10 @@ impl RpcMessage for ValidateAllocation {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Enter {
-    amount: BigDecimal,
-    address: String,
-    network: Option<String>,
-    token: Option<String>,
+    pub amount: BigDecimal,
+    pub address: String,
+    pub network: Option<String>,
+    pub token: Option<String>,
 }
 
 impl Enter {
@@ -351,16 +351,6 @@ impl Enter {
             network,
             token,
         }
-    }
-
-    pub fn amount(&self) -> BigDecimal {
-        self.amount.clone()
-    }
-    pub fn address(&self) -> String {
-        self.address.clone()
-    }
-    pub fn network(&self) -> Option<String> {
-        self.network.clone()
     }
 }
 

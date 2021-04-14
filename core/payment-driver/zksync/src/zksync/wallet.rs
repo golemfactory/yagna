@@ -122,11 +122,11 @@ pub async fn exit(msg: &Exit) -> Result<String, GenericError> {
 }
 
 pub async fn enter(msg: &Enter) -> Result<String, GenericError> {
-    let network = msg.network().unwrap_or(DEFAULT_NETWORK.to_string());
+    let network = msg.network.clone().unwrap_or(DEFAULT_NETWORK.to_string());
     let network = Network::from_str(&network).map_err(|e| GenericError::new(e))?;
-    let wallet = get_wallet(&msg.address(), network).await?;
+    let wallet = get_wallet(&msg.address, network).await?;
 
-    let tx_hash = deposit(wallet, network, msg.amount()).await?;
+    let tx_hash = deposit(wallet, network, msg.amount.clone()).await?;
 
     Ok(hex::encode(tx_hash.as_fixed_bytes()))
 }
