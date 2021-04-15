@@ -14,13 +14,11 @@ use structopt::StructOpt;
 
 use super::agreement::{compute_cost, ActivityPayment, AgreementPayment, CostInfo};
 use super::model::PaymentModel;
-use super::payment_checker::{DeadlineChecker, DeadlineElapsed, StopTracking, TrackDeadline};
 use crate::execution::{ActivityDestroyed, CreateActivity};
 use crate::market::provider_market::NewAgreement;
 use crate::market::termination_reason::BreakReason;
 use crate::tasks::{AgreementBroken, AgreementClosed, BreakAgreement};
 
-use crate::payments::payment_checker::StopTrackingAgreement;
 use ya_client::activity::ActivityProviderApi;
 use ya_client::model::payment::{DebitNote, Invoice, NewDebitNote, NewInvoice};
 use ya_client::payment::PaymentApi;
@@ -28,6 +26,9 @@ use ya_client_model::payment::{DebitNoteEventType, InvoiceEventType};
 use ya_std_utils::LogErr;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
+use ya_utils_actix::deadline_checker::{
+    DeadlineChecker, DeadlineElapsed, StopTracking, StopTrackingCategory, TrackDeadline,
+};
 use ya_utils_actix::{actix_signal_handler, forward_actix_handler};
 
 // =========================================== //
@@ -256,7 +257,7 @@ async fn send_debit_note(
         provider_context
             .debit_checker
             .send(TrackDeadline {
-                agreement_id: debit_note.agreement_id.clone(),
+                category: debit_note.agreement_id.clone(),
                 deadline,
                 id: debit_note.debit_note_id.clone(),
             })
@@ -347,6 +348,7 @@ async fn check_debit_notes_events(
                 DebitNoteEventType::DebitNoteAcceptedEvent => debit_checker
                     .send(StopTracking {
                         id: event.debit_note_id.clone(),
+                        category: None,
                     })
                     .await
                     .map(|_| log::debug!("DebitNote [{}] accepted.", event.debit_note_id))
@@ -626,8 +628,8 @@ impl Handler<AgreementClosed> for Payments {
 
             let future = async move {
                 ctx.debit_checker
-                    .send(StopTrackingAgreement {
-                        agreement_id: agreement_id.clone(),
+                    .send(StopTrackingCategory {
+                        category: agreement_id.clone(),
                     })
                     .await
                     .ok();
@@ -806,7 +808,7 @@ impl Handler<DeadlineElapsed> for Payments {
     type Result = ();
 
     fn handle(&mut self, msg: DeadlineElapsed, _ctx: &mut Context<Self>) -> Self::Result {
-        let timeout = match self.agreements.get_mut(&msg.agreement_id) {
+        let timeout = match self.agreements.get_mut(&msg.category) {
             Some(agreement) => match agreement.payment_timeout {
                 Some(timeout) => {
                     match agreement.deadline_elapsed {
@@ -822,7 +824,7 @@ impl Handler<DeadlineElapsed> for Payments {
                 None => {
                     log::error!(
                         "DeadlineElapsed for Agreement [{}], that's deadline shouldn't be tracked.",
-                        msg.agreement_id
+                        msg.category
                     );
                     return ();
                 }
@@ -830,7 +832,7 @@ impl Handler<DeadlineElapsed> for Payments {
             None => {
                 log::error!(
                     "DeadlineElapsed for not existing Agreement [{}].",
-                    msg.agreement_id
+                    msg.category
                 );
                 return ();
             }
@@ -840,21 +842,21 @@ impl Handler<DeadlineElapsed> for Payments {
             "Deadline {} elapsed for accepting DebitNote [{}] for Agreement [{}].",
             msg.deadline,
             msg.id,
-            msg.agreement_id
+            msg.category
         );
 
-        self.context.debit_checker.do_send(StopTrackingAgreement {
-            agreement_id: msg.agreement_id.clone(),
+        self.context.debit_checker.do_send(StopTrackingCategory {
+            category: msg.category.clone(),
         });
 
         self.break_agreement_signal
             .send_signal(BreakAgreement {
-                agreement_id: msg.agreement_id.clone(),
+                agreement_id: msg.category.clone(),
                 reason: BreakReason::DebitNotesDeadline(timeout),
             })
             .log_err_msg(&format!(
                 "Failed to send BreakAgreement when deadline elapsed for [{}]",
-                msg.agreement_id,
+                msg.category,
             ))
             .ok();
     }

@@ -6,7 +6,6 @@
 
 // Public
 pub const DRIVER_NAME: &'static str = "zksync";
-pub const ZKSYNC_TOKEN_NAME: &'static str = "GNT";
 
 pub const DEFAULT_NETWORK: &'static str = "rinkeby";
 pub const DEFAULT_TOKEN: &'static str = "tGLM";

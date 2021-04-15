@@ -13,7 +13,7 @@ anyhow = "1.0"
 awc = { version = "2.0", features = ["openssl"] }
 bigdecimal = { version = "0.2" }
 chrono = { version = "0.4", features = ["serde"] }
-futures3 = { version = "0.3", features = ["compat"], package = "futures" }
+futures = "0.3"
 hex = "0.4"
 lazy_static = "1.4"
 log = "0.4.8"
@@ -39,5 +39,4 @@ ya-utils-networking = "0.1"
 actix-rt = "1.0"
 dotenv = "0.15.0"
 env_logger = "0.7.1"
-ethkey = "0.3.1"
 structopt = "0.3"

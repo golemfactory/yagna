@@ -3,20 +3,24 @@
 */
 
 // External crates
+use ethsign::Signature;
+use std::collections::HashMap;
+use std::convert::TryInto;
 
 // Workspace uses
 
 // Local uses
+use crate::bus;
 use crate::dao::DbExecutor;
 use crate::model::*;
+use crate::utils;
 
 // Public revealed uses, required to implement this trait
 pub use async_trait::async_trait;
 pub use bigdecimal::BigDecimal;
-use std::collections::HashMap;
+pub use ya_client_model::payment::network::Network;
 pub use ya_client_model::NodeId;
 pub use ya_core_model::identity::{event::Event as IdentityEvent, Error as IdentityError};
-pub use ya_core_model::payment::local::Network;
 
 #[async_trait(?Send)]
 pub trait PaymentDriver {
@@ -50,13 +54,6 @@ pub trait PaymentDriver {
     fn get_networks(&self) -> HashMap<String, Network>;
     fn recv_init_required(&self) -> bool;
 
-    async fn get_transaction_balance(
-        &self,
-        db: DbExecutor,
-        caller: String,
-        msg: GetTransactionBalance,
-    ) -> Result<BigDecimal, GenericError>;
-
     async fn init(&self, db: DbExecutor, caller: String, msg: Init) -> Result<Ack, GenericError>;
     async fn fund(&self, db: DbExecutor, caller: String, msg: Fund)
         -> Result<String, GenericError>;
@@ -88,4 +85,45 @@ pub trait PaymentDriver {
         caller: String,
         msg: ValidateAllocation,
     ) -> Result<bool, GenericError>;
+
+    async fn sign_payment(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        msg: SignPayment,
+    ) -> Result<Vec<u8>, GenericError> {
+        let payload = utils::payment_hash(&msg.0);
+        let node_id = msg.0.payer_id;
+        bus::sign(node_id, payload).await
+    }
+
+    async fn verify_signature(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        msg: VerifySignature,
+    ) -> Result<bool, GenericError> {
+        if msg.signature.len() != 65 {
+            return Ok(false);
+        }
+        let v = msg.signature[0];
+        let r: [u8; 32] = msg.signature[1..33].try_into().unwrap();
+        let s: [u8; 32] = msg.signature[33..65].try_into().unwrap();
+        let signature = Signature { v, r, s };
+
+        let payload = utils::payment_hash(&msg.payment);
+        let pub_key = match signature.recover(payload.as_slice()) {
+            Ok(pub_key) => pub_key,
+            Err(_) => return Ok(false),
+        };
+
+        Ok(pub_key.address() == &msg.payment.payer_id.into_array())
+    }
+
+    async fn shut_down(
+        &self,
+        db: DbExecutor,
+        caller: String,
+        msg: ShutDown,
+    ) -> Result<(), GenericError>;
 }

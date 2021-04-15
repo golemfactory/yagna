@@ -6,7 +6,7 @@ use std::time::Duration;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use ya_client::model::market::{event::RequestorEvent, NewProposal, Reason};
-use ya_client::model::{node_id::ParseError, NodeId};
+use ya_client::model::NodeId;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::LogErr;
@@ -21,6 +21,7 @@ use crate::protocol::negotiation::{error::*, messages::*, requestor::Negotiation
 
 use super::{common::*, error::*, notifier::NotifierError, EventNotifier};
 use crate::config::Config;
+use crate::db::dao::AgreementEventsDao;
 use crate::utils::display::EnableDisplay;
 
 #[derive(Clone, derive_more::Display, Debug, PartialEq)]
@@ -28,9 +29,9 @@ pub enum ApprovalStatus {
     #[display(fmt = "Approved")]
     Approved,
     #[display(fmt = "Cancelled")]
-    Cancelled,
+    Cancelled { reason: Option<Reason> },
     #[display(fmt = "Rejected")]
-    Rejected,
+    Rejected { reason: Option<Reason> },
 }
 
 /// Requestor part of negotiation logic.
@@ -51,6 +52,7 @@ impl RequestorBroker {
 
         let broker1 = broker.clone();
         let broker2 = broker.clone();
+        let broker3 = broker.clone();
         let broker_proposal_reject = broker.clone();
         let broker_terminated = broker.clone();
 
@@ -68,9 +70,8 @@ impl RequestorBroker {
             move |caller: String, msg: AgreementApproved| {
                 on_agreement_approved(broker2.clone(), caller, msg)
             },
-            move |_caller: String, _msg: AgreementRejected| async move {
-                counter!("market.agreements.requestor.rejected", 1);
-                unimplemented!()
+            move |caller: String, msg: AgreementRejected| {
+                on_agreement_rejected(broker3.clone(), caller, msg)
             },
             move |caller: String, msg: AgreementTerminated| {
                 broker_terminated
@@ -290,6 +291,46 @@ impl RequestorBroker {
         Ok(agreement_id)
     }
 
+    pub async fn cancel_agreement(
+        &self,
+        id: &Identity,
+        agreement_id: &AgreementId,
+        reason: Option<Reason>,
+    ) -> Result<(), AgreementError> {
+        let dao = self.common.db.as_dao::<AgreementDao>();
+        let agreement = {
+            let _hold = self.common.agreement_lock.lock(&agreement_id).await;
+
+            let agreement = dao
+                .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
+                .await
+                .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
+                .ok_or(AgreementError::NotFound(agreement_id.to_string()))?;
+
+            validate_transition(&agreement, AgreementState::Cancelled)?;
+
+            let timestamp = Utc::now().naive_utc();
+            self.api
+                .cancel_agreement(&agreement, reason.clone(), timestamp.clone())
+                .await?;
+
+            dao.cancel(&agreement.id, reason.clone(), &timestamp)
+                .await
+                .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?
+        };
+
+        self.common.notify_agreement(&agreement).await;
+
+        counter!("market.agreements.requestor.cancelled", 1);
+        log::info!(
+            "Provider {} cancelled Agreement [{}]. Reason: {}",
+            id.display(),
+            &agreement.id,
+            reason.display(),
+        );
+        Ok(())
+    }
+
     pub async fn wait_for_approval(
         &self,
         id: &AgreementId,
@@ -318,11 +359,14 @@ impl RequestorBroker {
                 AgreementState::Approved => {
                     return Ok(ApprovalStatus::Approved);
                 }
+                // `AgreementRejectedEvent` should be last and the only event for this Agreement.
                 AgreementState::Rejected => {
-                    return Ok(ApprovalStatus::Rejected);
+                    let reason = self.query_reason_for(&agreement.id).await;
+                    return Ok(ApprovalStatus::Rejected { reason });
                 }
                 AgreementState::Cancelled => {
-                    return Ok(ApprovalStatus::Cancelled);
+                    let reason = self.query_reason_for(&agreement.id).await;
+                    return Ok(ApprovalStatus::Cancelled { reason });
                 }
                 AgreementState::Expired => return Err(WaitForApprovalError::Expired(id.clone())),
                 AgreementState::Proposal => {
@@ -337,10 +381,7 @@ impl RequestorBroker {
             if let Err(error) = notifier.wait_for_event_with_timeout(timeout).await {
                 return match error {
                     NotifierError::Timeout(_) => Err(WaitForApprovalError::Timeout(id.clone())),
-                    NotifierError::ChannelClosed(_) => {
-                        Err(WaitForApprovalError::Internal(error.to_string()))
-                    }
-                    NotifierError::Unsubscribed(_) => Ok(ApprovalStatus::Cancelled),
+                    e => Err(WaitForApprovalError::Internal(e.to_string())),
                 };
             }
         }
@@ -401,24 +442,34 @@ impl RequestorBroker {
         }
         return Ok(());
     }
+
+    async fn query_reason_for(&self, agreement_id: &AgreementId) -> Option<Reason> {
+        self.common
+            .db
+            .as_dao::<AgreementEventsDao>()
+            .select_for_agreement(agreement_id)
+            .await
+            .map(|events| {
+                events
+                    .last()
+                    .cloned()
+                    .map(|event| event.reason.map(|reason| reason.0))
+            })
+            .ok()
+            .flatten()
+            .flatten()
+    }
 }
 
 async fn on_agreement_approved(
     broker: CommonBroker,
     caller: String,
     msg: AgreementApproved,
-) -> Result<(), ApproveAgreementError> {
-    let caller: NodeId =
-        caller
-            .parse()
-            .map_err(|e: ParseError| ApproveAgreementError::CallerParseError {
-                e: e.to_string(),
-                caller,
-                id: msg.agreement_id.clone(),
-            })?;
+) -> Result<(), AgreementProtocolError> {
+    let caller: NodeId = CommonBroker::parse_caller(&caller)?;
     Ok(agreement_approved(broker, caller, msg)
         .await
-        .map_err(|e| ApproveAgreementError::Remote(e))?)
+        .map_err(|e| AgreementProtocolError::Remote(e))?)
 }
 
 async fn agreement_approved(
@@ -568,6 +619,64 @@ async fn commit_agreement(broker: CommonBroker, agreement_id: AgreementId) {
         &agreement.id,
         &agreement.provider_id
     );
+}
+
+async fn on_agreement_rejected(
+    broker: CommonBroker,
+    caller: String,
+    msg: AgreementRejected,
+) -> Result<(), AgreementProtocolError> {
+    let caller: NodeId = CommonBroker::parse_caller(&caller)?;
+    Ok(agreement_rejected(broker, caller, msg)
+        .await
+        .map_err(|e| AgreementProtocolError::Remote(e))?)
+}
+
+async fn agreement_rejected(
+    broker: CommonBroker,
+    caller: NodeId,
+    msg: AgreementRejected,
+) -> Result<(), RemoteAgreementError> {
+    let dao = broker.db.as_dao::<AgreementDao>();
+    let agreement = {
+        let _hold = broker.agreement_lock.lock(&msg.agreement_id).await;
+
+        let agreement = dao
+            .select(&msg.agreement_id, None, Utc::now().naive_utc())
+            .await
+            .map_err(|_e| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
+            .ok_or(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
+
+        if agreement.provider_id != caller {
+            // Don't reveal, that we know this Agreement id.
+            Err(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
+        }
+
+        validate_transition(&agreement, AgreementState::Rejected).map_err(|_| {
+            RemoteAgreementError::InvalidState(agreement.id.clone(), agreement.state.clone())
+        })?;
+
+        dao.reject(&agreement.id, msg.reason.clone(), &msg.rejection_ts)
+            .await
+            .log_err()
+            .map_err(|e| match e {
+                AgreementDaoError::InvalidTransition { from, .. } => {
+                    RemoteAgreementError::InvalidState(agreement.id.clone(), from)
+                }
+                _ => RemoteAgreementError::InternalError(agreement.id.clone()),
+            })?
+    };
+
+    broker.notify_agreement(&agreement).await;
+
+    counter!("market.agreements.requestor.rejected", 1);
+    log::info!(
+        "Agreement [{}] rejected by [{}]. Reason: {}",
+        &agreement.id,
+        caller,
+        msg.reason.display(),
+    );
+    Ok(())
 }
 
 pub async fn proposal_receiver_thread(

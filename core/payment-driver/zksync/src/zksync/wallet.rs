@@ -30,7 +30,7 @@ use ya_payment_driver::{
 use crate::{
     network::get_network_token,
     zksync::{faucet, signer::YagnaEthSigner, utils},
-    DEFAULT_NETWORK, ZKSYNC_TOKEN_NAME,
+    DEFAULT_NETWORK,
 };
 
 pub async fn account_balance(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
@@ -41,22 +41,12 @@ pub async fn account_balance(address: &str, network: Network) -> Result<BigDecim
         .map_err(GenericError::new)?;
     // TODO: implement tokens, replace None
     let token = get_network_token(network, None);
-    let mut balance_com = acc_info
+    let balance_com = acc_info
         .committed
         .balances
         .get(&token)
         .map(|x| x.0.clone())
         .unwrap_or(BigUint::zero());
-    // Hack to get GNT balance for backwards compatability
-    // TODO: Remove this if {} and the `mut` from `let mut balance_com`
-    if network == Network::Rinkeby && balance_com == BigUint::zero() {
-        balance_com = acc_info
-            .committed
-            .balances
-            .get(ZKSYNC_TOKEN_NAME)
-            .map(|x| x.0.clone())
-            .unwrap_or(BigUint::zero());
-    }
     let balance = utils::big_uint_to_big_dec(balance_com);
     log::debug!(
         "account_balance. address={}, network={}, balance={}",
@@ -90,7 +80,7 @@ pub async fn fund(address: &str, network: Network) -> Result<(), GenericError> {
     if network == Network::Mainnet {
         return Err(GenericError::new("Wallet can not be funded on mainnet."));
     }
-    faucet::request_ngnt(address, network).await?;
+    faucet::request_tglm(address, network).await?;
     Ok(())
 }
 
@@ -128,6 +118,21 @@ pub async fn exit(msg: &Exit) -> Result<String, GenericError> {
         )),
         None => Err(GenericError::new("Transaction time-outed")),
     }
+}
+
+pub async fn get_tx_fee(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
+    let token = get_network_token(network, None);
+    let wallet = get_wallet(&address, network).await?;
+    let tx_fee = wallet
+        .provider
+        .get_tx_fee(TxFeeTypes::Transfer, wallet.address(), token.as_str())
+        .await
+        .map_err(GenericError::new)?
+        .total_fee;
+    let tx_fee_bigdec = utils::big_uint_to_big_dec(tx_fee);
+
+    log::debug!("Transaction fee {:.5} {}", tx_fee_bigdec, token.as_str());
+    Ok(tx_fee_bigdec)
 }
 
 fn hash_to_hex(hash: TxHash) -> String {

@@ -104,7 +104,6 @@ async fn create_activity(
         .create_if_not_exists(&create_resp.activity_id(), agreement_id)
         .await?;
 
-    counter!("activity.requestor.created", 1);
     let create_result = CreateActivityResult {
         activity_id: create_resp.activity_id().into(),
         credentials: create_resp
@@ -112,6 +111,13 @@ async fn create_activity(
             .map(convert_credentials)
             .transpose()?,
     };
+
+    counter!("activity.requestor.created", 1);
+    log::info!(
+        "Created Activity [{}] for Agreement [{}]",
+        create_resp.activity_id(),
+        agreement_id
+    );
 
     Ok::<_, Error>(web::Json(body.to_response(create_result)))
 }
@@ -149,6 +155,11 @@ async fn destroy_activity(
     .await
     .map(|_| {
         counter!("activity.requestor.destroyed", 1);
+        log::info!(
+            "Requestor destroyed Activity [{}] for Agreement [{}]",
+            path.activity_id,
+            agreement.agreement_id
+        );
         web::Json(())
     })
 }
