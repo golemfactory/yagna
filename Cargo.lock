@@ -7034,8 +7034,9 @@ dependencies = [
 
 [[package]]
 name = "ya-client"
-version = "0.5.1"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=fded326374f6fd92c7c523c4e35494cd4c701e41#fded326374f6fd92c7c523c4e35494cd4c701e41"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0dd961458f2bdfbdca091d0107fd5d3c9a90a7ad83cb5a5fd5b00a9fd73f6fa4"
 dependencies = [
  "awc",
  "bytes 0.5.6",
@@ -7058,8 +7059,9 @@ dependencies = [
 
 [[package]]
 name = "ya-client-model"
-version = "0.3.1"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=fded326374f6fd92c7c523c4e35494cd4c701e41#fded326374f6fd92c7c523c4e35494cd4c701e41"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1466c69ef7b38b5c5a27cd915cad19f2e94f4adb29154e67bfdae8577946d067"
 dependencies = [
  "bigdecimal 0.2.0",
  "chrono",
@@ -7605,7 +7607,8 @@ dependencies = [
 [[package]]
 name = "ya-sb-proto"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=f86db8cbc363c0e31011b2c5db6ef3d8e35f920c#f86db8cbc363c0e31011b2c5db6ef3d8e35f920c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1eaa297ee64562ccd1041bb9d2c666a73b92329f83edfdc3bb2e78aad1087b0c"
 dependencies = [
  "bytes 0.5.6",
  "prost",
@@ -7619,7 +7622,8 @@ dependencies = [
 [[package]]
 name = "ya-sb-router"
 version = "0.4.1"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=f86db8cbc363c0e31011b2c5db6ef3d8e35f920c#f86db8cbc363c0e31011b2c5db6ef3d8e35f920c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac0d78a11d51aa4695a534f330b5a4719761b885c5a01ed201072c1bfd0cff06"
 dependencies = [
  "anyhow",
  "bytes 0.4.12",
@@ -7640,7 +7644,8 @@ dependencies = [
 [[package]]
 name = "ya-sb-util"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=f86db8cbc363c0e31011b2c5db6ef3d8e35f920c#f86db8cbc363c0e31011b2c5db6ef3d8e35f920c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20b2e7cfeacabb607fe1fd1dc8e653c3ee853f2e127cb1ed72955ea4cb84f951"
 dependencies = [
  "futures 0.3.12",
  "pin-project 0.4.27",
@@ -7728,7 +7733,8 @@ dependencies = [
 [[package]]
 name = "ya-service-bus"
 version = "0.4.4"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=f86db8cbc363c0e31011b2c5db6ef3d8e35f920c#f86db8cbc363c0e31011b2c5db6ef3d8e35f920c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "efe54570e41ad4d734959afb21e68726f4c8d85165fbe714be2c1d4f91ccf2ad"
 dependencies = [
  "actix 0.9.0",
  "flexbuffers",
