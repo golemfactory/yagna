@@ -1,10 +1,21 @@
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import List, Optional
 
 import pytest
 
+from goth.configuration import Override
 from goth.runner.log import configure_logging
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--config-override",
+        action="append",
+        help="Set an override for a value specified in goth-config.yml file. \
+                This argument may be used multiple times. \
+                Values must follow the convention: {yaml_path}={value}, e.g.: \
+                `docker-compose.docker-dir=/tmp/some_dir",
+    )
 
 @pytest.fixture(scope="session")
 def common_assets() -> Path:
@@ -22,3 +33,14 @@ def log_dir() -> Path:
     configure_logging(log_dir)
 
     return log_dir
+
+@pytest.fixture(scope="session")
+def config_overrides(request) -> Optional[List[Override]]:
+    """Fixture parsing --config-override params passed to the test invocation."""
+    overrides: Optional[List[str]] = request.config.option.config_override
+
+    if overrides:
+        tuples = [tuple(o.split("=")) for o in overrides]
+        return tuples
+
+    return None

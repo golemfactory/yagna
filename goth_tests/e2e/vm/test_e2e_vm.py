@@ -4,7 +4,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import pytest
 
@@ -12,7 +12,7 @@ from goth.address import (
     PROXY_HOST,
     YAGNA_REST_URL,
 )
-from goth.configuration import load_yaml
+from goth.configuration import load_yaml, Override
 from goth.node import node_environment
 from goth.runner import Runner
 from goth.runner.container.payment import PaymentIdPool
@@ -28,11 +28,12 @@ logger = logging.getLogger("goth.test.e2e_vm")
 @pytest.mark.asyncio
 async def test_e2e_vm_success(
     common_assets: Path,
+    config_overrides: Optional[List[Override]],
     log_dir: Path,
 ):
     """Test successful flow requesting a Blender task with goth REST API client."""
 
-    goth_config = load_yaml(common_assets / "goth-config.yml")
+    goth_config = load_yaml(common_assets / "goth-config.yml", config_overrides)
 
     runner = Runner(
         base_log_dir=log_dir,
