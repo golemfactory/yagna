@@ -49,6 +49,9 @@ impl Discovery {
     /// Broadcasts Offers to other nodes in network. Connected nodes will
     /// get call to function bound at `OfferBcast`.
     pub async fn bcast_offers(&self, offer_ids: Vec<SubscriptionId>) -> Result<(), DiscoveryError> {
+        if offer_ids.is_empty() {
+            return Ok(());
+        }
         let default_id = self.default_identity().await?;
         let bcast_msg = SendBroadcastMessage::new(OffersBcast { offer_ids });
 
@@ -91,6 +94,9 @@ impl Discovery {
         &self,
         offer_ids: Vec<SubscriptionId>,
     ) -> Result<(), DiscoveryError> {
+        if offer_ids.is_empty() {
+            return Ok(());
+        }
         let default_id = self.default_identity().await?;
 
         let bcast_msg = SendBroadcastMessage::new(UnsubscribedOffersBcast { offer_ids });
@@ -147,8 +153,9 @@ impl Discovery {
 
     async fn on_bcast_offers(self, caller: String, msg: OffersBcast) -> Result<(), ()> {
         let num_ids_received = msg.offer_ids.len();
-        if !msg.offer_ids.is_empty() {
-            log::trace!("Received {} Offers from [{}].", num_ids_received, &caller);
+        log::trace!("Received {} Offers from [{}].", num_ids_received, &caller);
+        if msg.offer_ids.is_empty() {
+            return Ok(());
         }
 
         // We should do filtering and getting Offers in single transaction. Otherwise multiple
@@ -158,7 +165,13 @@ impl Discovery {
         // occurred and re-broadcast only new ones.
         // But still it is worth to limit network traffic.
         let new_offer_ids = {
-            let offer_handlers = self.inner.offer_handlers.lock().await;
+            let offer_handlers = match self.inner.offer_handlers.try_lock() {
+                Ok(h) => h,
+                Err(_) => {
+                    log::trace!("Already handling bcast_offers, skipping...");
+                    return Ok(());
+                }
+            };
             let filter_out_known_ids = offer_handlers.filter_out_known_ids.clone();
             let receive_remote_offers = offer_handlers.receive_remote_offers.clone();
 
@@ -216,12 +229,13 @@ impl Discovery {
         msg: UnsubscribedOffersBcast,
     ) -> Result<(), ()> {
         let num_received_ids = msg.offer_ids.len();
-        if !msg.offer_ids.is_empty() {
-            log::trace!(
-                "Received {} unsubscribed Offers from [{}].",
-                num_received_ids,
-                &caller,
-            );
+        log::trace!(
+            "Received {} unsubscribed Offers from [{}].",
+            num_received_ids,
+            &caller
+        );
+        if msg.offer_ids.is_empty() {
+            return Ok(());
         }
 
         let offer_unsubscribe_handler = self.inner.offer_unsubscribe_handler.clone();

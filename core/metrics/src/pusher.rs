@@ -44,8 +44,8 @@ pub async fn push_forever(host_url: &str) {
         }
     };
 
-    let mut push_interval = time::interval(Duration::from_secs(5));
-    let client = Client::builder().timeout(Duration::from_secs(4)).finish();
+    let mut push_interval = time::interval(Duration::from_secs(60));
+    let client = Client::builder().timeout(Duration::from_secs(30)).finish();
     log::info!("Starting metrics pusher");
     loop {
         push_interval.tick().await;
