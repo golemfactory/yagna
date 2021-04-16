@@ -9,7 +9,7 @@ pub fn git_tag() -> &'static str {
             "--tag",
             "--abbrev=0",
             "--match=v[0-9]*",
-            "--match=pre-rel-[0-9]*"
+            "--match=pre-rel-v[0-9]*"
         ],
         cargo_prefix = ""
     )
