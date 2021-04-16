@@ -342,7 +342,8 @@ async fn test_sharing_someones_else_unsubscribes() {
     }
 
     // Wait until Nodes will share their Offers.
-    tokio::time::delay_for(Duration::from_millis(200)).await;
+    // After 300ms we should get at least two broadcasts from each Node.
+    tokio::time::delay_for(Duration::from_millis(320)).await;
 
     // Sanity check. Node-3 should have all Offers from market1.
     for subscription in subscriptions.iter() {
