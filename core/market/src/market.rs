@@ -89,6 +89,13 @@ impl MarketService {
         identity_api: Arc<dyn IdentityApi>,
         config: Arc<Config>,
     ) -> Result<Self, MarketInitError> {
+        counter!("market.offers.subscribed", 0);
+        counter!("market.offers.unsubscribed", 0);
+        counter!("market.offers.expired", 0);
+        counter!("market.demands.subscribed", 0);
+        counter!("market.demands.unsubscribed", 0);
+        counter!("market.demands.expired", 0);
+
         db.apply_migration(crate::db::migrations::run_with_output)?;
 
         let store = SubscriptionStore::new(db.clone(), config.clone());
@@ -137,11 +144,6 @@ impl MarketService {
             .bind_gsb(public_prefix, local_prefix)
             .await?;
         agreement::bind_gsb(self.db.clone(), public_prefix, local_prefix).await;
-
-        counter!("market.offers.subscribed", 0);
-        counter!("market.offers.unsubscribed", 0);
-        counter!("market.demands.subscribed", 0);
-        counter!("market.demands.unsubscribed", 0);
         Ok(())
     }
 

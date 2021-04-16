@@ -10,8 +10,8 @@ use uuid::Uuid;
 use ya_payment_driver::{
     dao::{payment::PaymentDao, transaction::TransactionDao, DbExecutor},
     db::models::{
-        Network, PaymentEntity, TransactionEntity, TransactionStatus, PAYMENT_STATUS_FAILED,
-        PAYMENT_STATUS_NOT_YET, TX_CREATED,
+        Network, PaymentEntity, TransactionEntity, TransactionStatus, TxType,
+        PAYMENT_STATUS_FAILED, PAYMENT_STATUS_NOT_YET,
     },
     model::{GenericError, PaymentDetails, SchedulePayment},
     utils,
@@ -64,12 +64,12 @@ impl ZksyncDao {
         msg: &SchedulePayment,
     ) -> Result<(), GenericError> {
         let recipient = msg.recipient().to_owned();
-        let gnt_amount = utils::big_dec_to_u256(msg.amount());
+        let glm_amount = utils::big_dec_to_u256(msg.amount());
         let gas_amount = Default::default();
         let (network, _token) = platform_to_network_token(msg.platform())?;
 
         let payment = PaymentEntity {
-            amount: utils::u256_to_big_endian_hex(gnt_amount),
+            amount: utils::u256_to_big_endian_hex(glm_amount),
             gas: utils::u256_to_big_endian_hex(gas_amount),
             order_id: order_id.to_string(),
             payment_due_date: msg.due_date().naive_utc(),
@@ -95,6 +95,7 @@ impl ZksyncDao {
         &self,
         details: &PaymentDetails,
         date: DateTime<Utc>,
+        network: Network,
     ) -> String {
         // TO CHECK: No difference between tx_id and tx_hash on zksync
         // TODO: Implement pre-sign
@@ -103,12 +104,13 @@ impl ZksyncDao {
             tx_id: tx_id.clone(),
             sender: details.sender.clone(),
             nonce: "".to_string(), // not used till pre-sign
-            status: TX_CREATED,
+            status: TransactionStatus::Created as i32,
             timestamp: date.naive_utc(),
-            tx_type: 0,                // Zksync only knows transfers, unused field
-            encoded: "".to_string(),   // not used till pre-sign
-            signature: "".to_string(), // not used till pre-sign
+            tx_type: TxType::Transfer as i32, // Zksync only knows transfers, unused field
+            encoded: "".to_string(),          // not used till pre-sign
+            signature: "".to_string(),        // not used till pre-sign
             tx_hash: None,
+            network,
         };
 
         if let Err(e) = self.transaction().insert_transactions(vec![tx]).await {
@@ -194,13 +196,20 @@ impl ZksyncDao {
         }
     }
 
-    pub async fn get_unconfirmed_txs(&self) -> Vec<TransactionEntity> {
-        match self.transaction().get_unconfirmed_txs().await {
+    pub async fn get_unconfirmed_txs(&self, network: Network) -> Vec<TransactionEntity> {
+        match self.transaction().get_unconfirmed_txs(network).await {
             Ok(txs) => txs,
             Err(e) => {
                 log::error!("Failed to fetch unconfirmed transactions : {:?}", e);
                 vec![]
             }
         }
+    }
+
+    pub async fn has_unconfirmed_txs(&self) -> Result<bool, GenericError> {
+        self.transaction()
+            .has_unconfirmed_txs()
+            .await
+            .map_err(GenericError::new)
     }
 }

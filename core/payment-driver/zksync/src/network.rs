@@ -26,22 +26,19 @@ lazy_static::lazy_static! {
             }
         }
     };
+    static ref DEFAULT_DB_NETWORK: DbNetwork = DbNetwork::from_str(DEFAULT_NETWORK).unwrap();
+    static ref MAINNET_DB_NETWORK: DbNetwork = DbNetwork::from_str(MAINNET_NETWORK).unwrap();
 }
 
 pub fn platform_to_network_token(platform: String) -> Result<(DbNetwork, String), GenericError> {
-    let net_list = (*SUPPORTED_NETWORKS).clone();
-    for network in net_list {
-        for token in network.1.tokens {
-            if platform == token.1 {
-                let db_network = DbNetwork::from_str(&network.0).map_err(GenericError::new)?;
-                return Ok((db_network, token.0));
-            }
-        }
+    match platform.as_str() {
+        DEFAULT_PLATFORM => Ok((*DEFAULT_DB_NETWORK, DEFAULT_TOKEN.to_owned())),
+        MAINNET_PLATFORM => Ok((*MAINNET_DB_NETWORK, MAINNET_TOKEN.to_owned())),
+        other => Err(GenericError::new(format!(
+            "Unable to find network for platform: {}",
+            other
+        ))),
     }
-    Err(GenericError::new(format!(
-        "Unable to find network for platform: {}",
-        platform
-    )))
 }
 
 pub fn network_token_to_platform(

@@ -50,5 +50,6 @@ async fn main() -> anyhow::Result<()> {
     log::info!("Properties: {:?}", decoration.properties);
     log::info!("Constraints: {:?}", decoration.constraints);
 
+    log::info!(" 👍🏻 Example completed successfully ❤️");
     Ok(())
 }

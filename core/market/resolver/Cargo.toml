@@ -5,13 +5,15 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
+ya-agreement-utils = "0.2"
+
 asnom = { git = "https://github.com/dequbed/asnom.git" }
 bigdecimal = "0.2"
 chrono = "0.4"
 log = "0.4.8"
 nom = "2.0"
 regex = "1"
-semver = "0.10.0"
+semver = "0.11"
 serde_json = "1.0.55"
 thiserror = "1.0.20"
 
