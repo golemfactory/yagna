@@ -7,6 +7,7 @@ import pytest
 from goth.configuration import Override
 from goth.runner.log import configure_logging
 
+
 def pytest_addoption(parser):
     parser.addoption(
         "--config-override",
@@ -16,6 +17,7 @@ def pytest_addoption(parser):
                 Values must follow the convention: {yaml_path}={value}, e.g.: \
                 `docker-compose.docker-dir=/tmp/some_dir",
     )
+
 
 @pytest.fixture(scope="session")
 def common_assets() -> Path:
@@ -33,6 +35,7 @@ def log_dir() -> Path:
     configure_logging(log_dir)
 
     return log_dir
+
 
 @pytest.fixture(scope="session")
 def config_overrides(request) -> Optional[List[Override]]:

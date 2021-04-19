@@ -1,8 +1,7 @@
-"""End to end tests for requesting VM tasks using goth REST API client."""
+"""End to end tests for requesting WASM tasks using goth REST API clients."""
 
 import json
 import logging
-import os
 from pathlib import Path
 from typing import List, Optional
 
@@ -19,30 +18,30 @@ from goth.runner.container.payment import PaymentIdPool
 from goth.runner.container.yagna import YagnaContainerConfig
 from goth.runner.probe import ProviderProbe, RequestorProbe
 
+from goth_tests.helpers.activity import wasi_exe_script
 from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
-from goth_tests.helpers.activity import vm_exe_script
 
-logger = logging.getLogger("goth.test.e2e_vm")
+logger = logging.getLogger("goth.test.e2e_wasi")
 
 
 @pytest.mark.asyncio
-async def test_e2e_vm(
+async def test_e2e_wasi(
     common_assets: Path,
     config_overrides: Optional[List[Override]],
     log_dir: Path,
 ):
-    """Test successful flow requesting a Blender task with goth REST API client."""
+    """Test successful flow requesting WASM tasks with goth REST API client."""
 
     goth_config = load_yaml(common_assets / "goth-config.yml", config_overrides)
     task_package = (
-        "hash:sha3:9a3b5d67b0b27746283cb5f287c13eab1beaa12d92a9f536b747c7ae:"
-        "http://3.249.139.167:8000/local-image-c76719083b.gvmi"
+        "hash://sha3:d5e31b2eed628572a5898bf8c34447644bfc4b5130cfc1e4f10aeaa1:"
+        "http://3.249.139.167:8000/rust-wasi-tutorial.zip"
     )
 
     runner = Runner(
         base_log_dir=log_dir,
         compose_config=goth_config.compose_config,
-        web_root_path=Path(__file__).parent / "assets",
+        web_root_path=common_assets / "web-root",
     )
 
     async with runner(goth_config.containers):
@@ -56,16 +55,11 @@ async def test_e2e_vm(
             requestor,
             demand,
             providers,
-            lambda proposal: proposal.properties.get("golem.runtime.name") == "vm",
+            lambda p: p.properties.get("golem.runtime.name") == "wasmtime",
         )
 
         # Activity
-        output_file = "out0000.png"
-        output_path = Path(runner.web_root_path) / "upload" / output_file
-        if output_path.exists():
-            os.remove(output_path)
-
-        exe_script = vm_exe_script(runner, output_file)
+        exe_script = wasi_exe_script(runner)
         num_commands = len(exe_script)
 
         for agreement_id, provider in agreement_providers:
@@ -74,13 +68,10 @@ async def test_e2e_vm(
             await provider.wait_for_exeunit_started()
             batch_id = await requestor.call_exec(activity_id, json.dumps(exe_script))
             await requestor.collect_results(
-                activity_id, batch_id, num_commands, timeout=300
+                activity_id, batch_id, num_commands, timeout=30
             )
             await requestor.destroy_activity(activity_id)
             await provider.wait_for_exeunit_finished()
-
-        assert output_path.is_file()
-        assert output_path.stat().st_size > 0
 
         # Payment
         for agreement_id, provider in agreement_providers:
