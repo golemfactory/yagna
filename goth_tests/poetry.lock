@@ -326,7 +326,7 @@ dev = ["jsonref"]
 
 [[package]]
 name = "goth"
-version = "0.2.2"
+version = "0.2.3"
 description = "Golem Test Harness - integration testing framework"
 category = "main"
 optional = false
@@ -377,7 +377,7 @@ python-versions = ">=3.6.1"
 
 [[package]]
 name = "hyperframe"
-version = "6.0.0"
+version = "6.0.1"
 description = "HTTP/2 framing layer for Python"
 category = "main"
 optional = false
@@ -1268,8 +1268,8 @@ ghapi = [
     {file = "ghapi-0.1.16.tar.gz", hash = "sha256:7154cb37261ebeb6d416412b5800fd0fbe653876d9fbbcc273b2c24b2408fc2c"},
 ]
 goth = [
-    {file = "goth-0.2.2-py3-none-any.whl", hash = "sha256:2a5f79fb49f706ba7f763e66b3a4092ed6e4ae9ee52881f1e4eccc9ea952a5e2"},
-    {file = "goth-0.2.2.tar.gz", hash = "sha256:62f607250cd24a7f8ea614d709fceaf9c17ad155e7e3f3a7d5d2356f01580866"},
+    {file = "goth-0.2.3-py3-none-any.whl", hash = "sha256:b0a7a663b17567d99206c19f55f7c3c5cbf6e27458e31a82918979a8a8ea78d2"},
+    {file = "goth-0.2.3.tar.gz", hash = "sha256:af27c408b973671902742a4055c9b3cd2941db5c16e077d23dd3768f2a553f2e"},
 ]
 h11 = [
     {file = "h11-0.12.0-py3-none-any.whl", hash = "sha256:36a3cb8c0a032f56e2da7084577878a035d3b61d104230d4bd49c0c6b555a9c6"},
@@ -1284,8 +1284,8 @@ hpack = [
     {file = "hpack-4.0.0.tar.gz", hash = "sha256:fc41de0c63e687ebffde81187a948221294896f6bdc0ae2312708df339430095"},
 ]
 hyperframe = [
-    {file = "hyperframe-6.0.0-py3-none-any.whl", hash = "sha256:a51026b1591cac726fc3d0b7994fbc7dc5efab861ef38503face2930fd7b2d34"},
-    {file = "hyperframe-6.0.0.tar.gz", hash = "sha256:742d2a4bc3152a340a49d59f32e33ec420aa8e7054c1444ef5c7efff255842f1"},
+    {file = "hyperframe-6.0.1-py3-none-any.whl", hash = "sha256:0ec6bafd80d8ad2195c4f03aacba3a8265e57bc4cff261e802bf39970ed02a15"},
+    {file = "hyperframe-6.0.1.tar.gz", hash = "sha256:ae510046231dc8e9ecb1a6586f63d2347bf4c8905914aa84ba585ae85f28a914"},
 ]
 idna = [
     {file = "idna-2.10-py2.py3-none-any.whl", hash = "sha256:b97d804b1e9b523befed77c48dacec60e6dcb0b5391d57af6a65a312a90648c0"},
