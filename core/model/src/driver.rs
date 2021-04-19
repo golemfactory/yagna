@@ -3,6 +3,7 @@ use bitflags::bitflags;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
+use std::time::Duration;
 use ya_client_model::payment::{Allocation, Payment};
 use ya_service_bus::RpcMessage;
 
@@ -90,6 +91,42 @@ impl GetAccountBalance {
 
 impl RpcMessage for GetAccountBalance {
     const ID: &'static str = "GetAccountBalance";
+    type Item = BigDecimal;
+    type Error = GenericError;
+}
+
+// ************************** GET TRANSACTION BALANCE **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetTransactionBalance {
+    pub sender: String,
+    pub recipient: String,
+    pub platform: String,
+}
+
+impl GetTransactionBalance {
+    pub fn new(sender: String, recipient: String, platform: String) -> GetTransactionBalance {
+        GetTransactionBalance {
+            sender,
+            recipient,
+            platform,
+        }
+    }
+    pub fn sender(&self) -> String {
+        self.sender.clone()
+    }
+
+    pub fn recipient(&self) -> String {
+        self.recipient.clone()
+    }
+
+    pub fn platform(&self) -> String {
+        self.platform.clone()
+    }
+}
+
+impl RpcMessage for GetTransactionBalance {
+    const ID: &'static str = "GetTransactionBalance";
     type Item = BigDecimal;
     type Error = GenericError;
 }
@@ -375,11 +412,11 @@ impl RpcMessage for Exit {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Transfer {
-    sender: String,
-    to: String,
-    amount: BigDecimal,
-    network: Option<String>,
-    token: Option<String>,
+    pub sender: String,
+    pub to: String,
+    pub amount: BigDecimal,
+    pub network: Option<String>,
+    pub token: Option<String>,
 }
 
 impl Transfer {
@@ -440,5 +477,24 @@ impl VerifySignature {
 impl RpcMessage for VerifySignature {
     const ID: &'static str = "VerifySignature";
     type Item = bool; // is signature correct
+    type Error = GenericError;
+}
+
+// ************************* SHUT DOWN *************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ShutDown {
+    pub timeout: Duration,
+}
+
+impl ShutDown {
+    pub fn new(timeout: Duration) -> Self {
+        Self { timeout }
+    }
+}
+
+impl RpcMessage for ShutDown {
+    const ID: &'static str = "ShutDown";
+    type Item = ();
     type Error = GenericError;
 }

@@ -40,7 +40,8 @@ mod local {
             .bind_with_processor(get_invoice_stats)
             .bind_with_processor(get_accounts)
             .bind_with_processor(validate_allocation)
-            .bind_with_processor(get_drivers);
+            .bind_with_processor(get_drivers)
+            .bind_with_processor(shut_down);
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
         // until first change to value will be made.
@@ -285,6 +286,18 @@ mod local {
         msg: GetDrivers,
     ) -> Result<HashMap<String, DriverDetails>, NoError> {
         Ok(processor.lock().await.get_drivers().await)
+    }
+
+    async fn shut_down(
+        db: DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        sender: String,
+        msg: ShutDown,
+    ) -> Result<(), GenericError> {
+        // It's crucial to drop the lock on processor (hence assigning the future to a variable).
+        // Otherwise, we won't be able to handle calls to `notify_payment` sent by drivers during shutdown.
+        let shutdown_future = processor.lock().await.shut_down(msg.timeout);
+        Ok(shutdown_future.await)
     }
 }
 

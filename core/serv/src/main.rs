@@ -408,6 +408,8 @@ impl ServiceCommand {
                 future::try_join(server.run(), sd_notify(false, "READY=1")).await?;
 
                 log::info!("{} service successfully finished!", app_name);
+
+                PaymentService::shut_down().await;
                 logger_handle.shutdown();
                 Ok(CommandOutput::NoOutput)
             }

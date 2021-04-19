@@ -163,8 +163,16 @@ pub async fn is_tx_confirmed(
     let env = get_env(network);
     let tx = get_tx_receipt(tx_hash, network).await?;
     if let Some(tx) = tx {
-        if let Some(b) = tx.block_number {
-            if b + env.required_confirmations >= *current_block {
+        if let Some(tx_bn) = tx.block_number {
+            // TODO: Store tx.block_number in DB and check only once after required_confirmations.
+            log::trace!(
+                "is_tx_confirmed? tb + rq - 1 <= cb. tb={}, rq={}, cb={}",
+                tx_bn,
+                env.required_confirmations,
+                current_block
+            );
+            // tx.block_number is the first confirmation, so we need to - 1
+            if tx_bn + env.required_confirmations - 1 <= *current_block {
                 return Ok(true);
             }
         }
@@ -260,7 +268,7 @@ fn raw_tx_to_entity(
         nonce: base_utils::u256_to_big_endian_hex(raw_tx.nonce),
         timestamp: timestamp.naive_utc(),
         encoded: serde_json::to_string(raw_tx).unwrap(),
-        status: TransactionStatus::Created.into(),
+        status: TransactionStatus::Created as i32,
         tx_type: tx_type as i32,
         signature: hex::encode(signature),
         tx_hash: None,
@@ -277,4 +285,9 @@ pub fn prepare_tx_id(raw_tx: &RawTransaction, chain_id: u64, sender: H160) -> St
     bytes.append(&mut address);
     // TODO: Try https://docs.rs/web3/0.13.0/web3/api/struct.Web3Api.html#method.sha3
     format!("{:x}", Sha3_512::digest(&bytes))
+}
+
+pub fn get_max_gas_costs(db_tx: &TransactionEntity) -> Result<U256, GenericError> {
+    let raw_tx: RawTransaction = serde_json::from_str(&db_tx.encoded).map_err(GenericError::new)?;
+    Ok(raw_tx.gas_price * raw_tx.gas)
 }

@@ -62,7 +62,7 @@ async fn test_startup_offers_sharing() {
 
     // We expect, that after this time we, should get at least one broadcast
     // from each Node.
-    tokio::time::delay_for(Duration::from_millis(400)).await;
+    tokio::time::delay_for(Duration::from_millis(800)).await;
 
     let market3 = network.get_market("Node-3");
 
@@ -131,7 +131,7 @@ async fn test_unsubscribes_cyclic_broadcasts() {
 
     // We expect, that after this time all nodes will have the same
     // knowledge about Offers.
-    tokio::time::delay_for(Duration::from_millis(200)).await;
+    tokio::time::delay_for(Duration::from_millis(600)).await;
     for subscription in subscriptions1.iter().chain(subscriptions2.iter()) {
         market1.get_offer(&subscription).await.unwrap();
         market2.get_offer(&subscription).await.unwrap();
@@ -163,7 +163,7 @@ async fn test_unsubscribes_cyclic_broadcasts() {
     // Immediate broadcast should be already lost.
     tokio::time::delay_for(Duration::from_millis(100)).await;
     network.enable_networking_for("Node-3").unwrap();
-    tokio::time::delay_for(Duration::from_millis(400)).await;
+    tokio::time::delay_for(Duration::from_millis(800)).await;
 
     // Check if all expected Offers were unsubscribed.
     for subscription in subscriptions1[10..]
@@ -271,7 +271,7 @@ async fn test_sharing_someones_else_offers() {
     }
 
     // Wait until Node-1 and Node-2 will share their Offers.
-    tokio::time::delay_for(Duration::from_millis(200)).await;
+    tokio::time::delay_for(Duration::from_millis(800)).await;
 
     // Sanity check. Node-2 should have all Offers; also from Node-1.
     for subscription in subscriptions.iter() {
@@ -367,7 +367,7 @@ async fn test_sharing_someones_else_unsubscribes() {
     network.enable_networking_for("Node-3").unwrap();
 
     // We expect that all unsubscribed will be shared with Node-3 after this delay.
-    tokio::time::delay_for(Duration::from_millis(400)).await;
+    tokio::time::delay_for(Duration::from_millis(1200)).await;
     for subscription in subscriptions[30..].into_iter() {
         let expected_error = QueryOfferError::Unsubscribed(subscription.clone());
         assert_err_eq!(expected_error, market1.get_offer(&subscription).await);

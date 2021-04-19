@@ -150,6 +150,8 @@ pub mod processor {
         Driver(#[from] ya_core_model::driver::GenericError),
         #[error("Database error: {0}")]
         Database(#[from] DbError),
+        #[error("Payment service is shutting down")]
+        Shutdown,
     }
 
     impl From<SchedulePaymentError> for GenericError {
@@ -352,6 +354,8 @@ pub mod processor {
         Driver(#[from] ya_core_model::driver::GenericError),
         #[error("Database error: {0}")]
         Database(#[from] DbError),
+        #[error("Payment service is shutting down")]
+        Shutdown,
     }
 
     impl From<ValidateAllocationError> for GsbValidateAllocationError {

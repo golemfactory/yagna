@@ -8,8 +8,9 @@ use ya_core_model::market::BUS_ID;
 use ya_core_model::net::local as local_net;
 use ya_core_model::net::local::{BroadcastMessage, SendBroadcastMessage};
 use ya_net::{self as net, RemoteEndpoint};
+use ya_service_bus::timeout::{IntoDuration, IntoTimeoutFuture};
 use ya_service_bus::typed::ServiceBinder;
-use ya_service_bus::{typed as bus, RpcEndpoint};
+use ya_service_bus::{typed as bus, Error as BusError, RpcEndpoint, RpcMessage};
 
 use super::callback::HandlerSlot;
 use crate::db::model::{Offer as ModelOffer, SubscriptionId};
@@ -21,6 +22,7 @@ pub mod message;
 
 use crate::PROTOCOL_VERSION;
 use error::*;
+use futures::TryFutureExt;
 use message::*;
 
 /// Responsible for communication with markets on other nodes
@@ -47,6 +49,9 @@ impl Discovery {
     /// Broadcasts Offers to other nodes in network. Connected nodes will
     /// get call to function bound at `OfferBcast`.
     pub async fn bcast_offers(&self, offer_ids: Vec<SubscriptionId>) -> Result<(), DiscoveryError> {
+        if offer_ids.is_empty() {
+            return Ok(());
+        }
         let default_id = self.default_identity().await?;
         let bcast_msg = SendBroadcastMessage::new(OffersBcast { offer_ids });
 
@@ -62,6 +67,7 @@ impl Discovery {
         &self,
         target_node_id: String,
         offer_ids: Vec<SubscriptionId>,
+        timeout: impl IntoDuration,
     ) -> Result<Vec<ModelOffer>, DiscoveryError> {
         let target_node = NodeId::from_str(&target_node_id)
             .map_err(|e| DiscoveryError::InternalError(e.to_string()))?;
@@ -70,13 +76,27 @@ impl Discovery {
             .to(target_node)
             .service(&get_offers_addr(BUS_ID))
             .send(RetrieveOffers { offer_ids })
-            .await??)
+            .timeout(Some(timeout))
+            .map_err(|_| {
+                DiscoveryError::GsbError(
+                    BusError::Timeout(format!(
+                        "{}/{}",
+                        get_offers_addr(BUS_ID),
+                        RetrieveOffers::ID
+                    ))
+                    .to_string(),
+                )
+            })
+            .await???)
     }
 
     pub async fn bcast_unsubscribes(
         &self,
         offer_ids: Vec<SubscriptionId>,
     ) -> Result<(), DiscoveryError> {
+        if offer_ids.is_empty() {
+            return Ok(());
+        }
         let default_id = self.default_identity().await?;
 
         let bcast_msg = SendBroadcastMessage::new(UnsubscribedOffersBcast { offer_ids });
@@ -133,8 +153,9 @@ impl Discovery {
 
     async fn on_bcast_offers(self, caller: String, msg: OffersBcast) -> Result<(), ()> {
         let num_ids_received = msg.offer_ids.len();
-        if !msg.offer_ids.is_empty() {
-            log::trace!("Received {} Offers from [{}].", num_ids_received, &caller);
+        log::trace!("Received {} Offers from [{}].", num_ids_received, &caller);
+        if msg.offer_ids.is_empty() {
+            return Ok(());
         }
 
         // We should do filtering and getting Offers in single transaction. Otherwise multiple
@@ -144,7 +165,13 @@ impl Discovery {
         // occurred and re-broadcast only new ones.
         // But still it is worth to limit network traffic.
         let new_offer_ids = {
-            let offer_handlers = self.inner.offer_handlers.lock().await;
+            let offer_handlers = match self.inner.offer_handlers.try_lock() {
+                Ok(h) => h,
+                Err(_) => {
+                    log::trace!("Already handling bcast_offers, skipping...");
+                    return Ok(());
+                }
+            };
             let filter_out_known_ids = offer_handlers.filter_out_known_ids.clone();
             let receive_remote_offers = offer_handlers.receive_remote_offers.clone();
 
@@ -152,7 +179,7 @@ impl Discovery {
 
             if !unknown_offer_ids.is_empty() {
                 let offers = self
-                    .get_remote_offers(caller.clone(), unknown_offer_ids)
+                    .get_remote_offers(caller.clone(), unknown_offer_ids, 3)
                     .await
                     .map_err(|e| {
                         log::debug!("Can't get Offers from [{}]. Error: {}", &caller, e)
@@ -202,12 +229,13 @@ impl Discovery {
         msg: UnsubscribedOffersBcast,
     ) -> Result<(), ()> {
         let num_received_ids = msg.offer_ids.len();
-        if !msg.offer_ids.is_empty() {
-            log::trace!(
-                "Received {} unsubscribed Offers from [{}].",
-                num_received_ids,
-                &caller,
-            );
+        log::trace!(
+            "Received {} unsubscribed Offers from [{}].",
+            num_received_ids,
+            &caller
+        );
+        if msg.offer_ids.is_empty() {
+            return Ok(());
         }
 
         let offer_unsubscribe_handler = self.inner.offer_unsubscribe_handler.clone();

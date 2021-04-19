@@ -20,7 +20,7 @@ pub enum BreakReason {
     #[display(fmt = "Agreement expired @ {}", _0)]
     #[strum(message = "Expired")]
     Expired(DateTime<Utc>),
-    #[display(fmt = "No activity created within {:?} from Agreement Approval", _0)]
+    #[display(fmt = "No activity created within {:?}", _0)]
     #[strum(message = "NoActivity")]
     NoActivity(Duration),
     #[display(
