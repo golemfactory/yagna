@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import pytest
 
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 @pytest.mark.asyncio
 async def test_payment_driver_list(
     common_assets: Path,
-    config_overrides: Optional[List[Override]],
+    config_overrides: List[Override],
     log_dir: Path,
 ):
     """Test just the requestor's CLI command, no need to setup provider."""
@@ -29,14 +29,9 @@ async def test_payment_driver_list(
     nodes = [
         {"name": "requestor", "type": "Requestor"},
     ]
-    config_overrides = config_overrides or []
     config_overrides.append(("nodes", nodes))
-
+    config_overrides.append(("docker-compose.build-environment.commit-hash", "29b7f85"))
     goth_config = load_yaml(common_assets / "goth-config.yml", config_overrides)
-    task_package = (
-        "hash://sha3:d5e31b2eed628572a5898bf8c34447644bfc4b5130cfc1e4f10aeaa1:"
-        "http://3.249.139.167:8000/rust-wasi-tutorial.zip"
-    )
 
     runner = Runner(
         base_log_dir=log_dir,

@@ -3,7 +3,7 @@ requires = ["poetry_core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-name = "yagna-integration-tests"
+name = "goth-tests"
 version = "0.1.0"
 description = "Integration tests for yagna"
 authors = ["GolemFactory <contact@golem.network>"]
