@@ -25,7 +25,7 @@ pub struct DiscoveryConfig {
 
 #[derive(StructOpt)]
 pub struct SubscriptionConfig {
-    #[structopt(env, parse(try_from_str = parse_chrono_duration), default_value = "1h")]
+    #[structopt(env = "DEFAULT_SUBSCRIPTION_TTL", parse(try_from_str = parse_chrono_duration), default_value = "1h")]
     pub default_ttl: chrono::Duration,
 }
 
