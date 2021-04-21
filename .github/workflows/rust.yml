@@ -11,7 +11,7 @@ on:
 
 jobs:
   build:
-    name: Tests & Build
+    name: Build
     env:
       # `-D warnings` means any warnings emitted will cause build to fail
       RUSTFLAGS: "-D warnings -C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
@@ -19,44 +19,50 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        # was commented bc of too much spend on Macos which is counted 10x, Windows is 2x
         os: [macos-latest, windows-latest, ubuntu-latest]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v1
 
-      - name: Install last stable Rust
+      - name: Install Last Stable Rust
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           components: rustfmt, clippy
 
-      - name: Check lockfile
+      - name: cargo tree - to check lockfile validity
         uses: actions-rs/cargo@v1
         with:
           command: tree
           args: --locked
 
-      - name: Check formatting
+      - name: cargo fmt
         uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
 
-      - name: Install openssl ( Windows only )
-        if: runner.os == 'Windows'
+      - name: Install openssl
+        if: matrix.os == 'windows-latest'
         run: |
           vcpkg install openssl:x64-windows openssl:x64-windows-static
           vcpkg list
           vcpkg integrate install
 
-      - name: Unit tests
+      - name: cargo test
         uses: actions-rs/cargo@v1
         with:
           command: test
           args: --workspace --locked
 
-      - name: Market Test Suite (semi-integration tests)
+      - name: cargo test sgx
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: exe-unit
+        run: cargo test --features sgx
+
+      - name: decentralized market test suite
         uses: actions-rs/cargo@v1
         if: startsWith( github.head_ref, 'market/' )
         with:
@@ -68,31 +74,95 @@ jobs:
           # because the latter needs separate compilation of lots of dependant crates again.
           args: --tests --workspace --features ya-market/test-suite
 
-      - name: Build binaries
+      - name: cargo build
         uses: actions-rs/cargo@v1
         with:
           command: build
           args: --workspace
 
-      - name: Copy binaries
-        shell: bash
+      - name: Copy binaries Unix
+        if: runner.os != 'Windows'
         run: |
           mkdir build
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            cp target/debug/{yagna,ya-provider,exe-unit,golemsp,gftp} build
-            strip -x build/*
-          elif [ "$RUNNER_OS" == "macOS" ]; then
-            cp target/debug/{yagna,gftp} build
-            strip -x build/*
-          elif [ "$RUNNER_OS" == "Windows" ]; then
-            cp target/debug/{yagna,gftp}.exe build
-          else
-            echo "$RUNNER_OS not supported"
-            exit 1
-          fi
+          cp target/debug/{yagna,ya-provider,exe-unit,golemsp} build
+          strip -x build/*
+
+      - name: Copy binaries Windows
+        if: runner.os == 'Windows'
+        run: |
+          mkdir build
+          copy target\debug\yagna.exe build
+          copy target\debug\ya-provider.exe build
+          copy target\debug\exe-unit.exe build
 
       - name: Upload binaries
         uses: actions/upload-artifact@v1
         with:
           name: Yagna ${{ runner.os }}
           path: build
+
+  integration-test:
+    name: Run integration tests
+    runs-on: goth
+    needs: build
+    defaults:
+      run:
+        working-directory: './goth_tests'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Configure python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.8.0'
+
+      - name: Configure poetry
+        uses: Gr1N/setup-poetry@v4
+        with:
+          poetry-version: 1.1.4
+          working-directory: './goth_tests'
+
+      - name: Install dependencies
+        run: poetry install --no-root
+
+      - name: Remove Docker containers
+        continue-on-error: true
+        run: docker rm -f $(docker ps -a -q)
+
+      - name: Log in to GitHub Docker repository
+        run: echo ${{ secrets.GITHUB_TOKEN }} | docker login docker.pkg.github.com -u ${{github.actor}} --password-stdin
+
+      - name: Download yagna artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: 'Yagna Linux'
+          path: /tmp/yagna-build
+
+      - name: Run test suite
+        env:
+          GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          poetry run poe goth-assets
+          poetry run poe goth-tests --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
+
+      - name: Upload test logs
+        uses: actions/upload-artifact@v2
+        if: always()
+        with:
+          name: goth-logs
+          path: /tmp/goth-tests
+
+      # Only relevant for self-hosted runners
+      - name: Remove test logs
+        if: always()
+        run: rm -rf /tmp/goth-tests
+
+      # Only relevant for self-hosted runners
+      - name: Remove poetry virtual env
+        if: always()
+        # Python version below should agree with the version set up by this job.
+        # In the future we'll be able to use the `--all` flag here to remove envs for
+        # all Python versions (https://github.com/python-poetry/poetry/issues/3208).
+        run: poetry env remove python3.8
