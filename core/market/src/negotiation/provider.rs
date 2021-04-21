@@ -9,6 +9,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::LogErr;
 
+use crate::bus;
 use crate::db::{
     dao::{AgreementDao, NegotiationEventsDao, ProposalDao, SaveAgreementError},
     model::{Agreement, AgreementId, AgreementState, AppSessionId},
@@ -243,8 +244,7 @@ impl ProviderBroker {
 
             validate_transition(&agreement, AgreementState::Approving)?;
 
-            // TODO: Sign Agreement.
-            let signature = "NoSignature".to_string();
+            let signature = hex::encode(bus::sign(id.identity, agreement.signature_hash()).await?);
             let timestamp = Utc::now().naive_utc();
 
             let agreement = dao
@@ -443,6 +443,7 @@ async fn agreement_committed(
         .log_err()?;
 
         // TODO: Validate committed signature from message.
+        // XXX
 
         dao.approve(&msg.agreement_id, &msg.signature)
             .await
@@ -567,6 +568,7 @@ async fn agreement_received(
     agreement.proposed_signature = Some(msg.signature);
 
     // TODO: Validate signature.
+    // XXX
 
     // Check if we generated the same id, as Requestor sent us. If not, reject
     // it, because wrong generated ids could be not unique.

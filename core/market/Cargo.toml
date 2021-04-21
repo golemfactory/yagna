@@ -37,6 +37,7 @@ diesel = { version = "1.4", features = ["chrono", "sqlite", "r2d2"] }
 diesel_migrations = "1.4"
 digest = "0.8.1"
 futures = "0.3"
+hex = "0.4"
 humantime = "2.0.0"
 lazy_static = "1.4"
 libsqlite3-sys = { version = "0.9.1", features = ["bundled"] }
@@ -48,7 +49,7 @@ r2d2 = "0.8"
 rand = "0.7.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-sha3 = "0.8.2"
+sha3 = "0.9"
 structopt = "0.3.20"
 strum = "0.19.5"
 strum_macros = "0.19.4"

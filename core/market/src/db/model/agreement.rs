@@ -1,6 +1,7 @@
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use diesel::sql_types::Text;
 use serde::{Deserialize, Serialize};
+use sha3::{Digest, Sha3_256};
 
 use ya_client::model::market::agreement::{
     Agreement as ClientAgreement, State as ClientAgreementState,
@@ -104,6 +105,25 @@ impl Agreement {
             creation_ts,
             owner,
         )
+    }
+
+    pub fn signature_hash(self) -> Vec<u8> {
+        let mut hasher = Sha3_256::new();
+        let sig_data = vec!(
+            self.id.to_string(),
+            self.creation_ts.to_string(),
+            self.valid_to.to_string(),
+            self.offer_id.to_string(),
+            self.demand_id.to_string(),
+            self.provider_id.to_string(),
+            self.requestor_id.to_string(),
+            self.offer_properties.to_string(),
+            self.offer_constraints.to_string(),
+            self.demand_properties.to_string(),
+            self.demand_constraints.to_string()
+        ).join(" ").as_bytes();
+        hasher.update(sig_data);
+        hasher.finalize().to_vec()
     }
 
     pub fn new_with_ts(
