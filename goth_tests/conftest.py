@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import pytest
 
@@ -38,12 +38,7 @@ def log_dir() -> Path:
 
 
 @pytest.fixture(scope="session")
-def config_overrides(request) -> Optional[List[Override]]:
+def config_overrides(request) -> List[Override]:
     """Fixture parsing --config-override params passed to the test invocation."""
-    overrides: Optional[List[str]] = request.config.option.config_override
-
-    if overrides:
-        tuples = [tuple(o.split("=")) for o in overrides]
-        return tuples
-
-    return None
+    overrides: List[str] = request.config.option.config_override or []
+    return [tuple(o.split("=")) for o in overrides]

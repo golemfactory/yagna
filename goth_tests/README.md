@@ -162,7 +162,7 @@ from goth.runner.probe import ProviderProbe, RequestorProbe
 @pytest.mark.asyncio
 async def test_example(
     common_assets: Path,
-    config_overrides: Optional[List[Override]],
+    config_overrides: List[Override],
     log_dir: Path,
 ):
     goth_config = load_yaml(common_assets / "goth-config.yml", config_overrides)
@@ -190,7 +190,7 @@ The above is an example of a test case, showcasing some of the basic `goth` func
 @pytest.mark.asyncio
 async def test_e2e_wasi(
     common_assets: Path,
-    config_overrides: Optional[List[Override]],
+    config_overrides: List[Override],
     log_dir: Path,
 ):
 ```
@@ -288,7 +288,7 @@ poetry run poe goth-tests --config-override docker-compose.build-environment.com
 Overrides specified as CLI arguments are passed into the test functions through the `config_overrides` fixture:
 ```
 async def test_something(
-    config_overrides: Optional[List[Override]],     # This is provided by a fixture
+    config_overrides: List[Override],     # This is provided by a fixture
     ...
 ):
     goth_config = load_yaml(Path("path/to/goth-config.yml", config_overrides)

@@ -3,7 +3,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import pytest
 
@@ -26,7 +26,7 @@ logger = logging.getLogger("goth.test.multi-activity")
 @pytest.mark.asyncio
 async def test_provider_multi_activity(
     common_assets: Path,
-    config_overrides: Optional[List[Override]],
+    config_overrides: List[Override],
     log_dir: Path,
 ):
     """Test provider handling multiple activities in single Agreement."""
@@ -35,7 +35,6 @@ async def test_provider_multi_activity(
         {"name": "requestor", "type": "Requestor"},
         {"name": "provider-1", "type": "VM-Wasm-Provider", "use-proxy": True},
     ]
-    config_overrides = config_overrides or []
     config_overrides.append(("nodes", nodes))
 
     goth_config = load_yaml(common_assets / "goth-config.yml", config_overrides)

@@ -25,7 +25,7 @@ logger = logging.getLogger("goth.test.zero_amount_txs")
 @pytest.mark.asyncio
 async def test_zero_amount_invoice(
     common_assets: Path,
-    config_overrides: Optional[List[Override]],
+    config_overrides: List[Override],
     log_dir: Path,
 ):
     """Test successful flow requesting WASM tasks with goth REST API client."""
@@ -34,7 +34,6 @@ async def test_zero_amount_invoice(
         {"name": "requestor", "type": "Requestor"},
         {"name": "provider-1", "type": "VM-Wasm-Provider", "use-proxy": True},
     ]
-    config_overrides = config_overrides or []
     config_overrides.append(("nodes", nodes))
 
     goth_config = load_yaml(common_assets / "goth-config.yml", config_overrides)

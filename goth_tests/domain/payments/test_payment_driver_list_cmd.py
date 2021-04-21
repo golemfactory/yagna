@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import pytest
 
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 @pytest.mark.asyncio
 async def test_payment_driver_list(
     common_assets: Path,
-    config_overrides: Optional[List[Override]],
+    config_overrides: List[Override],
     log_dir: Path,
 ):
     """Test just the requestor's CLI command, no need to setup provider."""
@@ -29,7 +29,6 @@ async def test_payment_driver_list(
     nodes = [
         {"name": "requestor", "type": "Requestor"},
     ]
-    config_overrides = config_overrides or []
     config_overrides.append(("nodes", nodes))
 
     goth_config = load_yaml(common_assets / "goth-config.yml", config_overrides)

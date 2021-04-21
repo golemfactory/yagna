@@ -3,7 +3,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import pytest
 
@@ -25,7 +25,7 @@ logger = logging.getLogger("goth.test.e2e_wasi")
 @pytest.mark.asyncio
 async def test_e2e_wasi(
     common_assets: Path,
-    config_overrides: Optional[List[Override]],
+    config_overrides: List[Override],
     log_dir: Path,
 ):
     """Test successful flow requesting WASM tasks with goth REST API client."""
