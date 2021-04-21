@@ -30,12 +30,8 @@ async def test_payment_driver_list(
         {"name": "requestor", "type": "Requestor"},
     ]
     config_overrides.append(("nodes", nodes))
-
+    config_overrides.append(("docker-compose.build-environment.commit-hash", "29b7f85"))
     goth_config = load_yaml(common_assets / "goth-config.yml", config_overrides)
-    task_package = (
-        "hash://sha3:d5e31b2eed628572a5898bf8c34447644bfc4b5130cfc1e4f10aeaa1:"
-        "http://3.249.139.167:8000/rust-wasi-tutorial.zip"
-    )
 
     runner = Runner(
         base_log_dir=log_dir,

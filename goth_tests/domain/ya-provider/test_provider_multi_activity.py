@@ -16,7 +16,7 @@ from goth.node import node_environment
 from goth.runner import Runner
 from goth.runner.probe import ProviderProbe, RequestorProbe
 
-from goth_tests.helpers.activity import wasi_exe_script
+from goth_tests.helpers.activity import wasi_exe_script, wasi_task_package
 from goth_tests.helpers.negotiation import negotiate_agreements, DemandBuilder
 from goth_tests.helpers.payment import pay_all
 
@@ -38,10 +38,6 @@ async def test_provider_multi_activity(
     config_overrides.append(("nodes", nodes))
 
     goth_config = load_yaml(common_assets / "goth-config.yml", config_overrides)
-    task_package = (
-        "hash://sha3:d5e31b2eed628572a5898bf8c34447644bfc4b5130cfc1e4f10aeaa1:"
-        "http://3.249.139.167:8000/rust-wasi-tutorial.zip"
-    )
 
     runner = Runner(
         base_log_dir=log_dir,
@@ -56,7 +52,7 @@ async def test_provider_multi_activity(
         # Market
         demand = (
             DemandBuilder(requestor)
-            .props_from_template(task_package)
+            .props_from_template(wasi_task_package)
             .property("golem.srv.caps.multi-activity", True)
             .constraints(
                 "(&(golem.com.pricing.model=linear)\

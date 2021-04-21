@@ -20,7 +20,7 @@ from goth.runner.container.yagna import YagnaContainerConfig
 from goth.runner.probe import ProviderProbe, RequestorProbe
 
 from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
-from goth_tests.helpers.activity import vm_exe_script
+from goth_tests.helpers.activity import vm_exe_script, vm_task_package
 
 logger = logging.getLogger("goth.test.e2e_vm")
 
@@ -34,10 +34,6 @@ async def test_e2e_vm(
     """Test successful flow requesting a Blender task with goth REST API client."""
 
     goth_config = load_yaml(common_assets / "goth-config.yml", config_overrides)
-    task_package = (
-        "hash:sha3:9a3b5d67b0b27746283cb5f287c13eab1beaa12d92a9f536b747c7ae:"
-        "http://3.249.139.167:8000/local-image-c76719083b.gvmi"
-    )
 
     runner = Runner(
         base_log_dir=log_dir,
@@ -50,7 +46,7 @@ async def test_e2e_vm(
         providers = runner.get_probes(probe_type=ProviderProbe)
 
         # Market
-        demand = DemandBuilder(requestor).props_from_template(task_package).build()
+        demand = DemandBuilder(requestor).props_from_template(vm_task_package).build()
 
         agreement_providers = await negotiate_agreements(
             requestor,

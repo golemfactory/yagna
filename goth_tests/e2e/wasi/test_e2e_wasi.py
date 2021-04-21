@@ -16,7 +16,7 @@ from goth.node import node_environment
 from goth.runner import Runner
 from goth.runner.probe import ProviderProbe, RequestorProbe
 
-from goth_tests.helpers.activity import wasi_exe_script
+from goth_tests.helpers.activity import wasi_exe_script, wasi_task_package
 from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
 
 logger = logging.getLogger("goth.test.e2e_wasi")
@@ -31,10 +31,6 @@ async def test_e2e_wasi(
     """Test successful flow requesting WASM tasks with goth REST API client."""
 
     goth_config = load_yaml(common_assets / "goth-config.yml", config_overrides)
-    task_package = (
-        "hash://sha3:d5e31b2eed628572a5898bf8c34447644bfc4b5130cfc1e4f10aeaa1:"
-        "http://3.249.139.167:8000/rust-wasi-tutorial.zip"
-    )
 
     runner = Runner(
         base_log_dir=log_dir,
@@ -47,7 +43,7 @@ async def test_e2e_wasi(
         providers = runner.get_probes(probe_type=ProviderProbe)
 
         # Market
-        demand = DemandBuilder(requestor).props_from_template(task_package).build()
+        demand = DemandBuilder(requestor).props_from_template(wasi_task_package).build()
 
         agreement_providers = await negotiate_agreements(
             requestor,
