@@ -131,8 +131,8 @@ impl MarketsNetwork {
 
         // Overwrite default cyclic broadcasts interval to 1s for tests purposes.
         let mut config = Config::default();
-        config.discovery.mean_cyclic_bcast_interval = Duration::from_millis(1000);
-        config.discovery.mean_cyclic_unsubscribes_interval = Duration::from_millis(1000);
+        config.discovery.mean_cyclic_bcast_interval = Duration::from_millis(500);
+        config.discovery.mean_cyclic_unsubscribes_interval = Duration::from_millis(500);
 
         MarketsNetwork {
             nodes: vec![],
