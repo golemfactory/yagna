@@ -37,6 +37,8 @@ Tests are organised into a directory structure based on their characteristics:
 ```
 In the above structure, for each test there is a separate `test_*.py` file with a single `test_*` function defined inside.
 
+While file naming is just a convention, test function names **must** start with a `test_` prefix, otherwise they will not be discovered by `pytest`.
+
 Domain-specific tests are placed in their appropriate directory under `domain`.
 
 If a test requires custom assets (e.g. VM Blender test) they should be placed in a directory named `assets` alongside the test `.py` file itself.
@@ -51,11 +53,37 @@ For every test case the following steps are performed:
 4. The integration test scenario is executed as defined in the function called by `pytest`.
 5. Once the test is finished, all previously started Docker containers (both "static" and "dynamic") are removed.
 
+### Logs from tests
+All containers launched during an integration test record their logs in a pre-determined location. By default, this location is: `$TEMP_DIR/goth-tests`, where `$TEMP_DIR` is the path of the directory used for temporary files.
+
+This path will depend either on the shell environment or the operating system on which the tests are being run (see [`tempfile.gettempdir`](https://docs.python.org/3/library/tempfile.html) for more details).
+
+#### Log directory structure
+```
+.
+└── goth_20210420_093848+0000
+    ├── runner.log                      # debug console logs from the entire test session
+    ├── test_e2e_vm                     # directory with logs from a single test
+    │   ├── ethereum.log
+    │   ├── provider_1.log              # debug logs from a single yagna node
+    │   ├── provider_1_ya-provider.log  # debug logs from an agent running in a yagna node
+    │   ├── provider_2.log
+    │   ├── provider_2_ya-provider.log
+    │   ├── proxy-nginx.log
+    │   ├── proxy.log                   # HTTP traffic going into the yagna daemons recorded by a "sniffer" proxy
+    │   ├── requestor.log
+    │   ├── router.log
+    │   ├── test.log                    # debug console logs from this test case only, duplicated in `runner.log`
+    │   └── zksync.log
+    └── test_e2e_wasi
+        └── ...
+```
+
 ## Running the tests locally
 
 ### Project setup
 Below are the steps you need to take in order to prepare your environment for running this integration test suite.
-> Please not that currently the only supported platform is **Linux** with **Python 3.8+**.
+> Please note that currently the only supported platform is **Linux** with **Python 3.8+**.
 
 #### Poetry
 This project uses [`poetry`](https://python-poetry.org/) to manage its dependencies. To install `poetry`, follow the instructions provided in its [installation docs section](https://python-poetry.org/docs/#installation).
@@ -120,7 +148,7 @@ poetry run poe goth-tests
 
 To run a single test you can call `pytest` directly like so:
 ```
-pytest -svx e2e/vm/test_e2e_vm.py
+poetry run pytest -svx e2e/vm/test_e2e_vm.py
 ```
 
 ## Writing test cases
