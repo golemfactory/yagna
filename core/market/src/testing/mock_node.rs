@@ -129,10 +129,10 @@ impl MarketsNetwork {
 
         MockNet::default().bind_gsb();
 
-        // Disable cyclic broadcasts by default.
+        // Overwrite default cyclic broadcasts interval to 1s for tests purposes.
         let mut config = Config::default();
-        config.discovery.max_bcasted_offers = 0;
-        config.discovery.max_bcasted_unsubscribes = 0;
+        config.discovery.mean_cyclic_bcast_interval = Duration::from_millis(1000);
+        config.discovery.mean_cyclic_unsubscribes_interval = Duration::from_millis(1000);
 
         MarketsNetwork {
             nodes: vec![],
