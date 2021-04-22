@@ -4,9 +4,10 @@ use std::time::Duration;
 
 use ya_market::assert_err_eq;
 use ya_market::testing::{
-    mock_offer::client, Config, MarketServiceExt, MarketsNetwork, QueryOfferError, SubscriptionId,
+    bcast::{assert_offers_broadcasted, assert_unsunbscribes_broadcasted},
+    mock_offer::client,
+    Config, MarketServiceExt, MarketsNetwork, QueryOfferError,
 };
-use ya_market::MarketService;
 
 /// Initialize two markets and add Offers.
 /// Third market that will be instantiated after these two, should
@@ -342,66 +343,4 @@ async fn test_sharing_someones_else_unsubscribes() {
 
     // All other Offers should remain untouched.
     assert_offers_broadcasted(&[&mkt1, &mkt2, &mkt3], subscriptions[0..3].iter()).await;
-}
-
-/// Assure that all given nodes have the same knowledge about given Subscriptions (Offers).
-/// Wait if needed at most 1,5s ( = 10 x 150ms).
-async fn assert_offers_broadcasted<'a, S>(mkts: &[&MarketService], subscriptions: S)
-where
-    S: IntoIterator<Item = &'a SubscriptionId>,
-    <S as IntoIterator>::IntoIter: Clone,
-{
-    let subscriptions = subscriptions.into_iter();
-    let mut all_broadcasted = false;
-    'retry: for _i in 0..10 {
-        for subscription in subscriptions.clone() {
-            for mkt in mkts {
-                if mkt.get_offer(&subscription).await.is_err() {
-                    // Every 150ms we should get at least one broadcast from each Node.
-                    // After a few tries all nodes should have the same knowledge about Offers.
-                    tokio::time::delay_for(Duration::from_millis(150)).await;
-                    continue 'retry;
-                }
-            }
-        }
-        all_broadcasted = true;
-        break;
-    }
-    assert!(
-        all_broadcasted,
-        "At least one of the offers was not propagated to all nodes"
-    );
-}
-
-/// Assure that all given nodes have the same knowledge about given Subscriptions (Offers).
-/// Wait if needed at most 1,5s ( = 10 x 150ms).
-async fn assert_unsunbscribes_broadcasted<'a, S>(mkts: &[&MarketService], subscriptions: S)
-where
-    S: IntoIterator<Item = &'a SubscriptionId>,
-    <S as IntoIterator>::IntoIter: Clone,
-{
-    let subscriptions = subscriptions.into_iter();
-    let mut all_broadcasted = false;
-    'retry: for _i in 0..10 {
-        for subscription in subscriptions.clone() {
-            for mkt in mkts {
-                let expect_error = QueryOfferError::Unsubscribed(subscription.clone()).to_string();
-                match mkt.get_offer(&subscription).await {
-                    Err(e) => assert_eq!(e.to_string(), expect_error),
-                    Ok(_) => {
-                        // Every 150ms we should get at least one broadcast from each Node.
-                        // After a few tries all nodes should have the same knowledge about Offers.
-                        tokio::time::delay_for(Duration::from_millis(150)).await;
-                        continue 'retry;
-                    }
-                }
-            }
-        }
-        all_broadcasted = true;
-        break;
-    }
-    assert!(
-        all_broadcasted,
-        "At least one of the offer unsubscribes was not propagated to all nodes"
-    );
 }

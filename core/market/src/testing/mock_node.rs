@@ -110,11 +110,6 @@ impl MarketsNetwork {
     /// It will be used to create directories and GSB binding points,
     /// to avoid potential name clashes.
     pub async fn new(test_name: Option<&str>) -> Self {
-        // DIRTY HACK. We need it because GSB v0.4.4 causes market test suite to hang
-        // using 100% CPU trying to reconnect in the infinite loop.
-        // It can be removed when https://github.com/golemfactory/ya-service-bus/issues/22
-        // is addressed
-        std::env::set_var("GSB_URL", "wrong url");
         let _ = env_logger::builder().try_init();
         // level 1 is this function.
         // level 2 is <core::future::from_generator::GenFuture<T> as
@@ -134,10 +129,10 @@ impl MarketsNetwork {
 
         MockNet::default().bind_gsb();
 
-        // Disable cyclic broadcasts by default.
+        // Overwrite default cyclic broadcasts interval to 1s for tests purposes.
         let mut config = Config::default();
-        config.discovery.max_bcasted_offers = 0;
-        config.discovery.max_bcasted_unsubscribes = 0;
+        config.discovery.mean_cyclic_bcast_interval = Duration::from_millis(500);
+        config.discovery.mean_cyclic_unsubscribes_interval = Duration::from_millis(500);
 
         MarketsNetwork {
             nodes: vec![],
