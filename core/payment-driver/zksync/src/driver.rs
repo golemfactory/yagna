@@ -175,8 +175,14 @@ impl PaymentDriver for ZksyncDriver {
         _caller: String,
         msg: Enter,
     ) -> Result<String, GenericError> {
-        log::info!("ENTER = Not Implemented: {:?}", msg);
-        Ok("NOT_IMPLEMENTED".to_string())
+        let tx_hash = wallet::enter(msg).await?;
+
+        Ok(format!(
+            "Deposit transaction has been sent on Ethereum and soon funds should be available \
+        on ZkSync network. You can check transaction status in the block explorer. \
+        Tracking link: https://rinkeby.zkscan.io/explorer/transactions/{}",
+            tx_hash
+        ))
     }
 
     async fn exit(
