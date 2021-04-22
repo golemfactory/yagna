@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 from goth.runner import Runner
+from goth.runner.probe import RequestorProbe, ProviderProbe
 
 
 wasi_task_package: str = (
@@ -15,6 +16,24 @@ vm_task_package: str = (
         "hash:sha3:9a3b5d67b0b27746283cb5f287c13eab1beaa12d92a9f536b747c7ae:"
         "http://3.249.139.167:8000/local-image-c76719083b.gvmi"
     )
+
+
+async def run_activity(
+        requestor: RequestorProbe,
+        provider: ProviderProbe,
+        agreement_id: str,
+        exe_script: dict,
+):
+    """Run single Activity from start to end."""
+
+    activity_id = await requestor.create_activity(agreement_id)
+    await provider.wait_for_exeunit_started()
+
+    batch_id = await requestor.call_exec(activity_id, json.dumps(exe_script))
+    await requestor.collect_results(activity_id, batch_id, len(exe_script), timeout=30)
+
+    await requestor.destroy_activity(activity_id)
+    await provider.wait_for_exeunit_finished()
 
 
 def vm_exe_script(runner: Runner, output_file: str = "output.png"):
