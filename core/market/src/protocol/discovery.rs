@@ -1,7 +1,9 @@
 //! Discovery protocol interface
+use actix_rt::Arbiter;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio::time::{delay_for, Duration};
 
 use ya_client::model::NodeId;
 use ya_core_model::market::BUS_ID;
@@ -40,26 +42,70 @@ pub(super) struct OfferHandlers {
 pub struct DiscoveryImpl {
     identity: Arc<dyn IdentityApi>,
 
+    offer_queue: Mutex<Vec<SubscriptionId>>,
+    unsub_queue: Mutex<Vec<SubscriptionId>>,
+
     offer_handlers: Mutex<OfferHandlers>,
     get_local_offers_handler: HandlerSlot<RetrieveOffers>,
     offer_unsubscribe_handler: HandlerSlot<UnsubscribedOffersBcast>,
 }
 
 impl Discovery {
-    /// Broadcasts Offers to other nodes in network. Connected nodes will
-    /// get call to function bound at `OfferBcast`.
     pub async fn bcast_offers(&self, offer_ids: Vec<SubscriptionId>) -> Result<(), DiscoveryError> {
+        log::trace!("bcast_offers {}", offer_ids.len());
         if offer_ids.is_empty() {
             return Ok(());
         }
-        let default_id = self.default_identity().await?;
+        let must_schedule = {
+            let mut queue = self.inner.offer_queue.lock().await;
+            let result = queue.len() == 0;
+
+            queue.append(&mut offer_ids.clone());
+            result
+        };
+        log::trace!(
+            "bcast_offers done appending. must_schedule? {}",
+            must_schedule
+        );
+
+        if must_schedule {
+            let myself = self.clone();
+            let _ = Arbiter::spawn(async move {
+                myself.send_bcast_offers().await;
+            });
+        }
+        Ok(())
+    }
+
+    /// Broadcasts Offers to other nodes in network. Connected nodes will
+    /// get call to function bound at `OfferBcast`.
+    async fn send_bcast_offers(&self) -> () {
+        delay_for(Duration::from_secs(5)).await;
+        let offer_ids: Vec<SubscriptionId> =
+            self.inner.offer_queue.lock().await.drain(0..).collect();
+        log::trace!("send_bcast_offers. {}", offer_ids.len());
+        if offer_ids.is_empty() {
+            return ();
+        }
+        let default_id = match self.default_identity().await {
+            Ok(id) => id,
+            Err(e) => {
+                log::error!(
+                    "Error getting default identity, not sending bcast. error={:?}",
+                    e
+                );
+                return;
+            }
+        };
         let bcast_msg = SendBroadcastMessage::new(OffersBcast { offer_ids });
 
         // TODO: We shouldn't use send_as. Put identity inside broadcasted message instead.
-        let _ = bus::service(local_net::BUS_ID)
+        if let Err(e) = bus::service(local_net::BUS_ID)
             .send_as(default_id, bcast_msg) // TODO: should we send as our (default) identity?
-            .await?;
-        Ok(())
+            .await
+        {
+            log::error!("Error sending bcast, skipping... error={:?}", e);
+        };
     }
 
     /// Ask remote Node for specified Offers.
@@ -94,18 +140,57 @@ impl Discovery {
         &self,
         offer_ids: Vec<SubscriptionId>,
     ) -> Result<(), DiscoveryError> {
+        log::trace!("bcast_unsubscribes {}", offer_ids.len());
         if offer_ids.is_empty() {
             return Ok(());
         }
-        let default_id = self.default_identity().await?;
+        let must_schedule = {
+            let mut queue = self.inner.unsub_queue.lock().await;
+            let result = queue.len() == 0;
+
+            queue.append(&mut offer_ids.clone());
+            result
+        };
+        log::trace!(
+            "bcast_unsubscribes done appending. must_schedule? {}",
+            must_schedule
+        );
+
+        if must_schedule {
+            let myself = self.clone();
+            let _ = Arbiter::spawn(async move {
+                myself.send_bcast_unsubscribes().await;
+            });
+        }
+        Ok(())
+    }
+
+    async fn send_bcast_unsubscribes(&self) {
+        let offer_ids: Vec<SubscriptionId> =
+            self.inner.unsub_queue.lock().await.drain(0..).collect();
+        if offer_ids.is_empty() {
+            return ();
+        }
+        let default_id = match self.default_identity().await {
+            Ok(id) => id,
+            Err(e) => {
+                log::error!(
+                    "Error getting default identity, not sending bcast. error={:?}",
+                    e
+                );
+                return;
+            }
+        };
 
         let bcast_msg = SendBroadcastMessage::new(UnsubscribedOffersBcast { offer_ids });
 
         // TODO: We shouldn't use send_as. Put identity inside broadcasted message instead.
-        let _ = bus::service(local_net::BUS_ID)
-            .send_as(default_id, bcast_msg)
-            .await?;
-        Ok(())
+        if let Err(e) = bus::service(local_net::BUS_ID)
+            .send_as(default_id, bcast_msg) // TODO: should we send as our (default) identity?
+            .await
+        {
+            log::error!("Error sending bcast, skipping... error={:?}", e);
+        };
     }
 
     pub async fn bind_gsb(

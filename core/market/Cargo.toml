@@ -8,7 +8,7 @@ edition = "2018"
 [features]
 test-suite = []
 bcast-singleton = []
-testing = ["actix-http", "actix-rt", "actix-service", "env_logger"]
+testing = ["actix-http", "actix-service", "env_logger"]
 
 [dependencies]
 ya-agreement-utils = { version = "^0.2"}
@@ -55,7 +55,7 @@ uuid = { version = "0.8", features = ["v4"] }
 
 # testing
 actix-http = { version = "2.2", optional = true }
-actix-rt = { version = "1.0.0", optional = true }
+actix-rt = { version = "1.0.0" }
 actix-service = { version = "1.0", optional = true }
 env_logger = { version = "0.7", optional = true }
 regex = "1.4.2"

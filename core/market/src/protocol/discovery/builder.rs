@@ -66,6 +66,8 @@ impl DiscoveryBuilder {
             inner: Arc::new(DiscoveryImpl {
                 identity: self.get_data(),
                 offer_handlers,
+                offer_queue: Mutex::new(vec![]),
+                unsub_queue: Mutex::new(vec![]),
                 get_local_offers_handler: self.get_handler(),
                 offer_unsubscribe_handler: self.get_handler(),
             }),
