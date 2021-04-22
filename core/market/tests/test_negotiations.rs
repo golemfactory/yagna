@@ -1,5 +1,6 @@
 use ya_client::model::market::{proposal::State, RequestorEvent};
 use ya_market::testing::{
+    bcast::assert_offers_broadcasted,
     events_helper::{provider, requestor, ClientProposalHelper},
     mock_offer::client::{not_matching_demand, not_matching_offer, sample_demand, sample_offer},
     negotiation::error::{CounterProposalError, RemoteProposalError},
@@ -894,7 +895,7 @@ async fn test_proposal_events_last() {
         .await
         .unwrap();
 
-    let offer2_id = market2
+    let offer1_id = market2
         .subscribe_offer(&sample_offer(), &identity2)
         .await
         .unwrap();
@@ -913,18 +914,21 @@ async fn test_proposal_events_last() {
         .await
         .unwrap();
 
-    market3
+    let offer2_id = market3
         .subscribe_offer(&sample_offer(), &identity3)
         .await
         .unwrap();
 
-    let proposal2 = provider::query_proposal(&market2, &offer2_id, "Initial #P")
+    // wait for Offer broadcast.
+    assert_offers_broadcasted(&[&market1], [offer2_id].iter()).await;
+
+    let proposal2 = provider::query_proposal(&market2, &offer1_id, "Initial #P")
         .await
         .unwrap();
     let proposal2_id = proposal2.get_proposal_id().unwrap();
     market2
         .provider_engine
-        .reject_proposal(&offer2_id, &proposal2_id, &identity2, None)
+        .reject_proposal(&offer1_id, &proposal2_id, &identity2, None)
         .await
         .unwrap();
 
