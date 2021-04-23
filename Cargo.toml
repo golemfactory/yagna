@@ -201,3 +201,8 @@ ya-utils-process = { path = "utils/process"}
 ya-diesel-utils = { path = "utils/diesel-utils"}
 ya-metrics = { path = "core/metrics" }
 ya-provider = { path = "agent/provider"}
+
+# Speed up builds on macOS (will be default in next rust version probably)
+# https://jakedeichert.com/blog/reducing-rust-incremental-compilation-times-on-macos-by-70-percent/
+[profile.dev]
+split-debuginfo = "unpacked"
