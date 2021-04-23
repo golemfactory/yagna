@@ -11,7 +11,7 @@ pub struct Config {
     pub events: EventsConfig,
 }
 
-#[derive(StructOpt)]
+#[derive(StructOpt, Clone)]
 pub struct DiscoveryConfig {
     #[structopt(env, default_value = "200")]
     pub max_bcasted_offers: u32,
@@ -21,6 +21,10 @@ pub struct DiscoveryConfig {
     pub mean_cyclic_bcast_interval: Duration,
     #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "4min")]
     pub mean_cyclic_unsubscribes_interval: Duration,
+    #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "5sec")]
+    pub offer_broadcast_time: Duration,
+    #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "5sec")]
+    pub unsub_broadcast_time: Duration,
 }
 
 pub struct SubscriptionConfig {
@@ -48,6 +52,8 @@ impl Default for DiscoveryConfig {
             max_bcasted_unsubscribes: 200,
             mean_cyclic_bcast_interval: Duration::from_secs(60),
             mean_cyclic_unsubscribes_interval: Duration::from_secs(60),
+            offer_broadcast_time: Duration::from_secs(1),
+            unsub_broadcast_time: Duration::from_secs(1),
         }
     }
 }

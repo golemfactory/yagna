@@ -3,7 +3,7 @@ use actix_rt::Arbiter;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tokio::time::{delay_for, Duration};
+use tokio::time::delay_for;
 
 use ya_client::model::NodeId;
 use ya_core_model::market::BUS_ID;
@@ -15,6 +15,7 @@ use ya_service_bus::typed::ServiceBinder;
 use ya_service_bus::{typed as bus, Error as BusError, RpcEndpoint, RpcMessage};
 
 use super::callback::HandlerSlot;
+use crate::config::DiscoveryConfig;
 use crate::db::model::{Offer as ModelOffer, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityError};
 
@@ -40,6 +41,8 @@ pub(super) struct OfferHandlers {
 }
 
 pub struct DiscoveryImpl {
+    config: DiscoveryConfig,
+
     identity: Arc<dyn IdentityApi>,
 
     offer_queue: Mutex<Vec<SubscriptionId>>,
@@ -73,7 +76,7 @@ impl Discovery {
             let myself = self.clone();
             let _ = Arbiter::spawn(async move {
                 // Sleep to collect multiple offers to send
-                delay_for(Duration::from_secs(5)).await;
+                delay_for(myself.inner.config.offer_broadcast_time).await;
                 myself.send_bcast_offers().await;
             });
         }
@@ -85,7 +88,7 @@ impl Discovery {
     async fn send_bcast_offers(&self) -> () {
         // `...offer_queue` MUST be empty to trigger the sending again
         let offer_ids: Vec<SubscriptionId> =
-            self.inner.offer_queue.lock().await.drain(0..).collect();
+            self.inner.offer_queue.lock().await.drain(..).collect();
 
         // Should never happen, but just to be certain.
         if offer_ids.is_empty() {
@@ -169,7 +172,7 @@ impl Discovery {
             let myself = self.clone();
             let _ = Arbiter::spawn(async move {
                 // Sleep to collect multiple unsubscribes to send
-                delay_for(Duration::from_secs(5)).await;
+                delay_for(myself.inner.config.unsub_broadcast_time).await;
                 myself.send_bcast_unsubscribes().await;
             });
         }
@@ -179,7 +182,7 @@ impl Discovery {
     async fn send_bcast_unsubscribes(&self) {
         // `...unsub_queue` MUST be empty to trigger the sending again
         let offer_ids: Vec<SubscriptionId> =
-            self.inner.unsub_queue.lock().await.drain(0..).collect();
+            self.inner.unsub_queue.lock().await.drain(..).collect();
 
         // Should never happen, but just to be certain.
         if offer_ids.is_empty() {

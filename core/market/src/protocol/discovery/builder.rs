@@ -7,6 +7,7 @@ use crate::protocol::callback::{CallbackFuture, OutputFuture};
 use crate::protocol::callback::{CallbackHandler, CallbackMessage, HandlerSlot};
 
 use super::{Discovery, DiscoveryImpl};
+use crate::config::DiscoveryConfig;
 use crate::protocol::discovery::OfferHandlers;
 
 #[derive(Default)]
@@ -57,13 +58,14 @@ impl DiscoveryBuilder {
         data.clone()
     }
 
-    pub fn build(mut self) -> Discovery {
+    pub fn build(mut self, config: DiscoveryConfig) -> Discovery {
         let offer_handlers = Mutex::new(OfferHandlers {
             filter_out_known_ids: self.get_handler(),
             receive_remote_offers: self.get_handler(),
         });
         Discovery {
             inner: Arc::new(DiscoveryImpl {
+                config,
                 identity: self.get_data(),
                 offer_handlers,
                 offer_queue: Mutex::new(vec![]),
