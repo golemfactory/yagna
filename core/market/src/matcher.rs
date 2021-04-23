@@ -59,7 +59,8 @@ impl Matcher {
             .add_data_handler(handlers::receive_remote_offers)
             .add_data_handler(handlers::get_local_offers)
             .add_data_handler(handlers::receive_remote_offer_unsubscribes)
-            .build(config.discovery.clone());
+            .with_config(config.discovery.clone())
+            .build();
 
         let matcher = Matcher {
             store,

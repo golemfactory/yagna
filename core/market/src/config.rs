@@ -1,7 +1,8 @@
 use std::time::Duration;
 use structopt::StructOpt;
 
-#[derive(Default, StructOpt)]
+#[derive(StructOpt, Clone)]
+#[cfg_attr(feature = "testing", derive(Default))]
 pub struct Config {
     #[structopt(flatten)]
     pub discovery: DiscoveryConfig,
@@ -27,10 +28,12 @@ pub struct DiscoveryConfig {
     pub unsub_broadcast_time: Duration,
 }
 
+#[derive(Clone)]
 pub struct SubscriptionConfig {
     pub default_ttl: chrono::Duration,
 }
 
+#[derive(Clone)]
 pub struct EventsConfig {
     pub max_events_default: i32,
     pub max_events_max: i32,
@@ -45,6 +48,7 @@ impl Config {
 }
 
 // This default implementation will be used only in tests.
+#[cfg(feature = "testing")]
 impl Default for DiscoveryConfig {
     fn default() -> Self {
         DiscoveryConfig {

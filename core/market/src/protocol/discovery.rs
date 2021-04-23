@@ -41,8 +41,6 @@ pub(super) struct OfferHandlers {
 }
 
 pub struct DiscoveryImpl {
-    config: DiscoveryConfig,
-
     identity: Arc<dyn IdentityApi>,
 
     offer_queue: Mutex<Vec<SubscriptionId>>,
@@ -51,6 +49,8 @@ pub struct DiscoveryImpl {
     offer_handlers: Mutex<OfferHandlers>,
     get_local_offers_handler: HandlerSlot<RetrieveOffers>,
     offer_unsubscribe_handler: HandlerSlot<UnsubscribedOffersBcast>,
+
+    config: DiscoveryConfig,
 }
 
 impl Discovery {
