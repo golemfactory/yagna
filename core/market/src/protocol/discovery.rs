@@ -52,10 +52,10 @@ pub struct DiscoveryImpl {
 
 impl Discovery {
     pub async fn bcast_offers(&self, offer_ids: Vec<SubscriptionId>) -> Result<(), DiscoveryError> {
-        log::trace!("bcast_offers {}", offer_ids.len());
         if offer_ids.is_empty() {
             return Ok(());
         }
+        // When there are 0 items in the queue we should schedule a send job.
         let must_schedule = {
             let mut queue = self.inner.offer_queue.lock().await;
             let result = queue.len() == 0;
@@ -64,13 +64,16 @@ impl Discovery {
             result
         };
         log::trace!(
-            "bcast_offers done appending. must_schedule? {}",
+            "bcast_offers done appending {} offers. must_schedule={}",
+            offer_ids.len(),
             must_schedule
         );
 
         if must_schedule {
             let myself = self.clone();
             let _ = Arbiter::spawn(async move {
+                // Sleep to collect multiple offers to send
+                delay_for(Duration::from_secs(5)).await;
                 myself.send_bcast_offers().await;
             });
         }
@@ -80,13 +83,15 @@ impl Discovery {
     /// Broadcasts Offers to other nodes in network. Connected nodes will
     /// get call to function bound at `OfferBcast`.
     async fn send_bcast_offers(&self) -> () {
-        delay_for(Duration::from_secs(5)).await;
+        // `...offer_queue` MUST be empty to trigger the sending again
         let offer_ids: Vec<SubscriptionId> =
             self.inner.offer_queue.lock().await.drain(0..).collect();
-        log::trace!("send_bcast_offers. {}", offer_ids.len());
+
+        // Should never happen, but just to be certain.
         if offer_ids.is_empty() {
             return ();
         }
+
         let default_id = match self.default_identity().await {
             Ok(id) => id,
             Err(e) => {
@@ -97,6 +102,7 @@ impl Discovery {
                 return;
             }
         };
+        log::debug!("Broadcasting offers. count={}", offer_ids.len());
         let bcast_msg = SendBroadcastMessage::new(OffersBcast { offer_ids });
 
         // TODO: We shouldn't use send_as. Put identity inside broadcasted message instead.
@@ -140,10 +146,11 @@ impl Discovery {
         &self,
         offer_ids: Vec<SubscriptionId>,
     ) -> Result<(), DiscoveryError> {
-        log::trace!("bcast_unsubscribes {}", offer_ids.len());
         if offer_ids.is_empty() {
             return Ok(());
         }
+
+        // When there are 0 items in the queue we should schedule a send job.
         let must_schedule = {
             let mut queue = self.inner.unsub_queue.lock().await;
             let result = queue.len() == 0;
@@ -151,14 +158,18 @@ impl Discovery {
             queue.append(&mut offer_ids.clone());
             result
         };
+
         log::trace!(
-            "bcast_unsubscribes done appending. must_schedule? {}",
+            "bcast_unsubscribes done appending {} offers. must_schedule={}",
+            offer_ids.len(),
             must_schedule
         );
 
         if must_schedule {
             let myself = self.clone();
             let _ = Arbiter::spawn(async move {
+                // Sleep to collect multiple unsubscribes to send
+                delay_for(Duration::from_secs(5)).await;
                 myself.send_bcast_unsubscribes().await;
             });
         }
@@ -166,8 +177,11 @@ impl Discovery {
     }
 
     async fn send_bcast_unsubscribes(&self) {
+        // `...unsub_queue` MUST be empty to trigger the sending again
         let offer_ids: Vec<SubscriptionId> =
             self.inner.unsub_queue.lock().await.drain(0..).collect();
+
+        // Should never happen, but just to be certain.
         if offer_ids.is_empty() {
             return ();
         }
@@ -182,6 +196,7 @@ impl Discovery {
             }
         };
 
+        log::debug!("Broadcasting unsubscribes. count={}", offer_ids.len());
         let bcast_msg = SendBroadcastMessage::new(UnsubscribedOffersBcast { offer_ids });
 
         // TODO: We shouldn't use send_as. Put identity inside broadcasted message instead.
