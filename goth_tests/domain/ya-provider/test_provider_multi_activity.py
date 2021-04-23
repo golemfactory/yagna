@@ -13,23 +13,24 @@ from goth.address import (
     PROXY_HOST,
     YAGNA_REST_URL,
 )
+from goth.configuration import load_yaml, Override
 from goth.node import node_environment
 from goth.runner import Runner
 from goth.runner.container.payment import PaymentIdPool
 from goth.runner.container.yagna import YagnaContainerConfig
 from goth.runner.probe import ProviderProbe, RequestorProbe
-from goth_tests.helpers.activity import wasi_exe_script
 
+from goth_tests.helpers.activity import wasi_exe_script, wasi_task_package
 from goth_tests.helpers.negotiation import negotiate_agreements, DemandBuilder
 from goth_tests.helpers.payment import pay_all
 
 logger = logging.getLogger(__name__)
 
 
-def _topology(
-        assets_path: Path, payment_id_pool: PaymentIdPool
-) -> List[YagnaContainerConfig]:
+def _topology(assets_path: Path) -> List[YagnaContainerConfig]:
     """Define the topology of the test network."""
+
+    payment_id_pool = PaymentIdPool(key_dir=assets_path / "keys")
 
     # Nodes are configured to communicate via proxy
     provider_env = node_environment(
@@ -62,38 +63,49 @@ def _topology(
     ]
 
 
+def _create_runner(
+    common_assets: Path, config_overrides: List[Override], log_dir: Path
+) -> Runner:
+    goth_config = load_yaml(common_assets / "goth-config.yml", config_overrides)
+
+    return Runner(
+        base_log_dir=log_dir,
+        compose_config=goth_config.compose_config,
+        web_root_path=common_assets / "web-root",
+    )
+
+
 # Tests running multiple activities on single Provider.
 # In this case Requestor is responsible for terminating Agreement.
 # Provider should listen
 @pytest.mark.asyncio
 async def test_provider_multi_activity(
-        assets_path: Path,
-        demand_constraints: str,
-        payment_id_pool: PaymentIdPool,
-        runner: Runner,
-        task_package_template: str,
+    common_assets: Path,
+    config_overrides: List[Override],
+    log_dir: Path,
 ):
     """Test provider handling multiple activities in single Agreement."""
+    runner = _create_runner(common_assets, config_overrides, log_dir)
 
-    async with runner(_topology(assets_path, payment_id_pool)):
+    async with runner(_topology(common_assets)):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         providers = runner.get_probes(probe_type=ProviderProbe)
 
         # Market
-        task_package = task_package_template.format(
+        task_package = wasi_task_package.format(
             web_server_addr=runner.host_address, web_server_port=runner.web_server_port
         )
 
         demand = (
             DemandBuilder(requestor)
-                .props_from_template(task_package)
-                .property("golem.srv.caps.multi-activity", True)
-                .constraints(
+            .props_from_template(task_package)
+            .property("golem.srv.caps.multi-activity", True)
+            .constraints(
                 "(&(golem.com.pricing.model=linear)\
                 (golem.srv.caps.multi-activity=true)\
                 (golem.runtime.name=wasmtime))"
             )
-                .build()
+            .build()
         )
 
         agreement_providers = await negotiate_agreements(
@@ -129,33 +141,32 @@ async def test_provider_multi_activity(
 # Provider is expected to reject second activity, if one is already running.
 @pytest.mark.asyncio
 async def test_provider_single_activity_at_once(
-        assets_path: Path,
-        demand_constraints: str,
-        payment_id_pool: PaymentIdPool,
-        runner: Runner,
-        task_package_template: str,
+    common_assets: Path,
+    config_overrides: List[Override],
+    log_dir: Path,
 ):
     """Test provider rejecting second activity if one is already running."""
+    runner = _create_runner(common_assets, config_overrides, log_dir)
 
-    async with runner(_topology(assets_path, payment_id_pool)):
+    async with runner(_topology(common_assets)):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         providers = runner.get_probes(probe_type=ProviderProbe)
 
         # Market
-        task_package = task_package_template.format(
+        task_package = wasi_task_package.format(
             web_server_addr=runner.host_address, web_server_port=runner.web_server_port
         )
 
         demand = (
             DemandBuilder(requestor)
-                .props_from_template(task_package)
-                .property("golem.srv.caps.multi-activity", True)
-                .constraints(
+            .props_from_template(task_package)
+            .property("golem.srv.caps.multi-activity", True)
+            .constraints(
                 "(&(golem.com.pricing.model=linear)\
                 (golem.srv.caps.multi-activity=true)\
                 (golem.runtime.name=wasmtime))"
             )
-                .build()
+            .build()
         )
 
         agreement_providers = await negotiate_agreements(
@@ -174,12 +185,12 @@ async def test_provider_single_activity_at_once(
             await requestor.create_activity(agreement_id)
 
             assert (
-                    re.match(
-                        r"terminated. Reason: Only single Activity allowed,"
-                        r" message: Can't create 2 simultaneous Activities.",
-                        e.value.body,
-                    )
-                    is not None
+                re.match(
+                    r"terminated. Reason: Only single Activity allowed,"
+                    r" message: Can't create 2 simultaneous Activities.",
+                    e.value.body,
+                )
+                is not None
             )
 
         await requestor.destroy_activity(activity_id1)

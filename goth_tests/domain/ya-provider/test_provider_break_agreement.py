@@ -10,23 +10,24 @@ from goth.address import (
     PROXY_HOST,
     YAGNA_REST_URL,
 )
+from goth.configuration import load_yaml, Override
 from goth.node import node_environment
 from goth.runner import Runner
 from goth.runner.container.payment import PaymentIdPool
 from goth.runner.container.yagna import YagnaContainerConfig
 from goth.runner.probe import RequestorProbe, ProviderProbe
 
-from goth_tests.helpers.activity import run_activity, wasi_exe_script
+from goth_tests.helpers.activity import run_activity, wasi_exe_script, wasi_task_package
 from goth_tests.helpers.negotiation import negotiate_agreements, DemandBuilder
 from goth_tests.helpers.payment import pay_all
 
 logger = logging.getLogger(__name__)
 
 
-def _topology(
-    assets_path: Path, payment_id_pool: PaymentIdPool
-) -> List[YagnaContainerConfig]:
+def _topology(assets_path: Path) -> List[YagnaContainerConfig]:
     """Define the topology of the test network."""
+
+    payment_id_pool = PaymentIdPool(key_dir=assets_path / "keys")
 
     # Nodes are configured to communicate via proxy
     provider_env = node_environment(
@@ -92,25 +93,36 @@ def build_demand(
     return demand.build()
 
 
+def _create_runner(
+    common_assets: Path, config_overrides: List[Override], log_dir: Path
+) -> Runner:
+    goth_config = load_yaml(common_assets / "goth-config.yml", config_overrides)
+
+    return Runner(
+        base_log_dir=log_dir,
+        compose_config=goth_config.compose_config,
+        web_root_path=common_assets / "web-root",
+    )
+
+
 # Provider is expected to break Agreement in time configured by
 # variable: IDLE_AGREEMENT_TIMEOUT, if there are no Activities created.
 @pytest.mark.asyncio
 async def test_provider_idle_agreement(
-    assets_path: Path,
-    demand_constraints: str,
-    payment_id_pool: PaymentIdPool,
-    runner: Runner,
-    task_package_template: str,
+    common_assets: Path,
+    config_overrides: List[Override],
+    log_dir: Path,
 ):
     """Test provider breaking idle Agreement."""
+    runner = _create_runner(common_assets, config_overrides, log_dir)
 
-    async with runner(_topology(assets_path, payment_id_pool)):
+    async with runner(_topology(common_assets)):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         providers = runner.get_probes(probe_type=ProviderProbe)
 
         agreement_providers = await negotiate_agreements(
             requestor,
-            build_demand(requestor, runner, task_package_template),
+            build_demand(requestor, runner, wasi_task_package),
             providers,
         )
 
@@ -126,22 +138,21 @@ async def test_provider_idle_agreement(
 # but orphaned Agreement at some point.
 @pytest.mark.asyncio
 async def test_provider_idle_agreement_after_2_activities(
-    assets_path: Path,
-    demand_constraints: str,
-    payment_id_pool: PaymentIdPool,
-    runner: Runner,
-    task_package_template: str,
+    common_assets: Path,
+    config_overrides: List[Override],
+    log_dir: Path,
 ):
     """Test provider breaking idle Agreement after 2 Activities were computed."""
+    runner = _create_runner(common_assets, config_overrides, log_dir)
 
-    async with runner(_topology(assets_path, payment_id_pool)):
+    async with runner(_topology(common_assets)):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         providers = runner.get_probes(probe_type=ProviderProbe)
 
         agreement_providers = await negotiate_agreements(
             requestor,
             build_demand(
-                requestor, runner, task_package_template, require_debit_notes=False
+                requestor, runner, wasi_task_package, require_debit_notes=False
             ),
             providers,
         )
@@ -162,21 +173,20 @@ async def test_provider_idle_agreement_after_2_activities(
 # Requestor is expected to accept DebitNotes in timeout negotiated in Offer.
 @pytest.mark.asyncio
 async def test_provider_debit_notes_accept_timeout(
-    assets_path: Path,
-    demand_constraints: str,
-    payment_id_pool: PaymentIdPool,
-    runner: Runner,
-    task_package_template: str,
+    common_assets: Path,
+    config_overrides: List[Override],
+    log_dir: Path,
 ):
     """Test provider breaking Agreement if Requestor doesn't accept DebitNotes."""
+    runner = _create_runner(common_assets, config_overrides, log_dir)
 
-    async with runner(_topology(assets_path, payment_id_pool)):
+    async with runner(_topology(common_assets)):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         providers = runner.get_probes(probe_type=ProviderProbe)
 
         agreement_providers = await negotiate_agreements(
             requestor,
-            build_demand(requestor, runner, task_package_template),
+            build_demand(requestor, runner, wasi_task_package),
             providers,
         )
 
@@ -204,21 +214,20 @@ async def test_provider_debit_notes_accept_timeout(
 # here we are unable to send them, so they can't timeout.
 @pytest.mark.asyncio
 async def test_provider_timeout_unresponsive_requestor(
-    assets_path: Path,
-    demand_constraints: str,
-    payment_id_pool: PaymentIdPool,
-    runner: Runner,
-    task_package_template: str,
+    common_assets: Path,
+    config_overrides: List[Override],
+    log_dir: Path,
 ):
     """Test provider breaking Agreement if Requestor doesn't accept DebitNotes."""
+    runner = _create_runner(common_assets, config_overrides, log_dir)
 
-    async with runner(_topology(assets_path, payment_id_pool)):
+    async with runner(_topology(common_assets)):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         providers = runner.get_probes(probe_type=ProviderProbe)
 
         agreement_providers = await negotiate_agreements(
             requestor,
-            build_demand(requestor, runner, task_package_template),
+            build_demand(requestor, runner, wasi_task_package),
             providers,
         )
 
