@@ -1,12 +1,9 @@
 use rand::seq::SliceRandom;
-use std::sync::Arc;
 use std::time::Duration;
 
 use ya_market::assert_err_eq;
 use ya_market::testing::{
-    mock_node::{
-        assert_offers_broadcasted, assert_unsunbscribes_broadcasted, create_market_config_for_test,
-    },
+    mock_node::{assert_offers_broadcasted, assert_unsunbscribes_broadcasted},
     mock_offer::client,
     MarketServiceExt, MarketsNetwork, QueryOfferError,
 };

@@ -106,6 +106,7 @@ mod test {
 
     use crate::testing::mock_identity::{generate_identity, MockIdentity};
     use crate::testing::mock_offer::sample_retrieve_offers;
+    use crate::testing::Config;
 
     use super::super::*;
     use super::*;
@@ -152,6 +153,7 @@ mod test {
             .add_handler(|_, _: UnsubscribedOffersBcast| async { Ok(vec![]) })
             .add_handler(|_, _: OffersBcast| async { Ok(vec![]) })
             .add_handler(|_, _: RetrieveOffers| async { Ok(vec![]) })
+            .with_config(Config::from_env().unwrap().discovery)
             .build();
     }
 
@@ -164,6 +166,7 @@ mod test {
             .add_data_handler(|_: &str, _, _: UnsubscribedOffersBcast| async { Ok(vec![]) })
             .add_handler(|_, _: OffersBcast| async { Ok(vec![]) })
             .add_data_handler(|_: &str, _, _: RetrieveOffers| async { Ok(vec![]) })
+            .with_config(Config::from_env().unwrap().discovery)
             .build();
     }
 
@@ -189,6 +192,7 @@ mod test {
                 }
             })
             .add_handler(|_, _: OffersBcast| async { Ok(vec![]) })
+            .with_config(Config::from_env().unwrap().discovery)
             .build();
 
         assert_eq!(0, counter.load(SeqCst));
