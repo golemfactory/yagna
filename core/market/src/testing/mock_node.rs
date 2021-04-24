@@ -221,8 +221,9 @@ impl MarketsNetwork {
             .await
     }
 
-    pub fn discovery_builder() -> DiscoveryBuilder {
+    pub fn discovery_builder(&self) -> DiscoveryBuilder {
         DiscoveryBuilder::default()
+            .with_config(self.config.discovery.clone())
             .add_handler(empty_on_offers_retrieved)
             .add_handler(empty_on_offers_bcast)
             .add_handler(empty_on_offer_unsubscribed_bcast)
