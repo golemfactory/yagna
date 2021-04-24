@@ -4,9 +4,11 @@ use std::time::Duration;
 
 use ya_market::assert_err_eq;
 use ya_market::testing::{
-    bcast::{assert_offers_broadcasted, assert_unsunbscribes_broadcasted},
+    mock_node::{
+        assert_offers_broadcasted, assert_unsunbscribes_broadcasted, create_market_config_for_test,
+    },
     mock_offer::client,
-    Config, MarketServiceExt, MarketsNetwork, QueryOfferError,
+    MarketServiceExt, MarketsNetwork, QueryOfferError,
 };
 
 /// Initialize two markets and add Offers.
@@ -17,14 +19,8 @@ use ya_market::testing::{
 async fn test_startup_offers_sharing() {
     let _ = env_logger::builder().try_init();
 
-    // Change expected time of sending broadcasts.
-    let mut config = Config::default();
-    config.discovery.mean_cyclic_bcast_interval = Duration::from_millis(100);
-    config.discovery.max_bcasted_offers = 7;
-
     let network = MarketsNetwork::new(None)
         .await
-        .with_config(Arc::new(config))
         .add_market_instance("Node-1")
         .await
         .add_market_instance("Node-2")
@@ -76,16 +72,8 @@ async fn test_startup_offers_sharing() {
 async fn test_unsubscribes_cyclic_broadcasts() {
     let _ = env_logger::builder().try_init();
 
-    // Change expected time of sending broadcasts.
-    let mut config = Config::default();
-    config.discovery.mean_cyclic_bcast_interval = Duration::from_millis(100);
-    config.discovery.mean_cyclic_unsubscribes_interval = Duration::from_millis(100);
-    config.discovery.max_bcasted_offers = 70;
-    config.discovery.max_bcasted_unsubscribes = 70;
-
     let network = MarketsNetwork::new(None)
         .await
-        .with_config(Arc::new(config))
         .add_market_instance("Node-1")
         .await
         .add_market_instance("Node-2")
@@ -213,14 +201,8 @@ async fn test_network_error_while_subscribing() {
 async fn test_sharing_someones_else_offers() {
     let _ = env_logger::builder().try_init();
 
-    // Change expected time of sending broadcasts.
-    let mut config = Config::default();
-    config.discovery.mean_cyclic_bcast_interval = Duration::from_millis(100);
-    config.discovery.max_bcasted_offers = 7;
-
     let network = MarketsNetwork::new(None)
         .await
-        .with_config(Arc::new(config))
         .add_market_instance("Node-1")
         .await
         .add_market_instance("Node-2")
@@ -272,16 +254,8 @@ async fn test_sharing_someones_else_offers() {
 async fn test_sharing_someones_else_unsubscribes() {
     let _ = env_logger::builder().try_init();
 
-    // Change expected time of sending broadcasts.
-    let mut config = Config::default();
-    config.discovery.mean_cyclic_bcast_interval = Duration::from_millis(100);
-    config.discovery.mean_cyclic_unsubscribes_interval = Duration::from_millis(100);
-    config.discovery.max_bcasted_offers = 7;
-    config.discovery.max_bcasted_unsubscribes = 7;
-
     let network = MarketsNetwork::new(None)
         .await
-        .with_config(Arc::new(config))
         .add_market_instance("Node-1")
         .await
         .add_market_instance("Node-2")

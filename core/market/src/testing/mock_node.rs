@@ -105,24 +105,6 @@ fn testname_from_backtrace(bn: &str) -> String {
     format!("{}.{}", filename, testname)
 }
 
-fn create_market_config_for_test() -> Config {
-    // This default implementation will be used only in tests.
-    let discovery = DiscoveryConfig {
-        max_bcasted_offers: 200,
-        max_bcasted_unsubscribes: 200,
-        mean_cyclic_bcast_interval: Duration::from_millis(200),
-        mean_cyclic_unsubscribes_interval: Duration::from_millis(200),
-        offer_rebroadcast_delay: Duration::from_millis(200),
-        unsub_rebroadcast_delay: Duration::from_millis(200),
-    };
-
-    Config {
-        discovery,
-        subscription: Default::default(),
-        events: Default::default(),
-    }
-}
-
 impl MarketsNetwork {
     /// Remember that test_name should be unique between all tests.
     /// It will be used to create directories and GSB binding points,
@@ -700,4 +682,84 @@ pub mod default {
     ) -> Result<(), TerminateAgreementError> {
         Ok(())
     }
+}
+
+pub fn create_market_config_for_test() -> Config {
+    // Discovery config to be used only in tests.
+    let discovery = DiscoveryConfig {
+        max_bcasted_offers: 100,
+        max_bcasted_unsubscribes: 100,
+        mean_cyclic_bcast_interval: Duration::from_millis(200),
+        mean_cyclic_unsubscribes_interval: Duration::from_millis(200),
+        offer_rebroadcast_delay: Duration::from_millis(200),
+        unsub_rebroadcast_delay: Duration::from_millis(200),
+    };
+
+    Config {
+        discovery,
+        subscription: Default::default(),
+        events: Default::default(),
+    }
+}
+
+/// Assure that all given nodes have the same knowledge about given Subscriptions (Offers).
+/// Wait if needed at most 2,5s ( = 10 x 250ms).
+pub async fn assert_offers_broadcasted<'a, S>(mkts: &[&MarketService], subscriptions: S)
+where
+    S: IntoIterator<Item = &'a SubscriptionId>,
+    <S as IntoIterator>::IntoIter: Clone,
+{
+    let subscriptions = subscriptions.into_iter();
+    let mut all_broadcasted = false;
+    'retry: for _i in 0..10 {
+        for subscription in subscriptions.clone() {
+            for mkt in mkts {
+                if mkt.get_offer(&subscription).await.is_err() {
+                    // Every 150ms we should get at least one broadcast from each Node.
+                    // After a few tries all nodes should have the same knowledge about Offers.
+                    tokio::time::delay_for(Duration::from_millis(250)).await;
+                    continue 'retry;
+                }
+            }
+        }
+        all_broadcasted = true;
+        break;
+    }
+    assert!(
+        all_broadcasted,
+        "At least one of the offers was not propagated to all nodes"
+    );
+}
+
+/// Assure that all given nodes have the same knowledge about given Subscriptions (Offers).
+/// Wait if needed at most 1,5s ( = 10 x 150ms).
+pub async fn assert_unsunbscribes_broadcasted<'a, S>(mkts: &[&MarketService], subscriptions: S)
+where
+    S: IntoIterator<Item = &'a SubscriptionId>,
+    <S as IntoIterator>::IntoIter: Clone,
+{
+    let subscriptions = subscriptions.into_iter();
+    let mut all_broadcasted = false;
+    'retry: for _i in 0..10 {
+        for subscription in subscriptions.clone() {
+            for mkt in mkts {
+                let expect_error = QueryOfferError::Unsubscribed(subscription.clone()).to_string();
+                match mkt.get_offer(&subscription).await {
+                    Err(e) => assert_eq!(e.to_string(), expect_error),
+                    Ok(_) => {
+                        // Every 150ms we should get at least one broadcast from each Node.
+                        // After a few tries all nodes should have the same knowledge about Offers.
+                        tokio::time::delay_for(Duration::from_millis(150)).await;
+                        continue 'retry;
+                    }
+                }
+            }
+        }
+        all_broadcasted = true;
+        break;
+    }
+    assert!(
+        all_broadcasted,
+        "At least one of the offer unsubscribes was not propagated to all nodes"
+    );
 }
