@@ -1,5 +1,5 @@
 use ya_market::testing::{
-    bcast::assert_offers_broadcasted,
+    mock_node::assert_offers_broadcasted,
     mock_offer::client::{sample_demand, sample_offer},
     proposal_util::exchange_draft_proposals,
     GetProposalError, MarketServiceExt, MarketsNetwork, Owner, ProposalError,
