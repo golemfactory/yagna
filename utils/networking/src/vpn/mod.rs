@@ -7,7 +7,7 @@ pub use common::MAX_FRAME_SIZE;
 pub use error::Error;
 pub use network::{Network, Networks};
 pub use packet::{ArpField, ArpPacket};
-pub use packet::{EtherField, EtherFrame, PeekPacket};
+pub use packet::{EtherField, EtherFrame, EtherType, PeekPacket};
 pub use packet::{IpPacket, IpV4Packet, IpV6Packet, Ipv4Field, Ipv6Field};
 
 /// IP sub-protocol identifiers

@@ -80,6 +80,10 @@ pub struct Packet {
 #[rtype(result = "Result<()>")]
 pub struct Shutdown;
 
+#[derive(Debug, Message)]
+#[rtype(result = "Result<()>")]
+pub struct DataSent;
+
 #[derive(Clone, Debug)]
 pub struct ConnectionMeta {
     pub handle: SocketHandle,

@@ -59,6 +59,13 @@ impl EtherFrame {
         }
     }
 
+    pub fn peek_payload(data: &Box<[u8]>) -> Result<&[u8], Error> {
+        if data.len() < ETHERNET_HDR_SIZE {
+            return Err(Error::PacketMalformed("Ethernet: frame too short".into()));
+        }
+        Ok(&data[EtherField::PAYLOAD])
+    }
+
     pub fn payload(&self) -> &[u8] {
         &self.as_ref()[EtherField::PAYLOAD]
     }

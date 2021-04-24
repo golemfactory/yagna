@@ -122,12 +122,13 @@ impl<'a> Stack<'a> {
         Ok(())
     }
 
-    pub fn send(&self, data: Vec<u8>, meta: ConnectionMeta) -> Send<'a> {
+    pub fn send<F: Fn() + 'static>(&self, data: Vec<u8>, meta: ConnectionMeta, f: F) -> Send<'a> {
         Send {
             data,
             offset: 0,
             meta,
             sockets: self.sockets.clone(),
+            sent: Box::new(f),
         }
     }
 
@@ -184,45 +185,50 @@ pub struct Send<'a> {
     offset: usize,
     meta: ConnectionMeta,
     sockets: Rc<RefCell<SocketSet<'a>>>,
+    sent: Box<dyn Fn()>,
 }
 
 impl<'a> Future for Send<'a> {
     type Output = Result<()>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let sockets_rfc = self.sockets.clone();
-        let mut sockets = sockets_rfc.borrow_mut();
-        let meta = &self.meta;
+        let result = {
+            let sockets_rfc = self.sockets.clone();
+            let mut sockets = sockets_rfc.borrow_mut();
+            let meta = &self.meta;
 
-        let result = match meta.protocol {
-            Protocol::Tcp => {
-                let mut socket = sockets.get::<TcpSocket>(meta.handle);
-                let result = socket.send_slice(&self.data[self.offset..]);
-                return match result {
-                    Ok(count) => {
-                        self.offset += count;
-                        if self.offset >= self.data.len() {
-                            Poll::Ready(Ok(()))
-                        } else {
+            match meta.protocol {
+                Protocol::Tcp => {
+                    let mut socket = sockets.get::<TcpSocket>(meta.handle);
+                    let result = socket.send_slice(&self.data[self.offset..]);
+                    return match result {
+                        Ok(count) => {
+                            self.offset += count;
+                            if self.offset >= self.data.len() {
+                                Poll::Ready(Ok(()))
+                            } else {
+                                socket.register_send_waker(cx.waker());
+                                Poll::Pending
+                            }
+                        }
+                        Err(smoltcp::Error::Exhausted) => {
                             socket.register_send_waker(cx.waker());
                             Poll::Pending
                         }
-                    }
-                    Err(smoltcp::Error::Exhausted) => {
-                        socket.register_send_waker(cx.waker());
-                        Poll::Pending
-                    }
-                    Err(err) => Poll::Ready(Err(Error::Other(err.to_string()))),
-                };
+                        Err(err) => Poll::Ready(Err(Error::Other(err.to_string()))),
+                    };
+                }
+                Protocol::Udp => sockets
+                    .get::<UdpSocket>(meta.handle)
+                    .send_slice(&self.data, meta.remote),
+                Protocol::Icmp => sockets
+                    .get::<IcmpSocket>(meta.handle)
+                    .send_slice(&self.data, meta.remote.addr),
+                _ => sockets.get::<RawSocket>(meta.handle).send_slice(&self.data),
             }
-            Protocol::Udp => sockets
-                .get::<UdpSocket>(meta.handle)
-                .send_slice(&self.data, meta.remote),
-            Protocol::Icmp => sockets
-                .get::<IcmpSocket>(meta.handle)
-                .send_slice(&self.data, meta.remote.addr),
-            _ => sockets.get::<RawSocket>(meta.handle).send_slice(&self.data),
         };
+
+        (*self.sent)();
 
         match result {
             Ok(_) => Poll::Ready(Ok(())),

@@ -14,12 +14,14 @@ use tokio::io;
 
 use crate::acl::Acl;
 use ya_core_model::activity;
-use ya_core_model::activity::VpnControl;
+use ya_core_model::activity::{RpcMessageError, VpnControl};
 use ya_runtime_api::server::{CreateNetwork, Network, NetworkEndpoint, RuntimeService};
 use ya_service_bus::{actix_rpc, typed, typed::Endpoint as GsbEndpoint, RpcEnvelope};
+use ya_utils_networking::vpn::common::ntoh;
 use ya_utils_networking::vpn::error::Error as VpnError;
 use ya_utils_networking::vpn::{
-    self, ArpField, ArpPacket, EtherFrame, IpPacket, Networks, PeekPacket, MAX_FRAME_SIZE,
+    self, ArpField, ArpPacket, EtherFrame, EtherType, IpPacket, Networks, PeekPacket,
+    MAX_FRAME_SIZE,
 };
 
 pub(crate) async fn start_vpn<R: RuntimeService>(
@@ -125,13 +127,12 @@ impl Vpn {
         let pkt: Vec<_> = frame.into();
         log::trace!("Egress {} b", pkt.len());
 
-        ctx.spawn(
-            endpoint
-                .call(activity::VpnPacket(pkt))
-                .map_err(|err| log::debug!("VPN call error: {}", err))
-                .then(|_| future::ready(()))
-                .into_actor(self),
-        );
+        endpoint
+            .call(activity::VpnPacket(pkt))
+            .map_err(|err| log::debug!("VPN call error: {}", err))
+            .then(|_| future::ready(()))
+            .into_actor(self)
+            .spawn(ctx);
     }
 }
 
@@ -140,9 +141,23 @@ impl Actor for Vpn {
 
     fn started(&mut self, ctx: &mut Self::Context) {
         self.networks.as_ref().keys().for_each(|net| {
-            let vpn_id = activity::exeunit::network_id(net);
+            let actor = ctx.address();
+            let net_id = net.clone();
+            let vpn_id = activity::exeunit::network_id(&net_id);
+
             actix_rpc::bind::<activity::VpnControl>(&vpn_id, ctx.address().recipient());
-            actix_rpc::bind::<activity::VpnPacket>(&vpn_id, ctx.address().recipient());
+            typed::bind_with_caller::<activity::VpnPacket, _, _>(&vpn_id, move |caller, pkt| {
+                actor
+                    .send(Packet {
+                        network_id: net_id.clone(),
+                        caller,
+                        data: pkt.0,
+                    })
+                    .then(|sent| match sent {
+                        Ok(result) => future::ready(result),
+                        Err(err) => future::err(RpcMessageError::Service(err.to_string())),
+                    })
+            });
         });
 
         match self.endpoint.rx.take() {
@@ -161,15 +176,14 @@ impl Actor for Vpn {
         log::info!("Stopping VPN service");
 
         let networks = self.networks.as_ref().keys().cloned().collect::<Vec<_>>();
-        ctx.wait(
-            async move {
-                for net in networks {
-                    let vpn_id = activity::exeunit::network_id(&net);
-                    let _ = typed::unbind(&vpn_id).await;
-                }
+        async move {
+            for net in networks {
+                let vpn_id = activity::exeunit::network_id(&net);
+                let _ = typed::unbind(&vpn_id).await;
             }
-            .into_actor(self),
-        );
+        }
+        .into_actor(self)
+        .wait(ctx);
 
         Running::Stop
     }
@@ -209,29 +223,54 @@ impl StreamHandler<Result<Vec<u8>>> for Vpn {
 }
 
 /// Ingress traffic handler (VPN -> VM)
-impl Handler<RpcEnvelope<activity::VpnPacket>> for Vpn {
-    type Result = <RpcEnvelope<activity::VpnPacket> as Message>::Result;
+impl Handler<Packet> for Vpn {
+    type Result = <Packet as Message>::Result;
 
-    fn handle(
-        &mut self,
-        packet: RpcEnvelope<activity::VpnPacket>,
-        ctx: &mut Context<Self>,
-    ) -> Self::Result {
-        let mut packet = packet.into_inner();
-        let mut tx = self.endpoint.tx.clone();
+    fn handle(&mut self, mut packet: Packet, ctx: &mut Context<Self>) -> Self::Result {
+        log::trace!("Ingress {} b", packet.data.len());
 
-        log::trace!("Ingress {} b", packet.0.len());
+        let network_id = packet.network_id;
+        let node_id = packet.caller;
+        let data = packet.data.into_boxed_slice();
 
-        write_prefix(&mut packet.0);
-
-        ctx.spawn(
-            async move {
-                if let Err(e) = tx.send(Ok(packet.0)).await {
-                    log::debug!("Ingress VPN error: {}", e);
+        // fixme: should requestor be queried for unknown IP addresses instead?
+        // read and add unknown node id -> ip if it doesn't exist
+        if let Ok(ether_type) = EtherFrame::peek_type(&data) {
+            let payload = EtherFrame::peek_payload(&data).unwrap();
+            let ip = match ether_type {
+                EtherType::Arp => {
+                    let pkt = ArpPacket::packet(payload);
+                    ntoh(pkt.get_field(ArpField::SPA))
                 }
+                EtherType::Ip => {
+                    let pkt = IpPacket::packet(payload);
+                    ntoh(pkt.src_address())
+                }
+                _ => None,
+            };
+
+            if let Some(ip) = ip {
+                log::debug!("Adding new node: {} {}", ip, node_id);
+                self.networks.get_mut(&network_id).map(|network| {
+                    if !network.nodes().contains_key(&node_id) {
+                        network.add_node(ip, &node_id, gsb_endpoint);
+                    }
+                });
             }
-            .into_actor(self),
-        );
+        }
+
+        let mut data = data.into();
+        write_prefix(&mut data);
+
+        let mut tx = self.endpoint.tx.clone();
+        async move {
+            if let Err(e) = tx.send(Ok(data)).await {
+                log::debug!("Ingress VPN error: {}", e);
+            }
+        }
+        .into_actor(self)
+        .spawn(ctx);
+
         Ok(())
     }
 }
@@ -277,6 +316,14 @@ impl Handler<Shutdown> for Vpn {
         ctx.stop();
         Ok(())
     }
+}
+
+#[derive(Message)]
+#[rtype(result = "<RpcEnvelope<activity::VpnPacket> as Message>::Result")]
+struct Packet {
+    network_id: String,
+    caller: String,
+    data: Vec<u8>,
 }
 
 struct VpnEndpoint {
@@ -450,8 +497,6 @@ mod test {
 
     #[test]
     fn rx_buffer() {
-        println!("rx_buffer");
-
         for mut tx in vec![TxMode::Full, TxMode::Chunked(1), TxMode::Chunked(2)] {
             for sz in vec![1, 2, 3, 5, 7, 12, 64] {
                 let src = (0..=255u8)

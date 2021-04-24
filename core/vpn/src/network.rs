@@ -311,6 +311,11 @@ impl Actor for Vpn {
         let id = self.vpn.id();
         let vpn_url = gsb_local_url(&id);
         actix_rpc::bind::<VpnPacket>(&vpn_url, ctx.address().recipient());
+
+        ctx.run_interval(std::time::Duration::from_millis(100), |this, ctx| {
+            this.poll(ctx.address());
+        });
+
         log::info!("VPN {} started", id);
     }
 
@@ -544,13 +549,14 @@ impl Handler<Disconnect> for Vpn {
 impl Handler<Packet> for Vpn {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, pkt: Packet, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, pkt: Packet, ctx: &mut Self::Context) -> Self::Result {
         if !self.connections.contains_key(&pkt.meta.handle) {
             return ActorResponse::reply(Err(Error::ConnectionError("no connection".into())));
         }
+        let addr = ctx.address();
         let fut = self
             .stack
-            .send(pkt.data, pkt.meta)
+            .send(pkt.data, pkt.meta, move || addr.do_send(DataSent {}))
             .map_err(|e| Error::Other(e.to_string()));
         ActorResponse::r#async(fut.into_actor(self))
     }
@@ -562,6 +568,15 @@ impl Handler<RpcEnvelope<VpnPacket>> for Vpn {
 
     fn handle(&mut self, msg: RpcEnvelope<VpnPacket>, ctx: &mut Self::Context) -> Self::Result {
         self.stack.receive_phy(msg.into_inner().0);
+        self.poll(ctx.address());
+        Ok(())
+    }
+}
+
+impl Handler<DataSent> for Vpn {
+    type Result = <DataSent as Message>::Result;
+
+    fn handle(&mut self, _: DataSent, ctx: &mut Self::Context) -> Self::Result {
         self.poll(ctx.address());
         Ok(())
     }
