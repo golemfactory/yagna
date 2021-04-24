@@ -20,7 +20,7 @@ use super::bcast::BCastService;
 use super::mock_net::{gsb_prefixes, MockNet};
 use super::negotiation::{provider, requestor};
 use super::{store::SubscriptionStore, Matcher};
-use crate::config::Config;
+use crate::config::{Config, DiscoveryConfig};
 use crate::db::dao::ProposalDao;
 use crate::db::model::{Demand, Offer, Proposal, ProposalId, SubscriptionId};
 use crate::identity::IdentityApi;
@@ -105,6 +105,24 @@ fn testname_from_backtrace(bn: &str) -> String {
     format!("{}.{}", filename, testname)
 }
 
+fn create_market_config_for_test() -> Config {
+    // This default implementation will be used only in tests.
+    let discovery = DiscoveryConfig {
+        max_bcasted_offers: 200,
+        max_bcasted_unsubscribes: 200,
+        mean_cyclic_bcast_interval: Duration::from_millis(200),
+        mean_cyclic_unsubscribes_interval: Duration::from_millis(200),
+        offer_rebroadcast_delay: Duration::from_millis(200),
+        unsub_rebroadcast_delay: Duration::from_millis(200),
+    };
+
+    Config {
+        discovery,
+        subscription: Default::default(),
+        events: Default::default(),
+    }
+}
+
 impl MarketsNetwork {
     /// Remember that test_name should be unique between all tests.
     /// It will be used to create directories and GSB binding points,
@@ -123,22 +141,16 @@ impl MarketsNetwork {
         }
         bn = testname_from_backtrace(&bn);
 
-        let tn = test_name.unwrap_or(&bn);
-        log::info!("Intializing MarketsNetwork. tn={}", tn);
-        let test_dir = prepare_test_dir(&tn).unwrap();
+        let test_name = test_name.unwrap_or(&bn).to_string();
+        log::info!("Intializing MarketsNetwork. tn={}", test_name);
 
         MockNet::default().bind_gsb();
 
-        // Overwrite default cyclic broadcasts interval to 1s for tests purposes.
-        let mut config = Config::default();
-        config.discovery.mean_cyclic_bcast_interval = Duration::from_millis(500);
-        config.discovery.mean_cyclic_unsubscribes_interval = Duration::from_millis(500);
-
         MarketsNetwork {
             nodes: vec![],
-            test_dir,
-            test_name: tn.to_string(),
-            config: Arc::new(config),
+            test_dir: prepare_test_dir(&test_name).unwrap(),
+            test_name,
+            config: Arc::new(create_market_config_for_test()),
         }
     }
 
@@ -221,6 +233,7 @@ impl MarketsNetwork {
         let identity_api = MockIdentity::new(name);
         let discovery = builder
             .add_data(identity_api.clone() as Arc<dyn IdentityApi>)
+            .with_config(self.config.discovery.clone())
             .build();
         self.add_node(name, identity_api, MockNodeKind::Discovery(discovery))
             .await

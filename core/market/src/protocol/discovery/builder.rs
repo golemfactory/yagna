@@ -10,11 +10,11 @@ use super::{Discovery, DiscoveryImpl};
 use crate::config::DiscoveryConfig;
 use crate::protocol::discovery::OfferHandlers;
 
-#[cfg_attr(feature = "testing", derive(Default))]
+#[derive(Default)]
 pub struct DiscoveryBuilder {
     data: HashMap<TypeId, Box<dyn Any>>,
     handlers: HashMap<TypeId, Box<dyn Any>>,
-    config: DiscoveryConfig,
+    config: Option<DiscoveryConfig>,
 }
 
 impl DiscoveryBuilder {
@@ -60,7 +60,7 @@ impl DiscoveryBuilder {
     }
 
     pub fn with_config(mut self, config: DiscoveryConfig) -> Self {
-        self.config = config;
+        self.config = Some(config);
         self
     }
 
@@ -78,7 +78,7 @@ impl DiscoveryBuilder {
                 unsub_queue: Mutex::new(vec![]),
                 get_local_offers_handler: self.get_handler(),
                 offer_unsubscribe_handler: self.get_handler(),
-                config: self.config,
+                config: self.config.unwrap(),
             }),
         }
     }

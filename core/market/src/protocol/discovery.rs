@@ -76,7 +76,7 @@ impl Discovery {
             let myself = self.clone();
             let _ = Arbiter::spawn(async move {
                 // Sleep to collect multiple offers to send
-                delay_for(myself.inner.config.offer_broadcast_time).await;
+                delay_for(myself.inner.config.offer_rebroadcast_delay).await;
                 myself.send_bcast_offers().await;
             });
         }
@@ -172,7 +172,7 @@ impl Discovery {
             let myself = self.clone();
             let _ = Arbiter::spawn(async move {
                 // Sleep to collect multiple unsubscribes to send
-                delay_for(myself.inner.config.unsub_broadcast_time).await;
+                delay_for(myself.inner.config.unsub_rebroadcast_delay).await;
                 myself.send_bcast_unsubscribes().await;
             });
         }

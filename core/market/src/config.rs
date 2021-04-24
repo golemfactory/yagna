@@ -2,7 +2,6 @@ use std::time::Duration;
 use structopt::StructOpt;
 
 #[derive(StructOpt, Clone)]
-#[cfg_attr(feature = "testing", derive(Default))]
 pub struct Config {
     #[structopt(flatten)]
     pub discovery: DiscoveryConfig,
@@ -23,9 +22,9 @@ pub struct DiscoveryConfig {
     #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "4min")]
     pub mean_cyclic_unsubscribes_interval: Duration,
     #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "5sec")]
-    pub offer_broadcast_time: Duration,
+    pub offer_rebroadcast_delay: Duration,
     #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "5sec")]
-    pub unsub_broadcast_time: Duration,
+    pub unsub_rebroadcast_delay: Duration,
 }
 
 #[derive(Clone)]
@@ -44,21 +43,6 @@ impl Config {
         // Mock command line arguments, because we want to use ENV fallback
         // or default values if ENV variables don't exist.
         Ok(Config::from_iter_safe(vec!["yagna"].iter())?)
-    }
-}
-
-// This default implementation will be used only in tests.
-#[cfg(feature = "testing")]
-impl Default for DiscoveryConfig {
-    fn default() -> Self {
-        DiscoveryConfig {
-            max_bcasted_offers: 200,
-            max_bcasted_unsubscribes: 200,
-            mean_cyclic_bcast_interval: Duration::from_secs(60),
-            mean_cyclic_unsubscribes_interval: Duration::from_secs(60),
-            offer_broadcast_time: Duration::from_secs(1),
-            unsub_broadcast_time: Duration::from_secs(1),
-        }
     }
 }
 
