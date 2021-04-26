@@ -23,7 +23,9 @@ pub struct DiscoveryConfig {
     pub mean_cyclic_unsubscribes_interval: Duration,
 }
 
+#[derive(StructOpt)]
 pub struct SubscriptionConfig {
+    #[structopt(env = "DEFAULT_SUBSCRIPTION_TTL", parse(try_from_str = parse_chrono_duration), default_value = "1h")]
     pub default_ttl: chrono::Duration,
 }
 
@@ -67,4 +69,8 @@ impl Default for EventsConfig {
             max_events_max: 100,
         }
     }
+}
+
+fn parse_chrono_duration(s: &str) -> Result<chrono::Duration, anyhow::Error> {
+    Ok(chrono::Duration::from_std(humantime::parse_duration(s)?)?)
 }
