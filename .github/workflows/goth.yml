@@ -6,6 +6,7 @@ on:
     types: [completed]
 
 jobs:
+
   integration-test:
     name: Integration Tests
     runs-on: goth
