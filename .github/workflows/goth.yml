@@ -6,14 +6,6 @@ on:
     types: [completed]
 
 jobs:
-  triggering-workflow-info:
-    name: Triggerin Workflow Info
-    runs-on: ubuntu-latest
-    steps:
-      - name: Dump GitHub event context
-        env:
-          GH_EVENT_CONTEXT: ${{ toJSON(github.event) }}
-        run: echo "$GH_EVENT_CONTEXT"
 
   integration-test:
     name: Integration Tests
@@ -26,8 +18,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Configure Python
         uses: actions/setup-python@v2
@@ -43,13 +33,6 @@ jobs:
       - name: Install dependencies
         run: poetry install --no-root
 
-      - name: Disconnect Docker containers from default network
-        continue-on-error: true
-        run: |
-          docker network inspect docker_default
-          sudo apt-get install -y jq
-          docker network inspect docker_default | jq ".[0].Containers | map(.Name)[]" | tee /dev/stderr | xargs --max-args 1 -- docker network disconnect -f docker_default
-
       - name: Remove Docker containers
         continue-on-error: true
         run: docker rm -f $(docker ps -a -q)
@@ -57,12 +40,9 @@ jobs:
       - name: Log in to GitHub Docker repository
         run: echo ${{ secrets.GITHUB_TOKEN }} | docker login docker.pkg.github.com -u ${{github.actor}} --password-stdin
 
-      - name: Download artifact
-        uses: dawidd6/action-download-artifact@v2
+      - name: Download Yagna artifact
+        uses: actions/download-artifact@v2
         with:
-          workflow: rust.yml
-          commit: ${{github.event.workflow_run.head_sha}}
-          workflow_conclusion: success
           name: 'Yagna Linux'
           path: /tmp/yagna-build
 
