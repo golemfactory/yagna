@@ -1,12 +1,19 @@
 use chrono::{Duration, NaiveDateTime, Utc};
+use serde_json::Value;
 use std::str::FromStr;
 
+use ya_agreement_utils::agreement::flatten;
 use ya_client::model::NodeId;
 
 use crate::db::model::{Demand, Offer};
 use crate::protocol::discovery::message::RetrieveOffers;
 use crate::testing::mock_identity::generate_identity;
 use crate::testing::SubscriptionId;
+
+pub fn flatten_json(json: &Value) -> Value {
+    let mapped = flatten(json.clone());
+    Value::Object(mapped)
+}
 
 #[allow(unused)]
 pub fn sample_retrieve_offers() -> RetrieveOffers {

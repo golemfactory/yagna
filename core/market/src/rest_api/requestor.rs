@@ -1,6 +1,5 @@
 use actix_web::web::{Data, Json, Path, Query};
 use actix_web::{HttpResponse, Responder, Scope};
-use metrics::counter;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -201,12 +200,16 @@ async fn wait_for_approval(
 
 #[actix_web::post("/agreements/{agreement_id}/cancel")]
 async fn cancel_agreement(
-    _market: Data<Arc<MarketService>>,
-    _path: Path<PathAgreement>,
-    _id: Identity,
-    _body: Json<Option<Reason>>,
-) -> HttpResponse {
-    // TODO: Move to final implementation.
-    counter!("market.agreements.requestor.cancelled", 1);
-    HttpResponse::NotImplemented().finish()
+    market: Data<Arc<MarketService>>,
+    path: Path<PathAgreement>,
+    id: Identity,
+    body: Json<Option<Reason>>,
+) -> impl Responder {
+    let agreement_id = path.into_inner().to_id(Owner::Requestor)?;
+    market
+        .requestor_engine
+        .cancel_agreement(&id, &agreement_id, body.into_inner())
+        .await
+        .log_err()
+        .map(|_| HttpResponse::Ok().finish())
 }

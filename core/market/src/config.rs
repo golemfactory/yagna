@@ -50,7 +50,7 @@ impl Config {
 impl Default for SubscriptionConfig {
     fn default() -> Self {
         SubscriptionConfig {
-            default_ttl: chrono::Duration::hours(1),
+            default_ttl: chrono::Duration::seconds(50),
         }
     }
 }

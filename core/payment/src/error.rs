@@ -150,6 +150,8 @@ pub mod processor {
         Driver(#[from] ya_core_model::driver::GenericError),
         #[error("Database error: {0}")]
         Database(#[from] DbError),
+        #[error("Payment service is shutting down")]
+        Shutdown,
     }
 
     impl From<SchedulePaymentError> for GenericError {
@@ -206,6 +208,8 @@ pub mod processor {
         Send(#[from] SendError),
         #[error("Database error: {0}")]
         Database(#[from] DbError),
+        #[error("Singning error: {0}")]
+        Sign(#[from] ya_core_model::driver::GenericError),
     }
 
     impl NotifyPaymentError {
@@ -225,6 +229,8 @@ pub mod processor {
 
     #[derive(thiserror::Error, Debug)]
     pub enum VerifyPaymentError {
+        #[error("Invalid payment signature")]
+        InvalidSignature,
         #[error("Confirmation is not base64-encoded")]
         ConfirmationEncoding,
         #[error("{0}")]
@@ -348,6 +354,8 @@ pub mod processor {
         Driver(#[from] ya_core_model::driver::GenericError),
         #[error("Database error: {0}")]
         Database(#[from] DbError),
+        #[error("Payment service is shutting down")]
+        Shutdown,
     }
 
     impl From<ValidateAllocationError> for GsbValidateAllocationError {

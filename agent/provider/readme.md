@@ -425,12 +425,12 @@ cargo run -p ya-provider run
 ```
 
 ## Central setup
-We have centrally deployed (@ ip: `3.249.139.167`) three independent standalone modules/apps:
- - [net Mk1](https://github.com/golemfactory/yagna/blob/master/docs/net-api/net-mk1-hub.md) @ 3.249.139.167:7464 \
+We have centrally deployed (@ yacn2.dev.golem.network) three independent standalone modules/apps:
+ - [net Mk1](https://github.com/golemfactory/yagna/blob/master/docs/net-api/net-mk1-hub.md) @ yacn2.dev.golem.network:7464 \
    (can be run locally with `cargo run --release -p ya-sb-router --example ya_sb_router -- -l tcp://0.0.0.0:7464` 
    from the [ya-service-bus](http://github.com/golemfactory/ya-service-bus) repository)
- - simple "images store" @ 3.249.139.167:8000 \
+ - simple "images store" @ yacn2.dev.golem.network:8000 \
    this is a http server that has two purposes: to serve binary `.zip`/`.yimg` packages (GET) and receive computation results (PUT)
    (can be run locally with `cargo run --release -p ya-exe-unit --example http-get-put -- --root-dir <DIR-WITH-WASM-BINARY-IMAGES>`)
- - ya-zksync-faucet @ 3.249.139.167:5778
-    eg. `curl http://3.249.139.167:5778/zk/donatex/0xf63579d46eedee31d9db380a38addd58fdf414fd`
+ - ya-zksync-faucet @ yacn2.dev.golem.network:5778
+    eg. `curl http://yacn2.dev.golem.network:5778/zk/donatex/0xf63579d46eedee31d9db380a38addd58fdf414fd`

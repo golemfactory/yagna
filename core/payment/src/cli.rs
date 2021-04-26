@@ -41,13 +41,14 @@ pub enum PaymentCli {
         account: pay::AccountCli,
     },
 
-    // TODO: Uncomment when operation is supported by drivers
-    // Enter {
-    //     #[structopt(flatten)]
-    //     account: AccountCli,
-    //     #[structopt(long)]
-    //     amount: String,
-    // },
+    /// Enter layer 2 (deposit funds to layer 2 network)
+    Enter {
+        #[structopt(flatten)]
+        account: pay::AccountCli,
+        #[structopt(long)]
+        amount: String,
+    },
+
     /// Exit layer 2 (withdraw funds to Ethereum)
     Exit {
         #[structopt(flatten)]
@@ -61,21 +62,22 @@ pub enum PaymentCli {
         amount: Option<String>,
     },
 
-    // TODO: Uncomment when operation is supported by drivers
-    // Transfer {
-    //     #[structopt(flatten)]
-    //     account: AccountCli,
-    //     network: Option<String>,
-    //     #[structopt(long)]
-    //     to_address: String,
-    //     #[structopt(long)]
-    //     amount: String,
-    // },
+    Transfer {
+        #[structopt(flatten)]
+        account: pay::AccountCli,
+        #[structopt(long)]
+        to_address: String,
+        #[structopt(long)]
+        amount: String,
+    },
     Invoice {
         address: Option<String>,
         #[structopt(subcommand)]
         command: InvoiceCommand,
     },
+
+    /// List registered drivers, networks, tokens and platforms
+    Drivers,
 }
 
 #[derive(StructOpt, Debug)]
@@ -214,17 +216,16 @@ impl PaymentCli {
                         .await??,
                 )
             }
-            // TODO: Uncomment when operation is supported by drivers
-            // PaymentCli::Enter {
-            //     account,
-            //     driver,
-            //     network,
-            //     amount
-            // } => {
-            //     let address = resolve_address(account).await?;
-            //     let amount = BigDecimal::from_str(&amount)?;
-            //     CommandOutput::object(wallet::enter(amount, address, driver, network, token).await?)
-            // }
+            PaymentCli::Enter { account, amount } => CommandOutput::object(
+                wallet::enter(
+                    BigDecimal::from_str(&amount)?,
+                    resolve_address(account.address()).await?,
+                    account.driver(),
+                    Some(account.network()),
+                    None,
+                )
+                .await?,
+            ),
             PaymentCli::Exit {
                 account,
                 to_address,
@@ -245,18 +246,63 @@ impl PaymentCli {
                     )
                     .await?,
                 )
-            } // TODO: Uncomment when operation is supported by drivers
-              // PaymentCli::Transfer {
-              //     account,
-              //     driver,
-              //     network,
-              //     to_address,
-              //     amount
-              // } => {
-              //     let address = resolve_address(account).await?;
-              //     let amount = BigDecimal::from_str(&amount)?;
-              //     CommandOutput::object(wallet::transfer(address, to_address, amount, driver, network, token).await?)
-              // }
+            }
+            PaymentCli::Transfer {
+                account,
+                to_address,
+                amount,
+            } => {
+                let address = resolve_address(account.address()).await?;
+                let amount = BigDecimal::from_str(&amount)?;
+                CommandOutput::object(
+                    wallet::transfer(
+                        address,
+                        to_address,
+                        amount,
+                        account.driver(),
+                        Some(account.network()),
+                        None,
+                    )
+                    .await?,
+                )
+            }
+            PaymentCli::Drivers => {
+                let drivers = bus::service(pay::BUS_ID).call(pay::GetDrivers {}).await??;
+                if ctx.json_output {
+                    return CommandOutput::object(drivers);
+                }
+                Ok(ResponseTable { columns: vec![
+                        "driver".to_owned(),
+                        "network".to_owned(),
+                        "default?".to_owned(),
+                        "token".to_owned(),
+                        "default?".to_owned(),
+                        "platform".to_owned(),
+                    ], values: drivers
+                        .iter()
+                        .flat_map(|(driver, dd)| {
+                            dd.networks
+                                .iter()
+                                .flat_map(|(network, n)| {
+                                    n.tokens
+                                        .iter()
+                                        .map(|(token, platform)|
+                                            serde_json::json! {[
+                                                driver,
+                                                network,
+                                                if &dd.default_network == network { "X" } else { "" },
+                                                token,
+                                                if &n.default_token == token { "X" } else { "" },
+                                                platform,
+                                            ]}
+                                        )
+                                        .collect::<Vec<serde_json::Value>>()
+                                })
+                                .collect::<Vec<serde_json::Value>>()
+                        })
+                        .collect()
+                }.into())
+            }
         }
     }
 }

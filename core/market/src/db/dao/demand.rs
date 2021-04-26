@@ -107,6 +107,11 @@ impl<'c> DemandDao<'c> {
         log::debug!("Clean market demands: done");
         Ok(())
     }
+
+    pub async fn demand_state(self, id: &SubscriptionId) -> DbResult<DemandState> {
+        let id = id.clone();
+        do_with_transaction(self.pool, move |conn| demand_status(conn, &id)).await
+    }
 }
 
 pub(super) fn demand_status(conn: &ConnType, id: &SubscriptionId) -> DbResult<DemandState> {

@@ -12,7 +12,7 @@ use zksync::types::BlockStatus;
 use zksync::zksync_types::{
     tokens::{ChangePubKeyFeeType, ChangePubKeyFeeTypeArg},
     tx::TxHash,
-    Address, Nonce, TxFeeTypes,
+    Address, Nonce, TxFeeTypes, H256,
 };
 use zksync::{
     provider::{Provider, RpcProvider},
@@ -23,14 +23,15 @@ use zksync_eth_signer::EthereumSigner;
 // Workspace uses
 use ya_payment_driver::{
     db::models::Network,
-    model::{AccountMode, Exit, GenericError, Init, PaymentDetails},
+    model::{AccountMode, Enter, Exit, GenericError, Init, PaymentDetails},
+    utils as base_utils,
 };
 
 // Local uses
 use crate::{
     network::get_network_token,
     zksync::{faucet, signer::YagnaEthSigner, utils},
-    DEFAULT_NETWORK, ZKSYNC_TOKEN_NAME,
+    DEFAULT_NETWORK,
 };
 
 pub async fn account_balance(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
@@ -41,22 +42,12 @@ pub async fn account_balance(address: &str, network: Network) -> Result<BigDecim
         .map_err(GenericError::new)?;
     // TODO: implement tokens, replace None
     let token = get_network_token(network, None);
-    let mut balance_com = acc_info
+    let balance_com = acc_info
         .committed
         .balances
         .get(&token)
         .map(|x| x.0.clone())
         .unwrap_or(BigUint::zero());
-    // Hack to get GNT balance for backwards compatability
-    // TODO: Remove this if {} and the `mut` from `let mut balance_com`
-    if network == Network::Rinkeby && balance_com == BigUint::zero() {
-        balance_com = acc_info
-            .committed
-            .balances
-            .get(ZKSYNC_TOKEN_NAME)
-            .map(|x| x.0.clone())
-            .unwrap_or(BigUint::zero());
-    }
     let balance = utils::big_uint_to_big_dec(balance_com);
     log::debug!(
         "account_balance. address={}, network={}, balance={}",
@@ -90,7 +81,7 @@ pub async fn fund(address: &str, network: Network) -> Result<(), GenericError> {
     if network == Network::Mainnet {
         return Err(GenericError::new("Wallet can not be funded on mainnet."));
     }
-    faucet::request_ngnt(address, network).await?;
+    faucet::request_tglm(address, network).await?;
     Ok(())
 }
 
@@ -128,6 +119,31 @@ pub async fn exit(msg: &Exit) -> Result<String, GenericError> {
         )),
         None => Err(GenericError::new("Transaction time-outed")),
     }
+}
+
+pub async fn enter(msg: Enter) -> Result<String, GenericError> {
+    let network = msg.network.unwrap_or(DEFAULT_NETWORK.to_string());
+    let network = Network::from_str(&network).map_err(|e| GenericError::new(e))?;
+    let wallet = get_wallet(&msg.address, network).await?;
+
+    let tx_hash = deposit(wallet, network, msg.amount).await?;
+
+    Ok(hex::encode(tx_hash.as_fixed_bytes()))
+}
+
+pub async fn get_tx_fee(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
+    let token = get_network_token(network, None);
+    let wallet = get_wallet(&address, network).await?;
+    let tx_fee = wallet
+        .provider
+        .get_tx_fee(TxFeeTypes::Transfer, wallet.address(), token.as_str())
+        .await
+        .map_err(GenericError::new)?
+        .total_fee;
+    let tx_fee_bigdec = utils::big_uint_to_big_dec(tx_fee);
+
+    log::debug!("Transaction fee {:.5} {}", tx_fee_bigdec, token.as_str());
+    Ok(tx_fee_bigdec)
 }
 
 fn hash_to_hex(hash: TxHash) -> String {
@@ -269,6 +285,21 @@ fn get_rpc_addr(network: Network) -> String {
         Network::Rinkeby => env::var("ZKSYNC_RINKEBY_RPC_ADDRESS")
             .unwrap_or("https://rinkeby-api.zksync.golem.network/jsrpc".to_string()),
     }
+}
+
+fn get_ethereum_node_addr_from_env(network: Network) -> String {
+    match network {
+        Network::Mainnet => {
+            env::var("MAINNET_GETH_ADDR").unwrap_or("https://geth.golem.network:55555".to_string())
+        }
+        Network::Rinkeby => env::var("RINKEBY_GETH_ADDR")
+            .unwrap_or("http://geth.testnet.golem.network:55555".to_string()),
+    }
+}
+
+fn get_ethereum_confirmation_timeout() -> std::time::Duration {
+    let value = std::env::var("ZKSYNC_ETH_CONFIRMATION_TIMEOUT_SECONDS").unwrap_or("60".to_owned());
+    std::time::Duration::from_secs(value.parse::<u64>().unwrap())
 }
 
 async fn get_wallet(
@@ -442,4 +473,58 @@ async fn get_unlock_fee<S: EthereumSigner + Clone, P: Provider + Clone>(
         .map_err(GenericError::new)?
         .total_fee;
     Ok(unlock_fee)
+}
+
+pub async fn deposit<S: EthereumSigner + Clone, P: Provider + Clone>(
+    wallet: Wallet<S, P>,
+    network: Network,
+    amount: BigDecimal,
+) -> Result<H256, GenericError> {
+    let token = get_network_token(network, None);
+    let amount = base_utils::big_dec_to_u256(amount);
+    let address = wallet.address();
+
+    log::info!(
+        "Starting deposit into ZkSync network. Address {:#x}, amount: {} of {}",
+        address,
+        amount,
+        token
+    );
+
+    let mut ethereum = wallet
+        .ethereum(get_ethereum_node_addr_from_env(network))
+        .await
+        .map_err(|err| GenericError::new(err))?;
+    ethereum.set_confirmation_timeout(get_ethereum_confirmation_timeout());
+
+    if !ethereum
+        .is_limited_erc20_deposit_approved(token.as_str(), amount)
+        .await
+        .unwrap()
+    {
+        let tx = ethereum
+            .limited_approve_erc20_token_deposits(token.as_str(), amount)
+            .await
+            .map_err(|err| GenericError::new(err))?;
+        info!(
+            "Approve erc20 token for ZkSync deposit. Tx: https://rinkeby.etherscan.io/tx/{:#x}",
+            tx
+        );
+
+        ethereum
+            .wait_for_tx(tx)
+            .await
+            .map_err(|err| GenericError::new(err))?;
+    }
+
+    let deposit_tx_hash = ethereum
+        .deposit(token.as_str(), amount, address)
+        .await
+        .map_err(|err| GenericError::new(err))?;
+    info!(
+        "Check out deposit transaction at https://rinkeby.etherscan.io/tx/{:#x}",
+        deposit_tx_hash
+    );
+
+    Ok(deposit_tx_hash)
 }

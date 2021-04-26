@@ -1,5 +1,3 @@
-use ya_market_resolver::flatten::JsonObjectExpected;
-
 use crate::db::model::{SubscriptionId, SubscriptionValidationError};
 use crate::db::DbError;
 use crate::identity::IdentityError;
@@ -13,12 +11,12 @@ pub enum DemandError {
     GetSingle(DbError, SubscriptionId),
     #[error("Failed to save Demand. Error: {0}.")]
     Save(DbError),
-    #[error(transparent)]
-    JsonObjectExpected(#[from] JsonObjectExpected),
     #[error("Failed to remove Demand [{1}]. Error: {0}.")]
     Remove(DbError, SubscriptionId),
     #[error("Demand [{0}] not found.")]
     NotFound(SubscriptionId),
+    #[error(transparent)]
+    JsonObjectExpected(#[from] serde_json::error::Error),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -60,7 +58,7 @@ pub enum SaveOfferError {
     #[error(transparent)]
     SubscriptionValidation(#[from] SubscriptionValidationError),
     #[error(transparent)]
-    JsonObjectExpected(#[from] JsonObjectExpected),
+    JsonObjectExpected(#[from] serde_json::error::Error),
     #[error("Wrong Offer [{id}] state {state:?} after inserted: {inserted}.")]
     WrongState {
         state: String,
@@ -115,6 +113,8 @@ pub enum MatcherError {
 pub enum MatcherInitError {
     #[error("Failed to initialize Discovery interface. Error: {0}.")]
     DiscoveryInitError(#[from] DiscoveryInitError),
+    #[error("Failed to initialize expiration tracker. Error: {0}.")]
+    ExpirationTrackerError(String),
 }
 
 #[derive(thiserror::Error, Debug)]

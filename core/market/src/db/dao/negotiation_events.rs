@@ -1,7 +1,9 @@
 use chrono::Utc;
+use diesel::dsl::sql;
 use diesel::{sql_types, ExpressionMethods, QueryDsl, RunQueryDsl};
 use thiserror::Error;
 
+use ya_client::model::market::Reason;
 use ya_persistence::executor::ConnType;
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 
@@ -12,7 +14,6 @@ use crate::db::model::{Agreement, EventType, MarketEvent, Owner, Proposal, Subsc
 use crate::db::schema::market_negotiation_event::dsl;
 use crate::db::{DbError, DbResult};
 use crate::market::EnvConfig;
-use diesel::dsl::sql;
 
 const EVENT_STORE_DAYS: EnvConfig<'static, u64> = EnvConfig {
     name: "YAGNA_MARKET_EVENT_STORE_DAYS",
@@ -55,7 +56,7 @@ impl<'c> NegotiationEventsDao<'c> {
     pub async fn add_proposal_rejected_event(
         &self,
         proposal: &Proposal,
-        reason: Option<String>,
+        reason: Option<Reason>,
     ) -> DbResult<()> {
         let event = MarketEvent::proposal_rejected(proposal, reason);
         do_with_transaction(self.pool, move |conn| {

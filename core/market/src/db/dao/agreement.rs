@@ -1,6 +1,7 @@
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, Utc};
 use diesel::prelude::*;
 
+use ya_client::model::market::Reason;
 use ya_client::model::NodeId;
 use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
 
@@ -233,7 +234,55 @@ impl<'c> AgreementDao<'c> {
             update_committed_signature(conn, &mut agreement, signature)?;
 
             // Always Provider approves.
-            create_event(conn, &agreement, None, Owner::Provider)?;
+            create_event(
+                conn,
+                &agreement,
+                None,
+                Owner::Provider,
+                agreement.approved_ts.unwrap_or(Utc::now().naive_utc()),
+            )?;
+
+            Ok(agreement)
+        })
+        .await
+    }
+
+    pub async fn reject(
+        &self,
+        id: &AgreementId,
+        reason: Option<Reason>,
+        timestamp: &NaiveDateTime,
+    ) -> Result<Agreement, AgreementDaoError> {
+        let id = id.clone();
+        let timestamp = timestamp.clone();
+
+        do_with_transaction(self.pool, move |conn| {
+            let mut agreement: Agreement =
+                market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
+
+            update_state(conn, &mut agreement, AgreementState::Rejected)?;
+            create_event(conn, &agreement, reason, Owner::Provider, timestamp)?;
+
+            Ok(agreement)
+        })
+        .await
+    }
+
+    pub async fn cancel(
+        &self,
+        id: &AgreementId,
+        reason: Option<Reason>,
+        timestamp: &NaiveDateTime,
+    ) -> Result<Agreement, AgreementDaoError> {
+        let id = id.clone();
+        let timestamp = timestamp.clone();
+
+        do_with_transaction(self.pool, move |conn| {
+            let mut agreement: Agreement =
+                market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
+
+            update_state(conn, &mut agreement, AgreementState::Cancelled)?;
+            create_event(conn, &agreement, reason, Owner::Requestor, timestamp)?;
 
             Ok(agreement)
         })
@@ -243,17 +292,19 @@ impl<'c> AgreementDao<'c> {
     pub async fn terminate(
         &self,
         id: &AgreementId,
-        reason: Option<String>,
+        reason: Option<Reason>,
         terminator: Owner,
+        timestamp: &NaiveDateTime,
     ) -> Result<bool, AgreementDaoError> {
         let id = id.clone();
+        let timestamp = timestamp.clone();
+
         do_with_transaction(self.pool, move |conn| {
-            log::debug!("Termination reason: {:?}", reason);
             let mut agreement: Agreement =
                 market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
 
             update_state(conn, &mut agreement, AgreementState::Terminated)?;
-            create_event(conn, &agreement, reason, terminator)?;
+            create_event(conn, &agreement, reason, terminator, timestamp)?;
 
             Ok(true)
         })

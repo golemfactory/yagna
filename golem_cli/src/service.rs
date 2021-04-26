@@ -40,7 +40,8 @@ impl AbortableChild {
                 let pid = child.id() as i32;
                 let _ret = ::nix::sys::signal::kill(Pid::from_raw(pid), SIGTERM);
             }
-            match future::select(tokio::time::delay_for(Duration::from_secs(2)), child).await {
+            // Yagna service should get ~10 seconds to clean up
+            match future::select(tokio::time::delay_for(Duration::from_secs(15)), child).await {
                 future::Either::Left((_, mut child)) => {
                     child.kill()?;
                     child.await

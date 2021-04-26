@@ -8,7 +8,8 @@
 
 // External uses
 use async_trait::async_trait;
-use futures3::{Future, FutureExt};
+use futures::{Future, FutureExt};
+use rlp::RlpStream;
 use std::pin::Pin;
 use tiny_keccak::keccak256;
 use tokio::task;
@@ -56,9 +57,16 @@ impl EthereumSigner for YagnaEthSigner {
         Ok(tx_eth_sig)
     }
 
-    async fn sign_transaction(&self, _raw_tx: RawTransaction) -> Result<Vec<u8>, SignerError> {
+    async fn sign_transaction(&self, raw_tx: RawTransaction) -> Result<Vec<u8>, SignerError> {
         log::debug!("YagnaEthSigner sign_transaction");
-        todo!();
+
+        let node_id = self.eth_address.as_bytes().into();
+        let payload: Vec<u8> = raw_tx.hash().into();
+        let chain_id = raw_tx.chain_id as u64;
+
+        let signature = sign_tx(node_id, payload.clone()).await?;
+
+        Ok(encode_signed_tx(&raw_tx, signature, chain_id))
     }
 }
 
@@ -104,4 +112,57 @@ fn sign_tx(
         Err(e) => Err(SignerError::SigningFailed(e.to_string())),
     });
     Box::pin(fut)
+}
+
+fn encode_signed_tx(raw_tx: &RawTransaction, signature: Vec<u8>, chain_id: u64) -> Vec<u8> {
+    let (sig_v, sig_r, sig_s) = prepare_signature(signature, chain_id);
+
+    let mut tx = RlpStream::new();
+
+    tx.begin_unbounded_list();
+
+    tx_encode(&raw_tx, &mut tx);
+    tx.append(&sig_v);
+    tx.append(&sig_r);
+    tx.append(&sig_s);
+
+    tx.finalize_unbounded_list();
+
+    tx.out()
+}
+
+fn prepare_signature(signature: Vec<u8>, chain_id: u64) -> (u64, Vec<u8>, Vec<u8>) {
+    // TODO ugly solution
+    assert_eq!(signature.len(), 65);
+
+    let sig_v = signature[0];
+    let sig_v = sig_v as u64 + chain_id * 2 + 35;
+
+    let mut sig_r = signature.to_owned().split_off(1);
+    let mut sig_s = sig_r.split_off(32);
+
+    prepare_signature_part(&mut sig_r);
+    prepare_signature_part(&mut sig_s);
+
+    (sig_v, sig_r, sig_s)
+}
+
+fn prepare_signature_part(part: &mut Vec<u8>) {
+    assert_eq!(part.len(), 32);
+    while part[0] == 0 {
+        part.remove(0);
+    }
+}
+
+fn tx_encode(tx: &RawTransaction, s: &mut RlpStream) {
+    s.append(&tx.nonce);
+    s.append(&tx.gas_price);
+    s.append(&tx.gas);
+    if let Some(ref t) = tx.to {
+        s.append(t);
+    } else {
+        s.append(&vec![]);
+    }
+    s.append(&tx.value);
+    s.append(&tx.data);
 }

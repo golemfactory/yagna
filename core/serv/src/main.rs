@@ -209,7 +209,7 @@ enum Services {
 
 #[cfg(not(any(
     feature = "dummy-driver",
-    feature = "gnt-driver",
+    feature = "erc20-driver",
     feature = "zksync-driver"
 )))]
 compile_error!("At least one payment driver needs to be enabled in order to make payments.");
@@ -223,17 +223,10 @@ async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<Vec<String>> {
         PaymentDriverService::gsb(&()).await?;
         drivers.push(DRIVER_NAME.to_owned());
     }
-    #[cfg(feature = "glmsync-driver")]
+    #[cfg(feature = "erc20-driver")]
     {
-        use ya_glmsync_driver::{PaymentDriverService, DRIVER_NAME};
-        let db_executor = DbExecutor::from_data_dir(data_dir, "glmsync-driver")?;
-        PaymentDriverService::gsb(&db_executor).await?;
-        drivers.push(DRIVER_NAME.to_owned());
-    }
-    #[cfg(feature = "gnt-driver")]
-    {
-        use ya_gnt_driver::{PaymentDriverService, DRIVER_NAME};
-        let db_executor = DbExecutor::from_data_dir(data_dir, "gnt-driver")?;
+        use ya_erc20_driver::{PaymentDriverService, DRIVER_NAME};
+        let db_executor = DbExecutor::from_data_dir(data_dir, "erc20-driver")?;
         PaymentDriverService::gsb(&db_executor).await?;
         drivers.push(DRIVER_NAME.to_owned());
     }
@@ -415,6 +408,8 @@ impl ServiceCommand {
                 future::try_join(server.run(), sd_notify(false, "READY=1")).await?;
 
                 log::info!("{} service successfully finished!", app_name);
+
+                PaymentService::shut_down().await;
                 logger_handle.shutdown();
                 Ok(CommandOutput::NoOutput)
             }

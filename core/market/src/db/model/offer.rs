@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 
 use ya_client::model::{market::Offer as ClientOffer, ErrorMessage, NodeId};
-use ya_market_resolver::flatten::{flatten_json, JsonObjectExpected};
 use ya_service_api_web::middleware::Identity;
 
 use super::SubscriptionId;
@@ -52,8 +51,10 @@ impl Offer {
         id: &Identity,
         creation_ts: NaiveDateTime,
         expiration_ts: NaiveDateTime,
-    ) -> Result<Offer, JsonObjectExpected> {
-        let properties = flatten_json(&offer.properties)?.to_string();
+    ) -> Result<Offer, serde_json::error::Error> {
+        let properties = serde_json::to_string(&ya_agreement_utils::agreement::flatten(
+            offer.properties.clone(),
+        ))?;
         let constraints = offer.constraints.clone();
         let node_id = id.identity;
 

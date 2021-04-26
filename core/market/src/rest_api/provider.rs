@@ -166,15 +166,13 @@ async fn reject_agreement(
     market: Data<Arc<MarketService>>,
     path: Path<PathAgreement>,
     id: Identity,
+    body: Json<Option<Reason>>,
 ) -> impl Responder {
     let agreement_id = path.into_inner().to_id(Owner::Provider)?;
     market
         .provider_engine
-        .reject_agreement(id, &agreement_id)
+        .reject_agreement(&id, &agreement_id, body.into_inner())
         .await
         .log_err()
-        .map(|result| match result {
-            true => HttpResponse::NoContent().finish(),
-            _ => HttpResponse::Gone().json(ErrorMessage::new(format!("{:?}", result))),
-        })
+        .map(|_| HttpResponse::Ok().finish())
 }
