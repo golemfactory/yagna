@@ -7,13 +7,15 @@ on:
 
 jobs:
   everytime:
-    name: Dummy job invoked regardless of previous workflow result
+    name: Dummy job
     runs-on: ubuntu-latest
     steps:
-      - name: Configure Python
-        uses: actions/setup-python@v2
+      - uses: actions/checkout@v2
         with:
-          python-version: '3.8.0'
+          ref: ${{ github.event.workflow_run.head_branch }}
+      - run: git branch
+      - run: env
+      - run: echo ${{ github.event }}
 
   integration-test:
     name: Integration Tests
@@ -26,6 +28,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
 
       - name: Configure Python
         uses: actions/setup-python@v2

@@ -22,6 +22,7 @@ jobs:
         os: [macos-latest, windows-latest, ubuntu-latest]
 
     steps:
+      - run: echo ${{ github.event }}
       - name: Checkout
         uses: actions/checkout@v1
 
