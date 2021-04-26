@@ -221,7 +221,13 @@ async def test_provider_timeout_unresponsive_requestor(
     """Test provider breaking Agreement if Requestor doesn't accept DebitNotes."""
     runner = _create_runner(common_assets, config_overrides, log_dir)
 
-    async with runner(_topology(common_assets)):
+    # Stopping container takes a little bit more time, so we must send
+    # DebitNote later, otherwise Agreement will be terminated due to
+    # not accepting DebitNotes by Requestor.
+    topology = _topology(common_assets)
+    topology[1].environment["DEBIT_NOTE_INTERVAL"] = "15"
+
+    async with runner(topology):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         providers = runner.get_probes(probe_type=ProviderProbe)
 
@@ -240,7 +246,7 @@ async def test_provider_timeout_unresponsive_requestor(
 
         # Stop Requestor probe. This should kill Yagna Daemon and
         # make Requestor unreachable, so Provider won't be able to send DebitNotes.
-        requestor.kill_daemon()
+        requestor.container.stop()
 
         # Negotiated timeout is 8s. Let's wait with some margin.
         # await task
@@ -248,3 +254,7 @@ async def test_provider_timeout_unresponsive_requestor(
             "Requestor is unreachable more than",
             timeout=12,
         )
+
+        # Note that Agreement will be broken, but Provider won't be
+        # able to terminate it, because other Yagna daemon is unreachable,
+        # so Provider will retry terminating in infinity.
