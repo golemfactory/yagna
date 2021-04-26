@@ -22,9 +22,9 @@ pub struct DiscoveryConfig {
     #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "4min")]
     pub mean_cyclic_unsubscribes_interval: Duration,
     #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "5sec")]
-    pub offer_rebroadcast_delay: Duration,
+    pub offer_broadcast_delay: Duration,
     #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "5sec")]
-    pub unsub_rebroadcast_delay: Duration,
+    pub unsub_broadcast_delay: Duration,
 }
 
 #[derive(StructOpt, Clone)]

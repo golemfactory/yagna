@@ -692,8 +692,8 @@ pub fn create_market_config_for_test() -> Config {
         max_bcasted_unsubscribes: 100,
         mean_cyclic_bcast_interval: Duration::from_millis(200),
         mean_cyclic_unsubscribes_interval: Duration::from_millis(200),
-        offer_rebroadcast_delay: Duration::from_millis(200),
-        unsub_rebroadcast_delay: Duration::from_millis(200),
+        offer_broadcast_delay: Duration::from_millis(200),
+        unsub_broadcast_delay: Duration::from_millis(200),
     };
 
     Config {
