@@ -82,7 +82,6 @@ jobs:
           args: --workspace
 
       - name: Copy binaries
-        if: false #TODO: restore
         shell: bash
         run: |
           mkdir build
@@ -93,8 +92,7 @@ jobs:
             cp target/debug/{yagna,gftp} build
             strip -x build/*
           elif [ "$RUNNER_OS" == "Windows" ]; then
-            copy target\debug\yagna.exe build
-            copy target\debug\gftp.exe build
+            cp target\debug\{yagna,gftp}.exe build
           else
             echo "$RUNNER_OS not supported"
             exit 1
