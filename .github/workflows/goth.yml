@@ -2,7 +2,7 @@ name: Goth
 
 on:
   workflow_run:
-    workflows: ["Unit Tests"]
+    workflows: ["CI"]
     types: [completed]
 
 jobs:
