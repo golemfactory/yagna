@@ -1,7 +1,7 @@
 use ya_client::model::market::{proposal::State, RequestorEvent};
 use ya_market::testing::{
-    bcast::assert_offers_broadcasted,
     events_helper::{provider, requestor, ClientProposalHelper},
+    mock_node::assert_offers_broadcasted,
     mock_offer::client::{not_matching_demand, not_matching_offer, sample_demand, sample_offer},
     negotiation::error::{CounterProposalError, RemoteProposalError},
     proposal_util::{exchange_draft_proposals, NegotiationHelper},

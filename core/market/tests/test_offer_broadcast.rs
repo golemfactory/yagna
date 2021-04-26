@@ -79,10 +79,11 @@ async fn test_broadcast_offer_callbacks() {
     let offer_clone = offer.clone();
     let offer_id = offer.id.clone();
 
+    let discovery_builder = network.discovery_builder();
     let network = network
         .add_discovery_instance(
             "Node-2",
-            MarketsNetwork::discovery_builder().add_handler(move |_: String, _: RetrieveOffers| {
+            discovery_builder.add_handler(move |_: String, _: RetrieveOffers| {
                 let offer = offer.clone();
                 async move { Ok(vec![offer]) }
             }),
@@ -120,10 +121,11 @@ async fn test_broadcast_offer_id_validation() {
     let mut offer = sample_offer();
     offer.id = invalid_id.clone();
 
+    let discovery_builder = network.discovery_builder();
     let network = network
         .add_discovery_instance(
             "Node-2",
-            MarketsNetwork::discovery_builder().add_handler(move |_: String, _: RetrieveOffers| {
+            discovery_builder.add_handler(move |_: String, _: RetrieveOffers| {
                 let offer = offer.clone();
                 async move { Ok(vec![offer]) }
             }),
@@ -137,7 +139,7 @@ async fn test_broadcast_offer_id_validation() {
         .await
         .unwrap();
 
-    wait_for_bcast(100, &market1, &invalid_id, false).await;
+    tokio::time::delay_for(Duration::from_millis(1000)).await;
     assert_err_eq!(
         QueryOfferError::NotFound(invalid_id.clone()),
         market1.get_offer(&invalid_id).await,
@@ -161,10 +163,11 @@ async fn test_broadcast_expired_offer() {
     let offer = sample_offer_with_expiration(expiration);
     let offer_id = offer.id.clone();
 
+    let discovery_builder = network.discovery_builder();
     let network = network
         .add_discovery_instance(
             "Node-2",
-            MarketsNetwork::discovery_builder().add_handler(move |_: String, _: RetrieveOffers| {
+            discovery_builder.add_handler(move |_: String, _: RetrieveOffers| {
                 let offer = offer.clone();
                 async move { Ok(vec![offer]) }
             }),
@@ -178,7 +181,7 @@ async fn test_broadcast_expired_offer() {
         .await
         .unwrap();
 
-    wait_for_bcast(100, &market1, &offer_id, false).await;
+    tokio::time::delay_for(Duration::from_millis(1000)).await;
 
     // This should return NotFound, because Market shouldn't add this Offer
     // to database at all.
@@ -242,27 +245,31 @@ async fn test_broadcast_stop_conditions() {
     let offers_counter = Arc::new(AtomicUsize::new(0));
     let counter = offers_counter.clone();
 
-    let discovery_builder = MarketsNetwork::discovery_builder().add_handler(
-        move |_caller: String, _msg: OffersBcast| {
-            let offers_counter = counter.clone();
-            let mut tx = tx.clone();
-            async move {
-                offers_counter.fetch_add(1, Ordering::SeqCst);
-                tx.send(()).await.unwrap();
-                Ok(vec![])
-            }
-        },
-    );
+    let discovery_builder =
+        network
+            .discovery_builder()
+            .add_handler(move |_caller: String, _msg: OffersBcast| {
+                let offers_counter = counter.clone();
+                let mut tx = tx.clone();
+                async move {
+                    offers_counter.fetch_add(1, Ordering::SeqCst);
+                    tx.send(()).await.unwrap();
+                    Ok(vec![])
+                }
+            });
     let network = network
         .add_discovery_instance("Node-3", discovery_builder)
         .await;
 
     // Broadcast already unsubscribed Offer. We will count number of Offers that will come back.
     let discovery3: Discovery = network.get_discovery("Node-3");
-    discovery3.bcast_offers(vec![offer.id]).await.unwrap();
+    discovery3
+        .bcast_offers(vec![offer.id.clone()])
+        .await
+        .unwrap();
 
     // Wait for broadcast.
-    tokio::time::timeout(Duration::from_millis(150), rx.next())
+    tokio::time::timeout(Duration::from_millis(250), rx.next())
         .await
         .unwrap();
 
@@ -293,8 +300,11 @@ async fn test_discovery_get_offers() {
     let network = MarketsNetwork::new(None)
         .await
         .add_market_instance("Node-1")
-        .await
-        .add_discovery_instance("Node-2", MarketsNetwork::discovery_builder())
+        .await;
+
+    let discovery_builder = network.discovery_builder();
+    let network = network
+        .add_discovery_instance("Node-2", discovery_builder)
         .await;
 
     let market1 = network.get_market("Node-1");
