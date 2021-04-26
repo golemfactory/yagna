@@ -11,7 +11,7 @@ on:
 
 jobs:
   build:
-    name: Unit Tests & Debug Build
+    name: Tests & Build
     env:
       # `-D warnings` means any warnings emitted will cause build to fail
       RUSTFLAGS: "-D warnings -C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
@@ -44,26 +44,27 @@ jobs:
           args: --all -- --check
 
       - name: Install openssl ( Windows only )
-        if: runner.os == 'Windows'
+        if: false #TODO: restore runner.os == 'Windows'
         run: |
           vcpkg install openssl:x64-windows openssl:x64-windows-static
           vcpkg list
           vcpkg integrate install
 
       - name: Unit tests [ cargo test --workspace --locked ]
+        if: false #TODO: restore
         uses: actions-rs/cargo@v1
         with:
           command: test
           args: --workspace --locked
 
       - name: Unit tests for SGX [ cd exe-unit && cargo test --features sgx ]
-        if: ${{ runner.os == 'Linux' && startsWith( github.head_ref, 'market/' ) }}
+        if: false #TODO: restore ${{ runner.os == 'Linux' && startsWith( github.head_ref, 'market/' ) }}
         working-directory: exe-unit
         run: cargo test --features sgx
 
       - name: Market Test Suite (semi-integration tests) [ cargo test --workspace --features ya-market/test-suite ]
         uses: actions-rs/cargo@v1
-        if: startsWith( github.head_ref, 'market/' )
+        if: false #TODO: restore startsWith( github.head_ref, 'market/' )
         with:
           command: test
           # Due to cargo quirks it is more efficient to run all tests from workspace as:
@@ -74,12 +75,14 @@ jobs:
           args: --tests --workspace --features ya-market/test-suite
 
       - name: Build binaries [ cargo build --workspace ]
+        if: false #TODO: restore
         uses: actions-rs/cargo@v1
         with:
           command: build
           args: --workspace
 
       - name: Copy binaries
+        if: false #TODO: restore
         shell: bash
         run: |
           mkdir build
@@ -98,6 +101,7 @@ jobs:
           fi
 
       - name: Upload binaries
+        if: false #TODO: restore
         uses: actions/upload-artifact@v1
         with:
           name: Yagna ${{ runner.os }}
