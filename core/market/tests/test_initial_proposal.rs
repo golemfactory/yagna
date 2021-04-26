@@ -323,7 +323,7 @@ async fn test_query_events_for_multiple_subscriptions() {
 
     // Check events related to first and last subscription.
     let events = market1
-        .query_events(&demand_id1, 1.2, Some(5))
+        .query_events(&demand_id1, 2.0, Some(5))
         .await
         .unwrap();
     assert_eq!(events.len(), 1);
@@ -335,7 +335,7 @@ async fn test_query_events_for_multiple_subscriptions() {
         .unwrap();
 
     let events = market1
-        .query_events(&demand_id2, 1.2, Some(5))
+        .query_events(&demand_id2, 2.0, Some(5))
         .await
         .unwrap();
     assert_eq!(events.len(), 1);

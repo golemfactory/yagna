@@ -20,7 +20,7 @@ use super::bcast::BCastService;
 use super::mock_net::{gsb_prefixes, MockNet};
 use super::negotiation::{provider, requestor};
 use super::{store::SubscriptionStore, Matcher};
-use crate::config::Config;
+use crate::config::{Config, DiscoveryConfig};
 use crate::db::dao::ProposalDao;
 use crate::db::model::{Demand, Offer, Proposal, ProposalId, SubscriptionId};
 use crate::identity::IdentityApi;
@@ -123,22 +123,16 @@ impl MarketsNetwork {
         }
         bn = testname_from_backtrace(&bn);
 
-        let tn = test_name.unwrap_or(&bn);
-        log::info!("Intializing MarketsNetwork. tn={}", tn);
-        let test_dir = prepare_test_dir(&tn).unwrap();
+        let test_name = test_name.unwrap_or(&bn).to_string();
+        log::info!("Intializing MarketsNetwork. tn={}", test_name);
 
         MockNet::default().bind_gsb();
 
-        // Disable cyclic broadcasts by default.
-        let mut config = Config::default();
-        config.discovery.max_bcasted_offers = 0;
-        config.discovery.max_bcasted_unsubscribes = 0;
-
         MarketsNetwork {
             nodes: vec![],
-            test_dir,
-            test_name: tn.to_string(),
-            config: Arc::new(config),
+            test_dir: prepare_test_dir(&test_name).unwrap(),
+            test_name,
+            config: Arc::new(create_market_config_for_test()),
         }
     }
 
@@ -221,13 +215,15 @@ impl MarketsNetwork {
         let identity_api = MockIdentity::new(name);
         let discovery = builder
             .add_data(identity_api.clone() as Arc<dyn IdentityApi>)
+            .with_config(self.config.discovery.clone())
             .build();
         self.add_node(name, identity_api, MockNodeKind::Discovery(discovery))
             .await
     }
 
-    pub fn discovery_builder() -> DiscoveryBuilder {
+    pub fn discovery_builder(&self) -> DiscoveryBuilder {
         DiscoveryBuilder::default()
+            .with_config(self.config.discovery.clone())
             .add_handler(empty_on_offers_retrieved)
             .add_handler(empty_on_offers_bcast)
             .add_handler(empty_on_offer_unsubscribed_bcast)
@@ -509,24 +505,6 @@ pub fn prepare_test_dir(dir_name: &str) -> Result<PathBuf> {
     Ok(test_dir)
 }
 
-/// Facilitates waiting for broadcast propagation.
-pub async fn wait_for_bcast(
-    grace_millis: u64,
-    market: &MarketService,
-    subscription_id: &SubscriptionId,
-    stop_is_ok: bool,
-) {
-    let steps = 20;
-    let wait_step = Duration::from_millis(grace_millis / steps);
-    let store = market.matcher.store.clone();
-    for _ in 0..steps {
-        tokio::time::delay_for(wait_step).await;
-        if store.get_offer(&subscription_id).await.is_ok() == stop_is_ok {
-            break;
-        }
-    }
-}
-
 #[macro_export]
 macro_rules! assert_err_eq {
     ($expected:expr, $actual:expr $(,)*) => {
@@ -686,5 +664,103 @@ pub mod default {
         _msg: AgreementTerminated,
     ) -> Result<(), TerminateAgreementError> {
         Ok(())
+    }
+}
+
+pub fn create_market_config_for_test() -> Config {
+    // Discovery config to be used only in tests.
+    let discovery = DiscoveryConfig {
+        max_bcasted_offers: 100,
+        max_bcasted_unsubscribes: 100,
+        mean_cyclic_bcast_interval: Duration::from_millis(200),
+        mean_cyclic_unsubscribes_interval: Duration::from_millis(200),
+        offer_broadcast_delay: Duration::from_millis(200),
+        unsub_broadcast_delay: Duration::from_millis(200),
+    };
+
+    Config {
+        discovery,
+        subscription: Default::default(),
+        events: Default::default(),
+    }
+}
+
+/// Assure that all given nodes have the same knowledge about given Subscriptions (Offers).
+/// Wait if needed at most 2,5s ( = 10 x 250ms).
+pub async fn assert_offers_broadcasted<'a, S>(mkts: &[&MarketService], subscriptions: S)
+where
+    S: IntoIterator<Item = &'a SubscriptionId>,
+    <S as IntoIterator>::IntoIter: Clone,
+{
+    let subscriptions = subscriptions.into_iter();
+    let mut all_broadcasted = false;
+    'retry: for _i in 0..10 {
+        for subscription in subscriptions.clone() {
+            for mkt in mkts {
+                if mkt.get_offer(&subscription).await.is_err() {
+                    // Every 150ms we should get at least one broadcast from each Node.
+                    // After a few tries all nodes should have the same knowledge about Offers.
+                    tokio::time::delay_for(Duration::from_millis(250)).await;
+                    continue 'retry;
+                }
+            }
+        }
+        all_broadcasted = true;
+        break;
+    }
+    assert!(
+        all_broadcasted,
+        "At least one of the offers was not propagated to all nodes"
+    );
+}
+
+/// Assure that all given nodes have the same knowledge about given Subscriptions (Offers).
+/// Wait if needed at most 1,5s ( = 10 x 150ms).
+pub async fn assert_unsunbscribes_broadcasted<'a, S>(mkts: &[&MarketService], subscriptions: S)
+where
+    S: IntoIterator<Item = &'a SubscriptionId>,
+    <S as IntoIterator>::IntoIter: Clone,
+{
+    let subscriptions = subscriptions.into_iter();
+    let mut all_broadcasted = false;
+    'retry: for _i in 0..10 {
+        for subscription in subscriptions.clone() {
+            for mkt in mkts {
+                let expect_error = QueryOfferError::Unsubscribed(subscription.clone()).to_string();
+                match mkt.get_offer(&subscription).await {
+                    Err(e) => assert_eq!(e.to_string(), expect_error),
+                    Ok(_) => {
+                        // Every 150ms we should get at least one broadcast from each Node.
+                        // After a few tries all nodes should have the same knowledge about Offers.
+                        tokio::time::delay_for(Duration::from_millis(150)).await;
+                        continue 'retry;
+                    }
+                }
+            }
+        }
+        all_broadcasted = true;
+        break;
+    }
+    assert!(
+        all_broadcasted,
+        "At least one of the offer unsubscribes was not propagated to all nodes"
+    );
+}
+
+/// Facilitates waiting for broadcast propagation.
+pub async fn wait_for_bcast(
+    grace_millis: u64,
+    market: &MarketService,
+    subscription_id: &SubscriptionId,
+    stop_is_ok: bool,
+) {
+    let steps = 20;
+    let wait_step = Duration::from_millis(grace_millis / steps);
+    let store = market.matcher.store.clone();
+    for _ in 0..steps {
+        tokio::time::delay_for(wait_step).await;
+        if store.get_offer(&subscription_id).await.is_ok() == stop_is_ok {
+            break;
+        }
     }
 }
