@@ -6,6 +6,14 @@ on:
     types: [completed]
 
 jobs:
+  everytime:
+    name: Dummy job invoked regardless of previous workflow result
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.8.0'
 
   integration-test:
     name: Integration Tests
