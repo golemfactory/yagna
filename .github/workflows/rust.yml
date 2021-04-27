@@ -90,7 +90,7 @@ jobs:
             cp target/debug/{yagna,gftp} build
             strip -x build/*
           elif [ "$RUNNER_OS" == "Windows" ]; then
-            cp target\debug\{yagna,gftp}.exe build
+            cp target/debug/{yagna,gftp}.exe build
           else
             echo "$RUNNER_OS not supported"
             exit 1
