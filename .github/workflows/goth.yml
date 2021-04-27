@@ -45,7 +45,7 @@ jobs:
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: rust.yml
-          commit: ${{github.event.workflow_run.head_commit.id}}
+          commit: ${{github.event.workflow_run.head_sha}}
           workflow_conclusion: success
           name: 'Yagna Linux'
           path: /tmp/yagna-build
