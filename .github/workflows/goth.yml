@@ -7,8 +7,9 @@ on:
 
 jobs:
   integration-test:
-    name: Run integration tests
+    name: Integration Tests
     runs-on: goth
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     defaults:
       run:
         working-directory: './goth_tests'
@@ -16,13 +17,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
 
-      - name: Configure python
+      - name: Configure Python
         uses: actions/setup-python@v2
         with:
           python-version: '3.8.0'
 
-      - name: Configure poetry
+      - name: Configure Poetry
         uses: Gr1N/setup-poetry@v4
         with:
           poetry-version: 1.1.4
@@ -67,7 +70,7 @@ jobs:
         run: rm -rf /tmp/goth-tests
 
       # Only relevant for self-hosted runners
-      - name: Remove poetry virtual env
+      - name: Remove Poetry virtual env
         if: always()
         # Python version below should agree with the version set up by this job.
         # In the future we'll be able to use the `--all` flag here to remove envs for
