@@ -32,41 +32,38 @@ jobs:
           components: rustfmt, clippy
 
       - name: Check lockfile
-        if: false #TODO: restore
         uses: actions-rs/cargo@v1
         with:
           command: tree
           args: --locked
 
       - name: Check formatting
-        if: false #TODO: restore
         uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
 
       - name: Install openssl ( Windows only )
-        if: false #TODO: restore runner.os == 'Windows'
+        if: runner.os == 'Windows'
         run: |
           vcpkg install openssl:x64-windows openssl:x64-windows-static
           vcpkg list
           vcpkg integrate install
 
       - name: Unit tests
-        if: false #TODO: restore
         uses: actions-rs/cargo@v1
         with:
           command: test
           args: --workspace --locked
 
       - name: Unit tests for SGX
-        if: false #TODO: restore ${{ runner.os == 'Linux' && startsWith( github.head_ref, 'market/' ) }}
+        if: ${{ runner.os == 'Linux' && startsWith( github.head_ref, 'sgx/' ) }}
         working-directory: exe-unit
         run: cargo test --features sgx
 
       - name: Market Test Suite (semi-integration tests)
         uses: actions-rs/cargo@v1
-        if: false #TODO: restore startsWith( github.head_ref, 'market/' )
+        if: startsWith( github.head_ref, 'market/' )
         with:
           command: test
           # Due to cargo quirks it is more efficient to run all tests from workspace as:
@@ -77,14 +74,12 @@ jobs:
           args: --tests --workspace --features ya-market/test-suite
 
       - name: Build binaries
-        if: false #TODO: restore
         uses: actions-rs/cargo@v1
         with:
           command: build
           args: --workspace
 
       - name: Copy binaries
-        if: false #TODO: restore
         shell: bash
         run: |
           mkdir build
@@ -102,7 +97,6 @@ jobs:
           fi
 
       - name: Upload binaries
-        if: false #TODO: restore
         uses: actions/upload-artifact@v1
         with:
           name: Yagna ${{ runner.os }}
