@@ -169,14 +169,14 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## SERVICE BUS
-ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "bd74a76c1b0a44f1e1c60464da25adcac0b9df04"}
-ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "bd74a76c1b0a44f1e1c60464da25adcac0b9df04"}
-ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "bd74a76c1b0a44f1e1c60464da25adcac0b9df04"}
-ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "bd74a76c1b0a44f1e1c60464da25adcac0b9df04"}
+#ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "b59a415ca00aecf83cf3df78fe032ee067344620"}
+#ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "b59a415ca00aecf83cf3df78fe032ee067344620"}
+#ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "b59a415ca00aecf83cf3df78fe032ee067344620"}
+#ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "b59a415ca00aecf83cf3df78fe032ee067344620"}
 
 ## CLIENT
-#ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "4c304836de47be0633f13246da96023979a313f8" }
-#ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "4c304836de47be0633f13246da96023979a313f8" }
+#ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "fded326374f6fd92c7c523c4e35494cd4c701e41" }
+#ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "fded326374f6fd92c7c523c4e35494cd4c701e41" }
 
 # ya-client = { path = "../ya-client" }
 # ya-client-model = { path = "../ya-client/model" }
@@ -198,3 +198,8 @@ ya-utils-process = { path = "utils/process"}
 ya-diesel-utils = { path = "utils/diesel-utils"}
 ya-metrics = { path = "core/metrics" }
 ya-provider = { path = "agent/provider"}
+
+# Speed up builds on macOS (will be default in next rust version probably)
+# https://jakedeichert.com/blog/reducing-rust-incremental-compilation-times-on-macos-by-70-percent/
+[profile.dev]
+split-debuginfo = "unpacked"
