@@ -1,5 +1,7 @@
+use chrono::{Duration, Utc};
 use ya_client::model::market::{proposal::State, RequestorEvent};
 use ya_market::testing::{
+    agreement_utils::gen_reason,
     events_helper::{provider, requestor, ClientProposalHelper},
     mock_node::assert_offers_broadcasted,
     mock_offer::client::{not_matching_demand, not_matching_offer, sample_demand, sample_offer},
@@ -1024,4 +1026,100 @@ async fn test_restart_negotiations() {
             .state,
         ProposalState::Draft
     );
+}
+
+/// Agent is allowed to restart negotiations after Agreement was rejected.
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
+async fn test_negotiations_after_agreement_rejected() {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance("Requestor1")
+        .await
+        .add_market_instance("Provider1")
+        .await;
+
+    let negotiation = exchange_draft_proposals(&network, "Requestor1", "Provider1")
+        .await
+        .unwrap();
+    let proposal_id = negotiation.proposal_id.clone();
+
+    let prov_market = network.get_market("Provider1");
+    let req_market = network.get_market("Requestor1");
+    let req_engine = &req_market.requestor_engine;
+    let req_id = network.get_default_id("Requestor1");
+    let prov_id = network.get_default_id("Provider1");
+
+    let agreement_id = req_engine
+        .create_agreement(
+            req_id.clone(),
+            &proposal_id,
+            Utc::now() + Duration::milliseconds(300),
+        )
+        .await
+        .unwrap();
+
+    req_engine
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
+        .await
+        .unwrap();
+
+    prov_market
+        .provider_engine
+        .reject_agreement(
+            &prov_id,
+            &agreement_id.clone().translate(Owner::Provider),
+            Some(gen_reason("Need-Better-Offer")),
+        )
+        .await
+        .unwrap();
+
+    // Get back to negotiation phase.
+    // Provider and Requestor will exchange another pair of Proposal.
+
+    let req_proposal_id = req_engine
+        .counter_proposal(
+            &negotiation.demand_id,
+            &negotiation.proposal_id,
+            &sample_demand(),
+            &req_id,
+        )
+        .await
+        .unwrap();
+
+    let prov_proposal_id = prov_market
+        .provider_engine
+        .counter_proposal(
+            &negotiation.offer_id,
+            &req_proposal_id.clone().translate(Owner::Provider),
+            &sample_offer(),
+            &prov_id,
+        )
+        .await
+        .unwrap();
+
+    let agreement_id = req_engine
+        .create_agreement(
+            req_id.clone(),
+            &prov_proposal_id.clone().translate(Owner::Requestor),
+            Utc::now() + Duration::milliseconds(300),
+        )
+        .await
+        .unwrap();
+
+    req_engine
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
+        .await
+        .unwrap();
+
+    prov_market
+        .provider_engine
+        .approve_agreement(
+            prov_id,
+            &agreement_id.clone().translate(Owner::Provider),
+            None,
+            0.1,
+        )
+        .await
+        .unwrap();
 }
