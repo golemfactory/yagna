@@ -8,7 +8,7 @@ edition = "2018"
 [features]
 test-suite = []
 bcast-singleton = []
-testing = ["actix-http", "actix-rt", "actix-service", "env_logger"]
+testing = ["actix-http", "actix-service", "env_logger"]
 
 [dependencies]
 ya-agreement-utils = { version = "^0.2"}
@@ -27,9 +27,10 @@ ya-utils-actix = "0.1"
 
 
 actix = { version = "0.10", default-features = false }
+actix-rt = { version = "1.0.0" }
 actix-web = "3.2"
-async-trait = { version = "0.1.33" }
 anyhow = "1.0"
+async-trait = { version = "0.1.33" }
 backtrace = "0.3.50"
 chrono = { version = "0.4", features = ["serde"] }
 derive_more = "0.99.5"
@@ -37,6 +38,7 @@ diesel = { version = "1.4", features = ["chrono", "sqlite", "r2d2"] }
 diesel_migrations = "1.4"
 digest = "0.8.1"
 futures = "0.3"
+humantime = "2.0.0"
 lazy_static = "1.4"
 libsqlite3-sys = { version = "0.9.1", features = ["bundled"] }
 log = "0.4"
@@ -48,6 +50,7 @@ rand = "0.7.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha3 = "0.8.2"
+structopt = "0.3.20"
 strum = "0.19.5"
 strum_macros = "0.19.4"
 thiserror = "1.0"
@@ -56,7 +59,6 @@ uuid = { version = "0.8", features = ["v4"] }
 
 # testing
 actix-http = { version = "2.2", optional = true }
-actix-rt = { version = "1.0.0", optional = true }
 actix-service = { version = "1.0", optional = true }
 env_logger = { version = "0.7", optional = true }
 regex = "1.4.2"
