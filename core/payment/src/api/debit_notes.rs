@@ -2,9 +2,10 @@
 use actix_web::web::{get, post, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use serde_json::value::Value::Null;
+use std::time::Instant;
 
 // Workspace uses
-use metrics::counter;
+use metrics::{counter, timing};
 use ya_client_model::payment::*;
 use ya_core_model::payment::local::{SchedulePayment, BUS_ID as LOCAL_SERVICE};
 use ya_core_model::payment::public::{
@@ -179,6 +180,8 @@ async fn send_debit_note(
     query: Query<params::Timeout>,
     id: Identity,
 ) -> HttpResponse {
+    let start = Instant::now();
+
     let debit_note_id = path.debit_note_id.clone();
     let node_id = id.identity;
     let dao: DebitNoteDao = db.as_dao();
@@ -193,7 +196,8 @@ async fn send_debit_note(
     }
 
     let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
-    with_timeout(timeout, async move {
+
+    let result = with_timeout(timeout, async move {
         match async move {
             ya_net::from(node_id)
                 .to(debit_note.recipient_id)
@@ -201,6 +205,7 @@ async fn send_debit_note(
                 .call(SendDebitNote(debit_note))
                 .await??;
             dao.mark_received(debit_note_id, node_id).await?;
+
             counter!("payment.debit_notes.provider.sent", 1);
             Ok(())
         }
@@ -213,7 +218,14 @@ async fn send_debit_note(
             Err(e) => response::server_error(&e),
         }
     })
-    .await
+    .await;
+
+    timing!(
+        "payment.debit_notes.provider.sent.time",
+        start,
+        Instant::now()
+    );
+    result
 }
 
 async fn cancel_debit_note(
@@ -233,6 +245,8 @@ async fn accept_debit_note(
     body: Json<Acceptance>,
     id: Identity,
 ) -> HttpResponse {
+    let start = Instant::now();
+
     let debit_note_id = path.debit_note_id.clone();
     let node_id = id.identity;
     let acceptance = body.into_inner();
@@ -302,7 +316,7 @@ async fn accept_debit_note(
     }
 
     let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
-    with_timeout(timeout, async move {
+    let result = with_timeout(timeout, async move {
         let issuer_id = debit_note.issuer_id;
         let accept_msg = AcceptDebitNote::new(debit_note_id.clone(), acceptance, issuer_id);
         let schedule_msg =
@@ -338,7 +352,14 @@ async fn accept_debit_note(
             Err(e) => return response::server_error(&e),
         }
     })
-    .await
+    .await;
+
+    timing!(
+        "payment.debit_notes.requestor.accepted.time",
+        start,
+        Instant::now()
+    );
+    result
 }
 
 async fn reject_debit_note(
