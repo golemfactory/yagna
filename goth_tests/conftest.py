@@ -37,7 +37,7 @@ def log_dir() -> Path:
     return log_dir
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def config_overrides(request) -> List[Override]:
     """Fixture parsing --config-override params passed to the test invocation."""
     overrides: List[str] = request.config.option.config_override or []
