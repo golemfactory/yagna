@@ -185,6 +185,9 @@ async fn send_debit_note(
     let debit_note_id = path.debit_note_id.clone();
     let node_id = id.identity;
     let dao: DebitNoteDao = db.as_dao();
+
+    log::debug!("Requested send DebitNote [{}]", debit_note_id);
+
     let debit_note = match dao.get(debit_note_id.clone(), node_id).await {
         Ok(Some(debit_note)) => debit_note,
         Ok(None) => return response::not_found(),
@@ -199,6 +202,12 @@ async fn send_debit_note(
 
     let result = with_timeout(timeout, async move {
         match async move {
+            log::debug!(
+                "Sending DebitNote [{}] to [{}].",
+                debit_note_id,
+                debit_note.recipient_id
+            );
+
             ya_net::from(node_id)
                 .to(debit_note.recipient_id)
                 .service(PUBLIC_SERVICE)
@@ -211,7 +220,10 @@ async fn send_debit_note(
         }
         .await
         {
-            Ok(_) => response::ok(Null),
+            Ok(_) => {
+                log::info!("DebitNote [{}] sent.", path.debit_note_id);
+                response::ok(Null)
+            }
             Err(Error::Rpc(RpcMessageError::Send(SendError::BadRequest(e)))) => {
                 response::bad_request(&e)
             }
@@ -251,6 +263,8 @@ async fn accept_debit_note(
     let node_id = id.identity;
     let acceptance = body.into_inner();
     let allocation_id = acceptance.allocation_id.clone();
+
+    log::debug!("Requested accept DebitNote [{}]", debit_note_id);
 
     let dao: DebitNoteDao = db.as_dao();
     log::trace!("Querying DB for Debit Note [{}]", debit_note_id);
@@ -345,7 +359,10 @@ async fn accept_debit_note(
         }
         .await
         {
-            Ok(_) => response::ok(Null),
+            Ok(_) => {
+                log::info!("DebitNote [{}] accepted.", path.debit_note_id);
+                response::ok(Null)
+            }
             Err(Error::Rpc(RpcMessageError::AcceptReject(AcceptRejectError::BadRequest(e)))) => {
                 return response::bad_request(&e);
             }
