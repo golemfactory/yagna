@@ -1,5 +1,6 @@
 //! Discovery protocol interface
 use actix_rt::Arbiter;
+use metrics::counter;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -108,12 +109,14 @@ impl Discovery {
         log::debug!("Broadcasting offers. count={}", offer_ids.len());
         let bcast_msg = SendBroadcastMessage::new(OffersBcast { offer_ids });
 
+        counter!("market.offers.broadcasts.net", 1);
         // TODO: We shouldn't use send_as. Put identity inside broadcasted message instead.
         if let Err(e) = bus::service(local_net::BUS_ID)
             .send_as(default_id, bcast_msg) // TODO: should we send as our (default) identity?
             .await
         {
             log::error!("Error sending bcast, skipping... error={:?}", e);
+            counter!("market.offers.broadcasts.net_errors", 1);
         };
     }
 
@@ -201,6 +204,7 @@ impl Discovery {
 
         log::debug!("Broadcasting unsubscribes. count={}", offer_ids.len());
         let bcast_msg = SendBroadcastMessage::new(UnsubscribedOffersBcast { offer_ids });
+        counter!("market.offers.unsubscribes.broadcasts.net", 1);
 
         // TODO: We shouldn't use send_as. Put identity inside broadcasted message instead.
         if let Err(e) = bus::service(local_net::BUS_ID)
@@ -208,6 +212,7 @@ impl Discovery {
             .await
         {
             log::error!("Error sending bcast, skipping... error={:?}", e);
+            counter!("market.offers.unsubscribes.broadcasts.net_errors", 1);
         };
     }
 

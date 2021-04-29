@@ -1,6 +1,7 @@
 //! Discovery protocol messages handlers
 use futures::StreamExt;
-use metrics::{counter, value};
+use metrics::{counter, timing, value};
+use std::time::Instant;
 
 use crate::db::model::{Offer, SubscriptionId};
 use crate::matcher::error::ModifyOfferError;
@@ -20,10 +21,15 @@ pub(super) async fn filter_out_known_offer_ids(
     // We shouldn't propagate Offer, if we already have it in our database.
     // Note that when we broadcast our Offer, it will reach us too, so it concerns
     // not only Offers from other nodes.
-    Ok(store
+
+    let start = Instant::now();
+    let result = store
         .filter_out_known_offer_ids(msg.offer_ids)
         .await
-        .map_err(|e| log::warn!("Error filtering Offers. Error: {}", e))?)
+        .map_err(|e| log::warn!("Error filtering Offers. Error: {}", e))?;
+    let end = Instant::now();
+    timing!("market.offers.incoming.time", start, end);
+    Ok(result)
 }
 
 /// Returns only ids of those from input offers, that was successfully stored locally.
@@ -92,6 +98,7 @@ pub(super) async fn receive_remote_offer_unsubscribes(
     caller: String,
     msg: UnsubscribedOffersBcast,
 ) -> Result<Vec<SubscriptionId>, ()> {
+    let start = Instant::now();
     let new_unsubscribes = futures::stream::iter(msg.offer_ids.into_iter())
         .filter_map(|offer_id| {
             let store = store.clone();
@@ -138,5 +145,7 @@ pub(super) async fn receive_remote_offer_unsubscribes(
             caller,
         );
     }
+    let end = Instant::now();
+    timing!("market.offers.unsubscribes.incoming.time", start, end);
     Ok(new_unsubscribes)
 }
