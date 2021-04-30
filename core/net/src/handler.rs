@@ -2,9 +2,10 @@ use crate::SUBSCRIPTIONS;
 use actix_rt::Arbiter;
 use futures::channel::oneshot;
 use futures::{future, Future, FutureExt, StreamExt, TryFutureExt};
+use metrics::{counter, timing, };
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::time::Duration;
+use std::time::{Duration, Instant, };
 use ya_core_model::net;
 use ya_core_model::net::local::BindBroadcastError;
 use ya_service_bus::connection::CallRequestHandler;
@@ -18,6 +19,11 @@ pub struct CentralBusHandler<C, E> {
 
 impl<C, E> CentralBusHandler<C, E> {
     pub fn new(call_handler: C, event_handler: E) -> (Self, oneshot::Receiver<()>) {
+        // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
+        // until first change to value will be made.
+        counter!("net.connect", 0);
+        counter!("net.disconnect", 0);
+
         let (tx, rx) = oneshot::channel();
         (
             Self {
@@ -84,15 +90,24 @@ async fn rebind<B, U, Fb, Fu, Fr, E>(
 {
     let (tx, rx) = oneshot::channel();
     let unbind_clone = unbind.clone();
+    let mut last_disconnect:Option<Instant> = None;
 
     loop {
         match bind().await {
             Ok(dc_rx) => {
                 reconnect.replace(Default::default());
                 resubscribe().await;
+                counter!("net.connect", 1);
+                if let Some(start) = last_disconnect {
+                    let end = Instant::now();
+                    timing!("net.reconnect.time", start, end);
+                    last_disconnect = None;
+                }
 
                 Arbiter::spawn(async move {
                     if let Ok(_) = dc_rx.await {
+                        counter!("net.disconnect", 1);
+                        last_disconnect = Some(Instant::now());
                         log::warn!("Handlers disconnected");
                         (*unbind_clone.borrow_mut())().await;
                         let _ = tx.send(());
