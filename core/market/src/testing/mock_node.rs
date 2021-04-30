@@ -714,8 +714,8 @@ where
     );
 }
 
-/// Assure that all given nodes have the same knowledge about given Subscriptions (Offers).
-/// Wait if needed at most 1,5s ( = 10 x 150ms).
+/// Assure that all given nodes have the same knowledge about given Offer Unsubscribes.
+/// Wait if needed at most 2,5s ( = 10 x 250ms).
 pub async fn assert_unsunbscribes_broadcasted<'a, S>(mkts: &[&MarketService], subscriptions: S)
 where
     S: IntoIterator<Item = &'a SubscriptionId>,
@@ -732,7 +732,7 @@ where
                     Ok(_) => {
                         // Every 150ms we should get at least one broadcast from each Node.
                         // After a few tries all nodes should have the same knowledge about Offers.
-                        tokio::time::delay_for(Duration::from_millis(150)).await;
+                        tokio::time::delay_for(Duration::from_millis(250)).await;
                         continue 'retry;
                     }
                 }
