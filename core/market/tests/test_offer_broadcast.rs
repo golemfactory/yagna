@@ -258,7 +258,7 @@ async fn test_broadcast_stop_conditions() {
         .unwrap();
 
     // Wait for broadcast.
-    tokio::time::timeout(Duration::from_millis(250), rx.next())
+    tokio::time::timeout(Duration::from_millis(500), rx.next())
         .await
         .unwrap();
 
