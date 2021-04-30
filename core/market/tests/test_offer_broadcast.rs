@@ -7,8 +7,9 @@ use tokio::time::Duration;
 
 use ya_market::assert_err_eq;
 use ya_market::testing::discovery::{message::*, Discovery};
+use ya_market::testing::mock_node::{assert_offers_broadcasted, assert_unsunbscribes_broadcasted};
 use ya_market::testing::mock_offer::{client, sample_offer, sample_offer_with_expiration};
-use ya_market::testing::{wait_for_bcast, MarketServiceExt, MarketsNetwork};
+use ya_market::testing::{MarketServiceExt, MarketsNetwork};
 use ya_market::testing::{QueryOfferError, SubscriptionId};
 
 /// Test adds offer. It should be broadcasted to other nodes in the network.
@@ -27,33 +28,28 @@ async fn test_broadcast_offer() {
         .await;
 
     // Add Offer on Node-1. It should be propagated to remaining nodes.
-    let market1 = network.get_market("Node-1");
+    let mkt1 = network.get_market("Node-1");
     let id1 = network.get_default_id("Node-1");
 
-    let subscription_id = market1
+    let offer_id = mkt1
         .subscribe_offer(&client::sample_offer(), &id1)
         .await
         .unwrap();
-    let offer = market1.get_offer(&subscription_id).await.unwrap();
+    let offer = mkt1.get_offer(&offer_id).await.unwrap();
 
     // Expect, that Offer will appear on other nodes.
-    let market2 = network.get_market("Node-2");
-    let market3 = network.get_market("Node-3");
-    wait_for_bcast(1000, &market2, &subscription_id, true).await;
-    assert_eq!(offer, market2.get_offer(&subscription_id).await.unwrap());
-    assert_eq!(offer, market3.get_offer(&subscription_id).await.unwrap());
+    let mkt2 = network.get_market("Node-2");
+    let mkt3 = network.get_market("Node-3");
+    assert_offers_broadcasted(&[&mkt2, &mkt3], &[offer_id.clone()]).await;
+    assert_eq!(offer, mkt2.get_offer(&offer_id).await.unwrap());
+    assert_eq!(offer, mkt3.get_offer(&offer_id).await.unwrap());
 
     // Unsubscribe Offer. Wait some delay for propagation.
-    market1
-        .unsubscribe_offer(&subscription_id, &id1)
-        .await
-        .unwrap();
-    let expected_error = QueryOfferError::Unsubscribed(subscription_id.clone());
-    assert_err_eq!(expected_error, market1.get_offer(&subscription_id).await);
+    mkt1.unsubscribe_offer(&offer_id, &id1).await.unwrap();
+    let expected_error = QueryOfferError::Unsubscribed(offer_id.clone());
+    assert_err_eq!(expected_error, mkt1.get_offer(&offer_id).await);
     // Expect, that Offer will disappear on other nodes.
-    wait_for_bcast(1000, &market2, &subscription_id, false).await;
-    assert_err_eq!(expected_error, market2.get_offer(&subscription_id).await);
-    assert_err_eq!(expected_error, market2.get_offer(&subscription_id).await);
+    assert_unsunbscribes_broadcasted(&[&mkt2, &mkt3], &[offer_id]).await;
 }
 
 /// This test checks, if Discovery interface calls expected sequence of callbacks.
@@ -73,7 +69,7 @@ async fn test_broadcast_offer_callbacks() {
         .add_market_instance("Node-1")
         .await;
 
-    let market1 = network.get_market("Node-1");
+    let mkt1 = network.get_market("Node-1");
 
     let offer = sample_offer();
     let offer_clone = offer.clone();
@@ -96,9 +92,9 @@ async fn test_broadcast_offer_callbacks() {
         .await
         .unwrap();
 
-    wait_for_bcast(1000, &market1, &offer_id, true).await;
+    assert_offers_broadcasted(&[&mkt1], &[offer_id.clone()]).await;
 
-    let offer = market1.get_offer(&offer_id).await.unwrap();
+    let offer = mkt1.get_offer(&offer_id).await.unwrap();
     assert_eq!(offer_clone, offer);
 }
 
@@ -114,7 +110,7 @@ async fn test_broadcast_offer_id_validation() {
         .add_market_instance("Node-1")
         .await;
 
-    let market1 = network.get_market("Node-1");
+    let mkt1 = network.get_market("Node-1");
 
     // Prepare Offer with subscription id changed to invalid.
     let invalid_id = SubscriptionId::from_str("c76161077d0343ab85ac986eb5f6ea38-edb0016d9f8bafb54540da34f05a8d510de8114488f23916276bdead05509a53").unwrap();
@@ -133,7 +129,7 @@ async fn test_broadcast_offer_id_validation() {
         .await;
     let discovery2: Discovery = network.get_discovery("Node-2");
 
-    // Offer should be propagated to market1, but he should reject it.
+    // Offer should be propagated to mkt1, but he should reject it.
     discovery2
         .bcast_offers(vec![invalid_id.clone()])
         .await
@@ -142,7 +138,7 @@ async fn test_broadcast_offer_id_validation() {
     tokio::time::delay_for(Duration::from_millis(1000)).await;
     assert_err_eq!(
         QueryOfferError::NotFound(invalid_id.clone()),
-        market1.get_offer(&invalid_id).await,
+        mkt1.get_offer(&invalid_id).await,
     );
 }
 
@@ -156,7 +152,7 @@ async fn test_broadcast_expired_offer() {
         .add_market_instance("Node-1")
         .await;
 
-    let market1 = network.get_market("Node-1");
+    let mkt1 = network.get_market("Node-1");
 
     // Prepare expired Offer to send.
     let expiration = Utc::now().naive_utc() - chrono::Duration::hours(1);
@@ -175,7 +171,7 @@ async fn test_broadcast_expired_offer() {
         .await;
     let discovery2: Discovery = network.get_discovery("Node-2");
 
-    // Offer should be propagated to market1, but he should reject it.
+    // Offer should be propagated to mkt1, but he should reject it.
     discovery2
         .bcast_offers(vec![offer_id.clone()])
         .await
@@ -187,7 +183,7 @@ async fn test_broadcast_expired_offer() {
     // to database at all.
     assert_err_eq!(
         QueryOfferError::NotFound(offer_id.clone()),
-        market1.get_offer(&offer_id).await,
+        mkt1.get_offer(&offer_id).await,
     );
 }
 
@@ -207,37 +203,30 @@ async fn test_broadcast_stop_conditions() {
         .await;
 
     // Add Offer on Node-1. It should be propagated to remaining nodes.
-    let market1 = network.get_market("Node-1");
+    let mkt1 = network.get_market("Node-1");
     let identity1 = network.get_default_id("Node-1");
 
-    let subscription_id = market1
+    let offer_id = mkt1
         .subscribe_offer(&client::sample_offer(), &identity1)
         .await
         .unwrap();
-    let offer = market1.get_offer(&subscription_id).await.unwrap();
+    let offer = mkt1.get_offer(&offer_id).await.unwrap();
 
     // Expect, that Offer will appear on other nodes.
-    let market2 = network.get_market("Node-2");
-    wait_for_bcast(1000, &market2, &subscription_id, true).await;
-    assert_eq!(offer, market2.get_offer(&subscription_id).await.unwrap());
+    let mkt2 = network.get_market("Node-2");
+    assert_offers_broadcasted(&[&mkt2], &[offer_id.clone()]).await;
+    assert_eq!(offer, mkt2.get_offer(&offer_id).await.unwrap());
 
     // Unsubscribe Offer. It should be unsubscribed on all Nodes and removed from
     // database on Node-2, since it's foreign Offer.
-    market1
-        .unsubscribe_offer(&subscription_id, &identity1)
-        .await
-        .unwrap();
+    mkt1.unsubscribe_offer(&offer_id, &identity1).await.unwrap();
     assert_err_eq!(
-        QueryOfferError::Unsubscribed(subscription_id.clone()),
-        market1.get_offer(&subscription_id).await
+        QueryOfferError::Unsubscribed(offer_id.clone()),
+        mkt1.get_offer(&offer_id).await
     );
 
     // Expect, that Offer will disappear on other nodes.
-    wait_for_bcast(1000, &market2, &subscription_id, false).await;
-    assert_err_eq!(
-        QueryOfferError::Unsubscribed(subscription_id.clone()),
-        market2.get_offer(&subscription_id).await
-    );
+    assert_unsunbscribes_broadcasted(&[&mkt2], &[offer_id.clone()]).await;
 
     // Send the same Offer using Discovery interface directly.
     // Number of returning Offers will be counted.
@@ -281,12 +270,12 @@ async fn test_broadcast_stop_conditions() {
 
     // We expect, that Offers won't be available on other nodes now
     assert_err_eq!(
-        QueryOfferError::Unsubscribed(subscription_id.clone()),
-        market1.get_offer(&subscription_id).await,
+        QueryOfferError::Unsubscribed(offer_id.clone()),
+        mkt1.get_offer(&offer_id).await,
     );
     assert_err_eq!(
-        QueryOfferError::Unsubscribed(subscription_id.clone()),
-        market2.get_offer(&subscription_id).await,
+        QueryOfferError::Unsubscribed(offer_id.clone()),
+        mkt2.get_offer(&offer_id).await,
     );
 }
 
@@ -307,11 +296,11 @@ async fn test_discovery_get_offers() {
         .add_discovery_instance("Node-2", discovery_builder)
         .await;
 
-    let market1 = network.get_market("Node-1");
+    let mkt1 = network.get_market("Node-1");
     let id1 = network.get_default_id("Node-1");
     let discovery2 = network.get_discovery("Node-2");
 
-    let subscription_id = market1
+    let subscription_id = mkt1
         .subscribe_offer(&client::sample_offer(), &id1)
         .await
         .unwrap();

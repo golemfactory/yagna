@@ -920,7 +920,7 @@ async fn test_proposal_events_last() {
         .unwrap();
 
     // wait for Offer broadcast.
-    assert_offers_broadcasted(&[&market1], [offer2_id].iter()).await;
+    assert_offers_broadcasted(&[&market1], &[offer2_id]).await;
 
     let proposal2 = provider::query_proposal(&market2, &offer1_id, "Initial #P")
         .await
