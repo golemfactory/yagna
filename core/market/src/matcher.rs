@@ -81,6 +81,7 @@ impl Matcher {
         counter!("market.offers.broadcasts.net_errors", 0);
         counter!("market.offers.unsubscribes.incoming", 0);
         counter!("market.offers.unsubscribes.broadcasts", 0);
+        counter!("market.offers.unsubscribes.broadcasts.size", 0);
         counter!("market.offers.unsubscribes.broadcasts.net", 0);
         counter!("market.offers.unsubscribes.broadcasts.net_errors", 0);
 

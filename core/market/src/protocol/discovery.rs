@@ -1,6 +1,6 @@
 //! Discovery protocol interface
 use actix_rt::Arbiter;
-use metrics::{counter, timing};
+use metrics::{counter, timing, value};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
@@ -107,7 +107,8 @@ impl Discovery {
                 return;
             }
         };
-        log::debug!("Broadcasting offers. count={}", offer_ids.len());
+        let size = offer_ids.len();
+        log::debug!("Broadcasting offers. count={}", size);
         let bcast_msg = SendBroadcastMessage::new(OffersBcast { offer_ids });
 
         counter!("market.offers.broadcasts.net", 1);
@@ -118,7 +119,7 @@ impl Discovery {
         {
             log::error!("Error sending bcast, skipping... error={:?}", e);
             counter!("market.offers.broadcasts.net_errors", 1);
-            value!("market.offers.broadcasts.size", offer_ids.len());
+            value!("market.offers.broadcasts.size", size as u64);
         };
     }
 
@@ -204,10 +205,11 @@ impl Discovery {
             }
         };
 
-        log::debug!("Broadcasting unsubscribes. count={}", offer_ids.len());
+        let size = offer_ids.len();
+        log::debug!("Broadcasting unsubscribes. count={}", size);
         let bcast_msg = SendBroadcastMessage::new(UnsubscribedOffersBcast { offer_ids });
         counter!("market.offers.unsubscribes.broadcasts.net", 1);
-        value!("market.offers.unsubscribes.broadcasts.size", offer_ids.len());
+        value!("market.offers.unsubscribes.broadcasts.size", size as u64);
 
         // TODO: We shouldn't use send_as. Put identity inside broadcasted message instead.
         if let Err(e) = bus::service(local_net::BUS_ID)
