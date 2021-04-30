@@ -40,18 +40,29 @@ mod local {
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
         // until first change to value will be made.
         counter!("payment.invoices.requestor.accepted", 0);
+        counter!("payment.invoices.requestor.accepted.call", 0);
         counter!("payment.invoices.requestor.received", 0);
+        counter!("payment.invoices.requestor.received.call", 0);
         counter!("payment.invoices.requestor.cancelled", 0);
+        counter!("payment.invoices.requestor.cancelled.call", 0);
         counter!("payment.invoices.requestor.paid", 0);
         counter!("payment.debit_notes.requestor.accepted", 0);
+        counter!("payment.debit_notes.requestor.accepted.call", 0);
+        counter!("payment.debit_notes.requestor.received", 0);
+        counter!("payment.debit_notes.requestor.received.call", 0);
         counter!("payment.debit_notes.provider.issued", 0);
         counter!("payment.debit_notes.provider.sent", 0);
+        counter!("payment.debit_notes.provider.sent.call", 0);
         counter!("payment.debit_notes.provider.accepted", 0);
+        counter!("payment.debit_notes.provider.accepted.call", 0);
         counter!("payment.invoices.provider.issued", 0);
         counter!("payment.invoices.provider.sent", 0);
+        counter!("payment.invoices.provider.sent.call", 0);
         counter!("payment.invoices.provider.cancelled", 0);
+        counter!("payment.invoices.provider.cancelled.call", 0);
         counter!("payment.invoices.provider.paid", 0);
         counter!("payment.invoices.provider.accepted", 0);
+        counter!("payment.invoices.provider.accepted.call", 0);
 
         counter!("payment.amount.received", 0, "platform" => "erc20-rinkeby-tglm");
         counter!("payment.amount.received", 0, "platform" => "erc20-mainnet-glm");
@@ -311,6 +322,7 @@ mod public {
             debit_note_id,
             sender_id
         );
+        counter!("payment.debit_notes.requestor.received.call", 1);
 
         let agreement = match get_agreement(agreement_id.clone(), core::Role::Requestor).await {
             Err(e) => {
@@ -373,6 +385,7 @@ mod public {
             debit_note_id,
             sender_id
         );
+        counter!("payment.debit_notes.provider.accepted.call", 1);
 
         let dao: DebitNoteDao = db.as_dao();
         let debit_note: DebitNote = match dao.get(debit_note_id.clone(), node_id).await {
@@ -448,6 +461,7 @@ mod public {
             invoice_id,
             sender_id
         );
+        counter!("payment.invoices.requestor.received.call", 1);
 
         let agreement = match get_agreement(agreement_id.clone(), core::Role::Requestor).await {
             Err(e) => {
@@ -532,6 +546,7 @@ mod public {
             invoice_id,
             sender_id
         );
+        counter!("payment.invoices.provider.accepted.call", 1);
 
         let dao: InvoiceDao = db.as_dao();
         let invoice: Invoice = match dao.get(invoice_id.clone(), node_id).await {
@@ -594,6 +609,7 @@ mod public {
             invoice_id,
             sender_id
         );
+        counter!("payment.invoices.requestor.cancelled.call", 1);
 
         let dao: InvoiceDao = db.as_dao();
         let invoice: Invoice = match dao.get(invoice_id.clone(), msg.recipient_id).await {

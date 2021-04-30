@@ -185,6 +185,7 @@ async fn send_invoice(
     let dao: InvoiceDao = db.as_dao();
 
     log::debug!("Requested send invoice [{}]", invoice_id);
+    counter!("payment.invoices.provider.sent.call", 1);
 
     let invoice = match dao.get(invoice_id.clone(), node_id).await {
         Ok(Some(invoice)) => invoice,
@@ -211,14 +212,13 @@ async fn send_invoice(
                 .call(SendInvoice(invoice))
                 .await??;
             dao.mark_received(invoice_id, node_id).await?;
-
-            counter!("payment.invoices.provider.sent", 1);
             Ok(())
         }
         .await
         {
             Ok(_) => {
                 log::info!("Invoice [{}] sent.", path.invoice_id);
+                counter!("payment.invoices.provider.sent", 1);
                 response::ok(Null)
             }
             Err(Error::Rpc(RpcMessageError::Send(SendError::BadRequest(e)))) => {
@@ -246,6 +246,7 @@ async fn cancel_invoice(
     let dao: InvoiceDao = db.as_dao();
 
     log::debug!("Requested cancel invoice [{}]", invoice_id);
+    counter!("payment.invoices.provider.cancelled.call", 1);
 
     let invoice = match dao.get(invoice_id.clone(), node_id).await {
         Ok(Some(invoice)) => invoice,
@@ -281,13 +282,12 @@ async fn cancel_invoice(
                 })
                 .await??;
             dao.cancel(invoice_id, node_id).await?;
-
-            counter!("payment.invoices.provider.cancelled", 1);
             Ok(())
         }
         .await
         {
             Ok(_) => {
+                counter!("payment.invoices.provider.cancelled", 1);
                 log::info!("Invoice [{}] cancelled.", path.invoice_id);
                 response::ok(Null)
             }
@@ -324,6 +324,7 @@ async fn accept_invoice(
     let allocation_id = acceptance.allocation_id.clone();
 
     log::debug!("Requested accept invoice [{}]", invoice_id);
+    counter!("payment.invoices.requestor.accepted.call", 1);
 
     let dao: InvoiceDao = db.as_dao();
 
@@ -410,13 +411,12 @@ async fn accept_invoice(
             log::trace!("Accepting Invoice [{}] in DB", invoice_id);
             dao.accept(invoice_id.clone(), node_id).await?;
             log::trace!("Invoice accepted successfully for [{}]", invoice_id);
-
-            counter!("payment.invoices.requestor.accepted", 1);
             Ok(())
         }
         .await
         {
             Ok(_) => {
+                counter!("payment.invoices.requestor.accepted", 1);
                 log::info!("Invoice [{}] accepted.", path.invoice_id);
                 response::ok(Null)
             }

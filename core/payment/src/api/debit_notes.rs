@@ -187,6 +187,7 @@ async fn send_debit_note(
     let dao: DebitNoteDao = db.as_dao();
 
     log::debug!("Requested send DebitNote [{}]", debit_note_id);
+    counter!("payment.debit_notes.provider.sent.call", 1);
 
     let debit_note = match dao.get(debit_note_id.clone(), node_id).await {
         Ok(Some(debit_note)) => debit_note,
@@ -214,14 +215,13 @@ async fn send_debit_note(
                 .call(SendDebitNote(debit_note))
                 .await??;
             dao.mark_received(debit_note_id, node_id).await?;
-
-            counter!("payment.debit_notes.provider.sent", 1);
             Ok(())
         }
         .await
         {
             Ok(_) => {
                 log::info!("DebitNote [{}] sent.", path.debit_note_id);
+                counter!("payment.debit_notes.provider.sent", 1);
                 response::ok(Null)
             }
             Err(Error::Rpc(RpcMessageError::Send(SendError::BadRequest(e)))) => {
@@ -265,6 +265,7 @@ async fn accept_debit_note(
     let allocation_id = acceptance.allocation_id.clone();
 
     log::debug!("Requested accept DebitNote [{}]", debit_note_id);
+    counter!("payment.debit_notes.requestor.accepted.call", 1);
 
     let dao: DebitNoteDao = db.as_dao();
     log::trace!("Querying DB for Debit Note [{}]", debit_note_id);
@@ -353,14 +354,13 @@ async fn accept_debit_note(
             log::trace!("Accepting Debit Note [{}] in DB", debit_note_id);
             dao.accept(debit_note_id.clone(), node_id).await?;
             log::trace!("Debit Note accepted successfully for [{}]", debit_note_id);
-
-            counter!("payment.debit_notes.requestor.accepted", 1);
             Ok(())
         }
         .await
         {
             Ok(_) => {
                 log::info!("DebitNote [{}] accepted.", path.debit_note_id);
+                counter!("payment.debit_notes.requestor.accepted", 1);
                 response::ok(Null)
             }
             Err(Error::Rpc(RpcMessageError::AcceptReject(AcceptRejectError::BadRequest(e)))) => {
