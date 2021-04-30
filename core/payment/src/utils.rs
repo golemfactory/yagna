@@ -198,8 +198,10 @@ pub mod response {
         HttpResponse::Unauthorized().json(ErrorMessage { message: None })
     }
 
-    pub fn timeout() -> HttpResponse {
-        HttpResponse::GatewayTimeout().json(ErrorMessage { message: None })
+    pub fn timeout(e: &impl ToString) -> HttpResponse {
+        HttpResponse::GatewayTimeout().json(ErrorMessage {
+            message: Some(e.to_string()),
+        })
     }
 
     pub fn server_error(e: &impl ToString) -> HttpResponse {
