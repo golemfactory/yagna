@@ -746,21 +746,3 @@ where
         "At least one of the offer unsubscribes was not propagated to all nodes"
     );
 }
-
-/// Facilitates waiting for broadcast propagation.
-pub async fn wait_for_bcast(
-    grace_millis: u64,
-    market: &MarketService,
-    subscription_id: &SubscriptionId,
-    stop_is_ok: bool,
-) {
-    let steps = 20;
-    let wait_step = Duration::from_millis(grace_millis / steps);
-    let store = market.matcher.store.clone();
-    for _ in 0..steps {
-        tokio::time::delay_for(wait_step).await;
-        if store.get_offer(&subscription_id).await.is_ok() == stop_is_ok {
-            break;
-        }
-    }
-}

@@ -21,5 +21,5 @@ pub mod mock_node;
 pub mod mock_offer;
 pub mod proposal_util;
 
-pub use mock_node::{wait_for_bcast, MarketServiceExt, MarketsNetwork};
+pub use mock_node::{MarketServiceExt, MarketsNetwork};
 pub use mock_offer::{client, sample_demand, sample_offer};
