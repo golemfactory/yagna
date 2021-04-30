@@ -118,6 +118,7 @@ impl Discovery {
         {
             log::error!("Error sending bcast, skipping... error={:?}", e);
             counter!("market.offers.broadcasts.net_errors", 1);
+            value!("market.offers.broadcasts.size", offer_ids.len());
         };
     }
 
