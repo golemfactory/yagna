@@ -306,6 +306,12 @@ mod public {
         let activity_id = debit_note.activity_id.clone();
         let agreement_id = debit_note.agreement_id.clone();
 
+        log::debug!(
+            "Got SendDebitNote [{}] from Node [{}].",
+            debit_note_id,
+            sender_id
+        );
+
         let agreement = match get_agreement(agreement_id.clone(), core::Role::Requestor).await {
             Err(e) => {
                 return Err(SendError::ServiceError(e.to_string()));
@@ -337,6 +343,11 @@ mod public {
                 .insert_received(debit_note)
                 .await?;
 
+            log::info!(
+                "DebitNote [{}] received from node [{}].",
+                node_id,
+                debit_note_id
+            );
             counter!("payment.debit_notes.requestor.received", 1);
             Ok(())
         }
@@ -356,6 +367,12 @@ mod public {
         let debit_note_id = msg.debit_note_id;
         let acceptance = msg.acceptance;
         let node_id = msg.issuer_id;
+
+        log::debug!(
+            "Got AcceptDebitNote [{}] from Node [{}].",
+            debit_note_id,
+            sender_id
+        );
 
         let dao: DebitNoteDao = db.as_dao();
         let debit_note: DebitNote = match dao.get(debit_note_id.clone(), node_id).await {
@@ -387,8 +404,9 @@ mod public {
             _ => (),
         }
 
-        match dao.accept(debit_note_id, node_id).await {
+        match dao.accept(debit_note_id.clone(), node_id).await {
             Ok(_) => {
+                log::info!("Node [{}] accepted DebitNote [{}].", node_id, debit_note_id);
                 counter!("payment.debit_notes.provider.accepted", 1);
                 Ok(Ack {})
             }
@@ -424,6 +442,12 @@ mod public {
         let invoice_id = invoice.invoice_id.clone();
         let agreement_id = invoice.agreement_id.clone();
         let activity_ids = invoice.activity_ids.clone();
+
+        log::debug!(
+            "Got SendInvoice [{}] from Node [{}].",
+            invoice_id,
+            sender_id
+        );
 
         let agreement = match get_agreement(agreement_id.clone(), core::Role::Requestor).await {
             Err(e) => {
@@ -482,6 +506,7 @@ mod public {
 
             db.as_dao::<InvoiceDao>().insert_received(invoice).await?;
 
+            log::info!("Invoice [{}] received from node [{}].", node_id, invoice_id);
             counter!("payment.invoices.requestor.received", 1);
             Ok(())
         }
@@ -501,6 +526,12 @@ mod public {
         let invoice_id = msg.invoice_id;
         let acceptance = msg.acceptance;
         let node_id = msg.issuer_id;
+
+        log::debug!(
+            "Got AcceptInvoice [{}] from Node [{}].",
+            invoice_id,
+            sender_id
+        );
 
         let dao: InvoiceDao = db.as_dao();
         let invoice: Invoice = match dao.get(invoice_id.clone(), node_id).await {
@@ -532,8 +563,9 @@ mod public {
             _ => (),
         }
 
-        match dao.accept(invoice_id, node_id).await {
+        match dao.accept(invoice_id.clone(), node_id).await {
             Ok(_) => {
+                log::info!("Node [{}] accepted invoice [{}].", node_id, invoice_id);
                 counter!("payment.invoices.provider.accepted", 1);
                 Ok(Ack {})
             }
@@ -557,6 +589,12 @@ mod public {
     ) -> Result<Ack, CancelError> {
         let invoice_id = msg.invoice_id;
 
+        log::debug!(
+            "Got CancelInvoice [{}] from Node [{}].",
+            invoice_id,
+            sender_id
+        );
+
         let dao: InvoiceDao = db.as_dao();
         let invoice: Invoice = match dao.get(invoice_id.clone(), msg.recipient_id).await {
             Ok(Some(invoice)) => invoice.into(),
@@ -578,8 +616,13 @@ mod public {
             }
         }
 
-        match dao.cancel(invoice_id, invoice.recipient_id).await {
+        match dao.cancel(invoice_id.clone(), invoice.recipient_id).await {
             Ok(_) => {
+                log::info!(
+                    "Node [{}] cancelled invoice [{}].",
+                    invoice.recipient_id,
+                    invoice_id
+                );
                 counter!("payment.invoices.requestor.cancelled", 1);
                 Ok(Ack {})
             }
