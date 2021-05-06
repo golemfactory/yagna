@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.6.4"
+version = "0.6.5"
 description = "Open platform and marketplace for distributed computations"
 readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
