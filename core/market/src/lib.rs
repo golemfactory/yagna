@@ -11,7 +11,6 @@ mod protocol;
 mod rest_api;
 mod utils;
 
-#[cfg(feature = "testing")]
 pub mod testing;
 
 pub use market::MarketService;

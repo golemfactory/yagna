@@ -55,7 +55,7 @@ async fn test_startup_offers_sharing() {
     let mkt3 = network.get_market("Node-3");
 
     // Make sure we got all offers that, were created.
-    assert_offers_broadcasted(&[&mkt1, &mkt2, &mkt3], subscriptions.iter()).await;
+    assert_offers_broadcasted(&[&mkt1, &mkt2, &mkt3], &subscriptions).await;
 }
 
 /// Unsubscribes are sent immediately after Offer is unsubscribed and
@@ -310,8 +310,8 @@ async fn test_sharing_someones_else_unsubscribes() {
     network.enable_networking_for("Node-3").unwrap();
 
     // We expect that all unsubscribed will be shared with Node-3 after this delay.
-    assert_unsunbscribes_broadcasted(&[&mkt1, &mkt2, &mkt3], subscriptions[3..].iter()).await;
+    assert_unsunbscribes_broadcasted(&[&mkt1, &mkt2, &mkt3], &subscriptions[3..]).await;
 
     // All other Offers should remain untouched.
-    assert_offers_broadcasted(&[&mkt1, &mkt2, &mkt3], subscriptions[0..3].iter()).await;
+    assert_offers_broadcasted(&[&mkt1, &mkt2, &mkt3], &subscriptions[0..3]).await;
 }
