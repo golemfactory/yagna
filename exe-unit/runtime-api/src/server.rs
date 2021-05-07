@@ -42,7 +42,9 @@ pub trait RuntimeService {
 }
 
 pub trait RuntimeEvent {
-    fn on_process_status(&self, _status: ProcessStatus) {}
+    fn on_process_status<'a>(&self, _status: ProcessStatus) -> BoxFuture<'a, ()> {
+        future::ready(()).boxed()
+    }
 }
 
 pub trait RuntimeStatus {
