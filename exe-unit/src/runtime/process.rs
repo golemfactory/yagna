@@ -82,7 +82,7 @@ impl RuntimeProcess {
                 })?)
             }
             false => {
-                log::warn!(
+                log::info!(
                     "Cannot read offer template from runtime; using defaults [{}]",
                     binary.display()
                 );
