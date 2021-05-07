@@ -50,7 +50,7 @@ impl Config {
 impl Default for SubscriptionConfig {
     fn default() -> Self {
         SubscriptionConfig {
-            default_ttl: chrono::Duration::seconds(50),
+            default_ttl: chrono::Duration::hours(1),
         }
     }
 }
@@ -66,4 +66,23 @@ impl Default for EventsConfig {
 
 fn parse_chrono_duration(s: &str) -> Result<chrono::Duration, anyhow::Error> {
     Ok(chrono::Duration::from_std(humantime::parse_duration(s)?)?)
+}
+
+#[cfg(test)]
+mod test {
+    use structopt::StructOpt;
+
+    use super::SubscriptionConfig;
+
+    #[test]
+    fn test_default_subscription_ttl() {
+        let d = SubscriptionConfig::default();
+        assert_eq!(60, d.default_ttl.num_minutes());
+    }
+
+    #[test]
+    fn test_default_structopt_subscription_ttl() {
+        let d = SubscriptionConfig::from_iter(&[""]);
+        assert_eq!(60, d.default_ttl.num_minutes());
+    }
 }
