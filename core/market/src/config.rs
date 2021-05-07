@@ -5,7 +5,7 @@ use structopt::StructOpt;
 pub struct Config {
     #[structopt(flatten)]
     pub discovery: DiscoveryConfig,
-    #[structopt(skip)]
+    #[structopt(flatten)]
     pub subscription: SubscriptionConfig,
     #[structopt(skip)]
     pub events: EventsConfig,
