@@ -16,6 +16,7 @@ use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::types::Role;
 use ya_service_api_web::middleware::Identity;
+use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
@@ -217,17 +218,19 @@ async fn send_debit_note(
             dao.mark_received(debit_note_id, node_id).await?;
             Ok(())
         }
+        .timeout(Some(timeout))
         .await
         {
-            Ok(_) => {
+            Ok(Ok(_)) => {
                 log::info!("DebitNote [{}] sent.", path.debit_note_id);
                 counter!("payment.debit_notes.provider.sent", 1);
                 response::ok(Null)
             }
-            Err(Error::Rpc(RpcMessageError::Send(SendError::BadRequest(e)))) => {
+            Ok(Err(Error::Rpc(RpcMessageError::Send(SendError::BadRequest(e))))) => {
                 response::bad_request(&e)
             }
-            Err(e) => response::server_error(&e),
+            Ok(Err(e)) => response::server_error(&e),
+            Err(_) => response::timeout(&"Timeout sending DebitNote to remote Node."),
         }
     })
     .await;
@@ -331,7 +334,7 @@ async fn accept_debit_note(
     }
 
     let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
-    let result = with_timeout(timeout, async move {
+    let result = async move {
         let issuer_id = debit_note.issuer_id;
         let accept_msg = AcceptDebitNote::new(debit_note_id.clone(), acceptance, issuer_id);
         let schedule_msg =
@@ -356,19 +359,23 @@ async fn accept_debit_note(
             log::trace!("Debit Note accepted successfully for [{}]", debit_note_id);
             Ok(())
         }
+        .timeout(Some(timeout))
         .await
         {
-            Ok(_) => {
+            Ok(Ok(_)) => {
                 log::info!("DebitNote [{}] accepted.", path.debit_note_id);
                 counter!("payment.debit_notes.requestor.accepted", 1);
                 response::ok(Null)
             }
-            Err(Error::Rpc(RpcMessageError::AcceptReject(AcceptRejectError::BadRequest(e)))) => {
+            Ok(Err(Error::Rpc(RpcMessageError::AcceptReject(AcceptRejectError::BadRequest(
+                e,
+            ))))) => {
                 return response::bad_request(&e);
             }
-            Err(e) => return response::server_error(&e),
+            Ok(Err(e)) => return response::server_error(&e),
+            Err(_) => response::timeout(&"Timeout sending Invoice to remote Node."),
         }
-    })
+    }
     .await;
 
     timing!(

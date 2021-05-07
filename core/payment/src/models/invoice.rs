@@ -105,3 +105,13 @@ pub struct InvoiceXActivity {
     pub activity_id: String,
     pub owner_id: NodeId,
 }
+
+pub fn equivalent(read_invoice: &ReadObj, write_invoice: &WriteObj) -> bool {
+    read_invoice.agreement_id == write_invoice.agreement_id
+        && read_invoice.amount == write_invoice.amount
+        && read_invoice.id == write_invoice.id
+        && read_invoice.owner_id == write_invoice.owner_id
+        && read_invoice.payment_due_date == write_invoice.payment_due_date
+        && read_invoice.role == write_invoice.role
+        && read_invoice.status == write_invoice.status
+}
