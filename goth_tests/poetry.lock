@@ -617,7 +617,7 @@ dev = ["pre-commit", "tox"]
 
 [[package]]
 name = "poethepoet"
-version = "0.8.0"
+version = "0.10.0"
 description = "A task runner that works well with poetry."
 category = "dev"
 optional = false
@@ -625,7 +625,7 @@ python-versions = ">=3.6,<4.0"
 
 [package.dependencies]
 pastel = ">=0.2.0,<0.3.0"
-tomlkit = ">=0.7.0,<0.8.0"
+tomlkit = ">=0.6.0,<1.0.0"
 
 [[package]]
 name = "protobuf"
@@ -1030,7 +1030,7 @@ python-versions = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8.0"
-content-hash = "293b84baa8cf3d15c3b56e7734509f8646c4a946b4f690a94bc00beefdd7c6c6"
+content-hash = "4b46f7560916df8e85fbfb37c902e3e5dba3ea50428674099bbfe174ebb70a13"
 
 [metadata.files]
 aiohttp = [
@@ -1460,8 +1460,8 @@ pluggy = [
     {file = "pluggy-0.13.1.tar.gz", hash = "sha256:15b2acde666561e1298d71b523007ed7364de07029219b604cf808bfa1c765b0"},
 ]
 poethepoet = [
-    {file = "poethepoet-0.8.0-py3-none-any.whl", hash = "sha256:f5984f9bd1cba8719f5befd7461c4bd25dbb2f85539197bb4f0ff7f31e6b1e43"},
-    {file = "poethepoet-0.8.0.tar.gz", hash = "sha256:3cf5d4e95a6c763413b451236405aab0ec6b737a00027720b794953867d3329d"},
+    {file = "poethepoet-0.10.0-py3-none-any.whl", hash = "sha256:6fb3021603d4421c6fcc40072bbcf150a6c52ef70ff4d3be089b8b04e015ef5a"},
+    {file = "poethepoet-0.10.0.tar.gz", hash = "sha256:70b97cb194b978dc464c70793e85e6f746cddf82b84a38bfb135946ad71ae19c"},
 ]
 protobuf = [
     {file = "protobuf-3.13.0-cp27-cp27m-macosx_10_9_x86_64.whl", hash = "sha256:9c2e63c1743cba12737169c447374fab3dfeb18111a460a8c1a000e35836b18c"},
