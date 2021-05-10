@@ -5,6 +5,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use regex::Regex;
 use std::collections::HashMap;
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
+use structopt::StructOpt;
 
 use ya_client::model::market::RequestorEvent;
 use ya_persistence::executor::DbExecutor;
@@ -20,7 +21,7 @@ use super::bcast::BCastService;
 use super::mock_net::{gsb_prefixes, MockNet};
 use super::negotiation::{provider, requestor};
 use super::{store::SubscriptionStore, Matcher};
-use crate::config::{Config, DiscoveryConfig};
+use crate::config::{Config, DiscoveryConfig, EventsConfig, SubscriptionConfig};
 use crate::db::dao::ProposalDao;
 use crate::db::model::{Demand, Offer, Proposal, ProposalId, SubscriptionId};
 use crate::identity::IdentityApi;
@@ -680,8 +681,8 @@ pub fn create_market_config_for_test() -> Config {
 
     Config {
         discovery,
-        subscription: Default::default(),
-        events: Default::default(),
+        subscription: SubscriptionConfig::from_iter(&[""]),
+        events: EventsConfig::from_iter(&[""]),
     }
 }
 
@@ -714,8 +715,8 @@ where
     );
 }
 
-/// Assure that all given nodes have the same knowledge about given Subscriptions (Offers).
-/// Wait if needed at most 1,5s ( = 10 x 150ms).
+/// Assure that all given nodes have the same knowledge about given Offer Unsubscribes.
+/// Wait if needed at most 2,5s ( = 10 x 250ms).
 pub async fn assert_unsunbscribes_broadcasted<'a, S>(mkts: &[&MarketService], subscriptions: S)
 where
     S: IntoIterator<Item = &'a SubscriptionId>,
@@ -732,7 +733,7 @@ where
                     Ok(_) => {
                         // Every 150ms we should get at least one broadcast from each Node.
                         // After a few tries all nodes should have the same knowledge about Offers.
-                        tokio::time::delay_for(Duration::from_millis(150)).await;
+                        tokio::time::delay_for(Duration::from_millis(250)).await;
                         continue 'retry;
                     }
                 }
@@ -745,22 +746,4 @@ where
         all_broadcasted,
         "At least one of the offer unsubscribes was not propagated to all nodes"
     );
-}
-
-/// Facilitates waiting for broadcast propagation.
-pub async fn wait_for_bcast(
-    grace_millis: u64,
-    market: &MarketService,
-    subscription_id: &SubscriptionId,
-    stop_is_ok: bool,
-) {
-    let steps = 20;
-    let wait_step = Duration::from_millis(grace_millis / steps);
-    let store = market.matcher.store.clone();
-    for _ in 0..steps {
-        tokio::time::delay_for(wait_step).await;
-        if store.get_offer(&subscription_id).await.is_ok() == stop_is_ok {
-            break;
-        }
-    }
 }

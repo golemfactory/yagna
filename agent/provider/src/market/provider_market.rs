@@ -73,8 +73,8 @@ pub struct NewAgreement {
 // =========================================== //
 
 /// Sent when subscribing offer to the market will be finished.
-#[rtype(result = "Result<()>")]
 #[derive(Debug, Clone, Message)]
+#[rtype(result = "Result<()>")]
 struct Subscription {
     id: String,
     preset: Preset,
