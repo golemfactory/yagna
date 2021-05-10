@@ -115,11 +115,6 @@ To verify your installation you can run the following command:
 docker run hello-world
 ```
 
-#### Docker Compose
-`goth` tests require `docker-compose` **version 1.27** or higher. There are two ways you can install it:
-1. Download the appropriate executable from the [releases page](https://github.com/docker/compose/releases) and make sure its present on your system's `PATH`.
-2. Use the `docker-compose` installed in the virtual environment created by Poetry. You will need to activate the environment in the shell from which you run your tests. You can do so by running `poetry shell` from the `goth_tests` directory (you should see the env's name similar to `yagna-integration-tests--RlJJ9yy-py3.8` in your shell prompt).
-
 #### GitHub API token
 `goth` makes use of the GitHub API to download releases and artifacts for its test runs. Although all of these assets are public, using the GitHub API still requires basic authentication. Therefore you need to provide `goth` with a personal access token.
 
