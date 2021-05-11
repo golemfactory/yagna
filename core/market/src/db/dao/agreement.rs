@@ -4,7 +4,7 @@ use diesel::prelude::*;
 use ya_client::model::NodeId;
 use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
 
-use crate::config::DBConfig;
+use crate::config::DbConfig;
 use crate::db::dao::agreement_events::create_event;
 use crate::db::dao::proposal::{has_counter_proposal, update_proposal_state};
 use crate::db::dao::sql_functions::datetime;
@@ -277,7 +277,7 @@ impl<'c> AgreementDao<'c> {
         .await
     }
 
-    pub async fn clean(&self, db_config: &DBConfig) -> DbResult<()> {
+    pub async fn clean(&self, db_config: &DbConfig) -> DbResult<()> {
         log::trace!("Clean market agreements: start");
         let interval_days = db_config.agreement_store_days;
         let (num_agreements, num_events) = do_with_transaction(self.pool, move |conn| {

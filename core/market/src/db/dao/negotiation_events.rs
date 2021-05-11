@@ -5,7 +5,7 @@ use thiserror::Error;
 use ya_persistence::executor::ConnType;
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
 
-use crate::config::DBConfig;
+use crate::config::DbConfig;
 use crate::db::dao::demand::{demand_status, DemandState};
 use crate::db::dao::offer::{query_state, OfferState};
 use crate::db::dao::sql_functions::datetime;
@@ -135,7 +135,7 @@ impl<'c> NegotiationEventsDao<'c> {
         .await
     }
 
-    pub async fn clean(&self, db_config: &DBConfig) -> DbResult<()> {
+    pub async fn clean(&self, db_config: &DbConfig) -> DbResult<()> {
         log::debug!("Clean market events: start");
         let interval_days = db_config.event_store_days;
         let num_deleted = do_with_transaction(self.pool, move |conn| {

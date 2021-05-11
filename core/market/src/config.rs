@@ -10,7 +10,7 @@ pub struct Config {
     #[structopt(flatten)]
     pub events: EventsConfig,
     #[structopt(flatten)]
-    pub db: DBConfig,
+    pub db: DbConfig,
 }
 
 #[derive(StructOpt, Clone)]
@@ -44,7 +44,7 @@ pub struct EventsConfig {
 }
 
 #[derive(StructOpt, Clone)]
-pub struct DBConfig {
+pub struct DbConfig {
     /// Interval in which Market cleaner will be invoked
     #[structopt(env = "MARKET_DB_CLEANUP_INTERVAL", parse(try_from_str = humantime::parse_duration), default_value = "24h")]
     pub cleanup_interval: Duration,
