@@ -9,6 +9,8 @@ pub struct Config {
     pub subscription: SubscriptionConfig,
     #[structopt(flatten)]
     pub events: EventsConfig,
+    #[structopt(flatten)]
+    pub db: DBConfig,
 }
 
 #[derive(StructOpt, Clone)]
@@ -41,6 +43,19 @@ pub struct EventsConfig {
     pub max_events_max: i32,
 }
 
+#[derive(StructOpt, Clone)]
+pub struct DBConfig {
+    /// Interval in which Market cleaner will be invoked
+    #[structopt(env = "MARKET_DB_CLEANUP_INTERVAL", parse(try_from_str = humantime::parse_duration), default_value = "24h")]
+    pub cleanup_interval: Duration,
+    /// Number of days to persist Agreements and related Agreement Events
+    #[structopt(env = "MARKET_AGREEMENT_STORE_DAYS", default_value = "90")]
+    pub agreement_store_days: i32,
+    /// Number of days to persist Negotiation Events
+    #[structopt(env = "MARKET_EVENT_STORE_DAYS", default_value = "1")]
+    pub event_store_days: i32,
+}
+
 impl Config {
     pub fn from_env() -> Result<Config, structopt::clap::Error> {
         // Empty command line arguments, because we want to use ENV fallback
@@ -68,5 +83,13 @@ mod test {
         let c = Config::from_env().unwrap();
         assert_eq!(20, c.events.max_events_default);
         assert_eq!(100, c.events.max_events_max);
+    }
+
+    #[test]
+    fn test_default_structopt_db_config() {
+        let c = Config::from_env().unwrap();
+        assert_eq!(24 * 3600, c.db.cleanup_interval.as_secs());
+        assert_eq!(90, c.db.agreement_store_days);
+        assert_eq!(1, c.db.event_store_days);
     }
 }
