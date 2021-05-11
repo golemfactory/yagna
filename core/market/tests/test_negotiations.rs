@@ -1,12 +1,13 @@
 use ya_client::model::market::{proposal::State, RequestorEvent};
 use ya_market::testing::{
     events_helper::{provider, requestor, ClientProposalHelper},
+    mock_node::assert_offers_broadcasted,
     mock_offer::client::{not_matching_demand, not_matching_offer, sample_demand, sample_offer},
     mock_offer::flatten_json,
     negotiation::error::{CounterProposalError, RemoteProposalError},
     proposal_util::{exchange_draft_proposals, NegotiationHelper},
-    wait_for_bcast, MarketServiceExt, MarketsNetwork, Owner, ProposalError, ProposalState,
-    ProposalValidationError, SaveProposalError,
+    MarketServiceExt, MarketsNetwork, Owner, ProposalError, ProposalState, ProposalValidationError,
+    SaveProposalError,
 };
 
 /// Test countering initial and draft proposals on both Provider and Requestor side.
@@ -891,7 +892,7 @@ async fn test_proposal_events_last() {
         .await
         .unwrap();
 
-    let offer2_id = market2
+    let offer1_id = market2
         .subscribe_offer(&sample_offer(), &identity2)
         .await
         .unwrap();
@@ -910,23 +911,23 @@ async fn test_proposal_events_last() {
         .await
         .unwrap();
 
-    let sub3 = market3
+    let offer2_id = market3
         .subscribe_offer(&sample_offer(), &identity3)
         .await
         .unwrap();
 
-    let proposal2 = provider::query_proposal(&market2, &offer2_id, "Initial #P")
+    // wait for Offer broadcast.
+    assert_offers_broadcasted(&[&market1], &[offer2_id]).await;
+
+    let proposal2 = provider::query_proposal(&market2, &offer1_id, "Initial #P")
         .await
         .unwrap();
     let proposal2_id = proposal2.get_proposal_id().unwrap();
     market2
         .provider_engine
-        .reject_proposal(&offer2_id, &proposal2_id, &identity2, None)
+        .reject_proposal(&offer1_id, &proposal2_id, &identity2, None)
         .await
         .unwrap();
-
-    // Make sure, that broadcast will reach Requestor.
-    wait_for_bcast(1000, &market1, &sub3, true).await;
 
     let events = market1
         .requestor_engine

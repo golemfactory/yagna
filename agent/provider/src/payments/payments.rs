@@ -1,5 +1,6 @@
 use actix::prelude::*;
 use anyhow::{anyhow, Error, Result};
+use backoff::backoff::Backoff;
 use bigdecimal::{BigDecimal, Zero};
 use chrono::Utc;
 use futures_util::FutureExt;
@@ -114,6 +115,8 @@ pub struct PaymentsConfig {
     pub get_events_error_timeout: Duration,
     #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "5s")]
     pub invoice_reissue_interval: Duration,
+    /// Deprecated! Will be removed in future releases. Please do not use it.
+    /// We will use progressive increasing (exponentially) time periods between retries.
     #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "50s")]
     pub invoice_resend_interval: Duration,
     #[structopt(skip = "you-forgot-to-set-session-id")]
@@ -705,6 +708,7 @@ impl Handler<SendInvoice> for Payments {
         async move {
             log::info!("Sending invoice [{}] to requestor...", msg.invoice_id);
 
+            let mut repeats = get_backoff();
             loop {
                 match provider_ctx.payment_api.send_invoice(&msg.invoice_id).await {
                     Ok(_) => {
@@ -712,9 +716,9 @@ impl Handler<SendInvoice> for Payments {
                         return Ok(());
                     }
                     Err(e) => {
-                        let interval = provider_ctx.config.invoice_resend_interval;
-                        log::error!("Error sending invoice: {} Retry in {:#?}.", e, interval);
-                        tokio::time::delay_for(interval).await
+                        let delay = repeats.next_backoff().unwrap_or(repeats.current_interval);
+                        log::warn!("Error sending invoice: {} Retry in {:#?}.", e, delay);
+                        tokio::time::delay_for(delay).await
                     }
                 }
             }
@@ -900,4 +904,14 @@ impl Actor for Payments {
             check_debit_notes_events(provider_ctx, debit_checker).await;
         });
     }
+}
+
+fn get_backoff() -> backoff::ExponentialBackoff {
+    let mut backoff = backoff::ExponentialBackoff::default();
+    backoff.current_interval = std::time::Duration::from_secs(15);
+    backoff.initial_interval = std::time::Duration::from_secs(15);
+    backoff.multiplier = 1.5f64;
+    backoff.max_interval = std::time::Duration::from_secs(3600);
+    backoff.max_elapsed_time = Some(std::time::Duration::from_secs(u64::max_value()));
+    backoff
 }
