@@ -1,0 +1,52 @@
+name: Test Checker
+
+on:
+  pull_request:
+    branches:
+      - master
+      - release/*
+
+jobs:
+  test_check:
+    name: Check test results
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for build to succeed
+        uses: tomchv/wait-my-workflow@v1.1.0
+        id: wait-for-build
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          checkName: "Tests & Build (ubuntu-latest)"
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          timeoutSeconds: 7200
+
+      - name: Make sure the build was a success
+        if: steps.wait-for-build.outputs.conclusion != 'success'
+        run: echo buils not success && false
+
+      - name: Sleep to wait for the build to trigger
+        run: sleep 1m
+
+      - name: Wait for test to succeed
+        uses: tomchv/wait-my-workflow@v1.1.0
+        id: wait-for-test
+        if: steps.wait-for-build.outputs.conclusion == 'success'
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          checkName: "Integration Tests"
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          timeoutSeconds: 1200
+
+      - run: echo '${{ toJson(steps.wait-for-test) }}'
+
+      - name: Fail if test did not launch
+        if: steps.wait-for-test.outputs.conclusion == 'does not exist'
+        run: echo job does not exist && false
+
+      - name: Fail if test failed
+        if: steps.wait-for-test.outputs.conclusion == 'failure'
+        run: echo fail && false
+
+      - name: Fail if test timed out
+        if: steps.wait-for-test.outputs.conclusion == 'timed_out'
+        run: echo Timeout && false
