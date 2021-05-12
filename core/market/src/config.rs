@@ -37,9 +37,9 @@ pub struct SubscriptionConfig {
 
 #[derive(StructOpt, Clone)]
 pub struct EventsConfig {
-    #[structopt(env = "MAX_MARKET_EVENTS_DEFAULT", default_value = "20")]
+    #[structopt(env = "MARKET_MAX_EVENTS_DEFAULT", default_value = "20")]
     pub max_events_default: i32,
-    #[structopt(env = "MAX_MARKET_EVENTS_MAX", default_value = "100")]
+    #[structopt(env = "MARKET_MAX_EVENTS_MAX", default_value = "100")]
     pub max_events_max: i32,
 }
 
