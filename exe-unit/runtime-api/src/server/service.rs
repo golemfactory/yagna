@@ -68,7 +68,7 @@ impl RuntimeEvent for EventEmitter {
 
 pub async fn run_async<Factory, FutureRuntime, Runtime>(factory: Factory)
 where
-    Factory: Fn(EventEmitter) -> FutureRuntime,
+    Factory: FnOnce(EventEmitter) -> FutureRuntime,
     FutureRuntime: Future<Output = Runtime>,
     Runtime: RuntimeService + 'static,
 {
