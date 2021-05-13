@@ -15,7 +15,7 @@ use ya_market::testing::agreement_utils::negotiate_agreement;
 use ya_market::testing::events_helper::requestor::expect_approve;
 use ya_market::testing::{
     client::{sample_demand, sample_offer},
-    mock_node::{wait_for_bcast, MarketServiceExt},
+    mock_node::{assert_offers_broadcasted, MarketServiceExt},
     proposal_util::exchange_draft_proposals,
     DemandError, MarketsNetwork, ModifyOfferError, Owner, SubscriptionId, SubscriptionParseError,
 };
@@ -68,7 +68,7 @@ async fn test_rest_get_offers() {
         .await
         .unwrap();
 
-    wait_for_bcast(1000, &market_remote, &subscription_id_local, true).await;
+    assert_offers_broadcasted(&[&market_remote], &[subscription_id_local.clone()]).await;
 
     let mut app = network.get_rest_app("Node-1").await;
 

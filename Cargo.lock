@@ -7326,6 +7326,7 @@ dependencies = [
 name = "ya-market"
 version = "0.3.0"
 dependencies = [
+ "actix 0.10.0",
  "actix-http",
  "actix-rt",
  "actix-service",
@@ -7365,7 +7366,6 @@ dependencies = [
  "ya-client",
  "ya-core-model",
  "ya-diesel-utils",
- "ya-market",
  "ya-market-resolver",
  "ya-net",
  "ya-persistence",
@@ -7374,6 +7374,7 @@ dependencies = [
  "ya-service-api-web",
  "ya-service-bus",
  "ya-std-utils",
+ "ya-utils-actix",
 ]
 
 [[package]]
