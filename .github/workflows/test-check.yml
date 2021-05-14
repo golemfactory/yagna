@@ -22,7 +22,7 @@ jobs:
 
       - name: Make sure the build was a success ( ubuntu )
         if: steps.wait-for-build-ubu.outputs.conclusion != 'success'
-        run: echo buils not success && false
+        run: echo job was not a success but ${{ steps.wait-for-build-ubu.outputs.conclusion }} && false
 
       - name: Wait for build to succeed ( windows )
         uses: tomchv/wait-my-workflow@v1.1.0
@@ -35,8 +35,8 @@ jobs:
 
       - name: Make sure the build was a success ( windows )
         if: steps.wait-for-build-win.outputs.conclusion != 'success'
+        run: echo job was not a success but ${{ steps.wait-for-build-win.outputs.conclusion }} && false
 
-        run: echo buils not success && false
       - name: Wait for build to succeed ( macos )
         uses: tomchv/wait-my-workflow@v1.1.0
         id: wait-for-build-mac
@@ -48,7 +48,7 @@ jobs:
 
       - name: Make sure the build was a success ( macos )
         if: steps.wait-for-build-mac.outputs.conclusion != 'success'
-        run: echo buils not success && false
+        run: echo job was not a success but ${{ steps.wait-for-build-mac.outputs.conclusion }} && false
 
       - name: Sleep to wait for the build to trigger
         run: sleep 1m
@@ -56,7 +56,6 @@ jobs:
       - name: Wait for test to succeed
         uses: tomchv/wait-my-workflow@v1.1.0
         id: wait-for-test
-        if: steps.wait-for-build.outputs.conclusion == 'success'
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           checkName: "Integration Tests"
