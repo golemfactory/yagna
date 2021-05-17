@@ -1123,3 +1123,75 @@ async fn test_negotiations_after_agreement_rejected() {
         .await
         .unwrap();
 }
+
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
+async fn test_reject_initial_proposal() {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance("Node-1")
+        .await
+        .add_market_instance("Node-2")
+        .await;
+
+    let market1 = network.get_market("Node-1");
+    let market2 = network.get_market("Node-2");
+
+    let identity1 = network.get_default_id("Node-1");
+    let identity2 = network.get_default_id("Node-2");
+
+    let demand_id = market1
+        .subscribe_demand(&sample_demand(), &identity1)
+        .await
+        .unwrap();
+
+    let offer_id = market2
+        .subscribe_offer(&sample_offer(), &identity2)
+        .await
+        .unwrap();
+
+    // wait for Offer broadcast.
+    assert_offers_broadcasted(&[&market1], &[offer_id]).await;
+
+    let initial_proposal =
+        requestor::query_proposal(&market1, &demand_id, "Query Initial Proposal")
+            .await
+            .unwrap();
+
+    market1
+        .requestor_engine
+        .reject_proposal(
+            &demand_id,
+            &initial_proposal.get_proposal_id().unwrap(),
+            &identity1,
+            None,
+        )
+        .await
+        .unwrap();
+
+    market1
+        .requestor_engine
+        .counter_proposal(
+            &demand_id,
+            &initial_proposal.get_proposal_id().unwrap(),
+            &sample_demand(),
+            &identity1,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        market1
+            .get_proposal(
+                &initial_proposal
+                    .get_proposal_id()
+                    .unwrap()
+                    .translate(Owner::Requestor)
+            )
+            .await
+            .unwrap()
+            .body
+            .state,
+        ProposalState::Initial
+    );
+}
