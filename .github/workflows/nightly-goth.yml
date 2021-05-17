@@ -1,24 +1,14 @@
-name: Goth
+name: Goth nightly
 
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types: [completed]
+  schedule:
+    # run this workflow every day at 3:00 AM UTC
+    - cron: '0 3 * * *'
 
 jobs:
-  triggering-workflow-info:
-    name: Triggerin Workflow Info
-    runs-on: ubuntu-latest
-    steps:
-      - name: Dump GitHub event context
-        env:
-          GH_EVENT_CONTEXT: ${{ toJSON(github.event) }}
-        run: echo "$GH_EVENT_CONTEXT"
-
   integration-test:
-    name: Integration Tests
+    name: Integration Tests (nightly)
     runs-on: goth
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     defaults:
       run:
         working-directory: './goth_tests'
@@ -26,8 +16,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Configure Python
         uses: actions/setup-python@v2
@@ -56,21 +44,13 @@ jobs:
       - name: Log in to GitHub Docker repository
         run: echo ${{ secrets.GITHUB_TOKEN }} | docker login docker.pkg.github.com -u ${{github.actor}} --password-stdin
 
-      - name: Download artifact
-        uses: dawidd6/action-download-artifact@v2
-        with:
-          workflow: rust.yml
-          commit: ${{github.event.workflow_run.head_sha}}
-          workflow_conclusion: success
-          name: 'Yagna Linux'
-          path: /tmp/yagna-build
-
       - name: Run test suite
         env:
           GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           poetry run poe goth-assets
-          poetry run poe goth-tests --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
+          # Runs on default yagna release, i.e. latest stable release from GitHub
+          poetry run poe goth-tests
 
       - name: Upload test logs
         uses: actions/upload-artifact@v2
