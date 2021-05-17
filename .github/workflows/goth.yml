@@ -1,24 +1,59 @@
 name: Goth
 
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types: [completed]
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+      - release/*
 
 jobs:
-  triggering-workflow-info:
-    name: Triggerin Workflow Info
+  test_check:
+    name: Check test results
     runs-on: ubuntu-latest
     steps:
-      - name: Dump GitHub event context
-        env:
-          GH_EVENT_CONTEXT: ${{ toJSON(github.event) }}
-        run: echo "$GH_EVENT_CONTEXT"
+      - name: Wait for build to succeed ( ubuntu )
+        uses: tomchv/wait-my-workflow@v1.1.0
+        id: wait-for-build-ubu
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          checkName: "Tests & Build (ubuntu-latest)"
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          timeoutSeconds: 7200
+
+      - name: Fail if build was not a success ( ubuntu )
+        run: echo job status: ${{ steps.wait-for-build-ubu.outputs.conclusion }} && ${{ fromJSON('["false", "true"]')[steps.wait-for-build-ubu.outputs.conclusion == 'success'] }}
+
+      - name: Wait for build to succeed ( macos )
+        uses: tomchv/wait-my-workflow@v1.1.0
+        id: wait-for-build-mac
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          checkName: "Tests & Build (macos-latest)"
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          timeoutSeconds: 7200
+
+      - name: Fail if build was not a success ( macos )
+        run: echo job status: ${{ steps.wait-for-build-mac.outputs.conclusion }} && ${{ fromJSON('["false", "true"]')[steps.wait-for-build-mac.outputs.conclusion == 'success'] }}
+
+      - name: Wait for build to succeed ( windows )
+        uses: tomchv/wait-my-workflow@v1.1.0
+        id: wait-for-build-win
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          checkName: "Tests & Build (windows-latest)"
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          timeoutSeconds: 7200
+
+      - name: Fail if build was not a success ( windows )
+        run: echo job status: ${{ steps.wait-for-build-win.outputs.conclusion }} && ${{ fromJSON('["false", "true"]')[steps.wait-for-build-win.outputs.conclusion == 'success'] }}
 
   integration-test:
     name: Integration Tests
     runs-on: goth
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    needs: test_check
     defaults:
       run:
         working-directory: './goth_tests'
@@ -27,7 +62,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Configure Python
         uses: actions/setup-python@v2
@@ -37,7 +72,8 @@ jobs:
       - name: Configure Poetry
         uses: Gr1N/setup-poetry@v4
         with:
-          poetry-version: 1.1.6
+          poetry-version: 1.1.4
+          working-directory: './goth_tests'
 
       - name: Install dependencies
         run: poetry install --no-root
@@ -60,7 +96,7 @@ jobs:
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: rust.yml
-          commit: ${{github.event.workflow_run.head_sha}}
+          commit: ${{github.event.pull_request.head.sha || github.sha}}
           workflow_conclusion: success
           name: 'Yagna Linux'
           path: /tmp/yagna-build
