@@ -2,9 +2,9 @@ use anyhow::{anyhow, Result};
 use chrono::{DateTime, Duration, TimeZone, Utc};
 
 use ya_agreement_utils::{Error, OfferDefinition};
-use ya_client_model::market::Reason;
 
 use crate::display::EnableDisplay;
+use crate::market::negotiator::common::reason_with_extra;
 use crate::market::negotiator::factory::AgreementExpirationNegotiatorConfig;
 use crate::market::negotiator::{
     AgreementResult, NegotiationResult, NegotiatorComponent, ProposalView,
@@ -102,18 +102,24 @@ impl NegotiatorComponent for LimitExpiration {
         let max_expiration = now + max_expiration_delta;
         let min_expiration = now + self.min_expiration;
 
-        if req_expiration > max_expiration || req_expiration < min_expiration {
+        let too_late = req_expiration < min_expiration;
+        let too_soon = req_expiration > max_expiration;
+        if too_soon || too_late {
             log::info!(
                 "Negotiator: Reject proposal [{}] due to expiration limits.",
                 demand.agreement_id
             );
+
             return Ok(NegotiationResult::Reject {
-                reason: Some(Reason::new(format!(
-                    "Proposal expires at: {} which is less than {} or more than {} from now",
-                    req_expiration,
-                    self.min_expiration.display(),
-                    max_expiration_delta.display()
-                ))),
+                reason: Some(reason_with_extra(
+                    format!(
+                        "Proposal expires at: {} which is less than {} or more than {} from now",
+                        req_expiration,
+                        self.min_expiration.display(),
+                        max_expiration_delta.display()
+                    ),
+                    serde_json::json!({ "golem.proposal.rejection.is-final": too_late }), // when it's too soon we could try later
+                )),
             });
         };
 
@@ -124,10 +130,13 @@ impl NegotiatorComponent for LimitExpiration {
             (Some(req_deadline), Some(our_deadline)) => {
                 if req_deadline > our_deadline {
                     NegotiationResult::Reject {
-                        reason: Some(Reason::new(format!(
-                            "DebitNote acceptance deadline should be less than {}.",
-                            self.payment_deadline.display()
-                        ))),
+                        reason: Some(reason_with_extra(
+                            format!(
+                                "DebitNote acceptance deadline should be less than {}.",
+                                self.payment_deadline.display()
+                            ),
+                            serde_json::json!({"golem.proposal.rejection.is-final": true}),
+                        )),
                     }
                 } else if req_deadline == our_deadline {
                     // We agree with Requestor to the same deadline.
@@ -136,10 +145,10 @@ impl NegotiatorComponent for LimitExpiration {
                     // Below certain timeout it is impossible for Requestor to accept DebitNotes.
                     if req_deadline.num_seconds() < self.min_deadline {
                         return Ok(NegotiationResult::Reject {
-                            reason: Some(Reason::new(format!(
-                                "To low DebitNotes timeout: {}",
-                                req_deadline.display()
-                            ))),
+                            reason: Some(reason_with_extra(
+                                format!("To low DebitNotes timeout: {}", req_deadline.display()),
+                                serde_json::json!({"golem.proposal.rejection.is-final": true}),
+                            )),
                         });
                     }
 
