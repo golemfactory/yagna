@@ -53,15 +53,6 @@ jobs:
         if: steps.wait-for-build-mac.outputs.conclusion != 'success'
         run: echo job was not a success but ${{ steps.wait-for-build-mac.outputs.conclusion }} && false
 
-  triggering-workflow-info:
-    name: Triggerin Workflow Info
-    runs-on: ubuntu-latest
-    steps:
-      - name: Dump GitHub event context
-        env:
-          GH_EVENT_CONTEXT: ${{ toJSON(github.event) }}
-        run: echo "$GH_EVENT_CONTEXT"
-
   integration-test:
     name: Integration Tests
     runs-on: goth
