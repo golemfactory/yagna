@@ -9,7 +9,7 @@ default = []
 lock = ["fs2"]
 
 [dependencies]
-actix = { version = "0.9", default-features = false }
+actix = { version = "0.10", default-features = false }
 anyhow = "1.0"
 derive_more = "0.99.5"
 futures = "0.3"
