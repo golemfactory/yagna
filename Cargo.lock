@@ -6791,7 +6791,6 @@ dependencies = [
  "ya-client",
  "ya-core-model",
  "ya-diesel-utils",
- "ya-market",
  "ya-market-resolver",
  "ya-net",
  "ya-persistence",
