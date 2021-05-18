@@ -170,7 +170,8 @@ impl YagnaCommand {
 
     pub async fn default_id(mut self) -> anyhow::Result<Id> {
         self.cmd.args(&["--json", "id", "show"]);
-        self.run().await
+        let output: Result<Id, String> = self.run().await?;
+        output.map_err(anyhow::Error::msg)
     }
 
     pub async fn version(mut self) -> anyhow::Result<VersionInfo> {
