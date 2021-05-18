@@ -1,4 +1,4 @@
-use actix_web::client::Client;
+use awc::Client;
 use std::time::Duration;
 use tokio::time;
 

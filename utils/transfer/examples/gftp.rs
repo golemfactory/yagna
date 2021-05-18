@@ -80,7 +80,7 @@ async fn main() -> Result<(), Error> {
 
     let path_th = path.clone();
     thread::spawn(move || {
-        System::new("gftp").block_on(async move {
+        System::new().block_on(async move {
             let url = gftp::publish(&path_th).await.unwrap();
             log::info!("Publishing file at {:?}", url);
             tx.send(url).unwrap();
@@ -111,7 +111,7 @@ async fn main() -> Result<(), Error> {
 
     let path_th = path_up.clone();
     thread::spawn(move || {
-        System::new("gftp").block_on(async move {
+        System::new().block_on(async move {
             let url = open_for_upload(&path_th).await.unwrap();
             log::info!("Awaiting upload at {:?}", url);
             tx.send(url).unwrap();

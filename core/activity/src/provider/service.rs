@@ -1,4 +1,3 @@
-use actix_rt::Arbiter;
 use chrono::Utc;
 use futures::future::LocalBoxFuture;
 use futures::prelude::*;
@@ -130,7 +129,7 @@ async fn create_activity_gsb(
     )
     .await
     .map_err(|e| {
-        Arbiter::spawn(enqueue_destroy_evt(
+        tokio::task::spawn_local(enqueue_destroy_evt(
             db.clone(),
             &activity_id,
             provider_id,
@@ -182,7 +181,7 @@ async fn activity_credentials(
         return Err(Error::Service(msg));
     }
 
-    Arbiter::spawn(monitor_activity(
+    tokio::task::spawn_local(monitor_activity(
         db.clone(),
         activity_id.clone(),
         provider_id,
@@ -346,7 +345,7 @@ async fn monitor_activity(
             }
         };
 
-        tokio::time::delay_for(delay).await;
+        tokio::time::sleep(delay).await;
     }
 
     // If we got here, we can be sure, that activity was already destroyed.

@@ -13,7 +13,6 @@ use ya_service_bus::typed as bus;
 use crate::dao::identity::Identity;
 use crate::dao::{Error as DaoError, IdentityDao};
 use crate::id_key::{generate_new, IdentityKey};
-use actix_rt::Arbiter;
 use futures::prelude::*;
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
@@ -56,7 +55,7 @@ fn send_event(s: Ref<Subscription>, event: model::event::Event) -> impl Future<O
     async move {
         for endpoint in subscriptions {
             let msg = event.clone();
-            Arbiter::spawn(async move {
+            tokio::task::spawn_local(async move {
                 log::debug!("Sending event: {:?}", msg);
                 match bus::service(&endpoint).call(msg).await {
                     Err(e) => log::error!("Failed to send event: {:?}", e),
@@ -76,11 +75,11 @@ impl IdentityService {
         let subscription = Rc::new(RefCell::new(Subscription::default()));
         {
             let subscription = subscription.clone();
-            Arbiter::spawn(async move {
+            tokio::task::spawn_local(async move {
                 let _ = receiver
                     .for_each(|event| send_event(subscription.borrow(), event))
                     .await;
-            })
+            });
         }
 
         let default_key = db

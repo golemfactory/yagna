@@ -277,7 +277,7 @@ forward_actix_handler!(
 );
 
 impl Handler<InitializeTaskManager> for TaskManager {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, _msg: InitializeTaskManager, ctx: &mut Context<Self>) -> Self::Result {
         let actx = self.async_context(ctx);
@@ -313,7 +313,7 @@ impl Handler<InitializeTaskManager> for TaskManager {
 // =========================================== //
 
 impl Handler<NewAgreement> for TaskManager {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: NewAgreement, ctx: &mut Context<Self>) -> Self::Result {
         // Add new agreement with it's state.
@@ -366,7 +366,7 @@ impl Handler<NewAgreement> for TaskManager {
 }
 
 impl Handler<CreateActivity> for TaskManager {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: CreateActivity, ctx: &mut Context<Self>) -> Self::Result {
         let actx = self.async_context(ctx);
@@ -425,7 +425,7 @@ impl Handler<CreateActivity> for TaskManager {
 }
 
 impl Handler<ActivityDestroyed> for TaskManager {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: ActivityDestroyed, ctx: &mut Context<Self>) -> Self::Result {
         let agreement_id = msg.agreement_id.clone();
@@ -483,7 +483,7 @@ impl Handler<ActivityDestroyed> for TaskManager {
 }
 
 impl Handler<BreakAgreement> for TaskManager {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: BreakAgreement, ctx: &mut Context<Self>) -> Self::Result {
         let actx = self.async_context(ctx);
@@ -529,7 +529,7 @@ impl Handler<BreakAgreement> for TaskManager {
 }
 
 impl Handler<CloseAgreement> for TaskManager {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: CloseAgreement, ctx: &mut Context<Self>) -> Self::Result {
         let actx = self.async_context(ctx);

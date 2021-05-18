@@ -310,7 +310,7 @@ async fn sd_notify(unset_environment: bool, state: &str) -> std::io::Result<()> 
     if unset_environment {
         env::remove_var("NOTIFY_SOCKET");
     }
-    let mut socket = tokio::net::UnixDatagram::unbound()?;
+    let socket = tokio::net::UnixDatagram::unbound()?;
     socket.send_to(state.as_ref(), addr).await?;
     Ok(())
 }

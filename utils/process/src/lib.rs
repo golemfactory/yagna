@@ -12,7 +12,6 @@ pub mod lock;
 
 #[cfg(unix)]
 use {
-    actix::prelude::*,
     futures::future::{AbortHandle, Abortable},
     shared_child::unix::SharedChildExt,
 };
@@ -116,8 +115,8 @@ impl ProcessHandle {
         let process = self.clone();
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
 
-        Arbiter::spawn(async move {
-            tokio::time::delay_for(timeout).await;
+        tokio::task::spawn_local(async move {
+            tokio::time::sleep(timeout).await;
             abort_handle.abort();
         });
 

@@ -24,11 +24,11 @@ ya-service-bus = "0.4"
 ya-std-utils = "0.1"
 ya-utils-actix = "0.1"
 
-actix = { version = "0.10", default-features = false }
-actix-http = { version = "2.2" }
-actix-rt = { version = "1.0.0" }
-actix-service = { version = "1.0" }
-actix-web = "3.2"
+actix = { version = "0.11", default-features = false }
+actix-http = "3.0.0-beta.6"
+actix-rt = "2.2"
+actix-service = "2.0"
+actix-web = "4.0.0-beta.6"
 anyhow = "1.0"
 async-trait = { version = "0.1.33" }
 backtrace = "0.3.50"
@@ -56,13 +56,13 @@ structopt = "0.3.20"
 strum = "0.19.5"
 strum_macros = "0.19.4"
 thiserror = "1.0"
-tokio = { version = "0.2", features = ["time", "sync"] }
+tokio = { version = "1.6", features = ["time", "sync"] }
 uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]
 all_asserts = "2.2.0"
 serde_json = "1.0"
 #serial_test = "0.5.0"
-serial_test = { git = "https://github.com/tworec/serial_test.git", branch = "actix_rt_test"}
+serial_test = { git = "https://github.com/mfranciszkiewicz/serial_test.git", branch = "actix_rt_2_2_test"}
 structopt = "0.3"
-tokio = { version = "0.2", features = ["macros", "rt-core"] }
+tokio = { version = "1.6", features = ["macros", "rt"] }

@@ -164,15 +164,18 @@ impl RuntimeProcess {
                 RuntimeEvent::stderr(id.clone(), idx, CommandOutput::Bin(out))
             });
 
+            let pid = child
+                .id()
+                .ok_or_else(|| Error::runtime("Missing process id"))?;
             let proc = if cfg!(feature = "sgx") {
-                ChildProcess::from(child.id())
+                ChildProcess::from(pid)
             } else {
-                let tree = ProcessTree::try_new(child.id()).map_err(Error::runtime)?;
+                let tree = ProcessTree::try_new(pid).map_err(Error::runtime)?;
                 ChildProcess::from(tree)
             };
             let _guard = ChildProcessGuard::new(proc, address.clone());
 
-            let result = future::join3(child, stdout, stderr).await;
+            let result = future::join3(child.wait(), stdout, stderr).await;
             Ok(result.0?.code().unwrap_or(-1))
         }
         .boxed_local()

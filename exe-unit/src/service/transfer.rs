@@ -257,7 +257,7 @@ macro_rules! actor_try {
 }
 
 impl Handler<DeployImage> for TransferService {
-    type Result = ActorResponse<Self, PathBuf, Error>;
+    type Result = ActorResponse<Self, Result<PathBuf>>;
 
     #[allow(unused_variables)]
     fn handle(&mut self, _: DeployImage, ctx: &mut Self::Context) -> Self::Result {
@@ -333,7 +333,7 @@ impl Handler<DeployImage> for TransferService {
 }
 
 impl Handler<TransferResource> for TransferService {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<()>>;
 
     fn handle(&mut self, msg: TransferResource, ctx: &mut Self::Context) -> Self::Result {
         let from = actor_try!(TransferUrl::parse(&msg.from, "container"));

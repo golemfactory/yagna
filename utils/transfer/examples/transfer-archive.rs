@@ -1,4 +1,3 @@
-use actix_rt::Arbiter;
 use futures::channel::mpsc::channel;
 use futures::StreamExt;
 use std::convert::TryFrom;
@@ -30,7 +29,7 @@ async fn main() -> anyhow::Result<()> {
     let format: ArchiveFormat = args.url.path().parse()?;
 
     let (tx, rx) = channel(1);
-    Arbiter::spawn(async move {
+    tokio::task::spawn_local(async move {
         rx.for_each(|evt| {
             log::info!("Extract: {:?}", evt);
             futures::future::ready(())
@@ -40,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
 
     log::warn!("Extracting {:?} to {:?}", args.url, args.src_path);
     let stream = http_provider.source(&args.url, &TransferArgs::default());
-    extract(stream, &args.src_path, format, tx).await?;
+    extract(stream, args.src_path.clone(), format, tx).await?;
 
     log::warn!("Starting on-the-fly compression & extraction");
     let fileset = FileSet::Pattern(SetEntry::Single(args.glob.clone()));
@@ -51,14 +50,14 @@ async fn main() -> anyhow::Result<()> {
     let (c_tx, c_rx) = channel(1);
     let (e_tx, e_rx) = channel(1);
 
-    Arbiter::spawn(async move {
+    tokio::task::spawn_local(async move {
         c_rx.for_each(|evt| {
             log::info!("Compress: {:?}", evt);
             futures::future::ready(())
         })
         .await;
     });
-    Arbiter::spawn(async move {
+    tokio::task::spawn_local(async move {
         e_rx.for_each(|evt| {
             log::info!("Extract: {:?}", evt);
             futures::future::ready(())
@@ -76,8 +75,8 @@ async fn main() -> anyhow::Result<()> {
     let format = ArchiveFormat::try_from(args.format.as_str())?;
     let path_it = transfer_args.traverse(&args.src_path)?;
 
-    let stream = archive(path_it, &args.src_path, format, c_tx).await;
-    extract(stream, &args.dst_path, format, e_tx).await?;
+    let stream = archive(path_it, args.src_path.clone(), format, c_tx).await;
+    extract(stream, args.dst_path.clone(), format, e_tx).await?;
 
     Ok(())
 }

@@ -1,4 +1,3 @@
-use actix_rt::Arbiter;
 use anyhow::anyhow;
 use futures::channel::oneshot;
 use futures::prelude::*;
@@ -75,13 +74,13 @@ pub async fn bind_remote(
         move |caller: String, topic: String, msg: Vec<u8>| {
             let endpoints = bcast.resolve(&topic);
             let msg: Rc<[u8]> = msg.into();
-            Arbiter::spawn(async move {
+            tokio::task::spawn_local(async move {
                 log::trace!("Received broadcast to topic {} from [{}].", &topic, &caller);
                 for endpoint in endpoints {
                     let addr = format!("{}/{}", endpoint, bcast_service_id);
                     let _ = local_bus::send(addr.as_ref(), &caller, msg.as_ref()).await;
                 }
-            })
+            });
         }
     };
 

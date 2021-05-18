@@ -51,7 +51,7 @@ async fn test_agreement_approved_event() {
     let agr_id = agreement_id.clone();
     let from_timestamp = confirm_timestamp.clone();
     let query_handle = tokio::task::spawn_local(async move {
-        tokio::time::delay_for(std::time::Duration::from_millis(20)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         prov_market
             .provider_engine
             .approve_agreement(
@@ -155,7 +155,7 @@ async fn test_agreement_events_and_wait_for_approval() {
     // Provider will approve agreement after some delay.
     let agr_id = agreement_id.clone();
     let query_handle = tokio::task::spawn_local(async move {
-        tokio::time::delay_for(std::time::Duration::from_millis(20)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         prov_market
             .provider_engine
             .approve_agreement(
@@ -317,7 +317,7 @@ async fn test_waiting_for_agreement_event() {
 
     // Terminate agreement with delay, so event will have to be woken up.
     tokio::task::spawn_local(async move {
-        tokio::time::delay_for(std::time::Duration::from_millis(1200)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
         prov_market
             .terminate_agreement(prov_id.clone(), p_agreement, Some(gen_reason("Expired")))
             .await

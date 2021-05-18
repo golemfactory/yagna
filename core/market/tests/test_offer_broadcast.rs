@@ -135,7 +135,7 @@ async fn test_broadcast_offer_id_validation() {
         .await
         .unwrap();
 
-    tokio::time::delay_for(Duration::from_millis(1000)).await;
+    tokio::time::sleep(Duration::from_millis(1000)).await;
     assert_err_eq!(
         QueryOfferError::NotFound(invalid_id.clone()),
         mkt1.get_offer(&invalid_id).await,
@@ -177,7 +177,7 @@ async fn test_broadcast_expired_offer() {
         .await
         .unwrap();
 
-    tokio::time::delay_for(Duration::from_millis(1000)).await;
+    tokio::time::sleep(Duration::from_millis(1000)).await;
 
     // This should return NotFound, because Market shouldn't add this Offer
     // to database at all.

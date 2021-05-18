@@ -47,7 +47,7 @@ async fn spawn_server(addr: &str) -> anyhow::Result<()> {
     let addr = addr.to_owned();
 
     std::thread::spawn(move || {
-        let sys = System::new("http");
+        let sys = System::new();
         HttpServer::new(move || {
             App::new().wrap(middleware::Logger::default()).service(
                 web::resource("/{name}")

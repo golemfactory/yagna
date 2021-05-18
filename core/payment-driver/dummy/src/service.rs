@@ -1,5 +1,4 @@
 use crate::{DRIVER_NAME, NETWORK_NAME, PLATFORM_NAME, TOKEN_NAME};
-use actix::Arbiter;
 use bigdecimal::BigDecimal;
 use chrono::Utc;
 use maplit::hashmap;
@@ -112,8 +111,8 @@ async fn schedule_payment(
 
     // Spawned because calling payment service while handling a call from payment service
     // would result in a deadlock. We need to wait a bit, so parent scope be able to answer
-    Arbiter::spawn(async move {
-        std::thread::sleep(actix::clock::Duration::from_millis(100));
+    tokio::task::spawn_local(async move {
+        std::thread::sleep(std::time::Duration::from_millis(100));
         let _ = bus::service(payment_srv::BUS_ID)
             .send(msg)
             .await

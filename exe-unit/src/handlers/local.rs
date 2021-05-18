@@ -240,7 +240,7 @@ impl<R: Runtime> Handler<SignExeScript> for ExeUnit<R> {
 }
 
 impl<R: Runtime> Handler<Stop> for ExeUnit<R> {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: Stop, _: &mut Context<Self>) -> Self::Result {
         self.state.batches.iter_mut().for_each(|(id, batch)| {
@@ -259,7 +259,7 @@ impl<R: Runtime> Handler<Stop> for ExeUnit<R> {
 }
 
 impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: Shutdown, ctx: &mut Context<Self>) -> Self::Result {
         if !self.state.inner.alive() {

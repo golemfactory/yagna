@@ -13,14 +13,14 @@ ya-service-bus = "0.4"
 ya-utils-path = "0.1"
 gftp = { version = "^0.2"}
 
-actix-http = "2.2"
-actix-rt = "1.1"
-awc = { version = "2.0", features = ["openssl"] }
-async-compression = { version = "0.3.5", features = ["stream", "bzip2", "gzip", "xz"] }
-bytes = "0.5.4"
+actix-http = "3.0.0-beta.6"
+actix-rt = "2.2"
+awc = { version = "3.0.0-beta.5", features = ["openssl"] }
+async-compression = { version = "=0.3.7", features = ["tokio", "futures-io", "stream", "bzip2", "gzip", "xz"] }
+bytes = "1.0"
 futures = "0.3.4"
 globset = "0.4.5"
-h2 = "0.2.7"
+h2 = "0.3.3"
 hex = "0.4.2"
 lazy_static = "1.4.0"
 log = "0.4.8"
@@ -30,21 +30,20 @@ serde = "1.0.104"
 sha3 = "0.8.2"
 tempdir = "0.3.7"
 thiserror = "1.0.11"
-tokio = {version = "0.2.11", features = ["fs"] }
-tokio-byteorder = "0.2.0"
-tokio-tar = "0.2.0"
+tokio = { version = "1.6", features = ["fs", "io-util"] }
+tokio-tar = "0.3"
+tokio-util = { version = "0.6", features = ["io"] }
 url = "2.1.1"
 walkdir = "2.3.1"
 
 [dependencies.zip]
 version = "0.5.6"
-features = ["tokio-02"]
-git = "https://github.com/mfranciszkiewicz/zip-rs.git"
-branch = "feature/tokio"
+features = ["tokio-1"]
+git = "https://github.com/golemfactory/zip-rs.git"
+branch = "feature/tokio-1"
 
 [dev-dependencies]
-actix-files = "0.4"
-actix-web = "3.2"
+actix-web = "4.0.0-beta.6"
 anyhow = "1.0"
 env_logger = "0.7"
 sha2 = "0.8.1"

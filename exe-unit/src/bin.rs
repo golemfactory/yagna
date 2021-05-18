@@ -204,7 +204,7 @@ fn run() -> anyhow::Result<()> {
     log::debug!("CLI args: {:?}", cli);
     log::debug!("ExeUnitContext args: {:?}", ctx);
 
-    let sys = System::new("exe-unit");
+    let sys = System::new();
 
     let metrics = MetricsService::try_new(&ctx, Some(10000), cli.supervise_caps)?.start();
     let transfers = TransferService::new(&ctx).start();

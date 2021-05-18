@@ -117,7 +117,7 @@ impl AgreementPayment {
         // Send number of activities. ActivitiesWaiter can be than awaited
         // until required condition is met.
         let num_activities = self.count_active_activities();
-        let _ = self.watch_sender.broadcast(num_activities);
+        let _ = self.watch_sender.send(num_activities);
     }
 
     pub fn activity_destroyed(&mut self, activity_id: &str) -> Result<()> {
@@ -151,7 +151,7 @@ impl AgreementPayment {
                 // Send number of activities. ActivitiesWaiter can be than awaited
                 // until required condition is met.
                 let num_activities = self.count_active_activities();
-                self.watch_sender.broadcast(num_activities)?;
+                self.watch_sender.send(num_activities)?;
 
                 return Ok(());
             }
@@ -250,7 +250,13 @@ pub async fn compute_cost(
 impl ActivitiesWaiter {
     pub async fn wait_for_finish(mut self) {
         log::debug!("Waiting for all activities to finish.");
-        while let Some(value) = self.watch_receiver.recv().await {
+        while let Some(value) = self
+            .watch_receiver
+            .changed()
+            .await
+            .map(|_| *self.watch_receiver.borrow())
+            .ok()
+        {
             log::debug!("Num active activities left: {}.", value);
             if value == 0 {
                 log::debug!("All activities finished.");

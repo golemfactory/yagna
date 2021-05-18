@@ -133,7 +133,7 @@ async fn test_unsubscribes_cyclic_broadcasts() {
     // Re-enable networking for Node-3. We should get only cyclic broadcast.
     // Immediate broadcast should be already lost.
     network.enable_networking_for("Node-3").unwrap();
-    tokio::time::delay_for(Duration::from_millis(320)).await;
+    tokio::time::sleep(Duration::from_millis(320)).await;
 
     // Check if all expected Offers were unsubscribed.
     assert_unsunbscribes_broadcasted(
@@ -288,7 +288,7 @@ async fn test_sharing_someones_else_unsubscribes() {
 
     // Wait until Nodes will share their Offers.
     // After 300ms we should get at least two broadcasts from each Node.
-    tokio::time::delay_for(Duration::from_millis(320)).await;
+    tokio::time::sleep(Duration::from_millis(320)).await;
 
     // Sanity check. Make sure all nodes have all offers.
     assert_offers_broadcasted(&[&mkt1, &mkt2, &mkt3], subscriptions.iter()).await;

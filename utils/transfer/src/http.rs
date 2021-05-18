@@ -119,18 +119,36 @@ impl<S> HttpErr<Self> for awc::ClientResponse<S> {
         let status = self.status();
         if status.is_success() {
             Ok(self)
+        } else if status.is_client_error() {
+            Err(HttpError::Client(status.to_string()).into())
         } else {
-            if status.is_client_error() {
-                Err(HttpError::Client(status.to_string()).into())
-            } else {
-                Err(HttpError::Server(status.to_string()).into())
+            Err(HttpError::Server(status.to_string()).into())
+        }
+    }
+}
+
+impl HttpErr<awc::ConnectResponse> for awc::ConnectResponse {
+    fn http_err(self) -> Result<awc::ConnectResponse, Error> {
+        match self {
+            awc::ConnectResponse::Client(resp) => match resp.http_err() {
+                Ok(resp) => Ok(awc::ConnectResponse::Client(resp)),
+                Err(error) => Err(error),
+            },
+            awc::ConnectResponse::Tunnel(head, framed) => {
+                if head.status.is_success() {
+                    Ok(awc::ConnectResponse::Tunnel(head, framed))
+                } else if head.status.is_client_error() {
+                    Err(HttpError::Client(head.status.to_string()).into())
+                } else {
+                    Err(HttpError::Server(head.status.to_string()).into())
+                }
             }
         }
     }
 }
 
-impl<'a> HttpErr<LocalBoxFuture<'a, Result<awc::ClientResponse, Error>>> for SendClientRequest {
-    fn http_err(self) -> Result<LocalBoxFuture<'a, Result<awc::ClientResponse, Error>>, Error> {
+impl<'a> HttpErr<LocalBoxFuture<'a, Result<awc::ConnectResponse, Error>>> for SendClientRequest {
+    fn http_err(self) -> Result<LocalBoxFuture<'a, Result<awc::ConnectResponse, Error>>, Error> {
         match self {
             SendClientRequest::Fut(fut, _, _) => {
                 Ok(async move { Ok(fut.await?.http_err()?) }.boxed_local())

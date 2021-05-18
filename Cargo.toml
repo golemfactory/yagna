@@ -52,9 +52,9 @@ ya-version = "0.1"
 gftp = { version = "^0.2", optional = true } # just to enable gftp build for cargo-deb
 ya-provider = { version = "0.2", optional = true } # just to enable conditionally running some tests
 
-actix-rt = "1.0"
-actix-service = "1.0"
-actix-web = "3.2"
+actix-rt = "2.2"
+actix-service = "2.0"
+actix-web = "4.0.0-beta.6"
 anyhow = "1.0"
 chrono = "0.4"
 directories = "2.0.2"
@@ -65,7 +65,7 @@ log = "0.4"
 openssl = "0.10"
 openssl-probe = { version = "0.1", optional = true }
 structopt = "0.3"
-tokio = {version = "0.2.22", features=["uds"]}
+tokio = {version = "1.6", features=["net"]}
 url = "2.1.1"
 
 [package.metadata.deb]
@@ -203,6 +203,10 @@ ya-utils-process = { path = "utils/process"}
 ya-diesel-utils = { path = "utils/diesel-utils"}
 ya-metrics = { path = "core/metrics" }
 ya-provider = { path = "agent/provider"}
+
+web3 = { git = "https://github.com/tomusdrw/rust-web3.git", rev = "7dfefdccce912a500c5a359937bef915fc3a1a73" }
+ethereum-tx-sign = { git = "https://github.com/mfranciszkiewicz/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
+
 
 # Speed up builds on macOS (will be default in next rust version probably)
 # https://jakedeichert.com/blog/reducing-rust-incremental-compilation-times-on-macos-by-70-percent/

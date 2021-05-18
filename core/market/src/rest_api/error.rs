@@ -1,3 +1,5 @@
+use actix_http::body::Body;
+use actix_http::Response;
 use actix_web::{HttpResponse, ResponseError};
 
 use ya_client::model::ErrorMessage;
@@ -21,12 +23,12 @@ use crate::{
 
 impl From<MarketError> for actix_web::HttpResponse {
     fn from(e: MarketError) -> Self {
-        e.error_response()
+        e.error_response().into()
     }
 }
 
 impl ResponseError for MarketError {
-    fn error_response(&self) -> HttpResponse {
+    fn error_response(&self) -> Response<Body> {
         match self {
             MarketError::Matcher(e) => e.error_response(),
             MarketError::QueryDemandsError(e) => e.error_response(),
@@ -39,7 +41,7 @@ impl ResponseError for MarketError {
 }
 
 impl ResponseError for MatcherError {
-    fn error_response(&self) -> HttpResponse {
+    fn error_response(&self) -> Response<Body> {
         match self {
             MatcherError::Demand(e) => e.error_response(),
             MatcherError::QueryOffers(e) => e.error_response(),
@@ -53,48 +55,55 @@ impl ResponseError for MatcherError {
 impl ResponseError for NegotiationError {}
 
 impl ResponseError for ResolverError {
-    fn error_response(&self) -> HttpResponse {
+    fn error_response(&self) -> Response<Body> {
         match self {
             _ => HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string())),
         }
+        .into()
     }
 }
 
 impl ResponseError for DemandError {
-    fn error_response(&self) -> HttpResponse {
+    fn error_response(&self) -> Response<Body> {
         match self {
             DemandError::NotFound(_) => {
                 HttpResponse::NotFound().json(ErrorMessage::new(self.to_string()))
             }
             _ => HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string())),
         }
+        .into()
     }
 }
 
 impl ResponseError for QueryDemandsError {
-    fn error_response(&self) -> HttpResponse {
-        HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string()))
+    fn error_response(&self) -> Response<Body> {
+        HttpResponse::InternalServerError()
+            .json(ErrorMessage::new(self.to_string()))
+            .into()
     }
 }
 
 impl ResponseError for QueryOffersError {
-    fn error_response(&self) -> HttpResponse {
-        HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string()))
+    fn error_response(&self) -> Response<Body> {
+        HttpResponse::InternalServerError()
+            .json(ErrorMessage::new(self.to_string()))
+            .into()
     }
 }
 
 impl ResponseError for QueryOfferError {
-    fn error_response(&self) -> HttpResponse {
+    fn error_response(&self) -> Response<Body> {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             QueryOfferError::NotFound(_) => HttpResponse::NotFound().json(msg),
             _ => HttpResponse::InternalServerError().json(msg),
         }
+        .into()
     }
 }
 
 impl ResponseError for SaveOfferError {
-    fn error_response(&self) -> HttpResponse {
+    fn error_response(&self) -> Response<Body> {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             SaveOfferError::Unsubscribed(_) | SaveOfferError::Expired(_) => {
@@ -102,11 +111,12 @@ impl ResponseError for SaveOfferError {
             }
             _ => HttpResponse::InternalServerError().json(msg),
         }
+        .into()
     }
 }
 
 impl ResponseError for ModifyOfferError {
-    fn error_response(&self) -> HttpResponse {
+    fn error_response(&self) -> Response<Body> {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             ModifyOfferError::NotFound(_) => HttpResponse::NotFound().json(msg),
@@ -115,11 +125,12 @@ impl ResponseError for ModifyOfferError {
             }
             _ => HttpResponse::InternalServerError().json(msg),
         }
+        .into()
     }
 }
 
 impl ResponseError for QueryEventsError {
-    fn error_response(&self) -> HttpResponse {
+    fn error_response(&self) -> Response<Body> {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             QueryEventsError::TakeEvents(TakeEventsError::NotFound(_))
@@ -131,27 +142,28 @@ impl ResponseError for QueryEventsError {
             }
             _ => HttpResponse::InternalServerError().json(msg),
         }
+        .into()
     }
 }
 
 impl ResponseError for ProposalError {
-    fn error_response(&self) -> HttpResponse {
+    fn error_response(&self) -> Response<Body> {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             ProposalError::Validation(e) => e.error_response(),
             ProposalError::Save(SaveProposalError::AlreadyCountered(..)) => {
-                HttpResponse::Gone().json(msg)
+                HttpResponse::Gone().json(msg).into()
             }
             ProposalError::Get(e) => e.error_response(),
             ProposalError::Reject(e) => e.error_response(),
             // TODO: get rid of those `_` patterns as they do not break when error is extended
-            _ => HttpResponse::InternalServerError().json(msg),
+            _ => HttpResponse::InternalServerError().json(msg).into(),
         }
     }
 }
 
 impl ResponseError for RejectProposalError {
-    fn error_response(&self) -> HttpResponse {
+    fn error_response(&self) -> Response<Body> {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             RejectProposalError::Validation(_) => HttpResponse::BadRequest().json(msg),
@@ -160,11 +172,12 @@ impl ResponseError for RejectProposalError {
             | RejectProposalError::ChangeState(_)
             | RejectProposalError::CallerParse(_) => HttpResponse::InternalServerError().json(msg),
         }
+        .into()
     }
 }
 
 impl ResponseError for ProposalValidationError {
-    fn error_response(&self) -> HttpResponse {
+    fn error_response(&self) -> Response<Body> {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             ProposalValidationError::NoSubscription(_)
@@ -175,32 +188,34 @@ impl ResponseError for ProposalValidationError {
             ProposalValidationError::Unauthorized(_, _) => HttpResponse::Unauthorized().json(msg),
             ProposalValidationError::Internal(_) => HttpResponse::InternalServerError().json(msg),
         }
+        .into()
     }
 }
 
 impl ResponseError for GetProposalError {
-    fn error_response(&self) -> HttpResponse {
+    fn error_response(&self) -> Response<Body> {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             GetProposalError::NotFound(..) => HttpResponse::NotFound().json(msg),
             _ => HttpResponse::InternalServerError().json(msg),
         }
+        .into()
     }
 }
 
 impl ResponseError for AgreementError {
-    fn error_response(&self) -> HttpResponse {
+    fn error_response(&self) -> Response<Body> {
         let msg = ErrorMessage::new(self.to_string());
         match self {
-            AgreementError::NotFound(_) => HttpResponse::NotFound().json(msg),
-            AgreementError::Expired(_) => HttpResponse::Gone().json(msg),
-            AgreementError::AlreadyExists(_, _) => HttpResponse::Conflict().json(msg),
+            AgreementError::NotFound(_) => HttpResponse::NotFound().json(msg).into(),
+            AgreementError::Expired(_) => HttpResponse::Gone().json(msg).into(),
+            AgreementError::AlreadyExists(_, _) => HttpResponse::Conflict().json(msg).into(),
             AgreementError::UpdateState(_, e) => e.error_response(),
             AgreementError::NoNegotiations(_)
             | AgreementError::OwnProposal(..)
             | AgreementError::ProposalNotFound(..)
             | AgreementError::ProposalCountered(..)
-            | AgreementError::InvalidId(..) => HttpResponse::BadRequest().json(msg),
+            | AgreementError::InvalidId(..) => HttpResponse::BadRequest().json(msg).into(),
             AgreementError::GetProposal(..)
             | AgreementError::Save(..)
             | AgreementError::Get(..)
@@ -209,13 +224,13 @@ impl ResponseError for AgreementError {
             | AgreementError::Protocol(_)
             | AgreementError::ProtocolTerminate(_)
             | AgreementError::ProtocolCommit(_)
-            | AgreementError::Internal(_) => HttpResponse::InternalServerError().json(msg),
+            | AgreementError::Internal(_) => HttpResponse::InternalServerError().json(msg).into(),
         }
     }
 }
 
 impl ResponseError for AgreementDaoError {
-    fn error_response(&self) -> HttpResponse {
+    fn error_response(&self) -> Response<Body> {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             AgreementDaoError::InvalidTransition { from, .. } => match from {
@@ -233,11 +248,12 @@ impl ResponseError for AgreementDaoError {
             | AgreementDaoError::SessionId(_)
             | AgreementDaoError::EventError(_) => HttpResponse::InternalServerError().json(msg),
         }
+        .into()
     }
 }
 
 impl ResponseError for WaitForApprovalError {
-    fn error_response(&self) -> HttpResponse {
+    fn error_response(&self) -> Response<Body> {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             WaitForApprovalError::NotFound(_) => HttpResponse::NotFound().json(msg),
@@ -250,15 +266,17 @@ impl ResponseError for WaitForApprovalError {
                 HttpResponse::InternalServerError().json(msg)
             }
         }
+        .into()
     }
 }
 
 impl ResponseError for AgreementEventsError {
-    fn error_response(&self) -> HttpResponse {
+    fn error_response(&self) -> Response<Body> {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             AgreementEventsError::InvalidMaxEvents(..) => HttpResponse::BadRequest().json(msg),
             AgreementEventsError::Internal(_) => HttpResponse::InternalServerError().json(msg),
         }
+        .into()
     }
 }
