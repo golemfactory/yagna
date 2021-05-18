@@ -326,7 +326,7 @@ dev = ["jsonref"]
 
 [[package]]
 name = "goth"
-version = "0.2.4"
+version = "0.3.0"
 description = "Golem Test Harness - integration testing framework"
 category = "main"
 optional = false
@@ -1030,7 +1030,7 @@ python-versions = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8.0"
-content-hash = "4b46f7560916df8e85fbfb37c902e3e5dba3ea50428674099bbfe174ebb70a13"
+content-hash = "f02894b8d14ba8ae88410ad712cac52e493a601237c828ce7387fa95c227cddd"
 
 [metadata.files]
 aiohttp = [
@@ -1141,6 +1141,8 @@ brotli = [
     {file = "Brotli-1.0.9-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:5cb1e18167792d7d21e21365d7650b72d5081ed476123ff7b8cac7f45189c0c7"},
     {file = "Brotli-1.0.9-cp39-cp39-manylinux1_i686.whl", hash = "sha256:16d528a45c2e1909c2798f27f7bf0a3feec1dc9e50948e738b961618e38b6a7b"},
     {file = "Brotli-1.0.9-cp39-cp39-manylinux1_x86_64.whl", hash = "sha256:56d027eace784738457437df7331965473f2c0da2c70e1a1f6fdbae5402e0389"},
+    {file = "Brotli-1.0.9-cp39-cp39-win32.whl", hash = "sha256:cfc391f4429ee0a9370aa93d812a52e1fee0f37a81861f4fdd1f4fb28e8547c3"},
+    {file = "Brotli-1.0.9-cp39-cp39-win_amd64.whl", hash = "sha256:854c33dad5ba0fbd6ab69185fec8dab89e13cda6b7d191ba111987df74f38761"},
     {file = "Brotli-1.0.9.zip", hash = "sha256:4d1b810aa0ed773f81dceda2cc7b403d01057458730e309856356d4ef4188438"},
 ]
 certifi = [
@@ -1259,8 +1261,8 @@ ghapi = [
     {file = "ghapi-0.1.16.tar.gz", hash = "sha256:7154cb37261ebeb6d416412b5800fd0fbe653876d9fbbcc273b2c24b2408fc2c"},
 ]
 goth = [
-    {file = "goth-0.2.4-py3-none-any.whl", hash = "sha256:acc8d1bd0837100ac0f32d6834fd67cee271ef9bb24f69ba8780f858be923c21"},
-    {file = "goth-0.2.4.tar.gz", hash = "sha256:ca162b6f8256a8535fbd306bebd434962b3973f8f0f9958698ef2165ce1af550"},
+    {file = "goth-0.3.0-py3-none-any.whl", hash = "sha256:4444632d617992abb883e7e9b16eaa37a8626c83aaedff687a4c0b32e2e085e0"},
+    {file = "goth-0.3.0.tar.gz", hash = "sha256:6b930f72933d09b1b9e06507d4145b36c1a656350cb6941c8d4f5fd0fd1f3b00"},
 ]
 h11 = [
     {file = "h11-0.12.0-py3-none-any.whl", hash = "sha256:36a3cb8c0a032f56e2da7084577878a035d3b61d104230d4bd49c0c6b555a9c6"},
