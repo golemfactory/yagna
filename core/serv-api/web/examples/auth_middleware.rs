@@ -72,7 +72,6 @@ async fn main() -> anyhow::Result<()> {
                         .await
                         .map_err(map_err)?
                         .map_err(map_err)?
-                        .ok_or(anyhow::Error::msg("Identity not found"))?
                         .node_id;
 
                     let create = model::Create {

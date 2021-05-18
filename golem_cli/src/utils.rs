@@ -95,6 +95,6 @@ pub async fn is_yagna_running() -> Result<bool> {
 pub async fn payment_account(cmd: &YaCommand, address: &Option<NodeId>) -> Result<String> {
     Ok(match address {
         Some(address) => address.to_string(),
-        _ => cmd.yagna()?.default_id().await?.node_id,
+        _ => cmd.yagna()?.default_id().await?.node_id.to_string(),
     })
 }

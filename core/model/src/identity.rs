@@ -10,15 +10,23 @@ pub struct Ack {}
 
 #[derive(Clone, Debug, Serialize, Deserialize, Error)]
 pub enum Error {
-    #[error("initialization failed {0}")]
+    #[error("Identity Service initialization failed: {0}")]
     Init(String),
-    #[error("given alias or key already exists")]
-    AlreadyExists,
-    #[error("node {0:?} not found")]
-    NodeNotFound(Box<NodeId>),
-    #[error("{0}")]
+    #[error("Identity `{0}` already exists")]
+    IdExists(NodeId),
+    #[error("Identity `{0}` not found")]
+    IdNotFound(NodeId),
+    #[error("Alias `{0}` already exists")]
+    AliasExists(String),
+    #[error("Alias `{0}` not found")]
+    AliasNotFound(String),
+    #[error("Default Identity not found. It shouldn't happen")]
+    DefaultIdNotFound,
+    #[error("Can not drop Default Identity")]
+    CantDropDefaultId,
+    #[error("Identity Service internal error: {0}")]
     InternalErr(String),
-    #[error("bad keystore format: {0}")]
+    #[error("Bad keystore format: {0}")]
     BadKeyStoreFormat(String),
 }
 
@@ -80,7 +88,7 @@ pub enum Get {
 
 impl RpcMessage for Get {
     const ID: &'static str = "Get";
-    type Item = Option<IdentityInfo>;
+    type Item = IdentityInfo;
     type Error = Error;
 }
 
@@ -170,17 +178,17 @@ impl Unlock {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
-pub struct DropId {
+pub struct Drop {
     pub node_id: NodeId,
 }
 
-impl DropId {
+impl Drop {
     pub fn with_id(node_id: NodeId) -> Self {
         Self { node_id }
     }
 }
 
-impl RpcMessage for DropId {
+impl RpcMessage for Drop {
     const ID: &'static str = "DropId";
     type Item = IdentityInfo;
     type Error = Error;

@@ -139,26 +139,6 @@ impl DbExecutor {
         c.batch_execute("PRAGMA foreign_keys = ON;")?;
         Ok(())
     }
-
-    pub async fn with_connection<R: Send + 'static, Error, F>(&self, f: F) -> Result<R, Error>
-    where
-        F: FnOnce(&ConnType) -> Result<R, Error> + Send + 'static,
-        Error: Send + 'static + From<tokio::task::JoinError> + From<r2d2::Error>,
-    {
-        do_with_ro_connection(&self.pool, f).await
-    }
-
-    pub async fn with_transaction<R: Send + 'static, Error, F>(&self, f: F) -> Result<R, Error>
-    where
-        F: FnOnce(&ConnType) -> Result<R, Error> + Send + 'static,
-        Error: Send
-            + 'static
-            + From<tokio::task::JoinError>
-            + From<r2d2::Error>
-            + From<diesel::result::Error>,
-    {
-        do_with_transaction(&self.pool, f).await
-    }
 }
 
 pub trait AsDao<'a> {

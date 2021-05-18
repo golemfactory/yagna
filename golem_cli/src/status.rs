@@ -126,7 +126,7 @@ pub async fn run() -> Result</*exit code*/ i32> {
                 .fg(Colour::Yellow)
                 .underline()
                 .paint("Wallet")]);
-            let account = config.account.map(|a| a.to_string()).unwrap_or(id.node_id);
+            let account = config.account.map(|a| a).unwrap_or(id.node_id).to_string();
             table.add_row(row![H2->Style::new().fg(Colour::Fixed(63)).paint(&account)]);
             table.add_empty_row();
 

@@ -12,8 +12,6 @@ pub enum IdentityError {
     GetDefaultIdError(String),
     #[error("Can't get identity caused by gsb error: {0}.")]
     GsbError(String),
-    #[error("No default identity!!! It shouldn't happen!!")]
-    NoDefaultId,
     #[error("Can't list identities. Error: {0}.")]
     ListError(String),
 }
@@ -35,7 +33,6 @@ impl IdentityApi for IdentityGSB {
             .await
             .map_err(|e| IdentityError::GsbError(e.to_string()))?
             .map_err(|e| IdentityError::GetDefaultIdError(e.to_string()))?
-            .ok_or(IdentityError::NoDefaultId)?
             .node_id)
     }
 
@@ -47,7 +44,7 @@ impl IdentityApi for IdentityGSB {
             .map_err(|e| IdentityError::ListError(e.to_string()))?
             .iter()
             .map(|identity_info| identity_info.node_id)
-            .collect::<Vec<NodeId>>())
+            .collect())
     }
 }
 

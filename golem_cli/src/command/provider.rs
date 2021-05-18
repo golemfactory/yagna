@@ -47,7 +47,7 @@ impl YaProviderCommand {
             .stdout(Stdio::piped())
             .output()
             .await
-            .context("failed to get ya-provider configuration")?;
+            .context(format!("Running: {:?}", self.cmd))?;
 
         serde_json::from_slice(output.stdout.as_slice()).context("parsing ya-provider config get")
     }
@@ -81,13 +81,13 @@ impl YaProviderCommand {
             .stdout(Stdio::piped())
             .output()
             .await
-            .context("failed to set ya-provider configuration")?;
+            .context(format!("Running: {:?}", cmd))?;
 
         if output.status.success() {
             Ok(())
         } else {
             let output = String::from_utf8_lossy(&output.stderr);
-            Err(anyhow::anyhow!("{}", output))
+            anyhow::bail!("{}", output)
         }
     }
 
@@ -101,7 +101,7 @@ impl YaProviderCommand {
             .stdout(Stdio::piped())
             .output()
             .await
-            .context("failed to get ya-provider presets")?;
+            .context(format!("Running: {:?}", cmd))?;
 
         serde_json::from_slice(output.stdout.as_slice()).context("parsing ya-provider preset list")
     }

@@ -285,8 +285,7 @@ impl Net {
     pub async fn gsb<Context>(_: Context) -> anyhow::Result<()> {
         let ids: Vec<IdentityInfo> = bus::service(identity::BUS_ID)
             .send(identity::List::default())
-            .await
-            .map_err(anyhow::Error::msg)??;
+            .await??;
 
         let client_info = ClientInfo::new("sb-client-net");
         let default_id = ids

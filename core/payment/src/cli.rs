@@ -312,13 +312,9 @@ async fn resolve_address(address: Option<String>) -> anyhow::Result<String> {
         return Ok(id);
     }
 
-    let id = bus::service(id_api::BUS_ID)
+    Ok(bus::service(id_api::BUS_ID)
         .send(id_api::Get::ByDefault)
-        .await??;
-
-    if let Some(id) = id {
-        return Ok(id.node_id.to_string());
-    }
-
-    anyhow::bail!("Default identity not found")
+        .await??
+        .node_id
+        .to_string())
 }

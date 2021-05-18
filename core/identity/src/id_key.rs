@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use crate::dao::identity::Identity;
 use crate::dao::Error;
 use anyhow::Context;

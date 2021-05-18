@@ -130,40 +130,35 @@ impl IdentityService {
         &self.sender
     }
 
-    pub fn get_by_alias(&self, alias: &str) -> Result<Option<model::IdentityInfo>, model::Error> {
-        let addr = match self.alias_to_id.get(alias) {
-            None => return Ok(None),
-            Some(s) => s,
+    pub fn get_by_alias(&self, alias: &str) -> Result<model::IdentityInfo, model::Error> {
+        let node_id = match self.alias_to_id.get(alias) {
+            None => return Err(model::Error::AliasNotFound(alias.to_string())),
+            Some(n) => n,
         };
-        let id = match self.ids.get(addr) {
-            None => return Ok(None),
-            Some(id) => id,
-        };
-        Ok(Some(to_info(&self.default_key, &id)))
+        self.get_by_id(node_id)
     }
 
-    pub fn get_by_id(&self, node_id: &NodeId) -> Result<Option<model::IdentityInfo>, model::Error> {
+    pub fn get_by_id(&self, node_id: &NodeId) -> Result<model::IdentityInfo, model::Error> {
         let id = match self.ids.get(node_id) {
-            None => return Ok(None),
+            None => return Err(model::Error::IdNotFound(node_id.clone())),
             Some(id) => id,
         };
-        Ok(Some(to_info(&self.default_key, &id)))
+        Ok(to_info(&self.default_key, id))
     }
 
-    pub fn get_default_id(&self) -> Result<Option<model::IdentityInfo>, model::Error> {
+    pub fn get_default_id(&self) -> Result<model::IdentityInfo, model::Error> {
         let id = match self.ids.get(&self.default_key) {
-            None => return Ok(None),
+            None => return Err(model::Error::DefaultIdNotFound),
             Some(id) => id,
         };
-        Ok(Some(to_info(&self.default_key, &id)))
+        Ok(to_info(&self.default_key, id))
     }
 
-    pub fn list_ids(&self) -> Result<Vec<model::IdentityInfo>, model::Error> {
-        Ok(self
-            .ids
+    pub fn list_ids(&self) -> Vec<model::IdentityInfo> {
+        self.ids
             .values()
             .map(|id_key| to_info(&self.default_key, id_key))
-            .collect())
+            .collect()
     }
 
     pub async fn create_identity(
@@ -237,7 +232,7 @@ impl IdentityService {
     fn get_key_by_id(&mut self, node_id: &NodeId) -> Result<&mut IdentityKey, model::Error> {
         Ok(match self.ids.get_mut(node_id) {
             Some(v) => v,
-            None => return Err(model::Error::NodeNotFound(Box::new(node_id.clone()))),
+            None => return Err(model::Error::IdNotFound(node_id.clone())),
         })
     }
 
@@ -245,8 +240,7 @@ impl IdentityService {
         let default_key = self.default_key;
         let key = self.get_key_by_id(&node_id)?;
         key.lock();
-        let output = to_info(&default_key, key);
-        Ok(output)
+        Ok(to_info(&default_key, key))
     }
 
     pub async fn unlock(
@@ -257,8 +251,7 @@ impl IdentityService {
         let default_key = self.default_key;
         let key = self.get_key_by_id(&node_id)?;
         key.unlock(password).map_err(model::Error::new_err_msg)?;
-        let output = to_info(&default_key, key);
-        Ok(output)
+        Ok(to_info(&default_key, key))
     }
 
     pub async fn sign(&mut self, node_id: NodeId, data: Vec<u8>) -> Result<Vec<u8>, model::Error> {
@@ -277,12 +270,12 @@ impl IdentityService {
         let node_id = update.node_id;
         let key = match self.ids.get_mut(&node_id) {
             Some(v) => v,
-            None => return Err(model::Error::NodeNotFound(Box::new(node_id.clone()))),
+            None => return Err(model::Error::IdNotFound(node_id.clone())),
         };
         let update_alias = update.alias.clone();
         if let Some(new_alias) = update.alias {
             if self.alias_to_id.contains_key(&new_alias) {
-                return Err(model::Error::AlreadyExists);
+                return Err(model::Error::AliasExists(new_alias.clone()));
             }
             if let Some(old_alias) = key.replace_alias(Some(new_alias.clone())) {
                 let _ = self.alias_to_id.remove(&old_alias);
@@ -296,34 +289,45 @@ impl IdentityService {
         }
 
         self.db
-            .with_transaction(move |conn| {
-                use crate::db::schema::identity::dsl::*;
-                use diesel::prelude::*;
-
-                if update_alias.is_some() {
-                    let _ = diesel::update(identity.filter(identity_id.eq(&node_id)))
-                        .set(alias.eq(&update_alias.unwrap()))
-                        .execute(conn)?;
-                }
-                if set_default && prev_default != node_id {
-                    diesel::update(identity.filter(identity_id.eq(&prev_default)))
-                        .set(is_default.eq(false))
-                        .execute(conn)?;
-                    diesel::update(identity.filter(identity_id.eq(&node_id)))
-                        .set(is_default.eq(true))
-                        .execute(conn)?;
-                }
-                Ok::<_, DaoError>(())
-            })
+            .as_dao::<IdentityDao>()
+            .update_identity(node_id, update_alias, set_default, prev_default)
             .await
-            .map_err(model::Error::new_err_msg)?;
+            .map_err(|e| model::Error::InternalErr(e.to_string()))?;
 
-        Ok(model::IdentityInfo {
-            alias: key.alias().map(ToOwned::to_owned),
-            node_id,
-            is_locked: key.is_locked(),
-            is_default: self.default_key == node_id,
-        })
+        Ok(to_info(&self.default_key, &key))
+    }
+
+    pub async fn drop_identity(
+        &mut self,
+        drop: model::Drop,
+    ) -> Result<model::IdentityInfo, model::Error> {
+        let node_id = drop.node_id;
+
+        if node_id == self.default_key {
+            return Err(model::Error::CantDropDefaultId);
+        }
+
+        let key = match self.ids.remove(&node_id) {
+            Some(v) => v,
+            None => return Err(model::Error::IdNotFound(node_id.clone())),
+        };
+
+        if let Some(alias) = key.alias() {
+            if self.alias_to_id.remove(alias).is_none() {
+                return Err(model::Error::InternalErr(format!(
+                    "Removing Identity alias `{}` failed",
+                    alias
+                )));
+            }
+        }
+
+        self.db
+            .as_dao::<IdentityDao>()
+            .mark_deleted(node_id)
+            .await
+            .map_err(|e| model::Error::InternalErr(e.to_string()))?;
+
+        Ok(to_info(&self.default_key, &key))
     }
 
     pub async fn subscribe(
@@ -346,7 +350,7 @@ impl IdentityService {
         let this = me.clone();
         let _ = bus::bind(model::BUS_ID, move |_list: model::List| {
             let this = this.clone();
-            async move { this.lock().await.list_ids() }
+            async move { Ok(this.lock().await.list_ids()) }
         });
         let this = me.clone();
         let _ = bus::bind(model::BUS_ID, move |get: model::Get| {
@@ -392,6 +396,12 @@ impl IdentityService {
             let this = this.clone();
             async move { this.lock().await.update_identity(update).await }
         });
+        let this = me.clone();
+        let _ = bus::bind(model::BUS_ID, move |drop: model::Drop| {
+            let this = this.clone();
+            async move { this.lock().await.drop_identity(drop).await }
+        });
+
         let this = me.clone();
         let _ = bus::bind(model::BUS_ID, move |lock: model::Lock| {
             let this = this.clone();

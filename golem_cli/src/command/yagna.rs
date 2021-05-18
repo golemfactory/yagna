@@ -1,4 +1,4 @@
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use futures::prelude::*;
@@ -13,7 +13,7 @@ use tokio::process::{Child, Command};
 use ya_core_model::payment::local::{
     InvoiceStats, InvoiceStatusNotes, NetworkName, StatusNotes, StatusResult,
 };
-use ya_core_model::version::VersionInfo;
+use ya_core_model::{identity::IdentityInfo, version::VersionInfo};
 
 pub struct PaymentPlatform {
     pub platform: &'static str,
@@ -74,12 +74,6 @@ impl PaymentDriver {
             network
         ))?)
     }
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Id {
-    pub node_id: String,
 }
 
 pub trait PaymentSummary {
@@ -169,7 +163,7 @@ impl YagnaCommand {
         }
     }
 
-    pub async fn default_id(mut self) -> anyhow::Result<Id> {
+    pub async fn default_id(mut self) -> anyhow::Result<IdentityInfo> {
         self.cmd.args(&["--json", "id", "show"]);
         let output: Result<Id, String> = self.run().await?;
         output.map_err(anyhow::Error::msg)
@@ -259,7 +253,7 @@ impl YagnaCommand {
 
         let mut tracker = tracker::Tracker::new(&mut cmd)?;
         cmd.kill_on_drop(true);
-        let child = cmd.spawn()?;
+        let child = cmd.spawn().context(format!("Running `{:?}`", cmd))?;
         let wait_for = tracker.wait_for_start();
         futures::pin_mut!(wait_for);
         match future::try_select(child, wait_for).await {
@@ -352,5 +346,55 @@ mod tracker {
         pub async fn wait_for_start(&mut self) -> anyhow::Result<()> {
             crate::utils::wait_for_yagna().await
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::command::YaCommand;
+    use std::path::PathBuf;
+    use tokio::process::Child;
+
+    #[serial_test::serial]
+    async fn test_default_id_compat() {
+        let (yac, mut yagna_srv) = set_up_test().await;
+
+        let id = yac.yagna().unwrap().default_id().await.unwrap();
+
+        println!("id: {:?}", id);
+        assert!(id.is_default);
+        assert!(id.alias.is_none());
+        assert_eq!(id.is_locked, false);
+
+        tear_down_test(&mut yagna_srv);
+    }
+
+    #[serial_test::serial]
+    async fn test_version_compat() {
+        let (yac, mut yagna_srv) = set_up_test().await;
+
+        let ver = yac.yagna().unwrap().version().await.unwrap();
+
+        println!("version: {:?}", ver);
+
+        tear_down_test(&mut yagna_srv);
+    }
+
+    async fn set_up_test() -> (YaCommand, Child) {
+        let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let wkspc_tgt_debug = crate_dir.join("..").join("target/debug");
+
+        let yac = YaCommand {
+            base_path: wkspc_tgt_debug.into(),
+        };
+
+        std::env::set_var("YAGNA_DATADIR", crate_dir.join("test-workdir"));
+        std::env::set_var("GSB_URL", "tcp://127.0.0.1:27321");
+        let child = yac.yagna().unwrap().service_run().await.unwrap();
+        (yac, child)
+    }
+
+    fn tear_down_test(yagna_srv: &mut Child) {
+        yagna_srv.kill().unwrap();
     }
 }

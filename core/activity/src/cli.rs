@@ -16,12 +16,7 @@ pub enum ActivityCli {
 
 impl ActivityCli {
     async fn get_identity(get_by: idm::Get) -> anyhow::Result<IdentityInfo> {
-        bus::service(idm::BUS_ID)
-            .send(get_by)
-            .await
-            .map_err(anyhow::Error::msg)?
-            .map_err(anyhow::Error::msg)?
-            .ok_or(anyhow::Error::msg("Identity not found"))
+        Ok(bus::service(idm::BUS_ID).send(get_by).await??)
     }
 
     pub async fn run_command(self, _ctx: &CliCtx) -> anyhow::Result<CommandOutput> {

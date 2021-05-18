@@ -347,8 +347,7 @@ pub fn extract_url(url: &Url) -> Result<(NodeId, String)> {
 async fn gftp_url(hash: &str) -> Result<Url> {
     let id = bus::service(identity::BUS_ID)
         .call(identity::Get::ByDefault)
-        .await??
-        .unwrap();
+        .await??;
 
     Ok(Url::parse(&format!("gftp://{:?}/{}", id.node_id, hash))?)
 }

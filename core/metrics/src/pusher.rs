@@ -87,11 +87,9 @@ pub async fn push(client: &Client, push_url: String) {
 }
 
 async fn get_default_id() -> anyhow::Result<IdentityInfo> {
-    let default_id = bus::service(identity::BUS_ID)
+    Ok(bus::service(identity::BUS_ID)
         .call(identity::Get::ByDefault)
-        .await??
-        .ok_or(anyhow::anyhow!("Default identity not found"))?;
-    Ok(default_id)
+        .await??)
 }
 
 async fn try_get_default_id() -> anyhow::Result<IdentityInfo> {

@@ -1,9 +1,10 @@
 pub use crate::db::models::Identity;
 use crate::db::schema as s;
+use crate::db::schema::identity::dsl::*;
 use diesel::prelude::*;
-use ya_persistence::executor::{
-    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
-};
+
+use ya_client_model::NodeId;
+use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
 type Result<T> = std::result::Result<T, super::Error>;
 
@@ -18,30 +19,17 @@ impl<'c> AsDao<'c> for IdentityDao<'c> {
 }
 
 impl<'c> IdentityDao<'c> {
-    #[inline]
-    async fn with_transaction<
-        R: Send + 'static,
-        F: FnOnce(&ConnType) -> Result<R> + Send + 'static,
-    >(
-        &self,
-        f: F,
-    ) -> Result<R> {
-        do_with_transaction(self.pool, f).await
-    }
-
     pub async fn create_identity(&self, new_identity: Identity) -> Result<()> {
-        let _rows = self
-            .with_transaction(move |conn| {
-                Ok(diesel::insert_into(s::identity::table)
-                    .values(new_identity)
-                    .execute(conn)?)
-            })
-            .await?;
-        Ok(())
+        do_with_transaction(self.pool, move |conn| {
+            diesel::insert_into(s::identity::table)
+                .values(new_identity)
+                .execute(conn)?;
+            Ok(())
+        })
+        .await
     }
 
     pub async fn list_identities(&self) -> Result<Vec<Identity>> {
-        use crate::db::schema::identity::dsl::*;
         readonly_transaction(self.pool, |conn| {
             Ok(identity
                 .filter(is_deleted.eq(false))
@@ -54,9 +42,7 @@ impl<'c> IdentityDao<'c> {
         &self,
         generator: KeyGenerator,
     ) -> Result<Identity> {
-        use crate::db::schema::identity::dsl::*;
-
-        self.with_transaction(move |conn| {
+        do_with_transaction(self.pool, move |conn| {
             if let Some(id) = identity
                 .filter(is_default.eq(true))
                 .get_result::<Identity>(conn)
@@ -70,6 +56,42 @@ impl<'c> IdentityDao<'c> {
                 .execute(conn)?;
 
             Ok(new_identity)
+        })
+        .await
+    }
+
+    pub async fn update_identity(
+        &self,
+        node_id: NodeId,
+        update_alias: Option<String>,
+        set_default: bool,
+        prev_default: NodeId,
+    ) -> Result<()> {
+        do_with_transaction(self.pool, move |conn| {
+            if update_alias.is_some() {
+                let _ = diesel::update(identity.filter(identity_id.eq(&node_id)))
+                    .set(alias.eq(&update_alias.unwrap()))
+                    .execute(conn)?;
+            }
+            if set_default && prev_default != node_id {
+                diesel::update(identity.filter(identity_id.eq(&prev_default)))
+                    .set(is_default.eq(false))
+                    .execute(conn)?;
+                diesel::update(identity.filter(identity_id.eq(&node_id)))
+                    .set(is_default.eq(true))
+                    .execute(conn)?;
+            }
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn mark_deleted(&self, node_id: NodeId) -> Result<()> {
+        do_with_transaction(self.pool, move |conn| {
+            diesel::update(identity.filter(identity_id.eq(&node_id)))
+                .set(is_deleted.eq(true))
+                .execute(conn)?;
+            Ok(())
         })
         .await
     }

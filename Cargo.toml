@@ -29,7 +29,7 @@ ya-dummy-driver = { version = "0.2", optional = true }
 ya-file-logging = "0.1"
 ya-erc20-driver = { version = "0.3", optional = true }
 ya-zksync-driver = { version = "0.2", optional = true }
-ya-identity = "0.2"
+ya-identity = "0.3"
 ya-market = "0.3"
 ya-metrics = "0.1"
 ya-net = { version = "0.2", features = ["service"] }

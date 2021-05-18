@@ -21,7 +21,7 @@ serde = { version = "1.0", features = ["derive"] }
 url = "2.1.1"
 
 [dev-dependencies]
-ya-identity = "0.2"
+ya-identity = "0.3"
 ya-persistence = "0.2"
 ya-sb-router = "0.4"
 ya-service-api-derive = "0.1"

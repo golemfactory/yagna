@@ -35,12 +35,7 @@ pub enum AppKeyCommand {
 
 impl AppKeyCommand {
     async fn get_identity(get_by: idm::Get) -> anyhow::Result<IdentityInfo> {
-        bus::service(idm::BUS_ID)
-            .send(get_by)
-            .await
-            .map_err(anyhow::Error::msg)?
-            .map_err(anyhow::Error::msg)?
-            .ok_or(anyhow::Error::msg("Identity not found"))
+        Ok(bus::service(idm::BUS_ID).send(get_by).await??)
     }
 
     pub async fn run_command(&self, _ctx: &CliCtx) -> Result<CommandOutput> {
@@ -63,11 +58,7 @@ impl AppKeyCommand {
                     role: role.clone(),
                     identity,
                 };
-                let key = bus::service(model::BUS_ID)
-                    .send(create)
-                    .await
-                    .map_err(anyhow::Error::msg)?
-                    .unwrap();
+                let key = bus::service(model::BUS_ID).send(create).await??;
                 Ok(CommandOutput::Object(serde_json::to_value(key)?))
             }
             AppKeyCommand::Drop { name, id } => {
@@ -75,11 +66,7 @@ impl AppKeyCommand {
                     name: name.clone(),
                     identity: id.clone(),
                 };
-                let _ = bus::service(model::BUS_ID)
-                    .send(remove)
-                    .await
-                    .map_err(anyhow::Error::msg)?
-                    .unwrap();
+                let _ = bus::service(model::BUS_ID).send(remove).await??;
                 Ok(CommandOutput::NoOutput)
             }
             AppKeyCommand::List { id, page, per_page } => {
@@ -88,11 +75,8 @@ impl AppKeyCommand {
                     page: page.clone(),
                     per_page: per_page.clone(),
                 };
-                let result: (Vec<model::AppKey>, u32) = bus::service(model::BUS_ID)
-                    .send(list)
-                    .await
-                    .map_err(anyhow::Error::msg)?
-                    .unwrap();
+                let result: (Vec<model::AppKey>, u32) =
+                    bus::service(model::BUS_ID).send(list).await??;
 
                 Ok(ResponseTable {
                     columns: vec![
