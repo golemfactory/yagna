@@ -960,6 +960,7 @@ async fn test_restart_negotiations() {
     let req_market = network.get_market("Requestor1");
     let prov_market = network.get_market("Provider1");
     let req_id = network.get_default_id("Requestor1");
+    let prov_id = network.get_default_id("Provider1");
 
     // Requestor side
     let negotiation = exchange_draft_proposals(&network, "Requestor1", "Provider1")
@@ -984,7 +985,7 @@ async fn test_restart_negotiations() {
         .await
         .unwrap();
 
-    let prov_proposal_id = req_market
+    let req_proposal_id = req_market
         .requestor_engine
         .counter_proposal(
             &negotiation.demand_id,
@@ -1001,7 +1002,10 @@ async fn test_restart_negotiations() {
             .unwrap();
 
     assert_eq!(
-        prov_proposal_id.translate(Owner::Provider).to_string(),
+        req_proposal_id
+            .clone()
+            .translate(Owner::Provider)
+            .to_string(),
         re_proposal.proposal_id
     );
 
@@ -1026,6 +1030,45 @@ async fn test_restart_negotiations() {
             .state,
         ProposalState::Draft
     );
+
+    // Agents should be able to sign Agreement after rejection.
+    let prov_proposal_id = prov_market
+        .provider_engine
+        .counter_proposal(
+            &negotiation.offer_id,
+            &req_proposal_id.translate(Owner::Provider),
+            &sample_offer(),
+            &prov_id,
+        )
+        .await
+        .unwrap();
+
+    let agreement_id = req_market
+        .requestor_engine
+        .create_agreement(
+            req_id.clone(),
+            &prov_proposal_id.translate(Owner::Requestor),
+            Utc::now() + Duration::milliseconds(300),
+        )
+        .await
+        .unwrap();
+
+    req_market
+        .requestor_engine
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
+        .await
+        .unwrap();
+
+    prov_market
+        .provider_engine
+        .approve_agreement(
+            prov_id,
+            &agreement_id.clone().translate(Owner::Provider),
+            None,
+            0.1,
+        )
+        .await
+        .unwrap();
 }
 
 /// Agent is allowed to restart negotiations after Agreement was rejected.
