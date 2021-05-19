@@ -63,13 +63,29 @@ impl<'c> ProposalDao<'c> {
     pub async fn save_proposal(&self, proposal: &Proposal) -> Result<(), SaveProposalError> {
         let proposal = proposal.body.clone();
         do_with_transaction(self.pool, move |conn| {
-            let prev_proposal = proposal
+            let prev_proposal_id = proposal
                 .prev_proposal_id
                 .clone()
                 .ok_or(SaveProposalError::NoPrevious(proposal.id.clone()))?;
 
-            if has_counter_proposal(conn, &prev_proposal)? {
-                return Err(SaveProposalError::AlreadyCountered(prev_proposal));
+            if has_counter_proposal(conn, &prev_proposal_id)? {
+                return Err(SaveProposalError::AlreadyCountered(prev_proposal_id));
+            }
+
+            let prev_proposal: DbProposal = dsl::market_proposal
+                .filter(dsl::id.eq(&prev_proposal_id))
+                .first(conn)
+                .optional()?
+                .ok_or(SaveProposalError::NoPrevious(proposal.id.clone()))?;
+
+            // If previous Proposal was rejected, we must change it's state back.
+            if prev_proposal.state == ProposalState::Rejected {
+                // If rejected Proposal doesn't have prev_proposal_id, it was Initial Proposal.
+                if prev_proposal.prev_proposal_id.is_some() {
+                    update_proposal_state(conn, &prev_proposal_id, ProposalState::Draft)?;
+                } else {
+                    update_proposal_state(conn, &prev_proposal_id, ProposalState::Initial)?;
+                }
             }
 
             diesel::insert_into(dsl::market_proposal)
