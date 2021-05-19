@@ -16,7 +16,7 @@ gftp = { version = "^0.2"}
 actix-http = "2.2"
 actix-rt = "1.1"
 awc = { version = "2.0", features = ["openssl"] }
-async-compression = { version = "0.3.5", features = ["stream", "bzip2", "gzip", "xz"] }
+async-compression = { version = "=0.3.7", features = ["stream", "bzip2", "gzip", "xz"] }
 bytes = "0.5.4"
 futures = "0.3.4"
 globset = "0.4.5"
