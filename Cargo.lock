@@ -7531,6 +7531,7 @@ dependencies = [
 [[package]]
 name = "ya-sb-proto"
 version = "0.3.0"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=fe78d2f49986ff45152555866cca46d212d437f6#fe78d2f49986ff45152555866cca46d212d437f6"
 dependencies = [
  "bytes 0.5.6",
  "prost",
@@ -7544,6 +7545,7 @@ dependencies = [
 [[package]]
 name = "ya-sb-router"
 version = "0.4.1"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=fe78d2f49986ff45152555866cca46d212d437f6#fe78d2f49986ff45152555866cca46d212d437f6"
 dependencies = [
  "actix",
  "actix-rt",
@@ -7570,6 +7572,7 @@ dependencies = [
 [[package]]
 name = "ya-sb-util"
 version = "0.1.0"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=fe78d2f49986ff45152555866cca46d212d437f6#fe78d2f49986ff45152555866cca46d212d437f6"
 dependencies = [
  "actix",
  "bitflags 1.2.1",
@@ -7659,6 +7662,7 @@ dependencies = [
 [[package]]
 name = "ya-service-bus"
 version = "0.4.5"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=fe78d2f49986ff45152555866cca46d212d437f6#fe78d2f49986ff45152555866cca46d212d437f6"
 dependencies = [
  "actix",
  "flexbuffers",
