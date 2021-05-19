@@ -120,7 +120,8 @@ impl CommonBroker {
             .await?;
 
         let is_first = prev_proposal.body.prev_proposal_id.is_none();
-        let new_proposal = prev_proposal.from_client(proposal)?;
+        let new_proposal =
+            prev_proposal.from_client(proposal, &prev_proposal.body.expiration_ts)?;
 
         validate_match(&new_proposal, &prev_proposal)?;
 
