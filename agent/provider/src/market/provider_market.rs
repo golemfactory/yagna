@@ -792,7 +792,6 @@ impl Handler<AgreementFinalized> for ProviderMarket {
 
             let demands = std::mem::replace(&mut myself.postponed_demands, Vec::new());
             ctx.spawn(
-                //renegotiate_demands(self.async_context(ctx), myself.api.clone(), demands).into_actor(myself),
                 renegotiate_demands(async_ctx, myself.subscriptions.clone(), demands)
                     .into_actor(myself),
             );

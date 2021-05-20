@@ -3,7 +3,6 @@ use std::collections::HashSet;
 
 use ya_agreement_utils::OfferDefinition;
 
-use crate::market::negotiator::common::reason_with_extra;
 use crate::market::negotiator::factory::LimitAgreementsNegotiatorConfig;
 use crate::market::negotiator::{
     AgreementResult, NegotiationResult, NegotiatorComponent, ProposalView,
@@ -42,15 +41,11 @@ impl NegotiatorComponent for MaxAgreements {
                 demand.agreement_id, // TODO: Should be just `id`, but I reuse AgreementView struct.
             );
             Ok(NegotiationResult::Reject {
-                reason: Some(reason_with_extra(
-                    format!(
-                        "No capacity available. Reached Agreements limit: {}",
-                        self.max_agreements
-                    ),
-                    serde_json::json!({
-                        "golem.proposal.rejection.is-final": false,
-                    }),
-                )),
+                message: format!(
+                    "No capacity available. Reached Agreements limit: {}",
+                    self.max_agreements
+                ),
+                is_final: false,
             })
         }
     }
