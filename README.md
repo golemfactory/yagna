@@ -6,7 +6,7 @@ An open platform and marketplace for distributed computations.
 
 ## Project Layout
 
-* [agent](agent) - basic agent applications based on core services. 
+* [agent/provider](agent/provider) - provider agent implementation based on core services.
 * [core](core) - core services for the open computation marketplace.
 * [exe-unit](exe-unit) -  ExeUnit Supervisor.
 * [service-bus](service-bus) - portable, rust-oriented service bus for IPC.
