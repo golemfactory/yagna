@@ -2,7 +2,6 @@ use anyhow::bail;
 use std::collections::HashSet;
 
 use ya_agreement_utils::OfferDefinition;
-use ya_client_model::market::Reason;
 
 use crate::market::negotiator::factory::LimitAgreementsNegotiatorConfig;
 use crate::market::negotiator::{
@@ -42,10 +41,11 @@ impl NegotiatorComponent for MaxAgreements {
                 demand.agreement_id, // TODO: Should be just `id`, but I reuse AgreementView struct.
             );
             Ok(NegotiationResult::Reject {
-                reason: Some(Reason::new(format!(
+                message: format!(
                     "No capacity available. Reached Agreements limit: {}",
                     self.max_agreements
-                ))),
+                ),
+                is_final: false,
             })
         }
     }

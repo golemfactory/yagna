@@ -10,7 +10,7 @@ use super::builtin::{LimitExpiration, MaxAgreements};
 use super::common::{offer_definition_to_offer, AgreementResponse, Negotiator, ProposalResponse};
 use super::{NegotiationResult, NegotiatorsPack};
 use crate::market::negotiator::common::{
-    AgreementFinalized, CreateOffer, ReactToAgreement, ReactToProposal,
+    reason_with_extra, AgreementFinalized, CreateOffer, ReactToAgreement, ReactToProposal,
 };
 use crate::market::negotiator::factory::CompositeNegotiatorConfig;
 use crate::market::negotiator::{NegotiatorComponent, ProposalView};
@@ -68,7 +68,14 @@ impl Handler<ReactToProposal> for CompositeNegotiator {
 
         let result = self.components.negotiate_step(&proposal, offer_proposal)?;
         match result {
-            NegotiationResult::Reject { reason } => Ok(ProposalResponse::RejectProposal { reason }),
+            NegotiationResult::Reject { message, is_final } => {
+                Ok(ProposalResponse::RejectProposal {
+                    reason: Some(reason_with_extra(
+                        message,
+                        serde_json::json!({ "golem.proposal.rejection.is-final": is_final }),
+                    )),
+                })
+            }
             NegotiationResult::Ready { offer } | NegotiationResult::Negotiating { offer } => {
                 let offer = NewOffer {
                     properties: flatten_value(offer.json),
@@ -133,8 +140,13 @@ impl Handler<ReactToAgreement> for CompositeNegotiator {
                 self.components.on_agreement_approved(&agreement_id)?;
                 Ok(AgreementResponse::ApproveAgreement)
             }
-            NegotiationResult::Reject { reason } => {
-                Ok(AgreementResponse::RejectAgreement { reason })
+            NegotiationResult::Reject { message, is_final } => {
+                Ok(AgreementResponse::RejectAgreement {
+                    reason: Some(reason_with_extra(
+                        message,
+                        serde_json::json!({ "golem.proposal.rejection.is-final": is_final }),
+                    )),
+                })
             }
             NegotiationResult::Negotiating { .. } => Ok(AgreementResponse::RejectAgreement {
                 reason: Some(Reason::new("Negotiations aren't finished.")),
