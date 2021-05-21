@@ -50,6 +50,7 @@ struct CmdArgs {
 fn rand_name() -> String {
     rand::thread_rng()
         .sample_iter(&Alphanumeric)
+        .map(char::from)
         .take(30)
         .collect()
 }

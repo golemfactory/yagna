@@ -13,9 +13,9 @@ ya-service-bus = "0.4"
 ya-utils-path = "0.1"
 gftp = { version = "^0.2"}
 
-actix-http = "3.0.0-beta.6"
+actix-http = "=3.0.0-beta.5"
 actix-rt = "2.2"
-awc = { version = "3.0.0-beta.5", features = ["openssl"] }
+awc = { version = "=3.0.0-beta.4", features = ["openssl"] }
 async-compression = { version = "=0.3.7", features = ["tokio", "futures-io", "stream", "bzip2", "gzip", "xz"] }
 bytes = "1.0"
 futures = "0.3.4"
@@ -25,7 +25,7 @@ hex = "0.4.2"
 lazy_static = "1.4.0"
 log = "0.4.8"
 percent-encoding = "2.1"
-rand = "0.7.3"
+rand = "0.8"
 serde = "1.0.104"
 sha3 = "0.8.2"
 tempdir = "0.3.7"
@@ -43,7 +43,7 @@ git = "https://github.com/golemfactory/zip-rs.git"
 branch = "feature/tokio-1"
 
 [dev-dependencies]
-actix-web = "4.0.0-beta.6"
+actix-web = "=4.0.0-beta.5"
 anyhow = "1.0"
 env_logger = "0.7"
 sha2 = "0.8.1"

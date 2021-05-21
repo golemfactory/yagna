@@ -19,7 +19,7 @@ ya-service-api-interfaces = "0.1"
 ya-service-api-web = "0.1"
 ya-service-bus = "0.4"
 
-actix-web = "4.0.0-beta.6"
+actix-web = "=4.0.0-beta.5"
 anyhow = "1.0.26"
 base64 = "0.12"
 bigdecimal = "0.2"
@@ -46,7 +46,7 @@ uuid = { version = "0.8", features = ["v4"] }
 humantime="2.0.1"
 
 [dev-dependencies]
-ya-client = "0.5"
+ya-client = "0.6"
 ya-dummy-driver = "0.2"
 ya-erc20-driver = "0.3"
 ya-zksync-driver = "0.2"

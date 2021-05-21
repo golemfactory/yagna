@@ -14,7 +14,7 @@ path = "src/main.rs"
 
 [dependencies]
 ya-agreement-utils = { version = "^0.2"}
-ya-client = { version = "0.5", features = ['cli'] }
+ya-client = { version = "0.6", features = ['cli'] }
 ya-client-model = "0.3"
 ya-compile-time-utils = "0.1"
 ya-core-model = { version = "^0.3", features = ['activity', 'payment'] }

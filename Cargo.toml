@@ -53,8 +53,8 @@ gftp = { version = "^0.2", optional = true } # just to enable gftp build for car
 ya-provider = { version = "0.2", optional = true } # just to enable conditionally running some tests
 
 actix-rt = "2.2"
-actix-service = "2.0"
-actix-web = "4.0.0-beta.6"
+actix-service = "=2.0.0-beta.5"
+actix-web = "=4.0.0-beta.5"
 anyhow = "1.0"
 chrono = "0.4"
 directories = "2.0.2"
@@ -169,19 +169,14 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## SERVICE BUS
-ya-service-bus = { path = "../ya-service-bus" }
-ya-sb-proto = { path = "../ya-service-bus/crates/proto" }
-ya-sb-router = { path = "../ya-service-bus/crates/router" }
-ya-sb-util = { path = "../ya-service-bus/crates/util" }
-
-#ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "b59a415ca00aecf83cf3df78fe032ee067344620"}
-#ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "b59a415ca00aecf83cf3df78fe032ee067344620"}
-#ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "b59a415ca00aecf83cf3df78fe032ee067344620"}
-#ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "b59a415ca00aecf83cf3df78fe032ee067344620"}
+ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "c952ae0641dbe8490805ecacf48b9b1cbac3ca0c"}
+ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "c952ae0641dbe8490805ecacf48b9b1cbac3ca0c"}
+ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "c952ae0641dbe8490805ecacf48b9b1cbac3ca0c"}
+ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "c952ae0641dbe8490805ecacf48b9b1cbac3ca0c"}
 
 ## CLIENT
-#ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "fded326374f6fd92c7c523c4e35494cd4c701e41" }
-#ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "fded326374f6fd92c7c523c4e35494cd4c701e41" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "71cfbb9f24492ccb60d4a3fef9d27ef98052233b" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "71cfbb9f24492ccb60d4a3fef9d27ef98052233b" }
 
 # ya-client = { path = "../ya-client" }
 # ya-client-model = { path = "../ya-client/model" }
@@ -206,7 +201,6 @@ ya-provider = { path = "agent/provider"}
 
 web3 = { git = "https://github.com/tomusdrw/rust-web3.git", rev = "7dfefdccce912a500c5a359937bef915fc3a1a73" }
 ethereum-tx-sign = { git = "https://github.com/mfranciszkiewicz/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
-
 
 # Speed up builds on macOS (will be default in next rust version probably)
 # https://jakedeichert.com/blog/reducing-rust-incremental-compilation-times-on-macos-by-70-percent/

@@ -15,14 +15,14 @@ ya-service-api = "0.1"
 ya-service-api-interfaces = "0.1"
 ya-service-bus = "0.4"
 
-awc = "3.0.0-beta.5"
-actix-web = { version = "4.0.0-beta.6", features = ["openssl"] }
+awc = "=3.0.0-beta.4"
+actix-web = { version = "=4.0.0-beta.5", features = ["openssl"] }
 anyhow = "1.0.32"
 bigdecimal = "0.2"
 futures = "0.3"
 lazy_static = "1.4"
 log = "0.4"
-metrics = "0.12"
+metrics = "0.16"
 metrics-core = "0.5.2"
 metrics-runtime = "0.13.1"
 percent-encoding = "2.1.0"

@@ -28,9 +28,7 @@ fn create_file(path: &Path, name: &str, chunk_size: usize, chunk_count: usize) -
     let mut rng = rand::thread_rng();
 
     for _ in 0..chunk_count {
-        let input: Vec<u8> = (0..chunk_size)
-            .map(|_| rng.gen_range(0, 256) as u8)
-            .collect();
+        let input: Vec<u8> = (0..chunk_size).map(|_| rng.gen_range(0..=255u8)).collect();
 
         hasher.input(&input);
         file_src.write(&input).unwrap();

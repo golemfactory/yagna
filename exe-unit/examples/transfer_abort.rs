@@ -30,9 +30,7 @@ fn create_file(path: &PathBuf) {
         .expect("rnd file");
 
     let mut rng = rand::thread_rng();
-    let input: Vec<u8> = (0..CHUNK_SIZE)
-        .map(|_| rng.gen_range(0, 256) as u8)
-        .collect();
+    let input: Vec<u8> = (0..CHUNK_SIZE).map(|_| rng.gen_range(0..=255u8)).collect();
 
     for _ in 0..CHUNK_COUNT {
         file.write(&input).unwrap();
