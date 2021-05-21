@@ -50,6 +50,14 @@ pub struct ProviderConfig {
         default_value = &*DEFAULT_DATA_DIR,
     )]
     pub data_dir: DataDir,
+    /// Provider log directory
+    #[structopt(
+        long,
+        set = clap::ArgSettings::Global,
+        env = "PROVIDER_LOG_DIR",
+    )]
+    pub log_dir: Option<DataDir>,
+
     #[structopt(skip = GLOBALS_JSON)]
     pub globals_file: PathBuf,
     #[structopt(skip = PRESETS_JSON)]
@@ -133,6 +141,9 @@ pub struct RunConfig {
     pub payment: PaymentsConfig,
     #[structopt(flatten)]
     pub tasks: TaskConfig,
+    ///changes log level from info to debug
+    #[structopt(long)]
+    pub debug: bool,
 }
 
 #[derive(StructOpt, Clone, Debug)]

@@ -292,6 +292,10 @@ struct ServiceCommandOpts {
     #[structopt(long, env, default_value = "60")]
     max_rest_timeout: usize,
 
+    ///changes log level from info to debug
+    #[structopt(long)]
+    debug: bool,
+
     /// Create logs in this directory. Logs are automatically rotated and compressed.
     /// If unset, then `data_dir` is used.
     /// If set to empty string, then logging to files is disabled.
@@ -332,7 +336,14 @@ impl ServiceCommand {
                 metrics_opts,
                 max_rest_timeout,
                 log_dir,
+                debug,
             }) => {
+                //if --debug option is provided override RUST_LOG flag with debug defaults
+                //if you want to more detailed control over logs use RUST_LOG variable and do not use --debug flag
+                if debug.clone() {
+                    env::set_var("RUST_LOG","debug,tokio_core=info,tokio_reactor=info,hyper=info,reqwest=info");
+                } 
+
                 // workaround to silence middleware logger by default
                 // to enable it explicitly set RUST_LOG=info or more verbose
                 env::set_var(

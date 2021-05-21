@@ -13,6 +13,7 @@ use ya_core_model::payment::local::{
     InvoiceStats, InvoiceStatusNotes, NetworkName, StatusNotes, StatusResult,
 };
 use ya_core_model::version::VersionInfo;
+use crate::setup::RunConfig;
 
 pub struct PaymentPlatform {
     pub platform: &'static str,
@@ -221,10 +222,20 @@ impl YagnaCommand {
         self.run().await
     }
 
-    pub async fn service_run(self) -> anyhow::Result<Child> {
+    pub async fn service_run(self, run_cfg: &RunConfig) -> anyhow::Result<Child> {
         let mut cmd = self.cmd;
 
         cmd.args(&["service", "run"]);
+
+        if run_cfg.debug {
+            cmd.arg("--debug");
+        }
+        if let Some(log_dir) = &run_cfg.log_dir {
+            cmd.arg("--log-dir");
+            cmd.arg(log_dir.to_str().unwrap());
+        }
+        
+
         cmd.stdin(Stdio::null())
             .stderr(Stdio::inherit())
             .stdout(Stdio::inherit());

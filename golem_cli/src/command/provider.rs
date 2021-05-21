@@ -291,6 +291,14 @@ impl YaProviderCommand {
             self.cmd.arg("--account").arg(account.to_string());
         }
 
+        if run_cfg.debug {
+            self.cmd.arg("--debug");
+        }
+        if let Some(log_dir) = &run_cfg.log_dir {
+            self.cmd.arg("--log-dir");
+            self.cmd.arg(log_dir.to_str().unwrap());
+        }
+
         log::debug!("spawning: {:?}", self.cmd);
 
         Ok(self

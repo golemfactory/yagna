@@ -172,7 +172,23 @@ impl GlobalsState {
 impl ProviderAgent {
     pub async fn new(mut args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
         let data_dir = config.data_dir.get_or_create()?;
-        let log_handler = start_logger("info", Some(&data_dir), &vec![])?;
+        
+        //log_dir is the same as data_dir by default, but can be changed using --log-dir option       
+        let log_dir = if let Some(log_dir) = &config.log_dir {
+            log_dir.get_or_create()?
+        }
+        else {
+            data_dir.clone()
+        };
+
+        //if --debug option is provided override RUST_LOG flag with debug defaults
+        //if you want to more detailed control over logs use RUST_LOG variable and do not use --debug flag
+        if args.debug {
+            std::env::set_var("RUST_LOG", "debug,tokio_core=info,tokio_reactor=info,hyper=info,reqwest=info");
+        }
+        //start_logger is using env var RUST_LOG internally
+        let log_handler = start_logger("info", Some(&log_dir), &vec![])?;
+
         let app_name = structopt::clap::crate_name!();
         log::info!(
             "Starting {}. Version: {}.",
@@ -180,6 +196,7 @@ impl ProviderAgent {
             ya_compile_time_utils::version_describe!()
         );
         log::info!("Data directory: {}", data_dir.display());
+        log::info!("Log directory: {}", log_dir.display());
 
         {
             log::info!("Performing disk cleanup...");
