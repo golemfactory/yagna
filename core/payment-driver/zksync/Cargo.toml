@@ -25,6 +25,7 @@ serde = "1.0"
 serde_json = "^1.0"
 tiny-keccak = "1.4.2"
 tokio = { version = "1.6", features = ["full"] }
+tokio-compat-02 = "0.2"
 uuid = { version = "0.8", features = ["v4"] }
 zksync = { git = "https://github.com/matter-labs/zksync", rev = "c9858084e20d722cbec9792539a6f55117caeb75"}
 zksync_eth_signer = { git = "https://github.com/matter-labs/zksync", rev = "c9858084e20d722cbec9792539a6f55117caeb75"}
