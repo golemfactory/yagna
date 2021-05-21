@@ -1,6 +1,6 @@
 [package]
 name = "ya-runtime-api"
-version = "0.1.2"
+version = "0.2.1"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 

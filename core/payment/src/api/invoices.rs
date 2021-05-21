@@ -17,6 +17,7 @@ use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::types::Role;
 use ya_service_api_web::middleware::Identity;
+use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
@@ -185,6 +186,7 @@ async fn send_invoice(
     let dao: InvoiceDao = db.as_dao();
 
     log::debug!("Requested send invoice [{}]", invoice_id);
+    counter!("payment.invoices.provider.sent.call", 1);
 
     let invoice = match dao.get(invoice_id.clone(), node_id).await {
         Ok(Some(invoice)) => invoice,
@@ -197,7 +199,7 @@ async fn send_invoice(
     }
     let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
 
-    let result = with_timeout(timeout, async move {
+    let result = async move {
         match async move {
             log::debug!(
                 "Sending invoice [{}] to [{}].",
@@ -211,22 +213,23 @@ async fn send_invoice(
                 .call(SendInvoice(invoice))
                 .await??;
             dao.mark_received(invoice_id, node_id).await?;
-
-            counter!("payment.invoices.provider.sent", 1);
             Ok(())
         }
+        .timeout(Some(timeout))
         .await
         {
-            Ok(_) => {
+            Ok(Ok(_)) => {
                 log::info!("Invoice [{}] sent.", path.invoice_id);
+                counter!("payment.invoices.provider.sent", 1);
                 response::ok(Null)
             }
-            Err(Error::Rpc(RpcMessageError::Send(SendError::BadRequest(e)))) => {
+            Ok(Err(Error::Rpc(RpcMessageError::Send(SendError::BadRequest(e))))) => {
                 response::bad_request(&e)
             }
-            Err(e) => response::server_error(&e),
+            Ok(Err(e)) => response::server_error(&e),
+            Err(_) => response::timeout(&"Timeout sending Invoice to remote Node."),
         }
-    })
+    }
     .await;
 
     timing!("payment.invoices.provider.sent.time", start, Instant::now());
@@ -246,6 +249,7 @@ async fn cancel_invoice(
     let dao: InvoiceDao = db.as_dao();
 
     log::debug!("Requested cancel invoice [{}]", invoice_id);
+    counter!("payment.invoices.provider.cancelled.call", 1);
 
     let invoice = match dao.get(invoice_id.clone(), node_id).await {
         Ok(Some(invoice)) => invoice,
@@ -264,7 +268,7 @@ async fn cancel_invoice(
     }
 
     let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
-    let result = with_timeout(timeout, async move {
+    let result = async move {
         match async move {
             log::debug!(
                 "Canceling invoice [{}] sent to [{}].",
@@ -281,22 +285,23 @@ async fn cancel_invoice(
                 })
                 .await??;
             dao.cancel(invoice_id, node_id).await?;
-
-            counter!("payment.invoices.provider.cancelled", 1);
             Ok(())
         }
+        .timeout(Some(timeout))
         .await
         {
-            Ok(_) => {
+            Ok(Ok(_)) => {
+                counter!("payment.invoices.provider.cancelled", 1);
                 log::info!("Invoice [{}] cancelled.", path.invoice_id);
                 response::ok(Null)
             }
-            Err(Error::Rpc(RpcMessageError::Cancel(CancelError::Conflict))) => {
+            Ok(Err(Error::Rpc(RpcMessageError::Cancel(CancelError::Conflict)))) => {
                 response::conflict(&"Invoice already accepted by requestor")
             }
-            Err(e) => response::server_error(&e),
+            Ok(Err(e)) => response::server_error(&e),
+            Err(_) => response::timeout(&"Timeout canceling Invoice on remote Node."),
         }
-    })
+    }
     .await;
 
     timing!(
@@ -324,6 +329,7 @@ async fn accept_invoice(
     let allocation_id = acceptance.allocation_id.clone();
 
     log::debug!("Requested accept invoice [{}]", invoice_id);
+    counter!("payment.invoices.requestor.accepted.call", 1);
 
     let dao: InvoiceDao = db.as_dao();
 
@@ -392,7 +398,7 @@ async fn accept_invoice(
     }
 
     let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
-    let result = with_timeout(timeout, async move {
+    let result = async move {
         let issuer_id = invoice.issuer_id;
         let accept_msg = AcceptInvoice::new(invoice_id.clone(), acceptance, issuer_id);
         let schedule_msg = SchedulePayment::from_invoice(invoice, allocation_id, amount_to_pay);
@@ -410,22 +416,23 @@ async fn accept_invoice(
             log::trace!("Accepting Invoice [{}] in DB", invoice_id);
             dao.accept(invoice_id.clone(), node_id).await?;
             log::trace!("Invoice accepted successfully for [{}]", invoice_id);
-
-            counter!("payment.invoices.requestor.accepted", 1);
             Ok(())
         }
+        .timeout(Some(timeout))
         .await
         {
-            Ok(_) => {
+            Ok(Ok(_)) => {
+                counter!("payment.invoices.requestor.accepted", 1);
                 log::info!("Invoice [{}] accepted.", path.invoice_id);
                 response::ok(Null)
             }
-            Err(Error::Rpc(RpcMessageError::AcceptReject(AcceptRejectError::BadRequest(e)))) => {
-                return response::bad_request(&e)
-            }
-            Err(e) => return response::server_error(&e),
+            Ok(Err(Error::Rpc(RpcMessageError::AcceptReject(AcceptRejectError::BadRequest(
+                e,
+            ))))) => return response::bad_request(&e),
+            Ok(Err(e)) => return response::server_error(&e),
+            Err(_) => response::timeout(&"Timeout accepting Invoice on remote Node."),
         }
-    })
+    }
     .await;
 
     timing!(

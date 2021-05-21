@@ -1,7 +1,9 @@
 //! Discovery protocol interface
 use actix_rt::Arbiter;
+use metrics::{counter, timing, value};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::Mutex;
 use tokio::time::delay_for;
 
@@ -105,15 +107,19 @@ impl Discovery {
                 return;
             }
         };
-        log::debug!("Broadcasting offers. count={}", offer_ids.len());
+        let size = offer_ids.len();
+        log::debug!("Broadcasting offers. count={}", size);
         let bcast_msg = SendBroadcastMessage::new(OffersBcast { offer_ids });
 
+        counter!("market.offers.broadcasts.net", 1);
         // TODO: We shouldn't use send_as. Put identity inside broadcasted message instead.
         if let Err(e) = bus::service(local_net::BUS_ID)
             .send_as(default_id, bcast_msg) // TODO: should we send as our (default) identity?
             .await
         {
             log::error!("Error sending bcast, skipping... error={:?}", e);
+            counter!("market.offers.broadcasts.net_errors", 1);
+            value!("market.offers.broadcasts.size", size as u64);
         };
     }
 
@@ -199,8 +205,11 @@ impl Discovery {
             }
         };
 
-        log::debug!("Broadcasting unsubscribes. count={}", offer_ids.len());
+        let size = offer_ids.len();
+        log::debug!("Broadcasting unsubscribes. count={}", size);
         let bcast_msg = SendBroadcastMessage::new(UnsubscribedOffersBcast { offer_ids });
+        counter!("market.offers.unsubscribes.broadcasts.net", 1);
+        value!("market.offers.unsubscribes.broadcasts.size", size as u64);
 
         // TODO: We shouldn't use send_as. Put identity inside broadcasted message instead.
         if let Err(e) = bus::service(local_net::BUS_ID)
@@ -208,6 +217,7 @@ impl Discovery {
             .await
         {
             log::error!("Error sending bcast, skipping... error={:?}", e);
+            counter!("market.offers.unsubscribes.broadcasts.net_errors", 1);
         };
     }
 
@@ -255,6 +265,7 @@ impl Discovery {
     }
 
     async fn on_bcast_offers(self, caller: String, msg: OffersBcast) -> Result<(), ()> {
+        let start = Instant::now();
         let num_ids_received = msg.offer_ids.len();
         log::trace!("Received {} Offers from [{}].", num_ids_received, &caller);
         if msg.offer_ids.is_empty() {
@@ -281,12 +292,19 @@ impl Discovery {
             let unknown_offer_ids = filter_out_known_ids.call(caller.clone(), msg).await?;
 
             if !unknown_offer_ids.is_empty() {
+                let start_remote = Instant::now();
                 let offers = self
                     .get_remote_offers(caller.clone(), unknown_offer_ids, 3)
                     .await
                     .map_err(|e| {
                         log::debug!("Can't get Offers from [{}]. Error: {}", &caller, e)
                     })?;
+                let end_remote = Instant::now();
+                timing!(
+                    "market.offers.incoming.get_remote.time",
+                    start_remote,
+                    end_remote
+                );
 
                 // We still could fail to add some Offers to database. If we fail to add them, we don't
                 // want to propagate subscription further.
@@ -313,6 +331,8 @@ impl Discovery {
                 .map_err(|e| log::warn!("Failed to bcast. Error: {}", e))?;
         }
 
+        let end = Instant::now();
+        timing!("market.offers.incoming.time", start, end);
         Ok(())
     }
 
@@ -331,6 +351,7 @@ impl Discovery {
         caller: String,
         msg: UnsubscribedOffersBcast,
     ) -> Result<(), ()> {
+        let start = Instant::now();
         let num_received_ids = msg.offer_ids.len();
         log::trace!(
             "Received {} unsubscribed Offers from [{}].",
@@ -357,6 +378,8 @@ impl Discovery {
                 log::error!("Error propagating unsubscribed Offers further: {}", error,);
             }
         }
+        let end = Instant::now();
+        timing!("market.offers.unsubscribes.incoming.time", start, end);
         Ok(())
     }
 

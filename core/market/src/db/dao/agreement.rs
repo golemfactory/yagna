@@ -5,6 +5,7 @@ use ya_client::model::market::Reason;
 use ya_client::model::NodeId;
 use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
 
+use crate::config::DbConfig;
 use crate::db::dao::agreement_events::create_event;
 use crate::db::dao::proposal::{has_counter_proposal, update_proposal_state};
 use crate::db::dao::sql_functions::datetime;
@@ -17,13 +18,6 @@ use crate::db::schema::market_agreement::dsl::market_agreement;
 use crate::db::schema::market_agreement_event::dsl as event;
 use crate::db::schema::market_agreement_event::dsl::market_agreement_event;
 use crate::db::{DbError, DbResult};
-use crate::market::EnvConfig;
-
-const AGREEMENT_STORE_DAYS: EnvConfig<'static, u64> = EnvConfig {
-    name: "YAGNA_MARKET_AGREEMENT_STORE_DAYS",
-    default: 90, // days
-    min: 30,     // days
-};
 
 #[derive(thiserror::Error, Debug)]
 pub enum SaveAgreementError {
@@ -334,10 +328,9 @@ impl<'c> AgreementDao<'c> {
         .await
     }
 
-    pub async fn clean(&self) -> DbResult<()> {
-        // FIXME use grace time from config file when #460 is merged
+    pub async fn clean(&self, db_config: &DbConfig) -> DbResult<()> {
         log::trace!("Clean market agreements: start");
-        let interval_days = AGREEMENT_STORE_DAYS.get_value();
+        let interval_days = db_config.agreement_store_days;
         let (num_agreements, num_events) = do_with_transaction(self.pool, move |conn| {
             let agreements_to_clean = market_agreement.filter(
                 agreement::valid_to.lt(datetime("NOW", format!("-{} days", interval_days))),

@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use anyhow::anyhow;
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
@@ -14,8 +13,6 @@ use ya_core_model::payment::local::{
     InvoiceStats, InvoiceStatusNotes, NetworkName, StatusNotes, StatusResult,
 };
 use ya_core_model::version::VersionInfo;
-
-pub const DEFAULT_DRIVER: &'static str = "zksync";
 
 pub struct PaymentPlatform {
     pub platform: &'static str,
@@ -151,7 +148,7 @@ pub struct YagnaCommand {
 impl YagnaCommand {
     async fn run<T: DeserializeOwned>(self) -> anyhow::Result<T> {
         let mut cmd = self.cmd;
-        let cmd_str = format!("running: {:?}", cmd);
+        log::debug!("Running: {:?}", cmd);
         let output = cmd
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -163,8 +160,9 @@ impl YagnaCommand {
             Ok(serde_json::from_slice(&output.stdout)?)
         } else {
             Err(anyhow::anyhow!(
-                "`{}` failed: {}",
-                cmd_str,
+                "{:?} failed.: Stdout:\n{}\nStderr:\n{}",
+                cmd,
+                String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
             ))
         }
@@ -254,29 +252,32 @@ impl YagnaCommand {
         let child = cmd.spawn()?;
         let wait_for = tracker.wait_for_start();
         futures::pin_mut!(wait_for);
-        let v = match future::try_select(child, wait_for).await {
-            Ok(v) => Ok(v),
-            Err(future::Either::Left((e, _wait))) => Err(e),
-            Err(future::Either::Right((e, mut child))) => {
+        match future::try_select(child, wait_for).await {
+            Ok(future::Either::Right((_wait_ends, child))) => Ok(child),
+            Ok(future::Either::Left((child_ends, _wait))) => {
+                anyhow::bail!(
+                    "Golem Service exited prematurely with status: {}",
+                    child_ends
+                );
+            }
+            Err(future::Either::Left((child_err, _wait))) => {
+                anyhow::bail!("Failed to start Golem Service: {}", child_err);
+            }
+            Err(future::Either::Right((wait_err, mut child))) => {
+                log::error!("Killing Golem Service, since wait failed: {}", wait_err);
                 child.kill()?;
                 let _ = child.await?;
-                Err(e)
+                Err(wait_err)
             }
-        }?;
-
-        match v {
-            future::Either::Left((_child_ends, _t)) => {
-                anyhow::bail!("failed to start service");
-            }
-            future::Either::Right((_t, child)) => Ok(child),
         }
     }
 }
 
 #[cfg(unix)]
 mod tracker {
+    use anyhow::Context;
     use directories::ProjectDirs;
-    use std::{fs, io};
+    use std::fs;
     use tokio::net;
     use tokio::process::Command;
 
@@ -285,28 +286,37 @@ mod tracker {
     }
 
     impl Tracker {
-        pub fn new(command: &mut Command) -> io::Result<Self> {
-            let p = ProjectDirs::from("", "GolemFactory", "yagna").unwrap();
+        pub fn new(command: &mut Command) -> anyhow::Result<Self> {
+            let p =
+                ProjectDirs::from("", "GolemFactory", "yagna").expect("Cannot determine home dir");
 
             let path = p
                 .runtime_dir()
                 .unwrap_or_else(|| p.data_dir())
                 .join("golem.service");
+            log::debug!("Golem Service notification socket path: {:?}", path);
             if path.exists() {
-                let _ = fs::remove_file(&path).ok();
+                let _ = fs::remove_file(&path);
             } else {
-                fs::create_dir_all(path.parent().unwrap())?;
+                let parent_dir = path.parent().unwrap();
+                fs::create_dir_all(parent_dir)
+                    .context(format!("Creating directory {:?} failed.", parent_dir))?;
             }
-            let socket = net::UnixDatagram::bind(&path)?;
+            let socket = net::UnixDatagram::bind(&path)
+                .context(format!("Binding unix socket {:?} failed.", path))?;
             command.env("NOTIFY_SOCKET", path);
             Ok(Tracker { socket })
         }
 
-        pub async fn wait_for_start(&mut self) -> io::Result<()> {
+        pub async fn wait_for_start(&mut self) -> anyhow::Result<()> {
             let mut buf = [0u8; 1024];
 
             loop {
-                let (size, _peer) = self.socket.recv_from(&mut buf).await?;
+                let (size, _peer) = self
+                    .socket
+                    .recv_from(&mut buf)
+                    .await
+                    .context("Receiving from Golem Service unix socket failed")?;
                 let data = &buf[..size];
                 for chunk in data.split(|&ch| ch == b'\n') {
                     if chunk == b"READY=1" {
@@ -320,20 +330,17 @@ mod tracker {
 
 #[cfg(not(unix))]
 mod tracker {
-    use std::io;
     use tokio::process::Command;
 
     pub struct Tracker {}
 
     impl Tracker {
-        pub fn new(_command: &mut Command) -> io::Result<Self> {
+        pub fn new(_command: &mut Command) -> anyhow::Result<Self> {
             Ok(Tracker {})
         }
 
-        pub async fn wait_for_start(&mut self) -> io::Result<()> {
-            crate::utils::wait_for_yagna()
-                .await
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+        pub async fn wait_for_start(&mut self) -> anyhow::Result<()> {
+            crate::utils::wait_for_yagna().await
         }
     }
 }
