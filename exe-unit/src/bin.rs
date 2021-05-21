@@ -1,9 +1,11 @@
-use actix::{Actor, System};
+use actix::Actor;
 use anyhow::bail;
 use flexi_logger::{DeferredNow, Record};
+use futures::channel::oneshot;
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use structopt::{clap, StructOpt};
+use tokio::io::AsyncWriteExt;
 
 use ya_core_model::activity;
 use ya_exe_unit::agreement::Agreement;
@@ -114,7 +116,7 @@ fn init_crypto(
     }
 }
 
-fn run() -> anyhow::Result<()> {
+async fn run() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
     #[allow(unused_mut)]
     let mut cli: Cli = Cli::from_args();
@@ -204,14 +206,14 @@ fn run() -> anyhow::Result<()> {
     log::debug!("CLI args: {:?}", cli);
     log::debug!("ExeUnitContext args: {:?}", ctx);
 
-    let sys = System::new();
+    let (tx, rx) = oneshot::channel();
 
     let metrics = MetricsService::try_new(&ctx, Some(10000), cli.supervise_caps)?.start();
     let transfers = TransferService::new(&ctx).start();
     let runtime = RuntimeProcess::new(&ctx, cli.binary).start();
-    let exe_unit = ExeUnit::new(ctx, metrics, transfers, runtime).start();
+    let exe_unit = ExeUnit::new(tx, ctx, metrics, transfers, runtime).start();
     let signals = SignalMonitor::new(exe_unit.clone()).start();
-    exe_unit.do_send(Register(signals));
+    exe_unit.send(Register(signals)).await?;
 
     if let Some(exe_script) = commands {
         let msg = activity::Exec {
@@ -220,10 +222,12 @@ fn run() -> anyhow::Result<()> {
             exe_script,
             timeout: None,
         };
-        exe_unit.do_send(RpcEnvelope::with_caller(String::new(), msg));
+        exe_unit
+            .send(RpcEnvelope::with_caller(String::new(), msg))
+            .await?;
     }
 
-    sys.run()?;
+    rx.await?;
     Ok(())
 }
 
@@ -243,7 +247,8 @@ fn configure_logger(logger: flexi_logger::Logger) -> flexi_logger::Logger {
         .format_for_stderr(colored_stderr_exeunit_prefixed_format)
 }
 
-fn main() {
+#[actix_rt::main]
+async fn main() {
     let default_log_level = "info";
     if configure_logger(flexi_logger::Logger::with_env_or_str(default_log_level))
         .log_to_file()
@@ -257,7 +262,7 @@ fn main() {
         log::warn!("Switched to fallback logging method");
     }
 
-    std::process::exit(match run() {
+    std::process::exit(match run().await {
         Ok(_) => 0,
         Err(error) => {
             log::error!("{}", error);

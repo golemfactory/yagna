@@ -283,12 +283,13 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
             let set_state = SetState::new(State::Terminated.into(), reason);
             let _ = address.send(set_state).await;
 
-            System::current().stop();
-
             log::info!("Shutdown process complete");
             Ok(())
         };
 
-        ActorResponse::r#async(fut.into_actor(self))
+        ActorResponse::r#async(fut.into_actor(self).map(|result, _, ctx| {
+            ctx.stop();
+            result
+        }))
     }
 }

@@ -37,6 +37,7 @@ ya-transfer = "0.1"
 ya-utils-path = "0.1"
 
 actix = { version = "0.11", default-features = false }
+actix-rt = "2.2"
 anyhow = "1.0.19"
 async-trait = "0.1.24"
 chrono = "0.4.10"
@@ -71,7 +72,6 @@ ya-runtime-api = { version = "0.3", path = "runtime-api", features = ["codec", "
 ya-sb-router = "0.4"
 
 actix-files = "=0.6.0-beta.4"
-actix-rt = "2.2"
 actix-web = "=4.0.0-beta.5"
 env_logger = "0.7"
 rustyline = "7.0.0"
