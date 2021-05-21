@@ -75,16 +75,17 @@ def _create_runner(
     )
 
 
-# Tests running multiple activities on single Provider.
-# In this case Requestor is responsible for terminating Agreement.
-# Provider should listen
 @pytest.mark.asyncio
 async def test_provider_multi_activity(
     common_assets: Path,
     config_overrides: List[Override],
     log_dir: Path,
 ):
-    """Test provider handling multiple activities in single Agreement."""
+    """Test provider handling multiple activities in single Agreement.
+
+    Tests running multiple activities on single Provider.
+    In this case Requestor is responsible for terminating Agreement.
+    """
     runner = _create_runner(common_assets, config_overrides, log_dir)
 
     async with runner(_topology(common_assets)):
@@ -138,14 +139,16 @@ async def test_provider_multi_activity(
         await pay_all(requestor, agreement_providers)
 
 
-# Provider is expected to reject second activity, if one is already running.
 @pytest.mark.asyncio
 async def test_provider_single_activity_at_once(
     common_assets: Path,
     config_overrides: List[Override],
     log_dir: Path,
 ):
-    """Test provider rejecting second activity if one is already running."""
+    """Test provider rejecting second activity if one is already running.
+
+    Provider is expected to reject second activity, if one is already running.
+    """
     runner = _create_runner(common_assets, config_overrides, log_dir)
 
     async with runner(_topology(common_assets)):

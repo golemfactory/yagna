@@ -105,15 +105,17 @@ def _create_runner(
     )
 
 
-# Provider is expected to break Agreement in time configured by
-# variable: IDLE_AGREEMENT_TIMEOUT, if there are no Activities created.
 @pytest.mark.asyncio
 async def test_provider_idle_agreement(
     common_assets: Path,
     config_overrides: List[Override],
     log_dir: Path,
 ):
-    """Test provider breaking idle Agreement."""
+    """Test provider breaking idle Agreement.
+
+    Provider is expected to break Agreement in time configured by
+    variable: IDLE_AGREEMENT_TIMEOUT, if there are no Activities created.
+    """
     runner = _create_runner(common_assets, config_overrides, log_dir)
 
     async with runner(_topology(common_assets)):
@@ -132,17 +134,19 @@ async def test_provider_idle_agreement(
         await pay_all(requestor, agreement_providers)
 
 
-# Provider is expected to break Agreement, if no new Activity was created
-# after time configured by variable: IDLE_AGREEMENT_TIMEOUT.
-# This test checks case, when Requestor already computed some Activities,
-# but orphaned Agreement at some point.
 @pytest.mark.asyncio
 async def test_provider_idle_agreement_after_2_activities(
     common_assets: Path,
     config_overrides: List[Override],
     log_dir: Path,
 ):
-    """Test provider breaking idle Agreement after 2 Activities were computed."""
+    """Test provider breaking idle Agreement after 2 Activities were computed.
+
+    Provider is expected to break Agreement, if no new Activity was created
+    after time configured by variable: IDLE_AGREEMENT_TIMEOUT.
+    This test checks case, when Requestor already computed some Activities,
+    but orphaned Agreement at some point.
+    """
     runner = _create_runner(common_assets, config_overrides, log_dir)
 
     async with runner(_topology(common_assets)):
@@ -170,14 +174,16 @@ async def test_provider_idle_agreement_after_2_activities(
         await pay_all(requestor, agreement_providers)
 
 
-# Requestor is expected to accept DebitNotes in timeout negotiated in Offer.
 @pytest.mark.asyncio
 async def test_provider_debit_notes_accept_timeout(
     common_assets: Path,
     config_overrides: List[Override],
     log_dir: Path,
 ):
-    """Test provider breaking Agreement if Requestor doesn't accept DebitNotes."""
+    """Test provider breaking Agreement if Requestor doesn't accept DebitNotes.
+
+    Requestor is expected to accept DebitNotes in timeout negotiated in Offer.
+    """
     runner = _create_runner(common_assets, config_overrides, log_dir)
 
     async with runner(_topology(common_assets)):
@@ -209,16 +215,18 @@ async def test_provider_debit_notes_accept_timeout(
         await pay_all(requestor, agreement_providers)
 
 
-# If Provider is unable to send DebitNotes for some period of time, he should
-# break Agreement. This is separate mechanism from DebitNotes keep alive, because
-# here we are unable to send them, so they can't timeout.
 @pytest.mark.asyncio
 async def test_provider_timeout_unresponsive_requestor(
     common_assets: Path,
     config_overrides: List[Override],
     log_dir: Path,
 ):
-    """Test provider breaking Agreement if Requestor doesn't accept DebitNotes."""
+    """Test provider breaking Agreement if Requestor doesn't accept DebitNotes.
+
+    If Provider is unable to send DebitNotes for some period of time, he should
+    break Agreement. This is separate mechanism from DebitNotes keep alive, because
+    here we are unable to send them, so they can't timeout.
+    """
     runner = _create_runner(common_assets, config_overrides, log_dir)
 
     # Stopping container takes a little bit more time, so we must send
