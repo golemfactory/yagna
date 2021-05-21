@@ -320,7 +320,7 @@ async fn process_proposal(
         ProposalResponse::IgnoreProposal => log::info!("Ignoring proposal {:?}", proposal_id),
         ProposalResponse::RejectProposal { reason } => {
             if let Some(r) = reason.clone() {
-                let is_final = r.extra["golem.proposal.rejection.is-final"].clone(); // FIXME verify
+                let is_final = r.extra["golem.proposal.rejection.is-final"].clone();
                 if !is_final.eq(&serde_json::json!(false)) {
                     let sub_dem = SubscriptionProposal {
                         subscription_id: subscription.id.clone(),
