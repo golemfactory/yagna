@@ -5,7 +5,6 @@ use futures::channel::oneshot;
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use structopt::{clap, StructOpt};
-use tokio::io::AsyncWriteExt;
 
 use ya_core_model::activity;
 use ya_exe_unit::agreement::Agreement;
@@ -224,10 +223,10 @@ async fn run() -> anyhow::Result<()> {
         };
         exe_unit
             .send(RpcEnvelope::with_caller(String::new(), msg))
-            .await?;
+            .await??;
     }
 
-    rx.await?;
+    rx.await??;
     Ok(())
 }
 
