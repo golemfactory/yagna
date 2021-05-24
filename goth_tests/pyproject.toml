@@ -1,0 +1,36 @@
+[build-system]
+requires = ["poetry_core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "goth-tests"
+version = "0.1.0"
+description = "Integration tests for yagna"
+authors = ["GolemFactory <contact@golem.network>"]
+license = "LGPL-3.0-or-later"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: AsyncIO",
+]
+repository = "https://github.com/golemfactory/yagna"
+documentation = "https://handbook.golem.network"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.8.0"
+pytest = "^6.2"
+pytest-asyncio = "^0.14"
+goth = "^0.3"
+# to use development goth version uncomment below
+#goth = { git = "https://github.com/golemfactory/goth.git", rev = "29e21ac6a9a755f757d6a0ebf9ebeb21d14139d6" }
+
+[tool.poetry.dev-dependencies]
+black = "^20.8b1"
+mypy = "^0.782"
+poethepoet = "^0.10.0"
+
+[tool.poe.tasks]
+codestyle = "black --check --diff ."
+goth-assets = "python -m goth create-assets assets"
+goth-tests = "pytest -svx ."
+typecheck = "mypy ."
