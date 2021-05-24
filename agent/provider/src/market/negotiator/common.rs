@@ -188,6 +188,12 @@ impl NegotiatorAddr {
     }
 }
 
+pub fn reason_with_extra(message: String, extra: serde_json::Value) -> Reason {
+    let mut reason = Reason::new(message);
+    reason.extra = extra;
+    reason
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
