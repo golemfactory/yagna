@@ -68,12 +68,21 @@ pub fn start_logger(
     default_log_spec: &str,
     log_dir: Option<&Path>,
     module_filters: &[(&str, log::LevelFilter)],
+    force_debug: bool
 ) -> Result<LoggerHandle> {
     let log_spec = LogSpecification::env_or_parse(default_log_spec)?;
     let mut log_spec_builder = LogSpecBuilder::from_module_filters(log_spec.module_filters());
     for filter in module_filters {
         log_spec_builder.module(filter.0, filter.1);
     }
+    
+    //override default log level if force_debug is set
+    //it leaves module_filters log levels unchanged
+    //used for --debug option
+    if force_debug {
+        log_spec_builder.default(log::LevelFilter::Debug);
+    }
+
     let log_spec = log_spec_builder.finalize();
 
     let mut logger = Logger::with(log_spec).format(log_format);
