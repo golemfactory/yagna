@@ -338,15 +338,6 @@ impl ServiceCommand {
                 log_dir,
                 debug,
             }) => {
-                //if --debug option is provided override RUST_LOG flag with debug defaults
-                //if you want to more detailed control over logs use RUST_LOG variable and do not use --debug flag
-                if *debug {
-                    env::set_var(
-                        "RUST_LOG",
-                        "debug,tokio_core=info,tokio_reactor=info,hyper=info,reqwest=info",
-                    );
-                }
-
                 // workaround to silence middleware logger by default
                 // to enable it explicitly set RUST_LOG=info or more verbose
                 env::set_var(
@@ -354,6 +345,9 @@ impl ServiceCommand {
                     env::var("RUST_LOG")
                         .unwrap_or(format!("info,actix_web::middleware::logger=warn",)),
                 );
+
+                //this force_debug flag sets default log level to debug
+                //if the --debug option is set
                 let force_debug = *debug;
                 let logger_handle = start_logger(
                     "info",
