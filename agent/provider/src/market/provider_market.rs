@@ -537,7 +537,7 @@ impl Handler<ReSubscribe> for ProviderMarket {
 struct PostponeDemand(SubscriptionProposal);
 
 impl Handler<PostponeDemand> for ProviderMarket {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: PostponeDemand, _ctx: &mut Self::Context) -> Self::Result {
         self.postponed_demands.extend(vec![msg.0]);

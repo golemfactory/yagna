@@ -1,13 +1,14 @@
 use actix::prelude::*;
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Duration, Utc};
+use futures::Future;
 use std::collections::HashMap;
+use std::pin::Pin;
 
 use crate::{
     actix_signal::{SignalSlot, Subscribe},
     actix_signal_handler,
 };
-use std::pin::Pin;
 
 /// Will be sent when deadline elapsed.
 #[derive(Message, Clone, Debug)]

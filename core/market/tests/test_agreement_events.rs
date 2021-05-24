@@ -376,7 +376,7 @@ async fn test_agreement_rejected_event() {
     let agr_id = agreement_id.clone();
     let from_timestamp = confirm_timestamp.clone();
     let query_handle = tokio::task::spawn_local(async move {
-        tokio::time::delay_for(std::time::Duration::from_millis(20)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         prov_market
             .provider_engine
             .reject_agreement(

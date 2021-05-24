@@ -1,9 +1,9 @@
 // PRIVATE RawTransaction.hash()
 
 use ethereum_tx_sign::RawTransaction;
+use ethereum_types::U256;
 use rlp::RlpStream;
 use tiny_keccak::{Hasher, Keccak};
-use web3::types::U256;
 
 pub fn get_tx_hash(tx: &RawTransaction, chain_id: u64) -> Vec<u8> {
     let mut hash = RlpStream::new();

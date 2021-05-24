@@ -162,7 +162,7 @@ async fn verify_signature(
 
 async fn shut_down(_db: (), _caller: String, msg: ShutDown) -> Result<(), GenericError> {
     if msg.timeout > std::time::Duration::from_secs(1) {
-        tokio::time::delay_for(msg.timeout - std::time::Duration::from_secs(1)).await;
+        tokio::time::sleep(msg.timeout - std::time::Duration::from_secs(1)).await;
     }
     Ok(())
 }

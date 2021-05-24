@@ -6,9 +6,9 @@ use std::str::FromStr;
 
 // External uses
 use bigdecimal::BigDecimal;
+use ethereum_types::{Address, H160, H256, U256};
 use lazy_static::lazy_static;
 use num_bigint::{BigInt, BigUint, ToBigInt};
-use web3::types::{Address, H160, H256, U256};
 
 // Workspace uses
 use ya_payment_driver::model::GenericError;

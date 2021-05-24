@@ -4,9 +4,9 @@
 
 // External crates
 use bigdecimal::BigDecimal;
+use ethereum_types::{H160, H256, U256, U64};
 use num_bigint::BigUint;
 use std::str::FromStr;
-use web3::types::{H160, H256, U256, U64};
 
 // Workspace uses
 use ya_payment_driver::{

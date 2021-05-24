@@ -211,7 +211,7 @@ impl PaymentDriver for Erc20Driver {
             self.confirm_payments().await; // Run it at least once
             Utc::now() < deadline && self.dao.has_unconfirmed_txs().await? // Stop if deadline passes or there are no more transactions to confirm
         } {
-            tokio::time::delay_for(std::time::Duration::from_secs(1)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
         Ok(())
     }
