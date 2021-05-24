@@ -56,11 +56,6 @@ jobs:
           command: test
           args: --workspace --locked
 
-      - name: Unit tests for SGX
-        if: ${{ runner.os == 'Linux' && startsWith( github.head_ref, 'sgx/' ) }}
-        working-directory: exe-unit
-        run: cargo test --features sgx
-
       - name: Market Test Suite (semi-integration tests)
         uses: actions-rs/cargo@v1
         if: startsWith( github.head_ref, 'market/' )
