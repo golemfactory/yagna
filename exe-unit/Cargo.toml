@@ -1,6 +1,6 @@
 [package]
 name = "ya-exe-unit"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
@@ -31,12 +31,12 @@ ya-agreement-utils = { version = "^0.2"}
 ya-client-model = "0.3"
 ya-compile-time-utils = "0.1"
 ya-core-model = { version = "^0.3", features = ["activity", "appkey"] }
-ya-runtime-api = { version = "0.2", path = "runtime-api", features = ["server"] }
+ya-runtime-api = { version = "0.3", path = "runtime-api", features = ["server"] }
 ya-service-bus = "0.4"
 ya-transfer = "0.1"
 ya-utils-path = "0.1"
 
-actix = { version = "0.9", default-features = false }
+actix = { version = "0.10", default-features = false }
 anyhow = "1.0.19"
 async-trait = "0.1.24"
 chrono = "0.4.10"
@@ -61,12 +61,12 @@ signal-hook = { version = "0.1.13", features = ["tokio-support"] }
 structopt = "0.3"
 thiserror = "1.0.10"
 tokio = { version = "0.2.11", features = ["process", "signal", "time"] }
-tokio-util = { version = "0.2", features = ["codec"] }
+tokio-util = { version = "0.3", features = ["codec"] }
 url = "2.1.1"
 yansi = "0.5.0"
 
 [dev-dependencies]
-ya-runtime-api = { version = "0.2", path = "runtime-api", features = ["codec", "server"] }
+ya-runtime-api = { version = "0.3", path = "runtime-api", features = ["codec", "server"] }
 ya-sb-router = "0.4"
 
 actix-files = "0.4"

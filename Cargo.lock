@@ -2,28 +2,6 @@
 # It is not intended for manual editing.
 [[package]]
 name = "actix"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4af87564ff659dee8f9981540cac9418c45e910c8072fdedd643a262a38fcaf"
-dependencies = [
- "actix-rt",
- "actix_derive",
- "bitflags 1.2.1",
- "bytes 0.5.6",
- "crossbeam-channel 0.4.4",
- "derive_more",
- "futures 0.3.13",
- "lazy_static",
- "log",
- "parking_lot 0.10.2",
- "pin-project 0.4.27",
- "smallvec 1.6.1",
- "tokio 0.2.25",
- "tokio-util 0.2.0",
-]
-
-[[package]]
-name = "actix"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1be241f88f3b1e7e9a3fbe3b5a8a0f6915b5a1d7ee0d9a248d3376d01068cc60"
@@ -139,7 +117,7 @@ dependencies = [
  "log",
  "mime",
  "percent-encoding",
- "pin-project 1.0.6",
+ "pin-project 1.0.7",
  "rand 0.7.3",
  "regex",
  "serde",
@@ -310,7 +288,7 @@ dependencies = [
  "log",
  "mime",
  "openssl",
- "pin-project 1.0.6",
+ "pin-project 1.0.7",
  "regex",
  "serde",
  "serde_json",
@@ -2616,7 +2594,7 @@ dependencies = [
  "httparse",
  "httpdate",
  "itoa",
- "pin-project 1.0.6",
+ "pin-project 1.0.7",
  "socket2 0.3.19",
  "tokio 0.2.25",
  "tower-service",
@@ -2640,7 +2618,7 @@ dependencies = [
  "httparse",
  "httpdate",
  "itoa",
- "pin-project 1.0.6",
+ "pin-project 1.0.7",
  "socket2 0.3.19",
  "tokio 1.4.0",
  "tower-service",
@@ -3906,11 +3884,11 @@ dependencies = [
 
 [[package]]
 name = "pin-project"
-version = "1.0.6"
+version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc174859768806e91ae575187ada95c91a29e96a98dc5d2cd9a1fed039501ba6"
+checksum = "c7509cc106041c40a4518d2af7a61530e1eed0e6285296a3d8c5472806ccc4a4"
 dependencies = [
- "pin-project-internal 1.0.6",
+ "pin-project-internal 1.0.7",
 ]
 
 [[package]]
@@ -3926,9 +3904,9 @@ dependencies = [
 
 [[package]]
 name = "pin-project-internal"
-version = "1.0.6"
+version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a490329918e856ed1b083f244e3bfe2d8c4f336407e4ea9e1a9f479ff09049e5"
+checksum = "48c950132583b500556b1efd71d45b319029f2b71518d979fcc208e16b42426f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5781,20 +5759,6 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "571da51182ec208780505a32528fc5512a8fe1443ab960b3f2f3ef093cd16930"
-dependencies = [
- "bytes 0.5.6",
- "futures-core",
- "futures-sink",
- "log",
- "pin-project-lite 0.1.12",
- "tokio 0.2.25",
-]
-
-[[package]]
-name = "tokio-util"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be8242891f2b6cbef26a2d7e8605133c2c554cd35b3e4948ea892d6d68436499"
@@ -5876,7 +5840,7 @@ version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97d095ae15e245a057c8e8451bab9b3ee1e1f68e9ba2b4fbc18d0ac5237835f2"
 dependencies = [
- "pin-project 1.0.6",
+ "pin-project 1.0.7",
  "tracing",
 ]
 
@@ -6589,7 +6553,7 @@ dependencies = [
 name = "ya-dummy-driver"
 version = "0.2.0"
 dependencies = [
- "actix 0.9.0",
+ "actix",
  "anyhow",
  "bigdecimal 0.2.0",
  "chrono",
@@ -6646,9 +6610,9 @@ dependencies = [
 
 [[package]]
 name = "ya-exe-unit"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
- "actix 0.9.0",
+ "actix",
  "actix-files",
  "actix-rt",
  "actix-web",
@@ -6682,7 +6646,7 @@ dependencies = [
  "tempdir",
  "thiserror",
  "tokio 0.2.25",
- "tokio-util 0.2.0",
+ "tokio-util 0.3.1",
  "url",
  "winapi 0.3.9",
  "ya-agreement-utils",
@@ -6751,7 +6715,7 @@ dependencies = [
 name = "ya-market"
 version = "0.3.0"
 dependencies = [
- "actix 0.10.0",
+ "actix",
  "actix-http",
  "actix-rt",
  "actix-service",
@@ -6919,7 +6883,7 @@ dependencies = [
 name = "ya-payment-driver"
 version = "0.2.0"
 dependencies = [
- "actix 0.9.0",
+ "actix",
  "anyhow",
  "async-trait",
  "bigdecimal 0.2.0",
@@ -6967,7 +6931,7 @@ dependencies = [
 name = "ya-provider"
 version = "0.2.0"
 dependencies = [
- "actix 0.10.0",
+ "actix",
  "actix-rt",
  "actix_derive",
  "anyhow",
@@ -7019,7 +6983,7 @@ dependencies = [
 
 [[package]]
 name = "ya-runtime-api"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "bytes 0.5.6",
@@ -7031,40 +6995,44 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio 0.2.25",
- "tokio-util 0.2.0",
+ "tokio-util 0.3.1",
 ]
 
 [[package]]
 name = "ya-sb-proto"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1eaa297ee64562ccd1041bb9d2c666a73b92329f83edfdc3bb2e78aad1087b0c"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=fe78d2f49986ff45152555866cca46d212d437f6#fe78d2f49986ff45152555866cca46d212d437f6"
 dependencies = [
  "bytes 0.5.6",
  "prost",
  "prost-build",
  "thiserror",
  "tokio 0.2.25",
- "tokio-util 0.2.0",
+ "tokio-util 0.3.1",
  "url",
 ]
 
 [[package]]
 name = "ya-sb-router"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac0d78a11d51aa4695a534f330b5a4719761b885c5a01ed201072c1bfd0cff06"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=fe78d2f49986ff45152555866cca46d212d437f6#fe78d2f49986ff45152555866cca46d212d437f6"
 dependencies = [
+ "actix",
+ "actix-rt",
+ "actix-server",
+ "actix-service",
  "anyhow",
- "bytes 0.4.12",
+ "bitflags 1.2.1",
  "chrono",
  "futures 0.3.13",
  "lazy_static",
  "log",
+ "parking_lot 0.11.1",
+ "pin-project 1.0.7",
  "prost",
  "structopt",
  "tokio 0.2.25",
- "tokio-util 0.2.0",
+ "tokio-util 0.3.1",
  "url",
  "uuid",
  "ya-sb-proto",
@@ -7074,9 +7042,10 @@ dependencies = [
 [[package]]
 name = "ya-sb-util"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20b2e7cfeacabb607fe1fd1dc8e653c3ee853f2e127cb1ed72955ea4cb84f951"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=fe78d2f49986ff45152555866cca46d212d437f6#fe78d2f49986ff45152555866cca46d212d437f6"
 dependencies = [
+ "actix",
+ "bitflags 1.2.1",
  "futures 0.3.13",
  "pin-project 0.4.27",
 ]
@@ -7163,10 +7132,9 @@ dependencies = [
 [[package]]
 name = "ya-service-bus"
 version = "0.4.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b922f9edfea09977ce545b930f897ca28927aeb61519933bc23d64d09fbfae0"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=fe78d2f49986ff45152555866cca46d212d437f6#fe78d2f49986ff45152555866cca46d212d437f6"
 dependencies = [
- "actix 0.9.0",
+ "actix",
  "flexbuffers",
  "futures 0.3.13",
  "lazy_static",
@@ -7176,7 +7144,7 @@ dependencies = [
  "serde",
  "thiserror",
  "tokio 0.2.25",
- "tokio-util 0.2.0",
+ "tokio-util 0.3.1",
  "url",
  "uuid",
  "ya-sb-proto",
@@ -7247,7 +7215,7 @@ dependencies = [
 name = "ya-utils-actix"
 version = "0.1.0"
 dependencies = [
- "actix 0.10.0",
+ "actix",
  "actix-rt",
  "anyhow",
  "chrono",
@@ -7287,7 +7255,7 @@ dependencies = [
 name = "ya-utils-process"
 version = "0.1.0"
 dependencies = [
- "actix 0.9.0",
+ "actix",
  "anyhow",
  "derive_more",
  "fs2",
