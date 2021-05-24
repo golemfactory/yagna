@@ -199,7 +199,7 @@ ya-diesel-utils = { path = "utils/diesel-utils"}
 ya-metrics = { path = "core/metrics" }
 ya-provider = { path = "agent/provider"}
 
-web3 = { git = "https://github.com/tomusdrw/rust-web3.git", rev = "7dfefdccce912a500c5a359937bef915fc3a1a73" }
+web3 = { git = "https://github.com/mfranciszkiewicz/rust-web3.git", rev = "4426e53383fae7f7e32928489ea59302e7f2c3c4" }
 ethereum-tx-sign = { git = "https://github.com/mfranciszkiewicz/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
 
 # Speed up builds on macOS (will be default in next rust version probably)
