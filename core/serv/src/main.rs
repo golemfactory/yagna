@@ -340,7 +340,7 @@ impl ServiceCommand {
             }) => {
                 //if --debug option is provided override RUST_LOG flag with debug defaults
                 //if you want to more detailed control over logs use RUST_LOG variable and do not use --debug flag
-                if debug.clone() {
+                if *debug {
                     env::set_var(
                         "RUST_LOG",
                         "debug,tokio_core=info,tokio_reactor=info,hyper=info,reqwest=info",
