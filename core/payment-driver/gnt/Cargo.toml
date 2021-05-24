@@ -12,7 +12,7 @@ ya-service-api-interfaces = "0.1"
 ya-service-bus = "0.4"
 ya-utils-networking = "0.1"
 
-actix = { version = "0.9", default-features = false }
+actix = { version = "0.10", default-features = false }
 actix-connect="2.0"
 actix-http="2.2"
 actix-rt = "1.1"
