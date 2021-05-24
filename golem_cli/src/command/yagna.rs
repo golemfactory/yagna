@@ -8,12 +8,12 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::process::Stdio;
 
+use crate::setup::RunConfig;
 use tokio::process::{Child, Command};
 use ya_core_model::payment::local::{
     InvoiceStats, InvoiceStatusNotes, NetworkName, StatusNotes, StatusResult,
 };
 use ya_core_model::version::VersionInfo;
-use crate::setup::RunConfig;
 
 pub struct PaymentPlatform {
     pub platform: &'static str,
@@ -234,7 +234,6 @@ impl YagnaCommand {
             cmd.arg("--log-dir");
             cmd.arg(log_dir.to_str().unwrap());
         }
-        
 
         cmd.stdin(Stdio::null())
             .stderr(Stdio::inherit())
