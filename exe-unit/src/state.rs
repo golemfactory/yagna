@@ -29,6 +29,21 @@ pub enum StateError {
     },
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct Supervision {
+    pub hardware: bool,
+    pub image: bool,
+}
+
+impl Default for Supervision {
+    fn default() -> Self {
+        Supervision {
+            hardware: true,
+            image: true,
+        }
+    }
+}
+
 pub(crate) struct ExeUnitState {
     pub inner: StatePair,
     pub last_batch: Option<String>,

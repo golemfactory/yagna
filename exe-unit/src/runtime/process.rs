@@ -3,7 +3,7 @@ use crate::message::{ExecuteCommand, SetRuntimeMode, SetTaskPackagePath, Shutdow
 use crate::output::{forward_output, vec_to_string};
 use crate::process::{kill, ProcessTree, SystemError};
 use crate::runtime::event::EventMonitor;
-use crate::runtime::{Runtime, RuntimeArgs, RuntimeMode};
+use crate::runtime::{Runtime, RuntimeMode};
 use crate::ExeUnitContext;
 use actix::prelude::*;
 use futures::future::{self, LocalBoxFuture};
@@ -33,10 +33,10 @@ fn process_kill_timeout_seconds() -> i64 {
 }
 
 pub struct RuntimeProcess {
-    binary: PathBuf,
-    runtime_args: RuntimeArgs,
-    task_package_path: Option<PathBuf>,
+    ctx: ExeUnitContext,
     mode: RuntimeMode,
+    binary: PathBuf,
+    image_path: Option<PathBuf>,
     children: HashSet<ChildProcess>,
     service: Option<ProcessService>,
     monitor: Option<EventMonitor>,
@@ -45,11 +45,11 @@ pub struct RuntimeProcess {
 impl RuntimeProcess {
     pub fn new(ctx: &ExeUnitContext, binary: PathBuf) -> Self {
         Self {
+            ctx: ctx.clone(),
+            mode: Default::default(),
             binary,
-            runtime_args: ctx.runtime_args.clone(),
-            task_package_path: None,
-            mode: RuntimeMode::default(),
-            children: HashSet::new(),
+            image_path: None,
+            children: Default::default(),
             service: None,
             monitor: None,
         }
@@ -92,12 +92,48 @@ impl RuntimeProcess {
     }
 
     fn args(&self, cmd_args: Vec<OsString>) -> Result<Vec<OsString>, Error> {
-        let pkg_path = self
-            .task_package_path
-            .clone()
-            .ok_or(Error::runtime("missing task package path"))?;
+        let mut args = vec![
+            OsString::from("--workdir"),
+            self.ctx.work_dir.clone().into_os_string(),
+        ];
 
-        let mut args = self.runtime_args.to_command_line(&pkg_path);
+        if self.ctx.supervise.image {
+            match self.image_path.as_ref() {
+                Some(val) => args.extend(vec![
+                    OsString::from("--task-package"),
+                    val.clone().into_os_string(),
+                ]),
+                None => {
+                    return Err(Error::Other(
+                        "task package (image) path was not provided".into(),
+                    ))
+                }
+            }
+        }
+
+        if !self.ctx.supervise.hardware {
+            let inf = &self.ctx.agreement.infrastructure;
+
+            if let Some(val) = inf.get("cpu.threads") {
+                args.extend(vec![
+                    OsString::from("--cpu-cores"),
+                    OsString::from((*val as u64).to_string()),
+                ]);
+            }
+            if let Some(val) = inf.get("mem.gib") {
+                args.extend(vec![
+                    OsString::from("--mem-gib"),
+                    OsString::from(val.to_string()),
+                ]);
+            }
+            if let Some(val) = inf.get("storage.gib").cloned() {
+                args.extend(vec![
+                    OsString::from("--storage-gib"),
+                    OsString::from(val.to_string()),
+                ]);
+            }
+        }
+
         args.extend(cmd_args);
         Ok(args)
     }
@@ -327,7 +363,7 @@ impl Handler<SetTaskPackagePath> for RuntimeProcess {
     type Result = <SetTaskPackagePath as Message>::Result;
 
     fn handle(&mut self, msg: SetTaskPackagePath, _: &mut Self::Context) -> Self::Result {
-        self.task_package_path = Some(msg.0);
+        self.image_path = msg.0;
     }
 }
 

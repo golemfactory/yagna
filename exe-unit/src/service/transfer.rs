@@ -37,7 +37,7 @@ impl AddVolumes {
 }
 
 #[derive(Clone, Debug, Message)]
-#[rtype(result = "Result<PathBuf>")]
+#[rtype(result = "Result<Option<PathBuf>>")]
 pub struct DeployImage;
 
 #[derive(Clone, Debug, Message)]
@@ -156,7 +156,7 @@ pub struct TransferService {
     providers: HashMap<&'static str, Rc<dyn TransferProvider<TransferData, TransferError>>>,
     cache: Cache,
     work_dir: PathBuf,
-    task_package: String,
+    task_package: Option<String>,
     abort_handles: HashSet<Abort>,
 }
 
@@ -257,11 +257,16 @@ macro_rules! actor_try {
 }
 
 impl Handler<DeployImage> for TransferService {
-    type Result = ActorResponse<Self, PathBuf, Error>;
+    type Result = ActorResponse<Self, Option<PathBuf>, Error>;
 
     #[allow(unused_variables)]
     fn handle(&mut self, _: DeployImage, ctx: &mut Self::Context) -> Self::Result {
-        let source_url = actor_try!(TransferUrl::parse_with_hash(&self.task_package, "file"));
+        let image = match self.task_package.as_ref() {
+            Some(image) => image,
+            None => return ActorResponse::reply(Ok(None)),
+        };
+
+        let source_url = actor_try!(TransferUrl::parse_with_hash(image, "file"));
         let cache_name = actor_try!(Cache::name(&source_url));
         let final_path = self.cache.to_final_path(&cache_name);
 
@@ -294,7 +299,7 @@ impl Handler<DeployImage> for TransferService {
                 if cache_path.exists() {
                     log::info!("Deploying cached image: {:?}", cache_path);
                     std::fs::copy(cache_path, &final_path)?;
-                    return Ok(final_path);
+                    return Ok(Some(final_path));
                 }
 
                 {
@@ -308,7 +313,7 @@ impl Handler<DeployImage> for TransferService {
                 std::fs::copy(cache_path, &final_path)?;
 
                 log::info!("Deployment from {:?} finished", source_url.url);
-                Ok(final_path)
+                Ok(Some(final_path))
             };
             return ActorResponse::r#async(fut.into_actor(self));
         }
@@ -325,7 +330,7 @@ impl Handler<DeployImage> for TransferService {
                     .await
                     .map_err(|e| Error::Other(e.to_string()))?;
                 std::fs::write(&final_path, bytes)?;
-                Ok(final_path)
+                Ok(Some(final_path))
             };
             return ActorResponse::r#async(fut.into_actor(self));
         }

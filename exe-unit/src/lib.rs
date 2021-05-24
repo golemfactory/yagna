@@ -21,7 +21,7 @@ use crate::runtime::*;
 use crate::service::metrics::MetricsService;
 use crate::service::transfer::{AddVolumes, DeployImage, TransferResource, TransferService};
 use crate::service::{ServiceAddr, ServiceControl};
-use crate::state::{ExeUnitState, StateError};
+use crate::state::{ExeUnitState, StateError, Supervision};
 
 pub mod agreement;
 #[cfg(feature = "sgx")]
@@ -372,13 +372,13 @@ impl<R: Runtime> Actor for ExeUnit<R> {
 #[derivative(Debug)]
 #[derive(Clone)]
 pub struct ExeUnitContext {
+    pub supervise: Supervision,
     pub activity_id: Option<String>,
     pub report_url: Option<String>,
-    pub credentials: Option<Credentials>,
     pub agreement: Agreement,
     pub work_dir: PathBuf,
     pub cache_dir: PathBuf,
-    pub runtime_args: RuntimeArgs,
+    pub credentials: Option<Credentials>,
     #[cfg(feature = "sgx")]
     #[derivative(Debug = "ignore")]
     pub crypto: crate::crypto::Crypto,
