@@ -340,8 +340,8 @@ impl<'c> AgreementDao<'c> {
                 event::agreement_id.eq_any(agreements_to_clean.clone().select(agreement::id)),
             );
 
-            let num_agreements = diesel::delete(agreements_to_clean).execute(conn)?;
             let num_events = diesel::delete(related_events).execute(conn)?;
+            let num_agreements = diesel::delete(agreements_to_clean).execute(conn)?;
             Result::<(usize, usize), DbError>::Ok((num_agreements, num_events))
         })
         .await?;
