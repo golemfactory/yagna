@@ -136,15 +136,15 @@ async fn main() -> anyhow::Result<()> {
     ]);
 
     let mut child = Command::new(&args.supervisor).args(child_args).spawn()?;
-    log::warn!("exeunit supervisor spawned. PID: {}", child.id());
-    tokio::time::delay_for(Duration::from_secs(2)).await;
+    log::warn!("exeunit supervisor spawned. PID: {:?}", child.id());
+    tokio::time::sleep(Duration::from_secs(2)).await;
 
     if let Err(e) = exec_and_wait(&args).await {
         log::error!("executing script {:?} error: {:?}", args.script, e);
     }
 
     log::warn!("killing exeunit if it is still alive");
-    child.kill()?;
+    child.kill().await?;
     Ok(())
 }
 
@@ -166,7 +166,7 @@ async fn exec_and_wait(args: &Cli) -> anyhow::Result<()> {
 
     if args.stream_output {
         let svc = actix_rpc::service(&exe_unit_url);
-        Arbiter::spawn(async move {
+        tokio::task::spawn_local(async move {
             let msg = StreamExecBatchResults {
                 activity_id: ACTIVITY_ID.to_string(),
                 batch_id: BATCH_ID.to_string(),

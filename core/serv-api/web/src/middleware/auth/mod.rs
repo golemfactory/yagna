@@ -3,13 +3,12 @@ pub mod ident;
 pub mod resolver;
 
 pub use crate::middleware::auth::ident::Identity;
-
 use crate::middleware::auth::resolver::AppKeyResolver;
 use actix_service::{Service, Transform};
 use actix_web::dev::{ServiceRequest, ServiceResponse};
-use actix_web::error::{Error, ErrorUnauthorized};
-use actix_web::{http::header::Header, HttpMessage};
-use actix_web_httpauth::headers::authorization::{Authorization, Bearer};
+use actix_web::error::{Error, ErrorUnauthorized, ParseError};
+use actix_web::HttpMessage;
+use actix_web_httpauth::headers::authorization::{Bearer, Scheme};
 use futures::future::{ok, Future, Ready};
 use futures::lock::Mutex;
 use std::cell::RefCell;
@@ -32,13 +31,12 @@ impl Default for Auth {
     }
 }
 
-impl<'s, S, B> Transform<S> for Auth
+impl<'s, S, B> Transform<S, ServiceRequest> for Auth
 where
-    S: Service<Request = ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
     S::Future: 'static,
     B: 'static,
 {
-    type Request = ServiceRequest;
     type Response = ServiceResponse<B>;
     type Error = Error;
     type Transform = AuthMiddleware<S>;
@@ -58,24 +56,23 @@ pub struct AuthMiddleware<S> {
     cache: Arc<Mutex<Cache>>,
 }
 
-impl<S, B> Service for AuthMiddleware<S>
+impl<S, B> Service<ServiceRequest> for AuthMiddleware<S>
 where
-    S: Service<Request = ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
     S::Future: 'static,
 {
-    type Request = ServiceRequest;
     type Response = ServiceResponse<B>;
     type Error = Error;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.service.borrow_mut().poll_ready(cx)
     }
 
-    fn call(&mut self, req: ServiceRequest) -> Self::Future {
-        let header = Authorization::<Bearer>::parse(&req)
+    fn call(&self, req: ServiceRequest) -> Self::Future {
+        let header = parse_auth::<Bearer, _>(&req)
             .ok()
-            .map(|a| a.into_scheme().token().to_string());
+            .map(|b| b.token().to_string());
 
         let cache = self.cache.clone();
         let service = self.service.clone();
@@ -121,4 +118,12 @@ where
             }
         })
     }
+}
+
+fn parse_auth<S: Scheme, T: HttpMessage>(msg: &T) -> Result<S, ParseError> {
+    let header = msg
+        .headers()
+        .get(actix_web::http::header::AUTHORIZATION)
+        .ok_or(ParseError::Header)?;
+    Ok(S::parse(header).map_err(|_| ParseError::Header)?)
 }

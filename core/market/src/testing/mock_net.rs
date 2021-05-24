@@ -1,4 +1,3 @@
-use actix_rt::Arbiter;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -172,7 +171,7 @@ impl MockNetInner {
                     );
                     let caller = caller.clone();
                     let msg = msg.clone();
-                    Arbiter::spawn(async move {
+                    tokio::task::spawn_local(async move {
                         let _ = local_bus::send(addr.as_ref(), &caller, msg.as_ref()).await;
                     });
                 }

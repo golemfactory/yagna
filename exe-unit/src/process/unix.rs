@@ -289,7 +289,7 @@ pub async fn kill(pid: i32, timeout: i64) -> Result<(), SystemError> {
             waitpid(pid, None)?;
             break;
         }
-        tokio::time::delay_for(delay).await;
+        tokio::time::sleep(delay).await;
     }
     Ok(())
 }

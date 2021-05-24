@@ -177,7 +177,7 @@ impl GntDriver {
                     log::info!("Received ETH from faucet.");
                     return Ok(());
                 }
-                tokio::time::delay_for(time::Duration::from_secs(3)).await;
+                tokio::time::sleep(time::Duration::from_secs(3)).await;
             }
             log::error!("Waiting for ETH timed out.");
             Err(GNTDriverError::InsufficientFunds)
@@ -410,7 +410,7 @@ mod tests {
             assert!(driver.is_ok());
         }
 
-        tokio::time::delay_for(std::time::Duration::from_millis(5)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         Ok(())
     }
 

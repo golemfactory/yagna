@@ -178,7 +178,7 @@ async fn test_rest() {
 
     // when
     let app_with_srv = Services::rest(actix_web::App::new(), &context);
-    let mut srv = init_service(app_with_srv).await;
+    let srv = init_service(app_with_srv).await;
 
     // then
     assert_eq!(2, context.map.borrow().len());

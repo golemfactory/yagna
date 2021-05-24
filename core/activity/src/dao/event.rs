@@ -2,7 +2,7 @@ use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use diesel::prelude::*;
 use diesel::sql_types::{Integer, Nullable, Text, Timestamp};
 use std::time::Duration;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 use ya_client_model::activity::ProviderEvent;
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
@@ -170,7 +170,7 @@ impl<'c> EventDao<'c> {
                     return Ok(events);
                 }
             }
-            delay_for(duration).await;
+            sleep(duration).await;
         }
     }
 }

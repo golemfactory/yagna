@@ -1,7 +1,6 @@
 use crate::SUBSCRIPTIONS;
-use actix_rt::Arbiter;
 use futures::channel::oneshot;
-use futures::{future, Future, FutureExt, StreamExt, TryFutureExt};
+use futures::{Future, FutureExt, StreamExt, TryFutureExt};
 use metrics::{counter, timing};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -73,14 +72,34 @@ where
     Fr: Future<Output = Result<(), E>> + 'static,
     E: 'static,
 {
-    rebind(Default::default(), bind, Rc::new(RefCell::new(unbind))).await;
+    let reconnect = Rc::new(RefCell::new(Default::default()));
+    let bind = Rc::new(RefCell::new(bind));
+    let unbind = Rc::new(RefCell::new(unbind));
+
+    let (tx, rx) = oneshot::channel();
+
+    tokio::task::spawn_local(async move {
+        let mut tx = Some(tx);
+        loop {
+            let dc = rebind(reconnect.clone(), bind.clone(), unbind.clone()).await;
+            if let Some(tx) = tx.take() {
+                let _ = tx.send(());
+            }
+            if let Err(_) = dc.await {
+                break;
+            }
+        }
+    });
+
+    let _ = rx.await;
 }
 
 async fn rebind<B, U, Fb, Fu, Fr, E>(
     reconnect: Rc<RefCell<ReconnectContext>>,
-    mut bind: B,
+    bind: Rc<RefCell<B>>,
     unbind: Rc<RefCell<U>>,
-) where
+) -> oneshot::Receiver<()>
+where
     B: FnMut() -> Fb + 'static,
     U: FnMut() -> Fu + 'static,
     Fb: Future<Output = std::io::Result<Fr>> + 'static,
@@ -89,43 +108,36 @@ async fn rebind<B, U, Fb, Fu, Fr, E>(
     E: 'static,
 {
     let (tx, rx) = oneshot::channel();
-    let unbind_clone = unbind.clone();
-
     loop {
-        match bind().await {
+        match { (*bind.borrow_mut())().await } {
             Ok(dc_rx) => {
-                if let Some(start) = reconnect.borrow_mut().last_disconnect {
-                    let end = Instant::now();
-                    timing!("net.reconnect.time", start, end);
+                if let Some(start) = { reconnect.borrow_mut().last_disconnect } {
+                    timing!("net.reconnect.time", start, Instant::now());
                 }
                 reconnect.replace(Default::default());
                 resubscribe().await;
                 counter!("net.connect", 1);
 
-                let reconnect_clone = reconnect.clone();
-                Arbiter::spawn(async move {
+                tokio::task::spawn_local(async move {
                     if let Ok(_) = dc_rx.await {
-                        counter!("net.disconnect", 1);
-                        reconnect_clone.borrow_mut().last_disconnect = Some(Instant::now());
                         log::warn!("Handlers disconnected");
-                        (*unbind_clone.borrow_mut())().await;
+                        counter!("net.disconnect", 1);
+                        reconnect.borrow_mut().last_disconnect = Some(Instant::now());
+                        (*unbind.borrow_mut())().await;
                         let _ = tx.send(());
                     }
                 });
                 break;
             }
-            Err(error) => {
+            Err(e) => {
                 let delay = { reconnect.borrow_mut().next().unwrap() };
-                log::warn!(
-                    "Failed to bind handlers: {}; retrying in {} s",
-                    error,
-                    delay.as_secs_f32()
-                );
-                tokio::time::delay_for(delay).await;
+                let dt = delay.as_secs_f32();
+                log::warn!("Failed to bind handlers: {}; retrying in {} s", e, dt);
+                tokio::time::sleep(delay).await;
             }
         }
     }
-    Arbiter::spawn(rx.then(move |_| rebind(reconnect, bind, unbind).then(|_| future::ready(()))));
+    rx
 }
 
 async fn resubscribe() {

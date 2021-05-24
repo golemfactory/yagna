@@ -70,7 +70,11 @@ impl MockIdentity {
 }
 
 pub fn generate_identity(name: &str) -> Identity {
-    let random_node_id: String = thread_rng().sample_iter(&Alphanumeric).take(20).collect();
+    let random_node_id: String = thread_rng()
+        .sample_iter(&Alphanumeric)
+        .map(char::from)
+        .take(20)
+        .collect();
 
     Identity {
         name: name.to_string(),

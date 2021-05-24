@@ -1,3 +1,5 @@
+use actix_http::Response;
+use actix_web::body::Body;
 use actix_web::{error::ResponseError, HttpResponse};
 
 use ya_client_model::ErrorMessage;
@@ -32,12 +34,12 @@ impl From<ya_persistence::executor::Error> for Error {
 
 impl From<Error> for actix_web::HttpResponse {
     fn from(err: Error) -> Self {
-        err.error_response()
+        err.error_response().into()
     }
 }
 
-impl From<tokio::time::Elapsed> for Error {
-    fn from(_: tokio::time::Elapsed) -> Self {
+impl From<tokio::time::error::Elapsed> for Error {
+    fn from(_: tokio::time::error::Elapsed) -> Self {
         Error::Timeout
     }
 }
@@ -101,7 +103,7 @@ impl From<Error> for RpcMessageError {
 }
 
 impl ResponseError for Error {
-    fn error_response(&self) -> HttpResponse {
+    fn error_response(&self) -> Response<Body> {
         match self {
             Error::BadRequest(_) => {
                 HttpResponse::BadRequest().json(ErrorMessage::new(self.to_string()))
@@ -121,5 +123,6 @@ impl ResponseError for Error {
                 HttpResponse::InternalServerError().json(ErrorMessage::new(e))
             }
         }
+        .into()
     }
 }

@@ -15,7 +15,6 @@ ya-service-api-interfaces = "0.1"
 ya-service-bus = "0.4"
 ya-utils-networking = "0.1"
 
-actix-rt = "1.0"
 anyhow = "1.0"
 futures = "0.3"
 lazy_static = "1.4"
@@ -23,7 +22,7 @@ log = "0.4"
 metrics="0.12"
 serde_json = "1.0"
 thiserror = "1.0"
-tokio = { version = "0.2", features = ["time"] }
+tokio = { version = "1.6", features = ["time"] }
 
 [dev-dependencies]
 ya-sb-proto = "0.3"

@@ -17,6 +17,7 @@ use chrono::Utc;
 use ethereum_tx_sign::RawTransaction;
 use ethereum_types::{Address, H256, U256};
 use futures3::channel::oneshot;
+use futures3::future::Either;
 use futures3::prelude::*;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -237,11 +238,11 @@ impl TransactionSender {
     fn nonce(
         &self,
         address: Address,
-    ) -> impl ActorFuture<Actor = Self, Output = Result<U256, GNTDriverError>> + 'static {
+    ) -> impl ActorFuture<Self, Output = Result<U256, GNTDriverError>> + 'static {
         if let Some(n) = self.nonces.get(&address) {
-            fut::Either::Left(fut::ok(n.clone()))
+            Either::Left(fut::ok(n.clone()))
         } else {
-            fut::Either::Right(self.read_init_nonce(address.clone()).into_actor(self).then(
+            Either::Right(self.read_init_nonce(address.clone()).into_actor(self).then(
                 move |r, act, _ctx| match r {
                     Ok(v) => {
                         let output = act.nonces.entry(address).or_insert(v).clone();
@@ -309,19 +310,19 @@ impl TransactionSender {
 }
 
 impl Handler<TxReq> for TransactionSender {
-    type Result = ActorResponse<Self, Reservation, GNTDriverError>;
+    type Result = ActorResponse<Self, Result<Reservation, GNTDriverError>>;
 
     fn handle(&mut self, msg: TxReq, _ctx: &mut Self::Context) -> Self::Result {
         let address = msg.address.clone();
         let fut = self.nonce(address).then(move |r, act, _ctx| {
             let next_nonce = match r {
                 Ok(v) => v,
-                Err(e) => return fut::Either::Right(fut::err(e)),
+                Err(e) => return Either::Right(fut::err(e)),
             };
             if act.reservation.is_some() {
                 let (tx, rx) = oneshot::channel();
                 act.pending_reservations.push((msg, tx));
-                return fut::Either::Left(
+                return Either::Left(
                     async move {
                         let result = rx.await.map_err(|_| GNTDriverError::FailedTransaction)?;
                         Ok(result)
@@ -331,19 +332,19 @@ impl Handler<TxReq> for TransactionSender {
             }
             let r = act.new_reservation(msg.address, msg.count, next_nonce);
 
-            fut::Either::Right(fut::ok(r.clone()))
+            Either::Right(fut::ok(r.clone()))
         });
         ActorResponse::r#async(fut)
     }
 }
 
 impl Handler<TxSave> for TransactionSender {
-    type Result = ActorResponse<Self, Vec<String>, GNTDriverError>;
+    type Result = ActorResponse<Self, Result<Vec<String>, GNTDriverError>>;
 
     fn handle(&mut self, msg: TxSave, _ctx: &mut Self::Context) -> Self::Result {
         fn transaction_error(
             msg: &str,
-        ) -> ActorResponse<TransactionSender, Vec<String>, GNTDriverError> {
+        ) -> ActorResponse<TransactionSender, Result<Vec<String>, GNTDriverError>> {
             log::error!("tx-save fail: {}", msg);
             ActorResponse::reply(Err(GNTDriverError::LibraryError(msg.to_owned())))
         }
@@ -416,7 +417,7 @@ impl Handler<TxSave> for TransactionSender {
         .then(move |r, act, ctx| {
             let reservation = act.reservation.take().unwrap();
             let _transactions = match r {
-                Err(e) => return fut::Either::Right(fut::err(e)),
+                Err(e) => return Either::Right(fut::err(e)),
                 Ok(v) => v,
             };
             act.nonces.insert(reservation.address, next_nonce);
@@ -453,7 +454,7 @@ impl Handler<TxSave> for TransactionSender {
                 Ok(result)
             };
 
-            fut::Either::Left(fut.into_actor(act))
+            Either::Left(fut.into_actor(act))
         });
 
         ActorResponse::r#async(fut)
@@ -461,7 +462,7 @@ impl Handler<TxSave> for TransactionSender {
 }
 
 impl Handler<Retry> for TransactionSender {
-    type Result = ActorResponse<Self, bool, GNTDriverError>;
+    type Result = ActorResponse<Self, Result<bool, GNTDriverError>>;
 
     fn handle(&mut self, msg: Retry, _ctx: &mut Self::Context) -> Self::Result {
         let db = self.db.clone();
@@ -623,7 +624,7 @@ impl TransactionSender {
                         let tx_sender = ctx.address();
                         let db = act.db.clone();
                         let sign_tx = utils::get_sign_tx(node_id);
-                        Arbiter::spawn(async move {
+                        tokio::task::spawn_local(async move {
                             process_payments(
                                 account,
                                 network,
@@ -754,7 +755,7 @@ impl TransactionSender {
 }
 
 impl Handler<WaitForTx> for TransactionSender {
-    type Result = ActorResponse<Self, TransactionReceipt, GNTDriverError>;
+    type Result = ActorResponse<Self, Result<TransactionReceipt, GNTDriverError>>;
 
     fn handle(&mut self, msg: WaitForTx, _ctx: &mut Self::Context) -> Self::Result {
         if self
@@ -811,7 +812,7 @@ impl Message for AccountLocked {
 }
 
 impl Handler<AccountLocked> for TransactionSender {
-    type Result = ActorResponse<Self, (), GNTDriverError>;
+    type Result = ActorResponse<Self, Result<(), GNTDriverError>>;
 
     fn handle(&mut self, msg: AccountLocked, _ctx: &mut Self::Context) -> Self::Result {
         self.active_accounts
@@ -831,7 +832,7 @@ impl Message for AccountUnlocked {
 }
 
 impl Handler<AccountUnlocked> for TransactionSender {
-    type Result = ActorResponse<Self, (), GNTDriverError>;
+    type Result = ActorResponse<Self, Result<(), GNTDriverError>>;
 
     fn handle(&mut self, msg: AccountUnlocked, _ctx: &mut Self::Context) -> Self::Result {
         self.active_accounts.borrow_mut().add_account(msg.identity);

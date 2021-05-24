@@ -8,7 +8,7 @@ edition = "2018"
 default = []
 
 [dependencies]
-actix = { version = "0.9", default-features = false }
+actix = { version = "0.11", default-features = false }
 anyhow = "1.0"
 async-trait = "0.1"
 bigdecimal = { version = "0.2" }
@@ -22,7 +22,7 @@ log = "0.4.8"
 num-bigint = { version = "0.3", features = ["serde"] }
 r2d2 = "0.8"
 thiserror = "1.0"
-tokio = { version = "0.2", features = ["macros"] }
+tokio = { version = "1.6", features = ["macros"] }
 
 ## yagna dependencies
 ya-client-model = "0.3"

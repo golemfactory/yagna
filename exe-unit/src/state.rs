@@ -1,7 +1,6 @@
 use crate::error::Error;
 use crate::notify::Notify;
 use crate::output::CapturedOutput;
-use actix::Arbiter;
 use chrono::{DateTime, Utc};
 use futures::channel::{mpsc, oneshot};
 use futures::{SinkExt, StreamExt, TryStreamExt};
@@ -221,7 +220,7 @@ pub(crate) struct Broadcast<T: Clone> {
     sender: Option<broadcast::Sender<T>>,
 }
 
-impl<T: Clone + 'static> Broadcast<T> {
+impl<T: Clone + Send + 'static> Broadcast<T> {
     pub fn initialized(&self) -> bool {
         self.sender.is_some()
     }
@@ -237,8 +236,8 @@ impl<T: Clone + 'static> Broadcast<T> {
         let (tx, rx) = mpsc::unbounded::<Result<T, _>>();
         let mut txc = tx.clone();
         let receiver = self.sender().subscribe();
-        Arbiter::spawn(async move {
-            if let Err(e) = receiver
+        tokio::task::spawn_local(async move {
+            if let Err(e) = tokio_stream::wrappers::BroadcastStream::new(receiver)
                 .map_err(Error::runtime)
                 .forward(
                     tx.sink_map_err(Error::runtime)
@@ -256,7 +255,8 @@ impl<T: Clone + 'static> Broadcast<T> {
 
     fn initialize(&mut self) {
         let (tx, rx) = broadcast::channel(16);
-        Arbiter::spawn(rx.for_each(|_| async { () }));
+        let receiver = tokio_stream::wrappers::BroadcastStream::new(rx);
+        tokio::task::spawn_local(receiver.for_each(|_| async { () }));
         self.sender = Some(tx);
     }
 }

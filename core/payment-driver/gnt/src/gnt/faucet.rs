@@ -75,7 +75,7 @@ impl EthFaucetConfig {
                         capped_seconds
                     );
                     let capped_seconds = time::Duration::from_secs(capped_seconds);
-                    tokio::time::delay_for(capped_seconds).await;
+                    tokio::time::sleep(capped_seconds).await;
                     return Err(GNTDriverError::LibraryError(
                         "faucet request is queued, try again".to_string(),
                     ));
@@ -101,7 +101,7 @@ impl EthFaucetConfig {
                         MAX_ETH_FAUCET_REQUESTS,
                         e
                     );
-                    tokio::time::delay_for(ETH_FAUCET_SLEEP).await;
+                    tokio::time::sleep(ETH_FAUCET_SLEEP).await;
                 }
             } else {
                 log::info!("Successfully requested Eth.");

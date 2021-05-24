@@ -172,7 +172,9 @@ pub async fn spawn(
     command.stdin(Stdio::piped()).stdout(Stdio::piped());
     command.kill_on_drop(true);
     let mut child: process::Child = command.spawn()?;
-    let pid = child.id();
+    let pid = child
+        .id()
+        .ok_or_else(|| anyhow::anyhow!("Missing child process PID"))?;
     let stdin =
         tokio_util::codec::FramedWrite::new(child.stdin.take().unwrap(), codec::Codec::default());
     let stdout = child.stdout.take().unwrap();
@@ -194,14 +196,15 @@ pub async fn spawn(
             }
         };
         let _ = tokio::task::spawn(async move {
-            futures::pin_mut!(child);
-            futures::pin_mut!(kill_rx);
-            futures::pin_mut!(pump);
-            let code = match future::select(child, future::select(pump, kill_rx)).await {
-                future::Either::Left((result, _)) => map_return_code(result, pid),
-                future::Either::Right((_, mut child)) => {
-                    let _ = child.kill();
-                    map_return_code(child.await, pid)
+            let code = tokio::select! {
+                r = child.wait() => map_return_code(r, pid),
+                _ = pump => {
+                    let _ = child.start_kill();
+                    map_return_code(child.wait().await, pid)
+                }
+                _ = kill_rx => {
+                    let _ = child.start_kill();
+                    map_return_code(child.wait().await, pid)
                 }
             };
             if let Err(_) = status_tx.send(code) {

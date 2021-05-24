@@ -61,7 +61,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetState>> for ExeUnit<R> {
 }
 
 impl<R: Runtime> Handler<RpcEnvelope<GetUsage>> for ExeUnit<R> {
-    type Result = ActorResponse<Self, ActivityUsage, RpcMessageError>;
+    type Result = ActorResponse<Self, Result<ActivityUsage, RpcMessageError>>;
 
     fn handle(&mut self, msg: RpcEnvelope<GetUsage>, _: &mut Self::Context) -> Self::Result {
         if let Err(e) = self.ctx.verify_activity_id(&msg.activity_id) {
@@ -119,7 +119,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetRunningCommand>> for ExeUnit<R> {
 }
 
 impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
-    type Result = ActorResponse<Self, Vec<ExeScriptCommandResult>, RpcMessageError>;
+    type Result = ActorResponse<Self, Result<Vec<ExeScriptCommandResult>, RpcMessageError>>;
 
     fn handle(
         &mut self,
@@ -169,7 +169,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
 }
 
 impl<R: Runtime> Handler<RpcStreamCall<StreamExecBatchResults>> for ExeUnit<R> {
-    type Result = ActorResponse<Self, (), RpcError>;
+    type Result = ActorResponse<Self, Result<(), RpcError>>;
 
     fn handle(
         &mut self,

@@ -3,7 +3,6 @@
 */
 
 // Extrernal crates
-use actix::Arbiter;
 use actix::AsyncContext;
 use actix::{
     prelude::{Addr, Context},
@@ -39,7 +38,7 @@ impl<D: PaymentDriverCron + 'static> Cron<D> {
     fn start_confirmation_job(&mut self, ctx: &mut Context<Self>) {
         let _ = ctx.run_interval(Duration::from_secs(5), |act, _ctx| {
             let driver = act.confirmation_job_handle.clone();
-            Arbiter::spawn(async move {
+            tokio::task::spawn_local(async move {
                 match driver.try_lock() {
                     Some(driver) => {
                         log::trace!("Running payment confirmation job...");
@@ -57,7 +56,7 @@ impl<D: PaymentDriverCron + 'static> Cron<D> {
     fn start_payment_job(&mut self, ctx: &mut Context<Self>) {
         let _ = ctx.run_interval(Duration::from_secs(10), |act, _ctx| {
             let driver = act.payment_job_handle.clone();
-            Arbiter::spawn(async move {
+            tokio::task::spawn_local(async move {
                 match driver.try_lock() {
                     Some(driver) => {
                         log::trace!("Running payment job...");

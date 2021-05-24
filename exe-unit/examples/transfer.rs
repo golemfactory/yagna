@@ -11,6 +11,7 @@ use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use tempdir::TempDir;
+use tokio::io::AsyncWriteExt;
 use ya_agreement_utils::AgreementView;
 use ya_client_model::activity::TransferArgs;
 use ya_exe_unit::agreement::Agreement;
@@ -68,13 +69,11 @@ async fn upload(
     let mut dst_path = path.as_ref().clone();
     dst_path.push(name.as_ref());
 
-    let mut dst = web::block(|| std::fs::File::create(dst_path))
-        .await
-        .unwrap();
+    let mut dst = tokio::fs::File::create(dst_path).await.unwrap();
 
     while let Some(chunk) = payload.next().await {
         let data = chunk.unwrap();
-        dst = web::block(move || dst.write_all(&data).map(|_| dst)).await?;
+        dst.write_all(&data).await?;
     }
 
     Ok(HttpResponse::Ok().finish())
@@ -186,7 +185,7 @@ async fn main() -> anyhow::Result<()> {
 
     let path = temp_dir.to_path_buf();
     std::thread::spawn(move || {
-        let sys = System::new("http");
+        let sys = System::new();
         start_http(path).expect("unable to start http servers");
         sys.run().expect("sys.run");
     });

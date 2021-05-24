@@ -91,8 +91,8 @@ async fn main() -> anyhow::Result<()> {
                 }
                 ClientCommand::Request { key } => {
                     let mut resp = Client::default()
-                        .get(rest_api_url().into_string())
-                        .header(header::AUTHORIZATION, key)
+                        .get(rest_api_url().to_string())
+                        .insert_header((header::AUTHORIZATION, format!("Bearer {}", key)))
                         .send()
                         .map_err(map_err)
                         .await?;

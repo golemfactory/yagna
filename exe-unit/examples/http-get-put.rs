@@ -1,10 +1,10 @@
 use actix_web::{middleware, web, App, HttpResponse, HttpServer};
 use futures::prelude::*;
 use std::env;
-use std::io::Write;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use structopt::StructOpt;
+use tokio::io::AsyncWriteExt;
 
 #[derive(StructOpt, Debug)]
 pub struct Cli {
@@ -25,13 +25,10 @@ async fn upload(
     let mut dst_path = path.as_ref().clone();
     dst_path.push(name.as_ref());
 
-    let mut dst = web::block(|| std::fs::File::create(dst_path))
-        .await
-        .unwrap();
-
+    let mut dst = tokio::fs::File::create(dst_path).await?;
     while let Some(chunk) = payload.next().await {
         let data = chunk.unwrap();
-        dst = web::block(move || dst.write_all(&data).map(|_| dst)).await?;
+        dst.write_all(&data).await?;
     }
 
     Ok(HttpResponse::Ok().finish())

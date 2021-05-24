@@ -322,7 +322,7 @@ async fn agreement_expired_before_confirmation() {
         .unwrap();
 
     // try to wait a bit, because CI on Windows is failing here...
-    tokio::time::delay_for(Duration::milliseconds(50).to_std().unwrap()).await;
+    tokio::time::sleep(Duration::milliseconds(50).to_std().unwrap()).await;
 
     // than: a try to confirm agreement...
     let result = req_engine
@@ -376,7 +376,7 @@ async fn agreement_expired_before_approval() {
         .await
         .unwrap();
 
-    tokio::time::delay_for(Duration::milliseconds(50).to_std().unwrap()).await;
+    tokio::time::sleep(Duration::milliseconds(50).to_std().unwrap()).await;
 
     // waiting for approval results with Expired error
     // bc Provider does not approve the Agreement

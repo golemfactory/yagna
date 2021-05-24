@@ -290,7 +290,7 @@ mod test {
         }
 
         let interval = (now + Duration::milliseconds(1200)) - Utc::now();
-        tokio::time::delay_for(interval.to_std().unwrap()).await;
+        tokio::time::sleep(interval.to_std().unwrap()).await;
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
         assert_eq!(deadlined.len(), 2);
@@ -298,7 +298,7 @@ mod test {
         assert_eq!(deadlined[1].id, 2.to_string());
 
         let interval = (now + Duration::milliseconds(2600)) - Utc::now();
-        tokio::time::delay_for(interval.to_std().unwrap()).await;
+        tokio::time::sleep(interval.to_std().unwrap()).await;
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
         assert_eq!(deadlined.len(), 3);
@@ -318,7 +318,7 @@ mod test {
             .unwrap();
 
         let interval = (now + Duration::milliseconds(3200)) - Utc::now();
-        tokio::time::delay_for(interval.to_std().unwrap()).await;
+        tokio::time::sleep(interval.to_std().unwrap()).await;
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
         assert_eq!(deadlined.len(), 1);
@@ -354,7 +354,7 @@ mod test {
             .unwrap();
 
         let interval = (now + Duration::milliseconds(300)) - Utc::now();
-        tokio::time::delay_for(interval.to_std().unwrap()).await;
+        tokio::time::sleep(interval.to_std().unwrap()).await;
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
         assert_eq!(deadlined.len(), 6);
@@ -385,7 +385,7 @@ mod test {
         }
 
         let interval = (now + Duration::milliseconds(100)) - Utc::now();
-        tokio::time::delay_for(interval.to_std().unwrap()).await;
+        tokio::time::sleep(interval.to_std().unwrap()).await;
 
         // Insert deadline before all other deadlines.
         checker
@@ -398,7 +398,7 @@ mod test {
             .unwrap();
 
         let interval = (now + Duration::milliseconds(900)) - Utc::now();
-        tokio::time::delay_for(interval.to_std().unwrap()).await;
+        tokio::time::sleep(interval.to_std().unwrap()).await;
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
         assert_eq!(deadlined.len(), 1);
@@ -415,7 +415,7 @@ mod test {
             .unwrap();
 
         let interval = (now + Duration::milliseconds(2700)) - Utc::now();
-        tokio::time::delay_for(interval.to_std().unwrap()).await;
+        tokio::time::sleep(interval.to_std().unwrap()).await;
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
         assert_eq!(deadlined.len(), 4);
@@ -446,7 +446,7 @@ mod test {
         }
 
         let interval = (now + Duration::milliseconds(500)) - Utc::now();
-        tokio::time::delay_for(interval.to_std().unwrap()).await;
+        tokio::time::sleep(interval.to_std().unwrap()).await;
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
         assert_eq!(deadlined.len(), 5);
@@ -476,7 +476,7 @@ mod test {
         }
 
         let interval = (now + Duration::milliseconds(100)) - Utc::now();
-        tokio::time::delay_for(interval.to_std().unwrap()).await;
+        tokio::time::sleep(interval.to_std().unwrap()).await;
 
         checker
             .send(StopTracking { id: 2.to_string() })
@@ -488,7 +488,7 @@ mod test {
             .unwrap();
 
         let interval = (now + Duration::milliseconds(3900)) - Utc::now();
-        tokio::time::delay_for(interval.to_std().unwrap()).await;
+        tokio::time::sleep(interval.to_std().unwrap()).await;
 
         let deadlined = receiver.send(Collect {}).await.unwrap();
 

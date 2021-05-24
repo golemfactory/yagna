@@ -10,7 +10,7 @@ default = []
 [dependencies]
 async-trait = "0.1"
 anyhow = "1.0"
-awc = { version = "2.0", features = ["openssl"] }
+awc = { version = "=3.0.0-beta.4", features = ["openssl"] }
 bigdecimal = { version = "0.2" }
 chrono = { version = "0.4", features = ["serde"] }
 futures3 = { version = "0.3", features = ["compat"], package = "futures" }
@@ -23,7 +23,7 @@ num-bigint = { version = "0.3", features = ["serde"] }
 serde = "1.0"
 serde_json = "^1.0"
 tiny-keccak = "1.4.2"
-tokio = { version = "0.2", features = ["full"] }
+tokio = { version = "1.6", features = ["full"] }
 uuid = { version = "0.8", features = ["v4"] }
 zksync = { git = "https://github.com/matter-labs/zksync", rev = "c9858084e20d722cbec9792539a6f55117caeb75"}
 zksync_eth_signer = { git = "https://github.com/matter-labs/zksync", rev = "c9858084e20d722cbec9792539a6f55117caeb75"}

@@ -61,7 +61,7 @@ pub enum Error {
     #[error("RPC error: {0}")]
     Rpc(#[from] RpcMessageError),
     #[error("Timeout")]
-    Timeout(#[from] tokio::time::Elapsed),
+    Timeout(#[from] tokio::time::error::Elapsed),
 }
 
 impl From<ya_core_model::activity::RpcMessageError> for Error {

@@ -436,11 +436,8 @@ impl MarketsNetwork {
     pub async fn get_rest_app(
         &self,
         node_name: &str,
-    ) -> impl ActixService<
-        Request = Request,
-        Response = ServiceResponse<Body>,
-        Error = actix_http::error::Error,
-    > {
+    ) -> impl ActixService<Request, Response = ServiceResponse<Body>, Error = actix_http::error::Error>
+    {
         let market = self.get_market(node_name);
         let identity = self.get_default_id(node_name);
 
@@ -698,7 +695,7 @@ where
                 if mkt.get_offer(&subscription).await.is_err() {
                     // Every 150ms we should get at least one broadcast from each Node.
                     // After a few tries all nodes should have the same knowledge about Offers.
-                    tokio::time::delay_for(Duration::from_millis(250)).await;
+                    tokio::time::sleep(Duration::from_millis(250)).await;
                     continue 'retry;
                 }
             }
@@ -730,7 +727,7 @@ where
                     Ok(_) => {
                         // Every 150ms we should get at least one broadcast from each Node.
                         // After a few tries all nodes should have the same knowledge about Offers.
-                        tokio::time::delay_for(Duration::from_millis(250)).await;
+                        tokio::time::sleep(Duration::from_millis(250)).await;
                         continue 'retry;
                     }
                 }

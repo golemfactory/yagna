@@ -1,4 +1,3 @@
-use actix::Arbiter;
 use anyhow::Result;
 use futures::{SinkExt, StreamExt};
 use rand::distributions::Alphanumeric;
@@ -8,7 +7,7 @@ use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::time::Duration;
 use structopt::StructOpt;
 use tokio::io::AsyncWriteExt;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 use tokio_util::codec::{FramedRead, FramedWrite};
 use ya_runtime_api::deploy::{ContainerVolume, DeployResult, StartMode};
 use ya_runtime_api::server::proto::{request, response, Request, Response};
@@ -51,6 +50,7 @@ struct CmdArgs {
 fn rand_name() -> String {
     rand::thread_rng()
         .sample_iter(&Alphanumeric)
+        .map(char::from)
         .take(30)
         .collect()
 }
@@ -110,7 +110,7 @@ async fn start() -> Result<()> {
             }),
             request::Command::Run(run) => {
                 let pid = SEQ.fetch_add(1, Relaxed);
-                Arbiter::spawn(mock_process(pid, id, run));
+                tokio::task::spawn_local(mock_process(pid, id, run));
                 response::Command::Run(response::RunProcess { pid })
             }
             request::Command::Kill(_) => {
@@ -141,7 +141,7 @@ async fn mock_process(pid: u64, id: u64, run: request::RunProcess) {
     };
 
     write_status(id, status).await;
-    delay_for(Duration::from_secs(1)).await;
+    sleep(Duration::from_secs(1)).await;
 
     let status = response::ProcessStatus {
         pid,

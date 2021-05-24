@@ -141,7 +141,7 @@ impl TaskState {
         self.state = Transition(self.state.0.clone(), Some(new_state.clone()));
 
         self.changed_sender
-            .broadcast(StateChange::TransitionStarted(self.state.clone()))
+            .send(StateChange::TransitionStarted(self.state.clone()))
             .map_err(|_| StateError::FailedNotify {
                 agreement_id: self.agreement_id.clone(),
                 new_state: self.state.clone(),
@@ -154,7 +154,7 @@ impl TaskState {
             self.state = Transition(new_state.clone(), None);
 
             self.changed_sender
-                .broadcast(StateChange::TransitionFinished(new_state))
+                .send(StateChange::TransitionFinished(new_state))
                 .map_err(|_| StateError::FailedNotify {
                     agreement_id: self.agreement_id.clone(),
                     new_state: self.state.clone(),
@@ -278,7 +278,13 @@ impl TasksStates {
 impl StateWaiter {
     /// Returns final state of Agreement.
     pub async fn transition_finished(&mut self) -> anyhow::Result<AgreementState> {
-        while let Some(change) = self.changed_receiver.recv().await {
+        while let Some(change) = self
+            .changed_receiver
+            .changed()
+            .await
+            .map(|_| self.changed_receiver.borrow().clone())
+            .ok()
+        {
             match change {
                 StateChange::TransitionFinished(state) => return Ok(state),
                 _ => (),

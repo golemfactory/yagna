@@ -1,4 +1,3 @@
-use actix_rt::Arbiter;
 use anyhow::Result;
 use env_logger::{Builder, Env, Target};
 use gftp::rpc::{RpcBody, RpcId, RpcMessage, RpcRequest, RpcResult, RpcStatusResult};
@@ -134,12 +133,14 @@ async fn server_loop() {
                     continue;
                 }
                 match msg.body {
-                    RpcBody::Request { request } => Arbiter::spawn(async move {
-                        if let ExecMode::Shutdown = execute(id, request, verbose).await {
-                            tokio::time::delay_for(Duration::from_secs(1)).await;
-                            std::process::exit(0);
-                        }
-                    }),
+                    RpcBody::Request { request } => {
+                        tokio::task::spawn_local(async move {
+                            if let ExecMode::Shutdown = execute(id, request, verbose).await {
+                                tokio::time::sleep(Duration::from_secs(1)).await;
+                                std::process::exit(0);
+                            }
+                        });
+                    }
                     _ => RpcMessage::request_error(id.as_ref()).print(verbose),
                 }
             }

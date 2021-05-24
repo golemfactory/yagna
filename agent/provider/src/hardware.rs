@@ -390,7 +390,7 @@ impl Manager {
                 let result = { state.lock().unwrap().update(profiles) };
                 match result {
                     Ok(val) => match val {
-                        true => tx.broadcast(Event::HardwareChanged).unwrap_or_default(),
+                        true => tx.send(Event::HardwareChanged).unwrap_or_default(),
                         false => log::info!("Hardware configuration unchanged"),
                     },
                     Err(err) => log::warn!("Error updating hardware configuration: {:?}", err),

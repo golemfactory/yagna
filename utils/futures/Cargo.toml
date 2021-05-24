@@ -7,5 +7,5 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = "0.2"
+tokio = { version = "1.6", features = ["time"] }
 futures3 = { version = "0.3", features = ["compat"], package = "futures" }

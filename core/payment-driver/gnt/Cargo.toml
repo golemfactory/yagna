@@ -12,20 +12,20 @@ ya-service-api-interfaces = "0.1"
 ya-service-bus = "0.4"
 ya-utils-networking = "0.1"
 
-actix = { version = "0.9", default-features = false }
-actix-connect="2.0"
-actix-http="2.2"
-actix-rt = "1.1"
+actix = { version = "0.11", default-features = false }
+actix-connect = "2.0"
+actix-http = "=3.0.0-beta.5"
+actix-rt = { version = "2.2", features = ["macros"] }
 anyhow = "1.0"
-awc = "2.0"
+awc = "=3.0.0-beta.4"
 bigdecimal = "0.2"
 bitflags = "1.2"
 chrono = { version = "0.4", features = ["serde"] }
 diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
 diesel_migrations = "1.4"
-ethereum-tx-sign = "3.0"
-ethereum-types = "0.9"
-ethabi = "12.0"
+ethereum-tx-sign = "3.1"
+ethereum-types = "0.11"
+ethabi = "14.0"
 futures3 = { version = "0.3", features = ["compat"], package = "futures" }
 hex = "0.4"
 lazy_static = "1.4"
@@ -35,18 +35,18 @@ num-derive = "0.3"
 num-traits = "0.2"
 maplit = "1.0"
 r2d2 = "0.8"
-rlp = "0.4"
+rlp = "0.5"
 secp256k1 = "0.19"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha3 = "0.8"
 thiserror = "1.0"
 tiny-keccak = { version = "2.0", features = ["keccak"] }
-tokio = { version = "0.2", features = ["macros"] }
+tokio = { version = "1.6", features = ["macros"] }
 uint = "0.7"
 ureq = { version = "0.11", features = ["charset"] }
 uuid = { version = "0.8", features = ["v4"] }
-web3 = "0.13"
+web3 = { version = "0.16", features = ["tokio"] }
 
 [dev-dependencies]
 dotenv = "0.15"

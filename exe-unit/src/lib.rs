@@ -52,10 +52,12 @@ pub struct ExeUnit<R: Runtime> {
     metrics: Addr<MetricsService>,
     transfers: Addr<TransferService>,
     services: Vec<Box<dyn ServiceControl>>,
+    shutdown_tx: Option<oneshot::Sender<Result<()>>>,
 }
 
 impl<R: Runtime> ExeUnit<R> {
     pub fn new(
+        shutdown_tx: oneshot::Sender<Result<()>>,
         ctx: ExeUnitContext,
         metrics: Addr<MetricsService>,
         transfers: Addr<TransferService>,
@@ -73,6 +75,7 @@ impl<R: Runtime> ExeUnit<R> {
                 Box::new(ServiceAddr::new(transfers)),
                 Box::new(ServiceAddr::new(runtime)),
             ],
+            shutdown_tx: Some(shutdown_tx),
         }
     }
 
@@ -365,6 +368,12 @@ impl<R: Runtime> Actor for ExeUnit<R> {
             return Running::Stop;
         }
         Running::Continue
+    }
+
+    fn stopped(&mut self, _: &mut Self::Context) {
+        if let Some(tx) = self.shutdown_tx.take() {
+            let _ = tx.send(Ok(()));
+        }
     }
 }
 

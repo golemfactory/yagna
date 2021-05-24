@@ -59,7 +59,7 @@ async fn wait_for_socket(addr: std::net::SocketAddr) -> Result<()> {
                 io::ErrorKind::ConnectionRefused => {
                     log::debug!("Waiting for socket ...");
                     if timeout_remaining > 0 {
-                        time::delay_for(time::Duration::from_secs(1)).await;
+                        time::sleep(time::Duration::from_secs(1)).await;
                         timeout_remaining -= 1;
                     } else {
                         bail!("Could not connect to the yagna socket");

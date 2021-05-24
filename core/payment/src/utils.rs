@@ -162,7 +162,7 @@ pub async fn listen_for_events<T: EventGetter>(
     let timeout = Duration::from_secs_f64(timeout_secs);
     tokio::time::timeout(timeout, async move {
         loop {
-            tokio::time::delay_for(Duration::from_secs(1)).await;
+            tokio::time::sleep(Duration::from_secs(1)).await;
             let events = getter.get_events().await?;
             if events.len() > 0 {
                 break Ok(events);

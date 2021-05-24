@@ -4,7 +4,7 @@ use diesel::prelude::*;
 use diesel::QueryableByName;
 use serde_json;
 use std::{convert::TryInto, time::Duration};
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 use ya_client_model::activity::activity_state::{ActivityState, StatePair};
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
@@ -130,7 +130,7 @@ impl<'c> ActivityStateDao<'c> {
                 log::debug!("got state: {:?} != {:?}. Waiting...", s.state, states);
             }
 
-            delay_for(duration).await;
+            sleep(duration).await;
         }
     }
 
