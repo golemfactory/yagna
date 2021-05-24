@@ -1,8 +1,12 @@
 [package]
 name = "ya-runtime-api"
+description = "Communication API between the Runtime and ExeUnit Supervisor. Provides server implementation for Runtime and client implementation for Supervisor."
 version = "0.2.1"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
+license = "GPL-3.0"
+homepage = "https://github.com/golemfactory/yagna/tree/master/exe-unit/runtime-api"
+repository = "https://github.com/golemfactory/yagna"
 
 [[example]]
 name = "runtime-server-mock"
