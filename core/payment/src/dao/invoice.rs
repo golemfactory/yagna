@@ -1,6 +1,6 @@
 use crate::dao::{agreement, invoice_event};
 use crate::error::{DbError, DbResult};
-use crate::models::invoice::{InvoiceXActivity, ReadObj, WriteObj};
+use crate::models::invoice::{equivalent, InvoiceXActivity, ReadObj, WriteObj};
 use crate::schema::pay_agreement::dsl as agreement_dsl;
 use crate::schema::pay_invoice::dsl;
 use crate::schema::pay_invoice_x_activity::dsl as activity_dsl;
@@ -77,6 +77,20 @@ impl<'c> InvoiceDao<'c> {
         let owner_id = invoice.owner_id.clone();
         let role = invoice.role.clone();
         do_with_transaction(self.pool, move |conn| {
+            if let Some(read_invoice) = query!()
+                .filter(dsl::id.eq(&invoice_id))
+                .filter(dsl::owner_id.eq(owner_id))
+                .first(conn)
+                .optional()?
+            {
+                return match equivalent(&read_invoice, &invoice) {
+                    true => Ok(()),
+                    false => Err(DbError::Integrity(format!(
+                        "Invoice with the same id and different content already exists."
+                    ))),
+                };
+            };
+
             agreement::set_amount_due(&invoice.agreement_id, &owner_id, &invoice.amount, conn)?;
 
             diesel::insert_into(dsl::pay_invoice)

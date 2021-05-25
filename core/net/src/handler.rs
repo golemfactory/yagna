@@ -2,9 +2,10 @@ use crate::SUBSCRIPTIONS;
 use actix_rt::Arbiter;
 use futures::channel::oneshot;
 use futures::{future, Future, FutureExt, StreamExt, TryFutureExt};
+use metrics::{counter, timing};
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use ya_core_model::net;
 use ya_core_model::net::local::BindBroadcastError;
 use ya_service_bus::connection::CallRequestHandler;
@@ -18,6 +19,11 @@ pub struct CentralBusHandler<C, E> {
 
 impl<C, E> CentralBusHandler<C, E> {
     pub fn new(call_handler: C, event_handler: E) -> (Self, oneshot::Receiver<()>) {
+        // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
+        // until first change to value will be made.
+        counter!("net.connect", 0);
+        counter!("net.disconnect", 0);
+
         let (tx, rx) = oneshot::channel();
         (
             Self {
@@ -88,11 +94,19 @@ async fn rebind<B, U, Fb, Fu, Fr, E>(
     loop {
         match bind().await {
             Ok(dc_rx) => {
+                if let Some(start) = reconnect.borrow_mut().last_disconnect {
+                    let end = Instant::now();
+                    timing!("net.reconnect.time", start, end);
+                }
                 reconnect.replace(Default::default());
                 resubscribe().await;
+                counter!("net.connect", 1);
 
+                let reconnect_clone = reconnect.clone();
                 Arbiter::spawn(async move {
                     if let Ok(_) = dc_rx.await {
+                        counter!("net.disconnect", 1);
+                        reconnect_clone.borrow_mut().last_disconnect = Some(Instant::now());
                         log::warn!("Handlers disconnected");
                         (*unbind_clone.borrow_mut())().await;
                         let _ = tx.send(());
@@ -131,6 +145,7 @@ pub struct ReconnectContext {
     pub current: f32, // s
     pub max: f32,     // s
     pub factor: f32,
+    pub last_disconnect: Option<Instant>,
 }
 
 impl Iterator for ReconnectContext {
@@ -148,6 +163,7 @@ impl Default for ReconnectContext {
             current: 1.,
             max: 1800.,
             factor: 2.,
+            last_disconnect: None,
         }
     }
 }

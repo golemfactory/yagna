@@ -112,6 +112,10 @@ impl<R: Runtime> Handler<Initialize> for ExeUnit<R> {
                     use ya_core_model::net::RemoteEndpoint;
                     use ya_core_model::sgx::VerifyAttestationEvidence;
 
+                    let task_package = task_package.ok_or_else(||
+                        Error::Other("Agreement has no `task_package` defined which is mandatory in case of SGX ExeUnit".into())
+                    )?;
+
                     let att_dev = std::path::Path::new("/dev/attestation");
                     if !att_dev.exists() {
                         let msg = format!("'{}' does not exist", att_dev.display());
@@ -168,12 +172,12 @@ impl<R: Runtime> Handler<Initialize> for ExeUnit<R> {
             Ok(())
         });
 
-        Box::new(fut)
+        Box::pin(fut)
     }
 
     #[cfg(not(feature = "sgx"))]
     fn handle(&mut self, _: Initialize, _: &mut Context<Self>) -> Self::Result {
-        Box::new(futures::future::ok(()).into_actor(self))
+        Box::pin(futures::future::ok(()).into_actor(self))
     }
 }
 
