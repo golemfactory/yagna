@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 import pytest
 
@@ -10,7 +10,7 @@ from goth.address import (
     PROXY_HOST,
     YAGNA_REST_URL,
 )
-from goth.configuration import load_yaml, Override
+from goth.configuration import load_yaml, Override, Configuration
 from goth.node import node_environment
 from goth.runner import Runner
 from goth.runner.container.payment import PaymentIdPool
@@ -21,48 +21,7 @@ from goth_tests.helpers.activity import run_activity, wasi_exe_script, wasi_task
 from goth_tests.helpers.negotiation import negotiate_agreements, DemandBuilder
 from goth_tests.helpers.payment import pay_all
 
-logger = logging.getLogger(__name__)
-
-
-def _topology(assets_path: Path) -> List[YagnaContainerConfig]:
-    """Define the topology of the test network."""
-
-    payment_id_pool = PaymentIdPool(key_dir=assets_path / "keys")
-
-    # Nodes are configured to communicate via proxy
-    provider_env = node_environment(
-        rest_api_url_base=YAGNA_REST_URL.substitute(host=PROXY_HOST),
-    )
-    provider_env["IDLE_AGREEMENT_TIMEOUT"] = "5s"
-    provider_env["DEBIT_NOTE_ACCEPTANCE_DEADLINE"] = "9s"
-    provider_env["DEBIT_NOTE_INTERVAL"] = "6"
-
-    requestor_env = node_environment(
-        rest_api_url_base=YAGNA_REST_URL.substitute(host=PROXY_HOST),
-    )
-
-    provider_volumes = {
-        assets_path
-        / "provider"
-        / "presets.json": "/root/.local/share/ya-provider/presets.json"
-    }
-
-    return [
-        YagnaContainerConfig(
-            name="requestor",
-            probe_type=RequestorProbe,
-            volumes={assets_path / "requestor": "/asset"},
-            environment=requestor_env,
-            payment_id=payment_id_pool.get_id(),
-        ),
-        YagnaContainerConfig(
-            name="provider_1",
-            probe_type=ProviderProbe,
-            environment=provider_env,
-            volumes=provider_volumes,
-            privileged_mode=True,
-        ),
-    ]
+logger = logging.getLogger("goth.test.breaking-agreement")
 
 
 def build_demand(
@@ -95,14 +54,19 @@ def build_demand(
 
 def _create_runner(
     common_assets: Path, config_overrides: List[Override], log_dir: Path
-) -> Runner:
-    goth_config = load_yaml(common_assets / "goth-config.yml", config_overrides)
+) -> Tuple[Runner, Configuration]:
+    goth_config = load_yaml(
+        common_assets / ".." / "domain" / "ya-provider" / "assets" / "goth-config.yml",
+        config_overrides,
+    )
 
-    return Runner(
+    runner = Runner(
         base_log_dir=log_dir,
         compose_config=goth_config.compose_config,
         web_root_path=common_assets / "web-root",
     )
+
+    return runner, goth_config
 
 
 @pytest.mark.asyncio
@@ -116,9 +80,9 @@ async def test_provider_idle_agreement(
     Provider is expected to break Agreement in time configured by
     variable: IDLE_AGREEMENT_TIMEOUT, if there are no Activities created.
     """
-    runner = _create_runner(common_assets, config_overrides, log_dir)
+    runner, config = _create_runner(common_assets, config_overrides, log_dir)
 
-    async with runner(_topology(common_assets)):
+    async with runner(config.containers):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         providers = runner.get_probes(probe_type=ProviderProbe)
 
@@ -147,9 +111,9 @@ async def test_provider_idle_agreement_after_2_activities(
     This test checks case, when Requestor already computed some Activities,
     but orphaned Agreement at some point.
     """
-    runner = _create_runner(common_assets, config_overrides, log_dir)
+    runner, config = _create_runner(common_assets, config_overrides, log_dir)
 
-    async with runner(_topology(common_assets)):
+    async with runner(config.containers):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         providers = runner.get_probes(probe_type=ProviderProbe)
 
@@ -184,9 +148,9 @@ async def test_provider_debit_notes_accept_timeout(
 
     Requestor is expected to accept DebitNotes in timeout negotiated in Offer.
     """
-    runner = _create_runner(common_assets, config_overrides, log_dir)
+    runner, config = _create_runner(common_assets, config_overrides, log_dir)
 
-    async with runner(_topology(common_assets)):
+    async with runner(config.containers):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         providers = runner.get_probes(probe_type=ProviderProbe)
 
@@ -227,15 +191,14 @@ async def test_provider_timeout_unresponsive_requestor(
     break Agreement. This is separate mechanism from DebitNotes keep alive, because
     here we are unable to send them, so they can't timeout.
     """
-    runner = _create_runner(common_assets, config_overrides, log_dir)
+    runner, config = _create_runner(common_assets, config_overrides, log_dir)
 
     # Stopping container takes a little bit more time, so we must send
     # DebitNote later, otherwise Agreement will be terminated due to
     # not accepting DebitNotes by Requestor.
-    topology = _topology(common_assets)
-    topology[1].environment["DEBIT_NOTE_INTERVAL"] = "15"
+    config.containers[1].environment["DEBIT_NOTE_INTERVAL"] = "15"
 
-    async with runner(topology):
+    async with runner(config.containers):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         providers = runner.get_probes(probe_type=ProviderProbe)
 

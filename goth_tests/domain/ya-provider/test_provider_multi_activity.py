@@ -4,75 +4,39 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 import pytest
 from ya_activity.exceptions import ApiException
 
-from goth.address import (
-    PROXY_HOST,
-    YAGNA_REST_URL,
-)
-from goth.configuration import load_yaml, Override
-from goth.node import node_environment
+from goth.configuration import load_yaml, Override, Configuration
 from goth.runner import Runner
-from goth.runner.container.payment import PaymentIdPool
-from goth.runner.container.yagna import YagnaContainerConfig
 from goth.runner.probe import ProviderProbe, RequestorProbe
 
 from goth_tests.helpers.activity import wasi_exe_script, wasi_task_package
 from goth_tests.helpers.negotiation import negotiate_agreements, DemandBuilder
 from goth_tests.helpers.payment import pay_all
 
-logger = logging.getLogger(__name__)
-
-
-def _topology(assets_path: Path) -> List[YagnaContainerConfig]:
-    """Define the topology of the test network."""
-
-    payment_id_pool = PaymentIdPool(key_dir=assets_path / "keys")
-
-    # Nodes are configured to communicate via proxy
-    provider_env = node_environment(
-        rest_api_url_base=YAGNA_REST_URL.substitute(host=PROXY_HOST),
-    )
-    requestor_env = node_environment(
-        rest_api_url_base=YAGNA_REST_URL.substitute(host=PROXY_HOST),
-    )
-
-    provider_volumes = {
-        assets_path
-        / "provider"
-        / "presets.json": "/root/.local/share/ya-provider/presets.json"
-    }
-
-    return [
-        YagnaContainerConfig(
-            name="requestor",
-            probe_type=RequestorProbe,
-            environment=requestor_env,
-            payment_id=payment_id_pool.get_id(),
-        ),
-        YagnaContainerConfig(
-            name="provider_1",
-            probe_type=ProviderProbe,
-            environment=provider_env,
-            volumes=provider_volumes,
-            privileged_mode=True,
-        ),
-    ]
+logger = logging.getLogger("goth.test.multi-activity")
 
 
 def _create_runner(
     common_assets: Path, config_overrides: List[Override], log_dir: Path
-) -> Runner:
+) -> Tuple[Runner, Configuration]:
+    nodes = [
+        {"name": "requestor", "type": "Requestor"},
+        {"name": "provider-1", "type": "VM-Wasm-Provider", "use-proxy": True},
+    ]
+    config_overrides.append(("nodes", nodes))
+
     goth_config = load_yaml(common_assets / "goth-config.yml", config_overrides)
 
-    return Runner(
+    runner = Runner(
         base_log_dir=log_dir,
         compose_config=goth_config.compose_config,
         web_root_path=common_assets / "web-root",
     )
+    return runner, goth_config
 
 
 @pytest.mark.asyncio
@@ -86,9 +50,9 @@ async def test_provider_multi_activity(
     Tests running multiple activities on single Provider.
     In this case Requestor is responsible for terminating Agreement.
     """
-    runner = _create_runner(common_assets, config_overrides, log_dir)
+    runner, config = _create_runner(common_assets, config_overrides, log_dir)
 
-    async with runner(_topology(common_assets)):
+    async with runner(config.containers):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         providers = runner.get_probes(probe_type=ProviderProbe)
 
@@ -149,9 +113,9 @@ async def test_provider_single_activity_at_once(
 
     Provider is expected to reject second activity, if one is already running.
     """
-    runner = _create_runner(common_assets, config_overrides, log_dir)
+    runner, config = _create_runner(common_assets, config_overrides, log_dir)
 
-    async with runner(_topology(common_assets)):
+    async with runner(config.containers):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         providers = runner.get_probes(probe_type=ProviderProbe)
 
