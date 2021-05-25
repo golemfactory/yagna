@@ -167,7 +167,7 @@ where
 // sends Request, recv Response
 pub async fn spawn(
     mut command: process::Command,
-    event_handler: impl RuntimeEvent + Send + 'static,
+    event_handler: impl RuntimeEvent + Send + Sync + 'static,
 ) -> Result<impl RuntimeService + RuntimeStatus + ProcessControl + Clone, anyhow::Error> {
     command.stdin(Stdio::piped()).stdout(Stdio::piped());
     command.kill_on_drop(true);
@@ -185,10 +185,9 @@ pub async fn spawn(
         let mut stdout =
             tokio_util::codec::FramedRead::new(stdout, codec::Codec::<proto::Response>::default());
         let pump = async move {
-            while let Some(it) = stdout.next().await {
-                let it = it.unwrap();
+            while let Some(Ok(it)) = stdout.next().await {
                 if it.event {
-                    handle_event(it, &event_handler)
+                    handle_event(it, &event_handler).await;
                 } else {
                     client.handle_response(it).await;
                 }
@@ -211,16 +210,14 @@ pub async fn spawn(
         });
     }
 
-    fn handle_event(response: proto::Response, event_handler: &impl RuntimeEvent) {
+    async fn handle_event(response: proto::Response, event_handler: &impl RuntimeEvent) {
         use proto::response::Command;
         let command = match response.command {
             Some(c) => c,
             None => return,
         };
         match command {
-            Command::Status(status) => {
-                event_handler.on_process_status(status);
-            }
+            Command::Status(status) => event_handler.on_process_status(status).await,
             cmd => log::warn!("invalid event: {:?}", cmd),
         }
     }

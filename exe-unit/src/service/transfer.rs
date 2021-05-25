@@ -37,7 +37,7 @@ impl AddVolumes {
 }
 
 #[derive(Clone, Debug, Message)]
-#[rtype(result = "Result<PathBuf>")]
+#[rtype(result = "Result<Option<PathBuf>>")]
 pub struct DeployImage;
 
 #[derive(Clone, Debug, Message)]
@@ -156,7 +156,7 @@ pub struct TransferService {
     providers: HashMap<&'static str, Rc<dyn TransferProvider<TransferData, TransferError>>>,
     cache: Cache,
     work_dir: PathBuf,
-    task_package: String,
+    task_package: Option<String>,
     abort_handles: HashSet<Abort>,
 }
 
@@ -257,11 +257,16 @@ macro_rules! actor_try {
 }
 
 impl Handler<DeployImage> for TransferService {
-    type Result = ActorResponse<Self, PathBuf, Error>;
+    type Result = ActorResponse<Self, Option<PathBuf>, Error>;
 
     #[allow(unused_variables)]
     fn handle(&mut self, _: DeployImage, ctx: &mut Self::Context) -> Self::Result {
-        let source_url = actor_try!(TransferUrl::parse_with_hash(&self.task_package, "file"));
+        let image = match self.task_package.as_ref() {
+            Some(image) => image,
+            None => return ActorResponse::reply(Ok(None)),
+        };
+
+        let source_url = actor_try!(TransferUrl::parse_with_hash(image, "file"));
         let cache_name = actor_try!(Cache::name(&source_url));
         let final_path = self.cache.to_final_path(&cache_name);
 
@@ -276,7 +281,6 @@ impl Handler<DeployImage> for TransferService {
         {
             let from_provider = actor_try!(self.provider(&source_url));
             let to_provider: FileTransferProvider = Default::default();
-            let cache_path = self.cache.to_cache_path(&cache_name);
             let temp_path = self.cache.to_temp_path(&cache_name);
             let temp_url = Url::from_file_path(temp_path.to_path_buf()).unwrap();
 
@@ -286,29 +290,32 @@ impl Handler<DeployImage> for TransferService {
             let fut = async move {
                 let final_path = final_path.to_path_buf();
                 let temp_path = temp_path.to_path_buf();
-                let cache_path = cache_path.to_path_buf();
 
                 let stream_fn = || Self::source(from_provider.clone(), &source_url, &args);
                 let sink_fn = || to_provider.destination(&temp_url, &args);
 
-                if cache_path.exists() {
-                    log::info!("Deploying cached image: {:?}", cache_path);
-                    std::fs::copy(cache_path, &final_path)?;
-                    return Ok(final_path);
+                if final_path.exists() {
+                    log::info!("Deploying cached image: {:?}", final_path);
+                    return Ok(Some(final_path));
                 }
 
                 {
                     let _guard = AbortHandleGuard::register(address, abort).await?;
-                    Abortable::new(retry_transfer(stream_fn, sink_fn, Retry::default()), reg)
+                    let retry = retry_transfer(stream_fn, sink_fn, Retry::default());
+                    Ok(Abortable::new(retry, reg)
                         .await
-                        .map_err(TransferError::from)??;
+                        .map_err(TransferError::from)??)
                 }
+                .map_err(|e: Error| {
+                    log::warn!("Removing temporary download file: {}", temp_path.display());
+                    let _ = std::fs::remove_file(&temp_path);
+                    e
+                })?;
 
-                std::fs::rename(temp_path, &cache_path)?;
-                std::fs::copy(cache_path, &final_path)?;
+                std::fs::rename(temp_path, &final_path)?;
 
                 log::info!("Deployment from {:?} finished", source_url.url);
-                Ok(final_path)
+                Ok(Some(final_path))
             };
             return ActorResponse::r#async(fut.into_actor(self));
         }
@@ -325,7 +332,7 @@ impl Handler<DeployImage> for TransferService {
                     .await
                     .map_err(|e| Error::Other(e.to_string()))?;
                 std::fs::write(&final_path, bytes)?;
-                Ok(final_path)
+                Ok(Some(final_path))
             };
             return ActorResponse::r#async(fut.into_actor(self));
         }
@@ -461,18 +468,12 @@ impl Cache {
     #[inline(always)]
     #[cfg(not(feature = "sgx"))]
     fn to_temp_path(&self, path: &CachePath) -> ProjectedPath {
-        ProjectedPath::local(self.tmp_dir.clone(), path.temp_path_buf())
-    }
-
-    #[inline(always)]
-    #[cfg(not(feature = "sgx"))]
-    fn to_cache_path(&self, path: &CachePath) -> ProjectedPath {
-        ProjectedPath::local(self.tmp_dir.clone(), path.cache_path_buf())
+        ProjectedPath::local(self.tmp_dir.clone(), path.temp_path())
     }
 
     #[inline(always)]
     fn to_final_path(&self, path: &CachePath) -> ProjectedPath {
-        ProjectedPath::local(self.dir.clone(), path.final_path_buf())
+        ProjectedPath::local(self.dir.clone(), path.final_path())
     }
 }
 

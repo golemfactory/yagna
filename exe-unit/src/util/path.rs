@@ -69,7 +69,7 @@ impl ProjectedPath {
 
 impl From<CachePath> for PathBuf {
     fn from(cache_path: CachePath) -> Self {
-        cache_path.final_path_buf()
+        cache_path.final_path()
     }
 }
 
@@ -84,20 +84,14 @@ impl CachePath {
     pub fn new(path: PathBuf, hash: Vec<u8>, nonce: String) -> Self {
         CachePath { path, hash, nonce }
     }
-
     /// Creates the long version of path, including hash and the "random" token.
-    pub fn temp_path_buf(&self) -> PathBuf {
+    pub fn temp_path(&self) -> PathBuf {
         self.to_path_buf(true, true)
     }
 
-    /// Creates the long version of path, including hash and the "random" token.
-    pub fn cache_path_buf(&self) -> PathBuf {
+    /// Creates a shorter version of path, including hash and excluding the "random" token.
+    pub fn final_path(&self) -> PathBuf {
         self.to_path_buf(true, false)
-    }
-
-    /// Creates a shorter version of path, excluding the "random" token.
-    pub fn final_path_buf(&self) -> PathBuf {
-        self.to_path_buf(false, false)
     }
 
     fn to_path_buf(&self, with_hash: bool, with_nonce: bool) -> PathBuf {

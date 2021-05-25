@@ -5,7 +5,6 @@ use anyhow::{anyhow, bail, Context, Result};
 use regex::Regex;
 use std::collections::HashMap;
 use std::{fs, path::PathBuf, sync::Arc, time::Duration};
-use structopt::StructOpt;
 
 use ya_client::model::market::RequestorEvent;
 use ya_persistence::executor::DbExecutor;
@@ -21,7 +20,7 @@ use super::bcast::BCastService;
 use super::mock_net::{gsb_prefixes, MockNet};
 use super::negotiation::{provider, requestor};
 use super::{store::SubscriptionStore, Matcher};
-use crate::config::{Config, DiscoveryConfig, EventsConfig, SubscriptionConfig};
+use crate::config::{Config, DiscoveryConfig};
 use crate::db::dao::ProposalDao;
 use crate::db::model::{Demand, Offer, Proposal, ProposalId, SubscriptionId};
 use crate::identity::IdentityApi;
@@ -679,11 +678,9 @@ pub fn create_market_config_for_test() -> Config {
         unsub_broadcast_delay: Duration::from_millis(200),
     };
 
-    Config {
-        discovery,
-        subscription: SubscriptionConfig::from_iter(&[""]),
-        events: EventsConfig::from_iter(&[""]),
-    }
+    let mut cfg = Config::from_env().unwrap();
+    cfg.discovery = discovery;
+    cfg
 }
 
 /// Assure that all given nodes have the same knowledge about given Subscriptions (Offers).
