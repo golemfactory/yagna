@@ -1,16 +1,20 @@
-use crate::events::Event;
-use crate::startup_config::{FileMonitor, ProviderConfig};
-use serde::{Deserialize, Serialize};
+use std::{io, ptr};
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::io;
+use std::ffi::OsStr;
 use std::ops::{Add, Not, Sub};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+
+use serde::{Deserialize, Serialize};
 use structopt::{clap, StructOpt};
 use tokio::sync::watch;
+
 use ya_agreement_utils::{CpuInfo, InfNodeInfo};
 use ya_utils_path::SwapSave;
+
+use crate::events::Event;
+use crate::startup_config::{FileMonitor, ProviderConfig};
 
 pub const DEFAULT_PROFILE_NAME: &str = "default";
 pub const CPU_THREADS_RESERVED: i32 = 1;
@@ -442,30 +446,47 @@ impl Manager {
     }
 }
 
+#[cfg(windows)]
+fn to_wstring(value: impl AsRef<OsStr>) -> Vec<u16> {
+    use std::os::windows::ffi::OsStrExt;
+
+    value.as_ref()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect()
+}
+
 /// Return free space on a partition with a given path
 fn partition_space<P: AsRef<Path>>(path: P) -> Result<u64, Error> {
     let path = path.as_ref();
     #[cfg(windows)]
     {
-        use std::os::windows::ffi::OsStrExt;
         use winapi::um::fileapi::GetDiskFreeSpaceExW;
+        use winapi::um::errhandlingapi::GetLastError;
         use winapi::um::winnt::PULARGE_INTEGER;
 
-        let wide: Vec<u16> = path.as_os_str().encode_wide().collect();
+        let path = if path.is_file() {
+            path.parent().unwrap()
+        }
+        else {
+            path
+        };
+
+        let wide: Vec<u16> = to_wstring(path);
         let mut free_bytes_available = 0u64;
-        let mut total_number_of_bytes = 0u64;
-        let mut total_number_of_free_bytes = 0u64;
 
         if unsafe {
             GetDiskFreeSpaceExW(
                 wide.as_ptr(),
                 &mut free_bytes_available as *mut u64 as PULARGE_INTEGER,
-                &mut total_number_of_bytes as *mut u64 as PULARGE_INTEGER,
-                &mut total_number_of_free_bytes as *mut u64 as PULARGE_INTEGER,
+                ptr::null_mut(),
+                ptr::null_mut(),
             )
         } == 0
         {
-            log::error!("Unable to read free partition space for path '{:?}'", path);
+            let err = unsafe { GetLastError() };
+            log::error!("Unable to read free partition space for path '{:?}", path);
+            return Err(Error::Io(std::io::Error::from_raw_os_error(err as i32)))
         };
 
         Ok(free_bytes_available)
