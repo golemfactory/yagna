@@ -16,7 +16,7 @@ use ya_client::market::MarketProviderApi;
 use ya_client_model::market::agreement_event::AgreementEventType;
 use ya_client_model::market::proposal::State;
 use ya_client_model::market::{
-    agreement_event::AgreementTerminator, Agreement, NewOffer, Proposal, ProviderEvent, Reason,
+    agreement_event::AgreementTerminator, Agreement, NewOffer, Proposal, ProviderEvent, Reason, PropertyQuery
 };
 use ya_client_model::NodeId;
 use ya_std_utils::LogErr;
@@ -241,11 +241,45 @@ async fn dispatch_event(
         ProviderEvent::ProposalEvent { proposal, .. } => {
             process_proposal(ctx, subscription, proposal).await
         }
+        ProviderEvent::ProposalRejectedEvent { proposal_id, reason, .. } => {
+            process_proposal_rejected(ctx, subscription, proposal_id, reason).await
+        }
         ProviderEvent::AgreementEvent { agreement, .. } => {
             process_agreement(ctx, subscription, agreement).await
         }
-        _ => unimplemented!(),
+        ProviderEvent::PropertyQueryEvent { property_query, .. } => {
+            process_property_query(ctx, subscription, property_query).await
+        }
+
     }
+}
+async fn process_proposal_rejected(
+    _ctx: AsyncCtx,
+    subscription: Subscription,
+    proposal_id: &String,
+    reason: &Option<Reason>
+) -> Result<()> {
+    log::warn!(
+        "Got proposal rejected which is not yet implemented [{}], reason [{:?}] for subscription [{}].",
+        proposal_id,
+        reason,
+        subscription.preset.name,
+    );
+    Ok(())
+}
+
+async fn process_property_query(
+    _ctx: AsyncCtx,
+    subscription: Subscription,
+    property_query: &PropertyQuery,
+) -> Result<()> {
+    log::warn!(
+        "Got property query message [{:?}] for subscription [{}].",
+        property_query,
+        subscription.preset.name,
+    );
+    
+    Ok(())
 }
 
 async fn process_proposal(
