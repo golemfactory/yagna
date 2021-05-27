@@ -35,6 +35,26 @@ async fn test_agreement() {
     let agreement_dao = db.as_dao::<AgreementDao>();
     agreement_dao.save(valid_agreement.clone()).await.unwrap();
     agreement_dao.save(expired_agreement.clone()).await.unwrap();
+
+    // create agreement event in 3 steps
+    agreement_dao
+        .confirm(&expired_agreement.id, &None, &"signature,".to_string())
+        .await
+        .unwrap();
+    agreement_dao
+        .approving(
+            &expired_agreement.id,
+            &None,
+            &"signature,".to_string(),
+            &Utc::now().naive_utc(),
+        )
+        .await
+        .unwrap();
+    agreement_dao
+        .approve(&expired_agreement.id, &"signature,".to_string())
+        .await
+        .unwrap();
+
     clean(db.clone(), &db_config()).await;
     assert_eq!(
         <PoolType as TestingDao<Agreement>>::exists(&db.clone().pool, valid_agreement.id).await,
