@@ -1,3 +1,14 @@
+use std::collections::{HashMap, HashSet};
+use std::convert::TryFrom;
+use std::io;
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use actix::prelude::*;
+use futures::future::Abortable;
+use url::Url;
+
 use crate::deploy::ContainerVolume;
 use crate::error::Error;
 use crate::message::Shutdown;
@@ -5,15 +16,7 @@ use crate::util::path::{CachePath, ProjectedPath};
 use crate::util::url::TransferUrl;
 use crate::util::Abort;
 use crate::{ExeUnitContext, Result};
-use actix::prelude::*;
-use futures::future::Abortable;
-use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
-use std::io;
-use std::path::PathBuf;
-use std::rc::Rc;
-use std::time::{SystemTime, UNIX_EPOCH};
-use url::Url;
+
 use ya_client_model::activity::TransferArgs;
 use ya_transfer::error::Error as TransferError;
 use ya_transfer::*;
@@ -312,7 +315,7 @@ impl Handler<DeployImage> for TransferService {
                     e
                 })?;
 
-                std::fs::rename(temp_path, &final_path)?;
+                move_file(&temp_path, &final_path).await?;
 
                 log::info!("Deployment from {:?} finished", source_url.url);
                 Ok(Some(final_path))
@@ -491,6 +494,39 @@ impl TryFrom<ProjectedPath> for TransferUrl {
             "file",
         )
         .map_err(Error::local)
+    }
+}
+
+#[allow(unused)]
+async fn move_file(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        #[cfg(target_os = "linux")]
+        use std::os::linux::fs::MetadataExt;
+        #[cfg(target_os = "macos")]
+        use std::os::macos::fs::MetadataExt;
+
+        let src = src.as_ref();
+        let dst = dst.as_ref();
+        let dst_parent = dst
+            .parent()
+            .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::NotFound))?;
+
+        let src_meta = src.metadata()?;
+        let dst_parent_meta = dst_parent.metadata()?;
+
+        // rename if both are located on the same device, copy & remove otherwise
+        if src_meta.st_dev() == dst_parent_meta.st_dev() {
+            tokio::fs::rename(src, dst).await
+        } else {
+            tokio::fs::copy(src, dst).await?;
+            tokio::fs::remove_file(src).await
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        tokio::fs::rename(src, dst).await
     }
 }
 
