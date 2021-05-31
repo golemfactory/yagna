@@ -7,14 +7,14 @@ from goth.runner import Runner
 
 
 wasi_task_package: str = (
-        "hash://sha3:d5e31b2eed628572a5898bf8c34447644bfc4b5130cfc1e4f10aeaa1:"
-        "http://yacn2.dev.golem.network:8000/rust-wasi-tutorial.zip"
-    )
+    "hash://sha3:d5e31b2eed628572a5898bf8c34447644bfc4b5130cfc1e4f10aeaa1:"
+    "http://yacn2.dev.golem.network:8000/rust-wasi-tutorial.zip"
+)
 
 vm_task_package: str = (
-        "hash:sha3:9a3b5d67b0b27746283cb5f287c13eab1beaa12d92a9f536b747c7ae:"
-        "http://yacn2.dev.golem.network:8000/local-image-c76719083b.gvmi"
-    )
+    "hash:sha3:9a3b5d67b0b27746283cb5f287c13eab1beaa12d92a9f536b747c7ae:"
+    "http://yacn2.dev.golem.network:8000/local-image-c76719083b.gvmi"
+)
 
 
 def vm_exe_script(runner: Runner, output_file: str = "output.png"):
