@@ -671,12 +671,14 @@ pub mod public {
     // *************************** PAYMENT ****************************
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     pub struct SendPayment {
+        #[serde(flatten)] // Flatten is required for backwards compatability with 0.6.x
         pub payment: Payment,
-        pub signature: Vec<u8>,
+        #[serde(default)] // Optional is required for backwards compatability with 0.6.x
+        pub signature: Option<Vec<u8>>,
     }
 
     impl SendPayment {
-        pub fn new(payment: Payment, signature: Vec<u8>) -> Self {
+        pub fn new(payment: Payment, signature: Option<Vec<u8>>) -> Self {
             Self { payment, signature }
         }
     }
