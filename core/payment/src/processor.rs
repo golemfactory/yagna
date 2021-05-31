@@ -415,7 +415,7 @@ impl PaymentProcessor {
             .await??;
 
         counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "platform" => payment_platform);
-        let msg = SendPayment::new(payment, signature);
+        let msg = SendPayment::new(payment, Some(signature));
 
         // Spawning to avoid deadlock in a case that payee is the same node as payer
         Arbiter::spawn(
@@ -463,7 +463,7 @@ impl PaymentProcessor {
     pub async fn verify_payment(
         &self,
         payment: Payment,
-        signature: Vec<u8>,
+        signature: Option<Vec<u8>>,
     ) -> Result<(), VerifyPaymentError> {
         // TODO: Split this into smaller functions
         let platform = payment.payment_platform.clone();
@@ -473,11 +473,13 @@ impl PaymentProcessor {
             AccountMode::RECV,
         )?;
 
-        if !driver_endpoint(&driver)
-            .send(driver::VerifySignature::new(payment.clone(), signature))
-            .await??
-        {
-            return Err(VerifyPaymentError::InvalidSignature);
+        if let Some(signature) = signature {
+            if !driver_endpoint(&driver)
+                .send(driver::VerifySignature::new(payment.clone(), signature))
+                .await??
+            {
+                return Err(VerifyPaymentError::InvalidSignature);
+            }
         }
 
         let confirmation = match base64::decode(&payment.details) {
