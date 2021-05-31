@@ -5759,6 +5759,20 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "571da51182ec208780505a32528fc5512a8fe1443ab960b3f2f3ef093cd16930"
+dependencies = [
+ "bytes 0.5.6",
+ "futures-core",
+ "futures-sink",
+ "log",
+ "pin-project-lite 0.1.12",
+ "tokio 0.2.25",
+]
+
+[[package]]
+name = "tokio-util"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be8242891f2b6cbef26a2d7e8605133c2c554cd35b3e4948ea892d6d68436499"
@@ -6823,7 +6837,7 @@ dependencies = [
  "thiserror",
  "tokio 0.2.25",
  "ya-core-model",
- "ya-sb-proto",
+ "ya-sb-proto 0.3.0",
  "ya-sb-router",
  "ya-service-api",
  "ya-service-api-interfaces",
@@ -7001,7 +7015,22 @@ dependencies = [
 [[package]]
 name = "ya-sb-proto"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=fe78d2f49986ff45152555866cca46d212d437f6#fe78d2f49986ff45152555866cca46d212d437f6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1eaa297ee64562ccd1041bb9d2c666a73b92329f83edfdc3bb2e78aad1087b0c"
+dependencies = [
+ "bytes 0.5.6",
+ "prost",
+ "prost-build",
+ "thiserror",
+ "tokio 0.2.25",
+ "tokio-util 0.2.0",
+ "url",
+]
+
+[[package]]
+name = "ya-sb-proto"
+version = "0.4.0"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=c4f16a69be383d9534f99928fccb64a558c47ff2#c4f16a69be383d9534f99928fccb64a558c47ff2"
 dependencies = [
  "bytes 0.5.6",
  "prost",
@@ -7014,8 +7043,8 @@ dependencies = [
 
 [[package]]
 name = "ya-sb-router"
-version = "0.4.1"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=fe78d2f49986ff45152555866cca46d212d437f6#fe78d2f49986ff45152555866cca46d212d437f6"
+version = "0.4.4"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=c4f16a69be383d9534f99928fccb64a558c47ff2#c4f16a69be383d9534f99928fccb64a558c47ff2"
 dependencies = [
  "actix",
  "actix-rt",
@@ -7035,14 +7064,14 @@ dependencies = [
  "tokio-util 0.3.1",
  "url",
  "uuid",
- "ya-sb-proto",
+ "ya-sb-proto 0.4.0",
  "ya-sb-util",
 ]
 
 [[package]]
 name = "ya-sb-util"
-version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=fe78d2f49986ff45152555866cca46d212d437f6#fe78d2f49986ff45152555866cca46d212d437f6"
+version = "0.2.0"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=c4f16a69be383d9534f99928fccb64a558c47ff2#c4f16a69be383d9534f99928fccb64a558c47ff2"
 dependencies = [
  "actix",
  "bitflags 1.2.1",
@@ -7131,8 +7160,8 @@ dependencies = [
 
 [[package]]
 name = "ya-service-bus"
-version = "0.4.5"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=fe78d2f49986ff45152555866cca46d212d437f6#fe78d2f49986ff45152555866cca46d212d437f6"
+version = "0.4.8"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=c4f16a69be383d9534f99928fccb64a558c47ff2#c4f16a69be383d9534f99928fccb64a558c47ff2"
 dependencies = [
  "actix",
  "flexbuffers",
@@ -7147,7 +7176,7 @@ dependencies = [
  "tokio-util 0.3.1",
  "url",
  "uuid",
- "ya-sb-proto",
+ "ya-sb-proto 0.4.0",
  "ya-sb-util",
 ]
 
@@ -7368,7 +7397,7 @@ dependencies = [
  "ya-payment",
  "ya-persistence",
  "ya-provider",
- "ya-sb-proto",
+ "ya-sb-proto 0.3.0",
  "ya-sb-router",
  "ya-service-api",
  "ya-service-api-derive",
