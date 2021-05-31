@@ -394,18 +394,18 @@ impl CommonBroker {
         // provider for the second time, so we must generate new Proposal for him.
         // Note: Regeneration failure isn't propagated to Requestor, because termination
         // succeeded at this point.
-        // if let Owner::Requestor = agreement.id.owner() {
-        //     self.regenerate_proposal(&agreement)
-        //         .await
-        //         .map_err(|e| {
-        //             log::warn!(
-        //                 "Failed to regenerate Proposal after Agreement [{}] termination. {}",
-        //                 &agreement.id,
-        //                 e
-        //             )
-        //         })
-        //         .ok();
-        // }
+        if let Owner::Requestor = agreement.id.owner() {
+            self.regenerate_proposal(&agreement)
+                .await
+                .map_err(|e| {
+                    log::warn!(
+                        "Failed to regenerate Proposal after Agreement [{}] termination. {}",
+                        &agreement.id,
+                        e
+                    )
+                })
+                .ok();
+        }
         Ok(())
     }
 
