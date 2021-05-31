@@ -20,9 +20,9 @@ readme = "README.md"
 python = "^3.8.0"
 pytest = "^6.2"
 pytest-asyncio = "^0.14"
-goth = "^0.3"
+#goth = "^0.3"
 # to use development goth version uncomment below
-#goth = { git = "https://github.com/golemfactory/goth.git", rev = "29e21ac6a9a755f757d6a0ebf9ebeb21d14139d6" }
+goth = { git = "https://github.com/golemfactory/goth.git", rev = "42be1f25da61897cf7c0b6b35b8e1124bf980211" }
 
 [tool.poetry.dev-dependencies]
 black = "^20.8b1"
