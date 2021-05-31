@@ -1,10 +1,10 @@
 use super::RuntimeService;
 use super::{codec, proto, ErrorResponse};
 use crate::server::RuntimeEvent;
+use futures::future::BoxFuture;
 use futures::lock::Mutex;
 use futures::prelude::*;
-use futures::SinkExt;
-
+use futures::{FutureExt, SinkExt};
 use std::rc::Rc;
 use tokio::io;
 
@@ -48,23 +48,27 @@ async fn handle(service: &impl RuntimeService, request: proto::Request) -> proto
 }
 
 pub struct EventEmitter {
-    tx: futures::channel::mpsc::UnboundedSender<proto::Response>,
+    tx: futures::channel::mpsc::Sender<proto::Response>,
 }
 
 impl RuntimeEvent for EventEmitter {
-    fn on_process_status(&self, status: proto::response::ProcessStatus) {
+    fn on_process_status<'a>(&self, status: proto::response::ProcessStatus) -> BoxFuture<'a, ()> {
         let mut response = proto::Response::default();
         response.event = true;
         response.command = Some(proto::response::Command::Status(status));
-        if let Err(e) = self.tx.unbounded_send(response) {
-            log::error!("send event failed: {}", e)
+        let mut tx = self.tx.clone();
+        async move {
+            if let Err(e) = tx.send(response).await {
+                log::error!("send event failed: {}", e)
+            }
         }
+        .boxed()
     }
 }
 
 pub async fn run_async<Factory, FutureRuntime, Runtime>(factory: Factory)
 where
-    Factory: Fn(EventEmitter) -> FutureRuntime,
+    Factory: FnOnce(EventEmitter) -> FutureRuntime,
     FutureRuntime: Future<Output = Runtime>,
     Runtime: RuntimeService + 'static,
 {
@@ -74,7 +78,7 @@ where
 
     let mut input = codec::Codec::<proto::Request>::stream(stdin);
     let output = Rc::new(Mutex::new(codec::Codec::<proto::Response>::sink(stdout)));
-    let (tx, mut rx) = futures::channel::mpsc::unbounded::<proto::Response>();
+    let (tx, mut rx) = futures::channel::mpsc::channel::<proto::Response>(1);
     let emitter = EventEmitter { tx };
     let service = Rc::new(factory(emitter).await);
 
@@ -84,10 +88,10 @@ where
         let output = output.clone();
         async move {
             while let Some(event) = rx.next().await {
-                log::debug!("event: {:?}", event);
+                log::trace!("event: {:?}", event);
                 let mut output = output.lock().await;
                 let r = SinkExt::send(&mut *output, event).await;
-                log::debug!("sending event done: {:?}", r);
+                log::trace!("sending event done: {:?}", r);
             }
         }
     });
@@ -99,15 +103,13 @@ where
                     Ok(request) => {
                         let service = service.clone();
                         let output = output.clone();
-                        tokio::task::spawn_local(async move {
-                            log::debug!("received request: {:?}", request);
-                            let resp = handle(service.as_ref(), request).await;
-                            log::debug!("response to send: {:?}", resp);
-                            let mut output = output.lock().await;
-                            log::debug!("sending");
-                            let r = SinkExt::send(&mut *output, resp).await;
-                            log::debug!("sending done: {:?}", r);
-                        });
+                        log::trace!("received request: {:?}", request);
+                        let resp = handle(service.as_ref(), request).await;
+                        log::trace!("response to send: {:?}", resp);
+                        let mut output = output.lock().await;
+                        log::trace!("sending");
+                        let r = SinkExt::send(&mut *output, resp).await;
+                        log::trace!("sending done: {:?}", r);
                     }
                     Err(e) => {
                         log::error!("fail: {}", e);

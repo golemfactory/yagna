@@ -78,7 +78,7 @@ pub struct ExecuteCommand {
 
 #[derive(Debug, Message)]
 #[rtype(result = "()")]
-pub struct SetTaskPackagePath(pub PathBuf);
+pub struct SetTaskPackagePath(pub Option<PathBuf>);
 
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<()>")]

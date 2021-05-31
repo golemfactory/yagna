@@ -1,8 +1,12 @@
 [package]
 name = "ya-runtime-api"
-version = "0.1.2"
+description = "Communication API between the Runtime and ExeUnit Supervisor. Provides server implementation for Runtime and client implementation for Supervisor."
+version = "0.3.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
+license = "GPL-3.0"
+homepage = "https://github.com/golemfactory/yagna/tree/master/exe-unit/runtime-api"
+repository = "https://github.com/golemfactory/yagna"
 
 [[example]]
 name = "runtime-server-mock"
@@ -27,7 +31,7 @@ prost = { version = "0.6.1", optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "0.2" , optional = true, features=["io-std", "rt-core", "rt-util", "process", "sync"] }
-tokio-util = { version = "0.2", optional = true, features = ["codec"] }
+tokio-util = { version = "0.3", optional = true, features = ["codec"] }
 
 [build-dependencies]
 prost-build = "0.6.1"

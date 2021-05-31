@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use ya_agreement_utils::{AgreementView, OfferDefinition};
-use ya_client::model::market::Reason;
 
 use crate::market::negotiator::AgreementResult;
 
@@ -21,7 +20,7 @@ pub enum NegotiationResult {
     Negotiating { offer: ProposalView },
     /// Proposal is not acceptable and should be rejected.
     /// Negotiations can't be continued.
-    Reject { reason: Option<Reason> },
+    Reject { message: String, is_final: bool },
 }
 
 /// `NegotiatorComponent` implements negotiation logic for part of Agreement
@@ -101,8 +100,8 @@ impl NegotiatorComponent for NegotiatorsPack {
                     all_ready = false;
                     offer
                 }
-                NegotiationResult::Reject { reason } => {
-                    return Ok(NegotiationResult::Reject { reason })
+                NegotiationResult::Reject { message, is_final } => {
+                    return Ok(NegotiationResult::Reject { message, is_final })
                 }
             }
         }

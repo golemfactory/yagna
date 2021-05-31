@@ -1,3 +1,11 @@
+# ToC
+
+ 1. [Introduction](#provider-agent)
+ 1. [Handbook](#handbook)
+    1. [ExeUnits](#exeunits)
+    1. [Presets](#presets)
+    1. [Running](#running-the-provider-agent)
+
 # Provider Agent
 
 This is a reference Yagna Provider Agent implementation.
@@ -169,7 +177,11 @@ To obtain `YAGNA_APPKEY` we need to be in this newly created workdir `cd ya-prov
 
 ## ExeUnits
 
-## WASI (wasmtime)
+ 1. [WASI](#wasi-wasmtime)
+ 1. [Runtime SDK](https://github.com/golemfactory/ya-runtime-sdk#deploying)
+ 1. [VM](#vm-docker)
+
+### WASI (wasmtime)
 
 This is the first ExeUnit we've prepared for you.
 You need to clone its repository and build.
@@ -201,6 +213,24 @@ Runtime:       /Users/tworec/git/ya-runtime-wasi/target/debug/ya-runtime-wasi
 Description:   This is just a sample descriptor for wasmtime exeunit used by ya-provider
 Properties:
     wasm.wasi.version@v           "0.9.0"
+```
+
+### VM (docker)
+
+Please refer to [vm repo documentation](https://github.com/golemfactory/ya-runtime-vm).
+Afterwards you'll need to update your `exeunits-descriptor.json` (defined as `EXE_UNIT_PATH`
+in `.env` or os env).
+
+Sample descriptor entry:
+```
+  {
+    "name": "vm",
+    "version": "0.2.0",
+    "supervisor-path": "exe-unit",
+        "runtime-path": "/home/user/.local/lib/yagna/plugins/ya-runtime-vm/ya-runtime-vm",
+    "description": "vm runtime",
+    "extra-args": ["--cap-handoff"]
+  }
 ```
 
 ## Presets

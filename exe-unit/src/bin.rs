@@ -9,10 +9,10 @@ use ya_core_model::activity;
 use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::message::Register;
 use ya_exe_unit::runtime::process::RuntimeProcess;
-use ya_exe_unit::runtime::RuntimeArgs;
 use ya_exe_unit::service::metrics::MetricsService;
 use ya_exe_unit::service::signal::SignalMonitor;
 use ya_exe_unit::service::transfer::TransferService;
+use ya_exe_unit::state::Supervision;
 use ya_exe_unit::{ExeUnit, ExeUnitContext};
 use ya_service_bus::RpcEnvelope;
 use ya_utils_path::normalize_path;
@@ -24,13 +24,8 @@ struct Cli {
     /// Runtime binary path
     #[structopt(long, short)]
     binary: PathBuf,
-    /// Hand off resource cap limiting to the Runtime
-    #[structopt(
-        long = "cap-handoff",
-        parse(from_flag = std::ops::Not::not),
-        set = clap::ArgSettings::Global,
-    )]
-    supervise_caps: bool,
+    #[structopt(flatten)]
+    supervise: SuperviseCli,
     /// Enclave secret key used in secure communication
     #[structopt(
         long,
@@ -49,6 +44,25 @@ struct Cli {
     requestor_pub_key: Option<String>,
     #[structopt(subcommand)]
     command: Command,
+}
+
+#[derive(structopt::StructOpt, Debug)]
+struct SuperviseCli {
+    /// Hardware resources are handled by the runtime
+    #[structopt(
+        long = "runtime-managed-hardware",
+        alias = "cap-handoff",
+        parse(from_flag = std::ops::Not::not),
+        set = clap::ArgSettings::Global,
+    )]
+    hardware: bool,
+    /// Images are handled by the runtime
+    #[structopt(
+        long = "runtime-managed-image",
+        parse(from_flag = std::ops::Not::not),
+        set = clap::ArgSettings::Global,
+    )]
+    image: bool,
 }
 
 #[derive(structopt::StructOpt, Debug)]
@@ -185,15 +199,17 @@ fn run() -> anyhow::Result<()> {
         )
     })?;
 
-    let runtime_args = RuntimeArgs::new(&args.work_dir, &agreement, !cli.supervise_caps);
     let ctx = ExeUnitContext {
+        supervise: Supervision {
+            hardware: cli.supervise.hardware,
+            image: cli.supervise.image,
+        },
         activity_id: ctx_activity_id,
         report_url: ctx_report_url,
-        credentials: None,
         agreement,
         work_dir,
         cache_dir,
-        runtime_args,
+        credentials: None,
         #[cfg(feature = "sgx")]
         crypto: init_crypto(
             cli.sec_key.replace("<hidden>".into()),
@@ -206,7 +222,7 @@ fn run() -> anyhow::Result<()> {
 
     let sys = System::new("exe-unit");
 
-    let metrics = MetricsService::try_new(&ctx, Some(10000), cli.supervise_caps)?.start();
+    let metrics = MetricsService::try_new(&ctx, Some(10000), ctx.supervise.hardware)?.start();
     let transfers = TransferService::new(&ctx).start();
     let runtime = RuntimeProcess::new(&ctx, cli.binary).start();
     let exe_unit = ExeUnit::new(ctx, metrics, transfers, runtime).start();
