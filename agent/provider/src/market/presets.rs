@@ -19,6 +19,7 @@ pub enum Coefficient {
     Duration,
     Cpu,
     Initial,
+    HashUnit
 }
 
 impl Coefficient {
@@ -31,6 +32,7 @@ impl Coefficient {
         let property = match self {
             Coefficient::Duration => "golem.usage.duration_sec",
             Coefficient::Cpu => "golem.usage.cpu_sec",
+            Coefficient::HashUnit => "golem.usage.ethminer.hash",
             Coefficient::Initial => return None,
         };
         Some(property)
@@ -41,6 +43,7 @@ impl Coefficient {
             Coefficient::Duration => "Duration",
             Coefficient::Cpu => "CPU",
             Coefficient::Initial => "Init price",
+            Coefficient::HashUnit => "Hash",
         }
     }
 }
@@ -50,9 +53,10 @@ impl<'s> TryFrom<&'s str> for Coefficient {
 
     fn try_from(value: &'s str) -> Result<Self> {
         match value {
-            "Init price" => Ok(Coefficient::Initial),
-            "Duration" => Ok(Coefficient::Duration),
-            "CPU" => Ok(Coefficient::Cpu),
+            "Init price" | "initial" => Ok(Coefficient::Initial),
+            "Duration" | "duration" => Ok(Coefficient::Duration),
+            "CPU" | "cpu" => Ok(Coefficient::Cpu),
+            "Hash" | "hash-unit" => Ok(Coefficient::HashUnit),
             _ => Err(anyhow!("Invalid coefficient: {}", value)),
         }
     }
