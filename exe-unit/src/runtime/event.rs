@@ -24,7 +24,7 @@ pub(crate) struct EventMonitor {
 impl EventMonitor {
     pub fn any_process<'a>(&mut self, ctx: CommandContext) -> Handle<'a> {
         let mut inner = self.fallback.lock().unwrap();
-        inner.replace(Channel::plain(ctx));
+        inner.replace(Channel::simple(ctx));
 
         Handle::Fallback {
             monitor: self.clone(),
@@ -32,7 +32,7 @@ impl EventMonitor {
     }
 
     pub fn process<'a>(&mut self, ctx: CommandContext, pid: u64) -> Handle<'a> {
-        let entry = Channel::new(ctx, Default::default());
+        let entry = Channel::new(ctx);
         let done_rx = entry.done_rx().unwrap();
 
         let mut inner = self.processes.lock().unwrap();
@@ -142,14 +142,14 @@ struct Channel {
 }
 
 impl Channel {
-    fn new(ctx: CommandContext, done: DoneChannel) -> Self {
+    fn new(ctx: CommandContext) -> Self {
         Channel {
             ctx,
-            done: Some(done),
+            done: Some(Default::default()),
         }
     }
 
-    fn plain(ctx: CommandContext) -> Self {
+    fn simple(ctx: CommandContext) -> Self {
         Channel { ctx, done: None }
     }
 
