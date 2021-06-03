@@ -42,7 +42,7 @@ impl Erc20Service {
         Cron::new(driver_rc.clone());
         log::debug!("Cron started");
 
-        log::info!("Succesfully connected Erc20Service to gsb.");
+        log::info!("Successfully connected Erc20Service to gsb.");
         Ok(())
     }
 }
