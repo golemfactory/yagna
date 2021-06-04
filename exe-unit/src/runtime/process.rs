@@ -1,3 +1,16 @@
+use std::collections::HashSet;
+use std::ffi::{OsStr, OsString};
+use std::hash::{Hash, Hasher};
+use std::ops::Not;
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
+use std::sync::Arc;
+
+use actix::prelude::*;
+use futures::future::{self, LocalBoxFuture};
+use futures::{FutureExt, TryFutureExt};
+use tokio::process::Command;
+
 use crate::error::Error;
 use crate::message::{ExecuteCommand, SetRuntimeMode, SetTaskPackagePath, Shutdown};
 use crate::output::{forward_output, vec_to_string};
@@ -5,16 +18,7 @@ use crate::process::{kill, ProcessTree, SystemError};
 use crate::runtime::event::EventMonitor;
 use crate::runtime::{Runtime, RuntimeMode};
 use crate::ExeUnitContext;
-use actix::prelude::*;
-use futures::future::{self, LocalBoxFuture};
-use futures::{FutureExt, TryFutureExt};
-use std::collections::HashSet;
-use std::ffi::{OsStr, OsString};
-use std::hash::{Hash, Hasher};
-use std::path::{Path, PathBuf};
-use std::process::Stdio;
-use std::sync::Arc;
-use tokio::process::Command;
+
 use ya_agreement_utils::agreement::OfferTemplate;
 use ya_client_model::activity::{CommandOutput, ExeScriptCommand, RuntimeEvent};
 use ya_runtime_api::server::{spawn, ProcessControl, RunProcess, RuntimeService, RuntimeStatus};
@@ -147,9 +151,7 @@ impl RuntimeProcess {
             ExeScriptCommand::Deploy {} => rt_args.args(&["deploy", "--"]),
             ExeScriptCommand::Start { args } => rt_args.args(&["start", "--"]).args(args),
             ExeScriptCommand::Run {
-                ref entry_point,
-                ref args,
-                ..
+                entry_point, args, ..
             } => rt_args
                 .args(&["run", "--entrypoint"])
                 .arg(entry_point)
@@ -235,7 +237,7 @@ impl RuntimeProcess {
                         .hello(SERVICE_PROTOCOL_VERSION)
                         .map_err(|e| Error::runtime(format!("service hello error: {:?}", e)));
 
-                    let _guard = monitor.any_process(ctx);
+                    let _handle = monitor.any_process(ctx);
                     match future::select(service.exited(), hello).await {
                         future::Either::Left((result, _)) => return Ok(result),
                         future::Either::Right((result, _)) => result.map(|_| ())?,
@@ -249,7 +251,7 @@ impl RuntimeProcess {
                 .boxed_local()
             }
             ExeScriptCommand::Run {
-                ref entry_point,
+                entry_point,
                 mut args,
                 ..
             } => {
@@ -263,7 +265,6 @@ impl RuntimeProcess {
                 log::info!("Executing {:?} with {} {:?}", binary, entry_point, args);
 
                 let mut monitor = self.monitor.get_or_insert_with(Default::default).clone();
-                let entry_point = entry_point.clone();
                 let exec = async move {
                     let name = Path::new(&entry_point)
                         .file_name()
@@ -490,9 +491,7 @@ impl std::fmt::Display for CommandArgs {
             f,
             "{:?}",
             self.inner.iter().fold(OsString::new(), |mut out, s| {
-                if !out.is_empty() {
-                    out.push(" ");
-                }
+                out.is_empty().not().then(|| out.push(" "));
                 out.push(s);
                 out
             })
