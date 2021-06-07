@@ -51,7 +51,7 @@ pub fn str_to_addr(addr: &str) -> Result<Address, GenericError> {
     match addr.trim_start_matches("0x").parse() {
         Ok(addr) => Ok(addr),
         Err(_e) => Err(GenericError::new(format!(
-            "Unable to parse addres {}",
+            "Unable to parse address {}",
             addr.to_string()
         ))),
     }

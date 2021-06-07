@@ -42,7 +42,7 @@ impl ZksyncService {
         Cron::new(driver_rc.clone());
         log::debug!("Cron started");
 
-        log::info!("Succesfully connected ZksyncService to gsb.");
+        log::info!("Successfully connected ZksyncService to gsb.");
         Ok(())
     }
 }
