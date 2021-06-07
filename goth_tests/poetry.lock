@@ -311,7 +311,7 @@ python-versions = "*"
 
 [[package]]
 name = "ghapi"
-version = "0.1.16"
+version = "0.1.17"
 description = "A python client for the GitHub API"
 category = "main"
 optional = false
@@ -326,32 +326,26 @@ dev = ["jsonref"]
 
 [[package]]
 name = "goth"
-version = "0.3.0"
+version = "0.4.0"
 description = "Golem Test Harness - integration testing framework"
 category = "main"
 optional = false
-python-versions = "^3.8"
+python-versions = ">=3.8,<4.0"
 
 [package.dependencies]
 aiohttp = "3.7.3"
-ansicolors = "^1.1.0"
-docker = "^5.0"
-docker-compose = "^1.29"
-dpath = "^2.0"
+ansicolors = ">=1.1.0,<2.0.0"
+docker = ">=5.0,<6.0"
+docker-compose = ">=1.29,<2.0"
+dpath = ">=2.0,<3.0"
 func_timeout = "4.3.5"
-ghapi = "^0.1.16"
-mitmproxy = "^5.3"
-pyyaml = "^5.4"
-transitions = "^0.8"
+ghapi = ">=0.1.16,<0.2.0"
+mitmproxy = ">=5.3,<6.0"
+pyyaml = ">=5.4,<6.0"
+transitions = ">=0.8,<0.9"
 typing_extensions = "3.7.4.3"
-urllib3 = "^1.26"
-ya-aioclient = "^0.5"
-
-[package.source]
-type = "git"
-url = "https://github.com/golemfactory/goth.git"
-reference = "6dbb13c123653407cdb5a7eaab1cc7022370e558"
-resolved_reference = "6dbb13c123653407cdb5a7eaab1cc7022370e558"
+urllib3 = ">=1.26,<2.0"
+ya-aioclient = ">=0.5,<0.6"
 
 [[package]]
 name = "h11"
@@ -900,7 +894,7 @@ python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
 
 [[package]]
 name = "tomlkit"
-version = "0.7.1"
+version = "0.7.2"
 description = "Style preserving TOML library"
 category = "dev"
 optional = false
@@ -947,16 +941,16 @@ python-versions = "*"
 
 [[package]]
 name = "urllib3"
-version = "1.26.4"
+version = "1.26.5"
 description = "HTTP library with thread-safe connection pooling, file post, and more."
 category = "main"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, <4"
 
 [package.extras]
+brotli = ["brotlipy (>=0.6.0)"]
 secure = ["pyOpenSSL (>=0.14)", "cryptography (>=1.3.4)", "idna (>=2.0.0)", "certifi", "ipaddress"]
 socks = ["PySocks (>=1.5.6,<1.5.7 || >1.5.7,<2.0)"]
-brotli = ["brotlipy (>=0.6.0)"]
 
 [[package]]
 name = "urwid"
@@ -1036,7 +1030,7 @@ python-versions = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8.0"
-content-hash = "638739d5066d2fb351220198adfc47a2cf18faa27ff49983007f6d43c0ecd8d0"
+content-hash = "bad19eaaee706785a281d9025e30703c6f7c7279ed913b163ad8508501666f57"
 
 [metadata.files]
 aiohttp = [
@@ -1261,10 +1255,13 @@ func-timeout = [
     {file = "func_timeout-4.3.5.tar.gz", hash = "sha256:74cd3c428ec94f4edfba81f9b2f14904846d5ffccc27c92433b8b5939b5575dd"},
 ]
 ghapi = [
-    {file = "ghapi-0.1.16-py3-none-any.whl", hash = "sha256:f62eece00b14fbd1a3056de64048738a1300837156c875f2e80dbe478716db08"},
-    {file = "ghapi-0.1.16.tar.gz", hash = "sha256:7154cb37261ebeb6d416412b5800fd0fbe653876d9fbbcc273b2c24b2408fc2c"},
+    {file = "ghapi-0.1.17-py3-none-any.whl", hash = "sha256:b6db6590f64d64b92706fa884ffff3e36430217506e57490a2e121135de45f5b"},
+    {file = "ghapi-0.1.17.tar.gz", hash = "sha256:915e2c8ac52b6ab208c97f748c1660d6eca537de8f2833ae442949dd2c511e65"},
 ]
-goth = []
+goth = [
+    {file = "goth-0.4.0-py3-none-any.whl", hash = "sha256:929144f70fa8bc0aebd4056e94476d95f9dd031f1b4cf167e097de09d37e39ee"},
+    {file = "goth-0.4.0.tar.gz", hash = "sha256:0efc8bf59f5214b0b98b78090c26cdd59ce677efe03fd7c2745c1066f0425d28"},
+]
 h11 = [
     {file = "h11-0.12.0-py3-none-any.whl", hash = "sha256:36a3cb8c0a032f56e2da7084577878a035d3b61d104230d4bd49c0c6b555a9c6"},
     {file = "h11-0.12.0.tar.gz", hash = "sha256:47222cb6067e4a307d535814917cd98fd0a57b6788ce715755fa2b6c28b56042"},
@@ -1706,8 +1703,8 @@ toml = [
     {file = "toml-0.10.2.tar.gz", hash = "sha256:b3bda1d108d5dd99f4a20d24d9c348e91c4db7ab1b749200bded2f839ccbe68f"},
 ]
 tomlkit = [
-    {file = "tomlkit-0.7.1-py2.py3-none-any.whl", hash = "sha256:01227863019024861bb83d9a09a757b1c65604969fd2cebb19f5e2b340649792"},
-    {file = "tomlkit-0.7.1.tar.gz", hash = "sha256:24d6049e0765aad9c56a30dfa60d54c69f39c142112a6c57ce8f1c285b6b9d8f"},
+    {file = "tomlkit-0.7.2-py2.py3-none-any.whl", hash = "sha256:173ad840fa5d2aac140528ca1933c29791b79a374a0861a80347f42ec9328117"},
+    {file = "tomlkit-0.7.2.tar.gz", hash = "sha256:d7a454f319a7e9bd2e249f239168729327e4dd2d27b17dc68be264ad1ce36754"},
 ]
 tornado = [
     {file = "tornado-6.1-cp35-cp35m-macosx_10_9_x86_64.whl", hash = "sha256:d371e811d6b156d82aa5f9a4e08b58debf97c302a35714f6f45e35139c332e32"},
@@ -1794,8 +1791,8 @@ typing-extensions = [
     {file = "typing_extensions-3.7.4.3.tar.gz", hash = "sha256:99d4073b617d30288f569d3f13d2bd7548c3a7e4c8de87db09a9d29bb3a4a60c"},
 ]
 urllib3 = [
-    {file = "urllib3-1.26.4-py2.py3-none-any.whl", hash = "sha256:2f4da4594db7e1e110a944bb1b551fdf4e6c136ad42e4234131391e21eb5b0df"},
-    {file = "urllib3-1.26.4.tar.gz", hash = "sha256:e7b021f7241115872f92f43c6508082facffbd1c048e3c6e2bb9c2a157e28937"},
+    {file = "urllib3-1.26.5-py2.py3-none-any.whl", hash = "sha256:753a0374df26658f99d826cfe40394a686d05985786d946fbe4165b5148f5a7c"},
+    {file = "urllib3-1.26.5.tar.gz", hash = "sha256:a7acd0977125325f516bda9735fa7142b909a8d01e8b2e4c8108d0984e6e0098"},
 ]
 urwid = [
     {file = "urwid-2.1.2.tar.gz", hash = "sha256:588bee9c1cb208d0906a9f73c613d2bd32c3ed3702012f51efe318a3f2127eae"},
