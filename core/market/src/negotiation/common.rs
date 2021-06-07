@@ -22,7 +22,11 @@ use crate::db::{
         Proposal, ProposalId, ProposalState, SubscriptionId,
     },
 };
-use crate::matcher::{store::SubscriptionStore, RawProposal};
+use crate::matcher::{
+    error::{DemandError, QueryOfferError},
+    store::SubscriptionStore,
+    RawProposal,
+};
 use crate::negotiation::error::RegenerateProposalError;
 use crate::negotiation::error::{NegotiationError, ProposalValidationError};
 use crate::negotiation::{
@@ -397,12 +401,18 @@ impl CommonBroker {
         if let Owner::Requestor = agreement.id.owner() {
             self.regenerate_proposal(&agreement)
                 .await
-                .map_err(|e| {
-                    log::warn!(
-                        "Failed to regenerate Proposal after Agreement [{}] termination. {}",
-                        &agreement.id,
-                        e
-                    )
+                .map_err(|e| match e {
+                    RegenerateProposalError::Demand(DemandError::NotFound(_)) => (),
+                    RegenerateProposalError::Offer(QueryOfferError::Expired(_)) => (),
+                    RegenerateProposalError::Offer(QueryOfferError::NotFound(_)) => (),
+                    RegenerateProposalError::Offer(QueryOfferError::Unsubscribed(_)) => (),
+                    _ => {
+                        log::warn!(
+                            "Failed to regenerate Proposal after Agreement [{}] termination. {}",
+                            &agreement.id,
+                            e
+                        )
+                    }
                 })
                 .ok();
         }
@@ -493,12 +503,18 @@ impl CommonBroker {
             tokio::task::spawn_local(async move {
                 self.regenerate_proposal(&agreement)
                     .await
-                    .map_err(|e| {
-                        log::warn!(
-                            "Failed to regenerate Proposal after Agreement [{}] termination. {}",
-                            &agreement.id,
-                            e
-                        )
+                    .map_err(|e| match e {
+                        RegenerateProposalError::Demand(DemandError::NotFound(_)) => (),
+                        RegenerateProposalError::Offer(QueryOfferError::Expired(_)) => (),
+                        RegenerateProposalError::Offer(QueryOfferError::NotFound(_)) => (),
+                        RegenerateProposalError::Offer(QueryOfferError::Unsubscribed(_)) => (),
+                        _ => {
+                            log::warn!(
+                                "Failed to regenerate Proposal after Agreement [{}] termination. {}",
+                                &agreement.id,
+                                e
+                            )
+                        }
                     })
                     .ok();
             });
