@@ -20,7 +20,7 @@ async fn main() -> anyhow::Result<()> {
     match &cli_args.commands {
         Commands::Run(_) => (), // logging is handled by ProviderAgent
         _ => {
-            ya_file_logging::start_logger("info", None, &vec![])?;
+            ya_file_logging::start_logger("info", None, &vec![], false)?;
             ()
         }
     }
