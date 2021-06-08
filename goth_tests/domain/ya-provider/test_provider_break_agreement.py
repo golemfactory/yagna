@@ -219,11 +219,10 @@ async def test_provider_timeout_unresponsive_requestor(
         # make Requestor unreachable, so Provider won't be able to send DebitNotes.
         requestor.container.stop()
 
-        # Negotiated timeout is 8s. Let's wait with some margin.
-        # await task
+        # First DebitNote will be sent after 15s. Let's wait with some margin.
         await providers[0].wait_for_agreement_broken(
             "Requestor is unreachable more than",
-            timeout=12,
+            timeout=18,
         )
 
         # Note that Agreement will be broken, but Provider won't be
