@@ -54,6 +54,7 @@ pub(crate) async fn start_vpn<R: RuntimeService>(
 }
 
 pub(crate) struct Vpn {
+    // TODO: Populate & use ACL
     acl: Acl,
     networks: Networks<GsbEndpoint>,
     endpoint: VpnEndpoint,

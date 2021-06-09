@@ -1,7 +1,10 @@
-use crate::message::*;
-use crate::socket::*;
-use crate::stack::Stack;
-use crate::Result;
+use std::collections::{BTreeSet, HashMap};
+use std::convert::TryFrom;
+use std::net::IpAddr;
+use std::ops::DerefMut;
+use std::str::FromStr;
+use std::time::Duration;
+
 use actix::prelude::*;
 use actix_web::error::Canceled;
 use futures::channel::{mpsc, oneshot};
@@ -11,17 +14,20 @@ use futures::{FutureExt, SinkExt};
 use smoltcp::iface::Route;
 use smoltcp::socket::{Socket, SocketHandle};
 use smoltcp::wire::{IpAddress, IpCidr, IpEndpoint};
-use std::collections::{BTreeSet, HashMap};
-use std::convert::TryFrom;
-use std::net::IpAddr;
-use std::ops::DerefMut;
-use std::str::FromStr;
+
+use crate::message::*;
+use crate::socket::*;
+use crate::stack::Stack;
+use crate::Result;
+
 use ya_core_model::activity::{VpnControl, VpnPacket};
 use ya_core_model::NodeId;
 use ya_service_bus::typed::{self, Endpoint};
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcEnvelope};
 use ya_utils_networking::vpn::common::{to_ip, to_net};
 use ya_utils_networking::vpn::*;
+
+const STACK_POLL_INTERVAL: Duration = Duration::from_millis(2500);
 
 #[derive(Default)]
 pub struct VpnSupervisor {
@@ -312,7 +318,7 @@ impl Actor for Vpn {
         let vpn_url = gsb_local_url(&id);
         actix_rpc::bind::<VpnPacket>(&vpn_url, ctx.address().recipient());
 
-        ctx.run_interval(std::time::Duration::from_millis(100), |this, ctx| {
+        ctx.run_interval(STACK_POLL_INTERVAL, |this, ctx| {
             this.poll(ctx.address());
         });
 

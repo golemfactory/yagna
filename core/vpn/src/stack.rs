@@ -201,6 +201,8 @@ impl<'a> Future for Send<'a> {
                 Protocol::Tcp => {
                     let mut socket = sockets.get::<TcpSocket>(meta.handle);
                     let result = socket.send_slice(&self.data[self.offset..]);
+                    (*self.sent)();
+
                     return match result {
                         Ok(count) => {
                             self.offset += count;
