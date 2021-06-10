@@ -151,14 +151,11 @@ async def test_provider_single_activity_at_once(
         with pytest.raises(ApiException) as e:
             await requestor.create_activity(agreement_id)
 
-            assert (
-                re.match(
-                    r"terminated. Reason: Only single Activity allowed,"
-                    r" message: Can't create 2 simultaneous Activities.",
-                    e.value.body,
-                )
-                is not None
-            )
+        assert re.search(
+            r"terminated. Reason: Only single Activity allowed,"
+            r" message: Can't create 2 simultaneous Activities.",
+            e.value.body,
+        )
 
         await requestor.destroy_activity(activity_id1)
         await provider.wait_for_exeunit_finished()
