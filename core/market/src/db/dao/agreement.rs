@@ -1,9 +1,11 @@
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, Utc};
 use diesel::prelude::*;
 
+use ya_client::model::market::Reason;
 use ya_client::model::NodeId;
 use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
 
+use crate::config::DbConfig;
 use crate::db::dao::agreement_events::create_event;
 use crate::db::dao::proposal::{has_counter_proposal, update_proposal_state};
 use crate::db::dao::sql_functions::datetime;
@@ -16,13 +18,6 @@ use crate::db::schema::market_agreement::dsl::market_agreement;
 use crate::db::schema::market_agreement_event::dsl as event;
 use crate::db::schema::market_agreement_event::dsl::market_agreement_event;
 use crate::db::{DbError, DbResult};
-use crate::market::EnvConfig;
-
-const AGREEMENT_STORE_DAYS: EnvConfig<'static, u64> = EnvConfig {
-    name: "YAGNA_MARKET_AGREEMENT_STORE_DAYS",
-    default: 90, // days
-    min: 30,     // days
-};
 
 #[derive(thiserror::Error, Debug)]
 pub enum SaveAgreementError {
@@ -233,7 +228,55 @@ impl<'c> AgreementDao<'c> {
             update_committed_signature(conn, &mut agreement, signature)?;
 
             // Always Provider approves.
-            create_event(conn, &agreement, None, Owner::Provider)?;
+            create_event(
+                conn,
+                &agreement,
+                None,
+                Owner::Provider,
+                agreement.approved_ts.unwrap_or(Utc::now().naive_utc()),
+            )?;
+
+            Ok(agreement)
+        })
+        .await
+    }
+
+    pub async fn reject(
+        &self,
+        id: &AgreementId,
+        reason: Option<Reason>,
+        timestamp: &NaiveDateTime,
+    ) -> Result<Agreement, AgreementDaoError> {
+        let id = id.clone();
+        let timestamp = timestamp.clone();
+
+        do_with_transaction(self.pool, move |conn| {
+            let mut agreement: Agreement =
+                market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
+
+            update_state(conn, &mut agreement, AgreementState::Rejected)?;
+            create_event(conn, &agreement, reason, Owner::Provider, timestamp)?;
+
+            Ok(agreement)
+        })
+        .await
+    }
+
+    pub async fn cancel(
+        &self,
+        id: &AgreementId,
+        reason: Option<Reason>,
+        timestamp: &NaiveDateTime,
+    ) -> Result<Agreement, AgreementDaoError> {
+        let id = id.clone();
+        let timestamp = timestamp.clone();
+
+        do_with_transaction(self.pool, move |conn| {
+            let mut agreement: Agreement =
+                market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
+
+            update_state(conn, &mut agreement, AgreementState::Cancelled)?;
+            create_event(conn, &agreement, reason, Owner::Requestor, timestamp)?;
 
             Ok(agreement)
         })
@@ -243,17 +286,19 @@ impl<'c> AgreementDao<'c> {
     pub async fn terminate(
         &self,
         id: &AgreementId,
-        reason: Option<String>,
+        reason: Option<Reason>,
         terminator: Owner,
+        timestamp: &NaiveDateTime,
     ) -> Result<bool, AgreementDaoError> {
         let id = id.clone();
+        let timestamp = timestamp.clone();
+
         do_with_transaction(self.pool, move |conn| {
-            log::debug!("Termination reason: {:?}", reason);
             let mut agreement: Agreement =
                 market_agreement.filter(agreement::id.eq(&id)).first(conn)?;
 
             update_state(conn, &mut agreement, AgreementState::Terminated)?;
-            create_event(conn, &agreement, reason, terminator)?;
+            create_event(conn, &agreement, reason, terminator, timestamp)?;
 
             Ok(true)
         })
@@ -283,10 +328,9 @@ impl<'c> AgreementDao<'c> {
         .await
     }
 
-    pub async fn clean(&self) -> DbResult<()> {
-        // FIXME use grace time from config file when #460 is merged
+    pub async fn clean(&self, db_config: &DbConfig) -> DbResult<()> {
         log::trace!("Clean market agreements: start");
-        let interval_days = AGREEMENT_STORE_DAYS.get_value();
+        let interval_days = db_config.agreement_store_days;
         let (num_agreements, num_events) = do_with_transaction(self.pool, move |conn| {
             let agreements_to_clean = market_agreement.filter(
                 agreement::valid_to.lt(datetime("NOW", format!("-{} days", interval_days))),
@@ -296,8 +340,8 @@ impl<'c> AgreementDao<'c> {
                 event::agreement_id.eq_any(agreements_to_clean.clone().select(agreement::id)),
             );
 
-            let num_agreements = diesel::delete(agreements_to_clean).execute(conn)?;
             let num_events = diesel::delete(related_events).execute(conn)?;
+            let num_agreements = diesel::delete(agreements_to_clean).execute(conn)?;
             Result::<(usize, usize), DbError>::Ok((num_agreements, num_events))
         })
         .await?;

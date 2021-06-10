@@ -12,12 +12,9 @@ path = "src/lib.rs"
 name = "ya-provider"
 path = "src/main.rs"
 
-[features]
-time-dependent-tests = []
-
 [dependencies]
 ya-agreement-utils = { version = "^0.2"}
-ya-client = { version = "0.6", features = ['cli'] }
+ya-client = { version = "0.5", features = ['cli'] }
 ya-client-model = "0.3"
 ya-compile-time-utils = "0.1"
 ya-core-model = { version = "^0.3", features = ['activity', 'payment'] }
@@ -49,7 +46,7 @@ log-derive = "0.4"
 notify = "4.0.15"
 num_cpus = "1.13.0"
 path-clean = "0.1.0"
-semver = { version = "0.10.0", features = ["serde"] }
+semver = { version = "0.11", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 shared_child = "0.3.4"

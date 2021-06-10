@@ -25,7 +25,7 @@ use crate::runtime::*;
 use crate::service::metrics::MetricsService;
 use crate::service::transfer::{AddVolumes, DeployImage, TransferResource, TransferService};
 use crate::service::{ServiceAddr, ServiceControl};
-use crate::state::{ExeUnitState, StateError};
+use crate::state::{ExeUnitState, StateError, Supervision};
 
 mod acl;
 pub mod agreement;
@@ -297,7 +297,7 @@ impl<R: Runtime> RuntimeRef<R> {
                 let task_package = transfer_service.send(DeployImage {}).await??;
                 runtime
                     .send(UpdateDeployment {
-                        task_package: Some(task_package),
+                        task_package: task_package,
                         networks: Some(net.clone()),
                         hosts: Some(hosts.clone()),
                         ..Default::default()
@@ -413,14 +413,14 @@ impl<R: Runtime> Actor for ExeUnit<R> {
 #[derivative(Debug)]
 #[derive(Clone)]
 pub struct ExeUnitContext {
+    pub supervise: Supervision,
     pub activity_id: Option<String>,
     pub report_url: Option<String>,
-    pub credentials: Option<Credentials>,
     pub agreement: Agreement,
     pub work_dir: PathBuf,
     pub cache_dir: PathBuf,
-    pub runtime_args: RuntimeArgs,
     pub acl: Acl,
+    pub credentials: Option<Credentials>,
     #[cfg(feature = "sgx")]
     #[derivative(Debug = "ignore")]
     pub crypto: crate::crypto::Crypto,

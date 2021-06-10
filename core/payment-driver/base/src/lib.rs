@@ -7,6 +7,9 @@
 #[macro_use]
 extern crate diesel;
 
+#[macro_use]
+extern crate num_derive;
+
 extern crate log;
 
 pub mod account;

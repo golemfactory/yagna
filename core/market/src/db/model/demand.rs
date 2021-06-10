@@ -2,7 +2,6 @@ use chrono::{NaiveDateTime, TimeZone, Utc};
 use serde_json;
 
 use ya_client::model::{market::Demand as ClientDemand, ErrorMessage, NodeId};
-use ya_market_resolver::flatten::{flatten_json, JsonObjectExpected};
 use ya_service_api_web::middleware::Identity;
 
 use super::SubscriptionId;
@@ -33,8 +32,10 @@ impl Demand {
         id: &Identity,
         creation_ts: NaiveDateTime,
         expiration_ts: NaiveDateTime,
-    ) -> Result<Demand, JsonObjectExpected> {
-        let properties = flatten_json(&demand.properties)?.to_string();
+    ) -> Result<Demand, serde_json::error::Error> {
+        let properties = serde_json::to_string(&ya_agreement_utils::agreement::flatten(
+            demand.properties.clone(),
+        ))?;
         let constraints = demand.constraints.clone();
         let node_id = id.identity;
 

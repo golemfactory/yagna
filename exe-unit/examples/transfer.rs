@@ -15,7 +15,6 @@ use ya_agreement_utils::AgreementView;
 use ya_client_model::activity::TransferArgs;
 use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::error::Error;
-use ya_exe_unit::runtime::RuntimeArgs;
 use ya_exe_unit::service::transfer::{AddVolumes, DeployImage, TransferResource, TransferService};
 use ya_exe_unit::ExeUnitContext;
 use ya_runtime_api::deploy::ContainerVolume;
@@ -196,18 +195,18 @@ async fn main() -> anyhow::Result<()> {
             agreement_id: String::new(),
             json: Value::Null,
         },
-        task_package: format!(
+        task_package: Some(format!(
             "hash://sha3:{}:http://127.0.0.1:8001/rnd",
             hex::encode(hash)
-        ),
+        )),
         usage_vector: Vec::new(),
         usage_limits: HashMap::new(),
         infrastructure: HashMap::new(),
     };
 
     log::debug!("Starting TransferService");
-    let runtime_args = RuntimeArgs::new(&work_dir, &agreement, true);
     let exe_ctx = ExeUnitContext {
+        supervise: Default::default(),
         activity_id: None,
         acl: Default::default(),
         report_url: None,
@@ -215,7 +214,6 @@ async fn main() -> anyhow::Result<()> {
         agreement,
         work_dir: work_dir.clone(),
         cache_dir,
-        runtime_args,
         #[cfg(feature = "sgx")]
         crypto: init_crypto()?,
     };

@@ -4,19 +4,23 @@ use crate::error::processor::{
     SchedulePaymentError, ValidateAllocationError, VerifyPaymentError,
 };
 use crate::models::order::ReadObj as DbOrder;
+use actix_web::rt::Arbiter;
 use bigdecimal::{BigDecimal, Zero};
-use futures::lock::Mutex;
+use futures::FutureExt;
 use metrics::counter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::sync::Arc;
-use ya_client_model::payment::{Account, ActivityPayment, AgreementPayment, Payment};
+use std::time::Duration;
+use ya_client_model::payment::{
+    Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
+};
 use ya_core_model::driver::{
-    self, driver_bus_id, AccountMode, PaymentConfirmation, PaymentDetails, ValidateAllocation,
+    self, driver_bus_id, AccountMode, PaymentConfirmation, PaymentDetails, ShutDown,
+    ValidateAllocation,
 };
 use ya_core_model::payment::local::{
-    DriverDetails, Network, NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver,
-    RegisterDriverError, SchedulePayment, UnregisterAccount, UnregisterDriver,
+    NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver, RegisterDriverError,
+    SchedulePayment, UnregisterAccount, UnregisterDriver,
 };
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_net::RemoteEndpoint;
@@ -198,6 +202,10 @@ impl DriverRegistry {
         }
     }
 
+    pub fn get_drivers(&self) -> HashMap<String, DriverDetails> {
+        self.drivers.clone()
+    }
+
     pub fn get_network(
         &self,
         driver: String,
@@ -261,12 +269,17 @@ impl DriverRegistry {
 
         Err(AccountNotRegistered::new(platform, address, mode))
     }
+
+    pub fn iter_drivers(&self) -> impl Iterator<Item = &String> {
+        self.drivers.keys()
+    }
 }
 
 #[derive(Clone)]
 pub struct PaymentProcessor {
     db_executor: DbExecutor,
-    registry: Arc<Mutex<DriverRegistry>>,
+    registry: DriverRegistry,
+    in_shutdown: bool,
 }
 
 impl PaymentProcessor {
@@ -274,27 +287,38 @@ impl PaymentProcessor {
         Self {
             db_executor,
             registry: Default::default(),
+            in_shutdown: false,
         }
     }
 
-    pub async fn register_driver(&self, msg: RegisterDriver) -> Result<(), RegisterDriverError> {
-        self.registry.lock().await.register_driver(msg)
+    pub async fn register_driver(
+        &mut self,
+        msg: RegisterDriver,
+    ) -> Result<(), RegisterDriverError> {
+        self.registry.register_driver(msg)
     }
 
-    pub async fn unregister_driver(&self, msg: UnregisterDriver) {
-        self.registry.lock().await.unregister_driver(msg)
+    pub async fn unregister_driver(&mut self, msg: UnregisterDriver) {
+        self.registry.unregister_driver(msg)
     }
 
-    pub async fn register_account(&self, msg: RegisterAccount) -> Result<(), RegisterAccountError> {
-        self.registry.lock().await.register_account(msg)
+    pub async fn register_account(
+        &mut self,
+        msg: RegisterAccount,
+    ) -> Result<(), RegisterAccountError> {
+        self.registry.register_account(msg)
     }
 
-    pub async fn unregister_account(&self, msg: UnregisterAccount) {
-        self.registry.lock().await.unregister_account(msg)
+    pub async fn unregister_account(&mut self, msg: UnregisterAccount) {
+        self.registry.unregister_account(msg)
     }
 
     pub async fn get_accounts(&self) -> Vec<Account> {
-        self.registry.lock().await.get_accounts()
+        self.registry.get_accounts()
+    }
+
+    pub async fn get_drivers(&self) -> HashMap<String, DriverDetails> {
+        self.registry.get_drivers()
     }
 
     pub async fn get_network(
@@ -302,7 +326,7 @@ impl PaymentProcessor {
         driver: String,
         network: Option<String>,
     ) -> Result<(String, Network), RegisterAccountError> {
-        self.registry.lock().await.get_network(driver, network)
+        self.registry.get_network(driver, network)
     }
 
     pub async fn get_platform(
@@ -311,13 +335,11 @@ impl PaymentProcessor {
         network: Option<String>,
         token: Option<String>,
     ) -> Result<String, RegisterAccountError> {
-        self.registry
-            .lock()
-            .await
-            .get_platform(driver, network, token)
+        self.registry.get_platform(driver, network, token)
     }
 
     pub async fn notify_payment(&self, msg: NotifyPayment) -> Result<(), NotifyPaymentError> {
+        let driver = msg.driver;
         let payment_platform = msg.platform;
         let payer_addr = msg.sender;
         let payee_addr = msg.recipient;
@@ -328,7 +350,7 @@ impl PaymentProcessor {
         let orders = self
             .db_executor
             .as_dao::<OrderDao>()
-            .get_many(msg.order_ids, msg.driver.clone())
+            .get_many(msg.order_ids, driver.clone())
             .await?;
         validate_orders(
             &orders,
@@ -371,7 +393,7 @@ impl PaymentProcessor {
                 payee_id,
                 payer_addr,
                 payee_addr,
-                payment_platform,
+                payment_platform.clone(),
                 msg.amount.clone(),
                 msg.confirmation.confirmation,
                 activity_payments,
@@ -388,14 +410,24 @@ impl PaymentProcessor {
             activity_payment.allocation_id = None;
         }
 
-        counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "driver" => msg.driver);
-        let msg = SendPayment(payment);
-        ya_net::from(payer_id)
-            .to(payee_id)
-            .service(BUS_ID)
-            .call(msg)
+        let signature = driver_endpoint(&driver)
+            .send(driver::SignPayment(payment.clone()))
             .await??;
 
+        counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "platform" => payment_platform);
+        let msg = SendPayment::new(payment, Some(signature));
+
+        // Spawning to avoid deadlock in a case that payee is the same node as payer
+        Arbiter::spawn(
+            ya_net::from(payer_id)
+                .to(payee_id)
+                .service(BUS_ID)
+                .call(msg)
+                .map(|res| match res {
+                    Ok(Ok(_)) => (),
+                    err => log::error!("Error sending payment message to provider: {:?}", err),
+                }),
+        );
         // TODO: Implement re-sending mechanism in case SendPayment fails
 
         counter!("payment.invoices.requestor.paid", 1);
@@ -403,12 +435,13 @@ impl PaymentProcessor {
     }
 
     pub async fn schedule_payment(&self, msg: SchedulePayment) -> Result<(), SchedulePaymentError> {
+        if self.in_shutdown {
+            return Err(SchedulePaymentError::Shutdown);
+        }
         let amount = msg.amount.clone();
-        let driver = self.registry.lock().await.driver(
-            &msg.payment_platform,
-            &msg.payer_addr,
-            AccountMode::SEND,
-        )?;
+        let driver =
+            self.registry
+                .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?;
         let order_id = driver_endpoint(&driver)
             .send(driver::SchedulePayment::new(
                 amount,
@@ -427,19 +460,32 @@ impl PaymentProcessor {
         Ok(())
     }
 
-    pub async fn verify_payment(&self, payment: Payment) -> Result<(), VerifyPaymentError> {
+    pub async fn verify_payment(
+        &self,
+        payment: Payment,
+        signature: Option<Vec<u8>>,
+    ) -> Result<(), VerifyPaymentError> {
         // TODO: Split this into smaller functions
+        let platform = payment.payment_platform.clone();
+        let driver = self.registry.driver(
+            &payment.payment_platform,
+            &payment.payee_addr,
+            AccountMode::RECV,
+        )?;
+
+        if let Some(signature) = signature {
+            if !driver_endpoint(&driver)
+                .send(driver::VerifySignature::new(payment.clone(), signature))
+                .await??
+            {
+                return Err(VerifyPaymentError::InvalidSignature);
+            }
+        }
 
         let confirmation = match base64::decode(&payment.details) {
             Ok(confirmation) => PaymentConfirmation { confirmation },
             Err(e) => return Err(VerifyPaymentError::ConfirmationEncoding),
         };
-        let platform = payment.payment_platform.clone();
-        let driver = self.registry.lock().await.driver(
-            &payment.payment_platform,
-            &payment.payee_addr,
-            AccountMode::RECV,
-        )?;
         let details: PaymentDetails = driver_endpoint(&driver)
             .send(driver::VerifyPayment::new(confirmation, platform.clone()))
             .await??;
@@ -509,23 +555,6 @@ impl PaymentProcessor {
             }
         }
 
-        // Verify if transaction hash hasn't been re-used by comparing transaction balance
-        // between payer and payee in database and on blockchain
-        let db_balance = agreement_dao
-            .get_transaction_balance(payee_id, payee_addr.clone(), payer_addr.clone())
-            .await?;
-        let bc_balance = driver_endpoint(&driver)
-            .send(driver::GetTransactionBalance::new(
-                payer_addr.clone(),
-                payee_addr.clone(),
-                platform,
-            ))
-            .await??;
-
-        if bc_balance < db_balance + &details.amount {
-            return VerifyPaymentError::balance();
-        }
-
         // Insert payment into database (this operation creates and updates all related entities)
         let payment_dao: PaymentDao = self.db_executor.as_dao();
         payment_dao.insert_received(payment, payee_id).await?;
@@ -537,11 +566,9 @@ impl PaymentProcessor {
         platform: String,
         address: String,
     ) -> Result<BigDecimal, GetStatusError> {
-        let driver =
-            self.registry
-                .lock()
-                .await
-                .driver(&platform, &address, AccountMode::empty())?;
+        let driver = self
+            .registry
+            .driver(&platform, &address, AccountMode::empty())?;
         let amount = driver_endpoint(&driver)
             .send(driver::GetAccountBalance::new(address, platform))
             .await??;
@@ -554,16 +581,17 @@ impl PaymentProcessor {
         address: String,
         amount: BigDecimal,
     ) -> Result<bool, ValidateAllocationError> {
+        if self.in_shutdown {
+            return Err(ValidateAllocationError::Shutdown);
+        }
         let existing_allocations = self
             .db_executor
             .as_dao::<AllocationDao>()
             .get_for_address(platform.clone(), address.clone())
             .await?;
-        let driver =
-            self.registry
-                .lock()
-                .await
-                .driver(&platform, &address, AccountMode::empty())?;
+        let driver = self
+            .registry
+            .driver(&platform, &address, AccountMode::empty())?;
         let msg = ValidateAllocation {
             address,
             platform,
@@ -572,5 +600,30 @@ impl PaymentProcessor {
         };
         let result = driver_endpoint(&driver).send(msg).await??;
         Ok(result)
+    }
+
+    pub fn shut_down(&mut self, timeout: Duration) -> impl futures::Future<Output = ()> + 'static {
+        self.in_shutdown = true;
+        let driver_shutdown_futures = self
+            .registry
+            .iter_drivers()
+            .map(|driver| shut_down_driver(driver, timeout));
+        futures::future::join_all(driver_shutdown_futures).map(|_| ())
+    }
+}
+
+fn shut_down_driver(
+    driver: &str,
+    timeout: Duration,
+) -> impl futures::Future<Output = ()> + 'static {
+    let driver = driver.to_string();
+    let endpoint = driver_endpoint(&driver);
+    let shutdown_msg = ShutDown::new(timeout);
+    async move {
+        log::info!("Shutting down driver '{}'... timeout={:?}", driver, timeout);
+        match endpoint.call(shutdown_msg).await {
+            Ok(Ok(_)) => log::info!("Driver '{}' shut down successfully.", driver),
+            err => log::error!("Error shutting down driver '{}': {:?}", driver, err),
+        }
     }
 }

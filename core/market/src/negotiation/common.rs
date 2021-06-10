@@ -22,7 +22,11 @@ use crate::db::{
         Proposal, ProposalId, ProposalState, SubscriptionId,
     },
 };
-use crate::matcher::{store::SubscriptionStore, RawProposal};
+use crate::matcher::{
+    error::{DemandError, QueryOfferError},
+    store::SubscriptionStore,
+    RawProposal,
+};
 use crate::negotiation::error::RegenerateProposalError;
 use crate::negotiation::error::{NegotiationError, ProposalValidationError};
 use crate::negotiation::{
@@ -120,7 +124,8 @@ impl CommonBroker {
             .await?;
 
         let is_first = prev_proposal.body.prev_proposal_id.is_none();
-        let new_proposal = prev_proposal.from_client(proposal)?;
+        let new_proposal =
+            prev_proposal.from_client(proposal, &prev_proposal.body.expiration_ts)?;
 
         validate_match(&new_proposal, &prev_proposal)?;
 
@@ -160,10 +165,7 @@ impl CommonBroker {
             caller_role,
             caller_id,
             &proposal_id,
-            reason
-                .as_ref()
-                .map(|r| format!("with reason: {}", r))
-                .unwrap_or("without reason".into()),
+            reason.display()
         );
 
         Ok(proposal)
@@ -361,18 +363,23 @@ impl CommonBroker {
 
             validate_transition(&agreement, AgreementState::Terminated)?;
 
+            let timestamp = Utc::now().naive_utc();
             protocol_common::propagate_terminate_agreement(
                 &agreement,
                 reason.clone(),
                 "NotSigned".to_string(),
-                Utc::now().naive_utc(),
+                timestamp.clone(),
             )
             .await?;
 
-            let reason_string = CommonBroker::reason2string(&reason);
-            dao.terminate(&agreement.id, reason_string, agreement.id.owner())
-                .await
-                .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?;
+            dao.terminate(
+                &agreement.id,
+                reason.clone(),
+                agreement.id.owner(),
+                &timestamp,
+            )
+            .await
+            .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?;
         }
 
         self.notify_agreement(&agreement).await;
@@ -391,25 +398,25 @@ impl CommonBroker {
         // provider for the second time, so we must generate new Proposal for him.
         // Note: Regeneration failure isn't propagated to Requestor, because termination
         // succeeded at this point.
-        // if let Owner::Requestor = agreement.id.owner() {
-        //     self.regenerate_proposal(&agreement)
-        //         .await
-        //         .map_err(|e| {
-        //             log::warn!(
-        //                 "Failed to regenerate Proposal after Agreement [{}] termination. {}",
-        //                 &agreement.id,
-        //                 e
-        //             )
-        //         })
-        //         .ok();
-        // }
+        if let Owner::Requestor = agreement.id.owner() {
+            self.regenerate_proposal(&agreement)
+                .await
+                .map_err(|e| match e {
+                    RegenerateProposalError::Demand(DemandError::NotFound(_)) => (),
+                    RegenerateProposalError::Offer(QueryOfferError::Expired(_)) => (),
+                    RegenerateProposalError::Offer(QueryOfferError::NotFound(_)) => (),
+                    RegenerateProposalError::Offer(QueryOfferError::Unsubscribed(_)) => (),
+                    _ => {
+                        log::warn!(
+                            "Failed to regenerate Proposal after Agreement [{}] termination. {}",
+                            &agreement.id,
+                            e
+                        )
+                    }
+                })
+                .ok();
+        }
         Ok(())
-    }
-
-    fn reason2string(reason: &Option<Reason>) -> Option<String> {
-        reason.as_ref().map(|reason| {
-            serde_json::to_string::<Reason>(reason).unwrap_or(reason.message.to_string())
-        })
     }
 
     // Called remotely via GSB
@@ -457,17 +464,23 @@ impl CommonBroker {
                 Err(RemoteAgreementError::NotFound(agreement_id.clone()))?
             }
 
-            let reason_string = CommonBroker::reason2string(&msg.reason);
-            dao.terminate(&agreement_id, reason_string, caller_role)
-                .await
-                .map_err(|e| {
-                    log::warn!(
-                        "Couldn't terminate agreement. id: {}, e: {}",
-                        agreement_id,
-                        e
-                    );
-                    RemoteAgreementError::InternalError(agreement_id.clone())
-                })?;
+            // TODO: Validate signature.
+
+            dao.terminate(
+                &agreement_id,
+                msg.reason.clone(),
+                caller_role,
+                &msg.termination_ts,
+            )
+            .await
+            .map_err(|e| {
+                log::warn!(
+                    "Couldn't terminate agreement. id: {}, e: {}",
+                    agreement_id,
+                    e
+                );
+                RemoteAgreementError::InternalError(agreement_id.clone())
+            })?;
 
             agreement
         };
@@ -490,12 +503,18 @@ impl CommonBroker {
             tokio::task::spawn_local(async move {
                 self.regenerate_proposal(&agreement)
                     .await
-                    .map_err(|e| {
-                        log::warn!(
-                            "Failed to regenerate Proposal after Agreement [{}] termination. {}",
-                            &agreement.id,
-                            e
-                        )
+                    .map_err(|e| match e {
+                        RegenerateProposalError::Demand(DemandError::NotFound(_)) => (),
+                        RegenerateProposalError::Offer(QueryOfferError::Expired(_)) => (),
+                        RegenerateProposalError::Offer(QueryOfferError::NotFound(_)) => (),
+                        RegenerateProposalError::Offer(QueryOfferError::Unsubscribed(_)) => (),
+                        _ => {
+                            log::warn!(
+                                "Failed to regenerate Proposal after Agreement [{}] termination. {}",
+                                &agreement.id,
+                                e
+                            )
+                        }
                     })
                     .ok();
             });
@@ -631,10 +650,9 @@ impl CommonBroker {
         // TODO: If creating Proposal succeeds, but event can't be added, provider
         // TODO: will never answer to this Proposal. Solve problem when Event API will be available.
         let subscription_id = proposal.negotiation.subscription_id.clone();
-        let reason = CommonBroker::reason2string(&msg.reason);
         self.db
             .as_dao::<NegotiationEventsDao>()
-            .add_proposal_rejected_event(&proposal, reason)
+            .add_proposal_rejected_event(&proposal, msg.reason.clone())
             .await
             .map_err(|e| {
                 // TODO: Don't leak our database error, but send meaningful message as response.

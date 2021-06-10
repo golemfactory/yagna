@@ -22,7 +22,7 @@ async fn main() {
 
     let acc_info = provider.account_info(pub_address).await.unwrap();
     debug!("{:?}", acc_info);
-    let token = "GNT";
+    let token = "tGLM";
     let balance_com = acc_info
         .committed
         .balances

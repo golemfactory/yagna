@@ -1,7 +1,11 @@
 //! Discovery protocol interface
+use actix_rt::Arbiter;
+use metrics::{counter, timing, value};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::Mutex;
+use tokio::time::delay_for;
 
 use ya_client::model::NodeId;
 use ya_core_model::market::BUS_ID;
@@ -13,6 +17,7 @@ use ya_service_bus::typed::ServiceBinder;
 use ya_service_bus::{typed as bus, Error as BusError, RpcEndpoint, RpcMessage};
 
 use super::callback::HandlerSlot;
+use crate::config::DiscoveryConfig;
 use crate::db::model::{Offer as ModelOffer, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityError};
 
@@ -40,23 +45,82 @@ pub(super) struct OfferHandlers {
 pub struct DiscoveryImpl {
     identity: Arc<dyn IdentityApi>,
 
+    offer_queue: Mutex<Vec<SubscriptionId>>,
+    unsub_queue: Mutex<Vec<SubscriptionId>>,
+
     offer_handlers: Mutex<OfferHandlers>,
     get_local_offers_handler: HandlerSlot<RetrieveOffers>,
     offer_unsubscribe_handler: HandlerSlot<UnsubscribedOffersBcast>,
+
+    config: DiscoveryConfig,
 }
 
 impl Discovery {
+    pub async fn bcast_offers(&self, offer_ids: Vec<SubscriptionId>) -> Result<(), DiscoveryError> {
+        if offer_ids.is_empty() {
+            return Ok(());
+        }
+        // When there are 0 items in the queue we should schedule a send job.
+        let must_schedule = {
+            let mut queue = self.inner.offer_queue.lock().await;
+            let result = queue.len() == 0;
+
+            queue.append(&mut offer_ids.clone());
+            result
+        };
+        log::trace!(
+            "bcast_offers done appending {} offers. must_schedule={}",
+            offer_ids.len(),
+            must_schedule
+        );
+
+        if must_schedule {
+            let myself = self.clone();
+            let _ = Arbiter::spawn(async move {
+                // Sleep to collect multiple offers to send
+                delay_for(myself.inner.config.offer_broadcast_delay).await;
+                myself.send_bcast_offers().await;
+            });
+        }
+        Ok(())
+    }
+
     /// Broadcasts Offers to other nodes in network. Connected nodes will
     /// get call to function bound at `OfferBcast`.
-    pub async fn bcast_offers(&self, offer_ids: Vec<SubscriptionId>) -> Result<(), DiscoveryError> {
-        let default_id = self.default_identity().await?;
+    async fn send_bcast_offers(&self) -> () {
+        // `...offer_queue` MUST be empty to trigger the sending again
+        let offer_ids: Vec<SubscriptionId> =
+            self.inner.offer_queue.lock().await.drain(..).collect();
+
+        // Should never happen, but just to be certain.
+        if offer_ids.is_empty() {
+            return ();
+        }
+
+        let default_id = match self.default_identity().await {
+            Ok(id) => id,
+            Err(e) => {
+                log::error!(
+                    "Error getting default identity, not sending bcast. error={:?}",
+                    e
+                );
+                return;
+            }
+        };
+        let size = offer_ids.len();
+        log::debug!("Broadcasting offers. count={}", size);
         let bcast_msg = SendBroadcastMessage::new(OffersBcast { offer_ids });
 
+        counter!("market.offers.broadcasts.net", 1);
         // TODO: We shouldn't use send_as. Put identity inside broadcasted message instead.
-        let _ = bus::service(local_net::BUS_ID)
+        if let Err(e) = bus::service(local_net::BUS_ID)
             .send_as(default_id, bcast_msg) // TODO: should we send as our (default) identity?
-            .await?;
-        Ok(())
+            .await
+        {
+            log::error!("Error sending bcast, skipping... error={:?}", e);
+            counter!("market.offers.broadcasts.net_errors", 1);
+            value!("market.offers.broadcasts.size", size as u64);
+        };
     }
 
     /// Ask remote Node for specified Offers.
@@ -91,15 +155,70 @@ impl Discovery {
         &self,
         offer_ids: Vec<SubscriptionId>,
     ) -> Result<(), DiscoveryError> {
-        let default_id = self.default_identity().await?;
+        if offer_ids.is_empty() {
+            return Ok(());
+        }
 
+        // When there are 0 items in the queue we should schedule a send job.
+        let must_schedule = {
+            let mut queue = self.inner.unsub_queue.lock().await;
+            let result = queue.len() == 0;
+
+            queue.append(&mut offer_ids.clone());
+            result
+        };
+
+        log::trace!(
+            "bcast_unsubscribes done appending {} offers. must_schedule={}",
+            offer_ids.len(),
+            must_schedule
+        );
+
+        if must_schedule {
+            let myself = self.clone();
+            let _ = Arbiter::spawn(async move {
+                // Sleep to collect multiple unsubscribes to send
+                delay_for(myself.inner.config.unsub_broadcast_delay).await;
+                myself.send_bcast_unsubscribes().await;
+            });
+        }
+        Ok(())
+    }
+
+    async fn send_bcast_unsubscribes(&self) {
+        // `...unsub_queue` MUST be empty to trigger the sending again
+        let offer_ids: Vec<SubscriptionId> =
+            self.inner.unsub_queue.lock().await.drain(..).collect();
+
+        // Should never happen, but just to be certain.
+        if offer_ids.is_empty() {
+            return ();
+        }
+        let default_id = match self.default_identity().await {
+            Ok(id) => id,
+            Err(e) => {
+                log::error!(
+                    "Error getting default identity, not sending bcast. error={:?}",
+                    e
+                );
+                return;
+            }
+        };
+
+        let size = offer_ids.len();
+        log::debug!("Broadcasting unsubscribes. count={}", size);
         let bcast_msg = SendBroadcastMessage::new(UnsubscribedOffersBcast { offer_ids });
+        counter!("market.offers.unsubscribes.broadcasts.net", 1);
+        value!("market.offers.unsubscribes.broadcasts.size", size as u64);
 
         // TODO: We shouldn't use send_as. Put identity inside broadcasted message instead.
-        let _ = bus::service(local_net::BUS_ID)
-            .send_as(default_id, bcast_msg)
-            .await?;
-        Ok(())
+        if let Err(e) = bus::service(local_net::BUS_ID)
+            .send_as(default_id, bcast_msg) // TODO: should we send as our (default) identity?
+            .await
+        {
+            log::error!("Error sending bcast, skipping... error={:?}", e);
+            counter!("market.offers.unsubscribes.broadcasts.net_errors", 1);
+        };
     }
 
     pub async fn bind_gsb(
@@ -146,9 +265,11 @@ impl Discovery {
     }
 
     async fn on_bcast_offers(self, caller: String, msg: OffersBcast) -> Result<(), ()> {
+        let start = Instant::now();
         let num_ids_received = msg.offer_ids.len();
-        if !msg.offer_ids.is_empty() {
-            log::trace!("Received {} Offers from [{}].", num_ids_received, &caller);
+        log::trace!("Received {} Offers from [{}].", num_ids_received, &caller);
+        if msg.offer_ids.is_empty() {
+            return Ok(());
         }
 
         // We should do filtering and getting Offers in single transaction. Otherwise multiple
@@ -158,19 +279,32 @@ impl Discovery {
         // occurred and re-broadcast only new ones.
         // But still it is worth to limit network traffic.
         let new_offer_ids = {
-            let offer_handlers = self.inner.offer_handlers.lock().await;
+            let offer_handlers = match self.inner.offer_handlers.try_lock() {
+                Ok(h) => h,
+                Err(_) => {
+                    log::trace!("Already handling bcast_offers, skipping...");
+                    return Ok(());
+                }
+            };
             let filter_out_known_ids = offer_handlers.filter_out_known_ids.clone();
             let receive_remote_offers = offer_handlers.receive_remote_offers.clone();
 
             let unknown_offer_ids = filter_out_known_ids.call(caller.clone(), msg).await?;
 
             if !unknown_offer_ids.is_empty() {
+                let start_remote = Instant::now();
                 let offers = self
                     .get_remote_offers(caller.clone(), unknown_offer_ids, 3)
                     .await
                     .map_err(|e| {
                         log::debug!("Can't get Offers from [{}]. Error: {}", &caller, e)
                     })?;
+                let end_remote = Instant::now();
+                timing!(
+                    "market.offers.incoming.get_remote.time",
+                    start_remote,
+                    end_remote
+                );
 
                 // We still could fail to add some Offers to database. If we fail to add them, we don't
                 // want to propagate subscription further.
@@ -197,6 +331,8 @@ impl Discovery {
                 .map_err(|e| log::warn!("Failed to bcast. Error: {}", e))?;
         }
 
+        let end = Instant::now();
+        timing!("market.offers.incoming.time", start, end);
         Ok(())
     }
 
@@ -215,13 +351,15 @@ impl Discovery {
         caller: String,
         msg: UnsubscribedOffersBcast,
     ) -> Result<(), ()> {
+        let start = Instant::now();
         let num_received_ids = msg.offer_ids.len();
-        if !msg.offer_ids.is_empty() {
-            log::trace!(
-                "Received {} unsubscribed Offers from [{}].",
-                num_received_ids,
-                &caller,
-            );
+        log::trace!(
+            "Received {} unsubscribed Offers from [{}].",
+            num_received_ids,
+            &caller
+        );
+        if msg.offer_ids.is_empty() {
+            return Ok(());
         }
 
         let offer_unsubscribe_handler = self.inner.offer_unsubscribe_handler.clone();
@@ -240,6 +378,8 @@ impl Discovery {
                 log::error!("Error propagating unsubscribed Offers further: {}", error,);
             }
         }
+        let end = Instant::now();
+        timing!("market.offers.unsubscribes.incoming.time", start, end);
         Ok(())
     }
 

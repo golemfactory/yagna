@@ -1,3 +1,11 @@
+# ToC
+
+ 1. [Introduction](#provider-agent)
+ 1. [Handbook](#handbook)
+    1. [ExeUnits](#exeunits)
+    1. [Presets](#presets)
+    1. [Running](#running-the-provider-agent)
+
 # Provider Agent
 
 This is a reference Yagna Provider Agent implementation.
@@ -48,7 +56,7 @@ Provider subscribes to the network as many Offers as presets enumerated from CLI
             },
             "scheme": "payu",
             "scheme.payu": {
-              "interval_sec": 6.0
+              "interval_sec": 120.0
             },
             "usage": {
               "vector": [
@@ -99,14 +107,30 @@ On activity finish Provider Agent will initiate Agreement termination.
 This is workaround because `terminate_agreement` operation is not supported yet in Market API.
 
 ### Payments
-Provider agent issues Debit Notes periodically (every `scheme.payu.interval_sec`; `6` in sample above).
-It issues Invoice once, after activity (ie. subordinate ExeUnit) finish. 
+Provider agent issues Debit Notes periodically (every `scheme.payu.interval_sec`;
+default value is [120s](src/payments/pricing.rs#L85): `interval` within `LinearPricingOffer`).
+It is not subject for negotiations.
+
+During negotiation Requestor and Provider both agrees on `timeout` at which Debit Notes are accepted by
+Requestor. A property responsible for this is named `golem.com.payment.debit-notes.accept-timeout?`.
+Provider starts negotiations with [4min](src/market/negotiator/factory.rs#L27) and it might be only
+lower ie. Requestor might propose lower value, which Provider will accept as long as it is more than
+`5sec`. Base value for `timeout` negotiations is controlled via [CLI](src/market/negotiator/factory.rs#L27)
+and ENV `DEBIT_NOTE_ACCEPTANCE_DEADLINE`. Provider is then entitled to break the Agreement after
+negotiated `timeout` elapses and Debit Note is **not** accepted.
+
+What's more, Provider is entitled to break the Agreement, when there is no Activity
+for [90s](src/tasks/config.rs#L7) (ie. idle Agreement).
+
+Provider issues Invoice **only once**, after the Agreement is terminated.
 
 ## Configuration
 
-Provider agent can be used with `.env` file. [Here](https://github.com/golemfactory/yagna/wiki/DotEnv-Configuration) is list of additional environment variables that can be set.
+Provider agent can be used with `.env` file. [Here](https://github.com/golemfactory/yagna/wiki/DotEnv-Configuration)
+is list of additional environment variables that can be set.
 
-Create separate working dir for the Provider Agent (please create `ya-prov` in the main yagna source code directory), and create `.env` file there by copying
+Create separate working dir for the Provider Agent (please create `ya-prov` in the main yagna source code directory),
+and create `.env` file there by copying
 [`.env-template`](https://github.com/golemfactory/yagna/blob/master/.env-template) from yagna repo main directory:
 ```bash
 mkdir ya-prov && cd ya-prov && cp ../.env-template .env
@@ -153,7 +177,11 @@ To obtain `YAGNA_APPKEY` we need to be in this newly created workdir `cd ya-prov
 
 ## ExeUnits
 
-## WASI (wasmtime)
+ 1. [WASI](#wasi-wasmtime)
+ 1. [Runtime SDK](https://github.com/golemfactory/ya-runtime-sdk#deploying)
+ 1. [VM](#vm-docker)
+
+### WASI (wasmtime)
 
 This is the first ExeUnit we've prepared for you.
 You need to clone its repository and build.
@@ -185,6 +213,24 @@ Runtime:       /Users/tworec/git/ya-runtime-wasi/target/debug/ya-runtime-wasi
 Description:   This is just a sample descriptor for wasmtime exeunit used by ya-provider
 Properties:
     wasm.wasi.version@v           "0.9.0"
+```
+
+### VM (docker)
+
+Please refer to [vm repo documentation](https://github.com/golemfactory/ya-runtime-vm).
+Afterwards you'll need to update your `exeunits-descriptor.json` (defined as `EXE_UNIT_PATH`
+in `.env` or os env).
+
+Sample descriptor entry:
+```
+  {
+    "name": "vm",
+    "version": "0.2.0",
+    "supervisor-path": "exe-unit",
+        "runtime-path": "/home/user/.local/lib/yagna/plugins/ya-runtime-vm/ya-runtime-vm",
+    "description": "vm runtime",
+    "extra-args": ["--cap-handoff"]
+  }
 ```
 
 ## Presets
@@ -409,12 +455,12 @@ cargo run -p ya-provider run
 ```
 
 ## Central setup
-We have centrally deployed (@ ip: `3.249.139.167`) three independent standalone modules/apps:
- - [net Mk1](https://github.com/golemfactory/yagna/blob/master/docs/net-api/net-mk1-hub.md) @ 3.249.139.167:7464 \
+We have centrally deployed (@ yacn2.dev.golem.network) three independent standalone modules/apps:
+ - [net Mk1](https://github.com/golemfactory/yagna/blob/master/docs/net-api/net-mk1-hub.md) @ yacn2.dev.golem.network:7464 \
    (can be run locally with `cargo run --release -p ya-sb-router --example ya_sb_router -- -l tcp://0.0.0.0:7464` 
    from the [ya-service-bus](http://github.com/golemfactory/ya-service-bus) repository)
- - simple "images store" @ 3.249.139.167:8000 \
+ - simple "images store" @ yacn2.dev.golem.network:8000 \
    this is a http server that has two purposes: to serve binary `.zip`/`.yimg` packages (GET) and receive computation results (PUT)
    (can be run locally with `cargo run --release -p ya-exe-unit --example http-get-put -- --root-dir <DIR-WITH-WASM-BINARY-IMAGES>`)
- - ya-zksync-faucet @ 3.249.139.167:5778
-    eg. `curl http://3.249.139.167:5778/zk/donatex/0xf63579d46eedee31d9db380a38addd58fdf414fd`
+ - ya-zksync-faucet @ yacn2.dev.golem.network:5778
+    eg. `curl http://yacn2.dev.golem.network:5778/zk/donatex/0xf63579d46eedee31d9db380a38addd58fdf414fd`

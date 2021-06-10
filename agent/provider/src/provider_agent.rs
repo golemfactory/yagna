@@ -172,7 +172,18 @@ impl GlobalsState {
 impl ProviderAgent {
     pub async fn new(mut args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
         let data_dir = config.data_dir.get_or_create()?;
-        let log_handler = start_logger("info", Some(&data_dir), &vec![])?;
+
+        //log_dir is the same as data_dir by default, but can be changed using --log-dir option
+        let log_dir = if let Some(log_dir) = &config.log_dir {
+            log_dir.get_or_create()?
+        } else {
+            data_dir.clone()
+        };
+
+        //start_logger is using env var RUST_LOG internally.
+        //args.debug options sets default logger to debug
+        let log_handler = start_logger("info", Some(&log_dir), &vec![], args.debug)?;
+
         let app_name = structopt::clap::crate_name!();
         log::info!(
             "Starting {}. Version: {}.",
@@ -180,6 +191,7 @@ impl ProviderAgent {
             ya_compile_time_utils::version_describe!()
         );
         log::info!("Data directory: {}", data_dir.display());
+        log::info!("Log directory: {}", log_dir.display());
 
         {
             log::info!("Performing disk cleanup...");
@@ -261,7 +273,10 @@ impl ProviderAgent {
 
         for preset in presets {
             let pricing_model: Box<dyn PricingOffer> = match preset.pricing_model.as_str() {
-                "linear" => Box::new(LinearPricingOffer::default()),
+                "linear" => match std::env::var("DEBIT_NOTE_INTERVAL") {
+                    Ok(val) => Box::new(LinearPricingOffer::default().interval(val.parse()?)),
+                    Err(_) => Box::new(LinearPricingOffer::default()),
+                },
                 other => return Err(anyhow!("Unsupported pricing model: {}", other)),
             };
             let mut offer: OfferTemplate = offer_templates

@@ -32,21 +32,6 @@ use ya_service_api_web::scope::ExtendableScope;
 
 pub mod agreement;
 
-pub struct EnvConfig<'a, T> {
-    pub name: &'a str,
-    pub default: T,
-    pub min: T,
-}
-
-impl<'a> EnvConfig<'a, u64> {
-    pub fn get_value(&self) -> u64 {
-        std::env::var(self.name)
-            .and_then(|v| v.parse::<u64>().map_err(|_| std::env::VarError::NotPresent))
-            .unwrap_or(self.default)
-            .max(self.min)
-    }
-}
-
 #[derive(Error, Debug)]
 pub enum MarketError {
     #[error(transparent)]
@@ -71,6 +56,8 @@ pub enum MarketInitError {
     Negotiation(#[from] NegotiationInitError),
     #[error("Failed to migrate market database. Error: {0}.")]
     Migration(#[from] anyhow::Error),
+    #[error("Failed to initialize config. Error: {0}.")]
+    Config(#[from] structopt::clap::Error),
 }
 
 /// Structure connecting all market objects.
@@ -87,6 +74,13 @@ impl MarketService {
         identity_api: Arc<dyn IdentityApi>,
         config: Arc<Config>,
     ) -> Result<Self, MarketInitError> {
+        counter!("market.offers.subscribed", 0);
+        counter!("market.offers.unsubscribed", 0);
+        counter!("market.offers.expired", 0);
+        counter!("market.demands.subscribed", 0);
+        counter!("market.demands.unsubscribed", 0);
+        counter!("market.demands.expired", 0);
+
         db.apply_migration(crate::db::migrations::run_with_output)?;
 
         let store = SubscriptionStore::new(db.clone(), config.clone());
@@ -111,7 +105,7 @@ impl MarketService {
         )?;
         let cleaner_db = db.clone();
         tokio::spawn(async move {
-            crate::db::dao::cleaner::clean_forever(cleaner_db).await;
+            crate::db::dao::cleaner::clean_forever(cleaner_db, config.db.clone()).await;
         });
 
         Ok(MarketService {
@@ -135,11 +129,6 @@ impl MarketService {
             .bind_gsb(public_prefix, local_prefix)
             .await?;
         agreement::bind_gsb(self.db.clone(), public_prefix, local_prefix).await;
-
-        counter!("market.offers.subscribed", 0);
-        counter!("market.offers.unsubscribed", 0);
-        counter!("market.demands.subscribed", 0);
-        counter!("market.demands.unsubscribed", 0);
         Ok(())
     }
 
@@ -316,7 +305,7 @@ impl StaticMarket {
             Ok(market.clone())
         } else {
             let identity_api = IdentityGSB::new();
-            let config = Arc::new(Config::default());
+            let config = Arc::new(Config::from_env()?);
             let market = Arc::new(MarketService::new(db, identity_api, config)?);
             *guarded_market = Some(market.clone());
             Ok(market)

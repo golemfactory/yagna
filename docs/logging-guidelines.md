@@ -35,7 +35,7 @@ Nice to have:
 The log entries should record following aspects/attributes:
 
 **Must have:**
-- **Timestamp** (with ms granularity, in UTC or with TZ information) - must be possible to correlate entries from nodes in different timezones
+- **Timestamp** (format see below) - must be possible to correlate entries from nodes in different timezones
 - Log **level**
 - Log **area/topic** (eg. namespace or module of code which records the log entry)
 - **Grouping or correlating** attribute (attribute which allows to filter events related to a single command, activity, API request, etc.)
@@ -51,14 +51,20 @@ The log entries should record following aspects/attributes:
 - **Error resolution hints** - very important for high level errors / warns that actually can be resolved by some action. In some cases this is true also for low level errors / warns
 - **Code location** of the log statement
 
+### Timestamp format
+
+Use local time, with millisecond precision with offset from UTC, as specified in [RFC3339, Section 4.](https://datatracker.ietf.org/doc/html/rfc3339#section-4) For example:
+
+2021-05-05T16:39:57.347-08:00
+
 ### Generic guidelines
 - Use descriptive messages and proper casing/punctuation, ie. instead of: 
   ```
-  [2020-08-27T07:56:22Z DEBUG yagna] init glm drv
+  [2020-08-27T07:56:22.348+02:00 DEBUG yagna] init glm drv
   ```
   do this:
   ```
-  [2020-08-27T07:56:22Z DEBUG yagna] Initializing GLM payment driver
+  [2020-08-27T07:56:22.348+02:00 DEBUG yagna] Initializing GLM payment driver
   ```
 
 ### Data confidentiality
@@ -155,12 +161,61 @@ Care must be taken when confidential or personal data need to be recorded in log
 As low-level, 3rd party library errors are encountered during execution, their error messages are usually useless without context information. It is vital to wrap the low-level error messages with additional info to indicate details of performed activity that would aid in troubleshooting. Eg. instead of:
 
 ```
-[2020-08-27T07:56:22Z ERROR yagna] File IO error: Path not found
+[2020-08-27T07:56:22.348+02:00 ERROR yagna] File IO error: Path not found
 ```
 
 log this:
 
 ```
-[2020-08-27T07:56:22Z ERROR yagna] E00342 - WASM ExeUnit DEPLOY: Error downloading remote file to temp folder '/tmp/yagna_data': File IO error: Path not found
+[2020-08-27T07:56:22.348+02:00 ERROR yagna] E00342 - WASM ExeUnit DEPLOY: Error downloading remote file to temp folder '/tmp/yagna_data': File IO error: Path not found
 
 ```
+
+## Implementation Recommendations
+
+It is recommended to follow the uniform patterns/mechanisms as listed in this section:
+
+### Default log file naming and location
+
+Log files shall be generated in complance with following path convention:
+
+```
+${YAGNA_DATA_DIR}\logs\${component-name}-${date-YYYYMMDD}(.${file-no})?.log
+```
+
+for example:
+
+```
+${YAGNA_DATA_DIR}\logs\yagna-20210127.log
+${YAGNA_DATA_DIR}\logs\gftp-20210126.1.log
+${YAGNA_DATA_DIR}\logs\gftp-20210126.2.log
+```
+
+### CLI configuration parameters
+
+For CLI-triggered components, it is recommended to implement following, uniform log config parameters:
+
+`--debug` - Launch the component with logs on DEBUG level (INFO is the default log level)
+
+`-- log-file (file name)` - Redirect logstream into a file with given name.
+
+### Default log entry layout
+
+It is recommended to follow a uniform log entry layout pattern: 
+
+```
+[ (timestamp) (log level) (area/topic)] (message)
+```
+
+for example:
+
+```
+[2020-08-27T07:56:22.348+02:00 ERROR yagna::exe_unit::wasm] E00342 - WASM ExeUnit DEPLOY: Error downloading remote file to temp folder '/tmp/yagna_data': File IO error: Path not found
+```
+
+### Log rotation
+
+It is recommended to implement log file rotation mechanisms. 
+
+**TODO** Details
+

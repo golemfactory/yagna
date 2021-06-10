@@ -82,7 +82,7 @@ pub struct LinearPricingOffer {
 
 impl Default for LinearPricingOffer {
     fn default() -> Self {
-        LinearPricingOffer { interval: 6.0 }
+        LinearPricingOffer { interval: 120.0 }
     }
 }
 

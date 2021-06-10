@@ -206,7 +206,7 @@ impl ResponseError for AgreementError {
             | AgreementError::Get(..)
             | AgreementError::Gsb(_)
             | AgreementError::ProtocolCreate(_)
-            | AgreementError::ProtocolApprove(_)
+            | AgreementError::Protocol(_)
             | AgreementError::ProtocolTerminate(_)
             | AgreementError::ProtocolCommit(_)
             | AgreementError::Internal(_) => HttpResponse::InternalServerError().json(msg),

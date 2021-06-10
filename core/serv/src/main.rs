@@ -212,7 +212,7 @@ enum Services {
 
 #[cfg(not(any(
     feature = "dummy-driver",
-    feature = "gnt-driver",
+    feature = "erc20-driver",
     feature = "zksync-driver"
 )))]
 compile_error!("At least one payment driver needs to be enabled in order to make payments.");
@@ -226,17 +226,10 @@ async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<Vec<String>> {
         PaymentDriverService::gsb(&()).await?;
         drivers.push(DRIVER_NAME.to_owned());
     }
-    #[cfg(feature = "glmsync-driver")]
+    #[cfg(feature = "erc20-driver")]
     {
-        use ya_glmsync_driver::{PaymentDriverService, DRIVER_NAME};
-        let db_executor = DbExecutor::from_data_dir(data_dir, "glmsync-driver")?;
-        PaymentDriverService::gsb(&db_executor).await?;
-        drivers.push(DRIVER_NAME.to_owned());
-    }
-    #[cfg(feature = "gnt-driver")]
-    {
-        use ya_gnt_driver::{PaymentDriverService, DRIVER_NAME};
-        let db_executor = DbExecutor::from_data_dir(data_dir, "gnt-driver")?;
+        use ya_erc20_driver::{PaymentDriverService, DRIVER_NAME};
+        let db_executor = DbExecutor::from_data_dir(data_dir, "erc20-driver")?;
         PaymentDriverService::gsb(&db_executor).await?;
         drivers.push(DRIVER_NAME.to_owned());
     }
@@ -269,7 +262,7 @@ impl CliCommand {
     pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
             CliCommand::Commands(command) => {
-                start_logger("warn", None, &vec![])?;
+                start_logger("warn", None, &vec![], false)?;
                 command.run_command(ctx).await
             }
             CliCommand::Complete(complete) => complete.run_command(ctx),
@@ -301,6 +294,10 @@ struct ServiceCommandOpts {
 
     #[structopt(long, env, default_value = "60")]
     max_rest_timeout: usize,
+
+    ///changes log level from info to debug
+    #[structopt(long)]
+    debug: bool,
 
     /// Create logs in this directory. Logs are automatically rotated and compressed.
     /// If unset, then `data_dir` is used.
@@ -342,6 +339,7 @@ impl ServiceCommand {
                 metrics_opts,
                 max_rest_timeout,
                 log_dir,
+                debug,
             }) => {
                 // workaround to silence middleware logger by default
                 // to enable it explicitly set RUST_LOG=info or more verbose
@@ -351,6 +349,9 @@ impl ServiceCommand {
                         .unwrap_or(format!("info,actix_web::middleware::logger=warn",)),
                 );
 
+                //this force_debug flag sets default log level to debug
+                //if the --debug option is set
+                let force_debug = *debug;
                 let logger_handle = start_logger(
                     "info",
                     log_dir.as_deref().or(Some(&ctx.data_dir)).and_then(|path| {
@@ -368,6 +369,7 @@ impl ServiceCommand {
                         ("web3", log::LevelFilter::Info),
                         ("h2", log::LevelFilter::Info),
                     ],
+                    force_debug,
                 )?;
 
                 let app_name = clap::crate_name!();
@@ -418,6 +420,8 @@ impl ServiceCommand {
                 future::try_join(server.run(), sd_notify(false, "READY=1")).await?;
 
                 log::info!("{} service successfully finished!", app_name);
+
+                PaymentService::shut_down().await;
                 logger_handle.shutdown();
                 Ok(CommandOutput::NoOutput)
             }

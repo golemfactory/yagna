@@ -7,12 +7,14 @@ use crate::protocol::callback::{CallbackFuture, OutputFuture};
 use crate::protocol::callback::{CallbackHandler, CallbackMessage, HandlerSlot};
 
 use super::{Discovery, DiscoveryImpl};
+use crate::config::DiscoveryConfig;
 use crate::protocol::discovery::OfferHandlers;
 
 #[derive(Default)]
 pub struct DiscoveryBuilder {
     data: HashMap<TypeId, Box<dyn Any>>,
     handlers: HashMap<TypeId, Box<dyn Any>>,
+    config: Option<DiscoveryConfig>,
 }
 
 impl DiscoveryBuilder {
@@ -57,17 +59,26 @@ impl DiscoveryBuilder {
         data.clone()
     }
 
+    pub fn with_config(mut self, config: DiscoveryConfig) -> Self {
+        self.config = Some(config);
+        self
+    }
+
     pub fn build(mut self) -> Discovery {
         let offer_handlers = Mutex::new(OfferHandlers {
             filter_out_known_ids: self.get_handler(),
             receive_remote_offers: self.get_handler(),
         });
+
         Discovery {
             inner: Arc::new(DiscoveryImpl {
                 identity: self.get_data(),
                 offer_handlers,
+                offer_queue: Mutex::new(vec![]),
+                unsub_queue: Mutex::new(vec![]),
                 get_local_offers_handler: self.get_handler(),
                 offer_unsubscribe_handler: self.get_handler(),
+                config: self.config.unwrap(),
             }),
         }
     }
@@ -95,6 +106,7 @@ mod test {
 
     use crate::testing::mock_identity::{generate_identity, MockIdentity};
     use crate::testing::mock_offer::sample_retrieve_offers;
+    use crate::testing::Config;
 
     use super::super::*;
     use super::*;
@@ -141,6 +153,7 @@ mod test {
             .add_handler(|_, _: UnsubscribedOffersBcast| async { Ok(vec![]) })
             .add_handler(|_, _: OffersBcast| async { Ok(vec![]) })
             .add_handler(|_, _: RetrieveOffers| async { Ok(vec![]) })
+            .with_config(Config::from_env().unwrap().discovery)
             .build();
     }
 
@@ -153,6 +166,7 @@ mod test {
             .add_data_handler(|_: &str, _, _: UnsubscribedOffersBcast| async { Ok(vec![]) })
             .add_handler(|_, _: OffersBcast| async { Ok(vec![]) })
             .add_data_handler(|_: &str, _, _: RetrieveOffers| async { Ok(vec![]) })
+            .with_config(Config::from_env().unwrap().discovery)
             .build();
     }
 
@@ -178,6 +192,7 @@ mod test {
                 }
             })
             .add_handler(|_, _: OffersBcast| async { Ok(vec![]) })
+            .with_config(Config::from_env().unwrap().discovery)
             .build();
 
         assert_eq!(0, counter.load(SeqCst));

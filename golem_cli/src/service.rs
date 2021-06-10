@@ -40,7 +40,8 @@ impl AbortableChild {
                 let pid = child.id() as i32;
                 let _ret = ::nix::sys::signal::kill(Pid::from_raw(pid), SIGTERM);
             }
-            match future::select(tokio::time::delay_for(Duration::from_secs(2)), child).await {
+            // Yagna service should get ~10 seconds to clean up
+            match future::select(tokio::time::delay_for(Duration::from_secs(15)), child).await {
                 future::Either::Left((_, mut child)) => {
                     child.kill()?;
                     child.await
@@ -111,7 +112,7 @@ pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
     crate::setup::setup(&mut config, false).await?;
 
     let cmd = YaCommand::new()?;
-    let service = cmd.yagna()?.service_run().await?;
+    let service = cmd.yagna()?.service_run(&config).await?;
     let app_key = appkey::get_app_key().await?;
 
     let provider_config = cmd.ya_provider()?.get_config().await?;

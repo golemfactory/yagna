@@ -1,6 +1,6 @@
 
-/.github/                                @prekucki
-/.github/workflows/rust.yml              @golemfactory/ya-integration
+/.github/workflows/goth.yml              @golemfactory/ya-integration
+/.github/workflows/nightly-goth.yml      @golemfactory/ya-integration
 
 # Activity
 /core/activity/                          @golemfactory/exe-unit

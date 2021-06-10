@@ -94,7 +94,7 @@ fn property_refs_returns_correct_result() {
 
     let expression = build_expression(&parse(f).unwrap()).unwrap();
 
-    // extract property_refs frome expression
+    // extract property_refs from expression
 
     assert_eq!(
         expression

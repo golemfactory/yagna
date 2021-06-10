@@ -73,8 +73,8 @@ pub struct NewAgreement {
 // =========================================== //
 
 /// Sent when subscribing offer to the market will be finished.
-#[rtype(result = "Result<()>")]
 #[derive(Debug, Clone, Message)]
+#[rtype(result = "Result<()>")]
 struct Subscription {
     id: String,
     preset: Preset,
@@ -99,6 +99,11 @@ struct OnAgreementTerminated {
 // ProviderMarket declaration
 // =========================================== //
 
+pub struct SubscriptionProposal {
+    pub subscription_id: String,
+    pub proposal: Proposal,
+}
+
 /// Manages market api communication and forwards proposal to implementation of market strategy.
 // Outputting empty string for logfn macro purposes
 #[derive(Display)]
@@ -107,6 +112,7 @@ pub struct ProviderMarket {
     negotiator: Arc<NegotiatorAddr>,
     api: Arc<MarketProviderApi>,
     subscriptions: HashMap<String, Subscription>,
+    postponed_demands: Vec<SubscriptionProposal>,
     config: Arc<MarketConfig>,
 
     /// External actors can listen on this signal.
@@ -136,6 +142,7 @@ impl ProviderMarket {
             negotiator: Arc::new(NegotiatorAddr::default()),
             config: Arc::new(config),
             subscriptions: HashMap::new(),
+            postponed_demands: Vec::new(),
             agreement_signed_signal: SignalSlot::<NewAgreement>::new(),
             agreement_terminated_signal: SignalSlot::<CloseAgreement>::new(),
             handles: HashMap::new(),
@@ -312,6 +319,16 @@ async fn process_proposal(
         }
         ProposalResponse::IgnoreProposal => log::info!("Ignoring proposal {:?}", proposal_id),
         ProposalResponse::RejectProposal { reason } => {
+            if let Some(r) = reason.clone() {
+                let is_final = r.extra["golem.proposal.rejection.is-final"].clone();
+                if !is_final.eq(&serde_json::json!(false)) {
+                    let sub_dem = SubscriptionProposal {
+                        subscription_id: subscription.id.clone(),
+                        proposal: demand.clone(),
+                    };
+                    ctx.market.do_send(PostponeDemand(sub_dem));
+                }
+            }
             ctx.api
                 .reject_proposal(&subscription.id, proposal_id, &reason)
                 .await?;
@@ -515,6 +532,19 @@ impl Handler<ReSubscribe> for ProviderMarket {
     }
 }
 
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+struct PostponeDemand(SubscriptionProposal);
+
+impl Handler<PostponeDemand> for ProviderMarket {
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, msg: PostponeDemand, _ctx: &mut Self::Context) -> Self::Result {
+        self.postponed_demands.extend(vec![msg.0]);
+        ActorResponse::reply(Ok(()))
+    }
+}
+
 // =========================================== //
 // Actix stuff
 // =========================================== //
@@ -701,6 +731,27 @@ async fn resubscribe_offers(
     }
 }
 
+async fn renegotiate_demands(
+    ctx: AsyncCtx,
+    subscriptions: HashMap<String, Subscription>,
+    demands: Vec<SubscriptionProposal>,
+) {
+    for sub_dem in demands {
+        let subscription = subscriptions.get(&sub_dem.subscription_id);
+        let demand = sub_dem.proposal;
+        match subscription {
+            None => {
+                log::warn!("Subscription not found: {}", sub_dem.subscription_id);
+                None
+            }
+            Some(sub) => process_proposal(ctx.clone(), sub.clone(), &demand)
+                .await
+                .log_warn_msg(&format!("Unable to process demand: {}", demand.proposal_id))
+                .ok(),
+        };
+    }
+}
+
 impl Handler<AgreementFinalized> for ProviderMarket {
     type Result = ResponseActFuture<Self, Result<()>>;
 
@@ -722,6 +773,7 @@ impl Handler<AgreementFinalized> for ProviderMarket {
                 .ok();
         }
 
+        let async_ctx = ctx.clone();
         let future = async move {
             ctx.negotiator
                 .agreement_finalized(&agreement_id, result)
@@ -736,11 +788,11 @@ impl Handler<AgreementFinalized> for ProviderMarket {
         .map(|_, myself, ctx| {
             ctx.spawn(terminate_agreement(myself.api.clone(), msg).into_actor(myself));
 
-            log::info!("Re-subscribing all active offers to get fresh proposals from the Market");
+            log::info!("Re-negotiating all demands");
 
-            let subscriptions = std::mem::replace(&mut myself.subscriptions, HashMap::new());
+            let demands = std::mem::replace(&mut myself.postponed_demands, Vec::new());
             ctx.spawn(
-                resubscribe_offers(ctx.address(), myself.api.clone(), subscriptions)
+                renegotiate_demands(async_ctx, myself.subscriptions.clone(), demands)
                     .into_actor(myself),
             );
             Ok(())

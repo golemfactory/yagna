@@ -20,11 +20,11 @@ pub struct LimitAgreementsNegotiatorConfig {
 pub struct AgreementExpirationNegotiatorConfig {
     #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "5min")]
     pub min_agreement_expiration: std::time::Duration,
-    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "30min")]
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "3h")]
     pub max_agreement_expiration: std::time::Duration,
     #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "30min")]
     pub max_agreement_expiration_without_deadline: std::time::Duration,
-    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "2min")]
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "4min")]
     pub debit_note_acceptance_deadline: std::time::Duration,
 }
 

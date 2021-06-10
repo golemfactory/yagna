@@ -14,7 +14,6 @@ use ya_agreement_utils::AgreementView;
 use ya_client_model::activity::TransferArgs;
 use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::message::{Shutdown, ShutdownReason};
-use ya_exe_unit::runtime::RuntimeArgs;
 use ya_exe_unit::service::transfer::{AbortTransfers, TransferResource, TransferService};
 use ya_exe_unit::ExeUnitContext;
 
@@ -158,14 +157,14 @@ async fn main() -> anyhow::Result<()> {
             agreement_id: String::new(),
             json: serde_json::Value::Null,
         },
-        task_package: "".to_string(),
+        task_package: None,
         usage_vector: Vec::new(),
         usage_limits: HashMap::new(),
         infrastructure: HashMap::new(),
     };
 
-    let runtime_args = RuntimeArgs::new(&work_dir, &agreement, true);
     let exe_ctx = ExeUnitContext {
+        supervise: Default::default(),
         activity_id: None,
         acl: Default::default(),
         report_url: None,
@@ -173,7 +172,6 @@ async fn main() -> anyhow::Result<()> {
         agreement,
         work_dir,
         cache_dir,
-        runtime_args,
         #[cfg(feature = "sgx")]
         crypto: init_crypto()?,
     };

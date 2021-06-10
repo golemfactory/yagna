@@ -179,10 +179,12 @@ async fn main() -> anyhow::Result<()> {
     .await?;
 
     log::info!("Creating allocation...");
+    let accounts = requestor.get_requestor_accounts().await?;
+    let account = accounts.first().expect("No account available");
     let allocation = requestor
         .create_allocation(&NewAllocation {
-            address: None,          // Use default address (i.e. identity)
-            payment_platform: None, // Use default payment platform
+            address: Some(account.address.clone()),
+            payment_platform: Some(account.platform.clone()),
             total_amount: BigDecimal::from(10u64),
             timeout: None,
             make_deposit: false,
@@ -226,5 +228,6 @@ async fn main() -> anyhow::Result<()> {
     cancel_result.unwrap_err();
     log::info!("Failed to cancel accepted invoice.");
 
+    log::info!(" 👍🏻 Example completed successfully ❤️");
     Ok(())
 }

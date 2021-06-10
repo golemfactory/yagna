@@ -1,32 +1,35 @@
+use std::collections::HashSet;
+use std::ffi::{OsStr, OsString};
+use std::hash::{Hash, Hasher};
+use std::ops::Not;
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
+use std::sync::Arc;
+
+use actix::prelude::*;
+use futures::future::{self, LocalBoxFuture};
+use futures::{FutureExt, TryFutureExt};
+use tokio::process::Command;
+
 use crate::acl::Acl;
 use crate::error::Error;
-use crate::message::{ExecuteCommand, Shutdown, ShutdownReason, UpdateDeployment};
+use crate::message::{CommandContext, ExecuteCommand, Shutdown, ShutdownReason, UpdateDeployment};
 use crate::network::{start_vpn, Vpn};
 use crate::output::{forward_output, vec_to_string};
 use crate::process::{kill, ProcessTree, SystemError};
 use crate::runtime::event::EventMonitor;
-use crate::runtime::{Runtime, RuntimeArgs, RuntimeMode};
+use crate::runtime::{Runtime, RuntimeMode};
 use crate::state::Deployment;
 use crate::ExeUnitContext;
-use actix::prelude::*;
-use futures::future::{self, LocalBoxFuture};
-use futures::prelude::*;
-use futures::{FutureExt, SinkExt, TryFutureExt};
-use std::collections::HashSet;
-use std::ffi::OsString;
-use std::hash::{Hash, Hasher};
-use std::path::{Path, PathBuf};
-use std::process::Stdio;
-use std::sync::Arc;
-use tokio::process::Command;
+
 use ya_agreement_utils::agreement::OfferTemplate;
 use ya_client_model::activity::{CommandOutput, ExeScriptCommand, RuntimeEvent};
 use ya_runtime_api::server::{spawn, ProcessControl, RunProcess, RuntimeService, RuntimeStatus};
-use ya_runtime_api::PROTOCOL_VERSION;
 
 const PROCESS_KILL_TIMEOUT_SECONDS_ENV_VAR: &str = "PROCESS_KILL_TIMEOUT_SECONDS";
 const DEFAULT_PROCESS_KILL_TIMEOUT_SECONDS: i64 = 5;
 const MIN_PROCESS_KILL_TIMEOUT_SECONDS: i64 = 1;
+const SERVICE_PROTOCOL_VERSION: &str = "0.1.0";
 
 fn process_kill_timeout_seconds() -> i64 {
     let limit = std::env::var(PROCESS_KILL_TIMEOUT_SECONDS_ENV_VAR)
@@ -36,8 +39,8 @@ fn process_kill_timeout_seconds() -> i64 {
 }
 
 pub struct RuntimeProcess {
+    ctx: ExeUnitContext,
     binary: PathBuf,
-    runtime_args: RuntimeArgs,
     deployment: Deployment,
     children: HashSet<ChildProcess>,
     service: Option<ProcessService>,
@@ -49,10 +52,10 @@ pub struct RuntimeProcess {
 impl RuntimeProcess {
     pub fn new(ctx: &ExeUnitContext, binary: PathBuf) -> Self {
         Self {
+            ctx: ctx.clone(),
             binary,
-            runtime_args: ctx.runtime_args.clone(),
             deployment: Default::default(),
-            children: HashSet::new(),
+            children: Default::default(),
             service: None,
             monitor: None,
             acl: ctx.acl.clone(),
@@ -87,7 +90,7 @@ impl RuntimeProcess {
                 })?)
             }
             false => {
-                log::warn!(
+                log::info!(
                     "Cannot read offer template from runtime; using defaults [{}]",
                     binary.display()
                 );
@@ -96,15 +99,43 @@ impl RuntimeProcess {
         }
     }
 
-    fn args(&self, cmd_args: Vec<OsString>) -> Result<Vec<OsString>, Error> {
-        let pkg_path = self
-            .deployment
-            .task_package
-            .clone()
-            .ok_or(Error::runtime("missing task package path"))?;
+    fn args(&self) -> Result<CommandArgs, Error> {
+        let mut args = CommandArgs::default();
 
-        let mut args = self.runtime_args.to_command_line(&pkg_path);
-        args.extend(cmd_args);
+        args.arg("--workdir");
+        args.arg(&self.ctx.work_dir);
+
+        if self.ctx.supervise.image {
+            match self.deployment.task_package.as_ref() {
+                Some(val) => {
+                    args.arg("--task-package");
+                    args.arg(val.display().to_string());
+                }
+                None => {
+                    return Err(Error::Other(
+                        "task package (image) path was not provided".into(),
+                    ))
+                }
+            }
+        }
+
+        if !self.ctx.supervise.hardware {
+            let inf = &self.ctx.agreement.infrastructure;
+
+            if let Some(val) = inf.get("cpu.threads") {
+                args.arg("--cpu-cores");
+                args.arg((*val as u64).to_string());
+            }
+            if let Some(val) = inf.get("mem.gib") {
+                args.arg("--mem-gib");
+                args.arg(val.to_string());
+            }
+            if let Some(val) = inf.get("storage.gib").cloned() {
+                args.arg("--storage-gib");
+                args.arg(val.to_string());
+            }
+        }
+
         Ok(args)
     }
 }
@@ -115,48 +146,49 @@ impl RuntimeProcess {
         cmd: ExecuteCommand,
         address: Addr<Self>,
     ) -> LocalBoxFuture<'f, Result<i32, Error>> {
-        let cmd_args = match &cmd.command {
-            ExeScriptCommand::Deploy { .. } => vec![OsString::from("deploy")],
-            ExeScriptCommand::Start { args } => ["start", "--"]
-                .iter()
-                .map(OsString::from)
-                .chain(args.into_iter().map(OsString::from))
-                .collect(),
+        let mut rt_args = match self.args() {
+            Ok(args) => args,
+            Err(err) => return futures::future::err(err).boxed_local(),
+        };
+
+        let (cmd, ctx) = cmd.split();
+        match cmd {
+            ExeScriptCommand::Deploy { .. } => rt_args.args(&["deploy", "--"]),
+            ExeScriptCommand::Start { args } => rt_args.args(&["start", "--"]).args(args),
             ExeScriptCommand::Run {
                 entry_point, args, ..
-            } => ["run", "--entrypoint", entry_point.as_str(), "--"]
-                .iter()
-                .map(OsString::from)
-                .chain(args.into_iter().map(OsString::from))
-                .collect(),
+            } => rt_args
+                .args(&["run", "--entrypoint"])
+                .arg(entry_point)
+                .arg("--")
+                .args(args),
             _ => return future::ok(0).boxed_local(),
         };
 
         let binary = self.binary.clone();
-        let args = self.args(cmd_args);
 
         log::info!(
             "Executing {:?} with {:?} from path {:?}",
             binary,
-            args,
+            rt_args,
             std::env::current_dir()
         );
 
         async move {
-            let idx = cmd.idx;
             let mut child = Command::new(binary)
+                .args(rt_args)
                 .kill_on_drop(true)
-                .args(args?)
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .spawn()?;
 
-            let id = cmd.batch_id.clone();
-            let stdout = forward_output(child.stdout.take().unwrap(), &cmd.tx, move |out| {
+            let idx = ctx.idx;
+            let id = ctx.batch_id.clone();
+            let stdout = forward_output(child.stdout.take().unwrap(), &ctx.tx, move |out| {
                 RuntimeEvent::stdout(id.clone(), idx, CommandOutput::Bin(out))
             });
-            let id = cmd.batch_id.clone();
-            let stderr = forward_output(child.stderr.take().unwrap(), &cmd.tx, move |out| {
+            let id = ctx.batch_id.clone();
+            let stderr = forward_output(child.stderr.take().unwrap(), &ctx.tx, move |out| {
                 RuntimeEvent::stderr(id.clone(), idx, CommandOutput::Bin(out))
             });
 
@@ -179,40 +211,51 @@ impl RuntimeProcess {
         cmd: ExecuteCommand,
         address: Addr<Self>,
     ) -> LocalBoxFuture<'f, Result<i32, Error>> {
-        match cmd.command.clone() {
-            ExeScriptCommand::Start { args } => self.handle_service_start(args, address),
+        let (cmd, ctx) = cmd.split();
+        match cmd {
+            ExeScriptCommand::Start { args } => self.handle_service_start(ctx, args, address),
             ExeScriptCommand::Run {
                 entry_point, args, ..
-            } => self.handle_service_run(cmd, entry_point, args),
+            } => self.handle_service_run(ctx, entry_point, args),
             _ => future::ok(0).boxed_local(),
         }
     }
 
     fn handle_service_start<'f>(
         &mut self,
+        ctx: CommandContext,
         args: Vec<String>,
         address: Addr<Self>,
     ) -> LocalBoxFuture<'f, Result<i32, Error>> {
-        let args = self.args(
-            std::iter::once(OsString::from("start"))
-                .chain(args.into_iter().map(OsString::from))
-                .collect(),
+        let mut rt_args = match self.args() {
+            Ok(rt_args) => rt_args,
+            Err(err) => return futures::future::err(err).boxed_local(),
+        };
+        rt_args.arg("start").args(args);
+
+        log::info!(
+            "Executing {:?} with {:?} from path {:?}",
+            self.binary,
+            rt_args,
+            std::env::current_dir()
         );
 
-        log::info!("Executing {:?} with {:?}", self.binary, args);
+        let mut command = Command::new(&self.binary);
+        command.args(rt_args);
 
         let acl = self.acl.clone();
         let deployment = self.deployment.clone();
-        let monitor = self.monitor.get_or_insert_with(Default::default).clone();
-        let mut command = Command::new(self.binary.clone());
+        let mut monitor = self.monitor.get_or_insert_with(Default::default).clone();
 
         async move {
-            command.args(args?);
-            let service = spawn(command, monitor).map_err(Error::runtime).await?;
+            let service = spawn(command, monitor.clone())
+                .map_err(Error::runtime)
+                .await?;
             let hello = service
-                .hello(PROTOCOL_VERSION)
+                .hello(SERVICE_PROTOCOL_VERSION)
                 .map_err(|e| Error::runtime(format!("service hello error: {:?}", e)));
 
+            let _handle = monitor.any_process(ctx);
             match future::select(service.exited(), hello).await {
                 future::Either::Left((result, _)) => return Ok(result),
                 future::Either::Right((result, _)) => result.map(|_| ())?,
@@ -242,7 +285,7 @@ impl RuntimeProcess {
 
     fn handle_service_run<'f>(
         &mut self,
-        cmd: ExecuteCommand,
+        ctx: CommandContext,
         entry_point: String,
         mut args: Vec<String>,
     ) -> LocalBoxFuture<'f, Result<i32, Error>> {
@@ -259,17 +302,11 @@ impl RuntimeProcess {
         );
 
         let mut monitor = self.monitor.get_or_insert_with(Default::default).clone();
-        let mut tx = cmd.tx.clone();
-
         let exec = async move {
-            args.insert(
-                0,
-                Path::new(&entry_point)
-                    .file_name()
-                    .ok_or_else(|| Error::runtime("Invalid binary name"))?
-                    .to_string_lossy()
-                    .to_string(),
-            );
+            let name = Path::new(&entry_point)
+                .file_name()
+                .ok_or_else(|| Error::runtime("Invalid binary name"))?;
+            args.insert(0, name.to_string_lossy().to_string());
 
             let mut run_process = RunProcess::default();
             run_process.bin = entry_point;
@@ -279,27 +316,8 @@ impl RuntimeProcess {
                 Ok(result) => result,
                 Err(error) => return Err(Error::RuntimeError(format!("{:?}", error))),
             };
-            let mut events = match monitor.events(process.pid) {
-                Some(events) => events,
-                _ => return Err(Error::runtime("Process already monitored")),
-            };
 
-            while let Some(status) = events.rx.next().await {
-                if !status.stdout.is_empty() {
-                    let out = CommandOutput::Bin(status.stdout);
-                    let evt = RuntimeEvent::stdout(cmd.batch_id.clone(), cmd.idx, out);
-                    let _ = tx.send(evt).await;
-                }
-                if !status.stderr.is_empty() {
-                    let out = CommandOutput::Bin(status.stderr);
-                    let evt = RuntimeEvent::stderr(cmd.batch_id.clone(), cmd.idx, out);
-                    let _ = tx.send(evt).await;
-                }
-                if !status.running {
-                    return Ok(status.return_code);
-                }
-            }
-            Ok(0)
+            Ok(monitor.process(ctx, process.pid).await)
         };
 
         async move {
@@ -461,6 +479,58 @@ impl ChildProcessGuard {
 impl Drop for ChildProcessGuard {
     fn drop(&mut self) {
         self.addr.do_send(RemoveChildProcess(self.inner.clone()));
+    }
+}
+
+#[derive(Clone, Default)]
+struct CommandArgs {
+    inner: Vec<OsString>,
+}
+
+impl CommandArgs {
+    pub fn arg<S: AsRef<OsStr>>(&mut self, arg: S) -> &mut Self {
+        self.inner.push(arg.as_ref().to_os_string());
+        self
+    }
+
+    pub fn args<I, S>(&mut self, args: I) -> &mut Self
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        for arg in args {
+            self.arg(arg.as_ref());
+        }
+        self
+    }
+}
+
+impl IntoIterator for CommandArgs {
+    type Item = OsString;
+    type IntoIter = std::vec::IntoIter<OsString>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.into_iter()
+    }
+}
+
+impl std::fmt::Debug for CommandArgs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        <Self as std::fmt::Display>::fmt(self, f)
+    }
+}
+
+impl std::fmt::Display for CommandArgs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{:?}",
+            self.inner.iter().fold(OsString::new(), |mut out, s| {
+                out.is_empty().not().then(|| out.push(" "));
+                out.push(s);
+                out
+            })
+        )
     }
 }
 

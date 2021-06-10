@@ -1,100 +1,180 @@
-use actix::Arbiter;
-use futures::channel::mpsc::{channel, Receiver, Sender};
-use futures::{FutureExt, SinkExt};
 use std::collections::HashMap;
+use std::future::Future;
+use std::ops::Not;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
-use ya_runtime_api::server::{ProcessStatus, RuntimeEvent};
+use std::task::{Context, Poll};
 
-#[derive(Clone)]
-pub struct EventMonitor {
-    inner: Arc<Mutex<Inner>>,
-}
+use futures::channel::mpsc::SendError;
+use futures::channel::oneshot;
+use futures::future::{BoxFuture, Fuse, Shared};
+use futures::{FutureExt, SinkExt, TryFutureExt};
 
-struct Inner {
-    map: HashMap<u64, EventChannel>,
-    arbiter: Arbiter,
-}
+use crate::message::CommandContext;
 
-impl Default for Inner {
-    fn default() -> Self {
-        Inner {
-            map: HashMap::new(),
-            arbiter: Arbiter::current(),
-        }
-    }
-}
+use ya_client_model::activity::{CommandOutput, RuntimeEvent};
+use ya_runtime_api::server::ProcessStatus;
 
-pub struct EventReceiver {
-    pub rx: Receiver<ProcessStatus>,
-    pid: u64,
-    monitor: EventMonitor,
-}
-
-impl Drop for EventReceiver {
-    fn drop(&mut self) {
-        self.monitor.remove(self.pid);
-    }
-}
-
-#[allow(unused)]
-struct EventChannel {
-    tx: Sender<ProcessStatus>,
-    rx: Option<Receiver<ProcessStatus>>,
-}
-
-impl Default for EventChannel {
-    fn default() -> Self {
-        let (tx, rx) = channel(32);
-        EventChannel { tx, rx: Some(rx) }
-    }
+#[derive(Default, Clone)]
+pub(crate) struct EventMonitor {
+    processes: Arc<Mutex<HashMap<u64, Channel>>>,
+    fallback: Arc<Mutex<Option<Channel>>>,
 }
 
 impl EventMonitor {
-    pub fn events(&mut self, pid: u64) -> Option<EventReceiver> {
-        let mut inner = self.inner.lock().unwrap();
-        inner
-            .map
-            .entry(pid)
-            .or_insert_with(|| EventChannel::default())
-            .rx
-            .take()
-            .map(|rx| EventReceiver {
-                rx,
-                pid,
-                monitor: self.clone(),
-            })
+    pub fn any_process<'a>(&mut self, ctx: CommandContext) -> Handle<'a> {
+        let mut inner = self.fallback.lock().unwrap();
+        inner.replace(Channel::simple(ctx));
+
+        Handle::Fallback {
+            monitor: self.clone(),
+        }
     }
 
-    pub fn remove(&mut self, pid: u64) {
-        self.inner.lock().unwrap().map.remove(&pid);
-    }
-}
+    pub fn process<'a>(&mut self, ctx: CommandContext, pid: u64) -> Handle<'a> {
+        let entry = Channel::new(ctx);
+        let done_rx = entry.done_rx().unwrap();
 
-impl Default for EventMonitor {
-    fn default() -> Self {
-        EventMonitor {
-            inner: Arc::new(Mutex::new(Inner::default())),
+        let mut inner = self.processes.lock().unwrap();
+        inner.insert(pid, entry);
+
+        Handle::Process {
+            monitor: self.clone(),
+            pid,
+            done_rx,
         }
     }
 }
 
-impl RuntimeEvent for EventMonitor {
-    fn on_process_status(&self, status: ProcessStatus) {
-        let mut inner = self.inner.lock().unwrap();
-        let mut tx = inner
-            .map
-            .entry(status.pid)
-            .or_insert_with(|| EventChannel::default())
-            .tx
-            .clone();
+impl ya_runtime_api::server::RuntimeEvent for EventMonitor {
+    fn on_process_status<'a>(&self, status: ProcessStatus) -> BoxFuture<'a, ()> {
+        let (ctx, done_tx) = {
+            let mut proc_map = self.processes.lock().unwrap();
+            let mut fallback = self.fallback.lock().unwrap();
 
-        inner.arbiter.send(
-            async move {
-                if let Err(err) = tx.send(status).await {
-                    log::error!("Event channel error: {:?}", err);
-                }
+            let entry = match proc_map.get_mut(&status.pid).or(fallback.as_mut()) {
+                Some(entry) => entry,
+                None => return futures::future::ready(()).boxed(),
+            };
+            let done_tx = status.running.not().then(|| entry.done_tx()).flatten();
+
+            (entry.ctx.clone(), done_tx)
+        };
+
+        publish(status, ctx, done_tx)
+            .map_err(|err| log::error!("Event channel error: {:?}", err))
+            .then(|_| async {})
+            .boxed()
+    }
+}
+
+async fn publish(
+    status: ProcessStatus,
+    mut ctx: CommandContext,
+    done_tx: Option<oneshot::Sender<i32>>,
+) -> Result<(), SendError> {
+    if !status.stdout.is_empty() {
+        ctx.tx
+            .send(RuntimeEvent::stdout(
+                ctx.batch_id.clone(),
+                ctx.idx,
+                CommandOutput::Bin(status.stdout),
+            ))
+            .await?;
+    }
+    if !status.stderr.is_empty() {
+        ctx.tx
+            .send(RuntimeEvent::stderr(
+                ctx.batch_id,
+                ctx.idx,
+                CommandOutput::Bin(status.stderr),
+            ))
+            .await?;
+    }
+    if let Some(done_tx) = done_tx {
+        let _ = done_tx.send(status.return_code);
+    }
+    Ok(())
+}
+
+pub(crate) enum Handle<'a> {
+    Process {
+        monitor: EventMonitor,
+        pid: u64,
+        done_rx: BoxFuture<'a, Result<i32, ()>>,
+    },
+    Fallback {
+        monitor: EventMonitor,
+    },
+}
+
+impl<'a> Drop for Handle<'a> {
+    fn drop(&mut self) {
+        match self {
+            Handle::Process { monitor, pid, .. } => {
+                monitor.processes.lock().unwrap().remove(pid);
             }
-            .boxed(),
-        );
+            Handle::Fallback { monitor, .. } => {
+                monitor.fallback.lock().unwrap().take();
+            }
+        }
+    }
+}
+
+impl<'a> Future for Handle<'a> {
+    type Output = i32;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        match self.get_mut() {
+            Handle::Process { done_rx, .. } => match Pin::new(done_rx).poll(cx) {
+                Poll::Ready(Ok(c)) => Poll::Ready(c),
+                Poll::Ready(Err(_)) => Poll::Ready(1),
+                Poll::Pending => Poll::Pending,
+            },
+            Handle::Fallback { .. } => Poll::Ready(0),
+        }
+    }
+}
+
+struct Channel {
+    ctx: CommandContext,
+    done: Option<DoneChannel>,
+}
+
+impl Channel {
+    fn new(ctx: CommandContext) -> Self {
+        Channel {
+            ctx,
+            done: Some(Default::default()),
+        }
+    }
+
+    fn simple(ctx: CommandContext) -> Self {
+        Channel { ctx, done: None }
+    }
+
+    fn done_tx(&mut self) -> Option<oneshot::Sender<i32>> {
+        self.done.as_mut().map(|d| d.tx.take()).flatten()
+    }
+
+    fn done_rx<'a>(&self) -> Option<BoxFuture<'a, Result<i32, ()>>> {
+        self.done
+            .as_ref()
+            .map(|d| d.rx.clone().map_err(|_| ()).boxed())
+    }
+}
+
+struct DoneChannel {
+    tx: Option<oneshot::Sender<i32>>,
+    rx: Shared<Fuse<oneshot::Receiver<i32>>>,
+}
+
+impl Default for DoneChannel {
+    fn default() -> Self {
+        let (tx, rx) = oneshot::channel();
+        Self {
+            tx: Some(tx),
+            rx: rx.fuse().shared(),
+        }
     }
 }

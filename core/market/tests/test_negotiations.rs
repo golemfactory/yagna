@@ -1,13 +1,16 @@
+use chrono::{Duration, Utc};
 use ya_client::model::market::{proposal::State, RequestorEvent};
 use ya_market::testing::{
+    agreement_utils::gen_reason,
     events_helper::{provider, requestor, ClientProposalHelper},
+    mock_node::assert_offers_broadcasted,
     mock_offer::client::{not_matching_demand, not_matching_offer, sample_demand, sample_offer},
+    mock_offer::flatten_json,
     negotiation::error::{CounterProposalError, RemoteProposalError},
     proposal_util::{exchange_draft_proposals, NegotiationHelper},
     MarketServiceExt, MarketsNetwork, Owner, ProposalError, ProposalState, ProposalValidationError,
     SaveProposalError,
 };
-use ya_market_resolver::flatten::flatten_json;
 
 /// Test countering initial and draft proposals on both Provider and Requestor side.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
@@ -37,10 +40,7 @@ async fn test_exchanging_draft_proposals() {
     let proposal0 = requestor::query_proposal(&market1, &demand_id, "Initial #R")
         .await
         .unwrap();
-    assert_eq!(
-        proposal0.properties,
-        flatten_json(&offer.properties).unwrap()
-    );
+    assert_eq!(proposal0.properties, flatten_json(&offer.properties));
     assert_eq!(proposal0.constraints, offer.constraints);
     assert_eq!(proposal0.issuer_id, identity2.identity);
     assert_eq!(proposal0.state, State::Initial);
@@ -68,7 +68,7 @@ async fn test_exchanging_draft_proposals() {
     assert_eq!(proposal1_prov.constraints, proposal1_req.constraints);
     assert_eq!(
         proposal1_prov.properties,
-        flatten_json(&proposal1_req.properties).unwrap()
+        flatten_json(&proposal1_req.properties)
     );
     assert_eq!(proposal1_prov.proposal_id, proposal1_prov_id.to_string());
     assert_eq!(proposal1_prov.issuer_id, identity1.identity);
@@ -93,7 +93,7 @@ async fn test_exchanging_draft_proposals() {
     assert_eq!(proposal2_req.constraints, proposal2_prov.constraints);
     assert_eq!(
         proposal2_req.properties,
-        flatten_json(&proposal2_prov.properties).unwrap()
+        flatten_json(&proposal2_prov.properties)
     );
     assert_eq!(proposal2_req.proposal_id, proposal2_req_id.to_string());
     assert_eq!(proposal2_req.issuer_id, identity2.identity);
@@ -120,7 +120,7 @@ async fn test_exchanging_draft_proposals() {
     assert_eq!(proposal3_prov.constraints, proposal3_req.constraints);
     assert_eq!(
         proposal3_prov.properties,
-        flatten_json(&proposal3_req.properties).unwrap()
+        flatten_json(&proposal3_req.properties)
     );
     assert_eq!(proposal3_prov.proposal_id, proposal3_prov_id.to_string());
     assert_eq!(proposal3_prov.issuer_id, identity1.identity);
@@ -894,7 +894,7 @@ async fn test_proposal_events_last() {
         .await
         .unwrap();
 
-    let offer2_id = market2
+    let offer1_id = market2
         .subscribe_offer(&sample_offer(), &identity2)
         .await
         .unwrap();
@@ -913,18 +913,21 @@ async fn test_proposal_events_last() {
         .await
         .unwrap();
 
-    market3
+    let offer2_id = market3
         .subscribe_offer(&sample_offer(), &identity3)
         .await
         .unwrap();
 
-    let proposal2 = provider::query_proposal(&market2, &offer2_id, "Initial #P")
+    // wait for Offer broadcast.
+    assert_offers_broadcasted(&[&market1], &[offer2_id]).await;
+
+    let proposal2 = provider::query_proposal(&market2, &offer1_id, "Initial #P")
         .await
         .unwrap();
     let proposal2_id = proposal2.get_proposal_id().unwrap();
     market2
         .provider_engine
-        .reject_proposal(&offer2_id, &proposal2_id, &identity2, None)
+        .reject_proposal(&offer1_id, &proposal2_id, &identity2, None)
         .await
         .unwrap();
 
@@ -936,10 +939,302 @@ async fn test_proposal_events_last() {
     assert_eq!(events.len(), 2);
     match events[0] {
         RequestorEvent::ProposalRejectedEvent { .. } => {}
-        _ => assert!(false, format!("Invalid first event_type: {:#?}", events[0])),
+        _ => assert!(false, "Invalid first event_type: {:#?}", events[0]),
     }
     match events[events.len() - 1] {
         RequestorEvent::ProposalEvent { .. } => {}
-        _ => assert!(false, format!("Invalid last event_type: {:#?}", events[0])),
+        _ => assert!(false, "Invalid last event_type: {:#?}", events[0]),
     }
+}
+
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
+async fn test_restart_negotiations() {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance("Requestor1")
+        .await
+        .add_market_instance("Provider1")
+        .await;
+
+    let req_market = network.get_market("Requestor1");
+    let prov_market = network.get_market("Provider1");
+    let req_id = network.get_default_id("Requestor1");
+    let prov_id = network.get_default_id("Provider1");
+
+    // Requestor side
+    let negotiation = exchange_draft_proposals(&network, "Requestor1", "Provider1")
+        .await
+        .unwrap();
+
+    req_market
+        .requestor_engine
+        .reject_proposal(
+            &negotiation.demand_id,
+            &negotiation.proposal_id,
+            &req_id,
+            None,
+        )
+        .await
+        .unwrap();
+
+    // Consume Rejected event. We need only 1 event in query_proposal later.
+    prov_market
+        .provider_engine
+        .query_events(&negotiation.offer_id, 3.0, Some(5))
+        .await
+        .unwrap();
+
+    let req_proposal_id = req_market
+        .requestor_engine
+        .counter_proposal(
+            &negotiation.demand_id,
+            &negotiation.proposal_id,
+            &sample_demand(),
+            &req_id,
+        )
+        .await
+        .unwrap();
+
+    let re_proposal =
+        provider::query_proposal(&prov_market, &negotiation.offer_id, "Counter rejected #P")
+            .await
+            .unwrap();
+
+    assert_eq!(
+        req_proposal_id
+            .clone()
+            .translate(Owner::Provider)
+            .to_string(),
+        re_proposal.proposal_id
+    );
+
+    // Proposal state should be changed back to draft.
+    assert_eq!(re_proposal.state, State::Draft);
+
+    assert_eq!(
+        prov_market
+            .get_proposal(&negotiation.proposal_id.clone().translate(Owner::Provider))
+            .await
+            .unwrap()
+            .body
+            .state,
+        ProposalState::Draft
+    );
+    assert_eq!(
+        req_market
+            .get_proposal(&negotiation.proposal_id.clone().translate(Owner::Requestor))
+            .await
+            .unwrap()
+            .body
+            .state,
+        ProposalState::Draft
+    );
+
+    // Agents should be able to sign Agreement after rejection.
+    let prov_proposal_id = prov_market
+        .provider_engine
+        .counter_proposal(
+            &negotiation.offer_id,
+            &req_proposal_id.translate(Owner::Provider),
+            &sample_offer(),
+            &prov_id,
+        )
+        .await
+        .unwrap();
+
+    let agreement_id = req_market
+        .requestor_engine
+        .create_agreement(
+            req_id.clone(),
+            &prov_proposal_id.translate(Owner::Requestor),
+            Utc::now() + Duration::milliseconds(300),
+        )
+        .await
+        .unwrap();
+
+    req_market
+        .requestor_engine
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
+        .await
+        .unwrap();
+
+    prov_market
+        .provider_engine
+        .approve_agreement(
+            prov_id,
+            &agreement_id.clone().translate(Owner::Provider),
+            None,
+            0.1,
+        )
+        .await
+        .unwrap();
+}
+
+/// Agent is allowed to restart negotiations after Agreement was rejected.
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
+async fn test_negotiations_after_agreement_rejected() {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance("Requestor1")
+        .await
+        .add_market_instance("Provider1")
+        .await;
+
+    let negotiation = exchange_draft_proposals(&network, "Requestor1", "Provider1")
+        .await
+        .unwrap();
+    let proposal_id = negotiation.proposal_id.clone();
+
+    let prov_market = network.get_market("Provider1");
+    let req_market = network.get_market("Requestor1");
+    let req_engine = &req_market.requestor_engine;
+    let req_id = network.get_default_id("Requestor1");
+    let prov_id = network.get_default_id("Provider1");
+
+    let agreement_id = req_engine
+        .create_agreement(
+            req_id.clone(),
+            &proposal_id,
+            Utc::now() + Duration::milliseconds(300),
+        )
+        .await
+        .unwrap();
+
+    req_engine
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
+        .await
+        .unwrap();
+
+    prov_market
+        .provider_engine
+        .reject_agreement(
+            &prov_id,
+            &agreement_id.clone().translate(Owner::Provider),
+            Some(gen_reason("Need-Better-Offer")),
+        )
+        .await
+        .unwrap();
+
+    // Get back to negotiation phase.
+    // Provider and Requestor will exchange another pair of Proposal.
+
+    let req_proposal_id = req_engine
+        .counter_proposal(
+            &negotiation.demand_id,
+            &negotiation.proposal_id,
+            &sample_demand(),
+            &req_id,
+        )
+        .await
+        .unwrap();
+
+    let prov_proposal_id = prov_market
+        .provider_engine
+        .counter_proposal(
+            &negotiation.offer_id,
+            &req_proposal_id.clone().translate(Owner::Provider),
+            &sample_offer(),
+            &prov_id,
+        )
+        .await
+        .unwrap();
+
+    let agreement_id = req_engine
+        .create_agreement(
+            req_id.clone(),
+            &prov_proposal_id.clone().translate(Owner::Requestor),
+            Utc::now() + Duration::milliseconds(300),
+        )
+        .await
+        .unwrap();
+
+    req_engine
+        .confirm_agreement(req_id.clone(), &agreement_id, None)
+        .await
+        .unwrap();
+
+    prov_market
+        .provider_engine
+        .approve_agreement(
+            prov_id,
+            &agreement_id.clone().translate(Owner::Provider),
+            None,
+            0.1,
+        )
+        .await
+        .unwrap();
+}
+
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
+async fn test_reject_initial_proposal() {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance("Node-1")
+        .await
+        .add_market_instance("Node-2")
+        .await;
+
+    let market1 = network.get_market("Node-1");
+    let market2 = network.get_market("Node-2");
+
+    let identity1 = network.get_default_id("Node-1");
+    let identity2 = network.get_default_id("Node-2");
+
+    let demand_id = market1
+        .subscribe_demand(&sample_demand(), &identity1)
+        .await
+        .unwrap();
+
+    let offer_id = market2
+        .subscribe_offer(&sample_offer(), &identity2)
+        .await
+        .unwrap();
+
+    // wait for Offer broadcast.
+    assert_offers_broadcasted(&[&market1], &[offer_id]).await;
+
+    let initial_proposal =
+        requestor::query_proposal(&market1, &demand_id, "Query Initial Proposal")
+            .await
+            .unwrap();
+
+    market1
+        .requestor_engine
+        .reject_proposal(
+            &demand_id,
+            &initial_proposal.get_proposal_id().unwrap(),
+            &identity1,
+            None,
+        )
+        .await
+        .unwrap();
+
+    market1
+        .requestor_engine
+        .counter_proposal(
+            &demand_id,
+            &initial_proposal.get_proposal_id().unwrap(),
+            &sample_demand(),
+            &identity1,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        market1
+            .get_proposal(
+                &initial_proposal
+                    .get_proposal_id()
+                    .unwrap()
+                    .translate(Owner::Requestor)
+            )
+            .await
+            .unwrap()
+            .body
+            .state,
+        ProposalState::Initial
+    );
 }

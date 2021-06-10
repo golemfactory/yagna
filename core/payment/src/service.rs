@@ -1,6 +1,9 @@
 use crate::processor::PaymentProcessor;
+use futures::lock::Mutex;
 use futures::prelude::*;
 use metrics::counter;
+use std::collections::HashMap;
+use std::sync::Arc;
 use ya_core_model as core;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::ServiceBinder;
@@ -8,6 +11,7 @@ use ya_service_bus::typed::ServiceBinder;
 pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
     log::debug!("Binding payment service to service bus");
 
+    let processor = Arc::new(Mutex::new(processor));
     local::bind_service(db, processor.clone());
     public::bind_service(db, processor);
 
@@ -18,11 +22,11 @@ mod local {
     use super::*;
     use crate::dao::*;
     use std::collections::BTreeMap;
-    use ya_client_model::payment::{Account, DocumentStatus};
+    use ya_client_model::payment::{Account, DocumentStatus, DriverDetails};
     use ya_core_model::payment::local::*;
     use ya_persistence::types::Role;
 
-    pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
+    pub fn bind_service(db: &DbExecutor, processor: Arc<Mutex<PaymentProcessor>>) {
         log::debug!("Binding payment local service to service bus");
 
         ServiceBinder::new(BUS_ID, db, processor)
@@ -35,23 +39,36 @@ mod local {
             .bind_with_processor(get_status)
             .bind_with_processor(get_invoice_stats)
             .bind_with_processor(get_accounts)
-            .bind_with_processor(validate_allocation);
+            .bind_with_processor(validate_allocation)
+            .bind_with_processor(get_drivers)
+            .bind_with_processor(shut_down);
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
         // until first change to value will be made.
         counter!("payment.invoices.requestor.accepted", 0);
+        counter!("payment.invoices.requestor.accepted.call", 0);
         counter!("payment.invoices.requestor.received", 0);
+        counter!("payment.invoices.requestor.received.call", 0);
         counter!("payment.invoices.requestor.cancelled", 0);
+        counter!("payment.invoices.requestor.cancelled.call", 0);
         counter!("payment.invoices.requestor.paid", 0);
         counter!("payment.debit_notes.requestor.accepted", 0);
+        counter!("payment.debit_notes.requestor.accepted.call", 0);
+        counter!("payment.debit_notes.requestor.received", 0);
+        counter!("payment.debit_notes.requestor.received.call", 0);
         counter!("payment.debit_notes.provider.issued", 0);
         counter!("payment.debit_notes.provider.sent", 0);
+        counter!("payment.debit_notes.provider.sent.call", 0);
         counter!("payment.debit_notes.provider.accepted", 0);
+        counter!("payment.debit_notes.provider.accepted.call", 0);
         counter!("payment.invoices.provider.issued", 0);
         counter!("payment.invoices.provider.sent", 0);
+        counter!("payment.invoices.provider.sent.call", 0);
         counter!("payment.invoices.provider.cancelled", 0);
+        counter!("payment.invoices.provider.cancelled.call", 0);
         counter!("payment.invoices.provider.paid", 0);
         counter!("payment.invoices.provider.accepted", 0);
+        counter!("payment.invoices.provider.accepted.call", 0);
 
         counter!("payment.amount.received", 0, "platform" => "erc20-rinkeby-tglm");
         counter!("payment.amount.received", 0, "platform" => "erc20-mainnet-glm");
@@ -68,74 +85,74 @@ mod local {
 
     async fn schedule_payment(
         db: DbExecutor,
-        processor: PaymentProcessor,
+        processor: Arc<Mutex<PaymentProcessor>>,
         sender: String,
         msg: SchedulePayment,
     ) -> Result<(), GenericError> {
-        processor.schedule_payment(msg).await?;
+        processor.lock().await.schedule_payment(msg).await?;
         Ok(())
     }
 
     async fn register_driver(
         db: DbExecutor,
-        processor: PaymentProcessor,
+        processor: Arc<Mutex<PaymentProcessor>>,
         sender: String,
         msg: RegisterDriver,
     ) -> Result<(), RegisterDriverError> {
-        processor.register_driver(msg).await
+        processor.lock().await.register_driver(msg).await
     }
 
     async fn unregister_driver(
         db: DbExecutor,
-        processor: PaymentProcessor,
+        processor: Arc<Mutex<PaymentProcessor>>,
         sender: String,
         msg: UnregisterDriver,
     ) -> Result<(), NoError> {
-        processor.unregister_driver(msg).await;
+        processor.lock().await.unregister_driver(msg).await;
         Ok(())
     }
 
     async fn register_account(
         db: DbExecutor,
-        processor: PaymentProcessor,
+        processor: Arc<Mutex<PaymentProcessor>>,
         sender: String,
         msg: RegisterAccount,
     ) -> Result<(), RegisterAccountError> {
-        processor.register_account(msg).await
+        processor.lock().await.register_account(msg).await
     }
 
     async fn unregister_account(
         db: DbExecutor,
-        processor: PaymentProcessor,
+        processor: Arc<Mutex<PaymentProcessor>>,
         sender: String,
         msg: UnregisterAccount,
     ) -> Result<(), NoError> {
-        processor.unregister_account(msg).await;
+        processor.lock().await.unregister_account(msg).await;
         Ok(())
     }
 
     async fn get_accounts(
         db: DbExecutor,
-        processor: PaymentProcessor,
+        processor: Arc<Mutex<PaymentProcessor>>,
         sender: String,
         msg: GetAccounts,
     ) -> Result<Vec<Account>, GenericError> {
-        Ok(processor.get_accounts().await)
+        Ok(processor.lock().await.get_accounts().await)
     }
 
     async fn notify_payment(
         db: DbExecutor,
-        processor: PaymentProcessor,
+        processor: Arc<Mutex<PaymentProcessor>>,
         sender: String,
         msg: NotifyPayment,
     ) -> Result<(), GenericError> {
-        processor.notify_payment(msg).await?;
+        processor.lock().await.notify_payment(msg).await?;
         Ok(())
     }
 
     async fn get_status(
         db: DbExecutor,
-        processor: PaymentProcessor,
+        processor: Arc<Mutex<PaymentProcessor>>,
         _caller: String,
         msg: GetStatus,
     ) -> Result<StatusResult, GenericError> {
@@ -148,6 +165,8 @@ mod local {
         } = msg;
 
         let (network, network_details) = processor
+            .lock()
+            .await
             .get_network(driver.clone(), network)
             .await
             .map_err(GenericError::new)?;
@@ -183,9 +202,14 @@ mod local {
         }
         .map_err(GenericError::new);
 
-        let amount_fut = processor
-            .get_status(platform.clone(), address.clone())
-            .map_err(GenericError::new);
+        let amount_fut = async {
+            processor
+                .lock()
+                .await
+                .get_status(platform.clone(), address.clone())
+                .await
+        }
+        .map_err(GenericError::new);
 
         let (incoming, outgoing, amount, reserved) =
             future::try_join4(incoming_fut, outgoing_fut, amount_fut, reserved_fut).await?;
@@ -203,7 +227,7 @@ mod local {
 
     async fn get_invoice_stats(
         db: DbExecutor,
-        processor: PaymentProcessor,
+        processor: Arc<Mutex<PaymentProcessor>>,
         _caller: String,
         msg: GetInvoiceStats,
     ) -> Result<InvoiceStats, GenericError> {
@@ -255,13 +279,36 @@ mod local {
 
     async fn validate_allocation(
         db: DbExecutor,
-        processor: PaymentProcessor,
+        processor: Arc<Mutex<PaymentProcessor>>,
         sender: String,
         msg: ValidateAllocation,
     ) -> Result<bool, ValidateAllocationError> {
         Ok(processor
+            .lock()
+            .await
             .validate_allocation(msg.platform, msg.address, msg.amount)
             .await?)
+    }
+
+    async fn get_drivers(
+        db: DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        _caller: String,
+        msg: GetDrivers,
+    ) -> Result<HashMap<String, DriverDetails>, NoError> {
+        Ok(processor.lock().await.get_drivers().await)
+    }
+
+    async fn shut_down(
+        db: DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        sender: String,
+        msg: ShutDown,
+    ) -> Result<(), GenericError> {
+        // It's crucial to drop the lock on processor (hence assigning the future to a variable).
+        // Otherwise, we won't be able to handle calls to `notify_payment` sent by drivers during shutdown.
+        let shutdown_future = processor.lock().await.shut_down(msg.timeout);
+        Ok(shutdown_future.await)
     }
 }
 
@@ -277,7 +324,7 @@ mod public {
     use ya_core_model::payment::public::*;
     use ya_persistence::types::Role;
 
-    pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
+    pub fn bind_service(db: &DbExecutor, processor: Arc<Mutex<PaymentProcessor>>) {
         log::debug!("Binding payment public service to service bus");
 
         ServiceBinder::new(BUS_ID, db, processor)
@@ -305,6 +352,13 @@ mod public {
         let debit_note_id = debit_note.debit_note_id.clone();
         let activity_id = debit_note.activity_id.clone();
         let agreement_id = debit_note.agreement_id.clone();
+
+        log::debug!(
+            "Got SendDebitNote [{}] from Node [{}].",
+            debit_note_id,
+            sender_id
+        );
+        counter!("payment.debit_notes.requestor.received.call", 1);
 
         let agreement = match get_agreement(agreement_id.clone(), core::Role::Requestor).await {
             Err(e) => {
@@ -337,6 +391,11 @@ mod public {
                 .insert_received(debit_note)
                 .await?;
 
+            log::info!(
+                "DebitNote [{}] received from node [{}].",
+                node_id,
+                debit_note_id
+            );
             counter!("payment.debit_notes.requestor.received", 1);
             Ok(())
         }
@@ -356,6 +415,13 @@ mod public {
         let debit_note_id = msg.debit_note_id;
         let acceptance = msg.acceptance;
         let node_id = msg.issuer_id;
+
+        log::debug!(
+            "Got AcceptDebitNote [{}] from Node [{}].",
+            debit_note_id,
+            sender_id
+        );
+        counter!("payment.debit_notes.provider.accepted.call", 1);
 
         let dao: DebitNoteDao = db.as_dao();
         let debit_note: DebitNote = match dao.get(debit_note_id.clone(), node_id).await {
@@ -387,8 +453,9 @@ mod public {
             _ => (),
         }
 
-        match dao.accept(debit_note_id, node_id).await {
+        match dao.accept(debit_note_id.clone(), node_id).await {
             Ok(_) => {
+                log::info!("Node [{}] accepted DebitNote [{}].", node_id, debit_note_id);
                 counter!("payment.debit_notes.provider.accepted", 1);
                 Ok(Ack {})
             }
@@ -424,6 +491,13 @@ mod public {
         let invoice_id = invoice.invoice_id.clone();
         let agreement_id = invoice.agreement_id.clone();
         let activity_ids = invoice.activity_ids.clone();
+
+        log::debug!(
+            "Got SendInvoice [{}] from Node [{}].",
+            invoice_id,
+            sender_id
+        );
+        counter!("payment.invoices.requestor.received.call", 1);
 
         let agreement = match get_agreement(agreement_id.clone(), core::Role::Requestor).await {
             Err(e) => {
@@ -482,6 +556,7 @@ mod public {
 
             db.as_dao::<InvoiceDao>().insert_received(invoice).await?;
 
+            log::info!("Invoice [{}] received from node [{}].", node_id, invoice_id);
             counter!("payment.invoices.requestor.received", 1);
             Ok(())
         }
@@ -501,6 +576,13 @@ mod public {
         let invoice_id = msg.invoice_id;
         let acceptance = msg.acceptance;
         let node_id = msg.issuer_id;
+
+        log::debug!(
+            "Got AcceptInvoice [{}] from Node [{}].",
+            invoice_id,
+            sender_id
+        );
+        counter!("payment.invoices.provider.accepted.call", 1);
 
         let dao: InvoiceDao = db.as_dao();
         let invoice: Invoice = match dao.get(invoice_id.clone(), node_id).await {
@@ -532,8 +614,9 @@ mod public {
             _ => (),
         }
 
-        match dao.accept(invoice_id, node_id).await {
+        match dao.accept(invoice_id.clone(), node_id).await {
             Ok(_) => {
+                log::info!("Node [{}] accepted invoice [{}].", node_id, invoice_id);
                 counter!("payment.invoices.provider.accepted", 1);
                 Ok(Ack {})
             }
@@ -557,6 +640,13 @@ mod public {
     ) -> Result<Ack, CancelError> {
         let invoice_id = msg.invoice_id;
 
+        log::debug!(
+            "Got CancelInvoice [{}] from Node [{}].",
+            invoice_id,
+            sender_id
+        );
+        counter!("payment.invoices.requestor.cancelled.call", 1);
+
         let dao: InvoiceDao = db.as_dao();
         let invoice: Invoice = match dao.get(invoice_id.clone(), msg.recipient_id).await {
             Ok(Some(invoice)) => invoice.into(),
@@ -578,8 +668,13 @@ mod public {
             }
         }
 
-        match dao.cancel(invoice_id, invoice.recipient_id).await {
+        match dao.cancel(invoice_id.clone(), invoice.recipient_id).await {
             Ok(_) => {
+                log::info!(
+                    "Node [{}] cancelled invoice [{}].",
+                    invoice.recipient_id,
+                    invoice_id
+                );
                 counter!("payment.invoices.requestor.cancelled", 1);
                 Ok(Ack {})
             }
@@ -591,11 +686,12 @@ mod public {
 
     async fn send_payment(
         db: DbExecutor,
-        processor: PaymentProcessor,
+        processor: Arc<Mutex<PaymentProcessor>>,
         sender_id: String,
         msg: SendPayment,
     ) -> Result<Ack, SendError> {
-        let payment = msg.0;
+        let payment = msg.payment;
+        let signature = msg.signature;
         if sender_id != payment.payer_id.to_string() {
             return Err(SendError::BadRequest("Invalid payer ID".to_owned()));
         }
@@ -603,7 +699,12 @@ mod public {
         let platform = payment.payment_platform.clone();
         let amount = payment.amount.clone();
         let num_paid_invoices = payment.agreement_payments.len() as u64;
-        match processor.verify_payment(payment).await {
+        match processor
+            .lock()
+            .await
+            .verify_payment(payment, signature)
+            .await
+        {
             Ok(_) => {
                 counter!("payment.amount.received", ya_metrics::utils::cryptocurrency_to_u64(&amount), "platform" => platform);
                 counter!("payment.invoices.provider.paid", num_paid_invoices);

@@ -9,6 +9,8 @@ default = []
 
 [dependencies]
 ya-core-model = { version = "^0.3", features = ["driver", "identity", "payment"] }
+ya-client-model = { version = "0.3" }
+ya-payment-driver = "0.2"
 ya-persistence = "0.2"
 ya-service-api-interfaces = "0.1"
 ya-service-bus = "0.4"
@@ -21,4 +23,5 @@ futures3 = { version = "0.3", features = ["compat"], package = "futures" }
 log = "0.4.8"
 maplit = "1.0"
 serde_json = "1.0"
+tokio = { version = "0.2", features = ["full"] }
 uuid = { version = "0.8", features = ["v4"] }

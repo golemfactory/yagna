@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use ya_client::model::NodeId;
-use ya_market_resolver::flatten::JsonObjectExpected;
 
 use crate::db::dao::AgreementDaoError;
 use crate::db::model::{
@@ -15,7 +14,7 @@ use crate::db::{
 };
 use crate::matcher::error::{DemandError, QueryOfferError};
 use crate::protocol::negotiation::error::{
-    ApproveAgreementError, CommitAgreementError, CounterProposalError as ProtocolProposalError,
+    AgreementProtocolError, CommitAgreementError, CounterProposalError as ProtocolProposalError,
     GsbAgreementError, NegotiationApiInitError, ProposeAgreementError, RejectProposalError,
     TerminateAgreementError,
 };
@@ -74,7 +73,7 @@ pub enum AgreementError {
     #[error("Protocol error: {0}")]
     ProtocolCreate(#[from] ProposeAgreementError),
     #[error("Protocol error while approving: {0}")]
-    ProtocolApprove(#[from] ApproveAgreementError),
+    Protocol(#[from] AgreementProtocolError),
     #[error("Protocol error while terminating: {0}")]
     ProtocolTerminate(#[from] TerminateAgreementError),
     #[error("Protocol error while committing: {0}")]
@@ -156,7 +155,7 @@ pub enum ProposalError {
     #[error(transparent)]
     Get(#[from] GetProposalError),
     #[error(transparent)]
-    JsonObjectExpected(#[from] JsonObjectExpected),
+    JsonObjectExpected(#[from] serde_json::error::Error),
     #[error(transparent)]
     Save(#[from] SaveProposalError),
     #[error(transparent)]

@@ -6,6 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
+use structopt::clap;
 use ya_core_model::NodeId;
 use ya_provider::ReceiverAccount;
 
@@ -24,6 +25,17 @@ pub struct RunConfig {
 
     #[structopt(flatten)]
     pub account: ReceiverAccount,
+
+    /// changes log level from info to debug
+    #[structopt(long)]
+    pub debug: bool,
+
+    /// log dir for yagna service
+    #[structopt(
+        long,
+        set = clap::ArgSettings::Global
+    )]
+    pub log_dir: Option<PathBuf>,
 }
 
 impl RunConfig {

@@ -13,7 +13,7 @@ where
 {
     #[error("Timeout while waiting for events for id [{}]", .0.display())]
     Timeout(Type),
-    #[error("Unsubscribed [{}]", .0.display())]
+    #[error("Unsubscribed notifications for [{}]", .0.display())]
     Unsubscribed(Type),
     #[error("Channel closed while waiting for events for id [{}]", .0.display())]
     ChannelClosed(Type),

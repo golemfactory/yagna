@@ -4,7 +4,7 @@
     "properties": {
       "golem": {
         "srv.comp": {
-          "task_package": "hash://sha3:D5E31B2EED628572A5898BF8C34447644BFC4B5130CFC1E4F10AEAA1:http://3.249.139.167:8000/rust-wasi-tutorial.zip"
+          "task_package": "hash://sha3:D5E31B2EED628572A5898BF8C34447644BFC4B5130CFC1E4F10AEAA1:http://yacn2.dev.golem.network:8000/rust-wasi-tutorial.zip"
         }
       }
     }

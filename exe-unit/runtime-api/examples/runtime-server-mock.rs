@@ -1,4 +1,6 @@
+use futures::future::BoxFuture;
 use futures::prelude::*;
+use futures::FutureExt;
 use std::{
     clone::Clone,
     env,
@@ -33,13 +35,15 @@ impl<E: RuntimeEvent> server::RuntimeService for RuntimeMock<E> {
             log::debug!("before delay_for");
             tokio::time::delay_for(Duration::from_secs(3)).await;
             log::debug!("after delay_for");
-            self.event_emitter.on_process_status(ProcessStatus {
-                pid: resp.pid,
-                running: true,
-                return_code: 0,
-                stdout: Vec::new(),
-                stderr: Vec::new(),
-            });
+            self.event_emitter
+                .on_process_status(ProcessStatus {
+                    pid: resp.pid,
+                    running: true,
+                    return_code: 0,
+                    stdout: Vec::new(),
+                    stderr: Vec::new(),
+                })
+                .await;
             Ok(resp)
         }
         .boxed_local()
@@ -79,9 +83,10 @@ impl EventMock {
 }
 
 impl RuntimeEvent for EventMock {
-    fn on_process_status(&self, status: ProcessStatus) {
+    fn on_process_status<'a>(&self, status: ProcessStatus) -> BoxFuture<'a, ()> {
         log::debug!("event: {:?}", status);
         *(self.0.lock().unwrap()) = status;
+        future::ready(()).boxed()
     }
 }
 

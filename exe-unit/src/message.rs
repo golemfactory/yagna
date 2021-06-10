@@ -85,6 +85,24 @@ impl ExecuteCommand {
             _ => false,
         }
     }
+
+    pub fn split(self) -> (ExeScriptCommand, CommandContext) {
+        (
+            self.command,
+            CommandContext {
+                batch_id: self.batch_id,
+                idx: self.idx,
+                tx: self.tx,
+            },
+        )
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CommandContext {
+    pub batch_id: String,
+    pub idx: usize,
+    pub tx: mpsc::Sender<RuntimeEvent>,
 }
 
 #[derive(Clone, Debug, Default, Message)]
@@ -95,10 +113,6 @@ pub struct UpdateDeployment {
     pub networks: Option<Vec<Network>>,
     pub hosts: Option<HashMap<String, String>>,
 }
-
-#[derive(Clone, Debug, Message)]
-#[rtype(result = "Result<()>")]
-pub struct SetRuntimeMode(pub RuntimeMode);
 
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<()>")]
