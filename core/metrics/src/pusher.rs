@@ -1,6 +1,5 @@
 use actix_web::client::Client;
-use std::time::Duration;
-use tokio::time;
+use tokio::time::{self, Duration, Instant};
 
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use ya_core_model::identity::{self, IdentityInfo};
@@ -44,7 +43,8 @@ pub async fn push_forever(host_url: &str) {
         }
     };
 
-    let mut push_interval = time::interval(Duration::from_secs(60));
+    let start = Instant::now() + Duration::from_secs(5);
+    let mut push_interval = time::interval_at(start, Duration::from_secs(60));
     let client = Client::builder().timeout(Duration::from_secs(30)).finish();
     log::info!("Starting metrics pusher");
     loop {
@@ -57,9 +57,25 @@ pub async fn push(client: &Client, push_url: String) {
     let current_metrics = crate::service::export_metrics().await;
     let res = client
         .put(push_url.as_str())
-        .send_body(current_metrics)
+        .send_body(current_metrics.clone())
         .await;
-    log::trace!("Pushed current metrics {:#?}", res);
+    match res {
+        Ok(r) if r.status().is_success() => log::trace!("Pushed metrics: {:#?}", r),
+        Ok(mut r) => {
+            let body = r.body().await.unwrap_or_default().to_vec();
+            let msg = String::from_utf8_lossy(&body);
+            log::warn!(
+                "Pushing metrics failed: `{}`\nCurrent metrics:\n{}{:#?}",
+                msg,
+                current_metrics,
+                r,
+            )
+        }
+        Err(actix_web::client::SendRequestError::Timeout) => {
+            log::debug!("Pushing metrics timed out")
+        }
+        Err(e) => log::warn!("Pushing metrics to {} failed: {}", push_url, e),
+    };
 }
 
 async fn get_default_id() -> anyhow::Result<IdentityInfo> {
