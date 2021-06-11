@@ -112,7 +112,7 @@ impl Discovery {
         let bcast_msg = SendBroadcastMessage::new(OffersBcast { offer_ids });
 
         counter!("market.offers.broadcasts.net", 1);
-        value!("market.offers.broadcasts.size", size as u64);
+        value!("market.offers.broadcasts.len", size as u64);
 
         // TODO: We shouldn't use send_as. Put identity inside broadcasted message instead.
         if let Err(e) = bus::service(local_net::BUS_ID)
@@ -210,7 +210,7 @@ impl Discovery {
         log::debug!("Broadcasting unsubscribes. count={}", size);
         let bcast_msg = SendBroadcastMessage::new(UnsubscribedOffersBcast { offer_ids });
         counter!("market.offers.unsubscribes.broadcasts.net", 1);
-        value!("market.offers.unsubscribes.broadcasts.size", size as u64);
+        value!("market.offers.unsubscribes.broadcasts.len", size as u64);
 
         // TODO: We shouldn't use send_as. Put identity inside broadcasted message instead.
         if let Err(e) = bus::service(local_net::BUS_ID)
