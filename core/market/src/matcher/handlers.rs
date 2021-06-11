@@ -47,7 +47,7 @@ pub(super) async fn receive_remote_offers(
                         offer.id
                     })
                     .map_err(|e| {
-                        log::warn!("Failed to save Offer [{}]. Error: {}", &offer_id, &e);
+                        log::info!("Failed to save Offer [{}]. Error: {}", &offer_id, &e);
                         e
                     })
                     .ok()

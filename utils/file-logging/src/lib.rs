@@ -1,5 +1,7 @@
 use anyhow::Result;
-use chrono::{DateTime, SecondsFormat, Utc};
+use chrono::{DateTime, Local};
+use chrono::format::{DelayedFormat};
+use chrono::format::strftime::{StrftimeItems};
 use flexi_logger::{
     style, AdaptiveFormat, Age, Cleanup, Criterion, DeferredNow, Duplicate, LogSpecBuilder,
     LogSpecification, Logger, Naming, Record,
@@ -7,6 +9,15 @@ use flexi_logger::{
 use std::path::Path;
 
 pub use flexi_logger::LoggerHandle;
+
+fn log_format_date(now: &mut DeferredNow) -> DelayedFormat<StrftimeItems>{
+    //use DateTime::<Local> instead of DateTime::<UTC> to obtain local date
+    let local_date = DateTime::<Local>::from(*now.now());
+
+    //format date as following: 2020-08-27T07:56:22.348+02:00 (local date + time zone with milliseconds precision)
+    const DATE_FORMAT_STR: &str = "%Y-%m-%dT%H:%M:%S%.3f%z";
+    local_date.format(DATE_FORMAT_STR)
+}
 
 fn log_format(
     w: &mut dyn std::io::Write,
@@ -16,11 +27,11 @@ fn log_format(
     write!(
         w,
         "[{} {:5} {}] {}",
-        DateTime::<Utc>::from(*now.now()).to_rfc3339_opts(SecondsFormat::Secs, true),
+        log_format_date(now),
         record.level(),
         record.module_path().unwrap_or("<unnamed>"),
         record.args()
-    )
+    )    
 }
 
 fn log_format_color(
@@ -33,7 +44,7 @@ fn log_format_color(
         w,
         "[{} {:5} {}] {}",
         yansi::Color::Fixed(247)
-            .paint(DateTime::<Utc>::from(*now.now()).to_rfc3339_opts(SecondsFormat::Secs, true)),
+            .paint(log_format_date(now)),
         style(level, level),
         yansi::Color::Fixed(247).paint(record.module_path().unwrap_or("<unnamed>")),
         &record.args()
@@ -57,12 +68,21 @@ pub fn start_logger(
     default_log_spec: &str,
     log_dir: Option<&Path>,
     module_filters: &[(&str, log::LevelFilter)],
+    force_debug: bool
 ) -> Result<LoggerHandle> {
     let log_spec = LogSpecification::env_or_parse(default_log_spec)?;
     let mut log_spec_builder = LogSpecBuilder::from_module_filters(log_spec.module_filters());
     for filter in module_filters {
         log_spec_builder.module(filter.0, filter.1);
     }
+    
+    //override default log level if force_debug is set
+    //it leaves module_filters log levels unchanged
+    //used for --debug option
+    if force_debug {
+        log_spec_builder.default(log::LevelFilter::Debug);
+    }
+
     let log_spec = log_spec_builder.finalize();
 
     let mut logger = Logger::with(log_spec).format(log_format);
