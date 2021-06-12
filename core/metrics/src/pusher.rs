@@ -61,6 +61,9 @@ pub async fn push(client: &Client, push_url: String) {
         .await;
     match res {
         Ok(r) if r.status().is_success() => log::trace!("Pushed metrics: {:#?}", r),
+        Ok(r) if r.status().is_server_error() => {
+            log::debug!("Metrics server @ {} error: {:#?}", push_url, r)
+        }
         Ok(mut r) => {
             let body = r.body().await.unwrap_or_default().to_vec();
             let msg = String::from_utf8_lossy(&body);
