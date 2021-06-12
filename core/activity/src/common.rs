@@ -34,7 +34,7 @@ pub struct QueryTimeout {
 
 #[derive(Deserialize)]
 pub struct QueryTimeoutCommandIndex {
-    #[serde(rename = "timeout")]
+    #[serde(rename = "timeout", default = "default_query_timeout")]
     pub timeout: Option<f32>,
     #[serde(rename = "commandIndex")]
     pub command_index: Option<usize>,
