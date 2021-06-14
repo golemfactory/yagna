@@ -127,7 +127,7 @@ async def test_provider_idle_agreement_after_2_activities(
 
         agreement_id, provider = agreement_providers[0]
         for i in range(0, 2):
-            logger.info("Running activity %n-th time on %s", i, provider.name)
+            logger.info("Running activity %d-th time on %s", i, provider.name)
             await run_activity(
                 requestor, provider, agreement_id, wasi_exe_script(runner)
             )

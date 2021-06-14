@@ -80,7 +80,7 @@ async def test_provider_multi_activity(
 
         for agreement_id, provider in agreement_providers:
             for i in range(0, 3):
-                logger.info("Running activity %n-th time on %s", i, provider.name)
+                logger.info("Running activity %d-th time on %s", i, provider.name)
                 activity_id = await requestor.create_activity(agreement_id)
                 await provider.wait_for_exeunit_started()
                 batch_id = await requestor.call_exec(
