@@ -56,7 +56,7 @@ def _create_runner(
     common_assets: Path, config_overrides: List[Override], log_dir: Path
 ) -> Tuple[Runner, Configuration]:
     goth_config = load_yaml(
-        common_assets / ".." / "domain" / "ya-provider" / "assets" / "goth-config.yml",
+        Path(__file__).parent / "assets" / "goth-config.yml",
         config_overrides,
     )
 
