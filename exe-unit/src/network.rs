@@ -365,6 +365,11 @@ impl VpnEndpoint {
             rx: Some(Box::new(stream)),
         })
     }
+
+    #[cfg(not(unix))]
+    async fn connect_socket<P: AsRef<Path>>(path: P) -> Result<Self> {
+        Err(Error::Other("OS not supported".into()))
+    }
 }
 
 impl<'a> TryFrom<&'a DeploymentNetwork> for Network {
