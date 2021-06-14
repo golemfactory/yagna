@@ -100,7 +100,7 @@ async def test_provider_multi_activity(
 
 
 @pytest.mark.asyncio
-async def test_provider_single_activity_at_once(
+async def test_provider_single_simultaneous_activity(
     common_assets: Path,
     config_overrides: List[Override],
     log_dir: Path,
@@ -141,7 +141,7 @@ async def test_provider_single_activity_at_once(
         #  Activity
         agreement_id, provider = agreement_providers[0]
 
-        activity_id1 = await requestor.create_activity(agreement_id)
+        first_activity_id = await requestor.create_activity(agreement_id)
 
         # Creation should fail here.
         with pytest.raises(ApiException) as e:
@@ -153,7 +153,7 @@ async def test_provider_single_activity_at_once(
             e.value.body,
         )
 
-        await requestor.destroy_activity(activity_id1)
+        await requestor.destroy_activity(first_activity_id)
         await provider.wait_for_exeunit_finished()
 
         await requestor.terminate_agreement(agreement_id, None)
