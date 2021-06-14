@@ -1,4 +1,4 @@
-"""End to end tests for requesting WASM tasks using goth REST API clients."""
+"""End to end tests for various scenarios which involve breaking agreements."""
 
 import logging
 from pathlib import Path
@@ -185,7 +185,7 @@ async def test_provider_timeout_unresponsive_requestor(
     config_overrides: List[Override],
     log_dir: Path,
 ):
-    """Test provider breaking Agreement if Requestor doesn't accept DebitNotes.
+    """Test provider breaking Agreement if Requestor goes offline.
 
     If Provider is unable to send DebitNotes for some period of time, he should
     break Agreement. This is separate mechanism from DebitNotes keep alive, because
