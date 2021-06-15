@@ -9,7 +9,7 @@ default = []
 service = []
 
 [dependencies]
-ya-core-model = { version = "^0.3", features=["net", "identity"] }
+ya-core-model = { version = "^0.4", features=["net", "identity"] }
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.1"
 ya-service-bus = "0.4"

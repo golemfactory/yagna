@@ -2278,7 +2278,7 @@ dependencies = [
 
 [[package]]
 name = "gftp"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "actix-rt",
  "anyhow",
@@ -3760,7 +3760,7 @@ checksum = "f842b1982eb6c2fe34036a4fbfb06dd185a3f5c8edfaacdf7d1ea10b07de6252"
 dependencies = [
  "lock_api 0.3.4",
  "parking_lot_core 0.6.2",
- "rustc_version 0.2.3",
+ "rustc_version",
 ]
 
 [[package]]
@@ -3794,7 +3794,7 @@ dependencies = [
  "cloudabi",
  "libc",
  "redox_syscall 0.1.57",
- "rustc_version 0.2.3",
+ "rustc_version",
  "smallvec 0.6.14",
  "winapi 0.3.9",
 ]
@@ -4680,15 +4680,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rustc_version"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0dfe2087c51c460008730de8b57e6a320782fbfb312e1f4d520e6c6fae155ee"
-dependencies = [
- "semver 0.11.0",
-]
-
-[[package]]
 name = "rustyline"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5237,7 +5228,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d022496b16281348b52d0e30ae99e01a73d737b2f45d38fed4edf79f9325a1d5"
 dependencies = [
  "discard",
- "rustc_version 0.2.3",
+ "rustc_version",
  "stdweb-derive",
  "stdweb-internal-macros",
  "stdweb-internal-runtime",
@@ -6125,7 +6116,7 @@ checksum = "e7141e445af09c8919f1d5f8a20dae0b20c3b57a45dee0d5823c6ed5d237f15a"
 dependencies = [
  "bitflags 1.2.1",
  "chrono",
- "rustc_version 0.3.3",
+ "rustc_version",
 ]
 
 [[package]]
@@ -6534,7 +6525,7 @@ dependencies = [
 
 [[package]]
 name = "ya-core-model"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "bigdecimal 0.2.0",
  "bitflags 1.2.1",
@@ -7370,7 +7361,7 @@ dependencies = [
 
 [[package]]
 name = "yagna"
-version = "0.6.6"
+version = "0.7.0"
 dependencies = [
  "actix-rt",
  "actix-service",
