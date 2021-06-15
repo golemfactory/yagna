@@ -6,8 +6,8 @@ use std::env;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use url::Url;
-use ya_client_model::activity::{FileSet, SetEntry, TransferArgs};
-use ya_transfer::{archive, extract};
+use ya_client_model::activity::{FileSet, SetEntry};
+use ya_transfer::{archive, extract, TransferContext};
 use ya_transfer::{ArchiveFormat, HttpTransferProvider, PathTraverse, TransferProvider};
 
 #[derive(StructOpt)]
@@ -39,15 +39,15 @@ async fn main() -> anyhow::Result<()> {
     });
 
     log::warn!("Extracting {:?} to {:?}", args.url, args.src_path);
-    let stream = http_provider.source(&args.url, &TransferArgs::default());
+    let stream = http_provider.source(&args.url, &TransferContext::default());
     extract(stream, &args.src_path, format, tx).await?;
 
     log::warn!("Starting on-the-fly compression & extraction");
     let fileset = FileSet::Pattern(SetEntry::Single(args.glob.clone()));
-    let mut transfer_args = TransferArgs::default();
-    transfer_args.fileset = Some(fileset);
+    let mut transfer_ctx = TransferContext::default();
+    transfer_ctx.args.fileset = Some(fileset);
 
-    log::warn!("Transfer args: {:?}", transfer_args);
+    log::warn!("Transfer args: {:?}", transfer_ctx.args);
     let (c_tx, c_rx) = channel(1);
     let (e_tx, e_rx) = channel(1);
 
@@ -74,7 +74,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let format = ArchiveFormat::try_from(args.format.as_str())?;
-    let path_it = transfer_args.traverse(&args.src_path)?;
+    let path_it = transfer_ctx.args.traverse(&args.src_path)?;
 
     let stream = archive(path_it, &args.src_path, format, c_tx).await;
     extract(stream, &args.dst_path, format, e_tx).await?;

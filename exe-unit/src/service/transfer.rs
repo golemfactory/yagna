@@ -1,9 +1,8 @@
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use actix::prelude::*;
 use futures::future::Abortable;
@@ -12,8 +11,7 @@ use url::Url;
 use crate::deploy::ContainerVolume;
 use crate::error::Error;
 use crate::message::Shutdown;
-use crate::util::path::{CachePath, ProjectedPath};
-use crate::util::url::TransferUrl;
+use crate::util::cache::Cache;
 use crate::util::Abort;
 use crate::{ExeUnitContext, Result};
 
@@ -46,14 +44,6 @@ pub struct DeployImage;
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "()")]
 pub struct AbortTransfers;
-
-#[derive(Clone, Debug, Message)]
-#[rtype("()")]
-struct AddAbortHandle(Abort);
-
-#[derive(Clone, Debug, Message)]
-#[rtype("()")]
-struct RemoveAbortHandle(Abort);
 
 struct ContainerTransferProvider {
     file_tp: FileTransferProvider,
@@ -124,33 +114,33 @@ impl TransferProvider<TransferData, TransferError> for ContainerTransferProvider
     fn source(
         &self,
         url: &Url,
-        args: &TransferArgs,
+        ctx: &TransferContext,
     ) -> TransferStream<TransferData, TransferError> {
         let file_url = match self.resolve_url(url.path_decoded().as_str()) {
             Ok(v) => v,
             Err(e) => return TransferStream::err(e),
         };
 
-        if args.format.is_some() {
-            return self.dir_tp.source(&file_url, args);
+        if ctx.args.format.is_some() {
+            return self.dir_tp.source(&file_url, ctx);
         }
-        self.file_tp.source(&file_url, args)
+        self.file_tp.source(&file_url, ctx)
     }
 
     fn destination(
         &self,
         url: &Url,
-        args: &TransferArgs,
+        ctx: &TransferContext,
     ) -> TransferSink<TransferData, TransferError> {
         let file_url = match self.resolve_url(url.path_decoded().as_str()) {
             Ok(v) => v,
             Err(e) => return TransferSink::err(e),
         };
 
-        if args.format.is_some() {
-            return self.dir_tp.destination(&file_url, args);
+        if ctx.args.format.is_some() {
+            return self.dir_tp.destination(&file_url, ctx);
         }
-        self.file_tp.destination(&file_url, args)
+        self.file_tp.destination(&file_url, ctx)
     }
 }
 
@@ -160,7 +150,7 @@ pub struct TransferService {
     cache: Cache,
     work_dir: PathBuf,
     task_package: Option<String>,
-    abort_handles: HashSet<Abort>,
+    abort_handles: Rc<RefCell<HashSet<Abort>>>,
 }
 
 impl TransferService {
@@ -170,7 +160,7 @@ impl TransferService {
             cache: Cache::new(ctx.cache_dir.clone()),
             work_dir: ctx.work_dir.clone(),
             task_package: ctx.agreement.task_package.clone(),
-            abort_handles: HashSet::new(),
+            abort_handles: Default::default(),
         }
     }
 
@@ -199,25 +189,6 @@ impl TransferService {
             }
         }
         providers
-    }
-
-    fn source(
-        provider: Rc<dyn TransferProvider<TransferData, TransferError>>,
-        transfer_url: &TransferUrl,
-        args: &TransferArgs,
-    ) -> std::result::Result<
-        Box<dyn Stream<Item = std::result::Result<TransferData, TransferError>> + Unpin>,
-        TransferError,
-    > {
-        let stream = provider.source(&transfer_url.url, args);
-        match &transfer_url.hash {
-            Some(hash) => Ok(Box::new(HashStream::try_new(
-                stream,
-                &hash.alg,
-                hash.val.clone(),
-            )?)),
-            None => Ok(Box::new(stream)),
-        }
     }
 
     fn provider(
@@ -269,56 +240,50 @@ impl Handler<DeployImage> for TransferService {
             None => return ActorResponse::reply(Ok(None)),
         };
 
-        let source_url = actor_try!(TransferUrl::parse_with_hash(image, "file"));
-        let cache_name = actor_try!(Cache::name(&source_url));
-        let final_path = self.cache.to_final_path(&cache_name);
+        let src_url = actor_try!(TransferUrl::parse_with_hash(image, "file"));
+        let src_name = actor_try!(Cache::name(&src_url));
+        let path = self.cache.to_final_path(&src_name).to_path_buf();
 
-        log::info!(
-            "Deploying from {:?} to {:?}",
-            source_url.url,
-            final_path.to_path_buf()
-        );
+        log::info!("Deploying from {:?} to {:?}", src_url.url, path);
 
-        let args = TransferArgs::default();
         #[cfg(not(feature = "sgx"))]
         {
-            let from_provider = actor_try!(self.provider(&source_url));
-            let to_provider: FileTransferProvider = Default::default();
-            let temp_path = self.cache.to_temp_path(&cache_name);
-            let temp_url = Url::from_file_path(temp_path.to_path_buf()).unwrap();
+            let path_tmp = self.cache.to_temp_path(&src_name).to_path_buf();
 
-            let address = ctx.address();
-            let (abort, reg) = Abort::new_pair();
+            let src = actor_try!(self.provider(&src_url));
+            let dst: Rc<FileTransferProvider> = Default::default();
+            let dst_url = TransferUrl {
+                url: Url::from_file_path(&path_tmp).unwrap(),
+                hash: None,
+            };
 
+            let handles = self.abort_handles.clone();
             let fut = async move {
-                let final_path = final_path.to_path_buf();
-                let temp_path = temp_path.to_path_buf();
-
-                let stream_fn = || Self::source(from_provider.clone(), &source_url, &args);
-                let sink_fn = || to_provider.destination(&temp_url, &args);
-
-                if final_path.exists() {
-                    log::info!("Deploying cached image: {:?}", final_path);
-                    return Ok(Some(final_path));
+                if path.exists() {
+                    log::info!("Deploying cached image: {:?}", path);
+                    return Ok(Some(path));
                 }
 
+                let (abort, reg) = Abort::new_pair();
                 {
-                    let _guard = AbortHandleGuard::register(address, abort).await?;
-                    let retry = retry_transfer(stream_fn, sink_fn, Retry::default());
+                    let ctx = Default::default();
+                    let retry = transfer_with(src, &src_url, dst, &dst_url, &ctx);
+
+                    let _guard = AbortHandleGuard::register(handles, abort);
                     Ok(Abortable::new(retry, reg)
                         .await
                         .map_err(TransferError::from)??)
                 }
                 .map_err(|e: Error| {
-                    log::warn!("Removing temporary download file: {}", temp_path.display());
-                    let _ = std::fs::remove_file(&temp_path);
+                    log::warn!("Removing temporary download file: {}", path_tmp.display());
+                    let _ = std::fs::remove_file(&path_tmp);
                     e
                 })?;
 
-                move_file(&temp_path, &final_path).await?;
+                move_file(&path_tmp, &path).await?;
+                log::info!("Deployment from {:?} finished", src_url.url);
 
-                log::info!("Deployment from {:?} finished", source_url.url);
-                Ok(Some(final_path))
+                Ok(Some(path))
             };
             return ActorResponse::r#async(fut.into_actor(self));
         }
@@ -326,16 +291,15 @@ impl Handler<DeployImage> for TransferService {
         #[cfg(feature = "sgx")]
         {
             let fut = async move {
-                let final_path = final_path.to_path_buf();
-                let resp = reqwest::get(source_url.url)
+                let resp = reqwest::get(src_url.url)
                     .await
                     .map_err(|e| Error::Other(e.to_string()))?;
                 let bytes = resp
                     .bytes()
                     .await
                     .map_err(|e| Error::Other(e.to_string()))?;
-                std::fs::write(&final_path, bytes)?;
-                Ok(Some(final_path))
+                std::fs::write(&path, bytes)?;
+                Ok(Some(path))
             };
             return ActorResponse::r#async(fut.into_actor(self));
         }
@@ -345,26 +309,31 @@ impl Handler<DeployImage> for TransferService {
 impl Handler<TransferResource> for TransferService {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, msg: TransferResource, ctx: &mut Self::Context) -> Self::Result {
-        let from = actor_try!(TransferUrl::parse(&msg.from, "container"));
-        let to = actor_try!(TransferUrl::parse(&msg.to, "container"));
-        let from_provider = actor_try!(self.provider(&from));
-        let to_provider = actor_try!(self.provider(&to));
+    fn handle(&mut self, msg: TransferResource, _: &mut Self::Context) -> Self::Result {
+        let src_url = actor_try!(TransferUrl::parse(&msg.from, "container"));
+        let dst_url = actor_try!(TransferUrl::parse(&msg.to, "container"));
+        let src = actor_try!(self.provider(&src_url));
+        let dst = actor_try!(self.provider(&dst_url));
 
         let (abort, reg) = Abort::new_pair();
-        let address = ctx.address();
-        let fut = async move {
-            let stream_fn = || Self::source(from_provider.clone(), &from, &msg.args);
-            let sink_fn = || to_provider.destination(&to.url, &msg.args);
 
-            log::info!("Transferring {:?} to {:?}", from.url, to.url);
+        let handles = self.abort_handles.clone();
+        let fut = async move {
+            log::info!("Transferring {:?} to {:?}", src_url.url, dst_url.url);
             {
-                let _guard = AbortHandleGuard::register(address, abort).await?;
-                Abortable::new(retry_transfer(stream_fn, sink_fn, Retry::default()), reg)
+                let ctx = TransferContext::from(msg.args);
+                let retry = transfer_with(src, &src_url, dst, &dst_url, &ctx);
+
+                let _guard = AbortHandleGuard::register(handles, abort);
+                Abortable::new(retry, reg)
                     .await
                     .map_err(TransferError::from)??;
             }
-            log::info!("Transfer of {:?} to {:?} finished", from.url, to.url);
+            log::info!(
+                "Transfer of {:?} to {:?} finished",
+                src_url.url,
+                dst_url.url
+            );
             Ok(())
         };
 
@@ -385,29 +354,16 @@ impl Handler<AddVolumes> for TransferService {
     }
 }
 
-impl Handler<AddAbortHandle> for TransferService {
-    type Result = <AddAbortHandle as Message>::Result;
-
-    fn handle(&mut self, msg: AddAbortHandle, _: &mut Self::Context) -> Self::Result {
-        self.abort_handles.insert(msg.0);
-    }
-}
-
-impl Handler<RemoveAbortHandle> for TransferService {
-    type Result = <RemoveAbortHandle as Message>::Result;
-
-    fn handle(&mut self, msg: RemoveAbortHandle, _: &mut Self::Context) -> Self::Result {
-        self.abort_handles.remove(&msg.0);
-    }
-}
-
 impl Handler<AbortTransfers> for TransferService {
     type Result = <AbortTransfers as Message>::Result;
 
     fn handle(&mut self, _: AbortTransfers, _: &mut Self::Context) -> Self::Result {
-        for handle in std::mem::replace(&mut self.abort_handles, HashSet::new()).into_iter() {
-            handle.abort();
+        {
+            let mut guard = self.abort_handles.borrow_mut();
+            std::mem::replace(&mut (*guard), Default::default())
         }
+        .into_iter()
+        .for_each(|h| h.abort());
     }
 }
 
@@ -422,78 +378,20 @@ impl Handler<Shutdown> for TransferService {
 }
 
 struct AbortHandleGuard {
-    address: Addr<TransferService>,
+    inner: Rc<RefCell<HashSet<Abort>>>,
     abort: Abort,
 }
 
 impl AbortHandleGuard {
-    pub async fn register(address: Addr<TransferService>, abort: Abort) -> Result<Self> {
-        address.send(AddAbortHandle(abort.clone())).await?;
-        Ok(AbortHandleGuard { address, abort })
+    pub fn register(inner: Rc<RefCell<HashSet<Abort>>>, abort: Abort) -> Self {
+        inner.borrow_mut().insert(abort.clone());
+        Self { inner, abort }
     }
 }
 
 impl Drop for AbortHandleGuard {
     fn drop(&mut self) {
-        self.address.do_send(RemoveAbortHandle(self.abort.clone()));
-    }
-}
-
-#[derive(Debug, Clone)]
-struct Cache {
-    dir: PathBuf,
-    tmp_dir: PathBuf,
-}
-
-impl Cache {
-    fn new(dir: PathBuf) -> Self {
-        let tmp_dir = dir.clone().join("tmp");
-        std::fs::create_dir_all(&tmp_dir).unwrap();
-        Cache { dir, tmp_dir }
-    }
-
-    fn name(transfer_url: &TransferUrl) -> Result<CachePath> {
-        let hash = match &transfer_url.hash {
-            Some(hash) => hash,
-            None => return Err(TransferError::InvalidUrlError("hash required".to_owned()).into()),
-        };
-
-        let name = transfer_url.file_name()?;
-        let nonce = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis()
-            .to_string();
-
-        Ok(CachePath::new(name.into(), hash.val.clone(), nonce))
-    }
-
-    #[inline(always)]
-    #[cfg(not(feature = "sgx"))]
-    fn to_temp_path(&self, path: &CachePath) -> ProjectedPath {
-        ProjectedPath::local(self.tmp_dir.clone(), path.temp_path())
-    }
-
-    #[inline(always)]
-    fn to_final_path(&self, path: &CachePath) -> ProjectedPath {
-        ProjectedPath::local(self.dir.clone(), path.final_path())
-    }
-}
-
-impl TryFrom<ProjectedPath> for TransferUrl {
-    type Error = Error;
-
-    fn try_from(value: ProjectedPath) -> Result<Self> {
-        TransferUrl::parse(
-            value
-                .to_path_buf()
-                .to_str()
-                .ok_or(Error::local(TransferError::InvalidUrlError(
-                    "Invalid path".to_owned(),
-                )))?,
-            "file",
-        )
-        .map_err(Error::local)
+        self.inner.borrow_mut().remove(&self.abort);
     }
 }
 

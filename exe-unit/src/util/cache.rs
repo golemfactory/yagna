@@ -1,5 +1,70 @@
+use crate::error::{Error, TransferError};
+use sha3::Digest;
+use std::convert::TryFrom;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use std::path::{Component, PathBuf};
+use ya_transfer::TransferUrl;
+
+#[derive(Debug, Clone)]
+pub(crate) struct Cache {
+    dir: PathBuf,
+    tmp_dir: PathBuf,
+}
+
+impl Cache {
+    pub fn new(dir: PathBuf) -> Self {
+        let tmp_dir = dir.clone().join("tmp");
+        std::fs::create_dir_all(&tmp_dir).expect(&format!(
+            "Unable to create directory: {}",
+            tmp_dir.display()
+        ));
+        Cache { dir, tmp_dir }
+    }
+
+    pub fn name(transfer_url: &TransferUrl) -> Result<CachePath, TransferError> {
+        let hash = match &transfer_url.hash {
+            Some(hash) => hash,
+            None => return Err(TransferError::InvalidUrlError("hash required".to_owned()).into()),
+        };
+
+        let name = transfer_url.file_name()?;
+        let location_hash = {
+            let bytes = transfer_url.url.as_str().as_bytes();
+            let hash = sha3::Sha3_224::digest(bytes);
+            hex::encode(hash)
+        };
+
+        Ok(CachePath::new(name.into(), hash.val.clone(), location_hash))
+    }
+
+    #[inline(always)]
+    #[cfg(not(feature = "sgx"))]
+    pub fn to_temp_path(&self, path: &CachePath) -> ProjectedPath {
+        ProjectedPath::local(self.tmp_dir.clone(), path.temp_path())
+    }
+
+    #[inline(always)]
+    pub fn to_final_path(&self, path: &CachePath) -> ProjectedPath {
+        ProjectedPath::local(self.dir.clone(), path.final_path())
+    }
+}
+
+impl TryFrom<ProjectedPath> for TransferUrl {
+    type Error = Error;
+
+    fn try_from(value: ProjectedPath) -> Result<Self, Error> {
+        TransferUrl::parse(
+            value
+                .to_path_buf()
+                .to_str()
+                .ok_or(Error::local(TransferError::InvalidUrlError(
+                    "Invalid path".to_owned(),
+                )))?,
+            "file",
+        )
+        .map_err(Error::local)
+    }
+}
 
 #[derive(Clone, Debug)]
 pub enum ProjectedPath {

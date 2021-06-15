@@ -3,10 +3,9 @@ use actix_web::{middleware, web, App, HttpResponse, HttpServer};
 use futures::channel::oneshot;
 use futures::{StreamExt, TryStreamExt};
 use std::env;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
-use url::Url;
-use ya_client_model::activity::TransferArgs;
-use ya_transfer::{retry_transfer, HttpTransferProvider, Retry, TransferProvider};
+use ya_transfer::{transfer_with, HttpTransferProvider, TransferUrl};
 
 const MAX_FAILURES: usize = 2;
 
@@ -78,17 +77,14 @@ async fn main() -> anyhow::Result<()> {
 
     log::debug!("Transferring");
 
-    let from_url: Url = format!("http://{}/file_get", srv_addr).parse()?;
-    let to_url: Url = format!("http://{}/file_put", srv_addr).parse()?;
-    let prov = HttpTransferProvider::default();
-    let args = TransferArgs::default();
+    let src_url = TransferUrl::parse(&format!("http://{}/file_get", srv_addr), "http")?;
+    let dst_url = TransferUrl::parse(&format!("http://{}/file_put", srv_addr), "http")?;
+    let src = Rc::new(HttpTransferProvider::default());
+    let dst = src.clone();
 
-    retry_transfer(
-        || Ok(prov.source(&from_url, &args)),
-        || prov.destination(&to_url, &args),
-        Retry::default(),
-    )
-    .await?;
+    transfer_with(src, &src_url, dst, &dst_url, &Default::default()).await?;
+
+    log::debug!("Done");
 
     Ok(())
 }

@@ -1,14 +1,15 @@
 use crate::error::{Error, HttpError};
-use crate::{abortable_sink, abortable_stream};
-use crate::{TransferData, TransferProvider, TransferSink, TransferStream};
-use actix_http::http::Method;
+use crate::{abortable_sink, abortable_stream, TransferState};
+use crate::{TransferContext, TransferData, TransferProvider, TransferSink, TransferStream};
+use actix_http::encoding::Decoder;
+use actix_http::http::{header, Method};
+use actix_http::Payload;
 use awc::SendClientRequest;
 use bytes::Bytes;
 use futures::future::{ready, LocalBoxFuture};
 use futures::{FutureExt, SinkExt, StreamExt, TryStreamExt};
 use tokio::task::spawn_local;
 use url::Url;
-use ya_client_model::activity::TransferArgs;
 
 enum HttpAuth<'s> {
     None,
@@ -31,16 +32,6 @@ impl<'s> From<&'s Url> for HttpAuth<'s> {
     }
 }
 
-fn request(method: Method, url: Url) -> awc::ClientRequest {
-    let builder = awc::ClientBuilder::new();
-    match HttpAuth::from(&url) {
-        HttpAuth::None => builder,
-        HttpAuth::Basic { username, password } => builder.basic_auth(username, password),
-    }
-    .finish()
-    .request(method, url.to_string())
-}
-
 pub struct HttpTransferProvider {
     upload_method: Method,
 }
@@ -58,14 +49,16 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
         vec!["http", "https"]
     }
 
-    fn source(&self, url: &Url, _: &TransferArgs) -> TransferStream<TransferData, Error> {
+    fn source(&self, url: &Url, ctx: &TransferContext) -> TransferStream<TransferData, Error> {
         let (stream, tx, abort_reg) = TransferStream::<TransferData, Error>::create(1);
         let txc = tx.clone();
+
         let url = url.clone();
+        let state = ctx.state.clone();
 
         spawn_local(async move {
             let fut = async move {
-                request(Method::GET, url)
+                DownloadRequest::new(url, &state)
                     .send()
                     .await?
                     .http_err()?
@@ -85,7 +78,7 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
         stream
     }
 
-    fn destination(&self, url: &Url, _: &TransferArgs) -> TransferSink<TransferData, Error> {
+    fn destination(&self, url: &Url, _: &TransferContext) -> TransferSink<TransferData, Error> {
         let method = self.upload_method.clone();
         let url = url.clone();
 
@@ -93,7 +86,9 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
 
         spawn_local(async move {
             let fut = async move {
-                request(method, url)
+                client_builder(&url)
+                    .finish()
+                    .request(method, url.to_string())
                     .send_stream(rx.map(|res| res.map(Bytes::from)))
                     .http_err()?
                     .await
@@ -104,6 +99,111 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
         });
 
         sink
+    }
+
+    fn prepare_source<'a>(
+        &self,
+        url: &Url,
+        ctx: &TransferContext,
+    ) -> LocalBoxFuture<'a, Result<(), Error>> {
+        if ctx.state.offset() == 0 {
+            return futures::future::ok(()).boxed_local();
+        }
+
+        let url = url.clone();
+        let state = ctx.state.clone();
+
+        async move {
+            Ok(if !probe_range(url, &state).await? {
+                log::warn!("Transfer resuming is not supported by the server");
+                state.set_offset(0);
+            })
+        }
+        .boxed_local()
+    }
+}
+
+fn client_builder(url: &Url) -> awc::ClientBuilder {
+    let builder = awc::ClientBuilder::new();
+    match HttpAuth::from(url) {
+        HttpAuth::None => builder,
+        HttpAuth::Basic { username, password } => builder.basic_auth(username, password),
+    }
+}
+
+async fn probe_range(url: Url, state: &TransferState) -> Result<bool, Error> {
+    Ok(DownloadRequest::new(url, state)
+        .method(Method::HEAD)
+        .send()
+        .await?
+        .headers()
+        .get_all(header::ACCEPT_RANGES)
+        .any(|v| v.to_str().map(|s| s == "bytes").unwrap_or(false)))
+}
+
+struct DownloadRequest {
+    method: Method,
+    url: Url,
+    offset: u64,
+    max_redirects: usize,
+}
+
+impl DownloadRequest {
+    pub fn new(url: Url, state: &TransferState) -> Self {
+        Self {
+            method: Method::GET,
+            url,
+            offset: state.offset(),
+            max_redirects: 10,
+        }
+    }
+
+    pub fn method(mut self, method: Method) -> Self {
+        self.method = method;
+        self
+    }
+
+    pub async fn send(
+        self,
+    ) -> Result<awc::ClientResponse<Decoder<Payload>>, awc::error::SendRequestError> {
+        let mut redirects = self.max_redirects;
+        let mut url = self.url.to_string();
+
+        let range = match self.offset {
+            0 => None,
+            off => Some(format!("bytes={}-", off)),
+        };
+
+        loop {
+            let mut builder = client_builder(&self.url);
+            if let Some(ref range) = range {
+                builder = builder.header(header::RANGE, range.clone());
+            }
+
+            let resp = builder
+                .finish()
+                .request(self.method.clone(), url.clone())
+                .send()
+                .await?;
+
+            let is_redirect = resp.status().is_redirection();
+            if (!is_redirect) || (is_redirect && redirects == 0) {
+                return Ok(resp);
+            }
+
+            match resp
+                .headers()
+                .get(header::LOCATION)
+                .map(|v| v.to_str().ok())
+                .flatten()
+            {
+                Some(location) => {
+                    url = location.to_string();
+                    redirects -= 1;
+                }
+                None => return Ok(resp),
+            }
+        }
     }
 }
 
@@ -117,7 +217,7 @@ where
 impl<S> HttpErr<Self> for awc::ClientResponse<S> {
     fn http_err(self) -> Result<Self, Error> {
         let status = self.status();
-        if status.is_success() {
+        if status.is_informational() || status.is_success() || status.is_redirection() {
             Ok(self)
         } else {
             if status.is_client_error() {
