@@ -47,8 +47,7 @@ For a more in-depth look at how Golem works, head over to our [documentation.](h
 
 * [agent/provider](agent/provider) - provider agent implementation based on core services.
 * [core](core) - core services for the open computation marketplace.
-* [exe-unit](exe-unit) -  ExeUnit Supervisor.
-* [service-bus](service-bus) - portable, rust-oriented service bus for IPC.
+* [exe-unit](exe-unit) -  ExeUnit Supervisor - a common part of all [runtimes](#runtimes) for yagna.
 * [test-utils](test-utils) - some helpers for testing purposes
 * [utils](utils) - trash bin for all other stuff ;)
 * [docs](docs) - project documentation including analysis and specifications.
@@ -84,17 +83,17 @@ _Modular_ means that all the building blocks can be easily replaceable.
 
 1. Distributed computations
     * [x] **Batching**
-    * [ ] Services _(optional)_
+    * [x] Services _(optional)_
 1. Computational environment (aka ExeUnit)
    * [x] **Wasm computation**
    * [x] Light vm-s _(optional)_
    * [ ] Docker on Linux _(optional)_
-   * [ ] SGX on Graphene _(optional)_
+   * [x] SGX on Graphene _(optional)_
 1. Payment platform
     * [x] **Payments with GLM**
-    * [x] **Gasless transactions**
+    * [x] **L1 & L2 transactions**
     * [x] **ERC20 token**
-    * [ ] payment matching _(optional)_
+    * [ ] Payment matching _(optional)_ (Ability for the invoice issuer to match the payment with Debit Note(s)/Invoice(s)).
 1. Transaction system
     * [x] **Usage market**
     * [x] **Pay per task**
@@ -103,8 +102,6 @@ _Modular_ means that all the building blocks can be easily replaceable.
     * [ ] **P2P** (Hybrid P2P) 
     * [ ] **Ability to work behind NAT** (Relays)
 1. Verification
-    * [ ] **Verification by redundancy**
+    * [ ] [**Verification by redundancy**](https://blog.golemproject.net/gwasm-verification/)
     * [x] **No verification**
     * [ ] Verification by humans _(optional)_
-1. Back compatibility
-    * [ ] Golem Brass/Clay interoperability _(optional)_
