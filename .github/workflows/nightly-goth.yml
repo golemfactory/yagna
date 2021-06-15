@@ -60,7 +60,7 @@ jobs:
         run: |
           poetry run poe goth-assets
           # Runs on branches defined within matrix
-          poetry run poe goth-tests --config-override docker-compose.build-environment.branch=${{ matrix.name }}
+          poetry run poe goth-tests --config-override docker-compose.build-environment.branch=${{ matrix.branch }}
 
       - name: Upload test logs
         uses: actions/upload-artifact@v2
