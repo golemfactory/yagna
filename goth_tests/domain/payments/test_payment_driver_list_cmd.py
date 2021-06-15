@@ -30,7 +30,6 @@ async def test_payment_driver_list(
         {"name": "requestor", "type": "Requestor"},
     ]
     config_overrides.append(("nodes", nodes))
-    config_overrides.append(("docker-compose.build-environment.commit-hash", "29b7f85"))
     goth_config = load_yaml(common_assets / "goth-config.yml", config_overrides)
 
     runner = Runner(

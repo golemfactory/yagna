@@ -76,6 +76,26 @@ pub struct ExecuteCommand {
     pub tx: mpsc::Sender<RuntimeEvent>,
 }
 
+impl ExecuteCommand {
+    pub fn split(self) -> (ExeScriptCommand, CommandContext) {
+        (
+            self.command,
+            CommandContext {
+                batch_id: self.batch_id,
+                idx: self.idx,
+                tx: self.tx,
+            },
+        )
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CommandContext {
+    pub batch_id: String,
+    pub idx: usize,
+    pub tx: mpsc::Sender<RuntimeEvent>,
+}
+
 #[derive(Debug, Message)]
 #[rtype(result = "()")]
 pub struct SetTaskPackagePath(pub Option<PathBuf>);
