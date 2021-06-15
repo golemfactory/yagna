@@ -4995,7 +4995,7 @@ version = "0.5.1"
 source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6c848541e89262f90ca693d9e1a84c6f3df0953b"
 dependencies = [
  "lazy_static",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.1",
  "serial_test_derive",
 ]
 
@@ -6534,7 +6534,7 @@ dependencies = [
 
 [[package]]
 name = "ya-core-model"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "bigdecimal 0.2.0",
  "bitflags 1.2.1",

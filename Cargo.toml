@@ -24,7 +24,7 @@ path = "core/serv/src/main.rs"
 [dependencies]
 ya-activity = "0.3"
 ya-compile-time-utils = "0.1"
-ya-core-model = { version = "^0.3" }
+ya-core-model = { version = "^0.4"}
 ya-dummy-driver = { version = "0.2", optional = true }
 ya-file-logging = "0.1"
 ya-erc20-driver = { version = "0.3", optional = true }
