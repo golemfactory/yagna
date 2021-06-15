@@ -2,15 +2,23 @@ name: Goth nightly
 
 on:
   workflow_dispatch:
-
+    inputs:
+      warning:
+        description: 'Choosing the branch is not supported yet.'
+        required: true
+        default: 'Predefined branches will be used'
   schedule:
     # run this workflow every day at 3:00 AM UTC
     - cron: '0 3 * * *'
 
 jobs:
   integration-test:
-    name: Integration Tests (nightly)
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: ["master", "release/v0.7"]
     runs-on: goth
+    name: Integration Tests (nightly) @ ${{ matrix.branch }}
     defaults:
       run:
         working-directory: './goth_tests'
@@ -51,8 +59,8 @@ jobs:
           GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           poetry run poe goth-assets
-          # Runs on default yagna release, i.e. latest stable release from GitHub
-          poetry run poe goth-tests --config-override docker-compose.build-environment.branch=master
+          # Runs on branches defined within matrix
+          poetry run poe goth-tests --config-override docker-compose.build-environment.branch=${{ matrix.name }}
 
       - name: Upload test logs
         uses: actions/upload-artifact@v2
