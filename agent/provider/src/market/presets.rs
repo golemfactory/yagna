@@ -19,7 +19,7 @@ pub enum Coefficient {
     Duration,
     Cpu,
     Initial,
-    HashUnit
+    HashUnit,
 }
 
 impl Coefficient {

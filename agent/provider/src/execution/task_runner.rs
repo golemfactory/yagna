@@ -557,6 +557,7 @@ impl Handler<GetOfferTemplates> for TaskRunner {
                 log::info!("Reading offer template for {}", key);
                 let string = fut.await?;
                 let value = serde_json::from_str(string.as_str())?;
+                log::info!("offer-template: {} = {:?}", key, value);
                 result.insert(key, value);
             }
             Ok(result)
