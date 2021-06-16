@@ -10,6 +10,9 @@ on:
   schedule:
     # run this workflow every day at 3:00 AM UTC
     - cron: '0 3 * * *'
+  push:
+    branches:
+      - mwu/goth-keep-all-logs
 
 jobs:
   integration-test:
@@ -66,7 +69,7 @@ jobs:
         uses: actions/upload-artifact@v2
         if: always()
         with:
-          name: goth-logs
+          name: goth-logs_${{ matrix.branch }}
           path: /tmp/goth-tests
 
       # Only relevant for self-hosted runners
