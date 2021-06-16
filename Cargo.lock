@@ -5759,6 +5759,20 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "571da51182ec208780505a32528fc5512a8fe1443ab960b3f2f3ef093cd16930"
+dependencies = [
+ "bytes 0.5.6",
+ "futures-core",
+ "futures-sink",
+ "log",
+ "pin-project-lite 0.1.12",
+ "tokio 0.2.25",
+]
+
+[[package]]
+name = "tokio-util"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be8242891f2b6cbef26a2d7e8605133c2c554cd35b3e4948ea892d6d68436499"
@@ -6823,7 +6837,7 @@ dependencies = [
  "thiserror",
  "tokio 0.2.25",
  "ya-core-model",
- "ya-sb-proto",
+ "ya-sb-proto 0.3.0",
  "ya-sb-router",
  "ya-service-api",
  "ya-service-api-interfaces",
@@ -6970,7 +6984,6 @@ dependencies = [
  "winapi 0.3.9",
  "ya-agreement-utils",
  "ya-client",
- "ya-client-model",
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-file-logging",
@@ -7001,7 +7014,22 @@ dependencies = [
 [[package]]
 name = "ya-sb-proto"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=pre-rel-1#e0280ebfd334674628410847868755ae6830256c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1eaa297ee64562ccd1041bb9d2c666a73b92329f83edfdc3bb2e78aad1087b0c"
+dependencies = [
+ "bytes 0.5.6",
+ "prost",
+ "prost-build",
+ "thiserror",
+ "tokio 0.2.25",
+ "tokio-util 0.2.0",
+ "url",
+]
+
+[[package]]
+name = "ya-sb-proto"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1622b60f9311efc95c1e1389e3c113a65b7f8139e6ad9cfcff84bdb8ad57a0f7"
 dependencies = [
  "bytes 0.5.6",
@@ -7015,8 +7043,8 @@ dependencies = [
 
 [[package]]
 name = "ya-sb-router"
-version = "0.4.3"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=pre-rel-1#e0280ebfd334674628410847868755ae6830256c"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e618863fff8794f92e0130ed66100ad03abb7c676d39bf76a60ba0118469506f"
 dependencies = [
  "actix",
@@ -7037,7 +7065,7 @@ dependencies = [
  "tokio-util 0.3.1",
  "url",
  "uuid",
- "ya-sb-proto",
+ "ya-sb-proto 0.4.0",
  "ya-sb-util",
 ]
 
@@ -7151,7 +7179,7 @@ dependencies = [
  "tokio-util 0.3.1",
  "url",
  "uuid",
- "ya-sb-proto",
+ "ya-sb-proto 0.4.0",
  "ya-sb-util",
 ]
 
@@ -7372,7 +7400,7 @@ dependencies = [
  "ya-payment",
  "ya-persistence",
  "ya-provider",
- "ya-sb-proto",
+ "ya-sb-proto 0.3.0",
  "ya-sb-router",
  "ya-service-api",
  "ya-service-api-derive",

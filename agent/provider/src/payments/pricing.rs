@@ -3,11 +3,11 @@ use bigdecimal::{BigDecimal, FromPrimitive};
 use serde_json::json;
 
 use ya_agreement_utils::ComInfo;
-use ya_client_model::{payment::Account, NodeId};
+use ya_client::model::{payment::Account, NodeId};
 use ya_core_model::payment::local::NetworkName;
 
 use super::model::{PaymentDescription, PaymentModel};
-use crate::market::presets::{Coefficient, Preset};
+use crate::market::presets::Preset;
 
 #[derive(Clone, Debug)]
 pub struct AccountView {
@@ -27,7 +27,7 @@ impl From<Account> for AccountView {
 }
 
 pub trait PricingOffer {
-    fn prices(&self, preset: &Preset) -> Vec<(Coefficient, f64)>;
+    fn prices(&self, preset: &Preset) -> Vec<(String, f64)>;
     fn build(
         &self,
         accounts: &Vec<AccountView>,
@@ -95,15 +95,8 @@ impl LinearPricingOffer {
 }
 
 impl PricingOffer for LinearPricingOffer {
-    fn prices(&self, preset: &Preset) -> Vec<(Coefficient, f64)> {
-        Coefficient::variants()
-            .into_iter()
-            .filter(|c| c != &Coefficient::Initial)
-            .filter_map(|c| match preset.usage_coeffs.get(&c) {
-                Some(v) => Some((c, *v)),
-                None => None,
-            })
-            .collect()
+    fn prices(&self, preset: &Preset) -> Vec<(String, f64)> {
+        preset.usage_coeffs.clone().into_iter().collect()
     }
 
     fn build(

@@ -1,12 +1,10 @@
-#![allow(unused)]
-
 use super::exeunit_instance::ExeUnitInstance;
 use anyhow::{anyhow, Context, Result};
 use futures::Future;
 use path_clean::PathClean;
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use std::{
     collections::HashMap,
     fmt,
@@ -18,13 +16,37 @@ use std::{
 use thiserror::Error;
 use ya_agreement_utils::OfferBuilder;
 
+fn default_counter_config() -> HashMap<String, CounterDefinition> {
+    let mut counters = HashMap::new();
+
+    counters.insert(
+        "golem.usage.duration_sec".into(),
+        CounterDefinition {
+            name: "duration".to_string(),
+            description: "Duration".to_string(),
+            price: true,
+        },
+    );
+    counters.insert(
+        "golem.usage.cpu_sec".into(),
+        CounterDefinition {
+            name: "cpu".to_string(),
+            description: "CPU".to_string(),
+            price: true,
+        },
+    );
+
+    counters
+}
+
 /// Descriptor of ExeUnit
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct ExeUnitDesc {
     pub name: String,
-    #[serde(default = "default_version")]
     pub version: Version,
+    #[serde(default)]
+    pub description: Option<String>,
     pub supervisor_path: PathBuf,
     /// Additional arguments passed to supervisor.
     #[serde(default)]
@@ -34,14 +56,27 @@ pub struct ExeUnitDesc {
     pub runtime_path: Option<PathBuf>,
     /// ExeUnit defined properties, that will be appended to offer.
     #[serde(default)]
-    pub properties: serde_json::Map<String, Value>,
+    pub properties: Map<String, Value>,
     /// Here other capabilities and exe units metadata.
-    #[serde(default = "default_description")]
+    pub config: Option<Configuration>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "kebab-case")]
+pub struct Configuration {
+    pub counters: HashMap<String, CounterDefinition>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "kebab-case")]
+pub struct CounterDefinition {
+    pub name: String,
     pub description: String,
+    pub price: bool,
 }
 
 impl ExeUnitDesc {
-    pub fn absolute_paths(self, base_path: &std::path::Path) -> std::io::Result<Self> {
+    pub fn absolute_paths(self, base_path: &Path) -> std::io::Result<Self> {
         let mut desc = self;
         if desc.supervisor_path.is_relative() {
             desc.supervisor_path = base_path.join(&desc.supervisor_path);
@@ -53,14 +88,31 @@ impl ExeUnitDesc {
         }
         Ok(desc)
     }
-}
 
-fn default_description() -> String {
-    "No description provided.".to_string()
-}
+    pub fn resolve_coefficient(&self, coefficient_name: &str) -> Result<String> {
+        self.config
+            .as_ref()
+            .and_then(|config| {
+                if config.counters.contains_key(coefficient_name) {
+                    return Some(coefficient_name.to_string());
+                }
+                todo!("")
+            })
+            .ok_or_else(|| anyhow!("invalid coefficient name = {}", coefficient_name))
+    }
 
-fn default_version() -> Version {
-    Version::new(0, 0, 0)
+    pub fn coefficients(&self) -> impl Iterator<Item = (String, CounterDefinition)> {
+        if let Some(config) = &self.config {
+            config
+                .counters
+                .clone()
+                .into_iter()
+
+        } else {
+            default_counter_config()
+                .into_iter()
+        }
+    }
 }
 
 /// Responsible for creating ExeUnits.
@@ -137,7 +189,7 @@ impl ExeUnitsRegistry {
         Ok(extended_args)
     }
 
-    pub fn register_exeunit(&mut self, mut desc: ExeUnitDesc) -> Result<()> {
+    fn register_exeunit(&mut self, mut desc: ExeUnitDesc) -> Result<()> {
         desc.supervisor_path = normalize_path(&desc.supervisor_path)?;
         desc.runtime_path = if let Some(runtime_path) = &desc.runtime_path {
             Some(normalize_path(runtime_path)?)
@@ -198,7 +250,7 @@ impl ExeUnitsRegistry {
             .clone())
     }
 
-    pub fn list_exeunits(&self) -> Vec<ExeUnitDesc> {
+    pub fn list(&self) -> Vec<ExeUnitDesc> {
         self.descriptors
             .iter()
             .map(|(_, desc)| desc.clone())
@@ -341,7 +393,10 @@ impl fmt::Display for ExeUnitDesc {
             f,
             "{:width$}{}\n",
             "Description:",
-            self.description,
+            self.description
+                .as_ref()
+                .map(AsRef::as_ref)
+                .unwrap_or("No description"),
             width = align
         )?;
 

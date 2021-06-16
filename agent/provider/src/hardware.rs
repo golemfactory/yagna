@@ -1,10 +1,10 @@
-use std::{io, ptr};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::ops::{Add, Not, Sub};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use std::{io, ptr};
 
 use serde::{Deserialize, Serialize};
 use structopt::{clap, StructOpt};
@@ -450,7 +450,8 @@ impl Manager {
 fn to_wstring(value: impl AsRef<OsStr>) -> Vec<u16> {
     use std::os::windows::ffi::OsStrExt;
 
-    value.as_ref()
+    value
+        .as_ref()
         .encode_wide()
         .chain(std::iter::once(0))
         .collect()
@@ -461,14 +462,13 @@ fn partition_space<P: AsRef<Path>>(path: P) -> Result<u64, Error> {
     let path = path.as_ref();
     #[cfg(windows)]
     {
-        use winapi::um::fileapi::GetDiskFreeSpaceExW;
         use winapi::um::errhandlingapi::GetLastError;
+        use winapi::um::fileapi::GetDiskFreeSpaceExW;
         use winapi::um::winnt::PULARGE_INTEGER;
 
         let path = if path.is_file() {
             path.parent().unwrap()
-        }
-        else {
+        } else {
             path
         };
 
@@ -486,7 +486,7 @@ fn partition_space<P: AsRef<Path>>(path: P) -> Result<u64, Error> {
         {
             let err = unsafe { GetLastError() };
             log::error!("Unable to read free partition space for path '{:?}", path);
-            return Err(Error::Io(std::io::Error::from_raw_os_error(err as i32)))
+            return Err(Error::Io(std::io::Error::from_raw_os_error(err as i32)));
         };
 
         Ok(free_bytes_available)

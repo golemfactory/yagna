@@ -4,7 +4,7 @@ use serde_json::Value;
 
 use ya_agreement_utils::agreement::{expand, flatten_value};
 use ya_agreement_utils::AgreementView;
-use ya_client_model::market::{NewOffer, Reason};
+use ya_client::model::market::{NewOffer, Reason};
 
 use super::builtin::{LimitExpiration, MaxAgreements};
 use super::common::{offer_definition_to_offer, AgreementResponse, Negotiator, ProposalResponse};

@@ -22,7 +22,7 @@ use crate::tasks::{AgreementBroken, AgreementClosed, BreakAgreement};
 use ya_client::activity::ActivityProviderApi;
 use ya_client::model::payment::{DebitNote, Invoice, NewDebitNote, NewInvoice};
 use ya_client::payment::PaymentApi;
-use ya_client_model::payment::{DebitNoteEventType, InvoiceEventType};
+use ya_client::model::payment::{DebitNoteEventType, InvoiceEventType};
 use ya_std_utils::LogErr;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};

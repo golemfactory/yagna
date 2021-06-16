@@ -13,19 +13,22 @@ use ya_client::{cli::ApiOpts, model::node_id::NodeId};
 use ya_core_model::payment::local::NetworkName;
 use ya_utils_path::data_dir::DataDir;
 
+pub use crate::cli::preset::PresetsConfig;
 use crate::execution::{ExeUnitsRegistry, TaskRunnerConfig};
-use crate::hardware::{Resources, UpdateResources};
 use crate::market::config::MarketConfig;
 use crate::payments::PaymentsConfig;
 use crate::tasks::config::TaskConfig;
+use crate::cli::exe_unit::ExeUnitsConfig;
+use crate::cli::profile::ProfileConfig;
+use crate::cli::config::ConfigConfig;
 
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
 
     static ref DEFAULT_PLUGINS_DIR : PathBuf = default_plugins();
 }
+pub(crate) use crate::config::globals::GLOBALS_JSON;
 
-pub(crate) const GLOBALS_JSON: &'static str = "globals.json";
 pub(crate) const PRESETS_JSON: &'static str = "presets.json";
 pub(crate) const HARDWARE_JSON: &'static str = "hardware.json";
 
@@ -147,15 +150,6 @@ pub struct RunConfig {
 }
 
 #[derive(StructOpt, Clone, Debug)]
-pub enum ConfigConfig {
-    Get {
-        /// 'node_name' or 'subnet'. If unspecified all config is printed.
-        name: Option<String>,
-    },
-    Set(NodeConfig),
-}
-
-#[derive(StructOpt, Clone, Debug)]
 pub struct PresetNoInteractive {
     #[structopt(long)]
     pub preset_name: Option<String>,
@@ -177,72 +171,7 @@ pub struct UpdateNames {
     pub names: Vec<String>,
 }
 
-#[derive(StructOpt, Clone, Debug)]
-#[structopt(rename_all = "kebab-case")]
-pub enum PresetsConfig {
-    /// List available presets
-    List,
-    /// List active presets
-    Active,
-    /// Create a preset
-    Create {
-        #[structopt(long)]
-        no_interactive: bool,
-        #[structopt(flatten)]
-        params: PresetNoInteractive,
-    },
-    /// Remove a preset
-    Remove { name: String },
-    /// Update a preset
-    Update {
-        #[structopt(flatten)]
-        names: UpdateNames,
-        #[structopt(long)]
-        no_interactive: bool,
-        #[structopt(flatten)]
-        params: PresetNoInteractive,
-    },
-    /// Activate a preset
-    Activate { name: String },
-    /// Deactivate a preset
-    Deactivate { name: String },
-    /// List available metrics
-    ListMetrics,
-}
 
-#[derive(StructOpt, Clone, Debug)]
-#[structopt(rename_all = "kebab-case")]
-pub enum ProfileConfig {
-    /// List available profiles
-    List,
-    /// Show the name of an active profile
-    Active,
-    /// Create a new profile
-    Create {
-        name: String,
-        #[structopt(flatten)]
-        resources: Resources,
-    },
-    /// Update a profile
-    Update {
-        #[structopt(flatten)]
-        names: UpdateNames,
-        #[structopt(flatten)]
-        resources: UpdateResources,
-    },
-    /// Remove an existing profile
-    Remove { name: String },
-    /// Activate a profile
-    Activate { name: String },
-}
-
-#[derive(StructOpt, Clone, Debug)]
-#[structopt(rename_all = "kebab-case")]
-pub enum ExeUnitsConfig {
-    List,
-    // TODO: Install command - could download ExeUnit and add to descriptor file.
-    // TODO: Update command - could update ExeUnit.
-}
 
 #[derive(StructOpt, Clone)]
 #[structopt(rename_all = "kebab-case")]

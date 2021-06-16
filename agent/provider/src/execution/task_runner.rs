@@ -16,9 +16,8 @@ use structopt::StructOpt;
 
 use ya_agreement_utils::{AgreementView, OfferTemplate};
 use ya_client::activity::ActivityProviderApi;
-use ya_client_model::activity::provider_event::ProviderEventType;
-use ya_client_model::activity::{ActivityState, ProviderEvent, State};
-use ya_core_model::activity;
+use ya_client::model::activity::provider_event::ProviderEventType;
+use ya_client::model::activity::{ActivityState, ProviderEvent, State};
 use ya_std_utils::LogErr;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::{Signal, SignalSlot};
@@ -26,7 +25,7 @@ use ya_utils_actix::{actix_signal_handler, forward_actix_handler};
 use ya_utils_path::SecurePath;
 use ya_utils_process::ExeUnitExitStatus;
 
-use super::exeunits_registry::{ExeUnitDesc, ExeUnitsRegistry};
+use super::registry::{ExeUnitDesc, ExeUnitsRegistry};
 use super::task::Task;
 use crate::market::provider_market::NewAgreement;
 use crate::market::Preset;
@@ -403,7 +402,7 @@ impl TaskRunner {
 
         self.save_agreement(&agreement_path, &agreement_id)?;
 
-        let mut args = vec!["service-bus", activity_id, activity::local::BUS_ID];
+        let mut args = vec!["service-bus", activity_id, ya_core_model::activity::local::BUS_ID];
         args.extend(["-c", self.cache_dir.to_str().ok_or(anyhow!("None"))?].iter());
         args.extend(["-w", working_dir.to_str().ok_or(anyhow!("None"))?].iter());
         args.extend(["-a", agreement_path.to_str().ok_or(anyhow!("None"))?].iter());
@@ -557,6 +556,7 @@ impl Handler<GetOfferTemplates> for TaskRunner {
                 log::info!("Reading offer template for {}", key);
                 let string = fut.await?;
                 let value = serde_json::from_str(string.as_str())?;
+                log::info!("offer-template: {} = {:?}", key, value);
                 result.insert(key, value);
             }
             Ok(result)

@@ -1,66 +1,13 @@
 use crate::events::Event;
 use crate::startup_config::FileMonitor;
-use anyhow::{anyhow, Error, Result};
+use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
 use std::fmt;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use strum::IntoEnumIterator;
-use strum_macros::EnumIter;
 use tokio::sync::watch;
 use ya_utils_path::SwapSave;
-
-#[derive(Serialize, Deserialize, Clone, Debug, Hash, Eq, PartialEq, EnumIter)]
-#[serde(rename_all = "snake_case")]
-#[non_exhaustive]
-pub enum Coefficient {
-    Duration,
-    Cpu,
-    Initial,
-    HashUnit
-}
-
-impl Coefficient {
-    #[inline]
-    pub fn variants() -> impl Iterator<Item = Coefficient> {
-        Self::iter()
-    }
-
-    pub fn to_property(&self) -> Option<&str> {
-        let property = match self {
-            Coefficient::Duration => "golem.usage.duration_sec",
-            Coefficient::Cpu => "golem.usage.cpu_sec",
-            Coefficient::HashUnit => "golem.usage.ethminer.hash",
-            Coefficient::Initial => return None,
-        };
-        Some(property)
-    }
-
-    pub fn to_readable(&self) -> &str {
-        match self {
-            Coefficient::Duration => "Duration",
-            Coefficient::Cpu => "CPU",
-            Coefficient::Initial => "Init price",
-            Coefficient::HashUnit => "Hash",
-        }
-    }
-}
-
-impl<'s> TryFrom<&'s str> for Coefficient {
-    type Error = Error;
-
-    fn try_from(value: &'s str) -> Result<Self> {
-        match value {
-            "Init price" | "initial" => Ok(Coefficient::Initial),
-            "Duration" | "duration" => Ok(Coefficient::Duration),
-            "CPU" | "cpu" => Ok(Coefficient::Cpu),
-            "Hash" | "hash-unit" => Ok(Coefficient::HashUnit),
-            _ => Err(anyhow!("Invalid coefficient: {}", value)),
-        }
-    }
-}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "kebab-case")]
@@ -69,12 +16,13 @@ pub struct Preset {
     pub name: String,
     pub exeunit_name: String,
     pub pricing_model: String,
-    pub usage_coeffs: HashMap<Coefficient, f64>,
+    pub initial_price: f64,
+    pub usage_coeffs: HashMap<String, f64>,
 }
 
 impl Preset {
     pub fn get_initial_price(&self) -> Option<f64> {
-        self.usage_coeffs.get(&Coefficient::Initial).cloned()
+        Some(self.initial_price)
     }
 }
 
@@ -167,6 +115,7 @@ impl Default for Presets {
 // FIXME: drop Preset::name so PresetsState can be serialized without conversion
 #[derive(Serialize, Deserialize, Debug)]
 struct PresetsFile {
+    ver: Option<u64>,
     active: Vec<String>,
     presets: Vec<Preset>,
 }
@@ -187,6 +136,7 @@ impl From<PresetsFile> for Presets {
 impl<'p> From<&'p Presets> for PresetsFile {
     fn from(presets: &'p Presets) -> Self {
         PresetsFile {
+            ver: Some(1),
             active: presets.active.clone(),
             presets: presets.presets.values().cloned().collect(),
         }
@@ -368,16 +318,11 @@ impl Default for PresetManager {
 impl Default for Preset {
     // FIXME: sane defaults
     fn default() -> Self {
-        let usage_coeffs = vec![
-            (Coefficient::Duration, 0.1),
-            (Coefficient::Cpu, 1.0),
-            (Coefficient::Initial, 1.0),
-        ]
-        .into_iter()
-        .collect();
+        let usage_coeffs = Default::default();
 
         Preset {
             name: "default".to_string(),
+            initial_price: 0.0,
             exeunit_name: "wasmtime".to_string(),
             pricing_model: "linear".to_string(),
             usage_coeffs,
@@ -420,7 +365,7 @@ impl fmt::Display for Preset {
             write!(
                 f,
                 "    {:width$}{} GLM\n",
-                name.to_readable(),
+                name,
                 coeff,
                 width = align_coeff
             )?;

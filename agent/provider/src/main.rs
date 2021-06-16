@@ -3,13 +3,11 @@ use std::env;
 use structopt::{clap, StructOpt};
 
 use ya_provider::dir::clean_provider_dir;
-use ya_provider::hardware::Profiles;
-use ya_provider::provider_agent::{GlobalsState, Initialize, ProviderAgent, Shutdown};
+use ya_provider::provider_agent::{ Initialize, ProviderAgent, Shutdown};
 use ya_provider::signal::SignalMonitor;
 use ya_provider::startup_config::{
-    Commands, ConfigConfig, ExeUnitsConfig, PresetsConfig, ProfileConfig, StartupConfig,
+    Commands, StartupConfig,
 };
-use ya_provider::{cli, hardware};
 use ya_utils_process::lock::ProcLock;
 
 #[actix_rt::main]
@@ -44,84 +42,10 @@ async fn main() -> anyhow::Result<()> {
             agent.send(Shutdown).await??;
             Ok(())
         }
-        Commands::Config(config_cmd) => match config_cmd {
-            ConfigConfig::Get { name } => cli::config_get(config, name),
-            ConfigConfig::Set(node_config) => {
-                let mut state = GlobalsState::load_or_create(&config.globals_file)?;
-                state.update_and_save(node_config, &config.globals_file)?;
-                Ok(())
-            }
-        },
-        Commands::Preset(presets_cmd) => match presets_cmd {
-            PresetsConfig::List => cli::list_presets(config),
-            PresetsConfig::Active => cli::active_presets(config),
-            PresetsConfig::Create {
-                no_interactive,
-                params,
-            } => {
-                if no_interactive {
-                    cli::create_preset(config, params)
-                } else {
-                    cli::create_preset_interactive(config)
-                }
-            }
-            PresetsConfig::Remove { name } => cli::remove_preset(config, name),
-            PresetsConfig::Update {
-                no_interactive,
-                params,
-                mut names,
-            } => {
-                if no_interactive {
-                    cli::update_presets(&config, names, params)
-                } else {
-                    if names.all || names.names.len() != 1 {
-                        anyhow::bail!("choose one name for interactive update");
-                    }
-                    cli::update_preset_interactive(config, names.names.drain(..).next().unwrap())
-                }
-            }
-            PresetsConfig::Activate { name } => cli::activate_preset(config, name),
-            PresetsConfig::Deactivate { name } => cli::deactivate_preset(config, name),
-            PresetsConfig::ListMetrics => cli::list_metrics(config),
-        },
-        Commands::Profile(profile_cmd) => {
-            let path = config.hardware_file.as_path();
-            match profile_cmd {
-                ProfileConfig::List => {
-                    let profiles = Profiles::load_or_create(&config)?.list();
-                    println!("{}", serde_json::to_string_pretty(&profiles)?);
-                }
-                ProfileConfig::Create { name, resources } => {
-                    let mut profiles = Profiles::load_or_create(&config)?;
-                    if let Some(_) = profiles.get(&name) {
-                        return Err(hardware::ProfileError::AlreadyExists(name).into());
-                    }
-                    profiles.add(name, resources)?;
-                    profiles.save(path)?;
-                }
-                ProfileConfig::Update { names, resources } => {
-                    cli::update_profiles(config, names, resources)?;
-                }
-                ProfileConfig::Remove { name } => {
-                    let mut profiles = Profiles::load_or_create(&config)?;
-                    profiles.remove(name)?;
-                    profiles.save(path)?;
-                }
-                ProfileConfig::Activate { name } => {
-                    let mut profiles = Profiles::load_or_create(&config)?;
-                    profiles.set_active(name)?;
-                    profiles.save(path)?;
-                }
-                ProfileConfig::Active => {
-                    let profiles = Profiles::load_or_create(&config)?;
-                    println!("{}", serde_json::to_string_pretty(profiles.active())?);
-                }
-            }
-            Ok(())
-        }
-        Commands::ExeUnit(exeunit_cmd) => match exeunit_cmd {
-            ExeUnitsConfig::List => cli::list_exeunits(config),
-        },
+        Commands::Config(config_cmd) => config_cmd.run(config),
+        Commands::Preset(presets_cmd) => presets_cmd.run(config),
+        Commands::Profile(profile_cmd) => profile_cmd.run(config),
+        Commands::ExeUnit(exe_unit_cmd) => exe_unit_cmd.run(config),
         Commands::Clean(clean_cmd) => {
             println!("Using data dir: {}", data_dir.display());
 
