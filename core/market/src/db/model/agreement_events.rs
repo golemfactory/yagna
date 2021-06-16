@@ -129,8 +129,8 @@ impl AgreementEvent {
                     },
                     reason,
                     signature: self.signature.unwrap_or_else(|| {
-                        log::warn!("AgreementTerminatedEvent without signature in database. This shouldn't happen, because \
-                                    Market is responsible for signing events and rejecting invalid signatures from other markets.");
+                        // This shouldn't happen after https://github.com/golemfactory/yagna/issues/1079 is implemented.
+                        log::trace!("AgreementTerminatedEvent without signature in database. Falling back to empty string.");
                         "".to_string()
                     }),
                 }
