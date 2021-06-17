@@ -200,6 +200,7 @@ impl DownloadRequest {
                 Some(location) => {
                     url = location.to_string();
                     redirects -= 1;
+                    log::debug!("Following new HTTP download location: {}", url);
                 }
                 None => return Ok(resp),
             }

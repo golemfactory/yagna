@@ -35,6 +35,7 @@ pub use crate::traverse::PathTraverse;
 
 use ya_client_model::activity::TransferArgs;
 
+/// Transfers data from `stream` to a `TransferSink`
 pub async fn transfer<S, T>(stream: S, mut sink: TransferSink<T, Error>) -> Result<(), Error>
 where
     S: Stream<Item = Result<T, Error>>,
@@ -44,6 +45,7 @@ where
     Ok(rx.await??)
 }
 
+/// Transfers data between `TransferProvider`s within current context
 pub async fn transfer_with<S, D>(
     src: impl AsRef<S>,
     src_url: &TransferUrl,
@@ -76,7 +78,7 @@ where
             Ok(val) => return Ok(val),
             Err(err) => match ctx.state.delay(&err) {
                 Some(delay) => {
-                    log::warn!("Retrying in {}s: {}", delay.as_secs_f32(), err);
+                    log::warn!("Retrying in {}s because: {}", delay.as_secs_f32(), err);
                     tokio::time::delay_for(delay).await;
                 }
                 None => return Err(err),
@@ -95,12 +97,18 @@ fn wrap_stream(
     })
 }
 
+/// Trait for implementing file transfer methods
 pub trait TransferProvider<T, E> {
+    /// Returns the URL schemes supported by this provider, e.g. `vec!["http", "https"]`
     fn schemes(&self) -> Vec<&'static str>;
 
+    /// Creates a transfer stream from `url` within current context
     fn source(&self, url: &Url, ctx: &TransferContext) -> TransferStream<T, E>;
+    /// Creates a transfer sink to `url` within current context
     fn destination(&self, url: &Url, ctx: &TransferContext) -> TransferSink<T, E>;
 
+    /// Initializes the transfer context when acting as a stream.
+    /// Executed prior to `source`, but after `prepare_destination`
     fn prepare_source<'a>(
         &self,
         _url: &Url,
@@ -110,6 +118,8 @@ pub trait TransferProvider<T, E> {
         futures::future::ok(()).boxed_local()
     }
 
+    /// Initializes the transfer context when acting as a sink.
+    /// Executed prior to `destination` and `prepare_source`
     fn prepare_destination<'a>(
         &self,
         _url: &Url,
@@ -143,6 +153,10 @@ where
     where
         F: FnMut(Result<T, E>) -> Result<T, E> + Send + Sync + 'static,
     {
+        // This function cannot take `self` as argument since `Self` implements `Drop`.
+        // In order to take and map the stream, then put it back in `self.rx`, the simplest
+        // workaround is to use `Option`. Outside of this function, `self.rx` is guaranteed
+        // to always be `Some`
         let rx = self.rx.take().unwrap();
         self.rx.replace(Box::pin(rx.map(f)));
     }
@@ -226,6 +240,7 @@ impl<T, E> Drop for TransferSink<T, E> {
         self.tx.close_channel();
     }
 }
+
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum TransferData {
@@ -266,6 +281,8 @@ impl From<Box<[u8]>> for TransferData {
     }
 }
 
+/// Transfer context, holding information on current state
+/// and arguments provided by the Requestor
 #[derive(Default, Clone)]
 pub struct TransferContext {
     pub state: TransferState,

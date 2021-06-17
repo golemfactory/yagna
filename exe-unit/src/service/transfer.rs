@@ -270,15 +270,12 @@ impl Handler<DeployImage> for TransferService {
                     let retry = transfer_with(src, &src_url, dst, &dst_url, &ctx);
 
                     let _guard = AbortHandleGuard::register(handles, abort);
-                    Ok(Abortable::new(retry, reg)
-                        .await
-                        .map_err(TransferError::from)??)
-                }
-                .map_err(|e: Error| {
-                    log::warn!("Removing temporary download file: {}", path_tmp.display());
-                    let _ = std::fs::remove_file(&path_tmp);
-                    e
-                })?;
+                    Ok::<_, Error>(
+                        Abortable::new(retry, reg)
+                            .await
+                            .map_err(TransferError::from)??,
+                    )
+                }?;
 
                 move_file(&path_tmp, &path).await?;
                 log::info!("Deployment from {:?} finished", src_url.url);
