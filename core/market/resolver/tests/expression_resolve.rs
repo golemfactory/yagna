@@ -25,6 +25,28 @@ fn resolve_empty() {
 }
 
 #[test]
+fn resolve_filter_true() {
+    let f = "(&)";
+
+    // test positive
+
+    run_resolve_test(f, &vec!["objectClass=\"Babs Jensen\""], ResolveResult::True);
+}
+
+#[test]
+fn resolve_filter_false() {
+    let f = "(|)";
+
+    // test negative
+
+    run_resolve_test(
+        f,
+        &vec!["objectClass=\"Babs Jensen\""],
+        ResolveResult::False(vec![], Expression::Empty(false)),
+    );
+}
+
+#[test]
 fn resolve_present() {
     let f = "(objectClass=*)";
 
