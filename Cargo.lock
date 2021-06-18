@@ -4988,7 +4988,7 @@ version = "0.5.1"
 source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6c848541e89262f90ca693d9e1a84c6f3df0953b"
 dependencies = [
  "lazy_static",
- "parking_lot 0.11.1",
+ "parking_lot 0.10.2",
  "serial_test_derive",
 ]
 
@@ -6993,7 +6993,8 @@ dependencies = [
 [[package]]
 name = "ya-sb-proto"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=642d57335b8f1ae4c84509b96e8a280a870ce81d#642d57335b8f1ae4c84509b96e8a280a870ce81d"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1622b60f9311efc95c1e1389e3c113a65b7f8139e6ad9cfcff84bdb8ad57a0f7"
 dependencies = [
  "bytes 0.5.6",
  "prost",
@@ -7007,7 +7008,8 @@ dependencies = [
 [[package]]
 name = "ya-sb-router"
 version = "0.4.4"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=642d57335b8f1ae4c84509b96e8a280a870ce81d#642d57335b8f1ae4c84509b96e8a280a870ce81d"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e618863fff8794f92e0130ed66100ad03abb7c676d39bf76a60ba0118469506f"
 dependencies = [
  "actix",
  "actix-rt",
@@ -7034,7 +7036,8 @@ dependencies = [
 [[package]]
 name = "ya-sb-util"
 version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=642d57335b8f1ae4c84509b96e8a280a870ce81d#642d57335b8f1ae4c84509b96e8a280a870ce81d"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91deadd9d0598335eceb0b3b419f7531ba5aba9c0ca1459bca19beb2e6a473a4"
 dependencies = [
  "actix",
  "bitflags 1.2.1",
@@ -7124,7 +7127,8 @@ dependencies = [
 [[package]]
 name = "ya-service-bus"
 version = "0.4.9"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=642d57335b8f1ae4c84509b96e8a280a870ce81d#642d57335b8f1ae4c84509b96e8a280a870ce81d"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47b700f5ffc577ff7efb46fde9309f6b616247d6c2f9a8310e93d1109dd4c3ea"
 dependencies = [
  "actix",
  "flexbuffers",
