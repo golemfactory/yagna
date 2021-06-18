@@ -4986,7 +4986,7 @@ version = "0.5.1"
 source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6c848541e89262f90ca693d9e1a84c6f3df0953b"
 dependencies = [
  "lazy_static",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.1",
  "serial_test_derive",
 ]
 
@@ -6637,7 +6637,6 @@ dependencies = [
  "nix 0.17.0",
  "openssl",
  "rand 0.6.5",
- "regex",
  "reqwest 0.10.10",
  "rustyline 7.1.0",
  "secp256k1 0.19.0",
@@ -7216,6 +7215,7 @@ dependencies = [
  "log",
  "percent-encoding",
  "rand 0.7.3",
+ "regex",
  "serde",
  "sha2 0.8.2",
  "sha3 0.8.2",
