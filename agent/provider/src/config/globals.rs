@@ -1,19 +1,19 @@
+use crate::startup_config::NodeConfig;
+use std::path::Path;
 use ya_client::model::NodeId;
-use std::path::{Path, PathBuf};
-use crate::startup_config::{NodeConfig, FileMonitor};
-use std::sync::{Arc, Mutex};
+
 use serde::{Deserialize, Deserializer, Serialize};
+use std::{fs, io};
 use ya_utils_path::SwapSave;
-use std::{io, fs};
 
 pub(crate) const GLOBALS_JSON: &'static str = "globals.json";
 
 #[derive(Clone, Debug, Default, Serialize, derive_more::Display)]
 #[display(
-fmt = "{}{}{}",
-"node_name.as_ref().map(|nn| format!(\"Node name: {}\", nn)).unwrap_or(\"\".into())",
-"subnet.as_ref().map(|s| format!(\"\nSubnet: {}\", s)).unwrap_or(\"\".into())",
-"account.as_ref().map(|a| format!(\"\nAccount: {}\", a)).unwrap_or(\"\".into())"
+    fmt = "{}{}{}",
+    "node_name.as_ref().map(|nn| format!(\"Node name: {}\", nn)).unwrap_or(\"\".into())",
+    "subnet.as_ref().map(|s| format!(\"\nSubnet: {}\", s)).unwrap_or(\"\".into())",
+    "account.as_ref().map(|a| format!(\"\nAccount: {}\", a)).unwrap_or(\"\".into())"
 )]
 pub struct GlobalsState {
     pub node_name: Option<String>,
@@ -104,3 +104,80 @@ impl GlobalsState {
     }
 }
 
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    const GLOBALS_JSON_ALPHA_3: &str = r#"
+{
+  "node_name": "amusing-crate",
+  "subnet": "community.3",
+  "account": {
+    "platform": null,
+    "address": "0x979db95461652299c34e15df09441b8dfc4edf7a"
+  }
+}
+"#;
+
+    const GLOBALS_JSON_ALPHA_4: &str = r#"
+{
+  "node_name": "amusing-crate",
+  "subnet": "community.4",
+  "account": "0x979db95461652299c34e15df09441b8dfc4edf7a"
+}
+"#;
+
+    #[test]
+    fn deserialize_globals() {
+        let mut g3: GlobalsState = serde_json::from_str(GLOBALS_JSON_ALPHA_3).unwrap();
+        let g4: GlobalsState = serde_json::from_str(GLOBALS_JSON_ALPHA_4).unwrap();
+        assert_eq!(g3.node_name, Some("amusing-crate".into()));
+        assert_eq!(g3.node_name, g4.node_name);
+        assert_eq!(g3.subnet, Some("community.3".into()));
+        assert_eq!(g4.subnet, Some("community.4".into()));
+        g3.subnet = Some("community.4".into());
+        assert_eq!(
+            serde_json::to_string(&g3).unwrap(),
+            serde_json::to_string(&g4).unwrap()
+        );
+        assert_eq!(
+            g3.account.unwrap().to_string(),
+            g4.account.unwrap().to_string()
+        );
+    }
+
+    #[test]
+    fn deserialize_no_account() {
+        let g: GlobalsState = serde_json::from_str(
+            r#"
+    {
+      "node_name": "amusing-crate",
+      "subnet": "community.3"
+    }
+    "#,
+        )
+        .unwrap();
+
+        assert_eq!(g.node_name, Some("amusing-crate".into()));
+        assert_eq!(g.subnet, Some("community.3".into()));
+        assert!(g.account.is_none())
+    }
+
+    #[test]
+    fn deserialize_null_account() {
+        let g: GlobalsState = serde_json::from_str(
+            r#"
+    {
+      "node_name": "amusing-crate",
+      "subnet": "community.4",
+      "account": null
+    }
+    "#,
+        )
+        .unwrap();
+
+        assert_eq!(g.node_name, Some("amusing-crate".into()));
+        assert_eq!(g.subnet, Some("community.4".into()));
+        assert!(g.account.is_none())
+    }
+}

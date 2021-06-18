@@ -16,7 +16,7 @@ use std::{
 use thiserror::Error;
 use ya_agreement_utils::OfferBuilder;
 
-fn default_counter_config() -> HashMap<String, CounterDefinition> {
+pub fn default_counter_config() -> HashMap<String, CounterDefinition> {
     let mut counters = HashMap::new();
 
     counters.insert(
@@ -101,16 +101,23 @@ impl ExeUnitDesc {
             .ok_or_else(|| anyhow!("invalid coefficient name = {}", coefficient_name))
     }
 
+    pub fn coefficient_name(&self, propery_name: &str) -> Option<String> {
+        Some(
+            self.config
+                .as_ref()?
+                .counters
+                .get(propery_name)
+                .as_ref()?
+                .name
+                .clone(),
+        )
+    }
+
     pub fn coefficients(&self) -> impl Iterator<Item = (String, CounterDefinition)> {
         if let Some(config) = &self.config {
-            config
-                .counters
-                .clone()
-                .into_iter()
-
+            config.counters.clone().into_iter()
         } else {
-            default_counter_config()
-                .into_iter()
+            default_counter_config().into_iter()
         }
     }
 }
@@ -236,7 +243,12 @@ impl ExeUnitsRegistry {
             )
         })?;
 
-        for desc in descs.into_iter() {
+        for mut desc in descs.into_iter() {
+            if desc.config.is_none() {
+                desc.config = Some(Configuration {
+                    counters: default_counter_config(),
+                });
+            }
             self.register_exeunit(desc.absolute_paths(base_path)?)?
         }
         Ok(())
@@ -377,21 +389,21 @@ impl fmt::Display for ExeUnitDesc {
         let align = 15;
         let align_prop = 30;
 
-        write!(f, "{:width$}{}\n", "Name:", self.name, width = align)?;
-        write!(f, "{:width$}{}\n", "Version:", self.version, width = align)?;
-        write!(
+        writeln!(f, "{:width$}{}", "Name:", self.name, width = align)?;
+        writeln!(f, "{:width$}{}", "Version:", self.version, width = align)?;
+        writeln!(
             f,
-            "{:width$}{}\n",
+            "{:width$}{}",
             "Supervisor:",
             self.supervisor_path.display(),
             width = align
         )?;
         if let Some(rt) = &self.runtime_path {
-            write!(f, "{:width$}{}\n", "Runtime:", rt.display(), width = align)?;
+            writeln!(f, "{:width$}{}", "Runtime:", rt.display(), width = align)?;
         }
-        write!(
+        writeln!(
             f,
-            "{:width$}{}\n",
+            "{:width$}{}",
             "Description:",
             self.description
                 .as_ref()
@@ -401,9 +413,9 @@ impl fmt::Display for ExeUnitDesc {
         )?;
 
         if !self.properties.is_empty() {
-            write!(f, "Properties:\n")?;
+            writeln!(f, "Properties:")?;
             for (key, value) in self.properties.iter() {
-                write!(f, "    {:width$}{}\n", key, value, width = align_prop)?;
+                writeln!(f, "    {:width$}{}", key, value, width = align_prop)?;
             }
         }
         Ok(())

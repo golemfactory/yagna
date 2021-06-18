@@ -1,3 +1,5 @@
+#![allow(clippy::unit_arg)]
+
 use actix::prelude::*;
 use anyhow::{anyhow, bail, Error, Result};
 use chrono::Utc;
@@ -157,7 +159,7 @@ impl TaskManager {
         ctx: &mut Context<Self>,
     ) -> Result<()> {
         let agreement_id = msg.0.agreement_id.clone();
-        let expiration = msg.0.expiration.clone();
+        let expiration = msg.0.expiration;
 
         if Utc::now() > expiration {
             bail!(
@@ -168,7 +170,7 @@ impl TaskManager {
 
         // Schedule agreement termination after expiration time.
         let duration = (expiration - Utc::now()).to_std()?;
-        let agr_id = agreement_id.clone();
+        let agr_id = agreement_id;
         ctx.run_later(duration, move |myself, ctx| {
             if !myself.tasks.is_agreement_finalized(&agr_id) {
                 ctx.address().do_send(BreakAgreement {
@@ -190,7 +192,7 @@ impl TaskManager {
         let agreement_id = msg.0.agreement_id.clone();
 
         // Schedule agreement termination when there is no activity created within timeout.
-        let handle = ctx.run_later(idle_timeout.clone(), move |myself, ctx| {
+        let handle = ctx.run_later(idle_timeout, move |myself, ctx| {
             if myself.tasks.not_active(&agreement_id) {
                 ctx.address().do_send(BreakAgreement {
                     agreement_id,
@@ -201,7 +203,7 @@ impl TaskManager {
 
         self.tasks_handles
             .entry(msg.0.agreement_id)
-            .or_insert(vec![])
+            .or_insert_with(Default::default)
             .push(handle);
         Ok(())
     }
@@ -239,7 +241,7 @@ impl TaskManager {
             runner: self.runner.clone(),
             payments: self.payments.clone(),
             market: self.market.clone(),
-            myself: ctx.address().clone(),
+            myself: ctx.address(),
         }
     }
 
@@ -249,7 +251,7 @@ impl TaskManager {
 
         let props = TaskInfo::from(&msg.agreement)
             .map_err(|e| anyhow!("Failed to create TaskInfo from Agreement. {}", e))?
-            .with_idle_agreement_timeout(self.config.idle_agreement_timeout.clone());
+            .with_idle_agreement_timeout(self.config.idle_agreement_timeout);
 
         self.tasks_props.insert(agreement_id.clone(), props.clone());
 
@@ -351,7 +353,7 @@ impl Handler<NewAgreement> for TaskManager {
                 if let Err(error) = result {
                     // If initialization failed, the only thing, we can do is breaking agreement.
                     let msg = BreakAgreement {
-                        agreement_id: agreement_id.clone(),
+                        agreement_id,
                         reason: BreakReason::InitializationError {
                             error: error.to_string(),
                         },

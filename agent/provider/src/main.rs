@@ -3,11 +3,9 @@ use std::env;
 use structopt::{clap, StructOpt};
 
 use ya_provider::dir::clean_provider_dir;
-use ya_provider::provider_agent::{ Initialize, ProviderAgent, Shutdown};
+use ya_provider::provider_agent::{Initialize, ProviderAgent, Shutdown};
 use ya_provider::signal::SignalMonitor;
-use ya_provider::startup_config::{
-    Commands, StartupConfig,
-};
+use ya_provider::startup_config::{Commands, StartupConfig};
 use ya_utils_process::lock::ProcLock;
 
 #[actix_rt::main]
@@ -18,8 +16,7 @@ async fn main() -> anyhow::Result<()> {
     match &cli_args.commands {
         Commands::Run(_) => (), // logging is handled by ProviderAgent
         _ => {
-            ya_file_logging::start_logger("info", None, &vec![], false)?;
-            ()
+            ya_file_logging::start_logger("info", None, &[], false)?;
         }
     }
 

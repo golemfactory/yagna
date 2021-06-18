@@ -1,6 +1,6 @@
-use structopt::StructOpt;
-use crate::startup_config::{NodeConfig, ProviderConfig};
 use crate::config::globals::GlobalsState;
+use crate::startup_config::{NodeConfig, ProviderConfig};
+use structopt::StructOpt;
 
 #[derive(StructOpt, Clone, Debug)]
 pub enum ConfigConfig {
@@ -12,7 +12,6 @@ pub enum ConfigConfig {
 }
 
 impl ConfigConfig {
-
     pub fn run(self, config: ProviderConfig) -> anyhow::Result<()> {
         match self {
             ConfigConfig::Get { name } => config_get(config, name),
@@ -49,8 +48,3 @@ pub fn config_get(config: ProviderConfig, name: Option<String>) -> anyhow::Resul
     }
     Ok(())
 }
-
-
-
-
-

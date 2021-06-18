@@ -13,14 +13,14 @@ use ya_client::{cli::ApiOpts, model::node_id::NodeId};
 use ya_core_model::payment::local::NetworkName;
 use ya_utils_path::data_dir::DataDir;
 
+use crate::cli::config::ConfigConfig;
+use crate::cli::exe_unit::ExeUnitsConfig;
 pub use crate::cli::preset::PresetsConfig;
+use crate::cli::profile::ProfileConfig;
 use crate::execution::{ExeUnitsRegistry, TaskRunnerConfig};
 use crate::market::config::MarketConfig;
 use crate::payments::PaymentsConfig;
 use crate::tasks::config::TaskConfig;
-use crate::cli::exe_unit::ExeUnitsConfig;
-use crate::cli::profile::ProfileConfig;
-use crate::cli::config::ConfigConfig;
 
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
@@ -171,8 +171,6 @@ pub struct UpdateNames {
     pub names: Vec<String>,
 }
 
-
-
 #[derive(StructOpt, Clone)]
 #[structopt(rename_all = "kebab-case")]
 #[structopt(about = clap::crate_description!())]
@@ -290,9 +288,9 @@ impl FileMonitor {
 
 impl Drop for FileMonitor {
     fn drop(&mut self) {
-        self.thread_ctl.take().map(|sender| {
+        if let Some(sender) = self.thread_ctl.take() {
             let _ = sender.send(());
-        });
+        }
     }
 }
 
@@ -316,5 +314,5 @@ fn default_plugins() -> PathBuf {
         .map(|u| u.home_dir().join(".local/lib/yagna/plugins"))
         .filter(|d| d.exists())
         .map(|p| p.join("ya-runtime-*.json"))
-        .unwrap_or("/usr/lib/yagna/plugins/ya-runtime-*.json".into())
+        .unwrap_or_else(|| "/usr/lib/yagna/plugins/ya-runtime-*.json".into())
 }

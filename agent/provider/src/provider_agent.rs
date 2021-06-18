@@ -1,20 +1,19 @@
 use actix::prelude::*;
 use anyhow::{anyhow, Error};
 use futures::{future, FutureExt, StreamExt, TryFutureExt};
-use serde::{Deserialize, Deserializer, Serialize};
+
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
-use std::{fs, io};
 
 use ya_agreement_utils::agreement::TypedArrayPointer;
 use ya_agreement_utils::*;
 use ya_client::cli::ProviderApi;
-use ya_core_model::{payment::local::NetworkName, NodeId};
+use ya_core_model::payment::local::NetworkName;
 use ya_file_logging::{start_logger, LoggerHandle};
-use ya_utils_path::SwapSave;
 
+use crate::config::globals::GlobalsState;
 use crate::dir::clean_provider_dir;
 use crate::events::Event;
 use crate::execution::{
@@ -26,8 +25,6 @@ use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{AccountView, LinearPricingOffer, Payments, PricingOffer};
 use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RunConfig};
 use crate::tasks::task_manager::{InitializeTaskManager, TaskManager};
-use crate::config::globals::GlobalsState;
-
 
 struct GlobalsManager {
     state: Arc<Mutex<GlobalsState>>,
@@ -63,7 +60,6 @@ impl GlobalsManager {
     }
 }
 
-
 pub struct ProviderAgent {
     globals: GlobalsManager,
     market: Addr<ProviderMarket>,
@@ -75,8 +71,6 @@ pub struct ProviderAgent {
     log_handler: LoggerHandle,
     network: NetworkName,
 }
-
-
 
 impl ProviderAgent {
     pub async fn new(mut args: RunConfig, config: ProviderConfig) -> anyhow::Result<ProviderAgent> {
@@ -91,7 +85,7 @@ impl ProviderAgent {
 
         //start_logger is using env var RUST_LOG internally.
         //args.debug options sets default logger to debug
-        let log_handler = start_logger("info", Some(&log_dir), &vec![], args.debug)?;
+        let log_handler = start_logger("info", Some(&log_dir), &[], args.debug)?;
 
         let app_name = structopt::clap::crate_name!();
         log::info!(
@@ -125,7 +119,11 @@ impl ProviderAgent {
         registry.test_runtimes()?;
 
         // Generate session id from node name and process id to make sure it's unique.
-        let name = args.node.node_name.clone().unwrap_or(app_name.to_string());
+        let name = args
+            .node
+            .node_name
+            .clone()
+            .unwrap_or_else(|| app_name.to_string());
         args.market.session_id = format!("{}-{}", name, std::process::id());
         args.runner.session_id = args.market.session_id.clone();
         args.payment.session_id = args.market.session_id.clone();
@@ -193,7 +191,7 @@ impl ProviderAgent {
                 .ok_or_else(|| anyhow!("Offer template not found for preset [{}]", preset.name))?
                 .clone();
 
-            let (initial_price, prices) = get_prices(&pricing_model, &preset, &offer)?;
+            let (initial_price, prices) = get_prices(pricing_model.as_ref(), &preset, &offer)?;
             offer.set_property("golem.com.usage.vector", get_usage_vector_value(&prices));
             offer.add_constraints(Self::build_constraints(subnet.clone())?);
 
@@ -303,7 +301,7 @@ impl ProviderAgent {
 }
 
 fn get_prices(
-    pricing_model: &Box<dyn PricingOffer>,
+    pricing_model: &dyn PricingOffer,
     preset: &Preset,
     offer: &OfferTemplate,
 ) -> Result<(f64, Vec<(String, f64)>), Error> {
@@ -318,9 +316,9 @@ fn get_prices(
     let prices = pricing_model
         .prices(&preset)
         .into_iter()
-        .filter_map(|(prop, v)|  match offer_usage_vec.contains(&prop.as_str()) {
-                true => Some((prop, v)),
-                false => None
+        .filter_map(|(prop, v)| match offer_usage_vec.contains(&prop.as_str()) {
+            true => Some((prop, v)),
+            false => None,
         })
         .collect::<Vec<_>>();
 
@@ -336,7 +334,7 @@ fn get_prices(
     Ok((initial_price, prices))
 }
 
-fn get_usage_vector_value(prices: &Vec<(String, f64)>) -> serde_json::Value {
+fn get_usage_vector_value(prices: &[(String, f64)]) -> serde_json::Value {
     let vec = prices
         .iter()
         .map(|(p, _)| serde_json::Value::String(p.clone()))
@@ -373,7 +371,7 @@ impl Handler<Initialize> for ProviderAgent {
 
     fn handle(&mut self, _: Initialize, ctx: &mut Context<Self>) -> Self::Result {
         let market = self.market.clone();
-        let agent = ctx.address().clone();
+        let agent = ctx.address();
         let preset_state = self.presets.state.clone();
         let rx = futures::stream::select_all(vec![
             self.hardware.event_receiver(),
@@ -504,81 +502,3 @@ pub struct Shutdown;
 #[derive(Message)]
 #[rtype(result = "Result<(), Error>")]
 struct CreateOffers(pub OfferKind);
-
-#[cfg(test)]
-mod test {
-    use crate::GlobalsState;
-
-    const GLOBALS_JSON_ALPHA_3: &str = r#"
-{
-  "node_name": "amusing-crate",
-  "subnet": "community.3",
-  "account": {
-    "platform": null,
-    "address": "0x979db95461652299c34e15df09441b8dfc4edf7a"
-  }
-}
-"#;
-
-    const GLOBALS_JSON_ALPHA_4: &str = r#"
-{
-  "node_name": "amusing-crate",
-  "subnet": "community.4",
-  "account": "0x979db95461652299c34e15df09441b8dfc4edf7a"
-}
-"#;
-
-    #[test]
-    fn deserialize_globals() {
-        let mut g3: GlobalsState = serde_json::from_str(GLOBALS_JSON_ALPHA_3).unwrap();
-        let g4: GlobalsState = serde_json::from_str(GLOBALS_JSON_ALPHA_4).unwrap();
-        assert_eq!(g3.node_name, Some("amusing-crate".into()));
-        assert_eq!(g3.node_name, g4.node_name);
-        assert_eq!(g3.subnet, Some("community.3".into()));
-        assert_eq!(g4.subnet, Some("community.4".into()));
-        g3.subnet = Some("community.4".into());
-        assert_eq!(
-            serde_json::to_string(&g3).unwrap(),
-            serde_json::to_string(&g4).unwrap()
-        );
-        assert_eq!(
-            g3.account.unwrap().to_string(),
-            g4.account.unwrap().to_string()
-        );
-    }
-
-    #[test]
-    fn deserialize_no_account() {
-        let g: GlobalsState = serde_json::from_str(
-            r#"
-    {
-      "node_name": "amusing-crate",
-      "subnet": "community.3"
-    }
-    "#,
-        )
-        .unwrap();
-
-        assert_eq!(g.node_name, Some("amusing-crate".into()));
-        assert_eq!(g.subnet, Some("community.3".into()));
-        assert!(g.account.is_none())
-    }
-
-    #[test]
-    fn deserialize_null_account() {
-        let g: GlobalsState = serde_json::from_str(
-            r#"
-    {
-      "node_name": "amusing-crate",
-      "subnet": "community.4",
-      "account": null
-    }
-    "#,
-        )
-        .unwrap();
-
-        assert_eq!(g.node_name, Some("amusing-crate".into()));
-        assert_eq!(g.subnet, Some("community.4".into()));
-        assert!(g.account.is_none())
-    }
-}

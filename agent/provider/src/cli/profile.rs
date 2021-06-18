@@ -1,6 +1,6 @@
-use crate::hardware::{Resources, UpdateResources, Profiles};
-use crate::startup_config::{UpdateNames, ProviderConfig};
 use crate::hardware::ProfileError;
+use crate::hardware::{Profiles, Resources, UpdateResources};
+use crate::startup_config::{ProviderConfig, UpdateNames};
 use structopt::StructOpt;
 
 #[derive(StructOpt, Clone, Debug)]
@@ -29,10 +29,8 @@ pub enum ProfileConfig {
     Activate { name: String },
 }
 
-
 impl ProfileConfig {
-
-    pub fn run(self, config : ProviderConfig) -> anyhow::Result<()> {
+    pub fn run(self, config: ProviderConfig) -> anyhow::Result<()> {
         {
             let path = config.hardware_file.as_path();
             match self {

@@ -1,5 +1,5 @@
-use structopt::StructOpt;
 use crate::startup_config::ProviderConfig;
+use structopt::StructOpt;
 
 #[derive(StructOpt, Clone, Debug)]
 #[structopt(rename_all = "kebab-case")]
@@ -12,7 +12,7 @@ pub enum ExeUnitsConfig {
 impl ExeUnitsConfig {
     pub fn run(self, config: ProviderConfig) -> anyhow::Result<()> {
         match self {
-            ExeUnitsConfig::List => list(config)
+            ExeUnitsConfig::List => list(config),
         }
     }
 }

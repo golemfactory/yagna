@@ -30,7 +30,7 @@ pub trait PricingOffer {
     fn prices(&self, preset: &Preset) -> Vec<(String, f64)>;
     fn build(
         &self,
-        accounts: &Vec<AccountView>,
+        accounts: &[AccountView],
         initial_price: f64,
         prices: Vec<(String, f64)>,
     ) -> Result<ComInfo>;
@@ -53,7 +53,8 @@ impl PaymentModel for LinearPricing {
                 .map(|(coeff, usage_value)| coeff * usage_value)
                 .sum::<f64>();
 
-        BigDecimal::from_f64(cost).ok_or(anyhow!("Failed to convert to BigDecimal: {}", cost))
+        BigDecimal::from_f64(cost)
+            .ok_or_else(|| anyhow!("Failed to convert to BigDecimal: {}", cost))
     }
 
     fn expected_usage_len(&self) -> usize {
@@ -90,7 +91,7 @@ impl LinearPricingOffer {
     #[allow(unused)]
     pub fn interval(mut self, seconds: f64) -> Self {
         self.interval = seconds;
-        return self;
+        self
     }
 }
 
@@ -101,7 +102,7 @@ impl PricingOffer for LinearPricingOffer {
 
     fn build(
         &self,
-        accounts: &Vec<AccountView>,
+        accounts: &[AccountView],
         initial_price: f64,
         prices: Vec<(String, f64)>,
     ) -> Result<ComInfo> {

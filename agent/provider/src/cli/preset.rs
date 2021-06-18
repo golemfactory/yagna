@@ -126,7 +126,7 @@ impl PresetUpdater {
 
     pub fn update_metrics(&mut self, config: &ProviderConfig) -> Result<()> {
         let registry = config.registry()?;
-        let mut usage_coeffs : HashMap<String, f64> = Default::default();
+        let mut usage_coeffs: HashMap<String, f64> = Default::default();
         let exe_unit_desc = registry.find_exeunit(&self.preset.exeunit_name)?;
 
         fn get_usage(m: &HashMap<String, f64>, k1: &str, k2: &str) -> f64 {
@@ -136,13 +136,15 @@ impl PresetUpdater {
         }
 
         for (prop_name, counter) in exe_unit_desc.coefficients() {
-            let prev_price = get_usage(&self.preset.usage_coeffs, &prop_name, &counter.name);
-            let price = Input::<f64>::new()
-                .with_prompt(&format!("{} (GLM)", &counter.description))
-                .default(prev_price)
-                .show_default(true)
-                .interact()?;
-            usage_coeffs.insert(prop_name, price);
+            if counter.price {
+                let prev_price = get_usage(&self.preset.usage_coeffs, &prop_name, &counter.name);
+                let price = Input::<f64>::new()
+                    .with_prompt(&format!("{} (GLM)", &counter.description))
+                    .default(prev_price)
+                    .show_default(true)
+                    .interact()?;
+                usage_coeffs.insert(prop_name, price);
+            }
         }
 
         self.preset.usage_coeffs = usage_coeffs;
@@ -179,14 +181,15 @@ pub fn create_interactive(config: ProviderConfig) -> anyhow::Result<()> {
     let exeunits = registry.list().into_iter().map(|desc| desc.name).collect();
     let pricing_models = vec!["linear".to_string()];
 
-    let preset = PresetUpdater::new(Preset::default(), exeunits, pricing_models).interact(&config)?;
+    let preset =
+        PresetUpdater::new(Preset::default(), exeunits, pricing_models).interact(&config)?;
 
     presets.add_preset(preset.clone())?;
     presets.save_to_file(&config.presets_file)?;
 
     println!();
     println!("Preset created:");
-    println!("{}", preset);
+    println!("{}", preset.display(&registry));
     Ok(())
 }
 
@@ -221,12 +224,13 @@ pub fn create(config: ProviderConfig, params: PresetNoInteractive) -> anyhow::Re
 
     println!();
     println!("Preset created:");
-    println!("{}", preset);
+    println!("{}", preset.display(&registry));
     Ok(())
 }
 
 fn list(config: ProviderConfig) -> anyhow::Result<()> {
     let presets = PresetManager::load_or_create(&config.presets_file)?;
+    let registry = config.registry()?;
 
     if config.json {
         println!("{}", serde_json::to_string_pretty(&presets.list())?);
@@ -234,7 +238,7 @@ fn list(config: ProviderConfig) -> anyhow::Result<()> {
         println!("Available Presets:");
 
         for preset in presets.list().iter() {
-            println!("\n{}", preset);
+            println!("\n{}", preset.display(&registry));
         }
     }
     Ok(())
@@ -341,14 +345,11 @@ fn update_preset_interactive(config: ProviderConfig, name: String) -> anyhow::Re
     let mut presets = PresetManager::load_or_create(&config.presets_file)?;
     let registry = config.registry()?;
 
-    let exeunits = registry
-        .list()
-        .into_iter()
-        .map(|desc| desc.name)
-        .collect();
+    let exeunits = registry.list().into_iter().map(|desc| desc.name).collect();
     let pricing_models = vec!["linear".to_string()];
 
-    let preset = PresetUpdater::new(presets.get(&name)?, exeunits, pricing_models).interact(&config)?;
+    let preset =
+        PresetUpdater::new(presets.get(&name)?, exeunits, pricing_models).interact(&config)?;
 
     presets.remove_preset(&name)?;
     presets.add_preset(preset.clone())?;
@@ -356,6 +357,6 @@ fn update_preset_interactive(config: ProviderConfig, name: String) -> anyhow::Re
 
     println!();
     println!("Preset updated:");
-    println!("{}", preset);
+    println!("{}", preset.display(&registry));
     Ok(())
 }

@@ -1,13 +1,17 @@
-use crate::events::Event;
-use crate::startup_config::FileMonitor;
-use anyhow::{anyhow, Result};
-use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt;
+use std::fmt::Formatter;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+
+use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
-use ya_utils_path::SwapSave;
+
+pub use crate::config::presets::Presets;
+use crate::events::Event;
+use crate::execution::ExeUnitsRegistry;
+use crate::startup_config::FileMonitor;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "kebab-case")]
@@ -24,6 +28,13 @@ impl Preset {
     pub fn get_initial_price(&self) -> Option<f64> {
         Some(self.initial_price)
     }
+
+    pub fn display<'a, 'b>(&'a self, registry: &'b ExeUnitsRegistry) -> PresetDisplay<'a, 'b> {
+        PresetDisplay {
+            preset: self,
+            registry,
+        }
+    }
 }
 
 /// Responsible for presets management.
@@ -32,115 +43,6 @@ pub struct PresetManager {
     monitor: Option<FileMonitor>,
     sender: Option<watch::Sender<Event>>,
     receiver: watch::Receiver<Event>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "kebab-case")]
-pub struct Presets {
-    pub active: Vec<String>,
-    pub presets: HashMap<String, Preset>,
-}
-
-impl Presets {
-    pub fn load_from_file<P: AsRef<Path>>(presets_file: P) -> Result<Presets> {
-        let path = presets_file.as_ref();
-        log::debug!("Loading presets from: {}", path.display());
-        let json = std::fs::read_to_string(path)?;
-        let presets: Presets = serde_json::from_str::<PresetsFile>(json.as_str())
-            .map_err(|e| anyhow!("Can't deserialize Presets from file {:?}: {}", path, e))?
-            .into();
-
-        match presets.active.is_empty() {
-            false => presets.active.iter().try_for_each(|name| {
-                presets
-                    .presets
-                    .get(name)
-                    .ok_or(anyhow!("Invalid active preset: {:?}", name))
-                    .map(|_| ())
-            })?,
-            _ => return Err(anyhow!("No active presets")),
-        }
-
-        Ok(presets)
-    }
-
-    pub fn save_to_file(&self, presets_file: &Path) -> Result<()> {
-        let json = serde_json::to_string_pretty(&PresetsFile::from(self))
-            .map_err(|error| anyhow!("Failed to serialize Presets: {}", error))?;
-        presets_file.swap_save(json).map_err(|error| {
-            anyhow!(
-                "Failed to save Presets to file {}, error: {}.",
-                presets_file.display(),
-                error
-            )
-        })?;
-        Ok(())
-    }
-
-    pub fn diff(&self, other: &Presets) -> (Vec<String>, Vec<String>) {
-        let mut updated = HashSet::new();
-        let mut removed = HashSet::new();
-
-        self.active.iter().for_each(|n| {
-            if !other.active.contains(n) {
-                removed.insert(n.clone());
-            }
-        });
-        self.presets
-            .iter()
-            .for_each(|(n, p)| match other.presets.get(n) {
-                Some(preset) => {
-                    if preset != p {
-                        updated.insert(n.clone());
-                    }
-                }
-                _ => {
-                    removed.insert(n.clone());
-                }
-            });
-
-        (updated.into_iter().collect(), removed.into_iter().collect())
-    }
-}
-
-impl Default for Presets {
-    fn default() -> Self {
-        Presets {
-            active: Vec::new(),
-            presets: HashMap::new(),
-        }
-    }
-}
-
-// FIXME: drop Preset::name so PresetsState can be serialized without conversion
-#[derive(Serialize, Deserialize, Debug)]
-struct PresetsFile {
-    ver: Option<u64>,
-    active: Vec<String>,
-    presets: Vec<Preset>,
-}
-
-impl From<PresetsFile> for Presets {
-    fn from(presets_file: PresetsFile) -> Self {
-        Presets {
-            active: presets_file.active,
-            presets: presets_file
-                .presets
-                .into_iter()
-                .map(|p| (p.name.clone(), p))
-                .collect(),
-        }
-    }
-}
-
-impl<'p> From<&'p Presets> for PresetsFile {
-    fn from(presets: &'p Presets) -> Self {
-        PresetsFile {
-            ver: Some(1),
-            active: presets.active.clone(),
-            presets: presets.presets.values().cloned().collect(),
-        }
-    }
 }
 
 impl PresetManager {
@@ -339,38 +241,57 @@ impl PartialEq for Preset {
     }
 }
 
-impl fmt::Display for Preset {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let align = 20;
-        let align_coeff = align - 4; // Minus indent.
+pub struct PresetDisplay<'a, 'b> {
+    preset: &'a Preset,
+    registry: &'b ExeUnitsRegistry,
+}
 
-        write!(f, "{:width$}{}\n", "Name:", self.name, width = align)?;
-        write!(
-            f,
-            "{:width$}{}\n",
-            "ExeUnit:",
-            self.exeunit_name,
-            width = align
-        )?;
-        write!(
-            f,
-            "{:width$}{}\n",
-            "Pricing model:",
-            self.pricing_model,
-            width = align
-        )?;
-        write!(f, "{}\n", "Coefficients:")?;
-
-        for (name, coeff) in self.usage_coeffs.iter() {
-            write!(
-                f,
-                "    {:width$}{} GLM\n",
-                name,
-                coeff,
-                width = align_coeff
-            )?;
-        }
-
-        Ok(())
+impl<'a, 'b> fmt::Display for PresetDisplay<'a, 'b> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        display_preset(f, self.preset, self.registry)
     }
+}
+
+fn display_preset(
+    f: &mut fmt::Formatter,
+    preset: &Preset,
+    registry: &ExeUnitsRegistry,
+) -> fmt::Result {
+    let align = 20;
+    let align_coeff = align - 4; // Minus indent.
+
+    write!(f, "{:width$}{}\n", "Name:", preset.name, width = align)?;
+    write!(
+        f,
+        "{:width$}{}\n",
+        "ExeUnit:",
+        preset.exeunit_name,
+        width = align
+    )?;
+    write!(
+        f,
+        "{:width$}{}\n",
+        "Pricing model:",
+        preset.pricing_model,
+        width = align
+    )?;
+    write!(f, "{}\n", "Coefficients:")?;
+
+    let exe_unit = registry.find_exeunit(&preset.exeunit_name).ok();
+
+    for (name, coeff) in preset.usage_coeffs.iter() {
+        let price_desc = exe_unit
+            .as_ref()
+            .and_then(|e| e.coefficient_name(&name))
+            .unwrap_or_else(|| name.to_string());
+        write!(
+            f,
+            "    {:width$}{} GLM\n",
+            price_desc,
+            coeff,
+            width = align_coeff
+        )?;
+    }
+
+    Ok(())
 }
