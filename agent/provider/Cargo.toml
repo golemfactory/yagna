@@ -56,7 +56,7 @@ strum = "0.20"
 strum_macros = "0.20"
 sys-info = "0.7.0"
 thiserror = "1.0.14"
-tokio = { version = "0.2.10", features = ["process", "signal"] }
+tokio = { version = "0.2", features = ["process", "signal", "dns"] }
 url = "2.1.1"
 walkdir = "2.3.1"
 yansi = "0.5.0"

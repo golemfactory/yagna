@@ -26,7 +26,7 @@ thiserror = "1.0"
 tokio = { version = "0.2", features = ["time"] }
 
 [dev-dependencies]
-ya-sb-proto = "0.3"
+ya-sb-proto = "0.4"
 ya-sb-router = "0.4"
 
 env_logger = "0.7"
