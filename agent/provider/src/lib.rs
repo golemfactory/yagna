@@ -12,5 +12,5 @@ pub mod signal;
 pub mod startup_config;
 pub mod tasks;
 
-pub use startup_config::ReceiverAccount;
 pub use config::globals::GlobalsState;
+pub use startup_config::ReceiverAccount;

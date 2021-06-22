@@ -96,7 +96,13 @@ impl ExeUnitDesc {
                 if config.counters.contains_key(coefficient_name) {
                     return Some(coefficient_name.to_string());
                 }
-                todo!("")
+                config.counters.iter().find_map(|(prop_name, definition)| {
+                    if definition.name == coefficient_name {
+                        Some(prop_name.into())
+                    } else {
+                        None
+                    }
+                })
             })
             .ok_or_else(|| anyhow!("invalid coefficient name = {}", coefficient_name))
     }
