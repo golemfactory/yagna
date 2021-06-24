@@ -1,6 +1,6 @@
 use crate::error::Error;
 use crate::{abortable_sink, abortable_stream};
-use crate::{TransferData, TransferProvider, TransferSink, TransferStream};
+use crate::{TransferContext, TransferData, TransferProvider, TransferSink, TransferStream};
 use bytes::Bytes;
 use futures::channel::mpsc;
 use futures::future::{ready, try_select, Either};
@@ -9,7 +9,6 @@ use gftp::DEFAULT_CHUNK_SIZE;
 use sha3::{Digest, Sha3_256};
 use tokio::task::spawn_local;
 use url::Url;
-use ya_client_model::activity::TransferArgs;
 use ya_core_model::gftp as model;
 use ya_core_model::gftp::Error as GftpError;
 use ya_core_model::gftp::GftpChunk;
@@ -31,7 +30,7 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
         vec!["gftp"]
     }
 
-    fn source(&self, url: &Url, _: &TransferArgs) -> TransferStream<TransferData, Error> {
+    fn source(&self, url: &Url, _: &TransferContext) -> TransferStream<TransferData, Error> {
         let url = url.clone();
         let concurrency = self.concurrency;
         let chunk_size = DEFAULT_CHUNK_SIZE;
@@ -75,7 +74,7 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
         stream
     }
 
-    fn destination(&self, url: &Url, _: &TransferArgs) -> TransferSink<TransferData, Error> {
+    fn destination(&self, url: &Url, _: &TransferContext) -> TransferSink<TransferData, Error> {
         let url = url.clone();
         let concurrency = self.concurrency;
         let chunk_size = DEFAULT_CHUNK_SIZE as usize;

@@ -64,7 +64,7 @@ where
 }
 
 #[inline]
-pub(crate) async fn auto_rebind<B, U, Fb, Fu, Fr, E>(bind: B, unbind: U)
+pub(crate) async fn auto_rebind<B, U, Fb, Fu, Fr, E>(bind: B, unbind: U) -> anyhow::Result<()>
 where
     B: FnMut() -> Fb + 'static,
     U: FnMut() -> Fu + 'static,
@@ -73,14 +73,15 @@ where
     Fr: Future<Output = Result<(), E>> + 'static,
     E: 'static,
 {
-    rebind(Default::default(), bind, Rc::new(RefCell::new(unbind))).await;
+    Ok(rebind(Default::default(), bind, Rc::new(RefCell::new(unbind))).await?)
 }
 
 async fn rebind<B, U, Fb, Fu, Fr, E>(
     reconnect: Rc<RefCell<ReconnectContext>>,
     mut bind: B,
     unbind: Rc<RefCell<U>>,
-) where
+) -> anyhow::Result<()>
+where
     B: FnMut() -> Fb + 'static,
     U: FnMut() -> Fu + 'static,
     Fb: Future<Output = std::io::Result<Fr>> + 'static,
@@ -121,11 +122,18 @@ async fn rebind<B, U, Fb, Fu, Fr, E>(
                     error,
                     delay.as_secs_f32()
                 );
-                tokio::time::delay_for(delay).await;
+                tokio::select! {
+                    _ = tokio::signal::ctrl_c() => {
+                        return Err(anyhow::anyhow!("Net initialization interrupted"));
+                    },
+                    _ = tokio::time::delay_for(delay) => {},
+                }
             }
         }
     }
+
     Arbiter::spawn(rx.then(move |_| rebind(reconnect, bind, unbind).then(|_| future::ready(()))));
+    Ok(())
 }
 
 async fn resubscribe() {
