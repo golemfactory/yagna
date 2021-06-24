@@ -373,7 +373,7 @@ async fn accept_debit_note(
                 return response::bad_request(&e);
             }
             Ok(Err(e)) => return response::server_error(&e),
-            Err(_) => response::timeout(&"Timeout sending Invoice to remote Node."),
+            Err(_) => response::timeout(&"Timeout accepting Invoice on remote Node."),
         }
     }
     .await;
