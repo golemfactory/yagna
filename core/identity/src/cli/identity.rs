@@ -97,6 +97,8 @@ pub enum IdentityCommand {
     Lock {
         /// NodeId or key
         node_or_alias: Option<NodeOrAlias>,
+        #[structopt(long)]
+        new_password: bool,
     },
 
     Unlock {
@@ -233,11 +235,26 @@ impl IdentityCommand {
                     .map_err(|e| anyhow::Error::msg(e))?;
                 CommandOutput::object(id)
             }
-            IdentityCommand::Lock { node_or_alias } => {
+            IdentityCommand::Lock {
+                node_or_alias,
+                new_password,
+            } => {
                 let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
+                let password = if *new_password {
+                    let password: String =
+                        rpassword::read_password_from_tty(Some("Password: "))?.into();
+                    let password2: String =
+                        rpassword::read_password_from_tty(Some("Confirm password: "))?.into();
+                    if password != password2 {
+                        anyhow::bail!("Password and confirmation do not match.")
+                    }
+                    Some(password)
+                } else {
+                    None
+                };
                 CommandOutput::object(
                     bus::service(identity::BUS_ID)
-                        .send(identity::Lock::with_id(node_id))
+                        .send(identity::Lock::with_id(node_id).with_set_password(password))
                         .await
                         .map_err(|e| anyhow::Error::msg(e))?,
                 )
