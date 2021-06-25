@@ -11,11 +11,12 @@ from ya_activity.exceptions import ApiException
 
 from goth.configuration import load_yaml, Override, Configuration
 from goth.runner import Runner
-from goth.runner.probe import ProviderProbe, RequestorProbe
+from goth.runner.probe import RequestorProbe
 
 from goth_tests.helpers.activity import wasi_exe_script, wasi_task_package
 from goth_tests.helpers.negotiation import negotiate_agreements, DemandBuilder
 from goth_tests.helpers.payment import pay_all
+from goth_tests.helpers.probe import ProviderProbe
 
 logger = logging.getLogger("goth.test.multi-activity")
 
@@ -51,6 +52,7 @@ async def test_provider_multi_activity(
     async with runner(config.containers):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         providers = runner.get_probes(probe_type=ProviderProbe)
+        assert providers
 
         # Market
         task_package = wasi_task_package.format(
@@ -114,6 +116,7 @@ async def test_provider_single_simultaneous_activity(
     async with runner(config.containers):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         providers = runner.get_probes(probe_type=ProviderProbe)
+        assert providers
 
         # Market
         task_package = wasi_task_package.format(

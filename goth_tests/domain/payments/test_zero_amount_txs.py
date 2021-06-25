@@ -13,11 +13,12 @@ from goth.address import (
 from goth.configuration import load_yaml, Override
 from goth.node import node_environment
 from goth.runner import Runner
-from goth.runner.probe import ProviderProbe, RequestorProbe
+from goth.runner.probe import RequestorProbe
 from ya_payment import InvoiceStatus
 
 from goth_tests.helpers.activity import wasi_exe_script, wasi_task_package
 from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
+from goth_tests.helpers.probe import ProviderProbe
 
 logger = logging.getLogger("goth.test.zero_amount_txs")
 

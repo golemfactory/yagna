@@ -38,7 +38,7 @@ node-types:
     class: "goth.runner.probe.RequestorProbe"
 
   - name: "Wasm-Provider"
-    class: "goth.runner.probe.ProviderProbe"
+    class: "goth_tests.helpers.probe.ProviderProbe"
     mount:
       - read-only: "provider/presets.json"
         destination: "/root/.local/share/ya-provider/presets.json"

@@ -15,11 +15,12 @@ from goth.node import node_environment
 from goth.runner import Runner
 from goth.runner.container.payment import PaymentIdPool
 from goth.runner.container.yagna import YagnaContainerConfig
-from goth.runner.probe import RequestorProbe, ProviderProbe
+from goth.runner.probe import RequestorProbe
 
 from goth_tests.helpers.activity import run_activity, wasi_exe_script, wasi_task_package
 from goth_tests.helpers.negotiation import negotiate_agreements, DemandBuilder
 from goth_tests.helpers.payment import pay_all
+from goth_tests.helpers.probe import ProviderProbe
 
 logger = logging.getLogger("goth.test.breaking-agreement")
 
@@ -85,6 +86,7 @@ async def test_provider_idle_agreement(
     async with runner(config.containers):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         providers = runner.get_probes(probe_type=ProviderProbe)
+        assert providers
 
         agreement_providers = await negotiate_agreements(
             requestor,
@@ -116,6 +118,7 @@ async def test_provider_idle_agreement_after_2_activities(
     async with runner(config.containers):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         providers = runner.get_probes(probe_type=ProviderProbe)
+        assert providers
 
         agreement_providers = await negotiate_agreements(
             requestor,
@@ -153,6 +156,7 @@ async def test_provider_debit_notes_accept_timeout(
     async with runner(config.containers):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         providers = runner.get_probes(probe_type=ProviderProbe)
+        assert providers
 
         agreement_providers = await negotiate_agreements(
             requestor,
@@ -201,6 +205,7 @@ async def test_provider_timeout_unresponsive_requestor(
     async with runner(config.containers):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         providers = runner.get_probes(probe_type=ProviderProbe)
+        assert providers
 
         agreement_providers = await negotiate_agreements(
             requestor,

@@ -17,10 +17,11 @@ from goth.node import node_environment
 from goth.runner import Runner
 from goth.runner.container.payment import PaymentIdPool
 from goth.runner.container.yagna import YagnaContainerConfig
-from goth.runner.probe import ProviderProbe, RequestorProbe
+from goth.runner.probe import RequestorProbe
 
-from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
 from goth_tests.helpers.activity import vm_exe_script, vm_task_package
+from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
+from goth_tests.helpers.probe import ProviderProbe
 
 logger = logging.getLogger("goth.test.e2e_vm")
 
@@ -44,6 +45,7 @@ async def test_e2e_vm(
     async with runner(goth_config.containers):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         providers = runner.get_probes(probe_type=ProviderProbe)
+        assert providers
 
         # Market
         demand = DemandBuilder(requestor).props_from_template(vm_task_package).build()
