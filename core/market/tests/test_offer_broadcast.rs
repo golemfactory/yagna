@@ -331,15 +331,15 @@ async fn test_broadcast_50k() {
         .add_market_instance("Node-1")
         .await;
 
-    let (tx, mut rx) = mpsc::channel::<()>(1);
+    let (tx, mut rx) = mpsc::channel::<Vec<SubscriptionId>>(1);
 
     let discovery_builder =
         network
             .discovery_builder()
-            .add_handler(move |_caller: String, _msg: OffersBcast| {
+            .add_handler(move |_: String, msg: RetrieveOffers| {
                 let mut tx = tx.clone();
                 async move {
-                    tx.send(()).await.unwrap();
+                    tx.send(msg.offer_ids).await.unwrap();
                     Ok(vec![])
                 }
             });
@@ -356,18 +356,21 @@ async fn test_broadcast_50k() {
         let o = sample_offer();
         offers_50k.push(o.id);
     }
+    offers_50k.sort_by(|a, b| a.to_string().partial_cmp(&b.to_string()).unwrap());
 
     log::debug!("bcast offers: {}", offers_50k.len());
     discovery2.bcast_offers(offers_50k.clone()).await.unwrap();
 
     // Wait for broadcast.
     log::debug!("wait for bcast");
-    tokio::time::timeout(Duration::from_millis(500), rx.next())
+    let mut requested_offers = tokio::time::timeout(Duration::from_millis(500), rx.next())
         .await
+        .unwrap()
         .unwrap();
-    log::debug!("bcast received");
-    let mkt1 = network.get_market("Node-1");
-    let last_offer_id = offers_50k.last().unwrap();
-    let offer = mkt1.get_offer(&last_offer_id).await.unwrap();
-    assert_eq!(&offer.id, last_offer_id);
+    requested_offers.sort_by(|a, b| a.to_string().partial_cmp(&b.to_string()).unwrap());
+    log::debug!("bcast received {}", requested_offers.len());
+    assert_eq!(
+        requested_offers,
+        offers_50k[offers_50k.len() - 100..].to_vec()
+    );
 }
