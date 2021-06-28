@@ -3,32 +3,39 @@ pub mod error;
 mod file;
 mod gftp;
 mod http;
+mod location;
 mod retry;
 mod traverse;
-mod util;
 
-use crate::error::Error;
+use std::cell::RefCell;
+use std::pin::Pin;
+use std::rc::Rc;
+use std::time::Duration;
+
 use actix_rt::Arbiter;
 use bytes::Bytes;
 use futures::channel::mpsc::{channel, Receiver, Sender};
 use futures::channel::oneshot;
-use futures::future::{AbortHandle, AbortRegistration, Abortable, Aborted};
+use futures::future::{AbortHandle, AbortRegistration, Abortable, Aborted, LocalBoxFuture};
+use futures::prelude::*;
 use futures::task::{Context, Poll};
-use futures::{Future, FutureExt, Sink, SinkExt, Stream, StreamExt, TryFutureExt};
 use sha3::digest::DynDigest;
 use sha3::{Sha3_224, Sha3_256, Sha3_384, Sha3_512};
-use std::pin::Pin;
 use url::Url;
-use ya_client_model::activity::TransferArgs;
+
+use crate::error::Error;
 
 pub use crate::archive::{archive, extract, ArchiveFormat};
 pub use crate::file::{DirTransferProvider, FileTransferProvider};
 pub use crate::gftp::GftpTransferProvider;
 pub use crate::http::HttpTransferProvider;
+pub use crate::location::{TransferUrl, UrlExt};
 pub use crate::retry::Retry;
 pub use crate::traverse::PathTraverse;
-pub use crate::util::UrlExt;
 
+use ya_client_model::activity::TransferArgs;
+
+/// Transfers data from `stream` to a `TransferSink`
 pub async fn transfer<S, T>(stream: S, mut sink: TransferSink<T, Error>) -> Result<(), Error>
 where
     S: Stream<Item = Result<T, Error>>,
@@ -38,22 +45,40 @@ where
     Ok(rx.await??)
 }
 
-pub async fn retry_transfer<S, T, Fs, Fd>(
-    stream_fn: Fs,
-    sink_fn: Fd,
-    mut retry: Retry,
+/// Transfers data between `TransferProvider`s within current context
+pub async fn transfer_with<S, D>(
+    src: impl AsRef<S>,
+    src_url: &TransferUrl,
+    dst: impl AsRef<D>,
+    dst_url: &TransferUrl,
+    ctx: &TransferContext,
 ) -> Result<(), Error>
 where
-    S: Stream<Item = Result<T, Error>>,
-    Fs: Fn() -> Result<S, Error>,
-    Fd: Fn() -> TransferSink<T, Error>,
+    S: TransferProvider<TransferData, Error> + ?Sized,
+    D: TransferProvider<TransferData, Error> + ?Sized,
 {
+    let src = src.as_ref();
+    let dst = dst.as_ref();
+
     loop {
-        match transfer(stream_fn()?, sink_fn()).await {
+        let fut = async {
+            dst.prepare_destination(&dst_url.url, ctx).await?;
+            src.prepare_source(&src_url.url, ctx).await?;
+
+            log::debug!("Transferring from offset: {}", ctx.state.offset());
+
+            let stream = wrap_stream(src.source(&src_url.url, ctx), &src_url)?;
+            let sink = dst.destination(&dst_url.url, ctx);
+
+            transfer(stream, sink).await?;
+            Ok::<_, Error>(())
+        };
+
+        match fut.await {
             Ok(val) => return Ok(val),
-            Err(err) => match retry.delay(&err) {
+            Err(err) => match ctx.state.delay(&err) {
                 Some(delay) => {
-                    log::warn!("retrying in {}s: {}", delay.as_secs_f32(), err);
+                    log::warn!("Retrying in {}s because: {}", delay.as_secs_f32(), err);
                     tokio::time::delay_for(delay).await;
                 }
                 None => return Err(err),
@@ -62,57 +87,78 @@ where
     }
 }
 
-#[derive(Clone, Debug)]
-#[non_exhaustive]
-pub enum TransferData {
-    Bytes(Bytes),
+fn wrap_stream(
+    stream: TransferStream<TransferData, Error>,
+    url: &TransferUrl,
+) -> Result<Box<dyn Stream<Item = Result<TransferData, Error>> + Unpin>, Error> {
+    Ok(match url.hash {
+        Some(ref h) => Box::new(HashStream::try_new(stream, &h.alg, h.val.clone())?),
+        None => Box::new(stream),
+    })
 }
 
-impl AsRef<Bytes> for TransferData {
-    fn as_ref(&self) -> &Bytes {
-        match &self {
-            TransferData::Bytes(b) => b,
-        }
-    }
-}
-
-impl From<TransferData> for Bytes {
-    fn from(d: TransferData) -> Self {
-        match d {
-            TransferData::Bytes(b) => b,
-        }
-    }
-}
-
-impl From<Bytes> for TransferData {
-    fn from(b: Bytes) -> Self {
-        TransferData::Bytes(b)
-    }
-}
-
-impl From<Vec<u8>> for TransferData {
-    fn from(vec: Vec<u8>) -> Self {
-        TransferData::Bytes(Bytes::from(vec))
-    }
-}
-
+/// Trait for implementing file transfer methods
 pub trait TransferProvider<T, E> {
+    /// Returns the URL schemes supported by this provider, e.g. `vec!["http", "https"]`
     fn schemes(&self) -> Vec<&'static str>;
 
-    fn source(&self, url: &Url, ctx: &TransferArgs) -> TransferStream<T, E>;
-    fn destination(&self, url: &Url, ctx: &TransferArgs) -> TransferSink<T, E>;
+    /// Creates a transfer stream from `url` within current context
+    fn source(&self, url: &Url, ctx: &TransferContext) -> TransferStream<T, E>;
+    /// Creates a transfer sink to `url` within current context
+    fn destination(&self, url: &Url, ctx: &TransferContext) -> TransferSink<T, E>;
+
+    /// Initializes the transfer context when acting as a stream.
+    /// Executed prior to `source`, but after `prepare_destination`
+    fn prepare_source<'a>(
+        &self,
+        _url: &Url,
+        ctx: &TransferContext,
+    ) -> LocalBoxFuture<'a, Result<(), Error>> {
+        ctx.state.set_offset(0);
+        futures::future::ok(()).boxed_local()
+    }
+
+    /// Initializes the transfer context when acting as a sink.
+    /// Executed prior to `destination` and `prepare_source`
+    fn prepare_destination<'a>(
+        &self,
+        _url: &Url,
+        ctx: &TransferContext,
+    ) -> LocalBoxFuture<'a, Result<(), Error>> {
+        ctx.state.set_offset(0);
+        futures::future::ok(()).boxed_local()
+    }
 }
 
+type InnerStream<'a, I> = Pin<Box<dyn Stream<Item = I> + Send + Sync + Unpin + 'a>>;
+
 pub struct TransferStream<T, E> {
-    rx: Receiver<Result<T, E>>,
+    rx: Option<InnerStream<'static, Result<T, E>>>,
     abort_handle: AbortHandle,
 }
 
-impl<T: 'static, E: 'static> TransferStream<T, E> {
+impl<T, E> TransferStream<T, E>
+where
+    T: Send + 'static,
+    E: Send + 'static,
+{
     pub fn create(channel_size: usize) -> (Self, Sender<Result<T, E>>, AbortRegistration) {
         let (tx, rx) = channel(channel_size);
+        let rx: Option<InnerStream<Result<T, E>>> = Some(Box::pin(rx));
         let (abort_handle, abort_reg) = AbortHandle::new_pair();
         (TransferStream { rx, abort_handle }, tx, abort_reg)
+    }
+
+    pub fn map_inner<F>(&mut self, f: F)
+    where
+        F: FnMut(Result<T, E>) -> Result<T, E> + Send + Sync + 'static,
+    {
+        // This function cannot take `self` as argument since `Self` implements `Drop`.
+        // In order to take and map the stream, then put it back in `self.rx`, the simplest
+        // workaround is to use `Option`. Outside of this function, `self.rx` is guaranteed
+        // to always be `Some`
+        let rx = self.rx.take().unwrap();
+        self.rx.replace(Box::pin(rx.map(f)));
     }
 
     pub fn err(e: E) -> Self {
@@ -130,7 +176,8 @@ impl<T, E> Stream for TransferStream<T, E> {
     type Item = Result<T, E>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        Stream::poll_next(Pin::new(&mut self.rx), cx)
+        let rx = self.rx.as_mut().unwrap();
+        Stream::poll_next(Pin::new(rx), cx)
     }
 }
 
@@ -194,7 +241,116 @@ impl<T, E> Drop for TransferSink<T, E> {
     }
 }
 
-pub struct HashStream<T, E, S>
+#[derive(Clone, Debug)]
+#[non_exhaustive]
+pub enum TransferData {
+    Bytes(Bytes),
+}
+
+impl AsRef<Bytes> for TransferData {
+    fn as_ref(&self) -> &Bytes {
+        match &self {
+            TransferData::Bytes(b) => b,
+        }
+    }
+}
+
+impl From<TransferData> for Bytes {
+    fn from(d: TransferData) -> Self {
+        match d {
+            TransferData::Bytes(b) => b,
+        }
+    }
+}
+
+impl From<Bytes> for TransferData {
+    fn from(b: Bytes) -> Self {
+        TransferData::Bytes(b)
+    }
+}
+
+impl From<Vec<u8>> for TransferData {
+    fn from(vec: Vec<u8>) -> Self {
+        TransferData::Bytes(Bytes::from(vec))
+    }
+}
+
+impl From<Box<[u8]>> for TransferData {
+    fn from(b: Box<[u8]>) -> Self {
+        Self::from(b.into_vec())
+    }
+}
+
+/// Transfer context, holding information on current state
+/// and arguments provided by the Requestor
+#[derive(Default, Clone)]
+pub struct TransferContext {
+    pub state: TransferState,
+    pub args: TransferArgs,
+}
+
+impl TransferContext {
+    pub fn new(offset: u64) -> Self {
+        let args = TransferArgs::default();
+        let state = TransferState::default();
+        state.set_offset(offset);
+
+        Self { args, state }
+    }
+}
+
+impl From<TransferArgs> for TransferContext {
+    fn from(args: TransferArgs) -> Self {
+        Self {
+            args,
+            ..Default::default()
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct TransferState {
+    offset: Rc<RefCell<u64>>,
+    retry: Rc<RefCell<Option<Retry>>>,
+}
+
+impl Default for TransferState {
+    fn default() -> Self {
+        Self {
+            retry: Rc::new(RefCell::new(Some(Retry::default()))),
+            offset: Default::default(),
+        }
+    }
+}
+
+impl TransferState {
+    pub fn offset(&self) -> u64 {
+        *self.offset.borrow()
+    }
+
+    pub fn set_offset(&self, offset: u64) {
+        let mut r = (*self.offset).borrow_mut();
+        *r = offset;
+    }
+
+    pub fn retry(&self, count: i32) {
+        self.retry_with(Retry::new(count));
+    }
+
+    pub fn retry_with(&self, retry: Retry) {
+        let mut r = (*self.retry).borrow_mut();
+        r.replace(retry);
+    }
+
+    pub(crate) fn delay(&self, err: &Error) -> Option<Duration> {
+        (*self.retry.borrow_mut())
+            .as_mut()
+            .map(|r| r.delay(&err))
+            .flatten()
+    }
+}
+
+struct HashStream<T, E, S>
 where
     S: Stream<Item = Result<T, E>>,
 {
@@ -295,7 +451,10 @@ where
     Abortable::new(fut, abort_reg)
         .map_err(E::from)
         .then(|r: Result<Result<(), E>, E>| async move {
-            if let Err(e) = flatten_result(r) {
+            if let Err(e) = match r {
+                Ok(r) => r,
+                Err(e) => Err(e),
+            } {
                 let _ = tx.send(Err(e)).await;
             }
             tx.close_channel();
@@ -321,9 +480,4 @@ where
         Result::<(), E>::Ok(())
     })
     .boxed_local()
-}
-
-#[inline(always)]
-pub(crate) fn flatten_result<T, E>(r: Result<Result<T, E>, E>) -> Result<T, E> {
-    r?
 }
