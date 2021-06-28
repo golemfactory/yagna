@@ -67,6 +67,7 @@ openssl-probe = { version = "0.1", optional = true }
 structopt = "0.3"
 tokio = {version = "0.2.22", features=["uds"]}
 url = "2.1.1"
+serde="1.0.126"
 
 [package.metadata.deb]
 name="golem-requestor"

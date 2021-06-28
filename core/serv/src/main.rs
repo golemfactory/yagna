@@ -1,8 +1,6 @@
-use actix_web::{middleware, web, App, HttpServer, Responder};
-use anyhow::{Context, Result};
-use futures::prelude::*;
 #[cfg(feature = "static-openssl")]
 extern crate openssl_probe;
+
 use std::{
     any::TypeId,
     collections::HashMap,
@@ -11,23 +9,29 @@ use std::{
     fmt::Debug,
     path::{Path, PathBuf},
 };
+
+use actix_web::{App, HttpServer, middleware, Responder, web};
+use anyhow::{Context, Result};
+use futures::prelude::*;
 use structopt::{clap, StructOpt};
 use url::Url;
-
-use ya_activity::service::Activity as ActivityService;
 use ya_file_logging::start_logger;
+use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
+use ya_service_bus::typed as gsb;
+
+use autocomplete::CompleteCommand;
+use ya_activity::service::Activity as ActivityService;
 use ya_identity::service::Identity as IdentityService;
 use ya_market::MarketService;
 use ya_metrics::{MetricsPusherOpts, MetricsService};
 use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
 use ya_persistence::executor::DbExecutor;
-use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_api_interfaces::Provider;
 use ya_service_api_web::{
-    middleware::{auth, Identity},
-    rest_api_host_port, DEFAULT_YAGNA_API_URL, YAGNA_API_URL_ENV_VAR,
+    DEFAULT_YAGNA_API_URL,
+    middleware::{auth, Identity}, rest_api_host_port, YAGNA_API_URL_ENV_VAR,
 };
 use ya_sgx::SgxService;
 use ya_utils_path::data_dir::DataDir;
@@ -35,8 +39,7 @@ use ya_utils_process::lock::ProcLock;
 use ya_version::VersionService;
 
 mod autocomplete;
-use autocomplete::CompleteCommand;
-
+mod model;
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
 }
@@ -272,6 +275,7 @@ impl CliCommand {
 enum ServiceCommand {
     /// Runs server in foreground
     Run(ServiceCommandOpts),
+    Shutdown(ShutdownOpts)
 }
 
 #[derive(StructOpt, Debug)]
@@ -317,6 +321,12 @@ async fn sd_notify(unset_environment: bool, state: &str) -> std::io::Result<()> 
     let mut socket = tokio::net::UnixDatagram::unbound()?;
     socket.send_to(state.as_ref(), addr).await?;
     Ok(())
+}
+
+#[derive(StructOpt, Debug)]
+struct ShutdownOpts {
+    #[structopt(long)]
+    gracefully: bool,
 }
 
 #[cfg(not(unix))]
@@ -414,13 +424,36 @@ impl ServiceCommand {
                 .bind(api_host_port.clone())
                 .context(format!("Failed to bind http server on {:?}", api_host_port))?;
 
-                future::try_join(server.run(), sd_notify(false, "READY=1")).await?;
+
+                let server_fut = server.run();
+                {
+                    let server = server_fut.clone();
+                    gsb::bind(model::BUS_ID, move |request : model::ShutdownRequest| {
+                        let server = server.clone();
+                        actix_rt::spawn(async move {
+                            actix_rt::time::delay_for(std::time::Duration::from_secs(1)).await;
+                            server.stop(request.graceful).await;
+                        });
+
+                        async move {
+                            Ok(())
+                        }
+                    });
+                }
+
+                future::try_join(server_fut, sd_notify(false, "READY=1")).await?;
 
                 log::info!("{} service successfully finished!", app_name);
 
                 PaymentService::shut_down().await;
                 logger_handle.shutdown();
                 Ok(CommandOutput::NoOutput)
+            }
+            Self::Shutdown(opts) => {
+                let result = gsb::service(model::BUS_ID).call(model::ShutdownRequest {
+                    graceful: opts.gracefully
+                }).await?;
+                CommandOutput::object(&result)
             }
         }
     }
