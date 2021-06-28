@@ -275,7 +275,7 @@ impl CliCommand {
 enum ServiceCommand {
     /// Runs server in foreground
     Run(ServiceCommandOpts),
-    Shutdown(ShutdownOpts)
+    Shutdown(ShutdownOpts),
 }
 
 #[derive(StructOpt, Debug)]
@@ -424,20 +424,17 @@ impl ServiceCommand {
                 .bind(api_host_port.clone())
                 .context(format!("Failed to bind http server on {:?}", api_host_port))?;
 
-
                 let server_fut = server.run();
                 {
                     let server = server_fut.clone();
-                    gsb::bind(model::BUS_ID, move |request : model::ShutdownRequest| {
+                    gsb::bind(model::BUS_ID, move |request: model::ShutdownRequest| {
                         let server = server.clone();
                         actix_rt::spawn(async move {
                             actix_rt::time::delay_for(std::time::Duration::from_secs(1)).await;
                             server.stop(request.graceful).await;
                         });
 
-                        async move {
-                            Ok(())
-                        }
+                        async move { Ok(()) }
                     });
                 }
 
@@ -450,9 +447,11 @@ impl ServiceCommand {
                 Ok(CommandOutput::NoOutput)
             }
             Self::Shutdown(opts) => {
-                let result = gsb::service(model::BUS_ID).call(model::ShutdownRequest {
-                    graceful: opts.gracefully
-                }).await?;
+                let result = gsb::service(model::BUS_ID)
+                    .call(model::ShutdownRequest {
+                        graceful: opts.gracefully,
+                    })
+                    .await?;
                 CommandOutput::object(&result)
             }
         }

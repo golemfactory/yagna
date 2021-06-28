@@ -1,15 +1,17 @@
-use directories::UserDirs;
-use futures::channel::oneshot;
-use notify::*;
-use serde::{Deserialize, Serialize};
+use std::env;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::Duration;
+
+use directories::UserDirs;
+use futures::channel::oneshot;
+use notify::*;
+use serde::{Deserialize, Serialize};
 use structopt::{clap, StructOpt};
 use strum::VariantNames;
-
 use ya_client::{cli::ApiOpts, model::node_id::NodeId};
+
 use ya_core_model::payment::local::NetworkName;
 use ya_utils_path::data_dir::DataDir;
 
@@ -17,6 +19,7 @@ use crate::cli::config::ConfigConfig;
 use crate::cli::exe_unit::ExeUnitsConfig;
 pub use crate::cli::preset::PresetsConfig;
 use crate::cli::profile::ProfileConfig;
+pub(crate) use crate::config::globals::GLOBALS_JSON;
 use crate::execution::{ExeUnitsRegistry, TaskRunnerConfig};
 use crate::market::config::MarketConfig;
 use crate::payments::PaymentsConfig;
@@ -27,8 +30,6 @@ lazy_static::lazy_static! {
 
     static ref DEFAULT_PLUGINS_DIR : PathBuf = default_plugins();
 }
-pub(crate) use crate::config::globals::GLOBALS_JSON;
-
 pub(crate) const PRESETS_JSON: &'static str = "presets.json";
 pub(crate) const HARDWARE_JSON: &'static str = "hardware.json";
 
@@ -310,6 +311,14 @@ where
 }
 
 fn default_plugins() -> PathBuf {
+    if let Some(mut exe) = env::current_exe().ok() {
+        exe.pop();
+        exe.push("plugins");
+        if exe.is_dir() {
+            return exe.join("ya-runtime-*.json");
+        }
+    }
+
     UserDirs::new()
         .map(|u| u.home_dir().join(".local/lib/yagna/plugins"))
         .filter(|d| d.exists())

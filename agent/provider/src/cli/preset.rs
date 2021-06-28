@@ -1,10 +1,11 @@
+use std::collections::HashMap;
+
 use anyhow::{anyhow, bail, Result};
 use dialoguer::{Input, Select};
 use structopt::StructOpt;
 
 use crate::market::{Preset, PresetManager};
 use crate::startup_config::{PresetNoInteractive, ProviderConfig, UpdateNames};
-use std::collections::HashMap;
 
 #[derive(StructOpt, Clone, Debug)]
 #[structopt(rename_all = "kebab-case")]
@@ -193,6 +194,10 @@ pub fn create_interactive(config: ProviderConfig) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn is_initial_coefficient_name(name : &str) -> bool {
+    name.eq_ignore_ascii_case("initial") || name.eq("Init price")
+}
+
 pub fn create(config: ProviderConfig, params: PresetNoInteractive) -> anyhow::Result<()> {
     if config.json {
         anyhow::bail!("json output not implemented");
@@ -212,9 +217,14 @@ pub fn create(config: ProviderConfig, params: PresetNoInteractive) -> anyhow::Re
     let exe_unit_desc = registry.find_exeunit(&preset.exeunit_name)?;
 
     for (name, price) in params.price.iter() {
-        let usage_coefficient = exe_unit_desc.resolve_coefficient(&name)?;
+        if is_initial_coefficient_name(name) {
+            preset.initial_price = *price;
+        }
+        else {
+            let usage_coefficient = exe_unit_desc.resolve_coefficient(&name)?;
 
-        preset.usage_coeffs.insert(usage_coefficient, *price);
+            preset.usage_coeffs.insert(usage_coefficient, *price);
+        }
     }
 
     validate_preset(&config, &preset)?;
@@ -301,9 +311,13 @@ fn update_presets(
             let exe_unit_desc = registry.find_exeunit(&preset.exeunit_name)?;
 
             for (name, price) in params.price.iter() {
-                preset
-                    .usage_coeffs
-                    .insert(exe_unit_desc.resolve_coefficient(&name)?, *price);
+                if is_initial_coefficient_name(name) {
+                    preset.initial_price = *price;
+                } else {
+                    preset
+                        .usage_coeffs
+                        .insert(exe_unit_desc.resolve_coefficient(&name)?, *price);
+                }
             }
 
             validate_preset(&config, &preset)?;

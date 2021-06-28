@@ -1,10 +1,3 @@
-use super::exeunit_instance::ExeUnitInstance;
-use anyhow::{anyhow, Context, Result};
-use futures::Future;
-use path_clean::PathClean;
-use semver::Version;
-use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
 use std::{
     collections::HashMap,
     fmt,
@@ -13,8 +6,18 @@ use std::{
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
+
+use anyhow::{anyhow, Context, Result};
+use futures::Future;
+use path_clean::PathClean;
+use semver::Version;
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use thiserror::Error;
+
 use ya_agreement_utils::OfferBuilder;
+
+use super::exeunit_instance::ExeUnitInstance;
 
 pub fn default_counter_config() -> HashMap<String, CounterDefinition> {
     let mut counters = HashMap::new();
@@ -33,6 +36,15 @@ pub fn default_counter_config() -> HashMap<String, CounterDefinition> {
             name: "cpu".to_string(),
             description: "CPU".to_string(),
             price: true,
+        },
+    );
+
+    counters.insert(
+        "golem.usage.storage_gib".into(),
+        CounterDefinition {
+            name: "storage_gib".into(),
+            description: "Sotrage".into(),
+            price: false,
         },
     );
 
@@ -97,7 +109,7 @@ impl ExeUnitDesc {
                     return Some(coefficient_name.to_string());
                 }
                 config.counters.iter().find_map(|(prop_name, definition)| {
-                    if definition.name == coefficient_name {
+                    if definition.name.eq_ignore_ascii_case(&coefficient_name) {
                         Some(prop_name.into())
                     } else {
                         None

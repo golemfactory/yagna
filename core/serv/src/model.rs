@@ -3,11 +3,11 @@
 use serde::{Deserialize, Serialize};
 use ya_service_bus::RpcMessage;
 
-pub const BUS_ID :&str = "/local/control";
+pub const BUS_ID: &str = "/local/control";
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct ShutdownRequest {
-    pub graceful : bool
+    pub graceful: bool,
 }
 
 impl RpcMessage for ShutdownRequest {
