@@ -318,16 +318,19 @@ async fn process_proposal(
                 .await?;
         }
         ProposalResponse::IgnoreProposal => log::info!("Ignoring proposal {:?}", proposal_id),
-        ProposalResponse::RejectProposal { reason } => {
-            if let Some(r) = reason.clone() {
-                let is_final = r.extra["golem.proposal.rejection.is-final"].clone();
-                if !is_final.eq(&serde_json::json!(false)) {
-                    let sub_dem = SubscriptionProposal {
-                        subscription_id: subscription.id.clone(),
-                        proposal: demand.clone(),
-                    };
-                    ctx.market.do_send(PostponeDemand(sub_dem));
-                }
+        ProposalResponse::RejectProposal { reason, is_final } => {
+            if !is_final {
+                let sub_dem = SubscriptionProposal {
+                    subscription_id: subscription.id.clone(),
+                    proposal: demand.clone(),
+                };
+                log::debug!(
+                    "Postponing rejected Proposal [{}] from Requestor [{}]. Reason: {}",
+                    demand.proposal_id,
+                    demand.issuer_id,
+                    reason.display()
+                );
+                ctx.market.do_send(PostponeDemand(sub_dem));
             }
             ctx.api
                 .reject_proposal(&subscription.id, proposal_id, &reason)
@@ -412,7 +415,7 @@ async fn process_agreement(
             // We negotiated agreement and here responsibility of ProviderMarket ends.
             // Notify outside world about agreement for further processing.
         }
-        AgreementResponse::RejectAgreement { reason } => {
+        AgreementResponse::RejectAgreement { reason, .. } => {
             ctx.api
                 .reject_agreement(&agreement.agreement_id, &reason)
                 .await?;
@@ -540,7 +543,7 @@ impl Handler<PostponeDemand> for ProviderMarket {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: PostponeDemand, _ctx: &mut Self::Context) -> Self::Result {
-        self.postponed_demands.extend(vec![msg.0]);
+        self.postponed_demands.push(msg.0);
         ActorResponse::reply(Ok(()))
     }
 }
@@ -737,6 +740,12 @@ async fn renegotiate_demands(
     demands: Vec<SubscriptionProposal>,
 ) {
     for sub_dem in demands {
+        log::info!(
+            "Re-negotiating Proposal [{}] with [{}].",
+            sub_dem.proposal.proposal_id,
+            sub_dem.proposal.issuer_id
+        );
+
         let subscription = subscriptions.get(&sub_dem.subscription_id);
         let demand = sub_dem.proposal;
         match subscription {

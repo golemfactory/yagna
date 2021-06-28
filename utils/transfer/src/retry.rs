@@ -21,9 +21,11 @@ impl Default for Retry {
 }
 
 impl Retry {
-    pub fn count(&mut self, count: i32) -> &mut Self {
-        self.count = count;
-        self
+    pub fn new(count: i32) -> Self {
+        Self {
+            count,
+            ..Retry::default()
+        }
     }
 
     pub fn backoff(&mut self, initial: f32, factor: f32) -> &mut Self {

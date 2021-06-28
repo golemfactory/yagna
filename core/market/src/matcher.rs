@@ -86,12 +86,11 @@ impl Matcher {
         // until first change to value will be made.
         counter!("market.offers.incoming", 0);
         counter!("market.offers.broadcasts", 0);
-        counter!("market.offers.broadcasts.size", 0);
+        counter!("market.offers.broadcasts.skip", 0);
         counter!("market.offers.broadcasts.net", 0);
         counter!("market.offers.broadcasts.net_errors", 0);
         counter!("market.offers.unsubscribes.incoming", 0);
         counter!("market.offers.unsubscribes.broadcasts", 0);
-        counter!("market.offers.unsubscribes.broadcasts.size", 0);
         counter!("market.offers.unsubscribes.broadcasts.net", 0);
         counter!("market.offers.unsubscribes.broadcasts.net_errors", 0);
 
