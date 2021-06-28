@@ -114,6 +114,8 @@ pub enum Error {
     NetApiError(#[from] ya_net::NetApiError),
     #[error("Cancelled")]
     Cancelled,
+    #[error("{0}")]
+    Other(String),
 }
 
 impl ResponseError for Error {}
