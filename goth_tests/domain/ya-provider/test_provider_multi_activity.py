@@ -24,9 +24,7 @@ logger = logging.getLogger("goth.test.multi-activity")
 def _create_runner(
     common_assets: Path, config_overrides: List[Override], log_dir: Path
 ) -> Tuple[Runner, Configuration]:
-    goth_config = load_yaml(
-        Path(__file__).parent / "assets" / "goth-config.yml", config_overrides
-    )
+    goth_config = load_yaml(Path(__file__).parent / "goth-config.yml", config_overrides)
 
     runner = Runner(
         base_log_dir=log_dir,

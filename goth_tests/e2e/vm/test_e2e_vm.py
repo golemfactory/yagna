@@ -29,12 +29,13 @@ logger = logging.getLogger("goth.test.e2e_vm")
 @pytest.mark.asyncio
 async def test_e2e_vm(
     common_assets: Path,
+    default_config: Path,
     config_overrides: List[Override],
     log_dir: Path,
 ):
     """Test successful flow requesting a Blender task with goth REST API client."""
 
-    goth_config = load_yaml(common_assets / "goth-config.yml", config_overrides)
+    goth_config = load_yaml(default_config, config_overrides)
 
     runner = Runner(
         base_log_dir=log_dir,
