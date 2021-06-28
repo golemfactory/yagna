@@ -5,7 +5,7 @@
 
 docker-compose:
 
-  docker-dir: "../../../assets/docker/"
+  docker-dir: "../../assets/docker/"
 
   build-environment:
     # TODO:
@@ -24,10 +24,10 @@ docker-compose:
     zksync: ".*Running on http://0.0.0.0:3030/.*"
 
 
-key-dir: "../../../assets/keys"
+key-dir: "../../assets/keys"
 
 
-web-root: "../../../assets/web-root"
+web-root: "../../assets/web-root"
 
 
 node-types:
@@ -40,9 +40,9 @@ node-types:
   - name: "Wasm-Provider"
     class: "goth_tests.helpers.probe.ProviderProbe"
     mount:
-      - read-only: "provider/presets.json"
+      - read-only: "../../assets/provider/presets.json"
         destination: "/root/.local/share/ya-provider/presets.json"
-      - read-only: "provider/hardware.json"
+      - read-only: "../../assets/provider/hardware.json"
         destination: "/root/.local/share/ya-provider/hardware.json"
       - read-write: "~/.local/share/ya-provider/vm-images"
         destination: "/root/.local/share/ya-provider/exe-unit/cache/tmp"
