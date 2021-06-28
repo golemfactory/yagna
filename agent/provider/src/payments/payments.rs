@@ -922,10 +922,10 @@ impl Actor for Payments {
 
 fn get_backoff() -> backoff::ExponentialBackoff {
     let mut backoff = backoff::ExponentialBackoff::default();
-    backoff.current_interval = std::time::Duration::from_secs(15);
-    backoff.initial_interval = std::time::Duration::from_secs(15);
+    backoff.current_interval = std::time::Duration::from_secs(3);
+    backoff.initial_interval = std::time::Duration::from_secs(3);
     backoff.multiplier = 1.5f64;
-    backoff.max_interval = std::time::Duration::from_secs(3600);
+    backoff.max_interval = std::time::Duration::from_secs(5 * 60 * 60);
     backoff.max_elapsed_time = Some(std::time::Duration::from_secs(u64::max_value()));
     backoff
 }
