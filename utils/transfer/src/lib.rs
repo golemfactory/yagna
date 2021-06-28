@@ -308,29 +308,35 @@ impl From<TransferArgs> for TransferContext {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct TransferState {
-    offset: Rc<RefCell<u64>>,
-    retry: Rc<RefCell<Option<Retry>>>,
-}
-
-impl Default for TransferState {
-    fn default() -> Self {
-        Self {
-            retry: Rc::new(RefCell::new(Some(Retry::default()))),
-            offset: Default::default(),
-        }
-    }
+    inner: Rc<RefCell<TransferStateInner>>,
 }
 
 impl TransferState {
+    pub fn finished(&self) -> bool {
+        if let Some(size) = self.size() {
+            return self.offset() >= size;
+        }
+        false
+    }
+
     pub fn offset(&self) -> u64 {
-        *self.offset.borrow()
+        self.inner.borrow().offset
     }
 
     pub fn set_offset(&self, offset: u64) {
-        let mut r = (*self.offset).borrow_mut();
-        *r = offset;
+        let mut r = self.inner.borrow_mut();
+        r.offset = offset;
+    }
+
+    pub fn size(&self) -> Option<u64> {
+        self.inner.borrow().size.clone()
+    }
+
+    pub fn set_size(&self, size: Option<u64>) {
+        let mut r = self.inner.borrow_mut();
+        r.size = r.size.max(size);
     }
 
     pub fn retry(&self, count: i32) {
@@ -338,15 +344,32 @@ impl TransferState {
     }
 
     pub fn retry_with(&self, retry: Retry) {
-        let mut r = (*self.retry).borrow_mut();
-        r.replace(retry);
+        let mut r = self.inner.borrow_mut();
+        r.retry.replace(retry);
     }
 
-    pub(crate) fn delay(&self, err: &Error) -> Option<Duration> {
-        (*self.retry.borrow_mut())
+    pub fn delay(&self, err: &Error) -> Option<Duration> {
+        (*self.inner.borrow_mut())
+            .retry
             .as_mut()
             .map(|r| r.delay(&err))
             .flatten()
+    }
+}
+
+struct TransferStateInner {
+    offset: u64,
+    size: Option<u64>,
+    retry: Option<Retry>,
+}
+
+impl Default for TransferStateInner {
+    fn default() -> Self {
+        Self {
+            offset: Default::default(),
+            size: Default::default(),
+            retry: Some(Retry::default()),
+        }
     }
 }
 
