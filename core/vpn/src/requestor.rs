@@ -95,7 +95,7 @@ async fn remove_network(
 }
 
 /// Retrieves requestor's addresses within a virtual private network.
-#[actix_web::get("/net/{net_id}/address")]
+#[actix_web::get("/net/{net_id}/addresses")]
 async fn get_addresses(
     vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
     path: web::Path<PathNetwork>,
@@ -111,7 +111,7 @@ async fn get_addresses(
 }
 
 /// Assigns a new address for the requestor within a virtual private network.
-#[actix_web::post("/net/{net_id}/address")]
+#[actix_web::post("/net/{net_id}/addresses")]
 async fn add_address(
     vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
     path: web::Path<PathNetwork>,
@@ -129,7 +129,7 @@ async fn add_address(
 }
 
 /// Retrieves requestor's addresses within a virtual private network.
-#[actix_web::get("/net/{net_id}/node")]
+#[actix_web::get("/net/{net_id}/nodes")]
 async fn get_nodes(
     vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
     path: web::Path<PathNetwork>,
@@ -145,7 +145,7 @@ async fn get_nodes(
 }
 
 /// Adds a node to an existing virtual private network.
-#[actix_web::post("/net/{net_id}/node")]
+#[actix_web::post("/net/{net_id}/nodes")]
 async fn add_node(
     vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
     path: web::Path<PathNetwork>,
@@ -168,7 +168,7 @@ async fn add_node(
 }
 
 /// Removes an existing node from a virtual private network
-#[actix_web::delete("/net/{net_id}/node/{node_id}")]
+#[actix_web::delete("/net/{net_id}/nodes/{node_id}")]
 async fn remove_node(
     vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
     path: web::Path<PathNetworkNode>,
