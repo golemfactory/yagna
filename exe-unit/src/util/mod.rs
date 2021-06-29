@@ -3,8 +3,7 @@ use std::cmp::Eq;
 use std::hash::Hash;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-pub mod path;
-pub mod url;
+pub mod cache;
 
 /// Allows storing AbortHandle objects in a container
 #[derive(Clone, Debug)]
