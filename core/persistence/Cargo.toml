@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 ya-client-model = { version = "0.3", features = [ "with-diesel" ] }
-ya-core-model = { version = "^0.3"}
+ya-core-model = { version = "^0.4"}
 
 anyhow = "1.0.26"
 bigdecimal = "0.2"

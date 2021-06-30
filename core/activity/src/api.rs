@@ -106,7 +106,8 @@ mod common {
         authorize_activity_initiator(&db, id.identity, &path.activity_id, Role::Requestor).await?;
 
         // Return locally persisted usage if activity has been already terminated or terminating
-        if get_persisted_state(&db, &path.activity_id).await?.alive() {
+        let state = get_persisted_state(&db, &path.activity_id).await?;
+        if !state.alive() {
             return get_persisted_usage(&db, &path.activity_id)
                 .await
                 .map(web::Json);

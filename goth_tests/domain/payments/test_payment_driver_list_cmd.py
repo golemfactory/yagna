@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 @pytest.mark.asyncio
 async def test_payment_driver_list(
     common_assets: Path,
+    default_config: Path,
     config_overrides: List[Override],
     log_dir: Path,
 ):
@@ -30,8 +31,7 @@ async def test_payment_driver_list(
         {"name": "requestor", "type": "Requestor"},
     ]
     config_overrides.append(("nodes", nodes))
-    config_overrides.append(("docker-compose.build-environment.commit-hash", "29b7f85"))
-    goth_config = load_yaml(common_assets / "goth-config.yml", config_overrides)
+    goth_config = load_yaml(default_config, config_overrides)
 
     runner = Runner(
         base_log_dir=log_dir,

@@ -66,8 +66,18 @@ impl IdentityKey {
         })
     }
 
-    pub fn lock(&mut self) {
-        self.secret = None;
+    pub fn lock(&mut self, new_password: Option<String>) -> anyhow::Result<()> {
+        if let Some(new_password) = new_password {
+            if let Some(secret) = self.secret.take() {
+                let crypto = secret.to_crypto(&Protected::new(new_password), KEY_ITERATIONS)?;
+                self.key_file.crypto = crypto;
+            } else {
+                anyhow::bail!("key already locked")
+            }
+        } else {
+            self.secret = None;
+        }
+        Ok(())
     }
 }
 

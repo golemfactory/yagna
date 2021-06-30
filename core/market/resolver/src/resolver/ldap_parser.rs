@@ -32,7 +32,7 @@ named!(
     filter<Tag>,
     alt!(match_empty | ws!(delimited!(char!('('), content, char!(')'))))
 );
-named!(filterlist<Vec<Tag>>, many1!(filter));
+named!(filterlist<Vec<Tag>>, many0!(filter));
 named!(content<Tag>, alt!(and | or | not | match_f));
 
 named!(
