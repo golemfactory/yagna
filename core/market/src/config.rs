@@ -47,7 +47,7 @@ pub struct EventsConfig {
 #[derive(StructOpt, Clone)]
 pub struct DbConfig {
     /// Interval in which Market cleaner will be invoked
-    #[structopt(env = "MARKET_DB_CLEANUP_INTERVAL", parse(try_from_str = humantime::parse_duration), default_value = "24h")]
+    #[structopt(env = "MARKET_DB_CLEANUP_INTERVAL", parse(try_from_str = humantime::parse_duration), default_value = "4h")]
     pub cleanup_interval: Duration,
     /// Number of days to persist Agreements and related Agreement Events
     #[structopt(env = "MARKET_AGREEMENT_STORE_DAYS", default_value = "90")]
@@ -89,7 +89,7 @@ mod test {
     #[test]
     fn test_default_structopt_db_config() {
         let c = Config::from_env().unwrap();
-        assert_eq!(24 * 3600, c.db.cleanup_interval.as_secs());
+        assert_eq!(4 * 3600, c.db.cleanup_interval.as_secs());
         assert_eq!(90, c.db.agreement_store_days);
         assert_eq!(1, c.db.event_store_days);
     }

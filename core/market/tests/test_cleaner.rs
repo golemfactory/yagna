@@ -222,7 +222,7 @@ async fn test_proposal_lotsa_negotiations() {
     let _ = env_logger::builder().try_init();
     let db = MarketsNetwork::new(None).await.init_database("testnode");
     let mut expired_negotiations: Vec<Negotiation> = vec![];
-    for i in 1..1500 {
+    for i in 1..6500 {
         let expired_negotiation = generate_negotiation(None);
         <PoolType as TestingDao<Negotiation>>::raw_insert(
             &db.clone().pool,
