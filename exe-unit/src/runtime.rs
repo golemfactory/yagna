@@ -9,8 +9,7 @@ pub trait Runtime:
     Actor<Context = Context<Self>>
     + Handler<Shutdown>
     + Handler<ExecuteCommand>
-    + Handler<SetTaskPackagePath>
-    + Handler<SetRuntimeMode>
+    + Handler<UpdateDeployment>
 {
 }
 
