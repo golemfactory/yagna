@@ -1,2 +1,2 @@
-drop index market_negotiation_expiration_idx;
 drop index market_proposal_expiration_idx;
+drop index market_proposal_negotiation_idx;

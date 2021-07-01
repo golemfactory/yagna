@@ -15,6 +15,7 @@ pub struct Config {
 
 #[derive(StructOpt, Clone)]
 pub struct DiscoveryConfig {
+    // don't set this value higher than SQLITE_MAX_VARIABLE_NUMBER, which defaults to 999 for SQLite versions prior to 3.32.0 (2020-05-22)
     #[structopt(env, default_value = "200")]
     pub max_bcasted_offers: u32,
     #[structopt(env, default_value = "200")]
