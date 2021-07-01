@@ -273,7 +273,13 @@ impl Handler<DeployImage> for TransferService {
                     Ok::<_, Error>(
                         Abortable::new(retry, reg)
                             .await
-                            .map_err(TransferError::from)??,
+                            .map_err(TransferError::from)?
+                            .map_err(|err| {
+                                if let TransferError::InvalidHashError { .. } = err {
+                                    let _ = std::fs::remove_file(&path_tmp);
+                                }
+                                err
+                            })?,
                     )
                 }?;
 
