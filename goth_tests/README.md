@@ -288,3 +288,23 @@ async def test_something(
 ):
     goth_config = load_yaml(Path("path/to/goth-config.yml", config_overrides)
 ```
+
+### Maintenance
+
+#### Updating expected `yagna` log lines
+Some `goth` test steps rely on scanning the logs from a process running on one or more `yagna` nodes. In particular, this is used extensively in the case of provider agent logs (e.g. determining if the exeunit has finished successfully).
+
+
+Since log messages are subject to change, these log line patterns need to be kept up to date.
+
+`yagna` tests implement a custom `ProviderProbe` class (`goth_tests/helpers/probe.py`) which includes all the commonly used log patterns as its methods.
+
+When a test fails due to an updated log message, the expected pattern can be updated by modifying one of `ProviderProbe`'s methods, e.g.:
+```
+@step()
+async def wait_for_exeunit_finished(self):
+    """Wait until exe-unit finishes."""
+    await self.provider_agent.wait_for_log(
+        r"(.*)ExeUnit process exited with status Finished - exit code: 0(.*)"
+    )
+```

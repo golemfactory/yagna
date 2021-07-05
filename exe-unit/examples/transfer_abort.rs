@@ -166,6 +166,7 @@ async fn main() -> anyhow::Result<()> {
     let exe_ctx = ExeUnitContext {
         supervise: Default::default(),
         activity_id: None,
+        acl: Default::default(),
         report_url: None,
         credentials: None,
         agreement,

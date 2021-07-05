@@ -1,0 +1,46 @@
+[package]
+name = "ya-vpn"
+version = "0.1.0"
+authors = ["Golem Factory <contact@golem.network>"]
+edition = "2018"
+
+[dependencies]
+ya-core-model = { version = "^0.4", features = ["activity", "market"] }
+ya-client-model = { version = "0.3", features = ["sgx"] }
+ya-net = "0.2"
+ya-persistence = "0.2"
+ya-service-api = "0.1"
+ya-service-api-interfaces = "0.1"
+ya-service-api-web = "0.1"
+ya-service-bus = "0.4"
+ya-utils-networking = { version = "0.1", default-features = false, features = ["vpn"]}
+
+actix = "0.10"
+actix-web = "3.3"
+actix-web-actors = "3"
+anyhow = "1.0"
+bytes = "0.5"
+env_logger = "0.7"
+futures = "0.3"
+hex = "0.4"
+ipnet = "2.3"
+managed = "0.7.2"
+lazy_static = "1.4"
+log = "0.4"
+mime = "0.3.16"
+rand = "0.7.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+smoltcp = { version = "0.7" }
+thiserror = "1.0"
+tokio = { version = "0.2.11", features = ["time"] }
+
+[dev-dependencies]
+ya-client = "0.5.3"
+
+actix-rt = "1.0"
+sha3 = "0.8.2"
+structopt = "0.3"
+tokio = { version = "0.2.11", features = ["time", "fs"] }
+url = "2.1"
+uuid = { version = "0.8", features = ["v4"] }
