@@ -1,3 +1,7 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
+
 use actix::prelude::*;
 use anyhow::{anyhow, Error, Result};
 use backoff::backoff::Backoff;
@@ -7,29 +11,27 @@ use futures_util::FutureExt;
 use humantime;
 use log;
 use serde_json::json;
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
 use structopt::StructOpt;
-
-use super::agreement::{compute_cost, ActivityPayment, AgreementPayment, CostInfo};
-use super::model::PaymentModel;
-use crate::execution::{ActivityDestroyed, CreateActivity};
-use crate::market::provider_market::NewAgreement;
-use crate::market::termination_reason::BreakReason;
-use crate::tasks::{AgreementBroken, AgreementClosed, BreakAgreement};
-
 use ya_client::activity::ActivityProviderApi;
 use ya_client::model::payment::{DebitNote, Invoice, NewDebitNote, NewInvoice};
 use ya_client::model::payment::{DebitNoteEventType, InvoiceEventType};
 use ya_client::payment::PaymentApi;
+
 use ya_std_utils::LogErr;
+use ya_utils_actix::{actix_signal_handler, forward_actix_handler};
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
 use ya_utils_actix::deadline_checker::{
     DeadlineChecker, DeadlineElapsed, StopTracking, StopTrackingCategory, TrackDeadline,
 };
-use ya_utils_actix::{actix_signal_handler, forward_actix_handler};
+
+use crate::execution::{ActivityDestroyed, CreateActivity};
+use crate::market::provider_market::NewAgreement;
+use crate::market::termination_reason::BreakReason;
+use crate::tasks::{AgreementBroken, AgreementClosed, BreakAgreement};
+
+use super::agreement::{ActivityPayment, AgreementPayment, compute_cost, CostInfo};
+use super::model::PaymentModel;
 
 // =========================================== //
 // Internal messages
@@ -924,10 +926,10 @@ impl Actor for Payments {
 
 fn get_backoff() -> backoff::ExponentialBackoff {
     backoff::ExponentialBackoff {
-        current_interval: std::time::Duration::from_secs(15),
-        initial_interval: std::time::Duration::from_secs(15),
+        current_interval: std::time::Duration::from_secs(3),
+        initial_interval: std::time::Duration::from_secs(3),
         multiplier: 1.5f64,
-        max_interval: std::time::Duration::from_secs(3600),
+        max_interval: std::time::Duration::from_secs(5 * 60 * 60),
         max_elapsed_time: Some(std::time::Duration::from_secs(u64::MAX)),
         ..Default::default()
     }

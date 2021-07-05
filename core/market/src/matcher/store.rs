@@ -1,9 +1,10 @@
-use chrono::{NaiveDateTime, Utc};
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use chrono::{NaiveDateTime, Utc};
 use ya_client::model::market::{Demand as ClientDemand, NewDemand, NewOffer, Offer as ClientOffer};
 use ya_client::model::NodeId;
+
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
@@ -149,6 +150,12 @@ impl SubscriptionStore {
         &self,
         offer_ids: Vec<SubscriptionId>,
     ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
+        // Make sure we only process ids up to limit from config
+        let max_bcasted_offers = self.config.discovery.max_bcasted_offers as usize;
+        let offers_idx =
+            offer_ids.len() - [offer_ids.len(), max_bcasted_offers].iter().min().unwrap();
+        let offer_ids = offer_ids[offers_idx..].to_vec();
+
         let known_ids = self
             .db
             .as_dao::<OfferDao>()

@@ -1,16 +1,17 @@
+use std::str::FromStr;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use chrono::Utc;
 use futures::{channel::mpsc, prelude::*};
-use std::str::FromStr;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
 use tokio::time::Duration;
 
 use ya_market::assert_err_eq;
-use ya_market::testing::discovery::{message::*, Discovery};
-use ya_market::testing::mock_node::{assert_offers_broadcasted, assert_unsunbscribes_broadcasted};
-use ya_market::testing::mock_offer::{client, sample_offer, sample_offer_with_expiration};
 use ya_market::testing::{MarketServiceExt, MarketsNetwork};
 use ya_market::testing::{QueryOfferError, SubscriptionId};
+use ya_market::testing::discovery::{Discovery, message::*};
+use ya_market::testing::mock_node::{assert_offers_broadcasted, assert_unsunbscribes_broadcasted};
+use ya_market::testing::mock_offer::{client, sample_offer, sample_offer_with_expiration};
 
 /// Test adds offer. It should be broadcasted to other nodes in the network.
 /// Than sending unsubscribe should remove Offer from other nodes.
@@ -317,4 +318,60 @@ async fn test_discovery_get_offers() {
 
     assert_eq!(offers.len(), 1);
     assert_eq!(offers[0].id, subscription_id);
+}
+
+/// Ensure that node is ready to handle broadcast message with more offers than
+/// `max_bcasted_offers` or more unsubscribes than `max_bcasted_unsubscribes`. We will use sets
+/// larger than 32766 as it's SQLITE_MAX_VARIABLE_NUMBER as of 3.32.0 (2020-05-22).
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
+async fn test_broadcast_50k() {
+    let _ = env_logger::builder().try_init();
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance("Node-1")
+        .await;
+
+    let (tx, mut rx) = mpsc::channel::<Vec<SubscriptionId>>(1);
+
+    let discovery_builder =
+        network
+            .discovery_builder()
+            .add_handler(move |_: String, msg: RetrieveOffers| {
+                let mut tx = tx.clone();
+                async move {
+                    tx.send(msg.offer_ids).await.unwrap();
+                    Ok(vec![])
+                }
+            });
+    let network = network
+        .add_discovery_instance("Node-2", discovery_builder)
+        .await;
+
+    let discovery2 = network.get_discovery("Node-2");
+    //let discovery1 = network.get_discovery("Node-1");
+
+    let mut offers_50k: Vec<SubscriptionId> = vec![];
+    log::debug!("generating offers");
+    for _n in 0..50000 {
+        let o = sample_offer();
+        offers_50k.push(o.id);
+    }
+    offers_50k.sort_by(|a, b| a.to_string().partial_cmp(&b.to_string()).unwrap());
+
+    log::debug!("bcast offers: {}", offers_50k.len());
+    discovery2.bcast_offers(offers_50k.clone()).await.unwrap();
+
+    // Wait for broadcast.
+    log::debug!("wait for bcast");
+    let mut requested_offers = tokio::time::timeout(Duration::from_millis(500), rx.next())
+        .await
+        .unwrap()
+        .unwrap();
+    requested_offers.sort_by(|a, b| a.to_string().partial_cmp(&b.to_string()).unwrap());
+    log::debug!("bcast received {}", requested_offers.len());
+    assert_eq!(
+        requested_offers,
+        offers_50k[offers_50k.len() - 100..].to_vec()
+    );
 }
