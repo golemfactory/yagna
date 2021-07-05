@@ -238,12 +238,8 @@ impl Discovery {
         );
         // Subscribe to receiving broadcasts only when demand is subscribed for the first time.
         let mut prefix_guard = self.inner.lazy_binder_prefix.lock().await;
-        *prefix_guard = match &mut *prefix_guard {
-            None => Some(String::from(local_prefix)),
-            Some(old_prefix) => {
-                log::info!("Dropping previous lazy_binder_prefix, and replacing it with new one. old={}, new={}", old_prefix, local_prefix);
-                Some(String::from(local_prefix))
-            }
+        if let Some(old_prefix) = (*prefix_guard).replace(local_prefix.to_string()) {
+            log::info!("Dropping previous lazy_binder_prefix, and replacing it with new one. old={}, new={}", old_prefix, local_prefix);
         };
 
         Ok(())
@@ -252,16 +248,14 @@ impl Discovery {
     pub async fn lazy_bind_gsb(&self) -> Result<(), DiscoveryInitError> {
         log::trace!("LazyBroadcastBind");
         let myself = self.clone();
+
         // /local/market/market-protocol-mk1-offer
         let mut prefix_guard = self.inner.lazy_binder_prefix.lock().await;
-        let local_prefix: String;
-        *prefix_guard = match &mut *prefix_guard {
+        let local_prefix = match (*prefix_guard).take() {
             None => return Ok(()),
-            Some(s) => {
-                local_prefix = s.to_string();
-                <Option<String>>::None
-            }
+            Some(prefix) => prefix,
         };
+
         let bcast_address = format!("{}/{}", local_prefix.as_str(), OffersBcast::TOPIC);
         ya_net::bind_broadcast_with_caller(
             &bcast_address,
