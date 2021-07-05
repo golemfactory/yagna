@@ -1,6 +1,8 @@
-use crate::message::*;
 use actix::prelude::*;
+
 use ya_runtime_api::deploy::StartMode;
+
+use crate::message::*;
 
 mod event;
 pub mod process;
@@ -9,8 +11,7 @@ pub trait Runtime:
     Actor<Context = Context<Self>>
     + Handler<Shutdown>
     + Handler<ExecuteCommand>
-    + Handler<SetTaskPackagePath>
-    + Handler<SetRuntimeMode>
+    + Handler<UpdateDeployment>
 {
 }
 

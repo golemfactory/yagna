@@ -6,10 +6,6 @@ from typing import List
 
 import pytest
 
-from goth.address import (
-    PROXY_HOST,
-    YAGNA_REST_URL,
-)
 from goth.configuration import load_yaml, Override
 from goth.runner import Runner
 from goth.runner.probe import RequestorProbe
@@ -21,6 +17,7 @@ logger = logging.getLogger(__name__)
 @pytest.mark.asyncio
 async def test_payment_driver_list(
     common_assets: Path,
+    default_config: Path,
     config_overrides: List[Override],
     log_dir: Path,
 ):
@@ -30,7 +27,7 @@ async def test_payment_driver_list(
         {"name": "requestor", "type": "Requestor"},
     ]
     config_overrides.append(("nodes", nodes))
-    goth_config = load_yaml(common_assets / "goth-config.yml", config_overrides)
+    goth_config = load_yaml(default_config, config_overrides)
 
     runner = Runner(
         base_log_dir=log_dir,

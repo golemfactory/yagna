@@ -1,10 +1,15 @@
-use super::*;
+use std::collections::HashMap;
+use std::fmt::Debug;
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+
+use futures::{FutureExt, SinkExt};
 use futures::channel::oneshot;
 use futures::future::Shared;
 use futures::lock::Mutex;
-use futures::{FutureExt, SinkExt};
-use std::collections::HashMap;
-use std::fmt::Debug;
+
+use super::*;
+
+const REQUEST_ID: AtomicU64 = AtomicU64::new(0);
 
 struct ClientInner<Out> {
     ids: u64,
@@ -52,7 +57,9 @@ where
             param.id = id;
             let _ = inner.response_callbacks.insert(id, tx);
             log::debug!("sending request: {:?}", param);
-            SinkExt::send(&mut inner.output, param).await.unwrap();
+            if let Err(e) = SinkExt::send(&mut inner.output, param).await {
+                log::error!("Runtime client write error: {:?}", e);
+            }
         }
         log::debug!("waiting for response");
         let response = rx.await.unwrap();
@@ -98,7 +105,7 @@ where
 {
     fn hello(&self, version: &str) -> AsyncResponse<'_, String> {
         let request = proto::Request {
-            id: 0,
+            id: REQUEST_ID.fetch_add(1, Relaxed),
             command: Some(proto::request::Command::Hello(proto::request::Hello {
                 version: version.to_owned(),
             })),
@@ -116,7 +123,7 @@ where
 
     fn run_process(&self, run: RunProcess) -> AsyncResponse<RunProcessResp> {
         let request = proto::Request {
-            id: 0,
+            id: REQUEST_ID.fetch_add(1, Relaxed),
             command: Some(proto::request::Command::Run(run)),
         };
         let fut = self.call(request);
@@ -132,7 +139,7 @@ where
 
     fn kill_process(&self, kill: KillProcess) -> AsyncResponse<()> {
         let request = proto::Request {
-            id: 0,
+            id: REQUEST_ID.fetch_add(1, Relaxed),
             command: Some(proto::request::Command::Kill(kill)),
         };
         let fut = self.call(request);
@@ -146,10 +153,26 @@ where
         .boxed_local()
     }
 
+    fn create_network(&self, network: CreateNetwork) -> AsyncResponse<CreateNetworkResp> {
+        let request = proto::Request {
+            id: REQUEST_ID.fetch_add(1, Relaxed),
+            command: Some(proto::request::Command::Network(network)),
+        };
+        let fut = self.call(request);
+        async move {
+            match fut.await.command {
+                Some(proto::response::Command::Network(res)) => Ok(res),
+                Some(proto::response::Command::Error(error)) => Err(error),
+                _ => panic!("invalid response"),
+            }
+        }
+        .boxed_local()
+    }
+
     fn shutdown(&self) -> AsyncResponse<'_, ()> {
         let shutdown = proto::request::Shutdown::default();
         let request = proto::Request {
-            id: 0,
+            id: REQUEST_ID.fetch_add(1, Relaxed),
             command: Some(proto::request::Command::Shutdown(shutdown)),
         };
         let fut = self.call(request);

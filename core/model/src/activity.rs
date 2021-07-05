@@ -2,15 +2,17 @@
 //!
 //! Top level objects constitutes public activity API.
 //! Local and Exeunit are in dedicated submodules.
-use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 
-use crate::Role;
+use serde::{Deserialize, Serialize};
 use ya_client_model::activity::{
     ActivityState, ActivityUsage, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
     RuntimeEvent,
 };
 use ya_client_model::NodeId;
 use ya_service_bus::{RpcMessage, RpcStreamMessage};
+
+use crate::Role;
 
 /// Public Activity bus address.
 ///
@@ -24,6 +26,11 @@ pub mod exeunit {
     /// Public exeunit bus address for given `activity_id`.
     pub fn bus_id(activity_id: &str) -> String {
         format!("/public/exeunit/{}", activity_id)
+    }
+
+    /// Public network VPN bus address for given `network_id`.
+    pub fn network_id(network_id: &str) -> String {
+        format!("/public/vpn/{}", network_id)
     }
 }
 
@@ -138,6 +145,53 @@ impl RpcMessage for GetUsage {
     type Error = RpcMessageError;
 }
 
+/// Update remote network configuration
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum VpnControl {
+    AddNodes {
+        network_id: String,
+        nodes: HashMap<String, String>, // IP -> NodeId
+    },
+    RemoveNodes {
+        network_id: String,
+        node_ids: HashSet<String>,
+    },
+}
+
+impl VpnControl {
+    pub fn add_node(network_id: String, node_ip: String, node_id: String) -> Self {
+        VpnControl::AddNodes {
+            network_id,
+            nodes: vec![(node_ip, node_id)].into_iter().collect(),
+        }
+    }
+
+    pub fn remove_node(network_id: String, node_id: String) -> Self {
+        VpnControl::RemoveNodes {
+            network_id,
+            node_ids: vec![(node_id)].into_iter().collect(),
+        }
+    }
+}
+
+impl RpcMessage for VpnControl {
+    const ID: &'static str = "VpnControl";
+    type Item = ();
+    type Error = RpcMessageError;
+}
+
+/// Network data
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VpnPacket(pub Vec<u8>);
+
+impl RpcMessage for VpnPacket {
+    const ID: &'static str = "VpnPacket";
+    type Item = ();
+    type Error = RpcMessageError;
+}
+
 pub mod sgx {
     use super::*;
 
@@ -224,9 +278,11 @@ impl RpcMessage for GetRunningCommand {
 ///
 /// Should be accessible only from local service bus (not via net ie. from remote hosts).
 pub mod local {
-    use super::*;
-    use chrono::{DateTime, Utc};
     use std::collections::BTreeMap;
+
+    use chrono::{DateTime, Utc};
+
+    use super::*;
 
     /// Local activity bus address.
     pub const BUS_ID: &str = "/local/activity";

@@ -8,19 +8,13 @@ from typing import List
 
 import pytest
 
-from goth.address import (
-    PROXY_HOST,
-    YAGNA_REST_URL,
-)
 from goth.configuration import load_yaml, Override
-from goth.node import node_environment
 from goth.runner import Runner
-from goth.runner.container.payment import PaymentIdPool
-from goth.runner.container.yagna import YagnaContainerConfig
-from goth.runner.probe import ProviderProbe, RequestorProbe
+from goth.runner.probe import RequestorProbe
 
-from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
 from goth_tests.helpers.activity import vm_exe_script, vm_task_package
+from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
+from goth_tests.helpers.probe import ProviderProbe
 
 logger = logging.getLogger("goth.test.e2e_vm")
 
@@ -28,12 +22,13 @@ logger = logging.getLogger("goth.test.e2e_vm")
 @pytest.mark.asyncio
 async def test_e2e_vm(
     common_assets: Path,
+    default_config: Path,
     config_overrides: List[Override],
     log_dir: Path,
 ):
     """Test successful flow requesting a Blender task with goth REST API client."""
 
-    goth_config = load_yaml(common_assets / "goth-config.yml", config_overrides)
+    goth_config = load_yaml(default_config, config_overrides)
 
     runner = Runner(
         base_log_dir=log_dir,
@@ -44,6 +39,7 @@ async def test_e2e_vm(
     async with runner(goth_config.containers):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         providers = runner.get_probes(probe_type=ProviderProbe)
+        assert providers
 
         # Market
         demand = DemandBuilder(requestor).props_from_template(vm_task_package).build()

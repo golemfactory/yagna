@@ -2,20 +2,19 @@
 
 import json
 import logging
-import re
-from pathlib import Path
-from typing import List, Tuple
-
 import pytest
-from ya_activity.exceptions import ApiException
-
+import re
 from goth.configuration import load_yaml, Override, Configuration
 from goth.runner import Runner
-from goth.runner.probe import ProviderProbe, RequestorProbe
+from goth.runner.probe import RequestorProbe
+from pathlib import Path
+from typing import List, Tuple
+from ya_activity.exceptions import ApiException
 
 from goth_tests.helpers.activity import wasi_exe_script, wasi_task_package
 from goth_tests.helpers.negotiation import negotiate_agreements, DemandBuilder
 from goth_tests.helpers.payment import pay_all
+from goth_tests.helpers.probe import ProviderProbe
 
 logger = logging.getLogger("goth.test.multi-activity")
 
@@ -23,9 +22,7 @@ logger = logging.getLogger("goth.test.multi-activity")
 def _create_runner(
     common_assets: Path, config_overrides: List[Override], log_dir: Path
 ) -> Tuple[Runner, Configuration]:
-    goth_config = load_yaml(
-        Path(__file__).parent / "assets" / "goth-config.yml", config_overrides
-    )
+    goth_config = load_yaml(Path(__file__).parent / "goth-config.yml", config_overrides)
 
     runner = Runner(
         base_log_dir=log_dir,
@@ -51,6 +48,7 @@ async def test_provider_multi_activity(
     async with runner(config.containers):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         providers = runner.get_probes(probe_type=ProviderProbe)
+        assert providers
 
         # Market
         task_package = wasi_task_package.format(
@@ -114,6 +112,7 @@ async def test_provider_single_simultaneous_activity(
     async with runner(config.containers):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         providers = runner.get_probes(probe_type=ProviderProbe)
+        assert providers
 
         # Market
         task_package = wasi_task_package.format(

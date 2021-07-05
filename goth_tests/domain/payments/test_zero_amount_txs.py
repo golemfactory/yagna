@@ -2,22 +2,19 @@
 
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import pytest
 
-from goth.address import (
-    PROXY_HOST,
-    YAGNA_REST_URL,
-)
 from goth.configuration import load_yaml, Override
 from goth.node import node_environment
 from goth.runner import Runner
-from goth.runner.probe import ProviderProbe, RequestorProbe
+from goth.runner.probe import RequestorProbe
 from ya_payment import InvoiceStatus
 
-from goth_tests.helpers.activity import wasi_exe_script, wasi_task_package
+from goth_tests.helpers.activity import wasi_task_package
 from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
+from goth_tests.helpers.probe import ProviderProbe
 
 logger = logging.getLogger("goth.test.zero_amount_txs")
 
@@ -25,6 +22,7 @@ logger = logging.getLogger("goth.test.zero_amount_txs")
 @pytest.mark.asyncio
 async def test_zero_amount_invoice(
     common_assets: Path,
+    default_config: Path,
     config_overrides: List[Override],
     log_dir: Path,
 ):
@@ -36,7 +34,7 @@ async def test_zero_amount_invoice(
     ]
     config_overrides.append(("nodes", nodes))
 
-    goth_config = load_yaml(common_assets / "goth-config.yml", config_overrides)
+    goth_config = load_yaml(default_config, config_overrides)
 
     runner = Runner(
         base_log_dir=log_dir,

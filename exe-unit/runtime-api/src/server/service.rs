@@ -1,12 +1,15 @@
-use super::RuntimeService;
-use super::{codec, proto, ErrorResponse};
-use crate::server::RuntimeEvent;
+use std::rc::Rc;
+
+use futures::{FutureExt, SinkExt};
 use futures::future::BoxFuture;
 use futures::lock::Mutex;
 use futures::prelude::*;
-use futures::{FutureExt, SinkExt};
-use std::rc::Rc;
 use tokio::io;
+
+use crate::server::RuntimeEvent;
+
+use super::{codec, ErrorResponse, proto};
+use super::RuntimeService;
 
 async fn handle_command(
     service: &impl RuntimeService,
@@ -23,6 +26,9 @@ async fn handle_command(
         proto::request::Command::Kill(kill) => {
             service.kill_process(kill).await?;
             proto::response::Command::Kill(Default::default())
+        }
+        proto::request::Command::Network(network) => {
+            proto::response::Command::Network(service.create_network(network).await?)
         }
         proto::request::Command::Shutdown(_) => {
             service.shutdown().await?;

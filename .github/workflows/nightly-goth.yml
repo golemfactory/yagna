@@ -64,6 +64,7 @@ jobs:
 
       - name: Convert branch name to valid file name ( replace / with - )
         id: branch_as
+        if: always()
         run: echo "::set-output name=file_name::$(echo '${{ matrix.branch }}' | sed 's/\//-/g')"
 
       - name: Upload test logs

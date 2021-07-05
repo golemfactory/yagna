@@ -1,21 +1,23 @@
-use actix::{Actor, System};
-use actix_web::{middleware, web, App, HttpResponse, HttpServer};
-use futures::StreamExt;
-use rand::Rng;
 use std::collections::HashMap;
 use std::env;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
+
+use actix::{Actor, System};
+use actix_web::{App, HttpResponse, HttpServer, middleware, web};
+use futures::StreamExt;
+use rand::Rng;
 use tempdir::TempDir;
 use tokio::time::delay_for;
-use ya_agreement_utils::AgreementView;
 use ya_client_model::activity::TransferArgs;
+
+use ya_agreement_utils::AgreementView;
 use ya_exe_unit::agreement::Agreement;
+use ya_exe_unit::ExeUnitContext;
 use ya_exe_unit::message::{Shutdown, ShutdownReason};
 use ya_exe_unit::service::transfer::{AbortTransfers, TransferResource, TransferService};
-use ya_exe_unit::ExeUnitContext;
 
 const CHUNK_SIZE: usize = 4096;
 const CHUNK_COUNT: usize = 1024 * 25;
@@ -166,6 +168,7 @@ async fn main() -> anyhow::Result<()> {
     let exe_ctx = ExeUnitContext {
         supervise: Default::default(),
         activity_id: None,
+        acl: Default::default(),
         report_url: None,
         credentials: None,
         agreement,

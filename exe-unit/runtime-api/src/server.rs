@@ -1,5 +1,23 @@
 use std::future::Future;
 use std::pin::Pin;
+use std::process::{ExitStatus, Stdio};
+use std::sync::Arc;
+
+use futures::future::BoxFuture;
+use futures::prelude::*;
+use tokio::process;
+
+pub use client::spawn;
+#[cfg(feature = "codec")]
+pub use codec::Codec;
+pub use proto::Network;
+pub use proto::request::{CreateNetwork, KillProcess, RunProcess};
+pub use proto::response::{ErrorCode, ProcessStatus};
+pub use proto::response::create_network::Endpoint as NetworkEndpoint;
+pub use proto::response::CreateNetwork as CreateNetworkResp;
+pub use proto::response::Error as ErrorResponse;
+pub use proto::response::RunProcess as RunProcessResp;
+pub use service::{run, run_async};
 
 pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/ya_runtime_api.rs"));
@@ -15,21 +33,8 @@ pub mod proto {
 }
 mod codec;
 
-#[cfg(feature = "codec")]
-pub use codec::Codec;
-pub use proto::request::{KillProcess, RunProcess};
-pub use proto::response::Error as ErrorResponse;
-pub use proto::response::RunProcess as RunProcessResp;
-pub use proto::response::{ErrorCode, ProcessStatus};
-
 pub type DynFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
 pub type AsyncResponse<'a, T> = DynFuture<'a, Result<T, ErrorResponse>>;
-
-use futures::future::BoxFuture;
-use futures::prelude::*;
-use std::process::{ExitStatus, Stdio};
-use std::sync::Arc;
-use tokio::process;
 
 pub trait RuntimeService {
     fn hello(&self, version: &str) -> AsyncResponse<'_, String>;
@@ -37,6 +42,8 @@ pub trait RuntimeService {
     fn run_process(&self, run: RunProcess) -> AsyncResponse<'_, RunProcessResp>;
 
     fn kill_process(&self, kill: KillProcess) -> AsyncResponse<'_, ()>;
+
+    fn create_network(&self, network: CreateNetwork) -> AsyncResponse<'_, CreateNetworkResp>;
 
     fn shutdown(&self) -> AsyncResponse<'_, ()>;
 }
@@ -60,5 +67,3 @@ pub trait ProcessControl {
 mod client;
 mod service;
 
-pub use client::spawn;
-pub use service::{run, run_async};

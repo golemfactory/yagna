@@ -1,13 +1,17 @@
-use crate::error::Error;
-use crate::runtime::RuntimeMode;
-use crate::state::CommandStateRepr;
-use crate::Result;
+use std::collections::HashMap;
+use std::path::PathBuf;
+
 use actix::prelude::*;
 use futures::channel::mpsc;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use ya_client_model::activity::activity_state::{State, StatePair};
 use ya_client_model::activity::{ExeScriptCommand, ExeScriptCommandResult, RuntimeEvent};
+use ya_client_model::activity::activity_state::{State, StatePair};
+use ya_client_model::activity::exe_script_command::Network;
+
+use crate::error::Error;
+use crate::Result;
+use crate::runtime::RuntimeMode;
+use crate::state::CommandStateRepr;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "Result<Vec<f64>>")]
@@ -77,6 +81,13 @@ pub struct ExecuteCommand {
 }
 
 impl ExecuteCommand {
+    pub fn stateless(&self) -> bool {
+        match &self.command {
+            ExeScriptCommand::Sign { .. } | ExeScriptCommand::Terminate { .. } => true,
+            _ => false,
+        }
+    }
+
     pub fn split(self) -> (ExeScriptCommand, CommandContext) {
         (
             self.command,
@@ -96,13 +107,14 @@ pub struct CommandContext {
     pub tx: mpsc::Sender<RuntimeEvent>,
 }
 
-#[derive(Debug, Message)]
-#[rtype(result = "()")]
-pub struct SetTaskPackagePath(pub Option<PathBuf>);
-
-#[derive(Clone, Debug, Message)]
+#[derive(Clone, Debug, Default, Message)]
 #[rtype(result = "Result<()>")]
-pub struct SetRuntimeMode(pub RuntimeMode);
+pub struct UpdateDeployment {
+    pub task_package: Option<PathBuf>,
+    pub runtime_mode: Option<RuntimeMode>,
+    pub networks: Option<Vec<Network>>,
+    pub hosts: Option<HashMap<String, String>>,
+}
 
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<()>")]

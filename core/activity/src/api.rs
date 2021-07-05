@@ -1,4 +1,5 @@
 use actix_web::Scope;
+
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::scope::ExtendableScope;
 
@@ -13,12 +14,12 @@ pub fn web_scope(db: &DbExecutor) -> Scope {
 
 /// Common operations for both sides: Provider and Requestor
 mod common {
-    use actix_web::{web, Responder};
+    use actix_web::{Responder, web};
+    use ya_service_bus::{RpcEndpoint, timeout::IntoTimeoutFuture};
 
     use ya_core_model::{activity, Role};
     use ya_persistence::executor::DbExecutor;
     use ya_service_api_web::middleware::Identity;
-    use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
 
     use crate::common::*;
 
@@ -106,7 +107,8 @@ mod common {
         authorize_activity_initiator(&db, id.identity, &path.activity_id, Role::Requestor).await?;
 
         // Return locally persisted usage if activity has been already terminated or terminating
-        if get_persisted_state(&db, &path.activity_id).await?.alive() {
+        let state = get_persisted_state(&db, &path.activity_id).await?;
+        if !state.alive() {
             return get_persisted_usage(&db, &path.activity_id)
                 .await
                 .map(web::Json);
