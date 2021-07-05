@@ -24,7 +24,10 @@ pub struct GetStateResponse(pub StatePair);
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "GetBatchResultsResponse")]
-pub struct GetBatchResults(pub String);
+pub struct GetBatchResults {
+    pub batch_id: String,
+    pub idx: Option<usize>,
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, MessageResponse)]
 pub struct GetBatchResultsResponse(pub Vec<ExeScriptCommandResult>);
