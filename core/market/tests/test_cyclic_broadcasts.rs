@@ -8,55 +8,56 @@ use ya_market::testing::{
     MarketServiceExt, MarketsNetwork, QueryOfferError,
 };
 
+/// Disabled for #1474 (Lazy broadcasts)
 /// Initialize two markets and add Offers.
 /// Third market that will be instantiated after these two, should
 /// get all Offers from them, if cyclic broadcasting works properly.
-#[cfg_attr(not(feature = "test-suite"), ignore)]
-#[serial_test::serial]
-async fn test_startup_offers_sharing() {
-    let _ = env_logger::builder().try_init();
-
-    let network = MarketsNetwork::new(None)
-        .await
-        .add_market_instance("Node-1")
-        .await
-        .add_market_instance("Node-2")
-        .await;
-
-    let mkt1 = network.get_market("Node-1");
-    let id1 = network.get_default_id("Node-1");
-
-    let mkt2 = network.get_market("Node-2");
-    let id2 = network.get_default_id("Node-2");
-
-    // Create some offers before we instantiate 3rd node.
-    // This way this 3rd node won't get them in first broadcasts, that
-    // are sent immediately, after subscription is made.
-    let mut subscriptions = vec![];
-
-    for _n in 0..3 {
-        subscriptions.push(
-            mkt1.subscribe_offer(&client::sample_offer(), &id1)
-                .await
-                .unwrap(),
-        )
-    }
-
-    for _n in 0..2 {
-        subscriptions.push(
-            mkt2.subscribe_offer(&client::sample_offer(), &id2)
-                .await
-                .unwrap(),
-        )
-    }
-
-    let network = network.add_market_instance("Node-3").await;
-
-    let mkt3 = network.get_market("Node-3");
-
-    // Make sure we got all offers that, were created.
-    assert_offers_broadcasted(&[&mkt1, &mkt2, &mkt3], &subscriptions).await;
-}
+//#[cfg_attr(not(feature = "test-suite"), ignore)]
+//#[serial_test::serial]
+//async fn test_startup_offers_sharing() {
+//    let _ = env_logger::builder().try_init();
+//
+//    let network = MarketsNetwork::new(None)
+//        .await
+//        .add_market_instance("Node-1")
+//        .await
+//        .add_market_instance("Node-2")
+//        .await;
+//
+//    let mkt1 = network.get_market("Node-1");
+//    let id1 = network.get_default_id("Node-1");
+//
+//    let mkt2 = network.get_market("Node-2");
+//    let id2 = network.get_default_id("Node-2");
+//
+//    // Create some offers before we instantiate 3rd node.
+//    // This way this 3rd node won't get them in first broadcasts, that
+//    // are sent immediately, after subscription is made.
+//    let mut subscriptions = vec![];
+//
+//    for _n in 0..3 {
+//        subscriptions.push(
+//            mkt1.subscribe_offer(&client::sample_offer(), &id1)
+//                .await
+//                .unwrap(),
+//        )
+//    }
+//
+//    for _n in 0..2 {
+//        subscriptions.push(
+//            mkt2.subscribe_offer(&client::sample_offer(), &id2)
+//                .await
+//                .unwrap(),
+//        )
+//    }
+//
+//    let network = network.add_market_instance("Node-3").await;
+//
+//    let mkt3 = network.get_market("Node-3");
+//
+//    // Make sure we got all offers that, were created.
+//    assert_offers_broadcasted(&[&mkt1, &mkt2, &mkt3], &subscriptions).await;
+//}
 
 /// Unsubscribes are sent immediately after Offer is unsubscribed and
 /// there are sent later in cyclic broadcasts. This test checks if cyclic broadcasts
@@ -85,6 +86,18 @@ async fn test_unsubscribes_cyclic_broadcasts() {
     let id2 = network.get_default_id("Node-2");
 
     let mkt3 = network.get_market("Node-3");
+    let id3 = network.get_default_id("Node-3");
+
+    // create demands so that after #1474 nodes will be subscribed to broadcasts
+    mkt1.subscribe_demand(&client::sample_demand(), &id1)
+        .await
+        .unwrap();
+    mkt2.subscribe_demand(&client::sample_demand(), &id2)
+        .await
+        .unwrap();
+    mkt3.subscribe_demand(&client::sample_demand(), &id3)
+        .await
+        .unwrap();
 
     let mut subscriptions1 = vec![];
     let mut subscriptions2 = vec![];
@@ -268,9 +281,20 @@ async fn test_sharing_someones_else_unsubscribes() {
     let id2 = network.get_default_id("Node-2");
 
     let mkt3 = network.get_market("Node-3");
+    let id3 = network.get_default_id("Node-3");
 
     let mut subscriptions = vec![];
 
+    // create demands so that after #1474 nodes will be subscribed to broadcasts
+    mkt1.subscribe_demand(&client::sample_demand(), &id1)
+        .await
+        .unwrap();
+    mkt2.subscribe_demand(&client::sample_demand(), &id2)
+        .await
+        .unwrap();
+    mkt3.subscribe_demand(&client::sample_demand(), &id3)
+        .await
+        .unwrap();
     for _n in 0..3 {
         subscriptions.push(
             mkt1.subscribe_offer(&client::sample_offer(), &id1)
