@@ -3,6 +3,7 @@
 //! Top level objects constitutes public activity API.
 //! Local and Exeunit are in dedicated submodules.
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 
 use crate::Role;
 use ya_client_model::activity::{
@@ -24,6 +25,11 @@ pub mod exeunit {
     /// Public exeunit bus address for given `activity_id`.
     pub fn bus_id(activity_id: &str) -> String {
         format!("/public/exeunit/{}", activity_id)
+    }
+
+    /// Public network VPN bus address for given `network_id`.
+    pub fn network_id(network_id: &str) -> String {
+        format!("/public/vpn/{}", network_id)
     }
 }
 
@@ -135,6 +141,53 @@ pub struct GetUsage {
 impl RpcMessage for GetUsage {
     const ID: &'static str = "GetActivityUsage";
     type Item = ActivityUsage;
+    type Error = RpcMessageError;
+}
+
+/// Update remote network configuration
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum VpnControl {
+    AddNodes {
+        network_id: String,
+        nodes: HashMap<String, String>, // IP -> NodeId
+    },
+    RemoveNodes {
+        network_id: String,
+        node_ids: HashSet<String>,
+    },
+}
+
+impl VpnControl {
+    pub fn add_node(network_id: String, node_ip: String, node_id: String) -> Self {
+        VpnControl::AddNodes {
+            network_id,
+            nodes: vec![(node_ip, node_id)].into_iter().collect(),
+        }
+    }
+
+    pub fn remove_node(network_id: String, node_id: String) -> Self {
+        VpnControl::RemoveNodes {
+            network_id,
+            node_ids: vec![(node_id)].into_iter().collect(),
+        }
+    }
+}
+
+impl RpcMessage for VpnControl {
+    const ID: &'static str = "VpnControl";
+    type Item = ();
+    type Error = RpcMessageError;
+}
+
+/// Network data
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VpnPacket(pub Vec<u8>);
+
+impl RpcMessage for VpnPacket {
+    const ID: &'static str = "VpnPacket";
+    type Item = ();
     type Error = RpcMessageError;
 }
 
