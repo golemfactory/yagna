@@ -47,7 +47,7 @@ pub struct DiscoveryImpl {
 
     offer_queue: Mutex<Vec<SubscriptionId>>,
     unsub_queue: Mutex<Vec<SubscriptionId>>,
-    lazy_binder_queue: Mutex<Vec<String>>,
+    lazy_binder_prefix: Mutex<Option<String>>,
 
     offer_handlers: Mutex<OfferHandlers>,
     get_local_offers_handler: HandlerSlot<RetrieveOffers>,
@@ -237,11 +237,14 @@ impl Discovery {
             },
         );
         // Subscribe to receiving broadcasts only when demand is subscribed for the first time.
-        self.inner
-            .lazy_binder_queue
-            .lock()
-            .await
-            .push(String::from(local_prefix));
+        let mut prefix_guard = self.inner.lazy_binder_prefix.lock().await;
+        *prefix_guard = match &mut *prefix_guard {
+            None => Some(String::from(local_prefix)),
+            Some(old_prefix) => {
+                log::info!("Dropping previous lazy_binder_prefix, and replacing it with new one. old={}, new={}", old_prefix, local_prefix);
+                Some(String::from(local_prefix))
+            }
+        };
 
         Ok(())
     }
@@ -250,10 +253,14 @@ impl Discovery {
         log::trace!("LazyBroadcastBind");
         let myself = self.clone();
         // /local/market/market-protocol-mk1-offer
-        let mut prefix_queue = self.inner.lazy_binder_queue.lock().await;
-        let local_prefix = match prefix_queue.pop() {
+        let mut prefix_guard = self.inner.lazy_binder_prefix.lock().await;
+        let local_prefix: String;
+        *prefix_guard = match &mut *prefix_guard {
             None => return Ok(()),
-            Some(s) => s,
+            Some(s) => {
+                local_prefix = s.to_string();
+                <Option<String>>::None
+            }
         };
         let bcast_address = format!("{}/{}", local_prefix.as_str(), OffersBcast::TOPIC);
         ya_net::bind_broadcast_with_caller(
