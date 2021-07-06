@@ -39,6 +39,10 @@ async fn validate_orders(
     payee_addr: &str,
     amount: &BigDecimal,
 ) -> Result<(), OrderValidationError> {
+    if orders.is_empty() {
+        return Err(OrderValidationError::new("orders not found in the database").into());
+    }
+
     let mut total_amount = BigDecimal::zero();
     for order in orders.iter() {
         if &order.payment_platform != platform {
@@ -352,9 +356,6 @@ impl PaymentProcessor {
             .as_dao::<OrderDao>()
             .get_many(msg.order_ids, driver.clone())
             .await?;
-        if orders.is_empty() {
-            return Err(OrderValidationError::new("orders not found in the database").into());
-        }
         validate_orders(
             &orders,
             &payment_platform,
