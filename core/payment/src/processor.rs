@@ -344,7 +344,7 @@ impl PaymentProcessor {
         let payer_addr = msg.sender;
         let payee_addr = msg.recipient;
 
-        if msg.order_ids.len() == 0 {
+        if msg.order_ids.is_empty() {
             return Err(OrderValidationError::new("order_ids is empty").into());
         }
         let orders = self
@@ -352,6 +352,9 @@ impl PaymentProcessor {
             .as_dao::<OrderDao>()
             .get_many(msg.order_ids, driver.clone())
             .await?;
+        if orders.is_empty() {
+            return Err(OrderValidationError::new("orders not found in the database").into());
+        }
         validate_orders(
             &orders,
             &payment_platform,
