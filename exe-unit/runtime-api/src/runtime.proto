@@ -9,6 +9,7 @@ message Request {
         RunProcess run = 10;
         KillProcess kill = 11;
         Shutdown shutdown = 12;
+        CreateNetwork network = 30;
     }
 
     message Hello {
@@ -28,10 +29,14 @@ message Request {
         int32 signal = 2;
     }
 
+    message CreateNetwork {
+        repeated Network networks = 1;
+        map<string, string> hosts = 2;
+    }
+
     message Shutdown {
 
     }
-
 }
 
 message Response {
@@ -48,6 +53,9 @@ message Response {
 
         // Events
         ProcessStatus status = 20;
+
+        // Network ctl
+        CreateNetwork network = 30;
     }
 
     message Hello {
@@ -70,7 +78,9 @@ message Response {
         uint64 pid = 1;
     }
 
-    message KillProcess {}
+    message KillProcess {
+
+    }
 
     message ProcessStatus {
         uint64 pid = 1;
@@ -80,8 +90,22 @@ message Response {
         bytes stderr = 5;
     }
 
-    message Shutdown {}
+    message CreateNetwork {
+        oneof endpoint {
+            string socket = 1;
+        }
+    }
 
+    message Shutdown {
+
+    }
+}
+
+message Network {
+    string addr = 1;
+    string gateway = 2;
+    string mask = 3;
+    string if_addr = 4;
 }
 
 message Output {
