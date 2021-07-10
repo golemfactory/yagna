@@ -5,7 +5,7 @@ use derive_more::Display;
 
 use ya_agreement_utils::{AgreementView, OfferDefinition};
 use ya_client::model::market::Reason;
-use ya_client_model::market::{NewOffer, Proposal};
+use ya_client::model::market::{NewOffer, Proposal};
 
 use crate::display::EnableDisplay;
 use crate::market::termination_reason::BreakReason;

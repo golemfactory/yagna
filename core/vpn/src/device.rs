@@ -1,6 +1,7 @@
+use std::collections::VecDeque;
+
 use smoltcp::phy;
 use smoltcp::time;
-use std::collections::VecDeque;
 
 const MTU: usize = 65535;
 

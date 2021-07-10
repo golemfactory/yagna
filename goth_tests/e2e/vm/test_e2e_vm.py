@@ -8,15 +8,8 @@ from typing import List
 
 import pytest
 
-from goth.address import (
-    PROXY_HOST,
-    YAGNA_REST_URL,
-)
 from goth.configuration import load_yaml, Override
-from goth.node import node_environment
 from goth.runner import Runner
-from goth.runner.container.payment import PaymentIdPool
-from goth.runner.container.yagna import YagnaContainerConfig
 from goth.runner.probe import RequestorProbe
 
 from goth_tests.helpers.activity import vm_exe_script, vm_task_package

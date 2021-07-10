@@ -1,30 +1,31 @@
 #[macro_use]
 extern crate derive_more;
 
-use actix::prelude::*;
-use chrono::Utc;
-use futures::channel::{mpsc, oneshot};
-use futures::{FutureExt, SinkExt};
 use std::path::PathBuf;
 use std::time::Duration;
 
-use ya_agreement_utils::agreement::OfferTemplate;
+use actix::prelude::*;
+use chrono::Utc;
+use futures::{FutureExt, SinkExt};
+use futures::channel::{mpsc, oneshot};
 use ya_client_model::activity::{
     activity_state::StatePair, ActivityUsage, CommandOutput, ExeScriptCommand, RuntimeEvent, State,
 };
+use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
+
+use ya_agreement_utils::agreement::OfferTemplate;
 use ya_core_model::activity;
 use ya_core_model::activity::local::Credentials;
 use ya_runtime_api::deploy;
-use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
 
 use crate::acl::Acl;
 use crate::agreement::Agreement;
 use crate::error::Error;
 use crate::message::*;
 use crate::runtime::*;
+use crate::service::{ServiceAddr, ServiceControl};
 use crate::service::metrics::MetricsService;
 use crate::service::transfer::{AddVolumes, DeployImage, TransferResource, TransferService};
-use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError, Supervision};
 
 mod acl;

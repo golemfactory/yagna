@@ -1,28 +1,31 @@
 #![allow(unused)]
-use crate::error::Error;
-use crate::message::Shutdown;
-use crate::state::{Deployment, DeploymentNetwork};
-use crate::Result;
-use actix::prelude::*;
-use futures::channel::mpsc;
-use futures::future;
-use futures::{FutureExt, SinkExt, Stream, StreamExt, TryFutureExt, TryStreamExt};
+
 use std::convert::TryFrom;
 use std::ops::Not;
 use std::path::Path;
-use tokio::io;
 
-use crate::acl::Acl;
+use actix::prelude::*;
+use futures::{FutureExt, SinkExt, Stream, StreamExt, TryFutureExt, TryStreamExt};
+use futures::channel::mpsc;
+use futures::future;
+use tokio::io;
+use ya_service_bus::{actix_rpc, RpcEnvelope, typed, typed::Endpoint as GsbEndpoint};
+
 use ya_core_model::activity;
 use ya_core_model::activity::{RpcMessageError, VpnControl};
 use ya_runtime_api::server::{CreateNetwork, Network, NetworkEndpoint, RuntimeService};
-use ya_service_bus::{actix_rpc, typed, typed::Endpoint as GsbEndpoint, RpcEnvelope};
+use ya_utils_networking::vpn::{
+    self, ArpField, ArpPacket, EtherFrame, EtherType, IpPacket, MAX_FRAME_SIZE, Networks,
+    PeekPacket,
+};
 use ya_utils_networking::vpn::common::ntoh;
 use ya_utils_networking::vpn::error::Error as VpnError;
-use ya_utils_networking::vpn::{
-    self, ArpField, ArpPacket, EtherFrame, EtherType, IpPacket, Networks, PeekPacket,
-    MAX_FRAME_SIZE,
-};
+
+use crate::acl::Acl;
+use crate::error::Error;
+use crate::message::Shutdown;
+use crate::Result;
+use crate::state::{Deployment, DeploymentNetwork};
 
 pub(crate) async fn start_vpn<R: RuntimeService>(
     acl: Acl,
@@ -484,8 +487,9 @@ fn gsb_endpoint(node_id: &str, net_id: &str) -> GsbEndpoint {
 
 #[cfg(test)]
 mod test {
-    use super::{write_prefix, RxBuffer};
     use std::iter::FromIterator;
+
+    use super::{RxBuffer, write_prefix};
 
     enum TxMode {
         Full,

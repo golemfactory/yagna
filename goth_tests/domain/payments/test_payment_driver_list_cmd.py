@@ -6,10 +6,6 @@ from typing import List
 
 import pytest
 
-from goth.address import (
-    PROXY_HOST,
-    YAGNA_REST_URL,
-)
 from goth.configuration import load_yaml, Override
 from goth.runner import Runner
 from goth.runner.probe import RequestorProbe

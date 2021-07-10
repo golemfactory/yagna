@@ -1,8 +1,11 @@
-use crate::network::VpnSupervisor;
-use futures::lock::Mutex;
 use std::sync::Arc;
+
+use futures::lock::Mutex;
+
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::Provider;
+
+use crate::network::VpnSupervisor;
 
 lazy_static::lazy_static! {
     static ref VPN_SUPERVISOR: Arc<Mutex<VpnSupervisor>> = Default::default();

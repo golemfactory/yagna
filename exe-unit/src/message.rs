@@ -1,15 +1,17 @@
-use crate::error::Error;
-use crate::runtime::RuntimeMode;
-use crate::state::CommandStateRepr;
-use crate::Result;
+use std::collections::HashMap;
+use std::path::PathBuf;
+
 use actix::prelude::*;
 use futures::channel::mpsc;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::PathBuf;
+use ya_client_model::activity::{ExeScriptCommand, ExeScriptCommandResult, RuntimeEvent};
 use ya_client_model::activity::activity_state::{State, StatePair};
 use ya_client_model::activity::exe_script_command::Network;
-use ya_client_model::activity::{ExeScriptCommand, ExeScriptCommandResult, RuntimeEvent};
+
+use crate::error::Error;
+use crate::Result;
+use crate::runtime::RuntimeMode;
+use crate::state::CommandStateRepr;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "Result<Vec<f64>>")]

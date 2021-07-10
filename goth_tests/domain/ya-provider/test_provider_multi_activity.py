@@ -2,16 +2,14 @@
 
 import json
 import logging
-import re
-from pathlib import Path
-from typing import List, Tuple
-
 import pytest
-from ya_activity.exceptions import ApiException
-
+import re
 from goth.configuration import load_yaml, Override, Configuration
 from goth.runner import Runner
 from goth.runner.probe import RequestorProbe
+from pathlib import Path
+from typing import List, Tuple
+from ya_activity.exceptions import ApiException
 
 from goth_tests.helpers.activity import wasi_exe_script, wasi_task_package
 from goth_tests.helpers.negotiation import negotiate_agreements, DemandBuilder

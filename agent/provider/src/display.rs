@@ -2,7 +2,7 @@ use humantime::format_duration;
 use std::fmt::{Error, Formatter};
 
 use ya_agreement_utils::agreement::flatten_value;
-use ya_client_model::market::NewOffer;
+use ya_client::model::market::NewOffer;
 
 pub struct DisplayEnabler<'a, Type>(pub &'a Type);
 

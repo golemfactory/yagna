@@ -1,6 +1,7 @@
+use std::process::Stdio;
+
 use anyhow::Context;
 use serde::Deserialize;
-use std::process::Stdio;
 use tokio::process::{Child, Command};
 
 use ya_core_model::payment::local::NetworkName;
@@ -31,10 +32,29 @@ pub struct UsageDef {
     pub duration: f64,
 }
 
+impl UsageDef {
+    pub fn for_runtime(&self, runtime: &RuntimeInfo) -> Vec<(&str, f64)> {
+        let mut v = Vec::new();
+        v.push(("initial", self.initial));
+        if runtime
+            .config
+            .counters
+            .contains_key("golem.usage.duration_sec")
+        {
+            v.push(("golem.usage.duration_sec", self.duration));
+        }
+        if runtime.config.counters.contains_key("golem.usage.cpu_sec") {
+            v.push(("golem.usage.cpu_sec", self.cpu));
+        }
+        v
+    }
+}
+
 #[derive(Deserialize)]
 pub struct RuntimeInfo {
     pub name: String,
     pub description: Option<String>,
+    pub config: ya_provider::execution::Configuration,
 }
 
 impl YaProviderCommand {
@@ -126,7 +146,7 @@ impl YaProviderCommand {
         self,
         name: &str,
         exeunit_name: &str,
-        usage_coeffs: &UsageDef,
+        usage_coeffs: &[(&str, f64)],
     ) -> anyhow::Result<()> {
         let mut cmd = self.cmd;
         cmd.args(&["preset", "create", "--no-interactive"]);
@@ -210,7 +230,7 @@ impl YaProviderCommand {
         mut self,
         name: &str,
         exeunit_name: &str,
-        usage_coeffs: &UsageDef,
+        usage_coeffs: &[(&str, f64)],
     ) -> anyhow::Result<()> {
         let mut cmd = &mut self.cmd;
         cmd.args(&["preset", "update", "--no-interactive"]);
@@ -314,7 +334,7 @@ fn preset_command<'a, 'b>(
     cmd: &mut Command,
     name: impl Into<Option<&'a str>>,
     exeunit_name: impl Into<Option<&'b str>>,
-    usage_coeffs: &UsageDef,
+    usage_coeffs: &[(&str, f64)],
 ) {
     if let Some(name) = name.into() {
         cmd.arg("--preset-name").arg(name);
@@ -323,9 +343,7 @@ fn preset_command<'a, 'b>(
         cmd.arg("--exe-unit").arg(exeunit_name);
     }
     cmd.arg("--pricing").arg("linear");
-    cmd.arg("--price").arg(format!("CPU={}", &usage_coeffs.cpu));
-    cmd.arg("--price")
-        .arg(format!("Duration={}", usage_coeffs.duration));
-    cmd.arg("--price")
-        .arg(format!("Init price={}", usage_coeffs.initial));
+    for &(k, v) in usage_coeffs {
+        cmd.arg("--price").arg(format!("{}={}", k, v));
+    }
 }

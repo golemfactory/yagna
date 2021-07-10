@@ -1,13 +1,15 @@
-use futures::future::BoxFuture;
-use futures::prelude::*;
-use futures::FutureExt;
 use std::{
     clone::Clone,
     env,
     sync::{Arc, Mutex},
     time::Duration,
 };
+
+use futures::future::BoxFuture;
+use futures::FutureExt;
+use futures::prelude::*;
 use tokio;
+
 use ya_runtime_api::server::{self, AsyncResponse, ProcessStatus, RuntimeEvent, RuntimeService};
 
 // server
