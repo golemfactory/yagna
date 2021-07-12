@@ -41,6 +41,11 @@ async fn test_rest_get_offers() {
     let market_remote = network.get_market("Node-2");
     let identity_local = network.get_default_id("Node-1");
     let identity_remote = network.get_default_id("Node-2");
+    // subscribe to broadcasts
+    market_remote
+        .subscribe_demand(&sample_demand(), &identity_remote)
+        .await
+        .unwrap();
 
     let offer_local = NewOffer::new(json!({}), "()".to_string());
     let offer_local_unsubscribed = NewOffer::new(json!({}), "()".to_string());
