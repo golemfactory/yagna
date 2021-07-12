@@ -8,6 +8,7 @@ use awc::SendClientRequest;
 use bytes::Bytes;
 use futures::future::{ready, LocalBoxFuture};
 use futures::{FutureExt, SinkExt, StreamExt, TryStreamExt};
+use std::str::FromStr;
 use tokio::task::spawn_local;
 use url::Url;
 
@@ -50,7 +51,7 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
     }
 
     fn source(&self, url: &Url, ctx: &TransferContext) -> TransferStream<TransferData, Error> {
-        let (stream, tx, abort_reg) = TransferStream::<TransferData, Error>::create(1);
+        let (stream, mut tx, abort_reg) = TransferStream::<TransferData, Error>::create(1);
         let txc = tx.clone();
 
         let url = url.clone();
@@ -58,10 +59,14 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
 
         spawn_local(async move {
             let fut = async move {
-                DownloadRequest::new(url, &state)
+                if state.finished() {
+                    log::debug!("Transfer already finished");
+                    let _ = tx.send(Ok(TransferData::Bytes(Bytes::new()))).await;
+                    return Ok(());
+                }
+                DownloadRequest::get(url, &state)
                     .send()
                     .await?
-                    .http_err()?
                     .into_stream()
                     .map_err(Error::from)
                     .forward(
@@ -114,10 +119,24 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
         let state = ctx.state.clone();
 
         async move {
-            Ok(if !probe_range(url, &state).await? {
+            let response = DownloadRequest::head(url).send().await?;
+            let ranges = response
+                .headers()
+                .get_all(header::ACCEPT_RANGES)
+                .any(|v| v.to_str().map(|s| s == "bytes").unwrap_or(false));
+            let size: Option<u64> = response
+                .headers()
+                .get(header::CONTENT_LENGTH)
+                .map(|v| v.to_str().ok().map(|s| u64::from_str(s).ok()).flatten())
+                .flatten();
+
+            state.set_size(size);
+            if !ranges {
                 log::warn!("Transfer resuming is not supported by the server");
                 state.set_offset(0);
-            })
+            }
+
+            Ok(())
         }
         .boxed_local()
     }
@@ -131,16 +150,6 @@ fn client_builder(url: &Url) -> awc::ClientBuilder {
     }
 }
 
-async fn probe_range(url: Url, state: &TransferState) -> Result<bool, Error> {
-    Ok(DownloadRequest::new(url, state)
-        .method(Method::HEAD)
-        .send()
-        .await?
-        .headers()
-        .get_all(header::ACCEPT_RANGES)
-        .any(|v| v.to_str().map(|s| s == "bytes").unwrap_or(false)))
-}
-
 struct DownloadRequest {
     method: Method,
     url: Url,
@@ -149,7 +158,7 @@ struct DownloadRequest {
 }
 
 impl DownloadRequest {
-    pub fn new(url: Url, state: &TransferState) -> Self {
+    pub fn get(url: Url, state: &TransferState) -> Self {
         Self {
             method: Method::GET,
             url,
@@ -158,9 +167,13 @@ impl DownloadRequest {
         }
     }
 
-    pub fn method(mut self, method: Method) -> Self {
-        self.method = method;
-        self
+    pub fn head(url: Url) -> Self {
+        Self {
+            method: Method::HEAD,
+            url,
+            offset: 0,
+            max_redirects: 10,
+        }
     }
 
     pub async fn send(

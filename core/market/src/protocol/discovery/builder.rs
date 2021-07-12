@@ -76,6 +76,7 @@ impl DiscoveryBuilder {
                 offer_handlers,
                 offer_queue: Mutex::new(vec![]),
                 unsub_queue: Mutex::new(vec![]),
+                lazy_binder_prefix: Mutex::new(None),
                 get_local_offers_handler: self.get_handler(),
                 offer_unsubscribe_handler: self.get_handler(),
                 config: self.config.unwrap(),
