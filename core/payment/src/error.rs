@@ -143,6 +143,8 @@ pub mod processor {
     #[derive(thiserror::Error, Debug)]
     pub enum SchedulePaymentError {
         #[error("{0}")]
+        InvalidInput(String),
+        #[error("{0}")]
         AccountNotRegistered(#[from] AccountNotRegistered),
         #[error("Service bus error: {0}")]
         ServiceBus(#[from] ya_service_bus::error::Error),
