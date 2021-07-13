@@ -2,6 +2,7 @@
 extern crate diesel;
 
 mod config;
+mod bus;
 mod db;
 mod identity;
 mod market;

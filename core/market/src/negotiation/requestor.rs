@@ -11,6 +11,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::LogErr;
 
+use crate::bus;
 use crate::db::{
     dao::{AgreementDao, AgreementDaoError, SaveAgreementError},
     model::{Agreement, AgreementId, AgreementState, AppSessionId},
@@ -387,7 +388,7 @@ impl RequestorBroker {
         }
     }
 
-    /// Signs (not yet) Agreement self-created via `create_agreement`
+    /// Signs Agreement self-created via `create_agreement`
     /// and sends it to the Provider.
     pub async fn confirm_agreement(
         &self,
@@ -417,8 +418,7 @@ impl RequestorBroker {
 
             validate_transition(&agreement, AgreementState::Pending)?;
 
-            // TODO: Sign Agreement.
-            let signature = "NoSignature".to_string();
+            let signature = hex::encode(bus::sign(id.identity, agreement.clone().signature_hash()).await?);
             agreement.proposed_signature = Some(signature.clone());
 
             self.api.propose_agreement(&agreement).await?;
@@ -508,8 +508,20 @@ async fn agreement_approved(
             return Err(RemoteAgreementError::Expired(agreement.id.clone()));
         }
 
-        // TODO: Validate agreement signature.
-        let signature = "NoSignature".to_string();
+        let raw_signature = hex::decode(agreement.approved_signature.unwrap_or("".to_string()))
+            .map_err(RemoteAgreementError::InvalidSignature(agreement.id.clone()))?;
+        if !crate::utils::verify_signature(
+            caller,
+            raw_signature,
+            agreement.clone().signature_hash(),
+        )
+            .unwrap_or_else(||{
+            log::warn!("Signature verification error. agreement: {}", agreement.id.clone());
+            false
+        }) {
+            return Err(RemoteAgreementError::InvalidSignature(agreement.id.clone());
+        }
+        let signature = hex::encode(bus::sign(agreement.requestor_id, agreement.clone().signature_hash()).await?);
 
         // Note: session must be None, because either we already set this value in ConfirmAgreement,
         // or we purposely left it None.
@@ -566,8 +578,7 @@ async fn commit_agreement(broker: CommonBroker, agreement_id: AgreementId) {
             .map_err(|_e| AgreementError::NotFound(agreement_id.to_string()))?
             .ok_or(AgreementError::NotFound(agreement_id.to_string()))?;
 
-        // TODO: Sign Agreement.
-        let signature = "NoSignature".to_string();
+        let signature = hex::encode(bus::sign(agreement.identity, agreement.clone().signature_hash()).await?);
         agreement.committed_signature = Some(signature.clone());
 
         // Note: This GSB call is racing with potential `cancel_agreement` call.
