@@ -34,7 +34,7 @@ ya-market = "0.3"
 ya-metrics = "0.1"
 ya-net = { version = "0.2", features = ["service"] }
 ya-payment = "0.2"
-ya-persistence = "0.2"
+ya-persistence = { version = "0.2", features = ["service"] }
 ya-sb-proto = "0.4"
 ya-sb-router = "0.4"
 ya-service-api = "0.1"
