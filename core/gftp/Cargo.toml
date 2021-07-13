@@ -18,7 +18,7 @@ name="gftp"
 required-features=['bin']
 
 [dependencies]
-ya-compile-time-utils = "0.1"
+ya-compile-time-utils = "0.2"
 ya-core-model = { version = "^0.4", features = ["gftp", "identity", "net"] }
 ya-service-bus = "0.4"
 

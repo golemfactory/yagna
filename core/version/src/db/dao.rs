@@ -77,7 +77,7 @@ impl<'c> ReleaseDAO<'c> {
 }
 
 fn get_current_release(conn: &ConnType) -> anyhow::Result<Option<Release>> {
-    get_release(conn, ya_compile_time_utils::semver_str())
+    get_release(conn, ya_compile_time_utils::semver_str!())
 }
 
 fn get_release(conn: &ConnType, ver: &str) -> anyhow::Result<Option<Release>> {
@@ -99,7 +99,7 @@ fn get_pending_release(conn: &ConnType, include_seen: bool) -> anyhow::Result<Op
 
     match query.first::<DBRelease>(conn).optional()? {
         Some(db_rel) => {
-            let running_ver = ya_compile_time_utils::semver_str();
+            let running_ver = ya_compile_time_utils::semver_str!();
             if !bump_is_greater(running_ver, &db_rel.version)
                 .map_err(|e| {
                     log::error!(
