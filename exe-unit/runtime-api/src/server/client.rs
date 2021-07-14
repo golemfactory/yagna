@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 
-use futures::{FutureExt, SinkExt};
 use futures::channel::oneshot;
 use futures::future::Shared;
 use futures::lock::Mutex;
+use futures::{FutureExt, SinkExt};
 
 use super::*;
 

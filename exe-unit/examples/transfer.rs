@@ -5,20 +5,20 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use actix::{Actor, Addr, System};
-use actix_web::{App, HttpResponse, HttpServer, middleware, web};
+use actix_web::{middleware, web, App, HttpResponse, HttpServer};
 use futures::StreamExt;
 use rand::Rng;
 use serde_json::Value;
-use sha3::Digest;
 use sha3::digest::generic_array::GenericArray;
+use sha3::Digest;
 use tempdir::TempDir;
 use ya_client_model::activity::TransferArgs;
 
 use ya_agreement_utils::AgreementView;
 use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::error::Error;
-use ya_exe_unit::ExeUnitContext;
 use ya_exe_unit::service::transfer::{AddVolumes, DeployImage, TransferResource, TransferService};
+use ya_exe_unit::ExeUnitContext;
 use ya_runtime_api::deploy::ContainerVolume;
 
 type HashOutput = GenericArray<u8, <sha3::Sha3_512 as Digest>::OutputSize>;

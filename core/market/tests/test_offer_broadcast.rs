@@ -1,17 +1,17 @@
 use std::str::FromStr;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 use chrono::Utc;
 use futures::{channel::mpsc, prelude::*};
 use tokio::time::Duration;
 
 use ya_market::assert_err_eq;
-use ya_market::testing::{MarketServiceExt, MarketsNetwork};
-use ya_market::testing::{QueryOfferError, SubscriptionId};
-use ya_market::testing::discovery::{Discovery, message::*};
+use ya_market::testing::discovery::{message::*, Discovery};
 use ya_market::testing::mock_node::{assert_offers_broadcasted, assert_unsunbscribes_broadcasted};
 use ya_market::testing::mock_offer::{client, sample_offer, sample_offer_with_expiration};
+use ya_market::testing::{MarketServiceExt, MarketsNetwork};
+use ya_market::testing::{QueryOfferError, SubscriptionId};
 
 /// Test adds offer. It should be broadcasted to other nodes in the network.
 /// Than sending unsubscribe should remove Offer from other nodes.

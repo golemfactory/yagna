@@ -106,12 +106,12 @@ impl<
 mod test {
     use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 
-    use crate::testing::Config;
     use crate::testing::mock_identity::{generate_identity, MockIdentity};
     use crate::testing::mock_offer::sample_retrieve_offers;
+    use crate::testing::Config;
 
-    use super::*;
     use super::super::*;
+    use super::*;
 
     #[test]
     #[should_panic]

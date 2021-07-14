@@ -5,14 +5,14 @@ use actix_http::http::{header, Method};
 use actix_http::Payload;
 use awc::SendClientRequest;
 use bytes::Bytes;
+use futures::future::{ready, LocalBoxFuture};
 use futures::{FutureExt, SinkExt, StreamExt, TryStreamExt};
-use futures::future::{LocalBoxFuture, ready};
 use tokio::task::spawn_local;
 use url::Url;
 
+use crate::error::{Error, HttpError};
 use crate::{abortable_sink, abortable_stream, TransferState};
 use crate::{TransferContext, TransferData, TransferProvider, TransferSink, TransferStream};
-use crate::error::{Error, HttpError};
 
 enum HttpAuth<'s> {
     None,

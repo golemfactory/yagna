@@ -14,8 +14,8 @@ pub fn web_scope(db: &DbExecutor) -> Scope {
 
 /// Common operations for both sides: Provider and Requestor
 mod common {
-    use actix_web::{Responder, web};
-    use ya_service_bus::{RpcEndpoint, timeout::IntoTimeoutFuture};
+    use actix_web::{web, Responder};
+    use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
 
     use ya_core_model::{activity, Role};
     use ya_persistence::executor::DbExecutor;

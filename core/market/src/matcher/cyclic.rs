@@ -4,8 +4,8 @@ use std::hash::Hash;
 use std::time::Instant;
 
 use metrics::{counter, timing};
-use rand::Rng;
 use rand::seq::IteratorRandom;
+use rand::Rng;
 
 use super::Matcher;
 

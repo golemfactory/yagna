@@ -4,9 +4,9 @@ use rand::seq::SliceRandom;
 
 use ya_market::assert_err_eq;
 use ya_market::testing::{
-    MarketServiceExt,
-    MarketsNetwork,
-    mock_node::{assert_offers_broadcasted, assert_unsunbscribes_broadcasted}, mock_offer::client, QueryOfferError,
+    mock_node::{assert_offers_broadcasted, assert_unsunbscribes_broadcasted},
+    mock_offer::client,
+    MarketServiceExt, MarketsNetwork, QueryOfferError,
 };
 
 /// Initialize two markets and add Offers.

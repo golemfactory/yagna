@@ -2,13 +2,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use actix::prelude::*;
-use actix_web::{HttpRequest, HttpResponse, Responder, ResponseError, web};
+use actix_web::{web, HttpRequest, HttpResponse, Responder, ResponseError};
 use actix_web_actors::ws;
 use futures::channel::mpsc;
 use futures::lock::Mutex;
 use serde::{Deserialize, Serialize};
-use ya_client_model::ErrorMessage;
 use ya_client_model::net::*;
+use ya_client_model::ErrorMessage;
 
 use ya_service_api_web::middleware::Identity;
 use ya_utils_networking::vpn::{Error as VpnError, Protocol};

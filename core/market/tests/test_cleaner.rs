@@ -1,16 +1,16 @@
 use chrono::{Duration, NaiveDateTime, Utc};
 use structopt::StructOpt;
 
-use ya_market::testing::{
-    Agreement, AgreementDao, DbConfig, DbProposal, Demand, DemandDao, MarketsNetwork, Negotiation,
-    Offer, OfferDao,
-};
 use ya_market::testing::cleaner::clean;
 use ya_market::testing::dao::TestingDao;
 use ya_market::testing::events_helper::{generate_event, TestMarketEvent};
 use ya_market::testing::mock_agreement::generate_agreement;
 use ya_market::testing::mock_offer::{generate_demand, generate_offer};
 use ya_market::testing::proposal_util::{generate_negotiation, generate_proposal};
+use ya_market::testing::{
+    Agreement, AgreementDao, DbConfig, DbProposal, Demand, DemandDao, MarketsNetwork, Negotiation,
+    Offer, OfferDao,
+};
 use ya_persistence::executor::PoolType;
 
 fn future() -> NaiveDateTime {

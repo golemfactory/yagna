@@ -10,7 +10,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use actix_web::{App, HttpServer, middleware, Responder, web};
+use actix_web::{middleware, web, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use futures::prelude::*;
 use structopt::{clap, StructOpt};
@@ -30,8 +30,8 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_api_interfaces::Provider;
 use ya_service_api_web::{
-    DEFAULT_YAGNA_API_URL,
-    middleware::{auth, Identity}, rest_api_host_port, YAGNA_API_URL_ENV_VAR,
+    middleware::{auth, Identity},
+    rest_api_host_port, DEFAULT_YAGNA_API_URL, YAGNA_API_URL_ENV_VAR,
 };
 use ya_sgx::SgxService;
 use ya_utils_path::data_dir::DataDir;

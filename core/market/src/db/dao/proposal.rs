@@ -1,15 +1,15 @@
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use diesel::expression::dsl::now as sql_now;
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use serde::{Deserialize, Serialize};
 
 use ya_persistence::executor::{
-    AsDao, ConnType, do_with_transaction, PoolType, readonly_transaction,
+    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
 
-use crate::db::{DbError, DbResult};
 use crate::db::model::{DbProposal, Negotiation, Proposal, ProposalId, ProposalState};
 use crate::db::schema::market_negotiation::dsl as dsl_negotiation;
 use crate::db::schema::market_proposal::dsl;
+use crate::db::{DbError, DbResult};
 
 #[derive(thiserror::Error, Debug)]
 pub enum SaveProposalError {

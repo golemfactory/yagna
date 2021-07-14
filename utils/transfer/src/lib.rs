@@ -7,15 +7,15 @@ use actix_rt::Arbiter;
 use bytes::Bytes;
 use futures::channel::mpsc::{channel, Receiver, Sender};
 use futures::channel::oneshot;
-use futures::future::{Abortable, Aborted, AbortHandle, AbortRegistration, LocalBoxFuture};
+use futures::future::{AbortHandle, AbortRegistration, Abortable, Aborted, LocalBoxFuture};
 use futures::prelude::*;
 use futures::task::{Context, Poll};
-use sha3::{Sha3_224, Sha3_256, Sha3_384, Sha3_512};
 use sha3::digest::DynDigest;
+use sha3::{Sha3_224, Sha3_256, Sha3_384, Sha3_512};
 use url::Url;
 use ya_client_model::activity::TransferArgs;
 
-pub use crate::archive::{archive, ArchiveFormat, extract};
+pub use crate::archive::{archive, extract, ArchiveFormat};
 use crate::error::Error;
 pub use crate::file::{DirTransferProvider, FileTransferProvider};
 pub use crate::gftp::GftpTransferProvider;

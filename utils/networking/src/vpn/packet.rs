@@ -3,8 +3,8 @@
 use std::convert::TryFrom;
 use std::ops::Deref;
 
-use crate::vpn::{Error, Protocol};
 use crate::vpn::packet::field::*;
+use crate::vpn::{Error, Protocol};
 
 pub const ETHERNET_HDR_SIZE: usize = 14;
 

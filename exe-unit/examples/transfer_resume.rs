@@ -7,14 +7,14 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use futures::future::LocalBoxFuture;
-use sha3::Digest;
 use sha3::digest::generic_array::GenericArray;
+use sha3::Digest;
 use structopt::StructOpt;
 use tempdir::TempDir;
 use url::Url;
 
-use ya_transfer::*;
 use ya_transfer::error::{Error, HttpError};
+use ya_transfer::*;
 
 #[derive(StructOpt, Debug)]
 pub struct Cli {

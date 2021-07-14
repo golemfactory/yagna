@@ -6,8 +6,8 @@ use std::{
 };
 
 use futures::future::BoxFuture;
-use futures::FutureExt;
 use futures::prelude::*;
+use futures::FutureExt;
 use tokio;
 
 use ya_runtime_api::server::{self, AsyncResponse, ProcessStatus, RuntimeEvent, RuntimeService};

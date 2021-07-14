@@ -9,15 +9,15 @@ use futures::future::Abortable;
 use url::Url;
 use ya_client_model::activity::TransferArgs;
 
-use ya_transfer::*;
 use ya_transfer::error::Error as TransferError;
+use ya_transfer::*;
 
-use crate::{ExeUnitContext, Result};
 use crate::deploy::ContainerVolume;
 use crate::error::Error;
 use crate::message::Shutdown;
-use crate::util::Abort;
 use crate::util::cache::Cache;
+use crate::util::Abort;
+use crate::{ExeUnitContext, Result};
 
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<()>")]

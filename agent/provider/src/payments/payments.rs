@@ -18,19 +18,19 @@ use ya_client::model::payment::{DebitNoteEventType, InvoiceEventType};
 use ya_client::payment::PaymentApi;
 
 use ya_std_utils::LogErr;
-use ya_utils_actix::{actix_signal_handler, forward_actix_handler};
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
 use ya_utils_actix::deadline_checker::{
     DeadlineChecker, DeadlineElapsed, StopTracking, StopTrackingCategory, TrackDeadline,
 };
+use ya_utils_actix::{actix_signal_handler, forward_actix_handler};
 
 use crate::execution::{ActivityDestroyed, CreateActivity};
 use crate::market::provider_market::NewAgreement;
 use crate::market::termination_reason::BreakReason;
 use crate::tasks::{AgreementBroken, AgreementClosed, BreakAgreement};
 
-use super::agreement::{ActivityPayment, AgreementPayment, compute_cost, CostInfo};
+use super::agreement::{compute_cost, ActivityPayment, AgreementPayment, CostInfo};
 use super::model::PaymentModel;
 
 // =========================================== //
