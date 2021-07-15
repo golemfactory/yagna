@@ -176,7 +176,7 @@ async def test_example(
         assert drivers and drivers.items()
 
         for provider in providers:
-            await provider.wait_for_offer_subscribed()
+            await provider.provider_agent.wait_for_log("Subscribed offer")
 ```
 
 The above is an example of a test case, showcasing some of the basic `goth` functionalities.
