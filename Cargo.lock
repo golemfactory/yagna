@@ -6953,10 +6953,15 @@ dependencies = [
  "log",
  "r2d2",
  "serde_json",
+ "structopt",
+ "tempdir",
  "thiserror",
  "tokio 0.2.25",
  "ya-client-model",
  "ya-core-model",
+ "ya-service-api",
+ "ya-service-api-interfaces",
+ "ya-utils-process",
 ]
 
 [[package]]
@@ -7416,7 +7421,7 @@ dependencies = [
 
 [[package]]
 name = "yagna"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "actix-rt",
  "actix-service",

@@ -27,6 +27,17 @@ async fn test_broadcast_offer() {
         .await
         .add_market_instance("Node-3")
         .await;
+    // make nodes are subscribed to broadcasts
+    let mkt2 = network.get_market("Node-2");
+    let id2 = network.get_default_id("Node-2");
+    let mkt3 = network.get_market("Node-3");
+    let id3 = network.get_default_id("Node-3");
+    mkt2.subscribe_demand(&client::sample_demand(), &id2)
+        .await
+        .unwrap();
+    mkt3.subscribe_demand(&client::sample_demand(), &id3)
+        .await
+        .unwrap();
 
     // Add Offer on Node-1. It should be propagated to remaining nodes.
     let mkt1 = network.get_market("Node-1");
@@ -71,6 +82,11 @@ async fn test_broadcast_offer_callbacks() {
         .await;
 
     let mkt1 = network.get_market("Node-1");
+    let id1 = network.get_default_id("Node-1");
+    // make sure mkt1 subscribes to broadcasts
+    mkt1.subscribe_demand(&client::sample_demand(), &id1)
+        .await
+        .unwrap();
 
     let offer = sample_offer();
     let offer_clone = offer.clone();
@@ -188,97 +204,103 @@ async fn test_broadcast_expired_offer() {
     );
 }
 
-/// Nodes shouldn't broadcast unsubscribed Offers.
-/// This test broadcasts unsubscribed Offer and checks how other market Nodes
-/// behave. We expect that market nodes will stop broadcast and Discovery interface will
-/// get Offer only from himself.
-#[cfg_attr(not(feature = "test-suite"), ignore)]
-#[serial_test::serial]
-async fn test_broadcast_stop_conditions() {
-    let _ = env_logger::builder().try_init();
-    let network = MarketsNetwork::new(None)
-        .await
-        .add_market_instance("Node-1")
-        .await
-        .add_market_instance("Node-2")
-        .await;
-
-    // Add Offer on Node-1. It should be propagated to remaining nodes.
-    let mkt1 = network.get_market("Node-1");
-    let identity1 = network.get_default_id("Node-1");
-
-    let offer_id = mkt1
-        .subscribe_offer(&client::sample_offer(), &identity1)
-        .await
-        .unwrap();
-    let offer = mkt1.get_offer(&offer_id).await.unwrap();
-
-    // Expect, that Offer will appear on other nodes.
-    let mkt2 = network.get_market("Node-2");
-    assert_offers_broadcasted(&[&mkt2], &[offer_id.clone()]).await;
-    assert_eq!(offer, mkt2.get_offer(&offer_id).await.unwrap());
-
-    // Unsubscribe Offer. It should be unsubscribed on all Nodes and removed from
-    // database on Node-2, since it's foreign Offer.
-    mkt1.unsubscribe_offer(&offer_id, &identity1).await.unwrap();
-    assert_err_eq!(
-        QueryOfferError::Unsubscribed(offer_id.clone()),
-        mkt1.get_offer(&offer_id).await
-    );
-
-    // Expect, that Offer will disappear on other nodes.
-    assert_unsunbscribes_broadcasted(&[&mkt2], &[offer_id.clone()]).await;
-
-    // Send the same Offer using Discovery interface directly.
-    // Number of returning Offers will be counted.
-    let (tx, mut rx) = mpsc::channel::<()>(1);
-    let offers_counter = Arc::new(AtomicUsize::new(0));
-    let counter = offers_counter.clone();
-
-    let discovery_builder =
-        network
-            .discovery_builder()
-            .add_handler(move |_caller: String, _msg: OffersBcast| {
-                let offers_counter = counter.clone();
-                let mut tx = tx.clone();
-                async move {
-                    offers_counter.fetch_add(1, Ordering::SeqCst);
-                    tx.send(()).await.unwrap();
-                    Ok(vec![])
-                }
-            });
-    let network = network
-        .add_discovery_instance("Node-3", discovery_builder)
-        .await;
-
-    // Broadcast already unsubscribed Offer. We will count number of Offers that will come back.
-    let discovery3: Discovery = network.get_discovery("Node-3");
-    discovery3
-        .bcast_offers(vec![offer.id.clone()])
-        .await
-        .unwrap();
-
-    // Wait for broadcast.
-    tokio::time::timeout(Duration::from_millis(500), rx.next())
-        .await
-        .unwrap();
-
-    assert_eq!(
-        offers_counter.load(Ordering::SeqCst),
-        1,
-        "We expect to receive Offer only from ourselves"
-    );
-
-    // We expect, that Offers won't be available on other nodes now
-    assert_err_eq!(
-        QueryOfferError::Unsubscribed(offer_id.clone()),
-        mkt1.get_offer(&offer_id).await,
-    );
-    assert_err_eq!(
-        QueryOfferError::Unsubscribed(offer_id.clone()),
-        mkt2.get_offer(&offer_id).await,
-    );
-}
+/// Note: Disabled after #1474 (Lazy broadcasts)
+///// Nodes shouldn't broadcast unsubscribed Offers.
+///// This test broadcasts unsubscribed Offer and checks how other market Nodes
+///// behave. We expect that market nodes will stop broadcast and Discovery interface will
+///// get Offer only from himself.
+//#[cfg_attr(not(feature = "test-suite"), ignore)]
+//#[serial_test::serial]
+//async fn test_broadcast_stop_conditions() {
+//    let _ = env_logger::builder().try_init();
+//    let network = MarketsNetwork::new(None)
+//        .await
+//        .add_market_instance("Node-1")
+//        .await
+//        .add_market_instance("Node-2")
+//        .await;
+//
+//    // Add Offer on Node-1. It should be propagated to remaining nodes.
+//    let mkt1 = network.get_market("Node-1");
+//    let identity1 = network.get_default_id("Node-1");
+//
+//    let mkt2 = network.get_market("Node-2");
+//    let id2 = network.get_default_id("Node-2");
+//    mkt1.subscribe_demand(&client::sample_demand(), &identity1).await.unwrap();
+//    mkt2.subscribe_demand(&client::sample_demand(), &id2).await.unwrap();
+//
+//    let offer_id = mkt1
+//        .subscribe_offer(&client::sample_offer(), &identity1)
+//        .await
+//        .unwrap();
+//    let offer = mkt1.get_offer(&offer_id).await.unwrap();
+//
+//    // Expect, that Offer will appear on other nodes.
+//    let mkt2 = network.get_market("Node-2");
+//    assert_offers_broadcasted(&[&mkt2], &[offer_id.clone()]).await;
+//    assert_eq!(offer, mkt2.get_offer(&offer_id).await.unwrap());
+//
+//    // Unsubscribe Offer. It should be unsubscribed on all Nodes and removed from
+//    // database on Node-2, since it's foreign Offer.
+//    mkt1.unsubscribe_offer(&offer_id, &identity1).await.unwrap();
+//    assert_err_eq!(
+//        QueryOfferError::Unsubscribed(offer_id.clone()),
+//        mkt1.get_offer(&offer_id).await
+//    );
+//
+//    // Expect, that Offer will disappear on other nodes.
+//    assert_unsunbscribes_broadcasted(&[&mkt2], &[offer_id.clone()]).await;
+//
+//    // Send the same Offer using Discovery interface directly.
+//    // Number of returning Offers will be counted.
+//    let (tx, mut rx) = mpsc::channel::<()>(1);
+//    let offers_counter = Arc::new(AtomicUsize::new(0));
+//    let counter = offers_counter.clone();
+//
+//    let discovery_builder =
+//        network
+//            .discovery_builder()
+//            .add_handler(move |_caller: String, _msg: OffersBcast| {
+//                let offers_counter = counter.clone();
+//                let mut tx = tx.clone();
+//                async move {
+//                    offers_counter.fetch_add(1, Ordering::SeqCst);
+//                    tx.send(()).await.unwrap();
+//                    Ok(vec![])
+//                }
+//            });
+//    let network = network
+//        .add_discovery_instance("Node-3", discovery_builder)
+//        .await;
+//
+//    // Broadcast already unsubscribed Offer. We will count number of Offers that will come back.
+//    let discovery3: Discovery = network.get_discovery("Node-3");
+//    discovery3
+//        .bcast_offers(vec![offer.id.clone()])
+//        .await
+//        .unwrap();
+//
+//    // Wait for broadcast.
+//    tokio::time::timeout(Duration::from_millis(1500), rx.next())
+//        .await
+//        .unwrap();
+//
+//    assert_eq!(
+//        offers_counter.load(Ordering::SeqCst),
+//        1,
+//        "We expect to receive Offer only from ourselves"
+//    );
+//
+//    // We expect, that Offers won't be available on other nodes now
+//    assert_err_eq!(
+//        QueryOfferError::Unsubscribed(offer_id.clone()),
+//        mkt1.get_offer(&offer_id).await,
+//    );
+//    assert_err_eq!(
+//        QueryOfferError::Unsubscribed(offer_id.clone()),
+//        mkt2.get_offer(&offer_id).await,
+//    );
+//}
 
 /// Discovery `RetrieveOffers` GSB endpoint should return only existing Offers.
 /// Test sends RetrieveOffers requesting existing and not existing subscription.
@@ -331,6 +353,12 @@ async fn test_broadcast_50k() {
         .await
         .add_market_instance("Node-1")
         .await;
+    let mkt1 = network.get_market("Node-1");
+    let id1 = network.get_default_id("Node-1");
+    // make sure mkt1 subscribes to broadcasts
+    mkt1.subscribe_demand(&client::sample_demand(), &id1)
+        .await
+        .unwrap();
 
     let (tx, mut rx) = mpsc::channel::<Vec<SubscriptionId>>(1);
 
@@ -349,7 +377,6 @@ async fn test_broadcast_50k() {
         .await;
 
     let discovery2 = network.get_discovery("Node-2");
-    //let discovery1 = network.get_discovery("Node-1");
 
     let mut offers_50k: Vec<SubscriptionId> = vec![];
     log::debug!("generating offers");
@@ -364,7 +391,7 @@ async fn test_broadcast_50k() {
 
     // Wait for broadcast.
     log::debug!("wait for bcast");
-    let mut requested_offers = tokio::time::timeout(Duration::from_millis(500), rx.next())
+    let mut requested_offers = tokio::time::timeout(Duration::from_millis(1500), rx.next())
         .await
         .unwrap()
         .unwrap();
