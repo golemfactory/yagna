@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate derive_more;
+
 use actix::prelude::*;
 use chrono::Utc;
 use futures::channel::{mpsc, oneshot};
@@ -14,6 +17,7 @@ use ya_core_model::activity::local::Credentials;
 use ya_runtime_api::deploy;
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
 
+use crate::acl::Acl;
 use crate::agreement::Agreement;
 use crate::error::Error;
 use crate::message::*;
@@ -23,6 +27,7 @@ use crate::service::transfer::{AddVolumes, DeployImage, TransferResource, Transf
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError, Supervision};
 
+mod acl;
 pub mod agreement;
 #[cfg(feature = "sgx")]
 pub mod crypto;
@@ -30,6 +35,7 @@ pub mod error;
 mod handlers;
 pub mod message;
 pub mod metrics;
+mod network;
 mod notify;
 mod output;
 pub mod process;
@@ -138,29 +144,32 @@ impl<R: Runtime> RuntimeRef<R> {
         mut events: mpsc::Sender<RuntimeEvent>,
         mut control: oneshot::Receiver<()>,
     ) {
-        for (idx, cmd) in exec.exe_script.into_iter().enumerate() {
+        let batch_id = exec.batch_id.clone();
+        for (idx, command) in exec.exe_script.into_iter().enumerate() {
             if let Ok(Some(_)) = control.try_recv() {
-                log::warn!("Batch {} execution aborted", exec.batch_id);
+                log::warn!("Batch {} execution aborted", batch_id);
                 break;
-            }
-
-            let batch_id = exec.batch_id.clone();
-            let evt = RuntimeEvent::started(batch_id.clone(), idx, cmd.clone());
-            if let Err(e) = events.send(evt).await {
-                log::error!("Unable to report event: {:?}", e);
             }
 
             let runtime_cmd = ExecuteCommand {
                 batch_id: batch_id.clone(),
-                idx,
-                command: cmd.clone(),
+                command: command.clone(),
                 tx: events.clone(),
+                idx,
             };
-            let result = self
-                .exec_cmd(runtime_cmd, runtime.clone(), transfers.clone())
-                .await;
 
-            let (return_code, message) = match result {
+            let evt = RuntimeEvent::started(batch_id.clone(), idx, command.clone());
+            if let Err(e) = events.send(evt).await {
+                log::error!("Unable to report event: {:?}", e);
+            }
+
+            let (return_code, message) = match {
+                if runtime_cmd.stateless() {
+                    self.exec_stateless(&runtime_cmd).await
+                } else {
+                    self.exec_stateful(runtime_cmd, &runtime, &transfers).await
+                }
+            } {
                 Ok(_) => (0, None),
                 Err(ref err) => match err {
                     Error::CommandExitCodeError(c) => (*c, Some(err.to_string())),
@@ -181,13 +190,8 @@ impl<R: Runtime> RuntimeRef<R> {
         }
     }
 
-    async fn exec_cmd(
-        &self,
-        runtime_cmd: ExecuteCommand,
-        runtime: Addr<R>,
-        transfer_service: Addr<TransferService>,
-    ) -> Result<()> {
-        match &runtime_cmd.command {
+    async fn exec_stateless(&self, runtime_cmd: &ExecuteCommand) -> Result<()> {
+        match runtime_cmd.command {
             ExeScriptCommand::Sign {} => {
                 let batch_id = runtime_cmd.batch_id.clone();
                 let signature = self.send(SignExeScript { batch_id }).await??;
@@ -203,19 +207,24 @@ impl<R: Runtime> RuntimeRef<R> {
                     ))
                     .await
                     .map_err(|e| Error::runtime(format!("Unable to send stdout event: {:?}", e)))?;
-
-                return Ok(());
             }
             ExeScriptCommand::Terminate {} => {
                 log::debug!("Terminating running ExeScripts");
-                let exclude_batches = vec![runtime_cmd.batch_id];
+                let exclude_batches = vec![runtime_cmd.batch_id.clone()];
                 self.send(Stop { exclude_batches }).await??;
                 self.send(SetState::from(State::Initialized)).await?;
-                return Ok(());
             }
             _ => (),
         }
+        Ok(())
+    }
 
+    async fn exec_stateful(
+        &self,
+        runtime_cmd: ExecuteCommand,
+        runtime: &Addr<R>,
+        transfer_service: &Addr<TransferService>,
+    ) -> Result<()> {
         let state = self.send(GetState {}).await?.0;
         let state_pre = match (&state.0, &state.1) {
             (_, Some(_)) => {
@@ -241,54 +250,20 @@ impl<R: Runtime> RuntimeRef<R> {
                 _ => StatePair(*s, Some(*s)),
             },
         };
+        self.send(SetState::from(state_pre.clone())).await?;
 
         log::info!("Executing command: {:?}", runtime_cmd.command);
 
-        self.send(SetState::from(state_pre.clone())).await?;
-
-        match &runtime_cmd.command {
-            ExeScriptCommand::Transfer { from, to, args } => {
-                let msg = TransferResource {
-                    from: from.clone(),
-                    to: to.clone(),
-                    args: args.clone(),
-                };
-                transfer_service.send(msg).await??;
-            }
-            ExeScriptCommand::Deploy {} => {
-                let msg = DeployImage {};
-                let path = transfer_service.send(msg).await??;
-                runtime.send(SetTaskPackagePath(path)).await?;
-            }
-            _ => (),
-        }
+        self.pre_runtime(&runtime_cmd, &runtime, &transfer_service)
+            .await?;
 
         let exit_code = runtime.send(runtime_cmd.clone()).await??;
         if exit_code != 0 {
             return Err(Error::CommandExitCodeError(exit_code));
         }
 
-        if let ExeScriptCommand::Deploy { .. } = &runtime_cmd.command {
-            let mut runtime_mode = RuntimeMode::ProcessPerCommand;
-            let stdout = self
-                .send(GetStdOut {
-                    batch_id: runtime_cmd.batch_id.clone(),
-                    idx: runtime_cmd.idx,
-                })
-                .await?;
-
-            if let Some(output) = stdout {
-                let deployment = deploy::DeployResult::from_bytes(output).map_err(|e| {
-                    log::error!("Deploy failed: {}", e);
-                    Error::CommandError(e.to_string())
-                })?;
-                transfer_service
-                    .send(AddVolumes::new(deployment.vols))
-                    .await??;
-                runtime_mode = deployment.start_mode.into();
-            }
-            runtime.send(SetRuntimeMode(runtime_mode)).await??;
-        }
+        self.post_runtime(&runtime_cmd, &runtime, &transfer_service)
+            .await?;
 
         let state_cur = self.send(GetState {}).await?.0;
         if state_cur != state_pre {
@@ -300,6 +275,72 @@ impl<R: Runtime> RuntimeRef<R> {
         }
 
         self.send(SetState::from(state_pre.1.unwrap())).await?;
+        Ok(())
+    }
+
+    async fn pre_runtime(
+        &self,
+        runtime_cmd: &ExecuteCommand,
+        runtime: &Addr<R>,
+        transfer_service: &Addr<TransferService>,
+    ) -> Result<()> {
+        match &runtime_cmd.command {
+            ExeScriptCommand::Transfer { from, to, args } => {
+                let msg = TransferResource {
+                    from: from.clone(),
+                    to: to.clone(),
+                    args: args.clone(),
+                };
+                transfer_service.send(msg).await??;
+            }
+            ExeScriptCommand::Deploy { net, hosts } => {
+                let task_package = transfer_service.send(DeployImage {}).await??;
+                runtime
+                    .send(UpdateDeployment {
+                        task_package: task_package,
+                        networks: Some(net.clone()),
+                        hosts: Some(hosts.clone()),
+                        ..Default::default()
+                    })
+                    .await??;
+            }
+            _ => (),
+        }
+        Ok(())
+    }
+
+    async fn post_runtime(
+        &self,
+        runtime_cmd: &ExecuteCommand,
+        runtime: &Addr<R>,
+        transfer_service: &Addr<TransferService>,
+    ) -> Result<()> {
+        if let ExeScriptCommand::Deploy { .. } = &runtime_cmd.command {
+            let mut runtime_mode = RuntimeMode::ProcessPerCommand;
+            let stdout = self
+                .send(GetStdOut {
+                    batch_id: runtime_cmd.batch_id.clone(),
+                    idx: runtime_cmd.idx,
+                })
+                .await?;
+
+            if let Some(output) = stdout {
+                let deployment = deploy::DeployResult::from_bytes(output).map_err(|e| {
+                    log::error!("Deployment failed: {}", e);
+                    Error::CommandError(e.to_string())
+                })?;
+                transfer_service
+                    .send(AddVolumes::new(deployment.vols))
+                    .await??;
+                runtime_mode = deployment.start_mode.into();
+            }
+            runtime
+                .send(UpdateDeployment {
+                    runtime_mode: Some(runtime_mode),
+                    ..Default::default()
+                })
+                .await??;
+        }
         Ok(())
     }
 }
@@ -378,6 +419,7 @@ pub struct ExeUnitContext {
     pub agreement: Agreement,
     pub work_dir: PathBuf,
     pub cache_dir: PathBuf,
+    pub acl: Acl,
     pub credentials: Option<Credentials>,
     #[cfg(feature = "sgx")]
     #[derivative(Debug = "ignore")]

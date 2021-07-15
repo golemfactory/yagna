@@ -137,7 +137,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
                 return ActorResponse::reply(Err(err));
             }
         };
-        let idx = match batch.exec.exe_script.len() {
+        let await_idx = match batch.exec.exe_script.len() {
             0 => return ActorResponse::reply(Ok(Vec::new())),
             len => msg.command_index.unwrap_or(len - 1),
         };
@@ -146,8 +146,11 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
         let duration = Duration::from_secs_f32(msg.timeout.unwrap_or(0.));
         let notifier = batch.notifier.clone();
 
+        let idx = msg.command_index.clone();
+        let batch_id = msg.batch_id.clone();
+
         let fut = async move {
-            if timeout(duration, notifier.when(move |i| i >= idx))
+            if timeout(duration, notifier.when(move |i| i >= await_idx))
                 .await
                 .is_err()
             {
@@ -155,11 +158,8 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
                     return Err(RpcMessageError::Timeout);
                 }
             }
-            match address.send(GetBatchResults(msg.batch_id.clone())).await {
-                Ok(mut results) => {
-                    results.0.truncate(idx + 1);
-                    Ok(results.0)
-                }
+            match address.send(GetBatchResults { batch_id, idx }).await {
+                Ok(results) => Ok(results.0),
                 _ => Ok(Vec::new()),
             }
         };

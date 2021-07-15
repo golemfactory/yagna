@@ -23,6 +23,8 @@ dependencies = [
  "smallvec 1.6.1",
  "tokio 0.2.25",
  "tokio-util 0.3.1",
+ "trust-dns-proto",
+ "trust-dns-resolver",
 ]
 
 [[package]]
@@ -299,6 +301,22 @@ dependencies = [
  "time 0.2.26",
  "tinyvec",
  "url",
+]
+
+[[package]]
+name = "actix-web-actors"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f6edf3c2693e2a8c422800c87ee89a6a4eac7dd01109bc172a1093ce1f4f001"
+dependencies = [
+ "actix",
+ "actix-codec",
+ "actix-http",
+ "actix-web",
+ "bytes 0.5.6",
+ "futures-channel",
+ "futures-core",
+ "pin-project 0.4.27",
 ]
 
 [[package]]
@@ -2979,6 +2997,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "managed"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c75de51135344a4f8ed3cfe2720dc27736f7711989703a0b43aadf3753c55577"
+
+[[package]]
 name = "maplit"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5167,6 +5191,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe0f37c9e8f3c5a4a66ad655a93c74daac4ad00c441533bf5c6e7990bb42604e"
 
 [[package]]
+name = "smoltcp"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11b5647cc4676e9358e6b15b6536b34e5b413e5ae946a06b3f85e713132bcdfa"
+dependencies = [
+ "bitflags 1.2.1",
+ "byteorder",
+ "libc",
+ "log",
+ "managed",
+]
+
+[[package]]
 name = "socket2"
 version = "0.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6457,10 +6494,10 @@ dependencies = [
 
 [[package]]
 name = "ya-client"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0dd961458f2bdfbdca091d0107fd5d3c9a90a7ad83cb5a5fd5b00a9fd73f6fa4"
+version = "0.5.3"
+source = "git+https://github.com/golemfactory/ya-client.git?branch=mf/vpn#e617eaea78b466fb9c0077d5dfd5b641b5b68d0e"
 dependencies = [
+ "actix-codec",
  "awc",
  "bytes 0.5.6",
  "chrono",
@@ -6483,8 +6520,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1466c69ef7b38b5c5a27cd915cad19f2e94f4adb29154e67bfdae8577946d067"
+source = "git+https://github.com/golemfactory/ya-client.git?branch=mf/vpn#e617eaea78b466fb9c0077d5dfd5b641b5b68d0e"
 dependencies = [
  "bigdecimal 0.2.0",
  "chrono",
@@ -6611,14 +6647,17 @@ dependencies = [
  "actix-web",
  "anyhow",
  "async-trait",
+ "bytes 0.5.6",
  "chrono",
  "derivative",
+ "derive_more",
  "dotenv",
  "env_logger",
  "flexi_logger",
  "futures 0.3.13",
  "graphene-sgx",
  "hex",
+ "ipnet",
  "lazy_static",
  "libproc",
  "log",
@@ -6649,6 +6688,7 @@ dependencies = [
  "ya-sb-router",
  "ya-service-bus",
  "ya-transfer",
+ "ya-utils-networking",
  "ya-utils-path",
  "yansi",
 ]
@@ -6913,10 +6953,15 @@ dependencies = [
  "log",
  "r2d2",
  "serde_json",
+ "structopt",
+ "tempdir",
  "thiserror",
  "tokio 0.2.25",
  "ya-client-model",
  "ya-core-model",
+ "ya-service-api",
+ "ya-service-api-interfaces",
+ "ya-utils-process",
 ]
 
 [[package]]
@@ -6975,7 +7020,7 @@ dependencies = [
 
 [[package]]
 name = "ya-runtime-api"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "bytes 0.5.6",
@@ -7231,10 +7276,13 @@ dependencies = [
 
 [[package]]
 name = "ya-utils-networking"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
+ "futures 0.3.13",
+ "ipnet",
  "log",
+ "thiserror",
  "trust-dns-resolver",
  "url",
 ]
@@ -7298,6 +7346,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-vpn"
+version = "0.1.0"
+dependencies = [
+ "actix",
+ "actix-rt",
+ "actix-web",
+ "actix-web-actors",
+ "anyhow",
+ "bytes 0.5.6",
+ "env_logger",
+ "futures 0.3.13",
+ "hex",
+ "ipnet",
+ "lazy_static",
+ "log",
+ "managed",
+ "mime",
+ "rand 0.7.3",
+ "serde",
+ "serde_json",
+ "sha3 0.8.2",
+ "smoltcp",
+ "structopt",
+ "thiserror",
+ "tokio 0.2.25",
+ "url",
+ "uuid",
+ "ya-client",
+ "ya-client-model",
+ "ya-core-model",
+ "ya-net",
+ "ya-persistence",
+ "ya-service-api",
+ "ya-service-api-interfaces",
+ "ya-service-api-web",
+ "ya-service-bus",
+ "ya-utils-networking",
+]
+
+[[package]]
 name = "ya-zksync-driver"
 version = "0.2.0"
 dependencies = [
@@ -7334,7 +7422,7 @@ dependencies = [
 
 [[package]]
 name = "yagna"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "actix-rt",
  "actix-service",
@@ -7378,6 +7466,7 @@ dependencies = [
  "ya-utils-path",
  "ya-utils-process",
  "ya-version",
+ "ya-vpn",
  "ya-zksync-driver",
 ]
 

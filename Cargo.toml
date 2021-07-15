@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.7.1"
+version = "0.7.2"
 description = "Open platform and marketplace for distributed computations"
 readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
@@ -34,7 +34,7 @@ ya-market = "0.3"
 ya-metrics = "0.1"
 ya-net = { version = "0.2", features = ["service"] }
 ya-payment = "0.2"
-ya-persistence = "0.2"
+ya-persistence = { version = "0.2", features = ["service"] }
 ya-sb-proto = "0.4"
 ya-sb-router = "0.4"
 ya-service-api = "0.1"
@@ -48,6 +48,7 @@ ya-utils-futures = "0.1"
 ya-utils-process = { version = "0.1", features = ["lock"] }
 ya-utils-networking = "0.1"
 ya-version = "0.1"
+ya-vpn = "0.1"
 
 gftp = { version = "^0.2", optional = true } # just to enable gftp build for cargo-deb
 ya-provider = { version = "0.2", optional = true } # just to enable conditionally running some tests
@@ -126,6 +127,7 @@ members = [
     "core/serv-api/web",
     "core/sgx",
     "core/version",
+    "core/vpn",
     "exe-unit",
     "exe-unit/runtime-api",
     "exe-unit/tokio-process-ns",
@@ -158,6 +160,7 @@ ya-dummy-driver = { path = "core/payment-driver/dummy" }
 ya-erc20-driver = { path = "core/payment-driver/erc20" }
 ya-zksync-driver = { path = "core/payment-driver/zksync" }
 ya-version = { path = "core/version" }
+ya-vpn = { path = "core/vpn" }
 
 ## CORE UTILS
 ya-core-model = { path = "core/model" }
@@ -175,8 +178,8 @@ ya-service-api-web = { path = "core/serv-api/web" }
 #ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "c4f16a69be383d9534f99928fccb64a558c47ff2"}
 
 ## CLIENT
-#ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "fded326374f6fd92c7c523c4e35494cd4c701e41" }
-#ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "fded326374f6fd92c7c523c4e35494cd4c701e41" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", branch = "mf/vpn"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", branch = "mf/vpn"}
 
 # ya-client = { path = "../ya-client" }
 # ya-client-model = { path = "../ya-client/model" }
