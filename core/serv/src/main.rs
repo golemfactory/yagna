@@ -28,7 +28,6 @@ use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
 use ya_persistence::executor::DbExecutor;
 use ya_persistence::service::Persistence as PersistenceService;
-use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_api_interfaces::Provider;
 use ya_service_api_web::{
