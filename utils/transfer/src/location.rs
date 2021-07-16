@@ -1,8 +1,22 @@
-use crate::error::TransferError;
-use regex::Regex;
 use std::path::PathBuf;
+
+use percent_encoding::percent_decode;
+use regex::Regex;
 use url::{ParseError, Url};
-use ya_transfer::UrlExt;
+
+use crate::error::Error;
+
+pub trait UrlExt {
+    fn path_decoded(&self) -> String;
+}
+
+impl UrlExt for url::Url {
+    fn path_decoded(&self) -> String {
+        percent_decode(self.path().as_bytes())
+            .decode_utf8_lossy()
+            .to_string()
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TransferHash {
@@ -16,21 +30,11 @@ pub struct TransferUrl {
     pub url: Url,
 }
 
-unsafe impl Send for TransferUrl {}
-
 impl TransferUrl {
-    pub fn file_name(&self) -> Result<String, TransferError> {
-        let path = PathBuf::from(self.url.path_decoded());
-        match path.file_name() {
-            Some(name) => Ok(name.to_string_lossy().to_string()),
-            None => Err(TransferError::InvalidUrlError(self.url.to_string())),
-        }
-    }
-
-    pub fn parse(url: &str, fallback_scheme: &str) -> Result<Self, TransferError> {
+    pub fn parse(url: &str, fallback_scheme: &str) -> Result<Self, Error> {
         let url = url.trim();
         if url.is_empty() {
-            return Err(TransferError::InvalidUrlError("Empty URL".to_owned()));
+            return Err(Error::InvalidUrlError("Empty URL".to_owned()));
         }
 
         let (hash, url) = parse_hash(url)?;
@@ -45,42 +49,31 @@ impl TransferUrl {
                 ParseError::RelativeUrlWithoutBase => {
                     Url::parse(&format!("{}:{}", fallback_scheme, url))?
                 }
-                _ => return Err(TransferError::from(error)),
+                _ => return Err(Error::from(error)),
             },
         };
 
         Ok(TransferUrl { hash, url: parsed })
     }
 
-    pub fn parse_with_hash(url: &str, fallback_scheme: &str) -> Result<Self, TransferError> {
+    pub fn parse_with_hash(url: &str, fallback_scheme: &str) -> Result<Self, Error> {
         let parsed = Self::parse(url, fallback_scheme)?;
         match &parsed.hash {
             Some(_) => Ok(parsed),
-            None => Err(TransferError::InvalidUrlError("Missing hash".to_owned())),
+            None => Err(Error::InvalidUrlError("Missing hash".to_owned())),
         }
     }
 
-    pub fn map_scheme<F>(mut self, f: F) -> Result<Self, TransferError>
-    where
-        F: Fn(&str) -> &str,
-    {
-        let scheme = self.url.scheme().to_owned();
-        let new_scheme = f(&scheme);
-        self.url = Url::parse(&self.url.as_str().replacen(&scheme, new_scheme, 1))?;
-        Ok(self)
-    }
-
-    pub fn map_path<F>(mut self, f: F) -> Result<Self, TransferError>
-    where
-        F: FnOnce(&str, &str) -> Result<String, TransferError>,
-    {
-        let new_path = f(self.url.scheme(), self.url.path_decoded().as_str())?;
-        self.url.set_path(&new_path);
-        Ok(self)
+    pub fn file_name(&self) -> Result<String, Error> {
+        let path = PathBuf::from(self.url.path_decoded());
+        match path.file_name() {
+            Some(name) => Ok(name.to_string_lossy().to_string()),
+            None => Err(Error::InvalidUrlError(self.url.to_string())),
+        }
     }
 }
 
-fn parse_hash(url: &str) -> Result<(Option<TransferHash>, &str), TransferError> {
+fn parse_hash(url: &str) -> Result<(Option<TransferHash>, &str), Error> {
     lazy_static::lazy_static! {
         static ref RE: Regex = Regex::new(r"(?i)hash:(//)?([^:]+):(0x)?([a-f0-9]+):(.+)").unwrap();
     }
@@ -95,7 +88,7 @@ fn parse_hash(url: &str) -> Result<(Option<TransferHash>, &str), TransferError> 
         }
         None => {
             if url.starts_with("hash:") {
-                Err(TransferError::InvalidUrlError(url.to_owned()))
+                Err(Error::InvalidUrlError(url.to_owned()))
             } else {
                 Ok((None, url))
             }

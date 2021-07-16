@@ -38,6 +38,10 @@ async fn validate_orders(
     payee_addr: &str,
     amount: &BigDecimal,
 ) -> Result<(), OrderValidationError> {
+    if orders.is_empty() {
+        return Err(OrderValidationError::new("orders not found in the database").into());
+    }
+
     let mut total_amount = BigDecimal::zero();
     for order in orders.iter() {
         if &order.payment_platform != platform {
@@ -343,7 +347,7 @@ impl PaymentProcessor {
         let payer_addr = msg.sender;
         let payee_addr = msg.recipient;
 
-        if msg.order_ids.len() == 0 {
+        if msg.order_ids.is_empty() {
             return Err(OrderValidationError::new("order_ids is empty").into());
         }
         let orders = self
@@ -414,7 +418,7 @@ impl PaymentProcessor {
             .await??;
 
         counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "platform" => payment_platform);
-        let msg = SendPayment::new(payment, signature);
+        let msg = SendPayment::new(payment, Some(signature));
 
         // Spawning to avoid deadlock in a case that payee is the same node as payer
         tokio::task::spawn_local(
@@ -462,7 +466,7 @@ impl PaymentProcessor {
     pub async fn verify_payment(
         &self,
         payment: Payment,
-        signature: Vec<u8>,
+        signature: Option<Vec<u8>>,
     ) -> Result<(), VerifyPaymentError> {
         // TODO: Split this into smaller functions
         let platform = payment.payment_platform.clone();
@@ -472,11 +476,13 @@ impl PaymentProcessor {
             AccountMode::RECV,
         )?;
 
-        if !driver_endpoint(&driver)
-            .send(driver::VerifySignature::new(payment.clone(), signature))
-            .await??
-        {
-            return Err(VerifyPaymentError::InvalidSignature);
+        if let Some(signature) = signature {
+            if !driver_endpoint(&driver)
+                .send(driver::VerifySignature::new(payment.clone(), signature))
+                .await??
+            {
+                return Err(VerifyPaymentError::InvalidSignature);
+            }
         }
 
         let confirmation = match base64::decode(&payment.details) {

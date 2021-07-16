@@ -1,6 +1,6 @@
 [package]
 name = "ya-exe-unit"
-version = "0.1.1"
+version = "0.1.4"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
@@ -15,10 +15,11 @@ path = "src/bin.rs"
 [features]
 default = ['compat-deployment']
 compat-deployment = []
-sgx=['graphene-sgx', 'openssl/vendored', 'reqwest/trust-dns', 'secp256k1/rand', 'sha3', 'ya-client-model/sgx', 'ya-core-model/sgx']
+sgx=['graphene-sgx', 'openssl/vendored', 'reqwest/trust-dns', 'secp256k1/rand', 'ya-client-model/sgx', 'ya-core-model/sgx']
 
 [target.'cfg(target_family = "unix")'.dependencies]
 nix = "0.17.0"
+bytes = "1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libproc = "0.7"
@@ -30,11 +31,12 @@ winapi = { version = "0.3.8", features = ["jobapi2", "processthreadsapi"] }
 ya-agreement-utils = { version = "^0.2"}
 ya-client-model = "0.3"
 ya-compile-time-utils = "0.1"
-ya-core-model = { version = "^0.3", features = ["activity", "appkey"] }
+ya-core-model = { version = "^0.4", features = ["activity", "appkey"] }
 ya-runtime-api = { version = "0.3", path = "runtime-api", features = ["server"] }
 ya-service-bus = "0.4"
 ya-transfer = "0.1"
 ya-utils-path = "0.1"
+ya-utils-networking = { version = "0.1", default-features = false, features = ["vpn"]}
 
 actix = { version = "0.11", default-features = false }
 actix-rt = "2.2"
@@ -42,11 +44,13 @@ anyhow = "1.0.19"
 async-trait = "0.1.24"
 chrono = "0.4.10"
 derivative = "2.1"
+derive_more = "0.99"
 dotenv = "0.15.0"
 flexi_logger = { version = "0.17", features = ["colors"] }
 futures = "0.3"
 graphene-sgx = { version = "0.3", optional = true }
 hex = "0.4.2"
+ipnet = "2.3"
 lazy_static = "1.4.0"
 log = "0.4.8"
 openssl= { version = "0.10", optional = true }
@@ -57,11 +61,11 @@ secp256k1 = { version = "0.19", optional = true }
 serde = { version = "^1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.8.11"
-sha3 = { version = "0.8.2", optional = true }
+sha3 = "0.8.2"
 signal-hook = { version = "0.1.13", features = ["tokio-support"] }
 structopt = "0.3"
 thiserror = "1.0.10"
-tokio = { version = "1.6", features = ["process", "signal", "time"] }
+tokio = { version = "1", features = ["process", "signal", "time"] }
 tokio-util = { version = "0.6.7", features = ["codec"] }
 tokio-stream = "0.1.6"
 url = "2.1.1"

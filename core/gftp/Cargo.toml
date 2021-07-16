@@ -1,6 +1,6 @@
 [package]
 name = "gftp"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 homepage = "https://github.com/golemfactory/yagna"
@@ -19,7 +19,7 @@ required-features=['bin']
 
 [dependencies]
 ya-compile-time-utils = "0.1"
-ya-core-model = { version = "^0.3", features = ["gftp", "identity", "net"] }
+ya-core-model = { version = "^0.4", features = ["gftp", "identity", "net"] }
 ya-service-bus = "0.4"
 
 actix-rt = "2.2"
@@ -35,7 +35,7 @@ serde_json = "1.0"
 sha3 = "0.8.2"
 structopt = "0.3.9"
 thiserror = "1.0.20"
-tokio = { version = "1.6", features = ["io-std", "time"] }
+tokio = { version = "1", features = ["io-std", "time"] }
 url = { version = "2.1.1", features = ["serde"] }
 
 [dev-dependencies]
@@ -43,6 +43,6 @@ dotenv = { version = "0.15.0" }
 env_logger = { version = "0.7.1" }
 sha3 = "0.8.2"
 tempdir = "0.3.7"
-tokio = { version = "1.6", features = ["process"] }
+tokio = { version = "1", features = ["process"] }
 
 [build-dependencies]

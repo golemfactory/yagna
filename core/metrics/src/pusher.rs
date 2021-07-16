@@ -1,6 +1,6 @@
+use awc::error::{ConnectError, SendRequestError};
 use awc::Client;
-use std::time::Duration;
-use tokio::time;
+use tokio::time::{self, Duration, Instant};
 
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use ya_core_model::identity::{self, IdentityInfo};
@@ -44,7 +44,8 @@ pub async fn push_forever(host_url: &str) {
         }
     };
 
-    let mut push_interval = time::interval(Duration::from_secs(60));
+    let start = Instant::now() + Duration::from_secs(5);
+    let mut push_interval = time::interval_at(start, Duration::from_secs(60));
     let client = Client::builder().timeout(Duration::from_secs(30)).finish();
     log::info!("Starting metrics pusher");
     loop {
@@ -54,12 +55,36 @@ pub async fn push_forever(host_url: &str) {
 }
 
 pub async fn push(client: &Client, push_url: String) {
-    let current_metrics = crate::service::export_metrics().await;
+    let metrics = crate::service::export_metrics().await;
     let res = client
         .put(push_url.as_str())
-        .send_body(current_metrics)
+        .send_body(metrics.clone())
         .await;
-    log::trace!("Pushed current metrics {:#?}", res);
+    match res {
+        Ok(r) if r.status().is_success() => {
+            log::trace!("Metrics pushed: {}", r.status())
+        }
+        Ok(r) if r.status().is_server_error() => {
+            log::debug!("Metrics server error: {:#?}", r);
+            log::trace!("Url: {}\nMetrics:\n{}", push_url, metrics);
+        }
+        Ok(mut r) => {
+            let body = r.body().await.unwrap_or_default().to_vec();
+            let msg = String::from_utf8_lossy(&body);
+            log::warn!("Pushing metrics failed: `{}`: {:#?}", msg, r);
+            log::debug!("Url: {}", push_url);
+            log::trace!("Metrics:\n{}", metrics);
+        }
+        Err(SendRequestError::Timeout) | Err(SendRequestError::Connect(ConnectError::Timeout)) => {
+            log::debug!("Pushing metrics timed out");
+            log::trace!("Url: {}\nMetrics:\n{}", push_url, metrics);
+        }
+        Err(e) => {
+            log::info!("Pushing metrics failed: {}", e);
+            log::debug!("Url: {}", push_url);
+            log::trace!("Metrics:\n{}", metrics);
+        }
+    };
 }
 
 async fn get_default_id() -> anyhow::Result<IdentityInfo> {

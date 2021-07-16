@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 ya-client = "0.6"
 ya-compile-time-utils = "0.1"
-ya-core-model = { version = "^0.3", features = ["version"] }
+ya-core-model = { version = "^0.4", features = ["version"] }
 ya-persistence = "0.2"
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.1"
@@ -26,4 +26,4 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 structopt = "0.3.21"
 thiserror = "^1.0"
-tokio = { version = "1.6", features = ["time", "sync"] }
+tokio = { version = "1", features = ["time", "sync"] }

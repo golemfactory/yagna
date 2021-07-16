@@ -3,16 +3,15 @@ use crate::archive::{archive, extract};
 use crate::error::Error;
 use crate::traverse::PathTraverse;
 use crate::{abortable_sink, abortable_stream};
-use crate::{TransferData, TransferProvider, TransferSink, TransferStream};
-use futures::future::ready;
-use futures::{SinkExt, StreamExt, TryFutureExt};
+use crate::{TransferContext, TransferData, TransferProvider, TransferSink, TransferStream};
+use futures::future::{ready, LocalBoxFuture};
+use futures::{FutureExt, SinkExt, StreamExt, TryFutureExt};
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
-use tokio::fs::File;
-use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::fs::{File, OpenOptions};
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, SeekFrom};
 use tokio::task::spawn_local;
 use url::Url;
-use ya_client_model::activity::TransferArgs;
 
 pub struct FileTransferProvider;
 pub struct DirTransferProvider;
@@ -30,19 +29,21 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
         vec!["file"]
     }
 
-    fn source(&self, url: &Url, _: &TransferArgs) -> TransferStream<TransferData, Error> {
+    fn source(&self, url: &Url, ctx: &TransferContext) -> TransferStream<TransferData, Error> {
         let (stream, tx, abort_reg) = TransferStream::<TransferData, Error>::create(1);
         let mut txc = tx.clone();
         let url = url.clone();
+        let offset = ctx.state.offset();
 
         spawn_local(async move {
             let fut = async move {
-                let file = File::open(extract_file_url(&url)).await?;
+                let mut file = File::open(extract_file_url(&url)).await?;
+                file.seek(SeekFrom::Start(offset)).await?;
                 let meta = file.metadata().await?;
 
                 let mut reader = BufReader::with_capacity(DEFAULT_CHUNK_SIZE, file);
                 let mut buf: [u8; DEFAULT_CHUNK_SIZE] = [0; DEFAULT_CHUNK_SIZE];
-                let mut remaining = meta.len();
+                let mut remaining = meta.len() - offset;
 
                 loop {
                     // read_exact returns EOF if there are less than DEFAULT_CHUNK_SIZE bytes to read
@@ -71,21 +72,43 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
         stream
     }
 
-    fn destination(&self, url: &Url, _: &TransferArgs) -> TransferSink<TransferData, Error> {
+    fn destination(&self, url: &Url, ctx: &TransferContext) -> TransferSink<TransferData, Error> {
         let (sink, mut rx, res_tx) = TransferSink::<TransferData, Error>::create(1);
         let path = PathBuf::from(extract_file_url(&url));
         let path_c = path.clone();
+        let state = ctx.state.clone();
 
         spawn_local(async move {
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
 
-            log::debug!("Transferring to file: {}", path.display());
             let fut = async move {
-                let mut file = File::create(&path).await?;
+                log::debug!("Transferring to file: {}", path.display());
+
+                let offset = state.offset();
+                let mut file = if offset == 0 {
+                    OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .open(&path)
+                        .await?
+                } else {
+                    let mut file = OpenOptions::new().write(true).open(&path).await?;
+                    file.seek(SeekFrom::Start(offset)).await?;
+                    file
+                };
+
                 while let Some(result) = rx.next().await {
-                    file.write_all(result?.as_ref()).await?;
+                    let data = result?;
+                    let bytes = data.as_ref();
+                    if bytes.len() == 0 {
+                        break;
+                    }
+
+                    file.write_all(bytes).await?;
+                    state.set_offset(state.offset() + bytes.len() as u64);
                 }
                 file.flush().await?;
                 file.sync_all().await?;
@@ -102,6 +125,24 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
 
         sink
     }
+
+    fn prepare_destination<'a>(
+        &self,
+        url: &Url,
+        ctx: &TransferContext,
+    ) -> LocalBoxFuture<'a, Result<(), Error>> {
+        let path = PathBuf::from(extract_file_url(&url));
+        let state = ctx.state.clone();
+        async move {
+            state.set_offset(match tokio::fs::metadata(path).await {
+                Ok(meta) => meta.len(),
+                _ => 0,
+            });
+
+            Ok(())
+        }
+        .boxed_local()
+    }
 }
 
 impl Default for DirTransferProvider {
@@ -115,9 +156,9 @@ impl TransferProvider<TransferData, Error> for DirTransferProvider {
         vec!["file"]
     }
 
-    fn source(&self, url: &Url, args: &TransferArgs) -> TransferStream<TransferData, Error> {
+    fn source(&self, url: &Url, ctx: &TransferContext) -> TransferStream<TransferData, Error> {
         let dir = Path::new(&extract_file_url(url)).to_owned();
-        let args = args.clone();
+        let args = ctx.args.clone();
         log::debug!("Transfer source directory: {}", dir.display());
 
         let (stream, tx, abort_reg) = TransferStream::<TransferData, Error>::create(1);
@@ -150,9 +191,9 @@ impl TransferProvider<TransferData, Error> for DirTransferProvider {
         stream
     }
 
-    fn destination(&self, url: &Url, args: &TransferArgs) -> TransferSink<TransferData, Error> {
+    fn destination(&self, url: &Url, ctx: &TransferContext) -> TransferSink<TransferData, Error> {
         let dir = Path::new(&extract_file_url(url)).to_owned();
-        let args = args.clone();
+        let args = ctx.args.clone();
         log::debug!("Transfer destination directory: {}", dir.display());
 
         let (sink, rx, res_tx) = TransferSink::<TransferData, Error>::create(1);
@@ -189,7 +230,7 @@ pub(crate) fn extract_file_url(url: &Url) -> String {
     }
     #[cfg(not(windows))]
     {
-        use crate::util::UrlExt;
+        use crate::location::UrlExt;
         url.path_decoded()
     }
 }

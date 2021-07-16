@@ -240,11 +240,29 @@ impl IdentityService {
         })
     }
 
-    pub async fn lock(&mut self, node_id: NodeId) -> Result<model::IdentityInfo, model::Error> {
+    pub async fn lock(
+        &mut self,
+        node_id: NodeId,
+        new_password: Option<String>,
+    ) -> Result<model::IdentityInfo, model::Error> {
         let default_key = self.default_key;
         let key = self.get_key_by_id(&node_id)?;
-        key.lock();
+        let new_key = new_password.is_some();
+        key.lock(new_password)
+            .map_err(|e| model::Error::InternalErr(e.to_string()))?;
         let output = to_info(&default_key, key);
+        if new_key {
+            let key_file = key
+                .to_key_file()
+                .map_err(|e| model::Error::InternalErr(e.to_string()))?;
+            let identity_id = output.node_id.to_string();
+            self.db
+                .as_dao::<IdentityDao>()
+                .update_keyfile(identity_id, key_file)
+                .await
+                .map_err(|e| model::Error::InternalErr(e.to_string()))?;
+        }
+
         Ok(output)
     }
 
@@ -397,7 +415,11 @@ impl IdentityService {
             async move {
                 let mut lock_sender = this.lock().await.sender().clone();
 
-                let result = this.lock().await.lock(lock.node_id).await;
+                let result = this
+                    .lock()
+                    .await
+                    .lock(lock.node_id, lock.set_password)
+                    .await;
 
                 if result.is_ok() {
                     let _ = lock_sender

@@ -10,9 +10,10 @@ use std::path::Path;
 use std::{env, thread};
 use tempdir::TempDir;
 use url::Url;
-use ya_client_model::activity::TransferArgs;
 use ya_transfer::error::Error;
-use ya_transfer::{transfer, FileTransferProvider, GftpTransferProvider, TransferProvider};
+use ya_transfer::{
+    transfer, FileTransferProvider, GftpTransferProvider, TransferContext, TransferProvider,
+};
 
 type HashOutput = GenericArray<u8, <sha3::Sha3_512 as Digest>::OutputSize>;
 
@@ -89,9 +90,9 @@ async fn main() -> Result<(), Error> {
     let src_url = rx.await.unwrap();
     let dest_url = Url::parse(&format!("file://{}", path_dl.to_str().unwrap()))?;
 
-    let args = TransferArgs::default();
-    let source = gftp_provider.source(&src_url, &args);
-    let dest = file_provider.destination(&dest_url, &args);
+    let ctx = TransferContext::default();
+    let dest = file_provider.destination(&dest_url, &ctx);
+    let source = gftp_provider.source(&src_url, &ctx);
 
     log::info!("Sharing file at {:?}", src_url.path());
     log::info!("Expecting file at {:?}", dest_url.path());
@@ -120,9 +121,9 @@ async fn main() -> Result<(), Error> {
     let src_url = Url::parse(&format!("file://{}", path_dl.to_str().unwrap()))?;
     let dest_url = rx.await.unwrap();
 
-    let args = TransferArgs::default();
-    let source = file_provider.source(&src_url, &args);
-    let dest = gftp_provider.destination(&dest_url, &args);
+    let ctx = TransferContext::default();
+    let dest = gftp_provider.destination(&dest_url, &ctx);
+    let source = file_provider.source(&src_url, &ctx);
 
     log::info!("Sharing file at {:?}", src_url.path());
     log::info!("Expecting file at {:?}", dest_url.path());

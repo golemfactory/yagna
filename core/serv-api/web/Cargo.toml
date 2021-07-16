@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 ya-client = "0.6"
-ya-core-model = { version = "^0.3", features = ["appkey"] }
+ya-core-model = { version = "^0.4", features = ["appkey"] }
 ya-service-api = "0.1"
 ya-service-api-cache = "0.1"
 ya-service-bus = "0.4"

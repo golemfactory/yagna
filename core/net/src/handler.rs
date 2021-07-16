@@ -63,7 +63,7 @@ where
 }
 
 #[inline]
-pub(crate) async fn auto_rebind<B, U, Fb, Fu, Fr, E>(bind: B, unbind: U)
+pub(crate) async fn auto_rebind<B, U, Fb, Fu, Fr, E>(bind: B, unbind: U) -> anyhow::Result<()>
 where
     B: FnMut() -> Fb + 'static,
     U: FnMut() -> Fu + 'static,
@@ -81,7 +81,10 @@ where
     tokio::task::spawn_local(async move {
         let mut tx = Some(tx);
         loop {
-            let dc = rebind(reconnect.clone(), bind.clone(), unbind.clone()).await;
+            let dc = match rebind(reconnect.clone(), bind.clone(), unbind.clone()).await {
+                Ok(dc) => dc,
+                Err(_) => break,
+            };
             if let Some(tx) = tx.take() {
                 let _ = tx.send(());
             }
@@ -91,14 +94,15 @@ where
         }
     });
 
-    let _ = rx.await;
+    rx.await?;
+    Ok(())
 }
 
 async fn rebind<B, U, Fb, Fu, Fr, E>(
     reconnect: Rc<RefCell<ReconnectContext>>,
     bind: Rc<RefCell<B>>,
     unbind: Rc<RefCell<U>>,
-) -> oneshot::Receiver<()>
+) -> anyhow::Result<oneshot::Receiver<()>>
 where
     B: FnMut() -> Fb + 'static,
     U: FnMut() -> Fu + 'static,
@@ -129,15 +133,23 @@ where
                 });
                 break;
             }
-            Err(e) => {
+            Err(error) => {
                 let delay = { reconnect.borrow_mut().next().unwrap() };
-                let dt = delay.as_secs_f32();
-                log::warn!("Failed to bind handlers: {}; retrying in {} s", e, dt);
-                tokio::time::sleep(delay).await;
+                log::warn!(
+                    "Failed to bind handlers: {}; retrying in {} s",
+                    error,
+                    delay.as_secs_f32()
+                );
+                tokio::select! {
+                    _ = tokio::signal::ctrl_c() => {
+                        return Err(anyhow::anyhow!("Net initialization interrupted"));
+                    },
+                    _ = tokio::time::sleep(delay) => {},
+                }
             }
         }
     }
-    rx
+    Ok(rx)
 }
 
 async fn resubscribe() {

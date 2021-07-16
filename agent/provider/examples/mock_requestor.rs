@@ -54,7 +54,7 @@ async fn simulate_requestor(client: MarketRequestorApi) -> Result<()> {
         } => {
             let proposal_id = &proposal.proposal_id;
 
-            println!("Received offer {}. Sending agreeement.", &proposal_id);
+            println!("Received offer {}. Sending agreement.", &proposal_id);
 
             let agreement_proposal =
                 AgreementProposal::new(proposal_id.clone(), chrono::Utc::now());

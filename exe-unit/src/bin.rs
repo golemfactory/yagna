@@ -5,15 +5,14 @@ use futures::channel::oneshot;
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use structopt::{clap, StructOpt};
-
 use ya_core_model::activity;
 use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::message::Register;
 use ya_exe_unit::runtime::process::RuntimeProcess;
-use ya_exe_unit::runtime::RuntimeArgs;
 use ya_exe_unit::service::metrics::MetricsService;
 use ya_exe_unit::service::signal::SignalMonitor;
 use ya_exe_unit::service::transfer::TransferService;
+use ya_exe_unit::state::Supervision;
 use ya_exe_unit::{ExeUnit, ExeUnitContext};
 use ya_service_bus::RpcEnvelope;
 use ya_utils_path::normalize_path;
@@ -25,13 +24,8 @@ struct Cli {
     /// Runtime binary path
     #[structopt(long, short)]
     binary: PathBuf,
-    /// Hand off resource cap limiting to the Runtime
-    #[structopt(
-        long = "cap-handoff",
-        parse(from_flag = std::ops::Not::not),
-        set = clap::ArgSettings::Global,
-    )]
-    supervise_caps: bool,
+    #[structopt(flatten)]
+    supervise: SuperviseCli,
     /// Enclave secret key used in secure communication
     #[structopt(
         long,
@@ -53,10 +47,35 @@ struct Cli {
 }
 
 #[derive(structopt::StructOpt, Debug)]
+struct SuperviseCli {
+    /// Hardware resources are handled by the runtime
+    #[structopt(
+        long = "runtime-managed-hardware",
+        alias = "cap-handoff",
+        parse(from_flag = std::ops::Not::not),
+        set = clap::ArgSettings::Global,
+    )]
+    hardware: bool,
+    /// Images are handled by the runtime
+    #[structopt(
+        long = "runtime-managed-image",
+        parse(from_flag = std::ops::Not::not),
+        set = clap::ArgSettings::Global,
+    )]
+    image: bool,
+}
+
+#[derive(structopt::StructOpt, Debug)]
 #[structopt(global_setting = clap::AppSettings::DeriveDisplayOrder)]
 enum Command {
     /// Execute commands from file
     FromFile {
+        /// ExeUnit daemon GSB URL
+        #[structopt(long)]
+        report_url: Option<String>,
+        /// ExeUnit service ID
+        #[structopt(long)]
+        service_id: Option<String>,
         /// Command file path
         input: PathBuf,
         #[structopt(flatten)]
@@ -125,10 +144,16 @@ async fn run() -> anyhow::Result<()> {
     }
 
     let mut commands = None;
-    let mut ctx_activity_id = None;
-    let mut ctx_report_url = None;
+    let ctx_activity_id;
+    let ctx_report_url;
+
     let args = match &cli.command {
-        Command::FromFile { args, input } => {
+        Command::FromFile {
+            args,
+            service_id,
+            report_url,
+            input,
+        } => {
             let contents = std::fs::read_to_string(input).map_err(|e| {
                 anyhow::anyhow!("Cannot read commands from file {}: {}", input.display(), e)
             })?;
@@ -139,6 +164,8 @@ async fn run() -> anyhow::Result<()> {
                     e
                 )
             })?;
+            ctx_activity_id = service_id.clone();
+            ctx_report_url = report_url.clone();
             commands = Some(contents);
             args
         }
@@ -186,15 +213,18 @@ async fn run() -> anyhow::Result<()> {
         )
     })?;
 
-    let runtime_args = RuntimeArgs::new(&args.work_dir, &agreement, !cli.supervise_caps);
     let ctx = ExeUnitContext {
-        activity_id: ctx_activity_id,
+        supervise: Supervision {
+            hardware: cli.supervise.hardware,
+            image: cli.supervise.image,
+        },
+        activity_id: ctx_activity_id.clone(),
         report_url: ctx_report_url,
-        credentials: None,
         agreement,
         work_dir,
         cache_dir,
-        runtime_args,
+        acl: Default::default(),
+        credentials: None,
         #[cfg(feature = "sgx")]
         crypto: init_crypto(
             cli.sec_key.replace("<hidden>".into()),
@@ -207,7 +237,7 @@ async fn run() -> anyhow::Result<()> {
 
     let (tx, rx) = oneshot::channel();
 
-    let metrics = MetricsService::try_new(&ctx, Some(10000), cli.supervise_caps)?.start();
+    let metrics = MetricsService::try_new(&ctx, Some(10000), ctx.supervise.hardware)?.start();
     let transfers = TransferService::new(&ctx).start();
     let runtime = RuntimeProcess::new(&ctx, cli.binary).start();
     let exe_unit = ExeUnit::new(tx, ctx, metrics, transfers, runtime).start();

@@ -36,7 +36,6 @@ pub(super) async fn receive_remote_offers(
     let added_offers_ids = futures::stream::iter(msg.offers.into_iter())
         .filter_map(|offer| {
             let resolver = resolver.clone();
-            let offer_id = offer.id.clone();
             async move {
                 resolver
                     .store
@@ -46,10 +45,7 @@ pub(super) async fn receive_remote_offers(
                         resolver.receive(&offer);
                         offer.id
                     })
-                    .map_err(|e| {
-                        log::warn!("Failed to save Offer [{}]. Error: {}", &offer_id, &e);
-                        e
-                    })
+                    .map_err(|e| log::info!("Skipping foreign Offer: {}", e))
                     .ok()
             }
         })

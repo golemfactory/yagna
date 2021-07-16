@@ -1,12 +1,12 @@
 use chrono::{DateTime, Utc};
 use ethereum_tx_sign::RawTransaction;
-use ethereum_types::{H160, H256, U256, U64};
 use lazy_static::lazy_static;
 use num_traits::FromPrimitive;
 use sha3::{Digest, Sha3_512};
 use web3::contract::{Contract, Options};
 use web3::transports::Http;
 use web3::types::{Bytes, TransactionReceipt};
+use web3::types::{H160, H256, U256, U64};
 use web3::Web3;
 
 use ya_client_model::NodeId;

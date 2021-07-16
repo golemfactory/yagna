@@ -22,6 +22,7 @@ use ya_metrics::{MetricsPusherOpts, MetricsService};
 use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
 use ya_persistence::executor::DbExecutor;
+use ya_persistence::service::Persistence as PersistenceService;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_api_interfaces::Provider;
@@ -33,6 +34,7 @@ use ya_sgx::SgxService;
 use ya_utils_path::data_dir::DataDir;
 use ya_utils_process::lock::ProcLock;
 use ya_version::VersionService;
+use ya_vpn::VpnService;
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
@@ -186,6 +188,8 @@ impl TryFrom<CliCtx> for ServiceContext {
 
 #[ya_service_api_derive::services(ServiceContext)]
 enum Services {
+    #[enable(gsb, cli)]
+    Db(PersistenceService),
     // Metrics service must be activated before all other services
     // to that will use it. Identity service is used by the Metrics,
     // so must be initialized before.
@@ -197,6 +201,8 @@ enum Services {
     Version(VersionService),
     #[enable(gsb)]
     Net(NetService),
+    #[enable(rest)]
+    Vpn(VpnService),
     #[enable(gsb, rest)]
     Market(MarketService),
     #[enable(gsb, rest, cli)]
@@ -259,7 +265,7 @@ impl CliCommand {
     pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
             CliCommand::Commands(command) => {
-                start_logger("warn", None, &vec![])?;
+                start_logger("warn", None, &vec![], false)?;
                 command.run_command(ctx).await
             }
             CliCommand::Complete(complete) => complete.run_command(ctx),
@@ -291,6 +297,10 @@ struct ServiceCommandOpts {
 
     #[structopt(long, env, default_value = "60")]
     max_rest_timeout: usize,
+
+    ///changes log level from info to debug
+    #[structopt(long)]
+    debug: bool,
 
     /// Create logs in this directory. Logs are automatically rotated and compressed.
     /// If unset, then `data_dir` is used.
@@ -332,6 +342,7 @@ impl ServiceCommand {
                 metrics_opts,
                 max_rest_timeout,
                 log_dir,
+                debug,
             }) => {
                 // workaround to silence middleware logger by default
                 // to enable it explicitly set RUST_LOG=info or more verbose
@@ -341,6 +352,9 @@ impl ServiceCommand {
                         .unwrap_or(format!("info,actix_web::middleware::logger=warn",)),
                 );
 
+                //this force_debug flag sets default log level to debug
+                //if the --debug option is set
+                let force_debug = *debug;
                 let logger_handle = start_logger(
                     "info",
                     log_dir.as_deref().or(Some(&ctx.data_dir)).and_then(|path| {
@@ -358,6 +372,7 @@ impl ServiceCommand {
                         ("web3", log::LevelFilter::Info),
                         ("h2", log::LevelFilter::Info),
                     ],
+                    force_debug,
                 )?;
 
                 let app_name = clap::crate_name!();

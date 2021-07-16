@@ -15,7 +15,7 @@ bigdecimal = { version = "0.2" }
 chrono = { version = "0.4", features = ["serde"] }
 diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
 diesel_migrations = "1.4"
-ethereum-types = "0.9"
+ethereum-types = "0.11"
 # Lock ethsign on this commit to match parity-crypto=0.6 from zksync_eth_client
 ethsign = { git = "https://github.com/tomusdrw/ethsign.git", rev = "1b93031d2c45f3a3313e5418876b3d3e751ba87e" }
 # TODO: Upgrade to latest = 0.8 after zksync_eth_client is updated
@@ -29,11 +29,11 @@ num-derive = "0.3"
 r2d2 = "0.8"
 sha3 = "0.9"
 thiserror = "1.0"
-tokio = { version = "1.6", features = ["macros"] }
+tokio = { version = "1", features = ["macros"] }
 
 ## yagna dependencies
 ya-client-model = "0.3"
-ya-core-model = { version = "^0.3", features = ["driver", "identity", "payment"] }
+ya-core-model = { version = "^0.4", features = ["driver", "identity", "payment"] }
 ya-persistence = "0.2"
 ya-service-bus = "0.4"
 

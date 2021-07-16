@@ -54,6 +54,13 @@ impl<E: RuntimeEvent> server::RuntimeService for RuntimeMock<E> {
         future::ok(()).boxed_local()
     }
 
+    fn create_network(
+        &self,
+        _: server::CreateNetwork,
+    ) -> AsyncResponse<'_, server::CreateNetworkResp> {
+        unimplemented!()
+    }
+
     fn shutdown(&self) -> AsyncResponse<'_, ()> {
         log::debug!("got shutdown");
         future::ok(()).boxed_local()

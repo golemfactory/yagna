@@ -5,10 +5,10 @@
 // External crates
 use bigdecimal::{BigDecimal, FromPrimitive};
 use chrono::{Duration, Utc};
-use ethereum_types::{H160, U256};
 use lazy_static::lazy_static;
 use std::{env, time};
 use tokio::time::sleep;
+use web3::types::{H160, U256};
 
 // Workspace uses
 use ya_payment_driver::{db::models::Network, model::GenericError, utils};

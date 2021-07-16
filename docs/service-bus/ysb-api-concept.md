@@ -73,7 +73,7 @@ Registration shares the lifetime of a "connection" between the GSB API module an
 ### Service relaying
 
 A state of exposing a Service interface directly on the Yagna network. The interface may be called by any third
-party who posesses the knowledge of that service's address.
+party who possesses the knowledge of that service's address.
 
 The prerequisite for relaying is to register a service within the GSB API module. In consequence, messages addressed
 to that service will be routed to that service by the GSB API module. Responses are routed back to the caller either

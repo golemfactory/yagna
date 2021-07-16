@@ -521,12 +521,12 @@ pub async fn deposit<S: EthereumSigner + Clone, P: Provider + Clone>(
     ethereum.set_confirmation_timeout(get_ethereum_confirmation_timeout());
 
     if !ethereum
-        .is_limited_erc20_deposit_approved(token.as_str(), amount)
+        .is_limited_erc20_deposit_approved(token.as_str(), u256_compat(amount))
         .await
         .unwrap()
     {
         let tx = ethereum
-            .limited_approve_erc20_token_deposits(token.as_str(), amount)
+            .limited_approve_erc20_token_deposits(token.as_str(), u256_compat(amount))
             .await
             .map_err(|err| GenericError::new(err))?;
         info!(
@@ -541,7 +541,7 @@ pub async fn deposit<S: EthereumSigner + Clone, P: Provider + Clone>(
     }
 
     let deposit_tx_hash = ethereum
-        .deposit(token.as_str(), amount, address)
+        .deposit(token.as_str(), u256_compat(amount), address)
         .await
         .map_err(|err| GenericError::new(err))?;
     info!(
@@ -550,4 +550,11 @@ pub async fn deposit<S: EthereumSigner + Clone, P: Provider + Clone>(
     );
 
     Ok(deposit_tx_hash)
+}
+
+#[inline(always)]
+fn u256_compat(src: ethereum_types::U256) -> zksync::zksync_types::U256 {
+    let mut ret = zksync::zksync_types::U256::from(0u32);
+    ret.0 = src.0;
+    ret
 }

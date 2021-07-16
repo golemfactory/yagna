@@ -19,6 +19,7 @@ use ya_payment_driver::{
 };
 
 use crate::network::platform_to_network_token;
+use std::ops::Add;
 
 pub struct Erc20Dao {
     db: DbExecutor,
@@ -107,7 +108,7 @@ impl Erc20Dao {
             .max();
 
         let next_nonce = match max_db {
-            Some(nonce) => nonce + U256::from(1),
+            Some(nonce) => nonce.add(1),
             None => U256::from(0),
         };
 

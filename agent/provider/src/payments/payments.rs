@@ -227,29 +227,9 @@ async fn send_debit_note(
             )
         })?;
 
-    log::debug!(
-        "Sending debit note [{}] for activity [{}].",
-        &debit_note.debit_note_id,
-        &debit_note_info.activity_id
-    );
-    payment_api
-        .send_debit_note(&debit_note.debit_note_id)
-        .await
-        .map_err(|error| {
-            anyhow!(
-                "Failed to send debit note [{}] for activity [{}]. {}",
-                &debit_note.debit_note_id,
-                &debit_note_info.activity_id,
-                error
-            )
-        })?;
-
-    log::info!(
-        "Debit note [{}] for activity [{}] sent.",
-        &debit_note.debit_note_id,
-        &debit_note_info.activity_id
-    );
-
+    // Start deadline tracking before actually sending
+    // debit_note, because debit note events can arrive
+    // before debit_note.send() call actually returns.
     if let Some(deadline) = debit_note_info
         .payment_timeout
         .map(|timeout| Utc::now() + timeout)
@@ -263,6 +243,40 @@ async fn send_debit_note(
             })
             .await?;
     }
+
+    log::debug!(
+        "Sending debit note [{}] for activity [{}].",
+        &debit_note.debit_note_id,
+        &debit_note_info.activity_id
+    );
+    let send_result = payment_api
+        .send_debit_note(&debit_note.debit_note_id)
+        .await
+        .map_err(|error| {
+            anyhow!(
+                "Failed to send debit note [{}] for activity [{}]. {}",
+                &debit_note.debit_note_id,
+                &debit_note_info.activity_id,
+                error
+            )
+        });
+    if send_result.is_err() {
+        provider_context
+            .debit_checker
+            .send(StopTracking {
+                id: debit_note.debit_note_id.clone(),
+                category: Some(debit_note.agreement_id.clone()),
+            })
+            .await
+            .ok();
+    }
+    send_result?;
+
+    log::info!(
+        "Debit note [{}] for activity [{}] sent.",
+        &debit_note.debit_note_id,
+        &debit_note_info.activity_id
+    );
 
     Ok(debit_note)
 }
@@ -908,10 +922,10 @@ impl Actor for Payments {
 
 fn get_backoff() -> backoff::ExponentialBackoff {
     let mut backoff = backoff::ExponentialBackoff::default();
-    backoff.current_interval = std::time::Duration::from_secs(15);
-    backoff.initial_interval = std::time::Duration::from_secs(15);
+    backoff.current_interval = std::time::Duration::from_secs(3);
+    backoff.initial_interval = std::time::Duration::from_secs(3);
     backoff.multiplier = 1.5f64;
-    backoff.max_interval = std::time::Duration::from_secs(3600);
+    backoff.max_interval = std::time::Duration::from_secs(5 * 60 * 60);
     backoff.max_elapsed_time = Some(std::time::Duration::from_secs(u64::max_value()));
     backoff
 }
