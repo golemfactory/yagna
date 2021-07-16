@@ -33,7 +33,7 @@ class ProviderProbe(BaseProviderProbe):
     async def wait_for_exeunit_finished(self):
         """Wait until exe-unit finishes."""
         await self.provider_agent.wait_for_log(
-            r"(.*)ExeUnit process exited with status Finished - exit code: 0(.*)"
+            r"(.*)ExeUnit process exited with status Finished - exit status: 0(.*)"
         )
 
     @step()
