@@ -1,20 +1,29 @@
 use crate::error::Error;
 use crate::notify::Notify;
 use crate::output::CapturedOutput;
+use crate::runtime::RuntimeMode;
 use actix::Arbiter;
 use chrono::{DateTime, Utc};
 use futures::channel::{mpsc, oneshot};
 use futures::{SinkExt, StreamExt, TryStreamExt};
+use ipnet::IpNet;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::net::IpAddr;
+use std::path::PathBuf;
 use thiserror::Error;
 use tokio::sync::broadcast;
-pub use ya_client_model::activity::activity_state::{State, StatePair};
+use ya_client_model::activity::exe_script_command::Network;
 use ya_client_model::activity::{
     Capture, CommandOutput, CommandResult, ExeScriptCommand, ExeScriptCommandResult,
     ExeScriptCommandState, RuntimeEvent, RuntimeEventKind,
 };
 use ya_core_model::activity::Exec;
+use ya_utils_networking::vpn::common::{to_ip, to_net};
+use ya_utils_networking::vpn::error::Error as VpnError;
+
+use std::str::FromStr;
+pub use ya_client_model::activity::activity_state::{State, StatePair};
 
 #[derive(Error, Debug, Serialize)]
 pub enum StateError {
@@ -189,19 +198,20 @@ impl Batch {
         }
     }
 
-    pub fn results(&self) -> Vec<ExeScriptCommandResult> {
-        let last_idx = self.exec.exe_script.len() - 1;
+    pub fn results(&self, cmd_idx: Option<usize>) -> Vec<ExeScriptCommandResult> {
+        let last_idx = cmd_idx.unwrap_or_else(|| self.exec.exe_script.len() - 1);
         self.results
             .iter()
             .enumerate()
-            .take_while(|(_, s)| s.result.is_some())
+            .take_while(|(idx, s)| *idx <= last_idx && s.result.is_some())
             .map(|(idx, s)| {
                 let result = s.result.clone().unwrap();
+                let output = cmd_idx.as_ref().map(|i| *i == idx).unwrap_or(true);
                 ExeScriptCommandResult {
                     index: idx as u32,
                     result,
-                    stdout: s.stdout.output(),
-                    stderr: s.stderr.output(),
+                    stdout: if output { s.stdout.output() } else { None },
+                    stderr: if output { s.stderr.output() } else { None },
                     message: s.message.clone(),
                     is_batch_finished: idx == last_idx || result == CommandResult::Error,
                     event_date: s.date,
@@ -367,5 +377,55 @@ fn output_bytes(output: &CommandOutput) -> &[u8] {
     match output {
         CommandOutput::Bin(vec) => vec.as_slice(),
         CommandOutput::Str(string) => string.as_bytes(),
+    }
+}
+
+#[derive(Clone, Default)]
+pub(crate) struct Deployment {
+    pub runtime_mode: RuntimeMode,
+    pub task_package: Option<PathBuf>,
+    pub networks: HashMap<String, DeploymentNetwork>,
+    pub hosts: HashMap<String, String>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct DeploymentNetwork {
+    pub network: IpNet,
+    pub node_ip: IpAddr,
+    pub nodes: HashMap<IpAddr, String>,
+}
+
+impl Deployment {
+    pub fn networking(&self) -> bool {
+        !self.networks.is_empty()
+    }
+
+    pub fn extend_networks(&mut self, networks: Vec<Network>) -> Result<(), Error> {
+        let networks = networks
+            .into_iter()
+            .map(|net| {
+                let id = net.id.clone();
+                let network = to_net(&net.ip, net.mask)?;
+                let node_ip = IpAddr::from_str(&net.node_ip)?;
+                let nodes = Self::map_nodes(net.nodes)?;
+                Ok((
+                    id,
+                    DeploymentNetwork {
+                        network,
+                        node_ip,
+                        nodes,
+                    },
+                ))
+            })
+            .collect::<Result<Vec<_>, VpnError>>()?;
+        self.networks.extend(networks.into_iter());
+        Ok(())
+    }
+
+    pub fn map_nodes(nodes: HashMap<String, String>) -> Result<HashMap<IpAddr, String>, VpnError> {
+        nodes
+            .into_iter()
+            .map(|(ip, id)| to_ip(ip.as_ref()).map(|ip| (ip, id)))
+            .collect()
     }
 }

@@ -19,6 +19,7 @@ sgx=['graphene-sgx', 'openssl/vendored', 'reqwest/trust-dns', 'secp256k1/rand', 
 
 [target.'cfg(target_family = "unix")'.dependencies]
 nix = "0.17.0"
+bytes = "0.5"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libproc = "0.7"
@@ -35,17 +36,20 @@ ya-runtime-api = { version = "0.3", path = "runtime-api", features = ["server"] 
 ya-service-bus = "0.4"
 ya-transfer = "0.1"
 ya-utils-path = "0.1"
+ya-utils-networking = { version = "0.1", default-features = false, features = ["vpn"]}
 
 actix = { version = "0.10", default-features = false }
 anyhow = "1.0.19"
 async-trait = "0.1.24"
 chrono = "0.4.10"
 derivative = "2.1"
+derive_more = "0.99"
 dotenv = "0.15.0"
 flexi_logger = { version = "0.17", features = ["colors"] }
 futures = "0.3"
 graphene-sgx = { version = "0.3", optional = true }
 hex = "0.4.2"
+ipnet = "2.3"
 lazy_static = "1.4.0"
 log = "0.4.8"
 openssl= { version = "0.10", optional = true }

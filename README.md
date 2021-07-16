@@ -27,7 +27,7 @@ Official Rust implementation of Golem. Golem is a network of nodes that implemen
         <img src="https://img.shields.io/reddit/subreddit-subscribers/GolemProject?style=social" /></a>
 </p>
 
-Golem Network has officially gone on mainnet with the [Beta I release](https://blog.golemproject.net/mainnet-release-beta-i/).
+Golem Network has officially gone on Ethereum Mainnet with the [Beta I release](https://blog.golemproject.net/mainnet-release-beta-i/) in March 2021.
 
 Golem democratizes society’s access to computing power by creating a decentralized platform where anyone can build a variety of applications, request computational resources and/or offer their idle systems in exchange for cryptocurrency tokens (GLM). The actors in this decentralized network can assume one of the three non-exclusive roles:
 
@@ -47,8 +47,7 @@ For a more in-depth look at how Golem works, head over to our [documentation.](h
 
 * [agent/provider](agent/provider) - provider agent implementation based on core services.
 * [core](core) - core services for the open computation marketplace.
-* [exe-unit](exe-unit) -  ExeUnit Supervisor.
-* [service-bus](service-bus) - portable, rust-oriented service bus for IPC.
+* [exe-unit](exe-unit) -  ExeUnit Supervisor - a common part of all [runtimes](#runtimes) for yagna.
 * [test-utils](test-utils) - some helpers for testing purposes
 * [utils](utils) - trash bin for all other stuff ;)
 * [docs](docs) - project documentation including analysis and specifications.
@@ -70,41 +69,44 @@ We call our runtime **ExeUnit**. As for now we support
 
 Other ExeUnit types are to come (see below).
 
-## MVP
+## Golem Beta Release(s)
+Important milestones for Golem development were [Beta I](https://github.com/golemfactory/yagna/releases/tag/v0.6.1) and most recent [Beta II](https://github.com/golemfactory/yagna/releases/tag/v0.7.0). With those releases we have delivered:
+* MVP (minimum viable product), though not feature rich yet, it is usable for early adopters
+* Clean and easy experience for new and existing users.
+* Support for GLM payments (both L1 & L2 on Ethreum Mainnet)
+* **Production-ready** and **easy to maintain** code base.
+* **Modular architecture** with all the building blocks beeing replaceable.
+* Small binaries (under 30Mb).
+* [Documentation and SDK](https://handbook.golem.network/) for Golem app developers.
 
-With the MVP out, in the form of the [Beta I, Grace Hopper](https://github.com/golemfactory/yagna/releases/tag/v0.6.1) release. The release includes:
-* Clean and easy UX, most specifically during onboarding.
-* GLM-centric.
-* Production-ready, modular and easy to maintain architecture and code base.  
-_Modular_ means that all the building blocks can be easily replaceable.
-* Documentation and SDK for developers.
-* Small footprint binaries.
-
-### Functional 
+## List of implemented and planned functionality 
 
 1. Distributed computations
     * [x] **Batching**
-    * [ ] Services _(optional)_
+    * [x] Services _(PoC stage)_
 1. Computational environment (aka ExeUnit)
    * [x] **Wasm computation**
-   * [x] Light vm-s _(optional)_
+   * [x] Light vm-s
    * [ ] Docker on Linux _(optional)_
-   * [ ] SGX on Graphene _(optional)_
+   * [x] SGX on Graphene _(PoC stage)_
 1. Payment platform
     * [x] **Payments with GLM**
-    * [x] **Gasless transactions**
-    * [x] **ERC20 token**
-    * [ ] payment matching _(optional)_
+    * [x] [**ERC20 token**](https://blog.golemproject.net/gnt-to-glm-migration/)
+    * [x] **Layer 1 & [Layer 2](https://blog.golemproject.net/new-golem-alpha-iii-reveal/) transactions**
+    * [ ] Payment matching _(optional)_ (Ability for the invoice issuer to match the payment with Debit Note(s)/Invoice(s)).
 1. Transaction system
-    * [x] **Usage market**
+    * [x] **Pay as you go(lem)** ([see more](https://blog.golemproject.net/pay-as-you-use-golem-a-brief-but-effective-primer/))
     * [x] **Pay per task**
     * [ ] Pay for dev _(optional)_
 1. Network
-    * [ ] **P2P** (Hybrid P2P) 
-    * [ ] **Ability to work behind NAT** (Relays)
+    * [ ] **P2P** (Hybrid P2P; in progress) 
+    * [ ] **Ability to work behind NAT** (Relays; in progress)
 1. Verification
-    * [ ] **Verification by redundancy**
+    * [ ] **Verification by redundancy** ([see also](https://blog.golemproject.net/gwasm-verification/))
     * [x] **No verification**
     * [ ] Verification by humans _(optional)_
-1. Back compatibility
-    * [ ] Golem Brass/Clay interoperability _(optional)_
+
+## Road ahead
+
+We are actively working on improving Yagna and extending its functionality, check upcoming releases and other news on [our blog](https://blog.golem.network/).
+
