@@ -280,6 +280,13 @@ pub mod processor {
             )))
         }
 
+        pub fn agreement_zero_amount(agreement_id: &str) -> Result<(), Self> {
+            Err(Self::Validation(format!(
+                "Agreement with 0 amount: {}",
+                agreement_id
+            )))
+        }
+
         pub fn agreement_not_found(agreement_id: &str) -> Result<(), Self> {
             Err(Self::Validation(format!(
                 "Agreement not found: {}",

@@ -530,6 +530,9 @@ impl PaymentProcessor {
         for agreement_payment in payment.agreement_payments.iter() {
             let agreement_id = &agreement_payment.agreement_id;
             let agreement = agreement_dao.get(agreement_id.clone(), payee_id).await?;
+            if agreement_payment.amount < BigDecimal::zero().into() {
+                return VerifyPaymentError::agreement_zero_amount(agreement_id)
+            }
             match agreement {
                 None => return VerifyPaymentError::agreement_not_found(agreement_id),
                 Some(agreement) if &agreement.payee_addr != payee_addr => {
