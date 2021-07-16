@@ -185,14 +185,10 @@ impl<R: Runtime> Handler<GetBatchResults> for ExeUnit<R> {
     type Result = <GetBatchResults as Message>::Result;
 
     fn handle(&mut self, msg: GetBatchResults, _: &mut Context<Self>) -> Self::Result {
-        let results = match self.state.batches.get(&msg.0) {
-            Some(batch) => batch.results(),
-            _ => {
-                log::warn!("Batch results error: unknown batch {}", msg.0);
-                Vec::new()
-            }
-        };
-        GetBatchResultsResponse(results)
+        GetBatchResultsResponse(match self.state.batches.get(&msg.batch_id) {
+            Some(batch) => batch.results(msg.idx),
+            _ => Vec::new(),
+        })
     }
 }
 
