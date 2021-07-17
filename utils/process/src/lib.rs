@@ -75,12 +75,7 @@ impl ProcessGroupExt<tokio::process::Command> for tokio::process::Command {
 pub enum ExeUnitExitStatus {
     #[display(fmt = "Aborted - {}", _0)]
     Aborted(std::process::ExitStatus),
-    // workaround for goth being bound to previous stdlib Display impl for ExitCode
-    // it was changed recently: https://github.com/rust-lang/rust/commit/11e40ce240d884303bee142a727decaeeef43bdb#diff-7015a38ee6056bbfa832b33281ffeaad5531c4dbfaff60ddfce0934475e040f4R532
-    #[display(
-        fmt = "Finished - exit code: {}",
-        "_0.code().map(|code| format!(\"{}\", code)).unwrap_or(\"None\".into())"
-    )]
+    #[display(fmt = "Finished - {}", _0)]
     Finished(std::process::ExitStatus),
     #[display(fmt = "Error - {}", _0)]
     Error(std::io::Error),
