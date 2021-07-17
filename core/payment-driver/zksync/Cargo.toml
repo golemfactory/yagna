@@ -39,7 +39,7 @@ ya-utils-futures = "0.1"
 ya-utils-networking = "0.1"
 
 [dev-dependencies]
-actix-rt = "2.2.0"
+actix-rt = "2.2"
 dotenv = "0.15.0"
 env_logger = "0.7.1"
 structopt = "0.3"

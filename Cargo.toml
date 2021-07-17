@@ -66,7 +66,7 @@ log = "0.4"
 openssl = "0.10"
 openssl-probe = { version = "0.1", optional = true }
 structopt = "0.3"
-tokio = {version = "1.6", features=["net"]}
+tokio = {version = "1", features=["net"]}
 url = "2.1.1"
 
 [package.metadata.deb]
@@ -202,8 +202,9 @@ ya-diesel-utils = { path = "utils/diesel-utils"}
 ya-metrics = { path = "core/metrics" }
 ya-provider = { path = "agent/provider"}
 
-web3 = { git = "https://github.com/mfranciszkiewicz/rust-web3.git", rev = "4426e53383fae7f7e32928489ea59302e7f2c3c4" }
 ethereum-tx-sign = { git = "https://github.com/mfranciszkiewicz/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
+graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "3619f63a0c1ff44962ab604e55cd5dfb62177c56" }
+web3 = { git = "https://github.com/mfranciszkiewicz/rust-web3.git", rev = "4426e53383fae7f7e32928489ea59302e7f2c3c4" }
 
 # Speed up builds on macOS (will be default in next rust version probably)
 # https://jakedeichert.com/blog/reducing-rust-incremental-compilation-times-on-macos-by-70-percent/

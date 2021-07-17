@@ -2002,6 +2002,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "field-offset"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e1c54951450cbd39f3dbcf1005ac413b49487dabf18a720ad2383eccfeffb92"
+dependencies = [
+ "memoffset 0.6.3",
+ "rustc_version 0.3.3",
+]
+
+[[package]]
 name = "filetime"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2498,18 +2508,18 @@ dependencies = [
 
 [[package]]
 name = "graphene-sgx"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02f7bbd8508c78b42370fc51a1f2a1092c8d5484098b68fd0ea9e6a46b64f9e1"
+version = "0.4.0"
+source = "git+https://github.com/golemfactory/graphene-rust.git?rev=3619f63a0c1ff44962ab604e55cd5dfb62177c56#3619f63a0c1ff44962ab604e55cd5dfb62177c56"
 dependencies = [
  "anyhow",
  "base64 0.11.0",
  "byteorder",
  "chrono",
+ "field-offset",
  "hex",
  "http",
- "hyper 0.13.10",
- "hyper-tls 0.4.3",
+ "hyper 0.14.7",
+ "hyper-tls 0.5.0",
  "openssl",
  "serde",
  "serde_json",
@@ -7751,6 +7761,7 @@ dependencies = [
  "ipnet",
  "log",
  "thiserror",
+ "tokio-compat-02",
  "trust-dns-resolver 0.19.7",
  "url",
 ]
@@ -7818,7 +7829,7 @@ name = "ya-vpn"
 version = "0.1.0"
 dependencies = [
  "actix",
- "actix-rt 1.1.1",
+ "actix-rt 2.2.0",
  "actix-web",
  "actix-web-actors",
  "anyhow",
