@@ -77,7 +77,7 @@ pub async fn run() -> Result</*exit code*/ i32> {
                 Style::new().fg(Colour::Red).paint("is not running")
             ]);
         }
-        table.add_row(row!["Version", ya_compile_time_utils::semver_str()]);
+        table.add_row(row!["Version", ya_compile_time_utils::semver_str!()]);
         table.add_row(row!["Commit", ya_compile_time_utils::git_rev()]);
         table.add_row(row!["Date", ya_compile_time_utils::build_date()]);
         table.add_row(row![
