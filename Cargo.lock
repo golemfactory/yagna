@@ -5352,7 +5352,7 @@ version = "0.5.1"
 source = "git+https://github.com/mfranciszkiewicz/serial_test.git?branch=actix_rt_2_2_test#9253a07695356676c6d66aec20d67582031ab4df"
 dependencies = [
  "lazy_static",
- "parking_lot 0.11.1",
+ "parking_lot 0.10.2",
  "serial_test_derive",
 ]
 
@@ -7017,7 +7017,7 @@ dependencies = [
 
 [[package]]
 name = "ya-compile-time-utils"
-version = "0.1.3"
+version = "0.2.0"
 dependencies = [
  "git-version",
  "metrics 0.12.1",
