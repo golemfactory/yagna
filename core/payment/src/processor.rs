@@ -530,7 +530,7 @@ impl PaymentProcessor {
         for agreement_payment in payment.agreement_payments.iter() {
             let agreement_id = &agreement_payment.agreement_id;
             let agreement = agreement_dao.get(agreement_id.clone(), payee_id).await?;
-            if agreement_payment.amount < BigDecimal::zero().into() {
+            if agreement_payment.amount == BigDecimal::zero().into() {
                 return VerifyPaymentError::agreement_zero_amount(agreement_id)
             }
             match agreement {
@@ -555,6 +555,9 @@ impl PaymentProcessor {
         let activity_dao: ActivityDao = self.db_executor.as_dao();
         for activity_payment in payment.activity_payments.iter() {
             let activity_id = &activity_payment.activity_id;
+            if activity_payment.amount == BigDecimal::zero().into() {
+                return VerifyPaymentError::activity_zero_amount(activity_id)
+            }
             let activity = activity_dao.get(activity_id.clone(), payee_id).await?;
             match activity {
                 None => return VerifyPaymentError::activity_not_found(activity_id),

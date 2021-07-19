@@ -280,13 +280,6 @@ pub mod processor {
             )))
         }
 
-        pub fn agreement_zero_amount(agreement_id: &str) -> Result<(), Self> {
-            Err(Self::Validation(format!(
-                "Agreement with 0 amount: {}",
-                agreement_id
-            )))
-        }
-
         pub fn agreement_not_found(agreement_id: &str) -> Result<(), Self> {
             Err(Self::Validation(format!(
                 "Agreement not found: {}",
@@ -315,6 +308,13 @@ pub mod processor {
             )))
         }
 
+        pub fn agreement_zero_amount(agreement_id: &str) -> Result<(), Self> {
+            Err(Self::Validation(format!(
+                "Agreement with 0 amount: {}",
+                agreement_id
+            )))
+        }
+
         pub fn activity_not_found(activity_id: &str) -> Result<(), Self> {
             Err(Self::Validation(format!(
                 "Activity not found: {}",
@@ -333,6 +333,13 @@ pub mod processor {
             Err(Self::Validation(format!(
                 "Invalid payer address for activity {}: {} != {}",
                 activity.id, activity.payer_addr, payer_addr
+            )))
+        }
+
+        pub fn activity_zero_amount(activity_id: &str) -> Result<(), Self> {
+            Err(Self::Validation(format!(
+                "Activity with 0 amount: {}",
+                activity_id
             )))
         }
 
