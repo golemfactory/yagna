@@ -198,6 +198,10 @@ pub mod processor {
                 expected, actual
             )))
         }
+
+        pub fn zero_amount(order: &Order) -> Result<(), Self> {
+            Err(Self(format!("Payment order can not have 0 amount. order_id={}", order.id)))
+        }
     }
 
     #[derive(thiserror::Error, Debug)]
