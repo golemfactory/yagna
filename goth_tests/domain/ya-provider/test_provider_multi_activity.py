@@ -1,5 +1,4 @@
 """End to end tests for requesting WASM tasks using goth REST API clients."""
-
 import json
 import logging
 import re
@@ -13,7 +12,12 @@ from goth.configuration import load_yaml, Override, Configuration
 from goth.runner import Runner
 from goth.runner.probe import RequestorProbe
 
-from goth_tests.helpers.activity import wasi_exe_script, wasi_task_package
+from goth_tests.helpers.activity import (
+    wasi_exe_script,
+    wasi_sleeper_exe_script,
+    wasi_task_package,
+    wasi_sleeper_task_package,
+)
 from goth_tests.helpers.negotiation import negotiate_agreements, DemandBuilder
 from goth_tests.helpers.payment import pay_all
 from goth_tests.helpers.probe import ProviderProbe
@@ -159,3 +163,109 @@ async def test_provider_single_simultaneous_activity(
 
         await requestor.terminate_agreement(agreement_id, None)
         await provider.wait_for_agreement_terminated()
+
+
+@pytest.mark.asyncio
+async def test_provider_recover_from_abandoned_task(
+    common_assets: Path,
+    config_overrides: List[Override],
+    log_dir: Path,
+):
+    """Tests providers' ability of terminating an abandoned task
+    and starting another one"""
+
+    nodes = [
+        {"name": "requestor-1", "type": "Requestor"},
+        {"name": "requestor-2", "type": "Requestor"},
+        {"name": "provider-1", "type": "Wasm-Provider", "use-proxy": True},
+    ]
+    config_overrides.append(("nodes", nodes))
+
+    runner, config = _create_runner(common_assets, config_overrides, log_dir)
+
+    async with runner(config.containers):
+        requestors = runner.get_probes(probe_type=RequestorProbe)
+        assert requestors
+        providers = runner.get_probes(probe_type=ProviderProbe)
+        assert providers
+
+        def build_demand(requestor, sleeper_task: bool = False):
+            task_package = (
+                wasi_sleeper_task_package if sleeper_task else wasi_task_package
+            )
+            return (
+                DemandBuilder(requestor)
+                .props_from_template(
+                    task_package.format(
+                        web_server_addr=runner.host_address,
+                        web_server_port=runner.web_server_port,
+                    )
+                )
+                .property("golem.srv.caps.multi-activity", True)
+                .constraints(
+                    "(&(golem.com.pricing.model=linear)\
+                    (golem.srv.caps.multi-activity=true)\
+                    (golem.runtime.name=wasmtime))"
+                )
+                .build()
+            )
+
+        async def run_activity(requestor, agreement_id, provider):
+            logger.info(
+                "Starting activity for agreement %s (%s)", agreement_id, requestor.name
+            )
+
+            exe_script = wasi_exe_script(runner)
+            activity_id = await requestor.create_activity(agreement_id)
+            await provider.wait_for_exeunit_started()
+
+            batch_id = await requestor.call_exec(activity_id, json.dumps(exe_script))
+            await requestor.collect_results(
+                activity_id, batch_id, len(exe_script), timeout=30
+            )
+            await requestor.destroy_activity(activity_id)
+            await provider.wait_for_exeunit_finished()
+
+        async def run_and_abandon_activity(requestor, agreement_id, provider):
+            logger.info(
+                "Starting activity to abandon for agreement %s (%s)",
+                agreement_id,
+                requestor.name,
+            )
+
+            activity_id = await requestor.create_activity(agreement_id)
+            await provider.wait_for_exeunit_started()
+            await requestor.call_exec(
+                activity_id, json.dumps(wasi_sleeper_exe_script())
+            )
+
+            logger.info("Stopping requestor %s", requestor.name)
+            await requestor.stop()
+            requestor.container.remove(force=True)
+
+        requestor1, requestor2 = requestors
+
+        logger.info("Requestor %s is negotiating an agreement", requestor1.name)
+
+        agreement_providers = await negotiate_agreements(
+            requestor1,
+            build_demand(requestor1, sleeper_task=True),
+            providers,
+        )
+        await run_and_abandon_activity(requestor1, *agreement_providers[0])
+
+        while True:
+            try:
+                agreement_providers = await negotiate_agreements(
+                    requestor2,
+                    build_demand(requestor2),
+                    providers,
+                )
+                break
+            except Exception:  # noqa
+                logger.info(
+                    "Requestor %s failed to negotiate an agreement, retrying",
+                    requestor2.name,
+                )
+
+        await run_activity(requestor2, *agreement_providers[0])
