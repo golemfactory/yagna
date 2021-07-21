@@ -194,9 +194,6 @@ impl PresetManager {
     pub fn deactivate(&mut self, name: &String) -> Result<()> {
         let mut state = self.state.lock().unwrap();
         if let Some(idx) = state.active.iter().position(|n| name == n) {
-            if state.active.len() == 1 {
-                return Err(anyhow!("Cannot remove the last active preset: {:?}", name));
-            }
             state.active.remove(idx);
             return Ok(());
         }

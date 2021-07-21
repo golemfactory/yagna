@@ -1,9 +1,12 @@
-use crate::market::Preset;
-use anyhow::anyhow;
-use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
+
+use anyhow::anyhow;
+use serde::{Deserialize, Serialize};
+
 use ya_utils_path::SwapSave;
+
+use crate::market::Preset;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -50,16 +53,13 @@ impl Presets {
             .map_err(|e| anyhow!("Can't deserialize Presets from file {:?}: {}", path, e))?
             .into();
 
-        match presets.active.is_empty() {
-            false => presets.active.iter().try_for_each(|name| {
-                presets
-                    .presets
-                    .get(name)
-                    .ok_or(anyhow!("Invalid active preset: {:?}", name))
-                    .map(|_| ())
-            })?,
-            _ => return Err(anyhow!("No active presets")),
-        }
+        presets.active.iter().try_for_each(|name| {
+            presets
+                .presets
+                .get(name)
+                .ok_or(anyhow!("Invalid active preset: {:?}", name))
+                .map(|_| ())
+        })?;
 
         Ok(presets)
     }
