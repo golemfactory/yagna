@@ -165,8 +165,7 @@ impl YagnaCommand {
 
     pub async fn default_id(mut self) -> anyhow::Result<IdentityInfo> {
         self.cmd.args(&["--json", "id", "show"]);
-        let output: Result<Id, String> = self.run().await?;
-        output.map_err(anyhow::Error::msg)
+        self.run().await
     }
 
     pub async fn version(mut self) -> anyhow::Result<VersionInfo> {
@@ -352,7 +351,9 @@ mod tracker {
 #[cfg(test)]
 mod test {
     use crate::command::YaCommand;
+    use crate::setup::RunConfig;
     use std::path::PathBuf;
+    use structopt::StructOpt;
     use tokio::process::Child;
 
     #[serial_test::serial]
@@ -390,7 +391,8 @@ mod test {
 
         std::env::set_var("YAGNA_DATADIR", crate_dir.join("test-workdir"));
         std::env::set_var("GSB_URL", "tcp://127.0.0.1:27321");
-        let child = yac.yagna().unwrap().service_run().await.unwrap();
+        let run_cfg = RunConfig::from_iter(&[""]);
+        let child = yac.yagna().unwrap().service_run(&run_cfg).await.unwrap();
         (yac, child)
     }
 
