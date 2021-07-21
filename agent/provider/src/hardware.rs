@@ -1,10 +1,13 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
+#[cfg(windows)]
 use std::ffi::OsStr;
+use std::io;
 use std::ops::{Add, Not, Sub};
 use std::path::Path;
+#[cfg(windows)]
+use std::ptr;
 use std::sync::{Arc, Mutex};
-use std::{io, ptr};
 
 use serde::{Deserialize, Serialize};
 use structopt::{clap, StructOpt};

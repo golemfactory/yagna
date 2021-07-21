@@ -4,14 +4,14 @@ use std::path::PathBuf;
 use actix::prelude::*;
 use futures::channel::mpsc;
 use serde::{Deserialize, Serialize};
-use ya_client_model::activity::{ExeScriptCommand, ExeScriptCommandResult, RuntimeEvent};
 use ya_client_model::activity::activity_state::{State, StatePair};
 use ya_client_model::activity::exe_script_command::Network;
+use ya_client_model::activity::{ExeScriptCommand, ExeScriptCommandResult, RuntimeEvent};
 
 use crate::error::Error;
-use crate::Result;
 use crate::runtime::RuntimeMode;
 use crate::state::CommandStateRepr;
+use crate::Result;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "Result<Vec<f64>>")]
@@ -26,7 +26,10 @@ pub struct GetStateResponse(pub StatePair);
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "GetBatchResultsResponse")]
-pub struct GetBatchResults(pub String);
+pub struct GetBatchResults {
+    pub batch_id: String,
+    pub idx: Option<usize>,
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, MessageResponse)]
 pub struct GetBatchResultsResponse(pub Vec<ExeScriptCommandResult>);

@@ -5,18 +5,18 @@ use std::str::FromStr;
 
 use actix::Arbiter;
 use chrono::{DateTime, Utc};
-use futures::{SinkExt, StreamExt, TryStreamExt};
 use futures::channel::{mpsc, oneshot};
+use futures::{SinkExt, StreamExt, TryStreamExt};
 use ipnet::IpNet;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::broadcast;
+pub use ya_client_model::activity::activity_state::{State, StatePair};
+use ya_client_model::activity::exe_script_command::Network;
 use ya_client_model::activity::{
     Capture, CommandOutput, CommandResult, ExeScriptCommand, ExeScriptCommandResult,
     ExeScriptCommandState, RuntimeEvent, RuntimeEventKind,
 };
-pub use ya_client_model::activity::activity_state::{State, StatePair};
-use ya_client_model::activity::exe_script_command::Network;
 
 use ya_core_model::activity::Exec;
 use ya_utils_networking::vpn::common::{to_ip, to_net};
@@ -200,19 +200,20 @@ impl Batch {
         }
     }
 
-    pub fn results(&self) -> Vec<ExeScriptCommandResult> {
-        let last_idx = self.exec.exe_script.len() - 1;
+    pub fn results(&self, cmd_idx: Option<usize>) -> Vec<ExeScriptCommandResult> {
+        let last_idx = cmd_idx.unwrap_or_else(|| self.exec.exe_script.len() - 1);
         self.results
             .iter()
             .enumerate()
-            .take_while(|(_, s)| s.result.is_some())
+            .take_while(|(idx, s)| *idx <= last_idx && s.result.is_some())
             .map(|(idx, s)| {
                 let result = s.result.clone().unwrap();
+                let output = cmd_idx.as_ref().map(|i| *i == idx).unwrap_or(true);
                 ExeScriptCommandResult {
                     index: idx as u32,
                     result,
-                    stdout: s.stdout.output(),
-                    stderr: s.stderr.output(),
+                    stdout: if output { s.stdout.output() } else { None },
+                    stderr: if output { s.stderr.output() } else { None },
                     message: s.message.clone(),
                     is_batch_finished: idx == last_idx || result == CommandResult::Error,
                     event_date: s.date,

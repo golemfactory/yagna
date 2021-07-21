@@ -1,12 +1,13 @@
 //! Cyclic methods for Matcher spawned after binding to GSB
+use std::collections::HashSet;
+use std::hash::Hash;
+use std::time::Instant;
+
 use metrics::{counter, timing};
 use rand::seq::IteratorRandom;
 use rand::Rng;
-use std::collections::HashSet;
-use std::hash::Hash;
 
 use super::Matcher;
-use std::time::Instant;
 
 pub(super) async fn bcast_offers(matcher: Matcher) {
     if matcher.config.discovery.max_bcasted_offers <= 0 {
@@ -26,18 +27,18 @@ pub(super) async fn bcast_offers(matcher: Matcher) {
 
             // Add some random subset of Offers to broadcast.
             let num_our_offers = our_ids.len();
-            let num_to_bcast = matcher.config.discovery.max_bcasted_offers;
-
-            let all_ids = matcher.store.get_active_offer_ids(None).await?;
-            let our_and_random_ids = randomize_ids(our_ids, all_ids, num_to_bcast as usize);
+            // let num_to_bcast = matcher.config.discovery.max_bcasted_offers;
+            //
+            // let all_ids = matcher.store.get_active_offer_ids(None).await?;
+            // let our_and_random_ids = randomize_ids(our_ids, all_ids, num_to_bcast as usize);
 
             log::trace!(
                 "Broadcasted {} Offers including {} ours.",
-                our_and_random_ids.len(),
+                our_ids.len(),
                 num_our_offers
             );
 
-            matcher.discovery.bcast_offers(our_and_random_ids).await?;
+            matcher.discovery.bcast_offers(our_ids).await?;
 
             let end = Instant::now();
             counter!("market.offers.broadcasts", 1);
@@ -69,21 +70,18 @@ pub(super) async fn bcast_unsubscribes(matcher: Matcher) {
 
             // Add some random subset of Offer unsubscribes to bcast.
             let num_our_unsubscribes = our_ids.len();
-            let max_bcast = matcher.config.discovery.max_bcasted_unsubscribes as usize;
-
-            let all_ids = matcher.store.get_unsubscribed_offer_ids(None).await?;
-            let our_and_random_ids = randomize_ids(our_ids, all_ids, max_bcast);
+            // let max_bcast = matcher.config.discovery.max_bcasted_unsubscribes as usize;
+            //
+            // let all_ids = matcher.store.get_unsubscribed_offer_ids(None).await?;
+            // let our_and_random_ids = randomize_ids(our_ids, all_ids, max_bcast);
 
             log::trace!(
                 "Broadcasted {} unsubscribed Offers including {} ours.",
-                our_and_random_ids.len(),
+                our_ids.len(),
                 num_our_unsubscribes
             );
 
-            matcher
-                .discovery
-                .bcast_unsubscribes(our_and_random_ids)
-                .await?;
+            matcher.discovery.bcast_unsubscribes(our_ids).await?;
 
             let end = Instant::now();
             counter!("market.offers.unsubscribes.broadcasts", 1);
@@ -99,6 +97,7 @@ pub(super) async fn bcast_unsubscribes(matcher: Matcher) {
 
 /// Returns vector of at most `cap_size` getting all our ids
 /// and random sample from other ids (all ids might include our ids).
+#[allow(dead_code)]
 fn randomize_ids<T: Eq + Hash + Clone>(
     our_ids: Vec<T>,
     all_ids: Vec<T>,
@@ -137,9 +136,11 @@ async fn wait_random_interval(mean_interval: std::time::Duration) {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::db::model::SubscriptionId;
     use std::str::FromStr;
+
+    use crate::db::model::SubscriptionId;
+
+    use super::*;
 
     #[test]
     fn test_randomize_cap_0() {

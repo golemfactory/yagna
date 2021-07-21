@@ -39,6 +39,10 @@ async fn validate_orders(
     payee_addr: &str,
     amount: &BigDecimal,
 ) -> Result<(), OrderValidationError> {
+    if orders.is_empty() {
+        return Err(OrderValidationError::new("orders not found in the database").into());
+    }
+
     let mut total_amount = BigDecimal::zero();
     for order in orders.iter() {
         if &order.payment_platform != platform {
@@ -344,7 +348,7 @@ impl PaymentProcessor {
         let payer_addr = msg.sender;
         let payee_addr = msg.recipient;
 
-        if msg.order_ids.len() == 0 {
+        if msg.order_ids.is_empty() {
             return Err(OrderValidationError::new("order_ids is empty").into());
         }
         let orders = self

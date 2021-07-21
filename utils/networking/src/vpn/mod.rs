@@ -3,7 +3,7 @@ pub use error::Error;
 pub use network::{Network, Networks};
 pub use packet::{ArpField, ArpPacket};
 pub use packet::{EtherField, EtherFrame, EtherType, PeekPacket};
-pub use packet::{IpPacket, Ipv4Field, IpV4Packet, Ipv6Field, IpV6Packet};
+pub use packet::{IpPacket, IpV4Packet, IpV6Packet, Ipv4Field, Ipv6Field};
 
 pub mod common;
 pub mod error;

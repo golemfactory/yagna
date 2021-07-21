@@ -6,8 +6,8 @@ use std::time::Duration;
 
 use actix::prelude::*;
 use chrono::Utc;
-use futures::{FutureExt, SinkExt};
 use futures::channel::{mpsc, oneshot};
+use futures::{FutureExt, SinkExt};
 use ya_client_model::activity::{
     activity_state::StatePair, ActivityUsage, CommandOutput, ExeScriptCommand, RuntimeEvent, State,
 };
@@ -23,9 +23,9 @@ use crate::agreement::Agreement;
 use crate::error::Error;
 use crate::message::*;
 use crate::runtime::*;
-use crate::service::{ServiceAddr, ServiceControl};
 use crate::service::metrics::MetricsService;
 use crate::service::transfer::{AddVolumes, DeployImage, TransferResource, TransferService};
+use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError, Supervision};
 
 mod acl;

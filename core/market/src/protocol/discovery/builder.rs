@@ -1,14 +1,15 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::sync::Arc;
+
 use tokio::sync::Mutex;
 
+use crate::config::DiscoveryConfig;
 use crate::protocol::callback::{CallbackFuture, OutputFuture};
 use crate::protocol::callback::{CallbackHandler, CallbackMessage, HandlerSlot};
+use crate::protocol::discovery::OfferHandlers;
 
 use super::{Discovery, DiscoveryImpl};
-use crate::config::DiscoveryConfig;
-use crate::protocol::discovery::OfferHandlers;
 
 #[derive(Default)]
 pub struct DiscoveryBuilder {
@@ -76,6 +77,7 @@ impl DiscoveryBuilder {
                 offer_handlers,
                 offer_queue: Mutex::new(vec![]),
                 unsub_queue: Mutex::new(vec![]),
+                lazy_binder_prefix: Mutex::new(None),
                 get_local_offers_handler: self.get_handler(),
                 offer_unsubscribe_handler: self.get_handler(),
                 config: self.config.unwrap(),

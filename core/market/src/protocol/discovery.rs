@@ -1,34 +1,35 @@
 //! Discovery protocol interface
-use actix_rt::Arbiter;
-use metrics::{counter, timing, value};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
+
+use actix_rt::Arbiter;
+use futures::TryFutureExt;
+use metrics::{counter, timing, value};
 use tokio::sync::Mutex;
 use tokio::time::delay_for;
-
 use ya_client::model::NodeId;
-use ya_core_model::market::BUS_ID;
-use ya_core_model::net::local as local_net;
-use ya_core_model::net::local::{BroadcastMessage, SendBroadcastMessage};
-use ya_net::{self as net, RemoteEndpoint};
 use ya_service_bus::timeout::{IntoDuration, IntoTimeoutFuture};
 use ya_service_bus::typed::ServiceBinder;
 use ya_service_bus::{typed as bus, Error as BusError, RpcEndpoint, RpcMessage};
 
-use super::callback::HandlerSlot;
+use error::*;
+use message::*;
+use ya_core_model::market::BUS_ID;
+use ya_core_model::net::local as local_net;
+use ya_core_model::net::local::{BroadcastMessage, SendBroadcastMessage};
+use ya_net::{self as net, RemoteEndpoint};
+
 use crate::config::DiscoveryConfig;
 use crate::db::model::{Offer as ModelOffer, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityError};
+use crate::PROTOCOL_VERSION;
+
+use super::callback::HandlerSlot;
 
 pub mod builder;
 pub mod error;
 pub mod message;
-
-use crate::PROTOCOL_VERSION;
-use error::*;
-use futures::TryFutureExt;
-use message::*;
 
 /// Responsible for communication with markets on other nodes
 /// during discovery phase.
@@ -47,6 +48,7 @@ pub struct DiscoveryImpl {
 
     offer_queue: Mutex<Vec<SubscriptionId>>,
     unsub_queue: Mutex<Vec<SubscriptionId>>,
+    lazy_binder_prefix: Mutex<Option<String>>,
 
     offer_handlers: Mutex<OfferHandlers>,
     get_local_offers_handler: HandlerSlot<RetrieveOffers>,
@@ -229,9 +231,33 @@ impl Discovery {
     ) -> Result<(), DiscoveryInitError> {
         log::info!("Discovery protocol version: {}", PROTOCOL_VERSION!());
 
+        ServiceBinder::new(&get_offers_addr(public_prefix), &(), self.clone()).bind_with_processor(
+            move |_, myself, caller: String, msg: RetrieveOffers| {
+                let myself = myself.clone();
+                myself.on_get_remote_offers(caller, msg)
+            },
+        );
+        // Subscribe to receiving broadcasts only when demand is subscribed for the first time.
+        let mut prefix_guard = self.inner.lazy_binder_prefix.lock().await;
+        if let Some(old_prefix) = (*prefix_guard).replace(local_prefix.to_string()) {
+            log::info!("Dropping previous lazy_binder_prefix, and replacing it with new one. old={}, new={}", old_prefix, local_prefix);
+        };
+
+        Ok(())
+    }
+
+    pub async fn lazy_bind_gsb(&self) -> Result<(), DiscoveryInitError> {
+        log::trace!("LazyBroadcastBind");
         let myself = self.clone();
+
         // /local/market/market-protocol-mk1-offer
-        let bcast_address = format!("{}/{}", local_prefix, OffersBcast::TOPIC);
+        let mut prefix_guard = self.inner.lazy_binder_prefix.lock().await;
+        let local_prefix = match (*prefix_guard).take() {
+            None => return Ok(()),
+            Some(prefix) => prefix,
+        };
+
+        let bcast_address = format!("{}/{}", local_prefix.as_str(), OffersBcast::TOPIC);
         ya_net::bind_broadcast_with_caller(
             &bcast_address,
             move |caller, msg: SendBroadcastMessage<OffersBcast>| {
@@ -254,14 +280,6 @@ impl Discovery {
         )
         .await
         .map_err(|e| DiscoveryInitError::from_pair(bcast_address, e))?;
-
-        ServiceBinder::new(&get_offers_addr(public_prefix), &(), self.clone()).bind_with_processor(
-            move |_, myself, caller: String, msg: RetrieveOffers| {
-                let myself = myself.clone();
-                myself.on_get_remote_offers(caller, msg)
-            },
-        );
-
         Ok(())
     }
 

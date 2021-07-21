@@ -4,6 +4,9 @@ use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+const LOCK_FILE_EXT: &'static str = "lock";
+const PID_FILE_EXT: &'static str = "pid";
+
 pub struct ProcLock {
     dir: PathBuf,
     name: String,
@@ -26,6 +29,26 @@ impl ProcLock {
             lock_path: None,
             pid_path: None,
         })
+    }
+
+    pub fn contains_locks<P: AsRef<Path>>(dir: P) -> Result<bool> {
+        Ok(std::fs::read_dir(dir)?
+            .filter_map(|r| r.map(|e| e.path()).ok())
+            .filter(|p| !p.is_dir())
+            .filter(|p| {
+                p.extension()
+                    .map(|e| {
+                        let e = e.to_string_lossy().to_lowercase();
+                        e.as_str() == LOCK_FILE_EXT
+                    })
+                    .unwrap_or(false)
+            })
+            .filter(|p| match File::open(&p) {
+                Ok(f) => f.try_lock_exclusive().is_err(),
+                _ => true,
+            })
+            .next()
+            .is_some())
     }
 
     pub fn lock(mut self, pid: u32) -> Result<Self> {
@@ -74,7 +97,9 @@ impl ProcLock {
     }
 
     fn lock_file(&self, name: impl ToString) -> Result<(File, PathBuf)> {
-        let lock_path = self.dir.join(format!("{}.lock", name.to_string()));
+        let lock_path = self
+            .dir
+            .join(format!("{}.{}", name.to_string(), LOCK_FILE_EXT));
         let lock_file = if lock_path.is_file() {
             match File::open(&lock_path) {
                 Ok(f) => f,
@@ -91,7 +116,8 @@ impl ProcLock {
 
     #[inline]
     fn pid_path(&self, name: impl ToString) -> PathBuf {
-        self.dir.join(format!("{}.pid", name.to_string()))
+        self.dir
+            .join(format!("{}.{}", name.to_string(), PID_FILE_EXT))
     }
 }
 

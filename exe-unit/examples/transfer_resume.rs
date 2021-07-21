@@ -2,6 +2,7 @@ use std::env;
 use std::fs::OpenOptions;
 use std::io::{ErrorKind, Read};
 use std::path::Path;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -12,7 +13,6 @@ use structopt::StructOpt;
 use tempdir::TempDir;
 use url::Url;
 
-use std::rc::Rc;
 use ya_transfer::error::{Error, HttpError};
 use ya_transfer::*;
 
@@ -110,6 +110,22 @@ fn hash_file<P: AsRef<Path>>(path: P) -> GenericArray<u8, <sha3::Sha3_224 as Dig
     hasher.result()
 }
 
+fn verify_file_hash<P: AsRef<Path>>(path: P, expected: &str) -> anyhow::Result<()> {
+    let hash = hex::encode(hash_file(path));
+
+    log::info!("input  hash: {}", expected);
+    log::info!("result hash: {}", hash);
+
+    if hash.as_str() != expected {
+        anyhow::bail!(
+            "hash mismatch: {} vs {} (expected)",
+            hash.as_str(),
+            expected
+        );
+    }
+    Ok(())
+}
+
 async fn download<P: AsRef<Path>>(dst_path: P, args: Cli) -> anyhow::Result<()> {
     let dst_path = dst_path.as_ref();
 
@@ -123,18 +139,16 @@ async fn download<P: AsRef<Path>>(dst_path: P, args: Cli) -> anyhow::Result<()> 
     retry.backoff(1., 1.);
     ctx.state.retry_with(retry);
 
+    log::info!("Transferring file");
     transfer_with(&src, &src_url, &dst, &dst_url, &ctx).await?;
-
     log::info!("File downloaded, verifying contents");
+    verify_file_hash(&dst_path, &args.hash)?;
 
-    let hash = hex::encode(hash_file(&dst_path));
+    log::info!("Retrying transfer on a completed file");
+    transfer_with(&src, &src_url, &dst, &dst_url, &ctx).await?;
+    log::info!("Verifying contents");
+    verify_file_hash(&dst_path, &args.hash)?;
 
-    log::info!("input  hash: {}", args.hash);
-    log::info!("result hash: {}", hash);
-
-    if args.hash != hash {
-        anyhow::bail!("hash mismatch");
-    }
     Ok(())
 }
 

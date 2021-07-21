@@ -10,7 +10,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use actix_web::{App, HttpServer, middleware, Responder, web};
+use actix_web::{middleware, web, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use futures::prelude::*;
 use structopt::{clap, StructOpt};
@@ -27,11 +27,12 @@ use ya_metrics::{MetricsPusherOpts, MetricsService};
 use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
 use ya_persistence::executor::DbExecutor;
+use ya_persistence::service::Persistence as PersistenceService;
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_api_interfaces::Provider;
 use ya_service_api_web::{
-    DEFAULT_YAGNA_API_URL,
-    middleware::{auth, Identity}, rest_api_host_port, YAGNA_API_URL_ENV_VAR,
+    middleware::{auth, Identity},
+    rest_api_host_port, DEFAULT_YAGNA_API_URL, YAGNA_API_URL_ENV_VAR,
 };
 use ya_sgx::SgxService;
 use ya_utils_path::data_dir::DataDir;
@@ -190,6 +191,8 @@ impl TryFrom<CliCtx> for ServiceContext {
 
 #[ya_service_api_derive::services(ServiceContext)]
 enum Services {
+    #[enable(gsb, cli)]
+    Db(PersistenceService),
     // Metrics service must be activated before all other services
     // to that will use it. Identity service is used by the Metrics,
     // so must be initialized before.

@@ -1,15 +1,15 @@
 use std::rc::Rc;
 
-use futures::{FutureExt, SinkExt};
 use futures::future::BoxFuture;
 use futures::lock::Mutex;
 use futures::prelude::*;
+use futures::{FutureExt, SinkExt};
 use tokio::io;
 
 use crate::server::RuntimeEvent;
 
-use super::{codec, ErrorResponse, proto};
 use super::RuntimeService;
+use super::{codec, proto, ErrorResponse};
 
 async fn handle_command(
     service: &impl RuntimeService,

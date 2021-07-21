@@ -194,7 +194,7 @@ pub fn create_interactive(config: ProviderConfig) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn is_initial_coefficient_name(name : &str) -> bool {
+fn is_initial_coefficient_name(name: &str) -> bool {
     name.eq_ignore_ascii_case("initial") || name.eq("Init price")
 }
 
@@ -219,8 +219,7 @@ pub fn create(config: ProviderConfig, params: PresetNoInteractive) -> anyhow::Re
     for (name, price) in params.price.iter() {
         if is_initial_coefficient_name(name) {
             preset.initial_price = *price;
-        }
-        else {
+        } else {
             let usage_coefficient = exe_unit_desc.resolve_coefficient(&name)?;
 
             preset.usage_coeffs.insert(usage_coefficient, *price);
