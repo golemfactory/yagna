@@ -31,7 +31,7 @@ winapi = { version = "0.3.8", features = ["jobapi2", "processthreadsapi"] }
 ya-agreement-utils = { version = "^0.2"}
 ya-client-model = "0.3"
 ya-compile-time-utils = "0.1"
-ya-core-model = { version = "^0.4", features = ["activity", "appkey"] }
+ya-core-model = { version = "^0.4", features = ["activity", "appkey"], default-features = false }
 ya-runtime-api = { version = "0.3", path = "runtime-api", features = ["server"] }
 ya-service-bus = "0.4"
 ya-transfer = "0.1"
@@ -80,3 +80,6 @@ rustyline = "7.0.0"
 sha3 = "0.8.2"
 shell-words = "1.0.0"
 tempdir = "0.3.7"
+
+[target.'cfg(target_os = "windows")'.build-dependencies]
+winres = "0.1"
