@@ -5,6 +5,9 @@ version = "0.2.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
+[features]
+test-suite = []
+
 [dependencies]
 ya-client = { version = "0.5", features = ['cli'] }
 ya-compile-time-utils = "0.2"
@@ -43,4 +46,4 @@ libc="0.2.73"
 nix="0.18.0"
 
 [dev-dependencies]
-serial_test = { git = "https://github.com/tworec/serial_test.git", branch = "actix_rt_test"}
+serial_test = "0.5"

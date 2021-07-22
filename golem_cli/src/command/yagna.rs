@@ -356,6 +356,8 @@ mod test {
     use structopt::StructOpt;
     use tokio::process::Child;
 
+    #[cfg_attr(not(feature = "test-suite"), ignore)]
+    #[actix_rt::test]
     #[serial_test::serial]
     async fn test_default_id_compat() {
         let (yac, mut yagna_srv) = set_up_test().await;
@@ -370,6 +372,8 @@ mod test {
         tear_down_test(&mut yagna_srv);
     }
 
+    #[cfg_attr(not(feature = "test-suite"), ignore)]
+    #[actix_rt::test]
     #[serial_test::serial]
     async fn test_version_compat() {
         let (yac, mut yagna_srv) = set_up_test().await;
