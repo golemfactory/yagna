@@ -3,13 +3,13 @@
 use std::convert::TryFrom;
 
 use anyhow::Context;
-use ethsign::{KeyFile, Protected, SecretKey};
 use ethsign::keyfile::Bytes;
+use ethsign::{KeyFile, Protected, SecretKey};
 use rand::Rng;
 use ya_client_model::NodeId;
 
-use crate::dao::Error;
 use crate::dao::identity::Identity;
+use crate::dao::Error;
 
 pub struct IdentityKey {
     id: NodeId,

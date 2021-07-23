@@ -1,7 +1,7 @@
 use diesel::prelude::*;
 
 use ya_persistence::executor::{
-    AsDao, ConnType, do_with_transaction, PoolType, readonly_transaction,
+    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
 
 pub use crate::db::models::Identity;

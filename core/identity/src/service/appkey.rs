@@ -6,7 +6,7 @@ use actix_rt::Arbiter;
 use chrono::Utc;
 use futures::prelude::*;
 use uuid::Uuid;
-use ya_service_bus::{RpcEndpoint, typed as bus};
+use ya_service_bus::{typed as bus, RpcEndpoint};
 
 use ya_core_model::appkey as model;
 use ya_core_model::identity as idm;

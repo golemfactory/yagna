@@ -15,8 +15,8 @@ use ya_service_bus::typed as bus;
 use ya_core_model::identity as model;
 use ya_persistence::executor::DbExecutor;
 
-use crate::dao::{Error as DaoError, IdentityDao};
 use crate::dao::identity::Identity;
+use crate::dao::{Error as DaoError, IdentityDao};
 use crate::id_key::{default_password, generate_new, IdentityKey};
 
 #[derive(Default)]
