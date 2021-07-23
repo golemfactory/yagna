@@ -1,9 +1,11 @@
+use diesel::prelude::*;
+
+use ya_persistence::executor::{
+    AsDao, ConnType, do_with_transaction, PoolType, readonly_transaction,
+};
+
 pub use crate::db::models::Identity;
 use crate::db::schema as s;
-use diesel::prelude::*;
-use ya_persistence::executor::{
-    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
-};
 
 type Result<T> = std::result::Result<T, super::Error>;
 
@@ -58,6 +60,25 @@ impl<'c> IdentityDao<'c> {
             Ok(identity
                 .filter(is_deleted.eq(false))
                 .load::<Identity>(conn)?)
+        })
+        .await
+    }
+
+    pub async fn init_preconfigured(&self, preconfigured_identity: Identity) -> Result<Identity> {
+        use crate::db::schema::identity::dsl as id_dsl;
+        self.with_transaction(move |conn| {
+            if let Some(id) = id_dsl::identity
+                .filter(id_dsl::identity_id.eq(preconfigured_identity.identity_id))
+                .get_result::<Identity>(conn)
+                .optional()?
+            {
+                Ok(id)
+            } else {
+                diesel::insert_into(s::identity::table)
+                    .values(&preconfigured_identity)
+                    .execute(conn)?;
+                Ok(preconfigured_identity)
+            }
         })
         .await
     }
