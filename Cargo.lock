@@ -6539,7 +6539,7 @@ dependencies = [
 
 [[package]]
 name = "ya-compile-time-utils"
-version = "0.1.3"
+version = "0.2.0"
 dependencies = [
  "git-version",
  "metrics 0.12.1",
@@ -6727,6 +6727,7 @@ dependencies = [
  "r2d2",
  "rand 0.7.3",
  "rpassword",
+ "rustc-hex",
  "serde_json",
  "sha2 0.9.3",
  "structopt",
@@ -7051,9 +7052,9 @@ dependencies = [
 
 [[package]]
 name = "ya-sb-router"
-version = "0.4.4"
+version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e618863fff8794f92e0130ed66100ad03abb7c676d39bf76a60ba0118469506f"
+checksum = "8fca2d61481525e6977f1a650549e89240d0d7ac3591ef79cbc97e5f0afb93a8"
 dependencies = [
  "actix",
  "actix-rt",
@@ -7170,9 +7171,9 @@ dependencies = [
 
 [[package]]
 name = "ya-service-bus"
-version = "0.4.9"
+version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47b700f5ffc577ff7efb46fde9309f6b616247d6c2f9a8310e93d1109dd4c3ea"
+checksum = "75b587455c11a7bbd9ec2a69d196c1d199d6e54696a923dba48a690e90a74c84"
 dependencies = [
  "actix",
  "flexbuffers",

@@ -51,23 +51,11 @@ jobs:
           vcpkg list
           vcpkg integrate install
 
-      - name: Unit tests
+      - name: Unit tests + Market Test Suite (semi-integration tests)
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --workspace --locked
-
-      - name: Market Test Suite (semi-integration tests)
-        uses: actions-rs/cargo@v1
-        if: startsWith( github.head_ref, 'market/' )
-        with:
-          command: test
-          # Due to cargo quirks it is more efficient to run all tests from workspace as:
-          #   --tests --workspace
-          # than just:
-          #   --tests -p ya-market
-          # because the latter needs separate compilation of lots of dependant crates again.
-          args: --tests --workspace --features ya-market/test-suite
+          args: --tests --workspace --features ya-market/test-suite --locked
 
       - name: Build binaries
         uses: actions-rs/cargo@v1

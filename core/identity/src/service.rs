@@ -1,11 +1,12 @@
-/// Identity service
-use futures::lock::Mutex;
 use std::sync::Arc;
 
-use crate::cli::Command;
+/// Identity service
+use futures::lock::Mutex;
 
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
+
+use crate::cli::Command;
 
 mod appkey;
 mod identity;

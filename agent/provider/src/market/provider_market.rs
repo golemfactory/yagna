@@ -244,7 +244,24 @@ async fn dispatch_event(
         ProviderEvent::AgreementEvent { agreement, .. } => {
             process_agreement(ctx, subscription, agreement).await
         }
-        _ => unimplemented!(),
+        ProviderEvent::ProposalRejectedEvent {
+            proposal_id,
+            reason,
+            ..
+        } => {
+            // TODO: Analyze whether reason is_final and treat final & non-final rejections
+            // differently.
+            log::info!(
+                "Proposal rejected. proposal_id: {}, reason: {:?}",
+                proposal_id,
+                reason
+            );
+            Ok(())
+        }
+        unimplemented_event => {
+            log::warn!("Unimplemented event received: {:?}", unimplemented_event);
+            Ok(())
+        }
     }
 }
 
