@@ -77,7 +77,7 @@ pub async fn run() -> Result</*exit code*/ i32> {
                 Style::new().fg(Colour::Red).paint("is not running")
             ]);
         }
-        table.add_row(row!["Version", ya_compile_time_utils::semver_str()]);
+        table.add_row(row!["Version", ya_compile_time_utils::semver_str!()]);
         table.add_row(row!["Commit", ya_compile_time_utils::git_rev()]);
         table.add_row(row!["Date", ya_compile_time_utils::build_date()]);
         table.add_row(row![
@@ -190,6 +190,7 @@ pub async fn run() -> Result</*exit code*/ i32> {
             table.add_row(row!["last 1h processed", status.last1h_processed()]);
             table.add_row(row!["last 1h in progress", status.in_progress()]);
             table.add_row(row!["total processed", status.total_processed()]);
+            table.add_row(row!["(including failures)"]);
 
             table
         };
