@@ -1,5 +1,4 @@
 /// Identity management CLI parser and runner
-use anyhow::Result;
 use std::path::PathBuf;
 use structopt::*;
 
@@ -27,7 +26,7 @@ impl Default for NodeOrAlias {
 impl std::str::FromStr for NodeOrAlias {
     type Err = anyhow::Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> anyhow::Result<Self, Self::Err> {
         if s.is_empty() {
             return Ok(NodeOrAlias::DefaultNode);
         }
@@ -133,7 +132,7 @@ pub enum IdentityCommand {
 }
 
 impl IdentityCommand {
-    pub async fn run_command(&self, _ctx: &CliCtx) -> Result<CommandOutput> {
+    pub async fn run_command(&self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
             IdentityCommand::List { .. } => {
                 let mut identities = bus::service(identity::BUS_ID)
@@ -163,7 +162,9 @@ impl IdentityCommand {
             }
             IdentityCommand::Show { node_or_alias } => {
                 let command: identity::Get = node_or_alias.clone().unwrap_or_default().into();
-                CommandOutput::object(bus::service(identity::BUS_ID).send(command).await??)
+                let id = bus::service(identity::BUS_ID).send(command).await??;
+                // We return Ok, just to be backward compatible, but it is ugly
+                CommandOutput::object(Ok::<_, ()>(id))
             }
             IdentityCommand::Update {
                 alias_or_id,
@@ -178,7 +179,8 @@ impl IdentityCommand {
                             .with_default(*set_default),
                     )
                     .await??;
-                CommandOutput::object(id)
+                // We return Ok, just to be backward compatible, but it is ugly
+                CommandOutput::object(Ok::<_, ()>(id))
             }
             IdentityCommand::Create {
                 alias,
@@ -209,33 +211,34 @@ impl IdentityCommand {
                         from_keystore: Some(key_file),
                     })
                     .await??;
-                CommandOutput::object(id)
+                // We return Ok, just to be backward compatible, but it is ugly
+                CommandOutput::object(Ok::<_, ()>(id))
             }
             IdentityCommand::Lock { node_or_alias } => {
                 let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
-                CommandOutput::object(
-                    bus::service(identity::BUS_ID)
-                        .send(identity::Lock::with_id(node_id))
-                        .await?,
-                )
+                let id = bus::service(identity::BUS_ID)
+                    .send(identity::Lock::with_id(node_id))
+                    .await??;
+                // We return Ok, just to be backward compatible, but it is ugly
+                CommandOutput::object(Ok::<_, ()>(id))
             }
             IdentityCommand::Unlock { node_or_alias } => {
                 let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
                 let password = rpassword::read_password_from_tty(Some("Password: "))?;
-                CommandOutput::object(
-                    bus::service(identity::BUS_ID)
-                        .send(identity::Unlock::with_id(node_id, password))
-                        .await?,
-                )
+                let id = bus::service(identity::BUS_ID)
+                    .send(identity::Unlock::with_id(node_id, password))
+                    .await??;
+                // We return Ok, just to be backward compatible, but it is ugly
+                CommandOutput::object(Ok::<_, ()>(id))
             }
             IdentityCommand::Drop { node_or_alias } => {
-                let id = node_or_alias.resolve().await?;
+                let node_id = node_or_alias.resolve().await?;
 
-                CommandOutput::object(
-                    bus::service(identity::BUS_ID)
-                        .send(identity::Drop::with_id(id))
-                        .await??,
-                )
+                let id = bus::service(identity::BUS_ID)
+                    .send(identity::Drop::with_id(node_id))
+                    .await??;
+                // We return Ok, just to be backward compatible, but it is ugly
+                CommandOutput::object(Ok::<_, ()>(id))
             }
             IdentityCommand::Export {
                 node_or_alias,
@@ -255,7 +258,13 @@ impl IdentityCommand {
                         std::fs::write(file, key_file)?;
                         CommandOutput::object(format!("Written to '{}'", file.display()))
                     }
-                    None => CommandOutput::object(key_file),
+                    None => {
+                        if ctx.json_output {
+                            Ok(CommandOutput::Object(serde_json::from_str(&key_file)?))
+                        } else {
+                            CommandOutput::object(key_file)
+                        }
+                    }
                 }
             }
         }
