@@ -172,21 +172,16 @@ async def test_provider_renegotiate_proposal(
     nodes = [
         {"name": "requestor-1", "type": "Requestor"},
         {"name": "requestor-2", "type": "Requestor"},
-        {"name": "provider-1", "type": "VM-Wasm-Provider", "use-proxy": True},
+        {"name": "provider-1", "type": "Wasm-Provider", "use-proxy": True},
     ]
     config_overrides.append(("nodes", nodes))
 
-    goth_config = load_yaml(common_assets / "goth-config.yml", config_overrides)
+    runner, config = _create_runner(common_assets, config_overrides, log_dir)
 
-    runner = Runner(
-        base_log_dir=log_dir,
-        compose_config=goth_config.compose_config,
-        web_root_path=common_assets / "web-root",
-    )
-
-    async with runner(goth_config.containers):
+    async with runner(config.containers):
         requestor1, requestor2 = runner.get_probes(probe_type=RequestorProbe)
         providers = runner.get_probes(probe_type=ProviderProbe)
+        assert providers
 
         def build_demand(requestor):
             return (
