@@ -1,41 +1,36 @@
 use futures::future::BoxFuture;
 use futures::prelude::*;
 use futures::FutureExt;
-use std::{
-    clone::Clone,
-    env,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::clone::Clone;
+use std::env;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tokio;
-use ya_runtime_api::server::{self, AsyncResponse, ProcessStatus, RuntimeEvent, RuntimeService};
+use ya_runtime_api::server::*;
 
 // server
 
-struct RuntimeMock<E>
+struct RuntimeMock<H>
 where
-    E: RuntimeEvent,
+    H: RuntimeHandler,
 {
-    event_emitter: E,
+    handler: H,
 }
 
-impl<E: RuntimeEvent> server::RuntimeService for RuntimeMock<E> {
+impl<H: RuntimeHandler> RuntimeService for RuntimeMock<H> {
     fn hello(&self, version: &str) -> AsyncResponse<String> {
         eprintln!("server version: {}", version);
         async { Ok("0.0.0-demo".to_owned()) }.boxed_local()
     }
 
-    fn run_process(
-        &self,
-        _run: server::RunProcess,
-    ) -> server::AsyncResponse<server::RunProcessResp> {
+    fn run_process(&self, _run: RunProcess) -> AsyncResponse<RunProcessResp> {
         async move {
-            let mut resp: server::RunProcessResp = Default::default();
+            let mut resp: RunProcessResp = Default::default();
             resp.pid = 100;
             log::debug!("before delay_for");
             tokio::time::delay_for(Duration::from_secs(3)).await;
             log::debug!("after delay_for");
-            self.event_emitter
+            self.handler
                 .on_process_status(ProcessStatus {
                     pid: resp.pid,
                     running: true,
@@ -49,15 +44,12 @@ impl<E: RuntimeEvent> server::RuntimeService for RuntimeMock<E> {
         .boxed_local()
     }
 
-    fn kill_process(&self, kill: server::KillProcess) -> AsyncResponse<()> {
+    fn kill_process(&self, kill: KillProcess) -> AsyncResponse<()> {
         log::debug!("got kill: {:?}", kill);
         future::ok(()).boxed_local()
     }
 
-    fn create_network(
-        &self,
-        _: server::CreateNetwork,
-    ) -> AsyncResponse<'_, server::CreateNetworkResp> {
+    fn create_network(&self, _: CreateNetwork) -> AsyncResponse<'_, CreateNetworkResp> {
         unimplemented!()
     }
 
@@ -82,10 +74,14 @@ impl EventMock {
     }
 }
 
-impl RuntimeEvent for EventMock {
-    fn on_process_status<'a>(&self, status: ProcessStatus) -> BoxFuture<'a, ()> {
+impl RuntimeHandler for EventMock {
+    fn on_process_status(&self, status: ProcessStatus) -> BoxFuture<'_, ()> {
         log::debug!("event: {:?}", status);
         *(self.0.lock().unwrap()) = status;
+        future::ready(()).boxed()
+    }
+
+    fn on_runtime_status(&self, _: RuntimeStatus) -> BoxFuture<'_, ()> {
         future::ready(()).boxed()
     }
 }
@@ -103,7 +99,10 @@ async fn main() -> anyhow::Result<()> {
     }
     env_logger::init();
     if env::var("X_SERVER").is_ok() {
-        server::run(|event_emitter| RuntimeMock { event_emitter }).await
+        run(|event_emitter| RuntimeMock {
+            handler: event_emitter,
+        })
+        .await
     } else {
         use tokio::process::Command;
         let exe = env::current_exe().unwrap();
@@ -111,9 +110,9 @@ async fn main() -> anyhow::Result<()> {
         let mut cmd = Command::new(exe);
         cmd.env("X_SERVER", "1");
         let events = EventMock::new();
-        let c = server::spawn(cmd, events.clone()).await?;
+        let c = spawn(cmd, events.clone()).await?;
         log::debug!("hello_result={:?}", c.hello("0.0.0x").await);
-        let mut run = server::RunProcess::default();
+        let mut run = RunProcess::default();
         run.bin = "sleep".to_owned();
         run.args = vec!["10".to_owned()];
         let sleep_1 = c.run_process(run.clone());

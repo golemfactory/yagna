@@ -1,9 +1,9 @@
 use futures::channel::mpsc;
 use futures::StreamExt;
 use tokio_util::codec::{BytesCodec, FramedRead};
-use ya_client_model::activity::{
-    CaptureFormat, CaptureMode, CapturePart, CommandOutput, RuntimeEvent,
-};
+use ya_client_model::activity::{CaptureFormat, CaptureMode, CapturePart, CommandOutput};
+
+use crate::message::RuntimeEvent;
 
 pub(crate) async fn forward_output<F, R>(read: R, tx: &mpsc::Sender<RuntimeEvent>, f: F)
 where

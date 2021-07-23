@@ -1,6 +1,6 @@
 use super::RuntimeService;
 use super::{codec, proto, ErrorResponse};
-use crate::server::RuntimeEvent;
+use crate::server::RuntimeHandler;
 use futures::future::BoxFuture;
 use futures::lock::Mutex;
 use futures::prelude::*;
@@ -54,11 +54,24 @@ pub struct EventEmitter {
     tx: futures::channel::mpsc::Sender<proto::Response>,
 }
 
-impl RuntimeEvent for EventEmitter {
-    fn on_process_status<'a>(&self, status: proto::response::ProcessStatus) -> BoxFuture<'a, ()> {
+impl RuntimeHandler for EventEmitter {
+    fn on_process_status(&self, status: proto::response::ProcessStatus) -> BoxFuture<'_, ()> {
         let mut response = proto::Response::default();
         response.event = true;
         response.command = Some(proto::response::Command::Status(status));
+        let mut tx = self.tx.clone();
+        async move {
+            if let Err(e) = tx.send(response).await {
+                log::error!("send event failed: {}", e)
+            }
+        }
+        .boxed()
+    }
+
+    fn on_runtime_status(&self, status: proto::response::RuntimeStatus) -> BoxFuture<'_, ()> {
+        let mut response = proto::Response::default();
+        response.event = true;
+        response.command = Some(proto::response::Command::RtStatus(status));
         let mut tx = self.tx.clone();
         async move {
             if let Err(e) = tx.send(response).await {
