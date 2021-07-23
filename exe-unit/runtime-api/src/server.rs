@@ -47,9 +47,9 @@ pub trait RuntimeService {
 /// Process and internal event handler
 pub trait RuntimeHandler {
     /// Process event handler
-    fn on_process_status(&self, status: ProcessStatus) -> BoxFuture<'_, ()>;
+    fn on_process_status<'a>(&self, status: ProcessStatus) -> BoxFuture<'a, ()>;
     /// Runtime event handler
-    fn on_runtime_status(&self, status: RuntimeStatus) -> BoxFuture<'_, ()>;
+    fn on_runtime_status<'a>(&self, status: RuntimeStatus) -> BoxFuture<'a, ()>;
 }
 
 /// Runtime control interface

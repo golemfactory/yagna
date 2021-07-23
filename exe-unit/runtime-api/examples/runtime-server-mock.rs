@@ -75,13 +75,13 @@ impl EventMock {
 }
 
 impl RuntimeHandler for EventMock {
-    fn on_process_status(&self, status: ProcessStatus) -> BoxFuture<'_, ()> {
+    fn on_process_status<'a>(&self, status: ProcessStatus) -> BoxFuture<'a, ()> {
         log::debug!("event: {:?}", status);
         *(self.0.lock().unwrap()) = status;
         future::ready(()).boxed()
     }
 
-    fn on_runtime_status(&self, _: RuntimeStatus) -> BoxFuture<'_, ()> {
+    fn on_runtime_status<'a>(&self, _: RuntimeStatus) -> BoxFuture<'a, ()> {
         future::ready(()).boxed()
     }
 }

@@ -55,7 +55,7 @@ pub struct EventEmitter {
 }
 
 impl RuntimeHandler for EventEmitter {
-    fn on_process_status(&self, status: proto::response::ProcessStatus) -> BoxFuture<'_, ()> {
+    fn on_process_status<'a>(&self, status: proto::response::ProcessStatus) -> BoxFuture<'a, ()> {
         let mut response = proto::Response::default();
         response.event = true;
         response.command = Some(proto::response::Command::Status(status));
@@ -68,7 +68,7 @@ impl RuntimeHandler for EventEmitter {
         .boxed()
     }
 
-    fn on_runtime_status(&self, status: proto::response::RuntimeStatus) -> BoxFuture<'_, ()> {
+    fn on_runtime_status<'a>(&self, status: proto::response::RuntimeStatus) -> BoxFuture<'a, ()> {
         let mut response = proto::Response::default();
         response.event = true;
         response.command = Some(proto::response::Command::RtStatus(status));

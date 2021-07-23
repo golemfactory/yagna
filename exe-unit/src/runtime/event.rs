@@ -47,7 +47,7 @@ impl EventMonitor {
 }
 
 impl ya_runtime_api::server::RuntimeHandler for EventMonitor {
-    fn on_process_status(&self, status: ProcessStatus) -> BoxFuture<'_, ()> {
+    fn on_process_status<'a>(&self, status: ProcessStatus) -> BoxFuture<'a, ()> {
         let (mut ctx, done_tx) = {
             let mut proc_map = self.processes.lock().unwrap();
             let mut fallback = self.fallback.lock().unwrap();
@@ -81,7 +81,7 @@ impl ya_runtime_api::server::RuntimeHandler for EventMonitor {
         .boxed()
     }
 
-    fn on_runtime_status(&self, status: RuntimeStatus) -> BoxFuture<'_, ()> {
+    fn on_runtime_status<'a>(&self, status: RuntimeStatus) -> BoxFuture<'a, ()> {
         use ya_runtime_api::server::proto::response::runtime_status::Kind;
 
         let mut ctx = {
