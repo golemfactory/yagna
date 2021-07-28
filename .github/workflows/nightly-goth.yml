@@ -12,11 +12,35 @@ on:
     - cron: '0 3 * * *'
 
 jobs:
+  prepare-matrix:
+    name: Prepare matrix JSON
+    runs-on: ubuntu-latest
+    outputs:
+      matrix-json: ${{ steps.get-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      # finds branches with names matching the release branch convention (e.g. release/v0.7) and returns one with highest version
+      - name: Get latest stable branch
+        id: latest-stable
+        # second sed expression removes leading whitespaces and '*' characters (git uses it to indicate the current branch)
+        run: |
+          branch=$(git branch -a | sed -e 's:remotes/origin/::' -e 's:^[ \t*]*::' | grep -E '^release\/v[0-9]+(\.[0-9]+)+$' | sort -Vr | head -1)
+          echo "::set-output name=branch::$branch"
+
+      # prepares JSON object representing strategy matrix which contains two 'branch' variants: master and latest stable
+      - name: Get matrix JSON
+        id: get-matrix
+        run: echo "::set-output name=matrix::{\"include\":[{\"branch\":\"master\"},{\"branch\":\"${{ steps.latest-stable.outputs.branch }}\"}]}"
+
   integration-test:
+    needs: prepare-matrix
     strategy:
+      matrix: ${{ fromJson(needs.prepare-matrix.outputs.matrix-json) }}
       fail-fast: false
-      matrix:
-        branch: ["master", "release/v0.7"]
     runs-on: goth
     name: Integration Tests (nightly) @ ${{ matrix.branch }}
     defaults:
