@@ -12,6 +12,7 @@ use crate::dao::EventDao;
 use crate::error::Error;
 
 pub mod service;
+mod tracker;
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
     scope.service(get_events).service(set_activity_state)
