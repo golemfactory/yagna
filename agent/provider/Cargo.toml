@@ -16,8 +16,8 @@ path = "src/main.rs"
 ya-agreement-utils = { version = "^0.2"}
 ya-client = { version = "0.5", features = ['cli'] }
 ya-client-model = "0.3"
-ya-compile-time-utils = "0.1"
-ya-core-model = { version = "^0.3", features = ['activity', 'payment'] }
+ya-compile-time-utils = "0.2"
+ya-core-model = { version = "^0.4", features = ['activity', 'payment'] }
 ya-file-logging = "0.1"
 ya-utils-actix = "0.1"
 ya-utils-path = "0.1"
@@ -56,7 +56,7 @@ strum = "0.20"
 strum_macros = "0.20"
 sys-info = "0.7.0"
 thiserror = "1.0.14"
-tokio = { version = "0.2.10", features = ["process", "signal"] }
+tokio = { version = "0.2", features = ["process", "signal", "dns"] }
 url = "2.1.1"
 walkdir = "2.3.1"
 yansi = "0.5.0"

@@ -22,6 +22,7 @@ use ya_metrics::{MetricsPusherOpts, MetricsService};
 use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
 use ya_persistence::executor::DbExecutor;
+use ya_persistence::service::Persistence as PersistenceService;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_api_interfaces::Provider;
@@ -33,6 +34,7 @@ use ya_sgx::SgxService;
 use ya_utils_path::data_dir::DataDir;
 use ya_utils_process::lock::ProcLock;
 use ya_version::VersionService;
+use ya_vpn::VpnService;
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
@@ -186,6 +188,8 @@ impl TryFrom<CliCtx> for ServiceContext {
 
 #[ya_service_api_derive::services(ServiceContext)]
 enum Services {
+    #[enable(gsb, cli)]
+    Db(PersistenceService),
     // Metrics service must be activated before all other services
     // to that will use it. Identity service is used by the Metrics,
     // so must be initialized before.
@@ -197,6 +201,8 @@ enum Services {
     Version(VersionService),
     #[enable(gsb)]
     Net(NetService),
+    #[enable(rest)]
+    Vpn(VpnService),
     #[enable(gsb, rest)]
     Market(MarketService),
     #[enable(gsb, rest, cli)]

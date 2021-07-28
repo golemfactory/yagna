@@ -1,6 +1,6 @@
 [package]
 name = "gftp"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 homepage = "https://github.com/golemfactory/yagna"
@@ -18,8 +18,8 @@ name="gftp"
 required-features=['bin']
 
 [dependencies]
-ya-compile-time-utils = "0.1"
-ya-core-model = { version = "^0.3", features = ["gftp", "identity", "net"] }
+ya-compile-time-utils = "0.2"
+ya-core-model = { version = "^0.4", features = ["gftp", "identity", "net"] }
 ya-service-bus = "0.4"
 
 actix-rt = "1.0"

@@ -4,7 +4,7 @@ use serde_json::Value;
 
 use ya_agreement_utils::agreement::{expand, flatten_value};
 use ya_agreement_utils::AgreementView;
-use ya_client_model::market::{NewOffer, Reason};
+use ya_client_model::market::NewOffer;
 
 use super::builtin::{LimitExpiration, MaxAgreements};
 use super::common::{offer_definition_to_offer, AgreementResponse, Negotiator, ProposalResponse};
@@ -74,6 +74,7 @@ impl Handler<ReactToProposal> for CompositeNegotiator {
                         message,
                         serde_json::json!({ "golem.proposal.rejection.is-final": is_final }),
                     )),
+                    is_final,
                 })
             }
             NegotiationResult::Ready { offer } | NegotiationResult::Negotiating { offer } => {
@@ -146,10 +147,15 @@ impl Handler<ReactToAgreement> for CompositeNegotiator {
                         message,
                         serde_json::json!({ "golem.proposal.rejection.is-final": is_final }),
                     )),
+                    is_final,
                 })
             }
             NegotiationResult::Negotiating { .. } => Ok(AgreementResponse::RejectAgreement {
-                reason: Some(Reason::new("Negotiations aren't finished.")),
+                reason: Some(reason_with_extra(
+                    format!("Negotiations aren't finished."),
+                    serde_json::json!({ "golem.proposal.rejection.is-final": false }),
+                )),
+                is_final: false,
             }),
         }
     }

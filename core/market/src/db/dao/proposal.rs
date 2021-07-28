@@ -136,12 +136,14 @@ impl<'c> ProposalDao<'c> {
     }
 
     pub async fn clean(&self) -> DbResult<()> {
-        // FIXME clean negotiations also
         log::debug!("Clean market proposals: start");
         loop {
             let (num_deleted_p, num_deleted_n) = do_with_transaction(self.pool, move |conn| {
                 // diesel forbids the same table appearing more than once in a query
-                // so we'll do some manual operations here
+                // so we'll do some manual operations here.
+                // NOTE: Because of that it's easy to hit
+                //       SQLITE_MAX_VARIABLE_NUMBER which is 999
+                //       prior to 3.32.0 (2020-05-22).
                 // TODO: Use sql max(expiration_ts)
                 let expired_negotiations = dsl_negotiation::market_negotiation
                     .filter(
@@ -151,7 +153,7 @@ impl<'c> ProposalDao<'c> {
                                 .select(dsl::negotiation_id),
                         ),
                     )
-                    .limit(500)
+                    .limit(990) // Be aware of too many sql variables
                     .select(dsl_negotiation::id)
                     .load::<String>(conn)?;
                 let ndp = diesel::delete(

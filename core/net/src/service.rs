@@ -305,7 +305,7 @@ impl Net {
             move || bind_remote(client_info.clone(), default_id.clone(), ids.clone()),
             move || unbind_remote(ids_clone.clone()),
         )
-        .await;
+        .await?;
         Ok(())
     }
 }

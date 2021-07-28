@@ -38,3 +38,16 @@ impl<'a> std::fmt::Display for DisplayEnabler<'a, NewOffer> {
         }
     }
 }
+
+impl<'a, Type> std::fmt::Display for DisplayEnabler<'a, Option<Type>>
+where
+    Type: std::fmt::Display,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        match &self.0 {
+            Some(id) => id.fmt(f),
+            // TODO: Someone funny could set appSessionId to "None" string.
+            None => write!(f, "None"),
+        }
+    }
+}

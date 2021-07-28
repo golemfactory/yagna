@@ -7,6 +7,7 @@ use ya_agreement_utils::{AgreementView, OfferDefinition};
 use ya_client::model::market::Reason;
 use ya_client_model::market::{NewOffer, Proposal};
 
+use crate::display::EnableDisplay;
 use crate::market::termination_reason::BreakReason;
 
 /// Response for requestor proposals.
@@ -18,12 +19,10 @@ pub enum ProposalResponse {
         offer: NewOffer,
     },
     AcceptProposal,
-    #[display(
-        fmt = "RejectProposal{}",
-        "reason.as_ref().map(|r| format!(\" (reason: {})\", r)).unwrap_or(\"\".into())"
-    )]
+    #[display(fmt = "RejectProposal (reason: {})", "reason.display()")]
     RejectProposal {
         reason: Option<Reason>,
+        is_final: bool,
     },
     ///< Don't send any message to requestor. Could be useful to wait for other offers.
     IgnoreProposal,
@@ -34,12 +33,10 @@ pub enum ProposalResponse {
 #[allow(dead_code)]
 pub enum AgreementResponse {
     ApproveAgreement,
-    #[display(
-        fmt = "RejectAgreement{}",
-        "reason.as_ref().map(|r| format!(\" (reason: {})\", r)).unwrap_or(\"\".into())"
-    )]
+    #[display(fmt = "RejectAgreement (reason: {})", "reason.display()")]
     RejectAgreement {
         reason: Option<Reason>,
+        is_final: bool,
     },
 }
 
@@ -202,21 +199,29 @@ mod tests {
     fn test_proposal_response_display() {
         let reason = ProposalResponse::RejectProposal {
             reason: Some("zima".into()),
+            is_final: false,
         };
-        let no_reason = ProposalResponse::RejectProposal { reason: None };
+        let no_reason = ProposalResponse::RejectProposal {
+            reason: None,
+            is_final: false,
+        };
 
         assert_eq!(reason.to_string(), "RejectProposal (reason: 'zima')");
-        assert_eq!(no_reason.to_string(), "RejectProposal");
+        assert_eq!(no_reason.to_string(), "RejectProposal (reason: None)");
     }
 
     #[test]
     fn test_agreement_response_display() {
         let reason = AgreementResponse::RejectAgreement {
             reason: Some("lato".into()),
+            is_final: false,
         };
-        let no_reason = AgreementResponse::RejectAgreement { reason: None };
+        let no_reason = AgreementResponse::RejectAgreement {
+            reason: None,
+            is_final: false,
+        };
 
         assert_eq!(reason.to_string(), "RejectAgreement (reason: 'lato')");
-        assert_eq!(no_reason.to_string(), "RejectAgreement");
+        assert_eq!(no_reason.to_string(), "RejectAgreement (reason: None)");
     }
 }

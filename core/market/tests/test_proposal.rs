@@ -127,6 +127,11 @@ async fn test_proposal_random_shuffle() {
                 .await
                 .unwrap(),
         );
+        // subscribe to broadcasts
+        market
+            .subscribe_demand(&sample_demand(), &identity)
+            .await
+            .unwrap();
         ids.push(identity.identity);
 
         tokio::time::delay_for(Duration::from_millis(200)).await;
