@@ -212,9 +212,10 @@ async def test_provider_renegotiate_proposal(
                 lambda p: p.properties.get("golem.runtime.name") == "wasmtime",
             )
             logger.info("Collected %s proposals", len(proposals))
+            assert len(proposals) == len(providers)
             return subscription_id, proposals
 
-        async def negotiate_rejection(
+        async def accept_all_proposals(
             requestor, demand, providers, subscription_id, proposals
         ):
             counter_providers = []
@@ -230,34 +231,31 @@ async def test_provider_renegotiate_proposal(
                 counter_providers.append((counter_proposal_id, provider))
             return counter_providers
 
-        async def renegotiate(requestor, counter_providers, subscription_id):
+        async def renegotiate(requestor, providers: List[ProviderProbe], subscription_id):
             logger.info("%s: renegotiate()", requestor.name)
             agreement_providers = []
-            for counter_proposal_id, provider in counter_providers:
-                logger.info(
-                    "%s with %s. p.wait_for_proposal_accepted()",
-                    requestor.name,
-                    provider.name,
-                )
-                # await provider.wait_for_proposal_accepted()
+            logger.info(
+                "requestor.name: %s. r.collect_offers()",
+                requestor.name,
+            )
 
-                new_proposals = []
-                collected_offers = await requestor.api.market.collect_offers(
-                    subscription_id
-                )
-                logger.info("collected offers: %s", collected_offers)
-                assert len(collected_offers) == 2
-                assert (
-                    collected_offers[0].reason.message
-                    == "No capacity available. Reached Agreements limit: 1"
-                )
-                new_proposals.append(collected_offers[1].proposal)
+            events = await requestor.api.market.collect_offers(
+                subscription_id
+            )
+            logger.info("collected offers: %s", events)
+            assert len(events) == 2
+            assert (
+                events[0].reason.message
+                == "No capacity available. Reached Agreements limit: 1"
+            )
+            offer = events[1].proposal
+            provider = [p for p in providers if p.address == events[1].proposal.issuer_id][0]
 
-                agreement_id = await requestor.create_agreement(new_proposals[0])
-                await requestor.confirm_agreement(agreement_id)
-                await provider.wait_for_agreement_approved()
-                await requestor.wait_for_approval(agreement_id)
-                agreement_providers.append((agreement_id, provider))
+            agreement_id = await requestor.create_agreement(offer)
+            await requestor.confirm_agreement(agreement_id)
+            await provider.wait_for_agreement_approved()
+            await requestor.wait_for_approval(agreement_id)
+            agreement_providers.append((agreement_id, provider))
             return agreement_providers
 
         async def negotiate_finalize(
@@ -290,10 +288,11 @@ async def test_provider_renegotiate_proposal(
                 agreement_providers.append((agreement_id, provider))
 
             await requestor.unsubscribe_demand(subscription_id)
-            logger.info("Got %s agreements", len(agreement_providers))
+            logger.info("Got %d agreements", len(agreement_providers))
+            assert agreement_providers
             return agreement_providers
 
-        async def run(requestor, agreement_providers, second_requestor=None):
+        async def run(requestor, agreement_providers):
             logger.info("%s run()", requestor.name)
             for agreement_id, provider in agreement_providers:
                 logger.info(
@@ -304,8 +303,6 @@ async def test_provider_renegotiate_proposal(
                 )
                 activity_id = await requestor.create_activity(agreement_id)
                 await provider.wait_for_exeunit_started()
-                if second_requestor is not None:
-                    second_requestor()
                 await requestor.destroy_activity(activity_id)
                 await provider.wait_for_exeunit_finished()
 
@@ -329,14 +326,14 @@ async def test_provider_renegotiate_proposal(
         )
         logger.info("agreement_providers1: %s", agreement_providers1)
         # Second requestor will get rejection because of capacity limits (provider already has an agreement with requestor 1)
-        counter_providers = await negotiate_rejection(
+        _counter_providers = await accept_all_proposals(
             requestor2, demand2, providers, subscription_id2, proposals2
         )
 
         await run(requestor1, agreement_providers1)
         # First requestor terminated agreement, so provider should renegotiate with second requestor
         agreement_providers2 = await renegotiate(
-            requestor2, counter_providers, subscription_id2
+            requestor2, providers, subscription_id2,
         )
         logger.info("agreement_providers2: %s", agreement_providers2)
         await run(requestor2, agreement_providers2)
