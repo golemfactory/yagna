@@ -2,7 +2,6 @@ use actix::Actor;
 use std::env;
 use structopt::{clap, StructOpt};
 
-use ya_provider::dir::clean_provider_dir;
 use ya_provider::provider_agent::{Initialize, ProviderAgent, Shutdown};
 use ya_provider::signal::SignalMonitor;
 use ya_provider::startup_config::{Commands, StartupConfig};
@@ -43,19 +42,6 @@ async fn main() -> anyhow::Result<()> {
         Commands::Preset(presets_cmd) => presets_cmd.run(config),
         Commands::Profile(profile_cmd) => profile_cmd.run(config),
         Commands::ExeUnit(exe_unit_cmd) => exe_unit_cmd.run(config),
-        Commands::Clean(clean_cmd) => {
-            println!("Using data dir: {}", data_dir.display());
-
-            let freed = clean_provider_dir(data_dir, clean_cmd.expr, true, clean_cmd.dry_run)?;
-            let human_freed = bytesize::to_string(freed, false);
-
-            if clean_cmd.dry_run {
-                println!("Dry run: {} to be freed", human_freed)
-            } else {
-                println!("Freed {} of disk space", human_freed)
-            }
-
-            Ok(())
-        }
+        Commands::Clean(clean_cmd) => clean_cmd.run(config),
     }
 }

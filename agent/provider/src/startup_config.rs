@@ -15,6 +15,7 @@ use ya_client::{cli::ApiOpts, model::node_id::NodeId};
 use ya_core_model::payment::local::NetworkName;
 use ya_utils_path::data_dir::DataDir;
 
+use crate::cli::clean::CleanConfig;
 use crate::cli::config::ConfigConfig;
 use crate::cli::exe_unit::ExeUnitsConfig;
 pub use crate::cli::preset::PresetsConfig;
@@ -183,19 +184,6 @@ pub struct StartupConfig {
     pub config: ProviderConfig,
     #[structopt(flatten)]
     pub commands: Commands,
-}
-
-#[derive(StructOpt, Clone, Debug)]
-#[structopt(rename_all = "kebab-case")]
-pub struct CleanConfig {
-    /// Expression in the following format:
-    /// <number>P, e.g. 30d
-    /// where P: s|m|h|d|w|M|y or empty for days
-    #[structopt(default_value = "30d")]
-    pub expr: String,
-    /// Perform a dry run
-    #[structopt(long)]
-    pub dry_run: bool,
 }
 
 #[derive(StructOpt, Clone)]

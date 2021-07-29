@@ -6414,6 +6414,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "winres"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff4fb510bbfe5b8992ff15f77a2e6fe6cf062878f0eda00c0f44963a807ca5dc"
+dependencies = [
+ "toml",
+]
+
+[[package]]
 name = "ws2_32-sys"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6680,6 +6689,7 @@ dependencies = [
  "tokio-util 0.3.1",
  "url",
  "winapi 0.3.9",
+ "winres",
  "ya-agreement-utils",
  "ya-client-model",
  "ya-compile-time-utils",
@@ -7008,6 +7018,7 @@ dependencies = [
  "winapi 0.3.9",
  "ya-agreement-utils",
  "ya-client",
+ "ya-client-model",
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-file-logging",
