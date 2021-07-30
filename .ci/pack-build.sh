@@ -17,6 +17,10 @@ if [ "$OS_NAME" = "ubuntu" ]; then
   OS_NAME=linux
   target=x86_64-unknown-linux-musl/
   exe=""
+elif [ "$OS_NAME" == "linux-aarch64" ]; then
+  OS_NAME=linux_aarch64
+  target=aarch64-unknown-linux-musl/
+  exe=""
 elif [ "$OS_NAME" == "macos" ]; then
   OS_NAME=osx
 elif [ "$OS_NAME" == "windows" ]; then
@@ -59,7 +63,3 @@ generate_asset() {
 
 generate_asset "requestor" "yagna gftp"
 generate_asset "provider" "golemsp yagna ya-provider" "exe-unit"
-
-
-
-
