@@ -393,8 +393,8 @@ mod public {
 
             log::info!(
                 "DebitNote [{}] received from node [{}].",
-                node_id,
-                debit_note_id
+                debit_note_id,
+                issuer_id
             );
             counter!("payment.debit_notes.requestor.received", 1);
             Ok(())
