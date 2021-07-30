@@ -2280,7 +2280,7 @@ dependencies = [
 
 [[package]]
 name = "gftp"
-version = "0.2.1"
+version = "0.2.3"
 dependencies = [
  "actix-rt",
  "anyhow",
@@ -4988,7 +4988,7 @@ version = "0.5.1"
 source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6c848541e89262f90ca693d9e1a84c6f3df0953b"
 dependencies = [
  "lazy_static",
- "parking_lot 0.11.1",
+ "parking_lot 0.10.2",
  "serial_test_derive",
 ]
 
@@ -7334,7 +7334,7 @@ dependencies = [
 
 [[package]]
 name = "yagna"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "actix-rt",
  "actix-service",
