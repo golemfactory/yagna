@@ -1,20 +1,27 @@
-use directories::UserDirs;
-use futures::channel::oneshot;
-use notify::*;
-use serde::{Deserialize, Serialize};
+use std::env;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::Duration;
+
+use directories::UserDirs;
+use futures::channel::oneshot;
+use notify::*;
+use serde::{Deserialize, Serialize};
 use structopt::{clap, StructOpt};
 use strum::VariantNames;
-
 use ya_client::{cli::ApiOpts, model::node_id::NodeId};
+
 use ya_core_model::payment::local::NetworkName;
 use ya_utils_path::data_dir::DataDir;
 
+use crate::cli::clean::CleanConfig;
+use crate::cli::config::ConfigConfig;
+use crate::cli::exe_unit::ExeUnitsConfig;
+pub use crate::cli::preset::PresetsConfig;
+use crate::cli::profile::ProfileConfig;
+pub(crate) use crate::config::globals::GLOBALS_JSON;
 use crate::execution::{ExeUnitsRegistry, TaskRunnerConfig};
-use crate::hardware::{Resources, UpdateResources};
 use crate::market::config::MarketConfig;
 use crate::payments::PaymentsConfig;
 use crate::tasks::config::TaskConfig;
@@ -24,8 +31,6 @@ lazy_static::lazy_static! {
 
     static ref DEFAULT_PLUGINS_DIR : PathBuf = default_plugins();
 }
-
-pub(crate) const GLOBALS_JSON: &'static str = "globals.json";
 pub(crate) const PRESETS_JSON: &'static str = "presets.json";
 pub(crate) const HARDWARE_JSON: &'static str = "hardware.json";
 
@@ -147,15 +152,6 @@ pub struct RunConfig {
 }
 
 #[derive(StructOpt, Clone, Debug)]
-pub enum ConfigConfig {
-    Get {
-        /// 'node_name' or 'subnet'. If unspecified all config is printed.
-        name: Option<String>,
-    },
-    Set(NodeConfig),
-}
-
-#[derive(StructOpt, Clone, Debug)]
 pub struct PresetNoInteractive {
     #[structopt(long)]
     pub preset_name: Option<String>,
@@ -177,73 +173,6 @@ pub struct UpdateNames {
     pub names: Vec<String>,
 }
 
-#[derive(StructOpt, Clone, Debug)]
-#[structopt(rename_all = "kebab-case")]
-pub enum PresetsConfig {
-    /// List available presets
-    List,
-    /// List active presets
-    Active,
-    /// Create a preset
-    Create {
-        #[structopt(long)]
-        no_interactive: bool,
-        #[structopt(flatten)]
-        params: PresetNoInteractive,
-    },
-    /// Remove a preset
-    Remove { name: String },
-    /// Update a preset
-    Update {
-        #[structopt(flatten)]
-        names: UpdateNames,
-        #[structopt(long)]
-        no_interactive: bool,
-        #[structopt(flatten)]
-        params: PresetNoInteractive,
-    },
-    /// Activate a preset
-    Activate { name: String },
-    /// Deactivate a preset
-    Deactivate { name: String },
-    /// List available metrics
-    ListMetrics,
-}
-
-#[derive(StructOpt, Clone, Debug)]
-#[structopt(rename_all = "kebab-case")]
-pub enum ProfileConfig {
-    /// List available profiles
-    List,
-    /// Show the name of an active profile
-    Active,
-    /// Create a new profile
-    Create {
-        name: String,
-        #[structopt(flatten)]
-        resources: Resources,
-    },
-    /// Update a profile
-    Update {
-        #[structopt(flatten)]
-        names: UpdateNames,
-        #[structopt(flatten)]
-        resources: UpdateResources,
-    },
-    /// Remove an existing profile
-    Remove { name: String },
-    /// Activate a profile
-    Activate { name: String },
-}
-
-#[derive(StructOpt, Clone, Debug)]
-#[structopt(rename_all = "kebab-case")]
-pub enum ExeUnitsConfig {
-    List,
-    // TODO: Install command - could download ExeUnit and add to descriptor file.
-    // TODO: Update command - could update ExeUnit.
-}
-
 #[derive(StructOpt, Clone)]
 #[structopt(rename_all = "kebab-case")]
 #[structopt(about = clap::crate_description!())]
@@ -255,19 +184,6 @@ pub struct StartupConfig {
     pub config: ProviderConfig,
     #[structopt(flatten)]
     pub commands: Commands,
-}
-
-#[derive(StructOpt, Clone, Debug)]
-#[structopt(rename_all = "kebab-case")]
-pub struct CleanConfig {
-    /// Expression in the following format:
-    /// <number>P, e.g. 30d
-    /// where P: s|m|h|d|w|M|y or empty for days
-    #[structopt(default_value = "30d")]
-    pub expr: String,
-    /// Perform a dry run
-    #[structopt(long)]
-    pub dry_run: bool,
 }
 
 #[derive(StructOpt, Clone)]
@@ -361,9 +277,9 @@ impl FileMonitor {
 
 impl Drop for FileMonitor {
     fn drop(&mut self) {
-        self.thread_ctl.take().map(|sender| {
+        if let Some(sender) = self.thread_ctl.take() {
             let _ = sender.send(());
-        });
+        }
     }
 }
 
@@ -383,9 +299,17 @@ where
 }
 
 fn default_plugins() -> PathBuf {
+    if let Some(mut exe) = env::current_exe().ok() {
+        exe.pop();
+        exe.push("plugins");
+        if exe.is_dir() {
+            return exe.join("ya-runtime-*.json");
+        }
+    }
+
     UserDirs::new()
         .map(|u| u.home_dir().join(".local/lib/yagna/plugins"))
         .filter(|d| d.exists())
         .map(|p| p.join("ya-runtime-*.json"))
-        .unwrap_or("/usr/lib/yagna/plugins/ya-runtime-*.json".into())
+        .unwrap_or_else(|| "/usr/lib/yagna/plugins/ya-runtime-*.json".into())
 }
