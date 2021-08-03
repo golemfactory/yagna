@@ -1,5 +1,6 @@
 use crate::TrackerRef;
 use actix_web::Scope;
+
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::scope::ExtendableScope;
 
@@ -15,15 +16,18 @@ pub fn web_scope(db: &DbExecutor, tracker: TrackerRef) -> Scope {
 
 /// Common operations for both sides: Provider and Requestor
 mod common {
-    use actix_web::{web, Responder};
+    use actix_web::{web, HttpResponse, Responder};
+    use futures::prelude::*;
 
-    use ya_core_model::{activity, Role};
+    use ya_core_model::{activity, NodeId, Role};
     use ya_persistence::executor::DbExecutor;
     use ya_service_api_web::middleware::Identity;
     use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
 
     use crate::common::*;
+    use crate::tracker::TrackingEvent;
     use crate::TrackerRef;
+    use actix_web::http::header;
 
     pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
         scope
@@ -133,15 +137,52 @@ mod common {
             .map(web::Json)
     }
 
-    #[actix_web::get("/_events")]
-    async fn get_events(
-        db: web::Data<DbExecutor>,
-        tracker: web::Data<TrackerRef>,
-        id: Identity,
-    ) -> impl Responder {
+    fn event_stream(
+        stream: tokio::sync::broadcast::Receiver<TrackingEvent>,
+        provider_id: NodeId,
+    ) -> impl futures::stream::Stream<Item = Result<web::Bytes, actix_web::Error>> {
+        futures::stream::unfold(Some(stream), move |opt_stream| async move {
+            if let Some(mut stream) = opt_stream {
+                Some(match stream.recv().await {
+                    Ok(event) => {
+                        let line = format!(
+                            "data: {}\r\n\r\n",
+                            serde_json::to_string(&event.for_provider(provider_id)).unwrap()
+                        );
+                        (Ok(web::Bytes::from(line)), Some(stream))
+                    }
+                    Err(err) => (
+                        Err(actix_web::error::ErrorInternalServerError(err).into()),
+                        None,
+                    ),
+                })
+            } else {
+                None
+            }
+        })
+    }
+
+    #[actix_web::get("/_monitor")]
+    async fn get_events(tracker: web::Data<TrackerRef>, id: Identity) -> impl Responder {
         let mut tracker = tracker.as_ref().clone();
         let (event, stream) = tracker.subscribe().await.unwrap();
-        log::error!("!event");
-        web::Json(event)
+
+        let item_str = match serde_json::to_string(&event.for_provider(id.identity)) {
+            Ok(v) => v,
+            Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
+        };
+
+        let line = format!("data: {}\r\n\r\n", item_str);
+
+        HttpResponse::Ok()
+            .header(header::CONTENT_TYPE, "text/event-stream")
+            .header(header::CACHE_CONTROL, "no-cache")
+            .streaming(Box::pin(
+                futures::stream::once(futures::future::ok(web::Bytes::from(line)))
+                    .chain(event_stream(stream, id.identity)),
+            ))
+
+        //let value = stream.recv().await.map_err(actix_web::error::ErrorInternalServerError)?;
+        //Ok::<_, actix_web::Error>(web::Json(value))
     }
 }

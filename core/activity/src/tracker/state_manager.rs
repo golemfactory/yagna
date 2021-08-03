@@ -4,13 +4,15 @@ use super::{ActivityStateModel, Map, TrackingEvent};
 use chrono::Utc;
 use std::sync::Arc;
 use tokio::sync::broadcast;
-use ya_client_model::activity::{ActivityState, StatePair};
+use ya_client_model::activity::State;
+use ya_core_model::NodeId;
 
 struct ExeUnitStatus {
     activity_id: Arc<str>,
+    identity_id: NodeId,
     exe_unit: Option<Arc<str>>,
     counters: Vec<Arc<str>>,
-    last_state: ActivityState,
+    last_state: State,
     values: Option<Vec<f64>>,
 }
 
@@ -40,7 +42,7 @@ impl StateManager {
     pub fn start_activity(
         &mut self,
         activity_id: Arc<str>,
-        _agreement_id: Arc<str>,
+        identity_id: NodeId,
         exe_unit: Option<Arc<str>>,
         counters: Vec<Arc<str>>,
     ) {
@@ -48,9 +50,10 @@ impl StateManager {
             activity_id.clone(),
             ExeUnitStatus {
                 activity_id,
+                identity_id,
                 exe_unit,
                 counters,
-                last_state: StatePair::default().into(),
+                last_state: State::New,
                 values: None,
             },
         );
@@ -65,7 +68,7 @@ impl StateManager {
         }
     }
 
-    pub fn update_state(&mut self, activity_id: &str, new_state: ActivityState) -> bool {
+    pub fn update_state(&mut self, activity_id: &str, new_state: State) -> bool {
         if let Some(state) = self.states.get_mut(activity_id) {
             if new_state != state.last_state {
                 state.last_state = new_state;
@@ -96,13 +99,17 @@ impl StateManager {
                     id: String::from(state.activity_id.as_ref()),
                     state: state.last_state.clone(),
                     usage: state.usage(),
-                    exe_unit: None,
+                    exe_unit: state.exe_unit.as_ref().map(|v| v.to_string()),
+                    provider_id: Some(state.identity_id),
                 })
                 .collect(),
         }
     }
 
     pub fn emit_state(&self) {
-        let _ = self.events.send(self.current_state());
+        match self.events.send(self.current_state()) {
+            Ok(cnt) => log::info!("send to {} recievers", cnt),
+            Err(_) => (),
+        }
     }
 }
