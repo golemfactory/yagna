@@ -24,6 +24,7 @@ use crate::common::{
 use crate::dao::*;
 use crate::db::models::ActivityEventType;
 use crate::error::Error;
+use crate::TrackerRef;
 
 const INACTIVITY_LIMIT_SECONDS_ENV_VAR: &str = "INACTIVITY_LIMIT_SECONDS";
 const UNRESPONSIVE_LIMIT_SECONDS_ENV_VAR: &str = "UNRESPONSIVE_LIMIT_SECONDS";
@@ -57,10 +58,10 @@ fn seconds_limit(env_var: &str, default_val: f64, min_val: f64) -> f64 {
     limit.max(min_val)
 }
 
-pub fn bind_gsb(db: &DbExecutor) {
+pub fn bind_gsb(db: &DbExecutor, tracker: TrackerRef) {
     // public for remote requestors interactions
-    ServiceBinder::new(activity::BUS_ID, db, ())
-        .bind(create_activity_gsb)
+    ServiceBinder::new(activity::BUS_ID, db, tracker.clone())
+        .bind_with_processor(create_activity_gsb)
         .bind(destroy_activity_gsb)
         .bind(get_activity_state_gsb)
         .bind(get_activity_usage_gsb);
@@ -73,12 +74,13 @@ pub fn bind_gsb(db: &DbExecutor) {
     counter!("activity.provider.destroyed.by_requestor", 0);
     counter!("activity.provider.destroyed.unresponsive", 0);
 
-    local::bind_gsb(db);
+    local::bind_gsb(db, tracker);
 }
 
 /// Creates new Activity based on given Agreement.
 async fn create_activity_gsb(
     db: DbExecutor,
+    mut tracker: TrackerRef,
     caller: String,
     msg: activity::Create,
 ) -> RpcMessageResult<activity::Create> {
@@ -121,8 +123,13 @@ async fn create_activity_gsb(
         .await
         .map_err(Error::from)?;
 
+    if let Err(e) = tracker.start_activity(&activity_id, &agreement).await {
+        log::error!("fail to notify on activity start. {:?}", e);
+    }
+
     let credentials = activity_credentials(
         db.clone(),
+        tracker.clone(),
         &activity_id,
         provider_id.clone(),
         app_session_id.clone(),
@@ -132,6 +139,7 @@ async fn create_activity_gsb(
     .map_err(|e| {
         Arbiter::spawn(enqueue_destroy_evt(
             db.clone(),
+            tracker.clone(),
             &activity_id,
             provider_id,
             app_session_id,
@@ -154,6 +162,7 @@ async fn create_activity_gsb(
 
 async fn activity_credentials(
     db: DbExecutor,
+    tracker: TrackerRef,
     activity_id: &String,
     provider_id: NodeId,
     app_session_id: Option<String>,
@@ -184,6 +193,7 @@ async fn activity_credentials(
 
     Arbiter::spawn(monitor_activity(
         db.clone(),
+        tracker,
         activity_id.clone(),
         provider_id,
         app_session_id,
@@ -270,6 +280,7 @@ async fn get_activity_progress(
 
 fn enqueue_destroy_evt(
     db: DbExecutor,
+    mut tracker: TrackerRef,
     activity_id: impl ToString,
     provider_id: NodeId,
     app_session_id: Option<String>,
@@ -279,6 +290,14 @@ fn enqueue_destroy_evt(
     log::debug!("Enqueueing a Destroy event for activity {}", activity_id);
 
     async move {
+        if let Err(err) = tracker.stop_activity(activity_id.clone()).await {
+            log::error!(
+                "failed to notify activity {} destruction. {:?}",
+                &activity_id,
+                err
+            );
+        }
+
         if let Err(err) = db
             .as_dao::<EventDao>()
             .create(
@@ -302,6 +321,7 @@ fn enqueue_destroy_evt(
 
 async fn monitor_activity(
     db: DbExecutor,
+    mut tracker: TrackerRef,
     activity_id: impl ToString,
     provider_id: NodeId,
     app_session_id: Option<String>,
@@ -317,13 +337,21 @@ async fn monitor_activity(
     loop {
         if let Ok((state, usage)) = get_activity_progress(&db, &activity_id).await {
             if !state.state.alive() {
+                let _ = tracker.stop_activity(activity_id.clone()).await;
                 break;
             }
 
             let dt = (Utc::now().timestamp() - usage.timestamp) as f64;
             if dt > limit_s {
                 log::warn!("activity {} inactive for {}s, destroying", activity_id, dt);
-                enqueue_destroy_evt(db, &activity_id, provider_id, app_session_id.clone()).await;
+                enqueue_destroy_evt(
+                    db,
+                    tracker.clone(),
+                    &activity_id,
+                    provider_id,
+                    app_session_id.clone(),
+                )
+                .await;
 
                 counter!("activity.provider.destroyed.unresponsive", 1);
                 break;
@@ -331,6 +359,9 @@ async fn monitor_activity(
                 log::warn!("activity {} unresponsive after {}s", activity_id, dt);
                 let new_state = ActivityState::from(StatePair(State::Unresponsive, state.state.1));
                 prev_state = Some(state);
+                let _ = tracker
+                    .update_state(activity_id.clone(), State::Unresponsive)
+                    .await;
                 if let Err(e) = set_persisted_state(&db, &activity_id, new_state).await {
                     log::error!("cannot update activity {} state: {}", activity_id, e);
                 }
@@ -340,6 +371,9 @@ async fn monitor_activity(
                     Some(state) => state,
                     _ => panic!("unknown pre-unresponsive state of activity {}", activity_id),
                 };
+                let _ = tracker
+                    .update_state(activity_id.clone(), state.state.0)
+                    .await;
                 if let Err(e) = set_persisted_state(&db, &activity_id, state).await {
                     log::error!("cannot update activity {} state: {}", activity_id, e);
                 }
@@ -362,10 +396,10 @@ mod local {
     use crate::common::{set_persisted_state, set_persisted_usage};
     use ya_core_model::activity::local::StatsResult;
 
-    pub fn bind_gsb(db: &DbExecutor) {
-        ServiceBinder::new(activity::local::BUS_ID, db, ())
-            .bind(set_activity_state_gsb)
-            .bind(set_activity_usage_gsb)
+    pub fn bind_gsb(db: &DbExecutor, tracker: TrackerRef) {
+        ServiceBinder::new(activity::local::BUS_ID, db, tracker)
+            .bind_with_processor(set_activity_state_gsb)
+            .bind_with_processor(set_activity_usage_gsb)
             .bind(get_agreement_id_gsb)
             .bind(activity_status);
     }
@@ -401,6 +435,7 @@ mod local {
     /// who knows it is authorized to call this endpoint
     async fn set_activity_state_gsb(
         db: DbExecutor,
+        mut tracker: TrackerRef,
         _caller: String,
         msg: activity::local::SetState,
     ) -> RpcMessageResult<activity::local::SetState> {
@@ -410,6 +445,9 @@ mod local {
                 .await
                 .map_err(Error::from)?;
         }
+        let _ = tracker
+            .update_state(msg.activity_id.clone(), msg.state.state.0)
+            .await;
         set_persisted_state(&db, &msg.activity_id, msg.state).await?;
         Ok(())
     }
@@ -421,6 +459,7 @@ mod local {
     /// who knows it is authorized to call this endpoint
     async fn set_activity_usage_gsb(
         db: DbExecutor,
+        mut tracker: TrackerRef,
         _caller: String,
         msg: activity::local::SetUsage,
     ) -> RpcMessageResult<activity::local::SetUsage> {
@@ -429,6 +468,10 @@ mod local {
             for (idx, value) in usage_vec.iter().enumerate() {
                 gauge!(format!("activity.provider.usage.{}", idx), *value as i64, "activity_id" => activity_id.clone());
             }
+            // ignore
+            let _ = tracker
+                .update_counters(activity_id.clone(), usage_vec.clone())
+                .await;
         }
 
         set_persisted_usage(&db, &msg.activity_id, msg.usage).await?;
