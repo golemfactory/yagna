@@ -1,0 +1,41 @@
+name: CI aarch64
+
+on:
+  push:
+    branches:
+      - master
+      - release/*
+  pull_request:
+    branches:
+      - master
+      - release/*
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Build binaries
+        uses: docker://golemfactory/build-aarch64:0.1.1
+        with:
+          workdir: /github/workspace
+          args: >
+            /bin/bash -c "
+              export HOME=/root &&
+              cargo build -p={yagna,ya-exe-unit,ya-provider,golemsp,gftp} --release --features static-openssl &&
+              aarch64-linux-musl-strip -x target/aarch64-unknown-linux-musl/release/{yagna,ya-provider,exe-unit,golemsp,gftp}
+            "
+      - name: Copy binaries
+        shell: bash
+        run: |
+          mkdir build
+          cp target/aarch64-unknown-linux-musl/release/{yagna,ya-provider,exe-unit,golemsp,gftp} build
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v1
+        with:
+          name: Yagna linux-aarch64
+          path: build
