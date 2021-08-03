@@ -24,6 +24,7 @@ use crate::common::{
 use crate::dao::*;
 use crate::db::models::ActivityEventType;
 use crate::error::Error;
+use crate::TrackerRef;
 
 const INACTIVITY_LIMIT_SECONDS_ENV_VAR: &str = "INACTIVITY_LIMIT_SECONDS";
 const UNRESPONSIVE_LIMIT_SECONDS_ENV_VAR: &str = "UNRESPONSIVE_LIMIT_SECONDS";
@@ -57,10 +58,10 @@ fn seconds_limit(env_var: &str, default_val: f64, min_val: f64) -> f64 {
     limit.max(min_val)
 }
 
-pub fn bind_gsb(db: &DbExecutor) {
+pub fn bind_gsb(db: &DbExecutor, tracker: TrackerRef) {
     // public for remote requestors interactions
-    ServiceBinder::new(activity::BUS_ID, db, ())
-        .bind(create_activity_gsb)
+    ServiceBinder::new(activity::BUS_ID, db, tracker)
+        .bind_with_processor(create_activity_gsb)
         .bind(destroy_activity_gsb)
         .bind(get_activity_state_gsb)
         .bind(get_activity_usage_gsb);
@@ -79,6 +80,7 @@ pub fn bind_gsb(db: &DbExecutor) {
 /// Creates new Activity based on given Agreement.
 async fn create_activity_gsb(
     db: DbExecutor,
+    mut tracker: TrackerRef,
     caller: String,
     msg: activity::Create,
 ) -> RpcMessageResult<activity::Create> {
@@ -121,8 +123,11 @@ async fn create_activity_gsb(
         .await
         .map_err(Error::from)?;
 
+    tracker.start_activity(&activity_id, &agreement);
+
     let credentials = activity_credentials(
         db.clone(),
+        tracker.clone(),
         &activity_id,
         provider_id.clone(),
         app_session_id.clone(),
@@ -154,6 +159,7 @@ async fn create_activity_gsb(
 
 async fn activity_credentials(
     db: DbExecutor,
+    tracker: TrackerRef,
     activity_id: &String,
     provider_id: NodeId,
     app_session_id: Option<String>,

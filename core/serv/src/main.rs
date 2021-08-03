@@ -38,6 +38,7 @@ use ya_vpn::VpnService;
 
 mod autocomplete;
 use autocomplete::CompleteCommand;
+use ya_activity::TrackerRef;
 
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
@@ -130,6 +131,7 @@ struct ServiceContext {
     ctx: CliCtx,
     dbs: HashMap<TypeId, DbExecutor>,
     default_db: DbExecutor,
+    activity_tracker: ya_activity::TrackerRef,
 }
 
 impl<S: 'static> Provider<S, DbExecutor> for ServiceContext {
@@ -138,6 +140,12 @@ impl<S: 'static> Provider<S, DbExecutor> for ServiceContext {
             Some(db) => db.clone(),
             None => self.default_db.clone(),
         }
+    }
+}
+
+impl<S: 'static> Provider<S, ya_activity::TrackerRef> for ServiceContext {
+    fn component(&self) -> ya_activity::TrackerRef {
+        self.activity_tracker.clone()
     }
 }
 
@@ -178,10 +186,13 @@ impl TryFrom<CliCtx> for ServiceContext {
         .cloned()
         .collect();
 
+        let activity_tracker = TrackerRef::create();
+
         Ok(ServiceContext {
             ctx,
             dbs,
             default_db,
+            activity_tracker,
         })
     }
 }

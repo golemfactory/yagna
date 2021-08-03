@@ -1,18 +1,17 @@
 //! Provider side operations
 use actix_web::{web, Responder};
-
 use ya_client_model::activity::{ActivityState, ProviderEvent};
+use ya_service_bus::timeout::IntoTimeoutFuture;
+
 use ya_core_model::Role;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
-use ya_service_bus::timeout::IntoTimeoutFuture;
 
 use crate::common::{authorize_activity_executor, set_persisted_state, PathActivity, QueryEvents};
 use crate::dao::EventDao;
 use crate::error::Error;
 
 pub mod service;
-mod tracker;
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
     scope.service(get_events).service(set_activity_state)

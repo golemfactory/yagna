@@ -1,10 +1,12 @@
+use crate::TrackerRef;
 use actix_web::Scope;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::scope::ExtendableScope;
 
-pub fn web_scope(db: &DbExecutor) -> Scope {
+pub fn web_scope(db: &DbExecutor, tracker: TrackerRef) -> Scope {
     actix_web::web::scope(crate::ACTIVITY_API_PATH)
         .data(db.clone())
+        .data(tracker.clone())
         .extend(common::extend_web_scope)
         .extend(crate::provider::extend_web_scope)
         .extend(crate::requestor::control::extend_web_scope)
@@ -21,10 +23,12 @@ mod common {
     use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
 
     use crate::common::*;
+    use crate::TrackerRef;
 
     pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
         scope
             // .service(get_activities_web)
+            .service(get_events)
             .service(get_activity_state_web)
             .service(get_activity_usage_web)
     }
@@ -127,5 +131,17 @@ mod common {
         set_persisted_usage(&db, &path.activity_id, usage)
             .await
             .map(web::Json)
+    }
+
+    #[actix_web::get("/_events")]
+    async fn get_events(
+        db: web::Data<DbExecutor>,
+        tracker: web::Data<TrackerRef>,
+        id: Identity,
+    ) -> impl Responder {
+        let mut tracker = tracker.as_ref().clone();
+        let (event, stream) = tracker.subscribe().await.unwrap();
+        log::error!("!event");
+        web::Json(event)
     }
 }
