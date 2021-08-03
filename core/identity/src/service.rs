@@ -1,5 +1,5 @@
-use futures::lock::Mutex;
 /// Identity service
+use futures::lock::Mutex;
 use std::sync::Arc;
 
 use ya_persistence::executor::DbExecutor;
