@@ -8,8 +8,9 @@ use ya_client_model::activity::State;
 use ya_core_model::NodeId;
 
 struct ExeUnitStatus {
-    activity_id: Arc<str>,
+    activity_id: String,
     identity_id: NodeId,
+    agreement_id: String,
     exe_unit: Option<Arc<str>>,
     counters: Vec<Arc<str>>,
     last_state: State,
@@ -30,7 +31,7 @@ impl ExeUnitStatus {
 
 pub struct StateManager {
     events: broadcast::Sender<TrackingEvent>,
-    states: Map<Arc<str>, ExeUnitStatus>,
+    states: Map<Box<str>, ExeUnitStatus>,
 }
 
 impl StateManager {
@@ -41,16 +42,18 @@ impl StateManager {
 
     pub fn start_activity(
         &mut self,
-        activity_id: Arc<str>,
+        activity_id: String,
         identity_id: NodeId,
+        agreement_id: String,
         exe_unit: Option<Arc<str>>,
         counters: Vec<Arc<str>>,
     ) {
         let _ = self.states.insert(
-            activity_id.clone(),
+            Box::from(activity_id.as_str()),
             ExeUnitStatus {
                 activity_id,
                 identity_id,
+                agreement_id,
                 exe_unit,
                 counters,
                 last_state: State::New,
@@ -96,7 +99,8 @@ impl StateManager {
                 .states
                 .values()
                 .map(|state| ActivityStateModel {
-                    id: String::from(state.activity_id.as_ref()),
+                    id: String::from(state.activity_id.as_str()),
+                    agreement_id: state.agreement_id.clone(),
                     state: state.last_state.clone(),
                     usage: state.usage(),
                     exe_unit: state.exe_unit.as_ref().map(|v| v.to_string()),
@@ -108,7 +112,7 @@ impl StateManager {
 
     pub fn emit_state(&self) {
         match self.events.send(self.current_state()) {
-            Ok(cnt) => log::info!("send to {} recievers", cnt),
+            Ok(cnt) => log::trace!("send to {} recievers", cnt),
             Err(_) => (),
         }
     }
