@@ -65,6 +65,7 @@ async def test_provider_multi_activity(
             DemandBuilder(requestor)
             .props_from_template(task_package)
             .property("golem.srv.caps.multi-activity", True)
+            .property("golem.com.payment.debit-notes.accept-timeout?", 5)
             .constraints(
                 "(&(golem.com.pricing.model=linear)\
                 (golem.srv.caps.multi-activity=true)\
