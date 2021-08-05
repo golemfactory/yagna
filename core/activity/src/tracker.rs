@@ -4,7 +4,6 @@ use futures::channel::oneshot;
 use futures::prelude::*;
 use serde::Serialize;
 use std::collections::BTreeMap as Map;
-use std::sync::Arc;
 use tokio::sync::broadcast;
 
 mod name_pool;
@@ -52,12 +51,14 @@ pub struct ActivityStateModel {
     exe_unit: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     provider_id: Option<NodeId>,
+    agreement_id: String,
 }
 
 pub enum Command {
     Start {
-        activity_id: Arc<str>,
+        activity_id: String,
         identity_id: NodeId,
+        agreement_id: String,
         exe_unit: Option<String>,
         counters: Vec<String>,
     },
@@ -102,11 +103,11 @@ impl TrackerRef {
         activity_id: &str,
         agreement: &Agreement,
     ) -> anyhow::Result<()> {
-        let activity_id: Arc<str> = activity_id.into();
+        let activity_id: String = activity_id.into();
 
         fn extract_agreement(
             agreement: &Agreement,
-        ) -> anyhow::Result<(Option<String>, Vec<String>, NodeId)> {
+        ) -> anyhow::Result<(Option<String>, Vec<String>, NodeId, String)> {
             if let Some(obj) = agreement.offer.properties.as_object() {
                 let exe_init = obj
                     .get("golem.runtime.name")
@@ -120,15 +121,21 @@ impl TrackerRef {
                 } else {
                     Vec::new()
                 };
-                return Ok((exe_init, counters, agreement.offer.provider_id));
+                return Ok((
+                    exe_init,
+                    counters,
+                    agreement.offer.provider_id,
+                    agreement.agreement_id.clone(),
+                ));
             }
             anyhow::bail!("invalid agreement format");
         }
-        let (exe_unit, counters, identity_id) = extract_agreement(agreement)?;
+        let (exe_unit, counters, identity_id, agreement_id) = extract_agreement(agreement)?;
         self.tx
             .send(Command::Start {
                 activity_id,
                 identity_id,
+                agreement_id,
                 exe_unit,
                 counters,
             })
@@ -178,6 +185,7 @@ pub fn start_tracker() -> (TrackerRef, broadcast::Receiver<TrackingEvent>) {
                 Command::Start {
                     activity_id,
                     identity_id,
+                    agreement_id,
                     exe_unit,
                     counters,
                 } => {
@@ -187,7 +195,13 @@ pub fn start_tracker() -> (TrackerRef, broadcast::Receiver<TrackingEvent>) {
                         .map(|counter| exe_units_names.alloc(&counter))
                         .collect();
 
-                    exe_unit_states.start_activity(activity_id, identity_id, exe_unit, counters);
+                    exe_unit_states.start_activity(
+                        activity_id,
+                        identity_id,
+                        agreement_id,
+                        exe_unit,
+                        counters,
+                    );
                     exe_unit_states.emit_state();
                 }
                 Command::Stop { activity_id } => {
