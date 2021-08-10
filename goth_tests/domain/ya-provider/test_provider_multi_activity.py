@@ -226,7 +226,6 @@ async def test_provider_recover_from_abandoned_task(
                 activity_id, batch_id, len(exe_script), timeout=30
             )
             await requestor.destroy_activity(activity_id)
-            # await timeout(provider.provider_agent.wait_for_log(r".*ExeUnit process exited.*"), 15)
 
         async def run_and_abandon_activity(requestor, agreement_id, provider):
             logger.info(
