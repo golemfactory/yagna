@@ -180,8 +180,8 @@ async def test_provider_recover_from_abandoned_task(
         {"name": "requestor-2", "type": "Requestor"},
         {"name": "provider-1", "type": "Wasm-Provider", "use-proxy": True},
     ]
-    config_overrides.append(("nodes", nodes))
 
+    config_overrides.append(("nodes", nodes))
     runner, config = _create_runner(common_assets, config_overrides, log_dir)
 
     async with runner(config.containers):
@@ -203,6 +203,7 @@ async def test_provider_recover_from_abandoned_task(
                     )
                 )
                 .property("golem.srv.caps.multi-activity", True)
+                .property("golem.com.payment.debit-notes.accept-timeout?", 5)
                 .constraints(
                     "(&(golem.com.pricing.model=linear)\
                     (golem.srv.caps.multi-activity=true)\
@@ -225,7 +226,7 @@ async def test_provider_recover_from_abandoned_task(
                 activity_id, batch_id, len(exe_script), timeout=30
             )
             await requestor.destroy_activity(activity_id)
-            await provider.wait_for_exeunit_finished()
+            # await timeout(provider.provider_agent.wait_for_log(r".*ExeUnit process exited.*"), 15)
 
         async def run_and_abandon_activity(requestor, agreement_id, provider):
             logger.info(
@@ -242,7 +243,8 @@ async def test_provider_recover_from_abandoned_task(
 
             logger.info("Stopping requestor %s", requestor.name)
             await requestor.stop()
-            requestor.container.remove(force=True)
+            # test teardown fails when a container is removed; restart instead
+            requestor.container.restart()
 
         requestor1, requestor2 = requestors
 
@@ -255,18 +257,13 @@ async def test_provider_recover_from_abandoned_task(
         )
         await run_and_abandon_activity(requestor1, *agreement_providers[0])
 
-        while True:
-            try:
-                agreement_providers = await negotiate_agreements(
-                    requestor2,
-                    build_demand(requestor2),
-                    providers,
-                )
-                break
-            except Exception:  # noqa
-                logger.info(
-                    "Requestor %s failed to negotiate an agreement, retrying",
-                    requestor2.name,
-                )
+        provider = agreement_providers[0][1]
+        await provider.wait_for_exeunit_exited()
 
+        agreement_providers = await negotiate_agreements(
+            requestor2,
+            build_demand(requestor2),
+            providers,
+            wait_for_offers_subscribed=False,
+        )
         await run_activity(requestor2, *agreement_providers[0])
