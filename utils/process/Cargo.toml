@@ -21,4 +21,4 @@ tokio = { version = "0.2.10", features = ["process", "signal"] }
 fs2 = { version = "0.4.3", optional = true }
 
 [target.'cfg(target_family = "unix")'.dependencies]
-nix = "0.17.0"
+nix = "0.22.0"

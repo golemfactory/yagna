@@ -7,16 +7,7 @@ use nix::unistd::{fork, ForkResult, Gid, Uid};
 use std::{fs, io};
 
 fn nix_to_io(e: nix::Error) -> io::Error {
-    match e {
-        nix::Error::Sys(errno) => errno.into(),
-        nix::Error::InvalidPath => io::Error::new(io::ErrorKind::NotFound, nix::Error::InvalidPath),
-        nix::Error::InvalidUtf8 => {
-            io::Error::new(io::ErrorKind::InvalidInput, nix::Error::InvalidUtf8)
-        }
-        nix::Error::UnsupportedOperation => {
-            io::Error::new(io::ErrorKind::Other, nix::Error::UnsupportedOperation)
-        }
-    }
+    Into::<io::Error>::into(e)
 }
 
 pub fn pre_exec(options: NsOptions) -> io::Result<()> {
@@ -31,7 +22,7 @@ pub fn pre_exec(options: NsOptions) -> io::Result<()> {
     fs::write("/proc/self/uid_map", format!("{} {} 1", uid, uid))?;
     fs::write("/proc/self/gid_map", format!("{} {} 1", gid, gid))?;
     if options.fork {
-        match fork().map_err(nix_to_io)? {
+        match unsafe { fork().map_err(nix_to_io)? } {
             ForkResult::Parent { child, .. } => {
                 unsafe {
                     prctl(PR_SET_PDEATHSIG, SIGTERM);
