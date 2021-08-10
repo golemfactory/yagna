@@ -256,6 +256,7 @@ async def test_provider_recover_from_abandoned_task(
         )
         await run_and_abandon_activity(requestor1, *agreement_providers[0])
 
+        # await activity termination
         provider = agreement_providers[0][1]
         await provider.wait_for_exeunit_exited()
 
