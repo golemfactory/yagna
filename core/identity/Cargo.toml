@@ -25,7 +25,7 @@ ethsign = { git = "https://github.com/tomusdrw/ethsign.git", rev = "1b93031d2c45
 # ethsign = "0.8"
 futures = "0.3"
 log = "0.4"
-promptly = "0.1.5"
+promptly = "0.3.0"
 r2d2 = "0.8.8"
 rand = "0.7.3"
 rpassword = "3.0.2"
@@ -34,6 +34,7 @@ structopt = "0.3"
 thiserror = "1.0"
 tokio = { version = "0.2", features = ["fs", "blocking"] }
 uuid = { version = "0.8", features = ["v4"] }
+rustc-hex = "2.1.0"
 
 [dev-dependencies]
 ya-service-api-derive = "0.1"
