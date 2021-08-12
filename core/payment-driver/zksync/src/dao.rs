@@ -181,6 +181,21 @@ impl ZksyncDao {
         }
     }
 
+    pub async fn retry_transaction(&self, tx_id: &str) {
+        if let Err(e) = self
+            .transaction()
+            .update_tx_status(tx_id.to_string(), TransactionStatus::Created.into())
+            .await
+        {
+            log::error!(
+                "Failed to update transaction state in `transaction` {:?} : {:?}",
+                tx_id,
+                e
+            )
+            // TO CHECK: Should it continue or stop the process...
+        }
+    }
+
     pub async fn payment_failed(&self, order_id: &str) {
         if let Err(e) = self
             .payment()
@@ -189,6 +204,21 @@ impl ZksyncDao {
         {
             log::error!(
                 "Failed to update transaction failed in `payment` {:?} : {:?}",
+                order_id,
+                e
+            )
+            // TO CHECK: Should it continue or stop the process...
+        }
+    }
+
+    pub async fn retry_payment(&self, order_id: &str) {
+        if let Err(e) = self
+            .payment()
+            .update_status(order_id.to_string(), PAYMENT_STATUS_NOT_YET)
+            .await
+        {
+            log::error!(
+                "Failed to retry transaction in `payment` {:?} : {:?}",
                 order_id,
                 e
             )
