@@ -67,6 +67,7 @@ async def negotiate_agreements(
     demand: Demand,
     providers: List[ProviderProbe],
     proposal_filter: Optional[Callable[[Proposal], bool]] = lambda p: True,
+    wait_for_offers_subscribed: bool = True,
 ) -> List[Tuple[str, ProviderProbe]]:
     """Negotiate agreements with supplied providers.
 
@@ -74,8 +75,9 @@ async def negotiate_agreements(
     logic, but rather you want to test further parts of yagna protocol
     and need ready Agreements.
     """
-    for provider in providers:
-        await provider.wait_for_offer_subscribed()
+    if wait_for_offers_subscribed:
+        for provider in providers:
+            await provider.wait_for_offer_subscribed()
 
     subscription_id, demand = await requestor.subscribe_demand(demand)
 
