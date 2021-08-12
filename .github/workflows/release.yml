@@ -151,6 +151,8 @@ jobs:
           asset_content_type: ${{ steps.pack.outputs.providerMedia }}
 
   build-aarch64:
+    env:
+      RUSTFLAGS: "-C link-arg=-s"
     needs: create-release
     runs-on: ubuntu-latest
     steps:
@@ -169,19 +171,31 @@ jobs:
             });
             console.log(release.data.upload_url);
             return release.data.upload_url
+
       - name: Check out repository
         uses: actions/checkout@v2
 
-      - name: Build binaries
-        uses: docker://golemfactory/build-aarch64:0.1.1
+      - name: Setup toolchain
+        uses: actions-rs/toolchain@v1
         with:
-          workdir: /github/workspace
+          toolchain: stable
+          target: aarch64-unknown-linux-musl
+          override: true
+
+      - name: Build binaries
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
           args: >
-            /bin/bash -c "
-              export HOME=/root &&
-              cargo build -p={yagna,ya-exe-unit,ya-provider,golemsp,gftp} --release --features static-openssl &&
-              aarch64-linux-musl-strip -x target/aarch64-unknown-linux-musl/release/{yagna,ya-provider,exe-unit,golemsp,gftp}
-            "
+            -p yagna
+            -p ya-exe-unit
+            -p ya-provider
+            -p golemsp
+            -p gftp
+            --release
+            --features static-openssl
+            --target aarch64-unknown-linux-musl
 
       - name: Pack
         id: pack
