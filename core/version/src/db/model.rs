@@ -22,7 +22,7 @@ pub struct DBRelease {
 impl DBRelease {
     pub(crate) fn current() -> anyhow::Result<Self> {
         Ok(DBRelease {
-            version: ya_compile_time_utils::semver_str().into(),
+            version: ya_compile_time_utils::semver_str!().into(),
             name: format!(
                 "({} {}{})",
                 ya_compile_time_utils::git_rev(),

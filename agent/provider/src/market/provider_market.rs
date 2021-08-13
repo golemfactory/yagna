@@ -13,12 +13,12 @@ use std::sync::Arc;
 
 use ya_agreement_utils::{AgreementView, OfferDefinition};
 use ya_client::market::MarketProviderApi;
-use ya_client_model::market::agreement_event::AgreementEventType;
-use ya_client_model::market::proposal::State;
-use ya_client_model::market::{
+use ya_client::model::market::agreement_event::AgreementEventType;
+use ya_client::model::market::proposal::State;
+use ya_client::model::market::{
     agreement_event::AgreementTerminator, Agreement, NewOffer, Proposal, ProviderEvent, Reason,
 };
-use ya_client_model::NodeId;
+use ya_client::model::NodeId;
 use ya_std_utils::LogErr;
 use ya_utils_actix::{
     actix_handler::ResultTypeGetter, actix_signal::SignalSlot, actix_signal_handler,
@@ -244,7 +244,24 @@ async fn dispatch_event(
         ProviderEvent::AgreementEvent { agreement, .. } => {
             process_agreement(ctx, subscription, agreement).await
         }
-        _ => unimplemented!(),
+        ProviderEvent::ProposalRejectedEvent {
+            proposal_id,
+            reason,
+            ..
+        } => {
+            // TODO: Analyze whether reason is_final and treat final & non-final rejections
+            // differently.
+            log::info!(
+                "Proposal rejected. proposal_id: {}, reason: {:?}",
+                proposal_id,
+                reason
+            );
+            Ok(())
+        }
+        unimplemented_event => {
+            log::warn!("Unimplemented event received: {:?}", unimplemented_event);
+            Ok(())
+        }
     }
 }
 
