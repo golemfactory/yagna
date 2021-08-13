@@ -235,6 +235,9 @@ pub async fn spawn(
             Some(Command::Status(status)) => {
                 let _ = handler.on_process_status(status).await;
             }
+            Some(Command::RtStatus(status)) => {
+                let _ = handler.on_runtime_status(status).await;
+            }
             cmd => log::warn!("invalid event: {:?}", cmd),
         }
     }
