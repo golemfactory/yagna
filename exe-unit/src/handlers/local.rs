@@ -30,8 +30,8 @@ impl<R: Runtime> StreamHandler<RuntimeEvent> for ExeUnit<R> {
                 };
                 ctx.spawn(fut.into_actor(self));
             }
-            _ => {
-                todo!()
+            other => {
+                log::warn!("Unsupported runtime event: {:?}", other);
             }
         };
     }

@@ -126,6 +126,7 @@ pub(crate) enum Handle<'a> {
         done_rx: BoxFuture<'a, Result<i32, ()>>,
     },
     Fallback {
+        #[allow(unused)]
         monitor: EventMonitor,
     },
 }
@@ -136,8 +137,8 @@ impl<'a> Drop for Handle<'a> {
             Handle::Process { monitor, pid, .. } => {
                 monitor.processes.lock().unwrap().remove(pid);
             }
-            Handle::Fallback { monitor, .. } => {
-                monitor.fallback.lock().unwrap().take();
+            _ => {
+                // ignore
             }
         }
     }
