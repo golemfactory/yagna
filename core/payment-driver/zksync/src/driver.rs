@@ -474,15 +474,13 @@ impl PaymentDriverCron for ZksyncDriver {
                     // In case of invalid nonce error we can retry sending transaction.
                     // Reset payment and transaction state to 'not sent', so cron job will pickup
                     // transaction again.
-                    if err.contains("nonce") {
+                    if err.contains("Nonce mismatch") {
                         log::warn!(
-                            "ZkSync transaction verification failed. Nonce mismatch. Transaction \
-                            will be retied. tx_details={:?} error={}",
+                            "Scheduling retry for tx {:?} because of nonce mismatch. ZkSync error: {}",
                             tx,
                             err
                         );
 
-                        self.dao.retry_transaction(&tx.tx_id).await;
                         for order_id in order_ids.iter() {
                             self.dao.retry_payment(order_id).await;
                         }
@@ -492,11 +490,13 @@ impl PaymentDriverCron for ZksyncDriver {
                             tx,
                             err
                         );
-                        self.dao.transaction_failed(&tx.tx_id).await;
+
                         for order_id in order_ids.iter() {
                             self.dao.payment_failed(order_id).await;
                         }
                     }
+
+                    self.dao.transaction_failed(&tx.tx_id).await;
                     return;
                 }
 
