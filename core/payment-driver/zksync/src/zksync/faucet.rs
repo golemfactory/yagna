@@ -8,6 +8,7 @@ use chrono::{Duration, Utc};
 use lazy_static::lazy_static;
 use std::{env, time};
 use tokio::time::delay_for;
+use ya_service_api::awc;
 
 // Workspace uses
 use ya_payment_driver::{db::models::Network, model::GenericError};
@@ -81,7 +82,9 @@ async fn wait_for_tglm(address: &str, network: Network) -> Result<(), GenericErr
 
 async fn faucet_donate(address: &str, _network: Network) -> Result<(), GenericError> {
     // TODO: Reduce timeout to 20-30 seconds when transfer is used.
-    let client = awc::Client::builder()
+    let client = awc::client_builder()
+        .await
+        .map_err(GenericError::new)?
         .timeout(std::time::Duration::from_secs(60))
         .finish();
     let faucet_url = resolve_faucet_url().await?;

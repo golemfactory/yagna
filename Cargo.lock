@@ -23,8 +23,8 @@ dependencies = [
  "smallvec 1.6.1",
  "tokio 0.2.25",
  "tokio-util 0.3.1",
- "trust-dns-proto",
- "trust-dns-resolver",
+ "trust-dns-proto 0.19.7",
+ "trust-dns-resolver 0.19.7",
 ]
 
 [[package]]
@@ -60,8 +60,8 @@ dependencies = [
  "log",
  "openssl",
  "tokio-openssl",
- "trust-dns-proto",
- "trust-dns-resolver",
+ "trust-dns-proto 0.19.7",
+ "trust-dns-resolver 0.19.7",
 ]
 
 [[package]]
@@ -86,9 +86,9 @@ dependencies = [
 
 [[package]]
 name = "actix-http"
-version = "2.2.0"
+version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "452299e87817ae5673910e53c243484ca38be3828db819b6011736fc6982e874"
+checksum = "5cb8958da437716f3f31b0e76f8daf36554128517d7df37ceba7df00f09622ee"
 dependencies = [
  "actix-codec",
  "actix-connect",
@@ -1562,6 +1562,12 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "data-encoding"
+version = "2.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ee2393c4a91429dffb4bedf19f4d6abf27d8a732c8ce4980305d782e5426d57"
 
 [[package]]
 name = "derivative"
@@ -3661,9 +3667,9 @@ dependencies = [
 
 [[package]]
 name = "openssl-probe"
-version = "0.1.2"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77af24da69f9d9341038eba93a073b1fdaaa1b788221b00a69bce9e762cb32de"
+checksum = "28988d872ab76095a6e6ac88d99b54fd267702734fd7ffe610ca27f533ddb95a"
 
 [[package]]
 name = "openssl-src"
@@ -4538,7 +4544,7 @@ dependencies = [
  "serde_urlencoded",
  "tokio 0.2.25",
  "tokio-tls",
- "trust-dns-resolver",
+ "trust-dns-resolver 0.19.7",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -5882,6 +5888,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "trust-dns-proto"
+version = "0.20.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad0d7f5db438199a6e2609debe3f69f808d074e0a2888ee0bccb45fe234d03f4"
+dependencies = [
+ "async-trait",
+ "cfg-if 1.0.0",
+ "data-encoding",
+ "enum-as-inner",
+ "futures-channel",
+ "futures-io",
+ "futures-util",
+ "idna",
+ "ipnet",
+ "lazy_static",
+ "log",
+ "rand 0.8.3",
+ "smallvec 1.6.1",
+ "thiserror",
+ "tinyvec",
+ "tokio 1.4.0",
+ "url",
+]
+
+[[package]]
 name = "trust-dns-resolver"
 version = "0.19.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5897,7 +5928,27 @@ dependencies = [
  "smallvec 1.6.1",
  "thiserror",
  "tokio 0.2.25",
- "trust-dns-proto",
+ "trust-dns-proto 0.19.7",
+]
+
+[[package]]
+name = "trust-dns-resolver"
+version = "0.20.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6ad17b608a64bd0735e67bde16b0636f8aa8591f831a25d18443ed00a699770"
+dependencies = [
+ "cfg-if 1.0.0",
+ "futures-util",
+ "ipconfig",
+ "lazy_static",
+ "log",
+ "lru-cache",
+ "parking_lot 0.11.1",
+ "resolv-conf",
+ "smallvec 1.6.1",
+ "thiserror",
+ "tokio 1.4.0",
+ "trust-dns-proto 0.20.3",
 ]
 
 [[package]]
@@ -7041,13 +7092,17 @@ dependencies = [
 name = "ya-service-api"
 version = "0.1.1"
 dependencies = [
+ "actix-connect",
+ "actix-http",
  "anyhow",
+ "awc",
  "lazy_static",
  "log",
  "prettytable-rs",
  "serde",
  "serde_json",
  "serde_yaml",
+ "trust-dns-resolver 0.20.3",
  "url",
 ]
 
@@ -7230,7 +7285,7 @@ dependencies = [
  "ipnet",
  "log",
  "thiserror",
- "trust-dns-resolver",
+ "trust-dns-resolver 0.19.7",
  "url",
 ]
 
@@ -7339,7 +7394,6 @@ dependencies = [
  "actix-rt",
  "anyhow",
  "async-trait",
- "awc",
  "bigdecimal 0.2.0",
  "chrono",
  "dotenv",
@@ -7360,6 +7414,7 @@ dependencies = [
  "uuid",
  "ya-client-model",
  "ya-payment-driver",
+ "ya-service-api",
  "ya-service-api-interfaces",
  "ya-utils-futures",
  "ya-utils-networking",

@@ -470,6 +470,7 @@ impl PaymentProcessor {
         signature: Option<Vec<u8>>,
     ) -> Result<(), VerifyPaymentError> {
         // TODO: Split this into smaller functions
+        log::info!("Entered verify_payment {:?}, sign={:?}", payment, signature);
         let platform = payment.payment_platform.clone();
         let driver = self.registry.driver(
             &payment.payment_platform,
@@ -482,19 +483,27 @@ impl PaymentProcessor {
                 .send(driver::VerifySignature::new(payment.clone(), signature))
                 .await??
             {
+                log::error!(
+                    "invalid payment signature from: {}/{}",
+                    payment.payer_id,
+                    payment.payment_platform
+                );
                 return Err(VerifyPaymentError::InvalidSignature);
             }
         }
 
+        log::info!("check for confirmation for: {}", payment.payment_id);
         let confirmation = match base64::decode(&payment.details) {
             Ok(confirmation) => PaymentConfirmation { confirmation },
             Err(e) => return Err(VerifyPaymentError::ConfirmationEncoding),
         };
+        log::info!("check for driver veryfication for: {}", payment.payment_id);
         let details: PaymentDetails = driver_endpoint(&driver)
             .send(driver::VerifyPayment::new(confirmation, platform.clone()))
             .await??;
 
         // Verify if amount declared in message matches actual amount transferred on blockchain
+        log::info!("check for amount for: {}", payment.payment_id);
         if &details.amount < &payment.amount {
             return VerifyPaymentError::amount(&details.amount, &payment.amount);
         }
@@ -503,6 +512,12 @@ impl PaymentProcessor {
         let agreement_sum = payment.agreement_payments.iter().map(|p| &p.amount).sum();
         let activity_sum = payment.activity_payments.iter().map(|p| &p.amount).sum();
         if &details.amount < &(&agreement_sum + &activity_sum) {
+            log::error!(
+                "invalid shares {}, {}, {}",
+                &details.amount,
+                &agreement_sum,
+                &activity_sum
+            );
             return VerifyPaymentError::shares(&details.amount, &agreement_sum, &activity_sum);
         }
 
@@ -513,13 +528,16 @@ impl PaymentProcessor {
 
         // Verify recipient address
         if &details.recipient != payee_addr {
+            log::error!("invalid recipient {}, {}", payee_addr, &details.recipient);
             return VerifyPaymentError::recipient(payee_addr, &details.recipient);
         }
         if &details.sender != payer_addr {
+            log::error!("invalid sender {}, {}", payer_addr, &details.sender);
             return VerifyPaymentError::sender(payer_addr, &details.sender);
         }
 
         // Verify agreement payments
+        log::info!("Verify agreement payments {}", payment.payment_id);
         let agreement_dao: AgreementDao = self.db_executor.as_dao();
         for agreement_payment in payment.agreement_payments.iter() {
             let agreement_id = &agreement_payment.agreement_id;
@@ -543,6 +561,7 @@ impl PaymentProcessor {
         }
 
         // Verify activity payments
+        log::info!("Verify activity payments {}", payment.payment_id);
         let activity_dao: ActivityDao = self.db_executor.as_dao();
         for activity_payment in payment.activity_payments.iter() {
             let activity_id = &activity_payment.activity_id;
@@ -560,6 +579,7 @@ impl PaymentProcessor {
         }
 
         // Insert payment into database (this operation creates and updates all related entities)
+        log::info!("Insert payment into database {}", payment.payment_id);
         let payment_dao: PaymentDao = self.db_executor.as_dao();
         payment_dao.insert_received(payment, payee_id).await?;
         Ok(())

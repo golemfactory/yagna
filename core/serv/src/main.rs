@@ -512,15 +512,24 @@ async fn me(id: Identity) -> impl Responder {
 }
 
 #[actix_web::post("/_gsb/{service:.*}")]
-async fn forward_gsb(id: Identity, web::Path(service) : web::Path<String>, data : web::Json<serde_json::Value>) -> impl Responder {
+async fn forward_gsb(
+    id: Identity,
+    web::Path(service): web::Path<String>,
+    data: web::Json<serde_json::Value>,
+) -> impl Responder {
     use ya_service_bus::untyped as bus;
-    log::info!(target: "gsb-bridge", "called: {}", service);
+    log::debug!(target: "gsb-bridge", "called: {}", service);
     let data = flexbuffers::to_vec(data.into_inner()).map_err(actix_web::error::ErrorBadRequest)?;
     let r = bus::send(
         &format!("/{}", service),
-                      &format!("/local/{}", id.identity), &data).await.map_err(actix_web::error::ErrorInternalServerError)?;
-    let json_resp : serde_json::Value = flexbuffers::from_slice(&r).map_err(actix_web::error::ErrorInternalServerError)?;
-    Ok::<_,actix_web::Error>(web::Json(json_resp))
+        &format!("/local/{}", id.identity),
+        &data,
+    )
+    .await
+    .map_err(actix_web::error::ErrorInternalServerError)?;
+    let json_resp: serde_json::Value =
+        flexbuffers::from_slice(&r).map_err(actix_web::error::ErrorInternalServerError)?;
+    Ok::<_, actix_web::Error>(web::Json(json_resp))
 }
 
 #[actix_rt::main]

@@ -26,6 +26,7 @@ use ya_payment_driver::{
     model::{AccountMode, Enter, Exit, GenericError, Init, PaymentDetails},
     utils as base_utils,
 };
+use ya_service_api::awc;
 
 // Local uses
 use crate::{
@@ -33,6 +34,7 @@ use crate::{
     zksync::{faucet, signer::YagnaEthSigner, utils},
     DEFAULT_NETWORK,
 };
+use std::time::Duration;
 
 pub async fn account_balance(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
     let pub_address = Address::from_str(&address[2..]).map_err(GenericError::new)?;
@@ -236,12 +238,17 @@ struct TxRespObj {
 pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails, GenericError> {
     let provider_url = get_rpc_addr(network);
 
+    let client: awc::Client = awc::client_builder()
+        .await
+        .map_err(GenericError::new)?
+        .timeout(Duration::from_secs(300))
+        .finish();
+
     // HACK: Get the transaction data from v0.1 api
     let api_url = provider_url.replace("/jsrpc", "/api/v0.1");
     let req_url = format!("{}/transactions_all/{}", api_url, tx_hash);
     log::debug!("Request URL: {}", &req_url);
 
-    let client = awc::Client::new();
     let response = client
         .get(req_url)
         .send()

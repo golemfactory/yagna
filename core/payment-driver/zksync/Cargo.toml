@@ -10,7 +10,6 @@ default = []
 [dependencies]
 async-trait = "0.1"
 anyhow = "1.0"
-awc = { version = "2.0", features = ["openssl"] }
 bigdecimal = { version = "0.2" }
 chrono = { version = "0.4", features = ["serde"] }
 futures = "0.3"
@@ -32,6 +31,7 @@ zksync_eth_signer = { git = "https://github.com/matter-labs/zksync", rev = "c985
 ## yagna dependencies
 ya-payment-driver = "0.2"
 ya-client-model = "0.3"
+ya-service-api = { version = "0.1.1", features=["with-awc"], path="../../serv-api" }
 ya-service-api-interfaces = "0.1"
 ya-utils-futures = "0.1"
 ya-utils-networking = "0.1"

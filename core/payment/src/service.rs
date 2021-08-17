@@ -699,6 +699,7 @@ mod public {
         let platform = payment.payment_platform.clone();
         let amount = payment.amount.clone();
         let num_paid_invoices = payment.agreement_payments.len() as u64;
+        let payment_id = payment.payment_id.clone();
         match processor
             .lock()
             .await
@@ -710,13 +711,16 @@ mod public {
                 counter!("payment.invoices.provider.paid", num_paid_invoices);
                 Ok(Ack {})
             }
-            Err(e) => match e {
-                VerifyPaymentError::ConfirmationEncoding => {
-                    Err(SendError::BadRequest(e.to_string()))
+            Err(e) => {
+                log::error!("verify_payment payment {} failed {:?}", payment_id, e);
+                match e {
+                    VerifyPaymentError::ConfirmationEncoding => {
+                        Err(SendError::BadRequest(e.to_string()))
+                    }
+                    VerifyPaymentError::Validation(e) => Err(SendError::BadRequest(e)),
+                    _ => Err(SendError::ServiceError(e.to_string())),
                 }
-                VerifyPaymentError::Validation(e) => Err(SendError::BadRequest(e)),
-                _ => Err(SendError::ServiceError(e.to_string())),
-            },
+            }
         }
     }
 }
