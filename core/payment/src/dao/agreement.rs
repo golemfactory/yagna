@@ -14,6 +14,7 @@ use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
 use ya_persistence::types::{BigDecimalField, Role, Summable};
+use std::collections::HashMap;
 
 pub fn increase_amount_due(
     agreement_id: &String,
@@ -26,8 +27,9 @@ pub fn increase_amount_due(
         .find((agreement_id, owner_id))
         .first(conn)?;
     let total_amount_due = &agreement.total_amount_due + amount;
+    let updated_ts = chrono::Utc::now().naive_utc();
     diesel::update(&agreement)
-        .set(dsl::total_amount_due.eq(total_amount_due))
+        .set((dsl::total_amount_due.eq(total_amount_due), dsl::updated_ts.eq(updated_ts)))
         .execute(conn)?;
     Ok(())
 }
@@ -44,8 +46,9 @@ pub fn set_amount_due(
     if total_amount_due < &agreement.total_amount_due {
         return Err(DbError::Query(format!("Requested amount for agreement cannot be lowered. Current amount requested: {} Amount on invoice: {}", agreement.total_amount_due, total_amount_due)));
     }
+    let updated_ts = chrono::Utc::now().naive_utc();
     diesel::update(&agreement)
-        .set(dsl::total_amount_due.eq(total_amount_due))
+        .set((dsl::total_amount_due.eq(total_amount_due), dsl::updated_ts.eq(updated_ts)))
         .execute(conn)?;
     Ok(())
 }
@@ -65,8 +68,9 @@ pub fn compute_amount_due(
         .select(activity_dsl::total_amount_due)
         .load(conn)?;
     let total_amount_due: BigDecimalField = activity_amounts.sum().into();
+    let updated_ts = chrono::Utc::now().naive_utc();
     diesel::update(&agreement)
-        .set(dsl::total_amount_due.eq(total_amount_due))
+        .set((dsl::total_amount_due.eq(total_amount_due),dsl::updated_ts.eq(updated_ts)))
         .execute(conn)?;
     Ok(())
 }
@@ -82,8 +86,9 @@ pub fn increase_amount_accepted(
         .find((agreement_id, owner_id))
         .first(conn)?;
     let total_amount_accepted = &agreement.total_amount_accepted + amount;
+    let updated_ts = chrono::Utc::now().naive_utc();
     diesel::update(&agreement)
-        .set(dsl::total_amount_accepted.eq(total_amount_accepted))
+        .set((dsl::total_amount_accepted.eq(total_amount_accepted), dsl::updated_ts.eq(updated_ts)))
         .execute(conn)?;
     Ok(())
 }
@@ -100,8 +105,9 @@ pub fn increase_amount_scheduled(
         .first(conn)?;
     let total_amount_scheduled: BigDecimalField =
         (&agreement.total_amount_scheduled.0 + amount).into();
+    let updated_ts = chrono::Utc::now().naive_utc();
     diesel::update(&agreement)
-        .set(dsl::total_amount_scheduled.eq(total_amount_scheduled))
+        .set((dsl::total_amount_scheduled.eq(total_amount_scheduled), dsl::updated_ts.eq(updated_ts)))
         .execute(conn)?;
     Ok(())
 }
@@ -116,8 +122,9 @@ pub fn set_amount_accepted(
         .find((agreement_id, owner_id))
         .first(conn)?;
     assert!(total_amount_accepted >= &agreement.total_amount_accepted); // TODO: Remove when payment service is production-ready.
+    let updated_ts = chrono::Utc::now().naive_utc();
     diesel::update(&agreement)
-        .set(dsl::total_amount_accepted.eq(total_amount_accepted))
+        .set((dsl::total_amount_accepted.eq(total_amount_accepted), dsl::updated_ts.eq(updated_ts)))
         .execute(conn)?;
     Ok(())
 }
@@ -134,8 +141,10 @@ pub fn increase_amount_paid(
         .select(dsl::total_amount_paid)
         .first(conn)?;
     let total_amount_paid = &total_amount_paid + amount;
+    let updated_ts = chrono::Utc::now().naive_utc();
     diesel::update(dsl::pay_agreement.find((agreement_id, owner_id)))
-        .set(dsl::total_amount_paid.eq(&total_amount_paid))
+        .set((dsl::total_amount_paid.eq(&total_amount_paid),
+              dsl::updated_ts.eq(updated_ts)))
         .execute(conn)?;
 
     let invoice_query: Option<(String, Role)> = invoice_dsl::pay_invoice
@@ -239,12 +248,18 @@ impl<'a> AgreementDao<'a> {
         payee_addr: String,
     ) -> DbResult<StatusNotes> {
         readonly_transaction(self.pool, move |conn| {
-            let agreements: Vec<ReadObj> = dsl::pay_agreement
+            let last_days = chrono::Utc::now() - chrono::Duration::days(1);
+            let agreements: Vec<crate::models::agreement::ReadObj> = dsl::pay_agreement
                 .filter(dsl::role.eq(Role::Provider))
                 .filter(dsl::payment_platform.eq(platform))
                 .filter(dsl::payee_addr.eq(payee_addr))
+                .filter(dsl::created_ts.ge(last_days.naive_utc()))
                 .get_results(conn)?;
-            Ok(make_summary(agreements))
+            let invoices : Vec<crate::models::invoice::ReadObj>= crate::dao::invoice::get_for_node_id(
+                .filter(invoice_dsl::role.eq("P".to_string()))
+                .filter(invoice_dsl::timestamp.ge(last_days.naive_utc()))
+                .get_results(conn)?;
+            Ok(make_summary2(agreements,invoices))
         })
         .await
     }
@@ -274,6 +289,24 @@ fn make_summary(agreements: Vec<ReadObj>) -> StatusNotes {
             requested: StatValue::new(agreement.total_amount_due),
             accepted: StatValue::new(agreement.total_amount_accepted),
             confirmed: StatValue::new(agreement.total_amount_paid),
+            overdue: None
         })
         .sum()
 }
+
+fn make_summary2(agreements: Vec<crate::models::agreement::ReadObj>, invoices:  Vec<crate::models::invoice::ReadObj>) -> StatusNotes {
+    let invoice_map : HashMap<String, crate::models::invoice::ReadObj> = invoices.into_iter().map(|invoice| (invoice.agreement_id.clone(), invoice)).collect();
+    for a in &agreements {
+        log::error!("a={:?},i={:?}", a, invoice_map.get(a.id))
+    }
+    agreements
+        .into_iter()
+        .map(|(agreement, invoice)| StatusNotes {
+            requested: StatValue::new(agreement.total_amount_due),
+            accepted: StatValue::new(agreement.total_amount_accepted),
+            confirmed: StatValue::new(agreement.total_amount_paid),
+            overdue: None
+        })
+        .sum()
+}
+

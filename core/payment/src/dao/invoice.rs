@@ -353,3 +353,33 @@ fn join_invoices_with_activities(
         })
         .collect()
 }
+
+
+pub fn get_for_payee(
+    conn : &ConnType,
+    payee : &str,
+    after_timestamp: Option<NaiveDateTime>,
+) -> DbResult<Vec<Invoice>> {
+    let mut query = query!().into_boxed();
+
+    if let Some(date) = after_timestamp {
+        query = query.filter(dsl::timestamp.gt(date))
+    }
+
+    if let Some(items) = max_items {
+        query = query.limit(items.into())
+    }
+
+    let invoices = query.load(conn)?;
+    let activities = activity_dsl::pay_invoice_x_activity
+        .inner_join(
+            dsl::pay_invoice.on(activity_dsl::owner_id
+                .eq(dsl::owner_id)
+                .and(activity_dsl::invoice_id.eq(dsl::id))),
+        )
+        .filter(dsl::owner_id.eq(node_id))
+        .select(crate::schema::pay_invoice_x_activity::all_columns)
+        .load(conn)?;
+    join_invoices_with_activities(invoices, activities)
+}
+

@@ -209,7 +209,7 @@ async fn send_debit_note(
         activity_id: debit_note_info.activity_id.clone(),
         total_amount_due: cost_info.cost,
         usage_counter_vector: Some(json!(cost_info.usage)),
-        payment_due_date: None,
+        payment_due_date: Some(Utc::now() + chrono::Duration::hours(8)),
     };
 
     log::debug!(
