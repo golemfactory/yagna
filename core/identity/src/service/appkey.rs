@@ -1,15 +1,18 @@
-use uuid::Uuid;
-
-use futures::prelude::*;
-use ya_core_model::appkey as model;
-use ya_persistence::executor::DbExecutor;
-use ya_service_bus::typed as bus;
-
-use crate::dao::AppKeyDao;
-use actix_rt::Arbiter;
 use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
+
+use actix_rt::Arbiter;
+use chrono::Utc;
+use futures::prelude::*;
+use uuid::Uuid;
+use ya_service_bus::{typed as bus, RpcEndpoint};
+
+use ya_core_model::appkey as model;
+use ya_core_model::identity as idm;
+use ya_persistence::executor::DbExecutor;
+
+use crate::dao::AppKeyDao;
 
 #[derive(Default)]
 struct Subscription {
@@ -84,23 +87,49 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     });
 
     let dbx = db.clone();
+    let preconfigured_appkey = crate::autoconf::preconfigured_appkey()?;
+    let preconfigured_node_id = crate::autoconf::preconfigured_node_id()?;
+    let start_datetime = Utc::now().naive_utc();
     // Retrieve an application key entry based on the key itself
     let _ = bus::bind(&model::BUS_ID, move |get: model::Get| {
         let db = dbx.clone();
+        let preconfigured_appkey = preconfigured_appkey.clone();
         async move {
-            let (appkey, role) = db
-                .as_dao::<AppKeyDao>()
-                .get(get.key)
-                .await
-                .map_err(|e| model::Error::internal(e.to_string()))?;
+            if preconfigured_appkey.as_ref() == Some(&get.key) {
+                let node_id = match preconfigured_node_id {
+                    Some(node_id) => node_id,
+                    None => {
+                        let default_identity = bus::service(idm::BUS_ID)
+                            .send(idm::Get::ByDefault)
+                            .await
+                            .map_err(model::Error::internal)?
+                            .map_err(model::Error::internal)?
+                            .ok_or_else(|| model::Error::internal("appkey not found"))?;
+                        default_identity.node_id
+                    }
+                };
+                Ok(model::AppKey {
+                    name: "autoconfigured".to_string(),
+                    key: get.key.clone(),
+                    role: model::DEFAULT_ROLE.to_string(),
+                    identity: node_id,
+                    created_date: start_datetime.clone(),
+                })
+            } else {
+                let (appkey, role) = db
+                    .as_dao::<AppKeyDao>()
+                    .get(get.key)
+                    .await
+                    .map_err(|e| model::Error::internal(e.to_string()))?;
 
-            Ok(model::AppKey {
-                name: appkey.name,
-                key: appkey.key,
-                role: role.name,
-                identity: appkey.identity_id,
-                created_date: appkey.created_date,
-            })
+                Ok(model::AppKey {
+                    name: appkey.name,
+                    key: appkey.key,
+                    role: role.name,
+                    identity: appkey.identity_id,
+                    created_date: appkey.created_date,
+                })
+            }
         }
     });
 

@@ -11,7 +11,7 @@ tokio= { version = "0.2", features=["process"] }
 
 [target.'cfg(target_os="linux")'.dependencies]
 libc= "0.2"
-nix="0.11.0"
+nix="0.22.0"
 
 [dev-dependencies]
 tokio= { version = "0.2", features=["process", "rt-threaded", "macros"] }
