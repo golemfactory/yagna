@@ -58,7 +58,7 @@ async fn test_query_initial_proposal() {
 
     // We expect that proposal will be available as requestor event.
     let events = market1
-        .query_events(&demand_id, 2.0, Some(5))
+        .query_events(&demand_id, 5.0, Some(5))
         .await
         .unwrap();
 
@@ -253,17 +253,22 @@ async fn test_query_events_edge_cases() {
     assert_err_eq!(QueryEventsError::InvalidMaxEvents(-5, 100), result);
 
     // Negative timeout should be treated as immediate checking events and return.
-    tokio::time::delay_for(Duration::from_millis(200)).await;
-    let events = tokio::time::timeout(
-        Duration::from_millis(20),
-        market1
-            .requestor_engine
-            .query_events(&demand_id, -5.0, None),
-    )
-    .await
-    .unwrap()
-    .unwrap();
-    assert_eq!(events.len(), 1);
+    for _ in 0..10 {
+        tokio::time::delay_for(Duration::from_millis(200)).await;
+        let events = tokio::time::timeout(
+            Duration::from_millis(20),
+            market1
+                .requestor_engine
+                .query_events(&demand_id, -5.0, None),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        if events.len() > 0 {
+            assert_eq!(events.len(), 1);
+            break;
+        }
+    }
 
     // Restore available Proposal
     let demand_id = market1
@@ -323,7 +328,7 @@ async fn test_query_events_for_multiple_subscriptions() {
 
     // Check events related to first and last subscription.
     let events = market1
-        .query_events(&demand_id1, 2.0, Some(5))
+        .query_events(&demand_id1, 5.0, Some(5))
         .await
         .unwrap();
     assert_eq!(events.len(), 1);
@@ -335,7 +340,7 @@ async fn test_query_events_for_multiple_subscriptions() {
         .unwrap();
 
     let events = market1
-        .query_events(&demand_id2, 2.0, Some(5))
+        .query_events(&demand_id2, 5.0, Some(5))
         .await
         .unwrap();
     assert_eq!(events.len(), 1);
@@ -508,7 +513,7 @@ async fn test_counter_initial_proposal() {
     // We expect that proposal will be available as event.
     let events = market1
         .requestor_engine
-        .query_events(&subscription_id, 2.0, Some(5))
+        .query_events(&subscription_id, 5.0, Some(5))
         .await
         .unwrap();
 
@@ -536,7 +541,7 @@ async fn test_counter_initial_proposal() {
     let new_proposal_id = new_proposal_id.translate(Owner::Provider);
     let events = market1
         .provider_engine
-        .query_events(&offer_id, 2.0, Some(5))
+        .query_events(&offer_id, 5.0, Some(5))
         .await
         .unwrap();
     assert_eq!(events.len(), 1);
