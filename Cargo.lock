@@ -6431,7 +6431,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.5.3"
-source = "git+https://github.com/golemfactory/ya-client.git?branch=mf/vpn#e617eaea78b466fb9c0077d5dfd5b641b5b68d0e"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=b13ddfd138d5b0aabeb5cfef4ea74f03a4bc16cf#b13ddfd138d5b0aabeb5cfef4ea74f03a4bc16cf"
 dependencies = [
  "actix-codec",
  "awc",
@@ -6456,7 +6456,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.3.2"
-source = "git+https://github.com/golemfactory/ya-client.git?branch=mf/vpn#e617eaea78b466fb9c0077d5dfd5b641b5b68d0e"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=b13ddfd138d5b0aabeb5cfef4ea74f03a4bc16cf#b13ddfd138d5b0aabeb5cfef4ea74f03a4bc16cf"
 dependencies = [
  "bigdecimal 0.2.0",
  "chrono",

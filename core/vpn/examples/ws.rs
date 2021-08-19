@@ -12,7 +12,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use url::Url;
 use ya_client::net::NetRequestorApi;
 use ya_client::web::WebClient;
-use ya_client_model::net::{Address, Network, Node};
+use ya_client_model::net::{Address, NewNetwork, Node};
 
 type HashOutput = GenericArray<u8, <sha3::Sha3_512 as Digest>::OutputSize>;
 
@@ -113,8 +113,7 @@ async fn main() -> anyhow::Result<()> {
     if cli.skip_create {
         println!("Re-using network: {}", net_id);
     } else {
-        let msg = Network {
-            id: net_id.clone(),
+        let msg = NewNetwork {
             ip: net_address,
             mask: None,
             gateway: None,
@@ -122,7 +121,9 @@ async fn main() -> anyhow::Result<()> {
 
         println!("Creating network: {}", net_id);
 
-        api.create_network(&msg).await?;
+        let network = api.create_network(&msg).await?;
+        let net_id = &network.id;
+
         api.add_address(
             &net_id,
             &Address {

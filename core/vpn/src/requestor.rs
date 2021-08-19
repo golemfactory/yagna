@@ -53,15 +53,15 @@ async fn get_networks(
 #[actix_web::post("/net")]
 async fn create_network(
     vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
-    model: web::Json<Network>,
+    model: web::Json<NewNetwork>,
     identity: Identity,
 ) -> impl Responder {
     let network = model.into_inner();
     let mut supervisor = vpn_sup.lock().await;
-    supervisor
+    let network = supervisor
         .create_network(&identity.identity, network)
         .await?;
-    Ok::<_, ApiError>(web::Json(()))
+    Ok::<_, ApiError>(web::Json(network))
 }
 
 /// Retrieves an existing virtual private network.

@@ -34,6 +34,7 @@ serde_json = "1.0"
 smoltcp = { version = "0.7" }
 thiserror = "1.0"
 tokio = { version = "0.2.11", features = ["time"] }
+uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]
 ya-client = "0.5.3"
