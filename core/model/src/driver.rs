@@ -363,12 +363,14 @@ impl RpcMessage for Enter {
 // ************************** EXIT **************************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all="camelCase")]
 pub struct Exit {
     sender: String,
     to: Option<String>,
     amount: Option<BigDecimal>,
     network: Option<String>,
     token: Option<String>,
+    fee_limit : Option<BigDecimal>
 }
 
 impl Exit {
@@ -378,6 +380,7 @@ impl Exit {
         amount: Option<BigDecimal>,
         network: Option<String>,
         token: Option<String>,
+        fee_limit : Option<BigDecimal>
     ) -> Exit {
         Exit {
             sender,
@@ -385,6 +388,7 @@ impl Exit {
             amount,
             network,
             token,
+            fee_limit
         }
     }
 
@@ -407,6 +411,22 @@ impl RpcMessage for Exit {
     type Item = String; // Transaction Identifier
     type Error = GenericError;
 }
+
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all="camelCase")]
+#[non_exhaustive]
+pub struct ExitFee {
+    pub sender: String,
+    pub to: Option<String>,
+    pub amount: Option<BigDecimal>,
+    pub network: Option<String>,
+    pub token: Option<String>,
+}
+
+pub struct ExitFeeResult {
+
+}
+
 
 // ************************** TRANSFER **************************
 

@@ -1,11 +1,11 @@
 use crate::schema::pay_agreement;
 use crate::DEFAULT_PAYMENT_PLATFORM;
+use chrono::{NaiveDateTime, Timelike, Utc};
 use serde_json::Value;
 use ya_agreement_utils::agreement::{expand, TypedPointer};
 use ya_client_model::market::Agreement;
 use ya_client_model::NodeId;
 use ya_persistence::types::{BigDecimalField, Role};
-use chrono::{NaiveDateTime, Utc, Timelike};
 
 #[derive(Queryable, Debug, Identifiable, Insertable)]
 #[table_name = "pay_agreement"]
@@ -24,7 +24,7 @@ pub struct WriteObj {
     pub total_amount_paid: BigDecimalField,
     pub app_session_id: Option<String>,
     pub created_ts: Option<NaiveDateTime>,
-    pub updated_ts : Option<NaiveDateTime>
+    pub updated_ts: Option<NaiveDateTime>,
 }
 
 impl WriteObj {
@@ -72,7 +72,8 @@ impl WriteObj {
             total_amount_scheduled: Default::default(),
             total_amount_paid: Default::default(),
             app_session_id: agreement.app_session_id,
-            created_ts, updated_ts
+            created_ts,
+            updated_ts,
         }
     }
 }

@@ -408,6 +408,10 @@ Mind that to be eligible you have to run your app at least once on testnet -
         }
         Ok(())
     }
+
+    async fn exit_fee(&self, msg: ExitFee) -> Result<ExitFeeResult, GenericError> {
+        todo!()
+    }
 }
 
 #[async_trait(?Send)]

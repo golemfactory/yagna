@@ -215,6 +215,10 @@ impl PaymentDriver for Erc20Driver {
         }
         Ok(())
     }
+
+    async fn exit_fee(&self, msg: ExitFee) -> Result<ExitFeeResult, GenericError> {
+        todo!()
+    }
 }
 
 #[async_trait(?Send)]

@@ -37,9 +37,10 @@ pub async fn exit(
     driver: String,
     network: Option<String>,
     token: Option<String>,
+    fee_limit : Option<BigDecimal>,
 ) -> anyhow::Result<String> {
     let driver_id = driver_bus_id(driver);
-    let message = Exit::new(sender, to, amount, network, token);
+    let message = Exit::new(sender, to, amount, network, token, fee_limit);
     let tx_id = bus::service(driver_id).call(message).await??;
     Ok(tx_id)
 }
