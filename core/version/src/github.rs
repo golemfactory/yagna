@@ -38,7 +38,7 @@ pub async fn check_latest_release(db: &DbExecutor) -> anyhow::Result<Release> {
         Ok(r) => r,
     };
 
-    if self_update::version::bump_is_greater(ya_compile_time_utils::semver_str(), &rel.version)
+    if self_update::version::bump_is_greater(ya_compile_time_utils::semver_str!(), &rel.version)
         .map_err(|e| {
             anyhow!(
                 "Github release version `{}` parse error: {}",
@@ -58,7 +58,7 @@ pub(crate) async fn check_running_release(db: &DbExecutor) -> anyhow::Result<Rel
         return Ok(release);
     }
 
-    let running_tag = ya_compile_time_utils::git_tag();
+    let running_tag = ya_compile_time_utils::git_tag!();
     log::debug!("Checking release for running tag: {}", running_tag);
 
     let db_rel = match tokio::task::spawn_blocking(move || {

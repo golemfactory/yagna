@@ -1,3 +1,7 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
+
 use actix::prelude::*;
 use anyhow::{anyhow, Error, Result};
 use backoff::backoff::Backoff;
@@ -7,22 +11,12 @@ use futures_util::FutureExt;
 use humantime;
 use log;
 use serde_json::json;
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
 use structopt::StructOpt;
-
-use super::agreement::{compute_cost, ActivityPayment, AgreementPayment, CostInfo};
-use super::model::PaymentModel;
-use crate::execution::{ActivityDestroyed, CreateActivity};
-use crate::market::provider_market::NewAgreement;
-use crate::market::termination_reason::BreakReason;
-use crate::tasks::{AgreementBroken, AgreementClosed, BreakAgreement};
-
 use ya_client::activity::ActivityProviderApi;
 use ya_client::model::payment::{DebitNote, Invoice, NewDebitNote, NewInvoice};
+use ya_client::model::payment::{DebitNoteEventType, InvoiceEventType};
 use ya_client::payment::PaymentApi;
-use ya_client_model::payment::{DebitNoteEventType, InvoiceEventType};
+
 use ya_std_utils::LogErr;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::{SignalSlot, Subscribe};
@@ -30,6 +24,14 @@ use ya_utils_actix::deadline_checker::{
     DeadlineChecker, DeadlineElapsed, StopTracking, StopTrackingCategory, TrackDeadline,
 };
 use ya_utils_actix::{actix_signal_handler, forward_actix_handler};
+
+use crate::execution::{ActivityDestroyed, CreateActivity};
+use crate::market::provider_market::NewAgreement;
+use crate::market::termination_reason::BreakReason;
+use crate::tasks::{AgreementBroken, AgreementClosed, BreakAgreement};
+
+use super::agreement::{compute_cost, ActivityPayment, AgreementPayment, CostInfo};
+use super::model::PaymentModel;
 
 // =========================================== //
 // Internal messages
@@ -449,11 +451,13 @@ impl Handler<ActivityDestroyed> for Payments {
         let agreement = match self
             .agreements
             .get_mut(&msg.agreement_id)
-            .ok_or(anyhow!(
-                "Can't find activity [{}] and agreement [{}].",
-                &msg.activity_id,
-                &msg.agreement_id
-            ))
+            .ok_or_else(|| {
+                anyhow!(
+                    "Can't find activity [{}] and agreement [{}].",
+                    &msg.activity_id,
+                    &msg.agreement_id
+                )
+            })
             .log_warn_msg("[ActivityDestroyed]")
         {
             Ok(agreement) => agreement,
@@ -814,7 +818,7 @@ impl Handler<InvoiceSettled> for Payments {
                 Err(e) => Err(anyhow!("Cannot get invoice: {}", e)),
             });
 
-        return ActorResponse::r#async(future);
+        ActorResponse::r#async(future)
     }
 }
 
@@ -921,11 +925,12 @@ impl Actor for Payments {
 }
 
 fn get_backoff() -> backoff::ExponentialBackoff {
-    let mut backoff = backoff::ExponentialBackoff::default();
-    backoff.current_interval = std::time::Duration::from_secs(15);
-    backoff.initial_interval = std::time::Duration::from_secs(15);
-    backoff.multiplier = 1.5f64;
-    backoff.max_interval = std::time::Duration::from_secs(3600);
-    backoff.max_elapsed_time = Some(std::time::Duration::from_secs(u64::max_value()));
-    backoff
+    backoff::ExponentialBackoff {
+        current_interval: std::time::Duration::from_secs(3),
+        initial_interval: std::time::Duration::from_secs(3),
+        multiplier: 1.5f64,
+        max_interval: std::time::Duration::from_secs(5 * 60 * 60),
+        max_elapsed_time: Some(std::time::Duration::from_secs(u64::MAX)),
+        ..Default::default()
+    }
 }

@@ -35,7 +35,7 @@ pub fn generate_event(id: i32, timestamp: NaiveDateTime) -> TestMarketEvent {
     }
 }
 
-const QUERY_EVENTS_TIMEOUT: f32 = 2.3;
+const QUERY_EVENTS_TIMEOUT: f32 = 5.0;
 
 pub mod requestor {
     use super::*;

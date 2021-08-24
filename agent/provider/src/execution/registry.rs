@@ -1,12 +1,3 @@
-#![allow(unused)]
-
-use super::exeunit_instance::ExeUnitInstance;
-use anyhow::{anyhow, Context, Result};
-use futures::Future;
-use path_clean::PathClean;
-use semver::Version;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::{
     collections::HashMap,
     fmt,
@@ -15,16 +6,59 @@ use std::{
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
+
+use anyhow::{anyhow, Context, Result};
+use futures::Future;
+use path_clean::PathClean;
+use semver::Version;
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use thiserror::Error;
+
 use ya_agreement_utils::OfferBuilder;
+
+use super::exeunit_instance::ExeUnitInstance;
+
+pub fn default_counter_config() -> HashMap<String, CounterDefinition> {
+    let mut counters = HashMap::new();
+
+    counters.insert(
+        "golem.usage.duration_sec".into(),
+        CounterDefinition {
+            name: "duration".to_string(),
+            description: "Duration".to_string(),
+            price: true,
+        },
+    );
+    counters.insert(
+        "golem.usage.cpu_sec".into(),
+        CounterDefinition {
+            name: "cpu".to_string(),
+            description: "CPU".to_string(),
+            price: true,
+        },
+    );
+
+    counters.insert(
+        "golem.usage.storage_gib".into(),
+        CounterDefinition {
+            name: "storage_gib".into(),
+            description: "Storage".into(),
+            price: false,
+        },
+    );
+
+    counters
+}
 
 /// Descriptor of ExeUnit
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub struct ExeUnitDesc {
     pub name: String,
-    #[serde(default = "default_version")]
     pub version: Version,
+    #[serde(default)]
+    pub description: Option<String>,
     pub supervisor_path: PathBuf,
     /// Additional arguments passed to supervisor.
     #[serde(default)]
@@ -34,14 +68,27 @@ pub struct ExeUnitDesc {
     pub runtime_path: Option<PathBuf>,
     /// ExeUnit defined properties, that will be appended to offer.
     #[serde(default)]
-    pub properties: serde_json::Map<String, Value>,
+    pub properties: Map<String, Value>,
     /// Here other capabilities and exe units metadata.
-    #[serde(default = "default_description")]
+    pub config: Option<Configuration>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "kebab-case")]
+pub struct Configuration {
+    pub counters: HashMap<String, CounterDefinition>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "kebab-case")]
+pub struct CounterDefinition {
+    pub name: String,
     pub description: String,
+    pub price: bool,
 }
 
 impl ExeUnitDesc {
-    pub fn absolute_paths(self, base_path: &std::path::Path) -> std::io::Result<Self> {
+    pub fn absolute_paths(self, base_path: &Path) -> std::io::Result<Self> {
         let mut desc = self;
         if desc.supervisor_path.is_relative() {
             desc.supervisor_path = base_path.join(&desc.supervisor_path);
@@ -53,14 +100,44 @@ impl ExeUnitDesc {
         }
         Ok(desc)
     }
-}
 
-fn default_description() -> String {
-    "No description provided.".to_string()
-}
+    pub fn resolve_coefficient(&self, coefficient_name: &str) -> Result<String> {
+        self.config
+            .as_ref()
+            .and_then(|config| {
+                if config.counters.contains_key(coefficient_name) {
+                    return Some(coefficient_name.to_string());
+                }
+                config.counters.iter().find_map(|(prop_name, definition)| {
+                    if definition.name.eq_ignore_ascii_case(&coefficient_name) {
+                        Some(prop_name.into())
+                    } else {
+                        None
+                    }
+                })
+            })
+            .ok_or_else(|| anyhow!("invalid coefficient name = {}", coefficient_name))
+    }
 
-fn default_version() -> Version {
-    Version::new(0, 0, 0)
+    pub fn coefficient_name(&self, propery_name: &str) -> Option<String> {
+        Some(
+            self.config
+                .as_ref()?
+                .counters
+                .get(propery_name)
+                .as_ref()?
+                .name
+                .clone(),
+        )
+    }
+
+    pub fn coefficients(&self) -> impl Iterator<Item = (String, CounterDefinition)> {
+        if let Some(config) = &self.config {
+            config.counters.clone().into_iter()
+        } else {
+            default_counter_config().into_iter()
+        }
+    }
 }
 
 /// Responsible for creating ExeUnits.
@@ -137,7 +214,7 @@ impl ExeUnitsRegistry {
         Ok(extended_args)
     }
 
-    pub fn register_exeunit(&mut self, mut desc: ExeUnitDesc) -> Result<()> {
+    fn register_exeunit(&mut self, mut desc: ExeUnitDesc) -> Result<()> {
         desc.supervisor_path = normalize_path(&desc.supervisor_path)?;
         desc.runtime_path = if let Some(runtime_path) = &desc.runtime_path {
             Some(normalize_path(runtime_path)?)
@@ -184,7 +261,12 @@ impl ExeUnitsRegistry {
             )
         })?;
 
-        for desc in descs.into_iter() {
+        for mut desc in descs.into_iter() {
+            if desc.config.is_none() {
+                desc.config = Some(Configuration {
+                    counters: default_counter_config(),
+                });
+            }
             self.register_exeunit(desc.absolute_paths(base_path)?)?
         }
         Ok(())
@@ -198,7 +280,7 @@ impl ExeUnitsRegistry {
             .clone())
     }
 
-    pub fn list_exeunits(&self) -> Vec<ExeUnitDesc> {
+    pub fn list(&self) -> Vec<ExeUnitDesc> {
         self.descriptors
             .iter()
             .map(|(_, desc)| desc.clone())
@@ -325,30 +407,33 @@ impl fmt::Display for ExeUnitDesc {
         let align = 15;
         let align_prop = 30;
 
-        write!(f, "{:width$}{}\n", "Name:", self.name, width = align)?;
-        write!(f, "{:width$}{}\n", "Version:", self.version, width = align)?;
-        write!(
+        writeln!(f, "{:width$}{}", "Name:", self.name, width = align)?;
+        writeln!(f, "{:width$}{}", "Version:", self.version, width = align)?;
+        writeln!(
             f,
-            "{:width$}{}\n",
+            "{:width$}{}",
             "Supervisor:",
             self.supervisor_path.display(),
             width = align
         )?;
         if let Some(rt) = &self.runtime_path {
-            write!(f, "{:width$}{}\n", "Runtime:", rt.display(), width = align)?;
+            writeln!(f, "{:width$}{}", "Runtime:", rt.display(), width = align)?;
         }
-        write!(
+        writeln!(
             f,
-            "{:width$}{}\n",
+            "{:width$}{}",
             "Description:",
-            self.description,
+            self.description
+                .as_ref()
+                .map(AsRef::as_ref)
+                .unwrap_or("No description"),
             width = align
         )?;
 
         if !self.properties.is_empty() {
-            write!(f, "Properties:\n")?;
+            writeln!(f, "Properties:")?;
             for (key, value) in self.properties.iter() {
-                write!(f, "    {:width$}{}\n", key, value, width = align_prop)?;
+                writeln!(f, "    {:width$}{}", key, value, width = align_prop)?;
             }
         }
         Ok(())

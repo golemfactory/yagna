@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use ya_agreement_utils::agreement::OfferTemplate;
 use ya_client_model::activity::{
-    activity_state::StatePair, ActivityUsage, CommandOutput, ExeScriptCommand, RuntimeEvent, State,
+    activity_state::StatePair, ActivityUsage, CommandOutput, ExeScriptCommand, State,
 };
 use ya_core_model::activity;
 use ya_core_model::activity::local::Credentials;

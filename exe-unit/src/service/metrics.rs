@@ -1,7 +1,7 @@
 #![allow(unused)]
 
 use crate::error::Error;
-use crate::message::{GetMetrics, Shutdown};
+use crate::message::{GetMetrics, SetMetric, Shutdown};
 use crate::metrics::error::MetricError;
 use crate::metrics::{
     CpuMetric, MemMetric, Metric, MetricData, MetricReport, StorageMetric, TimeMetric,
@@ -9,7 +9,7 @@ use crate::metrics::{
 use crate::ExeUnitContext;
 use actix::prelude::*;
 use chrono::{DateTime, Utc};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -28,16 +28,24 @@ impl MetricsService {
             true => ctx.agreement.usage_limits.get(id).cloned(),
             _ => None,
         };
-        let metrics = Self::metrics(&ctx, backlog_limit, caps);
 
-        if let Some(e) = ctx
+        let mut metrics = Self::metrics(&ctx, backlog_limit, caps);
+        let mut custom_metrics = ctx
             .agreement
             .usage_vector
             .iter()
-            .find(|e| !metrics.contains_key(*e))
-        {
-            return Err(MetricError::Unsupported(e.to_string()));
+            .filter(|e| !metrics.contains_key(*e))
+            .cloned()
+            .collect::<Vec<_>>();
+
+        if !custom_metrics.is_empty() {
+            log::debug!("Metrics provided by the runtime: {:?}", custom_metrics)
         }
+        custom_metrics.into_iter().for_each(|m| {
+            let caps = caps(ctx, &m);
+            let provider = MetricProvider::new(CustomMetric::default(), backlog_limit, caps);
+            metrics.insert(m, provider);
+        });
 
         Ok(MetricsService {
             usage_vector: ctx.agreement.usage_vector.clone(),
@@ -156,6 +164,40 @@ impl Handler<GetMetrics> for MetricsService {
         }
 
         Ok::<_, Error>(metrics)
+    }
+}
+
+impl Handler<SetMetric> for MetricsService {
+    type Result = ();
+
+    fn handle(&mut self, msg: SetMetric, ctx: &mut Self::Context) -> Self::Result {
+        match self.metrics.get_mut(&msg.name) {
+            Some(provider) => provider.metric.set(msg.value),
+            None => log::debug!("Unknown metric: {}", msg.name),
+        }
+    }
+}
+
+#[derive(Default)]
+struct CustomMetric {
+    val: MetricData,
+    peak: MetricData,
+}
+
+impl Metric for CustomMetric {
+    fn frame(&mut self) -> Result<MetricData, MetricError> {
+        Ok(self.val)
+    }
+
+    fn peak(&mut self) -> Result<MetricData, MetricError> {
+        Ok(self.peak)
+    }
+
+    fn set(&mut self, val: MetricData) {
+        if val > self.peak {
+            self.peak = val;
+        }
+        self.val = val;
     }
 }
 

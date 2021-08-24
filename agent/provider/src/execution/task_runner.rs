@@ -16,9 +16,8 @@ use structopt::StructOpt;
 
 use ya_agreement_utils::{AgreementView, OfferTemplate};
 use ya_client::activity::ActivityProviderApi;
-use ya_client_model::activity::provider_event::ProviderEventType;
-use ya_client_model::activity::{ActivityState, ProviderEvent, State};
-use ya_core_model::activity;
+use ya_client::model::activity::provider_event::ProviderEventType;
+use ya_client::model::activity::{ActivityState, ProviderEvent, State};
 use ya_std_utils::LogErr;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::{Signal, SignalSlot};
@@ -26,7 +25,7 @@ use ya_utils_actix::{actix_signal_handler, forward_actix_handler};
 use ya_utils_path::SecurePath;
 use ya_utils_process::ExeUnitExitStatus;
 
-use super::exeunits_registry::{ExeUnitDesc, ExeUnitsRegistry};
+use super::registry::{ExeUnitDesc, ExeUnitsRegistry};
 use super::task::Task;
 use crate::market::provider_market::NewAgreement;
 use crate::market::Preset;
@@ -374,6 +373,15 @@ impl TaskRunner {
             .map_err(|error| error.context(format!("ExeUnit offer-template command failed")))
     }
 
+    fn exeunit_coeffs(&self, exeunit_name: &str) -> Result<Vec<String>> {
+        Ok(match self.registry.find_exeunit(exeunit_name)?.config {
+            Some(ref config) => (config.counters.iter())
+                .filter_map(|(prop, cnt)| cnt.price.then(|| prop.clone()))
+                .collect(),
+            _ => Default::default(),
+        })
+    }
+
     #[logfn(Debug, fmt = "Task created: {}")]
     fn create_task(
         &self,
@@ -403,7 +411,11 @@ impl TaskRunner {
 
         self.save_agreement(&agreement_path, &agreement_id)?;
 
-        let mut args = vec!["service-bus", activity_id, activity::local::BUS_ID];
+        let mut args = vec![
+            "service-bus",
+            activity_id,
+            ya_core_model::activity::local::BUS_ID,
+        ];
         args.extend(["-c", self.cache_dir.to_str().ok_or(anyhow!("None"))?].iter());
         args.extend(["-w", working_dir.to_str().ok_or(anyhow!("None"))?].iter());
         args.extend(["-a", agreement_path.to_str().ok_or(anyhow!("None"))?].iter());
@@ -541,23 +553,55 @@ forward_actix_handler!(TaskRunner, GetExeUnit, get_exeunit);
 actix_signal_handler!(TaskRunner, CreateActivity, activity_created);
 actix_signal_handler!(TaskRunner, ActivityDestroyed, activity_destroyed);
 
+const PROPERTY_USAGE_VECTOR: &'static str = "golem.com.usage.vector";
+
 impl Handler<GetOfferTemplates> for TaskRunner {
     type Result = ResponseFuture<Result<HashMap<String, OfferTemplate>>>;
 
     fn handle(&mut self, msg: GetOfferTemplates, _: &mut Context<Self>) -> Self::Result {
-        let entries = msg
-            .0
-            .into_iter()
-            .map(|p| (p.name, self.offer_template(&p.exeunit_name)))
+        let mut result: HashMap<String, OfferTemplate> = HashMap::with_capacity(msg.0.len());
+        let entries = (msg.0.into_iter())
+            .map(|preset| {
+                let fut = self.offer_template(&preset.exeunit_name);
+                let coeffs = self
+                    .exeunit_coeffs(&preset.exeunit_name)
+                    .map(|mut coll| {
+                        coll.retain(|prop| preset.usage_coeffs.contains_key(prop));
+                        coll
+                    })
+                    .unwrap_or_else(|_| Default::default());
+                (preset, coeffs, fut)
+            })
             .collect::<Vec<_>>();
 
         async move {
-            let mut result: HashMap<String, OfferTemplate> = HashMap::new();
-            for (key, fut) in entries {
-                log::info!("Reading offer template for {}", key);
-                let string = fut.await?;
-                let value = serde_json::from_str(string.as_str())?;
-                result.insert(key, value);
+            for (preset, coeffs, fut) in entries {
+                log::info!("Reading offer template for {}", preset.name);
+
+                let output = fut.await?;
+                let mut template: OfferTemplate = serde_json::from_str(output.as_str())?;
+
+                match template
+                    .property(PROPERTY_USAGE_VECTOR)
+                    .ok_or_else(|| anyhow::anyhow!("offer template: missing usage vector"))?
+                {
+                    serde_json::Value::Array(vec) => {
+                        let mut usage_vector = vec.clone();
+                        usage_vector.extend(
+                            coeffs
+                                .into_iter()
+                                .map(|prop| serde_json::Value::String(prop)),
+                        );
+                        template.set_property(
+                            PROPERTY_USAGE_VECTOR,
+                            serde_json::Value::Array(usage_vector),
+                        );
+                    }
+                    _ => anyhow::bail!("offer template: invalid usage vector format"),
+                }
+
+                log::info!("offer-template: {} = {:?}", preset.name, template);
+                result.insert(preset.name, template);
             }
             Ok(result)
         }

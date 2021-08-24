@@ -3,14 +3,12 @@ mod activity_credentials;
 mod activity_state;
 mod activity_usage;
 mod event;
-mod runtime_event;
 
 pub use activity::ActivityDao;
 pub use activity_credentials::ActivityCredentialsDao;
 pub use activity_state::ActivityStateDao;
 pub use activity_usage::ActivityUsageDao;
 pub use event::{Event, EventDao};
-pub use runtime_event::RuntimeEventDao;
 use thiserror::Error;
 
 type Result<T> = std::result::Result<T, DaoError>;
