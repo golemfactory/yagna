@@ -76,9 +76,18 @@ impl MockNodeKind {
         let (public, local) = gsb_prefixes(test_name, name);
 
         match self {
-            MockNodeKind::Market(market) => market.bind_gsb(&public, &local).await?,
-            MockNodeKind::Matcher { matcher, .. } => matcher.bind_gsb(&public, &local).await?,
-            MockNodeKind::Discovery(discovery) => discovery.bind_gsb(&public, &local).await?,
+            MockNodeKind::Market(market) => {
+                market.bind_gsb(&public, &local).await?;
+                market.matcher.discovery.lazy_bind_gsb().await?;
+            }
+            MockNodeKind::Matcher { matcher, .. } => {
+                matcher.bind_gsb(&public, &local).await?;
+                matcher.discovery.lazy_bind_gsb().await?;
+            }
+            MockNodeKind::Discovery(discovery) => {
+                discovery.bind_gsb(&public, &local).await?;
+                discovery.lazy_bind_gsb().await?;
+            }
             MockNodeKind::Negotiation {
                 provider,
                 requestor,
