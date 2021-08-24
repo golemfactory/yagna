@@ -22,9 +22,11 @@ pub enum MetricReport {
 pub trait Metric {
     fn frame(&mut self) -> Result<MetricData>;
     fn peak(&mut self) -> Result<MetricData>;
+    fn set(&mut self, _value: MetricData) {}
 }
 
-pub struct CpuMetric;
+#[derive(Default)]
+pub struct CpuMetric {}
 
 impl CpuMetric {
     pub const ID: &'static str = "golem.usage.cpu_sec";
@@ -42,12 +44,7 @@ impl Metric for CpuMetric {
     }
 }
 
-impl Default for CpuMetric {
-    fn default() -> Self {
-        CpuMetric {}
-    }
-}
-
+#[derive(Default)]
 pub struct MemMetric {
     peak: MetricData,
 }
@@ -82,14 +79,6 @@ impl Metric for MemMetric {
     fn peak(&mut self) -> Result<MetricData> {
         let peak = os::mem_peak_rss()? as MetricData;
         Ok(self.update_peak(peak))
-    }
-}
-
-impl Default for MemMetric {
-    fn default() -> Self {
-        MemMetric {
-            peak: 0 as MetricData,
-        }
     }
 }
 

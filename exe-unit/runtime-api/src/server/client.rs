@@ -79,21 +79,19 @@ where
     }
 }
 
-impl<Out: Sink<proto::Request> + Unpin> RuntimeStatus for Arc<Client<Out>> {
-    fn exited<'a>(&self) -> BoxFuture<'a, i32> {
-        Box::pin(self.status.clone().then(|r| async move { r.unwrap_or(1) }))
-    }
-}
-
-impl<Out: Sink<proto::Request> + Unpin> ProcessControl for Arc<Client<Out>> {
+impl<Out: Sink<proto::Request> + Unpin> RuntimeControl for Arc<Client<Out>> {
     fn id(&self) -> u32 {
         self.pid
     }
 
-    fn kill(&self) {
+    fn stop(&self) {
         if let Some(s) = self.kill_cmd.lock().unwrap().take() {
             let _ = s.send(());
         }
+    }
+
+    fn stopped(&self) -> BoxFuture<'_, i32> {
+        Box::pin(self.status.clone().then(|r| async move { r.unwrap_or(1) }))
     }
 }
 
@@ -188,8 +186,8 @@ where
 // sends Request, recv Response
 pub async fn spawn(
     mut command: process::Command,
-    event_handler: impl RuntimeEvent + Send + Sync + 'static,
-) -> Result<impl RuntimeService + RuntimeStatus + ProcessControl + Clone, anyhow::Error> {
+    event_handler: impl RuntimeHandler + Send + Sync + 'static,
+) -> Result<impl RuntimeService + RuntimeControl + Clone, anyhow::Error> {
     command.stdin(Stdio::piped()).stdout(Stdio::piped());
     command.kill_on_drop(true);
     let mut child: process::Child = command.spawn()?;
@@ -231,14 +229,15 @@ pub async fn spawn(
         });
     }
 
-    async fn handle_event(response: proto::Response, event_handler: &impl RuntimeEvent) {
+    async fn handle_event(response: proto::Response, handler: &impl RuntimeHandler) {
         use proto::response::Command;
-        let command = match response.command {
-            Some(c) => c,
-            None => return,
-        };
-        match command {
-            Command::Status(status) => event_handler.on_process_status(status).await,
+        match response.command {
+            Some(Command::Status(status)) => {
+                let _ = handler.on_process_status(status).await;
+            }
+            Some(Command::RtStatus(status)) => {
+                let _ = handler.on_runtime_status(status).await;
+            }
             cmd => log::warn!("invalid event: {:?}", cmd),
         }
     }
