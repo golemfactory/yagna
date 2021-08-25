@@ -48,18 +48,20 @@ pub enum AgreementError {
     NotFound(String),
     #[error("Agreement [{0}] expired.")]
     Expired(AgreementId),
-    #[error("Can't create Agreement for Proposal {0}. Proposal {1} not found.")]
+    #[error("Can't create Agreement for Proposal [{0}]. Proposal [{1}] not found.")]
     ProposalNotFound(ProposalId, ProposalId),
-    #[error("Can't create second Agreement [{0}] for Proposal [{1}].")]
-    AlreadyExists(AgreementId, ProposalId),
-    #[error("Can't create Agreement for Proposal {0}. Failed to get Proposal {1}. Error: {2}")]
+    #[error("Can't create second Agreement for Proposal [{0}].")]
+    ProposalAlreadyAccepted(ProposalId),
+    #[error("Can't create Agreement for Proposal [{0}]. Failed to get Proposal [{1}]. Error: {2}")]
     GetProposal(ProposalId, ProposalId, String),
     #[error("Can't create Agreement for already countered Proposal [{0}].")]
     ProposalCountered(ProposalId),
-    #[error("Can't create Agreement for Proposal {0}. No negotiation with Provider took place. (You should counter Proposal at least one time)")]
+    #[error("Can't create Agreement for Proposal [{0}]. No negotiation with Provider took place. (You should counter Proposal at least one time)")]
     NoNegotiations(ProposalId),
-    #[error("Can't create Agreement for out own Proposal {0}. You can promote only provider's Proposals to Agreement.")]
+    #[error("Can't create Agreement for an own Proposal [{0}]. You can promote only provider's Proposals to Agreement.")]
     OwnProposal(ProposalId),
+    #[error("Can't create Agreement for rejected Proposal [{0}].")]
+    ProposalRejected(ProposalId),
     #[error("Failed to save Agreement for Proposal [{0}]. Error: {1}")]
     Save(ProposalId, DbError),
     #[error("Failed to get Agreement [{0}]. Error: {1}")]
