@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use ethereum_tx_sign::RawTransaction;
 use lazy_static::lazy_static;
 use num_traits::FromPrimitive;
 use sha3::{Digest, Sha3_512};
@@ -12,6 +11,7 @@ use ya_client_model::NodeId;
 use ya_payment_driver::db::models::{Network, TransactionEntity, TransactionStatus, TxType};
 use ya_payment_driver::{bus, model::GenericError, utils as base_utils};
 
+use crate::erc20::transaction::RawTransaction;
 use crate::erc20::{config, eth_utils};
 
 lazy_static! {

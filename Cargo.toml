@@ -202,6 +202,8 @@ ya-diesel-utils = { path = "utils/diesel-utils"}
 ya-metrics = { path = "core/metrics" }
 ya-provider = { path = "agent/provider"}
 
+web3 = { git = "https://github.com/Deniallugo/rust-web3", branch = "update_ethabi"}
+
 # Speed up builds on macOS (will be default in next rust version probably)
 # https://jakedeichert.com/blog/reducing-rust-incremental-compilation-times-on-macos-by-70-percent/
 [profile.dev]

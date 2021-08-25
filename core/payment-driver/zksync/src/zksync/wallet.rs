@@ -10,9 +10,7 @@ use std::str::FromStr;
 use zksync::operations::SyncTransactionHandle;
 use zksync::types::BlockStatus;
 use zksync::zksync_types::{
-    tokens::{ChangePubKeyFeeType, ChangePubKeyFeeTypeArg},
-    tx::TxHash,
-    Address, Nonce, TxFeeTypes, H256,
+    tokens::ChangePubKeyFeeTypeArg, tx::TxHash, Address, Nonce, TxFeeTypes, H256,
 };
 use zksync::{
     provider::{Provider, RpcProvider},
@@ -33,6 +31,7 @@ use crate::{
     zksync::{faucet, signer::YagnaEthSigner, utils},
     DEFAULT_NETWORK,
 };
+use zksync::zksync_types::tx::ChangePubKeyType;
 
 pub async fn account_balance(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
     let pub_address = Address::from_str(&address[2..]).map_err(GenericError::new)?;
@@ -464,7 +463,7 @@ async fn get_unlock_fee<S: EthereumSigner + Clone, P: Provider + Clone>(
         .provider
         .get_tx_fee(
             TxFeeTypes::ChangePubKey(ChangePubKeyFeeTypeArg::ContractsV4Version(
-                ChangePubKeyFeeType::ECDSA,
+                ChangePubKeyType::ECDSA,
             )),
             wallet.address(),
             token,
