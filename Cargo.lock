@@ -5152,7 +5152,7 @@ version = "0.5.1"
 source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6c848541e89262f90ca693d9e1a84c6f3df0953b"
 dependencies = [
  "lazy_static",
- "parking_lot 0.11.1",
+ "parking_lot 0.10.2",
  "serial_test_derive",
 ]
 
@@ -6440,7 +6440,7 @@ dependencies = [
 [[package]]
 name = "web3"
 version = "0.15.0"
-source = "git+https://github.com/Deniallugo/rust-web3?branch=update_ethabi#3a6c216b375bbe3c3df8dd70f6cf062691a9b9f9"
+source = "git+https://github.com/golemfactory/rust-web3?branch=update_ethabi#fe462bde01957d8161a144e9fc3e38cf1949eabc"
 dependencies = [
  "arrayvec 0.5.2",
  "async-native-tls",
