@@ -169,6 +169,21 @@ impl PaymentDriver for ZksyncDriver {
         Ok(())
     }
 
+    async fn get_account_balance(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        msg: GetAccountBalance,
+    ) -> Result<BigDecimal, GenericError> {
+        log::debug!("get_account_balance: {:?}", msg);
+        let (network, _) = platform_to_network_token(msg.platform())?;
+
+        let balance = wallet::account_balance(&msg.address(), network).await?;
+
+        log::debug!("get_account_balance - result: {}", &balance);
+        Ok(balance)
+    }
+
     async fn enter(
         &self,
         _db: DbExecutor,
@@ -206,19 +221,8 @@ impl PaymentDriver for ZksyncDriver {
         ))
     }
 
-    async fn get_account_balance(
-        &self,
-        _db: DbExecutor,
-        _caller: String,
-        msg: GetAccountBalance,
-    ) -> Result<BigDecimal, GenericError> {
-        log::debug!("get_account_balance: {:?}", msg);
-        let (network, _) = platform_to_network_token(msg.platform())?;
-
-        let balance = wallet::account_balance(&msg.address(), network).await?;
-
-        log::debug!("get_account_balance - result: {}", &balance);
-        Ok(balance)
+    async fn exit_fee(&self, msg: ExitFee) -> Result<FeeResult, GenericError> {
+        Ok(wallet::exit_fee(&msg).await?)
     }
 
     fn get_name(&self) -> String {
@@ -319,6 +323,10 @@ Mind that to be eligible you have to run your app at least once on testnet -
         Ok("NOT_IMPLEMENTED".to_string())
     }
 
+    async fn transfer_fee(&self, msg: TransferFee) -> Result<FeeResult, GenericError> {
+        wallet
+    }
+
     async fn schedule_payment(
         &self,
         _db: DbExecutor,
@@ -407,10 +415,6 @@ Mind that to be eligible you have to run your app at least once on testnet -
             tokio::time::delay_for(std::time::Duration::from_secs(1)).await;
         }
         Ok(())
-    }
-
-    async fn exit_fee(&self, msg: ExitFee) -> Result<ExitFeeResult, GenericError> {
-        todo!()
     }
 }
 
