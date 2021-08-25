@@ -363,14 +363,14 @@ impl RpcMessage for Enter {
 // ************************** EXIT **************************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct Exit {
     sender: String,
     to: Option<String>,
     amount: Option<BigDecimal>,
     network: Option<String>,
     token: Option<String>,
-    fee_limit : Option<BigDecimal>
+    fee_limit: Option<BigDecimal>,
 }
 
 impl Exit {
@@ -380,7 +380,7 @@ impl Exit {
         amount: Option<BigDecimal>,
         network: Option<String>,
         token: Option<String>,
-        fee_limit : Option<BigDecimal>
+        fee_limit: Option<BigDecimal>,
     ) -> Exit {
         Exit {
             sender,
@@ -388,7 +388,7 @@ impl Exit {
             amount,
             network,
             token,
-            fee_limit
+            fee_limit,
         }
     }
 
@@ -404,6 +404,9 @@ impl Exit {
     pub fn network(&self) -> Option<String> {
         self.network.clone()
     }
+    pub fn fee_limit(&self) -> Option<&BigDecimal> {
+        self.fee_limit.as_ref()
+    }
 }
 
 impl RpcMessage for Exit {
@@ -413,20 +416,43 @@ impl RpcMessage for Exit {
 }
 
 #[derive(Clone, Default, Serialize, Deserialize)]
-#[serde(rename_all="camelCase")]
-#[non_exhaustive]
+#[serde(rename_all = "camelCase")]
 pub struct ExitFee {
     pub sender: String,
+    #[serde(default)]
     pub to: Option<String>,
+    #[serde(default)]
     pub amount: Option<BigDecimal>,
+    #[serde(default)]
     pub network: Option<String>,
+    #[serde(default)]
     pub token: Option<String>,
 }
 
-pub struct ExitFeeResult {
-
+impl ExitFee {
+    pub fn for_sender(sender: String) -> Self {
+        Self {
+            sender,
+            to: None,
+            amount: None,
+            network: None,
+            token: None,
+        }
+    }
 }
 
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FeeResult {
+    pub amount: BigDecimal,
+    pub token: String,
+}
+
+impl RpcMessage for ExitFee {
+    const ID: &'static str = "ExitFee";
+    type Item = FeeResult;
+    type Error = GenericError;
+}
 
 // ************************** TRANSFER **************************
 
@@ -437,6 +463,7 @@ pub struct Transfer {
     pub amount: BigDecimal,
     pub network: Option<String>,
     pub token: Option<String>,
+    pub fee_limit: Option<BigDecimal>,
 }
 
 impl Transfer {
@@ -453,6 +480,7 @@ impl Transfer {
             amount,
             network,
             token,
+            fee_limit: None,
         }
     }
 }
@@ -460,6 +488,21 @@ impl Transfer {
 impl RpcMessage for Transfer {
     const ID: &'static str = "Transfer";
     type Item = String; // Transaction Identifier
+    type Error = GenericError;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TransferFee {
+    pub sender: String,
+    pub to: String,
+    pub amount: BigDecimal,
+    pub network: Option<String>,
+    pub token: Option<String>,
+}
+
+impl RpcMessage for TransferFee {
+    const ID: &'static str = "TransferFee";
+    type Item = FeeResult; // Transaction Identifier
     type Error = GenericError;
 }
 

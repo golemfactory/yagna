@@ -21,7 +21,7 @@ async fn main() -> anyhow::Result<()> {
                 driver: account.driver,
                 network: Some(account.network),
                 token: Some(account.token),
-                since: None
+                since: None,
             })
             .await??;
         log::info!("Balance: {:?}", payer_status.amount);

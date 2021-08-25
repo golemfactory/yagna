@@ -64,7 +64,10 @@ pub enum PaymentCli {
         amount: Option<String>,
 
         #[structopt(long)]
-        fee_limit : Option<BigDecimal>
+        check_only: bool,
+
+        #[structopt(long)]
+        fee_limit: Option<BigDecimal>,
     },
 
     Transfer {
@@ -250,24 +253,39 @@ impl PaymentCli {
                 account,
                 to_address,
                 amount,
-                fee_limit
+                fee_limit,
+                check_only,
             } => {
                 let amount = match amount {
                     None => None,
                     Some(a) => Some(BigDecimal::from_str(&a)?),
                 };
-                CommandOutput::object(
-                    wallet::exit(
-                        resolve_address(account.address()).await?,
-                        to_address,
-                        amount,
-                        account.driver(),
-                        Some(account.network()),
-                        None,
-                        fee_limit
+                if check_only {
+                    return CommandOutput::object(
+                        wallet::exit_fee(
+                            resolve_address(account.address()).await?,
+                            to_address,
+                            amount,
+                            account.driver(),
+                            Some(account.network()),
+                            None,
+                        )
+                        .await?,
+                    );
+                } else {
+                    CommandOutput::object(
+                        wallet::exit(
+                            resolve_address(account.address()).await?,
+                            to_address,
+                            amount,
+                            account.driver(),
+                            Some(account.network()),
+                            None,
+                            fee_limit,
+                        )
+                        .await?,
                     )
-                    .await?,
-                )
+                }
             }
             PaymentCli::Transfer {
                 account,
