@@ -363,7 +363,7 @@ ya-aioclient = "^0.6"
 type = "git"
 url = "https://github.com/golemfactory/goth.git"
 reference = "mf/zksync-update"
-resolved_reference = "0a04090b5c2df6d5a85120551865ca3a359cc66a"
+resolved_reference = "1d161c47304898b05690827eeb0fc5304f777f9f"
 
 [[package]]
 name = "h11"
