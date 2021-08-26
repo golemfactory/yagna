@@ -8,10 +8,10 @@ use num_bigint::BigUint;
 use std::env;
 use std::str::FromStr;
 use zksync::operations::SyncTransactionHandle;
-use zksync::types::BlockStatus;
+use zksync::types::{BlockStatus};
 use zksync::zksync_types::{
-    tokens::{ChangePubKeyFeeType, ChangePubKeyFeeTypeArg},
-    tx::TxHash,
+    tokens::{ChangePubKeyFeeTypeArg},
+    tx::{TxHash, ChangePubKeyType},
     Address, Nonce, TxFeeTypes, H256,
 };
 use zksync::{
@@ -464,7 +464,7 @@ async fn get_unlock_fee<S: EthereumSigner + Clone, P: Provider + Clone>(
         .provider
         .get_tx_fee(
             TxFeeTypes::ChangePubKey(ChangePubKeyFeeTypeArg::ContractsV4Version(
-                ChangePubKeyFeeType::ECDSA,
+                ChangePubKeyType::ECDSA
             )),
             wallet.address(),
             token,
@@ -497,6 +497,7 @@ pub async fn deposit<S: EthereumSigner + Clone, P: Provider + Clone>(
         .map_err(|err| GenericError::new(err))?;
     ethereum.set_confirmation_timeout(get_ethereum_confirmation_timeout());
 
+    
     if !ethereum
         .is_limited_erc20_deposit_approved(token.as_str(), amount)
         .await
