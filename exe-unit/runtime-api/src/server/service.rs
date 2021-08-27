@@ -6,10 +6,12 @@ use futures::prelude::*;
 use futures::{FutureExt, SinkExt};
 use tokio::io;
 
-use crate::server::RuntimeEvent;
+use crate::server::{RuntimeHandler};
 
 use super::RuntimeService;
 use super::{codec, proto, ErrorResponse};
+
+
 
 async fn handle_command(
     service: &impl RuntimeService,
@@ -57,11 +59,24 @@ pub struct EventEmitter {
     tx: futures::channel::mpsc::Sender<proto::Response>,
 }
 
-impl RuntimeEvent for EventEmitter {
+impl RuntimeHandler for EventEmitter {
     fn on_process_status<'a>(&self, status: proto::response::ProcessStatus) -> BoxFuture<'a, ()> {
         let mut response = proto::Response::default();
         response.event = true;
         response.command = Some(proto::response::Command::Status(status));
+        let mut tx = self.tx.clone();
+        async move {
+            if let Err(e) = tx.send(response).await {
+                log::error!("send event failed: {}", e)
+            }
+        }
+        .boxed()
+    }
+
+    fn on_runtime_status<'a>(&self, status: proto::response::RuntimeStatus) -> BoxFuture<'a, ()> {
+        let mut response = proto::Response::default();
+        response.event = true;
+        response.command = Some(proto::response::Command::RtStatus(status));
         let mut tx = self.tx.clone();
         async move {
             if let Err(e) = tx.send(response).await {

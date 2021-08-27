@@ -22,6 +22,7 @@ use crate::protocol::negotiation::{error::*, messages::*, requestor::Negotiation
 use super::{common::*, error::*, notifier::NotifierError, EventNotifier};
 use crate::config::Config;
 use crate::db::dao::AgreementEventsDao;
+use crate::db::model::ProposalState;
 use crate::utils::display::EnableDisplay;
 
 #[derive(Clone, derive_more::Display, Debug, PartialEq)]
@@ -249,6 +250,23 @@ impl RequestorBroker {
         if offer_proposal.body.issuer != Issuer::Them {
             return Err(AgreementError::OwnProposal(proposal_id.clone()));
         }
+        // We can promote only Proposals in Draft state
+        // (not Initial, nor Rejected, nor already Accepted, and of course nor already Expired)
+        match offer_proposal.body.state {
+            ProposalState::Draft => {}
+            ProposalState::Initial => {
+                return Err(AgreementError::NoNegotiations(proposal_id.clone()))
+            }
+            ProposalState::Rejected => {
+                return Err(AgreementError::ProposalRejected(proposal_id.clone()))
+            }
+            ProposalState::Accepted => {
+                return Err(AgreementError::ProposalAlreadyAccepted(proposal_id.clone()))
+            }
+            ProposalState::Expired => {
+                // TODO: expiration of proposals is never checked
+            }
+        }
 
         let demand_proposal_id = offer_proposal
             .body
@@ -276,8 +294,8 @@ impl RequestorBroker {
             .map_err(|e| match e {
                 SaveAgreementError::Internal(e) => AgreementError::Save(proposal_id.clone(), e),
                 SaveAgreementError::ProposalCountered(id) => AgreementError::ProposalCountered(id),
-                SaveAgreementError::Exists(agreement_id, proposal_id) => {
-                    AgreementError::AlreadyExists(agreement_id, proposal_id)
+                SaveAgreementError::Exists(_agreement_id, proposal_id) => {
+                    AgreementError::ProposalAlreadyAccepted(proposal_id)
                 }
             })?;
 
