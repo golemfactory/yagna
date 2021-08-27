@@ -323,8 +323,8 @@ Mind that to be eligible you have to run your app at least once on testnet -
         Ok("NOT_IMPLEMENTED".to_string())
     }
 
-    async fn transfer_fee(&self, msg: TransferFee) -> Result<FeeResult, GenericError> {
-        wallet
+    async fn transfer_fee(&self, _msg: TransferFee) -> Result<FeeResult, GenericError> {
+        Err(GenericError::new("NOT_IMPLEMENTED"))
     }
 
     async fn schedule_payment(
