@@ -14,6 +14,7 @@ use futures::{FutureExt, SinkExt};
 use smoltcp::iface::Route;
 use smoltcp::socket::{Socket, SocketHandle};
 use smoltcp::wire::{IpAddress, IpCidr, IpEndpoint};
+use uuid::Uuid;
 
 use crate::message::*;
 use crate::socket::*;
@@ -71,14 +72,10 @@ impl VpnSupervisor {
     pub async fn create_network(
         &mut self,
         node_id: &NodeId,
-        network: ya_client_model::net::Network,
-    ) -> Result<()> {
-        if self.networks.contains_key(&network.id) {
-            return Err(Error::NetIdTaken(network.id));
-        }
-
+        network: ya_client_model::net::NewNetwork,
+    ) -> Result<ya_client_model::net::Network> {
         let net = to_net(&network.ip, network.mask.as_ref())?;
-        let net_id = network.id.clone();
+        let net_id = Uuid::new_v4().to_simple().to_string();
         let net_ip = IpCidr::new(net.addr().into(), net.prefix_len());
         let net_gw = match network
             .gateway
@@ -98,20 +95,27 @@ impl VpnSupervisor {
             .arbiter
             .clone()
             .spawn_ext(async move {
-                let stack = Stack::new(net_ip, net_route(net_gw)?);
+                let stack = Stack::new(net_ip, net_route(net_gw.clone())?);
                 let vpn = Vpn::new(stack, vpn_net);
                 Ok::<_, Error>(vpn.start())
             })
             .await?;
 
+        let network = ya_client_model::net::Network {
+            id: net_id.clone(),
+            ip: net_ip.to_string(),
+            mask: net.netmask().to_string(),
+            gateway: net_gw.to_string(),
+        };
+
         self.networks.insert(net_id.clone(), actor);
-        self.blueprints.insert(net_id.clone(), network);
+        self.blueprints.insert(net_id.clone(), network.clone());
         self.ownership
             .entry(node_id.clone())
             .or_insert_with(Default::default)
             .insert(net_id);
 
-        Ok(())
+        Ok(network)
     }
 
     pub fn remove_network<'a>(
