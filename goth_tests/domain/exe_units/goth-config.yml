@@ -48,7 +48,7 @@ node-types:
     environment:
       - "IDLE_AGREEMENT_TIMEOUT=5s"
       - "DEBIT_NOTE_ACCEPTANCE_DEADLINE=8s"
-      - "DEBIT_NOTE_INTERVAL=6"
+      - "DEBIT_NOTE_INTERVAL=1"
 
 nodes:
 

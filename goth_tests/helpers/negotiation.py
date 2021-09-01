@@ -26,7 +26,7 @@ class DemandBuilder:
         self._constraints = "()"
         self._properties["golem.node.debug.subnet"] = DEFAULT_SUBNET
 
-    def props_from_template(self, task_package: str) -> "DemandBuilder":
+    def props_from_template(self, task_package: Optional[str]) -> "DemandBuilder":
         """Build default properties."""
 
         new_props = {
@@ -34,8 +34,11 @@ class DemandBuilder:
             "golem.srv.comp.expiration": int(
                 (datetime.now() + timedelta(minutes=10)).timestamp() * 1000
             ),
-            "golem.srv.comp.task_package": task_package,
         }
+
+        if task_package is not None:
+            new_props["golem.srv.comp.task_package"] = task_package
+
         self._properties.update(new_props)
         return self
 

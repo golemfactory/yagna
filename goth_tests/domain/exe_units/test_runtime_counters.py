@@ -17,24 +17,21 @@ logger = logging.getLogger("goth.test.runtime.custom-counters")
 
 def build_demand(
     requestor: RequestorProbe,
-    require_debit_notes=True,
 ):
     """Simplifies creating demand."""
 
-    demand = (
+    return (
         DemandBuilder(requestor)
-        .props_from_template("")
+        .props_from_template(None)
         .property("golem.srv.caps.multi-activity", True)
+        .property("golem.com.payment.debit-notes.accept-timeout?", 8)
         .constraints(
             "(&(golem.com.pricing.model=linear)\
                 (golem.srv.caps.multi-activity=true)\
                 (golem.runtime.name=test-counters))"
         )
+        .build()
     )
-
-    if require_debit_notes:
-        demand = demand.property("golem.com.payment.debit-notes.accept-timeout?", 8)
-    return demand.build()
 
 
 def _exe_script(duration: float = 3.0):
@@ -45,12 +42,6 @@ def _exe_script(duration: float = 3.0):
             "run": {
                 "entry_point": "sleep",
                 "args": [f"{duration * 1000}"],
-            }
-        },
-        {
-            "run": {
-                "entry_point": "stop",
-                "args": [],
             }
         },
     ]
@@ -79,10 +70,9 @@ async def test_custom_runtime_counter(
     config_overrides: List[Override],
     log_dir: Path,
 ):
-    """Test provider breaking idle Agreement.
+    """Test custom counters provided by the test runtime.
 
-    Provider is expected to break Agreement in time configured by
-    variable: IDLE_AGREEMENT_TIMEOUT, if there are no Activities created.
+    The final debit note is expected to contain a non-zero custom counter value.
     """
     runner, config = _create_runner(common_assets, config_overrides, log_dir)
     counter_name = "golem.usage.custom.counter"
@@ -102,6 +92,7 @@ async def test_custom_runtime_counter(
         agreement_id, provider = agreement_providers[0]
         agreement = await requestor.api.market.get_agreement(agreement_id)
         usage_vector = agreement.offer.properties["golem.com.usage.vector"]
+        logger.info("usage vector: %r", usage_vector)
 
         assert counter_name in usage_vector
         counter_idx = usage_vector.index(counter_name)
@@ -118,6 +109,8 @@ async def test_custom_runtime_counter(
         await provider.wait_for_exeunit_finished()
 
         debit_notes = await requestor.api.payment.get_debit_notes()
-        for debit_note in debit_notes:
-            assert len(debit_note.usage_counter_vector) == len(usage_vector)
-        assert debit_notes[-1].usage_counter_vector[counter_idx] > 0
+        last_debit_note = debit_notes[-1]
+        logger.info("last debit note: %r", last_debit_note)
+
+        assert len(last_debit_note.usage_counter_vector) == len(usage_vector)
+        assert last_debit_note.usage_counter_vector[counter_idx] > 0
