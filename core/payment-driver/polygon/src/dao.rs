@@ -20,11 +20,11 @@ use ya_payment_driver::{
 
 use crate::network::platform_to_network_token;
 
-pub struct Erc20Dao {
+pub struct PolygonDao {
     db: DbExecutor,
 }
 
-impl Erc20Dao {
+impl PolygonDao {
     pub fn new(db: DbExecutor) -> Self {
         Self { db }
     }
@@ -119,7 +119,7 @@ impl Erc20Dao {
         details: &PaymentDetails,
         date: DateTime<Utc>,
     ) -> String {
-        // TO CHECK: No difference between tx_id and tx_hash on erc20
+        // TO CHECK: No difference between tx_id and tx_hash on Polygon
         // TODO: Implement pre-sign
         let tx_id = Uuid::new_v4().to_string();
         let tx = TransactionEntity {
@@ -128,7 +128,7 @@ impl Erc20Dao {
             nonce: "".to_string(), // not used till pre-sign
             status: TransactionStatus::Created as i32,
             timestamp: date.naive_utc(),
-            tx_type: 0,                // Erc20 only knows transfers, unused field
+            tx_type: 0,                // Polygon only knows transfers, unused field
             encoded: "".to_string(),   // not used till pre-sign
             signature: "".to_string(), // not used till pre-sign
             tx_hash: None,

@@ -14,9 +14,9 @@ use ya_payment_driver::{
 
 // Local uses
 use crate::{
-    dao::Erc20Dao,
+    dao::PolygonDao,
     driver::PaymentDetails,
-    erc20::{utils, wallet},
+    polygon::{utils, wallet},
     network,
 };
 
@@ -51,7 +51,7 @@ pub async fn get_account_balance(msg: GetAccountBalance) -> Result<BigDecimal, G
 }
 
 pub async fn schedule_payment(
-    dao: &Erc20Dao,
+    dao: &PolygonDao,
     msg: SchedulePayment,
 ) -> Result<String, GenericError> {
     let order_id = Uuid::new_v4().to_string();

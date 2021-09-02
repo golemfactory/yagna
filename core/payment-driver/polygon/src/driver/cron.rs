@@ -15,13 +15,13 @@ use ya_payment_driver::{
 };
 
 // Local uses
-use crate::{dao::Erc20Dao, erc20::wallet, network};
+use crate::{dao::PolygonDao, polygon::wallet, network};
 
 lazy_static! {
     static ref TX_SUMBIT_TIMEOUT: Duration = Duration::minutes(15);
 }
 
-pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
+pub async fn confirm_payments(dao: &PolygonDao, name: &str, network_key: &str) {
     let network = Network::from_str(&network_key).unwrap();
     let txs = dao.get_unconfirmed_txs(network).await;
     log::trace!("confirm_payments {:?}", txs);
@@ -81,7 +81,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
             let details = match wallet::verify_tx(&tx_hash, network).await {
                 Ok(a) => a,
                 Err(e) => {
-                    log::warn!("Failed to get transaction details from erc20, creating bespoke details. Error={}", e);
+                    log::warn!("Failed to get transaction details from Polygon, creating bespoke details. Error={}", e);
 
                     let first_payment: PaymentEntity = match dao.get_first_payment(&tx_hash).await {
                         Some(p) => p,
@@ -110,7 +110,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
     }
 }
 
-pub async fn process_payments_for_account(dao: &Erc20Dao, node_id: &str, network: Network) {
+pub async fn process_payments_for_account(dao: &PolygonDao, node_id: &str, network: Network) {
     log::trace!(
         "Processing payments for node_id={}, network={}",
         node_id,
@@ -126,7 +126,7 @@ pub async fn process_payments_for_account(dao: &Erc20Dao, node_id: &str, network
         );
         let mut nonce = wallet::get_next_nonce(
             dao,
-            crate::erc20::utils::str_to_addr(&node_id).unwrap(),
+            crate::polygon::utils::str_to_addr(&node_id).unwrap(),
             network,
         )
         .await
@@ -138,7 +138,7 @@ pub async fn process_payments_for_account(dao: &Erc20Dao, node_id: &str, network
     }
 }
 
-pub async fn process_transactions(dao: &Erc20Dao, network: Network) {
+pub async fn process_transactions(dao: &PolygonDao, network: Network) {
     let transactions: Vec<TransactionEntity> = dao.get_unsent_txs(network).await;
 
     if !transactions.is_empty() {
@@ -150,7 +150,7 @@ pub async fn process_transactions(dao: &Erc20Dao, network: Network) {
     }
 }
 
-async fn handle_payment(dao: &Erc20Dao, payment: PaymentEntity, nonce: &mut U256) {
+async fn handle_payment(dao: &PolygonDao, payment: PaymentEntity, nonce: &mut U256) {
     let details = utils::db_to_payment_details(&payment);
     let tx_nonce = nonce.to_owned();
 

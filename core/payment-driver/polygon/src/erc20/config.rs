@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 use std::env;
 use web3::types::Address;
 
-use crate::erc20::utils;
+use crate::polygon::utils;
 
 // TODO: REUSE old verification checks?
 // pub(crate) const ETH_TX_SUCCESS: u64 = 1;

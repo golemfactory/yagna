@@ -1,5 +1,5 @@
 /*
-    Erc20 related utilities.
+    Polygon related utilities.
 */
 
 use std::str::FromStr;

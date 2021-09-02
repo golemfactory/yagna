@@ -12,7 +12,7 @@ use ya_client_model::NodeId;
 use ya_payment_driver::db::models::{Network, TransactionEntity, TransactionStatus, TxType};
 use ya_payment_driver::{bus, model::GenericError, utils as base_utils};
 
-use crate::erc20::{config, eth_utils};
+use crate::polygon::{config, eth_utils};
 
 lazy_static! {
     pub static ref GLM_FAUCET_GAS: U256 = U256::from(90_000);

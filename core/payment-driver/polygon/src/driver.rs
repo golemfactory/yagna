@@ -24,7 +24,7 @@ use ya_payment_driver::{
 };
 
 // Local uses
-use crate::{dao::Erc20Dao, network::SUPPORTED_NETWORKS, RINKEBY_NETWORK, DRIVER_NAME};
+use crate::{dao::PolygonDao, network::SUPPORTED_NETWORKS, RINKEBY_NETWORK, DRIVER_NAME};
 
 mod api;
 mod cli;
@@ -46,18 +46,18 @@ lazy_static::lazy_static! {
         );
 }
 
-pub struct Erc20Driver {
+pub struct PolygonDriver {
     active_accounts: AccountsRc,
-    dao: Erc20Dao,
+    dao: PolygonDao,
     sendout_lock: Mutex<()>,
     confirmation_lock: Mutex<()>,
 }
 
-impl Erc20Driver {
+impl PolygonDriver {
     pub fn new(db: DbExecutor) -> Self {
         Self {
             active_accounts: Accounts::new_rc(),
-            dao: Erc20Dao::new(db),
+            dao: PolygonDao::new(db),
             sendout_lock: Default::default(),
             confirmation_lock: Default::default(),
         }
@@ -85,7 +85,7 @@ impl Erc20Driver {
 }
 
 #[async_trait(?Send)]
-impl PaymentDriver for Erc20Driver {
+impl PaymentDriver for PolygonDriver {
     async fn account_event(
         &self,
         _db: DbExecutor,
@@ -218,7 +218,7 @@ impl PaymentDriver for Erc20Driver {
 }
 
 #[async_trait(?Send)]
-impl PaymentDriverCron for Erc20Driver {
+impl PaymentDriverCron for PolygonDriver {
     async fn confirm_payments(&self) {
         let guard = match self.confirmation_lock.try_lock() {
             None => {

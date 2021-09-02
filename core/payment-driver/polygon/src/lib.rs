@@ -5,7 +5,7 @@
 */
 
 // Public
-pub const DRIVER_NAME: &'static str = "erc20";
+pub const DRIVER_NAME: &'static str = "polygon";
 
 pub const RINKEBY_NETWORK: &'static str = "rinkeby";
 pub const RINKEBY_TOKEN: &'static str = "tGLM";
@@ -19,7 +19,7 @@ pub const MAINNET_NETWORK: &'static str = "mainnet";
 pub const MAINNET_TOKEN: &'static str = "GLM";
 pub const MAINNET_PLATFORM: &'static str = "erc20-mainnet-glm";
 
-pub use service::Erc20Service as PaymentDriverService;
+pub use service::PolygonService as PaymentDriverService;
 
 // Private
 #[macro_use]
