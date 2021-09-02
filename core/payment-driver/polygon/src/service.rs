@@ -15,7 +15,7 @@ use ya_payment_driver::{
 use ya_service_api_interfaces::Provider;
 
 // Local uses
-use crate::driver::Erc20Driver;
+use crate::driver::PolygonDriver;
 
 pub struct PolygonService;
 

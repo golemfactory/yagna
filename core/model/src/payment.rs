@@ -462,6 +462,7 @@ pub mod local {
     pub enum DriverName {
         ZkSync,
         Erc20,
+        Polygon,
     }
 
     #[derive(StructOpt, Debug, Clone)]
