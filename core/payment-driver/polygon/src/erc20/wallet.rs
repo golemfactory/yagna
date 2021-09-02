@@ -16,8 +16,8 @@ use ya_payment_driver::{
 
 // Local uses
 use crate::{
-    dao::Erc20Dao,
-    erc20::{eth_utils, ethereum, faucet, utils},
+    dao::PolygonDao,
+    polygon::{eth_utils, ethereum, faucet, utils},
     RINKEBY_NETWORK,
 };
 
@@ -57,7 +57,7 @@ pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
     Ok(())
 }
 
-pub async fn fund(dao: &Erc20Dao, address: H160, network: Network) -> Result<(), GenericError> {
+pub async fn fund(dao: &PolygonDao, address: H160, network: Network) -> Result<(), GenericError> {
     if network == Network::Mainnet {
         return Err(GenericError::new("Wallet can not be funded on mainnet."));
     }
@@ -66,7 +66,7 @@ pub async fn fund(dao: &Erc20Dao, address: H160, network: Network) -> Result<(),
 }
 
 pub async fn get_next_nonce(
-    dao: &Erc20Dao,
+    dao: &PolygonDao,
     address: H160,
     network: Network,
 ) -> Result<U256, GenericError> {
@@ -122,7 +122,7 @@ pub async fn make_transfer(
 }
 
 pub async fn send_transactions(
-    dao: &Erc20Dao,
+    dao: &PolygonDao,
     txs: Vec<TransactionEntity>,
     network: Network,
 ) -> Result<(), GenericError> {

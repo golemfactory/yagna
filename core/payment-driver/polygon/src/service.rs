@@ -17,11 +17,11 @@ use ya_service_api_interfaces::Provider;
 // Local uses
 use crate::driver::Erc20Driver;
 
-pub struct Erc20Service;
+pub struct PolygonService;
 
-impl Erc20Service {
+impl PolygonService {
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
-        log::debug!("Connecting Erc20Service to gsb...");
+        log::debug!("Connecting PolygonService to gsb...");
 
         // TODO: Read and validate env
         log::debug!("Environment variables validated");
@@ -32,7 +32,7 @@ impl Erc20Service {
         log::debug!("Database initialised");
 
         // Load driver
-        let driver = Erc20Driver::new(db.clone());
+        let driver = PolygonDriver::new(db.clone());
         driver.load_active_accounts().await;
         let driver_rc = Arc::new(driver);
         bus::bind_service(&db, driver_rc.clone()).await?;
@@ -42,7 +42,7 @@ impl Erc20Service {
         Cron::new(driver_rc.clone());
         log::debug!("Cron started");
 
-        log::info!("Successfully connected Erc20Service to gsb.");
+        log::info!("Successfully connected PolygonService to gsb.");
         Ok(())
     }
 }

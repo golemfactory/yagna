@@ -1,5 +1,5 @@
 [package]
-name = "ya-erc20-driver"
+name = "ya-polygon-driver"
 version = "0.3.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"

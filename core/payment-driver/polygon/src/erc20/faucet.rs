@@ -15,8 +15,8 @@ use ya_payment_driver::{db::models::Network, model::GenericError, utils};
 use ya_utils_networking::resolver;
 
 // Local uses
-use crate::dao::Erc20Dao;
-use crate::erc20::{ethereum, wallet};
+use crate::dao::PolygonDao;
+use crate::polygon::{ethereum, wallet};
 
 const DEFAULT_FAUCET_SRV_PREFIX: &str = "_eth-faucet._tcp";
 const DEFAULT_ETH_FAUCET_HOST: &str = "faucet.testnet.golem.network";
@@ -30,7 +30,7 @@ lazy_static! {
 }
 
 pub async fn request_glm(
-    dao: &Erc20Dao,
+    dao: &PolygonDao,
     address: H160,
     network: Network,
 ) -> Result<(), GenericError> {
@@ -40,7 +40,7 @@ pub async fn request_glm(
         log::info!("Enough tETH balance.");
     } else {
         log::info!(
-            "Requesting tETH from erc20 faucet... address = {}",
+            "Requesting tETH from Polygon faucet... address = {}",
             &str_addr
         );
 
@@ -82,7 +82,7 @@ pub async fn request_glm(
         return Ok(());
     }
     log::info!(
-        "Requesting tGLM from erc20 faucet... address = {}",
+        "Requesting tGLM from Polygon faucet... address = {}",
         &str_addr
     );
 
