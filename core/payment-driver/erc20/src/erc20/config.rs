@@ -20,6 +20,26 @@ pub struct EnvConfiguration {
 }
 
 lazy_static! {
+    pub static ref GOERLI_CONFIG: EnvConfiguration = EnvConfiguration {
+        glm_contract_address: utils::str_to_addr(
+            &env::var("GOERLI_TGLM_CONTRACT_ADDRESS")
+                .unwrap_or("0x33Af15C79d64B85bA14AafFaa4577949104b22e8".to_string())
+        )
+        .unwrap(),
+        glm_faucet_address: Some(
+            utils::str_to_addr(
+                &env::var("GOERLI_TGLM_FAUCET_ADDRESS")
+                    .unwrap_or("0xCCA41b09C1F50320bFB41BD6822BD0cdBDC7d85C".to_string())
+            )
+            .unwrap()
+        ),
+        required_confirmations: {
+            match env::var("ERC20_RINKEBY_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
+                Ok(Ok(x)) => x,
+                _ => 3,
+            }
+        }
+    };
     pub static ref RINKEBY_CONFIG: EnvConfiguration = EnvConfiguration {
         glm_contract_address: utils::str_to_addr(
             &env::var("RINKEBY_TGLM_CONTRACT_ADDRESS")

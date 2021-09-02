@@ -83,11 +83,12 @@ pub struct PaymentEntity {
 pub enum Network {
     Mainnet = 1,
     Rinkeby = 4,
+    Goerli = 8
 }
 
 impl Default for Network {
     fn default() -> Self {
-        Network::Rinkeby
+        Network::Goerli
     }
 }
 
@@ -98,6 +99,7 @@ impl FromStr for Network {
         match s.to_lowercase().as_str() {
             "mainnet" => Ok(Network::Mainnet),
             "rinkeby" => Ok(Network::Rinkeby),
+            "goerli" => Ok(Network::Goerli),
             _ => Err(DbError::InvalidData(format!(
                 "Invalid network: {}",
                 s.to_string()
@@ -111,6 +113,7 @@ impl Display for Network {
         match *self {
             Network::Mainnet => f.write_str("mainnet"),
             Network::Rinkeby => f.write_str("rinkeby"),
+            Network::Goerli => f.write_str("goerli"),
         }
     }
 }

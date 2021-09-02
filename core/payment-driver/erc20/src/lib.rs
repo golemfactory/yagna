@@ -7,9 +7,13 @@
 // Public
 pub const DRIVER_NAME: &'static str = "erc20";
 
-pub const DEFAULT_NETWORK: &'static str = "rinkeby";
-pub const DEFAULT_TOKEN: &'static str = "tGLM";
-pub const DEFAULT_PLATFORM: &'static str = "erc20-rinkeby-tglm";
+pub const RINKEBY_NETWORK: &'static str = "rinkeby";
+pub const RINKEBY_TOKEN: &'static str = "tGLM";
+pub const RINKEBY_PLATFORM: &'static str = "erc20-rinkeby-tglm";
+
+pub const GOERLI_NETWORK: &'static str = "goerli";
+pub const GOERLI_TOKEN: &'static str = "tGLM";
+pub const GOERLI_PLATFORM: &'static str = "erc20-goerli-tglm";
 
 pub const MAINNET_NETWORK: &'static str = "mainnet";
 pub const MAINNET_TOKEN: &'static str = "GLM";
