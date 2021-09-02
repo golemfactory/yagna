@@ -62,13 +62,13 @@ lazy_static! {
     };
     pub static ref MAINNET_CONFIG: EnvConfiguration = EnvConfiguration {
         glm_contract_address: utils::str_to_addr(
-            &env::var("MAINNET_GLM_CONTRACT_ADDRESS")
-                .unwrap_or("0x7DD9c5Cba05E151C895FDe1CF355C9A1D5DA6429".to_string())
+            &env::var("POLYGON_GLM_CONTRACT_ADDRESS")
+                .unwrap_or("0x0b220b82f3ea3b7f6d9a1d8ab58930c064a2b5bf".to_string())
         )
         .unwrap(),
         glm_faucet_address: None,
         required_confirmations: {
-            match env::var("ERC20_MAINNET_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
+            match env::var("POLYGON_MAINNET_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
                 Ok(Ok(x)) => x,
                 _ => 5,
             }

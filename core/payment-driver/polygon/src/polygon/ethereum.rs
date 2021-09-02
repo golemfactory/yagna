@@ -196,7 +196,7 @@ pub async fn get_tx_receipt(
 fn get_rpc_addr_from_env(network: Network) -> String {
     match network {
         Network::Mainnet => std::env::var("MAINNET_GETH_ADDR")
-            .unwrap_or("https://geth.golem.network:55555".to_string()),
+            .unwrap_or("http://51.38.53.113:8545".to_string()),
         Network::Rinkeby => std::env::var("RINKEBY_GETH_ADDR")
             .unwrap_or("http://geth.testnet.golem.network:55555".to_string()),
         Network::Goerli => std::env::var("GOERLI_GETH_ADDR")

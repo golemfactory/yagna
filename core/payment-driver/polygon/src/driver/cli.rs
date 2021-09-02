@@ -17,7 +17,7 @@ use ya_utils_futures::timeout::IntoTimeoutFuture;
 // Local uses
 use crate::{
     dao::PolygonDao,
-    driver::Erc20Driver,
+    driver::PolygonDriver,
     polygon::{utils, wallet},
     network, DRIVER_NAME,
 };
