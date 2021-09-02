@@ -440,6 +440,8 @@ pub mod local {
         Mainnet,
         #[strum(props(token = "tGLM"))]
         Rinkeby,
+        #[strum(props(token = "tGLM"))]
+        Goerli,
     }
 
     /// Experimental. In future releases this might change or be removed.
@@ -471,7 +473,7 @@ pub mod local {
         #[structopt(long, possible_values = DriverName::VARIANTS, default_value = DriverName::ZkSync.into())]
         pub driver: DriverName,
         /// Payment network
-        #[structopt(long, possible_values = NetworkName::VARIANTS, default_value = NetworkName::Rinkeby.into())]
+        #[structopt(long, possible_values = NetworkName::VARIANTS, default_value = NetworkName::Goerli.into())]
         pub network: NetworkName,
     }
 

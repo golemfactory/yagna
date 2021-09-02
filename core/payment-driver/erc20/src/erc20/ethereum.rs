@@ -199,6 +199,8 @@ fn get_rpc_addr_from_env(network: Network) -> String {
             .unwrap_or("https://geth.golem.network:55555".to_string()),
         Network::Rinkeby => std::env::var("RINKEBY_GETH_ADDR")
             .unwrap_or("http://geth.testnet.golem.network:55555".to_string()),
+        Network::Goerli => std::env::var("GOERLI_GETH_ADDR")
+            .unwrap_or("https://rpc.goerli.mudit.blog/".to_string()),
     }
 }
 
@@ -214,6 +216,7 @@ fn get_env(network: Network) -> config::EnvConfiguration {
     match network {
         Network::Mainnet => *config::MAINNET_CONFIG,
         Network::Rinkeby => *config::RINKEBY_CONFIG,
+        Network::Goerli => *config::GOERLI_CONFIG,
     }
 }
 
