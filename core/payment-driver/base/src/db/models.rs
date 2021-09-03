@@ -88,7 +88,7 @@ pub enum Network {
 
 impl Default for Network {
     fn default() -> Self {
-        Network::Goerli
+        Network::Rinkeby
     }
 }
 
