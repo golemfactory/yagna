@@ -20,7 +20,7 @@ readme = "README.md"
 python = "^3.8.0"
 pytest = "^6.2"
 pytest-asyncio = "^0.14"
-goth = { git = "https://github.com/golemfactory/goth.git", branch = "mf/zksync-update" }
+goth = { git = "https://github.com/golemfactory/goth.git", rev = "3326ad40f733b731bae50bbc332d9ba5ac558b78" }
 # to use development goth version uncomment below
 # goth = { git = "https://github.com/golemfactory/goth.git", branch = "your-branch-here" }
 

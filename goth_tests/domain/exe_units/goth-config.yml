@@ -37,20 +37,18 @@ node-types:
   - name: "Requestor"
     class: "goth.runner.probe.RequestorProbe"
 
-  - name: "Wasm-Provider"
+  - name: "Provider"
     class: "goth_tests.helpers.probe.ProviderProbe"
     mount:
       - read-only: "../../provider-presets.json"
         destination: "/root/.local/share/ya-provider/presets.json"
       - read-only: "../../assets/provider/hardware.json"
         destination: "/root/.local/share/ya-provider/hardware.json"
-      - read-write: "~/.local/share/ya-provider/vm-images"
-        destination: "/root/.local/share/ya-provider/exe-unit/cache/tmp"
     privileged-mode: True
     environment:
       - "IDLE_AGREEMENT_TIMEOUT=5s"
       - "DEBIT_NOTE_ACCEPTANCE_DEADLINE=8s"
-      - "DEBIT_NOTE_INTERVAL=6"
+      - "DEBIT_NOTE_INTERVAL=1"
 
 nodes:
 
@@ -58,5 +56,5 @@ nodes:
     type: "Requestor"
 
   - name: "provider-1"
-    type: "Wasm-Provider"
+    type: "Provider"
     use-proxy: True
