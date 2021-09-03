@@ -24,7 +24,7 @@ use ya_payment_driver::{
 };
 
 // Local uses
-use crate::{dao::PolygonDao, network::SUPPORTED_NETWORKS, RINKEBY_NETWORK, DRIVER_NAME};
+use crate::{dao::PolygonDao, network::SUPPORTED_NETWORKS, GOERLI_NETWORK, DRIVER_NAME};
 
 mod api;
 mod cli;
@@ -32,14 +32,14 @@ mod cron;
 
 lazy_static::lazy_static! {
     static ref TX_SENDOUT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(
-            std::env::var("ERC20_SENDOUT_INTERVAL_SECS")
+            std::env::var("POLYGON_SENDOUT_INTERVAL_SECS")
                 .ok()
                 .and_then(|x| x.parse().ok())
                 .unwrap_or(10),
         );
 
     static ref TX_CONFIRMATION_INTERVAL: std::time::Duration = std::time::Duration::from_secs(
-            std::env::var("ERC20_CONFIRMATION_INTERVAL_SECS")
+            std::env::var("POLYGON_CONFIRMATION_INTERVAL_SECS")
                 .ok()
                 .and_then(|x| x.parse().ok())
                 .unwrap_or(5),
@@ -130,7 +130,7 @@ impl PaymentDriver for PolygonDriver {
     }
 
     fn get_default_network(&self) -> String {
-        RINKEBY_NETWORK.to_string()
+        GOERLI_NETWORK.to_string()
     }
 
     fn get_networks(&self) -> HashMap<String, NetworkConfig> {

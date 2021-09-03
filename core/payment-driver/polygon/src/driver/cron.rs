@@ -163,11 +163,11 @@ async fn handle_payment(dao: &PolygonDao, payment: PaymentEntity, nonce: &mut U2
         Err(e) => {
             let deadline = Utc.from_utc_datetime(&payment.payment_due_date) + *TX_SUMBIT_TIMEOUT;
             if Utc::now() > deadline {
-                log::error!("Failed to submit erc20 transaction. Retry deadline reached. details={:?} error={}", payment, e);
+                log::error!("Failed to submit polygon transaction. Retry deadline reached. details={:?} error={}", payment, e);
                 dao.payment_failed(&payment.order_id).await;
             } else {
                 log::warn!(
-                    "Failed to submit erc20 transaction. Payment will be retried until {}. details={:?} error={}",
+                    "Failed to submit polygon transaction. Payment will be retried until {}. details={:?} error={}",
                     deadline, payment, e
                 );
             };
