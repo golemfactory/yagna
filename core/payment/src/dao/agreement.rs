@@ -347,7 +347,7 @@ fn make_summary2(
             match invoice.status {
                 DocumentStatus::Settled => false,
                 DocumentStatus::Accepted => {
-                    chrono::Utc::now() - invoice.timestamp > chrono::Duration::hours(1)
+                    chrono::Utc::now() - invoice.payment_due_date > chrono::Duration::hours(1)
                 }
                 _ => false,
             }
