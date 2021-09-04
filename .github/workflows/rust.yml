@@ -55,7 +55,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --tests --workspace --locked
+          args: --tests --workspace --exclude=["./agent/provider/src/market"] --locked
 
       - name: Build binaries
         uses: actions-rs/cargo@v1
