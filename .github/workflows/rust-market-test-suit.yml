@@ -51,11 +51,11 @@ jobs:
           vcpkg list
           vcpkg integrate install
 
-      - name: Unit tests
+      - name: Market Test Suite (semi-integration tests)
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --tests --workspace --locked
+          args: --features ya-market/test-suite --locked
 
       - name: Build binaries
         uses: actions-rs/cargo@v1
