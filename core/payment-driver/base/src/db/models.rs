@@ -23,6 +23,7 @@ pub const PAYMENT_STATUS_OK: i32 = 2;
 pub const PAYMENT_STATUS_NOT_ENOUGH_FUNDS: i32 = 3;
 pub const PAYMENT_STATUS_NOT_ENOUGH_GAS: i32 = 4;
 pub const PAYMENT_STATUS_FAILED: i32 = 5;
+pub const PAYMENT_STATUS_ACCEPTED: i32 = 99;
 
 #[derive(Clone, Copy)]
 pub enum TxType {

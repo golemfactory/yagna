@@ -58,6 +58,28 @@ impl ZksyncDao {
         }
     }
 
+    pub async fn get_accepted_payments(
+        &self,
+        node_id: &str,
+        network: Network,
+    ) -> Vec<PaymentEntity> {
+        match self
+            .payment()
+            .get_accpeted_payments(node_id.to_string(), network)
+            .await
+        {
+            Ok(payments) => payments,
+            Err(e) => {
+                log::error!(
+                    "Failed to fetch pending payments for {:?} : {:?}",
+                    node_id,
+                    e
+                );
+                vec![]
+            }
+        }
+    }
+
     pub async fn insert_payment(
         &self,
         order_id: &str,

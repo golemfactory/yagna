@@ -35,6 +35,7 @@ use crate::{
     zksync::wallet,
     DEFAULT_NETWORK, DRIVER_NAME,
 };
+use ya_payment_driver::db::models::PAYMENT_STATUS_ACCEPTED;
 
 lazy_static! {
     static ref TX_SUMBIT_TIMEOUT: Duration = Duration::minutes(15);
@@ -105,8 +106,11 @@ impl ZksyncDriver {
         log::trace!("Processing payments for node_id={}", node_id);
         for network_key in self.get_networks().keys() {
             let network = DbNetwork::from_str(&network_key).unwrap();
-            let payments: Vec<PaymentEntity> =
-                self.dao.get_pending_payments(node_id, network).await;
+            let payments: Vec<PaymentEntity> = if network == DbNetwork::Mainnet {
+                self.dao.get_accepted_payments(node_id, network).await
+            } else {
+                self.dao.get_pending_payments(node_id, network).await
+            };
             let mut nonce = 0;
             if !payments.is_empty() {
                 log::info!(
@@ -121,7 +125,11 @@ impl ZksyncDriver {
             }
             if network == DbNetwork::Mainnet {
                 for payment in payments {
-                    log::warn!("skiping payments: {:?}", payment);
+                    if payment.status != PAYMENT_STATUS_ACCEPTED {
+                        log::debug!("skiping payments: {:?}", payment);
+                    } else {
+                        self.handle_payment(payment, &mut nonce).await;
+                    }
                 }
             } else {
                 for payment in payments {
