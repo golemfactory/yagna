@@ -55,7 +55,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --features ya-market/test-suite --locked
+          args: --tests --features ya-market/test-suite --locked
 
       - name: Build binaries
         uses: actions-rs/cargo@v1
