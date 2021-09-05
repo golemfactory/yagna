@@ -20,7 +20,7 @@ jobs:
         id: wait-for-build-ubu
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          checkName: "Tests & Build (ubuntu-latest)"
+          checkName: "Build Binaries (ubuntu-latest)"
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           timeoutSeconds: 7200
 
@@ -77,7 +77,7 @@ jobs:
       - name: Download artifact
         uses: dawidd6/action-download-artifact@v2
         with:
-          workflow: rust.yml
+          workflow: binaries.yml
           commit: ${{github.event.pull_request.head.sha || github.sha}}
           workflow_conclusion: success
           name: 'Yagna Linux'
