@@ -6,18 +6,15 @@ from typing import List, Tuple
 
 import pytest
 
-from goth.address import (
-    PROXY_HOST,
-    YAGNA_REST_URL,
-)
 from goth.configuration import load_yaml, Override, Configuration
-from goth.node import node_environment
 from goth.runner import Runner
-from goth.runner.container.payment import PaymentIdPool
-from goth.runner.container.yagna import YagnaContainerConfig
 from goth.runner.probe import RequestorProbe
 
 from goth_tests.helpers.activity import run_activity, wasi_exe_script, wasi_task_package
+from goth_tests.helpers.api_events import (
+    wait_for_agreement_terminated_event,
+    wait_for_debit_note_sent,
+)
 from goth_tests.helpers.negotiation import negotiate_agreements, DemandBuilder
 from goth_tests.helpers.payment import pay_all
 from goth_tests.helpers.probe import ProviderProbe
@@ -94,8 +91,14 @@ async def test_provider_idle_agreement(
             providers,
         )
 
+        agreement_id, provider = agreement_providers[0]
         # Break after 5s + 3s margin
-        await providers[0].wait_for_agreement_broken(r"No activity created", timeout=8)
+        _api_event, agr_event = await wait_for_agreement_terminated_event(
+            provider, agr_id=agreement_id, timeout=8
+        )
+        logger.info("Agreement broken, event = %s", agr_event)
+        assert agr_event["reason"]["message"] == "No activity created within 5s"
+        assert agr_event["reason"]["golem.provider.code"] == "NoActivity"
 
         await pay_all(requestor, agreement_providers)
 
@@ -136,7 +139,12 @@ async def test_provider_idle_agreement_after_2_activities(
             )
 
         # Break after 5s + 3s margin
-        await providers[0].wait_for_agreement_broken("No activity created", timeout=8)
+        _api_event, agr_event = await wait_for_agreement_terminated_event(
+            provider, agr_id=agreement_id, timeout=8
+        )
+        logger.info("Agreement broken, event = %s", agr_event)
+        assert agr_event["reason"]["message"] == "No activity created within 5s"
+        assert agr_event["reason"]["golem.provider.code"] == "NoActivity"
 
         await pay_all(requestor, agreement_providers)
 
@@ -170,15 +178,17 @@ async def test_provider_debit_notes_accept_timeout(
         await provider.wait_for_exeunit_started()
 
         # Wait for first DebitNote sent by Provider.
-        await providers[0].wait_for_log(
-            r"Debit note \[.*\] for activity \[.*\] sent.", timeout=30
-        )
+        await wait_for_debit_note_sent(provider, agr_id=agreement_id, timeout=15)
 
         # Negotiated timeout is 8s. Let's wait with some margin.
-        await providers[0].wait_for_agreement_broken(
-            "Requestor isn't accepting DebitNotes in time",
-            timeout=12,
+        _api_event, agr_event = await wait_for_agreement_terminated_event(
+            provider, agr_id=agreement_id, timeout=12
         )
+        logger.info("Agreement broken, event = %s", agr_event)
+        assert agr_event["reason"]["message"].startswith(
+            "Requestor isn't accepting DebitNotes"
+        )
+        assert agr_event["reason"]["golem.provider.code"] == "DebitNotesDeadline"
 
         await pay_all(requestor, agreement_providers)
 

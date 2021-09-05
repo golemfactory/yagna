@@ -1,16 +1,25 @@
 """Helper functions for building custom Offers and negotiating Agreements."""
 
 import logging
-from typing import List, Optional, Callable, Tuple, Any
+from typing import List, Optional, Callable, Dict, Tuple, Any
 from datetime import datetime, timedelta
 
 from ya_market import Demand, DemandOfferBase, Proposal
 
+from goth.api_monitor.api_events import (
+    APIEvent,
+    APIResponse,
+    get_response_json,
+    is_subscribe_offer,
+)
 from goth.node import DEFAULT_SUBNET
 from goth.runner.probe import ProviderProbe, RequestorProbe
+from goth_tests.helpers.api_events import (
+    wait_for_approve_agreement_response,
+    wait_for_counter_proposal_response,
+)
 
-
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("goth.tests.negotiation")
 
 
 class DemandBuilder:
@@ -62,6 +71,37 @@ class DemandBuilder:
         )
 
 
+async def assert_offers_subscribed(providers: List[ProviderProbe]) -> Dict[str, str]:
+    """Wait until each of `providers` performs SubscribeOffer operation.
+
+    Return the mapping of provider names to their offer subscription ids.
+    """
+
+    if not providers:
+        return {}
+
+    runner = providers[0].runner
+    pending = {p.name for p in providers}
+    offer_sub_ids = {}
+
+    while pending:
+        ev: APIEvent
+        ev, _ = await runner.wait_for_api_event(
+            is_subscribe_offer,
+            event_type=APIResponse,
+            name="SubscribeOffer response",
+            timeout=10,
+        )
+        agent_name = ev.request.agent_name
+        if agent_name in pending:
+            sub_id = get_response_json(ev)
+            offer_sub_ids[agent_name] = sub_id
+            pending.remove(agent_name)
+            logger.info("Agent on %s subscribed offer, sub_id = %s", agent_name, sub_id)
+
+    return offer_sub_ids
+
+
 async def negotiate_agreements(
     requestor: RequestorProbe,
     demand: Demand,
@@ -74,8 +114,8 @@ async def negotiate_agreements(
     logic, but rather you want to test further parts of yagna protocol
     and need ready Agreements.
     """
-    for provider in providers:
-        await provider.wait_for_offer_subscribed()
+
+    await assert_offers_subscribed(providers)
 
     subscription_id, demand = await requestor.subscribe_demand(demand)
 
@@ -95,7 +135,11 @@ async def negotiate_agreements(
         counter_proposal_id = await requestor.counter_proposal(
             subscription_id, demand, proposal
         )
-        await provider.wait_for_proposal_accepted()
+        await wait_for_counter_proposal_response(
+            provider,
+            prop_id=counter_proposal_id.replace("R-", "P-"),
+            timeout=10,
+        )
 
         new_proposals = await requestor.wait_for_proposals(
             subscription_id,
@@ -105,8 +149,12 @@ async def negotiate_agreements(
 
         agreement_id = await requestor.create_agreement(new_proposals[0])
         await requestor.confirm_agreement(agreement_id)
-        await provider.wait_for_agreement_approved()
+        await wait_for_approve_agreement_response(
+            provider, agr_id=agreement_id, timeout=10
+        )
+
         await requestor.wait_for_approval(agreement_id)
+
         agreement_providers.append((agreement_id, provider))
 
     await requestor.unsubscribe_demand(subscription_id)
