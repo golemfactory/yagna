@@ -38,12 +38,6 @@ jobs:
           command: tree
           args: --locked
 
-      - name: Check formatting
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
-
       - name: Install openssl ( Windows only )
         if: runner.os == 'Windows'
         run: |
@@ -57,31 +51,3 @@ jobs:
           command: test
           args: --tests -p ya-market --features ya-market/test-suite --locked
 
-      - name: Build binaries
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --workspace
-
-      - name: Copy binaries
-        shell: bash
-        run: |
-          mkdir build
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            cp target/debug/{yagna,ya-provider,exe-unit,golemsp,gftp} build
-            strip -x build/*
-          elif [ "$RUNNER_OS" == "macOS" ]; then
-            cp target/debug/{yagna,gftp} build
-            strip -x build/*
-          elif [ "$RUNNER_OS" == "Windows" ]; then
-            cp target/debug/{yagna,gftp}.exe build
-          else
-            echo "$RUNNER_OS not supported"
-            exit 1
-          fi
-
-      - name: Upload binaries
-        uses: actions/upload-artifact@v1
-        with:
-          name: Yagna ${{ runner.os }}
-          path: build
