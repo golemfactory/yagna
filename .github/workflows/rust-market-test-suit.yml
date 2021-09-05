@@ -12,7 +12,7 @@ on:
 
 jobs:
   build:
-    name: Tests & Build
+    name: Market Test Suite
     env:
       # `-D warnings` means any warnings emitted will cause build to fail
       RUSTFLAGS: "-D warnings -C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
@@ -55,7 +55,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --tests ./agent/provider/src/market --features ya-market/test-suite --locked
+          args: --tests -p ya-market --features ya-market/test-suite --locked
 
       - name: Build binaries
         uses: actions-rs/cargo@v1
