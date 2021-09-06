@@ -1,9 +1,11 @@
-pub use crate::db::models::Identity;
-use crate::db::schema as s;
 use diesel::prelude::*;
+
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
+
+pub use crate::db::models::Identity;
+use crate::db::schema as s;
 
 type Result<T> = std::result::Result<T, super::Error>;
 
@@ -40,12 +42,43 @@ impl<'c> IdentityDao<'c> {
         Ok(())
     }
 
+    pub async fn update_keyfile(&self, identity_id: String, key_file_json: String) -> Result<()> {
+        self.with_transaction(move |conn| {
+            Ok(
+                diesel::update(s::identity::table.filter(s::identity::identity_id.eq(identity_id)))
+                    .set(s::identity::key_file_json.eq(&key_file_json))
+                    .execute(conn)?,
+            )
+        })
+        .await?;
+        Ok(())
+    }
+
     pub async fn list_identities(&self) -> Result<Vec<Identity>> {
         use crate::db::schema::identity::dsl::*;
         readonly_transaction(self.pool, |conn| {
             Ok(identity
                 .filter(is_deleted.eq(false))
                 .load::<Identity>(conn)?)
+        })
+        .await
+    }
+
+    pub async fn init_preconfigured(&self, preconfigured_identity: Identity) -> Result<Identity> {
+        use crate::db::schema::identity::dsl as id_dsl;
+        self.with_transaction(move |conn| {
+            if let Some(id) = id_dsl::identity
+                .filter(id_dsl::identity_id.eq(preconfigured_identity.identity_id))
+                .get_result::<Identity>(conn)
+                .optional()?
+            {
+                Ok(id)
+            } else {
+                diesel::insert_into(s::identity::table)
+                    .values(&preconfigured_identity)
+                    .execute(conn)?;
+                Ok(preconfigured_identity)
+            }
         })
         .await
     }

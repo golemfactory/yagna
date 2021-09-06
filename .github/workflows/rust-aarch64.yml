@@ -1,0 +1,55 @@
+name: CI aarch64
+
+on:
+  push:
+    branches:
+      - master
+      - release/*
+  pull_request:
+    branches:
+      - master
+      - release/*
+
+jobs:
+  build:
+    name: Build
+    env:
+      RUSTFLAGS: "-C link-arg=-s"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: aarch64-unknown-linux-musl
+          override: true
+
+      - name: Build binaries
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: >
+            -p yagna
+            -p ya-exe-unit
+            -p ya-provider
+            -p golemsp
+            -p gftp
+            --release
+            --features static-openssl
+            --target aarch64-unknown-linux-musl
+
+      - name: Copy binaries
+        shell: bash
+        run: |
+          mkdir build
+          cp target/aarch64-unknown-linux-musl/release/{yagna,ya-provider,exe-unit,golemsp,gftp} build
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v1
+        with:
+          name: Yagna linux-aarch64
+          path: build

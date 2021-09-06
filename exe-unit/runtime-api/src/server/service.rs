@@ -1,6 +1,6 @@
 use super::RuntimeService;
 use super::{codec, proto, ErrorResponse};
-use crate::server::RuntimeEvent;
+use crate::server::RuntimeHandler;
 use futures::future::BoxFuture;
 use futures::lock::Mutex;
 use futures::prelude::*;
@@ -23,6 +23,9 @@ async fn handle_command(
         proto::request::Command::Kill(kill) => {
             service.kill_process(kill).await?;
             proto::response::Command::Kill(Default::default())
+        }
+        proto::request::Command::Network(network) => {
+            proto::response::Command::Network(service.create_network(network).await?)
         }
         proto::request::Command::Shutdown(_) => {
             service.shutdown().await?;
@@ -51,11 +54,24 @@ pub struct EventEmitter {
     tx: futures::channel::mpsc::Sender<proto::Response>,
 }
 
-impl RuntimeEvent for EventEmitter {
+impl RuntimeHandler for EventEmitter {
     fn on_process_status<'a>(&self, status: proto::response::ProcessStatus) -> BoxFuture<'a, ()> {
         let mut response = proto::Response::default();
         response.event = true;
         response.command = Some(proto::response::Command::Status(status));
+        let mut tx = self.tx.clone();
+        async move {
+            if let Err(e) = tx.send(response).await {
+                log::error!("send event failed: {}", e)
+            }
+        }
+        .boxed()
+    }
+
+    fn on_runtime_status<'a>(&self, status: proto::response::RuntimeStatus) -> BoxFuture<'a, ()> {
+        let mut response = proto::Response::default();
+        response.event = true;
+        response.command = Some(proto::response::Command::RtStatus(status));
         let mut tx = self.tx.clone();
         async move {
             if let Err(e) = tx.send(response).await {

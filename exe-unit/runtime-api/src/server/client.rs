@@ -5,6 +5,9 @@ use futures::lock::Mutex;
 use futures::{FutureExt, SinkExt};
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+
+const REQUEST_ID: AtomicU64 = AtomicU64::new(0);
 
 struct ClientInner<Out> {
     ids: u64,
@@ -52,7 +55,9 @@ where
             param.id = id;
             let _ = inner.response_callbacks.insert(id, tx);
             log::debug!("sending request: {:?}", param);
-            SinkExt::send(&mut inner.output, param).await.unwrap();
+            if let Err(e) = SinkExt::send(&mut inner.output, param).await {
+                log::error!("Runtime client write error: {:?}", e);
+            }
         }
         log::debug!("waiting for response");
         let response = rx.await.unwrap();
@@ -74,21 +79,19 @@ where
     }
 }
 
-impl<Out: Sink<proto::Request> + Unpin> RuntimeStatus for Arc<Client<Out>> {
-    fn exited<'a>(&self) -> BoxFuture<'a, i32> {
-        Box::pin(self.status.clone().then(|r| async move { r.unwrap_or(1) }))
-    }
-}
-
-impl<Out: Sink<proto::Request> + Unpin> ProcessControl for Arc<Client<Out>> {
+impl<Out: Sink<proto::Request> + Unpin> RuntimeControl for Arc<Client<Out>> {
     fn id(&self) -> u32 {
         self.pid
     }
 
-    fn kill(&self) {
+    fn stop(&self) {
         if let Some(s) = self.kill_cmd.lock().unwrap().take() {
             let _ = s.send(());
         }
+    }
+
+    fn stopped(&self) -> BoxFuture<'_, i32> {
+        Box::pin(self.status.clone().then(|r| async move { r.unwrap_or(1) }))
     }
 }
 
@@ -98,7 +101,7 @@ where
 {
     fn hello(&self, version: &str) -> AsyncResponse<'_, String> {
         let request = proto::Request {
-            id: 0,
+            id: REQUEST_ID.fetch_add(1, Relaxed),
             command: Some(proto::request::Command::Hello(proto::request::Hello {
                 version: version.to_owned(),
             })),
@@ -116,7 +119,7 @@ where
 
     fn run_process(&self, run: RunProcess) -> AsyncResponse<RunProcessResp> {
         let request = proto::Request {
-            id: 0,
+            id: REQUEST_ID.fetch_add(1, Relaxed),
             command: Some(proto::request::Command::Run(run)),
         };
         let fut = self.call(request);
@@ -132,7 +135,7 @@ where
 
     fn kill_process(&self, kill: KillProcess) -> AsyncResponse<()> {
         let request = proto::Request {
-            id: 0,
+            id: REQUEST_ID.fetch_add(1, Relaxed),
             command: Some(proto::request::Command::Kill(kill)),
         };
         let fut = self.call(request);
@@ -146,10 +149,26 @@ where
         .boxed_local()
     }
 
+    fn create_network(&self, network: CreateNetwork) -> AsyncResponse<CreateNetworkResp> {
+        let request = proto::Request {
+            id: REQUEST_ID.fetch_add(1, Relaxed),
+            command: Some(proto::request::Command::Network(network)),
+        };
+        let fut = self.call(request);
+        async move {
+            match fut.await.command {
+                Some(proto::response::Command::Network(res)) => Ok(res),
+                Some(proto::response::Command::Error(error)) => Err(error),
+                _ => panic!("invalid response"),
+            }
+        }
+        .boxed_local()
+    }
+
     fn shutdown(&self) -> AsyncResponse<'_, ()> {
         let shutdown = proto::request::Shutdown::default();
         let request = proto::Request {
-            id: 0,
+            id: REQUEST_ID.fetch_add(1, Relaxed),
             command: Some(proto::request::Command::Shutdown(shutdown)),
         };
         let fut = self.call(request);
@@ -167,8 +186,8 @@ where
 // sends Request, recv Response
 pub async fn spawn(
     mut command: process::Command,
-    event_handler: impl RuntimeEvent + Send + Sync + 'static,
-) -> Result<impl RuntimeService + RuntimeStatus + ProcessControl + Clone, anyhow::Error> {
+    event_handler: impl RuntimeHandler + Send + Sync + 'static,
+) -> Result<impl RuntimeService + RuntimeControl + Clone, anyhow::Error> {
     command.stdin(Stdio::piped()).stdout(Stdio::piped());
     command.kill_on_drop(true);
     let mut child: process::Child = command.spawn()?;
@@ -210,14 +229,15 @@ pub async fn spawn(
         });
     }
 
-    async fn handle_event(response: proto::Response, event_handler: &impl RuntimeEvent) {
+    async fn handle_event(response: proto::Response, handler: &impl RuntimeHandler) {
         use proto::response::Command;
-        let command = match response.command {
-            Some(c) => c,
-            None => return,
-        };
-        match command {
-            Command::Status(status) => event_handler.on_process_status(status).await,
+        match response.command {
+            Some(Command::Status(status)) => {
+                let _ = handler.on_process_status(status).await;
+            }
+            Some(Command::RtStatus(status)) => {
+                let _ = handler.on_runtime_status(status).await;
+            }
             cmd => log::warn!("invalid event: {:?}", cmd),
         }
     }
