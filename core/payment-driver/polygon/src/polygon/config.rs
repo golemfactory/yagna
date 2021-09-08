@@ -23,7 +23,7 @@ lazy_static! {
     pub static ref GOERLI_CONFIG: EnvConfiguration = EnvConfiguration {
         glm_contract_address: utils::str_to_addr(
             &env::var("GOERLI_TGLM_CONTRACT_ADDRESS")
-                .unwrap_or("0x33Af15C79d64B85bA14AafFaa4577949104b22e8".to_string())
+                .unwrap_or("0x2036807B0B3aaf5b1858EE822D0e111fDdac7018".to_string())
         )
         .unwrap(),
         glm_faucet_address: Some(
@@ -34,27 +34,7 @@ lazy_static! {
             .unwrap()
         ),
         required_confirmations: {
-            match env::var("ERC20_RINKEBY_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
-                Ok(Ok(x)) => x,
-                _ => 3,
-            }
-        }
-    };
-    pub static ref RINKEBY_CONFIG: EnvConfiguration = EnvConfiguration {
-        glm_contract_address: utils::str_to_addr(
-            &env::var("RINKEBY_TGLM_CONTRACT_ADDRESS")
-                .unwrap_or("0xd94e3DC39d4Cad1DAd634e7eb585A57A19dC7EFE".to_string())
-        )
-        .unwrap(),
-        glm_faucet_address: Some(
-            utils::str_to_addr(
-                &env::var("RINKEBY_TGLM_FAUCET_ADDRESS")
-                    .unwrap_or("0x59259943616265A03d775145a2eC371732E2B06C".to_string())
-            )
-            .unwrap()
-        ),
-        required_confirmations: {
-            match env::var("ERC20_RINKEBY_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
+            match env::var("POLYGON_GOERLI_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
                 Ok(Ok(x)) => x,
                 _ => 3,
             }
