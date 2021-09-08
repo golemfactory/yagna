@@ -16,13 +16,13 @@ use ya_utils_futures::timeout::IntoTimeoutFuture;
 
 // Local uses
 use crate::{
-    dao::Erc20Dao,
-    driver::Erc20Driver,
-    erc20::{utils, wallet},
+    dao::PolygonDao,
+    driver::PolygonDriver,
+    polygon::{utils, wallet},
     network, DRIVER_NAME,
 };
 
-pub async fn init(driver: &Erc20Driver, msg: Init) -> Result<(), GenericError> {
+pub async fn init(driver: &PolygonDriver, msg: Init) -> Result<(), GenericError> {
     log::debug!("init: {:?}", msg);
     let mode = msg.mode();
     let address = msg.address();
@@ -52,7 +52,7 @@ pub async fn init(driver: &Erc20Driver, msg: Init) -> Result<(), GenericError> {
     Ok(())
 }
 
-pub async fn fund(dao: &Erc20Dao, msg: Fund) -> Result<String, GenericError> {
+pub async fn fund(dao: &PolygonDao, msg: Fund) -> Result<String, GenericError> {
     log::debug!("fund: {:?}", msg);
     let address = msg.address();
     let network = network::network_like_to_network(msg.network());
@@ -98,7 +98,7 @@ If you want to easily acquire some GLM to try Golem on mainnet please use zksync
     Ok(result)
 }
 
-pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericError> {
+pub async fn transfer(dao: &PolygonDao, msg: Transfer) -> Result<String, GenericError> {
     log::debug!("transfer: {:?}", msg);
     let network = network::network_like_to_network(msg.network);
     let token = network::get_network_token(network, None);

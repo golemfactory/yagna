@@ -12,7 +12,7 @@ use ya_client_model::NodeId;
 use ya_payment_driver::db::models::{Network, TransactionEntity, TransactionStatus, TxType};
 use ya_payment_driver::{bus, model::GenericError, utils as base_utils};
 
-use crate::erc20::{config, eth_utils};
+use crate::polygon::{config, eth_utils};
 
 lazy_static! {
     pub static ref GLM_FAUCET_GAS: U256 = U256::from(90_000);
@@ -24,7 +24,7 @@ const TRANSFER_ERC20_FUNCTION: &str = "transfer";
 
 pub async fn get_glm_balance(address: H160, network: Network) -> Result<U256, GenericError> {
     let client = get_client(network)?;
-    let env = get_env(network);
+    let env = get_env(network)?;
 
     let glm_contract = prepare_erc20_contract(&client, &env)?;
     glm_contract
@@ -72,7 +72,7 @@ pub async fn sign_faucet_tx(
     network: Network,
     nonce: U256,
 ) -> Result<TransactionEntity, GenericError> {
-    let env = get_env(network);
+    let env = get_env(network)?;
     let client = get_client(network)?;
     let contract = prepare_glm_faucet_contract(&client, &env)?;
     let contract = match contract {
@@ -115,7 +115,7 @@ pub async fn sign_transfer_tx(
     network: Network,
     nonce: U256,
 ) -> Result<TransactionEntity, GenericError> {
-    let env = get_env(network);
+    let env = get_env(network)?;
     let client = get_client(network)?;
     let contract = prepare_erc20_contract(&client, &env)?;
 
@@ -160,7 +160,7 @@ pub async fn is_tx_confirmed(
     current_block: &U64,
     network: Network,
 ) -> Result<bool, GenericError> {
-    let env = get_env(network);
+    let env = get_env(network)?;
     let tx = get_tx_receipt(tx_hash, network).await?;
     if let Some(tx) = tx {
         if let Some(tx_bn) = tx.block_number {
@@ -193,30 +193,27 @@ pub async fn get_tx_receipt(
     Ok(result)
 }
 
-fn get_rpc_addr_from_env(network: Network) -> String {
+fn get_rpc_addr_from_env(network: Network) -> Result<String, GenericError> {
     match network {
-        Network::Mainnet => std::env::var("MAINNET_GETH_ADDR")
-            .unwrap_or("https://geth.golem.network:55555".to_string()),
-        Network::Rinkeby => std::env::var("RINKEBY_GETH_ADDR")
-            .unwrap_or("http://geth.testnet.golem.network:55555".to_string()),
-        Network::Goerli => std::env::var("GOERLI_GETH_ADDR")
-            .unwrap_or("https://rpc.goerli.mudit.blog/".to_string()),
+        Network::Mainnet => Ok(std::env::var("POLYGON_GETH_ADDR").unwrap_or("http://51.38.53.113:8545".to_string())),
+        Network::Rinkeby => Err(GenericError::new("Rinkeby not supported on Polygon driver")),
+        Network::Goerli => Ok(std::env::var("GOERLI_GETH_ADDR").unwrap_or("https://rpc-mumbai.matic.today".to_string())),
     }
 }
 
 fn get_client(network: Network) -> Result<Web3<Http>, GenericError> {
-    let geth_addr = get_rpc_addr_from_env(network);
+    let geth_addr = get_rpc_addr_from_env(network)?;
 
     let transport = web3::transports::Http::new(&geth_addr).map_err(GenericError::new)?;
 
     Ok(Web3::new(transport))
 }
 
-fn get_env(network: Network) -> config::EnvConfiguration {
+fn get_env(network: Network) -> Result<config::EnvConfiguration, GenericError> {
     match network {
-        Network::Mainnet => *config::MAINNET_CONFIG,
-        Network::Rinkeby => *config::RINKEBY_CONFIG,
-        Network::Goerli => *config::GOERLI_CONFIG,
+        Network::Mainnet => Ok(*config::POLYGON_MAINNET_CONFIG),
+        Network::Rinkeby => Err(GenericError::new("Rinkeby not supported on Polygon driver")),
+        Network::Goerli => Ok(*config::GOERLI_CONFIG),
     }
 }
 
