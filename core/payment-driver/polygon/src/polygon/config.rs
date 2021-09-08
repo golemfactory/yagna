@@ -40,7 +40,7 @@ lazy_static! {
             }
         }
     };
-    pub static ref MAINNET_CONFIG: EnvConfiguration = EnvConfiguration {
+    pub static ref POLYGON_MAINNET_CONFIG: EnvConfiguration = EnvConfiguration {
         glm_contract_address: utils::str_to_addr(
             &env::var("POLYGON_GLM_CONTRACT_ADDRESS")
                 .unwrap_or("0x0b220b82f3ea3b7f6d9a1d8ab58930c064a2b5bf".to_string())

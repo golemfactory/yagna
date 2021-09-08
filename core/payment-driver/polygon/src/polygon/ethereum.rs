@@ -195,7 +195,7 @@ pub async fn get_tx_receipt(
 
 fn get_rpc_addr_from_env(network: Network) -> Result<String, GenericError> {
     match network {
-        Network::Mainnet => Ok(std::env::var("MAINNET_GETH_ADDR").unwrap_or("http://51.38.53.113:8545".to_string())),
+        Network::Mainnet => Ok(std::env::var("POLYGON_GETH_ADDR").unwrap_or("http://51.38.53.113:8545".to_string())),
         Network::Rinkeby => Err(GenericError::new("Rinkeby not supported on Polygon driver")),
         Network::Goerli => Ok(std::env::var("GOERLI_GETH_ADDR").unwrap_or("https://rpc-mumbai.matic.today".to_string())),
     }
@@ -211,7 +211,7 @@ fn get_client(network: Network) -> Result<Web3<Http>, GenericError> {
 
 fn get_env(network: Network) -> Result<config::EnvConfiguration, GenericError> {
     match network {
-        Network::Mainnet => Ok(*config::MAINNET_CONFIG),
+        Network::Mainnet => Ok(*config::POLYGON_MAINNET_CONFIG),
         Network::Rinkeby => Err(GenericError::new("Rinkeby not supported on Polygon driver")),
         Network::Goerli => Ok(*config::GOERLI_CONFIG),
     }
