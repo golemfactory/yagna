@@ -394,6 +394,15 @@ pub mod local {
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct BuildPayments {}
+
+    impl RpcMessage for BuildPayments {
+        const ID: &'static str = "BuildPayments";
+        type Item = String;
+        type Error = NoError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct GetDrivers {}
 
     impl RpcMessage for GetDrivers {

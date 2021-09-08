@@ -1,4 +1,5 @@
-use crate::schema::pay_order;
+use crate::schema::*;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use ya_client_model::NodeId;
 use ya_core_model::payment::local::{PaymentTitle, SchedulePayment};
 use ya_persistence::types::BigDecimalField;
@@ -61,4 +62,35 @@ impl WriteObj {
             is_paid: false,
         }
     }
+}
+
+#[derive(Queryable, Debug, Identifiable, Insertable)]
+#[table_name = "pay_batch_order"]
+pub struct BatchOrder {
+    pub id: String,
+    pub ts: NaiveDateTime,
+    pub owner_id: NodeId,
+    pub payer_addr: String,
+    pub platform: String,
+    pub total_amount: f32,
+    pub paid: bool,
+}
+
+#[derive(Queryable, Debug, Identifiable, Insertable)]
+#[table_name = "pay_batch_order_item"]
+pub struct BatchOrderItem {
+    pub id: String,
+    pub payee_addr: String,
+    pub amount: BigDecimalField,
+    pub driver_order_id: Option<String>,
+    pub paid: bool,
+}
+
+#[derive(Queryable, Debug, Identifiable, Insertable)]
+#[table_name = "pay_batch_order_item_payment"]
+pub struct BatchOrderItemPayment {
+    pub id: String,
+    pub payee_addr: String,
+    pub payee_id: NodeId,
+    pub json: String,
 }

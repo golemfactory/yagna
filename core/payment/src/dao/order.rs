@@ -1,17 +1,22 @@
 use crate::dao::{activity, agreement, allocation};
 use crate::error::DbResult;
-use crate::models::order::{ReadObj, WriteObj};
+use crate::models::order::{BatchOrder, ReadObj, WriteObj};
 use crate::schema::pay_debit_note::dsl as debit_note_dsl;
 use crate::schema::pay_invoice::dsl as invoice_dsl;
 use crate::schema::pay_order::dsl;
+use bigdecimal::{BigDecimal, ToPrimitive};
 use diesel::{
-    self, BoolExpressionMethods, ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl,
-    RunQueryDsl,
+    self, insert_into, BoolExpressionMethods, ExpressionMethods, JoinOnDsl,
+    NullableExpressionMethods, QueryDsl, RunQueryDsl,
 };
+use std::collections::HashMap;
+use uuid::Uuid;
 use ya_core_model::payment::local::{
     DebitNotePayment, InvoicePayment, PaymentTitle, SchedulePayment,
 };
+use ya_core_model::NodeId;
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
+use ya_persistence::types::BigDecimalField;
 
 pub struct OrderDao<'c> {
     pool: &'c PoolType,
@@ -87,6 +92,60 @@ impl<'c> OrderDao<'c> {
                 ))
                 .load(conn)?;
             Ok(orders)
+        })
+        .await
+    }
+
+    pub async fn new_batch_order(
+        &self,
+        owner_id: NodeId,
+        payer_addr: String,
+        platform: String,
+        items: HashMap<String, (BigDecimal, HashMap<NodeId, String>)>,
+    ) -> DbResult<String> {
+        do_with_transaction(self.pool, move |conn| {
+            let order_id = Uuid::new_v4().to_string();
+            {
+                use crate::schema::pay_batch_order::dsl;
+
+                let total_amount: BigDecimal = items.iter().map(|(_, (amount, _))| amount).sum();
+
+                let v = insert_into(dsl::pay_batch_order)
+                    .values((
+                        dsl::id.eq(&order_id),
+                        dsl::payer_addr.eq(payer_addr),
+                        dsl::platform.eq(platform),
+                        dsl::total_amount.eq(total_amount.to_f32()),
+                    ))
+                    .execute(conn)?;
+            }
+            {
+                use crate::schema::pay_batch_order_item::dsl;
+
+                for (payee_addr, (amount, payments)) in items {
+                    insert_into(dsl::pay_batch_order_item)
+                        .values((
+                            dsl::id.eq(&order_id),
+                            dsl::payee_addr.eq(&payee_addr),
+                            dsl::amount.eq(BigDecimalField(amount)),
+                        ))
+                        .execute(conn)?;
+                    for (payee_id, json) in payments {
+                        use crate::schema::pay_batch_order_item_payment::dsl;
+
+                        insert_into(dsl::pay_batch_order_item_payment)
+                            .values((
+                                dsl::id.eq(&order_id),
+                                dsl::payee_addr.eq(&payee_addr),
+                                dsl::payee_id.eq(payee_id),
+                                dsl::json.eq(json),
+                            ))
+                            .execute(conn)?;
+                    }
+                }
+            }
+
+            Ok(order_id)
         })
         .await
     }

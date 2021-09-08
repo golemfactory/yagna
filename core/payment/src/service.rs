@@ -41,6 +41,7 @@ mod local {
             .bind_with_processor(get_accounts)
             .bind_with_processor(validate_allocation)
             .bind_with_processor(get_drivers)
+            .bind_with_processor(build_payments)
             .bind_with_processor(shut_down);
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
@@ -297,6 +298,15 @@ mod local {
         msg: GetDrivers,
     ) -> Result<HashMap<String, DriverDetails>, NoError> {
         Ok(processor.lock().await.get_drivers().await)
+    }
+
+    async fn build_payments(
+        db: DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        _caller: String,
+        msg: BuildPayments,
+    ) -> Result<String, NoError> {
+        todo!()
     }
 
     async fn shut_down(
