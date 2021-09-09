@@ -83,7 +83,7 @@ pub struct PaymentEntity {
 pub enum Network {
     Mainnet = 1,
     Rinkeby = 4,
-    Goerli = 8
+    Goerli = 80001
 }
 
 impl Default for Network {
@@ -136,6 +136,7 @@ where
         Ok(match i32::from_sql(bytes)? {
             1 => Network::Mainnet,
             4 => Network::Rinkeby,
+            80001 => Network::Goerli,
             _ => return Err(anyhow::anyhow!("invalid value").into()),
         })
     }
