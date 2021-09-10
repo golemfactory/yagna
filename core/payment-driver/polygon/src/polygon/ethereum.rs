@@ -16,7 +16,7 @@ use crate::polygon::{config, eth_utils};
 
 lazy_static! {
     pub static ref GLM_FAUCET_GAS: U256 = U256::from(90_000);
-    pub static ref GLM_TRANSFER_GAS: U256 = U256::from(55_000);
+    pub static ref GLM_POLYGON_GAS_LIMIT: U256 = U256::from(100_000);
 }
 const CREATE_FAUCET_FUNCTION: &str = "create";
 const BALANCE_ERC20_FUNCTION: &str = "balanceOf";
@@ -128,7 +128,7 @@ pub async fn sign_transfer_tx(
         to: Some(contract.address()),
         value: U256::from(0),
         gas_price,
-        gas: *GLM_TRANSFER_GAS,
+        gas: *GLM_POLYGON_GAS_LIMIT,
         data,
     };
     let chain_id = network as u64;
