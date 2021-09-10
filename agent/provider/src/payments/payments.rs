@@ -124,7 +124,7 @@ pub struct PaymentsConfig {
     #[structopt(skip = "you-forgot-to-set-session-id")]
     pub session_id: String,
     #[structopt(env = "PAYMENT_DUE_TIMEOUT", parse(try_from_str = humantime::parse_duration), default_value = "24h")]
-    pub payment_due_timeout : Duration
+    pub payment_due_timeout: Duration,
 }
 
 /// Yagna APIs and payments information about provider.
@@ -207,8 +207,7 @@ async fn send_debit_note(
 ) -> Result<DebitNote> {
     let payment_due_date = if provider_context.config.payment_due_timeout.is_zero() {
         None
-    }
-    else {
+    } else {
         Some(Utc::now() + chrono::Duration::from_std(provider_context.config.payment_due_timeout)?)
     };
 
@@ -693,8 +692,9 @@ impl Handler<IssueInvoice> for Payments {
             cost_info.cost,
             cost_info.usage,
         );
-        let payment_due_date = Utc::now() + chrono::Duration::from_std(self.context.config.payment_due_timeout)
-            .unwrap_or_else(|_| chrono::Duration::days(1));
+        let payment_due_date = Utc::now()
+            + chrono::Duration::from_std(self.context.config.payment_due_timeout)
+                .unwrap_or_else(|_| chrono::Duration::days(1));
 
         let invoice = NewInvoice {
             agreement_id,

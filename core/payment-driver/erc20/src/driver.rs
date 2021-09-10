@@ -24,7 +24,7 @@ use ya_payment_driver::{
 };
 
 // Local uses
-use crate::{dao::Erc20Dao, network::SUPPORTED_NETWORKS, RINKEBY_NETWORK, DRIVER_NAME};
+use crate::{dao::Erc20Dao, network::SUPPORTED_NETWORKS, DRIVER_NAME, RINKEBY_NETWORK};
 
 mod api;
 mod cli;
@@ -225,8 +225,6 @@ impl PaymentDriver for Erc20Driver {
         }
         Ok(())
     }
-
-
 }
 
 #[async_trait(?Send)]

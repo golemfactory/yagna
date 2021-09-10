@@ -8,16 +8,16 @@ use tokio::process;
 pub use client::spawn;
 #[cfg(feature = "codec")]
 pub use codec::Codec;
-pub use proto::Network;
 pub use proto::request::{CreateNetwork, KillProcess, RunProcess};
-pub use proto::response::{ErrorCode, ProcessStatus, RuntimeStatus};
 pub use proto::response::create_network::Endpoint as NetworkEndpoint;
-pub use proto::response::CreateNetwork as CreateNetworkResp;
-pub use proto::response::Error as ErrorResponse;
-pub use proto::response::RunProcess as RunProcessResp;
 pub use proto::response::runtime_status::Counter as RuntimeCounter;
 pub use proto::response::runtime_status::Kind as RuntimeStatusKind;
 pub use proto::response::runtime_status::State as RuntimeState;
+pub use proto::response::CreateNetwork as CreateNetworkResp;
+pub use proto::response::Error as ErrorResponse;
+pub use proto::response::RunProcess as RunProcessResp;
+pub use proto::response::{ErrorCode, ProcessStatus, RuntimeStatus};
+pub use proto::Network;
 pub use service::{run, run_async};
 
 pub mod proto {
@@ -70,4 +70,3 @@ pub trait RuntimeControl {
 
 mod client;
 mod service;
-

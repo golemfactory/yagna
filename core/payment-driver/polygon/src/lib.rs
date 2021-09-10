@@ -23,6 +23,6 @@ extern crate log;
 
 mod dao;
 mod driver;
-pub mod polygon;
 mod network;
+pub mod polygon;
 mod service;

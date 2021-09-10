@@ -24,7 +24,7 @@ use ya_payment_driver::{
 };
 
 // Local uses
-use crate::{dao::PolygonDao, network::SUPPORTED_NETWORKS, MUMBAI_NETWORK, DRIVER_NAME};
+use crate::{dao::PolygonDao, network::SUPPORTED_NETWORKS, DRIVER_NAME, MUMBAI_NETWORK};
 
 mod api;
 mod cli;

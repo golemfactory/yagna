@@ -16,8 +16,8 @@ use ya_payment_driver::{
 use crate::{
     dao::PolygonDao,
     driver::PaymentDetails,
-    polygon::{utils, wallet},
     network,
+    polygon::{utils, wallet},
 };
 
 // lazy_static! {

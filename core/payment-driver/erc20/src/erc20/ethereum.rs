@@ -199,8 +199,12 @@ fn get_rpc_addr_from_env(network: Network) -> Result<String, GenericError> {
             .unwrap_or("https://geth.golem.network:55555".to_string())),
         Network::Rinkeby => Ok(std::env::var("RINKEBY_GETH_ADDR")
             .unwrap_or("http://geth.testnet.golem.network:55555".to_string())),
-        Network::PolygonMainnet => Err(GenericError::new("Polygon mainnet network not possible on ERC20 driver.")),
-        Network::PolygonMumbai => Err(GenericError::new("Polygon mumbai network not possible on ERC20 driver.")),
+        Network::PolygonMainnet => Err(GenericError::new(
+            "Polygon mainnet network not possible on ERC20 driver.",
+        )),
+        Network::PolygonMumbai => Err(GenericError::new(
+            "Polygon mumbai network not possible on ERC20 driver.",
+        )),
     }
 }
 
@@ -217,7 +221,9 @@ fn get_env(network: Network) -> Result<config::EnvConfiguration, GenericError> {
         Network::Mainnet => Ok(*config::MAINNET_CONFIG),
         Network::Rinkeby => Ok(*config::RINKEBY_CONFIG),
         Network::PolygonMumbai => Err(GenericError::new("No config for mainnet and polygonMumbai")),
-        Network::PolygonMainnet => Err(GenericError::new("No config for mainnet and polygonMumbai")),
+        Network::PolygonMainnet => {
+            Err(GenericError::new("No config for mainnet and polygonMumbai"))
+        }
     }
 }
 

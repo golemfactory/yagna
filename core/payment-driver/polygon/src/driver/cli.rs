@@ -18,8 +18,9 @@ use ya_utils_futures::timeout::IntoTimeoutFuture;
 use crate::{
     dao::PolygonDao,
     driver::PolygonDriver,
+    network,
     polygon::{utils, wallet},
-    network, DRIVER_NAME,
+    DRIVER_NAME,
 };
 
 pub async fn init(driver: &PolygonDriver, msg: Init) -> Result<(), GenericError> {
@@ -69,10 +70,10 @@ pub async fn fund(dao: &PolygonDao, msg: Fund) -> Result<String, GenericError> {
                 .await
                 .map_err(GenericError::new)??;
             format!("Received funds from the faucet. address=0x{:x}", &address)
-        },
+        }
         Network::PolygonMumbai => {
             format!("TODO: implement faucet for Mumbai")
-        },
+        }
         Network::PolygonMainnet => format!(
             r#"Your mainnet polygon address is {}.
 

@@ -15,7 +15,7 @@ use ya_payment_driver::{
 };
 
 // Local uses
-use crate::{dao::PolygonDao, polygon::wallet, network};
+use crate::{dao::PolygonDao, network, polygon::wallet};
 
 lazy_static! {
     static ref TX_SUMBIT_TIMEOUT: Duration = Duration::minutes(15);

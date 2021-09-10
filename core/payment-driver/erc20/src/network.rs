@@ -7,8 +7,8 @@ use ya_payment_driver::{db::models::Network as DbNetwork, driver::Network, model
 
 // Local uses
 use crate::{
-    RINKEBY_NETWORK, RINKEBY_PLATFORM, RINKEBY_TOKEN,
-    MAINNET_NETWORK, MAINNET_PLATFORM, MAINNET_TOKEN
+    MAINNET_NETWORK, MAINNET_PLATFORM, MAINNET_TOKEN, RINKEBY_NETWORK, RINKEBY_PLATFORM,
+    RINKEBY_TOKEN,
 };
 
 lazy_static::lazy_static! {

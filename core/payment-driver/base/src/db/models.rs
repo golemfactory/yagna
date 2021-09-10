@@ -84,7 +84,7 @@ pub enum Network {
     Mainnet = 1,
     Rinkeby = 4,
     PolygonMumbai = 80001,
-    PolygonMainnet = 137
+    PolygonMainnet = 137,
 }
 
 impl Default for Network {

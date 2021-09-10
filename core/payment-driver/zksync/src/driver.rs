@@ -299,12 +299,8 @@ impl PaymentDriver for ZksyncDriver {
                     &address
                 ))
             }
-            DbNetwork::PolygonMumbai => {
-                Ok(format!("PolygonMumbai Not supported"))
-            }
-            DbNetwork::PolygonMainnet => {
-                Ok(format!("PolygonMainnet Not supported"))
-            }
+            DbNetwork::PolygonMumbai => Ok(format!("PolygonMumbai Not supported")),
+            DbNetwork::PolygonMainnet => Ok(format!("PolygonMainnet Not supported")),
             DbNetwork::Mainnet => Ok(format!(
                 r#"Your mainnet zkSync address is {}.
 

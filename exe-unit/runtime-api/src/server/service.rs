@@ -6,12 +6,10 @@ use futures::prelude::*;
 use futures::{FutureExt, SinkExt};
 use tokio::io;
 
-use crate::server::{RuntimeHandler};
+use crate::server::RuntimeHandler;
 
 use super::RuntimeService;
 use super::{codec, proto, ErrorResponse};
-
-
 
 async fn handle_command(
     service: &impl RuntimeService,
