@@ -110,6 +110,7 @@ impl MarketsNetwork {
     /// It will be used to create directories and GSB binding points,
     /// to avoid potential name clashes.
     pub async fn new(test_name: Option<&str>) -> Self {
+        std::env::set_var("RUST_LOG", "debug");
         let _ = env_logger::builder().try_init();
         // level 1 is this function.
         // level 2 is <core::future::from_generator::GenFuture<T> as
