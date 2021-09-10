@@ -95,7 +95,7 @@ impl MockNodeKind {
 fn testname_from_backtrace(bn: &str) -> String {
     log::info!("Test name to regex match: {}", &bn);
     // Extract test name
-    let captures = Regex::new(r"(.*)::(.*)::\{\{.*")
+    let captures = Regex::new(r"(.*)::(.*)::.*")
         .unwrap()
         .captures(&bn)
         .unwrap();
