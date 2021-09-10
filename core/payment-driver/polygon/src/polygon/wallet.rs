@@ -18,7 +18,7 @@ use ya_payment_driver::{
 use crate::{
     dao::PolygonDao,
     polygon::{eth_utils, ethereum, faucet, utils},
-    GOERLI_NETWORK,
+    MUMBAI_NETWORK,
 };
 
 pub async fn account_balance(address: H160, network: Network) -> Result<BigDecimal, GenericError> {
@@ -38,7 +38,7 @@ pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
     log::debug!("init_wallet. msg={:?}", msg);
     let mode = msg.mode();
     let address = msg.address();
-    let network = msg.network().unwrap_or(GOERLI_NETWORK.to_string());
+    let network = msg.network().unwrap_or(MUMBAI_NETWORK.to_string());
     let network = Network::from_str(&network).map_err(|e| GenericError::new(e))?;
 
     if mode.contains(AccountMode::SEND) {

@@ -24,7 +24,7 @@ use ya_payment_driver::{
 };
 
 // Local uses
-use crate::{dao::PolygonDao, network::SUPPORTED_NETWORKS, GOERLI_NETWORK, DRIVER_NAME};
+use crate::{dao::PolygonDao, network::SUPPORTED_NETWORKS, MUMBAI_NETWORK, DRIVER_NAME};
 
 mod api;
 mod cli;
@@ -135,7 +135,7 @@ impl PaymentDriver for PolygonDriver {
     }
 
     fn get_default_network(&self) -> String {
-        GOERLI_NETWORK.to_string()
+        MUMBAI_NETWORK.to_string()
     }
 
     fn get_networks(&self) -> HashMap<String, NetworkConfig> {

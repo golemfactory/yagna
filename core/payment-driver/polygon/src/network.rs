@@ -7,33 +7,33 @@ use ya_payment_driver::{db::models::Network as DbNetwork, driver::Network, model
 
 // Local uses
 use crate::{
-    GOERLI_NETWORK, GOERLI_PLATFORM, GOERLI_TOKEN, MAINNET_NETWORK, MAINNET_PLATFORM,
-    MAINNET_TOKEN,
+    MUMBAI_NETWORK, MUMBAI_PLATFORM, MUMBAI_TOKEN,
+    POLYGON_MAINNET_NETWORK, POLYGON_MAINNET_PLATFORM, POLYGON_MAINNET_TOKEN,
 };
 
 lazy_static::lazy_static! {
     pub static ref SUPPORTED_NETWORKS: HashMap<String, Network> = hashmap! {
-        GOERLI_NETWORK.to_string() => Network {
-            default_token: GOERLI_TOKEN.to_string(),
+        MUMBAI_NETWORK.to_string() => Network {
+            default_token: MUMBAI_TOKEN.to_string(),
             tokens: hashmap! {
-                GOERLI_TOKEN.to_string() => GOERLI_PLATFORM.to_string()
+                MUMBAI_TOKEN.to_string() => MUMBAI_PLATFORM.to_string()
             }
         },
-        MAINNET_NETWORK.to_string() => Network {
-            default_token: MAINNET_TOKEN.to_string(),
+        POLYGON_MAINNET_NETWORK.to_string() => Network {
+            default_token: POLYGON_MAINNET_TOKEN.to_string(),
             tokens: hashmap! {
-                MAINNET_TOKEN.to_string() => MAINNET_PLATFORM.to_string()
+                POLYGON_MAINNET_TOKEN.to_string() => POLYGON_MAINNET_PLATFORM.to_string()
             }
         }
     };
-    pub static ref GOERLI_DB_NETWORK: DbNetwork = DbNetwork::from_str(GOERLI_NETWORK).unwrap();
-    pub static ref MAINNET_DB_NETWORK: DbNetwork = DbNetwork::from_str(MAINNET_NETWORK).unwrap();
+    pub static ref MUMBAI_DB_NETWORK: DbNetwork = DbNetwork::from_str(MUMBAI_NETWORK).unwrap();
+    pub static ref POLYGON_MAINNET_DB_NETWORK: DbNetwork = DbNetwork::from_str(POLYGON_MAINNET_NETWORK).unwrap();
 }
 
 pub fn platform_to_network_token(platform: String) -> Result<(DbNetwork, String), GenericError> {
     match platform.as_str() {
-        GOERLI_PLATFORM => Ok((*GOERLI_DB_NETWORK, GOERLI_TOKEN.to_owned())),
-        MAINNET_PLATFORM => Ok((*MAINNET_DB_NETWORK, MAINNET_TOKEN.to_owned())),
+        MUMBAI_PLATFORM => Ok((*MUMBAI_DB_NETWORK, MUMBAI_TOKEN.to_owned())),
+        POLYGON_MAINNET_PLATFORM => Ok((*POLYGON_MAINNET_DB_NETWORK, POLYGON_MAINNET_TOKEN.to_owned())),
         other => Err(GenericError::new(format!(
             "Unable to find network for platform: {}",
             other
@@ -45,7 +45,7 @@ pub fn network_token_to_platform(
     network: Option<DbNetwork>,
     token: Option<String>,
 ) -> Result<String, GenericError> {
-    let network = network.unwrap_or(*GOERLI_DB_NETWORK);
+    let network = network.unwrap_or(*MUMBAI_DB_NETWORK);
     let network_config = (*SUPPORTED_NETWORKS).get(&(network.to_string()));
     let network_config = match network_config {
         Some(nc) => nc,
@@ -80,7 +80,7 @@ pub fn get_network_token(network: DbNetwork, token: Option<String>) -> String {
 
 pub fn network_like_to_network(network_like: Option<String>) -> DbNetwork {
     match network_like {
-        Some(n) => DbNetwork::from_str(&n).unwrap_or(*GOERLI_DB_NETWORK),
-        None => *GOERLI_DB_NETWORK,
+        Some(n) => DbNetwork::from_str(&n).unwrap_or(*MUMBAI_DB_NETWORK),
+        None => *MUMBAI_DB_NETWORK,
     }
 }

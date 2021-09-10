@@ -7,13 +7,13 @@
 // Public
 pub const DRIVER_NAME: &'static str = "polygon";
 
-pub const GOERLI_NETWORK: &'static str = "goerli";
-pub const GOERLI_TOKEN: &'static str = "tGLM";
-pub const GOERLI_PLATFORM: &'static str = "polygon-goerli-tglm";
+pub const MUMBAI_NETWORK: &'static str = "mumbai";
+pub const MUMBAI_TOKEN: &'static str = "tGLM";
+pub const MUMBAI_PLATFORM: &'static str = "polygon-mumbai-tglm";
 
-pub const MAINNET_NETWORK: &'static str = "mainnet";
-pub const MAINNET_TOKEN: &'static str = "GLM";
-pub const MAINNET_PLATFORM: &'static str = "polygon-mainnet-glm";
+pub const POLYGON_MAINNET_NETWORK: &'static str = "polygon";
+pub const POLYGON_MAINNET_TOKEN: &'static str = "GLM";
+pub const POLYGON_MAINNET_PLATFORM: &'static str = "polygon-polygon-glm";
 
 pub use service::PolygonService as PaymentDriverService;
 

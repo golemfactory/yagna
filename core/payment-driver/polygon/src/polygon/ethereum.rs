@@ -195,9 +195,10 @@ pub async fn get_tx_receipt(
 
 fn get_rpc_addr_from_env(network: Network) -> Result<String, GenericError> {
     match network {
-        Network::Mainnet => Ok(std::env::var("POLYGON_GETH_ADDR").unwrap_or("http://51.38.53.113:8545".to_string())),
+        Network::Mainnet => Err(GenericError::new("Ethereum mainnet not supported on Polygon driver")),
         Network::Rinkeby => Err(GenericError::new("Rinkeby not supported on Polygon driver")),
-        Network::Goerli => Ok(std::env::var("GOERLI_GETH_ADDR").unwrap_or("https://polygon-mumbai.infura.io/v3/4dfe7a7afc6d4549b16490db5fd6358e".to_string())),
+        Network::PolygonMainnet => Ok(std::env::var("POLYGON_MAINNET_GETH_ADDR").unwrap_or("http://51.38.53.113:8545".to_string())),
+        Network::PolygonMumbai => Ok(std::env::var("POLYGON_MUMBAI_GETH_ADDR").unwrap_or("https://polygon-mumbai.infura.io/v3/4dfe7a7afc6d4549b16490db5fd6358e".to_string()))
     }
 }
 
@@ -211,9 +212,10 @@ fn get_client(network: Network) -> Result<Web3<Http>, GenericError> {
 
 fn get_env(network: Network) -> Result<config::EnvConfiguration, GenericError> {
     match network {
-        Network::Mainnet => Ok(*config::POLYGON_MAINNET_CONFIG),
+        Network::Mainnet => Err(GenericError::new("Eth mainnet not supported on Polygon driver")),
         Network::Rinkeby => Err(GenericError::new("Rinkeby not supported on Polygon driver")),
-        Network::Goerli => Ok(*config::GOERLI_CONFIG),
+        Network::PolygonMumbai => Ok(*config::MUMBAI_CONFIG),
+        Network::PolygonMainnet => Ok(*config::POLYGON_MAINNET_CONFIG),
     }
 }
 

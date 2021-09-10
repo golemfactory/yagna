@@ -237,7 +237,7 @@ pub mod processor {
         AccountNotRegistered(#[from] AccountNotRegistered),
         #[error("Service bus error: {0}")]
         ServiceBus(#[from] ya_service_bus::error::Error),
-        #[error("Error while sending payment: {0}")]
+        #[error("Error while verifying payment: {0}")]
         Driver(#[from] ya_core_model::driver::GenericError),
         #[error("Database error: {0}")]
         Database(#[from] DbError),
@@ -340,7 +340,7 @@ pub mod processor {
         AccountNotRegistered(#[from] AccountNotRegistered),
         #[error("Service bus error: {0}")]
         ServiceBus(#[from] ya_service_bus::error::Error),
-        #[error("Error while sending payment: {0}")]
+        #[error("Error while getting status about payment: {0}")]
         Driver(#[from] ya_core_model::driver::GenericError),
     }
 
@@ -350,7 +350,7 @@ pub mod processor {
         AccountNotRegistered(#[from] AccountNotRegistered),
         #[error("Service bus error: {0}")]
         ServiceBus(#[from] ya_service_bus::error::Error),
-        #[error("Error while sending payment: {0}")]
+        #[error("Error while validating allocation: {0}")]
         Driver(#[from] ya_core_model::driver::GenericError),
         #[error("Database error: {0}")]
         Database(#[from] DbError),

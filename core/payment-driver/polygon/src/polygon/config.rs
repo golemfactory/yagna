@@ -20,21 +20,21 @@ pub struct EnvConfiguration {
 }
 
 lazy_static! {
-    pub static ref GOERLI_CONFIG: EnvConfiguration = EnvConfiguration {
+    pub static ref MUMBAI_CONFIG: EnvConfiguration = EnvConfiguration {
         glm_contract_address: utils::str_to_addr(
-            &env::var("GOERLI_TGLM_CONTRACT_ADDRESS")
+            &env::var("MUMBAI_TGLM_CONTRACT_ADDRESS")
                 .unwrap_or("0x2036807B0B3aaf5b1858EE822D0e111fDdac7018".to_string())
         )
         .unwrap(),
         glm_faucet_address: Some(
             utils::str_to_addr(
-                &env::var("GOERLI_TGLM_FAUCET_ADDRESS")
+                &env::var("MUMBAI_TGLM_FAUCET_ADDRESS")
                     .unwrap_or("0xCCA41b09C1F50320bFB41BD6822BD0cdBDC7d85C".to_string())
             )
             .unwrap()
         ),
         required_confirmations: {
-            match env::var("POLYGON_GOERLI_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
+            match env::var("POLYGON_MUMBAI_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
                 Ok(Ok(x)) => x,
                 _ => 3,
             }

@@ -69,20 +69,16 @@ pub async fn fund(dao: &PolygonDao, msg: Fund) -> Result<String, GenericError> {
                 .await
                 .map_err(GenericError::new)??;
             format!("Received funds from the faucet. address=0x{:x}", &address)
-        }
-        Network::Goerli => {
-            let address = utils::str_to_addr(&address)?;
-            log::info!(
-                "Handling fund request. network={}, address={}",
-                &network,
-                &address
-            );
-            wallet::fund(dao, address, network)
-                .timeout(Some(60)) // Regular scenario =~ 30s
-                .await
-                .map_err(GenericError::new)??;
-            format!("Received funds from the faucet. address=0x{:x}", &address)
-        }
+        },
+        Network::PolygonMumbai => {
+            format!("TODO: implement faucet for Mumbai")
+        },
+        Network::PolygonMainnet => format!(
+            r#"Your mainnet polygon address is {}.
+
+Send some GLM tokens and ETH for gas to this address to be able to use this driver."#,
+            address
+        ),
         Network::Mainnet => format!(
             r#"Your mainnet ethereum address is {}.
 

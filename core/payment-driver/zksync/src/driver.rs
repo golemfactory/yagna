@@ -299,20 +299,11 @@ impl PaymentDriver for ZksyncDriver {
                     &address
                 ))
             }
-            DbNetwork::Goerli => {
-                log::info!(
-                    "Handling fund request. network={}, address={}",
-                    &network,
-                    &address
-                );
-                wallet::fund(&address, network)
-                    .timeout(Some(15)) // Regular scenario =~ 5s
-                    .await
-                    .map_err(GenericError::new)??;
-                Ok(format!(
-                    "Received funds from the faucet. address={}",
-                    &address
-                ))
+            DbNetwork::PolygonMumbai => {
+                Ok(format!("PolygonMumbai Not supported"))
+            }
+            DbNetwork::PolygonMainnet => {
+                Ok(format!("PolygonMainnet Not supported"))
             }
             DbNetwork::Mainnet => Ok(format!(
                 r#"Your mainnet zkSync address is {}.

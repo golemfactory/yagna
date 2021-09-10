@@ -448,8 +448,10 @@ pub mod local {
         Mainnet,
         #[strum(props(token = "tGLM"))]
         Rinkeby,
+        #[strum(props(token = "GLM"))]
+        Polygon,
         #[strum(props(token = "tGLM"))]
-        Goerli,
+        Mumbai,
     }
 
     /// Experimental. In future releases this might change or be removed.

@@ -67,17 +67,17 @@ lazy_static! {
     pub static ref POLYGON_DRIVER: PaymentDriver = {
         let mut polygon = HashMap::new();
         polygon.insert(
-            NetworkName::Mainnet.into(),
+            NetworkName::Polygon.into(),
             PaymentPlatform {
-                platform: "polygon-mainnet-glm",
+                platform: "polygon-polygon-glm",
                 driver: "polygon",
                 token: "GLM",
             },
         );
         polygon.insert(
-            NetworkName::Goerli.into(),
+            NetworkName::Mumbai.into(),
             PaymentPlatform {
-                platform: "polygon-goerli-tglm",
+                platform: "polygon-mumbai-tglm",
                 driver: "polygon",
                 token: "tGLM",
             },
