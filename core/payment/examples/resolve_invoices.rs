@@ -1,11 +1,15 @@
 use anyhow::Context;
-use bigdecimal::{BigDecimal, Zero};
+use bigdecimal::{BigDecimal, ToPrimitive, Zero};
+use chrono::Utc;
+use num_bigint::ToBigInt;
 use std::borrow::BorrowMut;
 use std::collections::{btree_map, hash_map};
 use std::collections::{BTreeMap, HashMap};
+use structopt::StructOpt;
 use uuid::Uuid;
 use ya_client::model::payment as mpay;
 use ya_client_model::payment::DocumentStatus;
+use ya_core_model::driver::{driver_bus_id, SchedulePayment};
 use ya_core_model::net::NetApiError::NodeIdParseError;
 use ya_core_model::payment::local as pay;
 use ya_core_model::payment::public as ppay;
@@ -13,6 +17,53 @@ use ya_core_model::NodeId;
 use ya_payment::dao::{AgreementDao, InvoiceDao, OrderDao};
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed as bus;
+
+#[derive(StructOpt)]
+struct Args {
+    #[structopt(subcommand)]
+    command: Command,
+}
+
+#[derive(StructOpt)]
+enum Command {
+    Generate {
+        #[structopt(long, short = "n")]
+        dry_run: bool,
+        #[structopt(long)]
+        incremental: bool,
+        #[structopt(long, default_value = "0x206bfe4f439a83b65a5b9c2c3b1cc6cb49054cc4")]
+        owner: NodeId,
+    },
+    SendPayments {
+        #[structopt(long)]
+        order_id: String,
+    },
+}
+
+#[actix_rt::main]
+async fn main() -> anyhow::Result<()> {
+    let args = Args::from_args_safe()?;
+
+    let db = {
+        let database_url = format!(
+            "file:{}/.local/share/yagna/payment.db",
+            std::env::home_dir().unwrap().display()
+        );
+        let db = DbExecutor::new(database_url)?;
+        db.apply_migration(ya_payment::migrations::run_with_output)?;
+        db
+    };
+
+    match args.command {
+        Command::Generate {
+            dry_run,
+            owner,
+            incremental,
+        } => generate(db, owner, dry_run, incremental).await?,
+        Command::SendPayments { order_id } => send_payments(db, order_id).await?,
+    }
+    Ok(())
+}
 
 struct Payment {
     amount: BigDecimal,
@@ -47,23 +98,16 @@ struct Order {
     obligations: Vec<Obligation>,
 }
 
-#[actix_rt::main]
-async fn main() -> anyhow::Result<()> {
-    let owner_id: NodeId = "0x206bfe4f439a83b65a5b9c2c3b1cc6cb49054cc4".parse()?;
-    let database_url = format!(
-        "file:{}/.local/share/yagna/payment.db",
-        std::env::home_dir().unwrap().display()
-    );
-    let db = DbExecutor::new(database_url)?;
-    db.apply_migration(ya_payment::migrations::run_with_output)?;
+async fn generate(
+    db: DbExecutor,
+    owner_id: NodeId,
+    dry_run: bool,
+    incremental: bool,
+) -> anyhow::Result<()> {
     let ts = chrono::Utc::now() + chrono::Duration::days(-7);
     let invoices = db
         .as_dao::<InvoiceDao>()
-        .get_for_node_id(
-            "0x206bfe4F439a83b65A5B9c2C3B1cc6cB49054cc4".parse()?,
-            Some(ts.naive_utc()),
-            Some(1000),
-        )
+        .get_for_node_id(owner_id, Some(ts.naive_utc()), Some(1000))
         .await?;
 
     let mut payments = HashMap::<(NodeId, NodeId, String), Payment>::new();
@@ -129,16 +173,46 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let mut px: HashMap<Key, Item> = Default::default();
+    let ten = BigDecimal::from(10u64);
+    let mut presision = BigDecimal::from(1u64);
+    for _ in 0..18 {
+        presision *= &ten;
+    }
 
+    let mut sqls = Vec::new();
+    let mut prev_amount_map = HashMap::<(NodeId, String), _>::new();
+    let zero = BigDecimal::default();
     for ((payer_addr, payee_addr, payment_platform), payment) in payments {
+        let key = (owner_id, payment_platform.clone());
+        if !prev_amount_map.contains_key(&key) {
+            prev_amount_map.insert(
+                key.clone(),
+                db.as_dao::<OrderDao>()
+                    .get_batch_items(owner_id, payment_platform.clone())
+                    .await?,
+            );
+        }
+        let prev_amount = prev_amount_map.get(&key).unwrap();
+
         let payment_id = Uuid::new_v4().to_string();
+        let mut payment_amount = if incremental {
+            &payment.amount
+                - prev_amount
+                    .get(&(payer_addr.to_string(), payee_addr.to_string()))
+                    .unwrap_or(&zero)
+        } else {
+            payment.amount.clone()
+        };
+        if payment_amount < zero {
+            payment_amount = zero.clone();
+        }
         let mut order = Order {
             payer_addr,
             payee_addr,
             payment_platform: payment_platform.clone(),
             obligations: Default::default(),
             payments: Default::default(),
-            amount: payment.amount.clone(),
+            amount: payment_amount.clone(),
         };
 
         match px.entry(Key {
@@ -160,9 +234,24 @@ async fn main() -> anyhow::Result<()> {
             })
             .unwrap();
 
-        total_amount += &payment.amount;
+        total_amount += &payment_amount;
+
+        let sql_line = format!(
+            r#"
+        INSERT INTO payment (order_id, amount, gas, sender, recipient, payment_due_date, status, tx_id, network)
+        VALUES ('{}', '{}', '0000000000000000000000000000000000000000000000000000000000000000', '{}', '{}', '2021-08-27 23:19:32.577052800', 99, null, 1);"#,
+            Uuid::new_v4(),
+            format!(
+                "{:064x}",
+                (&payment_amount * &presision).round(0).to_bigint().unwrap()
+            ),
+            owner_id,
+            payee_addr
+        );
+        sqls.push(sql_line);
+
         eprintln!("\n\n{}/{}/{}\n", payment_platform, payer_addr, payee_addr);
-        eprintln!("  :: amount {}", payment.amount);
+        eprintln!("  :: amount {} // {}", &payment_amount, &payment.amount);
         for (peer, obligations) in payment.delivers {
             let mut payment_template = mpay::Payment {
                 payment_id: payment_id.clone(),
@@ -171,21 +260,11 @@ async fn main() -> anyhow::Result<()> {
                 payer_addr: payer_addr.to_string(),
                 payee_addr: payee_addr.to_string(),
                 payment_platform: payment_platform.clone(),
-                amount: payment.amount.clone(),
+                amount: payment_amount.clone(),
                 timestamp: chrono::Utc::now(),
                 agreement_payments: vec![],
                 activity_payments: vec![],
                 details: "".to_string(),
-            };
-            let _ = match item.items.entry(payee_addr.to_string()) {
-                hash_map::Entry::Occupied(mut e) => e
-                    .get_mut()
-                    .1
-                    .insert(peer, serde_json::to_string_pretty(&payment_template)?),
-                hash_map::Entry::Vacant(e) => e
-                    .insert((payment.amount.clone(), Default::default()))
-                    .1
-                    .insert(peer, serde_json::to_string_pretty(&payment_template)?),
             };
 
             eprintln!("  :: peer {} invoices {}", peer, obligations.len());
@@ -207,23 +286,63 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
             }
+            let _ = match item.items.entry(payee_addr.to_string()) {
+                hash_map::Entry::Occupied(mut e) => e
+                    .get_mut()
+                    .1
+                    .insert(peer, serde_json::to_string_pretty(&payment_template)?),
+                hash_map::Entry::Vacant(e) => e
+                    .insert((payment_amount.clone(), Default::default()))
+                    .1
+                    .insert(peer, serde_json::to_string_pretty(&payment_template)?),
+            };
             order.payments.push(payment_template);
         }
         //eprintln!("order={:?}", order);
     }
-    for (k, v) in px {
-        let id = db
-            .as_dao::<OrderDao>()
-            .new_batch_order(
-                owner_id,
-                k.payer_addr.to_string(),
-                k.payment_platform,
-                v.items,
-            )
-            .await?;
-        eprintln!("order={}", id);
+
+    for sql in sqls {
+        eprintln!("{}", sql);
+    }
+
+    if !dry_run {
+        for (k, v) in px {
+            let id = db
+                .as_dao::<OrderDao>()
+                .new_batch_order(
+                    owner_id,
+                    k.payer_addr.to_string(),
+                    k.payment_platform,
+                    v.items,
+                )
+                .await?;
+            eprintln!("order={}", id);
+        }
     }
 
     eprintln!("total={} / {}", total_amount, total_amount_i);
+    Ok(())
+}
+
+async fn send_payments(db: DbExecutor, order_id: String) -> anyhow::Result<()> {
+    let (order, items) = db
+        .as_dao::<OrderDao>()
+        .get_unsent_batch_items(order_id.clone())
+        .await?;
+    let bus_id = driver_bus_id("zksync");
+    for item in items {
+        let payment_order_id = bus::service(&bus_id)
+            .call(SchedulePayment::new(
+                item.amount.0,
+                order.payer_addr.clone(),
+                item.payee_addr.clone(),
+                order.platform.clone(),
+                chrono::Utc::now(),
+            ))
+            .await??;
+        db.as_dao::<OrderDao>()
+            .batch_order_item_send(order_id.clone(), item.payee_addr, payment_order_id)
+            .await?;
+    }
     Ok(())
 }

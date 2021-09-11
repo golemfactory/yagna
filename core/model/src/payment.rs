@@ -53,18 +53,39 @@ pub mod local {
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct SchedulePayment {
-        pub title: PaymentTitle,
+        pub title: Option<PaymentTitle>,
         pub payer_id: NodeId,
         pub payee_id: NodeId,
         pub payer_addr: String,
         pub payee_addr: String,
         pub payment_platform: String,
-        pub allocation_id: String,
+        pub allocation_id: Option<String>,
         pub amount: BigDecimal,
         pub due_date: DateTime<Utc>,
     }
 
     impl SchedulePayment {
+        pub fn from_order(
+            payer_id: NodeId,
+            payee_id: NodeId,
+            payer_addr: String,
+            payee_addr: String,
+            payment_platform: String,
+            amount: BigDecimal,
+        ) -> Self {
+            SchedulePayment {
+                title: None,
+                payer_id,
+                payee_id,
+                payer_addr,
+                payee_addr,
+                payment_platform,
+                allocation_id: None,
+                amount,
+                due_date: Utc::now(),
+            }
+        }
+
         pub fn from_invoice(
             invoice: Invoice,
             allocation_id: String,
@@ -74,16 +95,16 @@ pub mod local {
                 return None;
             }
             Some(Self {
-                title: PaymentTitle::Invoice(InvoicePayment {
+                title: Some(PaymentTitle::Invoice(InvoicePayment {
                     invoice_id: invoice.invoice_id,
                     agreement_id: invoice.agreement_id,
-                }),
+                })),
                 payer_id: invoice.recipient_id,
                 payee_id: invoice.issuer_id,
                 payer_addr: invoice.payer_addr,
                 payee_addr: invoice.payee_addr,
                 payment_platform: invoice.payment_platform,
-                allocation_id,
+                allocation_id: Some(allocation_id),
                 amount,
                 due_date: invoice.payment_due_date,
             })
@@ -98,16 +119,16 @@ pub mod local {
                 return None;
             }
             debit_note.payment_due_date.map(|due_date| Self {
-                title: PaymentTitle::DebitNote(DebitNotePayment {
+                title: Some(PaymentTitle::DebitNote(DebitNotePayment {
                     debit_note_id: debit_note.debit_note_id,
                     activity_id: debit_note.activity_id,
-                }),
+                })),
                 payer_id: debit_note.recipient_id,
                 payee_id: debit_note.issuer_id,
                 payer_addr: debit_note.payer_addr,
                 payee_addr: debit_note.payee_addr,
                 payment_platform: debit_note.payment_platform,
-                allocation_id,
+                allocation_id: Some(allocation_id),
                 amount,
                 due_date,
             })
@@ -115,10 +136,11 @@ pub mod local {
 
         pub fn document_id(&self) -> String {
             match &self.title {
-                PaymentTitle::Invoice(invoice_payment) => invoice_payment.invoice_id.clone(),
-                PaymentTitle::DebitNote(debit_note_payment) => {
+                Some(PaymentTitle::Invoice(invoice_payment)) => invoice_payment.invoice_id.clone(),
+                Some(PaymentTitle::DebitNote(debit_note_payment)) => {
                     debit_note_payment.debit_note_id.clone()
                 }
+                None => Default::default(),
             }
         }
     }

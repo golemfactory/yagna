@@ -43,7 +43,7 @@ pub struct ReadObj {
 
 impl WriteObj {
     pub fn new(msg: SchedulePayment, id: String, driver: String) -> Self {
-        let (invoice_id, debit_note_id) = match msg.title {
+        let (invoice_id, debit_note_id) = match msg.title.unwrap() {
             PaymentTitle::DebitNote(title) => (None, Some(title.debit_note_id)),
             PaymentTitle::Invoice(title) => (Some(title.invoice_id), None),
         };
@@ -58,7 +58,7 @@ impl WriteObj {
             payment_platform: msg.payment_platform,
             invoice_id,
             debit_note_id,
-            allocation_id: msg.allocation_id,
+            allocation_id: msg.allocation_id.unwrap(),
             is_paid: false,
         }
     }
@@ -72,7 +72,7 @@ pub struct BatchOrder {
     pub owner_id: NodeId,
     pub payer_addr: String,
     pub platform: String,
-    pub total_amount: f32,
+    pub total_amount: Option<f32>,
     pub paid: bool,
 }
 

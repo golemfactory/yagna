@@ -401,7 +401,7 @@ async fn accept_invoice(
     let result = async move {
         let issuer_id = invoice.issuer_id;
         let accept_msg = AcceptInvoice::new(invoice_id.clone(), acceptance, issuer_id);
-        let schedule_msg = SchedulePayment::from_invoice(invoice, allocation_id, amount_to_pay);
+        //let schedule_msg = SchedulePayment::from_invoice(invoice, allocation_id, amount_to_pay);
         match async move {
             log::debug!("Sending AcceptInvoice [{}] to [{}]", invoice_id, issuer_id);
             ya_net::from(node_id)
@@ -409,12 +409,13 @@ async fn accept_invoice(
                 .service(PUBLIC_SERVICE)
                 .call(accept_msg)
                 .await??;
-            if let Some(msg) = schedule_msg {
-                log::trace!("Calling SchedulePayment [{}] locally", invoice_id);
-                bus::service(LOCAL_SERVICE).send(msg).await??;
-            }
             log::trace!("Accepting Invoice [{}] in DB", invoice_id);
-            dao.accept(invoice_id.clone(), node_id).await?;
+            db.as_dao::<AllocationDao>()
+                .spend_from_allocation(allocation_id, amount_to_pay)
+                .await?;
+            db.as_dao::<InvoiceDao>()
+                .accept(invoice_id.clone(), node_id)
+                .await?;
             log::trace!("Invoice accepted successfully for [{}]", invoice_id);
             Ok(())
         }

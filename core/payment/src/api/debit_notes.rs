@@ -337,8 +337,8 @@ async fn accept_debit_note(
     let result = async move {
         let issuer_id = debit_note.issuer_id;
         let accept_msg = AcceptDebitNote::new(debit_note_id.clone(), acceptance, issuer_id);
-        let schedule_msg =
-            SchedulePayment::from_debit_note(debit_note, allocation_id, amount_to_pay);
+        //let schedule_msg =
+        //    SchedulePayment::from_debit_note(debit_note, allocation_id, amount_to_pay);
         match async move {
             log::trace!(
                 "Sending AcceptDebitNote [{}] to [{}]",
@@ -350,12 +350,14 @@ async fn accept_debit_note(
                 .service(PUBLIC_SERVICE)
                 .call(accept_msg)
                 .await??;
-            if let Some(msg) = schedule_msg {
-                log::trace!("Calling SchedulePayment [{}] locally", debit_note_id);
-                bus::service(LOCAL_SERVICE).send(msg).await??;
-            }
+
             log::trace!("Accepting Debit Note [{}] in DB", debit_note_id);
-            dao.accept(debit_note_id.clone(), node_id).await?;
+            db.as_dao::<AllocationDao>()
+                .spend_from_allocation(allocation_id, amount_to_pay)
+                .await?;
+            db.as_dao::<DebitNoteDao>()
+                .accept(debit_note_id.clone(), node_id)
+                .await?;
             log::trace!("Debit Note accepted successfully for [{}]", debit_note_id);
             Ok(())
         }
