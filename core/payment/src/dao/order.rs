@@ -74,7 +74,7 @@ impl<'c> OrderDao<'c> {
                         .eq(debit_note_dsl::id.nullable())
                         .and(dsl::payer_id.eq(debit_note_dsl::owner_id))),
                 )
-                .filter(dsl::id.eq_any(ids))
+                .filter(dsl::id.eq_any(&ids))
                 .filter(dsl::driver.eq(driver))
                 .select((
                     dsl::id,
@@ -93,7 +93,54 @@ impl<'c> OrderDao<'c> {
                     debit_note_dsl::activity_id.nullable(),
                 ))
                 .load(conn)?;
+
             Ok(orders)
+        })
+        .await
+    }
+
+    pub async fn get_orders(
+        &self,
+        ids: Vec<String>,
+        driver: String,
+    ) -> DbResult<(Vec<ReadObj>, Vec<BatchOrderItem>)> {
+        readonly_transaction(self.pool, move |conn| {
+            let orders = dsl::pay_order
+                .left_join(
+                    invoice_dsl::pay_invoice.on(dsl::invoice_id
+                        .eq(invoice_dsl::id.nullable())
+                        .and(dsl::payer_id.eq(invoice_dsl::owner_id))),
+                )
+                .left_join(
+                    debit_note_dsl::pay_debit_note.on(dsl::debit_note_id
+                        .eq(debit_note_dsl::id.nullable())
+                        .and(dsl::payer_id.eq(debit_note_dsl::owner_id))),
+                )
+                .filter(dsl::id.eq_any(&ids))
+                .filter(dsl::driver.eq(driver))
+                .select((
+                    dsl::id,
+                    dsl::driver,
+                    dsl::amount,
+                    dsl::payee_id,
+                    dsl::payer_id,
+                    dsl::payee_addr,
+                    dsl::payer_addr,
+                    dsl::payment_platform,
+                    dsl::invoice_id,
+                    dsl::debit_note_id,
+                    dsl::allocation_id,
+                    dsl::is_paid,
+                    invoice_dsl::agreement_id.nullable(),
+                    debit_note_dsl::activity_id.nullable(),
+                ))
+                .load(conn)?;
+
+            let batch_orders: Vec<BatchOrderItem> = oidsl::pay_batch_order_item
+                .filter(oidsl::driver_order_id.eq_any(ids))
+                .load(conn)?;
+
+            Ok((orders, batch_orders))
         })
         .await
     }
@@ -215,5 +262,33 @@ impl<'c> OrderDao<'c> {
                 .execute(conn)?)
         })
         .await
+    }
+
+    pub async fn batch_order_item_paid(
+        &self,
+        order_id: String,
+        payee_addr: String,
+        confirmation: Vec<u8>,
+    ) -> DbResult<usize> {
+        do_with_transaction(self.pool, |conn| {
+            Ok(diesel::update(oidsl::pay_batch_order_item)
+                .filter(
+                    oidsl::id
+                        .eq(order_id)
+                        .and(oidsl::payee_addr.eq(payee_addr))
+                        .and(oidsl::paid.eq(false)),
+                )
+                .set(oidsl::paid.eq(true))
+                .execute(conn)?)
+        })
+        .await
+    }
+
+    pub async fn get_batch_order_payments(
+        &self,
+        order_id: String,
+        payee_addr: String,
+    ) -> DbResult<()> {
+        readonly_transaction(self.pool, |conn| Ok(())).await
     }
 }

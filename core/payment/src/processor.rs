@@ -351,90 +351,134 @@ impl PaymentProcessor {
         if msg.order_ids.is_empty() {
             return Err(OrderValidationError::new("order_ids is empty").into());
         }
-        let orders = self
+        let (orders, batch_orders) = self
             .db_executor
             .as_dao::<OrderDao>()
-            .get_many(msg.order_ids, driver.clone())
+            .get_orders(msg.order_ids, driver.clone())
             .await?;
-        validate_orders(
-            &orders,
-            &payment_platform,
-            &payer_addr,
-            &payee_addr,
-            &msg.amount,
-        )
-        .await?;
-
-        let mut activity_payments = vec![];
-        let mut agreement_payments = vec![];
-        for order in orders.iter() {
-            let amount = order.amount.clone().into();
-            match (order.activity_id.clone(), order.agreement_id.clone()) {
-                (Some(activity_id), None) => activity_payments.push(ActivityPayment {
-                    activity_id,
-                    amount,
-                    allocation_id: Some(order.allocation_id.clone()),
-                }),
-                (None, Some(agreement_id)) => agreement_payments.push(AgreementPayment {
-                    agreement_id,
-                    amount,
-                    allocation_id: Some(order.allocation_id.clone()),
-                }),
-                _ => return NotifyPaymentError::invalid_order(&order),
+        if !batch_orders.is_empty() {
+            for batch_order_item in batch_orders {
+                self.db_executor
+                    .as_dao::<OrderDao>()
+                    .batch_order_item_paid(
+                        batch_order_item.id.clone(),
+                        batch_order_item.payee_addr.clone(),
+                        msg.confirmation.clone(),
+                    )
+                    .await?;
+                {
+                    for (payer_id, payee_id, json) in self
+                        .db_executor
+                        .as_dao::<OrderDao>()
+                        .get_batch_order_payments(
+                            batch_order_item.id.clone(),
+                            batch_order_item.payee_addr.clone(),
+                        )
+                    {
+                        Arbiter::spawn(async move {
+                            ya_net::from(payer_id)
+                                .to(payee_id)
+                                .service(BUS_ID)
+                                .call(msg)
+                        })
+                    }
+                    Arbiter::spawn(
+                        ya_net::from(payer_id)
+                            .to(payee_id)
+                            .service(BUS_ID)
+                            .call(msg)
+                            .map(|res| match res {
+                                Ok(Ok(_)) => (),
+                                err => log::error!(
+                                    "Error sending payment message to provider: {:?}",
+                                    err
+                                ),
+                            }),
+                    );
+                }
             }
         }
-
-        // FIXME: This is a hack. Payment orders realized by a single transaction are not guaranteed
-        //        to have the same payer and payee IDs. Fixing this requires a major redesign of the
-        //        data model. Payments can no longer by assigned to a single payer and payee.
-        let payer_id = orders.get(0).unwrap().payer_id;
-        let payee_id = orders.get(0).unwrap().payee_id;
-
-        let payment_dao: PaymentDao = self.db_executor.as_dao();
-        let payment_id = payment_dao
-            .create_new(
-                payer_id,
-                payee_id,
-                payer_addr,
-                payee_addr,
-                payment_platform.clone(),
-                msg.amount.clone(),
-                msg.confirmation.confirmation,
-                activity_payments,
-                agreement_payments,
+        if !orders.is_empty() {
+            validate_orders(
+                &orders,
+                &payment_platform,
+                &payer_addr,
+                &payee_addr,
+                &msg.amount,
             )
             .await?;
 
-        let mut payment = payment_dao.get(payment_id, payer_id).await?.unwrap();
-        // Allocation IDs are requestor's private matter and should not be sent to provider
-        for agreement_payment in payment.agreement_payments.iter_mut() {
-            agreement_payment.allocation_id = None;
+            let mut activity_payments = vec![];
+            let mut agreement_payments = vec![];
+            for order in orders.iter() {
+                let amount = order.amount.clone().into();
+                match (order.activity_id.clone(), order.agreement_id.clone()) {
+                    (Some(activity_id), None) => activity_payments.push(ActivityPayment {
+                        activity_id,
+                        amount,
+                        allocation_id: Some(order.allocation_id.clone()),
+                    }),
+                    (None, Some(agreement_id)) => agreement_payments.push(AgreementPayment {
+                        agreement_id,
+                        amount,
+                        allocation_id: Some(order.allocation_id.clone()),
+                    }),
+                    _ => return NotifyPaymentError::invalid_order(&order),
+                }
+            }
+
+            // FIXME: This is a hack. Payment orders realized by a single transaction are not guaranteed
+            //        to have the same payer and payee IDs. Fixing this requires a major redesign of the
+            //        data model. Payments can no longer by assigned to a single payer and payee.
+            let payer_id = orders.get(0).unwrap().payer_id;
+            let payee_id = orders.get(0).unwrap().payee_id;
+
+            let payment_dao: PaymentDao = self.db_executor.as_dao();
+            let payment_id = payment_dao
+                .create_new(
+                    payer_id,
+                    payee_id,
+                    payer_addr,
+                    payee_addr,
+                    payment_platform.clone(),
+                    msg.amount.clone(),
+                    msg.confirmation.confirmation,
+                    activity_payments,
+                    agreement_payments,
+                )
+                .await?;
+
+            let mut payment = payment_dao.get(payment_id, payer_id).await?.unwrap();
+            // Allocation IDs are requestor's private matter and should not be sent to provider
+            for agreement_payment in payment.agreement_payments.iter_mut() {
+                agreement_payment.allocation_id = None;
+            }
+            for activity_payment in payment.activity_payments.iter_mut() {
+                activity_payment.allocation_id = None;
+            }
+
+            let signature = driver_endpoint(&driver)
+                .send(driver::SignPayment(payment.clone()))
+                .await??;
+
+            counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "platform" => payment_platform);
+            let msg = SendPayment::new(payment, Some(signature));
+
+            // Spawning to avoid deadlock in a case that payee is the same node as payer
+            Arbiter::spawn(
+                ya_net::from(payer_id)
+                    .to(payee_id)
+                    .service(BUS_ID)
+                    .call(msg)
+                    .map(|res| match res {
+                        Ok(Ok(_)) => (),
+                        err => log::error!("Error sending payment message to provider: {:?}", err),
+                    }),
+            );
+            // TODO: Implement re-sending mechanism in case SendPayment fails
+
+            counter!("payment.invoices.requestor.paid", 1);
         }
-        for activity_payment in payment.activity_payments.iter_mut() {
-            activity_payment.allocation_id = None;
-        }
-
-        let signature = driver_endpoint(&driver)
-            .send(driver::SignPayment(payment.clone()))
-            .await??;
-
-        counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "platform" => payment_platform);
-        let msg = SendPayment::new(payment, Some(signature));
-
-        // Spawning to avoid deadlock in a case that payee is the same node as payer
-        Arbiter::spawn(
-            ya_net::from(payer_id)
-                .to(payee_id)
-                .service(BUS_ID)
-                .call(msg)
-                .map(|res| match res {
-                    Ok(Ok(_)) => (),
-                    err => log::error!("Error sending payment message to provider: {:?}", err),
-                }),
-        );
-        // TODO: Implement re-sending mechanism in case SendPayment fails
-
-        counter!("payment.invoices.requestor.paid", 1);
         Ok(())
     }
 

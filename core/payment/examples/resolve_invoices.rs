@@ -248,7 +248,9 @@ async fn generate(
             owner_id,
             payee_addr
         );
-        sqls.push(sql_line);
+        if payment_amount > zero {
+            sqls.push(sql_line);
+        }
 
         eprintln!("\n\n{}/{}/{}\n", payment_platform, payer_addr, payee_addr);
         eprintln!("  :: amount {} // {}", &payment_amount, &payment.amount);
