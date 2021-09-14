@@ -4,9 +4,10 @@ use std::path::PathBuf;
 use actix::prelude::*;
 use futures::channel::mpsc;
 use serde::{Deserialize, Serialize};
+use ya_client_model::activity;
 use ya_client_model::activity::activity_state::{State, StatePair};
 use ya_client_model::activity::exe_script_command::Network;
-use ya_client_model::activity::{ExeScriptCommand, ExeScriptCommandResult, RuntimeEvent};
+use ya_client_model::activity::{CommandOutput, ExeScriptCommand, ExeScriptCommandResult};
 
 use crate::error::Error;
 use crate::runtime::RuntimeMode;
@@ -16,6 +17,13 @@ use crate::Result;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "Result<Vec<f64>>")]
 pub struct GetMetrics;
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
+#[rtype(result = "()")]
+pub struct SetMetric {
+    pub name: String,
+    pub value: f64,
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Message)]
 #[rtype(result = "GetStateResponse")]
@@ -100,6 +108,51 @@ impl ExecuteCommand {
                 tx: self.tx,
             },
         )
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum RuntimeEvent {
+    Process(activity::RuntimeEvent),
+    State {
+        name: String,
+        value: Option<serde_json::Value>,
+    },
+    Counter {
+        name: String,
+        value: f64,
+    },
+}
+
+impl RuntimeEvent {
+    pub fn started(batch_id: String, idx: usize, command: ExeScriptCommand) -> Self {
+        let kind = activity::RuntimeEventKind::Started { command };
+        Self::Process(activity::RuntimeEvent::new(batch_id, idx, kind))
+    }
+
+    pub fn finished(
+        batch_id: String,
+        idx: usize,
+        return_code: i32,
+        message: Option<String>,
+    ) -> Self {
+        let kind = activity::RuntimeEventKind::Finished {
+            return_code,
+            message,
+        };
+        Self::Process(activity::RuntimeEvent::new(batch_id, idx, kind))
+    }
+
+    pub fn stdout(batch_id: String, idx: usize, out: CommandOutput) -> Self {
+        let kind = activity::RuntimeEventKind::StdOut(out);
+        let event = activity::RuntimeEvent::new(batch_id, idx, kind);
+        Self::Process(event)
+    }
+
+    pub fn stderr(batch_id: String, idx: usize, out: CommandOutput) -> Self {
+        let kind = activity::RuntimeEventKind::StdErr(out);
+        let event = activity::RuntimeEvent::new(batch_id, idx, kind);
+        Self::Process(event)
     }
 }
 

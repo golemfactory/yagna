@@ -123,15 +123,15 @@ pub struct PaymentsConfig {
     pub invoice_resend_interval: Duration,
     #[structopt(skip = "you-forgot-to-set-session-id")]
     pub session_id: String,
+    #[structopt(env = "PAYMENT_DUE_TIMEOUT", parse(try_from_str = humantime::parse_duration), default_value = "24h")]
+    pub payment_due_timeout: Duration,
 }
 
 /// Yagna APIs and payments information about provider.
 struct ProviderCtx {
     activity_api: Arc<ActivityProviderApi>,
     payment_api: Arc<PaymentApi>,
-
     debit_checker: Addr<DeadlineChecker>,
-
     config: PaymentsConfig,
 }
 
@@ -205,11 +205,17 @@ async fn send_debit_note(
     debit_note_info: DebitNoteInfo,
     cost_info: CostInfo,
 ) -> Result<DebitNote> {
+    let payment_due_date = if provider_context.config.payment_due_timeout.is_zero() {
+        None
+    } else {
+        Some(Utc::now() + chrono::Duration::from_std(provider_context.config.payment_due_timeout)?)
+    };
+
     let debit_note = NewDebitNote {
         activity_id: debit_note_info.activity_id.clone(),
         total_amount_due: cost_info.cost,
         usage_counter_vector: Some(json!(cost_info.usage)),
-        payment_due_date: None,
+        payment_due_date,
     };
 
     log::debug!(
@@ -686,14 +692,15 @@ impl Handler<IssueInvoice> for Payments {
             cost_info.cost,
             cost_info.usage,
         );
+        let payment_due_date = Utc::now()
+            + chrono::Duration::from_std(self.context.config.payment_due_timeout)
+                .unwrap_or_else(|_| chrono::Duration::days(1));
 
         let invoice = NewInvoice {
             agreement_id,
             activity_ids: Some(activity_ids),
             amount: cost_info.cost,
-            // TODO: Change this date to meaningful value.
-            //  Now all our invoices are immediately outdated.
-            payment_due_date: Utc::now(),
+            payment_due_date,
         };
 
         let provider_ctx = self.context.clone();

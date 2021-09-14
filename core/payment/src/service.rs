@@ -163,6 +163,7 @@ mod local {
             driver,
             network,
             token,
+            since,
         } = msg;
 
         let (network, network_details) = processor
@@ -184,14 +185,14 @@ mod local {
 
         let incoming_fut = async {
             db.as_dao::<AgreementDao>()
-                .incoming_transaction_summary(platform.clone(), address.clone())
+                .incoming_transaction_summary(platform.clone(), address.clone(), since)
                 .await
         }
         .map_err(GenericError::new);
 
         let outgoing_fut = async {
             db.as_dao::<AgreementDao>()
-                .outgoing_transaction_summary(platform.clone(), address.clone())
+                .outgoing_transaction_summary(platform.clone(), address.clone(), since)
                 .await
         }
         .map_err(GenericError::new);
@@ -403,8 +404,8 @@ mod public {
 
             log::info!(
                 "DebitNote [{}] received from node [{}].",
-                node_id,
-                debit_note_id
+                debit_note_id,
+                issuer_id
             );
             counter!("payment.debit_notes.requestor.received", 1);
             Ok(())

@@ -24,7 +24,7 @@ use ya_payment_driver::{
 };
 
 // Local uses
-use crate::{dao::Erc20Dao, network::SUPPORTED_NETWORKS, DEFAULT_NETWORK, DRIVER_NAME};
+use crate::{dao::Erc20Dao, network::SUPPORTED_NETWORKS, DRIVER_NAME, RINKEBY_NETWORK};
 
 mod api;
 mod cli;
@@ -96,6 +96,15 @@ impl PaymentDriver for Erc20Driver {
         Ok(())
     }
 
+    async fn get_account_balance(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        msg: GetAccountBalance,
+    ) -> Result<BigDecimal, GenericError> {
+        api::get_account_balance(msg).await
+    }
+
     async fn enter(
         &self,
         _db: DbExecutor,
@@ -116,13 +125,9 @@ impl PaymentDriver for Erc20Driver {
         Ok("NOT_IMPLEMENTED".to_string())
     }
 
-    async fn get_account_balance(
-        &self,
-        _db: DbExecutor,
-        _caller: String,
-        msg: GetAccountBalance,
-    ) -> Result<BigDecimal, GenericError> {
-        api::get_account_balance(msg).await
+    async fn exit_fee(&self, _: ExitFee) -> Result<FeeResult, GenericError> {
+        log::info!("EXIT_FEE = Not Implemented");
+        Err(GenericError::new("EXIT_FEE = Not Implemented"))
     }
 
     fn get_name(&self) -> String {
@@ -130,7 +135,7 @@ impl PaymentDriver for Erc20Driver {
     }
 
     fn get_default_network(&self) -> String {
-        DEFAULT_NETWORK.to_string()
+        RINKEBY_NETWORK.to_string()
     }
 
     fn get_networks(&self) -> HashMap<String, NetworkConfig> {
@@ -163,6 +168,11 @@ impl PaymentDriver for Erc20Driver {
     ) -> Result<String, GenericError> {
         self.is_account_active(&msg.sender)?;
         cli::transfer(&self.dao, msg).await
+    }
+
+    async fn transfer_fee(&self, _msg: TransferFee) -> Result<FeeResult, GenericError> {
+        log::info!("transfer_fee = Not Implemented");
+        Err(GenericError::new("transfer_fee = Not Implemented"))
     }
 
     async fn schedule_payment(
@@ -219,20 +229,12 @@ impl PaymentDriver for Erc20Driver {
 
 #[async_trait(?Send)]
 impl PaymentDriverCron for Erc20Driver {
-    async fn confirm_payments(&self) {
-        let guard = match self.confirmation_lock.try_lock() {
-            None => {
-                log::trace!("ERC-20 confirmation job in progress.");
-                return;
-            }
-            Some(guard) => guard,
-        };
-        log::trace!("Running ERC-20 confirmation job...");
-        for network_key in self.get_networks().keys() {
-            cron::confirm_payments(&self.dao, &self.get_name(), network_key).await;
-        }
-        log::trace!("ERC-20 confirmation job complete.");
-        drop(guard); // Explicit drop to tell Rust that guard is not unused variable
+    fn sendout_interval(&self) -> std::time::Duration {
+        *TX_SENDOUT_INTERVAL
+    }
+
+    fn confirmation_interval(&self) -> std::time::Duration {
+        *TX_CONFIRMATION_INTERVAL
     }
 
     async fn send_out_payments(&self) {
@@ -257,11 +259,19 @@ impl PaymentDriverCron for Erc20Driver {
         drop(guard); // Explicit drop to tell Rust that guard is not unused variable
     }
 
-    fn sendout_interval(&self) -> std::time::Duration {
-        *TX_SENDOUT_INTERVAL
-    }
-
-    fn confirmation_interval(&self) -> std::time::Duration {
-        *TX_CONFIRMATION_INTERVAL
+    async fn confirm_payments(&self) {
+        let guard = match self.confirmation_lock.try_lock() {
+            None => {
+                log::trace!("ERC-20 confirmation job in progress.");
+                return;
+            }
+            Some(guard) => guard,
+        };
+        log::trace!("Running ERC-20 confirmation job...");
+        for network_key in self.get_networks().keys() {
+            cron::confirm_payments(&self.dao, &self.get_name(), network_key).await;
+        }
+        log::trace!("ERC-20 confirmation job complete.");
+        drop(guard); // Explicit drop to tell Rust that guard is not unused variable
     }
 }

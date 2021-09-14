@@ -10,10 +10,10 @@ use futures::channel::oneshot;
 use futures::future::{BoxFuture, Fuse, Shared};
 use futures::{FutureExt, SinkExt, TryFutureExt};
 
-use crate::message::CommandContext;
+use crate::message::{CommandContext, RuntimeEvent};
 
-use ya_client_model::activity::{CommandOutput, RuntimeEvent};
-use ya_runtime_api::server::ProcessStatus;
+use ya_client_model::activity::CommandOutput;
+use ya_runtime_api::server::{ProcessStatus, RuntimeStatus};
 
 #[derive(Default, Clone)]
 pub(crate) struct EventMonitor {
@@ -46,9 +46,9 @@ impl EventMonitor {
     }
 }
 
-impl ya_runtime_api::server::RuntimeEvent for EventMonitor {
+impl ya_runtime_api::server::RuntimeHandler for EventMonitor {
     fn on_process_status<'a>(&self, status: ProcessStatus) -> BoxFuture<'a, ()> {
-        let (ctx, done_tx) = {
+        let (mut ctx, done_tx) = {
             let mut proc_map = self.processes.lock().unwrap();
             let mut fallback = self.fallback.lock().unwrap();
 
@@ -57,44 +57,66 @@ impl ya_runtime_api::server::RuntimeEvent for EventMonitor {
                 None => return futures::future::ready(()).boxed(),
             };
             let done_tx = status.running.not().then(|| entry.done_tx()).flatten();
-
             (entry.ctx.clone(), done_tx)
         };
 
-        publish(status, ctx, done_tx)
-            .map_err(|err| log::error!("Event channel error: {:?}", err))
-            .then(|_| async {})
-            .boxed()
+        async move {
+            if !status.stdout.is_empty() {
+                let out = CommandOutput::Bin(status.stdout);
+                let evt = RuntimeEvent::stdout(ctx.batch_id.clone(), ctx.idx, out);
+                ctx.tx.send(evt).await?;
+            }
+            if !status.stderr.is_empty() {
+                let out = CommandOutput::Bin(status.stderr);
+                let evt = RuntimeEvent::stderr(ctx.batch_id, ctx.idx, out);
+                ctx.tx.send(evt).await?;
+            }
+            if let Some(done_tx) = done_tx {
+                let _ = done_tx.send(status.return_code);
+            }
+            Ok::<_, SendError>(())
+        }
+        .map_err(|err| log::error!("Event channel error: {:?}", err))
+        .then(|_| async {})
+        .boxed()
     }
-}
 
-async fn publish(
-    status: ProcessStatus,
-    mut ctx: CommandContext,
-    done_tx: Option<oneshot::Sender<i32>>,
-) -> Result<(), SendError> {
-    if !status.stdout.is_empty() {
-        ctx.tx
-            .send(RuntimeEvent::stdout(
-                ctx.batch_id.clone(),
-                ctx.idx,
-                CommandOutput::Bin(status.stdout),
-            ))
-            .await?;
+    fn on_runtime_status<'a>(&self, status: RuntimeStatus) -> BoxFuture<'a, ()> {
+        use ya_runtime_api::server::proto::response::runtime_status::Kind;
+
+        let mut ctx = {
+            let channel = self.fallback.lock().unwrap();
+            match channel.as_ref() {
+                Some(c) => c.ctx.clone(),
+                None => return futures::future::ready(()).boxed(),
+            }
+        };
+
+        async move {
+            let evt = match status.kind {
+                Some(Kind::State(state)) => RuntimeEvent::State {
+                    name: state.name,
+                    value: serde_json::from_slice(&state.value[..])
+                        .map_err(|e| log::warn!("Invalid runtime state value: {:?}", e))
+                        .ok(),
+                },
+                Some(Kind::Counter(counter)) => RuntimeEvent::Counter {
+                    name: counter.name,
+                    value: counter.value,
+                },
+                evt => {
+                    log::warn!("Unsupported runtime event: {:?}", evt);
+                    return Ok::<_, SendError>(());
+                }
+            };
+
+            ctx.tx.send(evt).await?;
+            Ok::<_, SendError>(())
+        }
+        .map_err(|err| log::error!("Event channel error: {:?}", err))
+        .then(|_| async {})
+        .boxed()
     }
-    if !status.stderr.is_empty() {
-        ctx.tx
-            .send(RuntimeEvent::stderr(
-                ctx.batch_id,
-                ctx.idx,
-                CommandOutput::Bin(status.stderr),
-            ))
-            .await?;
-    }
-    if let Some(done_tx) = done_tx {
-        let _ = done_tx.send(status.return_code);
-    }
-    Ok(())
 }
 
 pub(crate) enum Handle<'a> {
@@ -104,6 +126,7 @@ pub(crate) enum Handle<'a> {
         done_rx: BoxFuture<'a, Result<i32, ()>>,
     },
     Fallback {
+        #[allow(unused)]
         monitor: EventMonitor,
     },
 }
@@ -114,8 +137,8 @@ impl<'a> Drop for Handle<'a> {
             Handle::Process { monitor, pid, .. } => {
                 monitor.processes.lock().unwrap().remove(pid);
             }
-            Handle::Fallback { monitor, .. } => {
-                monitor.fallback.lock().unwrap().take();
+            _ => {
+                // ignore
             }
         }
     }

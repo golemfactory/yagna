@@ -45,6 +45,7 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
         .bind_with_processor(
             move |db, dr, c, m| async move { dr.enter(db, c, m).await }
         )
+        .bind_with_processor(move |_, dr, _, m| async move { dr.exit_fee(m).await })
         .bind_with_processor(
             move |db, dr, c, m| async move { dr.exit(db, c, m).await }
         )

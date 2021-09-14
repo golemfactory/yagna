@@ -70,6 +70,8 @@ pub async fn fund(dao: &Erc20Dao, msg: Fund) -> Result<String, GenericError> {
                 .map_err(GenericError::new)??;
             format!("Received funds from the faucet. address=0x{:x}", &address)
         }
+        Network::PolygonMainnet => format!("PolygonMainnet not supported on ERC20 driver"),
+        Network::PolygonMumbai => format!("PolygonMumbai not supported on ERC20 driver"),
         Network::Mainnet => format!(
             r#"Your mainnet ethereum address is {}.
 

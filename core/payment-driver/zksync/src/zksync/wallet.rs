@@ -35,6 +35,7 @@ use crate::{
     DEFAULT_NETWORK,
 };
 use std::time::Duration;
+use ya_payment_driver::model::{ExitFee, FeeResult};
 
 pub async fn account_balance(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
     let pub_address = Address::from_str(&address[2..]).map_err(GenericError::new)?;
@@ -87,6 +88,23 @@ pub async fn fund(address: &str, network: Network) -> Result<(), GenericError> {
     Ok(())
 }
 
+pub async fn exit_fee(msg: &ExitFee) -> Result<FeeResult, GenericError> {
+    let network = msg
+        .network
+        .as_ref()
+        .map(AsRef::as_ref)
+        .unwrap_or(DEFAULT_NETWORK);
+    let network = Network::from_str(network).map_err(|e| GenericError::new(e))?;
+    let wallet = get_wallet(&msg.sender, network).await?;
+    let token = get_network_token(network, None);
+    let unlock_fee = get_unlock_fee(&wallet, &token).await?;
+    let withdraw_fee = get_withdraw_fee(&wallet, &token).await?;
+    Ok(FeeResult {
+        amount: utils::big_uint_to_big_dec(unlock_fee + withdraw_fee),
+        token,
+    })
+}
+
 pub async fn exit(msg: &Exit) -> Result<String, GenericError> {
     let network = msg.network().unwrap_or(DEFAULT_NETWORK.to_string());
     let network = Network::from_str(&network).map_err(|e| GenericError::new(e))?;
@@ -97,6 +115,16 @@ pub async fn exit(msg: &Exit) -> Result<String, GenericError> {
     let unlock_fee = get_unlock_fee(&wallet, &token).await?;
     let withdraw_fee = get_withdraw_fee(&wallet, &token).await?;
     let total_fee = unlock_fee + withdraw_fee;
+    if let Some(fee_limit_decimal) = msg.fee_limit() {
+        let fee_limit = utils::big_dec_to_big_uint(fee_limit_decimal.clone())?;
+        if total_fee > fee_limit {
+            return Err(GenericError::new(format!(
+                "minimum withdraw fees is {} {}",
+                utils::big_uint_to_big_dec(total_fee),
+                token
+            )));
+        }
+    }
     if balance < total_fee {
         return Err(GenericError::new(format!(
             "Not enough balance to exit. Minimum required balance to pay withdraw fees is {} {}",
@@ -291,6 +319,8 @@ fn get_rpc_addr(network: Network) -> String {
             .unwrap_or("https://api.zksync.golem.network/jsrpc".to_string()),
         Network::Rinkeby => env::var("ZKSYNC_RINKEBY_RPC_ADDRESS")
             .unwrap_or("https://rinkeby-api.zksync.golem.network/jsrpc".to_string()),
+        Network::PolygonMainnet => panic!("Polygon mainnet not supported on zksync"),
+        Network::PolygonMumbai => panic!("Polygon mainnet not supported on zksync"),
     }
 }
 
@@ -301,6 +331,8 @@ fn get_ethereum_node_addr_from_env(network: Network) -> String {
         }
         Network::Rinkeby => env::var("RINKEBY_GETH_ADDR")
             .unwrap_or("http://geth.testnet.golem.network:55555".to_string()),
+        Network::PolygonMainnet => panic!("Polygon mainnet not supported on zksync"),
+        Network::PolygonMumbai => panic!("Polygon mainnet not supported on zksync"),
     }
 }
 

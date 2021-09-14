@@ -183,6 +183,21 @@ impl PaymentDriver for ZksyncDriver {
         Ok(())
     }
 
+    async fn get_account_balance(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        msg: GetAccountBalance,
+    ) -> Result<BigDecimal, GenericError> {
+        log::debug!("get_account_balance: {:?}", msg);
+        let (network, _) = platform_to_network_token(msg.platform())?;
+
+        let balance = wallet::account_balance(&msg.address(), network).await?;
+
+        log::debug!("get_account_balance - result: {}", &balance);
+        Ok(balance)
+    }
+
     async fn enter(
         &self,
         _db: DbExecutor,
@@ -220,19 +235,8 @@ impl PaymentDriver for ZksyncDriver {
         ))
     }
 
-    async fn get_account_balance(
-        &self,
-        _db: DbExecutor,
-        _caller: String,
-        msg: GetAccountBalance,
-    ) -> Result<BigDecimal, GenericError> {
-        log::debug!("get_account_balance: {:?}", msg);
-        let (network, _) = platform_to_network_token(msg.platform())?;
-
-        let balance = wallet::account_balance(&msg.address(), network).await?;
-
-        log::debug!("get_account_balance - result: {}", &balance);
-        Ok(balance)
+    async fn exit_fee(&self, msg: ExitFee) -> Result<FeeResult, GenericError> {
+        Ok(wallet::exit_fee(&msg).await?)
     }
 
     fn get_name(&self) -> String {
@@ -309,6 +313,8 @@ impl PaymentDriver for ZksyncDriver {
                     &address
                 ))
             }
+            DbNetwork::PolygonMumbai => Ok(format!("PolygonMumbai Not supported")),
+            DbNetwork::PolygonMainnet => Ok(format!("PolygonMainnet Not supported")),
             DbNetwork::Mainnet => Ok(format!(
                 r#"Your mainnet zkSync address is {}.
 
@@ -331,6 +337,10 @@ Mind that to be eligible you have to run your app at least once on testnet -
     ) -> Result<String, GenericError> {
         log::info!("TRANSFER = Not Implemented: {:?}", msg);
         Ok("NOT_IMPLEMENTED".to_string())
+    }
+
+    async fn transfer_fee(&self, _msg: TransferFee) -> Result<FeeResult, GenericError> {
+        Err(GenericError::new("NOT_IMPLEMENTED"))
     }
 
     async fn schedule_payment(
@@ -485,15 +495,32 @@ impl PaymentDriverCron for ZksyncDriver {
                     .collect();
 
                 if let Err(err) = tx_success {
-                    log::error!(
-                        "ZkSync transaction verification failed. tx_details={:?} error={}",
-                        tx,
-                        err
-                    );
-                    self.dao.transaction_failed(&tx.tx_id).await;
-                    for order_id in order_ids.iter() {
-                        self.dao.payment_failed(order_id).await;
+                    // In case of invalid nonce error we can retry sending transaction.
+                    // Reset payment and transaction state to 'not sent', so cron job will pickup
+                    // transaction again.
+                    if err.contains("Nonce mismatch") {
+                        log::warn!(
+                            "Scheduling retry for tx {:?} because of nonce mismatch. ZkSync error: {}",
+                            tx,
+                            err
+                        );
+
+                        for order_id in order_ids.iter() {
+                            self.dao.retry_payment(order_id).await;
+                        }
+                    } else {
+                        log::error!(
+                            "ZkSync transaction verification failed. tx_details={:?} error={}",
+                            tx,
+                            err
+                        );
+
+                        for order_id in order_ids.iter() {
+                            self.dao.payment_failed(order_id).await;
+                        }
                     }
+
+                    self.dao.transaction_failed(&tx.tx_id).await;
                     return;
                 }
 

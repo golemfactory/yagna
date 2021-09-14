@@ -261,6 +261,7 @@ pub mod local {
         pub driver: String,
         pub network: Option<String>,
         pub token: Option<String>,
+        pub since: Option<DateTime<Utc>>,
     }
 
     impl RpcMessage for GetStatus {
@@ -321,6 +322,7 @@ pub mod local {
         pub requested: StatValue,
         pub accepted: StatValue,
         pub confirmed: StatValue,
+        pub overdue: Option<StatValue>,
     }
 
     impl std::ops::Add for StatusNotes {
@@ -331,6 +333,12 @@ pub mod local {
                 requested: self.requested + rhs.requested,
                 accepted: self.accepted + rhs.accepted,
                 confirmed: self.confirmed + rhs.confirmed,
+                overdue: match (self.overdue, rhs.overdue) {
+                    (None, None) => None,
+                    (Some(l), Some(r)) => Some(l + r),
+                    (Some(l), None) => Some(l),
+                    (None, Some(r)) => Some(r),
+                },
             }
         }
     }
@@ -471,6 +479,10 @@ pub mod local {
         Mainnet,
         #[strum(props(token = "tGLM"))]
         Rinkeby,
+        #[strum(props(token = "GLM"))]
+        Polygon,
+        #[strum(props(token = "tGLM"))]
+        Mumbai,
     }
 
     /// Experimental. In future releases this might change or be removed.
@@ -491,6 +503,7 @@ pub mod local {
     pub enum DriverName {
         ZkSync,
         Erc20,
+        Polygon,
     }
 
     #[derive(StructOpt, Debug, Clone)]
