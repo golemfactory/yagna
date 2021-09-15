@@ -27,31 +27,6 @@ jobs:
       - name: Fail if build was not a success ( ubuntu )
         run: echo job status= ${{ steps.wait-for-build-ubu.outputs.conclusion }} && ${{ fromJSON('["false", "true"]')[steps.wait-for-build-ubu.outputs.conclusion == 'success'] }}
 
-      - name: Wait for build to succeed ( windows )
-        uses: tomchv/wait-my-workflow@v1.1.0
-        id: wait-for-build-win
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          checkName: "Build Binaries (windows-latest)"
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          timeoutSeconds: 7200
-
-      - name: Fail if build was not a success ( windows )
-        run: echo job status= ${{ steps.wait-for-build-ubu.outputs.conclusion }} && ${{ fromJSON('["false", "true"]')[steps.wait-for-build-ubu.outputs.conclusion == 'success'] }}
-
-      - name: Wait for build to succeed ( macos )
-        uses: tomchv/wait-my-workflow@v1.1.0
-        id: wait-for-build-mac
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          checkName: "Build Binaries (macos-latest)"
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          timeoutSeconds: 7200
-
-      - name: Fail if build was not a success ( macos )
-        run: echo job status= ${{ steps.wait-for-build-ubu.outputs.conclusion }} && ${{ fromJSON('["false", "true"]')[steps.wait-for-build-ubu.outputs.conclusion == 'success'] }}
-
-
   integration-test:
     name: Integration Tests
     runs-on: goth
