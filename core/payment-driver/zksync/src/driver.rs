@@ -123,18 +123,8 @@ impl ZksyncDriver {
                 nonce = wallet::get_nonce(node_id, network).await;
                 log::debug!("Payments: nonce={}, details={:?}", &nonce, payments);
             }
-            if network == DbNetwork::Mainnet {
-                for payment in payments {
-                    if payment.status != PAYMENT_STATUS_ACCEPTED {
-                        log::debug!("skiping payments: {:?}", payment);
-                    } else {
-                        self.handle_payment(payment, &mut nonce).await;
-                    }
-                }
-            } else {
-                for payment in payments {
-                    self.handle_payment(payment, &mut nonce).await;
-                }
+            for payment in payments {
+                self.handle_payment(payment, &mut nonce).await;
             }
         }
     }

@@ -13,7 +13,7 @@ use ya_persistence::types::BigDecimalField;
 
 use crate::dao::{activity, agreement, allocation};
 use crate::error::{DbError, DbResult};
-use crate::models::order::{BatchOrder, BatchOrderItem, ReadObj, WriteObj};
+use crate::models::order::{BatchOrder, BatchOrderItem, BatchOrderItemPayment, ReadObj, WriteObj};
 use crate::schema::pay_batch_order::dsl as odsl;
 use crate::schema::pay_batch_order_item::dsl as oidsl;
 use crate::schema::pay_debit_note::dsl as debit_note_dsl;
@@ -288,7 +288,23 @@ impl<'c> OrderDao<'c> {
         &self,
         order_id: String,
         payee_addr: String,
-    ) -> DbResult<()> {
-        readonly_transaction(self.pool, |conn| Ok(())).await
+    ) -> DbResult<Vec<BatchOrderItemPayment>> {
+        readonly_transaction(self.pool, |conn| {
+            use crate::schema::pay_batch_order_item_payment::dsl as d;
+
+            Ok(d::pay_batch_order_item_payment
+                .filter(d::id.eq(order_id).and(d::payee_addr.eq(payee_addr)))
+                .load(conn)?)
+        })
+        .await
+    }
+
+    pub async fn get_batch_order(&self, order_id: String) -> DbResult<BatchOrder> {
+        readonly_transaction(self.pool, move |conn| {
+            Ok(odsl::pay_batch_order
+                .filter(odsl::id.eq(order_id))
+                .get_result(conn)?)
+        })
+        .await
     }
 }

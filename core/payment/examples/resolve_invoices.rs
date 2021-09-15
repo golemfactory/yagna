@@ -33,6 +33,8 @@ enum Command {
         incremental: bool,
         #[structopt(long, default_value = "0x206bfe4f439a83b65a5b9c2c3b1cc6cb49054cc4")]
         owner: NodeId,
+        #[structopt(long, default_value = "polygon-mumbai-tglm")]
+        payment_playform: String,
     },
     SendPayments {
         #[structopt(long)]
@@ -57,9 +59,10 @@ async fn main() -> anyhow::Result<()> {
     match args.command {
         Command::Generate {
             dry_run,
+            payment_playform,
             owner,
             incremental,
-        } => generate(db, owner, dry_run, incremental).await?,
+        } => generate(db, owner, payment_playform, dry_run, incremental).await?,
         Command::SendPayments { order_id } => send_payments(db, order_id).await?,
     }
     Ok(())
@@ -101,6 +104,7 @@ struct Order {
 async fn generate(
     db: DbExecutor,
     owner_id: NodeId,
+    payment_platform: String,
     dry_run: bool,
     incremental: bool,
 ) -> anyhow::Result<()> {
@@ -116,6 +120,7 @@ async fn generate(
     for invoice in invoices
         .into_iter()
         .filter(|i| i.status == DocumentStatus::Accepted)
+        .filter(|i| i.payment_platform == payment_platform)
         .filter(|i| i.recipient_id == owner_id)
     {
         let agreement = db
@@ -331,8 +336,10 @@ async fn send_payments(db: DbExecutor, order_id: String) -> anyhow::Result<()> {
         .as_dao::<OrderDao>()
         .get_unsent_batch_items(order_id.clone())
         .await?;
-    let bus_id = driver_bus_id("zksync");
+    eprintln!("got {} orders", items.len());
+    let bus_id = driver_bus_id("polygon");
     for item in items {
+        eprintln!("sending: {:?}", &item);
         let payment_order_id = bus::service(&bus_id)
             .call(SchedulePayment::new(
                 item.amount.0,

@@ -363,38 +363,90 @@ impl PaymentProcessor {
                     .batch_order_item_paid(
                         batch_order_item.id.clone(),
                         batch_order_item.payee_addr.clone(),
-                        msg.confirmation.clone(),
+                        msg.confirmation.confirmation.clone(),
                     )
                     .await?;
                 {
-                    for (payer_id, payee_id, json) in self
+                    let db_order = self
+                        .db_executor
+                        .as_dao::<OrderDao>()
+                        .get_batch_order(batch_order_item.id.clone())
+                        .await?;
+
+                    let confirmation = base64::encode(&msg.confirmation.confirmation);
+
+                    for db_payment in self
                         .db_executor
                         .as_dao::<OrderDao>()
                         .get_batch_order_payments(
                             batch_order_item.id.clone(),
                             batch_order_item.payee_addr.clone(),
                         )
+                        .await?
                     {
+                        let payer_id = db_order.owner_id;
+                        let driver = driver.clone();
+                        let payment_platform = payment_platform.clone();
+                        let confirmation = confirmation.clone();
+
+                        let (payee_id, json) = (db_payment.payee_id, db_payment.json);
                         Arbiter::spawn(async move {
-                            ya_net::from(payer_id)
+                            let mut payment: Payment = match serde_json::from_str(&json) {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    log::error!(
+                                        "Failed to decode payment for {}, e={:?}",
+                                        payee_id,
+                                        e
+                                    );
+                                    return;
+                                }
+                            };
+
+                            payment.details = confirmation.clone();
+
+                            let signature = match driver_endpoint(&driver)
+                                .send(driver::SignPayment(payment.clone()))
+                                .await
+                            {
+                                Ok(Ok(v)) => v,
+                                Err(e) => {
+                                    log::error!(
+                                        "Failed to sign payment: {:?} ,err={:?}",
+                                        payment,
+                                        e
+                                    );
+                                    return;
+                                }
+                                Ok(Err(e)) => {
+                                    log::error!("Failed to sign payment: {:?} ,err={}", payment, e);
+                                    return;
+                                }
+                            };
+
+                            let msg = SendPayment::new(payment, Some(signature));
+
+                            match ya_net::from(payer_id)
                                 .to(payee_id)
                                 .service(BUS_ID)
                                 .call(msg)
+                                .await
+                            {
+                                Ok(Ok(v)) => (),
+                                Err(e) => log::error!(
+                                    "failed to call payment to {}, err={:?}",
+                                    payee_id,
+                                    e
+                                ),
+                                Ok(Err(e)) => log::error!(
+                                    "failed to send payment to {}, err={:?}",
+                                    payee_id,
+                                    e
+                                ),
+                            }
                         })
                     }
-                    Arbiter::spawn(
-                        ya_net::from(payer_id)
-                            .to(payee_id)
-                            .service(BUS_ID)
-                            .call(msg)
-                            .map(|res| match res {
-                                Ok(Ok(_)) => (),
-                                err => log::error!(
-                                    "Error sending payment message to provider: {:?}",
-                                    err
-                                ),
-                            }),
-                    );
+                    counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "platform" => payment_platform.clone());
                 }
             }
         }
