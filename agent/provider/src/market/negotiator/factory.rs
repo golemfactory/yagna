@@ -20,7 +20,7 @@ pub struct LimitAgreementsNegotiatorConfig {
 pub struct AgreementExpirationNegotiatorConfig {
     #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "5min")]
     pub min_agreement_expiration: std::time::Duration,
-    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "3h")]
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "10h")]
     pub max_agreement_expiration: std::time::Duration,
     #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "30min")]
     pub max_agreement_expiration_without_deadline: std::time::Duration,
