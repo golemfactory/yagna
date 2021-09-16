@@ -2249,7 +2249,7 @@ dependencies = [
 
 [[package]]
 name = "gftp"
-version = "0.2.1"
+version = "0.2.3"
 dependencies = [
  "actix-rt",
  "anyhow",
@@ -7563,7 +7563,7 @@ dependencies = [
 
 [[package]]
 name = "yagna"
-version = "0.7.2"
+version = "0.7.3"
 dependencies = [
  "actix-rt",
  "actix-service",

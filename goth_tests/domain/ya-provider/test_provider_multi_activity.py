@@ -266,3 +266,181 @@ async def test_provider_recover_from_abandoned_task(
             wait_for_offers_subscribed=False,
         )
         await run_activity(requestor2, *agreement_providers[0])
+
+
+@pytest.mark.asyncio
+async def test_provider_renegotiate_proposal(
+    common_assets: Path,
+    config_overrides: List[Override],
+    log_dir: Path,
+):
+    """Tests providers' ability of renegotiating previously rejected proposal."""
+
+    nodes = [
+        {"name": "requestor-1", "type": "Requestor"},
+        {"name": "requestor-2", "type": "Requestor"},
+        {"name": "provider-1", "type": "Wasm-Provider", "use-proxy": True},
+    ]
+    config_overrides.append(("nodes", nodes))
+
+    runner, config = _create_runner(common_assets, config_overrides, log_dir)
+
+    async with runner(config.containers):
+        requestor1, requestor2 = runner.get_probes(probe_type=RequestorProbe)
+        providers = runner.get_probes(probe_type=ProviderProbe)
+        assert providers
+
+        def build_demand(requestor):
+            return (
+                DemandBuilder(requestor)
+                .props_from_template(wasi_task_package)
+                .property("golem.srv.caps.multi-activity", True)
+                .constraints(
+                    "(&(golem.com.pricing.model=linear)\
+                    (golem.srv.caps.multi-activity=true)\
+                    (golem.runtime.name=wasmtime))"
+                )
+                .build()
+            )
+
+        async def negotiate_begin(requestor, demand, providers):
+            logger.info(
+                "%s Negotiating with providers",
+                requestor.name,
+            )
+            for provider in providers:
+                await provider.wait_for_offer_subscribed()
+
+            subscription_id, demand = await requestor.subscribe_demand(demand)
+
+            proposals = await requestor.wait_for_proposals(
+                subscription_id,
+                providers,
+                lambda p: p.properties.get("golem.runtime.name") == "wasmtime",
+            )
+            logger.info("Collected %s proposals", len(proposals))
+            assert len(proposals) == len(providers)
+            return subscription_id, proposals
+
+        async def accept_all_proposals(
+            requestor, demand, providers, subscription_id, proposals
+        ):
+            counter_providers = []
+            for proposal in proposals:
+                provider = next(p for p in providers if p.address == proposal.issuer_id)
+                logger.info(
+                    "%s Processing proposal from %s", requestor.name, provider.name
+                )
+
+                counter_proposal_id = await requestor.counter_proposal(
+                    subscription_id, demand, proposal
+                )
+                counter_providers.append((counter_proposal_id, provider))
+            return counter_providers
+
+        async def renegotiate(requestor, providers: List[ProviderProbe], subscription_id):
+            logger.info("%s: renegotiate()", requestor.name)
+            agreement_providers = []
+            logger.info(
+                "requestor.name: %s. r.collect_offers()",
+                requestor.name,
+            )
+
+            events = await requestor.api.market.collect_offers(
+                subscription_id
+            )
+            logger.info("collected offers: %s", events)
+            assert len(events) == 2
+            assert (
+                events[0].reason.message
+                == "No capacity available. Reached Agreements limit: 1"
+            )
+            offer = events[1].proposal
+            provider = [p for p in providers if p.address == events[1].proposal.issuer_id][0]
+
+            agreement_id = await requestor.create_agreement(offer)
+            await requestor.confirm_agreement(agreement_id)
+            await provider.wait_for_agreement_approved()
+            await requestor.wait_for_approval(agreement_id)
+            agreement_providers.append((agreement_id, provider))
+            return agreement_providers
+
+        async def negotiate_finalize(
+            requestor, demand, providers, subscription_id, proposals
+        ):
+            logger.info("%s: negotiate_finalize()", requestor.name)
+            agreement_providers = []
+
+            for proposal in proposals:
+                provider = next(p for p in providers if p.address == proposal.issuer_id)
+                logger.info(
+                    "%s Processing proposal from %s", requestor.name, provider.name
+                )
+
+                counter_proposal_id = await requestor.counter_proposal(
+                    subscription_id, demand, proposal
+                )
+                await provider.wait_for_proposal_accepted()
+
+                new_proposals = await requestor.wait_for_proposals(
+                    subscription_id,
+                    (provider,),
+                    lambda proposal: proposal.prev_proposal_id == counter_proposal_id,
+                )
+
+                agreement_id = await requestor.create_agreement(new_proposals[0])
+                await requestor.confirm_agreement(agreement_id)
+                await provider.wait_for_agreement_approved()
+                await requestor.wait_for_approval(agreement_id)
+                agreement_providers.append((agreement_id, provider))
+
+            await requestor.unsubscribe_demand(subscription_id)
+            logger.info("Got %d agreements", len(agreement_providers))
+            assert agreement_providers
+            return agreement_providers
+
+        async def run(requestor, agreement_providers):
+            logger.info("%s run()", requestor.name)
+            for agreement_id, provider in agreement_providers:
+                logger.info(
+                    "%s Running activity on %s. agreement_id: %s",
+                    requestor.name,
+                    provider.name,
+                    agreement_id,
+                )
+                activity_id = await requestor.create_activity(agreement_id)
+                await provider.wait_for_exeunit_started()
+                await requestor.destroy_activity(activity_id)
+                await provider.wait_for_exeunit_finished()
+
+                await requestor.terminate_agreement(agreement_id, None)
+                await provider.wait_for_agreement_terminated()
+
+            # Payment
+            await pay_all(requestor, agreement_providers)
+            logger.info("%s run() -> done", requestor.name)
+
+        demand1 = build_demand(requestor1)
+        demand2 = build_demand(requestor2)
+        subscription_id1, proposals1 = await negotiate_begin(
+            requestor1, demand1, providers
+        )
+        subscription_id2, proposals2 = await negotiate_begin(
+            requestor2, demand2, providers
+        )
+        agreement_providers1 = await negotiate_finalize(
+            requestor1, demand1, providers, subscription_id1, proposals1
+        )
+        logger.info("agreement_providers1: %s", agreement_providers1)
+        # Second requestor will get rejection because of capacity limits (provider already has an agreement with requestor 1)
+        _counter_providers = await accept_all_proposals(
+            requestor2, demand2, providers, subscription_id2, proposals2
+        )
+
+        await run(requestor1, agreement_providers1)
+        # First requestor terminated agreement, so provider should renegotiate with second requestor
+        agreement_providers2 = await renegotiate(
+            requestor2, providers, subscription_id2,
+        )
+        logger.info("agreement_providers2: %s", agreement_providers2)
+        await run(requestor2, agreement_providers2)
