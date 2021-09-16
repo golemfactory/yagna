@@ -40,7 +40,7 @@ node-types:
   - name: "Wasm-Provider"
     class: "goth_tests.helpers.probe.ProviderProbe"
     mount:
-      - read-only: "../../provider-presets.json"
+      - read-only: "../../assets/provider/presets.json"
         destination: "/root/.local/share/ya-provider/presets.json"
       - read-only: "../../assets/provider/hardware.json"
         destination: "/root/.local/share/ya-provider/hardware.json"
