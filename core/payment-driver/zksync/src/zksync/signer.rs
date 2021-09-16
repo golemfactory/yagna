@@ -128,7 +128,7 @@ fn encode_signed_tx(raw_tx: &RawTransaction, signature: Vec<u8>, chain_id: u64) 
 
     tx.finalize_unbounded_list();
 
-    tx.out()
+    tx.out().to_vec()
 }
 
 fn prepare_signature(signature: Vec<u8>, chain_id: u64) -> (u64, Vec<u8>, Vec<u8>) {
