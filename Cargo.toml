@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.7.2"
+version = "0.7.3"
 description = "Open platform and marketplace for distributed computations"
 readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
@@ -178,11 +178,11 @@ ya-service-api-web = { path = "core/serv-api/web" }
 #ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "c4f16a69be383d9534f99928fccb64a558c47ff2"}
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", branch = "mf/vpn"}
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", branch = "mf/vpn"}
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "b13ddfd138d5b0aabeb5cfef4ea74f03a4bc16cf"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "b13ddfd138d5b0aabeb5cfef4ea74f03a4bc16cf"}
 
-# ya-client = { path = "../ya-client" }
-# ya-client-model = { path = "../ya-client/model" }
+#ya-client = { path = "../ya-client" }
+#ya-client-model = { path = "../ya-client/model" }
 
 ## OTHERS
 gftp = { path = "core/gftp" }
@@ -201,6 +201,8 @@ ya-utils-process = { path = "utils/process"}
 ya-diesel-utils = { path = "utils/diesel-utils"}
 ya-metrics = { path = "core/metrics" }
 ya-provider = { path = "agent/provider"}
+
+web3 = { git = "https://github.com/golemfactory/rust-web3", branch = "update_ethabi" }
 
 # Speed up builds on macOS (will be default in next rust version probably)
 # https://jakedeichert.com/blog/reducing-rust-incremental-compilation-times-on-macos-by-70-percent/

@@ -76,9 +76,18 @@ impl MockNodeKind {
         let (public, local) = gsb_prefixes(test_name, name);
 
         match self {
-            MockNodeKind::Market(market) => market.bind_gsb(&public, &local).await?,
-            MockNodeKind::Matcher { matcher, .. } => matcher.bind_gsb(&public, &local).await?,
-            MockNodeKind::Discovery(discovery) => discovery.bind_gsb(&public, &local).await?,
+            MockNodeKind::Market(market) => {
+                market.bind_gsb(&public, &local).await?;
+                market.matcher.discovery.lazy_bind_gsb().await?;
+            }
+            MockNodeKind::Matcher { matcher, .. } => {
+                matcher.bind_gsb(&public, &local).await?;
+                matcher.discovery.lazy_bind_gsb().await?;
+            }
+            MockNodeKind::Discovery(discovery) => {
+                discovery.bind_gsb(&public, &local).await?;
+                discovery.lazy_bind_gsb().await?;
+            }
             MockNodeKind::Negotiation {
                 provider,
                 requestor,
@@ -95,7 +104,7 @@ impl MockNodeKind {
 fn testname_from_backtrace(bn: &str) -> String {
     log::info!("Test name to regex match: {}", &bn);
     // Extract test name
-    let captures = Regex::new(r"(.*)::(.*)::\{\{.*")
+    let captures = Regex::new(r"(.*)::(.*)::.*")
         .unwrap()
         .captures(&bn)
         .unwrap();
@@ -110,6 +119,7 @@ impl MarketsNetwork {
     /// It will be used to create directories and GSB binding points,
     /// to avoid potential name clashes.
     pub async fn new(test_name: Option<&str>) -> Self {
+        std::env::set_var("RUST_LOG", "debug");
         let _ = env_logger::builder().try_init();
         // level 1 is this function.
         // level 2 is <core::future::from_generator::GenFuture<T> as

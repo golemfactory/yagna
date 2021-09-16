@@ -190,6 +190,7 @@ pub async fn run() -> Result</*exit code*/ i32> {
             table.add_row(row!["last 1h processed", status.last1h_processed()]);
             table.add_row(row!["last 1h in progress", status.in_progress()]);
             table.add_row(row!["total processed", status.total_processed()]);
+            table.add_row(row!["(including failures)"]);
 
             table
         };

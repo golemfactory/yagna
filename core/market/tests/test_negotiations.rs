@@ -8,8 +8,8 @@ use ya_market::testing::{
     mock_offer::flatten_json,
     negotiation::error::{CounterProposalError, RemoteProposalError},
     proposal_util::{exchange_draft_proposals, NegotiationHelper},
-    MarketServiceExt, MarketsNetwork, Owner, ProposalError, ProposalState, ProposalValidationError,
-    SaveProposalError,
+    AgreementError, MarketServiceExt, MarketsNetwork, Owner, ProposalError, ProposalState,
+    ProposalValidationError, SaveProposalError,
 };
 
 /// Test countering initial and draft proposals on both Provider and Requestor side.
@@ -1069,6 +1069,81 @@ async fn test_restart_negotiations() {
         )
         .await
         .unwrap();
+}
+
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
+async fn test_create_agreement_on_rejected_proposal_should_fail() {
+    let network = MarketsNetwork::new(None)
+        .await
+        .add_market_instance("Requestor1")
+        .await
+        .add_market_instance("Provider1")
+        .await;
+
+    let req_market = network.get_market("Requestor1");
+    let prov_market = network.get_market("Provider1");
+    let req_id = network.get_default_id("Requestor1");
+
+    // Requestor side
+    let negotiation = exchange_draft_proposals(&network, "Requestor1", "Provider1")
+        .await
+        .unwrap();
+
+    req_market
+        .requestor_engine
+        .reject_proposal(
+            &negotiation.demand_id,
+            &negotiation.proposal_id,
+            &req_id,
+            None,
+        )
+        .await
+        .unwrap();
+
+    // Consume Rejected event. We need only 1 event in query_proposal later.
+    prov_market
+        .provider_engine
+        .query_events(&negotiation.offer_id, 3.0, Some(5))
+        .await
+        .unwrap();
+
+    // Proposal state should be `Rejected` on both sides.
+    assert_eq!(
+        prov_market
+            .get_proposal(&negotiation.proposal_id.clone().translate(Owner::Provider))
+            .await
+            .unwrap()
+            .body
+            .state,
+        ProposalState::Rejected
+    );
+    assert_eq!(
+        req_market
+            .get_proposal(&negotiation.proposal_id)
+            .await
+            .unwrap()
+            .body
+            .state,
+        ProposalState::Rejected
+    );
+
+    // Requestor do not restart negotiation by countering proposal which was rejected by him.
+    // Requestor should NOT be able to create Agreement after rejection.
+    match req_market
+        .requestor_engine
+        .create_agreement(
+            req_id.clone(),
+            &negotiation.proposal_id,
+            Utc::now() + Duration::milliseconds(300),
+        )
+        .await
+    {
+        Err(AgreementError::ProposalRejected(id)) => {
+            assert_eq!(id, negotiation.proposal_id);
+        }
+        e => panic!("Expected AgreementError::ProposalRejected, got: {:?}", e),
+    }
 }
 
 /// Agent is allowed to restart negotiations after Agreement was rejected.
