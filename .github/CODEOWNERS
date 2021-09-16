@@ -1,6 +1,7 @@
 
-/.github/workflows/goth.yml              @golemfactory/ya-integration
-/.github/workflows/nightly-goth.yml      @golemfactory/ya-integration
+# Integration tests
+/.github/workflows/goth.yml              @golemfactory/ya-sdk
+/.github/workflows/nightly-goth.yml      @golemfactory/ya-sdk
 
 # Activity
 /core/activity/                          @golemfactory/exe-unit

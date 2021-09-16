@@ -1,6 +1,6 @@
 use actix::{Actor, Context, Handler};
 
-use ya_client_model::market::NewOffer;
+use ya_client::model::market::NewOffer;
 
 use super::common::offer_definition_to_offer;
 use super::common::{AgreementResponse, Negotiator, ProposalResponse};

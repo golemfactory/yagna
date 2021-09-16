@@ -20,36 +20,12 @@ jobs:
         id: wait-for-build-ubu
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          checkName: "Tests & Build (ubuntu-latest)"
+          checkName: "Build Binaries (ubuntu-latest)"
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           timeoutSeconds: 7200
 
       - name: Fail if build was not a success ( ubuntu )
         run: echo job status= ${{ steps.wait-for-build-ubu.outputs.conclusion }} && ${{ fromJSON('["false", "true"]')[steps.wait-for-build-ubu.outputs.conclusion == 'success'] }}
-
-      - name: Wait for build to succeed ( macos )
-        uses: tomchv/wait-my-workflow@v1.1.0
-        id: wait-for-build-mac
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          checkName: "Tests & Build (macos-latest)"
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          timeoutSeconds: 7200
-
-      - name: Fail if build was not a success ( macos )
-        run: echo job status= ${{ steps.wait-for-build-mac.outputs.conclusion }} && ${{ fromJSON('["false", "true"]')[steps.wait-for-build-mac.outputs.conclusion == 'success'] }}
-
-      - name: Wait for build to succeed ( windows )
-        uses: tomchv/wait-my-workflow@v1.1.0
-        id: wait-for-build-win
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          checkName: "Tests & Build (windows-latest)"
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          timeoutSeconds: 7200
-
-      - name: Fail if build was not a success ( windows )
-        run: echo job status= ${{ steps.wait-for-build-win.outputs.conclusion }} && ${{ fromJSON('["false", "true"]')[steps.wait-for-build-win.outputs.conclusion == 'success'] }}
 
   integration-test:
     name: Integration Tests
@@ -81,6 +57,7 @@ jobs:
 
       - name: Disconnect Docker containers from default network
         continue-on-error: true
+        # related to this issue: https://github.com/moby/moby/issues/23302
         run: |
           docker network inspect docker_default
           sudo apt-get install -y jq
@@ -90,13 +67,17 @@ jobs:
         continue-on-error: true
         run: docker rm -f $(docker ps -a -q)
 
+      - name: Restart Docker daemon
+        # related to this issue: https://github.com/moby/moby/issues/23302
+        run: sudo systemctl restart docker
+
       - name: Log in to GitHub Docker repository
         run: echo ${{ secrets.GITHUB_TOKEN }} | docker login docker.pkg.github.com -u ${{github.actor}} --password-stdin
 
       - name: Download artifact
         uses: dawidd6/action-download-artifact@v2
         with:
-          workflow: rust.yml
+          workflow: binaries.yml
           commit: ${{github.event.pull_request.head.sha || github.sha}}
           workflow_conclusion: success
           name: 'Yagna Linux'

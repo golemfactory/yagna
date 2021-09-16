@@ -26,7 +26,7 @@ class DemandBuilder:
         self._constraints = "()"
         self._properties["golem.node.debug.subnet"] = DEFAULT_SUBNET
 
-    def props_from_template(self, task_package: str) -> "DemandBuilder":
+    def props_from_template(self, task_package: Optional[str]) -> "DemandBuilder":
         """Build default properties."""
 
         new_props = {
@@ -34,8 +34,11 @@ class DemandBuilder:
             "golem.srv.comp.expiration": int(
                 (datetime.now() + timedelta(minutes=10)).timestamp() * 1000
             ),
-            "golem.srv.comp.task_package": task_package,
         }
+
+        if task_package is not None:
+            new_props["golem.srv.comp.task_package"] = task_package
+
         self._properties.update(new_props)
         return self
 
@@ -67,6 +70,7 @@ async def negotiate_agreements(
     demand: Demand,
     providers: List[ProviderProbe],
     proposal_filter: Optional[Callable[[Proposal], bool]] = lambda p: True,
+    wait_for_offers_subscribed: bool = True,
 ) -> List[Tuple[str, ProviderProbe]]:
     """Negotiate agreements with supplied providers.
 
@@ -74,8 +78,9 @@ async def negotiate_agreements(
     logic, but rather you want to test further parts of yagna protocol
     and need ready Agreements.
     """
-    for provider in providers:
-        await provider.wait_for_offer_subscribed()
+    if wait_for_offers_subscribed:
+        for provider in providers:
+            await provider.wait_for_offer_subscribed()
 
     subscription_id, demand = await requestor.subscribe_demand(demand)
 

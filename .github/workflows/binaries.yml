@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+      - release/*
+  pull_request:
+    branches:
+      - master
+      - release/*
+
+jobs:
+  build:
+    name: Build Binaries
+    env:
+      # `-D warnings` means any warnings emitted will cause build to fail
+      RUSTFLAGS: "-D warnings -C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
+      X86_64_PC_WINDOWS_MSVC_OPENSSL_DIR: c:/vcpkg/installed/x64-windows
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+
+      - name: Install last stable Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+
+      - name: Check lockfile
+        uses: actions-rs/cargo@v1
+        with:
+          command: tree
+          args: --locked
+
+      - name: Install openssl ( Windows only )
+        if: runner.os == 'Windows'
+        run: |
+          vcpkg install openssl:x64-windows openssl:x64-windows-static
+          vcpkg list
+          vcpkg integrate install
+
+      - name: Build binaries
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --workspace
+
+      - name: Copy binaries
+        shell: bash
+        run: |
+          mkdir build
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            cp target/debug/{yagna,ya-provider,exe-unit,golemsp,gftp} build
+            strip -x build/*
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            cp target/debug/{yagna,gftp} build
+            strip -x build/*
+          elif [ "$RUNNER_OS" == "Windows" ]; then
+            cp target/debug/{yagna,gftp}.exe build
+          else
+            echo "$RUNNER_OS not supported"
+            exit 1
+          fi
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v1
+        with:
+          name: Yagna ${{ runner.os }}
+          path: build

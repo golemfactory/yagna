@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - master
-      - release/*      
+      - release/*
   pull_request:
     branches:
       - master
@@ -12,7 +12,7 @@ on:
 
 jobs:
   build:
-    name: Tests & Build
+    name: Unit Tests
     env:
       # `-D warnings` means any warnings emitted will cause build to fail
       RUSTFLAGS: "-D warnings -C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
@@ -51,37 +51,9 @@ jobs:
           vcpkg list
           vcpkg integrate install
 
-      - name: Unit tests + Market Test Suite (semi-integration tests)
+      - name: Unit tests
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --tests --workspace --features ya-market/test-suite --locked
+          args: --tests --workspace --exclude=["./agent/provider/src/market"] --locked
 
-      - name: Build binaries
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --workspace
-
-      - name: Copy binaries
-        shell: bash
-        run: |
-          mkdir build
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            cp target/debug/{yagna,ya-provider,exe-unit,golemsp,gftp} build
-            strip -x build/*
-          elif [ "$RUNNER_OS" == "macOS" ]; then
-            cp target/debug/{yagna,gftp} build
-            strip -x build/*
-          elif [ "$RUNNER_OS" == "Windows" ]; then
-            cp target/debug/{yagna,gftp}.exe build
-          else
-            echo "$RUNNER_OS not supported"
-            exit 1
-          fi
-
-      - name: Upload binaries
-        uses: actions/upload-artifact@v1
-        with:
-          name: Yagna ${{ runner.os }}
-          path: build
