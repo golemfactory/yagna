@@ -35,7 +35,6 @@ use crate::{
     zksync::wallet,
     DEFAULT_NETWORK, DRIVER_NAME,
 };
-use ya_payment_driver::db::models::PAYMENT_STATUS_ACCEPTED;
 
 lazy_static! {
     static ref TX_SUMBIT_TIMEOUT: Duration = Duration::minutes(15);

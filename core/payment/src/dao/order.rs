@@ -145,61 +145,6 @@ impl<'c> OrderDao<'c> {
         .await
     }
 
-    pub async fn new_batch_order(
-        &self,
-        owner_id: NodeId,
-        payer_addr: String,
-        platform: String,
-        items: HashMap<String, (BigDecimal, HashMap<NodeId, String>)>,
-    ) -> DbResult<String> {
-        do_with_transaction(self.pool, move |conn| {
-            let order_id = Uuid::new_v4().to_string();
-            {
-                use crate::schema::pay_batch_order::dsl;
-
-                let total_amount: BigDecimal = items.iter().map(|(_, (amount, _))| amount).sum();
-
-                let v = diesel::insert_into(dsl::pay_batch_order)
-                    .values((
-                        dsl::id.eq(&order_id),
-                        dsl::owner_id.eq(owner_id),
-                        dsl::payer_addr.eq(payer_addr),
-                        dsl::platform.eq(platform),
-                        dsl::total_amount.eq(total_amount.to_f32()),
-                    ))
-                    .execute(conn)?;
-            }
-            {
-                use crate::schema::pay_batch_order_item::dsl;
-
-                for (payee_addr, (amount, payments)) in items {
-                    diesel::insert_into(dsl::pay_batch_order_item)
-                        .values((
-                            dsl::id.eq(&order_id),
-                            dsl::payee_addr.eq(&payee_addr),
-                            dsl::amount.eq(BigDecimalField(amount)),
-                        ))
-                        .execute(conn)?;
-                    for (payee_id, json) in payments {
-                        use crate::schema::pay_batch_order_item_payment::dsl;
-
-                        diesel::insert_into(dsl::pay_batch_order_item_payment)
-                            .values((
-                                dsl::id.eq(&order_id),
-                                dsl::payee_addr.eq(&payee_addr),
-                                dsl::payee_id.eq(payee_id),
-                                dsl::json.eq(json),
-                            ))
-                            .execute(conn)?;
-                    }
-                }
-            }
-
-            Ok(order_id)
-        })
-        .await
-    }
-
     pub async fn get_batch_items(
         &self,
         owner_id: NodeId,

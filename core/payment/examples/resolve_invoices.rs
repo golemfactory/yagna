@@ -14,7 +14,7 @@ use ya_core_model::net::NetApiError::NodeIdParseError;
 use ya_core_model::payment::local as pay;
 use ya_core_model::payment::public as ppay;
 use ya_core_model::NodeId;
-use ya_payment::dao::{AgreementDao, InvoiceDao, OrderDao};
+use ya_payment::dao::{AgreementDao, BatchDao, InvoiceDao, OrderDao};
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed as bus;
 
@@ -40,6 +40,7 @@ enum Command {
         #[structopt(long)]
         order_id: String,
     },
+    ListDebitNotes {},
 }
 
 #[actix_rt::main]
@@ -64,6 +65,22 @@ async fn main() -> anyhow::Result<()> {
             incremental,
         } => generate(db, owner, payment_playform, dry_run, incremental).await?,
         Command::SendPayments { order_id } => send_payments(db, order_id).await?,
+        Command::ListDebitNotes {} => list_dn(db).await?,
+    }
+    Ok(())
+}
+
+async fn list_dn(db: DbExecutor) -> anyhow::Result<()> {
+    for (id, amount, prev_id) in db
+        .as_dao::<BatchDao>()
+        .list_debit_notes(
+            "0xf7530cbcd3685a997b1e49974f68dbe94b1116be".parse()?,
+            "polygon-mumbai-tglm".to_string(),
+            chrono::Utc::now() + chrono::Duration::days(-30),
+        )
+        .await?
+    {
+        eprintln!("id={}, amount={}, prev_id={}", id, amount, prev_id);
     }
     Ok(())
 }
@@ -313,9 +330,9 @@ async fn generate(
     }
 
     if !dry_run {
-        for (k, v) in px {
+        /*for (k, v) in px {
             let id = db
-                .as_dao::<OrderDao>()
+                .as_dao::<BatchDao>()
                 .new_batch_order(
                     owner_id,
                     k.payer_addr.to_string(),
@@ -324,7 +341,8 @@ async fn generate(
                 )
                 .await?;
             eprintln!("order={}", id);
-        }
+        }*/
+        todo!()
     }
 
     eprintln!("total={} / {}", total_amount, total_amount_i);

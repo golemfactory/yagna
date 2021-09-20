@@ -1,6 +1,8 @@
+use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use tokio::fs;
 use ya_core_model::driver::{driver_bus_id, AccountMode, Init};
 use ya_core_model::identity;
@@ -11,6 +13,23 @@ fn accounts_path(data_dir: &Path) -> PathBuf {
         Some(path) => PathBuf::from(path),
         None => data_dir.join("accounts.json"),
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub(crate) enum SendMode {
+    Simple(bool),
+    Batch(BatchMode),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) enum BatchMode {
+    Manual {},
+    Auto {
+        internal: Duration,
+        min_amount: BigDecimal,
+        max_delay: Duration,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
