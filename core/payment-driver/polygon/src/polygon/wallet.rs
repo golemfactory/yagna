@@ -74,9 +74,11 @@ pub async fn get_next_nonce(
     let str_addr = format!("0x{:x}", &address);
     let db_nonce = dao.get_next_nonce(&str_addr, network).await?;
 
-    if network_nonce != db_nonce
-    {
-        warn!("Network nonce different than db nonce: {} != {}", network_nonce, db_nonce);
+    if network_nonce != db_nonce {
+        warn!(
+            "Network nonce different than db nonce: {} != {}",
+            network_nonce, db_nonce
+        );
     }
 
     Ok(network_nonce)
