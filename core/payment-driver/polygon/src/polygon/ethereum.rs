@@ -21,7 +21,7 @@ lazy_static! {
     pub static ref GLM_POLYGON_MAX_GAS_PRICE: u64 =
         match env::var("GLM_POLYGON_MAX_GAS_PRICE").map(|s| s.parse()) {
             Ok(Ok(x)) => x,
-            _ => 1000,
+            _ => 1000000000000, //1000 Gwei
         };
 }
 const CREATE_FAUCET_FUNCTION: &str = "create";
@@ -93,12 +93,6 @@ pub async fn sign_faucet_tx(
     let data = eth_utils::contract_encode(&contract, CREATE_FAUCET_FUNCTION, ()).unwrap();
     let gas_price = client.eth().gas_price().await.map_err(GenericError::new)?;
 
-    if gas_price > U256::from(*GLM_POLYGON_MAX_GAS_PRICE) {
-        return Err(GenericError::new(format!(
-            "Gas priced exceeded max set value! gasPrice: {}. maximumGasPrice: {}",
-            gas_price, *GLM_POLYGON_MAX_GAS_PRICE
-        )));
-    };
 
     let tx = RawTransaction {
         nonce,
@@ -136,6 +130,13 @@ pub async fn sign_transfer_tx(
     let data = eth_utils::contract_encode(&contract, TRANSFER_ERC20_FUNCTION, (recipient, amount))
         .map_err(GenericError::new)?;
     let gas_price = client.eth().gas_price().await.map_err(GenericError::new)?;
+
+    if gas_price > U256::from(*GLM_POLYGON_MAX_GAS_PRICE) {
+        return Err(GenericError::new(format!(
+            "Gas priced exceeded max set value! gasPrice: {}. maximumGasPrice: {}",
+            gas_price, *GLM_POLYGON_MAX_GAS_PRICE
+        )));
+    };
 
     let tx = RawTransaction {
         nonce,
