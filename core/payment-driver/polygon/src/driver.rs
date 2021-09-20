@@ -35,14 +35,14 @@ lazy_static::lazy_static! {
             std::env::var("POLYGON_SENDOUT_INTERVAL_SECS")
                 .ok()
                 .and_then(|x| x.parse().ok())
-                .unwrap_or(10),
+                .unwrap_or(60),
         );
 
     static ref TX_CONFIRMATION_INTERVAL: std::time::Duration = std::time::Duration::from_secs(
             std::env::var("POLYGON_CONFIRMATION_INTERVAL_SECS")
                 .ok()
                 .and_then(|x| x.parse().ok())
-                .unwrap_or(5),
+                .unwrap_or(25),
         );
 }
 
