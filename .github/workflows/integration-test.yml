@@ -1,4 +1,4 @@
-name: Goth
+name: Goth integration tests
 
 on:
   push:
@@ -20,7 +20,7 @@ jobs:
         id: wait-for-build-ubu
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          checkName: "Build Binaries (ubuntu-latest)"
+          checkName: "Build binaries (x86-64) (ubuntu-latest)"
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           timeoutSeconds: 7200
 

@@ -1,4 +1,4 @@
-name: CI
+name: Market Test Suite
 
 on:
   push:
