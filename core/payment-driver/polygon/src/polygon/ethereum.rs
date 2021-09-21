@@ -13,10 +13,16 @@ use ya_payment_driver::db::models::{Network, TransactionEntity, TransactionStatu
 use ya_payment_driver::{bus, model::GenericError, utils as base_utils};
 
 use crate::polygon::{config, eth_utils};
+use std::env;
 
 lazy_static! {
     pub static ref GLM_FAUCET_GAS: U256 = U256::from(90_000);
     pub static ref GLM_POLYGON_GAS_LIMIT: U256 = U256::from(100_000);
+    pub static ref GLM_POLYGON_MAX_GAS_PRICE: u64 =
+        match env::var("GLM_POLYGON_MAX_GAS_PRICE").map(|s| s.parse()) {
+            Ok(Ok(x)) => x,
+            _ => 1000000000000, //1000 Gwei
+        };
 }
 const CREATE_FAUCET_FUNCTION: &str = "create";
 const BALANCE_ERC20_FUNCTION: &str = "balanceOf";
@@ -48,11 +54,11 @@ pub async fn get_balance(address: H160, network: Network) -> Result<U256, Generi
         .map_err(GenericError::new)?)
 }
 
-pub async fn get_next_nonce(address: H160, network: Network) -> Result<U256, GenericError> {
+pub async fn get_next_nonce_pending(address: H160, network: Network) -> Result<U256, GenericError> {
     let client = get_client(network)?;
     let nonce = client
         .eth()
-        .transaction_count(address, None)
+        .transaction_count(address, Some(web3::types::BlockNumber::Latest))
         .await
         .map_err(GenericError::new)?;
     Ok(nonce)
@@ -86,6 +92,8 @@ pub async fn sign_faucet_tx(
 
     let data = eth_utils::contract_encode(&contract, CREATE_FAUCET_FUNCTION, ()).unwrap();
     let gas_price = client.eth().gas_price().await.map_err(GenericError::new)?;
+
+
     let tx = RawTransaction {
         nonce,
         to: Some(contract.address()),
@@ -122,6 +130,13 @@ pub async fn sign_transfer_tx(
     let data = eth_utils::contract_encode(&contract, TRANSFER_ERC20_FUNCTION, (recipient, amount))
         .map_err(GenericError::new)?;
     let gas_price = client.eth().gas_price().await.map_err(GenericError::new)?;
+
+    if gas_price > U256::from(*GLM_POLYGON_MAX_GAS_PRICE) {
+        return Err(GenericError::new(format!(
+            "Gas priced exceeded max set value! gasPrice: {}. maximumGasPrice: {}",
+            gas_price, *GLM_POLYGON_MAX_GAS_PRICE
+        )));
+    };
 
     let tx = RawTransaction {
         nonce,
@@ -200,7 +215,7 @@ fn get_rpc_addr_from_env(network: Network) -> Result<String, GenericError> {
         )),
         Network::Rinkeby => Err(GenericError::new("Rinkeby not supported on Polygon driver")),
         Network::PolygonMainnet => Ok(std::env::var("POLYGON_MAINNET_GETH_ADDR")
-            .unwrap_or("http://51.38.53.113:8545".to_string())),
+            .unwrap_or("https://bor.golem.network".to_string())),
         Network::PolygonMumbai => Ok(std::env::var("POLYGON_MUMBAI_GETH_ADDR").unwrap_or(
             "https://polygon-mumbai.infura.io/v3/4dfe7a7afc6d4549b16490db5fd6358e".to_string(),
         )),
