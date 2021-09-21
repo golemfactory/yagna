@@ -19,7 +19,6 @@ pub enum BatchPaymentObligation {
         agreement_id: String,
     },
     DebitNote {
-        id: String,
         amount: BigDecimal,
         agreement_id: String,
         activity_id: String,
@@ -45,30 +44,24 @@ impl<'c> AsDao<'c> for BatchDao<'c> {
         Self { pool }
     }
 }
-pub fn resolve_invoices(
-    conn: &ConnType,
-    owner_id: NodeId,
-    payer_addr: &str,
-    platform: &str,
-    since: DateTime<Utc>,
-) -> DbResult<()> {
-    todo!()
-}
 
-#[cfg(test)]
 pub fn resolve_invoices(
     conn: &ConnType,
     owner_id: NodeId,
     payer_addr: &str,
     platform: &str,
     since: DateTime<Utc>,
-) -> DbResult<()> {
+) -> DbResult<String> {
     use crate::schema::pay_agreement::dsl as pa;
     use crate::schema::pay_invoice::dsl as iv;
     use std::collections::hash_map;
 
     let invoices = iv::pay_invoice
-        .inner_join(pa::pay_agreement)
+        .inner_join(
+            pa::pay_agreement.on(pa::id
+                .eq(iv::agreement_id)
+                .and(pa::owner_id.eq(iv::owner_id))),
+        )
         .filter(iv::owner_id.eq(owner_id))
         .filter(iv::role.eq("R"))
         .filter(pa::payer_addr.eq(payer_addr))
@@ -113,15 +106,17 @@ pub fn resolve_invoices(
             continue;
         }
 
+        total_amount += &amount_to_pay;
+
         let obligation = BatchPaymentObligation::Invoice {
             id: invoice_id,
             amount: amount_to_pay.clone(),
-            agreement_id: agreement_id,
+            agreement_id: agreement_id.clone(),
         };
 
         match payments.entry(payee_addr.clone()) {
             hash_map::Entry::Occupied(mut e) => {
-                let mut payment = e.get_mut();
+                let payment = e.get_mut();
                 payment.amount += &amount_to_pay;
                 match payment.peer_obligation.entry(peer_id) {
                     hash_map::Entry::Occupied(mut e) => e.get_mut().push(obligation),
@@ -137,7 +132,7 @@ pub fn resolve_invoices(
                 e.insert(BatchPayment {
                     amount,
                     peer_obligation,
-                })
+                });
             }
         }
         super::agreement::increase_amount_scheduled(
@@ -151,18 +146,34 @@ pub fn resolve_invoices(
         use crate::schema::pay_activity;
         use crate::schema::pay_activity::dsl;
 
+        table! {
+            sql_activity (id, owner_id) {
+                id -> Text,
+                owner_id -> Text,
+                role -> Text,
+                peer_id -> Text,
+                payee_addr -> Text,
+                agreement_id -> Text,
+                total_amount_due -> Text,
+                total_amount_accepted -> Text,
+                total_amount_scheduled -> Text,
+                total_amount_paid -> Text,
+            }
+        }
+
         #[derive(QueryableByName)]
-        #[table_name = "pay_activity"]
+        #[table_name = "sql_activity"]
         struct Activity {
             id: String,
             peer_id: NodeId,
             payee_addr: String,
             total_amount_accepted: BigDecimalField,
             total_amount_scheduled: BigDecimalField,
+            agreement_id: String,
         };
 
         let v : Vec<Activity> = diesel::sql_query(r#"
-                SELECT a.id, pa.peer_id, pa.payee_addr, a.total_amount_accepted, a.total_amount_scheduled
+                SELECT a.id, pa.peer_id, pa.payee_addr, a.total_amount_accepted, a.total_amount_scheduled, pa.id agreement_id
                 FROM pay_activity a join pay_agreement pa on a.owner_id = pa.owner_id and a.agreement_id = pa.id and a.role = pa.role
                 where a.role='R' and a.total_amount_accepted > 0
                 and cast(a.total_amount_scheduled as float) < cast(a.total_amount_accepted as float)
@@ -173,6 +184,41 @@ pub fn resolve_invoices(
             .bind::<Text, _>(&platform)
             .bind::<Text, _>(owner_id)
             .load::<Activity>(conn)?;
+        for a in v {
+            let amount_to_pay = a.total_amount_scheduled.0 - a.total_amount_accepted.0;
+            if amount_to_pay < zero {
+                continue;
+            }
+            total_amount += &amount_to_pay;
+
+            let obligation = BatchPaymentObligation::DebitNote {
+                amount: amount_to_pay.clone(),
+                agreement_id: a.agreement_id.clone(),
+                activity_id: a.id,
+            };
+
+            match payments.entry(a.payee_addr.clone()) {
+                hash_map::Entry::Occupied(mut e) => {
+                    let payment = e.get_mut();
+                    payment.amount += &total_amount;
+                    match payment.peer_obligation.entry(a.peer_id) {
+                        hash_map::Entry::Occupied(mut e) => e.get_mut().push(obligation),
+                        hash_map::Entry::Vacant(e) => {
+                            e.insert(vec![obligation]);
+                        }
+                    }
+                }
+                hash_map::Entry::Vacant(e) => {
+                    let mut peer_obligation = HashMap::new();
+                    peer_obligation.insert(a.peer_id, vec![obligation]);
+                    let amount = amount_to_pay.clone();
+                    e.insert(BatchPayment {
+                        amount,
+                        peer_obligation,
+                    });
+                }
+            }
+        }
     }
 
     let order_id = Uuid::new_v4().to_string();
@@ -215,10 +261,22 @@ pub fn resolve_invoices(
             }
         }
     }
-    Ok(())
+    Ok(order_id)
 }
 
 impl<'c> BatchDao<'c> {
+    pub async fn resolve(
+        &self,
+        owner_id: NodeId,
+        payer_addr: String,
+        platform: String,
+        since: DateTime<Utc>,
+    ) -> DbResult<String> {
+        do_with_transaction(self.pool, move |conn| {
+            resolve_invoices(conn, owner_id, &payer_addr, &platform, since)
+        })
+        .await
+    }
     pub async fn list_debit_notes(
         &self,
         owner_id: NodeId,
@@ -227,7 +285,6 @@ impl<'c> BatchDao<'c> {
     ) -> DbResult<Vec<(String, BigDecimalField, BigDecimalField)>> {
         use crate::schema::pay_activity;
         use crate::schema::pay_debit_note::dsl;
-        use crate::schema::pay_invoice_x_activity::dsl as ii;
 
         #[derive(QueryableByName)]
         #[table_name = "pay_activity"]
@@ -252,61 +309,5 @@ impl<'c> BatchDao<'c> {
                 .load::<Activity>(conn)?;
             Ok(v.into_iter().map(|a| (a.id, a.total_amount_accepted, a.total_amount_scheduled)).collect())
         }).await
-    }
-
-    pub async fn new_batch_order(
-        &self,
-        owner_id: NodeId,
-        payer_addr: String,
-        platform: String,
-        items: Vec<BatchItem>,
-    ) -> DbResult<String> {
-        do_with_transaction(self.pool, move |conn| {
-            let order_id = Uuid::new_v4().to_string();
-            {
-                use crate::schema::pay_batch_order::dsl;
-
-                let total_amount: BigDecimal = Default::default(); //items.iter().map(|i| i.).sum();
-
-                let v = diesel::insert_into(dsl::pay_batch_order)
-                    .values((
-                        dsl::id.eq(&order_id),
-                        dsl::owner_id.eq(&owner_id),
-                        dsl::payer_addr.eq(payer_addr),
-                        dsl::platform.eq(platform),
-                        dsl::total_amount.eq(total_amount.to_f32()),
-                    ))
-                    .execute(conn)?;
-            }
-            {
-                use crate::schema::pay_batch_order_item::dsl;
-
-                /*for (payee_addr, (amount, payments)) in items {
-                    diesel::insert_into(dsl::pay_batch_order_item)
-                        .values((
-                            dsl::id.eq(&order_id),
-                            dsl::payee_addr.eq(&payee_addr),
-                            dsl::amount.eq(BigDecimalField(amount)),
-                        ))
-                        .execute(conn)?;
-                    for (payee_id, json) in payments {
-                        use crate::schema::pay_batch_order_item_payment::dsl;
-
-                        diesel::insert_into(dsl::pay_batch_order_item_payment)
-                            .values((
-                                dsl::id.eq(&order_id),
-                                dsl::payee_addr.eq(&payee_addr),
-                                dsl::payee_id.eq(payee_id),
-                                dsl::json.eq(json),
-                            ))
-                            .execute(conn)?;
-                    }
-                }*/
-                todo!();
-            }
-
-            Ok(order_id)
-        })
-        .await
     }
 }

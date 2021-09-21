@@ -126,6 +126,12 @@ async fn generate(
     incremental: bool,
 ) -> anyhow::Result<()> {
     let ts = chrono::Utc::now() + chrono::Duration::days(-7);
+
+    let order_id = db
+        .as_dao::<BatchDao>()
+        .resolve(owner_id, owner_id.to_string(), payment_platform, ts)
+        .await?;
+    /*
     let invoices = db
         .as_dao::<InvoiceDao>()
         .get_for_node_id(owner_id, Some(ts.naive_utc()), Some(1000))
@@ -341,11 +347,11 @@ async fn generate(
                 )
                 .await?;
             eprintln!("order={}", id);
-        }*/
+        }
         todo!()
-    }
+    }*/*/
 
-    eprintln!("total={} / {}", total_amount, total_amount_i);
+    eprintln!("order={}", order_id);
     Ok(())
 }
 
