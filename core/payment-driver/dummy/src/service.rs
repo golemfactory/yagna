@@ -64,6 +64,7 @@ async fn init(_db: (), _caller: String, msg: Init) -> Result<Ack, GenericError> 
         network: NETWORK_NAME.to_string(),
         token: TOKEN_NAME.to_string(),
         mode,
+        batch: msg.batch(),
     };
     bus::service(payment_srv::BUS_ID)
         .send(msg)

@@ -1,21 +1,24 @@
-use crate::dao::{ActivityDao, AgreementDao, AllocationDao, OrderDao, PaymentDao};
+use crate::dao::{ActivityDao, AgreementDao, AllocationDao, BatchDao, OrderDao, PaymentDao};
 use crate::error::processor::{
     AccountNotRegistered, GetStatusError, NotifyPaymentError, OrderValidationError,
     SchedulePaymentError, ValidateAllocationError, VerifyPaymentError,
 };
+use crate::models::batch::BatchPaymentObligation;
 use crate::models::order::ReadObj as DbOrder;
 use actix_web::rt::Arbiter;
 use bigdecimal::{BigDecimal, Zero};
+use chrono::Utc;
 use futures::FutureExt;
 use metrics::counter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::time::Duration;
+use uuid::Uuid;
 use ya_client_model::payment::{
     Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
 };
 use ya_core_model::driver::{
-    self, driver_bus_id, AccountMode, PaymentConfirmation, PaymentDetails, ShutDown,
+    self, driver_bus_id, AccountMode, BatchMode, PaymentConfirmation, PaymentDetails, ShutDown,
     ValidateAllocation,
 };
 use ya_core_model::payment::local::{
@@ -71,6 +74,7 @@ struct AccountDetails {
     pub network: String,
     pub token: String,
     pub mode: AccountMode,
+    pub batch: Option<BatchMode>,
 }
 
 #[derive(Clone, Default)]
@@ -174,6 +178,7 @@ impl DriverRegistry {
                     network: msg.network,
                     token: msg.token,
                     mode: msg.mode,
+                    batch: msg.batch,
                 });
             }
         };
@@ -359,7 +364,7 @@ impl PaymentProcessor {
         if !batch_orders.is_empty() {
             for batch_order_item in batch_orders {
                 self.db_executor
-                    .as_dao::<OrderDao>()
+                    .as_dao::<BatchDao>()
                     .batch_order_item_paid(
                         batch_order_item.id.clone(),
                         batch_order_item.payee_addr.clone(),
@@ -369,41 +374,73 @@ impl PaymentProcessor {
                 {
                     let db_order = self
                         .db_executor
-                        .as_dao::<OrderDao>()
+                        .as_dao::<BatchDao>()
                         .get_batch_order(batch_order_item.id.clone())
                         .await?;
 
                     let confirmation = base64::encode(&msg.confirmation.confirmation);
 
-                    for db_payment in self
+                    let payment = self
                         .db_executor
-                        .as_dao::<OrderDao>()
+                        .as_dao::<BatchDao>()
                         .get_batch_order_payments(
                             batch_order_item.id.clone(),
                             batch_order_item.payee_addr.clone(),
                         )
-                        .await?
-                    {
+                        .await?;
+
+                    for (payee_id, obligations) in payment.peer_obligation {
                         let payer_id = db_order.owner_id;
+                        let payer_addr = payer_addr.clone();
+                        let payee_addr = payee_addr.clone();
                         let driver = driver.clone();
                         let payment_platform = payment_platform.clone();
                         let confirmation = confirmation.clone();
+                        let agreement_payments = obligations
+                            .iter()
+                            .filter_map(|obligation: &BatchPaymentObligation| match obligation {
+                                BatchPaymentObligation::Invoice {
+                                    id,
+                                    amount,
+                                    agreement_id,
+                                } => Some(AgreementPayment {
+                                    agreement_id: agreement_id.to_string(),
+                                    amount: amount.clone(),
+                                    allocation_id: None,
+                                }),
+                                _ => None,
+                            })
+                            .collect::<Vec<_>>();
+                        let activity_payments = obligations
+                            .iter()
+                            .filter_map(|obligation: &BatchPaymentObligation| match obligation {
+                                BatchPaymentObligation::DebitNote {
+                                    amount,
+                                    agreement_id,
+                                    activity_id,
+                                } => Some(ActivityPayment {
+                                    activity_id: activity_id.to_string(),
+                                    amount: amount.clone(),
+                                    allocation_id: None,
+                                }),
+                                _ => None,
+                            })
+                            .collect::<Vec<_>>();
 
-                        let (payee_id, json) = (db_payment.payee_id, db_payment.json);
                         Arbiter::spawn(async move {
-                            let mut payment: Payment = match serde_json::from_str(&json) {
-                                Ok(v) => v,
-                                Err(e) => {
-                                    log::error!(
-                                        "Failed to decode payment for {}, e={:?}",
-                                        payee_id,
-                                        e
-                                    );
-                                    return;
-                                }
+                            let payment = Payment {
+                                payment_id: uuid::Uuid::new_v4().to_string(), // TODO: check this
+                                payer_id,
+                                payee_id,
+                                payer_addr: payer_addr.clone(),
+                                payee_addr: payee_addr.clone(),
+                                payment_platform,
+                                amount: Default::default(),
+                                timestamp: Utc::now(),
+                                agreement_payments,
+                                activity_payments,
+                                details: confirmation.clone(),
                             };
-
-                            payment.details = confirmation.clone();
 
                             let signature = match driver_endpoint(&driver)
                                 .send(driver::SignPayment(payment.clone()))

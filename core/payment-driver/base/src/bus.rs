@@ -23,6 +23,7 @@ use ya_service_bus::{
 // Local uses
 use crate::dao::DbExecutor;
 use crate::driver::PaymentDriver;
+use crate::model::BatchMode;
 
 pub async fn bind_service<Driver: PaymentDriver + 'static>(
     db: &DbExecutor,
@@ -128,6 +129,7 @@ pub async fn register_account(
     network: &str,
     token: &str,
     mode: AccountMode,
+    batch: Option<BatchMode>,
 ) -> Result<(), GenericError> {
     let msg = payment_srv::RegisterAccount {
         address: address.to_string(),
@@ -135,6 +137,7 @@ pub async fn register_account(
         network: network.to_string(),
         token: token.to_string(),
         mode,
+        batch,
     };
     service(payment_srv::BUS_ID)
         .send(msg)

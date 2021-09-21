@@ -40,7 +40,15 @@ pub async fn init(driver: &PolygonDriver, msg: Init) -> Result<(), GenericError>
 
     let network = network::network_like_to_network(msg.network());
     let token = network::get_network_token(network, msg.token());
-    bus::register_account(driver, &msg.address(), &network.to_string(), &token, mode).await?;
+    bus::register_account(
+        driver,
+        &msg.address(),
+        &network.to_string(),
+        &token,
+        mode,
+        msg.batch(),
+    )
+    .await?;
 
     log::info!(
         "Initialised payment account. mode={:?}, address={}, driver={}, network={}, token={}",

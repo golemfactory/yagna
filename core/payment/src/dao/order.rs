@@ -13,11 +13,13 @@ use ya_persistence::types::BigDecimalField;
 
 use crate::dao::{activity, agreement, allocation};
 use crate::error::{DbError, DbResult};
-use crate::models::order::{BatchOrder, BatchOrderItem, BatchOrderItemPayment, ReadObj, WriteObj};
+use crate::models::batch::DbBatchOrderItem;
+use crate::models::order::{ReadObj, WriteObj};
 use crate::schema::pay_batch_order::dsl as odsl;
 use crate::schema::pay_batch_order_item::dsl as oidsl;
 use crate::schema::pay_debit_note::dsl as debit_note_dsl;
 use crate::schema::pay_invoice::dsl as invoice_dsl;
+use crate::schema::pay_order::columns::payment_platform;
 use crate::schema::pay_order::dsl;
 
 pub struct OrderDao<'c> {
@@ -103,7 +105,7 @@ impl<'c> OrderDao<'c> {
         &self,
         ids: Vec<String>,
         driver: String,
-    ) -> DbResult<(Vec<ReadObj>, Vec<BatchOrderItem>)> {
+    ) -> DbResult<(Vec<ReadObj>, Vec<DbBatchOrderItem>)> {
         readonly_transaction(self.pool, move |conn| {
             let orders = dsl::pay_order
                 .left_join(
@@ -117,7 +119,7 @@ impl<'c> OrderDao<'c> {
                         .and(dsl::payer_id.eq(debit_note_dsl::owner_id))),
                 )
                 .filter(dsl::id.eq_any(&ids))
-                .filter(dsl::driver.eq(driver))
+                .filter(dsl::driver.eq(&driver))
                 .select((
                     dsl::id,
                     dsl::driver,
@@ -136,9 +138,7 @@ impl<'c> OrderDao<'c> {
                 ))
                 .load(conn)?;
 
-            let batch_orders: Vec<BatchOrderItem> = oidsl::pay_batch_order_item
-                .filter(oidsl::driver_order_id.eq_any(ids))
-                .load(conn)?;
+            let batch_orders = super::batch::get_batch_orders(conn, &ids, &driver)?;
 
             Ok((orders, batch_orders))
         })
@@ -172,83 +172,6 @@ impl<'c> OrderDao<'c> {
                     Ok(((payer_addr, payee_addr), amount.parse().map_err(|e : bigdecimal::ParseBigDecimalError| DbError::Integrity(e.to_string()))?))
                 })
                 .collect()
-        })
-        .await
-    }
-
-    pub async fn get_unsent_batch_items(
-        &self,
-        order_id: String,
-    ) -> DbResult<(BatchOrder, Vec<BatchOrderItem>)> {
-        readonly_transaction(self.pool, move |conn| {
-            let order: BatchOrder = odsl::pay_batch_order
-                .filter(odsl::id.eq(&order_id))
-                .get_result(conn)?;
-            let items: Vec<BatchOrderItem> = oidsl::pay_batch_order_item
-                .filter(oidsl::id.eq(&order_id))
-                .filter(oidsl::driver_order_id.is_null())
-                .filter(oidsl::paid.eq(false))
-                .load(conn)?;
-            Ok((order, items))
-        })
-        .await
-    }
-
-    pub async fn batch_order_item_send(
-        &self,
-        order_id: String,
-        payee_addr: String,
-        driver_order_id: String,
-    ) -> DbResult<usize> {
-        do_with_transaction(self.pool, |conn| {
-            Ok(diesel::update(oidsl::pay_batch_order_item)
-                .filter(oidsl::id.eq(order_id).and(oidsl::payee_addr.eq(payee_addr)))
-                .set(oidsl::driver_order_id.eq(driver_order_id))
-                .execute(conn)?)
-        })
-        .await
-    }
-
-    pub async fn batch_order_item_paid(
-        &self,
-        order_id: String,
-        payee_addr: String,
-        confirmation: Vec<u8>,
-    ) -> DbResult<usize> {
-        do_with_transaction(self.pool, |conn| {
-            Ok(diesel::update(oidsl::pay_batch_order_item)
-                .filter(
-                    oidsl::id
-                        .eq(order_id)
-                        .and(oidsl::payee_addr.eq(payee_addr))
-                        .and(oidsl::paid.eq(false)),
-                )
-                .set(oidsl::paid.eq(true))
-                .execute(conn)?)
-        })
-        .await
-    }
-
-    pub async fn get_batch_order_payments(
-        &self,
-        order_id: String,
-        payee_addr: String,
-    ) -> DbResult<Vec<BatchOrderItemPayment>> {
-        readonly_transaction(self.pool, |conn| {
-            use crate::schema::pay_batch_order_item_payment::dsl as d;
-
-            Ok(d::pay_batch_order_item_payment
-                .filter(d::id.eq(order_id).and(d::payee_addr.eq(payee_addr)))
-                .load(conn)?)
-        })
-        .await
-    }
-
-    pub async fn get_batch_order(&self, order_id: String) -> DbResult<BatchOrder> {
-        readonly_transaction(self.pool, move |conn| {
-            Ok(odsl::pay_batch_order
-                .filter(odsl::id.eq(order_id))
-                .get_result(conn)?)
         })
         .await
     }

@@ -45,7 +45,12 @@ enum Command {
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
+    std::env::set_var("RUST_LOG", "debug");
+    env_logger::init();
+
     let args = Args::from_args_safe()?;
+
+    log::info!("test1");
 
     let db = {
         let database_url = format!(
@@ -351,13 +356,13 @@ async fn generate(
         todo!()
     }*/*/
 
-    eprintln!("order={}", order_id);
+    eprintln!("order={:?}", order_id);
     Ok(())
 }
 
 async fn send_payments(db: DbExecutor, order_id: String) -> anyhow::Result<()> {
     let (order, items) = db
-        .as_dao::<OrderDao>()
+        .as_dao::<BatchDao>()
         .get_unsent_batch_items(order_id.clone())
         .await?;
     eprintln!("got {} orders", items.len());
@@ -373,7 +378,7 @@ async fn send_payments(db: DbExecutor, order_id: String) -> anyhow::Result<()> {
                 chrono::Utc::now(),
             ))
             .await??;
-        db.as_dao::<OrderDao>()
+        db.as_dao::<BatchDao>()
             .batch_order_item_send(order_id.clone(), item.payee_addr, payment_order_id)
             .await?;
     }

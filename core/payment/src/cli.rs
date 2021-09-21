@@ -10,8 +10,9 @@ use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
-use crate::accounts::{init_account, Account};
+use crate::accounts::{init_account, Account, SendMode};
 use crate::wallet;
+use ya_core_model::driver::BatchMode;
 
 /// Payment management.
 #[derive(StructOpt, Debug)]
@@ -31,6 +32,8 @@ pub enum PaymentCli {
         account: pay::AccountCli,
         #[structopt(long, help = "Initialize account for sending")]
         sender: bool,
+        #[structopt(long, help = "Batching interval")]
+        send_interval: Option<humantime::Duration>,
         #[structopt(long, help = "Initialize account for receiving")]
         receiver: bool,
     },
@@ -111,14 +114,24 @@ impl PaymentCli {
             PaymentCli::Init {
                 account,
                 sender,
+                send_interval,
                 receiver,
             } => {
+                let send = match send_interval {
+                    Some(v) => SendMode::Batch(BatchMode::Auto {
+                        internal: v.into(),
+                        min_amount: Default::default(),
+                        max_delay: Default::default(),
+                    }),
+                    None => SendMode::Simple(sender),
+                };
+
                 let account = Account {
                     driver: account.driver(),
                     address: resolve_address(account.address()).await?,
                     network: Some(account.network()),
                     token: None, // Use default -- we don't yet support other tokens than GLM
-                    send: sender,
+                    send,
                     receive: receiver,
                 };
                 init_account(account).await?;

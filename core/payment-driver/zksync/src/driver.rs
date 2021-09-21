@@ -264,7 +264,7 @@ impl PaymentDriver for ZksyncDriver {
             DbNetwork::from_str(&network).map_err(GenericError::new)?,
             msg.token(),
         );
-        bus::register_account(self, &address, &network, &token, mode).await?;
+        bus::register_account(self, &address, &network, &token, mode, msg.batch()).await?;
 
         log::info!(
             "Initialised payment account. mode={:?}, address={}, driver={}, network={}, token={}",
