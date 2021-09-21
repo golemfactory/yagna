@@ -215,7 +215,7 @@ fn get_rpc_addr_from_env(network: Network) -> Result<String, GenericError> {
         )),
         Network::Rinkeby => Err(GenericError::new("Rinkeby not supported on Polygon driver")),
         Network::PolygonMainnet => Ok(std::env::var("POLYGON_MAINNET_GETH_ADDR")
-            .unwrap_or("http://51.38.53.113:8545".to_string())),
+            .unwrap_or("https://bor.golem.network".to_string())),
         Network::PolygonMumbai => Ok(std::env::var("POLYGON_MUMBAI_GETH_ADDR").unwrap_or(
             "https://polygon-mumbai.infura.io/v3/4dfe7a7afc6d4549b16490db5fd6358e".to_string(),
         )),
