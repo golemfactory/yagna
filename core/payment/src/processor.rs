@@ -13,7 +13,7 @@ use metrics::counter;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::time::Duration;
-use uuid::Uuid;
+
 use ya_client_model::payment::{
     Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
 };

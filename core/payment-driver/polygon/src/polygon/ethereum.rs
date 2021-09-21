@@ -93,7 +93,6 @@ pub async fn sign_faucet_tx(
     let data = eth_utils::contract_encode(&contract, CREATE_FAUCET_FUNCTION, ()).unwrap();
     let gas_price = client.eth().gas_price().await.map_err(GenericError::new)?;
 
-
     let tx = RawTransaction {
         nonce,
         to: Some(contract.address()),

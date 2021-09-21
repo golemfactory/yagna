@@ -1,10 +1,10 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 use bigdecimal::{BigDecimal, ToPrimitive};
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel::sql_types::{Text, Timestamp};
-use serde::{Deserialize, Serialize};
+
 use uuid::Uuid;
 use ya_client_model::payment::DocumentStatus;
 
@@ -138,9 +138,6 @@ pub fn resolve_invoices(
         )?;
     }
     {
-        use crate::schema::pay_activity;
-        use crate::schema::pay_activity::dsl;
-
         table! {
             sql_activity (id, owner_id) {
                 id -> Text,
@@ -300,7 +297,6 @@ impl<'c> BatchDao<'c> {
         since: DateTime<Utc>,
     ) -> DbResult<Vec<(String, BigDecimalField, BigDecimalField)>> {
         use crate::schema::pay_activity;
-        use crate::schema::pay_debit_note::dsl;
 
         #[derive(QueryableByName)]
         #[table_name = "pay_activity"]

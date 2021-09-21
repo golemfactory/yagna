@@ -1,15 +1,13 @@
 use std::collections::HashMap;
 
-use bigdecimal::{BigDecimal, ToPrimitive};
+use bigdecimal::BigDecimal;
 use diesel::prelude::*;
-use uuid::Uuid;
 
 use ya_core_model::payment::local::{
     DebitNotePayment, InvoicePayment, PaymentTitle, SchedulePayment,
 };
 use ya_core_model::NodeId;
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
-use ya_persistence::types::BigDecimalField;
 
 use crate::dao::{activity, agreement, allocation};
 use crate::error::{DbError, DbResult};
@@ -19,7 +17,7 @@ use crate::schema::pay_batch_order::dsl as odsl;
 use crate::schema::pay_batch_order_item::dsl as oidsl;
 use crate::schema::pay_debit_note::dsl as debit_note_dsl;
 use crate::schema::pay_invoice::dsl as invoice_dsl;
-use crate::schema::pay_order::columns::payment_platform;
+
 use crate::schema::pay_order::dsl;
 
 pub struct OrderDao<'c> {

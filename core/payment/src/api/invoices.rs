@@ -7,7 +7,7 @@ use std::time::Instant;
 // Workspace uses
 use metrics::{counter, timing};
 use ya_client_model::payment::*;
-use ya_core_model::payment::local::{SchedulePayment, BUS_ID as LOCAL_SERVICE};
+
 use ya_core_model::payment::public::{
     AcceptInvoice, AcceptRejectError, CancelError, CancelInvoice, SendError, SendInvoice,
     BUS_ID as PUBLIC_SERVICE,
@@ -18,7 +18,6 @@ use ya_persistence::executor::DbExecutor;
 use ya_persistence::types::Role;
 use ya_service_api_web::middleware::Identity;
 use ya_service_bus::timeout::IntoTimeoutFuture;
-use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
 use crate::dao::*;
