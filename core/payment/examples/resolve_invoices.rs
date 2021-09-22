@@ -1,6 +1,6 @@
 use anyhow::Context;
 use bigdecimal::{BigDecimal, ToPrimitive, Zero};
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use num_bigint::ToBigInt;
 use std::borrow::BorrowMut;
 use std::collections::{btree_map, hash_map};
@@ -40,7 +40,14 @@ enum Command {
         #[structopt(long)]
         order_id: String,
     },
-    ListDebitNotes {},
+    Run {
+        #[structopt(long)]
+        owner: NodeId,
+        #[structopt(long)]
+        payment_playform: String,
+        #[structopt(long)]
+        interval: Option<humantime::Duration>,
+    },
 }
 
 #[actix_rt::main]
@@ -70,7 +77,23 @@ async fn main() -> anyhow::Result<()> {
             incremental,
         } => generate(db, owner, payment_playform, dry_run, incremental).await?,
         Command::SendPayments { order_id } => send_payments(db, order_id).await?,
-        Command::ListDebitNotes {} => list_dn(db).await?,
+        Command::Run {
+            owner,
+            payment_playform,
+            interval,
+        } => {
+            if let Some(duration) = interval {
+                loop {
+                    tokio::time::delay_for(duration.into()).await;
+                    log::info!("sending payments for {} {}", owner, payment_playform);
+                    if let Err(e) = run(db.clone(), owner, payment_playform.clone()).await {
+                        log::error!("failed to process order: {:?}", e);
+                    }
+                }
+            } else {
+                run(db, owner, payment_playform).await?;
+            }
+        }
     }
     Ok(())
 }
@@ -381,6 +404,19 @@ async fn send_payments(db: DbExecutor, order_id: String) -> anyhow::Result<()> {
         db.as_dao::<BatchDao>()
             .batch_order_item_send(order_id.clone(), item.payee_addr, payment_order_id)
             .await?;
+    }
+    Ok(())
+}
+
+async fn run(db: DbExecutor, owner_id: NodeId, payment_platform: String) -> anyhow::Result<()> {
+    let ts = chrono::Utc::now() + chrono::Duration::days(-15);
+
+    if let Some(order_id) = db
+        .as_dao::<BatchDao>()
+        .resolve(owner_id, owner_id.to_string(), payment_platform, ts)
+        .await?
+    {
+        send_payments(db, order_id).await?;
     }
     Ok(())
 }

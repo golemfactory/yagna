@@ -24,6 +24,7 @@ use crate::dao::*;
 use crate::error::{DbError, Error};
 use crate::utils::provider::get_agreement_id;
 use crate::utils::*;
+use bigdecimal::BigDecimal;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -370,7 +371,10 @@ async fn accept_invoice(
         }
         Err(e) => return response::server_error(&e),
     };
-    let amount_to_pay = &invoice.amount - &agreement.total_amount_scheduled.0;
+    let mut amount_to_pay = &invoice.amount - &agreement.total_amount_accepted.0;
+    if amount_to_pay < BigDecimal::default() {
+        amount_to_pay = BigDecimal::default();
+    }
 
     log::trace!(
         "Querying DB for Allocation [{}] for Invoice [{}]",

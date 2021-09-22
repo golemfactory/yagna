@@ -162,7 +162,7 @@ pub fn resolve_invoices(
             total_amount_accepted: BigDecimalField,
             total_amount_scheduled: BigDecimalField,
             agreement_id: String,
-        };
+        }
 
         let v : Vec<Activity> = diesel::sql_query(r#"
                 SELECT a.id, pa.peer_id, pa.payee_addr, a.total_amount_accepted, a.total_amount_scheduled, pa.id agreement_id
@@ -195,7 +195,7 @@ pub fn resolve_invoices(
             match payments.entry(a.payee_addr.clone()) {
                 hash_map::Entry::Occupied(mut e) => {
                     let payment = e.get_mut();
-                    payment.amount += &total_amount;
+                    payment.amount += &amount_to_pay;
                     match payment.peer_obligation.entry(a.peer_id) {
                         hash_map::Entry::Occupied(mut e) => e.get_mut().push(obligation),
                         hash_map::Entry::Vacant(e) => {
@@ -235,8 +235,6 @@ pub fn resolve_invoices(
             .execute(conn)?;
     }
     {
-        use crate::schema::pay_batch_order_item::dsl as oidsl;
-
         for (payee_addr, payment) in payments {
             diesel::insert_into(oidsl::pay_batch_order_item)
                 .values((
@@ -268,8 +266,6 @@ pub fn get_batch_orders(
     ids: &[String],
     platform: &str,
 ) -> DbResult<Vec<DbBatchOrderItem>> {
-    use crate::schema::pay_batch_order_item::dsl as oidsl;
-
     let batch_orders: Vec<DbBatchOrderItem> = oidsl::pay_batch_order_item
         .filter(oidsl::driver_order_id.eq_any(ids))
         .load(conn)?;
@@ -304,7 +300,7 @@ impl<'c> BatchDao<'c> {
             id: String,
             total_amount_accepted: BigDecimalField,
             total_amount_scheduled: BigDecimalField,
-        };
+        }
 
         do_with_transaction(self.pool, move |conn| {
             let v : Vec<Activity> = diesel::sql_query(r#"
