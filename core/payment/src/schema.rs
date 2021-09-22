@@ -35,6 +35,8 @@ table! {
         total_amount_scheduled -> Text,
         total_amount_paid -> Text,
         app_session_id -> Nullable<Text>,
+        created_ts -> Nullable<Timestamp>,
+        updated_ts -> Nullable<Timestamp>,
     }
 }
 

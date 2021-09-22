@@ -39,6 +39,8 @@ pub enum PaymentCli {
     Status {
         #[structopt(flatten)]
         account: pay::AccountCli,
+        #[structopt(long)]
+        last: Option<humantime::Duration>,
     },
 
     /// Enter layer 2 (deposit funds to layer 2 network)
@@ -60,6 +62,12 @@ pub enum PaymentCli {
         to_address: Option<String>,
         #[structopt(long, help = "Optional amount to exit [default: <ALL_FUNDS>]")]
         amount: Option<String>,
+
+        #[structopt(long)]
+        check_only: bool,
+
+        #[structopt(long)]
+        fee_limit: Option<BigDecimal>,
     },
 
     Transfer {
@@ -116,7 +124,7 @@ impl PaymentCli {
                 init_account(account).await?;
                 Ok(CommandOutput::NoOutput)
             }
-            PaymentCli::Status { account } => {
+            PaymentCli::Status { account, last } => {
                 let address = resolve_address(account.address()).await?;
                 let status = bus::service(pay::BUS_ID)
                     .call(pay::GetStatus {
@@ -124,6 +132,9 @@ impl PaymentCli {
                         driver: account.driver(),
                         network: Some(account.network()),
                         token: None,
+                        since: last.map(|d| {
+                            chrono::Utc::now() - chrono::Duration::seconds(d.as_secs() as i64)
+                        }),
                     })
                     .await??;
                 if ctx.json_output {
@@ -141,28 +152,40 @@ impl PaymentCli {
                     ],
                     values: vec![
                         serde_json::json! {[
-                            format!("driver: {}", status.driver),
+                            format!("token: {}", status.token),
                             format!("{} {}", status.amount, status.token),
                             format!("{} {}", status.reserved, status.token),
+                            "requested",
+                            format!("{} {}", status.incoming.requested.total_amount - &status.incoming.accepted.total_amount, status.token),
+                            format!("{} {}", status.outgoing.requested.total_amount - &status.outgoing.accepted.total_amount, status.token),
+                        ]},
+                        serde_json::json! {[
+                            format!("driver: {}", status.driver),
+                            "",
+                            "",
                             "accepted",
-                            format!("{} {}", status.incoming.accepted.total_amount, status.token),
-                            format!("{} {}", status.outgoing.accepted.total_amount, status.token),
+                            format!("{} {}", status.incoming.accepted.total_amount-&status.incoming.confirmed.total_amount, status.token),
+                            format!("{} {}", status.outgoing.accepted.total_amount-&status.outgoing.confirmed.total_amount, status.token),
                         ]},
                         serde_json::json! {[
                             format!("network: {}", status.network),
                             "",
                             "",
-                            "confirmed",
+                            "paid",
                             format!("{} {}", status.incoming.confirmed.total_amount, status.token),
                             format!("{} {}", status.outgoing.confirmed.total_amount, status.token),
                         ]},
                         serde_json::json! {[
-                            format!("token: {}", status.token),
                             "",
                             "",
-                            "requested",
-                            format!("{} {}", status.incoming.requested.total_amount, status.token),
-                            format!("{} {}", status.outgoing.requested.total_amount, status.token),
+                            "",
+                            "overdue",
+                            if let Some(overdue) =status.incoming.overdue {
+                              format!("{} {}", overdue.total_amount, status.token)
+                            } else {
+                                Default::default()
+                            },
+                            String::default(),
                         ]},
                     ],
                 }
@@ -230,22 +253,39 @@ impl PaymentCli {
                 account,
                 to_address,
                 amount,
+                fee_limit,
+                check_only,
             } => {
                 let amount = match amount {
                     None => None,
                     Some(a) => Some(BigDecimal::from_str(&a)?),
                 };
-                CommandOutput::object(
-                    wallet::exit(
-                        resolve_address(account.address()).await?,
-                        to_address,
-                        amount,
-                        account.driver(),
-                        Some(account.network()),
-                        None,
+                if check_only {
+                    return CommandOutput::object(
+                        wallet::exit_fee(
+                            resolve_address(account.address()).await?,
+                            to_address,
+                            amount,
+                            account.driver(),
+                            Some(account.network()),
+                            None,
+                        )
+                        .await?,
+                    );
+                } else {
+                    CommandOutput::object(
+                        wallet::exit(
+                            resolve_address(account.address()).await?,
+                            to_address,
+                            amount,
+                            account.driver(),
+                            Some(account.network()),
+                            None,
+                            fee_limit,
+                        )
+                        .await?,
                     )
-                    .await?,
-                )
+                }
             }
             PaymentCli::Transfer {
                 account,
