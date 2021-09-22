@@ -11,7 +11,7 @@ use crate::market::negotiator::{
 
 pub struct PriceNego {}
 
-static PRICE_PROPERTY: &'static str = "/properties/golem/com/pricing/model/linear/coeffs";
+static PRICE_PROPERTY: &'static str = "/golem/com/pricing/model/linear/coeffs";
 
 impl PriceNego {
     pub fn new(_config: &AgreementExpirationNegotiatorConfig) -> anyhow::Result<Self> {
