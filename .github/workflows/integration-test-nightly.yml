@@ -1,4 +1,4 @@
-name: Goth nightly
+name: Goth integration tests (nightly)
 
 on:
   workflow_dispatch:

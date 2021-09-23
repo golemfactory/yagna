@@ -1,4 +1,4 @@
-name: Goth
+name: Goth integration tests
 
 on:
   push:
@@ -20,7 +20,7 @@ jobs:
         id: wait-for-build-ubu
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          checkName: "Build Binaries (ubuntu-latest)"
+          checkName: "Build binaries (x86-64) (ubuntu-latest)"
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           timeoutSeconds: 7200
 
@@ -77,7 +77,7 @@ jobs:
       - name: Download artifact
         uses: dawidd6/action-download-artifact@v2
         with:
-          workflow: binaries.yml
+          workflow: binaries-x86-64.yml
           commit: ${{github.event.pull_request.head.sha || github.sha}}
           workflow_conclusion: success
           name: 'Yagna Linux'
