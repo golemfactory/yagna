@@ -1015,9 +1015,9 @@ checksum = "e0dcbc35f504eb6fc275a6d20e4ebcda18cf50d40ba6fabff8c711fa16cb3b16"
 
 [[package]]
 name = "bytes"
-version = "1.0.1"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b700ce4376041dcd0a327fd0097c41095743c4c8af8887265942faf1100bd040"
+checksum = "c4872d67bab6358e59559027aa3b9157c53d9358c51423c17554809a8858e0f8"
 
 [[package]]
 name = "bytesize"
@@ -1031,7 +1031,7 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90706ba19e97b90786e19dc0d5e2abd80008d99d4c0c5d1ad0b5e72cec7c494d"
 dependencies = [
- "bytes 1.0.1",
+ "bytes 1.1.0",
 ]
 
 [[package]]
@@ -1774,6 +1774,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "env_logger"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a19187fea3ac7e84da7dacf48de0c45d63c6a76f9490dae389aead16c243fce3"
+dependencies = [
+ "log",
+]
+
+[[package]]
 name = "envy"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2255,7 +2264,7 @@ dependencies = [
  "anyhow",
  "digest 0.8.1",
  "dotenv",
- "env_logger",
+ "env_logger 0.7.1",
  "futures 0.3.13",
  "log",
  "rand 0.7.3",
@@ -2332,7 +2341,7 @@ dependencies = [
  "crossterm",
  "directories",
  "dotenv",
- "env_logger",
+ "env_logger 0.7.1",
  "futures 0.3.13",
  "lazy_static",
  "libc",
@@ -2403,7 +2412,7 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc018e188373e2777d0ef2467ebff62a08e66c3f5857b23c8fbec3018210dc00"
 dependencies = [
- "bytes 1.0.1",
+ "bytes 1.1.0",
  "fnv",
  "futures-core",
  "futures-sink",
@@ -2493,7 +2502,7 @@ version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7245cd7449cc792608c3c8a9eaf69bd4eabbabf802713748fd739c98b82f0747"
 dependencies = [
- "bytes 1.0.1",
+ "bytes 1.1.0",
  "fnv",
  "itoa",
 ]
@@ -2514,7 +2523,7 @@ version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5dfb77c123b4e2f72a2069aeae0b4b4949cc7e966df277813fc16347e7549737"
 dependencies = [
- "bytes 1.0.1",
+ "bytes 1.1.0",
  "http",
  "pin-project-lite 0.2.6",
 ]
@@ -2576,7 +2585,7 @@ version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8e946c2b1349055e0b72ae281b238baf1a3ea7307c7e9f9d64673bdd9c26ac7"
 dependencies = [
- "bytes 1.0.1",
+ "bytes 1.1.0",
  "futures-channel",
  "futures-core",
  "futures-util",
@@ -2631,7 +2640,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6183ddfa99b85da61a140bea0efc93fdf56ceaa041b37d553518030827f9905"
 dependencies = [
- "bytes 1.0.1",
+ "bytes 1.1.0",
  "hyper 0.14.4",
  "native-tls",
  "tokio 1.10.1",
@@ -2799,6 +2808,15 @@ name = "itertools"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "284f18f85651fe11e8a991b2adb42cb078325c996ed026d994719efcfca1d54b"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69ddb889f9d0d08a67338271fa9b62996bc788c7796a5c18cf057420aaed5eaf"
 dependencies = [
  "either",
 ]
@@ -4575,7 +4593,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "246e9f61b9bb77df069a947682be06e31ac43ea37862e244a69f177694ea6d22"
 dependencies = [
  "base64 0.13.0",
- "bytes 1.0.1",
+ "bytes 1.1.0",
  "encoding_rs",
  "futures-core",
  "futures-util",
@@ -4656,7 +4674,7 @@ version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "999508abb0ae792aabed2460c45b89106d97fe4adac593bdaef433c2605847b5"
 dependencies = [
- "bytes 1.0.1",
+ "bytes 1.1.0",
  "rustc-hex",
 ]
 
@@ -5797,7 +5815,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92036be488bb6594459f2e03b60e42df6f937fe6ca5c5ffdcb539c6b84dc40f5"
 dependencies = [
  "autocfg 1.0.1",
- "bytes 1.0.1",
+ "bytes 1.1.0",
  "libc",
  "memchr",
  "mio 0.7.11",
@@ -5951,7 +5969,7 @@ version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5143d049e85af7fbc36f5454d990e62c2df705b3589f123b71f441b6b59f443f"
 dependencies = [
- "bytes 1.0.1",
+ "bytes 1.1.0",
  "futures-core",
  "futures-io",
  "futures-sink",
@@ -6592,7 +6610,7 @@ dependencies = [
  "chrono",
  "diesel",
  "diesel_migrations",
- "env_logger",
+ "env_logger 0.7.1",
  "futures 0.3.13",
  "hex",
  "lazy_static",
@@ -6751,7 +6769,7 @@ dependencies = [
  "bigdecimal 0.2.0",
  "chrono",
  "dotenv",
- "env_logger",
+ "env_logger 0.7.1",
  "ethabi",
  "ethereum-types",
  "futures 0.3.13",
@@ -6792,7 +6810,7 @@ dependencies = [
  "derivative",
  "derive_more",
  "dotenv",
- "env_logger",
+ "env_logger 0.7.1",
  "flexi_logger",
  "futures 0.3.13",
  "graphene-sgx",
@@ -6859,8 +6877,8 @@ dependencies = [
  "diesel",
  "diesel_migrations",
  "dotenv",
- "env_logger",
- "ethsign 0.7.3",
+ "env_logger 0.7.1",
+ "ethsign 0.8.0",
  "futures 0.3.13",
  "log",
  "promptly",
@@ -6902,7 +6920,7 @@ dependencies = [
  "diesel",
  "diesel_migrations",
  "digest 0.8.1",
- "env_logger",
+ "env_logger 0.7.1",
  "futures 0.3.13",
  "humantime 2.1.0",
  "lazy_static",
@@ -6946,7 +6964,7 @@ dependencies = [
  "asnom",
  "bigdecimal 0.2.0",
  "chrono",
- "env_logger",
+ "env_logger 0.7.1",
  "log",
  "nom 2.2.1",
  "regex",
@@ -6985,7 +7003,9 @@ version = "0.2.0"
 dependencies = [
  "actix-rt",
  "anyhow",
- "env_logger",
+ "bytes 0.5.6",
+ "env_logger 0.7.1",
+ "ethsign 0.8.0",
  "futures 0.3.13",
  "lazy_static",
  "log",
@@ -6995,13 +7015,65 @@ dependencies = [
  "structopt",
  "thiserror",
  "tokio 0.2.25",
+ "tokio-util 0.3.1",
+ "url",
  "ya-core-model",
+ "ya-net-server",
+ "ya-relay-proto",
  "ya-sb-proto",
  "ya-sb-router",
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-bus",
  "ya-utils-networking",
+]
+
+[[package]]
+name = "ya-net-server"
+version = "0.1.0"
+source = "git+https://github.com/golemfactory/ya-relay.git?branch=mf/ya-integration#0a0ad0308e829611b43a3599841938e575d758d7"
+dependencies = [
+ "actix-rt",
+ "anyhow",
+ "bytes 0.5.6",
+ "chrono",
+ "derive_more",
+ "digest 0.9.0",
+ "env_logger 0.8.4",
+ "ethsign 0.8.0",
+ "futures 0.3.13",
+ "hex",
+ "itertools 0.10.1",
+ "log",
+ "rand 0.8.3",
+ "secp256k1 0.20.3",
+ "serde_json",
+ "sha2 0.9.3",
+ "sha3 0.9.1",
+ "structopt",
+ "thiserror",
+ "tokio 0.2.25",
+ "tokio-util 0.3.1",
+ "url",
+ "uuid",
+ "ya-client-model",
+ "ya-net-stack",
+ "ya-relay-proto",
+]
+
+[[package]]
+name = "ya-net-stack"
+version = "0.1.0"
+source = "git+https://github.com/golemfactory/ya-relay.git?branch=mf/ya-integration#0a0ad0308e829611b43a3599841938e575d758d7"
+dependencies = [
+ "derive_more",
+ "futures 0.3.13",
+ "log",
+ "managed",
+ "rand 0.8.3",
+ "smoltcp",
+ "thiserror",
+ "tokio 0.2.25",
 ]
 
 [[package]]
@@ -7017,7 +7089,7 @@ dependencies = [
  "diesel",
  "diesel_migrations",
  "dotenv",
- "env_logger",
+ "env_logger 0.7.1",
  "ethsign 0.7.3",
  "futures 0.3.13",
  "hex",
@@ -7160,12 +7232,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-relay-proto"
+version = "0.1.0"
+source = "git+https://github.com/golemfactory/ya-relay.git?branch=mf/ya-integration#0a0ad0308e829611b43a3599841938e575d758d7"
+dependencies = [
+ "bytes 0.5.6",
+ "derive_more",
+ "futures 0.3.13",
+ "prost",
+ "prost-build",
+ "thiserror",
+ "tokio 0.2.25",
+ "tokio-util 0.3.1",
+]
+
+[[package]]
 name = "ya-runtime-api"
 version = "0.4.0"
 dependencies = [
  "anyhow",
  "bytes 0.5.6",
- "env_logger",
+ "env_logger 0.7.1",
  "futures 0.3.13",
  "log",
  "prost",
@@ -7292,7 +7379,7 @@ dependencies = [
  "actix-web-httpauth",
  "anyhow",
  "awc",
- "env_logger",
+ "env_logger 0.7.1",
  "futures 0.3.13",
  "log",
  "serde",
@@ -7364,7 +7451,7 @@ dependencies = [
  "async-compression",
  "awc",
  "bytes 0.5.6",
- "env_logger",
+ "env_logger 0.7.1",
  "futures 0.3.13",
  "gftp",
  "globset",
@@ -7496,7 +7583,7 @@ dependencies = [
  "actix-web-actors",
  "anyhow",
  "bytes 0.5.6",
- "env_logger",
+ "env_logger 0.7.1",
  "futures 0.3.13",
  "hex",
  "ipnet",
@@ -7537,7 +7624,7 @@ dependencies = [
  "bigdecimal 0.2.0",
  "chrono",
  "dotenv",
- "env_logger",
+ "env_logger 0.7.1",
  "futures 0.3.13",
  "hex",
  "lazy_static",
