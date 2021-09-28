@@ -124,9 +124,12 @@ impl VpnSupervisor {
         network_id: &str,
     ) -> Result<BoxFuture<'a, Result<()>>> {
         self.owner(node_id, network_id)?;
-        self.networks.remove(network_id);
+        let vpn = self
+            .networks
+            .remove(network_id)
+            .ok_or_else(|| Error::NetNotFound)?;
         self.blueprints.remove(network_id);
-        self.forward(network_id, Shutdown {})
+        self.forward(vpn, Shutdown {})
     }
 
     pub fn remove_node<'a>(
@@ -137,12 +140,13 @@ impl VpnSupervisor {
     ) -> Result<BoxFuture<'a, Result<()>>> {
         self.owner(node_id, network_id)?;
         self.ownership.remove(node_id);
-        self.forward(network_id, RemoveNode { id })
+        let vpn = self.vpn(network_id)?;
+        self.forward(vpn, RemoveNode { id })
     }
 
     fn forward<'a, M, T>(
         &self,
-        network_id: &str,
+        vpn: Addr<Vpn>,
         msg: M,
     ) -> Result<BoxFuture<'a, <M as Message>::Result>>
     where
@@ -151,7 +155,6 @@ impl VpnSupervisor {
         <M as Message>::Result: Send + 'static,
         T: Send + 'static,
     {
-        let vpn = self.vpn(network_id)?;
         Ok(Box::pin(async move {
             match vpn.send(msg).await {
                 Ok(r) => r,
