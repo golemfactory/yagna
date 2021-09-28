@@ -7031,7 +7031,7 @@ dependencies = [
 [[package]]
 name = "ya-net-server"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?branch=mf/ya-integration#0a0ad0308e829611b43a3599841938e575d758d7"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=ecaf3d6#ecaf3d6fa3f03340ab3d7f0e1766ac7b464b42b7"
 dependencies = [
  "actix-rt",
  "anyhow",
@@ -7064,7 +7064,7 @@ dependencies = [
 [[package]]
 name = "ya-net-stack"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?branch=mf/ya-integration#0a0ad0308e829611b43a3599841938e575d758d7"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=ecaf3d6#ecaf3d6fa3f03340ab3d7f0e1766ac7b464b42b7"
 dependencies = [
  "derive_more",
  "futures 0.3.13",
@@ -7234,7 +7234,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-proto"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?branch=mf/ya-integration#0a0ad0308e829611b43a3599841938e575d758d7"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=ecaf3d6#ecaf3d6fa3f03340ab3d7f0e1766ac7b464b42b7"
 dependencies = [
  "bytes 0.5.6",
  "derive_more",
