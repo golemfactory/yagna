@@ -41,6 +41,21 @@ enum Commands {
 
     /// Show provider status
     Status,
+
+    #[structopt(setting = structopt::clap::AppSettings::Hidden)]
+    Complete(CompleteCommand),
+}
+
+#[derive(StructOpt)]
+/// Generates autocomplete script from given shell
+pub struct CompleteCommand {
+    /// Describes which shell to produce a completions file for
+    #[structopt(
+    parse(try_from_str),
+    possible_values = &clap::Shell::variants(),
+    case_insensitive = true
+    )]
+    shell: clap::Shell,
 }
 
 #[derive(StructOpt)]
@@ -75,6 +90,19 @@ async fn my_main() -> Result</*exit code*/ i32> {
             SettingsCommand::Show => settings_show::run().await,
         },
         Commands::Status => status::run().await,
+        Commands::Complete(complete) => {
+            let binary_name = clap::crate_name!();
+            println!(
+                "# generating {} completions for {}",
+                binary_name, complete.shell
+            );
+            StartupConfig::clap().gen_completions_to(
+                binary_name,
+                complete.shell,
+                &mut std::io::stdout(),
+            );
+            Ok(0)
+        }
     }
 }
 
