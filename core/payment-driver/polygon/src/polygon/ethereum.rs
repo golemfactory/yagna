@@ -137,12 +137,20 @@ pub async fn sign_transfer_tx(
     let mut gas_price = client.eth().gas_price().await.map_err(GenericError::new)?;
 
     if gas_price > U256::from(*GLM_POLYGON_MAX_GAS_PRICE) {
-        log::warn!("Gas price higher than maximum {}/{}. Continuing with lower gas price...", gas_price, *GLM_POLYGON_MAX_GAS_PRICE);
+        log::warn!(
+            "Gas price higher than maximum {}/{}. Continuing with lower gas price...",
+            gas_price,
+            *GLM_POLYGON_MAX_GAS_PRICE
+        );
         gas_price = U256::from(*GLM_POLYGON_MAX_GAS_PRICE);
     };
 
     if gas_price < U256::from(*GLM_POLYGON_MIN_GAS_PRICE) {
-        log::info!("Gas price lower than mininimum {}/{}. Continuing with higher gas price...", gas_price, *GLM_POLYGON_MIN_GAS_PRICE);
+        log::info!(
+            "Gas price lower than mininimum {}/{}. Continuing with higher gas price...",
+            gas_price,
+            *GLM_POLYGON_MIN_GAS_PRICE
+        );
         gas_price = U256::from(*GLM_POLYGON_MIN_GAS_PRICE);
     }
 
