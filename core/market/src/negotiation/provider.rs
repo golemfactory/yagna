@@ -2,10 +2,10 @@ use chrono::Utc;
 use futures::stream::StreamExt;
 use metrics::counter;
 use std::sync::Arc;
+use std::time::Instant;
 
 use ya_client::model::market::{event::ProviderEvent, NewProposal, Reason};
 use ya_core_model::NodeId;
-use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::LogErr;
 
@@ -13,6 +13,7 @@ use crate::db::{
     dao::{AgreementDao, NegotiationEventsDao, ProposalDao, SaveAgreementError},
     model::{Agreement, AgreementId, AgreementState, AppSessionId},
     model::{Issuer, Offer, Owner, Proposal, ProposalId, SubscriptionId},
+    DbMixedExecutor,
 };
 use crate::matcher::store::SubscriptionStore;
 use crate::protocol::negotiation::{error::*, messages::*, provider::NegotiationApi};
@@ -25,7 +26,6 @@ use crate::db::dao::AgreementDaoError;
 use crate::negotiation::common::validate_transition;
 use crate::negotiation::notifier::NotifierError;
 use crate::utils::display::EnableDisplay;
-use std::time::Instant;
 
 #[derive(Clone, Debug, Eq, PartialEq, derive_more::Display)]
 pub enum ApprovalResult {
@@ -44,7 +44,7 @@ pub struct ProviderBroker {
 
 impl ProviderBroker {
     pub fn new(
-        db: DbExecutor,
+        db: DbMixedExecutor,
         store: SubscriptionStore,
         session_notifier: EventNotifier<AppSessionId>,
         config: Arc<Config>,

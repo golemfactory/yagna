@@ -57,11 +57,11 @@ async fn test_agreement() {
 
     clean(db.clone(), &db_config()).await;
     assert_eq!(
-        <PoolType as TestingDao<Agreement>>::exists(&db.clone().pool, valid_agreement.id).await,
+        <PoolType as TestingDao<Agreement>>::exists(&db.disk_db.pool, valid_agreement.id).await,
         true
     );
     assert_eq!(
-        <PoolType as TestingDao<Agreement>>::exists(&db.clone().pool, expired_agreement.id).await,
+        <PoolType as TestingDao<Agreement>>::exists(&db.disk_db.pool, expired_agreement.id).await,
         false
     );
 }
@@ -84,11 +84,11 @@ async fn test_demand() {
     demand_dao.insert(&expired_demand).await.unwrap();
     clean(db.clone(), &db_config()).await;
     assert_eq!(
-        <PoolType as TestingDao<Demand>>::exists(&db.clone().pool, valid_demand.id).await,
+        <PoolType as TestingDao<Demand>>::exists(&db.disk_db.pool, valid_demand.id).await,
         true
     );
     assert_eq!(
-        <PoolType as TestingDao<Demand>>::exists(&db.clone().pool, expired_demand.id).await,
+        <PoolType as TestingDao<Demand>>::exists(&db.disk_db.pool, expired_demand.id).await,
         false
     );
 }
@@ -118,11 +118,11 @@ async fn test_offer() {
         .unwrap();
     clean(db.clone(), &db_config()).await;
     assert_eq!(
-        <PoolType as TestingDao<Offer>>::exists(&db.clone().pool, valid_offer.id).await,
+        <PoolType as TestingDao<Offer>>::exists(&db.disk_db.pool, valid_offer.id).await,
         true
     );
     assert_eq!(
-        <PoolType as TestingDao<Offer>>::exists(&db.clone().pool, expired_offer.id).await,
+        <PoolType as TestingDao<Offer>>::exists(&db.disk_db.pool, expired_offer.id).await,
         false
     );
 }
@@ -134,19 +134,19 @@ async fn test_events() {
     let db = MarketsNetwork::new(None).await.init_database("testnode");
     let valid_event = generate_event(1, future());
     let expired_event = generate_event(2, past());
-    <PoolType as TestingDao<TestMarketEvent>>::raw_insert(&db.clone().pool, valid_event.clone())
+    <PoolType as TestingDao<TestMarketEvent>>::raw_insert(&db.disk_db.pool, valid_event.clone())
         .await
         .unwrap();
-    <PoolType as TestingDao<TestMarketEvent>>::raw_insert(&db.clone().pool, expired_event.clone())
+    <PoolType as TestingDao<TestMarketEvent>>::raw_insert(&db.disk_db.pool, expired_event.clone())
         .await
         .unwrap();
     clean(db.clone(), &db_config()).await;
     assert_eq!(
-        <PoolType as TestingDao<TestMarketEvent>>::exists(&db.clone().pool, valid_event.id).await,
+        <PoolType as TestingDao<TestMarketEvent>>::exists(&db.disk_db.pool, valid_event.id).await,
         true
     );
     assert_eq!(
-        <PoolType as TestingDao<TestMarketEvent>>::exists(&db.clone().pool, expired_event.id).await,
+        <PoolType as TestingDao<TestMarketEvent>>::exists(&db.disk_db.pool, expired_event.id).await,
         false
     );
 }
@@ -158,11 +158,11 @@ async fn test_proposal() {
     let db = MarketsNetwork::new(None).await.init_database("testnode");
     let valid_negotiation = generate_negotiation(None);
     let expired_negotiation = generate_negotiation(None);
-    <PoolType as TestingDao<Negotiation>>::raw_insert(&db.clone().pool, valid_negotiation.clone())
+    <PoolType as TestingDao<Negotiation>>::raw_insert(&db.disk_db.pool, valid_negotiation.clone())
         .await
         .unwrap();
     <PoolType as TestingDao<Negotiation>>::raw_insert(
-        &db.clone().pool,
+        &db.disk_db.pool,
         expired_negotiation.clone(),
     )
     .await
@@ -177,7 +177,7 @@ async fn test_proposal() {
         } else {
             generate_proposal(1, past(), valid_negotiation.id.clone())
         };
-        <PoolType as TestingDao<DbProposal>>::raw_insert(&db.clone().pool, proposal.clone())
+        <PoolType as TestingDao<DbProposal>>::raw_insert(&db.disk_db.pool, proposal.clone())
             .await
             .unwrap();
         valid_proposals.push(proposal.clone());
@@ -185,30 +185,30 @@ async fn test_proposal() {
 
     for i in 0..10 {
         let proposal = generate_proposal(i * 10, past(), expired_negotiation.id.clone());
-        <PoolType as TestingDao<DbProposal>>::raw_insert(&db.clone().pool, proposal.clone())
+        <PoolType as TestingDao<DbProposal>>::raw_insert(&db.disk_db.pool, proposal.clone())
             .await
             .unwrap();
         expired_proposals.push(proposal.clone());
     }
     clean(db.clone(), &db_config()).await;
     assert_eq!(
-        <PoolType as TestingDao<Negotiation>>::exists(&db.clone().pool, valid_negotiation.id).await,
+        <PoolType as TestingDao<Negotiation>>::exists(&db.disk_db.pool, valid_negotiation.id).await,
         true
     );
     for proposal in valid_proposals.into_iter() {
         assert_eq!(
-            <PoolType as TestingDao<DbProposal>>::exists(&db.clone().pool, proposal.id).await,
+            <PoolType as TestingDao<DbProposal>>::exists(&db.disk_db.pool, proposal.id).await,
             true
         );
     }
     assert_eq!(
-        <PoolType as TestingDao<Negotiation>>::exists(&db.clone().pool, expired_negotiation.id)
+        <PoolType as TestingDao<Negotiation>>::exists(&db.disk_db.pool, expired_negotiation.id)
             .await,
         false
     );
     for proposal in expired_proposals.into_iter() {
         assert_eq!(
-            <PoolType as TestingDao<DbProposal>>::exists(&db.clone().pool, proposal.id).await,
+            <PoolType as TestingDao<DbProposal>>::exists(&db.disk_db.pool, proposal.id).await,
             false
         );
     }
@@ -225,13 +225,13 @@ async fn test_proposal_lotsa_negotiations() {
     for i in 1..6500 {
         let expired_negotiation = generate_negotiation(None);
         <PoolType as TestingDao<Negotiation>>::raw_insert(
-            &db.clone().pool,
+            &db.disk_db.pool,
             expired_negotiation.clone(),
         )
         .await
         .unwrap();
         let proposal = generate_proposal(i, past(), expired_negotiation.id.clone());
-        <PoolType as TestingDao<DbProposal>>::raw_insert(&db.clone().pool, proposal.clone())
+        <PoolType as TestingDao<DbProposal>>::raw_insert(&db.disk_db.pool, proposal.clone())
             .await
             .unwrap();
         expired_negotiations.push(expired_negotiation);
@@ -239,7 +239,7 @@ async fn test_proposal_lotsa_negotiations() {
     clean(db.clone(), &db_config()).await;
     for n in expired_negotiations {
         assert_eq!(
-            <PoolType as TestingDao<Negotiation>>::exists(&db.clone().pool, n.id).await,
+            <PoolType as TestingDao<Negotiation>>::exists(&db.disk_db.pool, n.id).await,
             false
         );
     }

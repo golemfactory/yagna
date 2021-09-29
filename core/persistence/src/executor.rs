@@ -117,6 +117,10 @@ impl DbExecutor {
         Self::new(db.to_string_lossy())
     }
 
+    pub fn in_memory() -> Result<Self, Error> {
+        Self::new(":memory:")
+    }
+
     fn conn(&self) -> Result<ConnType, Error> {
         Ok(self.pool.get()?)
     }
@@ -137,6 +141,8 @@ impl DbExecutor {
         c.batch_execute("PRAGMA foreign_keys = OFF;")?;
         migration(&c, &mut std::io::stderr())?;
         c.batch_execute("PRAGMA foreign_keys = ON;")?;
+
+        c.execute("select * from market_demand;")?;
         Ok(())
     }
 

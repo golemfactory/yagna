@@ -28,6 +28,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
 use ya_service_api_web::middleware::Identity;
 
+use crate::db::DbMixedExecutor;
 use ya_service_api_web::scope::ExtendableScope;
 
 pub mod agreement;
@@ -58,11 +59,13 @@ pub enum MarketInitError {
     Migration(#[from] anyhow::Error),
     #[error("Failed to initialize config. Error: {0}.")]
     Config(#[from] structopt::clap::Error),
+    #[error("Failed to initialize in memory market database. Error: {0}.")]
+    InMemory(anyhow::Error),
 }
 
 /// Structure connecting all market objects.
 pub struct MarketService {
-    pub db: DbExecutor,
+    pub db: DbMixedExecutor,
     pub matcher: Matcher,
     pub provider_engine: ProviderBroker,
     pub requestor_engine: RequestorBroker,
@@ -81,7 +84,12 @@ impl MarketService {
         counter!("market.demands.unsubscribed", 0);
         counter!("market.demands.expired", 0);
 
+        let ram_db = DbExecutor::in_memory().map_err(|e| MarketInitError::InMemory(e.into()))?;
+
+        ram_db.apply_migration(crate::db::migrations::run_with_output)?;
         db.apply_migration(crate::db::migrations::run_with_output)?;
+
+        let db = DbMixedExecutor::new(db.clone(), ram_db);
 
         let store = SubscriptionStore::new(db.clone(), config.clone());
         let (matcher, listeners) = Matcher::new(store.clone(), identity_api, config.clone())?;

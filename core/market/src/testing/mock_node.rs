@@ -23,6 +23,7 @@ use super::{store::SubscriptionStore, Matcher};
 use crate::config::{Config, DiscoveryConfig};
 use crate::db::dao::ProposalDao;
 use crate::db::model::{Demand, Offer, Proposal, ProposalId, SubscriptionId};
+use crate::db::DbMixedExecutor;
 use crate::identity::IdentityApi;
 use crate::matcher::error::{DemandError, QueryOfferError};
 use crate::matcher::EventsListeners;
@@ -470,11 +471,18 @@ impl MarketsNetwork {
         db
     }
 
-    pub fn init_database(&self, name: &str) -> DbExecutor {
-        let db = self.create_database(name);
-        db.apply_migration(crate::db::migrations::run_with_output)
+    pub fn init_database(&self, name: &str) -> DbMixedExecutor {
+        let disk_db = self.create_database(name);
+        let ram_db = DbExecutor::in_memory().unwrap();
+
+        disk_db
+            .apply_migration(crate::db::migrations::run_with_output)
             .unwrap();
-        db
+        ram_db
+            .apply_migration(crate::db::migrations::run_with_output)
+            .unwrap();
+
+        DbMixedExecutor::new(disk_db.clone(), ram_db)
     }
 
     fn instance_dir(&self, name: &str) -> PathBuf {
