@@ -748,3 +748,32 @@ impl ArbiterExt for Arbiter {
         Box::pin(rx_fut)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::network::VpnSupervisor;
+    use ya_client_model::net::NewNetwork;
+    use ya_core_model::NodeId;
+
+    #[actix_rt::test]
+    async fn create_remove_network() -> anyhow::Result<()> {
+        let node_id = NodeId::default();
+
+        let mut supervisor = VpnSupervisor::default();
+        let network = supervisor
+            .create_network(
+                &node_id,
+                NewNetwork {
+                    ip: "10.0.0.0".to_string(),
+                    mask: None,
+                    gateway: None,
+                },
+            )
+            .await?;
+
+        supervisor.get_network(&node_id, &network.id)?;
+        supervisor.remove_network(&node_id, &network.id)?;
+
+        Ok(())
+    }
+}
