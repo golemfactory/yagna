@@ -6,4 +6,4 @@ mod service;
 
 pub use api::*;
 #[cfg(any(feature = "service", test))]
-pub use service::Net;
+pub use service::{start_network, Net};
