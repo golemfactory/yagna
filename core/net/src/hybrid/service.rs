@@ -64,12 +64,12 @@ pub struct Net;
 impl Net {
     pub async fn gsb<Context>(_: Context) -> anyhow::Result<()> {
         let (default_id, ids) = crate::service::identities().await?;
-        spawn_client(default_id, ids).await?;
+        start_network(default_id, ids).await?;
         Ok(())
     }
 }
 
-async fn spawn_client(default_id: NodeId, ids: Vec<NodeId>) -> anyhow::Result<()> {
+pub async fn start_network(default_id: NodeId, ids: Vec<NodeId>) -> anyhow::Result<()> {
     let url = Url::parse(&format!("udp://{}", relay_addr().await?))?;
     let provider = IdentityCryptoProvider::new(default_id);
 

@@ -6,7 +6,7 @@ mod service;
 
 pub use api::*;
 #[cfg(any(feature = "service", test))]
-pub use service::Net;
+pub use service::{bind_remote, Net};
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};

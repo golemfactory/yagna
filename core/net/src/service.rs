@@ -41,7 +41,7 @@ pub(crate) fn parse_from_addr(from_addr: &str) -> anyhow::Result<(NodeId, String
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ya_core_model::net::{from, RemoteEndpoint};
+    use ya_core_model::net::RemoteEndpoint;
 
     #[test]
     fn parse_generated_from_to_service_should_pass() {
