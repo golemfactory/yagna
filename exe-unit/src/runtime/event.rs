@@ -17,35 +17,39 @@ use ya_runtime_api::server::{ProcessStatus, RuntimeStatus};
 
 #[derive(Default, Clone)]
 pub(crate) struct EventMonitor {
-    next_process: Arc<Mutex<Option<Channel>>>,
-    processes: Arc<Mutex<HashMap<u64, Channel>>>,
-    fallback: Arc<Mutex<Option<Channel>>>,
+    inner: Arc<Mutex<Inner>>,
+}
+
+#[derive(Default)]
+struct Inner {
+    next_process: Option<Channel>,
+    processes: HashMap<u64, Channel>,
+    fallback: Option<Channel>,
 }
 
 impl EventMonitor {
     pub fn any_process<'a>(&mut self, ctx: CommandContext) -> Handle<'a> {
-        let mut inner = self.fallback.lock().unwrap();
-        inner.replace(Channel::fallback(ctx.clone()));
+        let mut inner = self.inner.lock().unwrap();
+        inner.fallback.replace(Channel::fallback(ctx.clone()));
 
         Handle::Fallback {}
     }
 
     pub fn next_process<'a>(&mut self, ctx: CommandContext) -> Handle<'a> {
+        let mut inner = self.inner.lock().unwrap();
         let channel = Channel::new(ctx, Default::default());
         let handle = Handle::process(&self, &channel);
-        self.next_process.lock().unwrap().replace(channel);
+        inner.next_process.replace(channel);
 
         handle
     }
 
     #[allow(unused)]
     pub fn process<'a>(&mut self, ctx: CommandContext, pid: u64) -> Handle<'a> {
-        let channel = Channel::new(ctx, Arc::new(Mutex::new(Some(pid))));
-        let done_rx = channel.done_rx().unwrap();
-
-        let mut processes = self.processes.lock().unwrap();
+        let mut inner = self.inner.lock().unwrap();
+        let channel = Channel::new(ctx, pid);
         let handle = Handle::process(&self, &channel);
-        processes.insert(pid, channel);
+        inner.processes.insert(pid, channel);
 
         handle
     }
@@ -55,20 +59,21 @@ impl ya_runtime_api::server::RuntimeHandler for EventMonitor {
     fn on_process_status<'a>(&self, status: ProcessStatus) -> BoxFuture<'a, ()> {
         let running = status.running;
         let (mut ctx, done_tx) = {
-            let mut next_process = self.next_process.lock().unwrap();
-            let mut processes = self.processes.lock().unwrap();
-            let mut fallback = self.fallback.lock().unwrap();
+            let mut inner = self.inner.lock().unwrap();
 
-            if !processes.contains_key(&status.pid) {
-                if let Some(channel) = next_process.take() {
-                    channel.pid.lock().unwrap().replace(status.pid);
-                    processes.insert(status.pid, channel);
+            if !inner.processes.contains_key(&status.pid) {
+                if let Some(channel) = inner.next_process.take() {
+                    channel.waker.lock().unwrap().pid.replace(status.pid);
+                    inner.processes.insert(status.pid, channel);
                 }
             }
 
-            let entry = match processes.get_mut(&status.pid).or(fallback.as_mut()) {
+            let entry = match inner.processes.get_mut(&status.pid) {
                 Some(entry) => entry,
-                None => return futures::future::ready(()).boxed(),
+                None => match inner.fallback.as_mut() {
+                    Some(entry) => entry,
+                    None => return futures::future::ready(()).boxed(),
+                },
             };
 
             let done_tx = running.not().then(|| entry.done_tx()).flatten();
@@ -102,8 +107,8 @@ impl ya_runtime_api::server::RuntimeHandler for EventMonitor {
         use ya_runtime_api::server::proto::response::runtime_status::Kind;
 
         let mut ctx = {
-            let channel = self.fallback.lock().unwrap();
-            match channel.as_ref() {
+            let inner = self.inner.lock().unwrap();
+            match inner.fallback.as_ref() {
                 Some(c) => c.ctx.clone(),
                 None => return futures::future::ready(()).boxed(),
             }
@@ -140,17 +145,21 @@ pub(crate) enum Handle<'a> {
     Process {
         monitor: EventMonitor,
         done_rx: BoxFuture<'a, Result<i32, ()>>,
-        pid: Arc<Mutex<Option<u64>>>,
-        waker: Arc<Mutex<Option<Waker>>>,
+        waker: Arc<Mutex<ProcessWaker>>,
     },
     Fallback {},
+}
+
+#[derive(Default)]
+pub(crate) struct ProcessWaker {
+    pid: Option<u64>,
+    waker: Option<Waker>,
 }
 
 impl<'a> Handle<'a> {
     fn process(monitor: &EventMonitor, channel: &Channel) -> Self {
         Handle::Process {
             monitor: monitor.clone(),
-            pid: channel.pid.clone(),
             done_rx: channel.done_rx().unwrap(),
             waker: channel.waker.clone(),
         }
@@ -160,10 +169,11 @@ impl<'a> Handle<'a> {
 impl<'a> Drop for Handle<'a> {
     fn drop(&mut self) {
         match self {
-            Handle::Process { monitor, pid, .. } => {
-                if let Some(pid) = { pid.lock().unwrap().clone() } {
-                    monitor.processes.lock().unwrap().remove(&pid);
-                    monitor.next_process.lock().unwrap().take();
+            Handle::Process { monitor, waker, .. } => {
+                if let Some(pid) = { waker.lock().unwrap().pid } {
+                    let mut inner = monitor.inner.lock().unwrap();
+                    inner.processes.remove(&pid);
+                    inner.next_process.take();
                 }
             }
             _ => {
@@ -184,13 +194,13 @@ impl<'a> Future for Handle<'a> {
                 Poll::Pending => {
                     let mut guard = waker.lock().unwrap();
 
-                    if let Some(waker) = guard.as_ref() {
+                    if let Some(waker) = &guard.waker {
                         let cx_waker = cx.waker();
                         if !waker.will_wake(cx_waker) {
-                            guard.replace(cx_waker.clone());
+                            guard.waker.replace(cx_waker.clone());
                         }
                     } else {
-                        guard.replace(cx.waker().clone());
+                        guard.waker.replace(cx.waker().clone());
                     }
 
                     Poll::Pending
@@ -204,17 +214,18 @@ impl<'a> Future for Handle<'a> {
 pub(crate) struct Channel {
     ctx: CommandContext,
     done: Option<DoneChannel>,
-    pid: Arc<Mutex<Option<u64>>>,
-    waker: Arc<Mutex<Option<Waker>>>,
+    waker: Arc<Mutex<ProcessWaker>>,
 }
 
 impl Channel {
-    fn new(ctx: CommandContext, pid: Arc<Mutex<Option<u64>>>) -> Self {
+    fn new(ctx: CommandContext, pid: u64) -> Self {
         Channel {
             ctx,
             done: Some(Default::default()),
-            pid,
-            waker: Default::default(),
+            waker: Arc::new(Mutex::new(ProcessWaker {
+                pid: Some(pid),
+                waker: None,
+            })),
         }
     }
 
@@ -222,14 +233,13 @@ impl Channel {
         Channel {
             ctx,
             done: None,
-            pid: Default::default(),
             waker: Default::default(),
         }
     }
 
     fn wake(&self) {
         let guard = self.waker.lock().unwrap();
-        if let Some(waker) = guard.as_ref() {
+        if let Some(waker) = &guard.waker {
             waker.wake_by_ref();
         }
     }
