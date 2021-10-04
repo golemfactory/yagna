@@ -16,6 +16,7 @@ use futures::channel::mpsc;
 use futures::stream::LocalBoxStream;
 use futures::{FutureExt, SinkExt, Stream, StreamExt, TryStreamExt};
 use lazy_static::lazy_static;
+use tokio::time::{self, Duration};
 use tokio_util::codec::{Decoder, Encoder};
 use url::Url;
 
@@ -144,6 +145,16 @@ pub async fn start_network(default_id: NodeId, ids: Vec<NodeId>) -> anyhow::Resu
             }
         }
     }));
+
+    // Keep server connection alive by pinging every 30 seconds.
+    let ping_client = client.clone();
+    tokio::task::spawn_local(async move {
+        let mut interval = time::interval(Duration::new(30, 0));
+        loop {
+            interval.tick().await;
+            ping_client.server_session().await.unwrap().ping().await.unwrap();
+        }
+    });
 
     Ok(())
 }
