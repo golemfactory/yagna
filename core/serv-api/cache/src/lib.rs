@@ -100,9 +100,17 @@ where
     }
 
     pub fn get(&self, key: &K) -> Option<V> {
-        self.map
-            .get(key)
-            .and_then(|entry| (entry.0 + self.ttl >= SystemTime::now()).then(|| entry.1.clone()))
+        let now = SystemTime::now();
+        match self.map.get(key) {
+            Some(entry) => {
+                if entry.0 + self.ttl < now {
+                    None
+                } else {
+                    Some(entry.1.clone())
+                }
+            }
+            None => None,
+        }
     }
 
     pub fn insert(&mut self, key: K, value: V) {
