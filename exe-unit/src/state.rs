@@ -25,7 +25,7 @@ use ya_utils_networking::vpn::error::Error as VpnError;
 use std::str::FromStr;
 pub use ya_client_model::activity::activity_state::{State, StatePair};
 
-fn invalid_state_err_msg(state_pair: StatePair) -> String {
+fn invalid_state_err_msg(state_pair: &StatePair) -> String {
     match state_pair {
         StatePair(State::Initialized, None) => {
             format!("Activity is initialized - deploy() command is expected now")
