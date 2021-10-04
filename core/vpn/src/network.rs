@@ -409,7 +409,10 @@ impl Handler<AddNode> for Vpn {
 
     fn handle(&mut self, msg: AddNode, _: &mut Self::Context) -> Self::Result {
         let ip = to_ip(&msg.address)?;
-        self.vpn.add_node(ip, &msg.id, gsb_remote_url)?;
+        match self.vpn.add_node(ip, &msg.id, gsb_remote_url) {
+            Ok(_) | Err(Error::IpAddrTaken(_)) => {}
+            Err(err) => return Err(err),
+        }
 
         let vpn_id = self.vpn.id().clone();
         let futs = self
