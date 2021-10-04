@@ -8,12 +8,14 @@ use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicBool, AtomicUsize};
+use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 
 use bytes::BytesMut;
 use futures::channel::mpsc;
 use futures::stream::LocalBoxStream;
 use futures::{FutureExt, SinkExt, Stream, StreamExt, TryStreamExt};
+use lazy_static::lazy_static;
 use tokio_util::codec::{Decoder, Encoder};
 use url::Url;
 
@@ -43,7 +45,10 @@ thread_local! {
     pub(crate) static CLIENT: RefCell<Option<Client>> = Default::default();
     pub(crate) static BCAST: BCastService = Default::default();
     pub(crate) static BCAST_HANDLERS: SharedMap<Rc<str>, Rc<RefCell<BCastHandler>>> = Default::default();
-    pub(crate) static BCAST_SENDER: RefCell<Option<NetSender>> = Default::default();
+}
+
+lazy_static! {
+    pub(crate) static ref BCAST_SENDER: Arc<Mutex<Option<NetSender>>> = Default::default();
 }
 
 async fn relay_addr() -> std::io::Result<SocketAddr> {
@@ -80,15 +85,12 @@ pub async fn start_network(default_id: NodeId, ids: Vec<NodeId>) -> anyhow::Resu
         .connect()
         .build()
         .await?;
-
     let (btx, brx) = mpsc::channel(1);
 
     CLIENT.with(|c| {
         c.borrow_mut().replace(client.clone());
     });
-    BCAST_SENDER.with(|s| {
-        s.borrow_mut().replace(btx);
-    });
+    BCAST_SENDER.lock().unwrap().replace(btx);
 
     let receiver = client.forward_receiver().await.unwrap();
     let services = ids.iter().map(|id| net_service(id)).collect();
