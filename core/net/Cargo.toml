@@ -7,7 +7,7 @@ edition = "2018"
 [features]
 default = []
 service = []
-hybrid = ["ya-net-server", "ya-relay-proto", "ya-sb-proto", "bytes", "ethsign", "tokio-util", "url"]
+hybrid-net = ["ya-net-server", "ya-relay-proto", "ya-sb-proto", "bytes", "ethsign", "tokio-util", "url"]
 
 [dependencies]
 ya-core-model = { version = "^0.4", features=["net", "identity"] }
