@@ -28,7 +28,9 @@ where
     S: ToString + 'static,
 {
     let mut sender = BCAST_SENDER
-        .with(|s| s.borrow().clone())
+        .lock()
+        .unwrap()
+        .clone()
         .ok_or_else(|| Error::Closed("network not initialized".to_string()))?;
 
     let request = GsbMessage::BroadcastRequest(ya_sb_proto::BroadcastRequest {
