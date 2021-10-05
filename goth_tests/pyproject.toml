@@ -35,3 +35,4 @@ goth-assets = "python -m goth create-assets assets"
 goth-tests = "pytest -svx ."
 provider-tests = "pytest -svx ./domain/ya-provider"
 typecheck = "mypy ."
+
