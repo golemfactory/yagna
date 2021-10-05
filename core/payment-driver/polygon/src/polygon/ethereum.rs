@@ -64,7 +64,7 @@ pub async fn get_next_nonce_pending(address: H160, network: Network) -> Result<U
     let client = get_client(network)?;
     let nonce = client
         .eth()
-        .transaction_count(address, Some(web3::types::BlockNumber::Latest))
+        .transaction_count(address, Some(web3::types::BlockNumber::Pending))
         .await
         .map_err(GenericError::new)?;
     Ok(nonce)
