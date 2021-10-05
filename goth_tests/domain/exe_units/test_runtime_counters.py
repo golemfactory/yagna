@@ -108,6 +108,11 @@ async def test_custom_runtime_counter(
         await requestor.destroy_activity(activity_id)
         await provider.wait_for_exeunit_finished()
 
+        logger.info("waiting for last debit note to be send")
+        await provider.provider_agent.wait_for_log(r"(.*)Sending debit note(.*)")
+        logger.info("waiting for last debit note to be received")
+        await requestor.container.logs.wait_for_entry(r"(.*)DebitNote \[(.+)\] received from node(.*)")
+
         debit_notes = await requestor.api.payment.get_debit_notes()
         last_debit_note = debit_notes[-1]
         logger.info("last debit note: %r", last_debit_note)
