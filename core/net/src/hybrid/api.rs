@@ -1,5 +1,4 @@
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 use bytes::BytesMut;
 use futures::SinkExt;
@@ -65,19 +64,26 @@ where
                 <SendBroadcastMessage<M> as RpcMessage>::Error,
             >,
         > + 'static,
-    F: FnMut(String, SendBroadcastMessage<M>) -> T + 'static,
+    F: FnMut(String, SendBroadcastMessage<M>) -> T + Send + 'static,
 {
-    let address_rc: Rc<str> = broadcast_address.into();
-    let handler_rc = Rc::new(RefCell::new(handler));
+    let address = broadcast_address.to_string();
+    let handler_rc = Arc::new(Mutex::new(handler));
 
-    let subscription = M::into_subscribe_msg(address_rc.to_string());
+    let subscription = M::into_subscribe_msg(address.clone());
+
+    log::trace!(
+        "binding broadcast handler for topic: {}",
+        subscription.topic()
+    );
+
     let handler = move |caller: String, bytes: &[u8]| {
         match serialization::from_slice::<M>(bytes) {
             Ok(m) => {
                 let m = SendBroadcastMessage::new(m);
-                let h = handler_rc.clone();
+                let handler = handler_rc.clone();
                 tokio::task::spawn_local(async move {
-                    let _ = (*(h.borrow_mut()))(caller, m).await;
+                    let mut h = handler.lock().unwrap();
+                    let _ = (*(h))(caller, m).await;
                 });
             }
             Err(e) => {
@@ -86,8 +92,11 @@ where
         };
     };
 
-    BCAST.with(|b| b.add(subscription));
-    BCAST_HANDLERS.with(|h| h.insert(address_rc, Rc::new(RefCell::new(Box::new(handler)))));
+    BCAST.add(subscription);
+    BCAST_HANDLERS
+        .lock()
+        .unwrap()
+        .insert(address, Arc::new(Mutex::new(Box::new(handler))));
 
     Ok(())
 }

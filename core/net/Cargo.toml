@@ -11,8 +11,8 @@ hybrid-net = ["ya-net-server", "ya-relay-proto", "ya-sb-proto", "bytes", "ethsig
 
 [dependencies]
 ya-core-model = { version = "^0.4", features=["net", "identity"] }
-ya-net-server = { git = "https://github.com/golemfactory/ya-relay.git", rev = "ecaf3d6", optional = true }
-ya-relay-proto = { git = "https://github.com/golemfactory/ya-relay.git", rev = "ecaf3d6", features = ["codec"], optional = true }
+ya-net-server = { git = "https://github.com/golemfactory/ya-relay.git", branch = "mf/ya-integration", optional = true }
+ya-relay-proto = { git = "https://github.com/golemfactory/ya-relay.git", branch = "mf/ya-integration", features = ["codec"], optional = true }
 ya-sb-proto = { version = "0.4", optional = true }
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.1"

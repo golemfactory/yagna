@@ -1,6 +1,5 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use std::hash::Hash;
 use std::iter::FromIterator;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::pin::Pin;
@@ -15,7 +14,6 @@ use bytes::BytesMut;
 use futures::channel::mpsc;
 use futures::stream::LocalBoxStream;
 use futures::{FutureExt, SinkExt, Stream, StreamExt, TryStreamExt};
-use lazy_static::lazy_static;
 use tokio::time::{self, Duration};
 use tokio_util::codec::{Decoder, Encoder};
 use url::Url;
@@ -34,22 +32,26 @@ use crate::service::parse_from_addr;
 
 const NET_RELAY_HOST_ENV_VAR: &str = "NET_RELAY_HOST";
 const DEFAULT_NET_RELAY_HOST: &str = "127.0.0.1:7464";
+const PING_INTERVAL: Duration = Duration::from_millis(15000);
 const REQUEST_ID: AtomicUsize = AtomicUsize::new(0);
 
-pub type BCastHandler = Box<dyn FnMut(String, &[u8])>;
+pub type BCastHandler = Box<dyn FnMut(String, &[u8]) + Send>;
+
 type NetSender = mpsc::Sender<Vec<u8>>;
 type NetReceiver = mpsc::Receiver<Vec<u8>>;
 type NetSinkKind = SinkKind<NetSender, mpsc::SendError>;
 type NetSinkKey = (NodeId, bool);
 
-thread_local! {
-    pub(crate) static CLIENT: RefCell<Option<Client>> = Default::default();
-    pub(crate) static BCAST: BCastService = Default::default();
-    pub(crate) static BCAST_HANDLERS: SharedMap<Rc<str>, Rc<RefCell<BCastHandler>>> = Default::default();
+type ArcMap<K, V> = Arc<Mutex<HashMap<K, V>>>;
+
+lazy_static::lazy_static! {
+    pub(crate) static ref BCAST: BCastService = Default::default();
+    pub(crate) static ref BCAST_HANDLERS: ArcMap<String, Arc<Mutex<BCastHandler>>> = Default::default();
+    pub(crate) static ref BCAST_SENDER: Arc<Mutex<Option<NetSender>>> = Default::default();
 }
 
-lazy_static! {
-    pub(crate) static ref BCAST_SENDER: Arc<Mutex<Option<NetSender>>> = Default::default();
+thread_local! {
+    static CLIENT: RefCell<Option<Client>> = Default::default();
 }
 
 async fn relay_addr() -> std::io::Result<SocketAddr> {
@@ -79,7 +81,7 @@ pub async fn start_network(default_id: NodeId, ids: Vec<NodeId>) -> anyhow::Resu
     let url = Url::parse(&format!("udp://{}", relay_addr().await?))?;
     let provider = IdentityCryptoProvider::new(default_id);
 
-    log::info!("using default identity as network id: {:?}", default_id);
+    log::info!("starting hybrid network client with id: {}", default_id);
 
     let client = ClientBuilder::from_url(url)
         .crypto(provider)
@@ -98,31 +100,39 @@ pub async fn start_network(default_id: NodeId, ids: Vec<NodeId>) -> anyhow::Resu
     let state = State::new(ids, services);
 
     // outbound traffic
+    spawn_broadcast_handler(brx);
     spawn_local_bus_handler(net::BUS_ID, state.clone(), move |_| Ok(default_id.clone()));
     spawn_local_bus_handler("/from", state.clone(), {
-        let state_ = state.clone();
+        let state = state.clone();
         move |addr| {
             let (from_node, _) = match parse_from_addr(addr) {
                 Ok(v) => v,
                 Err(e) => anyhow::bail!("invalid address: {}", e),
             };
-            if !state_.ids.contains(&from_node) {
-                anyhow::bail!("unknown identity: {:?}", from_node,);
+            if !state.inner.borrow().ids.contains(&from_node) {
+                anyhow::bail!("unknown identity: {:?}", from_node);
             }
             Ok(from_node)
         }
     });
-    spawn_broadcast_handler(brx);
 
     // inbound traffic
     tokio::task::spawn_local(receiver.for_each(move |fwd| {
         let state = state.clone();
         async move {
             let key = (fwd.node_id, fwd.reliable);
-            let mut tx = match state.routes.get_cloned(&key) {
+            let mut tx = match {
+                let inner = state.inner.borrow();
+                inner.routes.get(&key).cloned()
+            } {
                 Some(tx) => tx,
                 None => {
                     let (tx, rx) = mpsc::channel(1);
+                    {
+                        let mut inner = state.inner.borrow_mut();
+                        inner.routes.insert(key, tx.clone());
+                    }
+
                     let rx = if fwd.reliable {
                         PrefixedStream::new(rx)
                             .inspect_err(|e| log::debug!("stream error: {}", e))
@@ -132,7 +142,6 @@ pub async fn start_network(default_id: NodeId, ids: Vec<NodeId>) -> anyhow::Resu
                         rx.boxed_local()
                     };
 
-                    state.routes.insert(key, tx.clone());
                     spawn_inbound_handler(rx, fwd.node_id, fwd.reliable, state.clone());
                     tx
                 }
@@ -140,16 +149,17 @@ pub async fn start_network(default_id: NodeId, ids: Vec<NodeId>) -> anyhow::Resu
 
             if tx.send(fwd.payload.into()).await.is_err() {
                 log::debug!("net routing error: channel closed");
-                state.routes.remove(&key);
-                state.forward.remove(&key);
+                let mut inner = state.inner.borrow_mut();
+                inner.routes.remove(&key);
+                inner.forward.remove(&key);
             }
         }
     }));
 
-    // Keep server connection alive by pinging every 30 seconds.
+    // Keep server connection alive by pinging every `PING_INTERVAL` seconds.
     let ping_client = client.clone();
     tokio::task::spawn_local(async move {
-        let mut interval = time::interval(Duration::new(30, 0));
+        let mut interval = time::interval(PING_INTERVAL);
         loop {
             interval.tick().await;
             if let Ok(session) = ping_client.server_session().await {
@@ -174,7 +184,10 @@ where
             address,
             tx,
         };
-        state.requests.insert(request_id.clone(), request);
+
+        let mut inner = state.inner.borrow_mut();
+        inner.requests.insert(request_id.clone(), request);
+
         (rx, request_id)
     }
 
@@ -291,7 +304,7 @@ fn spawn_inbound_handler(
 
             match GsbMessageDecoder::new().decode(&mut bytes)? {
                 Some(GsbMessage::CallRequest(request @ ya_sb_proto::CallRequest { .. })) => {
-                    handle_request(request, remote_id, reliable, state)?;
+                    handle_request(request, remote_id, state, reliable)?;
                 }
                 Some(GsbMessage::CallReply(reply @ ya_sb_proto::CallReply { .. })) => {
                     handle_reply(reply, remote_id, state)?;
@@ -318,8 +331,8 @@ fn spawn_inbound_handler(
 fn handle_request(
     request: ya_sb_proto::CallRequest,
     remote_id: NodeId,
-    reliable: bool,
     state: State,
+    reliable: bool,
 ) -> anyhow::Result<()> {
     let caller_id = NodeId::from_str(&request.caller).ok();
     if !caller_id.map(|id| id == remote_id).unwrap_or(false) {
@@ -337,10 +350,16 @@ fn handle_request(
     let eos_map = eos.clone();
     let eos_chain = eos.clone();
 
-    let stream = match state.services.iter().find(|&id| address.starts_with(id)) {
-        Some(prefix) => {
+    let stream = match {
+        let inner = state.inner.borrow();
+        inner
+            .services
+            .iter()
+            .find(|&id| address.starts_with(id))
             // replaces  /net/<dest_node_id>/test/1 --> /public/test/1
-            let address: String = address.replacen(prefix, net::PUBLIC_PREFIX, 1);
+            .map(|s| address.replacen(s, net::PUBLIC_PREFIX, 1))
+    } {
+        Some(address) => {
             local_bus::call_stream(&address, &request.caller, &request.data).left_stream()
         }
         None => {
@@ -348,20 +367,17 @@ fn handle_request(
             futures::stream::once(futures::future::err(err)).right_stream()
         }
     }
-    .map(move |result| {
-        let reply = match result {
-            Ok(chunk) => {
-                if chunk.is_full() {
-                    eos_map.store(true, Relaxed);
-                }
-                chunk_ok(request_id.clone(), chunk)
-            }
-            Err(err) => {
+    .map(move |result| match result {
+        Ok(chunk) => {
+            if chunk.is_full() {
                 eos_map.store(true, Relaxed);
-                chunk_err(request_id.clone(), err)
             }
-        };
-        reply
+            chunk_ok(request_id.clone(), chunk)
+        }
+        Err(err) => {
+            eos_map.store(true, Relaxed);
+            chunk_err(request_id.clone(), err)
+        }
     })
     .chain(StreamOnceIf::new(
         move || !eos_chain.load(Relaxed),
@@ -401,11 +417,15 @@ fn handle_reply(
     remote_id: NodeId,
     state: State,
 ) -> anyhow::Result<()> {
-    let mut request = match state.requests.get_cloned(&reply.request_id) {
+    let mut request = match {
+        let inner = state.inner.borrow();
+        inner.requests.get(&reply.request_id).cloned()
+    } {
         Some(request) => {
             if request.caller == remote_id {
                 if reply.reply_type == ya_sb_proto::CallReplyType::Full as i32 {
-                    state.requests.remove(&reply.request_id);
+                    let mut inner = state.inner.borrow_mut();
+                    inner.requests.remove(&reply.request_id);
                 }
                 request
             } else {
@@ -442,12 +462,15 @@ fn handle_broadcast(
     let data: Rc<[u8]> = request.data.into();
     let caller = caller_id.unwrap().to_string();
 
+    let handlers = BCAST_HANDLERS.lock().unwrap();
+
     for handler in BCAST
-        .with(|b| b.resolve(&topic))
+        .resolve(&topic)
         .into_iter()
-        .filter_map(|e| BCAST_HANDLERS.with(|m| m.get_cloned(&e)))
+        .filter_map(|e| handlers.get(e.as_ref()).clone())
     {
-        (*(handler.borrow_mut()))(caller.clone(), data.as_ref());
+        let mut h = handler.lock().unwrap();
+        (*(h))(caller.clone(), data.as_ref());
     }
 
     Ok(())
@@ -455,26 +478,34 @@ fn handle_broadcast(
 
 #[derive(Clone)]
 struct State {
-    requests: SharedMap<String, Request<NetSender>>,
-    routes: SharedMap<NetSinkKey, NetSender>,
-    forward: SharedMap<NetSinkKey, NetSinkKind>,
-    ids: Rc<HashSet<NodeId>>,
-    services: Rc<HashSet<String>>,
+    inner: Rc<RefCell<StateInner>>,
+}
+
+#[derive(Default)]
+struct StateInner {
+    requests: HashMap<String, Request<NetSender>>,
+    routes: HashMap<NetSinkKey, NetSender>,
+    forward: HashMap<NetSinkKey, NetSinkKind>,
+    ids: HashSet<NodeId>,
+    services: HashSet<String>,
 }
 
 impl State {
     fn new(ids: impl IntoIterator<Item = NodeId>, services: HashSet<String>) -> Self {
         Self {
-            requests: Default::default(),
-            routes: Default::default(),
-            forward: Default::default(),
-            ids: Rc::new(ids.into_iter().collect()),
-            services: Rc::new(services),
+            inner: Rc::new(RefCell::new(StateInner {
+                ids: ids.into_iter().collect(),
+                services,
+                ..Default::default()
+            })),
         }
     }
 
     async fn forward_sink(&self, remote_id: NodeId, reliable: bool) -> anyhow::Result<NetSinkKind> {
-        match self.forward.get_cloned(&(remote_id, reliable)) {
+        match {
+            let inner = self.inner.borrow();
+            inner.forward.get(&(remote_id, reliable)).cloned()
+        } {
             Some(sink) => Ok(sink),
             None => {
                 let client = CLIENT
@@ -487,7 +518,9 @@ impl State {
                     session.forward_unreliable(remote_id).await?.into()
                 };
 
-                self.forward.insert((remote_id, reliable), forward.clone());
+                let mut inner = self.inner.borrow_mut();
+                inner.forward.insert((remote_id, reliable), forward.clone());
+
                 Ok(forward)
             }
         }
@@ -545,62 +578,6 @@ where
         } else {
             Poll::Ready(None)
         }
-    }
-}
-
-pub struct SharedMap<K, V>
-where
-    K: Eq + Hash,
-{
-    inner: Rc<RefCell<HashMap<K, V>>>,
-}
-
-impl<K, V> Clone for SharedMap<K, V>
-where
-    K: Eq + Hash,
-{
-    fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.clone(),
-        }
-    }
-}
-
-impl<K, V> Default for SharedMap<K, V>
-where
-    K: Eq + Hash,
-{
-    fn default() -> Self {
-        Self {
-            inner: Default::default(),
-        }
-    }
-}
-
-impl<K, V> SharedMap<K, V>
-where
-    K: Eq + Hash,
-{
-    pub fn insert(&self, key: K, value: V) -> Option<V> {
-        self.inner.borrow_mut().insert(key, value)
-    }
-
-    pub fn remove(&self, key: &K) -> Option<V> {
-        self.inner.borrow_mut().remove(key)
-    }
-}
-
-impl<K, V> SharedMap<K, V>
-where
-    K: Eq + Hash,
-    V: Clone,
-{
-    pub fn get_cloned<Q>(&self, key: &Q) -> Option<V>
-    where
-        K: std::borrow::Borrow<Q>,
-        Q: Eq + Hash,
-    {
-        self.inner.borrow().get(key).cloned()
     }
 }
 
