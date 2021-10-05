@@ -152,7 +152,10 @@ pub async fn start_network(default_id: NodeId, ids: Vec<NodeId>) -> anyhow::Resu
         let mut interval = time::interval(Duration::new(30, 0));
         loop {
             interval.tick().await;
-            ping_client.server_session().await.unwrap().ping().await.unwrap();
+            if let Ok(session) = ping_client.server_session().await {
+                log::trace!("Sending ping to keep session alive.");
+                let _ = session.ping().await;
+            }
         }
     });
 
