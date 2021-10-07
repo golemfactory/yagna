@@ -1,16 +1,14 @@
 use std::sync::{Arc, Mutex};
 
-use bytes::BytesMut;
 use futures::SinkExt;
-use tokio_util::codec::Encoder;
 
 use ya_core_model::net::local::{
     BindBroadcastError, BroadcastMessage, SendBroadcastMessage, ToEndpoint,
 };
-use ya_sb_proto::codec::{GsbMessage, GsbMessageEncoder};
+use ya_sb_proto::codec::GsbMessage;
 use ya_service_bus::{serialization, Error, RpcMessage};
 
-use crate::hybrid::service::{BCAST, BCAST_HANDLERS, BCAST_SENDER};
+use crate::hybrid::service::{encode_message, BCAST, BCAST_HANDLERS, BCAST_SENDER};
 
 pub async fn broadcast<M, S>(
     caller: S,
@@ -38,14 +36,9 @@ where
         topic: M::TOPIC.to_owned(),
     });
 
-    let mut bytes = BytesMut::with_capacity(request.encoded_len());
-    let mut encoder = GsbMessageEncoder::default();
-
-    encoder
-        .encode(request, &mut bytes)
-        .map_err(|e| Error::EncodingProblem(e.to_string()))?;
+    let bytes = encode_message(request).map_err(|e| Error::EncodingProblem(e.to_string()))?;
     sender
-        .send(bytes.to_vec())
+        .send(bytes)
         .await
         .map_err(|_| Error::Closed("broadcast channel is closed".to_string()))?;
 
