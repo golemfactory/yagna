@@ -1,9 +1,10 @@
 // PRIVATE RawTransaction.hash()
 
-use ethereum_tx_sign::RawTransaction;
+use ethereum_types::U256;
 use rlp::RlpStream;
 use tiny_keccak::{Hasher, Keccak};
-use web3::types::U256;
+
+use crate::erc20::transaction::RawTransaction;
 
 pub fn get_tx_hash(tx: &RawTransaction, chain_id: u64) -> Vec<u8> {
     let mut hash = RlpStream::new();
@@ -53,7 +54,7 @@ pub fn encode_signed_tx(raw_tx: &RawTransaction, signature: Vec<u8>, chain_id: u
 
     tx.finalize_unbounded_list();
 
-    tx.out()
+    tx.out().to_vec()
 }
 
 fn prepare_signature(signature: Vec<u8>, chain_id: u64) -> (u64, Vec<u8>, Vec<u8>) {

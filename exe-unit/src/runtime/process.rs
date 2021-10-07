@@ -13,7 +13,9 @@ use tokio::process::Command;
 
 use crate::acl::Acl;
 use crate::error::Error;
-use crate::message::{CommandContext, ExecuteCommand, Shutdown, ShutdownReason, UpdateDeployment};
+use crate::message::{
+    CommandContext, ExecuteCommand, RuntimeEvent, Shutdown, ShutdownReason, UpdateDeployment,
+};
 use crate::network::{start_vpn, Vpn};
 use crate::output::{forward_output, vec_to_string};
 use crate::process::{kill, ProcessTree, SystemError};
@@ -23,8 +25,8 @@ use crate::state::Deployment;
 use crate::ExeUnitContext;
 
 use ya_agreement_utils::agreement::OfferTemplate;
-use ya_client_model::activity::{CommandOutput, ExeScriptCommand, RuntimeEvent};
-use ya_runtime_api::server::{spawn, ProcessControl, RunProcess, RuntimeService, RuntimeStatus};
+use ya_client_model::activity::{CommandOutput, ExeScriptCommand};
+use ya_runtime_api::server::{spawn, RunProcess, RuntimeControl, RuntimeService};
 
 const PROCESS_KILL_TIMEOUT_SECONDS_ENV_VAR: &str = "PROCESS_KILL_TIMEOUT_SECONDS";
 const DEFAULT_PROCESS_KILL_TIMEOUT_SECONDS: i64 = 5;
@@ -256,7 +258,7 @@ impl RuntimeProcess {
                 .map_err(|e| Error::runtime(format!("service hello error: {:?}", e)));
 
             let _handle = monitor.any_process(ctx);
-            match future::select(service.exited(), hello).await {
+            match future::select(service.stopped(), hello).await {
                 future::Either::Left((result, _)) => return Ok(result),
                 future::Either::Right((result, _)) => result.map(|_| ())?,
             }
@@ -270,7 +272,7 @@ impl RuntimeProcess {
             };
 
             futures::pin_mut!(vpn);
-            match future::select(service.exited(), vpn).await {
+            match future::select(service.stopped(), vpn).await {
                 future::Either::Left((result, _)) => return Ok(result),
                 future::Either::Right((result, _)) => result.map(|_| ())?,
             }
@@ -289,8 +291,8 @@ impl RuntimeProcess {
         entry_point: String,
         mut args: Vec<String>,
     ) -> LocalBoxFuture<'f, Result<i32, Error>> {
-        let (service, status) = match self.service.as_ref() {
-            Some(svc) => (svc.service.clone(), svc.status.clone()),
+        let (service, ctrl) = match self.service.as_ref() {
+            Some(svc) => (svc.service.clone(), svc.control.clone()),
             None => return future::err(Error::runtime("START command not run")).boxed_local(),
         };
 
@@ -322,7 +324,7 @@ impl RuntimeProcess {
 
         async move {
             futures::pin_mut!(exec);
-            let exited = status.exited().map(Ok);
+            let exited = ctrl.stopped().map(Ok);
             future::select(exited, exec).await.factor_first().0
         }
         .boxed_local()
@@ -451,7 +453,7 @@ impl ChildProcess {
     fn kill<'f>(self, timeout: i64) -> LocalBoxFuture<'f, Result<(), SystemError>> {
         match self {
             ChildProcess::Service(service) => async move {
-                service.control.kill();
+                service.control.stop();
                 Ok(())
             }
             .boxed_local(),
@@ -537,19 +539,17 @@ impl std::fmt::Display for CommandArgs {
 #[derive(Clone)]
 struct ProcessService {
     service: Arc<dyn RuntimeService + Send + Sync + 'static>,
-    control: Arc<dyn ProcessControl + Send + Sync + 'static>,
-    status: Arc<dyn RuntimeStatus + Send + Sync + 'static>,
+    control: Arc<dyn RuntimeControl + Send + Sync + 'static>,
 }
 
 impl ProcessService {
     pub fn new<S>(service: S) -> Self
     where
-        S: RuntimeService + RuntimeStatus + ProcessControl + Clone + Send + Sync + 'static,
+        S: RuntimeService + RuntimeControl + Clone + Send + Sync + 'static,
     {
         ProcessService {
             service: Arc::new(service.clone()),
-            control: Arc::new(service.clone()),
-            status: Arc::new(service),
+            control: Arc::new(service),
         }
     }
 }

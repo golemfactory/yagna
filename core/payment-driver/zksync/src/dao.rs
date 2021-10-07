@@ -196,6 +196,21 @@ impl ZksyncDao {
         }
     }
 
+    pub async fn retry_payment(&self, order_id: &str) {
+        if let Err(e) = self
+            .payment()
+            .update_status(order_id.to_string(), PAYMENT_STATUS_NOT_YET)
+            .await
+        {
+            log::error!(
+                "Failed to set status of the `payment` {:?} to be retried : {:?}",
+                order_id,
+                e
+            )
+            // TO CHECK: Should it continue or stop the process...
+        }
+    }
+
     pub async fn get_unconfirmed_txs(&self, network: Network) -> Vec<TransactionEntity> {
         match self.transaction().get_unconfirmed_txs(network).await {
             Ok(txs) => txs,

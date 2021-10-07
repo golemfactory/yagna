@@ -7,21 +7,32 @@ use crate::{report, ExeUnit};
 use actix::prelude::*;
 use futures::FutureExt;
 use ya_client_model::activity;
-use ya_client_model::activity::RuntimeEvent;
 use ya_core_model::activity::local::SetState as SetActivityState;
 
 impl<R: Runtime> StreamHandler<RuntimeEvent> for ExeUnit<R> {
-    fn handle(&mut self, event: RuntimeEvent, _: &mut Context<Self>) {
-        match self.state.batches.get_mut(&event.batch_id) {
-            Some(batch) => {
-                let batch_id = event.batch_id.clone();
-                self.state.last_batch = Some(batch_id.clone());
+    fn handle(&mut self, event: RuntimeEvent, ctx: &mut Context<Self>) {
+        match event {
+            RuntimeEvent::Process(event) => match self.state.batches.get_mut(&event.batch_id) {
+                Some(batch) => {
+                    let batch_id = event.batch_id.clone();
+                    self.state.last_batch = Some(batch_id.clone());
 
-                if let Err(err) = batch.handle_event(event) {
-                    log::error!("Batch {} event error: {}", batch_id, err);
+                    if let Err(err) = batch.handle_event(event) {
+                        log::error!("Batch {} event error: {}", batch_id, err);
+                    }
                 }
+                _ => log::error!("Batch {} event error: unknown batch", event.batch_id),
+            },
+            RuntimeEvent::Counter { name, value } => {
+                let addr = self.metrics.clone();
+                let fut = async move {
+                    let _ = addr.send(SetMetric { name, value }).await;
+                };
+                ctx.spawn(fut.into_actor(self));
             }
-            _ => log::error!("Batch {} event error: unknown batch", event.batch_id),
+            other => {
+                log::warn!("Unsupported runtime event: {:?}", other);
+            }
         };
     }
 }

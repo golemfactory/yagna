@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 from goth.runner import Runner
-from goth.runner.probe import RequestorProbe, ProviderProbe
+from goth.runner.probe import ProviderProbe, RequestorProbe
 
 
 wasi_task_package: str = (

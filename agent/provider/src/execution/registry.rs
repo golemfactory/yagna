@@ -43,7 +43,7 @@ pub fn default_counter_config() -> HashMap<String, CounterDefinition> {
         "golem.usage.storage_gib".into(),
         CounterDefinition {
             name: "storage_gib".into(),
-            description: "Sotrage".into(),
+            description: "Storage".into(),
             price: false,
         },
     );

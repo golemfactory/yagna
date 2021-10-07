@@ -303,13 +303,13 @@ fn default_plugins() -> PathBuf {
         exe.pop();
         exe.push("plugins");
         if exe.is_dir() {
-            return exe.join("ya-runtime-*.json");
+            return exe.join("ya-*.json");
         }
     }
 
     UserDirs::new()
         .map(|u| u.home_dir().join(".local/lib/yagna/plugins"))
         .filter(|d| d.exists())
-        .map(|p| p.join("ya-runtime-*.json"))
-        .unwrap_or_else(|| "/usr/lib/yagna/plugins/ya-runtime-*.json".into())
+        .map(|p| p.join("ya-*.json"))
+        .unwrap_or_else(|| "/usr/lib/yagna/plugins/ya-*.json".into())
 }
