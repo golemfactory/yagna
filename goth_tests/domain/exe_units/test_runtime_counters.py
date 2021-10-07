@@ -24,7 +24,6 @@ def build_demand(
         DemandBuilder(requestor)
         .props_from_template(None)
         .property("golem.srv.caps.multi-activity", True)
-        .property("golem.com.payment.debit-notes.accept-timeout?", 8)
         .constraints(
             "(&(golem.com.pricing.model=linear)\
                 (golem.srv.caps.multi-activity=true)\
