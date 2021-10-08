@@ -18,16 +18,30 @@ use std::env;
 lazy_static! {
     pub static ref GLM_FAUCET_GAS: U256 = U256::from(90_000);
     pub static ref GLM_POLYGON_GAS_LIMIT: U256 = U256::from(100_000);
+
+    /*
+        Comment by scx1332:
+        In production I suggest limiting to 31.101 Gwei to not pay too much fees in extreme network situations
+        Use:
+        GLM_POLYGON_MAX_GAS_PRICE=31101000000
+    */
     pub static ref GLM_POLYGON_MAX_GAS_PRICE: u64 =
         match env::var("GLM_POLYGON_MAX_GAS_PRICE").map(|s| s.parse()) {
             Ok(Ok(x)) => x,
             _ => 1000000000000, //1000 Gwei
         };
+    /*
+        Comment by scx1332:
+        30.101 Gwei (as of 2021-10-08 30GWEI is minimum accepted gas price,
+        network is under-utilised right now so 30.1 should result in express transactions
+        USD cost as of 2021-10-08 of transaction is about 0,16 cents (USD)
+    */
+
     pub static ref GLM_POLYGON_MIN_GAS_PRICE: u64 =
         match env::var("GLM_POLYGON_MIN_GAS_PRICE").map(|s| s.parse()) {
             Ok(Ok(x)) => x,
-            _ => 6100000000, //6.1 Gwei
-        };
+            _ => 30101000000,
+    };
 
 }
 const CREATE_FAUCET_FUNCTION: &str = "create";

@@ -1,8 +1,4 @@
-
-
-
-use ya_agreement_utils::{OfferDefinition};
-
+use ya_agreement_utils::OfferDefinition;
 
 use crate::market::negotiator::factory::AgreementExpirationNegotiatorConfig;
 use crate::market::negotiator::{
