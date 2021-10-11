@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
 use num_traits::FromPrimitive;
 use sha3::{Digest, Sha3_512};
+use std::env;
 use web3::contract::{Contract, Options};
 use web3::transports::Http;
 use web3::types::{Bytes, TransactionReceipt, H160, H256, U256, U64};
@@ -17,6 +18,31 @@ use crate::erc20::{config, eth_utils};
 lazy_static! {
     pub static ref GLM_FAUCET_GAS: U256 = U256::from(90_000);
     pub static ref GLM_TRANSFER_GAS: U256 = U256::from(55_000);
+    pub static ref GLM_POLYGON_GAS_LIMIT: U256 = U256::from(100_000);
+
+    /*
+        Comment by scx1332:
+        In production I suggest limiting to 31.101 Gwei to not pay too much fees in extreme network situations
+        Use:
+        GLM_POLYGON_MAX_GAS_PRICE=31101000000
+    */
+    pub static ref GLM_POLYGON_MAX_GAS_PRICE: u64 =
+        match env::var("GLM_POLYGON_MAX_GAS_PRICE").map(|s| s.parse()) {
+            Ok(Ok(x)) => x,
+            _ => 1000000000000, //1000 Gwei
+        };
+    /*
+        Comment by scx1332:
+        30.101 Gwei (as of 2021-10-08 30GWEI is minimum accepted gas price,
+        network is under-utilised right now so 30.1 should result in express transactions
+        USD cost as of 2021-10-08 of transaction is about 0,16 cents (USD)
+    */
+
+    pub static ref GLM_POLYGON_MIN_GAS_PRICE: u64 =
+        match env::var("GLM_POLYGON_MIN_GAS_PRICE").map(|s| s.parse()) {
+            Ok(Ok(x)) => x,
+            _ => 30101000000,
+    };
 }
 const CREATE_FAUCET_FUNCTION: &str = "create";
 const BALANCE_ERC20_FUNCTION: &str = "balanceOf";
@@ -48,11 +74,11 @@ pub async fn get_balance(address: H160, network: Network) -> Result<U256, Generi
         .map_err(GenericError::new)?)
 }
 
-pub async fn get_next_nonce(address: H160, network: Network) -> Result<U256, GenericError> {
+pub async fn get_next_nonce_pending(address: H160, network: Network) -> Result<U256, GenericError> {
     let client = get_client(network)?;
     let nonce = client
         .eth()
-        .transaction_count(address, None)
+        .transaction_count(address, Some(web3::types::BlockNumber::Pending))
         .await
         .map_err(GenericError::new)?;
     Ok(nonce)
@@ -121,14 +147,39 @@ pub async fn sign_transfer_tx(
 
     let data = eth_utils::contract_encode(&contract, TRANSFER_ERC20_FUNCTION, (recipient, amount))
         .map_err(GenericError::new)?;
-    let gas_price = client.eth().gas_price().await.map_err(GenericError::new)?;
+    let mut gas_price = client.eth().gas_price().await.map_err(GenericError::new)?;
+
+    match network {
+        Network::PolygonMainnet | Network::PolygonMumbai => {
+            if gas_price > U256::from(*GLM_POLYGON_MAX_GAS_PRICE) {
+                log::warn!(
+                    "Gas price higher than maximum {}/{}. Continuing with lower gas price...",
+                    gas_price,
+                    *GLM_POLYGON_MAX_GAS_PRICE
+                );
+                gas_price = U256::from(*GLM_POLYGON_MAX_GAS_PRICE);
+            };
+
+            if gas_price < U256::from(*GLM_POLYGON_MIN_GAS_PRICE) {
+                log::info!(
+                    "Gas price lower than mininimum {}/{}. Continuing with higher gas price...",
+                    gas_price,
+                    *GLM_POLYGON_MIN_GAS_PRICE
+                );
+                gas_price = U256::from(*GLM_POLYGON_MIN_GAS_PRICE);
+            }
+        }
+        Network::Mainnet | Network::Rinkeby => {
+            log::info!("Gas limits not implemented for Mainnet and Rinkeby networks",);
+        }
+    }
 
     let tx = RawTransaction {
         nonce,
         to: Some(contract.address()),
         value: U256::from(0),
         gas_price,
-        gas: *GLM_TRANSFER_GAS,
+        gas: *GLM_POLYGON_GAS_LIMIT,
         data,
     };
     let chain_id = network as u64;
@@ -199,11 +250,10 @@ fn get_rpc_addr_from_env(network: Network) -> Result<String, GenericError> {
             .unwrap_or("https://geth.golem.network:55555".to_string())),
         Network::Rinkeby => Ok(std::env::var("RINKEBY_GETH_ADDR")
             .unwrap_or("http://geth.testnet.golem.network:55555".to_string())),
-        Network::PolygonMainnet => Err(GenericError::new(
-            "Polygon mainnet network not possible on ERC20 driver.",
-        )),
-        Network::PolygonMumbai => Err(GenericError::new(
-            "Polygon mumbai network not possible on ERC20 driver.",
+        Network::PolygonMainnet => Ok(std::env::var("POLYGON_MAINNET_GETH_ADDR")
+            .unwrap_or("https://bor.golem.network".to_string())),
+        Network::PolygonMumbai => Ok(std::env::var("POLYGON_MUMBAI_GETH_ADDR").unwrap_or(
+            "https://polygon-mumbai.infura.io/v3/4dfe7a7afc6d4549b16490db5fd6358e".to_string(),
         )),
     }
 }
@@ -220,10 +270,8 @@ fn get_env(network: Network) -> Result<config::EnvConfiguration, GenericError> {
     match network {
         Network::Mainnet => Ok(*config::MAINNET_CONFIG),
         Network::Rinkeby => Ok(*config::RINKEBY_CONFIG),
-        Network::PolygonMumbai => Err(GenericError::new("No config for mainnet and polygonMumbai")),
-        Network::PolygonMainnet => {
-            Err(GenericError::new("No config for mainnet and polygonMumbai"))
-        }
+        Network::PolygonMumbai => Ok(*config::MUMBAI_CONFIG),
+        Network::PolygonMainnet => Ok(*config::POLYGON_MAINNET_CONFIG),
     }
 }
 

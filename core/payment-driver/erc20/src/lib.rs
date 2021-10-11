@@ -11,9 +11,17 @@ pub const RINKEBY_NETWORK: &'static str = "rinkeby";
 pub const RINKEBY_TOKEN: &'static str = "tGLM";
 pub const RINKEBY_PLATFORM: &'static str = "erc20-rinkeby-tglm";
 
+pub const MUMBAI_NETWORK: &'static str = "mumbai";
+pub const MUMBAI_TOKEN: &'static str = "tGLM";
+pub const MUMBAI_PLATFORM: &'static str = "erc20-mumbai-tglm";
+
 pub const MAINNET_NETWORK: &'static str = "mainnet";
 pub const MAINNET_TOKEN: &'static str = "GLM";
 pub const MAINNET_PLATFORM: &'static str = "erc20-mainnet-glm";
+
+pub const POLYGON_MAINNET_NETWORK: &'static str = "polygon";
+pub const POLYGON_MAINNET_TOKEN: &'static str = "GLM";
+pub const POLYGON_MAINNET_PLATFORM: &'static str = "erc20-polygon-glm";
 
 pub use service::Erc20Service as PaymentDriverService;
 

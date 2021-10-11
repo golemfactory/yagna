@@ -70,10 +70,18 @@ pub async fn get_next_nonce(
     address: H160,
     network: Network,
 ) -> Result<U256, GenericError> {
-    let network_nonce = ethereum::get_next_nonce(address, network).await?;
+    let network_nonce = ethereum::get_next_nonce_pending(address, network).await?;
     let str_addr = format!("0x{:x}", &address);
     let db_nonce = dao.get_next_nonce(&str_addr, network).await?;
-    Ok(std::cmp::max(network_nonce, db_nonce))
+
+    if network_nonce != db_nonce {
+        warn!(
+            "Network nonce different than db nonce: {} != {}",
+            network_nonce, db_nonce
+        );
+    }
+
+    Ok(network_nonce)
 }
 
 pub async fn has_enough_eth_for_gas(
