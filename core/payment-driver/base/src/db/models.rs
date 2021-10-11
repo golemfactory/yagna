@@ -83,6 +83,8 @@ pub struct PaymentEntity {
 pub enum Network {
     Mainnet = 1,
     Rinkeby = 4,
+    PolygonMumbai = 80001,
+    PolygonMainnet = 137,
 }
 
 impl Default for Network {
@@ -98,6 +100,8 @@ impl FromStr for Network {
         match s.to_lowercase().as_str() {
             "mainnet" => Ok(Network::Mainnet),
             "rinkeby" => Ok(Network::Rinkeby),
+            "polygon" => Ok(Network::PolygonMainnet),
+            "mumbai" => Ok(Network::PolygonMumbai),
             _ => Err(DbError::InvalidData(format!(
                 "Invalid network: {}",
                 s.to_string()
@@ -111,6 +115,8 @@ impl Display for Network {
         match *self {
             Network::Mainnet => f.write_str("mainnet"),
             Network::Rinkeby => f.write_str("rinkeby"),
+            Network::PolygonMumbai => f.write_str("mumbai"),
+            Network::PolygonMainnet => f.write_str("polygon"),
         }
     }
 }
@@ -133,6 +139,8 @@ where
         Ok(match i32::from_sql(bytes)? {
             1 => Network::Mainnet,
             4 => Network::Rinkeby,
+            137 => Network::PolygonMainnet,
+            80001 => Network::PolygonMumbai,
             _ => return Err(anyhow::anyhow!("invalid value").into()),
         })
     }
