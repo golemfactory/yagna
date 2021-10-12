@@ -16,6 +16,7 @@ use ya_payment_driver::model::GenericError;
 lazy_static! {
     // TODO: Get token decimals from erc20-provider / wallet
     pub static ref PRECISION: BigDecimal = BigDecimal::from(1_000_000_000_000_000_000u64);
+    pub static ref GWEI_PRECISION: BigDecimal = BigDecimal::from(1_000_000_000u64);
 }
 
 pub fn big_dec_to_u256(v: BigDecimal) -> Result<U256, GenericError> {
@@ -26,6 +27,16 @@ pub fn big_dec_to_u256(v: BigDecimal) -> Result<U256, GenericError> {
     let v = &v.to_string();
     Ok(U256::from_dec_str(v).map_err(GenericError::new)?)
 }
+
+pub fn big_dec_gwei_to_u256(v: BigDecimal) -> Result<U256, GenericError> {
+    let v = v * &(*GWEI_PRECISION);
+    let v = v
+        .to_bigint()
+        .ok_or(GenericError::new("Failed to convert to bigint"))?;
+    let v = &v.to_string();
+    Ok(U256::from_dec_str(v).map_err(GenericError::new)?)
+}
+
 
 pub fn u256_to_big_dec(v: U256) -> Result<BigDecimal, GenericError> {
     let v: BigDecimal = v.to_string().parse().map_err(GenericError::new)?;

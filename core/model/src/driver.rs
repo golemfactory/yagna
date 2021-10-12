@@ -417,6 +417,8 @@ pub struct Transfer {
     pub amount: BigDecimal,
     pub network: Option<String>,
     pub token: Option<String>,
+    pub gas_price: Option<BigDecimal>,
+    pub gas_limit: Option<u32>,
 }
 
 impl Transfer {
@@ -426,6 +428,8 @@ impl Transfer {
         amount: BigDecimal,
         network: Option<String>,
         token: Option<String>,
+        gas_price: Option<BigDecimal>,
+        gas_limit: Option<u32>,
     ) -> Transfer {
         Transfer {
             sender,
@@ -433,6 +437,8 @@ impl Transfer {
             amount,
             network,
             token,
+            gas_price,
+            gas_limit,
         }
     }
 }
