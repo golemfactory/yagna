@@ -5,14 +5,13 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use std::pin::Pin;
 use std::rc::Rc;
 use std::str::FromStr;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
-use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 
 use anyhow::Context as AnyhowContext;
 use futures::channel::mpsc;
-use futures::stream::LocalBoxStream;
 use futures::{FutureExt, SinkExt, Stream, StreamExt, TryStreamExt};
 use tokio::time::{self, Duration};
 use url::Url;
@@ -22,6 +21,7 @@ use ya_core_model::NodeId;
 use ya_net_server::testing::{Client, ClientBuilder};
 use ya_relay_proto::codec::forward::{PrefixedSink, PrefixedStream, SinkKind};
 use ya_sb_proto::codec::GsbMessage;
+use ya_sb_proto::CallReplyCode;
 use ya_service_bus::{untyped as local_bus, Error, ResponseChunk};
 use ya_utils_networking::resolver;
 
@@ -32,10 +32,11 @@ const NET_RELAY_HOST_ENV_VAR: &str = "NET_RELAY_HOST";
 const DEFAULT_NET_RELAY_HOST: &str = "127.0.0.1:7464";
 const DEFAULT_BROADCAST_NODE_COUNT: u32 = 12;
 const DEFAULT_PING_INTERVAL: Duration = Duration::from_millis(15000);
-const REQUEST_ID: AtomicUsize = AtomicUsize::new(0);
 
 pub type BCastHandler = Box<dyn FnMut(String, &[u8]) + Send>;
 
+type BusSender = mpsc::Sender<ResponseChunk>;
+type BusReceiver = mpsc::Receiver<ResponseChunk>;
 type NetSender = mpsc::Sender<Vec<u8>>;
 type NetReceiver = mpsc::Receiver<Vec<u8>>;
 type NetSinkKind = SinkKind<NetSender, mpsc::SendError>;
@@ -160,6 +161,8 @@ pub async fn start_network(default_id: NodeId, ids: Vec<NodeId>) -> anyhow::Resu
                 }
             };
 
+            log::trace!("received forward packet ({} B)", fwd.payload.len());
+
             if tx.send(fwd.payload.into()).await.is_err() {
                 log::debug!("net routing error: channel closed");
                 let mut inner = state.inner.borrow_mut();
@@ -189,62 +192,86 @@ fn spawn_local_bus_handler<F>(address: &'static str, state: State, resolver: F)
 where
     F: Fn(&str, &str) -> anyhow::Result<(NodeId, NodeId, String)> + 'static,
 {
-    fn add_request(
-        caller_id: NodeId,
-        remote_id: NodeId,
-        address: impl ToString,
-        state: &State,
-    ) -> (NetReceiver, String) {
-        log::trace!("local bus handler -> add request to remote");
-
-        let (tx, rx) = mpsc::channel(1);
-        let request_id = REQUEST_ID.fetch_add(1, Relaxed).to_string();
-        let request = Request {
-            caller_id,
-            remote_id,
-            address: address.to_string(),
-            tx,
-        };
-
-        let mut inner = state.inner.borrow_mut();
-        inner.requests.insert(request_id.clone(), request);
-
-        (rx, request_id)
+    fn reply_bad_request(request_id: impl ToString, error: impl ToString, tx: BusSender) {
+        reply_err(request_id, error, CallReplyCode::CallReplyBadRequest, tx);
     }
 
-    fn forward_net(
-        caller_id: NodeId,
-        remote_id: NodeId,
-        address: impl ToString,
-        request_id: String,
-        data: &[u8],
-        state: &State,
+    fn reply_service_err(request_id: impl ToString, error: impl ToString, tx: BusSender) {
+        reply_err(request_id, error, CallReplyCode::ServiceFailure, tx);
+    }
+
+    fn reply_err(
+        request_id: impl ToString,
+        error: impl ToString,
+        code: impl Into<i32>,
+        mut tx: BusSender,
     ) {
-        let address = address.to_string();
-        let state = state.clone();
-        let data = data.to_vec();
-
+        let err = encode_error(request_id, error, code.into()).unwrap();
         tokio::task::spawn_local(async move {
-            log::trace!("local bus handler -> send message to remote");
-
-            match state.forward_sink(remote_id, true).await {
-                Ok(mut session) => {
-                    match encode_request(caller_id, address, request_id, data) {
-                        Ok(data) => {
-                            let _ = session
-                                .send(data)
-                                .await
-                                .map_err(|_| log::debug!("error sending message: session closed"));
-                        }
-                        Err(error) => log::debug!("error encoding message: {}", error),
-                    };
-                }
-                Err(error) => log::debug!("error forwarding message: {}", error),
-            };
+            let _ = tx.send(ResponseChunk::Full(err)).await;
         });
     }
 
-    fn forward_local(caller: &str, addr: &str, data: &[u8], state: &State, tx: NetSender) {
+    fn forward(
+        caller_id: NodeId,
+        remote_id: NodeId,
+        address: impl ToString,
+        msg: &[u8],
+        state: &State,
+    ) -> BusReceiver {
+        let address = address.to_string();
+        let state = state.clone();
+        let request_id = gen_id().to_string();
+
+        log::trace!("forward net {}", address);
+
+        let (tx, rx) = mpsc::channel(1);
+        let msg = match encode_request(caller_id, address.clone(), request_id.clone(), msg.to_vec())
+        {
+            Ok(vec) => vec,
+            Err(err) => {
+                reply_bad_request(request_id, format!("invalid request: {}", err), tx);
+                return rx;
+            }
+        };
+
+        {
+            let mut inner = state.inner.borrow_mut();
+            inner.requests.insert(
+                request_id.clone(),
+                Request {
+                    caller_id,
+                    remote_id,
+                    address,
+                    tx: tx.clone(),
+                },
+            );
+        }
+
+        tokio::task::spawn_local(async move {
+            log::trace!(
+                "local bus handler -> send message to remote ({} B)",
+                msg.len()
+            );
+
+            match state.forward_sink(remote_id, true).await {
+                Ok(mut session) => {
+                    let _ = session.send(msg).await.map_err(|_| {
+                        let err = format!("error sending message: session closed");
+                        reply_service_err(request_id, err, tx);
+                    });
+                }
+                Err(error) => {
+                    let err = format!("error forwarding message: {}", error);
+                    reply_service_err(request_id, err, tx);
+                }
+            };
+        });
+
+        rx
+    }
+
+    fn forward_local(caller: &str, addr: &str, data: &[u8], state: &State, tx: BusSender) {
         let address = match {
             let inner = state.inner.borrow();
             inner
@@ -256,37 +283,21 @@ where
         } {
             Some(address) => address,
             None => {
-                log::debug!("unknown address: {}", addr);
+                let err = format!("unknown address: {}", addr);
+                reply_bad_request("unknown", err, tx);
                 return;
             }
         };
 
+        log::trace!("forwarding /net call to a local endpoint: {}", address);
+
         let send = local_bus::call_stream(address.as_str(), caller, data);
         tokio::task::spawn_local(async move {
             let _ = send
-                .map(|r| r.map(|c| c.into_bytes()))
                 .map_err(|e| Error::GsbFailure(e.to_string()))
                 .forward(tx.sink_map_err(|e| Error::GsbFailure(e.to_string())))
                 .await;
         });
-    }
-
-    fn err_future<T, M>(message: M) -> futures::future::Ready<Result<T, Error>>
-    where
-        T: 'static,
-        M: ToString,
-    {
-        let err = Error::GsbBadRequest(message.to_string());
-        futures::future::err(err)
-    }
-
-    fn err_stream<'a, T, M>(message: M) -> LocalBoxStream<'a, Result<T, Error>>
-    where
-        T: 'static,
-        M: ToString,
-    {
-        let err = Error::GsbBadRequest(message.to_string());
-        futures::stream::once(async move { Err(err) }).boxed_local()
     }
 
     let resolver = Rc::new(resolver);
@@ -294,11 +305,14 @@ where
     let resolver_ = resolver.clone();
     let state_ = state.clone();
     let rpc = move |caller: &str, addr: &str, msg: &[u8]| {
-        log::trace!("handle rpc {}", addr);
+        log::trace!("forwarding rpc call to {}", addr);
 
         let (caller_id, remote_id, address) = match (*resolver_)(caller, addr) {
             Ok(id) => id,
-            Err(error) => return err_future(error).left_future(),
+            Err(err) => {
+                log::debug!("rpc {} forward error: {}", addr, err);
+                return async move { Ok(chunk_err(0, err).unwrap().into_bytes()) }.left_future();
+            }
         };
 
         log::trace!(
@@ -308,25 +322,41 @@ where
             remote_id
         );
 
-        let mut rx = if caller_id == remote_id {
+        let mut rx = if state_.inner.borrow().ids.contains(&remote_id) {
             let (tx, rx) = mpsc::channel(1);
             forward_local(&caller_id.to_string(), addr, msg, &state_, tx);
             rx
         } else {
-            let (rx, request_id) = add_request(caller_id, remote_id, &address, &state_);
-            forward_net(caller_id, remote_id, address, request_id, msg, &state_);
-            rx
+            forward(caller_id, remote_id, address, msg, &state_)
         };
 
-        async move { rx.next().await.ok_or(Error::Cancelled) }.right_future()
+        async move {
+            match rx.next().await.ok_or(Error::Cancelled) {
+                Ok(chunk) => match chunk {
+                    ResponseChunk::Full(vec) => Ok(vec),
+                    ResponseChunk::Part(_) => {
+                        Err(Error::GsbFailure("partial response".to_string()))
+                    }
+                },
+                Err(err) => Err(err),
+            }
+        }
+        .right_future()
     };
 
     let resolver_ = resolver.clone();
     let state_ = state.clone();
     let stream = move |caller: &str, addr: &str, msg: &[u8]| {
+        log::trace!("forwarding stream call to {}", addr);
+
         let (caller_id, remote_id, address) = match (*resolver_)(caller, addr) {
             Ok(id) => id,
-            Err(error) => return err_stream(error).left_stream(),
+            Err(err) => {
+                log::debug!("stream {} call error: {}", addr, err);
+                return futures::stream::once(async move { chunk_err(0, err) })
+                    .boxed_local()
+                    .left_stream();
+            }
         };
 
         log::trace!(
@@ -336,23 +366,19 @@ where
             remote_id
         );
 
-        let rx = if caller_id == remote_id {
+        let rx = if state_.inner.borrow().ids.contains(&remote_id) {
             let (tx, rx) = mpsc::channel(1);
             forward_local(&caller_id.to_string(), addr, msg, &state_, tx);
             rx
         } else {
-            let (rx, request_id) = add_request(caller_id, remote_id, &address, &state_);
-            forward_net(caller_id, remote_id, address, request_id, msg, &state_);
-            rx
+            forward(caller_id, remote_id, address, msg, &state_)
         };
-
         let eos = Rc::new(AtomicBool::new(false));
         let eos_chain = eos.clone();
 
         rx.map(move |v| {
-            // FIXME: streaming response
-            eos.store(true, Relaxed);
-            Ok(ResponseChunk::Full(v))
+            v.is_full().then(|| eos.store(true, Relaxed));
+            Ok(v)
         })
         .chain(StreamOnceIf::new(
             move || !eos_chain.load(Relaxed),
@@ -401,21 +427,21 @@ fn spawn_inbound_handler(
         async move {
             match decode_message(payload.as_slice()) {
                 Ok(Some(GsbMessage::CallRequest(request @ ya_sb_proto::CallRequest { .. }))) => {
-                    handle_request(request, remote_id, state, reliable)?;
+                    handle_request(request, remote_id, state, reliable)
                 }
                 Ok(Some(GsbMessage::CallReply(reply @ ya_sb_proto::CallReply { .. }))) => {
-                    handle_reply(reply, remote_id, state)?;
+                    handle_reply(reply, remote_id, state)
                 }
                 Ok(Some(GsbMessage::BroadcastRequest(
                     request @ ya_sb_proto::BroadcastRequest { .. },
-                ))) => {
-                    handle_broadcast(request, remote_id)?;
+                ))) => handle_broadcast(request, remote_id),
+                Ok(None) => {
+                    log::trace!("received a partial message");
+                    Ok(())
                 }
-                Ok(None) => anyhow::bail!("received partial message"),
                 Err(err) => anyhow::bail!("received message error: {}", err),
                 _ => anyhow::bail!("unexpected message type"),
-            };
-            Ok(())
+            }
         }
         .then(|result| async move {
             if let Err(e) = result {
@@ -437,9 +463,10 @@ fn handle_request(
         anyhow::bail!("invalid caller id: {}", request.caller);
     }
 
-    log::trace!("sending request to {}", remote_id);
+    log::trace!("handle request to {} from {}", request.address, remote_id);
 
     let address = request.address;
+    let address_map = address.clone();
     let caller_id = caller_id.unwrap();
     let request_id = request.request_id;
     let request_id_map = request_id.clone();
@@ -458,9 +485,11 @@ fn handle_request(
             .map(|s| address.replacen(s, net::PUBLIC_PREFIX, 1))
     } {
         Some(address) => {
+            log::trace!("handle request: calling: {}", address);
             local_bus::call_stream(&address, &request.caller, &request.data).left_stream()
         }
         None => {
+            log::trace!("handle request failed: unknown address: {}", address);
             let err = Error::GsbBadRequest(format!("unknown address: {}", address));
             futures::stream::once(futures::future::err(err)).right_stream()
         }
@@ -468,23 +497,29 @@ fn handle_request(
     .map(move |result| match result {
         Ok(chunk) => {
             chunk.is_full().then(|| eos_map.store(true, Relaxed));
-            chunk_ok(request_id.clone(), chunk)
+            reply_ok(request_id.clone(), chunk)
         }
         Err(err) => {
             eos_map.store(true, Relaxed);
-            chunk_err(request_id.clone(), err)
+            reply_err(request_id.clone(), err)
         }
     })
     .chain(StreamOnceIf::new(
         move || !eos_chain.load(Relaxed),
-        move || chunk_eos(request_id_map.clone()),
+        move || reply_eos(request_id_map.clone()),
     ))
-    .filter_map(|reply| async move {
-        match encode_message(reply) {
-            Ok(vec) => Some(Ok::<Vec<u8>, mpsc::SendError>(vec)),
-            Err(e) => {
-                log::debug!("packet encoding error: {}", e);
-                None
+    .filter_map(move |reply| {
+        let address = address_map.clone();
+        async move {
+            match encode_message(reply) {
+                Ok(vec) => {
+                    log::trace!("sending reply to request for {} ({} B)", address, vec.len());
+                    Some(Ok::<Vec<u8>, mpsc::SendError>(vec))
+                }
+                Err(e) => {
+                    log::debug!("packet encoding error: {}", e);
+                    None
+                }
             }
         }
     });
@@ -511,13 +546,24 @@ fn handle_reply(
     remote_id: NodeId,
     state: State,
 ) -> anyhow::Result<()> {
+    let full = reply.reply_type == ya_sb_proto::CallReplyType::Full as i32;
+
+    log::trace!(
+        "handle reply from node {} (full: {}, code: {}, id: {}) {} B",
+        remote_id,
+        full,
+        reply.code,
+        reply.request_id,
+        reply.data.len(),
+    );
+
     let mut request = match {
         let inner = state.inner.borrow();
         inner.requests.get(&reply.request_id).cloned()
     } {
         Some(request) => {
             if request.remote_id == remote_id {
-                if reply.reply_type == ya_sb_proto::CallReplyType::Full as i32 {
+                if full {
                     let mut inner = state.inner.borrow_mut();
                     inner.requests.remove(&reply.request_id);
                 }
@@ -526,12 +572,10 @@ fn handle_reply(
                 anyhow::bail!("invalid reply caller for request id: {}", reply.request_id);
             }
         }
-        None => anyhow::bail!("unknown request id: {}", reply.request_id),
+        None => anyhow::bail!("invalid reply request id: {}", reply.request_id),
     };
 
-    log::trace!("handle reply from node {}", remote_id);
-
-    let data = if reply.code == ya_sb_proto::CallReplyCode::CallReplyOk as i32 {
+    let data = if reply.code == CallReplyCode::CallReplyOk as i32 {
         reply.data
     } else {
         let err = anyhow::anyhow!("request failed with code {}", reply.code);
@@ -543,7 +587,14 @@ fn handle_reply(
 
     tokio::task::spawn_local(async move {
         log::trace!("forward reply data");
-        let _ = request.tx.send(data).await;
+        let _ = request
+            .tx
+            .send(if full {
+                ResponseChunk::Full(data)
+            } else {
+                ResponseChunk::Part(data)
+            })
+            .await;
     });
 
     Ok(())
@@ -565,19 +616,22 @@ fn handle_broadcast(
         &request.caller
     );
 
-    let topic = request.topic;
-    let data: Rc<[u8]> = request.data.into();
     let caller = caller_id.unwrap().to_string();
 
-    let handlers = BCAST_HANDLERS.lock().unwrap();
-    for handler in BCAST
-        .resolve(&topic)
-        .into_iter()
-        .filter_map(|e| handlers.get(e.as_ref()).clone())
-    {
-        let mut h = handler.lock().unwrap();
-        (*(h))(caller.clone(), data.as_ref());
-    }
+    tokio::task::spawn_local(async move {
+        let data: Rc<[u8]> = request.data.into();
+        let topic = request.topic;
+
+        let handlers = BCAST_HANDLERS.lock().unwrap();
+        for handler in BCAST
+            .resolve(&topic)
+            .into_iter()
+            .filter_map(|e| handlers.get(e.as_ref()).clone())
+        {
+            let mut h = handler.lock().unwrap();
+            (*(h))(caller.clone(), data.as_ref());
+        }
+    });
 
     Ok(())
 }
@@ -589,7 +643,7 @@ struct State {
 
 #[derive(Default)]
 struct StateInner {
-    requests: HashMap<String, Request<NetSender>>,
+    requests: HashMap<String, Request<BusSender>>,
     routes: HashMap<NetSinkKey, NetSender>,
     forward: HashMap<NetSinkKey, NetSinkKind>,
     ids: HashSet<NodeId>,
@@ -704,17 +758,17 @@ fn encode_request(
     Ok(encode_message(message)?)
 }
 
-fn encode_bad_request(request_id: String, error: impl ToString) -> anyhow::Result<Vec<u8>> {
-    encode_error(
-        request_id,
-        error,
-        ya_sb_proto::CallReplyCode::CallReplyBadRequest as i32,
-    )
+fn encode_bad_request(request_id: impl ToString, error: impl ToString) -> anyhow::Result<Vec<u8>> {
+    encode_error(request_id, error, CallReplyCode::CallReplyBadRequest as i32)
 }
 
-fn encode_error(request_id: String, error: impl ToString, code: i32) -> anyhow::Result<Vec<u8>> {
+fn encode_error(
+    request_id: impl ToString,
+    error: impl ToString,
+    code: i32,
+) -> anyhow::Result<Vec<u8>> {
     let message = GsbMessage::CallReply(ya_sb_proto::CallReply {
-        request_id,
+        request_id: request_id.to_string(),
         code,
         reply_type: ya_sb_proto::CallReplyType::Full as i32,
         data: error.to_string().into_bytes(),
@@ -741,7 +795,7 @@ pub(crate) fn decode_message(src: &[u8]) -> Result<Option<GsbMessage>, Error> {
         .map_err(|e| Error::EncodingProblem(e.to_string()))?)
 }
 
-fn chunk_ok(request_id: String, chunk: ResponseChunk) -> GsbMessage {
+fn reply_ok(request_id: impl ToString, chunk: ResponseChunk) -> GsbMessage {
     let reply_type = if chunk.is_full() {
         ya_sb_proto::CallReplyType::Full as i32
     } else {
@@ -749,29 +803,36 @@ fn chunk_ok(request_id: String, chunk: ResponseChunk) -> GsbMessage {
     };
 
     GsbMessage::CallReply(ya_sb_proto::CallReply {
-        request_id,
+        request_id: request_id.to_string(),
         code: ya_sb_proto::CallReplyCode::CallReplyOk as i32,
         reply_type,
         data: chunk.into_bytes(),
     })
 }
 
-fn chunk_err(request_id: String, err: ya_service_bus::Error) -> GsbMessage {
+fn reply_err(request_id: impl ToString, err: impl ToString) -> GsbMessage {
     GsbMessage::CallReply(ya_sb_proto::CallReply {
-        request_id,
-        code: ya_sb_proto::CallReplyCode::ServiceFailure as i32,
+        request_id: request_id.to_string(),
+        code: ya_sb_proto::CallReplyCode::CallReplyBadRequest as i32,
         reply_type: ya_sb_proto::CallReplyType::Full as i32,
-        data: format!("{}", err).into_bytes(),
+        data: err.to_string().into_bytes(),
     })
 }
 
-fn chunk_eos(request_id: String) -> GsbMessage {
+fn reply_eos(request_id: impl ToString) -> GsbMessage {
     GsbMessage::CallReply(ya_sb_proto::CallReply {
-        request_id,
+        request_id: request_id.to_string(),
         code: ya_sb_proto::CallReplyCode::CallReplyOk as i32,
         reply_type: ya_sb_proto::CallReplyType::Full as i32,
         data: vec![],
     })
+}
+
+fn chunk_err(request_id: impl ToString, err: impl ToString) -> Result<ResponseChunk, Error> {
+    Ok(ResponseChunk::Full(encode_message(reply_err(
+        request_id.to_string(),
+        err,
+    ))?))
 }
 
 fn parse_net_to_addr(addr: &str) -> anyhow::Result<(NodeId, String)> {
@@ -783,10 +844,10 @@ fn parse_net_to_addr(addr: &str) -> anyhow::Result<(NodeId, String)> {
         let service_id = &addr[prefix..];
 
         if let Some(_) = it.next() {
-            return Ok((to_id, net_service(service_id)));
+            return Ok((to_id, net_service(format!("{}/{}", to_node_id, service_id))));
         }
     }
-    anyhow::bail!("invalid net-from destination: {}", addr)
+    anyhow::bail!("invalid net-to destination: {}", addr)
 }
 
 fn parse_from_to_addr(addr: &str) -> anyhow::Result<(NodeId, NodeId, String)> {
@@ -804,5 +865,11 @@ fn parse_from_to_addr(addr: &str) -> anyhow::Result<(NodeId, NodeId, String)> {
             return Ok((from_id, to_id, net_service(service_id)));
         }
     }
-    anyhow::bail!("invalid net-from destination: {}", addr)
+    anyhow::bail!("invalid net-from-to destination: {}", addr)
+}
+
+fn gen_id() -> u64 {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    rng.gen::<u64>() & 0x1f_ff_ff__ff_ff_ff_ffu64
 }

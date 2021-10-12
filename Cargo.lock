@@ -1851,7 +1851,7 @@ version = "0.7.3"
 source = "git+https://github.com/tomusdrw/ethsign.git?rev=1b93031d2c45f3a3313e5418876b3d3e751ba87e#1b93031d2c45f3a3313e5418876b3d3e751ba87e"
 dependencies = [
  "parity-crypto 0.6.2",
- "rand 0.8.3",
+ "rand 0.8.4",
  "rustc-hex",
  "secp256k1 0.19.0",
  "serde",
@@ -1865,7 +1865,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4dfbd5e7c2bd7ab6758207318f4b89028d11f927219a340d9e638bf0038046b4"
 dependencies = [
  "parity-crypto 0.8.0",
- "rand 0.8.3",
+ "rand 0.8.4",
  "rustc-hex",
  "secp256k1 0.20.3",
  "serde",
@@ -1923,7 +1923,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cfcf0ed7fe52a17a03854ec54a9f76d6d84508d1c0e66bc1793301c73fc8493c"
 dependencies = [
  "byteorder",
- "rand 0.8.3",
+ "rand 0.8.4",
  "rustc-hex",
  "static_assertions",
 ]
@@ -4270,9 +4270,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.8.3"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ef9e7e66b4468674bfcb0c81af8b7fa0bb154fa9f28eb840da5c447baeb8d7e"
+checksum = "2e7573632e6454cf6b99d7aac4ccca54be06da05aca2ef7423d22d27d4d4bcd8"
 dependencies = [
  "libc",
  "rand_chacha 0.3.0",
@@ -5170,7 +5170,7 @@ version = "0.5.1"
 source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6c848541e89262f90ca693d9e1a84c6f3df0953b"
 dependencies = [
  "lazy_static",
- "parking_lot 0.11.1",
+ "parking_lot 0.10.2",
  "serial_test_derive",
 ]
 
@@ -5610,7 +5610,7 @@ checksum = "dac1c663cfc93810f88aed9b8941d48cabf856a1b111c29a40439018d870eb22"
 dependencies = [
  "cfg-if 1.0.0",
  "libc",
- "rand 0.8.3",
+ "rand 0.8.4",
  "redox_syscall 0.2.5",
  "remove_dir_all",
  "winapi 0.3.9",
@@ -7011,6 +7011,7 @@ dependencies = [
  "log",
  "metrics 0.12.1",
  "prost",
+ "rand 0.7.3",
  "serde",
  "serde_json",
  "structopt",
@@ -7032,7 +7033,7 @@ dependencies = [
 [[package]]
 name = "ya-net-server"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?branch=mf/ya-integration#1aba387741de001833a03a10bfd27dbc2c7183c6"
+source = "git+https://github.com/golemfactory/ya-relay.git?branch=mf/ya-integration#7790eb3418bb5408d878030a2d5cb7e6b5a0a864"
 dependencies = [
  "actix-rt",
  "anyhow",
@@ -7046,7 +7047,7 @@ dependencies = [
  "hex",
  "itertools 0.10.1",
  "log",
- "rand 0.8.3",
+ "rand 0.8.4",
  "secp256k1 0.20.3",
  "serde_json",
  "sha2 0.9.3",
@@ -7065,13 +7066,13 @@ dependencies = [
 [[package]]
 name = "ya-net-stack"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?branch=mf/ya-integration#1aba387741de001833a03a10bfd27dbc2c7183c6"
+source = "git+https://github.com/golemfactory/ya-relay.git?branch=mf/ya-integration#7790eb3418bb5408d878030a2d5cb7e6b5a0a864"
 dependencies = [
  "derive_more",
  "futures 0.3.13",
  "log",
  "managed",
- "rand 0.8.3",
+ "rand 0.8.4",
  "smoltcp",
  "thiserror",
  "tokio 0.2.25",
@@ -7235,13 +7236,14 @@ dependencies = [
 [[package]]
 name = "ya-relay-proto"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?branch=mf/ya-integration#1aba387741de001833a03a10bfd27dbc2c7183c6"
+source = "git+https://github.com/golemfactory/ya-relay.git?branch=mf/ya-integration#7790eb3418bb5408d878030a2d5cb7e6b5a0a864"
 dependencies = [
  "bytes 0.5.6",
  "derive_more",
  "futures 0.3.13",
  "prost",
  "prost-build",
+ "rand 0.8.4",
  "thiserror",
  "tokio 0.2.25",
  "tokio-util 0.3.1",
