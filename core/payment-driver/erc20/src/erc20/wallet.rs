@@ -113,7 +113,7 @@ pub async fn make_transfer(
     nonce: U256,
     network: Network,
     gas_price: Option<BigDecimal>,
-    gas_limit: Option<u32>
+    gas_limit: Option<u32>,
 ) -> Result<TransactionEntity, GenericError> {
     log::debug!(
         "make_transfer(). network={}, nonce={}, details={:?}",
@@ -125,14 +125,17 @@ pub async fn make_transfer(
     let amount = utils::big_dec_to_u256(amount)?;
     let gas_price = match gas_price {
         Some(gas_price) => Some(utils::big_dec_gwei_to_u256(gas_price)?),
-        None => None
+        None => None,
     };
 
     let address = utils::str_to_addr(&details.sender)?;
     let recipient = utils::str_to_addr(&details.recipient)?;
     // TODO: Implement token
     //let token = get_network_token(network, None);
-    ethereum::sign_transfer_tx(address, recipient, amount, network, nonce, gas_price, gas_limit).await
+    ethereum::sign_transfer_tx(
+        address, recipient, amount, network, nonce, gas_price, gas_limit,
+    )
+    .await
 }
 
 pub async fn send_transactions(

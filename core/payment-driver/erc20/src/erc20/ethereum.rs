@@ -5,7 +5,7 @@ use sha3::{Digest, Sha3_512};
 use std::env;
 use web3::contract::{Contract, Options};
 use web3::transports::Http;
-use web3::types::{Bytes, TransactionReceipt, TransactionId, H160, H256, U256, U64, Transaction};
+use web3::types::{Bytes, Transaction, TransactionId, TransactionReceipt, H160, H256, U256, U64};
 use web3::Web3;
 
 use ya_client_model::NodeId;
@@ -142,7 +142,7 @@ pub async fn sign_transfer_tx(
     network: Network,
     nonce: U256,
     gas_price_override: Option<U256>,
-    gas_limit_override: Option<u32>
+    gas_limit_override: Option<u32>,
 ) -> Result<TransactionEntity, GenericError> {
     let env = get_env(network)?;
     let client = get_client(network)?;
@@ -186,7 +186,7 @@ pub async fn sign_transfer_tx(
 
     let gas_limit = match gas_limit_override {
         Some(gas_limit_override) => U256::from(gas_limit_override),
-        None => *GLM_POLYGON_GAS_LIMIT
+        None => *GLM_POLYGON_GAS_LIMIT,
     };
 
     let tx = YagnaRawTransaction {

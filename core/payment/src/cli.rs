@@ -69,9 +69,13 @@ pub enum PaymentCli {
         to_address: String,
         #[structopt(long, help = "Amount in GLM for example 1.45")]
         amount: String,
-        #[structopt(long, help = "Override gas price (in Gwei)", default_value="auto")]
+        #[structopt(long, help = "Override gas price (in Gwei)", default_value = "auto")]
         gas_price: String,
-        #[structopt(long, help = "Override gas limit (at least 48000 to account with GLM, 60000 to new account without GLM)", default_value="auto")]
+        #[structopt(
+            long,
+            help = "Override gas limit (at least 48000 to account with GLM, 60000 to new account without GLM)",
+            default_value = "auto"
+        )]
         gas_limit: String,
     },
     Invoice {
@@ -266,7 +270,7 @@ impl PaymentCli {
                 } else {
                     Some(BigDecimal::from_str(&gas_price)?)
                 };
-                let gas_limit = if gas_limit.is_empty() || gas_limit == "auto"  {
+                let gas_limit = if gas_limit.is_empty() || gas_limit == "auto" {
                     None
                 } else {
                     Some(u32::from_str(&gas_limit)?)

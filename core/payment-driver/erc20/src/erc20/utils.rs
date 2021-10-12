@@ -37,7 +37,6 @@ pub fn big_dec_gwei_to_u256(v: BigDecimal) -> Result<U256, GenericError> {
     Ok(U256::from_dec_str(v).map_err(GenericError::new)?)
 }
 
-
 pub fn u256_to_big_dec(v: U256) -> Result<BigDecimal, GenericError> {
     let v: BigDecimal = v.to_string().parse().map_err(GenericError::new)?;
     Ok(v / &(*PRECISION))
