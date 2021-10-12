@@ -6173,6 +6173,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "unbounded-queue"
+version = "0.1.0"
+source = "git+https://github.com/golemfactory/ya-relay.git?branch=mf/ya-integration#0c0ec7a28975f5bbc6b7444a5e38a7f5c99c68b4"
+dependencies = [
+ "futures 0.3.13",
+ "thiserror",
+]
+
+[[package]]
 name = "unicase"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7033,7 +7042,7 @@ dependencies = [
 [[package]]
 name = "ya-net-server"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?branch=mf/ya-integration#7790eb3418bb5408d878030a2d5cb7e6b5a0a864"
+source = "git+https://github.com/golemfactory/ya-relay.git?branch=mf/ya-integration#0c0ec7a28975f5bbc6b7444a5e38a7f5c99c68b4"
 dependencies = [
  "actix-rt",
  "anyhow",
@@ -7056,6 +7065,7 @@ dependencies = [
  "thiserror",
  "tokio 0.2.25",
  "tokio-util 0.3.1",
+ "unbounded-queue",
  "url",
  "uuid",
  "ya-client-model",
@@ -7066,7 +7076,7 @@ dependencies = [
 [[package]]
 name = "ya-net-stack"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?branch=mf/ya-integration#7790eb3418bb5408d878030a2d5cb7e6b5a0a864"
+source = "git+https://github.com/golemfactory/ya-relay.git?branch=mf/ya-integration#0c0ec7a28975f5bbc6b7444a5e38a7f5c99c68b4"
 dependencies = [
  "derive_more",
  "futures 0.3.13",
@@ -7076,6 +7086,7 @@ dependencies = [
  "smoltcp",
  "thiserror",
  "tokio 0.2.25",
+ "unbounded-queue",
 ]
 
 [[package]]
@@ -7236,7 +7247,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-proto"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?branch=mf/ya-integration#7790eb3418bb5408d878030a2d5cb7e6b5a0a864"
+source = "git+https://github.com/golemfactory/ya-relay.git?branch=mf/ya-integration#0c0ec7a28975f5bbc6b7444a5e38a7f5c99c68b4"
 dependencies = [
  "bytes 0.5.6",
  "derive_more",

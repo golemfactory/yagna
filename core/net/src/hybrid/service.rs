@@ -212,7 +212,7 @@ where
         });
     }
 
-    fn forward(
+    fn forward_net(
         caller_id: NodeId,
         remote_id: NodeId,
         address: impl ToString,
@@ -230,6 +230,7 @@ where
         {
             Ok(vec) => vec,
             Err(err) => {
+                log::debug!("forward net: invalid request: {}", err);
                 reply_bad_request(request_id, format!("invalid request: {}", err), tx);
                 return rx;
             }
@@ -305,7 +306,7 @@ where
     let resolver_ = resolver.clone();
     let state_ = state.clone();
     let rpc = move |caller: &str, addr: &str, msg: &[u8]| {
-        log::trace!("forwarding rpc call to {}", addr);
+        log::trace!("local bus: rpc call (egress): {}", addr);
 
         let (caller_id, remote_id, address) = match (*resolver_)(caller, addr) {
             Ok(id) => id,
@@ -316,7 +317,7 @@ where
         };
 
         log::trace!(
-            "sending rpc message to {} ({} -> {})",
+            "local bus: rpc call (egress): {} ({} -> {})",
             address,
             caller_id,
             remote_id
@@ -327,7 +328,7 @@ where
             forward_local(&caller_id.to_string(), addr, msg, &state_, tx);
             rx
         } else {
-            forward(caller_id, remote_id, address, msg, &state_)
+            forward_net(caller_id, remote_id, address, msg, &state_)
         };
 
         async move {
@@ -347,12 +348,12 @@ where
     let resolver_ = resolver.clone();
     let state_ = state.clone();
     let stream = move |caller: &str, addr: &str, msg: &[u8]| {
-        log::trace!("forwarding stream call to {}", addr);
+        log::trace!("local bus: stream call (egress): {}", addr);
 
         let (caller_id, remote_id, address) = match (*resolver_)(caller, addr) {
             Ok(id) => id,
             Err(err) => {
-                log::debug!("stream {} call error: {}", addr, err);
+                log::debug!("local bus: stream call (egress) to {} error: {}", addr, err);
                 return futures::stream::once(async move { chunk_err(0, err) })
                     .boxed_local()
                     .left_stream();
@@ -360,7 +361,7 @@ where
         };
 
         log::trace!(
-            "sending stream message to {} ({} -> {})",
+            "local bus: stream call (egress): {} ({} -> {})",
             address,
             caller_id,
             remote_id
@@ -371,7 +372,7 @@ where
             forward_local(&caller_id.to_string(), addr, msg, &state_, tx);
             rx
         } else {
-            forward(caller_id, remote_id, address, msg, &state_)
+            forward_net(caller_id, remote_id, address, msg, &state_)
         };
         let eos = Rc::new(AtomicBool::new(false));
         let eos_chain = eos.clone();
@@ -463,13 +464,18 @@ fn handle_request(
         anyhow::bail!("invalid caller id: {}", request.caller);
     }
 
-    log::trace!("handle request to {} from {}", request.address, remote_id);
-
     let address = request.address;
-    let address_map = address.clone();
     let caller_id = caller_id.unwrap();
     let request_id = request.request_id;
     let request_id_map = request_id.clone();
+    let request_id_map2 = request_id.clone();
+
+    log::trace!(
+        "handle request {} to {} from {}",
+        request_id,
+        address,
+        remote_id
+    );
 
     let eos = Rc::new(AtomicBool::new(false));
     let eos_map = eos.clone();
@@ -509,15 +515,19 @@ fn handle_request(
         move || reply_eos(request_id_map.clone()),
     ))
     .filter_map(move |reply| {
-        let address = address_map.clone();
+        let request_id = request_id_map2.clone();
         async move {
             match encode_message(reply) {
                 Ok(vec) => {
-                    log::trace!("sending reply to request for {} ({} B)", address, vec.len());
+                    log::trace!(
+                        "handle request {}: reply chunk ({} B)",
+                        request_id,
+                        vec.len()
+                    );
                     Some(Ok::<Vec<u8>, mpsc::SendError>(vec))
                 }
                 Err(e) => {
-                    log::debug!("packet encoding error: {}", e);
+                    log::debug!("handle request: reply encoding error: {}", e);
                     None
                 }
             }
@@ -578,7 +588,12 @@ fn handle_reply(
     let data = if reply.code == CallReplyCode::CallReplyOk as i32 {
         reply.data
     } else {
-        let err = anyhow::anyhow!("request failed with code {}", reply.code);
+        let err = anyhow::anyhow!(
+            "request {} failed with code {}",
+            reply.request_id,
+            reply.code
+        );
+        log::debug!("{}", err);
         match encode_bad_request(reply.request_id, err) {
             Ok(vec) => vec,
             Err(err) => anyhow::bail!("unable to encode error reply: {}", err),
@@ -586,15 +601,17 @@ fn handle_reply(
     };
 
     tokio::task::spawn_local(async move {
-        log::trace!("forward reply data");
-        let _ = request
+        if let Err(_) = request
             .tx
             .send(if full {
                 ResponseChunk::Full(data)
             } else {
                 ResponseChunk::Part(data)
             })
-            .await;
+            .await
+        {
+            log::debug!("failed to forward reply: channel closed");
+        }
     });
 
     Ok(())
@@ -780,6 +797,7 @@ pub(crate) fn encode_message(msg: GsbMessage) -> Result<Vec<u8>, Error> {
     use tokio_util::codec::Encoder;
 
     let mut buf = bytes::BytesMut::with_capacity(msg.encoded_len());
+    // FIXME: GsbMessageEncoder requires a BytesMut to Vec conversion
     ya_sb_proto::codec::GsbMessageEncoder::default()
         .encode(msg, &mut buf)
         .map_err(|e| Error::EncodingProblem(e.to_string()))?;

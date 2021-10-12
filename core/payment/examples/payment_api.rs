@@ -340,7 +340,9 @@ async fn main() -> anyhow::Result<()> {
     log::info!("bind remote...");
 
     #[cfg(feature = "hybrid-net")]
-    let _ = ya_net::start_network(provider_id, vec![provider_id, requestor_id]).await?;
+    {
+        let _ = ya_net::start_network(provider_id, vec![provider_id, requestor_id]).await?;
+    }
 
     #[cfg(not(feature = "hybrid-net"))]
     {
