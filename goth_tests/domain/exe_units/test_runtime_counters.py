@@ -33,14 +33,14 @@ def build_demand(
     )
 
 
-def _exe_script(duration: float = 3.0):
+def _exe_script(duration: int = 10000):
     return [
         {"deploy": {}},
         {"start": {"args": []}},
         {
             "run": {
                 "entry_point": "sleep",
-                "args": [f"{duration * 1000}"],
+                "args": [f"{duration}"],
             }
         },
     ]
@@ -101,7 +101,7 @@ async def test_custom_runtime_counter(
 
         batch_id = await requestor.call_exec(activity_id, json.dumps(exe_script))
         await requestor.collect_results(
-            activity_id, batch_id, len(exe_script), timeout=10
+            activity_id, batch_id, len(exe_script), timeout=30
         )
 
         await requestor.destroy_activity(activity_id)
