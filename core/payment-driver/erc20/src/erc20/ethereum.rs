@@ -51,7 +51,7 @@ const TRANSFER_ERC20_FUNCTION: &str = "transfer";
 
 pub async fn get_glm_balance(address: H160, network: Network) -> Result<U256, GenericError> {
     let client = get_client(network)?;
-    let env = get_env(network)?;
+    let env = get_env(network);
 
     let glm_contract = prepare_erc20_contract(&client, &env)?;
     glm_contract
@@ -99,7 +99,7 @@ pub async fn sign_faucet_tx(
     network: Network,
     nonce: U256,
 ) -> Result<TransactionEntity, GenericError> {
-    let env = get_env(network)?;
+    let env = get_env(network);
     let client = get_client(network)?;
     let contract = prepare_glm_faucet_contract(&client, &env)?;
     let contract = match contract {
@@ -144,7 +144,7 @@ pub async fn sign_transfer_tx(
     gas_price_override: Option<U256>,
     gas_limit_override: Option<u32>,
 ) -> Result<TransactionEntity, GenericError> {
-    let env = get_env(network)?;
+    let env = get_env(network);
     let client = get_client(network)?;
     let contract = prepare_erc20_contract(&client, &env)?;
 
@@ -153,7 +153,7 @@ pub async fn sign_transfer_tx(
     let mut gas_price = client.eth().gas_price().await.map_err(GenericError::new)?;
 
     match network {
-        Network::PolygonMainnet | Network::PolygonMumbai => {
+        Network::Polygon | Network::Mumbai => {
             if gas_price < U256::from(*GLM_POLYGON_MIN_GAS_PRICE) {
                 log::info!(
                     "Gas price lower than mininimum {}/{}. Continuing with higher gas price...",
@@ -179,8 +179,8 @@ pub async fn sign_transfer_tx(
                 gas_price = U256::from(*GLM_POLYGON_MAX_GAS_PRICE);
             };
         }
-        Network::Mainnet | Network::Rinkeby => {
-            log::info!("Gas limits not implemented for Mainnet and Rinkeby networks",);
+        Network::Mainnet | Network::Rinkeby | Network::Goerli => {
+            log::info!("Gas limits not implemented for Mainnet, Rinkeby and Goerli networks",);
         }
     }
 
@@ -239,7 +239,7 @@ pub async fn get_tx_on_chain_status(
         confirmed: false,
         succeeded: false,
     };
-    let env = get_env(network)?;
+    let env = get_env(network);
     let tx = get_tx_receipt(tx_hash, network).await?;
     if let Some(tx) = tx {
         res.exists_on_chain = true;
@@ -270,41 +270,12 @@ pub async fn get_tx_on_chain_status(
     }
     Ok(res)
 }
-/*
-pub async fn is_tx_succeeded(
-    tx_hash: H256,
-    current_block: &U64,
-    network: Network,
-) -> Result<bool, GenericError> {
-    let env = get_env(network)?;
-    let tx = get_tx_receipt(tx_hash, network).await?;
-    if let Some(tx) = tx {
-        if (tx.status == 1)
-        {
-
-        }
-        if let Some(tx_bn) = tx.block_number {
-            // TODO: Store tx.block_number in DB and check only once after required_confirmations.
-            log::trace!(
-                "is_tx_confirmed? tb + rq - 1 <= cb. tb={}, rq={}, cb={}",
-                tx_bn,
-                env.required_confirmations,
-                current_block
-            );
-            // tx.block_number is the first confirmation, so we need to - 1
-            if tx_bn + env.required_confirmations - 1 <= *current_block {
-                return Ok(true);
-            }
-        }
-    }
-    Ok(false)
-}*/
 
 pub fn decode_encoded_transaction_data(
     network: Network,
     encoded: &str,
 ) -> Result<(ethereum_types::Address, ethereum_types::U256), GenericError> {
-    let env = get_env(network)?;
+    let env = get_env(network);
     let client = get_client(network)?;
     let contract = prepare_erc20_contract(&client, &env)?;
 
@@ -355,34 +326,38 @@ pub async fn get_tx_receipt(
     Ok(result)
 }
 
-fn get_rpc_addr_from_env(network: Network) -> Result<String, GenericError> {
+fn get_rpc_addr_from_env(network: Network) -> String {
     match network {
-        Network::Mainnet => Ok(std::env::var("MAINNET_GETH_ADDR")
-            .unwrap_or("https://geth.golem.network:55555".to_string())),
-        Network::Rinkeby => Ok(std::env::var("RINKEBY_GETH_ADDR")
-            .unwrap_or("http://geth.testnet.golem.network:55555".to_string())),
-        Network::PolygonMainnet => Ok(std::env::var("POLYGON_MAINNET_GETH_ADDR")
-            .unwrap_or("https://bor.golem.network".to_string())),
-        Network::PolygonMumbai => Ok(std::env::var("POLYGON_MUMBAI_GETH_ADDR").unwrap_or(
-            "https://polygon-mumbai.infura.io/v3/4dfe7a7afc6d4549b16490db5fd6358e".to_string(),
-        )),
+        Network::Mainnet => std::env::var("MAINNET_GETH_ADDR")
+            .unwrap_or("https://geth.golem.network:55555".to_string()),
+        Network::Rinkeby => std::env::var("RINKEBY_GETH_ADDR")
+            .unwrap_or("http://geth.testnet.golem.network:55555".to_string()),
+        Network::Goerli => {
+            std::env::var("GOERLI_GETH_ADDR").unwrap_or("https://rpc.goerli.mudit.blog".to_string())
+        }
+        Network::Polygon => {
+            std::env::var("POLYGON_GETH_ADDR").unwrap_or("https://bor.golem.network".to_string())
+        }
+        Network::Mumbai => std::env::var("MUMBAI_GETH_ADDR")
+            .unwrap_or("https://matic-mumbai.chainstacklabs.com".to_string()),
     }
 }
 
 fn get_client(network: Network) -> Result<Web3<Http>, GenericError> {
-    let geth_addr = get_rpc_addr_from_env(network)?;
+    let geth_addr = get_rpc_addr_from_env(network);
 
     let transport = web3::transports::Http::new(&geth_addr).map_err(GenericError::new)?;
 
     Ok(Web3::new(transport))
 }
 
-fn get_env(network: Network) -> Result<config::EnvConfiguration, GenericError> {
+fn get_env(network: Network) -> config::EnvConfiguration {
     match network {
-        Network::Mainnet => Ok(*config::MAINNET_CONFIG),
-        Network::Rinkeby => Ok(*config::RINKEBY_CONFIG),
-        Network::PolygonMumbai => Ok(*config::MUMBAI_CONFIG),
-        Network::PolygonMainnet => Ok(*config::POLYGON_MAINNET_CONFIG),
+        Network::Mainnet => *config::MAINNET_CONFIG,
+        Network::Rinkeby => *config::RINKEBY_CONFIG,
+        Network::Goerli => *config::GOERLI_CONFIG,
+        Network::Mumbai => *config::MUMBAI_CONFIG,
+        Network::Polygon => *config::POLYGON_MAINNET_CONFIG,
     }
 }
 
