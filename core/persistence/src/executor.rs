@@ -89,6 +89,7 @@ impl DbExecutor {
         let manager = ConnectionManager::new(database_url.clone());
         let tx_lock: TxLock = Arc::new(RwLock::new(0));
         let inner = Pool::builder()
+            .max_size(1)
             .connection_customizer(Box::new(connection_customizer(
                 database_url.clone(),
                 tx_lock.clone(),
@@ -117,8 +118,8 @@ impl DbExecutor {
         Self::new(db.to_string_lossy())
     }
 
-    pub fn in_memory() -> Result<Self, Error> {
-        Self::new(":memory:")
+    pub fn in_memory(name: &str) -> Result<Self, Error> {
+        Self::new(format!("file:{}?mode=memory&cache=shared", name))
     }
 
     fn conn(&self) -> Result<ConnType, Error> {
@@ -141,8 +142,6 @@ impl DbExecutor {
         c.batch_execute("PRAGMA foreign_keys = OFF;")?;
         migration(&c, &mut std::io::stderr())?;
         c.batch_execute("PRAGMA foreign_keys = ON;")?;
-
-        c.execute("select * from market_demand;")?;
         Ok(())
     }
 
@@ -259,4 +258,24 @@ where
         })
     })
     .await
+}
+
+#[derive(Clone)]
+pub struct DbMixedExecutor {
+    pub disk_db: DbExecutor,
+    pub ram_db: DbExecutor,
+}
+
+pub trait AsMixedDao<'a> {
+    fn as_dao(disk_pool: &'a PoolType, ram_pool: &'a PoolType) -> Self;
+}
+
+impl DbMixedExecutor {
+    pub fn new(disk_db: DbExecutor, ram_db: DbExecutor) -> DbMixedExecutor {
+        DbMixedExecutor { disk_db, ram_db }
+    }
+
+    pub fn as_dao<'a, T: AsMixedDao<'a>>(&'a self) -> T {
+        AsMixedDao::as_dao(&self.disk_db.pool, &self.ram_db.pool)
+    }
 }

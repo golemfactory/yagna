@@ -463,26 +463,36 @@ impl MarketsNetwork {
         .await
     }
 
-    fn create_database(&self, name: &str) -> DbExecutor {
+    fn create_database(&self, name: &str) -> DbMixedExecutor {
         let db_path = self.instance_dir(name);
-        let db = DbExecutor::from_data_dir(&db_path, "yagna")
+        let db_name = self.node_gsb_prefixes(name).0;
+
+        let disk_db = DbExecutor::from_data_dir(&db_path, "yagna")
             .map_err(|e| anyhow!("Failed to create db [{:?}]. Error: {}", db_path, e))
             .unwrap();
-        db
+        let ram_db = DbExecutor::in_memory(&db_name)
+            .map_err(|e| {
+                anyhow!(
+                    "Failed to create in memory db [{:?}]. Error: {}",
+                    db_name,
+                    e
+                )
+            })
+            .unwrap();
+
+        DbMixedExecutor::new(disk_db, ram_db)
     }
 
     pub fn init_database(&self, name: &str) -> DbMixedExecutor {
-        let disk_db = self.create_database(name);
-        let ram_db = DbExecutor::in_memory().unwrap();
+        let db = self.create_database(name);
 
-        disk_db
+        db.disk_db
             .apply_migration(crate::db::migrations::run_with_output)
             .unwrap();
-        ram_db
+        db.ram_db
             .apply_migration(crate::db::migrations::run_with_output)
             .unwrap();
-
-        DbMixedExecutor::new(disk_db.clone(), ram_db)
+        db
     }
 
     fn instance_dir(&self, name: &str) -> PathBuf {

@@ -156,8 +156,6 @@ impl<'c> AgreementDao<'c> {
             diesel::insert_into(market_agreement)
                 .values(&agreement)
                 .execute(conn)?;
-
-            update_proposal_state(conn, &proposal_id, ProposalState::Accepted)?;
             Ok(agreement)
         })
         .await?;
