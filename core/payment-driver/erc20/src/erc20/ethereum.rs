@@ -252,11 +252,12 @@ fn get_rpc_addr_from_env(network: Network) -> Result<String, GenericError> {
             .unwrap_or("http://geth.testnet.golem.network:55555".to_string())),
         Network::Goerli => Ok(std::env::var("GOERLI_GETH_ADDR")
             .unwrap_or("https://rpc.goerli.mudit.blog".to_string())),
-        Network::Polygon => Ok(std::env::var("POLYGON_GETH_ADDR")
-            .unwrap_or("https://bor.golem.network".to_string())),
-        Network::Mumbai => Ok(std::env::var("MUMBAI_GETH_ADDR").unwrap_or(
-            "https://matic-mumbai.chainstacklabs.com".to_string(),
-        )),
+        Network::Polygon => {
+            Ok(std::env::var("POLYGON_GETH_ADDR")
+                .unwrap_or("https://bor.golem.network".to_string()))
+        }
+        Network::Mumbai => Ok(std::env::var("MUMBAI_GETH_ADDR")
+            .unwrap_or("https://matic-mumbai.chainstacklabs.com".to_string())),
     }
 }
 

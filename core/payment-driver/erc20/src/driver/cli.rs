@@ -69,10 +69,10 @@ pub async fn fund(dao: &Erc20Dao, msg: Fund) -> Result<String, GenericError> {
                 .await
                 .map_err(GenericError::new)??;
             format!("Received funds from the faucet. address=0x{:x}", &address)
-        },
+        }
         Network::Goerli => {
             format!("Goerli faucet not supported")
-        },
+        }
         Network::Polygon => format!(
             r#"Your mainnet/polygon ethereum address is {}.
 

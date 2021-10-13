@@ -81,11 +81,11 @@ pub struct PaymentEntity {
 #[derive(AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy, FromPrimitive)]
 #[sql_type = "Integer"]
 pub enum Network {
-    Mainnet = 1, //Main Ethereum chain
-    Rinkeby = 4, //Rinkeby is Ethereum testnet
-    Goerli = 5, //Goerli is another Ethereum testnet
+    Mainnet = 1,    //Main Ethereum chain
+    Rinkeby = 4,    //Rinkeby is Ethereum testnet
+    Goerli = 5,     //Goerli is another Ethereum testnet
     Mumbai = 80001, //Mumbai is testnet for Polygon network
-    Polygon = 137, //Polygon is Polygon production network
+    Polygon = 137,  //Polygon is Polygon production network
 }
 
 impl Default for Network {

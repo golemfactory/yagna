@@ -295,7 +295,7 @@ impl PaymentDriver for ZksyncDriver {
                     &address
                 ))
             }
-            DbNetwork::Goerli =>  Ok(format!("PolygonMumbai Not supported")),
+            DbNetwork::Goerli => Ok(format!("PolygonMumbai Not supported")),
             DbNetwork::Mumbai => Ok(format!("PolygonMumbai Not supported")),
             DbNetwork::Polygon => Ok(format!("PolygonMainnet Not supported")),
             DbNetwork::Mainnet => Ok(format!(
