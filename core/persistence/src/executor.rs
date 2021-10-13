@@ -89,6 +89,7 @@ impl DbExecutor {
         let manager = ConnectionManager::new(database_url.clone());
         let tx_lock: TxLock = Arc::new(RwLock::new(0));
         let inner = Pool::builder()
+            // Sqlite doesn't handle connections from multiple threads well.
             .max_size(1)
             .connection_customizer(Box::new(connection_customizer(
                 database_url.clone(),

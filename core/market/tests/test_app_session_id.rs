@@ -3,8 +3,8 @@ use chrono::{Duration, Utc};
 
 use ya_market::testing::agreement_utils::{negotiate_agreement, negotiate_agreement_with_ids};
 use ya_market::testing::proposal_util::exchange_proposals_exclusive;
+use ya_market::testing::MarketsNetwork;
 use ya_market::testing::Owner;
-use ya_market::testing::{MarketServiceExt, MarketsNetwork};
 
 use ya_client::model::market::AgreementEventType;
 
