@@ -1,6 +1,5 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use std::iter::FromIterator;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::pin::Pin;
 use std::rc::Rc;
@@ -20,7 +19,7 @@ use ya_core_model::net::{self, net_service};
 use ya_core_model::NodeId;
 use ya_net_server::testing::{Client, ClientBuilder};
 use ya_relay_proto::codec::forward::{PrefixedSink, PrefixedStream, SinkKind};
-use ya_sb_proto::codec::GsbMessage;
+use ya_sb_proto::codec::{GsbMessage, ProtocolError};
 use ya_sb_proto::CallReplyCode;
 use ya_service_bus::{untyped as local_bus, Error, ResponseChunk};
 use ya_utils_networking::resolver;
@@ -794,23 +793,43 @@ fn encode_error(
 }
 
 pub(crate) fn encode_message(msg: GsbMessage) -> Result<Vec<u8>, Error> {
-    use tokio_util::codec::Encoder;
+    use prost::Message;
 
-    let mut buf = bytes::BytesMut::with_capacity(msg.encoded_len());
-    // FIXME: GsbMessageEncoder requires a BytesMut to Vec conversion
-    ya_sb_proto::codec::GsbMessageEncoder::default()
-        .encode(msg, &mut buf)
+    let packet = ya_sb_proto::Packet { packet: Some(msg) };
+    let len: usize = packet.encoded_len();
+
+    let mut dst = Vec::with_capacity(4 + len);
+    dst.extend((len as u32).to_be_bytes());
+    packet
+        .encode(&mut dst)
         .map_err(|e| Error::EncodingProblem(e.to_string()))?;
-    Ok(Vec::from_iter(buf.into_iter()))
+
+    Ok(dst)
 }
 
 pub(crate) fn decode_message(src: &[u8]) -> Result<Option<GsbMessage>, Error> {
-    use tokio_util::codec::Decoder;
+    use prost::Message;
 
-    let mut buf = bytes::BytesMut::from_iter(src.iter().cloned());
-    Ok(ya_sb_proto::codec::GsbMessageDecoder::default()
-        .decode(&mut buf)
-        .map_err(|e| Error::EncodingProblem(e.to_string()))?)
+    let msg_length = if src.len() < 4 {
+        return Ok(None);
+    } else {
+        let mut buf = [0u8; 4];
+        buf.copy_from_slice(&src[0..4]);
+        u32::from_be_bytes(buf) as usize
+    };
+
+    if src.len() < 4 + msg_length {
+        return Ok(None);
+    }
+
+    let packet = ya_sb_proto::Packet::decode(&src[4..4 + msg_length])
+        .map_err(|e| Error::EncodingProblem(e.to_string()))?;
+    match packet.packet {
+        Some(msg) => Ok(Some(msg)),
+        None => Err(Error::EncodingProblem(
+            ProtocolError::UnrecognizedMessageType.to_string(),
+        )),
+    }
 }
 
 fn reply_ok(request_id: impl ToString, chunk: ResponseChunk) -> GsbMessage {
@@ -890,4 +909,33 @@ fn gen_id() -> u64 {
     use rand::Rng;
     let mut rng = rand::thread_rng();
     rng.gen::<u64>() & 0x1f_ff_ff__ff_ff_ff_ffu64
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::hybrid::service::{decode_message, encode_message};
+    use std::iter::FromIterator;
+
+    #[test]
+    fn encode_message_compat() {
+        use tokio_util::codec::Encoder;
+        use ya_sb_proto::codec::GsbMessage;
+
+        let msg = GsbMessage::CallReply(ya_sb_proto::CallReply {
+            request_id: "10203040".to_string(),
+            code: ya_sb_proto::CallReplyCode::CallReplyBadRequest as i32,
+            reply_type: ya_sb_proto::CallReplyType::Full as i32,
+            data: "err".to_string().into_bytes(),
+        });
+        let encoded = encode_message(msg.clone()).unwrap();
+
+        let mut buf = bytes::BytesMut::with_capacity(msg.encoded_len());
+        ya_sb_proto::codec::GsbMessageEncoder::default()
+            .encode(msg.clone(), &mut buf)
+            .unwrap();
+        let encoded_orig = Vec::from_iter(buf.into_iter());
+
+        assert_eq!(encoded_orig, encoded);
+        assert_eq!(decode_message(encoded.as_slice()).unwrap().unwrap(), msg);
+    }
 }
