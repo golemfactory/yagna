@@ -25,11 +25,27 @@ use ya_utils_networking::vpn::error::Error as VpnError;
 use std::str::FromStr;
 pub use ya_client_model::activity::activity_state::{State, StatePair};
 
+fn invalid_state_err_msg(state_pair: &StatePair) -> String {
+    match state_pair {
+        StatePair(State::Initialized, None) => {
+            format!("Activity is initialized - deploy() command is expected now")
+        }
+        StatePair(State::Deployed, None) => {
+            format!("Activity is deployed - start() command is expected now")
+        }
+        StatePair(State::Ready, None) => format!("Cannot send command after a successful start()"),
+        _ => format!(
+            "This command is not allowed when activity is in the {:?} state",
+            state_pair.0
+        ),
+    }
+}
+
 #[derive(Error, Debug, Serialize)]
 pub enum StateError {
     #[error("Busy: {0:?}")]
     Busy(StatePair),
-    #[error("Invalid state: {0:?}")]
+    #[error("{}", invalid_state_err_msg(.0))]
     InvalidState(StatePair),
     #[error("Unexpected state: {current:?}, expected {expected:?}")]
     UnexpectedState {
