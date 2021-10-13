@@ -50,7 +50,7 @@ const TRANSFER_ERC20_FUNCTION: &str = "transfer";
 
 pub async fn get_glm_balance(address: H160, network: Network) -> Result<U256, GenericError> {
     let client = get_client(network)?;
-    let env = get_env(network)?;
+    let env = get_env(network);
 
     let glm_contract = prepare_erc20_contract(&client, &env)?;
     glm_contract
@@ -98,7 +98,7 @@ pub async fn sign_faucet_tx(
     network: Network,
     nonce: U256,
 ) -> Result<TransactionEntity, GenericError> {
-    let env = get_env(network)?;
+    let env = get_env(network);
     let client = get_client(network)?;
     let contract = prepare_glm_faucet_contract(&client, &env)?;
     let contract = match contract {
@@ -141,7 +141,7 @@ pub async fn sign_transfer_tx(
     network: Network,
     nonce: U256,
 ) -> Result<TransactionEntity, GenericError> {
-    let env = get_env(network)?;
+    let env = get_env(network);
     let client = get_client(network)?;
     let contract = prepare_erc20_contract(&client, &env)?;
 
@@ -211,7 +211,7 @@ pub async fn is_tx_confirmed(
     current_block: &U64,
     network: Network,
 ) -> Result<bool, GenericError> {
-    let env = get_env(network)?;
+    let env = get_env(network);
     let tx = get_tx_receipt(tx_hash, network).await?;
     if let Some(tx) = tx {
         if let Some(tx_bn) = tx.block_number {
@@ -269,13 +269,13 @@ fn get_client(network: Network) -> Result<Web3<Http>, GenericError> {
     Ok(Web3::new(transport))
 }
 
-fn get_env(network: Network) -> Result<config::EnvConfiguration, GenericError> {
+fn get_env(network: Network) -> config::EnvConfiguration {
     match network {
-        Network::Mainnet => Ok(*config::MAINNET_CONFIG),
-        Network::Rinkeby => Ok(*config::RINKEBY_CONFIG),
-        Network::Goerli => Ok(*config::GOERLI_CONFIG),
-        Network::Mumbai => Ok(*config::MUMBAI_CONFIG),
-        Network::Polygon => Ok(*config::POLYGON_MAINNET_CONFIG),
+        Network::Mainnet => *config::MAINNET_CONFIG,
+        Network::Rinkeby => *config::RINKEBY_CONFIG,
+        Network::Goerli => *config::GOERLI_CONFIG,
+        Network::Mumbai => *config::MUMBAI_CONFIG,
+        Network::Polygon => *config::POLYGON_MAINNET_CONFIG,
     }
 }
 
