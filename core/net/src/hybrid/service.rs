@@ -76,6 +76,12 @@ impl Net {
     }
 }
 
+// FIXME: examples compatibility
+#[allow(unused)]
+pub async fn bind_remote<T>(_: T, default_id: NodeId, ids: Vec<NodeId>) -> anyhow::Result<()> {
+    start_network(default_id, ids).await
+}
+
 pub async fn start_network(default_id: NodeId, ids: Vec<NodeId>) -> anyhow::Result<()> {
     let url = Url::parse(&format!("udp://{}", relay_addr().await?))?;
     let provider = IdentityCryptoProvider::new(default_id);
