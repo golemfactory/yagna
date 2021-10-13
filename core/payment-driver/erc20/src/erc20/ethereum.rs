@@ -244,25 +244,25 @@ pub async fn get_tx_receipt(
     Ok(result)
 }
 
-fn get_rpc_addr_from_env(network: Network) -> Result<String, GenericError> {
+fn get_rpc_addr_from_env(network: Network) -> String {
     match network {
-        Network::Mainnet => Ok(std::env::var("MAINNET_GETH_ADDR")
-            .unwrap_or("https://geth.golem.network:55555".to_string())),
-        Network::Rinkeby => Ok(std::env::var("RINKEBY_GETH_ADDR")
-            .unwrap_or("http://geth.testnet.golem.network:55555".to_string())),
-        Network::Goerli => Ok(std::env::var("GOERLI_GETH_ADDR")
-            .unwrap_or("https://rpc.goerli.mudit.blog".to_string())),
-        Network::Polygon => {
-            Ok(std::env::var("POLYGON_GETH_ADDR")
-                .unwrap_or("https://bor.golem.network".to_string()))
+        Network::Mainnet => std::env::var("MAINNET_GETH_ADDR")
+            .unwrap_or("https://geth.golem.network:55555".to_string()),
+        Network::Rinkeby => std::env::var("RINKEBY_GETH_ADDR")
+            .unwrap_or("http://geth.testnet.golem.network:55555".to_string()),
+        Network::Goerli => {
+            std::env::var("GOERLI_GETH_ADDR").unwrap_or("https://rpc.goerli.mudit.blog".to_string())
         }
-        Network::Mumbai => Ok(std::env::var("MUMBAI_GETH_ADDR")
-            .unwrap_or("https://matic-mumbai.chainstacklabs.com".to_string())),
+        Network::Polygon => {
+            std::env::var("POLYGON_GETH_ADDR").unwrap_or("https://bor.golem.network".to_string())
+        }
+        Network::Mumbai => std::env::var("MUMBAI_GETH_ADDR")
+            .unwrap_or("https://matic-mumbai.chainstacklabs.com".to_string()),
     }
 }
 
 fn get_client(network: Network) -> Result<Web3<Http>, GenericError> {
-    let geth_addr = get_rpc_addr_from_env(network)?;
+    let geth_addr = get_rpc_addr_from_env(network);
 
     let transport = web3::transports::Http::new(&geth_addr).map_err(GenericError::new)?;
 
