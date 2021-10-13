@@ -4,7 +4,7 @@ use smoltcp::wire::{IpProtocol, IpVersion};
 use std::time::Duration;
 use ya_utils_networking::vpn::MAX_FRAME_SIZE;
 
-pub const TCP_CONN_TIMEOUT: Duration = Duration::from_secs(3);
+pub const TCP_CONN_TIMEOUT: Duration = Duration::from_secs(5);
 const TCP_KEEP_ALIVE: Duration = Duration::from_secs(60);
 
 pub fn tcp_socket<'a>() -> TcpSocket<'a> {
