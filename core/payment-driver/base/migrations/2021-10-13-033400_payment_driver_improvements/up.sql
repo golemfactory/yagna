@@ -1,0 +1,35 @@
+PRAGMA foreign_keys=off;
+
+CREATE TABLE `transaction_tmp`(
+    tx_id VARCHAR(128) NOT NULL PRIMARY KEY,
+    sender VARCHAR(40) NOT NULL,
+    nonce VARCHAR(64) NOT NULL,
+    status INTEGER NOT NULL,
+    tx_type INTEGER NOT NULL,
+    encoded VARCHAR (8000) NOT NULL,
+    signature VARCHAR (130) NOT NULL,
+    tx_hash VARCHAR(64) NULL UNIQUE,
+
+    starting_gas_price VARCHAR(64) NULL,
+    current_gas_price VARCHAR(64) NULL,
+    maximum_gas_price VARCHAR(64) NULL,
+    time_created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    time_last_action DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    time_sent DATETIME NULL,
+    time_confirmed DATETIME NULL,
+    FOREIGN KEY(status) REFERENCES transaction_status (status_id),
+    FOREIGN KEY(tx_type) REFERENCES transaction_type (type_id)
+);
+
+INSERT INTO `transaction_tmp`(tx_id, sender, nonce, status, tx_type, encoded, signature, tx_hash, time_created, time_last_action)
+SELECT tx_id, sender, nonce, status, tx_type, encoded, signature, tx_hash, timestamp, timestamp FROM `transaction`;
+
+DROP TABLE `transaction`;
+
+ALTER TABLE `transaction_tmp` RENAME TO `transaction`;
+
+PRAGMA foreign_keys=on;
+
+create index if not exists transaction_tx_hash_idx on "transaction" (tx_hash);
+create index if not exists transaction_sender_idx on "transaction" (sender);
+create index if not exists transaction_status_idx on "transaction" (status);

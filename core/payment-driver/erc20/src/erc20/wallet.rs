@@ -158,7 +158,7 @@ pub async fn send_transactions(
             }
             Err(e) => {
                 log::error!("Error sending transaction: {:?}", e);
-                dao.transaction_failed(&tx.tx_id).await;
+                dao.transaction_failed_send(&tx.tx_id).await;
             }
         }
     }

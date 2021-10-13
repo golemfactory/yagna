@@ -32,10 +32,12 @@ pub enum TxType {
 
 #[derive(FromPrimitive)]
 pub enum TransactionStatus {
-    Failed = 0,
     Created = 1,
     Sent = 2,
-    Confirmed = 3,
+    Pending = 3,
+    Confirmed = 4,
+    ErrorSent = 10,
+    ErrorOnChain = 11
 }
 
 impl TryFrom<i32> for TransactionStatus {
@@ -54,13 +56,19 @@ pub struct TransactionEntity {
     pub tx_id: String,
     pub sender: String,
     pub nonce: String,
-    pub timestamp: NaiveDateTime,
     pub status: i32,
     pub tx_type: i32,
     pub encoded: String,
     pub signature: String,
     pub tx_hash: Option<String>,
     pub network: Network,
+    pub starting_gas_price: Option<String>,
+    pub current_gas_price: Option<String>,
+    pub maximum_gas_price: Option<String>,
+    pub time_created: NaiveDateTime,
+    pub time_last_action: NaiveDateTime,
+    pub time_sent: Option<NaiveDateTime>,
+    pub time_confirmed: Option<NaiveDateTime>
 }
 
 #[derive(Queryable, Clone, Debug, Identifiable, Insertable, PartialEq)]

@@ -122,17 +122,24 @@ impl Erc20Dao {
         // TO CHECK: No difference between tx_id and tx_hash on erc20
         // TODO: Implement pre-sign
         let tx_id = Uuid::new_v4().to_string();
+        let current_naive_time = date.naive_utc();
         let tx = TransactionEntity {
             tx_id: tx_id.clone(),
             sender: details.sender.clone(),
             nonce: "".to_string(), // not used till pre-sign
             status: TransactionStatus::Created as i32,
-            timestamp: date.naive_utc(),
+            time_created: current_naive_time,
+            time_last_action: current_naive_time,
+            time_confirmed: None,
+            time_sent: None,
             tx_type: 0,                // Erc20 only knows transfers, unused field
             encoded: "".to_string(),   // not used till pre-sign
             signature: "".to_string(), // not used till pre-sign
             tx_hash: None,
             network: Network::Rinkeby, // TODO: update network
+            current_gas_price: None,
+            starting_gas_price: None,
+            maximum_gas_price: None,
         };
 
         if let Err(e) = self.transaction().insert_transactions(vec![tx]).await {
@@ -200,10 +207,25 @@ impl Erc20Dao {
         }
     }
 
-    pub async fn transaction_failed(&self, tx_id: &str) {
+    pub async fn transaction_failed_send(&self, tx_id: &str) {
         if let Err(e) = self
             .transaction()
-            .update_tx_status(tx_id.to_string(), TransactionStatus::Failed.into())
+            .update_tx_status(tx_id.to_string(), TransactionStatus::ErrorSent.into())
+            .await
+        {
+            log::error!(
+                "Failed to update transaction failed in `transaction` {:?} : {:?}",
+                tx_id,
+                e
+            )
+            // TO CHECK: Should it continue or stop the process...
+        }
+    }
+
+    pub async fn transaction_failed_onchain(&self, tx_id: &str) {
+        if let Err(e) = self
+            .transaction()
+            .update_tx_status(tx_id.to_string(), TransactionStatus::ErrorOnChain.into())
             .await
         {
             log::error!(

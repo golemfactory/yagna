@@ -24,13 +24,19 @@ table! {
         tx_id -> Text,
         sender -> Text,
         nonce -> Text,
-        timestamp -> Timestamp,
         status -> Integer,
         tx_type -> Integer,
         encoded -> Text,
         signature -> Text,
         tx_hash -> Nullable<Text>,
         network -> Integer,
+        starting_gas_price -> Nullable<Text>,
+        current_gas_price -> Nullable<Text>,
+        maximum_gas_price -> Nullable<Text>,
+        time_created -> Timestamp,
+        time_last_action -> Timestamp,
+        time_sent -> Nullable<Timestamp>,
+        time_confirmed -> Nullable<Timestamp>,
     }
 }
 

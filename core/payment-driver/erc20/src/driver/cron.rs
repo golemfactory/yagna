@@ -149,7 +149,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                     .iter()
                     .map(|payment| payment.order_id.clone())
                     .collect();
-                dao.transaction_failed(&tx.tx_id).await;
+                dao.transaction_failed_onchain(&tx.tx_id).await;
                 for order_id in order_ids.iter() {
                     dao.payment_failed(order_id).await;
                 }

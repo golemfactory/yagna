@@ -406,11 +406,18 @@ fn raw_tx_to_entity(
     signature: &Vec<u8>,
     tx_type: TxType,
 ) -> TransactionEntity {
+    let current_naive_time = timestamp.naive_utc();
     TransactionEntity {
         tx_id: prepare_tx_id(&raw_tx, chain_id, sender),
         sender: format!("0x{:x}", sender),
         nonce: base_utils::u256_to_big_endian_hex(raw_tx.nonce),
-        timestamp: timestamp.naive_utc(),
+        time_created: current_naive_time,
+        time_last_action: current_naive_time,
+        time_sent: None,
+        time_confirmed: None,
+        maximum_gas_price: None,
+        starting_gas_price: None,
+        current_gas_price: None,
         encoded: serde_json::to_string(raw_tx).unwrap(),
         status: TransactionStatus::Created as i32,
         tx_type: tx_type as i32,
