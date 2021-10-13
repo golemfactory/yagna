@@ -11,6 +11,10 @@ pub const RINKEBY_NETWORK: &'static str = "rinkeby";
 pub const RINKEBY_TOKEN: &'static str = "tGLM";
 pub const RINKEBY_PLATFORM: &'static str = "erc20-rinkeby-tglm";
 
+pub const GOERLI_NETWORK: &'static str = "goerli";
+pub const GOERLI_TOKEN: &'static str = "tGLM";
+pub const GOERLI_PLATFORM: &'static str = "erc20-goerli-tglm";
+
 pub const MUMBAI_NETWORK: &'static str = "mumbai";
 pub const MUMBAI_TOKEN: &'static str = "tGLM";
 pub const MUMBAI_PLATFORM: &'static str = "erc20-mumbai-tglm";

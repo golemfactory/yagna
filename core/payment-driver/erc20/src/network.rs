@@ -9,7 +9,7 @@ use ya_payment_driver::{db::models::Network as DbNetwork, driver::Network, model
 use crate::{
     MAINNET_NETWORK, MAINNET_PLATFORM, MAINNET_TOKEN, MUMBAI_NETWORK, MUMBAI_PLATFORM,
     MUMBAI_TOKEN, POLYGON_MAINNET_NETWORK, POLYGON_MAINNET_PLATFORM, POLYGON_MAINNET_TOKEN,
-    RINKEBY_NETWORK, RINKEBY_PLATFORM, RINKEBY_TOKEN,
+    RINKEBY_NETWORK, RINKEBY_PLATFORM, RINKEBY_TOKEN, GOERLI_NETWORK, GOERLI_PLATFORM, GOERLI_TOKEN,
 };
 
 lazy_static::lazy_static! {
@@ -18,6 +18,12 @@ lazy_static::lazy_static! {
             default_token: RINKEBY_TOKEN.to_string(),
             tokens: hashmap! {
                 RINKEBY_TOKEN.to_string() => RINKEBY_PLATFORM.to_string()
+            }
+        },
+        GOERLI_NETWORK.to_string() => Network {
+            default_token: GOERLI_TOKEN.to_string(),
+            tokens: hashmap! {
+                GOERLI_TOKEN.to_string() => GOERLI_PLATFORM.to_string()
             }
         },
         MAINNET_NETWORK.to_string() => Network {
@@ -40,6 +46,7 @@ lazy_static::lazy_static! {
         }
     };
     pub static ref RINKEBY_DB_NETWORK: DbNetwork = DbNetwork::from_str(RINKEBY_NETWORK).unwrap();
+    pub static ref GOERLI_DB_NETWORK: DbNetwork = DbNetwork::from_str(GOERLI_NETWORK).unwrap();
     pub static ref MAINNET_DB_NETWORK: DbNetwork = DbNetwork::from_str(MAINNET_NETWORK).unwrap();
     pub static ref MUMBAI_DB_NETWORK: DbNetwork = DbNetwork::from_str(MUMBAI_NETWORK).unwrap();
     pub static ref POLYGON_MAINNET_DB_NETWORK: DbNetwork = DbNetwork::from_str(POLYGON_MAINNET_NETWORK).unwrap();
@@ -48,6 +55,7 @@ lazy_static::lazy_static! {
 pub fn platform_to_network_token(platform: String) -> Result<(DbNetwork, String), GenericError> {
     match platform.as_str() {
         RINKEBY_PLATFORM => Ok((*RINKEBY_DB_NETWORK, RINKEBY_TOKEN.to_owned())),
+        GOERLI_PLATFORM => Ok((*GOERLI_DB_NETWORK, GOERLI_TOKEN.to_owned())),
         MAINNET_PLATFORM => Ok((*MAINNET_DB_NETWORK, MAINNET_TOKEN.to_owned())),
         MUMBAI_PLATFORM => Ok((*MUMBAI_DB_NETWORK, MUMBAI_TOKEN.to_owned())),
         POLYGON_MAINNET_PLATFORM => Ok((

@@ -150,7 +150,7 @@ pub async fn sign_transfer_tx(
     let mut gas_price = client.eth().gas_price().await.map_err(GenericError::new)?;
 
     match network {
-        Network::PolygonMainnet | Network::PolygonMumbai => {
+        Network::Polygon | Network::Mumbai => {
             if gas_price > U256::from(*GLM_POLYGON_MAX_GAS_PRICE) {
                 log::warn!(
                     "Gas price higher than maximum {}/{}. Continuing with lower gas price...",
@@ -169,8 +169,8 @@ pub async fn sign_transfer_tx(
                 gas_price = U256::from(*GLM_POLYGON_MIN_GAS_PRICE);
             }
         }
-        Network::Mainnet | Network::Rinkeby => {
-            log::info!("Gas limits not implemented for Mainnet and Rinkeby networks",);
+        Network::Mainnet | Network::Rinkeby | Network::Goerli => {
+            log::info!("Gas limits not implemented for Mainnet, Rinkeby and Goerli networks",);
         }
     }
 
@@ -250,10 +250,12 @@ fn get_rpc_addr_from_env(network: Network) -> Result<String, GenericError> {
             .unwrap_or("https://geth.golem.network:55555".to_string())),
         Network::Rinkeby => Ok(std::env::var("RINKEBY_GETH_ADDR")
             .unwrap_or("http://geth.testnet.golem.network:55555".to_string())),
-        Network::PolygonMainnet => Ok(std::env::var("POLYGON_MAINNET_GETH_ADDR")
+        Network::Goerli => Ok(std::env::var("GOERLI_GETH_ADDR")
+            .unwrap_or("https://rpc.goerli.mudit.blog".to_string())),
+        Network::Polygon => Ok(std::env::var("POLYGON_GETH_ADDR")
             .unwrap_or("https://bor.golem.network".to_string())),
-        Network::PolygonMumbai => Ok(std::env::var("POLYGON_MUMBAI_GETH_ADDR").unwrap_or(
-            "https://polygon-mumbai.infura.io/v3/4dfe7a7afc6d4549b16490db5fd6358e".to_string(),
+        Network::Mumbai => Ok(std::env::var("MUMBAI_GETH_ADDR").unwrap_or(
+            "https://matic-mumbai.chainstacklabs.com".to_string(),
         )),
     }
 }
@@ -270,8 +272,9 @@ fn get_env(network: Network) -> Result<config::EnvConfiguration, GenericError> {
     match network {
         Network::Mainnet => Ok(*config::MAINNET_CONFIG),
         Network::Rinkeby => Ok(*config::RINKEBY_CONFIG),
-        Network::PolygonMumbai => Ok(*config::MUMBAI_CONFIG),
-        Network::PolygonMainnet => Ok(*config::POLYGON_MAINNET_CONFIG),
+        Network::Goerli => Ok(*config::GOERLI_CONFIG),
+        Network::Mumbai => Ok(*config::MUMBAI_CONFIG),
+        Network::Polygon => Ok(*config::POLYGON_MAINNET_CONFIG),
     }
 }
 
