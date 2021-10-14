@@ -33,6 +33,7 @@ pub mod agreement;
 pub mod crypto;
 pub mod error;
 mod handlers;
+pub mod logger;
 pub mod message;
 pub mod metrics;
 mod network;
