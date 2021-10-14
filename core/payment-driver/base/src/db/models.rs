@@ -32,6 +32,7 @@ pub enum TxType {
 
 #[derive(FromPrimitive)]
 pub enum TransactionStatus {
+    Unused = 0, //previous failure
     Created = 1,
     Sent = 2,
     Pending = 3,
