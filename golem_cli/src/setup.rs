@@ -112,10 +112,7 @@ pub async fn setup(run_config: &RunConfig, force: bool) -> Result<i32> {
                 config.subnet = None;
             }
         }
-        let subnet = promptly::prompt_default(
-            "Subnet ",
-            config.subnet.unwrap_or_else(|| DEFAULT_SUBNET.to_string()),
-        )?;
+        let subnet = config.subnet.unwrap_or_else(|| DEFAULT_SUBNET.to_string());
 
         let account_msg = &config
             .account

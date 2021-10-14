@@ -124,9 +124,12 @@ impl VpnSupervisor {
         network_id: &str,
     ) -> Result<BoxFuture<'a, Result<()>>> {
         self.owner(node_id, network_id)?;
-        self.networks.remove(network_id);
+        let vpn = self
+            .networks
+            .remove(network_id)
+            .ok_or_else(|| Error::NetNotFound)?;
         self.blueprints.remove(network_id);
-        self.forward(network_id, Shutdown {})
+        self.forward(vpn, Shutdown {})
     }
 
     pub fn remove_node<'a>(
@@ -137,12 +140,13 @@ impl VpnSupervisor {
     ) -> Result<BoxFuture<'a, Result<()>>> {
         self.owner(node_id, network_id)?;
         self.ownership.remove(node_id);
-        self.forward(network_id, RemoveNode { id })
+        let vpn = self.vpn(network_id)?;
+        self.forward(vpn, RemoveNode { id })
     }
 
     fn forward<'a, M, T>(
         &self,
-        network_id: &str,
+        vpn: Addr<Vpn>,
         msg: M,
     ) -> Result<BoxFuture<'a, <M as Message>::Result>>
     where
@@ -151,7 +155,6 @@ impl VpnSupervisor {
         <M as Message>::Result: Send + 'static,
         T: Send + 'static,
     {
-        let vpn = self.vpn(network_id)?;
         Ok(Box::pin(async move {
             match vpn.send(msg).await {
                 Ok(r) => r,
@@ -409,7 +412,10 @@ impl Handler<AddNode> for Vpn {
 
     fn handle(&mut self, msg: AddNode, _: &mut Self::Context) -> Self::Result {
         let ip = to_ip(&msg.address)?;
-        self.vpn.add_node(ip, &msg.id, gsb_remote_url)?;
+        match self.vpn.add_node(ip, &msg.id, gsb_remote_url) {
+            Ok(_) | Err(Error::IpAddrTaken(_)) => {}
+            Err(err) => return Err(err),
+        }
 
         let vpn_id = self.vpn.id().clone();
         let futs = self
@@ -743,5 +749,34 @@ impl ArbiterExt for Arbiter {
 
         self.send(Box::pin(tx_fut));
         Box::pin(rx_fut)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::network::VpnSupervisor;
+    use ya_client_model::net::NewNetwork;
+    use ya_core_model::NodeId;
+
+    #[actix_rt::test]
+    async fn create_remove_network() -> anyhow::Result<()> {
+        let node_id = NodeId::default();
+
+        let mut supervisor = VpnSupervisor::default();
+        let network = supervisor
+            .create_network(
+                &node_id,
+                NewNetwork {
+                    ip: "10.0.0.0".to_string(),
+                    mask: None,
+                    gateway: None,
+                },
+            )
+            .await?;
+
+        supervisor.get_network(&node_id, &network.id)?;
+        supervisor.remove_network(&node_id, &network.id)?;
+
+        Ok(())
     }
 }
