@@ -18,6 +18,7 @@ use crate::{
         schema::transaction::dsl,
     },
 };
+use chrono::{Utc, NaiveDateTime};
 
 #[allow(unused)]
 pub struct TransactionDao<'c> {
@@ -124,11 +125,29 @@ impl<'c> TransactionDao<'c> {
         .await
     }
 
+    pub async fn update_tx_send_again(&self, tx_id: String) -> DbResult<()> {
+        let current_time = Utc::now().naive_utc();
+        do_with_transaction(self.pool, move |conn| {
+            diesel::update(dsl::transaction.find(tx_id))
+                .set((
+                    dsl::status.eq(TransactionStatus::Created as i32),
+                    dsl::time_last_action.eq(current_time),
+                    dsl::time_sent.eq::<Option<NaiveDateTime>>(None),
+                    dsl::tx_hash.eq::<Option<String>>(None),
+                ))
+                .execute(conn)?;
+            Ok(())
+        }).await
+    }
+
     pub async fn update_tx_sent(&self, tx_id: String, tx_hash: String) -> DbResult<()> {
+        let current_time = Utc::now().naive_utc();
         do_with_transaction(self.pool, move |conn| {
             diesel::update(dsl::transaction.find(tx_id))
                 .set((
                     dsl::status.eq(TransactionStatus::Sent as i32),
+                    dsl::time_last_action.eq(current_time),
+                    dsl::time_sent.eq(current_time),
                     dsl::tx_hash.eq(tx_hash),
                 ))
                 .execute(conn)?;
@@ -137,10 +156,19 @@ impl<'c> TransactionDao<'c> {
         .await
     }
 
-    pub async fn update_tx_status(&self, tx_id: String, status: TransactionStatus) -> DbResult<()> {
+    pub async fn update_tx_status(&self, tx_id: String, status: TransactionStatus, err: Option<String>) -> DbResult<()> {
+        let current_time = Utc::now().naive_utc();
+        let confirmed_time = match status {
+            TransactionStatus::Confirmed => Some(current_time),
+            _ => None
+        };
         do_with_transaction(self.pool, move |conn| {
             diesel::update(dsl::transaction.find(tx_id))
-                .set(dsl::status.eq(status as i32))
+                .set((dsl::status.eq(status as i32),
+                     dsl::time_last_action.eq(current_time),
+                     dsl::time_confirmed.eq(confirmed_time),
+                     dsl::last_error_msg.eq(err)
+                ))
                 .execute(conn)?;
             Ok(())
         })

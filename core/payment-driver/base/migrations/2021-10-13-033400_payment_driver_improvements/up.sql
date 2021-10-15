@@ -17,6 +17,8 @@ CREATE TABLE `transaction_tmp`(
     time_sent DATETIME NULL,
     time_confirmed DATETIME NULL,
     network INTEGER NOT NULL DEFAULT 4,
+    last_error_msg TEXT NULL,
+    resent_times INT DEFAULT 0,
     FOREIGN KEY(status) REFERENCES transaction_status (status_id),
     FOREIGN KEY(tx_type) REFERENCES transaction_type (type_id)
 );

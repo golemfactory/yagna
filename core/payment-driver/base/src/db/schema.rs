@@ -37,6 +37,8 @@ table! {
         time_last_action -> Timestamp,
         time_sent -> Nullable<Timestamp>,
         time_confirmed -> Nullable<Timestamp>,
+        last_error_msg -> Nullable<Text>,
+        resent_times -> Integer,
     }
 }
 

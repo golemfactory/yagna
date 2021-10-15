@@ -24,12 +24,16 @@ use crate::{
 
 lazy_static! {
     static ref TX_SUMBIT_TIMEOUT: Duration = Duration::minutes(15);
+
+    static ref TX_WAIT_FOR_TRANSACTION_ON_NETWORK : Duration = Duration::seconds(10);
 }
+
 
 pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
     let network = Network::from_str(&network_key).unwrap();
     let txs = dao.get_unconfirmed_txs(network).await;
     log::trace!("confirm_payments {:?}", txs);
+    let current_time = Utc::now().naive_utc();
 
     if !txs.is_empty() {
         // TODO: Store block number and continue only on new block
@@ -72,8 +76,23 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 }
             };
 
+            let time_elapsed_from_sent = match tx.time_sent {
+                Some(time_sent) => Some(current_time -time_sent),
+                None => None
+            };
+            let time_elapsed_from_last_action = current_time - tx.time_last_action;
+
+            let resend_transaction = false;
+
             if !s.exists_on_chain {
                 log::info!("Transaction not found on chain");
+                if (time_elapsed_from_last_action > *TX_WAIT_FOR_TRANSACTION_ON_NETWORK)
+                {
+                    log::warn!("Transaction not found on chain for {:?}", time_elapsed_from_sent);
+                    log::warn!("Time since last action {:?}", time_elapsed_from_last_action);
+                    dao.retry_send_transaction(&tx.tx_id).await;
+                }
+
                 continue;
             } else if s.pending {
                 log::info!("Transaction found on chain but is still pending");
@@ -149,7 +168,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                     .iter()
                     .map(|payment| payment.order_id.clone())
                     .collect();
-                dao.transaction_failed_onchain(&tx.tx_id).await;
+                dao.transaction_failed_onchain(&tx.tx_id, "Failure on chain during execution").await;
                 for order_id in order_ids.iter() {
                     dao.payment_failed(order_id).await;
                 }

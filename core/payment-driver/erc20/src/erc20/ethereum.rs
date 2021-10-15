@@ -135,6 +135,9 @@ pub async fn sign_faucet_tx(
     ))
 }
 
+
+
+
 pub async fn sign_transfer_tx(
     address: H160,
     recipient: H160,
@@ -270,6 +273,7 @@ pub async fn get_tx_on_chain_status(
     }
     Ok(res)
 }
+
 
 pub fn decode_encoded_transaction_data(
     network: Network,
@@ -424,6 +428,8 @@ fn raw_tx_to_entity(
         signature: hex::encode(signature),
         tx_hash: None,
         network: Network::from_u64(chain_id).unwrap(),
+        last_error_msg: None,
+        resent_times: 0
     }
 }
 

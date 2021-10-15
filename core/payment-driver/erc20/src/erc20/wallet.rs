@@ -20,6 +20,7 @@ use crate::{
     erc20::{eth_utils, ethereum, faucet, utils},
     RINKEBY_NETWORK,
 };
+use crate::erc20::transaction::YagnaRawTransaction;
 
 pub async fn account_balance(address: H160, network: Network) -> Result<BigDecimal, GenericError> {
     let balance_com = ethereum::get_glm_balance(address, network).await?;
@@ -145,8 +146,17 @@ pub async fn send_transactions(
 ) -> Result<(), GenericError> {
     // TODO: Use batch sending?
     for tx in txs {
-        let raw_tx = serde_json::from_str(&tx.encoded).map_err(GenericError::new)?;
-        let sign = hex::decode(tx.signature).map_err(GenericError::new)?;
+        let raw_tx:YagnaRawTransaction = serde_json::from_str(&tx.encoded).map_err(GenericError::new)?;
+        let address = utils::str_to_addr(&tx.sender)?;
+        //let (recipient, amount) = ethereum::decode_encoded_transaction_data(network, raw_tx.data);
+        let (recipient, amount) = ethereum::decode_encoded_transaction_data(network, &tx.encoded)?;
+
+        let signed_tx = ethereum::sign_transfer_tx(address, recipient, amount, network, raw_tx.nonce, Some(raw_tx.gas_price), Some(raw_tx.gas.as_u32())).await?;
+
+        let signature = signed_tx.signature;
+        //let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
+
+        let sign = hex::decode(signature).map_err(GenericError::new)?;
         let signed = eth_utils::encode_signed_tx(&raw_tx, sign, network as u64);
 
         match ethereum::send_tx(signed, network).await {
@@ -158,7 +168,12 @@ pub async fn send_transactions(
             }
             Err(e) => {
                 log::error!("Error sending transaction: {:?}", e);
-                dao.transaction_failed_send(&tx.tx_id).await;
+                /*if e.to_string().contains("nonce too low")
+                {
+                    log::error!("TODO: {:?}", e);
+                }*/
+
+                dao.transaction_failed_send(&tx.tx_id, e.to_string().as_str()).await;
             }
         }
     }

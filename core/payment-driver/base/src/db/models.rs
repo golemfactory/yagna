@@ -69,7 +69,9 @@ pub struct TransactionEntity {
     pub time_created: NaiveDateTime,
     pub time_last_action: NaiveDateTime,
     pub time_sent: Option<NaiveDateTime>,
-    pub time_confirmed: Option<NaiveDateTime>
+    pub time_confirmed: Option<NaiveDateTime>,
+    pub last_error_msg: Option<String>,
+    pub resent_times: i32,
 }
 
 #[derive(Queryable, Clone, Debug, Identifiable, Insertable, PartialEq)]
