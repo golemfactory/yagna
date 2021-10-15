@@ -31,7 +31,7 @@ pub mod local {
     use ya_client_model::NodeId;
 
     pub const BUS_ID: &'static str = "/local/payment";
-    pub const DEFAULT_PAYMENT_DRIVER: &str = "zksync";
+    pub const DEFAULT_PAYMENT_DRIVER: &str = "erc20";
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct DebitNotePayment {
