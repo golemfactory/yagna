@@ -5,10 +5,12 @@ on:
     branches:
       - master
       - release/*
+      - km/polygon-default
   pull_request:
     branches:
       - master
       - release/*
+      - km/polygon-default
 
 jobs:
   build:
