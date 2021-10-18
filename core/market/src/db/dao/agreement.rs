@@ -134,7 +134,7 @@ impl<'c> AgreementDao<'c> {
 
     pub async fn save(&self, agreement: Agreement) -> Result<Agreement, SaveAgreementError> {
         // Agreement is always created for last Provider Proposal.
-        // TODO: We access two databases, what could cause race conditions in some edge cases.
+        // TODO: Accessing two databases can cause race conditions in some edge cases.
         let proposal_id = agreement.offer_proposal_id.clone();
         readonly_transaction(self.ram_pool, move |conn| {
             if has_counter_proposal(conn, &proposal_id)? {

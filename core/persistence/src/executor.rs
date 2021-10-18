@@ -84,18 +84,28 @@ fn connection_customizer(
 
 impl DbExecutor {
     pub fn new<S: Display>(database_url: S) -> Result<Self, Error> {
+        DbExecutor::new_impl(database_url, None)
+    }
+
+    fn new_impl<S: Display>(database_url: S, pool_size: Option<u32>) -> Result<Self, Error> {
         let database_url = format!("{}", database_url);
         log::info!("using database at: {}", database_url);
         let manager = ConnectionManager::new(database_url.clone());
         let tx_lock: TxLock = Arc::new(RwLock::new(0));
-        let inner = Pool::builder()
+
+        let builder = Pool::builder()
             // Sqlite doesn't handle connections from multiple threads well.
             .max_size(1)
             .connection_customizer(Box::new(connection_customizer(
                 database_url.clone(),
                 tx_lock.clone(),
-            )))
-            .build(manager)?;
+            )));
+
+        let inner = match pool_size {
+            // Sqlite doesn't handle connections from multiple threads well.
+            Some(pool_size) => builder.max_size(pool_size).build(manager)?,
+            None => builder.build(manager)?,
+        };
 
         {
             let connection = inner.get()?;
@@ -120,7 +130,7 @@ impl DbExecutor {
     }
 
     pub fn in_memory(name: &str) -> Result<Self, Error> {
-        Self::new(format!("file:{}?mode=memory&cache=shared", name))
+        Self::new_impl(format!("file:{}?mode=memory&cache=shared", name), Some(1))
     }
 
     fn conn(&self) -> Result<ConnType, Error> {
