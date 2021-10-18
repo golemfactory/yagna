@@ -113,8 +113,8 @@ impl Erc20Dao {
 
         Ok(next_nonce)
     }
-
-    pub async fn insert_transaction(
+/*
+    pub async fn insert_transaction2(
         &self,
         details: &PaymentDetails,
         date: DateTime<Utc>,
@@ -149,10 +149,20 @@ impl Erc20Dao {
             // TO CHECK: Should it continue or stop the process...
         }
         tx_id
-    }
+    }*/
 
     pub async fn insert_raw_transaction(&self, tx: TransactionEntity) -> String {
         let tx_id = tx.tx_id.clone();
+/*        match self.transaction().get(tx_id).await {
+            Some(res) => {
+                if let Some(tx) = res {
+                    self.transaction().del
+                }
+            }
+            Err(e) => log::error!("Error when checking for existing transactions: {:?}", e)
+        }*/
+
+
         if let Err(e) = self.transaction().insert_transactions(vec![tx]).await {
             log::error!("Failed to store transaction for {} : {:?}", tx_id, e)
             // TO CHECK: Should it continue or stop the process...

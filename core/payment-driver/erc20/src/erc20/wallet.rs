@@ -7,10 +7,11 @@ use bigdecimal::BigDecimal;
 use num_bigint::BigUint;
 use std::str::FromStr;
 use web3::types::{H160, H256, U256, U64};
+use chrono::{DateTime, Utc};
 
 // Workspace uses
 use ya_payment_driver::{
-    db::models::{Network, TransactionEntity},
+    db::models::{Network, TransactionEntity, TxType},
     model::{AccountMode, GenericError, Init, PaymentDetails},
 };
 
@@ -133,11 +134,24 @@ pub async fn make_transfer(
     let recipient = utils::str_to_addr(&details.recipient)?;
     // TODO: Implement token
     //let token = get_network_token(network, None);
-    ethereum::sign_transfer_tx(
+    let raw_tx = ethereum::prepare_raw_transaction(
         address, recipient, amount, network, nonce, gas_price, gas_limit,
     )
-    .await
+    .await?;
+//    Ok(raw_tx)
+
+
+    let chain_id = network as u64;
+
+    Ok(ethereum::raw_tx_to_entity(
+        &raw_tx,
+        address,
+        chain_id,
+        Utc::now(),
+        TxType::Transfer,
+    ))
 }
+
 
 pub async fn send_transactions(
     dao: &Erc20Dao,
@@ -149,15 +163,13 @@ pub async fn send_transactions(
         let raw_tx:YagnaRawTransaction = serde_json::from_str(&tx.encoded).map_err(GenericError::new)?;
         let address = utils::str_to_addr(&tx.sender)?;
         //let (recipient, amount) = ethereum::decode_encoded_transaction_data(network, raw_tx.data);
-        let (recipient, amount) = ethereum::decode_encoded_transaction_data(network, &tx.encoded)?;
+        //let (recipient, amount) = ethereum::decode_encoded_transaction_data(network, &tx.encoded)?;
 
-        let signed_tx = ethereum::sign_transfer_tx(address, recipient, amount, network, raw_tx.nonce, Some(raw_tx.gas_price), Some(raw_tx.gas.as_u32())).await?;
+        let signature = ethereum::sign_raw_transfer_transaction(address, network, &raw_tx).await?;
 
-        let signature = signed_tx.signature;
-        //let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
+        //let sign = hex::decode(signature).map_err(GenericError::new)?;
 
-        let sign = hex::decode(signature).map_err(GenericError::new)?;
-        let signed = eth_utils::encode_signed_tx(&raw_tx, sign, network as u64);
+        let signed = eth_utils::encode_signed_tx(&raw_tx, signature, network as u64);
 
         match ethereum::send_tx(signed, network).await {
             Ok(tx_hash) => {

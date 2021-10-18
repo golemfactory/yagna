@@ -27,7 +27,7 @@ table! {
         status -> Integer,
         tx_type -> Integer,
         encoded -> Text,
-        signature -> Text,
+        signature -> Nullable<Text>,
         tx_hash -> Nullable<Text>,
         network -> Integer,
         starting_gas_price -> Nullable<Text>,

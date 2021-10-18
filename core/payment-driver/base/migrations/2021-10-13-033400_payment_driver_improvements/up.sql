@@ -7,7 +7,7 @@ CREATE TABLE `transaction_tmp`(
     status INTEGER NOT NULL,
     tx_type INTEGER NOT NULL,
     encoded VARCHAR (8000) NOT NULL,
-    signature VARCHAR (130) NOT NULL,
+    signature VARCHAR (130) NULL,
     tx_hash VARCHAR(64) NULL UNIQUE,
     starting_gas_price VARCHAR(64) NULL,
     current_gas_price VARCHAR(64) NULL,

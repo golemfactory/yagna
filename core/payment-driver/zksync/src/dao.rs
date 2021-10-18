@@ -114,7 +114,7 @@ impl ZksyncDao {
             maximum_gas_price: None,
             tx_type: TxType::Transfer as i32, // Zksync only knows transfers, unused field
             encoded: "".to_string(),          // not used till pre-sign
-            signature: "".to_string(),        // not used till pre-sign
+            signature: None,        // not used till pre-sign
             tx_hash: None,
             network,
             last_error_msg: None,

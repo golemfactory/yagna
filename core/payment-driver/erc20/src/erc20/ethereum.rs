@@ -123,22 +123,27 @@ pub async fn sign_faucet_tx(
     };
     let chain_id = network as u64;
     let node_id = NodeId::from(address.as_ref());
-    let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
+   //let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
 
     Ok(raw_tx_to_entity(
         &tx,
         address,
         chain_id,
         Utc::now(),
-        &signature,
         TxType::Faucet,
     ))
 }
 
 
+pub async fn sign_raw_transfer_transaction(address: H160, network: Network, tx: &YagnaRawTransaction) -> Result<Vec<u8>, GenericError> {
+    let chain_id = network as u64;
+    let node_id = NodeId::from(address.as_ref());
+    let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
+    Ok(signature)
+}
 
 
-pub async fn sign_transfer_tx(
+pub async fn prepare_raw_transaction(
     address: H160,
     recipient: H160,
     amount: U256,
@@ -146,7 +151,7 @@ pub async fn sign_transfer_tx(
     nonce: U256,
     gas_price_override: Option<U256>,
     gas_limit_override: Option<u32>,
-) -> Result<TransactionEntity, GenericError> {
+) -> Result<YagnaRawTransaction, GenericError> {
     let env = get_env(network);
     let client = get_client(network)?;
     let contract = prepare_erc20_contract(&client, &env)?;
@@ -200,18 +205,7 @@ pub async fn sign_transfer_tx(
         gas: gas_limit,
         data,
     };
-    let chain_id = network as u64;
-    let node_id = NodeId::from(address.as_ref());
-    let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
-
-    Ok(raw_tx_to_entity(
-        &tx,
-        address,
-        chain_id,
-        Utc::now(),
-        &signature,
-        TxType::Transfer,
-    ))
+    Ok(tx)
 }
 
 pub async fn send_tx(signed_tx: Vec<u8>, network: Network) -> Result<H256, GenericError> {
@@ -402,12 +396,11 @@ fn prepare_glm_faucet_contract(
     }
 }
 
-fn raw_tx_to_entity(
+pub fn raw_tx_to_entity(
     raw_tx: &YagnaRawTransaction,
     sender: H160,
     chain_id: u64,
     timestamp: DateTime<Utc>,
-    signature: &Vec<u8>,
     tx_type: TxType,
 ) -> TransactionEntity {
     let current_naive_time = timestamp.naive_utc();
@@ -425,7 +418,7 @@ fn raw_tx_to_entity(
         encoded: serde_json::to_string(raw_tx).unwrap(),
         status: TransactionStatus::Created as i32,
         tx_type: tx_type as i32,
-        signature: hex::encode(signature),
+        signature: None,
         tx_hash: None,
         network: Network::from_u64(chain_id).unwrap(),
         last_error_msg: None,

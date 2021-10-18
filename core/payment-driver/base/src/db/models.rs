@@ -60,7 +60,7 @@ pub struct TransactionEntity {
     pub status: i32,
     pub tx_type: i32,
     pub encoded: String,
-    pub signature: String,
+    pub signature: Option<String>,
     pub tx_hash: Option<String>,
     pub network: Network,
     pub starting_gas_price: Option<String>,
