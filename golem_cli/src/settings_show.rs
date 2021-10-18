@@ -65,7 +65,9 @@ async fn get_prices(cmd: &YaCommand) -> Result<BTreeMap<String, UsageDef>> {
     }
     for p in presets {
         if active_presets.contains(&p.name) {
-            usage_map.insert(p.name, p.usage_coeffs);
+            let mut coeffs = p.usage_coeffs;
+            coeffs.insert("initial".to_string(), p.initial_price);
+            usage_map.insert(p.name, coeffs);
         }
     }
     Ok(usage_map)
@@ -73,10 +75,10 @@ async fn get_prices(cmd: &YaCommand) -> Result<BTreeMap<String, UsageDef>> {
 
 pub async fn show_prices(cmd: &YaCommand) -> Result<()> {
     let price_description: HashMap<&str, (&str, f64)> = [
-        ("cpu", ("GLM per cpu hour", 3600.0)),
+        ("golem.usage.cpu_sec", ("GLM per cpu hour", 3600.0)),
         ("initial", ("GLM for start", 1.0)),
-        ("duration", ("GLM per hour", 3600.0)),
-        ("storage_gib", ("GLM per GB of storage", 1.0)),
+        ("golem.usage.duration_sec", ("GLM per hour", 3600.0)),
+        ("golem.usage.storage_gib", ("GLM per GB of storage", 1.0)),
     ]
     .iter()
     .cloned()
