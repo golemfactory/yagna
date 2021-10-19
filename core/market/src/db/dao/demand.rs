@@ -4,20 +4,20 @@ use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 use ya_client::model::NodeId;
 use ya_persistence::executor::ConnType;
-use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
+use ya_persistence::executor::{do_with_transaction, readonly_transaction, PoolType};
 
 use crate::db::model::{Demand, SubscriptionId};
 use crate::db::schema::market_demand::dsl;
-use crate::db::{DbError, DbResult};
+use crate::db::{AsMixedDao, DbError, DbResult};
 
 #[allow(unused)]
 pub struct DemandDao<'c> {
     pool: &'c PoolType,
 }
 
-impl<'c> AsDao<'c> for DemandDao<'c> {
-    fn as_dao(pool: &'c PoolType) -> Self {
-        Self { pool }
+impl<'a> AsMixedDao<'a> for DemandDao<'a> {
+    fn as_dao(_disk_pool: &'a PoolType, ram_pool: &'a PoolType) -> Self {
+        Self { pool: ram_pool }
     }
 }
 

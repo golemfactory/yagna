@@ -3,7 +3,7 @@ use diesel::prelude::*;
 
 use ya_client::model::market::Reason;
 use ya_client::model::NodeId;
-use ya_persistence::executor::{do_with_transaction, AsDao, ConnType, PoolType};
+use ya_persistence::executor::{do_with_transaction, readonly_transaction, ConnType, PoolType};
 
 use crate::config::DbConfig;
 use crate::db::dao::agreement_events::create_event;
@@ -17,7 +17,7 @@ use crate::db::schema::market_agreement::dsl as agreement;
 use crate::db::schema::market_agreement::dsl::market_agreement;
 use crate::db::schema::market_agreement_event::dsl as event;
 use crate::db::schema::market_agreement_event::dsl::market_agreement_event;
-use crate::db::{DbError, DbResult};
+use crate::db::{AsMixedDao, DbError, DbResult};
 
 #[derive(thiserror::Error, Debug)]
 pub enum SaveAgreementError {
@@ -31,11 +31,15 @@ pub enum SaveAgreementError {
 
 pub struct AgreementDao<'c> {
     pool: &'c PoolType,
+    ram_pool: &'c PoolType,
 }
 
-impl<'a> AsDao<'a> for AgreementDao<'a> {
-    fn as_dao(pool: &'a PoolType) -> Self {
-        Self { pool }
+impl<'a> AsMixedDao<'a> for AgreementDao<'a> {
+    fn as_dao(disk_pool: &'a PoolType, ram_pool: &'a PoolType) -> Self {
+        Self {
+            pool: disk_pool,
+            ram_pool,
+        }
     }
 }
 
@@ -130,12 +134,18 @@ impl<'c> AgreementDao<'c> {
 
     pub async fn save(&self, agreement: Agreement) -> Result<Agreement, SaveAgreementError> {
         // Agreement is always created for last Provider Proposal.
+        // TODO: Accessing two databases can cause race conditions in some edge cases.
         let proposal_id = agreement.offer_proposal_id.clone();
-        do_with_transaction(self.pool, move |conn| {
+        readonly_transaction(self.ram_pool, move |conn| {
             if has_counter_proposal(conn, &proposal_id)? {
                 return Err(SaveAgreementError::ProposalCountered(proposal_id.clone()));
             }
+            Ok(())
+        })
+        .await?;
 
+        let proposal_id = agreement.offer_proposal_id.clone();
+        let agreement = do_with_transaction(self.pool, move |conn| {
             if let Some(agreement) = find_agreement_for_proposal(conn, &proposal_id)? {
                 return Err(SaveAgreementError::Exists(
                     agreement.id,
@@ -146,8 +156,12 @@ impl<'c> AgreementDao<'c> {
             diesel::insert_into(market_agreement)
                 .values(&agreement)
                 .execute(conn)?;
+            Ok(agreement)
+        })
+        .await?;
 
-            update_proposal_state(conn, &proposal_id, ProposalState::Accepted)?;
+        do_with_transaction(self.ram_pool, move |conn| {
+            update_proposal_state(conn, &agreement.offer_proposal_id, ProposalState::Accepted)?;
             Ok(agreement)
         })
         .await
