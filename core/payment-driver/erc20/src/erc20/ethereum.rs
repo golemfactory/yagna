@@ -15,6 +15,7 @@ use ya_payment_driver::{bus, model::GenericError, utils as base_utils};
 use crate::erc20::transaction::YagnaRawTransaction;
 use crate::erc20::{config, eth_utils};
 use ethabi::Token;
+use uuid::Uuid;
 
 lazy_static! {
     pub static ref GLM_FAUCET_GAS: U256 = U256::from(90_000);
@@ -125,10 +126,12 @@ pub async fn sign_faucet_tx(
     let node_id = NodeId::from(address.as_ref());
    //let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
 
-    Ok(raw_tx_to_entity(
-        &tx,
+    Ok(create_dao_entity(
+        nonce,
         address,
-        chain_id,
+        gas_price,
+        serde_json::to_string(&tx).map_err(GenericError::new)?,
+        network,
         Utc::now(),
         TxType::Faucet,
     ))
@@ -396,45 +399,36 @@ fn prepare_glm_faucet_contract(
     }
 }
 
-pub fn raw_tx_to_entity(
-    raw_tx: &YagnaRawTransaction,
+pub fn create_dao_entity(
+    nonce: U256,
     sender: H160,
-    chain_id: u64,
+    starting_gas_price: U256,
+    encoded_raw_tx: String,
+    network: Network,
     timestamp: DateTime<Utc>,
     tx_type: TxType,
 ) -> TransactionEntity {
     let current_naive_time = timestamp.naive_utc();
     TransactionEntity {
-        tx_id: prepare_tx_id(&raw_tx, chain_id, sender),
+        tx_id: Uuid::new_v4().to_string(),
         sender: format!("0x{:x}", sender),
-        nonce: base_utils::u256_to_big_endian_hex(raw_tx.nonce),
+        nonce: nonce.to_string(),
         time_created: current_naive_time,
         time_last_action: current_naive_time,
         time_sent: None,
         time_confirmed: None,
         maximum_gas_price: None,
-        starting_gas_price: None,
+        starting_gas_price: Some(starting_gas_price.to_string()),
         current_gas_price: None,
-        encoded: serde_json::to_string(raw_tx).unwrap(),
+        encoded: encoded_raw_tx,
         status: TransactionStatus::Created as i32,
         tx_type: tx_type as i32,
         signature: None,
         tx_hash: None,
-        network: Network::from_u64(chain_id).unwrap(),
+        network,
         last_error_msg: None,
         resent_times: 0
     }
-}
-
-// We need a function to prepare an unique identifier for tx
-// that could be calculated easily from RawTransaction data
-// Explanation: RawTransaction::hash() can produce the same output (sender does not have any impact)
-pub fn prepare_tx_id(raw_tx: &YagnaRawTransaction, chain_id: u64, sender: H160) -> String {
-    let mut bytes = eth_utils::get_tx_hash(raw_tx, chain_id);
-    let mut address = sender.as_bytes().to_vec();
-    bytes.append(&mut address);
-    // TODO: Try https://docs.rs/web3/0.13.0/web3/api/struct.Web3Api.html#method.sha3
-    format!("{:x}", Sha3_512::digest(&bytes))
 }
 
 pub fn get_max_gas_costs(db_tx: &TransactionEntity) -> Result<U256, GenericError> {

@@ -3,7 +3,7 @@ PRAGMA foreign_keys=off;
 CREATE TABLE `transaction_tmp`(
     tx_id VARCHAR(128) NOT NULL PRIMARY KEY,
     sender VARCHAR(40) NOT NULL,
-    nonce VARCHAR(64) NOT NULL,
+    nonce INTEGER NOT NULL DEFAULT 0,
     status INTEGER NOT NULL,
     tx_type INTEGER NOT NULL,
     encoded VARCHAR (8000) NOT NULL,

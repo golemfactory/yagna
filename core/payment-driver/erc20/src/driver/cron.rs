@@ -21,18 +21,22 @@ use crate::{
     erc20::{ethereum, wallet},
     network,
 };
+use ya_payment_driver::db::models::TransactionStatus;
+use ya_payment_driver::db::models::TxType::Transfer;
 
 lazy_static! {
     static ref TX_SUMBIT_TIMEOUT: Duration = Duration::minutes(15);
 
     static ref TX_WAIT_FOR_TRANSACTION_ON_NETWORK : Duration = Duration::seconds(10);
+    static ref TX_WAIT_FOR_PENDING_ON_NETWORK : Duration = Duration::seconds(30);
+    static ref TX_WAIT_FOR_ERROR_SENT_TRANSACTION : Duration = Duration::seconds(20);
 }
 
 
 pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
     let network = Network::from_str(&network_key).unwrap();
     let txs = dao.get_unconfirmed_txs(network).await;
-    log::trace!("confirm_payments {:?}", txs);
+    log::debug!("confirm_payments {:?}", txs);
     let current_time = Utc::now().naive_utc();
 
     if !txs.is_empty() {
@@ -41,6 +45,25 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
 
         for tx in txs {
             log::trace!("checking tx {:?}", &tx);
+
+            let time_elapsed_from_sent = match tx.time_sent {
+                Some(time_sent) => Some(current_time -time_sent),
+                None => None
+            };
+            let time_elapsed_from_last_action = current_time - tx.time_last_action;
+
+
+            if tx.status == TransactionStatus::ErrorSent as i32 {
+                log::info!("Transaction not sent, retrying");
+                if time_elapsed_from_last_action > *TX_WAIT_FOR_ERROR_SENT_TRANSACTION {
+                    log::warn!("Transaction not found on chain for {:?}", time_elapsed_from_sent);
+                    log::warn!("Time since last action {:?}", time_elapsed_from_last_action);
+                    dao.retry_send_transaction(&tx.tx_id).await;
+                }
+            }
+
+
+
             let tx_hash = match &tx.tx_hash {
                 None => continue,
                 Some(tx_hash) => tx_hash,
@@ -76,11 +99,6 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 }
             };
 
-            let time_elapsed_from_sent = match tx.time_sent {
-                Some(time_sent) => Some(current_time -time_sent),
-                None => None
-            };
-            let time_elapsed_from_last_action = current_time - tx.time_last_action;
 
             let resend_transaction = false;
 
@@ -96,6 +114,12 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 continue;
             } else if s.pending {
                 log::info!("Transaction found on chain but is still pending");
+                if (time_elapsed_from_last_action > *TX_WAIT_FOR_PENDING_ON_NETWORK)
+                {
+                    log::warn!("Transaction not found on chain for {:?}", time_elapsed_from_sent);
+                    log::warn!("Time since last action {:?}", time_elapsed_from_last_action);
+                    dao.retry_send_transaction(&tx.tx_id).await;
+                }
                 continue;
             } else if !s.confirmed {
                 log::info!("Transaction is commited, but we are waiting for confirmations");

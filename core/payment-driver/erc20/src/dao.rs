@@ -3,8 +3,8 @@
 */
 
 // Extrernal crates
-use chrono::{DateTime, Utc};
-use uuid::Uuid;
+//use chrono::{DateTime, Utc};
+//use uuid::Uuid;
 use web3::types::U256;
 
 // Workspace uses
@@ -14,7 +14,7 @@ use ya_payment_driver::{
         Network, PaymentEntity, TransactionEntity, TransactionStatus, PAYMENT_STATUS_FAILED,
         PAYMENT_STATUS_NOT_YET,
     },
-    model::{GenericError, PaymentDetails, SchedulePayment},
+    model::{GenericError, SchedulePayment},
     utils,
 };
 
@@ -219,10 +219,22 @@ impl Erc20Dao {
         }
     }
 
-    pub async fn transaction_sent(&self, tx_id: &str, tx_hash: &str) {
+    pub async fn update_tx_fields(&self, tx_id: &str, encoded: String, signature: String, current_gas_price: Option<String>) {
         if let Err(e) = self
             .transaction()
-            .update_tx_sent(tx_id.to_string(), tx_hash.to_string())
+            .update_tx_fields(tx_id.to_string(), encoded, signature, current_gas_price)
+            .await
+        {
+            log::error!("Failed to update for transaction {:?} : {:?}", tx_id, e)
+            // TO CHECK: Should it continue or stop the process...
+        }
+    }
+
+
+    pub async fn transaction_sent(&self, tx_id: &str, tx_hash: &str, gas_price: Option<String>) {
+        if let Err(e) = self
+            .transaction()
+            .update_tx_sent(tx_id.to_string(), tx_hash.to_string(), gas_price)
             .await
         {
             log::error!("Failed to update for transaction {:?} : {:?}", tx_id, e)

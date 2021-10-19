@@ -166,7 +166,7 @@ impl ZksyncDao {
         }
         if let Err(e) = self
             .transaction()
-            .update_tx_sent(tx_id.to_string(), tx_hash.to_string())
+            .update_tx_sent(tx_id.to_string(), tx_hash.to_string(), None)
             .await
         {
             log::error!("Failed to update for transaction {:?} : {:?}", tx_id, e)

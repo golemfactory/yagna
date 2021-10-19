@@ -8,6 +8,7 @@ use num_bigint::BigUint;
 use std::str::FromStr;
 use web3::types::{H160, H256, U256, U64};
 use chrono::{DateTime, Utc};
+use crate::erc20::ethereum::GLM_POLYGON_MIN_GAS_PRICE;
 
 // Workspace uses
 use ya_payment_driver::{
@@ -143,10 +144,12 @@ pub async fn make_transfer(
 
     let chain_id = network as u64;
 
-    Ok(ethereum::raw_tx_to_entity(
-        &raw_tx,
+    Ok(ethereum::create_dao_entity(
+        nonce,
         address,
-        chain_id,
+        raw_tx.gas_price,
+        serde_json::to_string(&raw_tx).map_err(GenericError::new)?,
+        network,
         Utc::now(),
         TxType::Transfer,
     ))
@@ -160,21 +163,38 @@ pub async fn send_transactions(
 ) -> Result<(), GenericError> {
     // TODO: Use batch sending?
     for tx in txs {
-        let raw_tx:YagnaRawTransaction = serde_json::from_str(&tx.encoded).map_err(GenericError::new)?;
+        let mut raw_tx:YagnaRawTransaction = serde_json::from_str(&tx.encoded).map_err(GenericError::new)?;
         let address = utils::str_to_addr(&tx.sender)?;
         //let (recipient, amount) = ethereum::decode_encoded_transaction_data(network, raw_tx.data);
         //let (recipient, amount) = ethereum::decode_encoded_transaction_data(network, &tx.encoded)?;
 
-        let signature = ethereum::sign_raw_transfer_transaction(address, network, &raw_tx).await?;
 
         //let sign = hex::decode(signature).map_err(GenericError::new)?;
+
+
+        let mut new_gas_price = if let Some(current_gas_price) = tx.current_gas_price {
+            let mut gas_u256 = U256::from_dec_str(&current_gas_price).map_err(GenericError::new)?;
+            gas_u256 = gas_u256 + gas_u256 / 10 + gas_u256 / 1;
+            gas_u256
+        } else if let Some(starting_gas_price) = tx.starting_gas_price {
+            U256::from_dec_str(&starting_gas_price).map_err(GenericError::new)?
+        } else {
+            U256::from(*GLM_POLYGON_MIN_GAS_PRICE)
+        };
+        raw_tx.gas_price = new_gas_price;
+
+        let encoded = serde_json::to_string(&raw_tx).map_err(GenericError::new)?;
+        let signature = ethereum::sign_raw_transfer_transaction(address, network, &raw_tx).await?;
+
+        //save new parameters to db before proceeding. Maybe we should change status to sending
+        dao.update_tx_fields(&tx.tx_id, encoded, hex::encode(&signature), Some(new_gas_price.to_string())).await;
 
         let signed = eth_utils::encode_signed_tx(&raw_tx, signature, network as u64);
 
         match ethereum::send_tx(signed, network).await {
             Ok(tx_hash) => {
                 let str_tx_hash = format!("0x{:x}", &tx_hash);
-                dao.transaction_sent(&tx.tx_id, &str_tx_hash).await;
+                dao.transaction_sent(&tx.tx_id, &str_tx_hash, Some(raw_tx.gas_price.to_string())).await;
                 log::info!("Send transaction. hash={}", &str_tx_hash);
                 log::debug!("id={}", &tx.tx_id);
             }
