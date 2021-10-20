@@ -22,7 +22,6 @@ use crate::{
     network,
 };
 use ya_payment_driver::db::models::TransactionStatus;
-use ya_payment_driver::db::models::TxType::Transfer;
 
 lazy_static! {
     static ref TX_SUMBIT_TIMEOUT: Duration = Duration::minutes(15);
@@ -99,13 +98,9 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 }
             };
 
-
-            let resend_transaction = false;
-
             if !s.exists_on_chain {
                 log::info!("Transaction not found on chain");
-                if (time_elapsed_from_last_action > *TX_WAIT_FOR_TRANSACTION_ON_NETWORK)
-                {
+                if time_elapsed_from_last_action > *TX_WAIT_FOR_TRANSACTION_ON_NETWORK {
                     log::warn!("Transaction not found on chain for {:?}", time_elapsed_from_sent);
                     log::warn!("Time since last action {:?}", time_elapsed_from_last_action);
                     dao.retry_send_transaction(&tx.tx_id).await;
@@ -114,8 +109,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 continue;
             } else if s.pending {
                 log::info!("Transaction found on chain but is still pending");
-                if (time_elapsed_from_last_action > *TX_WAIT_FOR_PENDING_ON_NETWORK)
-                {
+                if time_elapsed_from_last_action > *TX_WAIT_FOR_PENDING_ON_NETWORK {
                     log::warn!("Transaction not found on chain for {:?}", time_elapsed_from_sent);
                     log::warn!("Time since last action {:?}", time_elapsed_from_last_action);
                     dao.retry_send_transaction(&tx.tx_id).await;

@@ -1,7 +1,5 @@
 use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
-use num_traits::FromPrimitive;
-use sha3::{Digest, Sha3_512};
 use std::env;
 use web3::contract::{Contract, Options};
 use web3::transports::Http;
@@ -10,10 +8,10 @@ use web3::Web3;
 
 use ya_client_model::NodeId;
 use ya_payment_driver::db::models::{Network, TransactionEntity, TransactionStatus, TxType};
-use ya_payment_driver::{bus, model::GenericError, utils as base_utils};
+use ya_payment_driver::{bus, model::GenericError};
 
 use crate::erc20::transaction::YagnaRawTransaction;
-use crate::erc20::{config, eth_utils};
+use crate::erc20::{config, eth_utils, utils};
 use ethabi::Token;
 use uuid::Uuid;
 
@@ -122,14 +120,14 @@ pub async fn sign_faucet_tx(
         gas: *GLM_FAUCET_GAS,
         data,
     };
-    let chain_id = network as u64;
-    let node_id = NodeId::from(address.as_ref());
+    //let chain_id = network as u64;
+    //let node_id = NodeId::from(address.as_ref());
    //let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
 
     Ok(create_dao_entity(
         nonce,
         address,
-        gas_price,
+        utils::convert_u256_gas_to_float( gas_price),
         serde_json::to_string(&tx).map_err(GenericError::new)?,
         network,
         Utc::now(),
@@ -147,7 +145,7 @@ pub async fn sign_raw_transfer_transaction(address: H160, network: Network, tx: 
 
 
 pub async fn prepare_raw_transaction(
-    address: H160,
+    _address: H160,
     recipient: H160,
     amount: U256,
     network: Network,
@@ -402,7 +400,7 @@ fn prepare_glm_faucet_contract(
 pub fn create_dao_entity(
     nonce: U256,
     sender: H160,
-    starting_gas_price: U256,
+    starting_gas_price: f64,
     encoded_raw_tx: String,
     network: Network,
     timestamp: DateTime<Utc>,
@@ -412,13 +410,13 @@ pub fn create_dao_entity(
     TransactionEntity {
         tx_id: Uuid::new_v4().to_string(),
         sender: format!("0x{:x}", sender),
-        nonce: nonce.to_string(),
+        nonce: nonce.as_u32() as i32,
         time_created: current_naive_time,
         time_last_action: current_naive_time,
         time_sent: None,
         time_confirmed: None,
-        maximum_gas_price: None,
-        starting_gas_price: Some(starting_gas_price.to_string()),
+        limit_gas_price: None,
+        starting_gas_price: Some(starting_gas_price),
         current_gas_price: None,
         encoded: encoded_raw_tx,
         status: TransactionStatus::Created as i32,

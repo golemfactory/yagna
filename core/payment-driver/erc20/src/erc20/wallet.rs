@@ -7,7 +7,7 @@ use bigdecimal::BigDecimal;
 use num_bigint::BigUint;
 use std::str::FromStr;
 use web3::types::{H160, H256, U256, U64};
-use chrono::{DateTime, Utc};
+use chrono::{Utc};
 use crate::erc20::ethereum::GLM_POLYGON_MIN_GAS_PRICE;
 
 // Workspace uses
@@ -19,7 +19,12 @@ use ya_payment_driver::{
 // Local uses
 use crate::{
     dao::Erc20Dao,
-    erc20::{eth_utils, ethereum, faucet, utils},
+    erc20::{eth_utils, ethereum, faucet, utils::{
+        convert_float_gas_to_u256, convert_u256_gas_to_float, str_to_addr, u256_to_big_dec, big_dec_gwei_to_u256, topic_to_str_address,
+        big_uint_to_big_dec, big_dec_to_u256, gas_float_equals
+
+        }
+    },
     RINKEBY_NETWORK,
 };
 use crate::erc20::transaction::YagnaRawTransaction;
@@ -27,7 +32,7 @@ use crate::erc20::transaction::YagnaRawTransaction;
 pub async fn account_balance(address: H160, network: Network) -> Result<BigDecimal, GenericError> {
     let balance_com = ethereum::get_glm_balance(address, network).await?;
 
-    let balance = utils::u256_to_big_dec(balance_com)?;
+    let balance = u256_to_big_dec(balance_com)?;
     log::debug!(
         "account_balance. address={}, network={}, balance={}",
         address,
@@ -45,7 +50,7 @@ pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
     let network = Network::from_str(&network).map_err(|e| GenericError::new(e))?;
 
     if mode.contains(AccountMode::SEND) {
-        let h160_addr = utils::str_to_addr(&address)?;
+        let h160_addr = str_to_addr(&address)?;
 
         let glm_balance = ethereum::get_glm_balance(h160_addr, network).await?;
         if glm_balance == U256::zero() {
@@ -91,14 +96,14 @@ pub async fn has_enough_eth_for_gas(
     db_tx: &TransactionEntity,
     network: Network,
 ) -> Result<BigDecimal, GenericError> {
-    let sender_h160 = utils::str_to_addr(&db_tx.sender)?;
+    let sender_h160 = str_to_addr(&db_tx.sender)?;
     let eth_balance = ethereum::get_balance(sender_h160, network).await?;
     let gas_costs = ethereum::get_max_gas_costs(db_tx)?;
-    let human_gas_cost = utils::u256_to_big_dec(gas_costs)?;
+    let human_gas_cost = u256_to_big_dec(gas_costs)?;
     if gas_costs > eth_balance {
         return Err(GenericError::new(format!(
             "Not enough ETH balance for gas. balance={}, gas_cost={}, address={}, network={}",
-            utils::u256_to_big_dec(eth_balance)?,
+            u256_to_big_dec(eth_balance)?,
             &human_gas_cost,
             &db_tx.sender,
             &db_tx.network
@@ -125,14 +130,14 @@ pub async fn make_transfer(
         &details
     );
     let amount = details.amount.clone();
-    let amount = utils::big_dec_to_u256(amount)?;
+    let amount = big_dec_to_u256(amount)?;
     let gas_price = match gas_price {
-        Some(gas_price) => Some(utils::big_dec_gwei_to_u256(gas_price)?),
+        Some(gas_price) => Some(big_dec_gwei_to_u256(gas_price)?),
         None => None,
     };
 
-    let address = utils::str_to_addr(&details.sender)?;
-    let recipient = utils::str_to_addr(&details.recipient)?;
+    let address = str_to_addr(&details.sender)?;
+    let recipient = str_to_addr(&details.recipient)?;
     // TODO: Implement token
     //let token = get_network_token(network, None);
     let raw_tx = ethereum::prepare_raw_transaction(
@@ -141,13 +146,12 @@ pub async fn make_transfer(
     .await?;
 //    Ok(raw_tx)
 
-
-    let chain_id = network as u64;
+    //let chain_id = network as u64;
 
     Ok(ethereum::create_dao_entity(
         nonce,
         address,
-        raw_tx.gas_price,
+        convert_u256_gas_to_float(raw_tx.gas_price),
         serde_json::to_string(&raw_tx).map_err(GenericError::new)?,
         network,
         Utc::now(),
@@ -155,6 +159,26 @@ pub async fn make_transfer(
     ))
 }
 
+
+
+
+const POLYGON_PREFERED_GAS_LEVELS : [f64; 8] = [0.0, 10.0, 15.0, 20.0, 25.0, 30.11, 35.11, 40.11];
+
+fn bump_gas_price(gas_in_gwei: f64) -> f64 {
+    for n in 1..(POLYGON_PREFERED_GAS_LEVELS.len() - 1) {
+        if gas_float_equals(POLYGON_PREFERED_GAS_LEVELS[n], gas_in_gwei) {
+            return POLYGON_PREFERED_GAS_LEVELS[n + 1];
+        }
+    }
+    for n in 1..(POLYGON_PREFERED_GAS_LEVELS.len()) {
+        if gas_in_gwei > POLYGON_PREFERED_GAS_LEVELS[n - 1] && gas_in_gwei < POLYGON_PREFERED_GAS_LEVELS[n] {
+            return POLYGON_PREFERED_GAS_LEVELS[n];
+        }
+    }
+
+    //default - bump by 20%
+    return gas_in_gwei * 1.2;
+}
 
 pub async fn send_transactions(
     dao: &Erc20Dao,
@@ -164,7 +188,7 @@ pub async fn send_transactions(
     // TODO: Use batch sending?
     for tx in txs {
         let mut raw_tx:YagnaRawTransaction = serde_json::from_str(&tx.encoded).map_err(GenericError::new)?;
-        let address = utils::str_to_addr(&tx.sender)?;
+        let address = str_to_addr(&tx.sender)?;
         //let (recipient, amount) = ethereum::decode_encoded_transaction_data(network, raw_tx.data);
         //let (recipient, amount) = ethereum::decode_encoded_transaction_data(network, &tx.encoded)?;
 
@@ -172,12 +196,12 @@ pub async fn send_transactions(
         //let sign = hex::decode(signature).map_err(GenericError::new)?;
 
 
-        let mut new_gas_price = if let Some(current_gas_price) = tx.current_gas_price {
-            let mut gas_u256 = U256::from_dec_str(&current_gas_price).map_err(GenericError::new)?;
-            gas_u256 = gas_u256 + gas_u256 / 10 + gas_u256 / 1;
-            gas_u256
+        let new_gas_price = if let Some(current_gas_price) = tx.current_gas_price {
+            let gas_f64 = bump_gas_price(current_gas_price);
+
+            convert_float_gas_to_u256(gas_f64)
         } else if let Some(starting_gas_price) = tx.starting_gas_price {
-            U256::from_dec_str(&starting_gas_price).map_err(GenericError::new)?
+            convert_float_gas_to_u256(starting_gas_price)
         } else {
             U256::from(*GLM_POLYGON_MIN_GAS_PRICE)
         };
@@ -187,14 +211,14 @@ pub async fn send_transactions(
         let signature = ethereum::sign_raw_transfer_transaction(address, network, &raw_tx).await?;
 
         //save new parameters to db before proceeding. Maybe we should change status to sending
-        dao.update_tx_fields(&tx.tx_id, encoded, hex::encode(&signature), Some(new_gas_price.to_string())).await;
+        dao.update_tx_fields(&tx.tx_id, encoded, hex::encode(&signature), Some(convert_u256_gas_to_float(new_gas_price))).await;
 
         let signed = eth_utils::encode_signed_tx(&raw_tx, signature, network as u64);
 
         match ethereum::send_tx(signed, network).await {
             Ok(tx_hash) => {
                 let str_tx_hash = format!("0x{:x}", &tx_hash);
-                dao.transaction_sent(&tx.tx_id, &str_tx_hash, Some(raw_tx.gas_price.to_string())).await;
+                dao.transaction_sent(&tx.tx_id, &str_tx_hash, Some(convert_u256_gas_to_float(raw_tx.gas_price))).await;
                 log::info!("Send transaction. hash={}", &str_tx_hash);
                 log::debug!("id={}", &tx.tx_id);
             }
@@ -236,9 +260,9 @@ pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails
 
     // TODO: Properly parse logs after https://github.com/tomusdrw/rust-web3/issues/208
     let tx_log = &tx.logs[0];
-    let sender = utils::topic_to_str_address(&tx_log.topics[1]);
-    let recipient = utils::topic_to_str_address(&tx_log.topics[2]);
-    let amount = utils::big_uint_to_big_dec(BigUint::from_bytes_be(&tx_log.data.0));
+    let sender = topic_to_str_address(&tx_log.topics[1]);
+    let recipient = topic_to_str_address(&tx_log.topics[2]);
+    let amount = big_uint_to_big_dec(BigUint::from_bytes_be(&tx_log.data.0));
     // TODO: Get date from block
     // let date_str = format!("{}Z", v.created_at);
     let date = Some(chrono::Utc::now());

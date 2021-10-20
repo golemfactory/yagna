@@ -97,17 +97,16 @@ impl Erc20Dao {
         address: &str,
         network: Network,
     ) -> Result<U256, GenericError> {
-        let max_db = self
+        let max_nonce = self
             .transaction()
             .get_used_nonces(address, network)
             .await
             .map_err(GenericError::new)?
             .into_iter()
-            .map(utils::u256_from_big_endian_hex)
             .max();
 
-        let next_nonce = match max_db {
-            Some(nonce) => nonce + U256::from(1),
+        let next_nonce = match max_nonce {
+            Some(nonce) => U256::from(nonce + 1),
             None => U256::from(0),
         };
 
@@ -139,7 +138,7 @@ impl Erc20Dao {
             network: Network::Rinkeby, // TODO: update network
             current_gas_price: None,
             starting_gas_price: None,
-            maximum_gas_price: None,
+            limit_gas_price: None,
             last_error_msg: None,
             resent_times: 0,
         };
@@ -219,7 +218,7 @@ impl Erc20Dao {
         }
     }
 
-    pub async fn update_tx_fields(&self, tx_id: &str, encoded: String, signature: String, current_gas_price: Option<String>) {
+    pub async fn update_tx_fields(&self, tx_id: &str, encoded: String, signature: String, current_gas_price: Option<f64>) {
         if let Err(e) = self
             .transaction()
             .update_tx_fields(tx_id.to_string(), encoded, signature, current_gas_price)
@@ -231,7 +230,7 @@ impl Erc20Dao {
     }
 
 
-    pub async fn transaction_sent(&self, tx_id: &str, tx_hash: &str, gas_price: Option<String>) {
+    pub async fn transaction_sent(&self, tx_id: &str, tx_hash: &str, gas_price: Option<f64>) {
         if let Err(e) = self
             .transaction()
             .update_tx_sent(tx_id.to_string(), tx_hash.to_string(), gas_price)

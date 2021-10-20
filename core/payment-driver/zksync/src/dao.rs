@@ -103,7 +103,7 @@ impl ZksyncDao {
         let tx = TransactionEntity {
             tx_id: tx_id.clone(),
             sender: details.sender.clone(),
-            nonce: "".to_string(), // not used till pre-sign
+            nonce: -1, // not used till pre-sign
             status: TransactionStatus::Created as i32,
             time_created: date.naive_utc(),
             time_last_action: date.naive_utc(),
@@ -111,7 +111,7 @@ impl ZksyncDao {
             time_sent: None,
             current_gas_price: None,
             starting_gas_price: None,
-            maximum_gas_price: None,
+            limit_gas_price: None,
             tx_type: TxType::Transfer as i32, // Zksync only knows transfers, unused field
             encoded: "".to_string(),          // not used till pre-sign
             signature: None,        // not used till pre-sign

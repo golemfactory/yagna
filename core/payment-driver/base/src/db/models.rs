@@ -7,7 +7,7 @@ use chrono::NaiveDateTime;
 use diesel::backend::Backend;
 use diesel::deserialize;
 use diesel::serialize::Output;
-use diesel::sql_types::Integer;
+use diesel::sql_types::{Integer};
 use diesel::types::{FromSql, ToSql};
 use num_traits::FromPrimitive;
 use std::convert::TryFrom;
@@ -56,16 +56,16 @@ impl TryFrom<i32> for TransactionStatus {
 pub struct TransactionEntity {
     pub tx_id: String,
     pub sender: String,
-    pub nonce: String,
+    pub nonce: i32,
     pub status: i32,
     pub tx_type: i32,
     pub encoded: String,
     pub signature: Option<String>,
     pub tx_hash: Option<String>,
     pub network: Network,
-    pub starting_gas_price: Option<String>,
-    pub current_gas_price: Option<String>,
-    pub maximum_gas_price: Option<String>,
+    pub starting_gas_price: Option<f64>,
+    pub current_gas_price: Option<f64>,
+    pub limit_gas_price: Option<f64>,
     pub time_created: NaiveDateTime,
     pub time_last_action: NaiveDateTime,
     pub time_sent: Option<NaiveDateTime>,

@@ -53,10 +53,10 @@ impl<'c> TransactionDao<'c> {
         .await
     }
 
-    pub async fn get_used_nonces(&self, address: &str, network: Network) -> DbResult<Vec<String>> {
+    pub async fn get_used_nonces(&self, address: &str, network: Network) -> DbResult<Vec<i32>> {
         let address = address.to_string();
         readonly_transaction(self.pool, move |conn| {
-            let nonces: Vec<String> = dsl::transaction
+            let nonces: Vec<i32> = dsl::transaction
                 .filter(dsl::sender.eq(address).and(dsl::network.eq(network)))
                 .select(dsl::nonce)
                 .order(dsl::nonce.asc())
@@ -156,7 +156,7 @@ impl<'c> TransactionDao<'c> {
         }).await
     }
 
-    pub async fn update_tx_sent(&self, tx_id: String, tx_hash: String, gas_price: Option<String>) -> DbResult<()> {
+    pub async fn update_tx_sent(&self, tx_id: String, tx_hash: String, gas_price: Option<f64>) -> DbResult<()> {
         let current_time = Utc::now().naive_utc();
         do_with_transaction(self.pool, move |conn| {
             diesel::update(dsl::transaction.find(tx_id))
@@ -192,7 +192,7 @@ impl<'c> TransactionDao<'c> {
         .await
     }
 
-    pub async fn update_tx_fields(&self, tx_id: String, encoded: String, signature:String, current_gas_price: Option<String>) -> DbResult<()> {
+    pub async fn update_tx_fields(&self, tx_id: String, encoded: String, signature:String, current_gas_price: Option<f64>) -> DbResult<()> {
         let current_time = Utc::now().naive_utc();
         do_with_transaction(self.pool, move |conn| {
             diesel::update(dsl::transaction.find(tx_id))
