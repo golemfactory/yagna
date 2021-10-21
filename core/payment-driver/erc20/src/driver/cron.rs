@@ -48,7 +48,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
             }
         };
 
-        for tx in txs {
+        'main_tx_loop: for tx in txs {
             log::debug!("checking tx {:?}", &tx);
 
             let time_elapsed_from_sent = match tx.time_sent {
@@ -82,10 +82,14 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                             continue;
                         }
                     };
-                    if (tcs.succeeded) {
+                    if tcs.exists_on_chain && !tcs.pending {
                         log::debug!("Previously sent transaction confirmed");
+                        dao.overwrite_tmp_onchain_txs_and_status_back_to_pending(&tx.tx_id, existing_tx_hash).await;
+                        continue 'main_tx_loop;
                     }
                 }
+            }
+            if tx.status == TransactionStatus::ErrorSent as i32 {
                 log::info!("Transaction not sent, retrying");
                 if time_elapsed_from_last_action > *TX_WAIT_FOR_ERROR_SENT_TRANSACTION {
                     log::warn!("Transaction not found on chain for {:?}", time_elapsed_from_sent);

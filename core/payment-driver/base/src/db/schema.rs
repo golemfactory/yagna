@@ -32,6 +32,8 @@ table! {
         starting_gas_price -> Nullable<Double>,
         current_gas_price -> Nullable<Double>,
         limit_gas_price -> Nullable<Double>,
+        final_gas_price -> Nullable<Double>,
+        final_gas_used -> Nullable<Double>,
         time_created -> Timestamp,
         time_last_action -> Timestamp,
         time_sent -> Nullable<Timestamp>,

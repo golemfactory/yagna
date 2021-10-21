@@ -112,6 +112,8 @@ impl ZksyncDao {
             current_gas_price: None,
             starting_gas_price: None,
             limit_gas_price: None,
+            final_gas_price: None,
+            final_gas_used: None,
             tx_type: TxType::Transfer as i32, // Zksync only knows transfers, unused field
             encoded: "".to_string(),          // not used till pre-sign
             signature: None,        // not used till pre-sign

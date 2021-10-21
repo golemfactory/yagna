@@ -229,6 +229,17 @@ impl Erc20Dao {
         }
     }
 
+    pub async fn overwrite_tmp_onchain_txs_and_status_back_to_pending(&self, tx_id: &str, overwrite_tmp_onchain_txs: &str) {
+        if let Err(e) = self
+            .transaction()
+            .overwrite_tmp_onchain_txs_and_status_back_to_pending(tx_id.to_string(), overwrite_tmp_onchain_txs.to_string())
+            .await
+        {
+            log::error!("Failed to update for transaction {:?} : {:?}", tx_id, e)
+            // TO CHECK: Should it continue or stop the process...
+        }
+    }
+
 
     pub async fn transaction_sent(&self, tx_id: &str, tx_hash: &str, gas_price: Option<f64>) {
         if let Err(e) = self

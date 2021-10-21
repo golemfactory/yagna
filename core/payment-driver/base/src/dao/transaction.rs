@@ -205,4 +205,17 @@ impl<'c> TransactionDao<'c> {
         })
         .await
     }
+
+    pub async fn overwrite_tmp_onchain_txs_and_status_back_to_pending(&self, tx_id: String, overwrite_tmp_onchain_txs: String) -> DbResult<()> {
+        let current_time = Utc::now().naive_utc();
+        do_with_transaction(self.pool, move |conn| {
+            diesel::update(dsl::transaction.find(tx_id))
+                .set((dsl::time_last_action.eq(current_time),
+                      dsl::tmp_onchain_txs.eq(overwrite_tmp_onchain_txs),
+                      dsl::status.eq(TransactionStatus::Pending as i32),
+                ))
+                .execute(conn)?;
+            Ok(())
+        }).await
+    }
 }

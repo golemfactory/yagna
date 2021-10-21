@@ -11,6 +11,8 @@ CREATE TABLE `transaction_tmp`(
     starting_gas_price DOUBLE NULL,
     current_gas_price DOUBLE NULL,
     limit_gas_price DOUBLE NULL,
+    final_gas_price DOUBLE NULL,
+    final_gas_used DOUBLE NULL,
     gas_limit INTEGER NULL,
     time_created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     time_last_action DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

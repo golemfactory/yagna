@@ -9,6 +9,7 @@ use std::str::FromStr;
 use web3::types::{H160, H256, U256, U64};
 use chrono::{Utc};
 use crate::erc20::ethereum::{GLM_POLYGON_MIN_GAS_PRICE, GLM_POLYGON_DEFAULT_MAX_GAS_PRICE, POLYGON_PREFERED_GAS_LEVELS};
+use num_traits::Float;
 
 // Workspace uses
 use ya_payment_driver::{
@@ -169,20 +170,26 @@ pub async fn make_transfer(
 
 
 
-fn bump_gas_price(gas_in_gwei: f64) -> f64 {
+fn bump_gas_price(gas_in_gwei: f64, limit_in_gwei: Option<f64>) -> f64 {
+    let mut result = -1.0;
     for n in 1..(POLYGON_PREFERED_GAS_LEVELS.len() - 1) {
         if gas_float_equals(POLYGON_PREFERED_GAS_LEVELS[n], gas_in_gwei) {
-            return POLYGON_PREFERED_GAS_LEVELS[n + 1];
+            result = POLYGON_PREFERED_GAS_LEVELS[n + 1];
         }
     }
     for n in 1..(POLYGON_PREFERED_GAS_LEVELS.len()) {
         if gas_in_gwei > POLYGON_PREFERED_GAS_LEVELS[n - 1] && gas_in_gwei < POLYGON_PREFERED_GAS_LEVELS[n] {
-            return POLYGON_PREFERED_GAS_LEVELS[n];
+            result = POLYGON_PREFERED_GAS_LEVELS[n];
         }
     }
 
-    //default - bump by 20%
-    return gas_in_gwei * 1.2;
+    if result < 0.0 {
+        result = gas_in_gwei * 1.2
+    }
+    if let Some(limit_in_gwei) = limit_in_gwei {
+        result = Float::min(result, limit_in_gwei);
+    }
+    result
 }
 
 pub async fn send_transactions(
@@ -202,7 +209,7 @@ pub async fn send_transactions(
 
 
         let new_gas_price = if let Some(current_gas_price) = tx.current_gas_price {
-            let gas_f64 = bump_gas_price(current_gas_price);
+            let gas_f64 = bump_gas_price(current_gas_price, tx.limit_gas_price);
 
             convert_float_gas_to_u256(gas_f64)
         } else if let Some(starting_gas_price) = tx.starting_gas_price {
@@ -267,7 +274,6 @@ pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails
     log::debug!("verify_tx. hash={}", tx_hash);
     let hex_hash = H256::from_str(&tx_hash[2..]).unwrap();
     let tx = ethereum::get_tx_receipt(hex_hash, network).await?.unwrap();
-
     // TODO: Properly parse logs after https://github.com/tomusdrw/rust-web3/issues/208
     let tx_log = &tx.logs[0];
     let sender = topic_to_str_address(&tx_log.topics[1]);

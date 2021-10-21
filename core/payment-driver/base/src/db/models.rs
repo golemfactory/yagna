@@ -65,6 +65,8 @@ pub struct TransactionEntity {
     pub starting_gas_price: Option<f64>,
     pub current_gas_price: Option<f64>,
     pub limit_gas_price: Option<f64>,
+    pub final_gas_price: Option<f64>,
+    pub final_gas_used: Option<f64>,
     pub time_created: NaiveDateTime,
     pub time_last_action: NaiveDateTime,
     pub time_sent: Option<NaiveDateTime>,

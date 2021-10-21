@@ -228,6 +228,8 @@ pub struct TransactionChainStatus {
     pub pending: bool,
     pub confirmed: bool,
     pub succeeded: bool,
+    pub gas_used: Option<U256>,
+    pub gas_price: Option<U256>,
 }
 
 pub async fn get_tx_on_chain_status(
@@ -240,11 +242,14 @@ pub async fn get_tx_on_chain_status(
         pending: false,
         confirmed: false,
         succeeded: false,
+        gas_price: None,
+        gas_used: None
     };
     let env = get_env(network);
     let tx = get_tx_receipt(tx_hash, network).await?;
     if let Some(tx) = tx {
         res.exists_on_chain = true;
+        res.gas_used = tx.gas_used;
         const TRANSACTION_STATUS_SUCCESS: u64 = 1;
         if tx.status == Some(ethereum_types::U64::from(TRANSACTION_STATUS_SUCCESS)) {
             res.succeeded = true;
@@ -261,8 +266,13 @@ pub async fn get_tx_on_chain_status(
             if tx_bn + env.required_confirmations - 1 <= *current_block {
                 res.confirmed = true;
             }
+            let transaction = get_tx_from_network(tx_hash, network).await?;
+            if let Some(t) = transaction {
+                res.gas_price = Some(t.gas_price);
+            }
         } else {
         }
+
     } else {
         let transaction = get_tx_from_network(tx_hash, network).await?;
         if let Some(_transaction) = transaction {
@@ -421,6 +431,8 @@ pub fn create_dao_entity(
         time_sent: None,
         time_confirmed: None,
         limit_gas_price: Some(limit_gas_price),
+        final_gas_price: None,
+        final_gas_used: None,
         starting_gas_price: Some(starting_gas_price),
         current_gas_price: None,
         encoded: encoded_raw_tx,
