@@ -441,7 +441,7 @@ impl PaymentDriverCron for ZksyncDriver {
 
             for tx in txs {
                 log::trace!("checking tx {:?}", &tx);
-                let tx_hash = match &tx.tx_hash {
+                let tx_hash = match &tx.tmp_onchain_txs {
                     None => continue,
                     Some(tx_hash) => tx_hash,
                 };

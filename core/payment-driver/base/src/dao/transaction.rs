@@ -149,7 +149,6 @@ impl<'c> TransactionDao<'c> {
                     dsl::status.eq(TransactionStatus::Created as i32),
                     dsl::time_last_action.eq(current_time),
                     dsl::time_sent.eq::<Option<NaiveDateTime>>(None),
-                    dsl::tx_hash.eq::<Option<String>>(None),
                 ))
                 .execute(conn)?;
             Ok(())
@@ -164,7 +163,7 @@ impl<'c> TransactionDao<'c> {
                     dsl::status.eq(TransactionStatus::Sent as i32),
                     dsl::time_last_action.eq(current_time),
                     dsl::time_sent.eq(current_time),
-                    dsl::tx_hash.eq(tx_hash),
+                    dsl::tmp_onchain_txs.eq(tx_hash),
                     dsl::current_gas_price.eq(gas_price),
                 ))
                 .execute(conn)?;

@@ -15,6 +15,8 @@ use crate::erc20::{config, eth_utils, utils};
 use ethabi::Token;
 use uuid::Uuid;
 
+pub const POLYGON_PREFERED_GAS_LEVELS : [f64; 13] = [0.0, 10.011, 15.011, 20.011, 25.011, 30.011, 33.011, 36.011, 40.011, 50.011, 60.011, 80.011, 100.011];
+
 lazy_static! {
     pub static ref GLM_FAUCET_GAS: U256 = U256::from(90_000);
     pub static ref GLM_TRANSFER_GAS: U256 = U256::from(55_000);
@@ -26,10 +28,10 @@ lazy_static! {
         Use:
         GLM_POLYGON_MAX_GAS_PRICE=31101000000
     */
-    pub static ref GLM_POLYGON_MAX_GAS_PRICE: u64 =
+    pub static ref GLM_POLYGON_DEFAULT_MAX_GAS_PRICE: u64 =
         match env::var("GLM_POLYGON_MAX_GAS_PRICE").map(|s| s.parse()) {
             Ok(Ok(x)) => x,
-            _ => 1000000000000, //1000 Gwei
+            _ => 100_011_000_000, //100.011 Gwei
         };
     /*
         Comment by scx1332:
@@ -128,6 +130,7 @@ pub async fn sign_faucet_tx(
         nonce,
         address,
         utils::convert_u256_gas_to_float( gas_price),
+        utils::convert_u256_gas_to_float( gas_price),
         serde_json::to_string(&tx).map_err(GenericError::new)?,
         network,
         Utc::now(),
@@ -161,6 +164,7 @@ pub async fn prepare_raw_transaction(
         .map_err(GenericError::new)?;
     let mut gas_price = client.eth().gas_price().await.map_err(GenericError::new)?;
 
+
     match network {
         Network::Polygon | Network::Mumbai => {
             if gas_price < U256::from(*GLM_POLYGON_MIN_GAS_PRICE) {
@@ -179,13 +183,13 @@ pub async fn prepare_raw_transaction(
                 );
                 gas_price = gas_price_override;
             }
-            if gas_price > U256::from(*GLM_POLYGON_MAX_GAS_PRICE) {
+            if gas_price > U256::from(*GLM_POLYGON_DEFAULT_MAX_GAS_PRICE) {
                 log::warn!(
                     "Gas price higher than maximum {}/{}. Continuing with lower gas price...",
                     gas_price,
-                    *GLM_POLYGON_MAX_GAS_PRICE
+                    *GLM_POLYGON_DEFAULT_MAX_GAS_PRICE
                 );
-                gas_price = U256::from(*GLM_POLYGON_MAX_GAS_PRICE);
+                gas_price = U256::from(*GLM_POLYGON_DEFAULT_MAX_GAS_PRICE);
             };
         }
         Network::Mainnet | Network::Rinkeby | Network::Goerli => {
@@ -401,6 +405,7 @@ pub fn create_dao_entity(
     nonce: U256,
     sender: H160,
     starting_gas_price: f64,
+    limit_gas_price: f64,
     encoded_raw_tx: String,
     network: Network,
     timestamp: DateTime<Utc>,
@@ -415,14 +420,15 @@ pub fn create_dao_entity(
         time_last_action: current_naive_time,
         time_sent: None,
         time_confirmed: None,
-        limit_gas_price: None,
+        limit_gas_price: Some(limit_gas_price),
         starting_gas_price: Some(starting_gas_price),
         current_gas_price: None,
         encoded: encoded_raw_tx,
         status: TransactionStatus::Created as i32,
         tx_type: tx_type as i32,
         signature: None,
-        tx_hash: None,
+        tmp_onchain_txs: None,
+        final_tx: None,
         network,
         last_error_msg: None,
         resent_times: 0

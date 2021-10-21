@@ -115,7 +115,8 @@ impl ZksyncDao {
             tx_type: TxType::Transfer as i32, // Zksync only knows transfers, unused field
             encoded: "".to_string(),          // not used till pre-sign
             signature: None,        // not used till pre-sign
-            tx_hash: None,
+            final_tx: None,
+            tmp_onchain_txs: None,
             network,
             last_error_msg: None,
             resent_times: 0,

@@ -51,7 +51,7 @@ impl TryFrom<i32> for TransactionStatus {
 }
 
 #[derive(Clone, Queryable, Debug, Identifiable, Insertable, PartialEq)]
-#[primary_key(tx_hash)]
+#[primary_key(tx_id)]
 #[table_name = "transaction"]
 pub struct TransactionEntity {
     pub tx_id: String,
@@ -59,9 +59,8 @@ pub struct TransactionEntity {
     pub nonce: i32,
     pub status: i32,
     pub tx_type: i32,
-    pub encoded: String,
-    pub signature: Option<String>,
-    pub tx_hash: Option<String>,
+    pub tmp_onchain_txs: Option<String>,
+    pub final_tx: Option<String>,
     pub network: Network,
     pub starting_gas_price: Option<f64>,
     pub current_gas_price: Option<f64>,
@@ -72,6 +71,8 @@ pub struct TransactionEntity {
     pub time_confirmed: Option<NaiveDateTime>,
     pub last_error_msg: Option<String>,
     pub resent_times: i32,
+    pub signature: Option<String>,
+    pub encoded: String,
 }
 
 #[derive(Queryable, Clone, Debug, Identifiable, Insertable, PartialEq)]

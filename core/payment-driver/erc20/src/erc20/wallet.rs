@@ -8,7 +8,7 @@ use num_bigint::BigUint;
 use std::str::FromStr;
 use web3::types::{H160, H256, U256, U64};
 use chrono::{Utc};
-use crate::erc20::ethereum::GLM_POLYGON_MIN_GAS_PRICE;
+use crate::erc20::ethereum::{GLM_POLYGON_MIN_GAS_PRICE, GLM_POLYGON_DEFAULT_MAX_GAS_PRICE, POLYGON_PREFERED_GAS_LEVELS};
 
 // Workspace uses
 use ya_payment_driver::{
@@ -121,6 +121,7 @@ pub async fn make_transfer(
     nonce: U256,
     network: Network,
     gas_price: Option<BigDecimal>,
+    limit_gas_price: Option<BigDecimal>,
     gas_limit: Option<u32>,
 ) -> Result<TransactionEntity, GenericError> {
     log::debug!(
@@ -134,6 +135,10 @@ pub async fn make_transfer(
     let gas_price = match gas_price {
         Some(gas_price) => Some(big_dec_gwei_to_u256(gas_price)?),
         None => None,
+    };
+    let limit_gas_price = match limit_gas_price {
+        Some(limit_gas_price) => big_dec_gwei_to_u256(limit_gas_price)?,
+        None => U256::from(*GLM_POLYGON_DEFAULT_MAX_GAS_PRICE),
     };
 
     let address = str_to_addr(&details.sender)?;
@@ -152,6 +157,7 @@ pub async fn make_transfer(
         nonce,
         address,
         convert_u256_gas_to_float(raw_tx.gas_price),
+        convert_u256_gas_to_float(limit_gas_price),
         serde_json::to_string(&raw_tx).map_err(GenericError::new)?,
         network,
         Utc::now(),
@@ -162,7 +168,6 @@ pub async fn make_transfer(
 
 
 
-const POLYGON_PREFERED_GAS_LEVELS : [f64; 8] = [0.0, 10.0, 15.0, 20.0, 25.0, 30.11, 35.11, 40.11];
 
 fn bump_gas_price(gas_in_gwei: f64) -> f64 {
     for n in 1..(POLYGON_PREFERED_GAS_LEVELS.len() - 1) {
@@ -218,6 +223,11 @@ pub async fn send_transactions(
         match ethereum::send_tx(signed, network).await {
             Ok(tx_hash) => {
                 let str_tx_hash = format!("0x{:x}", &tx_hash);
+                let str_tx_hash = if let Some(tmp_onchain_txs) = tx.tmp_onchain_txs {
+                    tmp_onchain_txs + ";" + str_tx_hash.as_str()
+                } else {
+                    str_tx_hash
+                };
                 dao.transaction_sent(&tx.tx_id, &str_tx_hash, Some(convert_u256_gas_to_float(raw_tx.gas_price))).await;
                 log::info!("Send transaction. hash={}", &str_tx_hash);
                 log::debug!("id={}", &tx.tx_id);

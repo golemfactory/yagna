@@ -26,9 +26,8 @@ table! {
         nonce -> Integer,
         status -> Integer,
         tx_type -> Integer,
-        encoded -> Text,
-        signature -> Nullable<Text>,
-        tx_hash -> Nullable<Text>,
+        tmp_onchain_txs -> Nullable<Text>,
+        final_tx -> Nullable<Text>,
         network -> Integer,
         starting_gas_price -> Nullable<Double>,
         current_gas_price -> Nullable<Double>,
@@ -39,6 +38,8 @@ table! {
         time_confirmed -> Nullable<Timestamp>,
         last_error_msg -> Nullable<Text>,
         resent_times -> Integer,
+        signature -> Nullable<Text>,
+        encoded -> Text,
     }
 }
 
