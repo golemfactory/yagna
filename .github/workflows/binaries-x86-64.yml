@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - release/*
+      - mwu/build-hybrid-for-goth
   pull_request:
     branches:
       - master
@@ -49,7 +50,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --workspace
+          args: --workspace --features hybrid-net
 
       - name: Copy binaries
         shell: bash
