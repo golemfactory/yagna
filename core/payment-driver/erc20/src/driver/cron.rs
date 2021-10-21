@@ -63,11 +63,17 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 None => "".to_string()
             };
 
-            let tmp_onchain_txs_vec : Vec<&str> = tmp_onchain_txs.split(";").collect();
+            let mut tmp_onchain_txs_vec : Vec<&str> = vec![];
+            for str in tmp_onchain_txs.split(";") {
+                if str.len() > 2 { //todo make proper validation of transaction hash
+                    tmp_onchain_txs_vec.push(str);
+                }
+            }
 
 
             if tx.status == TransactionStatus::ErrorSent as i32 {
                 for existing_tx_hash in &tmp_onchain_txs_vec {
+                    //ignore malformed strings
                     let hex_hash = match H256::from_str(&existing_tx_hash[2..]) {
                         Ok(hex_hash) => hex_hash,
                         Err(err) => {
@@ -90,8 +96,8 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 }
             }
             if tx.status == TransactionStatus::ErrorSent as i32 {
-                log::info!("Transaction not sent, retrying");
                 if time_elapsed_from_last_action > *TX_WAIT_FOR_ERROR_SENT_TRANSACTION {
+                    log::info!("Transaction not sent, retrying");
                     log::warn!("Transaction not found on chain for {:?}", time_elapsed_from_sent);
                     log::warn!("Time since last action {:?}", time_elapsed_from_last_action);
                     dao.retry_send_transaction(&tx.tx_id).await;
