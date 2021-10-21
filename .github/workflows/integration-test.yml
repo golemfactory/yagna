@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - release/*
+      - mwu/build-hybrid-for-goth
   pull_request:
     branches:
       - master
