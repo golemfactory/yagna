@@ -27,6 +27,11 @@ impl ExeUnitInstance {
         log::debug!("Spawning args: {:?}", args);
         log::debug!("Spawning in: {:?}", working_dir);
 
+        log::info!(
+            "Exeunit log directory: {}",
+            working_dir.join("logs").display()
+        );
+
         let binary_path = ya_utils_path::normalize_path(&binary_path)
             .map_err(|e| anyhow!("Failed to spawn [{}]: {}", binary_path.display(), e))?;
 
@@ -34,6 +39,9 @@ impl ExeUnitInstance {
         command
             .args(args)
             .current_dir(working_dir)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             // new_process_group is a no-op on non-Unix systems
             .new_process_group();
 

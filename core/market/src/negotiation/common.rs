@@ -7,7 +7,6 @@ use std::time::{Duration, Instant};
 use ya_client::model::market::{proposal::Proposal as ClientProposal, reason::Reason, NewProposal};
 use ya_client::model::NodeId;
 use ya_market_resolver::{match_demand_offer, Match};
-use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
 use crate::config::Config;
@@ -21,6 +20,7 @@ use crate::db::{
         Agreement, AgreementEvent, AgreementId, AgreementState, AppSessionId, MarketEvent, Owner,
         Proposal, ProposalId, ProposalState, SubscriptionId,
     },
+    DbMixedExecutor,
 };
 use crate::matcher::{
     error::{DemandError, QueryOfferError},
@@ -53,7 +53,7 @@ type IsFirst = bool;
 
 #[derive(Clone)]
 pub struct CommonBroker {
-    pub(super) db: DbExecutor,
+    pub(super) db: DbMixedExecutor,
     pub(super) store: SubscriptionStore,
     pub(super) negotiation_notifier: EventNotifier<SubscriptionId>,
     pub(super) session_notifier: EventNotifier<AppSessionId>,
@@ -64,7 +64,7 @@ pub struct CommonBroker {
 
 impl CommonBroker {
     pub fn new(
-        db: DbExecutor,
+        db: DbMixedExecutor,
         store: SubscriptionStore,
         session_notifier: EventNotifier<AppSessionId>,
         config: Arc<Config>,

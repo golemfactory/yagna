@@ -1,10 +1,11 @@
-use crate::config::DbConfig;
-use crate::db::dao::{AgreementDao, DemandDao, NegotiationEventsDao, OfferDao, ProposalDao};
 use futures::join;
 use tokio::time;
-use ya_persistence::executor::DbExecutor;
 
-pub async fn clean(db: DbExecutor, cfg: &DbConfig) {
+use crate::config::DbConfig;
+use crate::db::dao::{AgreementDao, DemandDao, NegotiationEventsDao, OfferDao, ProposalDao};
+use crate::db::DbMixedExecutor;
+
+pub async fn clean(db: DbMixedExecutor, cfg: &DbConfig) {
     let demand_db = db.clone();
     let events_db = db.clone();
     let offer_db = db.clone();
@@ -27,7 +28,7 @@ pub async fn clean(db: DbExecutor, cfg: &DbConfig) {
     }
 }
 
-pub async fn clean_forever(db: DbExecutor, cfg: DbConfig) {
+pub async fn clean_forever(db: DbMixedExecutor, cfg: DbConfig) {
     let mut interval = time::interval(cfg.cleanup_interval);
     loop {
         interval.tick().await;

@@ -1,4 +1,4 @@
-name: SGX CI
+name: SGX Unit Tests
 
 on:
   push:
@@ -13,7 +13,7 @@ on:
 
 jobs:
   build:
-    name: SGX Tests
+    name: SGX Unit Tests
     env:
       # `-D warnings` means any warnings emitted will cause build to fail
       RUSTFLAGS: "-D warnings -C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"

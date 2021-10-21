@@ -344,19 +344,19 @@ optional = false
 python-versions = ">=3.8,<4.0"
 
 [package.dependencies]
-pyyaml = ">=5.4,<6.0"
 aiohttp = "3.7.4"
-docker-compose = ">=1.29,<2.0"
-typing_extensions = ">=3.10.0,<4.0.0"
-dpath = ">=2.0,<3.0"
-ya-aioclient = ">=0.6,<0.7"
-mitmproxy = ">=5.3,<6.0"
-urllib3 = ">=1.26,<2.0"
 ansicolors = ">=1.1.0,<2.0.0"
 docker = ">=5.0,<6.0"
-transitions = ">=0.8,<0.9"
-ghapi = ">=0.1.16,<0.2.0"
+docker-compose = ">=1.29,<2.0"
+dpath = ">=2.0,<3.0"
 func_timeout = "4.3.5"
+ghapi = ">=0.1.16,<0.2.0"
+mitmproxy = ">=5.3,<6.0"
+pyyaml = ">=5.4,<6.0"
+transitions = ">=0.8,<0.9"
+typing_extensions = ">=3.10.0,<4.0.0"
+urllib3 = ">=1.26,<2.0"
+ya-aioclient = ">=0.6,<0.7"
 
 [[package]]
 name = "h11"
