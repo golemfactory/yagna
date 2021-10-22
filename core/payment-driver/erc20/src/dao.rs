@@ -208,7 +208,7 @@ impl Erc20Dao {
         final_hash: &str,
         final_gas_price: Option<f64>,
         final_gas_used: Option<i32>,
-        error: &str
+        error: &str,
     ) {
         if let Err(e) = self
             .transaction()
@@ -324,7 +324,6 @@ impl Erc20Dao {
             // TO CHECK: Should it continue or stop the process...
         }
     }
-
 
     pub async fn payment_failed(&self, order_id: &str) {
         if let Err(e) = self

@@ -92,11 +92,13 @@ impl<'c> TransactionDao<'c> {
     }
 
     pub async fn get_unsent_txs(&self, network: Network) -> DbResult<Vec<TransactionEntity>> {
-        self.get_by_statuses(TransactionStatus::Created,
-                             TransactionStatus::Resend,
-                             TransactionStatus::ResendAndBumpGas,
-                             network)
-            .await
+        self.get_by_statuses(
+            TransactionStatus::Created,
+            TransactionStatus::Resend,
+            TransactionStatus::ResendAndBumpGas,
+            network,
+        )
+        .await
     }
 
     pub async fn get_unconfirmed_txs(&self, network: Network) -> DbResult<Vec<TransactionEntity>> {
