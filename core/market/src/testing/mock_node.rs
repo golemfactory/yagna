@@ -23,6 +23,7 @@ use super::{store::SubscriptionStore, Matcher};
 use crate::config::{Config, DiscoveryConfig};
 use crate::db::dao::ProposalDao;
 use crate::db::model::{Demand, Offer, Proposal, ProposalId, SubscriptionId};
+use crate::db::DbMixedExecutor;
 use crate::identity::IdentityApi;
 use crate::matcher::error::{DemandError, QueryOfferError};
 use crate::matcher::EventsListeners;
@@ -462,17 +463,34 @@ impl MarketsNetwork {
         .await
     }
 
-    fn create_database(&self, name: &str) -> DbExecutor {
+    fn create_database(&self, name: &str) -> DbMixedExecutor {
         let db_path = self.instance_dir(name);
-        let db = DbExecutor::from_data_dir(&db_path, "yagna")
+        let db_name = self.node_gsb_prefixes(name).0;
+
+        let disk_db = DbExecutor::from_data_dir(&db_path, "yagna")
             .map_err(|e| anyhow!("Failed to create db [{:?}]. Error: {}", db_path, e))
             .unwrap();
-        db
+        let ram_db = DbExecutor::in_memory(&db_name)
+            .map_err(|e| {
+                anyhow!(
+                    "Failed to create in memory db [{:?}]. Error: {}",
+                    db_name,
+                    e
+                )
+            })
+            .unwrap();
+
+        DbMixedExecutor::new(disk_db, ram_db)
     }
 
-    pub fn init_database(&self, name: &str) -> DbExecutor {
+    pub fn init_database(&self, name: &str) -> DbMixedExecutor {
         let db = self.create_database(name);
-        db.apply_migration(crate::db::migrations::run_with_output)
+
+        db.disk_db
+            .apply_migration(crate::db::migrations::run_with_output)
+            .unwrap();
+        db.ram_db
+            .apply_migration(crate::db::migrations::run_with_output)
             .unwrap();
         db
     }

@@ -5,20 +5,20 @@ use ya_core_model::{
     market::{GetAgreement, RpcMessageError},
     Role,
 };
-use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::ServiceBinder;
 
 use crate::db::dao::AgreementDao;
 use crate::db::model::{AgreementId, Owner};
+use crate::db::DbMixedExecutor;
 
-pub async fn bind_gsb(db: DbExecutor, public_prefix: &str, _local_prefix: &str) {
+pub async fn bind_gsb(db: DbMixedExecutor, public_prefix: &str, _local_prefix: &str) {
     log::trace!("Binding market agreement public service to service bus");
     ServiceBinder::new(public_prefix, &db, ()).bind(get_agreement);
     log::debug!("Successfully bound market agreement public service to service bus");
 }
 
 async fn get_agreement(
-    db: DbExecutor,
+    db: DbMixedExecutor,
     _sender_id: String,
     msg: GetAgreement,
 ) -> Result<ClientAgreement, RpcMessageError> {
