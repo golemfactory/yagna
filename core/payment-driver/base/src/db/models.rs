@@ -37,6 +37,8 @@ pub enum TransactionStatus {
     Sent = 2,
     Pending = 3,
     Confirmed = 4,
+    Resend = 5,
+    ResendAndBumpGas = 6,
     ErrorSent = 10,
     ErrorOnChain = 11,
 }

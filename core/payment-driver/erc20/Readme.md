@@ -85,6 +85,60 @@ DB fields explained
 * signature - transaction signature
 * encoded - YagnaRawTransaction encoded in json
 
+## Assigning nonces
+
+To process transaction in ethereum network you have to assign nonce which has to be strictly one greater than previous nonce.
+This makes process of sending transaction tricky and complicated, because when you send two transactions with the same nonce one of them will fail. Other case is when one transaction is blocked or waiting others with higher nonce will get stuck too.
+Currently for every transaction nonce is assigned and not changed until transaction will consume nonce on chain.
+
+Huge issue: When transaction is malformed and it get stuck, resend will not help and all transactions are blocked.
+
+With the implementation of the driver we are trying to resolve cases automatically but the process is complicated and not perfect right now.
+
+Good news: Nonce prevents double spending so we don't have to worry about that (unless we change the nonce)
+
+Note: Error on chain will consume nonce and gas and new nonce has to be assigned to proceed with transaction, which is currently not handled.
+
+## Bumping gas prices
+
+Problem on Ethereum network is as follows:
+If you sent transaction you have only vague idea when transaction will be performed. 
+There is function that is estimating current gas price but it is far from perfect.
+Also we want to pay for gas as little as possible. 
+For example on Polygon Network if you sent transaction for 30.01Gwei you can be pretty sure it get proceeded fairly smoothly
+right now, but when the network is congested transaction can get stuck for indefinite amount of time.
+When network usage is lower you can try to make transaction for lower gas fee (for example 20Gwei).
+To resolve this issue we implemented automatic gas bumping. Every set amount of time gas is increased to increase probability of transaction getting processed.
+That way we can save money on gas and also have bigger chance of transactions not getting stuck.
+
+Currently we proposed following gas levels for polygon network:
+```
+10.011, 
+15.011, 
+20.011, 
+25.011, 
+30.011, //minimum suggested gas price 
+33.011, 
+36.011, 
+40.011, 
+50.011, 
+60.011, 
+80.011,
+100.011
+```
+Note that we add 0.011 to increase the chance of getting inline of someone setting whole number as gas price (which people tend to do). It costs almost nothing but significally increase your chance of transaction beeing processed.
+
+Note that on test networks gas doesn't matter and transaction is processed instantly regardless of gas set. So to test this
+feature you have to use Polygon network and pay some Matic for gas.
+
+## List of known errors:
+
+Error when sending when gas-limit set too low
+```
+RPC error: Error { code: ServerError(-32000), message: "intrinsic gas too low", data: None }
+```
+
+
 
 
 

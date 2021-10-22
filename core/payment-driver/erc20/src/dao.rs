@@ -224,10 +224,10 @@ impl Erc20Dao {
         }
     }
 
-    pub async fn retry_send_transaction(&self, tx_id: &str) {
+    pub async fn retry_send_transaction(&self, tx_id: &str, bump_gas: bool) {
         if let Err(e) = self
             .transaction()
-            .update_tx_send_again(tx_id.to_string())
+            .update_tx_send_again(tx_id.to_string(), bump_gas)
             .await
         {
             log::error!("Failed to update for transaction {:?} : {:?}", tx_id, e)

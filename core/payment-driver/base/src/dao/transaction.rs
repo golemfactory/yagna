@@ -92,7 +92,10 @@ impl<'c> TransactionDao<'c> {
     }
 
     pub async fn get_unsent_txs(&self, network: Network) -> DbResult<Vec<TransactionEntity>> {
-        self.get_by_status(TransactionStatus::Created, network)
+        self.get_by_statuses(TransactionStatus::Created,
+                             TransactionStatus::Resend,
+                             TransactionStatus::ResendAndBumpGas,
+                             network)
             .await
     }
 
@@ -153,12 +156,16 @@ impl<'c> TransactionDao<'c> {
         .await
     }
 
-    pub async fn update_tx_send_again(&self, tx_id: String) -> DbResult<()> {
+    pub async fn update_tx_send_again(&self, tx_id: String, bump_gas: bool) -> DbResult<()> {
         let current_time = Utc::now().naive_utc();
+        let new_status = match bump_gas {
+            true => TransactionStatus::ResendAndBumpGas as i32,
+            false => TransactionStatus::Resend as i32,
+        };
         do_with_transaction(self.pool, move |conn| {
             diesel::update(dsl::transaction.find(tx_id))
                 .set((
-                    dsl::status.eq(TransactionStatus::Created as i32),
+                    dsl::status.eq(new_status),
                     dsl::time_last_action.eq(current_time),
                     dsl::time_sent.eq::<Option<NaiveDateTime>>(None),
                 ))

@@ -33,6 +33,7 @@ use crate::{
     },
     RINKEBY_NETWORK,
 };
+use ya_payment_driver::db::models::TransactionStatus;
 
 pub async fn account_balance(address: H160, network: Network) -> Result<BigDecimal, GenericError> {
     let balance_com = ethereum::get_glm_balance(address, network).await?;
@@ -211,7 +212,10 @@ pub async fn send_transactions(
         //let sign = hex::decode(signature).map_err(GenericError::new)?;
 
         let new_gas_price = if let Some(current_gas_price) = tx.current_gas_price {
-            let gas_f64 = bump_gas_price(current_gas_price, tx.max_gas_price);
+            let mut gas_f64 = current_gas_price;
+            if tx.status == TransactionStatus::ResendAndBumpGas as i32 {
+                gas_f64 = bump_gas_price(current_gas_price, tx.max_gas_price);
+            }
 
             convert_float_gas_to_u256(gas_f64)
         } else if let Some(starting_gas_price) = tx.starting_gas_price {

@@ -47,6 +47,8 @@ INSERT INTO `transaction_status` (status_id, status) VALUES(1, "CREATED");
 INSERT INTO `transaction_status` (status_id, status) VALUES(2, "SENT");
 INSERT INTO `transaction_status` (status_id, status) VALUES(3, "PENDING");
 INSERT INTO `transaction_status` (status_id, status) VALUES(4, "CONFIRMED");
+INSERT INTO `transaction_status` (status_id, status) VALUES(5, "RESEND");
+INSERT INTO `transaction_status` (status_id, status) VALUES(6, "RESENDANDBUMPGAS");
 INSERT INTO `transaction_status` (status_id, status) VALUES(10, "ERRORSENT");
 INSERT INTO `transaction_status` (status_id, status) VALUES(11, "ERRORONCHAIN");
 

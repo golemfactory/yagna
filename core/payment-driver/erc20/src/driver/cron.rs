@@ -108,7 +108,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                         time_elapsed_from_sent
                     );
                     log::warn!("Time since last action {:?}", time_elapsed_from_last_action);
-                    dao.retry_send_transaction(&tx.tx_id).await;
+                    dao.retry_send_transaction(&tx.tx_id, false).await;
                 }
             }
 
@@ -163,7 +163,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                         time_elapsed_from_sent
                     );
                     log::warn!("Time since last action {:?}", time_elapsed_from_last_action);
-                    dao.retry_send_transaction(&tx.tx_id).await;
+                    dao.retry_send_transaction(&tx.tx_id, false).await;
                 }
 
                 continue;
@@ -175,7 +175,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                         time_elapsed_from_sent
                     );
                     log::warn!("Time since last action {:?}", time_elapsed_from_last_action);
-                    dao.retry_send_transaction(&tx.tx_id).await;
+                    dao.retry_send_transaction(&tx.tx_id, true).await;
                 }
                 continue;
             } else if !s.confirmed {
