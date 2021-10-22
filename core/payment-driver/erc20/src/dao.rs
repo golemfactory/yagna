@@ -138,7 +138,7 @@ impl Erc20Dao {
             network: Network::Rinkeby, // TODO: update network
             current_gas_price: None,
             starting_gas_price: None,
-            limit_gas_price: None,
+            max_gas_price: None,
             last_error_msg: None,
             resent_times: 0,
         };

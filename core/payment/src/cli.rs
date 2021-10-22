@@ -76,7 +76,7 @@ pub enum PaymentCli {
             help = "Override maximum gas price (in Gwei)",
             default_value = "auto"
         )]
-        limit_gas_price: String,
+        max_gas_price: String,
         #[structopt(
             long,
             help = "Override gas limit (at least 48000 to account with GLM, 60000 to new account without GLM)",
@@ -266,7 +266,7 @@ impl PaymentCli {
                 to_address,
                 amount,
                 gas_price,
-                limit_gas_price,
+                max_gas_price,
                 gas_limit,
             } => {
                 let address = resolve_address(account.address()).await?;
@@ -277,10 +277,10 @@ impl PaymentCli {
                 } else {
                     Some(BigDecimal::from_str(&gas_price)?)
                 };
-                let limit_gas_price = if limit_gas_price.is_empty() || limit_gas_price == "auto" {
+                let max_gas_price = if max_gas_price.is_empty() || max_gas_price == "auto" {
                     None
                 } else {
-                    Some(BigDecimal::from_str(&limit_gas_price)?)
+                    Some(BigDecimal::from_str(&max_gas_price)?)
                 };
 
                 let gas_limit = if gas_limit.is_empty() || gas_limit == "auto" {
@@ -298,7 +298,7 @@ impl PaymentCli {
                         Some(account.network()),
                         None,
                         gas_price,
-                        limit_gas_price,
+                        max_gas_price,
                         gas_limit,
                     )
                     .await?,

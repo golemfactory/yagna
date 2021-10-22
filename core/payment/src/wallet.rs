@@ -52,7 +52,7 @@ pub async fn transfer(
     network: Option<String>,
     token: Option<String>,
     gas_price: Option<BigDecimal>,
-    limit_gas_price: Option<BigDecimal>,
+    max_gas_price: Option<BigDecimal>,
     gas_limit: Option<u32>,
 ) -> anyhow::Result<String> {
     let driver_id = driver_bus_id(driver);
@@ -63,7 +63,7 @@ pub async fn transfer(
         network,
         token,
         gas_price,
-        limit_gas_price,
+        max_gas_price,
         gas_limit,
     );
     let tx_id = bus::service(driver_id).call(message).await??;

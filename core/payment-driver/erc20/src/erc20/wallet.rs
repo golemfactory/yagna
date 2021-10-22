@@ -126,7 +126,7 @@ pub async fn make_transfer(
     nonce: U256,
     network: Network,
     gas_price: Option<BigDecimal>,
-    limit_gas_price: Option<BigDecimal>,
+    max_gas_price: Option<BigDecimal>,
     gas_limit: Option<u32>,
 ) -> Result<TransactionEntity, GenericError> {
     log::debug!(
@@ -141,8 +141,8 @@ pub async fn make_transfer(
         Some(gas_price) => Some(big_dec_gwei_to_u256(gas_price)?),
         None => None,
     };
-    let limit_gas_price = match limit_gas_price {
-        Some(limit_gas_price) => big_dec_gwei_to_u256(limit_gas_price)?,
+    let max_gas_price = match max_gas_price {
+        Some(max_gas_price) => big_dec_gwei_to_u256(max_gas_price)?,
         None => U256::from(*GLM_POLYGON_DEFAULT_MAX_GAS_PRICE),
     };
 
@@ -162,7 +162,7 @@ pub async fn make_transfer(
         nonce,
         address,
         convert_u256_gas_to_float(raw_tx.gas_price),
-        convert_u256_gas_to_float(limit_gas_price),
+        convert_u256_gas_to_float(max_gas_price),
         raw_tx.gas.as_u32() as i32,
         serde_json::to_string(&raw_tx).map_err(GenericError::new)?,
         network,
@@ -211,7 +211,7 @@ pub async fn send_transactions(
         //let sign = hex::decode(signature).map_err(GenericError::new)?;
 
         let new_gas_price = if let Some(current_gas_price) = tx.current_gas_price {
-            let gas_f64 = bump_gas_price(current_gas_price, tx.limit_gas_price);
+            let gas_f64 = bump_gas_price(current_gas_price, tx.max_gas_price);
 
             convert_float_gas_to_u256(gas_f64)
         } else if let Some(starting_gas_price) = tx.starting_gas_price {

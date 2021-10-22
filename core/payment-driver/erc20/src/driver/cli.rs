@@ -106,7 +106,7 @@ pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericEr
     let amount = msg.amount;
     let gas_limit = msg.gas_limit;
     let gas_price = msg.gas_price;
-    let limit_gas_price = msg.limit_gas_price;
+    let max_gas_price = msg.max_gas_price;
     let glm_balance = wallet::account_balance(sender_h160, network).await?;
 
     if amount > glm_balance {
@@ -129,7 +129,7 @@ pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericEr
         nonce,
         network,
         gas_price,
-        limit_gas_price,
+        max_gas_price,
         gas_limit,
     )
     .await?;

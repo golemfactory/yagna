@@ -64,7 +64,7 @@ pub struct TransactionEntity {
     pub network: Network,
     pub starting_gas_price: Option<f64>,
     pub current_gas_price: Option<f64>,
-    pub limit_gas_price: Option<f64>,
+    pub max_gas_price: Option<f64>,
     pub final_gas_price: Option<f64>,
     pub final_gas_used: Option<i32>,
     pub gas_limit: Option<i32>,

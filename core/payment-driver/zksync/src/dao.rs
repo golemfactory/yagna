@@ -111,7 +111,7 @@ impl ZksyncDao {
             time_sent: None,
             current_gas_price: None,
             starting_gas_price: None,
-            limit_gas_price: None,
+            max_gas_price: None,
             final_gas_price: None,
             final_gas_used: None,
             gas_limit: None,

@@ -10,7 +10,7 @@ CREATE TABLE `transaction_tmp`(
     final_tx TEXT NULL,
     starting_gas_price DOUBLE NULL,
     current_gas_price DOUBLE NULL,
-    limit_gas_price DOUBLE NULL,
+    max_gas_price DOUBLE NULL,
     final_gas_price DOUBLE NULL,
     final_gas_used INTEGER NULL,
     gas_limit INTEGER NULL,

@@ -31,7 +31,7 @@ table! {
         network -> Integer,
         starting_gas_price -> Nullable<Double>,
         current_gas_price -> Nullable<Double>,
-        limit_gas_price -> Nullable<Double>,
+        max_gas_price -> Nullable<Double>,
         final_gas_price -> Nullable<Double>,
         final_gas_used -> Nullable<Integer>,
         gas_limit -> Nullable<Integer>,
