@@ -18,7 +18,7 @@ use crate::{
         schema::transaction::dsl,
     },
 };
-use chrono::{Utc, NaiveDateTime};
+use chrono::{NaiveDateTime, Utc};
 
 #[allow(unused)]
 pub struct TransactionDao<'c> {
@@ -97,7 +97,13 @@ impl<'c> TransactionDao<'c> {
     }
 
     pub async fn get_unconfirmed_txs(&self, network: Network) -> DbResult<Vec<TransactionEntity>> {
-        self.get_by_statuses(TransactionStatus::Sent, TransactionStatus::ErrorSent, TransactionStatus::Pending, network).await
+        self.get_by_statuses(
+            TransactionStatus::Sent,
+            TransactionStatus::ErrorSent,
+            TransactionStatus::Pending,
+            network,
+        )
+        .await
     }
 
     pub async fn has_unconfirmed_txs(&self) -> DbResult<bool> {
@@ -134,11 +140,17 @@ impl<'c> TransactionDao<'c> {
     ) -> DbResult<Vec<TransactionEntity>> {
         readonly_transaction(self.pool, move |conn| {
             let txs: Vec<TransactionEntity> = dsl::transaction
-                .filter((dsl::status.eq(status1 as i32).or(dsl::status.eq(status2 as i32)).or(dsl::status.eq(status3 as i32))).and(dsl::network.eq(network)))
+                .filter(
+                    (dsl::status
+                        .eq(status1 as i32)
+                        .or(dsl::status.eq(status2 as i32))
+                        .or(dsl::status.eq(status3 as i32)))
+                    .and(dsl::network.eq(network)),
+                )
                 .load(conn)?;
             Ok(txs)
         })
-            .await
+        .await
     }
 
     pub async fn update_tx_send_again(&self, tx_id: String) -> DbResult<()> {
@@ -152,10 +164,16 @@ impl<'c> TransactionDao<'c> {
                 ))
                 .execute(conn)?;
             Ok(())
-        }).await
+        })
+        .await
     }
 
-    pub async fn update_tx_sent(&self, tx_id: String, tx_hash: String, gas_price: Option<f64>) -> DbResult<()> {
+    pub async fn update_tx_sent(
+        &self,
+        tx_id: String,
+        tx_hash: String,
+        gas_price: Option<f64>,
+    ) -> DbResult<()> {
         let current_time = Utc::now().naive_utc();
         do_with_transaction(self.pool, move |conn| {
             diesel::update(dsl::transaction.find(tx_id))
@@ -172,12 +190,21 @@ impl<'c> TransactionDao<'c> {
         .await
     }
 
-    pub async fn confirm_tx(&self, tx_id: String, status: TransactionStatus, err: Option<String>, final_hash: String, final_gas_price: Option<f64>, final_gas_used: Option<i32>) -> DbResult<()> {
+    pub async fn confirm_tx(
+        &self,
+        tx_id: String,
+        status: TransactionStatus,
+        err: Option<String>,
+        final_hash: String,
+        final_gas_price: Option<f64>,
+        final_gas_used: Option<i32>,
+    ) -> DbResult<()> {
         let current_time = Utc::now().naive_utc();
         let confirmed_time = current_time;
         do_with_transaction(self.pool, move |conn| {
             diesel::update(dsl::transaction.find(tx_id))
-                .set((dsl::status.eq(status as i32),
+                .set((
+                    dsl::status.eq(status as i32),
                     dsl::time_last_action.eq(current_time),
                     dsl::time_confirmed.eq(confirmed_time),
                     dsl::last_error_msg.eq(err),
@@ -185,23 +212,29 @@ impl<'c> TransactionDao<'c> {
                     dsl::final_gas_used.eq(final_gas_used),
                     dsl::final_tx.eq(Some(final_hash)),
                     dsl::tmp_onchain_txs.eq::<Option<String>>(None),
-                    dsl::current_gas_price.eq::<Option<f64>>(None)
+                    dsl::current_gas_price.eq::<Option<f64>>(None),
                 ))
                 .execute(conn)?;
             Ok(())
         })
-            .await
+        .await
     }
 
-    pub async fn update_tx_status(&self, tx_id: String, status: TransactionStatus, err: Option<String>) -> DbResult<()> {
+    pub async fn update_tx_status(
+        &self,
+        tx_id: String,
+        status: TransactionStatus,
+        err: Option<String>,
+    ) -> DbResult<()> {
         let current_time = Utc::now().naive_utc();
         let confirmed_time = match status {
             TransactionStatus::Confirmed => Some(current_time),
-            _ => None
+            _ => None,
         };
         do_with_transaction(self.pool, move |conn| {
             diesel::update(dsl::transaction.find(tx_id))
-                .set((dsl::status.eq(status as i32),
+                .set((
+                    dsl::status.eq(status as i32),
                     dsl::time_last_action.eq(current_time),
                     dsl::time_confirmed.eq(confirmed_time),
                     dsl::last_error_msg.eq(err),
@@ -212,14 +245,21 @@ impl<'c> TransactionDao<'c> {
         .await
     }
 
-    pub async fn update_tx_fields(&self, tx_id: String, encoded: String, signature:String, current_gas_price: Option<f64>) -> DbResult<()> {
+    pub async fn update_tx_fields(
+        &self,
+        tx_id: String,
+        encoded: String,
+        signature: String,
+        current_gas_price: Option<f64>,
+    ) -> DbResult<()> {
         let current_time = Utc::now().naive_utc();
         do_with_transaction(self.pool, move |conn| {
             diesel::update(dsl::transaction.find(tx_id))
-                .set((dsl::time_last_action.eq(current_time),
-                      dsl::encoded.eq(encoded),
-                      dsl::signature.eq(signature),
-                      dsl::current_gas_price.eq(current_gas_price),
+                .set((
+                    dsl::time_last_action.eq(current_time),
+                    dsl::encoded.eq(encoded),
+                    dsl::signature.eq(signature),
+                    dsl::current_gas_price.eq(current_gas_price),
                 ))
                 .execute(conn)?;
             Ok(())
@@ -228,16 +268,22 @@ impl<'c> TransactionDao<'c> {
     }
 
     //this is hacky solution for now to update db state so next check will properly resolve transaction status
-    pub async fn overwrite_tmp_onchain_txs_and_status_back_to_pending(&self, tx_id: String, overwrite_tmp_onchain_txs: String) -> DbResult<()> {
+    pub async fn overwrite_tmp_onchain_txs_and_status_back_to_pending(
+        &self,
+        tx_id: String,
+        overwrite_tmp_onchain_txs: String,
+    ) -> DbResult<()> {
         let current_time = Utc::now().naive_utc();
         do_with_transaction(self.pool, move |conn| {
             diesel::update(dsl::transaction.find(tx_id))
-                .set((dsl::time_last_action.eq(current_time),
-                      dsl::tmp_onchain_txs.eq(overwrite_tmp_onchain_txs),
-                      dsl::status.eq(TransactionStatus::Pending as i32),
+                .set((
+                    dsl::time_last_action.eq(current_time),
+                    dsl::tmp_onchain_txs.eq(overwrite_tmp_onchain_txs),
+                    dsl::status.eq(TransactionStatus::Pending as i32),
                 ))
                 .execute(conn)?;
             Ok(())
-        }).await
+        })
+        .await
     }
 }

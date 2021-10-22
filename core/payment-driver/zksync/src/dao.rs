@@ -117,7 +117,7 @@ impl ZksyncDao {
             gas_limit: None,
             tx_type: TxType::Transfer as i32, // Zksync only knows transfers, unused field
             encoded: "".to_string(),          // not used till pre-sign
-            signature: None,        // not used till pre-sign
+            signature: None,                  // not used till pre-sign
             final_tx: None,
             tmp_onchain_txs: None,
             network,
@@ -181,7 +181,11 @@ impl ZksyncDao {
     pub async fn transaction_failed(&self, tx_id: &str, err: &str) {
         if let Err(e) = self
             .transaction()
-            .update_tx_status(tx_id.to_string(), TransactionStatus::ErrorOnChain.into(), Some(err.to_string()))
+            .update_tx_status(
+                tx_id.to_string(),
+                TransactionStatus::ErrorOnChain.into(),
+                Some(err.to_string()),
+            )
             .await
         {
             log::error!(

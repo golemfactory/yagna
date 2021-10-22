@@ -66,7 +66,6 @@ pub fn str_to_addr(addr: &str) -> Result<Address, GenericError> {
     }
 }
 
-
 pub fn convert_float_gas_to_u256(gas_in_gwei: f64) -> U256 {
     let gas_in_wei = gas_in_gwei * 1.0E9;
     let gas_in_wei_int = gas_in_wei as u64;

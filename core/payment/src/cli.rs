@@ -71,7 +71,11 @@ pub enum PaymentCli {
         amount: String,
         #[structopt(long, help = "Override gas price (in Gwei)", default_value = "auto")]
         gas_price: String,
-        #[structopt(long, help = "Override maximum gas price (in Gwei)", default_value = "auto")]
+        #[structopt(
+            long,
+            help = "Override maximum gas price (in Gwei)",
+            default_value = "auto"
+        )]
         limit_gas_price: String,
         #[structopt(
             long,

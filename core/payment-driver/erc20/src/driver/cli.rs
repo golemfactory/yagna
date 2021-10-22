@@ -124,7 +124,15 @@ pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericEr
     };
 
     let nonce = wallet::get_next_nonce(dao, sender_h160, network).await?;
-    let db_tx = wallet::make_transfer(&details, nonce, network, gas_price, limit_gas_price, gas_limit).await?;
+    let db_tx = wallet::make_transfer(
+        &details,
+        nonce,
+        network,
+        gas_price,
+        limit_gas_price,
+        gas_limit,
+    )
+    .await?;
 
     // Check if there is enough ETH for gas
     let human_gas_cost = wallet::has_enough_eth_for_gas(&db_tx, network).await?;

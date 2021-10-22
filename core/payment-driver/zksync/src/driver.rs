@@ -499,7 +499,9 @@ impl PaymentDriverCron for ZksyncDriver {
                         }
                     }
 
-                    self.dao.transaction_failed(&tx.tx_id, "Unknown error").await;
+                    self.dao
+                        .transaction_failed(&tx.tx_id, "Unknown error")
+                        .await;
                     return;
                 }
 

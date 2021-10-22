@@ -112,7 +112,7 @@ impl Erc20Dao {
 
         Ok(next_nonce)
     }
-/*
+    /*
     pub async fn insert_transaction2(
         &self,
         details: &PaymentDetails,
@@ -152,7 +152,7 @@ impl Erc20Dao {
 
     pub async fn insert_raw_transaction(&self, tx: TransactionEntity) -> String {
         let tx_id = tx.tx_id.clone();
-/*        match self.transaction().get(tx_id).await {
+        /*        match self.transaction().get(tx_id).await {
             Some(res) => {
                 if let Some(tx) = res {
                     self.transaction().del
@@ -160,7 +160,6 @@ impl Erc20Dao {
             }
             Err(e) => log::error!("Error when checking for existing transactions: {:?}", e)
         }*/
-
 
         if let Err(e) = self.transaction().insert_transactions(vec![tx]).await {
             log::error!("Failed to store transaction for {} : {:?}", tx_id, e)
@@ -175,14 +174,27 @@ impl Erc20Dao {
             Err(e) => {
                 log::error!("Failed to fetch `payments` for tx {:?} : {:?}", tx_id, e);
                 vec![]
-            },
+            }
         }
     }
 
-    pub async fn transaction_confirmed(&self, tx_id: &str, final_hash: &str, final_gas_price: Option<f64>, final_gas_used: Option<i32>) {
+    pub async fn transaction_confirmed(
+        &self,
+        tx_id: &str,
+        final_hash: &str,
+        final_gas_price: Option<f64>,
+        final_gas_used: Option<i32>,
+    ) {
         if let Err(e) = self
             .transaction()
-            .confirm_tx(tx_id.to_string(), TransactionStatus::Confirmed.into(), None, final_hash.to_string(), final_gas_price, final_gas_used)
+            .confirm_tx(
+                tx_id.to_string(),
+                TransactionStatus::Confirmed.into(),
+                None,
+                final_hash.to_string(),
+                final_gas_price,
+                final_gas_used,
+            )
             .await
         {
             log::error!("Failed to update tx status for {:?} : {:?}", tx_id, e)
@@ -223,7 +235,13 @@ impl Erc20Dao {
         }
     }
 
-    pub async fn update_tx_fields(&self, tx_id: &str, encoded: String, signature: String, current_gas_price: Option<f64>) {
+    pub async fn update_tx_fields(
+        &self,
+        tx_id: &str,
+        encoded: String,
+        signature: String,
+        current_gas_price: Option<f64>,
+    ) {
         if let Err(e) = self
             .transaction()
             .update_tx_fields(tx_id.to_string(), encoded, signature, current_gas_price)
@@ -234,17 +252,23 @@ impl Erc20Dao {
         }
     }
 
-    pub async fn overwrite_tmp_onchain_txs_and_status_back_to_pending(&self, tx_id: &str, overwrite_tmp_onchain_txs: &str) {
+    pub async fn overwrite_tmp_onchain_txs_and_status_back_to_pending(
+        &self,
+        tx_id: &str,
+        overwrite_tmp_onchain_txs: &str,
+    ) {
         if let Err(e) = self
             .transaction()
-            .overwrite_tmp_onchain_txs_and_status_back_to_pending(tx_id.to_string(), overwrite_tmp_onchain_txs.to_string())
+            .overwrite_tmp_onchain_txs_and_status_back_to_pending(
+                tx_id.to_string(),
+                overwrite_tmp_onchain_txs.to_string(),
+            )
             .await
         {
             log::error!("Failed to update for transaction {:?} : {:?}", tx_id, e)
             // TO CHECK: Should it continue or stop the process...
         }
     }
-
 
     pub async fn transaction_sent(&self, tx_id: &str, tx_hash: &str, gas_price: Option<f64>) {
         if let Err(e) = self
@@ -260,7 +284,11 @@ impl Erc20Dao {
     pub async fn transaction_failed_send(&self, tx_id: &str, error: &str) {
         if let Err(e) = self
             .transaction()
-            .update_tx_status(tx_id.to_string(), TransactionStatus::ErrorSent.into(), Some(error.to_string()))
+            .update_tx_status(
+                tx_id.to_string(),
+                TransactionStatus::ErrorSent.into(),
+                Some(error.to_string()),
+            )
             .await
         {
             log::error!(
@@ -275,7 +303,11 @@ impl Erc20Dao {
     pub async fn transaction_failed_onchain(&self, tx_id: &str, err: &str) {
         if let Err(e) = self
             .transaction()
-            .update_tx_status(tx_id.to_string(), TransactionStatus::ErrorOnChain.into(), Some(err.to_string()))
+            .update_tx_status(
+                tx_id.to_string(),
+                TransactionStatus::ErrorOnChain.into(),
+                Some(err.to_string()),
+            )
             .await
         {
             log::error!(

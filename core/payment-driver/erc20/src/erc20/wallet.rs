@@ -3,13 +3,15 @@
 */
 
 // External crates
+use crate::erc20::ethereum::{
+    GLM_POLYGON_DEFAULT_MAX_GAS_PRICE, GLM_POLYGON_MIN_GAS_PRICE, POLYGON_PREFERED_GAS_LEVELS,
+};
 use bigdecimal::BigDecimal;
+use chrono::Utc;
 use num_bigint::BigUint;
+use num_traits::Float;
 use std::str::FromStr;
 use web3::types::{H160, H256, U256, U64};
-use chrono::{Utc};
-use crate::erc20::ethereum::{GLM_POLYGON_MIN_GAS_PRICE, GLM_POLYGON_DEFAULT_MAX_GAS_PRICE, POLYGON_PREFERED_GAS_LEVELS};
-use num_traits::Float;
 
 // Workspace uses
 use ya_payment_driver::{
@@ -18,17 +20,19 @@ use ya_payment_driver::{
 };
 
 // Local uses
+use crate::erc20::transaction::YagnaRawTransaction;
 use crate::{
     dao::Erc20Dao,
-    erc20::{eth_utils, ethereum, faucet, utils::{
-        convert_float_gas_to_u256, convert_u256_gas_to_float, str_to_addr, u256_to_big_dec, big_dec_gwei_to_u256, topic_to_str_address,
-        big_uint_to_big_dec, big_dec_to_u256, gas_float_equals
-
-        }
+    erc20::{
+        eth_utils, ethereum, faucet,
+        utils::{
+            big_dec_gwei_to_u256, big_dec_to_u256, big_uint_to_big_dec, convert_float_gas_to_u256,
+            convert_u256_gas_to_float, gas_float_equals, str_to_addr, topic_to_str_address,
+            u256_to_big_dec,
+        },
     },
     RINKEBY_NETWORK,
 };
-use crate::erc20::transaction::YagnaRawTransaction;
 
 pub async fn account_balance(address: H160, network: Network) -> Result<BigDecimal, GenericError> {
     let balance_com = ethereum::get_glm_balance(address, network).await?;
@@ -150,7 +154,7 @@ pub async fn make_transfer(
         address, recipient, amount, network, nonce, gas_price, gas_limit,
     )
     .await?;
-//    Ok(raw_tx)
+    //    Ok(raw_tx)
 
     //let chain_id = network as u64;
 
@@ -167,10 +171,6 @@ pub async fn make_transfer(
     ))
 }
 
-
-
-
-
 fn bump_gas_price(gas_in_gwei: f64, limit_in_gwei: Option<f64>) -> f64 {
     let mut result = -1.0;
     for n in 1..(POLYGON_PREFERED_GAS_LEVELS.len() - 1) {
@@ -179,7 +179,9 @@ fn bump_gas_price(gas_in_gwei: f64, limit_in_gwei: Option<f64>) -> f64 {
         }
     }
     for n in 1..(POLYGON_PREFERED_GAS_LEVELS.len()) {
-        if gas_in_gwei > POLYGON_PREFERED_GAS_LEVELS[n - 1] && gas_in_gwei < POLYGON_PREFERED_GAS_LEVELS[n] {
+        if gas_in_gwei > POLYGON_PREFERED_GAS_LEVELS[n - 1]
+            && gas_in_gwei < POLYGON_PREFERED_GAS_LEVELS[n]
+        {
             result = POLYGON_PREFERED_GAS_LEVELS[n];
         }
     }
@@ -200,14 +202,13 @@ pub async fn send_transactions(
 ) -> Result<(), GenericError> {
     // TODO: Use batch sending?
     for tx in txs {
-        let mut raw_tx:YagnaRawTransaction = serde_json::from_str(&tx.encoded).map_err(GenericError::new)?;
+        let mut raw_tx: YagnaRawTransaction =
+            serde_json::from_str(&tx.encoded).map_err(GenericError::new)?;
         let address = str_to_addr(&tx.sender)?;
         //let (recipient, amount) = ethereum::decode_encoded_transaction_data(network, raw_tx.data);
         //let (recipient, amount) = ethereum::decode_encoded_transaction_data(network, &tx.encoded)?;
 
-
         //let sign = hex::decode(signature).map_err(GenericError::new)?;
-
 
         let new_gas_price = if let Some(current_gas_price) = tx.current_gas_price {
             let gas_f64 = bump_gas_price(current_gas_price, tx.limit_gas_price);
@@ -224,7 +225,13 @@ pub async fn send_transactions(
         let signature = ethereum::sign_raw_transfer_transaction(address, network, &raw_tx).await?;
 
         //save new parameters to db before proceeding. Maybe we should change status to sending
-        dao.update_tx_fields(&tx.tx_id, encoded, hex::encode(&signature), Some(convert_u256_gas_to_float(new_gas_price))).await;
+        dao.update_tx_fields(
+            &tx.tx_id,
+            encoded,
+            hex::encode(&signature),
+            Some(convert_u256_gas_to_float(new_gas_price)),
+        )
+        .await;
 
         let signed = eth_utils::encode_signed_tx(&raw_tx, signature, network as u64);
 
@@ -236,7 +243,12 @@ pub async fn send_transactions(
                 } else {
                     str_tx_hash
                 };
-                dao.transaction_sent(&tx.tx_id, &str_tx_hash, Some(convert_u256_gas_to_float(raw_tx.gas_price))).await;
+                dao.transaction_sent(
+                    &tx.tx_id,
+                    &str_tx_hash,
+                    Some(convert_u256_gas_to_float(raw_tx.gas_price)),
+                )
+                .await;
                 log::info!("Send transaction. hash={}", &str_tx_hash);
                 log::debug!("id={}", &tx.tx_id);
             }
@@ -247,7 +259,8 @@ pub async fn send_transactions(
                     log::error!("TODO: {:?}", e);
                 }*/
 
-                dao.transaction_failed_send(&tx.tx_id, e.to_string().as_str()).await;
+                dao.transaction_failed_send(&tx.tx_id, e.to_string().as_str())
+                    .await;
             }
         }
     }

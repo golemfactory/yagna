@@ -15,7 +15,10 @@ use crate::erc20::{config, eth_utils, utils};
 use ethabi::Token;
 use uuid::Uuid;
 
-pub const POLYGON_PREFERED_GAS_LEVELS : [f64; 13] = [0.0, 10.011, 15.011, 20.011, 25.011, 30.011, 33.011, 36.011, 40.011, 50.011, 60.011, 80.011, 100.011];
+pub const POLYGON_PREFERED_GAS_LEVELS: [f64; 13] = [
+    0.0, 10.011, 15.011, 20.011, 25.011, 30.011, 33.011, 36.011, 40.011, 50.011, 60.011, 80.011,
+    100.011,
+];
 
 lazy_static! {
     pub static ref GLM_FAUCET_GAS: U256 = U256::from(90_000);
@@ -124,13 +127,13 @@ pub async fn sign_faucet_tx(
     };
     //let chain_id = network as u64;
     //let node_id = NodeId::from(address.as_ref());
-   //let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
+    //let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
 
     Ok(create_dao_entity(
         nonce,
         address,
-        utils::convert_u256_gas_to_float( gas_price),
-        utils::convert_u256_gas_to_float( gas_price),
+        utils::convert_u256_gas_to_float(gas_price),
+        utils::convert_u256_gas_to_float(gas_price),
         GLM_FAUCET_GAS.as_u32() as i32,
         serde_json::to_string(&tx).map_err(GenericError::new)?,
         network,
@@ -139,14 +142,16 @@ pub async fn sign_faucet_tx(
     ))
 }
 
-
-pub async fn sign_raw_transfer_transaction(address: H160, network: Network, tx: &YagnaRawTransaction) -> Result<Vec<u8>, GenericError> {
+pub async fn sign_raw_transfer_transaction(
+    address: H160,
+    network: Network,
+    tx: &YagnaRawTransaction,
+) -> Result<Vec<u8>, GenericError> {
     let chain_id = network as u64;
     let node_id = NodeId::from(address.as_ref());
     let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
     Ok(signature)
 }
-
 
 pub async fn prepare_raw_transaction(
     _address: H160,
@@ -164,7 +169,6 @@ pub async fn prepare_raw_transaction(
     let data = eth_utils::contract_encode(&contract, TRANSFER_ERC20_FUNCTION, (recipient, amount))
         .map_err(GenericError::new)?;
     let mut gas_price = client.eth().gas_price().await.map_err(GenericError::new)?;
-
 
     match network {
         Network::Polygon | Network::Mumbai => {
@@ -244,7 +248,7 @@ pub async fn get_tx_on_chain_status(
         confirmed: false,
         succeeded: false,
         gas_price: None,
-        gas_used: None
+        gas_used: None,
     };
     let env = get_env(network);
     let tx = get_tx_receipt(tx_hash, network).await?;
@@ -273,7 +277,6 @@ pub async fn get_tx_on_chain_status(
             }
         } else {
         }
-
     } else {
         let transaction = get_tx_from_network(tx_hash, network).await?;
         if let Some(_transaction) = transaction {
@@ -283,7 +286,6 @@ pub async fn get_tx_on_chain_status(
     }
     Ok(res)
 }
-
 
 pub fn decode_encoded_transaction_data(
     network: Network,
@@ -446,7 +448,7 @@ pub fn create_dao_entity(
         final_tx: None,
         network,
         last_error_msg: None,
-        resent_times: 0
+        resent_times: 0,
     }
 }
 

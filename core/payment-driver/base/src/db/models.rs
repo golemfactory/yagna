@@ -7,7 +7,7 @@ use chrono::NaiveDateTime;
 use diesel::backend::Backend;
 use diesel::deserialize;
 use diesel::serialize::Output;
-use diesel::sql_types::{Integer};
+use diesel::sql_types::Integer;
 use diesel::types::{FromSql, ToSql};
 use num_traits::FromPrimitive;
 use std::convert::TryFrom;
@@ -38,7 +38,7 @@ pub enum TransactionStatus {
     Pending = 3,
     Confirmed = 4,
     ErrorSent = 10,
-    ErrorOnChain = 11
+    ErrorOnChain = 11,
 }
 
 impl TryFrom<i32> for TransactionStatus {
