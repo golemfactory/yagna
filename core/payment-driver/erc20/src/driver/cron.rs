@@ -22,6 +22,7 @@ use crate::{
     network,
 };
 use ya_payment_driver::db::models::TransactionStatus;
+use crate::erc20::utils::convert_u256_gas_to_float;
 
 lazy_static! {
     static ref TX_SUMBIT_TIMEOUT: Duration = Duration::minutes(15);
@@ -174,8 +175,18 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
             } else if s.succeeded {
                 log::info!("Transaction confirmed and succeeded");
 
-                let payments = dao.transaction_confirmed(&tx.tx_id).await;
-                // Faucet can stop here IF the tx was a success.
+                let gas_used_i32 = match s.gas_used {
+                    Some(gas_used) => Some(gas_used.as_u32() as i32),
+                    None => None
+                };
+                let final_gas_price = match s.gas_price {
+                    Some(gas_price) => Some(convert_u256_gas_to_float(gas_price)),
+                    None => None
+                };
+
+                dao.transaction_confirmed(&tx.tx_id, newest_tx, final_gas_price, gas_used_i32).await;
+                let payments = dao.get_payments_based_on_tx(&tx.tx_id).await;
+                    // Faucet can stop here IF the tx was a success.
                 if tx.tx_type == TxType::Faucet as i32 {
                     log::debug!("Faucet tx confirmed, exit early. hash={}", &newest_tx);
                     continue;
@@ -233,7 +244,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 };
             } else {
                 log::info!("Transaction confirmed, but resulted in error");
-                let payments = dao.transaction_confirmed(&tx.tx_id).await;
+                let payments = dao.get_payments_based_on_tx(&tx.tx_id).await;
 
                 let order_ids: Vec<String> = payments
                     .iter()

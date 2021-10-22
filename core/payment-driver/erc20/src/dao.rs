@@ -169,20 +169,25 @@ impl Erc20Dao {
         tx_id
     }
 
-    pub async fn transaction_confirmed(&self, tx_id: &str) -> Vec<PaymentEntity> {
+    pub async fn get_payments_based_on_tx(&self, tx_id: &str) -> Vec<PaymentEntity> {
+        match self.payment().get_by_tx_id(tx_id.to_string()).await {
+            Ok(payments) => payments,
+            Err(e) => {
+                log::error!("Failed to fetch `payments` for tx {:?} : {:?}", tx_id, e);
+                vec![]
+            },
+        }
+    }
+
+    pub async fn transaction_confirmed(&self, tx_id: &str, final_hash: &str, final_gas_price: Option<f64>, final_gas_used: Option<i32>) {
         if let Err(e) = self
             .transaction()
-            .update_tx_status(tx_id.to_string(), TransactionStatus::Confirmed.into(), None)
+            .confirm_tx(tx_id.to_string(), TransactionStatus::Confirmed.into(), None, final_hash.to_string(), final_gas_price, final_gas_used)
             .await
         {
             log::error!("Failed to update tx status for {:?} : {:?}", tx_id, e)
             // TO CHECK: Should it continue or stop the process...
         }
-        match self.payment().get_by_tx_id(tx_id.to_string()).await {
-            Ok(payments) => return payments,
-            Err(e) => log::error!("Failed to fetch `payments` for tx {:?} : {:?}", tx_id, e),
-        };
-        vec![]
     }
 
     pub async fn get_first_payment(&self, tx_hash: &str) -> Option<PaymentEntity> {

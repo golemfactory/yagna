@@ -159,6 +159,7 @@ pub async fn make_transfer(
         address,
         convert_u256_gas_to_float(raw_tx.gas_price),
         convert_u256_gas_to_float(limit_gas_price),
+        raw_tx.gas.as_u32() as i32,
         serde_json::to_string(&raw_tx).map_err(GenericError::new)?,
         network,
         Utc::now(),

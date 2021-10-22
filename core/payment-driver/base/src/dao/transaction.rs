@@ -172,6 +172,27 @@ impl<'c> TransactionDao<'c> {
         .await
     }
 
+    pub async fn confirm_tx(&self, tx_id: String, status: TransactionStatus, err: Option<String>, final_hash: String, final_gas_price: Option<f64>, final_gas_used: Option<i32>) -> DbResult<()> {
+        let current_time = Utc::now().naive_utc();
+        let confirmed_time = current_time;
+        do_with_transaction(self.pool, move |conn| {
+            diesel::update(dsl::transaction.find(tx_id))
+                .set((dsl::status.eq(status as i32),
+                    dsl::time_last_action.eq(current_time),
+                    dsl::time_confirmed.eq(confirmed_time),
+                    dsl::last_error_msg.eq(err),
+                    dsl::final_gas_price.eq(final_gas_price),
+                    dsl::final_gas_used.eq(final_gas_used),
+                    dsl::final_tx.eq(Some(final_hash)),
+                    dsl::tmp_onchain_txs.eq::<Option<String>>(None),
+                    dsl::current_gas_price.eq::<Option<f64>>(None)
+                ))
+                .execute(conn)?;
+            Ok(())
+        })
+            .await
+    }
+
     pub async fn update_tx_status(&self, tx_id: String, status: TransactionStatus, err: Option<String>) -> DbResult<()> {
         let current_time = Utc::now().naive_utc();
         let confirmed_time = match status {
@@ -206,6 +227,7 @@ impl<'c> TransactionDao<'c> {
         .await
     }
 
+    //this is hacky solution for now to update db state so next check will properly resolve transaction status
     pub async fn overwrite_tmp_onchain_txs_and_status_back_to_pending(&self, tx_id: String, overwrite_tmp_onchain_txs: String) -> DbResult<()> {
         let current_time = Utc::now().naive_utc();
         do_with_transaction(self.pool, move |conn| {

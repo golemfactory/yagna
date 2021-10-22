@@ -31,7 +31,7 @@ lazy_static! {
     pub static ref GLM_POLYGON_DEFAULT_MAX_GAS_PRICE: u64 =
         match env::var("GLM_POLYGON_MAX_GAS_PRICE").map(|s| s.parse()) {
             Ok(Ok(x)) => x,
-            _ => 100_011_000_000, //100.011 Gwei
+            _ => 100_010_000_000, //100.01 Gwei
         };
     /*
         Comment by scx1332:
@@ -131,6 +131,7 @@ pub async fn sign_faucet_tx(
         address,
         utils::convert_u256_gas_to_float( gas_price),
         utils::convert_u256_gas_to_float( gas_price),
+        GLM_FAUCET_GAS.as_u32() as i32,
         serde_json::to_string(&tx).map_err(GenericError::new)?,
         network,
         Utc::now(),
@@ -416,6 +417,7 @@ pub fn create_dao_entity(
     sender: H160,
     starting_gas_price: f64,
     limit_gas_price: f64,
+    gas_limit: i32,
     encoded_raw_tx: String,
     network: Network,
     timestamp: DateTime<Utc>,
@@ -433,6 +435,7 @@ pub fn create_dao_entity(
         limit_gas_price: Some(limit_gas_price),
         final_gas_price: None,
         final_gas_used: None,
+        gas_limit: Some(gas_limit),
         starting_gas_price: Some(starting_gas_price),
         current_gas_price: None,
         encoded: encoded_raw_tx,
