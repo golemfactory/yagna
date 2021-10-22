@@ -155,6 +155,15 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 }
             };
 
+            let gas_used_i32 = match s.gas_used {
+                Some(gas_used) => Some(gas_used.as_u32() as i32),
+                None => None,
+            };
+            let final_gas_price = match s.gas_price {
+                Some(gas_price) => Some(convert_u256_gas_to_float(gas_price)),
+                None => None,
+            };
+
             if !s.exists_on_chain {
                 log::info!("Transaction not found on chain");
                 if time_elapsed_from_last_action > *TX_WAIT_FOR_TRANSACTION_ON_NETWORK {
@@ -184,14 +193,6 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
             } else if s.succeeded {
                 log::info!("Transaction confirmed and succeeded");
 
-                let gas_used_i32 = match s.gas_used {
-                    Some(gas_used) => Some(gas_used.as_u32() as i32),
-                    None => None,
-                };
-                let final_gas_price = match s.gas_price {
-                    Some(gas_price) => Some(convert_u256_gas_to_float(gas_price)),
-                    None => None,
-                };
 
                 dao.transaction_confirmed(&tx.tx_id, newest_tx, final_gas_price, gas_used_i32)
                     .await;
@@ -254,14 +255,16 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 };
             } else {
                 log::info!("Transaction confirmed, but resulted in error");
+
+                dao.transaction_confirmed_and_failed(&tx.tx_id, newest_tx, final_gas_price, gas_used_i32, "Failure on chain during execution")
+                    .await;
+
                 let payments = dao.get_payments_based_on_tx(&tx.tx_id).await;
 
                 let order_ids: Vec<String> = payments
                     .iter()
                     .map(|payment| payment.order_id.clone())
                     .collect();
-                dao.transaction_failed_onchain(&tx.tx_id, "Failure on chain during execution")
-                    .await;
                 for order_id in order_ids.iter() {
                     dao.payment_failed(order_id).await;
                 }

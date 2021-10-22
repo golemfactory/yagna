@@ -202,6 +202,31 @@ impl Erc20Dao {
         }
     }
 
+    pub async fn transaction_confirmed_and_failed(
+        &self,
+        tx_id: &str,
+        final_hash: &str,
+        final_gas_price: Option<f64>,
+        final_gas_used: Option<i32>,
+        error: &str
+    ) {
+        if let Err(e) = self
+            .transaction()
+            .confirm_tx(
+                tx_id.to_string(),
+                TransactionStatus::ErrorOnChain.into(),
+                Some(error.to_string()),
+                final_hash.to_string(),
+                final_gas_price,
+                final_gas_used,
+            )
+            .await
+        {
+            log::error!("Failed to update tx status for {:?} : {:?}", tx_id, e)
+            // TO CHECK: Should it continue or stop the process...
+        }
+    }
+
     pub async fn get_first_payment(&self, tx_hash: &str) -> Option<PaymentEntity> {
         match self
             .payment()
@@ -300,24 +325,6 @@ impl Erc20Dao {
         }
     }
 
-    pub async fn transaction_failed_onchain(&self, tx_id: &str, err: &str) {
-        if let Err(e) = self
-            .transaction()
-            .update_tx_status(
-                tx_id.to_string(),
-                TransactionStatus::ErrorOnChain.into(),
-                Some(err.to_string()),
-            )
-            .await
-        {
-            log::error!(
-                "Failed to update transaction failed in `transaction` {:?} : {:?}",
-                tx_id,
-                e
-            )
-            // TO CHECK: Should it continue or stop the process...
-        }
-    }
 
     pub async fn payment_failed(&self, order_id: &str) {
         if let Err(e) = self
