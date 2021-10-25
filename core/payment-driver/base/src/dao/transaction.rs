@@ -6,6 +6,8 @@
 use diesel::{
     self, BoolExpressionMethods, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl,
 };
+use chrono::Duration;
+
 
 // Workspace uses
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
@@ -18,7 +20,7 @@ use crate::{
         schema::transaction::dsl,
     },
 };
-use chrono::{NaiveDateTime, Utc};
+use chrono::{Utc};
 
 #[allow(unused)]
 pub struct TransactionDao<'c> {
@@ -55,9 +57,10 @@ impl<'c> TransactionDao<'c> {
 
     pub async fn get_used_nonces(&self, address: &str, network: Network) -> DbResult<Vec<i32>> {
         let address = address.to_string();
+        let not_older_than = (Utc::now() - Duration::days(7)).naive_utc();
         readonly_transaction(self.pool, move |conn| {
             let nonces: Vec<i32> = dsl::transaction
-                .filter(dsl::sender.eq(address).and(dsl::network.eq(network)))
+                .filter(dsl::sender.eq(address).and(dsl::network.eq(network)).and(dsl::time_created.gt(not_older_than)))
                 .select(dsl::nonce)
                 .order(dsl::nonce.asc())
                 .load(conn)?;

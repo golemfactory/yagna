@@ -137,6 +137,13 @@ Error when sending when gas-limit set too low
 ```
 RPC error: Error { code: ServerError(-32000), message: "intrinsic gas too low", data: None }
 ```
+```
+RPC error: Error { code: ServerError(-32000), message: "already known", data: None }
+```
+```
+RPC error: Error { code: ServerError(-32000), message: "nonce too low", data: None }
+```
+
 
 
 

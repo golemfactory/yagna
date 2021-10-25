@@ -26,24 +26,34 @@ use ya_payment_driver::db::models::TransactionStatus;
 
 lazy_static! {
     static ref TX_SUMBIT_TIMEOUT: Duration = Duration::minutes(15);
-    static ref TX_WAIT_FOR_TRANSACTION_ON_NETWORK: Duration = Duration::seconds(10);
-    static ref TX_WAIT_FOR_PENDING_ON_NETWORK: Duration = Duration::seconds(30);
-    static ref TX_WAIT_FOR_ERROR_SENT_TRANSACTION: Duration = Duration::seconds(20);
+    static ref ERC20_WAIT_FOR_TRANSACTION_ON_NETWORK: Duration = match std::env::var("ERC20_WAIT_FOR_TRANSACTION_ON_NETWORK").map(|str|str.parse::<i64>()) {
+            Ok(Ok(seconds)) => Duration::seconds(seconds),
+            _ => Duration::seconds(60),
+        };
+    static ref ERC20_WAIT_FOR_PENDING_ON_NETWORK: Duration = match std::env::var("ERC20_WAIT_FOR_PENDING_ON_NETWORK").map(|str|str.parse::<i64>()) {
+            Ok(Ok(seconds)) => Duration::seconds(seconds),
+            _ => Duration::seconds(600),
+        };
+    static ref ERC20_WAIT_FOR_ERROR_SENT_TRANSACTION: Duration = match std::env::var("ERC20_WAIT_FOR_ERROR_SENT_TRANSACTION").map(|str|str.parse::<i64>()) {
+            Ok(Ok(seconds)) => Duration::seconds(seconds),
+            _ => Duration::seconds(200),
+        };
+
 }
 
 pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
     let network = Network::from_str(&network_key).unwrap();
     let txs = dao.get_unconfirmed_txs(network).await;
-    log::debug!("confirm_payments {:?}", txs);
+    //log::debug!("confirm_payments {:?}", txs);
     let current_time = Utc::now().naive_utc();
 
     if !txs.is_empty() {
         // TODO: Store block number and continue only on new block
         let block_number = match wallet::get_block_number(network).await {
-            Ok(block_number) => block_number,
+            Ok(block_number) => Some(block_number.as_u64()),
             Err(err) => {
-                log::error!("No block info can be downloaded: {:?}", err);
-                return;
+                log::error!("No block info can be downloaded, probably no connection to RPC: {:?}", err);
+                None
             }
         };
 
@@ -80,7 +90,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                         }
                     };
                     let tcs =
-                        match ethereum::get_tx_on_chain_status(hex_hash, &block_number, network)
+                        match ethereum::get_tx_on_chain_status(hex_hash, block_number, network)
                             .await
                         {
                             Ok(tcs) => tcs,
@@ -101,7 +111,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 }
             }
             if tx.status == TransactionStatus::ErrorSent as i32 {
-                if time_elapsed_from_last_action > *TX_WAIT_FOR_ERROR_SENT_TRANSACTION {
+                if time_elapsed_from_last_action > *ERC20_WAIT_FOR_ERROR_SENT_TRANSACTION {
                     log::info!("Transaction not sent, retrying");
                     log::warn!(
                         "Transaction not found on chain for {:?}",
@@ -127,7 +137,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
             log::debug!(
                 "Checking if tx was a success. network={}, block={}, hash={}",
                 &network,
-                &block_number,
+                block_number.unwrap_or(0),
                 &newest_tx
             );
             let tokens = match ethereum::decode_encoded_transaction_data(network, &tx.encoded) {
@@ -147,7 +157,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                     continue;
                 }
             };
-            let s = match ethereum::get_tx_on_chain_status(hex_hash, &block_number, network).await {
+            let s = match ethereum::get_tx_on_chain_status(hex_hash, block_number, network).await {
                 Ok(hex_hash) => hex_hash,
                 Err(err) => {
                     log::error!("Error when getting get_tx_on_chain_status: {:?}", err);
@@ -166,7 +176,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
 
             if !s.exists_on_chain {
                 log::info!("Transaction not found on chain");
-                if time_elapsed_from_last_action > *TX_WAIT_FOR_TRANSACTION_ON_NETWORK {
+                if time_elapsed_from_last_action > *ERC20_WAIT_FOR_TRANSACTION_ON_NETWORK {
                     log::warn!(
                         "Transaction not found on chain for {:?}",
                         time_elapsed_from_sent
@@ -178,7 +188,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 continue;
             } else if s.pending {
                 log::info!("Transaction found on chain but is still pending");
-                if time_elapsed_from_last_action > *TX_WAIT_FOR_PENDING_ON_NETWORK {
+                if time_elapsed_from_last_action > *ERC20_WAIT_FOR_PENDING_ON_NETWORK {
                     log::warn!(
                         "Transaction not found on chain for {:?}",
                         time_elapsed_from_sent

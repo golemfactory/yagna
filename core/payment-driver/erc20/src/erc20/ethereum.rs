@@ -222,7 +222,7 @@ pub struct TransactionChainStatus {
 
 pub async fn get_tx_on_chain_status(
     tx_hash: H256,
-    current_block: &U64,
+    current_block: Option<u64>,
     network: Network,
 ) -> Result<TransactionChainStatus, GenericError> {
     let mut res = TransactionChainStatus {
@@ -248,11 +248,13 @@ pub async fn get_tx_on_chain_status(
                 "is_tx_confirmed? tb + rq - 1 <= cb. tb={}, rq={}, cb={}",
                 tx_bn,
                 env.required_confirmations,
-                current_block
+                current_block.unwrap_or(0)
             );
             // tx.block_number is the first confirmation, so we need to - 1
-            if tx_bn + env.required_confirmations - 1 <= *current_block {
-                res.confirmed = true;
+            if let Some(current_block) = current_block {
+                if tx_bn.as_u64() + env.required_confirmations - 1 <= current_block {
+                    res.confirmed = true;
+                }
             }
             let transaction = get_tx_from_network(tx_hash, network).await?;
             if let Some(t) = transaction {

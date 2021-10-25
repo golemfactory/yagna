@@ -97,13 +97,13 @@ impl Erc20Dao {
         address: &str,
         network: Network,
     ) -> Result<U256, GenericError> {
-        let max_nonce = self
+        let list_of_nonces = self
             .transaction()
             .get_used_nonces(address, network)
             .await
-            .map_err(GenericError::new)?
-            .into_iter()
-            .max();
+            .map_err(GenericError::new)?;
+
+        let max_nonce = list_of_nonces.into_iter().max();
 
         let next_nonce = match max_nonce {
             Some(nonce) => U256::from(nonce + 1),
