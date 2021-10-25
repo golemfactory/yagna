@@ -1977,6 +1977,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "flexi_logger"
+version = "0.19.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35627d78fcea84d52181369fe48fcfce56a2a18e29443dba23d4c24b650fb107"
+dependencies = [
+ "ansi_term 0.12.1",
+ "atty",
+ "chrono",
+ "glob",
+ "lazy_static",
+ "log",
+ "regex",
+ "rustversion",
+ "thiserror",
+]
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5170,7 +5187,7 @@ version = "0.5.1"
 source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6c848541e89262f90ca693d9e1a84c6f3df0953b"
 dependencies = [
  "lazy_static",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.1",
  "serial_test_derive",
 ]
 
@@ -6820,7 +6837,7 @@ dependencies = [
  "derive_more",
  "dotenv",
  "env_logger 0.7.1",
- "flexi_logger",
+ "flexi_logger 0.19.4",
  "futures 0.3.13",
  "graphene-sgx",
  "hex",
@@ -6866,7 +6883,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "flexi_logger",
+ "flexi_logger 0.17.1",
  "log",
  "yansi",
 ]
@@ -7664,7 +7681,7 @@ dependencies = [
 
 [[package]]
 name = "yagna"
-version = "0.7.3"
+version = "0.8.0"
 dependencies = [
  "actix-rt",
  "actix-service",

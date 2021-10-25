@@ -24,10 +24,10 @@ use ya_client::model::market::{
     Reason,
 };
 use ya_core_model::market::{local, BUS_ID};
-use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
 use ya_service_api_web::middleware::Identity;
 
+use crate::db::DbMixedExecutor;
 use ya_service_api_web::scope::ExtendableScope;
 
 pub mod agreement;
@@ -58,11 +58,13 @@ pub enum MarketInitError {
     Migration(#[from] anyhow::Error),
     #[error("Failed to initialize config. Error: {0}.")]
     Config(#[from] structopt::clap::Error),
+    #[error("Failed to initialize in memory market database. Error: {0}.")]
+    InMemory(anyhow::Error),
 }
 
 /// Structure connecting all market objects.
 pub struct MarketService {
-    pub db: DbExecutor,
+    pub db: DbMixedExecutor,
     pub matcher: Matcher,
     pub provider_engine: ProviderBroker,
     pub requestor_engine: RequestorBroker,
@@ -70,7 +72,7 @@ pub struct MarketService {
 
 impl MarketService {
     pub fn new(
-        db: &DbExecutor,
+        db: &DbMixedExecutor,
         identity_api: Arc<dyn IdentityApi>,
         config: Arc<Config>,
     ) -> Result<Self, MarketInitError> {
@@ -81,7 +83,10 @@ impl MarketService {
         counter!("market.demands.unsubscribed", 0);
         counter!("market.demands.expired", 0);
 
-        db.apply_migration(crate::db::migrations::run_with_output)?;
+        db.ram_db
+            .apply_migration(crate::db::migrations::run_with_output)?;
+        db.disk_db
+            .apply_migration(crate::db::migrations::run_with_output)?;
 
         let store = SubscriptionStore::new(db.clone(), config.clone());
         let (matcher, listeners) = Matcher::new(store.clone(), identity_api, config.clone())?;
@@ -132,12 +137,14 @@ impl MarketService {
         Ok(())
     }
 
-    pub async fn gsb<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> anyhow::Result<()> {
+    pub async fn gsb<Context: Provider<Self, DbMixedExecutor>>(
+        ctx: &Context,
+    ) -> anyhow::Result<()> {
         let market = MARKET.get_or_init_market(&ctx.component())?;
         Ok(market.bind_gsb(BUS_ID, local::BUS_ID).await?)
     }
 
-    pub fn rest<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> actix_web::Scope {
+    pub fn rest<Context: Provider<Self, DbMixedExecutor>>(ctx: &Context) -> actix_web::Scope {
         match MARKET.get_or_init_market(&ctx.component()) {
             Ok(market) => MarketService::bind_rest(market),
             Err(e) => {
@@ -298,7 +305,7 @@ impl StaticMarket {
 
     pub fn get_or_init_market(
         &self,
-        db: &DbExecutor,
+        db: &DbMixedExecutor,
     ) -> Result<Arc<MarketService>, MarketInitError> {
         let mut guarded_market = self.locked_market.lock().unwrap();
         if let Some(market) = &*guarded_market {

@@ -283,6 +283,9 @@ fn get_rpc_addr(network: Network) -> String {
             .unwrap_or("https://api.zksync.golem.network/jsrpc".to_string()),
         Network::Rinkeby => env::var("ZKSYNC_RINKEBY_RPC_ADDRESS")
             .unwrap_or("https://rinkeby-api.zksync.golem.network/jsrpc".to_string()),
+        Network::Goerli => panic!("Goerli not supported on zksync"),
+        Network::Polygon => panic!("Polygon not supported on zksync"),
+        Network::Mumbai => panic!("Mumbai not supported on zksync"),
     }
 }
 
@@ -293,6 +296,9 @@ fn get_ethereum_node_addr_from_env(network: Network) -> String {
         }
         Network::Rinkeby => env::var("RINKEBY_GETH_ADDR")
             .unwrap_or("http://geth.testnet.golem.network:55555".to_string()),
+        Network::Goerli => panic!("Goerli not supported on zksync"),
+        Network::Polygon => panic!("Polygon mainnet not supported on zksync"),
+        Network::Mumbai => panic!("Polygon mumbai not supported on zksync"),
     }
 }
 
