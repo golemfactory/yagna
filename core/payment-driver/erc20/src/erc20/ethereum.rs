@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
-use std::env;
 use web3::contract::{Contract, Options};
 use web3::transports::Http;
 use web3::types::{Bytes, Transaction, TransactionId, TransactionReceipt, H160, H256, U256, U64};
@@ -15,39 +14,17 @@ use crate::erc20::{config, eth_utils, utils};
 use ethabi::Token;
 use uuid::Uuid;
 
-pub const POLYGON_PREFERED_GAS_LEVELS: [f64; 13] = [
-    0.0, 10.011, 15.011, 20.011, 25.011, 30.011, 33.011, 36.011, 40.011, 50.011, 60.011, 80.011,
-    100.011,
+pub const POLYGON_PREFERRED_GAS_PRICES: [f64; 13] = [
+    0.0, 10.01, 15.01, 20.01, 25.01, 30.01, 33.01, 36.01, 40.01, 50.01, 60.01, 80.01,
+    100.01,
 ];
+pub const POLYGON_STARTING_GAS_PRICE: f64 = 10.01;
+pub const POLYGON_MAXIMUM_GAS_PRICE: f64 = 100.01;
 
 lazy_static! {
     pub static ref GLM_FAUCET_GAS: U256 = U256::from(90_000);
     pub static ref GLM_TRANSFER_GAS: U256 = U256::from(55_000);
     pub static ref GLM_POLYGON_GAS_LIMIT: U256 = U256::from(100_000);
-
-    /*
-        Comment by scx1332:
-        In production I suggest limiting to 31.101 Gwei to not pay too much fees in extreme network situations
-        Use:
-        GLM_POLYGON_MAX_GAS_PRICE=31101000000
-    */
-    pub static ref GLM_POLYGON_DEFAULT_MAX_GAS_PRICE: u64 =
-        match env::var("GLM_POLYGON_MAX_GAS_PRICE").map(|s| s.parse()) {
-            Ok(Ok(x)) => x,
-            _ => 100_010_000_000, //100.01 Gwei
-        };
-    /*
-        Comment by scx1332:
-        30.101 Gwei (as of 2021-10-08 30GWEI is minimum accepted gas price,
-        network is under-utilised right now so 30.1 should result in express transactions
-        USD cost as of 2021-10-08 of transaction is about 0,16 cents (USD)
-    */
-
-    pub static ref GLM_POLYGON_MIN_GAS_PRICE: u64 =
-        match env::var("GLM_POLYGON_MIN_GAS_PRICE").map(|s| s.parse()) {
-            Ok(Ok(x)) => x,
-            _ => 30101000000,
-    };
 }
 const CREATE_FAUCET_FUNCTION: &str = "create";
 const BALANCE_ERC20_FUNCTION: &str = "balanceOf";
@@ -168,8 +145,14 @@ pub async fn prepare_raw_transaction(
 
     let data = eth_utils::contract_encode(&contract, TRANSFER_ERC20_FUNCTION, (recipient, amount))
         .map_err(GenericError::new)?;
-    let mut gas_price = client.eth().gas_price().await.map_err(GenericError::new)?;
 
+    //get gas price from network in not provided
+    let gas_price = match gas_price_override {
+        Some(gas_price_new) => gas_price_new,
+        None => client.eth().gas_price().await.map_err(GenericError::new)?
+    };
+
+    /*
     match network {
         Network::Polygon | Network::Mumbai => {
             if gas_price < U256::from(*GLM_POLYGON_MIN_GAS_PRICE) {
@@ -200,7 +183,7 @@ pub async fn prepare_raw_transaction(
         Network::Mainnet | Network::Rinkeby | Network::Goerli => {
             log::info!("Gas limits not implemented for Mainnet, Rinkeby and Goerli networks",);
         }
-    }
+    }*/
 
     let gas_limit = match gas_limit_override {
         Some(gas_limit_override) => U256::from(gas_limit_override),

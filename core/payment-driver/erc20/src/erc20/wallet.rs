@@ -4,7 +4,7 @@
 
 // External crates
 use crate::erc20::ethereum::{
-    GLM_POLYGON_DEFAULT_MAX_GAS_PRICE, GLM_POLYGON_MIN_GAS_PRICE, POLYGON_PREFERED_GAS_LEVELS,
+    POLYGON_PREFERRED_GAS_PRICES, POLYGON_STARTING_GAS_PRICE, POLYGON_MAXIMUM_GAS_PRICE,
 };
 use bigdecimal::BigDecimal;
 use chrono::Utc;
@@ -139,12 +139,12 @@ pub async fn make_transfer(
     let amount = details.amount.clone();
     let amount = big_dec_to_u256(amount)?;
     let gas_price = match gas_price {
-        Some(gas_price) => Some(big_dec_gwei_to_u256(gas_price)?),
-        None => None,
+        Some(gas_price) => big_dec_gwei_to_u256(gas_price)?,
+        None => convert_float_gas_to_u256(POLYGON_STARTING_GAS_PRICE),
     };
     let max_gas_price = match max_gas_price {
         Some(max_gas_price) => big_dec_gwei_to_u256(max_gas_price)?,
-        None => U256::from(*GLM_POLYGON_DEFAULT_MAX_GAS_PRICE),
+        None => convert_float_gas_to_u256(POLYGON_MAXIMUM_GAS_PRICE),
     };
 
     let address = str_to_addr(&details.sender)?;
@@ -152,7 +152,7 @@ pub async fn make_transfer(
     // TODO: Implement token
     //let token = get_network_token(network, None);
     let raw_tx = ethereum::prepare_raw_transaction(
-        address, recipient, amount, network, nonce, gas_price, gas_limit,
+        address, recipient, amount, network, nonce, Some(gas_price), gas_limit,
     )
     .await?;
     //    Ok(raw_tx)
@@ -174,16 +174,16 @@ pub async fn make_transfer(
 
 fn bump_gas_price(gas_in_gwei: f64, limit_in_gwei: Option<f64>) -> f64 {
     let mut result = -1.0;
-    for n in 1..(POLYGON_PREFERED_GAS_LEVELS.len() - 1) {
-        if gas_float_equals(POLYGON_PREFERED_GAS_LEVELS[n], gas_in_gwei) {
-            result = POLYGON_PREFERED_GAS_LEVELS[n + 1];
+    for n in 1..(POLYGON_PREFERRED_GAS_PRICES.len() - 1) {
+        if gas_float_equals(POLYGON_PREFERRED_GAS_PRICES[n], gas_in_gwei) {
+            result = POLYGON_PREFERRED_GAS_PRICES[n + 1];
         }
     }
-    for n in 1..(POLYGON_PREFERED_GAS_LEVELS.len()) {
-        if gas_in_gwei > POLYGON_PREFERED_GAS_LEVELS[n - 1]
-            && gas_in_gwei < POLYGON_PREFERED_GAS_LEVELS[n]
+    for n in 1..(POLYGON_PREFERRED_GAS_PRICES.len()) {
+        if gas_in_gwei > POLYGON_PREFERRED_GAS_PRICES[n - 1]
+            && gas_in_gwei < POLYGON_PREFERRED_GAS_PRICES[n]
         {
-            result = POLYGON_PREFERED_GAS_LEVELS[n];
+            result = POLYGON_PREFERRED_GAS_PRICES[n];
         }
     }
 
@@ -221,7 +221,7 @@ pub async fn send_transactions(
         } else if let Some(starting_gas_price) = tx.starting_gas_price {
             convert_float_gas_to_u256(starting_gas_price)
         } else {
-            U256::from(*GLM_POLYGON_MIN_GAS_PRICE)
+            convert_float_gas_to_u256(POLYGON_STARTING_GAS_PRICE)
         };
         raw_tx.gas_price = new_gas_price;
 
