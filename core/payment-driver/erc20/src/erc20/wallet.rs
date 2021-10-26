@@ -4,7 +4,7 @@
 
 // External crates
 use crate::erc20::ethereum::{
-    POLYGON_PREFERRED_GAS_PRICES, POLYGON_STARTING_GAS_PRICE, POLYGON_MAXIMUM_GAS_PRICE,
+    POLYGON_MAXIMUM_GAS_PRICE, POLYGON_PREFERRED_GAS_PRICES, POLYGON_STARTING_GAS_PRICE,
 };
 use bigdecimal::BigDecimal;
 use chrono::Utc;
@@ -153,7 +153,13 @@ pub async fn make_transfer(
     // TODO: Implement token
     //let token = get_network_token(network, None);
     let raw_tx = ethereum::prepare_raw_transaction(
-        address, recipient, amount, network, nonce, Some(gas_price), gas_limit,
+        address,
+        recipient,
+        amount,
+        network,
+        nonce,
+        Some(gas_price),
+        gas_limit,
     )
     .await?;
     //    Ok(raw_tx)
@@ -170,7 +176,7 @@ pub async fn make_transfer(
         network,
         Utc::now(),
         TxType::Transfer,
-        Some(amount_big_dec)
+        Some(amount_big_dec),
     ))
 }
 
@@ -256,19 +262,16 @@ pub async fn send_transactions(
             }
             Err(e) => {
                 log::error!("Error sending transaction: {:?}", e);
-                if e.to_string().contains("nonce too low")
-                {
+                if e.to_string().contains("nonce too low") {
                     log::error!("Nonce too low: {:?}", e);
                     dao.transaction_failed_with_nonce_too_low(&tx.tx_id, e.to_string().as_str())
                         .await;
                 }
-                if e.to_string().contains("already known")
-                {
+                if e.to_string().contains("already known") {
                     log::error!("Already known: {:?}. Send transaction with higher gas to get from this error loop. (resent won't fix anything)", e);
                     dao.retry_send_transaction(&tx.tx_id, true).await;
                     return Ok(());
                 }
-
 
                 dao.transaction_failed_send(&tx.tx_id, e.to_string().as_str())
                     .await;

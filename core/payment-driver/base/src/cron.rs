@@ -36,14 +36,13 @@ impl<D: PaymentDriverCron + 'static> Cron<D> {
     fn start_confirmation_job(&mut self, ctx: &mut Context<Self>) {
         let _ = ctx.run_interval(self.driver.confirmation_interval(), |act, _ctx| {
             let driver = act.driver.clone();
-            Arbiter::spawn(async move
-                {
-                    driver.confirm_payments().await;
-                    driver.send_out_payments().await;
-                });
+            Arbiter::spawn(async move {
+                driver.confirm_payments().await;
+                driver.send_out_payments().await;
+            });
         });
     }
-/*
+    /*
     fn start_sendout_job(&mut self, ctx: &mut Context<Self>) {
         let _ = ctx.run_interval(self.driver.sendout_interval(), |act, _ctx| {
             let driver = act.driver.clone();

@@ -26,19 +26,27 @@ use ya_payment_driver::db::models::TransactionStatus;
 
 lazy_static! {
     static ref TX_SUMBIT_TIMEOUT: Duration = Duration::minutes(15);
-    static ref ERC20_WAIT_FOR_TRANSACTION_ON_NETWORK: Duration = match std::env::var("ERC20_WAIT_FOR_TRANSACTION_ON_NETWORK").map(|str|str.parse::<i64>()) {
-            Ok(Ok(seconds)) => Duration::seconds(seconds),
-            _ => Duration::seconds(60),
-        };
-    static ref ERC20_WAIT_FOR_PENDING_ON_NETWORK: Duration = match std::env::var("ERC20_WAIT_FOR_PENDING_ON_NETWORK").map(|str|str.parse::<i64>()) {
+    static ref ERC20_WAIT_FOR_TRANSACTION_ON_NETWORK: Duration = match std::env::var(
+        "ERC20_WAIT_FOR_TRANSACTION_ON_NETWORK"
+    )
+    .map(|str| str.parse::<i64>())
+    {
+        Ok(Ok(seconds)) => Duration::seconds(seconds),
+        _ => Duration::seconds(60),
+    };
+    static ref ERC20_WAIT_FOR_PENDING_ON_NETWORK: Duration =
+        match std::env::var("ERC20_WAIT_FOR_PENDING_ON_NETWORK").map(|str| str.parse::<i64>()) {
             Ok(Ok(seconds)) => Duration::seconds(seconds),
             _ => Duration::seconds(600),
         };
-    static ref ERC20_WAIT_FOR_ERROR_SENT_TRANSACTION: Duration = match std::env::var("ERC20_WAIT_FOR_ERROR_SENT_TRANSACTION").map(|str|str.parse::<i64>()) {
-            Ok(Ok(seconds)) => Duration::seconds(seconds),
-            _ => Duration::seconds(200),
-        };
-
+    static ref ERC20_WAIT_FOR_ERROR_SENT_TRANSACTION: Duration = match std::env::var(
+        "ERC20_WAIT_FOR_ERROR_SENT_TRANSACTION"
+    )
+    .map(|str| str.parse::<i64>())
+    {
+        Ok(Ok(seconds)) => Duration::seconds(seconds),
+        _ => Duration::seconds(200),
+    };
 }
 
 pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
@@ -52,7 +60,10 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
         let block_number = match wallet::get_block_number(network).await {
             Ok(block_number) => Some(block_number.as_u64()),
             Err(err) => {
-                log::error!("No block info can be downloaded, probably no connection to RPC: {:?}", err);
+                log::error!(
+                    "No block info can be downloaded, probably no connection to RPC: {:?}",
+                    err
+                );
                 None
             }
         };
@@ -141,7 +152,6 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 &newest_tx
             );
 
-
             let hex_hash = match H256::from_str(&newest_tx[2..]) {
                 Ok(hex_hash) => hex_hash,
                 Err(err) => {
@@ -195,8 +205,14 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
             } else if s.succeeded {
                 log::info!("Transaction confirmed and succeeded");
 
-                dao.transaction_confirmed(&tx.tx_id, newest_tx, final_gas_price, s.gas_price.map(|s|s.to_string()),gas_used_i32)
-                    .await;
+                dao.transaction_confirmed(
+                    &tx.tx_id,
+                    newest_tx,
+                    final_gas_price,
+                    s.gas_price.map(|s| s.to_string()),
+                    gas_used_i32,
+                )
+                .await;
                 // Faucet can stop here IF the tx was a success.
                 if tx.tx_type == TxType::Faucet as i32 {
                     log::debug!("Faucet tx confirmed, exit early. hash={}", &newest_tx);
@@ -263,7 +279,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                     &tx.tx_id,
                     newest_tx,
                     final_gas_price,
-                    s.gas_price.map(|s|s.to_string()),
+                    s.gas_price.map(|s| s.to_string()),
                     gas_used_i32,
                     "Failure on chain during execution",
                 )

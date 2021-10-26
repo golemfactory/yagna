@@ -11,14 +11,12 @@ use ya_payment_driver::{bus, model::GenericError};
 
 use crate::erc20::transaction::YagnaRawTransaction;
 use crate::erc20::{config, eth_utils, utils};
-use ethabi::Token;
-use uuid::Uuid;
 use bigdecimal::BigDecimal;
 use bigdecimal::ToPrimitive;
+use ethabi::Token;
+use uuid::Uuid;
 
-pub const POLYGON_PREFERRED_GAS_PRICES: [f64; 6] = [
-    0.0, 10.01, 15.01, 20.01, 25.01, 30.01
-];
+pub const POLYGON_PREFERRED_GAS_PRICES: [f64; 6] = [0.0, 10.01, 15.01, 20.01, 25.01, 30.01];
 pub const POLYGON_STARTING_GAS_PRICE: f64 = 10.01;
 pub const POLYGON_MAXIMUM_GAS_PRICE: f64 = 30.01;
 
@@ -117,7 +115,7 @@ pub async fn sign_faucet_tx(
         network,
         Utc::now(),
         TxType::Faucet,
-        None
+        None,
     ))
 }
 
@@ -151,7 +149,7 @@ pub async fn prepare_raw_transaction(
     //get gas price from network in not provided
     let gas_price = match gas_price_override {
         Some(gas_price_new) => gas_price_new,
-        None => client.eth().gas_price().await.map_err(GenericError::new)?
+        None => client.eth().gas_price().await.map_err(GenericError::new)?,
     };
 
     /*
@@ -412,7 +410,7 @@ pub fn create_dao_entity(
     network: Network,
     timestamp: DateTime<Utc>,
     tx_type: TxType,
-    amount: Option<BigDecimal>
+    amount: Option<BigDecimal>,
 ) -> TransactionEntity {
     let current_naive_time = timestamp.naive_utc();
     TransactionEntity {
@@ -429,7 +427,7 @@ pub fn create_dao_entity(
         final_gas_used: None,
         amount_base: Some(0.0),
         amount_base_exact: Some("0".to_string()),
-        amount_erc20: amount.as_ref().map(|a| a.to_f64().unwrap_or(0.0) ),
+        amount_erc20: amount.as_ref().map(|a| a.to_f64().unwrap_or(0.0)),
         amount_erc20_exact: amount.as_ref().map(|a| a.to_string()),
         gas_limit: Some(gas_limit),
         starting_gas_price: Some(starting_gas_price),

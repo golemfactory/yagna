@@ -3,11 +3,11 @@
 */
 
 // External crates
+use chrono::Duration;
+use chrono::NaiveDateTime;
 use diesel::{
     self, BoolExpressionMethods, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl,
 };
-use chrono::Duration;
-use chrono::NaiveDateTime;
 
 // Workspace uses
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
@@ -20,7 +20,7 @@ use crate::{
         schema::transaction::dsl,
     },
 };
-use chrono::{Utc};
+use chrono::Utc;
 
 #[allow(unused)]
 pub struct TransactionDao<'c> {
@@ -60,7 +60,12 @@ impl<'c> TransactionDao<'c> {
         let not_older_than = (Utc::now() - Duration::days(7)).naive_utc();
         readonly_transaction(self.pool, move |conn| {
             let nonces: Vec<i32> = dsl::transaction
-                .filter(dsl::sender.eq(address).and(dsl::network.eq(network)).and(dsl::time_created.gt(not_older_than)))
+                .filter(
+                    dsl::sender
+                        .eq(address)
+                        .and(dsl::network.eq(network))
+                        .and(dsl::time_created.gt(not_older_than)),
+                )
                 .select(dsl::nonce)
                 .order(dsl::nonce.asc())
                 .load(conn)?;
@@ -201,7 +206,6 @@ impl<'c> TransactionDao<'c> {
         })
         .await
     }
-
 
     pub async fn confirm_tx(
         &self,

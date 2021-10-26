@@ -231,11 +231,7 @@ impl Erc20Dao {
         }
     }
 
-    pub async fn transaction_failed_with_nonce_too_low(
-        &self,
-        tx_id: &str,
-        error: &str,
-    ) {
+    pub async fn transaction_failed_with_nonce_too_low(&self, tx_id: &str, error: &str) {
         if let Err(e) = self
             .transaction()
             .confirm_tx(
@@ -245,7 +241,7 @@ impl Erc20Dao {
                 None,
                 None,
                 None,
-                None
+                None,
             )
             .await
         {
