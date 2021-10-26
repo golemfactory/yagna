@@ -8,7 +8,8 @@ use ya_core_model::net::local::{
 use ya_sb_proto::codec::GsbMessage;
 use ya_service_bus::{serialization, Error, RpcMessage};
 
-use crate::hybrid::service::{encode_message, BCAST, BCAST_HANDLERS, BCAST_SENDER};
+use crate::hybrid::codec::encode_message;
+use crate::hybrid::service::{BCAST, BCAST_HANDLERS, BCAST_SENDER};
 
 pub async fn broadcast<M, S>(
     caller: S,

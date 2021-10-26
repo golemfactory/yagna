@@ -1,30 +1,33 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::future::Future;
 use std::net::{SocketAddr, ToSocketAddrs};
-use std::pin::Pin;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll};
+use std::task::Poll;
 
 use anyhow::Context as AnyhowContext;
 use futures::channel::mpsc;
+use futures::stream::LocalBoxStream;
 use futures::{FutureExt, SinkExt, Stream, StreamExt, TryStreamExt};
 use tokio::time::{self, Duration};
 use url::Url;
 
 use ya_core_model::net::{self, net_service};
 use ya_core_model::NodeId;
+use ya_net_server::testing::client::ForwardReceiver;
 use ya_net_server::testing::{Client, ClientBuilder};
 use ya_relay_proto::codec::forward::{PrefixedSink, PrefixedStream, SinkKind};
-use ya_sb_proto::codec::{GsbMessage, ProtocolError};
+use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::CallReplyCode;
 use ya_service_bus::{untyped as local_bus, Error, ResponseChunk};
 use ya_utils_networking::resolver;
 
 use crate::bcast::BCastService;
+use crate::hybrid::codec;
 use crate::hybrid::crypto::IdentityCryptoProvider;
 
 const NET_RELAY_HOST_ENV_VAR: &str = "NET_RELAY_HOST";
@@ -106,7 +109,7 @@ pub async fn start_network(default_id: NodeId, ids: Vec<NodeId>) -> anyhow::Resu
 
     // outbound traffic
     let state_ = state.clone();
-    spawn_local_bus_handler(net::BUS_ID, state.clone(), move |_, addr| {
+    bind_local_bus(net::BUS_ID, state.clone(), move |_, addr| {
         let from_node = default_id.clone();
         let (to_node, addr) = match parse_net_to_addr(addr) {
             Ok(id) => id,
@@ -120,7 +123,7 @@ pub async fn start_network(default_id: NodeId, ids: Vec<NodeId>) -> anyhow::Resu
     });
 
     let state_ = state.clone();
-    spawn_local_bus_handler("/from", state.clone(), move |_, addr| {
+    bind_local_bus("/from", state.clone(), move |_, addr| {
         let (from_node, to_node, addr) = match parse_from_to_addr(addr) {
             Ok(tup) => tup,
             Err(err) => anyhow::bail!("invalid address: {}", err),
@@ -132,50 +135,8 @@ pub async fn start_network(default_id: NodeId, ids: Vec<NodeId>) -> anyhow::Resu
         Ok((from_node, to_node, addr))
     });
 
-    spawn_broadcast_handler(brx);
-
-    // inbound traffic
-    let state_ = state.clone();
-    tokio::task::spawn_local(receiver.for_each(move |fwd| {
-        let state = state_.clone();
-        async move {
-            let key = (fwd.node_id, fwd.reliable);
-            let mut tx = match {
-                let inner = state.inner.borrow();
-                inner.routes.get(&key).cloned()
-            } {
-                Some(cached) => cached,
-                None => {
-                    let (tx, rx) = mpsc::channel(1);
-                    {
-                        let mut inner = state.inner.borrow_mut();
-                        inner.routes.insert(key, tx.clone());
-                    }
-
-                    let rx = if fwd.reliable {
-                        PrefixedStream::new(rx)
-                            .inspect_err(|e| log::debug!("prefixed stream error: {}", e))
-                            .filter_map(|r| async move { r.ok().map(|b| b.to_vec()) })
-                            .boxed_local()
-                    } else {
-                        rx.boxed_local()
-                    };
-
-                    spawn_inbound_handler(rx, fwd.node_id, fwd.reliable, state.clone());
-                    tx
-                }
-            };
-
-            log::trace!("received forward packet ({} B)", fwd.payload.len());
-
-            if tx.send(fwd.payload.into()).await.is_err() {
-                log::debug!("net routing error: channel closed");
-                let mut inner = state.inner.borrow_mut();
-                inner.routes.remove(&key);
-                inner.forward.remove(&key);
-            }
-        }
-    }));
+    tokio::task::spawn_local(broadcast_handler(brx));
+    tokio::task::spawn_local(forward_handler(receiver, state.clone()));
 
     // Keep server connection alive by pinging every `DEFAULT_PING_INTERVAL` seconds.
     let client_ = client.clone();
@@ -193,119 +154,10 @@ pub async fn start_network(default_id: NodeId, ids: Vec<NodeId>) -> anyhow::Resu
     Ok(())
 }
 
-fn spawn_local_bus_handler<F>(address: &'static str, state: State, resolver: F)
+fn bind_local_bus<F>(address: &'static str, state: State, resolver: F)
 where
     F: Fn(&str, &str) -> anyhow::Result<(NodeId, NodeId, String)> + 'static,
 {
-    fn reply_bad_request(request_id: impl ToString, error: impl ToString, tx: BusSender) {
-        reply_err(request_id, error, CallReplyCode::CallReplyBadRequest, tx);
-    }
-
-    fn reply_service_err(request_id: impl ToString, error: impl ToString, tx: BusSender) {
-        reply_err(request_id, error, CallReplyCode::ServiceFailure, tx);
-    }
-
-    fn reply_err(
-        request_id: impl ToString,
-        error: impl ToString,
-        code: impl Into<i32>,
-        mut tx: BusSender,
-    ) {
-        let err = encode_error(request_id, error, code.into()).unwrap();
-        tokio::task::spawn_local(async move {
-            let _ = tx.send(ResponseChunk::Full(err)).await;
-        });
-    }
-
-    fn forward_net(
-        caller_id: NodeId,
-        remote_id: NodeId,
-        address: impl ToString,
-        msg: &[u8],
-        state: &State,
-    ) -> BusReceiver {
-        let address = address.to_string();
-        let state = state.clone();
-        let request_id = gen_id().to_string();
-
-        log::trace!("forward net {}", address);
-
-        let (tx, rx) = mpsc::channel(1);
-        let msg = match encode_request(caller_id, address.clone(), request_id.clone(), msg.to_vec())
-        {
-            Ok(vec) => vec,
-            Err(err) => {
-                log::debug!("forward net: invalid request: {}", err);
-                reply_bad_request(request_id, format!("invalid request: {}", err), tx);
-                return rx;
-            }
-        };
-
-        {
-            let mut inner = state.inner.borrow_mut();
-            inner.requests.insert(
-                request_id.clone(),
-                Request {
-                    caller_id,
-                    remote_id,
-                    address,
-                    tx: tx.clone(),
-                },
-            );
-        }
-
-        tokio::task::spawn_local(async move {
-            log::trace!(
-                "local bus handler -> send message to remote ({} B)",
-                msg.len()
-            );
-
-            match state.forward_sink(remote_id, true).await {
-                Ok(mut session) => {
-                    let _ = session.send(msg).await.map_err(|_| {
-                        let err = format!("error sending message: session closed");
-                        reply_service_err(request_id, err, tx);
-                    });
-                }
-                Err(error) => {
-                    let err = format!("error forwarding message: {}", error);
-                    reply_service_err(request_id, err, tx);
-                }
-            };
-        });
-
-        rx
-    }
-
-    fn forward_local(caller: &str, addr: &str, data: &[u8], state: &State, tx: BusSender) {
-        let address = match {
-            let inner = state.inner.borrow();
-            inner
-                .services
-                .iter()
-                .find(|&id| addr.starts_with(id))
-                // replaces  /net/<dest_node_id>/test/1 --> /public/test/1
-                .map(|s| addr.replacen(s, net::PUBLIC_PREFIX, 1))
-        } {
-            Some(address) => address,
-            None => {
-                let err = format!("unknown address: {}", addr);
-                reply_bad_request("unknown", err, tx);
-                return;
-            }
-        };
-
-        log::trace!("forwarding /net call to a local endpoint: {}", address);
-
-        let send = local_bus::call_stream(address.as_str(), caller, data);
-        tokio::task::spawn_local(async move {
-            let _ = send
-                .map_err(|e| Error::GsbFailure(e.to_string()))
-                .forward(tx.sink_map_err(|e| Error::GsbFailure(e.to_string())))
-                .await;
-        });
-    }
-
     let resolver = Rc::new(resolver);
 
     let resolver_ = resolver.clone();
@@ -330,10 +182,10 @@ where
 
         let mut rx = if state_.inner.borrow().ids.contains(&remote_id) {
             let (tx, rx) = mpsc::channel(1);
-            forward_local(&caller_id.to_string(), addr, msg, &state_, tx);
+            forward_bus_to_local(&caller_id.to_string(), addr, msg, &state_, tx);
             rx
         } else {
-            forward_net(caller_id, remote_id, address, msg, &state_)
+            forward_bus_to_net(caller_id, remote_id, address, msg, &state_)
         };
 
         async move {
@@ -350,12 +202,10 @@ where
         .right_future()
     };
 
-    let resolver_ = resolver.clone();
-    let state_ = state.clone();
     let stream = move |caller: &str, addr: &str, msg: &[u8]| {
         log::trace!("local bus: stream call (egress): {}", addr);
 
-        let (caller_id, remote_id, address) = match (*resolver_)(caller, addr) {
+        let (caller_id, remote_id, address) = match (*resolver)(caller, addr) {
             Ok(id) => id,
             Err(err) => {
                 log::debug!("local bus: stream call (egress) to {} error: {}", addr, err);
@@ -372,13 +222,14 @@ where
             remote_id
         );
 
-        let rx = if state_.inner.borrow().ids.contains(&remote_id) {
+        let rx = if state.inner.borrow().ids.contains(&remote_id) {
             let (tx, rx) = mpsc::channel(1);
-            forward_local(&caller_id.to_string(), addr, msg, &state_, tx);
+            forward_bus_to_local(&caller_id.to_string(), addr, msg, &state, tx);
             rx
         } else {
-            forward_net(caller_id, remote_id, address, msg, &state_)
+            forward_bus_to_net(caller_id, remote_id, address, msg, &state)
         };
+
         let eos = Rc::new(AtomicBool::new(false));
         let eos_chain = eos.clone();
 
@@ -386,10 +237,14 @@ where
             v.is_full().then(|| eos.store(true, Relaxed));
             Ok(v)
         })
-        .chain(StreamOnceIf::new(
-            move || !eos_chain.load(Relaxed),
-            move || Ok(ResponseChunk::Full(Vec::new())),
-        ))
+        .chain(futures::stream::poll_fn(move |_| {
+            if eos_chain.load(Relaxed) {
+                Poll::Ready(None)
+            } else {
+                eos_chain.store(true, Relaxed);
+                Poll::Ready(Some(Ok(ResponseChunk::Full(Vec::new()))))
+            }
+        }))
         .boxed_local()
         .right_stream()
     };
@@ -398,9 +253,98 @@ where
     local_bus::subscribe(address, rpc, stream);
 }
 
+/// Forward requests from and to the local bus
+fn forward_bus_to_local(caller: &str, addr: &str, data: &[u8], state: &State, tx: BusSender) {
+    let address = match {
+        let inner = state.inner.borrow();
+        inner
+            .services
+            .iter()
+            .find(|&id| addr.starts_with(id))
+            // replaces  /net/<dest_node_id>/test/1 --> /public/test/1
+            .map(|s| addr.replacen(s, net::PUBLIC_PREFIX, 1))
+    } {
+        Some(address) => address,
+        None => {
+            let err = format!("unknown address: {}", addr);
+            handler_reply_bad_request("unknown", err, tx);
+            return;
+        }
+    };
+
+    log::trace!("forwarding /net call to a local endpoint: {}", address);
+
+    let send = local_bus::call_stream(address.as_str(), caller, data);
+    tokio::task::spawn_local(async move {
+        let _ = send
+            .map_err(|e| Error::GsbFailure(e.to_string()))
+            .forward(tx.sink_map_err(|e| Error::GsbFailure(e.to_string())))
+            .await;
+    });
+}
+
+/// Forward requests from local bus to the network
+fn forward_bus_to_net(
+    caller_id: NodeId,
+    remote_id: NodeId,
+    address: impl ToString,
+    msg: &[u8],
+    state: &State,
+) -> BusReceiver {
+    let address = address.to_string();
+    let state = state.clone();
+    let request_id = gen_id().to_string();
+
+    log::trace!("forward net {}", address);
+
+    let (tx, rx) = mpsc::channel(1);
+    let msg =
+        match codec::encode_request(caller_id, address.clone(), request_id.clone(), msg.to_vec()) {
+            Ok(vec) => vec,
+            Err(err) => {
+                log::debug!("forward net: invalid request: {}", err);
+                handler_reply_bad_request(request_id, format!("invalid request: {}", err), tx);
+                return rx;
+            }
+        };
+
+    let request = Request {
+        caller_id,
+        remote_id,
+        address,
+        tx: tx.clone(),
+    };
+    {
+        let mut inner = state.inner.borrow_mut();
+        inner.requests.insert(request_id.clone(), request);
+    }
+
+    tokio::task::spawn_local(async move {
+        log::trace!(
+            "local bus handler -> send message to remote ({} B)",
+            msg.len()
+        );
+
+        match state.forward_sink(remote_id, true).await {
+            Ok(mut session) => {
+                let _ = session.send(msg).await.map_err(|_| {
+                    let err = format!("error sending message: session closed");
+                    handler_reply_service_err(request_id, err, tx);
+                });
+            }
+            Err(error) => {
+                let err = format!("error forwarding message: {}", error);
+                handler_reply_service_err(request_id, err, tx);
+            }
+        };
+    });
+
+    rx
+}
+
 /// Forward broadcast messages from the network to the local bus
-fn spawn_broadcast_handler(rx: NetReceiver) {
-    tokio::task::spawn_local(StreamExt::for_each(rx, move |payload| {
+fn broadcast_handler(rx: NetReceiver) -> impl Future<Output = ()> + Unpin + 'static {
+    StreamExt::for_each(rx, move |payload| {
         async move {
             let client = CLIENT
                 .with(|c| c.borrow().clone())
@@ -416,22 +360,79 @@ fn spawn_broadcast_handler(rx: NetReceiver) {
                 log::debug!("unable to broadcast message: {}", e)
             }
         })
-    }));
+    })
+    .boxed_local()
 }
 
-/// Forward GSB from the network to the local bus
-fn spawn_inbound_handler(
+/// Handle incoming forward messages
+fn forward_handler(
+    receiver: ForwardReceiver,
+    state: State,
+) -> impl Future<Output = ()> + Unpin + 'static {
+    receiver
+        .for_each(move |fwd| {
+            let state = state.clone();
+            async move {
+                let key = (fwd.node_id, fwd.reliable);
+                let mut tx = match {
+                    let inner = state.inner.borrow();
+                    inner.routes.get(&key).cloned()
+                } {
+                    Some(cached) => cached,
+                    None => {
+                        let state = state.clone();
+                        let (tx, rx) = forward_channel(fwd.reliable);
+                        {
+                            let mut inner = state.inner.borrow_mut();
+                            inner.routes.insert(key, tx.clone());
+                        }
+                        tokio::task::spawn_local(inbound_handler(
+                            rx,
+                            fwd.node_id,
+                            fwd.reliable,
+                            state,
+                        ));
+                        tx
+                    }
+                };
+
+                log::trace!("received forward packet ({} B)", fwd.payload.len());
+
+                if tx.send(fwd.payload.into()).await.is_err() {
+                    log::debug!("net routing error: channel closed");
+                    state.remove_sink(&key);
+                }
+            }
+        })
+        .boxed_local()
+}
+
+fn forward_channel<'a>(reliable: bool) -> (mpsc::Sender<Vec<u8>>, LocalBoxStream<'a, Vec<u8>>) {
+    let (tx, rx) = mpsc::channel(1);
+    let rx = if reliable {
+        PrefixedStream::new(rx)
+            .inspect_err(|e| log::debug!("prefixed stream error: {}", e))
+            .filter_map(|r| async move { r.ok().map(|b| b.to_vec()) })
+            .boxed_local()
+    } else {
+        rx.boxed_local()
+    };
+    (tx, rx)
+}
+
+/// Forward node GSB messages from the network to the local bus
+fn inbound_handler(
     rx: impl Stream<Item = Vec<u8>> + 'static,
     remote_id: NodeId,
     reliable: bool,
     state: State,
-) {
-    tokio::task::spawn_local(StreamExt::for_each(rx, move |payload| {
+) -> impl Future<Output = ()> + Unpin + 'static {
+    StreamExt::for_each(rx, move |payload| {
         let state = state.clone();
         log::trace!("local bus handler -> inbound message");
 
         async move {
-            match decode_message(payload.as_slice()) {
+            match codec::decode_message(payload.as_slice()) {
                 Ok(Some(GsbMessage::CallRequest(request @ ya_sb_proto::CallRequest { .. }))) => {
                     handle_request(request, remote_id, state, reliable)
                 }
@@ -454,7 +455,8 @@ fn spawn_inbound_handler(
                 log::debug!("ingress message error: {}", e)
             }
         })
-    }));
+    })
+    .boxed_local()
 }
 
 /// Forward messages from the network to the local bus
@@ -472,8 +474,8 @@ fn handle_request(
     let address = request.address;
     let caller_id = caller_id.unwrap();
     let request_id = request.request_id;
-    let request_id_map = request_id.clone();
-    let request_id_map2 = request_id.clone();
+    let request_id_chain = request_id.clone();
+    let request_id_filter = request_id.clone();
 
     log::trace!(
         "handle request {} to {} from {}",
@@ -508,35 +510,37 @@ fn handle_request(
     .map(move |result| match result {
         Ok(chunk) => {
             chunk.is_full().then(|| eos_map.store(true, Relaxed));
-            reply_ok(request_id.clone(), chunk)
+            codec::reply_ok(request_id.clone(), chunk)
         }
         Err(err) => {
             eos_map.store(true, Relaxed);
-            reply_err(request_id.clone(), err)
+            codec::reply_err(request_id.clone(), err)
         }
     })
-    .chain(StreamOnceIf::new(
-        move || !eos_chain.load(Relaxed),
-        move || reply_eos(request_id_map.clone()),
-    ))
-    .filter_map(move |reply| {
-        let request_id = request_id_map2.clone();
-        async move {
-            match encode_message(reply) {
-                Ok(vec) => {
-                    log::trace!(
-                        "handle request {}: reply chunk ({} B)",
-                        request_id,
-                        vec.len()
-                    );
-                    Some(Ok::<Vec<u8>, mpsc::SendError>(vec))
-                }
-                Err(e) => {
-                    log::debug!("handle request: reply encoding error: {}", e);
-                    None
-                }
-            }
+    .chain(futures::stream::poll_fn(move |_| {
+        if eos_chain.load(Relaxed) {
+            Poll::Ready(None)
+        } else {
+            eos_chain.store(true, Relaxed);
+            Poll::Ready(Some(codec::reply_eos(request_id_chain.clone())))
         }
+    }))
+    .filter_map(move |reply| {
+        let filtered = match codec::encode_message(reply) {
+            Ok(vec) => {
+                log::trace!(
+                    "handle request {}: reply chunk ({} B)",
+                    request_id_filter,
+                    vec.len()
+                );
+                Some(Ok::<Vec<u8>, mpsc::SendError>(vec))
+            }
+            Err(e) => {
+                log::debug!("handle request: reply encoding error: {}", e);
+                None
+            }
+        };
+        async move { filtered }
     });
 
     tokio::task::spawn_local(
@@ -547,7 +551,7 @@ fn handle_request(
         }
         .then(|result| async move {
             if let Err(e) = result {
-                log::debug!("reply forward error: {}", e)
+                log::debug!("reply forward error: {}", e);
             }
         }),
     );
@@ -563,7 +567,7 @@ fn handle_reply(
 ) -> anyhow::Result<()> {
     let full = reply.reply_type == ya_sb_proto::CallReplyType::Full as i32;
 
-    log::trace!(
+    log::debug!(
         "handle reply from node {} (full: {}, code: {}, id: {}) {} B",
         remote_id,
         full,
@@ -576,45 +580,30 @@ fn handle_reply(
         let inner = state.inner.borrow();
         inner.requests.get(&reply.request_id).cloned()
     } {
-        Some(request) => {
-            if request.remote_id == remote_id {
-                if full {
-                    let mut inner = state.inner.borrow_mut();
-                    inner.requests.remove(&reply.request_id);
-                }
-                request
-            } else {
-                anyhow::bail!("invalid reply caller for request id: {}", reply.request_id);
+        Some(request) if request.remote_id == remote_id => {
+            if full {
+                let mut inner = state.inner.borrow_mut();
+                inner.requests.remove(&reply.request_id);
             }
+            request
         }
+        Some(_) => anyhow::bail!("invalid caller for request id: {}", reply.request_id),
         None => anyhow::bail!("invalid reply request id: {}", reply.request_id),
     };
 
     let data = if reply.code == CallReplyCode::CallReplyOk as i32 {
         reply.data
     } else {
-        let err = anyhow::anyhow!(
-            "request {} failed with code {}",
-            reply.request_id,
-            reply.code
-        );
-        log::debug!("{}", err);
-        match encode_bad_request(reply.request_id, err) {
-            Ok(vec) => vec,
-            Err(err) => anyhow::bail!("unable to encode error reply: {}", err),
-        }
+        codec::encode_reply(reply).context("unable to encode reply")?
     };
 
     tokio::task::spawn_local(async move {
-        if let Err(_) = request
-            .tx
-            .send(if full {
-                ResponseChunk::Full(data)
-            } else {
-                ResponseChunk::Part(data)
-            })
-            .await
-        {
+        let chunk = if full {
+            ResponseChunk::Full(data)
+        } else {
+            ResponseChunk::Part(data)
+        };
+        if let Err(_) = request.tx.send(chunk).await {
             log::debug!("failed to forward reply: channel closed");
         }
     });
@@ -708,6 +697,12 @@ impl State {
             }
         }
     }
+
+    fn remove_sink(&self, key: &NetSinkKey) {
+        let mut inner = self.inner.borrow_mut();
+        inner.routes.remove(&key);
+        inner.forward.remove(&key);
+    }
 }
 
 #[derive(Clone)]
@@ -718,164 +713,30 @@ struct Request<S: Clone> {
     tx: S,
 }
 
-struct StreamOnceIf<P, V, T>
-where
-    P: Fn() -> bool,
-    V: Fn() -> T,
-{
-    predicate: P,
-    value: V,
-    done: bool,
+fn handler_reply_bad_request(request_id: impl ToString, error: impl ToString, tx: BusSender) {
+    handler_reply_err(request_id, error, CallReplyCode::CallReplyBadRequest, tx);
 }
 
-impl<P, V, T> StreamOnceIf<P, V, T>
-where
-    P: Fn() -> bool,
-    V: Fn() -> T,
-{
-    fn new(predicate: P, value: V) -> Self {
-        Self {
-            predicate,
-            value,
-            done: false,
-        }
-    }
+fn handler_reply_service_err(request_id: impl ToString, error: impl ToString, tx: BusSender) {
+    handler_reply_err(request_id, error, CallReplyCode::ServiceFailure, tx);
 }
 
-impl<P, V, T> Stream for StreamOnceIf<P, V, T>
-where
-    P: Fn() -> bool + Unpin,
-    V: Fn() -> T + Unpin,
-{
-    type Item = T;
-
-    fn poll_next(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        if (self.as_ref().predicate)() {
-            if self.done {
-                Poll::Ready(None)
-            } else {
-                let this = self.get_mut();
-                this.done = true;
-                let value = (this.value)();
-                Poll::Ready(Some(value))
-            }
-        } else {
-            Poll::Ready(None)
-        }
-    }
-}
-
-fn encode_request(
-    caller: NodeId,
-    address: String,
-    request_id: String,
-    data: Vec<u8>,
-) -> anyhow::Result<Vec<u8>> {
-    let message = GsbMessage::CallRequest(ya_sb_proto::CallRequest {
-        caller: caller.to_string(),
-        address,
-        request_id,
-        data,
-    });
-    Ok(encode_message(message)?)
-}
-
-fn encode_bad_request(request_id: impl ToString, error: impl ToString) -> anyhow::Result<Vec<u8>> {
-    encode_error(request_id, error, CallReplyCode::CallReplyBadRequest as i32)
-}
-
-fn encode_error(
+fn handler_reply_err(
     request_id: impl ToString,
     error: impl ToString,
-    code: i32,
-) -> anyhow::Result<Vec<u8>> {
-    let message = GsbMessage::CallReply(ya_sb_proto::CallReply {
-        request_id: request_id.to_string(),
-        code,
-        reply_type: ya_sb_proto::CallReplyType::Full as i32,
-        data: error.to_string().into_bytes(),
+    code: impl Into<i32>,
+    mut tx: BusSender,
+) {
+    let err = codec::encode_error(request_id, error, code.into()).unwrap();
+    tokio::task::spawn_local(async move {
+        let _ = tx.send(ResponseChunk::Full(err)).await;
     });
-    Ok(encode_message(message)?)
-}
-
-pub(crate) fn encode_message(msg: GsbMessage) -> Result<Vec<u8>, Error> {
-    use prost::Message;
-
-    let packet = ya_sb_proto::Packet { packet: Some(msg) };
-    let len: usize = packet.encoded_len();
-
-    let mut dst = Vec::with_capacity(4 + len);
-    dst.extend((len as u32).to_be_bytes());
-    packet
-        .encode(&mut dst)
-        .map_err(|e| Error::EncodingProblem(e.to_string()))?;
-
-    Ok(dst)
-}
-
-pub(crate) fn decode_message(src: &[u8]) -> Result<Option<GsbMessage>, Error> {
-    use prost::Message;
-
-    let msg_length = if src.len() < 4 {
-        return Ok(None);
-    } else {
-        let mut buf = [0u8; 4];
-        buf.copy_from_slice(&src[0..4]);
-        u32::from_be_bytes(buf) as usize
-    };
-
-    if src.len() < 4 + msg_length {
-        return Ok(None);
-    }
-
-    let packet = ya_sb_proto::Packet::decode(&src[4..4 + msg_length])
-        .map_err(|e| Error::EncodingProblem(e.to_string()))?;
-    match packet.packet {
-        Some(msg) => Ok(Some(msg)),
-        None => Err(Error::EncodingProblem(
-            ProtocolError::UnrecognizedMessageType.to_string(),
-        )),
-    }
-}
-
-fn reply_ok(request_id: impl ToString, chunk: ResponseChunk) -> GsbMessage {
-    let reply_type = if chunk.is_full() {
-        ya_sb_proto::CallReplyType::Full as i32
-    } else {
-        ya_sb_proto::CallReplyType::Partial as i32
-    };
-
-    GsbMessage::CallReply(ya_sb_proto::CallReply {
-        request_id: request_id.to_string(),
-        code: ya_sb_proto::CallReplyCode::CallReplyOk as i32,
-        reply_type,
-        data: chunk.into_bytes(),
-    })
-}
-
-fn reply_err(request_id: impl ToString, err: impl ToString) -> GsbMessage {
-    GsbMessage::CallReply(ya_sb_proto::CallReply {
-        request_id: request_id.to_string(),
-        code: ya_sb_proto::CallReplyCode::CallReplyBadRequest as i32,
-        reply_type: ya_sb_proto::CallReplyType::Full as i32,
-        data: err.to_string().into_bytes(),
-    })
-}
-
-fn reply_eos(request_id: impl ToString) -> GsbMessage {
-    GsbMessage::CallReply(ya_sb_proto::CallReply {
-        request_id: request_id.to_string(),
-        code: ya_sb_proto::CallReplyCode::CallReplyOk as i32,
-        reply_type: ya_sb_proto::CallReplyType::Full as i32,
-        data: vec![],
-    })
 }
 
 fn chunk_err(request_id: impl ToString, err: impl ToString) -> Result<ResponseChunk, Error> {
-    Ok(ResponseChunk::Full(encode_message(reply_err(
-        request_id.to_string(),
-        err,
-    ))?))
+    Ok(ResponseChunk::Full(codec::encode_message(
+        codec::reply_err(request_id.to_string(), err),
+    )?))
 }
 
 fn parse_net_to_addr(addr: &str) -> anyhow::Result<(NodeId, String)> {
@@ -915,33 +776,4 @@ fn gen_id() -> u64 {
     use rand::Rng;
     let mut rng = rand::thread_rng();
     rng.gen::<u64>() & 0x1f_ff_ff__ff_ff_ff_ffu64
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::hybrid::service::{decode_message, encode_message};
-    use std::iter::FromIterator;
-
-    #[test]
-    fn encode_message_compat() {
-        use tokio_util::codec::Encoder;
-        use ya_sb_proto::codec::GsbMessage;
-
-        let msg = GsbMessage::CallReply(ya_sb_proto::CallReply {
-            request_id: "10203040".to_string(),
-            code: ya_sb_proto::CallReplyCode::CallReplyBadRequest as i32,
-            reply_type: ya_sb_proto::CallReplyType::Full as i32,
-            data: "err".to_string().into_bytes(),
-        });
-        let encoded = encode_message(msg.clone()).unwrap();
-
-        let mut buf = bytes::BytesMut::with_capacity(msg.encoded_len());
-        ya_sb_proto::codec::GsbMessageEncoder::default()
-            .encode(msg.clone(), &mut buf)
-            .unwrap();
-        let encoded_orig = Vec::from_iter(buf.into_iter());
-
-        assert_eq!(encoded_orig, encoded);
-        assert_eq!(decode_message(encoded.as_slice()).unwrap().unwrap(), msg);
-    }
 }
