@@ -45,7 +45,7 @@ pub struct EventsListeners {
 pub struct Matcher {
     pub store: SubscriptionStore,
     pub resolver: Resolver,
-    discovery: Discovery,
+    pub(crate) discovery: Discovery,
     identity: Arc<dyn IdentityApi>,
     config: Arc<Config>,
     expiration_tracker: Addr<DeadlineChecker>,

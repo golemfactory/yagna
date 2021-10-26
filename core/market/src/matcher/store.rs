@@ -11,6 +11,7 @@ use ya_service_api_web::middleware::Identity;
 use crate::config::Config;
 use crate::db::dao::*;
 use crate::db::model::{Demand, Offer, SubscriptionId};
+use crate::db::DbMixedExecutor;
 use crate::matcher::error::{
     DemandError, ModifyOfferError, QueryDemandsError, QueryOfferError, QueryOffersError,
     SaveOfferError,
@@ -18,12 +19,12 @@ use crate::matcher::error::{
 
 #[derive(Clone)]
 pub struct SubscriptionStore {
-    pub(crate) db: DbExecutor,
+    pub(crate) db: DbMixedExecutor,
     config: Arc<Config>,
 }
 
 impl SubscriptionStore {
-    pub fn new(db: DbExecutor, config: Arc<Config>) -> Self {
+    pub fn new(db: DbMixedExecutor, config: Arc<Config>) -> Self {
         SubscriptionStore { db, config }
     }
 

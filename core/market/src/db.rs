@@ -8,4 +8,6 @@ pub(crate) mod migrations {
 }
 
 pub(crate) use ya_persistence::executor::Error as DbError;
+pub(crate) use ya_persistence::executor::{AsMixedDao, DbMixedExecutor};
+
 pub(crate) type DbResult<T> = Result<T, DbError>;

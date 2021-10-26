@@ -2,6 +2,8 @@ use std::process::Stdio;
 
 use anyhow::Context;
 use serde::Deserialize;
+use std::process::Stdio;
+use std::{collections::BTreeMap, process::Stdio};
 use tokio::process::{Child, Command};
 
 use ya_core_model::payment::local::NetworkName;
@@ -21,16 +23,7 @@ pub struct Preset {
     pub usage_coeffs: UsageDef,
 }
 
-#[derive(Deserialize, Clone, Default)]
-#[serde(rename_all = "kebab-case")]
-pub struct UsageDef {
-    #[serde(default)]
-    pub cpu: f64,
-    #[serde(default)]
-    pub initial: f64,
-    #[serde(default)]
-    pub duration: f64,
-}
+pub type UsageDef = BTreeMap<String, f64>;
 
 impl UsageDef {
     pub fn for_runtime(&self, runtime: &RuntimeInfo) -> Vec<(&str, f64)> {
@@ -345,5 +338,4 @@ fn preset_command<'a, 'b>(
     cmd.arg("--pricing").arg("linear");
     for &(k, v) in usage_coeffs {
         cmd.arg("--price").arg(format!("{}={}", k, v));
-    }
 }

@@ -7,7 +7,9 @@ use ya_payment_driver::{db::models::Network as DbNetwork, driver::Network, model
 
 // Local uses
 use crate::{
-    MAINNET_NETWORK, MAINNET_PLATFORM, MAINNET_TOKEN, RINKEBY_NETWORK, RINKEBY_PLATFORM,
+    GOERLI_NETWORK, GOERLI_PLATFORM, GOERLI_TOKEN, MAINNET_NETWORK, MAINNET_PLATFORM,
+    MAINNET_TOKEN, MUMBAI_NETWORK, MUMBAI_PLATFORM, MUMBAI_TOKEN, POLYGON_MAINNET_NETWORK,
+    POLYGON_MAINNET_PLATFORM, POLYGON_MAINNET_TOKEN, RINKEBY_NETWORK, RINKEBY_PLATFORM,
     RINKEBY_TOKEN,
 };
 
@@ -19,21 +21,48 @@ lazy_static::lazy_static! {
                 RINKEBY_TOKEN.to_string() => RINKEBY_PLATFORM.to_string()
             }
         },
+        GOERLI_NETWORK.to_string() => Network {
+            default_token: GOERLI_TOKEN.to_string(),
+            tokens: hashmap! {
+                GOERLI_TOKEN.to_string() => GOERLI_PLATFORM.to_string()
+            }
+        },
         MAINNET_NETWORK.to_string() => Network {
             default_token: MAINNET_TOKEN.to_string(),
             tokens: hashmap! {
                 MAINNET_TOKEN.to_string() => MAINNET_PLATFORM.to_string()
             }
+        },
+        MUMBAI_NETWORK.to_string() => Network {
+            default_token: MUMBAI_TOKEN.to_string(),
+            tokens: hashmap! {
+                MUMBAI_TOKEN.to_string() => MUMBAI_PLATFORM.to_string()
+            }
+        },
+        POLYGON_MAINNET_NETWORK.to_string() => Network {
+            default_token: POLYGON_MAINNET_TOKEN.to_string(),
+            tokens: hashmap! {
+                POLYGON_MAINNET_TOKEN.to_string() => POLYGON_MAINNET_PLATFORM.to_string()
+            }
         }
     };
     pub static ref RINKEBY_DB_NETWORK: DbNetwork = DbNetwork::from_str(RINKEBY_NETWORK).unwrap();
+    pub static ref GOERLI_DB_NETWORK: DbNetwork = DbNetwork::from_str(GOERLI_NETWORK).unwrap();
     pub static ref MAINNET_DB_NETWORK: DbNetwork = DbNetwork::from_str(MAINNET_NETWORK).unwrap();
+    pub static ref MUMBAI_DB_NETWORK: DbNetwork = DbNetwork::from_str(MUMBAI_NETWORK).unwrap();
+    pub static ref POLYGON_MAINNET_DB_NETWORK: DbNetwork = DbNetwork::from_str(POLYGON_MAINNET_NETWORK).unwrap();
 }
 
 pub fn platform_to_network_token(platform: String) -> Result<(DbNetwork, String), GenericError> {
     match platform.as_str() {
         RINKEBY_PLATFORM => Ok((*RINKEBY_DB_NETWORK, RINKEBY_TOKEN.to_owned())),
+        GOERLI_PLATFORM => Ok((*GOERLI_DB_NETWORK, GOERLI_TOKEN.to_owned())),
         MAINNET_PLATFORM => Ok((*MAINNET_DB_NETWORK, MAINNET_TOKEN.to_owned())),
+        MUMBAI_PLATFORM => Ok((*MUMBAI_DB_NETWORK, MUMBAI_TOKEN.to_owned())),
+        POLYGON_MAINNET_PLATFORM => Ok((
+            *POLYGON_MAINNET_DB_NETWORK,
+            POLYGON_MAINNET_TOKEN.to_owned(),
+        )),
         other => Err(GenericError::new(format!(
             "Unable to find network for platform: {}",
             other

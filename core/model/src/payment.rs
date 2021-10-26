@@ -448,6 +448,8 @@ pub mod local {
         Mainnet,
         #[strum(props(token = "tGLM"))]
         Rinkeby,
+        #[strum(props(token = "tGLM"))]
+        Goerli,
         #[strum(props(token = "GLM"))]
         Polygon,
         #[strum(props(token = "tGLM"))]
@@ -472,7 +474,6 @@ pub mod local {
     pub enum DriverName {
         ZkSync,
         Erc20,
-        Polygon,
     }
 
     #[derive(StructOpt, Debug, Clone)]

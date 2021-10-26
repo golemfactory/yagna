@@ -26,7 +26,7 @@ use ya_market::MarketService;
 use ya_metrics::{MetricsPusherOpts, MetricsService};
 use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
-use ya_persistence::executor::DbExecutor;
+use ya_persistence::executor::{DbExecutor, DbMixedExecutor};
 use ya_persistence::service::Persistence as PersistenceService;
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_api_interfaces::Provider;
@@ -134,7 +134,9 @@ impl TryFrom<&CliArgs> for CliCtx {
 struct ServiceContext {
     ctx: CliCtx,
     dbs: HashMap<TypeId, DbExecutor>,
+    mixed_dbs: HashMap<TypeId, DbMixedExecutor>,
     default_db: DbExecutor,
+    default_mixed: DbMixedExecutor,
     activity_tracker: ya_activity::TrackerRef,
 }
 
@@ -147,6 +149,12 @@ impl<S: 'static> Provider<S, DbExecutor> for ServiceContext {
     }
 }
 
+impl<S: 'static> Provider<S, DbMixedExecutor> for ServiceContext {
+    fn component(&self) -> DbMixedExecutor {
+        match self.mixed_dbs.get(&TypeId::of::<S>()) {
+            Some(db) => db.clone(),
+            None => self.default_mixed.clone(),
+        }
 impl<S: 'static> Provider<S, ya_activity::TrackerRef> for ServiceContext {
     fn component(&self) -> ya_activity::TrackerRef {
         self.activity_tracker.clone()
@@ -170,6 +178,16 @@ impl ServiceContext {
         Ok((TypeId::of::<S>(), DbExecutor::from_data_dir(path, name)?))
     }
 
+    fn make_mixed_entry<S: 'static>(
+        path: &PathBuf,
+        name: &str,
+    ) -> Result<(TypeId, DbMixedExecutor)> {
+        let disk_db = DbExecutor::from_data_dir(path, name)?;
+        let ram_db = DbExecutor::in_memory(name)?;
+
+        Ok((TypeId::of::<S>(), DbMixedExecutor::new(disk_db, ram_db)))
+    }
+
     fn set_metrics_ctx(&mut self, metrics_opts: &MetricsPusherOpts) {
         self.ctx.metrics_ctx = Some(metrics_opts.into())
     }
@@ -182,7 +200,6 @@ impl TryFrom<CliCtx> for ServiceContext {
         let default_name = clap::crate_name!();
         let default_db = DbExecutor::from_data_dir(&ctx.data_dir, default_name)?;
         let dbs = [
-            Self::make_entry::<MarketService>(&ctx.data_dir, "market")?,
             Self::make_entry::<ActivityService>(&ctx.data_dir, "activity")?,
             Self::make_entry::<PaymentService>(&ctx.data_dir, "payment")?,
         ]
@@ -190,12 +207,16 @@ impl TryFrom<CliCtx> for ServiceContext {
         .cloned()
         .collect();
 
+        let market_db = Self::make_mixed_entry::<MarketService>(&ctx.data_dir, "market")?;
+        let mixed_dbs = [market_db.clone()].iter().cloned().collect();
         let activity_tracker = TrackerRef::create();
 
         Ok(ServiceContext {
             ctx,
             dbs,
+            mixed_dbs,
             default_db,
+            default_mixed: market_db.1,
             activity_tracker,
         })
     }

@@ -1,10 +1,10 @@
-name: CI
+name: Build binaries (x86-64)
 
 on:
   push:
     branches:
       - master
-      - release/*      
+      - release/*
   pull_request:
     branches:
       - master
@@ -12,7 +12,7 @@ on:
 
 jobs:
   build:
-    name: Tests & Build
+    name: Build binaries (x86-64)
     env:
       # `-D warnings` means any warnings emitted will cause build to fail
       RUSTFLAGS: "-D warnings -C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
@@ -20,7 +20,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        os: [ubuntu-latest]
 
     steps:
       - name: Checkout
@@ -38,24 +38,12 @@ jobs:
           command: tree
           args: --locked
 
-      - name: Check formatting
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
-
       - name: Install openssl ( Windows only )
         if: runner.os == 'Windows'
         run: |
           vcpkg install openssl:x64-windows openssl:x64-windows-static
           vcpkg list
           vcpkg integrate install
-
-      - name: Unit tests + Market Test Suite (semi-integration tests)
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --tests --workspace --features ya-market/test-suite --locked
 
       - name: Build binaries
         uses: actions-rs/cargo@v1

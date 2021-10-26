@@ -26,7 +26,7 @@ class ProviderProbe(BaseProviderProbe):
     async def wait_for_exeunit_started(self):
         """Wait until the provider agent starts the exe-unit."""
         await self.provider_agent.wait_for_log(
-            r"(.*)\[ExeUnit\](.+)Supervisor initialized$"
+            r"(.*)ExeUnit initialized.*"
         )
 
     @step()

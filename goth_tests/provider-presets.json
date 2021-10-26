@@ -1,0 +1,41 @@
+{
+  "ver": "V1",
+  "active": [
+    "wasm",
+    "vm",
+    "test-counters"
+  ],
+  "presets": [
+    {
+      "name": "wasm",
+      "exeunit-name": "wasmtime",
+      "pricing-model": "linear",
+      "initial-price": 0,
+      "usage-coeffs": {
+        "golem.usage.duration_sec": 0.0001,
+        "golem.usage.cpu_sec": 0.0001
+      }
+    },
+    {
+      "name": "vm",
+      "exeunit-name": "vm",
+      "pricing-model": "linear",
+      "initial-price": 0,
+      "usage-coeffs": {
+        "golem.usage.duration_sec": 0.0001,
+        "golem.usage.cpu_sec": 0.0001
+      }
+    },
+    {
+      "name": "test-counters",
+      "exeunit-name": "test-counters",
+      "pricing-model": "linear",
+      "initial-price": 0,
+      "usage-coeffs": {
+        "golem.usage.duration_sec": 0.0001,
+        "golem.usage.cpu_sec": 0.0001,
+        "golem.usage.custom.counter": 0.0003
+      }
+    }
+  ]
+}

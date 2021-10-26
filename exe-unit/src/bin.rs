@@ -3,13 +3,14 @@ use std::path::PathBuf;
 
 use actix::{Actor, Addr, Arbiter, System};
 use anyhow::bail;
-use flexi_logger::{DeferredNow, Record};
 use structopt::{clap, StructOpt};
+
 use ya_client_model::activity::ExeScriptCommand;
 use ya_service_bus::RpcEnvelope;
 
 use ya_core_model::activity;
 use ya_exe_unit::agreement::Agreement;
+use ya_exe_unit::logger::*;
 use ya_exe_unit::message::{GetState, GetStateResponse, Register};
 use ya_exe_unit::runtime::process::RuntimeProcess;
 use ya_exe_unit::service::metrics::MetricsService;
@@ -291,35 +292,11 @@ fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn colored_stderr_exeunit_prefixed_format(
-    w: &mut dyn std::io::Write,
-    now: &mut DeferredNow,
-    record: &Record,
-) -> Result<(), std::io::Error> {
-    write!(w, "{}", yansi::Color::Fixed(92).paint("[ExeUnit] "))?;
-    flexi_logger::colored_opt_format(w, now, record)
-}
-
-fn configure_logger(logger: flexi_logger::Logger) -> flexi_logger::Logger {
-    logger
-        .format(flexi_logger::colored_opt_format)
-        .duplicate_to_stderr(flexi_logger::Duplicate::Debug)
-        .format_for_stderr(colored_stderr_exeunit_prefixed_format)
-}
-
 fn main() {
-    let default_log_level = "info";
-    if configure_logger(flexi_logger::Logger::with_env_or_str(default_log_level))
-        .log_to_file()
-        .directory("logs")
-        .start()
-        .is_err()
-    {
-        configure_logger(flexi_logger::Logger::with_env_or_str(default_log_level))
-            .start()
-            .expect("Failed to initialize logging");
-        log::warn!("Switched to fallback logging method");
-    }
+    if let Err(error) = start_file_logger() {
+        start_logger().expect("Failed to start logging");
+        log::warn!("Using fallback logging due to an error: {:?}", error);
+    };
 
     std::process::exit(match run() {
         Ok(_) => 0,
@@ -328,12 +305,4 @@ fn main() {
             1
         }
     })
-}
-
-#[cfg(test)]
-mod test {
-    #[test]
-    fn test_paint() {
-        println!("Some: {}", yansi::Color::Fixed(92).paint("violet text!"));
-    }
 }

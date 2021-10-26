@@ -299,8 +299,9 @@ impl PaymentDriver for ZksyncDriver {
                     &address
                 ))
             }
-            DbNetwork::PolygonMumbai => Ok(format!("PolygonMumbai Not supported")),
-            DbNetwork::PolygonMainnet => Ok(format!("PolygonMainnet Not supported")),
+            DbNetwork::Goerli => Ok(format!("PolygonMumbai Not supported")),
+            DbNetwork::Mumbai => Ok(format!("PolygonMumbai Not supported")),
+            DbNetwork::Polygon => Ok(format!("PolygonMainnet Not supported")),
             DbNetwork::Mainnet => Ok(format!(
                 r#"Your mainnet zkSync address is {}.
 
@@ -448,7 +449,7 @@ impl PaymentDriverCron for ZksyncDriver {
 
             for tx in txs {
                 log::trace!("checking tx {:?}", &tx);
-                let tx_hash = match &tx.tx_hash {
+                let tx_hash = match &tx.tmp_onchain_txs {
                     None => continue,
                     Some(tx_hash) => tx_hash,
                 };
@@ -506,7 +507,9 @@ impl PaymentDriverCron for ZksyncDriver {
                         }
                     }
 
-                    self.dao.transaction_failed(&tx.tx_id).await;
+                    self.dao
+                        .transaction_failed(&tx.tx_id, "Unknown error")
+                        .await;
                     return;
                 }
 

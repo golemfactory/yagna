@@ -103,14 +103,31 @@ impl ZksyncDao {
         let tx = TransactionEntity {
             tx_id: tx_id.clone(),
             sender: details.sender.clone(),
-            nonce: "".to_string(), // not used till pre-sign
+            nonce: -1, // not used till pre-sign
             status: TransactionStatus::Created as i32,
-            timestamp: date.naive_utc(),
+            time_created: date.naive_utc(),
+            time_last_action: date.naive_utc(),
+            time_confirmed: None,
+            time_sent: None,
+            current_gas_price: None,
+            starting_gas_price: None,
+            max_gas_price: None,
+            final_gas_price: None,
+            final_gas_price_exact: None,
+            final_gas_used: None,
+            amount_base: None,
+            amount_base_exact: None,
+            amount_erc20: None,
+            amount_erc20_exact: None,
+            gas_limit: None,
             tx_type: TxType::Transfer as i32, // Zksync only knows transfers, unused field
             encoded: "".to_string(),          // not used till pre-sign
-            signature: "".to_string(),        // not used till pre-sign
-            tx_hash: None,
+            signature: None,                  // not used till pre-sign
+            final_tx: None,
+            tmp_onchain_txs: None,
             network,
+            last_error_msg: None,
+            resent_times: 0,
         };
 
         if let Err(e) = self.transaction().insert_transactions(vec![tx]).await {
@@ -123,7 +140,7 @@ impl ZksyncDao {
     pub async fn transaction_confirmed(&self, tx_id: &str) -> Vec<PaymentEntity> {
         if let Err(e) = self
             .transaction()
-            .update_tx_status(tx_id.to_string(), TransactionStatus::Confirmed.into())
+            .update_tx_status(tx_id.to_string(), TransactionStatus::Confirmed.into(), None)
             .await
         {
             log::error!("Failed to update tx status for {:?} : {:?}", tx_id, e)
@@ -158,7 +175,7 @@ impl ZksyncDao {
         }
         if let Err(e) = self
             .transaction()
-            .update_tx_sent(tx_id.to_string(), tx_hash.to_string())
+            .update_tx_sent(tx_id.to_string(), tx_hash.to_string(), None)
             .await
         {
             log::error!("Failed to update for transaction {:?} : {:?}", tx_id, e)
@@ -166,10 +183,14 @@ impl ZksyncDao {
         }
     }
 
-    pub async fn transaction_failed(&self, tx_id: &str) {
+    pub async fn transaction_failed(&self, tx_id: &str, err: &str) {
         if let Err(e) = self
             .transaction()
-            .update_tx_status(tx_id.to_string(), TransactionStatus::Failed.into())
+            .update_tx_status(
+                tx_id.to_string(),
+                TransactionStatus::ErrorOnChain.into(),
+                Some(err.to_string()),
+            )
             .await
         {
             log::error!(

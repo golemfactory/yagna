@@ -6,13 +6,13 @@ use ya_client::model::market::event::{ProviderEvent, RequestorEvent};
 use ya_client::model::market::{Agreement as ClientAgreement, Proposal as ClientProposal, Reason};
 use ya_client::model::ErrorMessage;
 use ya_diesel_utils::DbTextField;
-use ya_persistence::executor::DbExecutor;
 
 use super::SubscriptionId;
 use crate::db::dao::{AgreementDao, ProposalDao};
 use crate::db::model::agreement_events::DbReason;
 use crate::db::model::{Agreement, AgreementId, Owner, Proposal, ProposalId};
 use crate::db::schema::market_negotiation_event;
+use crate::db::DbMixedExecutor;
 
 #[derive(Error, Debug)]
 pub enum EventError {
@@ -112,7 +112,7 @@ impl MarketEvent {
 
     pub async fn into_client_requestor_event(
         self,
-        db: &DbExecutor,
+        db: &DbMixedExecutor,
     ) -> Result<RequestorEvent, EventError> {
         let event_date = DateTime::<Utc>::from_utc(self.timestamp, Utc);
         match self.event_type {
@@ -136,7 +136,7 @@ impl MarketEvent {
         }
     }
 
-    async fn into_client_proposal(self, db: DbExecutor) -> Result<ClientProposal, EventError> {
+    async fn into_client_proposal(self, db: DbMixedExecutor) -> Result<ClientProposal, EventError> {
         let prop = db
             .as_dao::<ProposalDao>()
             .get_proposal(&self.artifact_id)
@@ -147,7 +147,10 @@ impl MarketEvent {
         Ok(prop.into_client()?)
     }
 
-    async fn into_client_agreement(self, db: DbExecutor) -> Result<ClientAgreement, EventError> {
+    async fn into_client_agreement(
+        self,
+        db: DbMixedExecutor,
+    ) -> Result<ClientAgreement, EventError> {
         let agreement = db
             .as_dao::<AgreementDao>()
             .select(&self.artifact_id, None, Utc::now().naive_utc())
@@ -160,7 +163,7 @@ impl MarketEvent {
 
     pub async fn into_client_provider_event(
         self,
-        db: &DbExecutor,
+        db: &DbMixedExecutor,
     ) -> Result<ProviderEvent, EventError> {
         let event_date = DateTime::<Utc>::from_utc(self.timestamp, Utc);
         match self.event_type {
