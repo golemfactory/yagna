@@ -1,4 +1,4 @@
-*
+/*
     Payment driver for yagna using erc20.
 
     This file only contains constants and imports.

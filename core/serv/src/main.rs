@@ -155,6 +155,9 @@ impl<S: 'static> Provider<S, DbMixedExecutor> for ServiceContext {
             Some(db) => db.clone(),
             None => self.default_mixed.clone(),
         }
+    }
+}
+	
 impl<S: 'static> Provider<S, ya_activity::TrackerRef> for ServiceContext {
     fn component(&self) -> ya_activity::TrackerRef {
         self.activity_tracker.clone()
@@ -253,7 +256,6 @@ enum Services {
     feature = "dummy-driver",
     feature = "erc20-driver",
     feature = "zksync-driver",
-    feature = "polygon-driver"
 )))]
 compile_error!("At least one payment driver needs to be enabled in order to make payments.");
 
@@ -270,13 +272,6 @@ async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<Vec<String>> {
     {
         use ya_erc20_driver::{PaymentDriverService, DRIVER_NAME};
         let db_executor = DbExecutor::from_data_dir(data_dir, "erc20-driver")?;
-        PaymentDriverService::gsb(&db_executor).await?;
-        drivers.push(DRIVER_NAME.to_owned());
-    }
-    #[cfg(feature = "polygon-driver")]
-    {
-        use ya_polygon_driver::{PaymentDriverService, DRIVER_NAME};
-        let db_executor = DbExecutor::from_data_dir(data_dir, "polygon-driver")?;
         PaymentDriverService::gsb(&db_executor).await?;
         drivers.push(DRIVER_NAME.to_owned());
     }

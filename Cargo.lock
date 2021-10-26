@@ -1541,6 +1541,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "data-encoding"
+version = "2.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ee2393c4a91429dffb4bedf19f4d6abf27d8a732c8ce4980305d782e5426d57"
+
+[[package]]
 name = "debugid"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1549,12 +1555,6 @@ dependencies = [
  "serde",
  "uuid",
 ]
-
-[[package]]
-name = "data-encoding"
-version = "2.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ee2393c4a91429dffb4bedf19f4d6abf27d8a732c8ce4980305d782e5426d57"
 
 [[package]]
 name = "derivative"
@@ -6127,7 +6127,7 @@ dependencies = [
  "smallvec 1.6.1",
  "thiserror",
  "tinyvec",
- "tokio 1.4.0",
+ "tokio 1.10.1",
  "url",
 ]
 
@@ -6166,7 +6166,7 @@ dependencies = [
  "resolv-conf",
  "smallvec 1.6.1",
  "thiserror",
- "tokio 1.4.0",
+ "tokio 1.10.1",
  "trust-dns-proto 0.20.3",
 ]
 
@@ -7122,7 +7122,6 @@ dependencies = [
  "ya-metrics",
  "ya-net",
  "ya-persistence",
- "ya-polygon-driver",
  "ya-sb-router",
  "ya-service-api",
  "ya-service-api-interfaces",
@@ -7182,43 +7181,6 @@ dependencies = [
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-utils-process",
-]
-
-[[package]]
-name = "ya-polygon-driver"
-version = "0.3.0"
-dependencies = [
- "actix-rt",
- "anyhow",
- "async-trait",
- "awc",
- "bigdecimal 0.2.0",
- "chrono",
- "dotenv",
- "env_logger",
- "ethabi",
- "ethereum-tx-sign",
- "futures 0.3.13",
- "hex",
- "lazy_static",
- "log",
- "maplit",
- "num-bigint 0.3.2",
- "num-traits",
- "rlp",
- "serde",
- "serde_json",
- "sha3 0.8.2",
- "structopt",
- "tiny-keccak 2.0.2",
- "tokio 0.2.25",
- "uuid",
- "web3",
- "ya-client-model",
- "ya-payment-driver",
- "ya-service-api-interfaces",
- "ya-utils-futures",
- "ya-utils-networking",
 ]
 
 [[package]]
@@ -7716,7 +7678,6 @@ dependencies = [
  "ya-net",
  "ya-payment",
  "ya-persistence",
- "ya-polygon-driver",
  "ya-provider",
  "ya-sb-proto",
  "ya-sb-router",
