@@ -137,8 +137,8 @@ pub async fn make_transfer(
         &nonce,
         &details
     );
-    let amount = details.amount.clone();
-    let amount = big_dec_to_u256(amount)?;
+    let amount_big_dec = details.amount.clone();
+    let amount = big_dec_to_u256(&amount_big_dec)?;
     let gas_price = match gas_price {
         Some(gas_price) => big_dec_gwei_to_u256(gas_price)?,
         None => convert_float_gas_to_u256(POLYGON_STARTING_GAS_PRICE),
@@ -170,6 +170,7 @@ pub async fn make_transfer(
         network,
         Utc::now(),
         TxType::Transfer,
+        Some(amount_big_dec)
     ))
 }
 
@@ -259,10 +260,19 @@ pub async fn send_transactions(
             }
             Err(e) => {
                 log::error!("Error sending transaction: {:?}", e);
-                /*if e.to_string().contains("nonce too low")
+                if e.to_string().contains("nonce too low")
                 {
-                    log::error!("TODO: {:?}", e);
-                }*/
+                    log::error!("Nonce too low: {:?}", e);
+                    dao.transaction_failed_with_nonce_too_low(&tx.tx_id, e.to_string().as_str())
+                        .await;
+                }
+                if e.to_string().contains("already known")
+                {
+                    log::error!("Already known: {:?}. Send transaction with higher gas to get from this error loop. (resent won't fix anything)", e);
+                    dao.retry_send_transaction(&tx.tx_id, true).await;
+                    return Ok(());
+                }
+
 
                 dao.transaction_failed_send(&tx.tx_id, e.to_string().as_str())
                     .await;

@@ -12,7 +12,12 @@ CREATE TABLE `transaction_tmp`(
     current_gas_price DOUBLE NULL,
     max_gas_price DOUBLE NULL,
     final_gas_price DOUBLE NULL,
+    final_gas_price_exact TEXT NULL,
     final_gas_used INTEGER NULL,
+    amount_base DOUBLE NULL,
+    amount_base_exact TEXT NULL,
+    amount_erc20 DOUBLE NULL,
+    amount_erc20_exact TEXT NULL,
     gas_limit INTEGER NULL,
     time_created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     time_last_action DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -28,7 +33,7 @@ CREATE TABLE `transaction_tmp`(
 );
 
 INSERT INTO `transaction_tmp`(tx_id, sender, nonce, status, tx_type, encoded, signature, final_tx, time_created, time_last_action, network)
-SELECT tx_id, sender, nonce, status, tx_type, encoded, signature, tx_hash, timestamp, timestamp, network FROM `transaction`;
+SELECT tx_id, sender, nonce, 4, tx_type, encoded, signature, tx_hash, timestamp, timestamp, network FROM `transaction`;
 
 DROP TABLE `transaction`;
 
@@ -51,5 +56,6 @@ INSERT INTO `transaction_status` (status_id, status) VALUES(5, "RESEND");
 INSERT INTO `transaction_status` (status_id, status) VALUES(6, "RESENDANDBUMPGAS");
 INSERT INTO `transaction_status` (status_id, status) VALUES(10, "ERRORSENT");
 INSERT INTO `transaction_status` (status_id, status) VALUES(11, "ERRORONCHAIN");
+INSERT INTO `transaction_status` (status_id, status) VALUES(12, "ERRORNONCETOOLOW");
 
 PRAGMA foreign_keys=on;

@@ -13,13 +13,14 @@ use crate::erc20::transaction::YagnaRawTransaction;
 use crate::erc20::{config, eth_utils, utils};
 use ethabi::Token;
 use uuid::Uuid;
+use bigdecimal::BigDecimal;
+use bigdecimal::ToPrimitive;
 
-pub const POLYGON_PREFERRED_GAS_PRICES: [f64; 13] = [
-    0.0, 10.01, 15.01, 20.01, 25.01, 30.01, 33.01, 36.01, 40.01, 50.01, 60.01, 80.01,
-    100.01,
+pub const POLYGON_PREFERRED_GAS_PRICES: [f64; 6] = [
+    0.0, 10.01, 15.01, 20.01, 25.01, 30.01
 ];
 pub const POLYGON_STARTING_GAS_PRICE: f64 = 10.01;
-pub const POLYGON_MAXIMUM_GAS_PRICE: f64 = 100.01;
+pub const POLYGON_MAXIMUM_GAS_PRICE: f64 = 30.01;
 
 lazy_static! {
     pub static ref GLM_FAUCET_GAS: U256 = U256::from(90_000);
@@ -116,6 +117,7 @@ pub async fn sign_faucet_tx(
         network,
         Utc::now(),
         TxType::Faucet,
+        None
     ))
 }
 
@@ -409,6 +411,7 @@ pub fn create_dao_entity(
     network: Network,
     timestamp: DateTime<Utc>,
     tx_type: TxType,
+    amount: Option<BigDecimal>
 ) -> TransactionEntity {
     let current_naive_time = timestamp.naive_utc();
     TransactionEntity {
@@ -421,7 +424,12 @@ pub fn create_dao_entity(
         time_confirmed: None,
         max_gas_price: Some(max_gas_price),
         final_gas_price: None,
+        final_gas_price_exact: None,
         final_gas_used: None,
+        amount_base: Some(0.0),
+        amount_base_exact: Some("0".to_string()),
+        amount_erc20: amount.as_ref().map(|a| a.to_f64().unwrap_or(0.0) ),
+        amount_erc20_exact: amount.as_ref().map(|a| a.to_string()),
         gas_limit: Some(gas_limit),
         starting_gas_price: Some(starting_gas_price),
         current_gas_price: None,

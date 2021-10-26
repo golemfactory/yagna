@@ -18,7 +18,7 @@ lazy_static! {
     pub static ref GWEI_PRECISION: BigDecimal = BigDecimal::from(1_000_000_000u64);
 }
 
-pub fn big_dec_to_u256(v: BigDecimal) -> Result<U256, GenericError> {
+pub fn big_dec_to_u256(v: &BigDecimal) -> Result<U256, GenericError> {
     let v = v * &(*PRECISION);
     let v = v
         .to_bigint()

@@ -203,7 +203,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
             } else if s.succeeded {
                 log::info!("Transaction confirmed and succeeded");
 
-                dao.transaction_confirmed(&tx.tx_id, newest_tx, final_gas_price, gas_used_i32)
+                dao.transaction_confirmed(&tx.tx_id, newest_tx, final_gas_price, s.gas_price.map(|s|s.to_string()),gas_used_i32)
                     .await;
                 let payments = dao.get_payments_based_on_tx(&tx.tx_id).await;
                 // Faucet can stop here IF the tx was a success.
@@ -269,6 +269,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                     &tx.tx_id,
                     newest_tx,
                     final_gas_price,
+                    s.gas_price.map(|s|s.to_string()),
                     gas_used_i32,
                     "Failure on chain during execution",
                 )

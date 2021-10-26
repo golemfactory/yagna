@@ -7,7 +7,7 @@ use diesel::{
     self, BoolExpressionMethods, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl,
 };
 use chrono::Duration;
-
+use chrono::NaiveDateTime;
 
 // Workspace uses
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
@@ -202,13 +202,15 @@ impl<'c> TransactionDao<'c> {
         .await
     }
 
+
     pub async fn confirm_tx(
         &self,
         tx_id: String,
         status: TransactionStatus,
         err: Option<String>,
-        final_hash: String,
+        final_hash: Option<String>,
         final_gas_price: Option<f64>,
+        final_gas_price_exact: Option<String>,
         final_gas_used: Option<i32>,
     ) -> DbResult<()> {
         let current_time = Utc::now().naive_utc();
@@ -221,8 +223,9 @@ impl<'c> TransactionDao<'c> {
                     dsl::time_confirmed.eq(confirmed_time),
                     dsl::last_error_msg.eq(err),
                     dsl::final_gas_price.eq(final_gas_price),
+                    dsl::final_gas_price_exact.eq(final_gas_price_exact),
                     dsl::final_gas_used.eq(final_gas_used),
-                    dsl::final_tx.eq(Some(final_hash)),
+                    dsl::final_tx.eq(final_hash),
                     dsl::tmp_onchain_txs.eq::<Option<String>>(None),
                     dsl::current_gas_price.eq::<Option<f64>>(None),
                 ))

@@ -41,6 +41,7 @@ pub enum TransactionStatus {
     ResendAndBumpGas = 6,
     ErrorSent = 10,
     ErrorOnChain = 11,
+    ErrorNonceTooLow = 12,
 }
 
 impl TryFrom<i32> for TransactionStatus {
@@ -68,7 +69,12 @@ pub struct TransactionEntity {
     pub current_gas_price: Option<f64>,
     pub max_gas_price: Option<f64>,
     pub final_gas_price: Option<f64>,
+    pub final_gas_price_exact: Option<String>,
     pub final_gas_used: Option<i32>,
+    pub amount_base: Option<f64>,
+    pub amount_base_exact: Option<String>,
+    pub amount_erc20: Option<f64>,
+    pub amount_erc20_exact: Option<String>,
     pub gas_limit: Option<i32>,
     pub time_created: NaiveDateTime,
     pub time_last_action: NaiveDateTime,
