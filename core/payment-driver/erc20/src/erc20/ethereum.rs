@@ -274,6 +274,7 @@ pub async fn get_tx_on_chain_status(
     Ok(res)
 }
 
+//unused but tested that it is working for transfers
 pub fn decode_encoded_transaction_data(
     network: Network,
     encoded: &str,

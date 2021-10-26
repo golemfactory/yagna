@@ -208,10 +208,6 @@ pub async fn send_transactions(
         let mut raw_tx: YagnaRawTransaction =
             serde_json::from_str(&tx.encoded).map_err(GenericError::new)?;
         let address = str_to_addr(&tx.sender)?;
-        //let (recipient, amount) = ethereum::decode_encoded_transaction_data(network, raw_tx.data);
-        //let (recipient, amount) = ethereum::decode_encoded_transaction_data(network, &tx.encoded)?;
-
-        //let sign = hex::decode(signature).map_err(GenericError::new)?;
 
         let new_gas_price = if let Some(current_gas_price) = tx.current_gas_price {
             let mut gas_f64 = current_gas_price;

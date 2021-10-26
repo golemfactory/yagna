@@ -140,15 +140,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 block_number.unwrap_or(0),
                 &newest_tx
             );
-            let tokens = match ethereum::decode_encoded_transaction_data(network, &tx.encoded) {
-                Ok(tokens) => tokens,
-                Err(err) => {
-                    log::error!("Error when decoding contract data: {:?}", err);
-                    continue;
-                }
-            };
 
-            log::debug!("Decoded value: {:?}", tokens);
 
             let hex_hash = match H256::from_str(&newest_tx[2..]) {
                 Ok(hex_hash) => hex_hash,
@@ -205,12 +197,14 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
 
                 dao.transaction_confirmed(&tx.tx_id, newest_tx, final_gas_price, s.gas_price.map(|s|s.to_string()),gas_used_i32)
                     .await;
-                let payments = dao.get_payments_based_on_tx(&tx.tx_id).await;
                 // Faucet can stop here IF the tx was a success.
                 if tx.tx_type == TxType::Faucet as i32 {
                     log::debug!("Faucet tx confirmed, exit early. hash={}", &newest_tx);
                     continue;
                 }
+
+                let payments = dao.get_payments_based_on_tx(&tx.tx_id).await;
+
                 // CLI Transfer ( no related payments ) can stop here IF the tx was a success.
                 if tx.tx_type == TxType::Transfer as i32 && payments.is_empty() {
                     log::debug!("Transfer confirmed, exit early. hash={}", &newest_tx);
