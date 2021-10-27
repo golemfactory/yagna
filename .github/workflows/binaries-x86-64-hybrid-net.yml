@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - release/*
+      - mwu/build-hybrid-for-goth
   pull_request:
     branches:
       - master
@@ -12,7 +13,7 @@ on:
 
 jobs:
   build:
-    name: Build binaries (x86-64)
+    name: Build binaries (x86-64) features=hybrid-net
     env:
       # `-D warnings` means any warnings emitted will cause build to fail
       RUSTFLAGS: "-D warnings -C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
@@ -49,7 +50,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --workspace
+          args: --workspace --features hybrid-net
 
       - name: Copy binaries
         shell: bash
@@ -71,5 +72,5 @@ jobs:
       - name: Upload binaries
         uses: actions/upload-artifact@v1
         with:
-          name: Yagna ${{ runner.os }}
+          name: Yagna ${{ runner.os }} hybrid-net
           path: build
