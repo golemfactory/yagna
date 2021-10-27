@@ -7,9 +7,13 @@ edition = "2018"
 [features]
 default = []
 service = []
+hybrid-net = ["ya-net-server", "ya-relay-proto", "ya-sb-proto", "bytes", "ethsign", "tokio-util", "url", "prost", "rand"]
 
 [dependencies]
 ya-core-model = { version = "^0.4", features=["net", "identity"] }
+ya-net-server = { git = "https://github.com/golemfactory/ya-relay.git", rev = "3e8701e2ffa0030bb6925e3a0db541cefe93c507", optional = true }
+ya-relay-proto = { git = "https://github.com/golemfactory/ya-relay.git", rev = "3e8701e2ffa0030bb6925e3a0db541cefe93c507", features = ["codec"], optional = true }
+ya-sb-proto = { version = "0.4", optional = true }
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.1"
 ya-service-bus = "0.4"
@@ -24,6 +28,13 @@ metrics="0.12"
 serde_json = "1.0"
 thiserror = "1.0"
 tokio = { version = "0.2", features = ["time"] }
+
+bytes = { version = "0.5", optional = true }
+ethsign = { version = "0.8", optional = true }
+tokio-util = { version = "0.3", optional = true }
+url = { version = "2.2", optional = true }
+prost = { version = "0.6", optional = true }
+rand = { version = "0.7", optional = true}
 
 [dev-dependencies]
 ya-sb-proto = "0.4"
