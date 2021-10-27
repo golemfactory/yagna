@@ -17,6 +17,7 @@ pub struct YaProviderCommand {
 pub struct Preset {
     pub name: String,
     pub exeunit_name: String,
+    pub initial_price: f64,
     pub usage_coeffs: UsageDef,
 }
 
