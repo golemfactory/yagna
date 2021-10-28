@@ -1,4 +1,4 @@
-name: Build binaries (x86-64)
+name: Build binaries (x86-64) hybrid-net
 
 on:
   push:
@@ -13,7 +13,7 @@ on:
 
 jobs:
   build:
-    name: Build binaries (x86-64) features=hybrid-net
+    name: Build binaries (x86-64) hybrid-net
     env:
       # `-D warnings` means any warnings emitted will cause build to fail
       RUSTFLAGS: "-D warnings -C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"

@@ -1,4 +1,4 @@
-name: Goth integration tests
+name: Goth integration tests hybrid-net
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
         id: wait-for-build-ubu
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          checkName: "Build binaries (x86-64) features=hybrid-net (ubuntu-latest)"
+          checkName: "Build binaries (x86-64) hybrid-net (ubuntu-latest)"
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           timeoutSeconds: 7200
 
@@ -89,7 +89,7 @@ jobs:
           GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           poetry run poe goth-assets
-          poetry run poe goth-tests --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
+          poetry run poe goth-tests --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build --config-override docker-compose.build-environment.compose-file=docker-compose-hybrid-net.yml
 
       - name: Upload test logs
         uses: actions/upload-artifact@v2
