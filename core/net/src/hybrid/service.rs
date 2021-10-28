@@ -27,6 +27,7 @@ use ya_service_bus::{untyped as local_bus, Error, ResponseChunk};
 use ya_utils_networking::resolver;
 
 use crate::bcast::BCastService;
+use crate::config::Config;
 use crate::hybrid::codec;
 use crate::hybrid::crypto::IdentityCryptoProvider;
 
@@ -72,7 +73,7 @@ async fn relay_addr() -> std::io::Result<SocketAddr> {
 pub struct Net;
 
 impl Net {
-    pub async fn gsb<Context>(_: Context) -> anyhow::Result<()> {
+    pub async fn gsb<Context>(_: Context, _config: Config) -> anyhow::Result<()> {
         let (default_id, ids) = crate::service::identities().await?;
         start_network(default_id, ids).await?;
         Ok(())
