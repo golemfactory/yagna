@@ -13,7 +13,7 @@ use anyhow::Context as AnyhowContext;
 use futures::channel::mpsc;
 use futures::stream::LocalBoxStream;
 use futures::{FutureExt, SinkExt, Stream, StreamExt, TryStreamExt};
-use tokio::time::{self, Duration};
+use tokio::time::{self};
 use url::Url;
 
 use ya_core_model::net::{self, net_service};
@@ -31,10 +31,8 @@ use crate::config::Config;
 use crate::hybrid::codec;
 use crate::hybrid::crypto::IdentityCryptoProvider;
 
-const NET_RELAY_HOST_ENV_VAR: &str = "NET_RELAY_HOST";
 const DEFAULT_NET_RELAY_HOST: &str = "127.0.0.1:7464";
 const DEFAULT_BROADCAST_NODE_COUNT: u32 = 12;
-const DEFAULT_PING_INTERVAL: Duration = Duration::from_millis(15000);
 
 pub type BCastHandler = Box<dyn FnMut(String, &[u8]) + Send>;
 
@@ -57,8 +55,8 @@ thread_local! {
     static CLIENT: RefCell<Option<Client>> = Default::default();
 }
 
-async fn relay_addr() -> std::io::Result<SocketAddr> {
-    Ok(match std::env::var(NET_RELAY_HOST_ENV_VAR) {
+async fn relay_addr(config: &Config) -> std::io::Result<SocketAddr> {
+    Ok(match std::env::var(&config.host) {
         Ok(val) => val,
         Err(_) => resolver::resolve_yagna_srv_record("_net_relay._udp")
             .await
@@ -73,9 +71,9 @@ async fn relay_addr() -> std::io::Result<SocketAddr> {
 pub struct Net;
 
 impl Net {
-    pub async fn gsb<Context>(_: Context, _config: Config) -> anyhow::Result<()> {
+    pub async fn gsb<Context>(_: Context, config: Config) -> anyhow::Result<()> {
         let (default_id, ids) = crate::service::identities().await?;
-        start_network(default_id, ids).await?;
+        start_network(config, default_id, ids).await?;
         Ok(())
     }
 }
@@ -83,11 +81,15 @@ impl Net {
 // FIXME: examples compatibility
 #[allow(unused)]
 pub async fn bind_remote<T>(_: T, default_id: NodeId, ids: Vec<NodeId>) -> anyhow::Result<()> {
-    start_network(default_id, ids).await
+    start_network(Config::from_env()?, default_id, ids).await
 }
 
-pub async fn start_network(default_id: NodeId, ids: Vec<NodeId>) -> anyhow::Result<()> {
-    let url = Url::parse(&format!("udp://{}", relay_addr().await?))?;
+pub async fn start_network(
+    config: Config,
+    default_id: NodeId,
+    ids: Vec<NodeId>,
+) -> anyhow::Result<()> {
+    let url = Url::parse(&format!("udp://{}", relay_addr(&config).await?))?;
     let provider = IdentityCryptoProvider::new(default_id);
 
     log::info!("starting network (hybrid) with identity: {}", default_id);
@@ -139,10 +141,10 @@ pub async fn start_network(default_id: NodeId, ids: Vec<NodeId>) -> anyhow::Resu
     tokio::task::spawn_local(broadcast_handler(brx));
     tokio::task::spawn_local(forward_handler(receiver, state.clone()));
 
-    // Keep server connection alive by pinging every `DEFAULT_PING_INTERVAL` seconds.
+    // Keep server connection alive by pinging every `YA_NET_DEFAULT_PING_INTERVAL` seconds.
     let client_ = client.clone();
     tokio::task::spawn_local(async move {
-        let mut interval = time::interval(DEFAULT_PING_INTERVAL);
+        let mut interval = time::interval(config.ping_interval);
         loop {
             interval.tick().await;
             if let Ok(session) = client_.server_session().await {

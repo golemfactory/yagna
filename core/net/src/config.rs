@@ -1,3 +1,4 @@
+use std::time::Duration;
 use structopt::StructOpt;
 use strum::VariantNames;
 use strum::{EnumString, EnumVariantNames, IntoStaticStr};
@@ -14,6 +15,10 @@ pub enum NetType {
 pub struct Config {
     #[structopt(env = "YA_NET_TYPE", possible_values = NetType::VARIANTS, default_value = NetType::Central.into())]
     pub net_type: NetType,
+    #[structopt(env = "YA_NET_DEFAULT_PING_INTERVAL", parse(try_from_str = humantime::parse_duration), default_value = "15s")]
+    pub ping_interval: Duration,
+    #[structopt(env = "YA_NET_RELAY_HOST", default_value = "127.0.0.1:7464")]
+    pub host: String,
 }
 
 impl Config {
