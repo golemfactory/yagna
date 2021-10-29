@@ -23,7 +23,7 @@ pytest-asyncio = "^0.14"
 # goth = "^0.7"
 # to use development goth version uncomment below
 # goth = { git = "https://github.com/golemfactory/goth.git", branch = "fix-flaky-tests-wait_for_proposals" }
-goth = { git = "https://github.com/golemfactory/goth.git", rev = "b5b4ad3c4156899781888f12c9e614ad7f734af9" }
+goth = { git = "https://github.com/golemfactory/goth.git", branch = "mwu/proposal-timeout" }
 
 [tool.poetry.dev-dependencies]
 black = "^20.8b1"
@@ -36,4 +36,3 @@ goth-assets = "python -m goth create-assets assets"
 goth-tests = "pytest -svx ."
 provider-tests = "pytest -svx ./domain/ya-provider"
 typecheck = "mypy ."
-
