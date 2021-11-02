@@ -4,11 +4,9 @@ pub use ya_core_model::net::{
 
 pub use service::{bind_broadcast_with_caller, broadcast, Net};
 
-#[cfg(any(feature = "service", test))]
 mod bcast;
-mod central;
-mod hybrid;
-#[cfg(any(feature = "service", test))]
+pub mod central;
+pub mod hybrid;
 mod service;
 
 mod config;
