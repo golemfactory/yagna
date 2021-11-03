@@ -362,8 +362,8 @@ ya-aioclient = "^0.6"
 [package.source]
 type = "git"
 url = "https://github.com/golemfactory/goth.git"
-reference = "mwu/proposal-timeout"
-resolved_reference = "1cd98a535d13a1693420f0266ab611f62573b6e7"
+reference = "master"
+resolved_reference = "1c0207750d0d90ff9ad9da720c8c61c8fb76f056"
 
 [[package]]
 name = "h11"
@@ -1049,7 +1049,7 @@ python-versions = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8.0"
-content-hash = "fddd3784bdf473e1b74f1c6754df4b6c31455f42d19c59c5aedb2d8907f8a1f5"
+content-hash = "45ecb760c659c5ba69a02e3dbe5181c5505afbd00362e2bf4dc87f9accad432c"
 
 [metadata.files]
 aiohttp = [
