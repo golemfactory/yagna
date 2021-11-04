@@ -677,6 +677,7 @@ pub mod public {
     // *************************** PAYMENT ****************************
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     pub struct SendPayment {
+        #[serde(flatten)]
         pub payment: Payment,
         pub signature: Vec<u8>,
     }
