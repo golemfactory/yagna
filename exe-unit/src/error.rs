@@ -60,8 +60,8 @@ pub enum Error {
     UsageLimitExceeded(String),
     #[error("Agreement error: {0}")]
     AgreementError(#[from] agreement::Error),
-    #[error("VPN error: {0}")]
-    Vpn(#[from] ya_utils_networking::vpn::Error),
+    #[error("Net error: {0}")]
+    Net(#[from] ya_utils_networking::vpn::Error),
     #[error(transparent)]
     Acl(#[from] crate::acl::Error),
     #[error("{0}")]
@@ -84,6 +84,10 @@ impl Error {
 
     pub fn runtime(err: impl ToString) -> Self {
         Error::RuntimeError(err.to_string())
+    }
+
+    pub fn other(err: impl ToString) -> Self {
+        Error::Other(err.to_string())
     }
 }
 
@@ -133,7 +137,7 @@ impl From<Error> for RpcError {
             Error::RemoteServiceError(e) => RpcError::Service(e),
             Error::GsbError(e) => RpcError::Service(e),
             Error::UsageLimitExceeded(e) => RpcError::UsageLimitExceeded(e),
-            Error::Vpn(e) => RpcError::Service(e.to_string()),
+            Error::Net(e) => RpcError::Service(e.to_string()),
             Error::Acl(e) => RpcError::Forbidden(e.to_string()),
             Error::Other(e) => RpcError::Service(e),
             #[cfg(feature = "sgx")]

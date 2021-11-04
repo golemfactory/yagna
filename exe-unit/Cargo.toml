@@ -1,6 +1,6 @@
 [package]
 name = "ya-exe-unit"
-version = "0.1.4"
+version = "0.2.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
@@ -63,8 +63,8 @@ sha3 = "0.8.2"
 signal-hook = { version = "0.1.13", features = ["tokio-support"] }
 structopt = "0.3"
 thiserror = "1.0.10"
-tokio = { version = "0.2.11", features = ["process", "signal", "time"] }
-tokio-util = { version = "0.3", features = ["codec"] }
+tokio = { version = "0.2.11", features = ["process", "signal", "time", "tcp", "udp"] }
+tokio-util = { version = "0.3", features = ["codec", "udp"] }
 url = "2.1.1"
 yansi = "0.5.0"
 
