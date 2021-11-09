@@ -1,4 +1,7 @@
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
+use std::iter::FromIterator;
+use std::net::IpAddr;
+
 use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::TokioAsyncResolver;
 use url::Url;
@@ -69,4 +72,12 @@ pub async fn try_resolve_dns_record(request_url: &str) -> String {
             request_url.to_owned()
         }
     }
+}
+
+/// Resolve all known IP addresses of a given domain
+pub async fn resolve_domain_name<T: FromIterator<IpAddr>>(domain: &str) -> anyhow::Result<T> {
+    let resolver =
+        TokioAsyncResolver::tokio(ResolverConfig::google(), ResolverOpts::default()).await?;
+    let response = resolver.lookup_ip(domain).await?;
+    Ok(T::from_iter(response.iter()))
 }
