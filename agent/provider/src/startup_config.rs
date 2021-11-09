@@ -33,6 +33,7 @@ lazy_static::lazy_static! {
 }
 pub(crate) const PRESETS_JSON: &'static str = "presets.json";
 pub(crate) const HARDWARE_JSON: &'static str = "hardware.json";
+pub(crate) const TRUSTED_KEYS_FILE: &'static str = "trusted_keys";
 
 /// Common configuration for all Provider commands.
 #[derive(StructOpt, Clone, Debug)]
@@ -69,6 +70,8 @@ pub struct ProviderConfig {
     pub presets_file: PathBuf,
     #[structopt(skip = HARDWARE_JSON)]
     pub hardware_file: PathBuf,
+    #[structopt(skip = TRUSTED_KEYS_FILE)]
+    pub trusted_keys_file: PathBuf,
     /// Max number of available CPU cores
     #[structopt(
         long,
@@ -208,8 +211,46 @@ pub struct FileMonitor {
     pub(crate) thread_ctl: Option<oneshot::Sender<()>>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct FileMonitorConfig {
+    pub watch_delay: Duration,
+    pub sleep_delay: Duration,
+    pub verbose: bool,
+}
+
+impl Default for FileMonitorConfig {
+    fn default() -> Self {
+        Self {
+            watch_delay: Duration::from_secs(3),
+            sleep_delay: Duration::from_secs(2),
+            verbose: true,
+        }
+    }
+}
+
+impl FileMonitorConfig {
+    pub fn silent() -> Self {
+        Self {
+            verbose: false,
+            ..Default::default()
+        }
+    }
+}
+
 impl FileMonitor {
     pub fn spawn<P, H>(path: P, handler: H) -> std::result::Result<Self, notify::Error>
+    where
+        P: AsRef<Path>,
+        H: Fn(DebouncedEvent) -> () + Send + 'static,
+    {
+        Self::spawn_with(path, handler, Default::default())
+    }
+
+    pub fn spawn_with<P, H>(
+        path: P,
+        handler: H,
+        config: FileMonitorConfig,
+    ) -> std::result::Result<Self, notify::Error>
     where
         P: AsRef<Path>,
         H: Fn(DebouncedEvent) -> () + Send + 'static,
@@ -219,9 +260,7 @@ impl FileMonitor {
         let (tx, rx) = mpsc::channel();
         let (tx_ctl, mut rx_ctl) = oneshot::channel();
 
-        let watch_delay = Duration::from_secs(3);
-        let sleep_delay = Duration::from_secs(2);
-        let mut watcher: RecommendedWatcher = Watcher::new(tx, watch_delay)?;
+        let mut watcher: RecommendedWatcher = Watcher::new(tx, config.watch_delay)?;
 
         std::thread::spawn(move || {
             let mut active = false;
@@ -229,7 +268,11 @@ impl FileMonitor {
                 if !active {
                     match watcher.watch(&path_th, RecursiveMode::NonRecursive) {
                         Ok(_) => active = true,
-                        Err(e) => log::error!("Unable to monitor path '{:?}': {}", path_th, e),
+                        Err(e) => {
+                            if config.verbose {
+                                log::error!("Unable to monitor path '{:?}': {}", path_th, e);
+                            }
+                        }
                     }
                 }
                 if let Ok(event) = rx.try_recv() {
@@ -247,15 +290,24 @@ impl FileMonitor {
                 if let Ok(Some(_)) = rx_ctl.try_recv() {
                     break;
                 }
-                std::thread::sleep(sleep_delay);
+                std::thread::sleep(config.sleep_delay);
             }
-            log::error!("Stopping file monitor: {:?}", path_th);
+
+            if config.verbose {
+                log::info!("Stopping file monitor: {:?}", path_th);
+            }
         });
 
         Ok(Self {
             path,
             thread_ctl: Some(tx_ctl),
         })
+    }
+
+    pub fn stop(&mut self) {
+        if let Some(sender) = self.thread_ctl.take() {
+            let _ = sender.send(());
+        }
     }
 
     pub fn on_modified<F>(f: F) -> impl Fn(DebouncedEvent) -> ()
@@ -277,9 +329,7 @@ impl FileMonitor {
 
 impl Drop for FileMonitor {
     fn drop(&mut self) {
-        if let Some(sender) = self.thread_ctl.take() {
-            let _ = sender.send(());
-        }
+        self.stop();
     }
 }
 

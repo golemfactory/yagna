@@ -3,6 +3,8 @@ use humantime;
 use std::sync::Arc;
 use structopt::StructOpt;
 
+use ya_agreement_utils::policy::PolicyConfig;
+
 use super::common::NegotiatorAddr;
 use crate::market::config::MarketConfig;
 use crate::market::negotiator::{AcceptAllNegotiator, CompositeNegotiator};
@@ -35,6 +37,8 @@ pub struct CompositeNegotiatorConfig {
     pub limit_agreements_config: LimitAgreementsNegotiatorConfig,
     #[structopt(flatten)]
     pub expire_agreements_config: AgreementExpirationNegotiatorConfig,
+    #[structopt(flatten)]
+    pub policy_config: PolicyConfig,
 }
 
 #[derive(StructOpt, Clone, Debug)]

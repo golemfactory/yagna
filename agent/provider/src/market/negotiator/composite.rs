@@ -6,7 +6,7 @@ use ya_agreement_utils::agreement::{expand, flatten_value};
 use ya_agreement_utils::AgreementView;
 use ya_client::model::market::NewOffer;
 
-use super::builtin::{LimitExpiration, MaxAgreements};
+use super::builtin::{LimitExpiration, ManifestSignature, MaxAgreements};
 use super::common::{offer_definition_to_offer, AgreementResponse, Negotiator, ProposalResponse};
 use super::{NegotiationResult, NegotiatorsPack};
 use crate::market::negotiator::common::{
@@ -34,6 +34,10 @@ impl CompositeNegotiator {
             .add_component(
                 "LimitExpiration",
                 Box::new(LimitExpiration::new(&config.expire_agreements_config)?),
+            )
+            .add_component(
+                "ManifestSignature",
+                Box::new(ManifestSignature::from(config.policy_config.clone())),
             );
 
         Ok(CompositeNegotiator { components })
@@ -56,6 +60,8 @@ impl Handler<ReactToProposal> for CompositeNegotiator {
         // In current implementation we don't allow to change constraints, so we take
         // them from initial Offer.
         let constraints = msg.prev_proposal.constraints;
+        let proposal_constraints = msg.demand.constraints.clone();
+
         let proposal = ProposalView {
             agreement_id: msg.demand.proposal_id,
             json: expand(msg.demand.properties),
@@ -66,7 +72,9 @@ impl Handler<ReactToProposal> for CompositeNegotiator {
             agreement_id: msg.prev_proposal.proposal_id,
         };
 
-        let result = self.components.negotiate_step(&proposal, offer_proposal)?;
+        let result =
+            self.components
+                .negotiate_step(&proposal, &proposal_constraints, offer_proposal)?;
         match result {
             NegotiationResult::Reject { message, is_final } => {
                 Ok(ProposalResponse::RejectProposal {
@@ -90,7 +98,7 @@ impl Handler<ReactToProposal> for CompositeNegotiator {
 
 pub fn to_proposal_views(
     mut agreement: AgreementView,
-) -> anyhow::Result<(ProposalView, ProposalView)> {
+) -> anyhow::Result<(ProposalView, String, ProposalView)> {
     // Dispatch Agreement into separate Demand-Offer Proposal pair.
     // TODO: We should get ProposalId here, but Agreement doen't store it anywhere.
     let offer_id = agreement.pointer_typed("/offer/offerId")?;
@@ -116,7 +124,15 @@ pub fn to_proposal_views(
         json: demand_proposal,
         agreement_id: demand_id,
     };
-    Ok((demand_proposal, offer_proposal))
+
+    let demand_constraints = agreement
+        .json
+        .pointer_mut("/demand/properties")
+        .and_then(|v| v.as_str())
+        .map(ToString::to_string)
+        .unwrap_or_default();
+
+    Ok((demand_proposal, demand_constraints, offer_proposal))
 }
 
 impl Handler<ReactToAgreement> for CompositeNegotiator {
@@ -124,19 +140,21 @@ impl Handler<ReactToAgreement> for CompositeNegotiator {
 
     fn handle(&mut self, msg: ReactToAgreement, _: &mut Context<Self>) -> Self::Result {
         let agreement_id = msg.agreement.agreement_id.clone();
-        let (demand_proposal, offer_proposal) = to_proposal_views(msg.agreement).map_err(|e| {
-            anyhow!(
-                "Negotiator failed to extract Proposals from Agreement. {}",
-                e
-            )
-        })?;
+        let (demand_proposal, demand_constraints, offer_proposal) =
+            to_proposal_views(msg.agreement).map_err(|e| {
+                anyhow!(
+                    "Negotiator failed to extract Proposals from Agreement. {}",
+                    e
+                )
+            })?;
 
         // We expect that all `NegotiatorComponents` should return ready state.
         // Otherwise we must reject Agreement proposals, because negotiations didn't end.
-        match self
-            .components
-            .negotiate_step(&demand_proposal, offer_proposal)?
-        {
+        match self.components.negotiate_step(
+            &demand_proposal,
+            &demand_constraints,
+            offer_proposal,
+        )? {
             NegotiationResult::Ready { .. } => {
                 self.components.on_agreement_approved(&agreement_id)?;
                 Ok(AgreementResponse::ApproveAgreement)

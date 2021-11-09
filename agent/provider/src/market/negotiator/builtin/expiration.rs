@@ -85,6 +85,7 @@ impl NegotiatorComponent for LimitExpiration {
     fn negotiate_step(
         &mut self,
         demand: &ProposalView,
+        _demand_constraints: &String,
         mut offer: ProposalView,
     ) -> anyhow::Result<NegotiationResult> {
         let req_deadline = debit_deadline_from(demand)?;

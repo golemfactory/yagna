@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
 use ya_agreement_utils::agreement::TypedArrayPointer;
+use ya_agreement_utils::policy::Keystore;
 use ya_agreement_utils::*;
 use ya_client::cli::ProviderApi;
 use ya_core_model::payment::local::NetworkName;
@@ -23,7 +24,9 @@ use crate::hardware;
 use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{AccountView, LinearPricingOffer, Payments, PricingOffer};
-use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RunConfig};
+use crate::startup_config::{
+    FileMonitor, FileMonitorConfig, NodeConfig, ProviderConfig, RunConfig,
+};
 use crate::tasks::task_manager::{InitializeTaskManager, TaskManager};
 
 struct GlobalsManager {
@@ -70,6 +73,7 @@ pub struct ProviderAgent {
     accounts: Vec<AccountView>,
     log_handler: LoggerHandle,
     network: NetworkName,
+    keystore_monitor: FileMonitor,
 }
 
 impl ProviderAgent {
@@ -124,9 +128,27 @@ impl ProviderAgent {
             .node_name
             .clone()
             .unwrap_or_else(|| app_name.to_string());
+
+        let keystore_path = data_dir.join(&config.trusted_keys_file);
+        let keystore = match Keystore::from_path(&keystore_path) {
+            Ok(store) => {
+                log::info!("Trusted key store loaded from {}", keystore_path.display());
+                store
+            }
+            Err(err) => {
+                log::info!("Using a new keystore: {}", err);
+                Default::default()
+            }
+        };
+
         args.market.session_id = format!("{}-{}", name, std::process::id());
         args.runner.session_id = args.market.session_id.clone();
         args.payment.session_id = args.market.session_id.clone();
+        args.market
+            .negotiator_config
+            .composite_config
+            .policy_config
+            .trusted_keys = Some(keystore.clone());
 
         let network = args.node.account.network.clone();
         let net_color = match network {
@@ -141,6 +163,7 @@ impl ProviderAgent {
         presets.spawn_monitor(&config.presets_file)?;
         let mut hardware = hardware::Manager::try_new(&config)?;
         hardware.spawn_monitor(&config.hardware_file)?;
+        let keystore_monitor = spawn_keystore_monitor(&config.trusted_keys_file, keystore)?;
 
         let market = ProviderMarket::new(api.market, args.market).start();
         let payments = Payments::new(api.activity.clone(), api.payment, args.payment).start();
@@ -158,6 +181,7 @@ impl ProviderAgent {
             accounts,
             log_handler,
             network,
+            keystore_monitor,
         })
     }
 
@@ -357,6 +381,25 @@ async fn process_activity_events(runner: Addr<TaskRunner>) {
     }
 }
 
+fn spawn_keystore_monitor<P: AsRef<Path>>(
+    path: P,
+    keystore: Keystore,
+) -> Result<FileMonitor, Error> {
+    let handler = move |p: PathBuf| match Keystore::from_path(&p) {
+        Ok(new_keystore) => {
+            keystore.replace(new_keystore);
+            log::info!("Trusted keystore updated from {}", p.display());
+        }
+        Err(e) => log::warn!("Error updating trusted keystore from {:?}: {:?}", p, e),
+    };
+    let monitor = FileMonitor::spawn_with(
+        path,
+        FileMonitor::on_modified(handler),
+        FileMonitorConfig::silent(),
+    )?;
+    Ok(monitor)
+}
+
 impl Actor for ProviderAgent {
     type Context = Context<Self>;
 
@@ -450,6 +493,7 @@ impl Handler<Shutdown> for ProviderAgent {
         let market = self.market.clone();
         let runner = self.runner.clone();
         let log_handler = self.log_handler.clone();
+        self.keystore_monitor.stop();
 
         async move {
             market.send(MarketShutdown).await??;

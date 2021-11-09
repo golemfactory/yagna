@@ -38,6 +38,7 @@ pub trait NegotiatorComponent {
     fn negotiate_step(
         &mut self,
         demand: &ProposalView,
+        demand_constraints: &String,
         offer: ProposalView,
     ) -> anyhow::Result<NegotiationResult>;
 
@@ -84,11 +85,12 @@ impl NegotiatorComponent for NegotiatorsPack {
     fn negotiate_step(
         &mut self,
         demand: &ProposalView,
+        demand_constraints: &String,
         mut offer: ProposalView,
     ) -> anyhow::Result<NegotiationResult> {
         let mut all_ready = true;
         for (name, component) in &mut self.components {
-            let result = component.negotiate_step(demand, offer)?;
+            let result = component.negotiate_step(demand, demand_constraints, offer)?;
             offer = match result {
                 NegotiationResult::Ready { offer } => offer,
                 NegotiationResult::Negotiating { offer } => {
