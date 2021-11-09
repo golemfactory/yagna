@@ -457,9 +457,9 @@ dependencies = [
 
 [[package]]
 name = "aho-corasick"
-version = "0.7.15"
+version = "0.7.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7404febffaa47dac81aa44dba71523c9d069b1bdc50a77db41195149e17f68e5"
+checksum = "1e37cfd5e7657ada45f742d6e99ca5788580b5c529dc78faf11ece6dc702656f"
 dependencies = [
  "memchr",
 ]
@@ -2672,9 +2672,9 @@ checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
 name = "idna"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89829a5d69c23d348314a7ac337fe39173b61149a9864deabd260983aed48c21"
+checksum = "418a0a6fab821475f634efe3ccc45c013f742efe03d853e8d3355d5cb850ecf8"
 dependencies = [
  "matches",
  "unicode-bidi",
@@ -3062,9 +3062,9 @@ checksum = "60302e4db3a61da70c0cb7991976248362f30319e88850c487b9b95bbf059e00"
 
 [[package]]
 name = "memchr"
-version = "2.3.4"
+version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ee1c47aaa256ecabcaea351eae4a9b01ef39ed810004e298d2511ed284b1525"
+checksum = "308cc39be01b73d0d18f82a0e7b2a3df85245f84af96fdddc5d202d27e47b86a"
 
 [[package]]
 name = "memoffset"
@@ -4532,9 +4532,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.4.5"
+version = "1.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "957056ecddbeba1b26965114e191d2e8589ce74db242b6ea25fc4062427a5c19"
+checksum = "d07a8629359eb56f1e2fb1652bb04212c072a87ba68546a04065d525673ac461"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -4553,9 +4553,9 @@ dependencies = [
 
 [[package]]
 name = "regex-syntax"
-version = "0.6.23"
+version = "0.6.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24d5f089152e60f62d28b835fbff2cd2e8dc0baf1ac13343bef92ab7eed84548"
+checksum = "f497285884f3fcff424ffc933e56d7cbca511def0c9831a7f9b5f6153e3cc89b"
 
 [[package]]
 name = "remove_dir_all"
@@ -4987,6 +4987,9 @@ name = "semver"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "568a8e6258aa33c13358f81fd834adb854c6f7c9468520910a9b1e8fac068012"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "semver-parser"
@@ -5312,6 +5315,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fdf1b9db47230893d76faad238fd6097fd6d6a9245cd7a4d90dbd639536bbd2"
 
 [[package]]
+name = "shlex"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43b2853a4d09f215c24cc5489c992ce46052d359b5109343cbafbf26bc62f8a3"
+
+[[package]]
 name = "signal-hook"
 version = "0.1.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5376,6 +5385,16 @@ dependencies = [
  "libc",
  "log",
  "managed",
+]
+
+[[package]]
+name = "snailquote"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec62a949bda7f15800481a711909f946e1204f2460f89210eaf7f57730f88f86"
+dependencies = [
+ "thiserror",
+ "unicode_categories",
 ]
 
 [[package]]
@@ -5547,6 +5566,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7318c509b5ba57f18533982607f24070a55d353e90d4cae30c467cdb2ad5ac5c"
 
 [[package]]
+name = "strum"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7ac893c7d471c8a21f31cfe213ec4f6d9afeed25537c772e08ef3f005f8729e"
+
+[[package]]
 name = "strum_macros"
 version = "0.19.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5563,6 +5588,18 @@ name = "strum_macros"
 version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee8bc6b87a5112aeeab1f4a9f7ab634fe6cbefc4850006df31267f4cfb9e3149"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "339f799d8b549e3744c7ac7feb216383e4005d94bdb22561b3ab8f3b808ae9fb"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -6235,6 +6272,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7fe0bb3479651439c9112f72b6c505038574c9fbb575ed1bf3b797fa39dd564"
 
 [[package]]
+name = "unicode_categories"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39ec24b3121d976906ece63c9daad25b85969647682eee313cb5779fdd69e14e"
+
+[[package]]
 name = "url"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6638,7 +6681,7 @@ dependencies = [
  "r2d2",
  "serde",
  "serde_json",
- "shlex",
+ "shlex 0.1.1",
  "structopt",
  "thiserror",
  "tokio 0.2.25",
@@ -6656,14 +6699,27 @@ dependencies = [
 
 [[package]]
 name = "ya-agreement-utils"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
+ "base64 0.13.0",
+ "chrono",
+ "ethsign 0.8.0",
+ "hex",
+ "regex",
+ "semver 1.0.4",
  "serde",
  "serde_json",
  "serde_yaml",
+ "sha2 0.9.3",
+ "shlex 1.1.0",
+ "snailquote",
+ "structopt",
+ "strum 0.22.0",
+ "strum_macros 0.22.0",
  "tempdir",
  "thiserror",
+ "url",
  "ya-client-model",
 ]
 
@@ -6839,6 +6895,7 @@ dependencies = [
  "nix 0.22.0",
  "openssl",
  "rand 0.6.5",
+ "regex",
  "reqwest 0.10.10",
  "rustyline 7.1.0",
  "secp256k1 0.19.0",
@@ -6881,7 +6938,7 @@ dependencies = [
 
 [[package]]
 name = "ya-identity"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "actix-rt",
  "actix-service",
@@ -7085,7 +7142,7 @@ dependencies = [
 [[package]]
 name = "ya-net-stack"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=1a213f4185ad9f4f0f1caf0eea6ccc163619685b#1a213f4185ad9f4f0f1caf0eea6ccc163619685b"
+source = "git+https://github.com/golemfactory/ya-relay.git?branch=mf/inet#c0e60ae31a7b1200f8d40ef9fbb9c78694866685"
 dependencies = [
  "derive_more",
  "futures 0.3.13",
@@ -7240,12 +7297,15 @@ dependencies = [
  "log-derive",
  "nix 0.22.0",
  "notify",
+ "num-traits",
  "num_cpus",
  "path-clean",
+ "regex",
  "semver 0.11.0",
  "serde",
  "serde_json",
  "shared_child",
+ "shlex 1.1.0",
  "signal-hook",
  "structopt",
  "strum 0.20.0",
@@ -7552,7 +7612,7 @@ dependencies = [
  "thiserror",
  "trust-dns-resolver",
  "url",
- "ya-net-stack 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=1a213f4185ad9f4f0f1caf0eea6ccc163619685b)",
+ "ya-net-stack 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?branch=mf/inet)",
 ]
 
 [[package]]
