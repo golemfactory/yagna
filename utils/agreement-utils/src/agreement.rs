@@ -2,7 +2,7 @@ use ya_client_model::market::Agreement;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fmt::{Error as FormatError, Formatter};
 use std::path::PathBuf;
@@ -57,6 +57,17 @@ impl AgreementView {
         Ok(map)
     }
 
+    pub fn constraints(&self, reg_expr: &str, group: usize) -> Option<HashSet<String>> {
+        self.pointer("/demand/constraints")
+            .and_then(|v| v.as_str())
+            .and_then(|s| parse_constraints(s, reg_expr, group))
+    }
+
+    pub fn get_property<'a, T: Deserialize<'a>>(&self, property: &str) -> Result<T, Error> {
+        let pointer = format!("/{}", property.replace(".", "/"));
+        self.pointer_typed(pointer.as_str())
+    }
+
     pub fn remove_property(&mut self, pointer: &str) -> Result<(), Error> {
         let path: Vec<&str> = pointer.split('/').collect();
         Ok(
@@ -67,6 +78,18 @@ impl AgreementView {
             })?,
         )
     }
+}
+
+pub fn parse_constraints(input: &str, reg_expr: &str, group: usize) -> Option<HashSet<String>> {
+    let re = regex::Regex::new(reg_expr).unwrap();
+    re.captures(input)
+        .and_then(|cap| cap.get(group))
+        .map(|mat| {
+            mat.as_str()
+                .split(",")
+                .map(|s| s.trim().to_lowercase())
+                .collect::<HashSet<_>>()
+        })
 }
 
 fn remove_property_impl(value: &mut serde_json::Value, path: &[&str]) -> Result<(), Error> {
