@@ -64,6 +64,8 @@ pub enum Error {
     Net(#[from] ya_utils_networking::vpn::Error),
     #[error(transparent)]
     Acl(#[from] crate::acl::Error),
+    #[error(transparent)]
+    Validation(#[from] crate::manifest::ValidationError),
     #[error("{0}")]
     Other(String),
     #[cfg(feature = "sgx")]
@@ -139,6 +141,7 @@ impl From<Error> for RpcError {
             Error::UsageLimitExceeded(e) => RpcError::UsageLimitExceeded(e),
             Error::Net(e) => RpcError::Service(e.to_string()),
             Error::Acl(e) => RpcError::Forbidden(e.to_string()),
+            Error::Validation(e) => RpcError::BadRequest(e.to_string()),
             Error::Other(e) => RpcError::Service(e),
             #[cfg(feature = "sgx")]
             Error::Crypto(e) => RpcError::Service(e.to_string()),

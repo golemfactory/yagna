@@ -28,7 +28,7 @@ libproc = "0.7"
 winapi = { version = "0.3.8", features = ["jobapi2", "processthreadsapi"] }
 
 [dependencies]
-ya-agreement-utils = { version = "^0.2"}
+ya-agreement-utils = { version = "^0.2", features = ["manifest"] }
 ya-client-model = "0.3"
 ya-compile-time-utils = "0.2"
 ya-core-model = { version = "^0.4", features = ["activity", "appkey"] }
@@ -52,8 +52,9 @@ hex = "0.4.2"
 ipnet = "2.3"
 lazy_static = "1.4.0"
 log = "0.4.8"
-openssl= { version = "0.10", optional = true }
+openssl = { version = "0.10", optional = true }
 rand = "0.6"
+regex = "1.5"
 reqwest = { version = "0.10.7", optional = true }
 secp256k1 = { version = "0.19", optional = true }
 serde = { version = "^1.0", features = ["derive"] }

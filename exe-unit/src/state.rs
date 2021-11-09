@@ -14,15 +14,13 @@ use tokio::sync::broadcast;
 
 pub use ya_client_model::activity::activity_state::{State, StatePair};
 use ya_client_model::activity::exe_script_command::Network;
-use ya_client_model::activity::{
-    Capture, CommandOutput, CommandResult, ExeScriptCommand, ExeScriptCommandResult,
-    ExeScriptCommandState, RuntimeEvent, RuntimeEventKind,
-};
+use ya_client_model::activity::*;
 use ya_core_model::activity::Exec;
 use ya_utils_networking::vpn::common::{to_ip, to_net};
 use ya_utils_networking::vpn::Error as NetError;
 
 use crate::error::Error;
+use crate::manifest::ManifestContext;
 use crate::notify::Notify;
 use crate::output::CapturedOutput;
 use crate::runtime::RuntimeMode;
@@ -56,19 +54,11 @@ pub enum StateError {
     },
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub struct Supervision {
     pub hardware: bool,
     pub image: bool,
-}
-
-impl Default for Supervision {
-    fn default() -> Self {
-        Supervision {
-            hardware: true,
-            image: true,
-        }
-    }
+    pub manifest: ManifestContext,
 }
 
 pub(crate) struct ExeUnitState {

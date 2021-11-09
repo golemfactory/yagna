@@ -1,13 +1,16 @@
-use actix::{Actor, Addr, Arbiter, System};
-use anyhow::bail;
 use std::convert::TryFrom;
 use std::path::PathBuf;
-use structopt::{clap, StructOpt};
 
+use actix::{Actor, Addr, Arbiter, System};
+use anyhow::{bail, Context};
+use structopt::{clap, StructOpt};
 use ya_client_model::activity::ExeScriptCommand;
+use ya_service_bus::RpcEnvelope;
+
 use ya_core_model::activity;
 use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::logger::*;
+use ya_exe_unit::manifest::ManifestContext;
 use ya_exe_unit::message::{GetState, GetStateResponse, Register};
 use ya_exe_unit::runtime::process::RuntimeProcess;
 use ya_exe_unit::service::metrics::MetricsService;
@@ -15,7 +18,6 @@ use ya_exe_unit::service::signal::SignalMonitor;
 use ya_exe_unit::service::transfer::TransferService;
 use ya_exe_unit::state::Supervision;
 use ya_exe_unit::{ExeUnit, ExeUnitContext};
-use ya_service_bus::RpcEnvelope;
 use ya_utils_path::normalize_path;
 
 #[derive(structopt::StructOpt, Debug)]
@@ -29,18 +31,18 @@ struct Cli {
     supervise: SuperviseCli,
     /// Enclave secret key used in secure communication
     #[structopt(
-    long,
-    env = "EXE_UNIT_SEC_KEY",
-    hide_env_values = true,
-    set = clap::ArgSettings::Global,
+        long,
+        env = "EXE_UNIT_SEC_KEY",
+        hide_env_values = true,
+        set = clap::ArgSettings::Global,
     )]
     sec_key: Option<String>,
     /// Requestor public key used in secure communication
     #[structopt(
-    long,
-    env = "EXE_UNIT_REQUESTOR_PUB_KEY",
-    hide_env_values = true,
-    set = clap::ArgSettings::Global,
+        long,
+        env = "EXE_UNIT_REQUESTOR_PUB_KEY",
+        hide_env_values = true,
+        set = clap::ArgSettings::Global,
     )]
     requestor_pub_key: Option<String>,
     #[structopt(subcommand)]
@@ -51,17 +53,17 @@ struct Cli {
 struct SuperviseCli {
     /// Hardware resources are handled by the runtime
     #[structopt(
-    long = "runtime-managed-hardware",
-    alias = "cap-handoff",
-    parse(from_flag = std::ops::Not::not),
-    set = clap::ArgSettings::Global,
+        long = "runtime-managed-hardware",
+        alias = "cap-handoff",
+        parse(from_flag = std::ops::Not::not),
+        set = clap::ArgSettings::Global,
     )]
     hardware: bool,
     /// Images are handled by the runtime
     #[structopt(
-    long = "runtime-managed-image",
-    parse(from_flag = std::ops::Not::not),
-    set = clap::ArgSettings::Global,
+        long = "runtime-managed-image",
+        parse(from_flag = std::ops::Not::not),
+        set = clap::ArgSettings::Global,
     )]
     image: bool,
 }
@@ -174,9 +176,9 @@ async fn send_script(
 
 fn run() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
+
     #[allow(unused_mut)]
     let mut cli: Cli = Cli::from_args();
-
     if !cli.binary.exists() {
         bail!("Runtime binary does not exist: {}", cli.binary.display());
     }
@@ -243,7 +245,7 @@ fn run() -> anyhow::Result<()> {
             e
         )
     })?;
-    let agreement = Agreement::try_from(&args.agreement).map_err(|e| {
+    let mut agreement = Agreement::try_from(&args.agreement).map_err(|e| {
         anyhow::anyhow!(
             "Error parsing the agreement from {}: {}",
             args.agreement.display(),
@@ -251,10 +253,20 @@ fn run() -> anyhow::Result<()> {
         )
     })?;
 
+    log::info!("Attempting to read app manifest ..");
+
+    let manifest_ctx =
+        ManifestContext::try_new(&agreement.inner).context("Invalid app manifest")?;
+    agreement.task_package = manifest_ctx.payload().or(agreement.task_package.take());
+
+    log::info!("Manifest-enabled features: {:?}", manifest_ctx.features());
+    log::info!("User-provided payload: {:?}", agreement.task_package);
+
     let ctx = ExeUnitContext {
         supervise: Supervision {
             hardware: cli.supervise.hardware,
             image: cli.supervise.image,
+            manifest: manifest_ctx,
         },
         activity_id: ctx_activity_id.clone(),
         report_url: ctx_report_url,

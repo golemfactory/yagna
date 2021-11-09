@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ffi::{OsStr, OsString};
 use std::hash::{Hash, Hasher};
 use std::ops::Not;
@@ -17,6 +17,7 @@ use ya_runtime_api::server::{spawn, RunProcess, RuntimeControl, RuntimeService};
 
 use crate::acl::Acl;
 use crate::error::Error;
+use crate::manifest::{Feature, UrlValidator};
 use crate::message::{
     CommandContext, ExecuteCommand, RuntimeEvent, Shutdown, ShutdownReason, UpdateDeployment,
 };
@@ -43,7 +44,7 @@ fn process_kill_timeout_seconds() -> i64 {
 }
 
 pub struct RuntimeProcess {
-    ctx: ExeUnitContext,
+    ctx: RuntimeProcessContext,
     binary: PathBuf,
     deployment: Deployment,
     children: HashSet<ChildProcess>,
@@ -57,7 +58,7 @@ pub struct RuntimeProcess {
 impl RuntimeProcess {
     pub fn new(ctx: &ExeUnitContext, binary: PathBuf) -> Self {
         Self {
-            ctx: ctx.clone(),
+            ctx: ctx.into(),
             binary,
             deployment: Default::default(),
             children: Default::default(),
@@ -111,7 +112,7 @@ impl RuntimeProcess {
         args.arg("--workdir");
         args.arg(&self.ctx.work_dir);
 
-        if self.ctx.supervise.image {
+        if self.ctx.supervise_image {
             match self.deployment.task_package.as_ref() {
                 Some(val) => {
                     args.arg("--task-package");
@@ -125,8 +126,8 @@ impl RuntimeProcess {
             }
         }
 
-        if !self.ctx.supervise.hardware {
-            let inf = &self.ctx.agreement.infrastructure;
+        if !self.ctx.supervise_hardware {
+            let inf = &self.ctx.infrastructure;
 
             if let Some(val) = inf.get("cpu.threads") {
                 args.arg("--cpu-cores");
@@ -249,6 +250,7 @@ impl RuntimeProcess {
         let mut command = Command::new(&self.binary);
         command.args(rt_args);
 
+        let proc_ctx = self.ctx.clone();
         let acl = self.acl.clone();
         let deployment = self.deployment.clone();
         let mut monitor = self.monitor.get_or_insert_with(Default::default).clone();
@@ -269,11 +271,16 @@ impl RuntimeProcess {
 
             let service_ = service.clone();
             let net = async {
-                let inet = start_inet(&service_).await?;
-                if let Some(vpn) = start_vpn(acl, &service_, &deployment).await? {
-                    address.send(SetVpnService(vpn)).await?;
+                if proc_ctx.feature_inet {
+                    let inet = start_inet(&service_, proc_ctx.feature_inet_filter).await?;
+                    address.send(SetInetService(inet)).await?;
                 }
-                address.send(SetInetService(inet)).await?;
+
+                if proc_ctx.feature_vpn {
+                    if let Some(vpn) = start_vpn(acl, &service_, &deployment).await? {
+                        address.send(SetVpnService(vpn)).await?;
+                    }
+                }
 
                 Ok::<_, Error>(())
             };
@@ -459,6 +466,31 @@ impl Handler<Shutdown> for RuntimeProcess {
             Ok(())
         }
         .boxed_local()
+    }
+}
+
+#[derive(Clone)]
+struct RuntimeProcessContext {
+    work_dir: PathBuf,
+    supervise_image: bool,
+    supervise_hardware: bool,
+    infrastructure: HashMap<String, f64>,
+    feature_vpn: bool,
+    feature_inet: bool,
+    feature_inet_filter: Option<UrlValidator>,
+}
+
+impl<'a> From<&'a ExeUnitContext> for RuntimeProcessContext {
+    fn from(ctx: &'a ExeUnitContext) -> Self {
+        Self {
+            work_dir: ctx.work_dir.clone(),
+            supervise_image: ctx.supervise.image,
+            supervise_hardware: ctx.supervise.hardware,
+            infrastructure: ctx.agreement.infrastructure.clone(),
+            feature_vpn: ctx.supervise.manifest.features().contains(&Feature::Vpn),
+            feature_inet: ctx.supervise.manifest.features().contains(&Feature::Inet),
+            feature_inet_filter: ctx.supervise.manifest.validator::<UrlValidator>(),
+        }
     }
 }
 

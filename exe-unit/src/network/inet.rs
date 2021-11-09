@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::future::Future;
 use std::iter::FromIterator;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::Poll;
@@ -29,10 +29,12 @@ use ya_utils_networking::vpn::{
     EtherFrame, EtherType, IpPacket, PeekPacket, SocketEndpoint, TcpPacket, UdpPacket,
 };
 
+use crate::manifest::UrlValidator;
 use crate::message::Shutdown;
 use crate::network;
 use crate::network::{Endpoint, RxBuffer};
 use crate::{Error, Result};
+use ya_utils_networking::vpn::stack::socket::DEFAULT_TCP_KEEP_ALIVE;
 
 const IP4_ADDRESS: std::net::Ipv4Addr = std::net::Ipv4Addr::new(9, 0, 0x0d, 0x01);
 const IP6_ADDRESS: std::net::Ipv6Addr = IP4_ADDRESS.to_ipv6_mapped();
@@ -50,7 +52,10 @@ type TransportKey = (
     Option<u16>,
 );
 
-pub(crate) async fn start_inet<R: RuntimeService>(service: &R) -> Result<Addr<Inet>> {
+pub(crate) async fn start_inet<R: RuntimeService>(
+    service: &R,
+    filter: Option<UrlValidator>,
+) -> Result<Addr<Inet>> {
     use ya_runtime_api::server::Network;
 
     let ip4_net = ipnet::Ipv4Net::new(IP4_ADDRESS, DEFAULT_PREFIX_LEN).unwrap();
@@ -89,7 +94,7 @@ pub(crate) async fn start_inet<R: RuntimeService>(service: &R) -> Result<Addr<In
         None => return Err(Error::Other("endpoint already connected".into()).into()),
     };
 
-    Ok(Inet::new(endpoint).start())
+    Ok(Inet::new(endpoint, filter).start())
 }
 
 pub(crate) struct Inet {
@@ -99,9 +104,9 @@ pub(crate) struct Inet {
 }
 
 impl Inet {
-    pub fn new(endpoint: Endpoint) -> Self {
+    pub fn new(endpoint: Endpoint, filter: Option<UrlValidator>) -> Self {
         let network = Self::create_network();
-        let proxy = Proxy::new(network.clone());
+        let proxy = Proxy::new(network.clone(), filter);
         Self {
             network,
             endpoint,
@@ -162,7 +167,7 @@ impl Actor for Inet {
 
     fn stopping(&mut self, _ctx: &mut Self::Context) -> Running {
         self.network = Self::create_network();
-        self.proxy = Proxy::new(self.network.clone());
+        self.proxy = Proxy::new(self.network.clone(), self.proxy.filter.clone());
 
         log::info!("[inet] stopping service");
         Running::Stop
@@ -349,6 +354,7 @@ fn ip_packet_to_socket_desc(ip_packet: &IpPacket) -> Result<SocketDesc> {
 #[derive(Clone)]
 struct Proxy {
     state: Arc<RwLock<ProxyState>>,
+    filter: Option<UrlValidator>,
 }
 
 struct ProxyState {
@@ -357,13 +363,14 @@ struct ProxyState {
 }
 
 impl Proxy {
-    fn new(network: net::Network) -> Self {
+    fn new(network: net::Network, filter: Option<UrlValidator>) -> Self {
         let state = ProxyState {
             network,
             remotes: Default::default(),
         };
         Self {
             state: Arc::new(RwLock::new(state)),
+            filter,
         }
     }
 
@@ -418,9 +425,14 @@ impl Proxy {
 
         log::debug!("[inet] connect to {:?}", desc);
 
+        let (ip, port) = (conv_ip_addr(meta.local.addr)?, meta.local.port);
+        if let Some(ref filter) = self.filter {
+            filter.validate(meta.protocol, ip, port)?;
+        }
+
         let (tx, mut rx) = match meta.protocol {
-            Protocol::Tcp => inet_tcp_proxy(meta.local).await?,
-            Protocol::Udp => inet_udp_proxy(meta.local).await?,
+            Protocol::Tcp => inet_tcp_proxy(ip, port).await?,
+            Protocol::Udp => inet_udp_proxy(ip, port).await?,
             other => return Err(NetError::ProtocolNotSupported(other.to_string()).into()),
         };
 
@@ -471,10 +483,7 @@ impl Proxy {
         let key = (&meta).proxy_key()?;
         let mut inner = self.state.write().await;
 
-        log::debug!("[inet] proxy unbind REMOVE: {:?}", desc);
-
         if let Some(mut conn) = inner.remotes.remove(&key) {
-            // let _ = inner.network.unbind(meta.protocol, meta.local);
             let _ = conn.close().await;
         }
 
@@ -482,10 +491,13 @@ impl Proxy {
     }
 }
 
-async fn inet_tcp_proxy<'a>(remote: IpEndpoint) -> Result<(TransportSender, TransportReceiver)> {
-    log::debug!("[inet] connecting TCP to {}", remote);
+async fn inet_tcp_proxy<'a>(ip: IpAddr, port: u16) -> Result<(TransportSender, TransportReceiver)> {
+    log::debug!("[inet] connecting TCP to {}:{}", ip, port);
 
-    let tcp_stream = TcpStream::connect((conv_ip_addr(remote.addr)?, remote.port)).await?;
+    let tcp_stream = TcpStream::connect((ip, port)).await?;
+    let _ = tcp_stream.set_keepalive(Some(DEFAULT_TCP_KEEP_ALIVE.into()));
+    let _ = tcp_stream.set_nodelay(true);
+
     let stream = Framed::with_capacity(tcp_stream, BytesCodec::new(), MAX_FRAME_SIZE);
     let (tx, rx) = stream.split();
     Ok((
@@ -494,10 +506,10 @@ async fn inet_tcp_proxy<'a>(remote: IpEndpoint) -> Result<(TransportSender, Tran
     ))
 }
 
-async fn inet_udp_proxy<'a>(remote: IpEndpoint) -> Result<(TransportSender, TransportReceiver)> {
-    log::debug!("[inet] initiating UDP to {}", remote);
+async fn inet_udp_proxy<'a>(ip: IpAddr, port: u16) -> Result<(TransportSender, TransportReceiver)> {
+    log::debug!("[inet] opening UDP socket with {}:{}", ip, port);
 
-    let socket_addr: std::net::SocketAddr = (conv_ip_addr(remote.addr)?, remote.port).into();
+    let socket_addr: std::net::SocketAddr = ((ip, port)).into();
     let udp_socket = tokio::net::UdpSocket::bind("0.0.0.0:0").await?;
     udp_socket.connect(socket_addr).await?;
 
@@ -650,8 +662,6 @@ impl<'a> TransportKeyExt for &'a SocketDesc {
 }
 
 fn conv_ip_addr(addr: IpAddress) -> Result<std::net::IpAddr> {
-    use std::net::IpAddr;
-
     match addr {
         IpAddress::Ipv4(ipv4) => Ok(IpAddr::V4(ipv4.into())),
         IpAddress::Ipv6(ipv6) => Ok(IpAddr::V6(ipv6.into())),

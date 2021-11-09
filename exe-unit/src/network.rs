@@ -196,7 +196,7 @@ mod test {
 
     #[test]
     fn rx_buffer() {
-        for mut tx in vec![TxMode::Full, TxMode::Chunked(1), TxMode::Chunked(2)] {
+        for tx in vec![TxMode::Full, TxMode::Chunked(1), TxMode::Chunked(2)] {
             for sz in vec![1, 2, 3, 5, 7, 12, 64] {
                 let src = (0..=255u8)
                     .into_iter()
