@@ -201,12 +201,8 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
             } else if s.succeeded {
                 log::info!("Transaction confirmed and succeeded");
 
-                dao.transaction_confirmed(
-                    &tx.tx_id,
-                    newest_tx,
-                    final_gas_price,
-                )
-                .await;
+                dao.transaction_confirmed(&tx.tx_id, newest_tx, final_gas_price)
+                    .await;
                 // Faucet can stop here IF the tx was a success.
                 if tx.tx_type == TxType::Faucet as i32 {
                     log::debug!("Faucet tx confirmed, exit early. hash={}", &newest_tx);
