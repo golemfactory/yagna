@@ -8,7 +8,7 @@ use futures::future::LocalBoxFuture;
 use futures::FutureExt;
 
 use ya_core_model::{identity, NodeId};
-use ya_net_server::crypto::{Crypto, CryptoProvider};
+use ya_relay_server::crypto::{Crypto, CryptoProvider};
 use ya_service_bus::RpcEndpoint;
 
 pub struct IdentityCryptoProvider {

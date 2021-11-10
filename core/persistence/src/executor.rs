@@ -103,7 +103,11 @@ impl DbExecutor {
 
         let inner = match pool_size {
             // Sqlite doesn't handle connections from multiple threads well.
-            Some(pool_size) => builder.max_size(pool_size).build(manager)?,
+            Some(pool_size) => builder
+                .max_size(pool_size)
+                .idle_timeout(None)
+                .max_lifetime(None)
+                .build(manager)?,
             None => builder.build(manager)?,
         };
 
