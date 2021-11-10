@@ -214,8 +214,6 @@ impl<'c> TransactionDao<'c> {
         err: Option<String>,
         final_hash: Option<String>,
         final_gas_price: Option<f64>,
-        final_gas_price_exact: Option<String>,
-        final_gas_used: Option<i32>,
     ) -> DbResult<()> {
         let current_time = Utc::now().naive_utc();
         let confirmed_time = current_time;
@@ -226,12 +224,11 @@ impl<'c> TransactionDao<'c> {
                     dsl::time_last_action.eq(current_time),
                     dsl::time_confirmed.eq(confirmed_time),
                     dsl::last_error_msg.eq(err),
-                    dsl::final_gas_price.eq(final_gas_price),
-                    dsl::final_gas_price_exact.eq(final_gas_price_exact),
-                    dsl::final_gas_used.eq(final_gas_used),
+                    dsl::current_gas_price.eq(final_gas_price),
                     dsl::final_tx.eq(final_hash),
                     dsl::tmp_onchain_txs.eq::<Option<String>>(None),
-                    dsl::current_gas_price.eq::<Option<f64>>(None),
+                    dsl::encoded.eq(""),
+                    dsl::signature.eq::<Option<String>>(None),
                 ))
                 .execute(conn)?;
             Ok(())

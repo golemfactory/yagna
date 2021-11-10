@@ -167,10 +167,6 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 }
             };
 
-            let gas_used_i32 = match s.gas_used {
-                Some(gas_used) => Some(gas_used.as_u32() as i32),
-                None => None,
-            };
             let final_gas_price = match s.gas_price {
                 Some(gas_price) => Some(convert_u256_gas_to_float(gas_price)),
                 None => None,
@@ -209,8 +205,6 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                     &tx.tx_id,
                     newest_tx,
                     final_gas_price,
-                    s.gas_price.map(|s| s.to_string()),
-                    gas_used_i32,
                 )
                 .await;
                 // Faucet can stop here IF the tx was a success.
@@ -279,8 +273,6 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                     &tx.tx_id,
                     newest_tx,
                     final_gas_price,
-                    s.gas_price.map(|s| s.to_string()),
-                    gas_used_i32,
                     "Failure on chain during execution",
                 )
                 .await;

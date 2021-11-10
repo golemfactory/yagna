@@ -183,8 +183,6 @@ impl Erc20Dao {
         tx_id: &str,
         final_hash: &str,
         final_gas_price: Option<f64>,
-        final_gas_price_exact: Option<String>,
-        final_gas_used: Option<i32>,
     ) {
         if let Err(e) = self
             .transaction()
@@ -194,8 +192,6 @@ impl Erc20Dao {
                 None,
                 Some(final_hash.to_string()),
                 final_gas_price,
-                final_gas_price_exact,
-                final_gas_used,
             )
             .await
         {
@@ -209,8 +205,6 @@ impl Erc20Dao {
         tx_id: &str,
         final_hash: &str,
         final_gas_price: Option<f64>,
-        final_gas_price_exact: Option<String>,
-        final_gas_used: Option<i32>,
         error: &str,
     ) {
         if let Err(e) = self
@@ -221,8 +215,6 @@ impl Erc20Dao {
                 Some(error.to_string()),
                 Some(final_hash.to_string()),
                 final_gas_price,
-                final_gas_price_exact,
-                final_gas_used,
             )
             .await
         {
@@ -238,8 +230,6 @@ impl Erc20Dao {
                 tx_id.to_string(),
                 TransactionStatus::ErrorNonceTooLow.into(),
                 Some(error.to_string()),
-                None,
-                None,
                 None,
                 None,
             )
