@@ -7,12 +7,12 @@ edition = "2018"
 [features]
 default = []
 service = []
-hybrid-net = ["ya-relay-server", "ya-relay-proto", "ya-sb-proto", "bytes", "ethsign", "tokio-util", "url", "prost", "rand"]
+hybrid-net = ["ya-relay-client", "ya-relay-proto", "ya-sb-proto", "bytes", "ethsign", "tokio-util", "url", "prost", "rand"]
 
 [dependencies]
 ya-core-model = { version = "^0.4", features=["net", "identity"] }
-ya-relay-server = { git = "https://github.com/golemfactory/ya-relay.git", rev = "972c05bc5a9217d65c7095a3917e8735bb241825", optional = true }
-ya-relay-proto = { git = "https://github.com/golemfactory/ya-relay.git", rev = "972c05bc5a9217d65c7095a3917e8735bb241825", features = ["codec"], optional = true }
+ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "5f72c43c199e12b7ac1b5c369eb00bb80915d8fe", optional = true }
+ya-relay-proto = { git = "https://github.com/golemfactory/ya-relay.git", rev = "5f72c43c199e12b7ac1b5c369eb00bb80915d8fe", features = ["codec"], optional = true }
 ya-sb-proto = { version = "0.4", optional = true }
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.1"
