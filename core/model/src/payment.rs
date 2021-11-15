@@ -470,7 +470,7 @@ pub mod local {
 
     #[derive(StructOpt, Debug, Clone)]
     pub struct AccountCli {
-        /// Wallet address [default: <DEFAULT_IDENTIDITY>]
+        /// Wallet address [default: <DEFAULT_IDENTITY>]
         #[structopt(long, env = "YA_ACCOUNT")]
         pub account: Option<NodeId>,
         /// Payment driver
