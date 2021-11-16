@@ -2830,15 +2830,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "itertools"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69ddb889f9d0d08a67338271fa9b62996bc788c7796a5c18cf057420aaed5eaf"
-dependencies = [
- "either",
-]
-
-[[package]]
 name = "itoa"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7037,8 +7028,8 @@ dependencies = [
  "tokio-util 0.3.1",
  "url",
  "ya-core-model",
+ "ya-relay-client",
  "ya-relay-proto",
- "ya-relay-server",
  "ya-sb-proto",
  "ya-sb-router",
  "ya-service-api",
@@ -7203,14 +7194,53 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-relay-client"
+version = "0.1.0"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=26a4099c7c55f8ae53ae459e4c58f3c639a183af#26a4099c7c55f8ae53ae459e4c58f3c639a183af"
+dependencies = [
+ "anyhow",
+ "derive_more",
+ "env_logger 0.8.4",
+ "futures 0.3.13",
+ "log",
+ "tokio 0.2.25",
+ "url",
+ "ya-client-model",
+ "ya-relay-core",
+ "ya-relay-proto",
+ "ya-relay-stack",
+]
+
+[[package]]
 name = "ya-relay-core"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=972c05bc5a9217d65c7095a3917e8735bb241825#972c05bc5a9217d65c7095a3917e8735bb241825"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=26a4099c7c55f8ae53ae459e4c58f3c639a183af#26a4099c7c55f8ae53ae459e4c58f3c639a183af"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "digest 0.9.0",
+ "ethsign 0.8.0",
+ "futures 0.3.13",
+ "hex",
+ "lazy_static",
+ "log",
+ "rand 0.8.4",
+ "serde_json",
+ "sha2 0.9.3",
+ "sha3 0.9.1",
+ "tokio 0.2.25",
+ "tokio-util 0.3.1",
+ "url",
+ "uuid",
+ "ya-client-model",
+ "ya-relay-proto",
+ "ya-relay-stack",
+]
 
 [[package]]
 name = "ya-relay-proto"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=972c05bc5a9217d65c7095a3917e8735bb241825#972c05bc5a9217d65c7095a3917e8735bb241825"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=26a4099c7c55f8ae53ae459e4c58f3c639a183af#26a4099c7c55f8ae53ae459e4c58f3c639a183af"
 dependencies = [
  "bytes 0.5.6",
  "derive_more",
@@ -7224,45 +7254,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "ya-relay-server"
-version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=972c05bc5a9217d65c7095a3917e8735bb241825#972c05bc5a9217d65c7095a3917e8735bb241825"
-dependencies = [
- "actix-rt",
- "anyhow",
- "bytes 0.5.6",
- "chrono",
- "derive_more",
- "digest 0.9.0",
- "dotenv",
- "env_logger 0.8.4",
- "ethsign 0.8.0",
- "futures 0.3.13",
- "hex",
- "itertools 0.10.1",
- "lazy_static",
- "log",
- "rand 0.8.4",
- "secp256k1 0.20.3",
- "serde_json",
- "sha2 0.9.3",
- "sha3 0.9.1",
- "structopt",
- "thiserror",
- "tokio 0.2.25",
- "tokio-util 0.3.1",
- "url",
- "uuid",
- "ya-client-model",
- "ya-relay-core",
- "ya-relay-proto",
- "ya-relay-stack",
-]
-
-[[package]]
 name = "ya-relay-stack"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=972c05bc5a9217d65c7095a3917e8735bb241825#972c05bc5a9217d65c7095a3917e8735bb241825"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=26a4099c7c55f8ae53ae459e4c58f3c639a183af#26a4099c7c55f8ae53ae459e4c58f3c639a183af"
 dependencies = [
  "derive_more",
  "futures 0.3.13",
