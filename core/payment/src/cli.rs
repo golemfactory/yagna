@@ -55,7 +55,7 @@ pub enum PaymentCli {
         account: pay::AccountCli,
         #[structopt(
             long,
-            help = "Optional address to exit to [default: <DEFAULT_IDENTIDITY>]"
+            help = "Optional address to exit to [default: <DEFAULT_IDENTITY>]"
         )]
         to_address: Option<String>,
         #[structopt(long, help = "Optional amount to exit [default: <ALL_FUNDS>]")]
