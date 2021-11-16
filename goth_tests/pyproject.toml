@@ -23,7 +23,7 @@ pytest-asyncio = "^0.14"
 # goth = "^0.7"
 # to use development goth version uncomment below
 # goth = { git = "https://github.com/golemfactory/goth.git", branch = "your-branch-here" }
-goth = { git = "https://github.com/golemfactory/goth.git", rev = "1272095c5e13d8c574359b51bc53053484501c7c" }
+goth = { git = "https://github.com/golemfactory/goth.git", rev = "8a01f6317f6efb592e4e6d7d0e0137ae8ae785e7" }
 
 [tool.poetry.dev-dependencies]
 black = "^20.8b1"
