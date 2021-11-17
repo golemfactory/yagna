@@ -54,7 +54,7 @@ pub fn u256_from_big_endian_hex(bytes: String) -> U256 {
     U256::from_big_endian(&bytes)
 }
 
-pub fn big_dec_to_u256(v: BigDecimal) -> U256 {
+pub fn big_dec_to_u256(v: &BigDecimal) -> U256 {
     let v = v * Into::<BigDecimal>::into(PRECISION);
     let v = v.to_bigint().unwrap();
     let v = &v.to_string();

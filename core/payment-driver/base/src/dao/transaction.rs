@@ -189,7 +189,7 @@ impl<'c> TransactionDao<'c> {
         &self,
         tx_id: String,
         tx_hash: String,
-        gas_price: Option<f64>,
+        gas_price: Option<String>,
     ) -> DbResult<()> {
         let current_time = Utc::now().naive_utc();
         do_with_transaction(self.pool, move |conn| {
@@ -213,7 +213,7 @@ impl<'c> TransactionDao<'c> {
         status: TransactionStatus,
         err: Option<String>,
         final_hash: Option<String>,
-        final_gas_price: Option<f64>,
+        final_gas_price: Option<String>,
     ) -> DbResult<()> {
         let current_time = Utc::now().naive_utc();
         let confirmed_time = current_time;
@@ -266,7 +266,7 @@ impl<'c> TransactionDao<'c> {
         tx_id: String,
         encoded: String,
         signature: String,
-        current_gas_price: Option<f64>,
+        current_gas_price: Option<String>,
     ) -> DbResult<()> {
         let current_time = Utc::now().naive_utc();
         do_with_transaction(self.pool, move |conn| {
