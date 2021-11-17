@@ -221,13 +221,14 @@ pub async fn send_transactions(
                 let mut gas_f64 = convert_u256_gas_to_float(gas_u256);
 
                 let max_gas_u256 = match tx.max_gas_price {
-                    Some(max_gas_price) => Some(convert_u256_gas_to_float(U256::from_dec_str(&max_gas_price).map_err(GenericError::new)?)),
-                    None => None
+                    Some(max_gas_price) => Some(convert_u256_gas_to_float(
+                        U256::from_dec_str(&max_gas_price).map_err(GenericError::new)?,
+                    )),
+                    None => None,
                 };
                 gas_f64 = bump_gas_price(gas_f64, max_gas_u256);
                 convert_float_gas_to_u256(gas_f64)
-            }
-            else {
+            } else {
                 U256::from_dec_str(&current_gas_price).map_err(GenericError::new)?
             }
         } else if let Some(starting_gas_price) = tx.starting_gas_price {
@@ -259,12 +260,8 @@ pub async fn send_transactions(
                 } else {
                     str_tx_hash
                 };
-                dao.transaction_sent(
-                    &tx.tx_id,
-                    &str_tx_hash,
-                    Some(raw_tx.gas_price.to_string()),
-                )
-                .await;
+                dao.transaction_sent(&tx.tx_id, &str_tx_hash, Some(raw_tx.gas_price.to_string()))
+                    .await;
                 log::info!("Send transaction. hash={}", &str_tx_hash);
                 log::debug!("id={}", &tx.tx_id);
             }

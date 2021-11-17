@@ -10,9 +10,8 @@ use ya_payment_driver::db::models::{Network, TransactionEntity, TransactionStatu
 use ya_payment_driver::{bus, model::GenericError};
 
 use crate::erc20::transaction::YagnaRawTransaction;
-use crate::erc20::{config, eth_utils, utils};
+use crate::erc20::{config, eth_utils};
 use bigdecimal::BigDecimal;
-use bigdecimal::ToPrimitive;
 use ethabi::Token;
 use uuid::Uuid;
 use ya_payment_driver::utils::big_dec_to_u256;
@@ -152,39 +151,6 @@ pub async fn prepare_raw_transaction(
         Some(gas_price_new) => gas_price_new,
         None => client.eth().gas_price().await.map_err(GenericError::new)?,
     };
-
-    /*
-    match network {
-        Network::Polygon | Network::Mumbai => {
-            if gas_price < U256::from(*GLM_POLYGON_MIN_GAS_PRICE) {
-                log::info!(
-                    "Gas price lower than mininimum {}/{}. Continuing with higher gas price...",
-                    gas_price,
-                    *GLM_POLYGON_MIN_GAS_PRICE
-                );
-                gas_price = U256::from(*GLM_POLYGON_MIN_GAS_PRICE);
-            }
-            if let Some(gas_price_override) = gas_price_override {
-                log::info!(
-                    "Overriding gas price value new value: {} old value: {}",
-                    gas_price_override,
-                    gas_price
-                );
-                gas_price = gas_price_override;
-            }
-            if gas_price > U256::from(*GLM_POLYGON_DEFAULT_MAX_GAS_PRICE) {
-                log::warn!(
-                    "Gas price higher than maximum {}/{}. Continuing with lower gas price...",
-                    gas_price,
-                    *GLM_POLYGON_DEFAULT_MAX_GAS_PRICE
-                );
-                gas_price = U256::from(*GLM_POLYGON_DEFAULT_MAX_GAS_PRICE);
-            };
-        }
-        Network::Mainnet | Network::Rinkeby | Network::Goerli => {
-            log::info!("Gas limits not implemented for Mainnet, Rinkeby and Goerli networks",);
-        }
-    }*/
 
     let gas_limit = match gas_limit_override {
         Some(gas_limit_override) => U256::from(gas_limit_override),

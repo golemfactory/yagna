@@ -2,9 +2,6 @@
     Database Access Object, all you need to interact with the database.
 */
 
-// Extrernal crates
-//use chrono::{DateTime, Utc};
-//use uuid::Uuid;
 use web3::types::U256;
 
 // Workspace uses
@@ -112,54 +109,9 @@ impl Erc20Dao {
 
         Ok(next_nonce)
     }
-    /*
-    pub async fn insert_transaction2(
-        &self,
-        details: &PaymentDetails,
-        date: DateTime<Utc>,
-    ) -> String {
-        // TO CHECK: No difference between tx_id and tx_hash on erc20
-        // TODO: Implement pre-sign
-        let tx_id = Uuid::new_v4().to_string();
-        let current_naive_time = date.naive_utc();
-        let tx = TransactionEntity {
-            tx_id: tx_id.clone(),
-            sender: details.sender.clone(),
-            nonce: "".to_string(), // not used till pre-sign
-            status: TransactionStatus::Created as i32,
-            time_created: current_naive_time,
-            time_last_action: current_naive_time,
-            time_confirmed: None,
-            time_sent: None,
-            tx_type: 0,                // Erc20 only knows transfers, unused field
-            encoded: "".to_string(),   // not used till pre-sign
-            signature: "".to_string(), // not used till pre-sign
-            tx_hash: None,
-            network: Network::Rinkeby, // TODO: update network
-            current_gas_price: None,
-            starting_gas_price: None,
-            max_gas_price: None,
-            last_error_msg: None,
-            resent_times: 0,
-        };
-
-        if let Err(e) = self.transaction().insert_transactions(vec![tx]).await {
-            log::error!("Failed to store transaction for {:?} : {:?}", details, e)
-            // TO CHECK: Should it continue or stop the process...
-        }
-        tx_id
-    }*/
 
     pub async fn insert_raw_transaction(&self, tx: TransactionEntity) -> String {
         let tx_id = tx.tx_id.clone();
-        /*        match self.transaction().get(tx_id).await {
-            Some(res) => {
-                if let Some(tx) = res {
-                    self.transaction().del
-                }
-            }
-            Err(e) => log::error!("Error when checking for existing transactions: {:?}", e)
-        }*/
 
         if let Err(e) = self.transaction().insert_transactions(vec![tx]).await {
             log::error!("Failed to store transaction for {} : {:?}", tx_id, e)

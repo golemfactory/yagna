@@ -16,7 +16,6 @@ use ya_payment_driver::{
 };
 
 // Local uses
-use crate::erc20::utils::convert_u256_gas_to_float;
 use crate::{
     dao::Erc20Dao,
     erc20::{ethereum, wallet},
@@ -71,10 +70,8 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
         'main_tx_loop: for tx in txs {
             log::debug!("checking tx {:?}", &tx);
 
-            let time_elapsed_from_sent = match tx.time_sent {
-                Some(time_sent) => Some(time_sent),
-                None => None,
-            };
+            let time_elapsed_from_sent = tx.time_sent;
+
             let time_elapsed_from_last_action = current_time - tx.time_last_action;
 
             let tmp_onchain_txs = match &tx.tmp_onchain_txs {
