@@ -7,7 +7,6 @@ use tokio::sync::mpsc::UnboundedReceiver;
 
 use ya_client::model::market::{event::RequestorEvent, NewProposal, Reason};
 use ya_client::model::NodeId;
-use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::LogErr;
 
@@ -15,6 +14,7 @@ use crate::db::{
     dao::{AgreementDao, AgreementDaoError, SaveAgreementError},
     model::{Agreement, AgreementId, AgreementState, AppSessionId},
     model::{Demand, Issuer, Owner, ProposalId, SubscriptionId},
+    DbMixedExecutor,
 };
 use crate::matcher::{store::SubscriptionStore, RawProposal};
 use crate::protocol::negotiation::{error::*, messages::*, requestor::NegotiationApi};
@@ -43,7 +43,7 @@ pub struct RequestorBroker {
 
 impl RequestorBroker {
     pub fn new(
-        db: DbExecutor,
+        db: DbMixedExecutor,
         store: SubscriptionStore,
         proposal_receiver: UnboundedReceiver<RawProposal>,
         session_notifier: EventNotifier<AppSessionId>,

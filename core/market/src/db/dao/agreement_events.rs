@@ -3,8 +3,8 @@ use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl, RunQueryDsl};
 
 use ya_client::model::market::Reason;
 use ya_client::model::NodeId;
+use ya_persistence::executor::PoolType;
 use ya_persistence::executor::{readonly_transaction, ConnType};
-use ya_persistence::executor::{AsDao, PoolType};
 
 use crate::db::dao::AgreementDaoError;
 use crate::db::model::{Agreement, AgreementEvent, AgreementId, NewAgreementEvent};
@@ -13,15 +13,15 @@ use crate::db::schema::market_agreement::dsl as agreement;
 use crate::db::schema::market_agreement::dsl::market_agreement;
 use crate::db::schema::market_agreement_event::dsl as event;
 use crate::db::schema::market_agreement_event::dsl::market_agreement_event;
-use crate::db::DbResult;
+use crate::db::{AsMixedDao, DbResult};
 
 pub struct AgreementEventsDao<'c> {
     pool: &'c PoolType,
 }
 
-impl<'c> AsDao<'c> for AgreementEventsDao<'c> {
-    fn as_dao(pool: &'c PoolType) -> Self {
-        Self { pool }
+impl<'a> AsMixedDao<'a> for AgreementEventsDao<'a> {
+    fn as_dao(disk_pool: &'a PoolType, _ram_pool: &'a PoolType) -> Self {
+        Self { pool: disk_pool }
     }
 }
 

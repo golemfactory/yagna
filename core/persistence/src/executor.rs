@@ -84,16 +84,32 @@ fn connection_customizer(
 
 impl DbExecutor {
     pub fn new<S: Display>(database_url: S) -> Result<Self, Error> {
+        DbExecutor::new_with_pool_size(database_url, None)
+    }
+
+    fn new_with_pool_size<S: Display>(
+        database_url: S,
+        pool_size: Option<u32>,
+    ) -> Result<Self, Error> {
         let database_url = format!("{}", database_url);
         log::info!("using database at: {}", database_url);
         let manager = ConnectionManager::new(database_url.clone());
         let tx_lock: TxLock = Arc::new(RwLock::new(0));
-        let inner = Pool::builder()
-            .connection_customizer(Box::new(connection_customizer(
-                database_url.clone(),
-                tx_lock.clone(),
-            )))
-            .build(manager)?;
+
+        let builder = Pool::builder().connection_customizer(Box::new(connection_customizer(
+            database_url.clone(),
+            tx_lock.clone(),
+        )));
+
+        let inner = match pool_size {
+            // Sqlite doesn't handle connections from multiple threads well.
+            Some(pool_size) => builder
+                .max_size(pool_size)
+                .idle_timeout(None)
+                .max_lifetime(None)
+                .build(manager)?,
+            None => builder.build(manager)?,
+        };
 
         {
             let connection = inner.get()?;
@@ -115,6 +131,10 @@ impl DbExecutor {
     pub fn from_data_dir(data_dir: &Path, name: &str) -> Result<Self, Error> {
         let db = data_dir.join(name).with_extension("db");
         Self::new(db.to_string_lossy())
+    }
+
+    pub fn in_memory(name: &str) -> Result<Self, Error> {
+        Self::new_with_pool_size(format!("file:{}?mode=memory&cache=shared", name), Some(1))
     }
 
     fn conn(&self) -> Result<ConnType, Error> {
@@ -253,4 +273,24 @@ where
         })
     })
     .await
+}
+
+#[derive(Clone)]
+pub struct DbMixedExecutor {
+    pub disk_db: DbExecutor,
+    pub ram_db: DbExecutor,
+}
+
+pub trait AsMixedDao<'a> {
+    fn as_dao(disk_pool: &'a PoolType, ram_pool: &'a PoolType) -> Self;
+}
+
+impl DbMixedExecutor {
+    pub fn new(disk_db: DbExecutor, ram_db: DbExecutor) -> DbMixedExecutor {
+        DbMixedExecutor { disk_db, ram_db }
+    }
+
+    pub fn as_dao<'a, T: AsMixedDao<'a>>(&'a self) -> T {
+        AsMixedDao::as_dao(&self.disk_db.pool, &self.ram_db.pool)
+    }
 }
