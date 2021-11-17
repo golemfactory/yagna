@@ -168,7 +168,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
             };
 
             let final_gas_price = match s.gas_price {
-                Some(gas_price) => Some(convert_u256_gas_to_float(gas_price)),
+                Some(gas_price) => Some(gas_price.to_string()),
                 None => None,
             };
 

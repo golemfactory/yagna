@@ -169,8 +169,8 @@ pub async fn make_transfer(
     Ok(ethereum::create_dao_entity(
         nonce,
         address,
-        convert_u256_gas_to_float(raw_tx.gas_price),
-        convert_u256_gas_to_float(max_gas_price),
+        raw_tx.gas_price.to_string(),
+        max_gas_price.to_string(),
         raw_tx.gas.as_u32() as i32,
         serde_json::to_string(&raw_tx).map_err(GenericError::new)?,
         network,
@@ -216,14 +216,22 @@ pub async fn send_transactions(
         let address = str_to_addr(&tx.sender)?;
 
         let new_gas_price = if let Some(current_gas_price) = tx.current_gas_price {
-            let mut gas_f64 = current_gas_price;
             if tx.status == TransactionStatus::ResendAndBumpGas as i32 {
-                gas_f64 = bump_gas_price(current_gas_price, tx.max_gas_price);
-            }
+                let gas_u256 = U256::from_dec_str(&current_gas_price).map_err(GenericError::new)?;
+                let mut gas_f64 = convert_u256_gas_to_float(gas_u256);
 
-            convert_float_gas_to_u256(gas_f64)
+                let max_gas_u256 = match tx.max_gas_price {
+                    Some(max_gas_price) => Some(convert_u256_gas_to_float(U256::from_dec_str(&max_gas_price).map_err(GenericError::new)?)),
+                    None => None
+                };
+                gas_f64 = bump_gas_price(gas_f64, max_gas_u256);
+                convert_float_gas_to_u256(gas_f64)
+            }
+            else {
+                U256::from_dec_str(&current_gas_price).map_err(GenericError::new)?
+            }
         } else if let Some(starting_gas_price) = tx.starting_gas_price {
-            convert_float_gas_to_u256(starting_gas_price)
+            U256::from_dec_str(&starting_gas_price).map_err(GenericError::new)?
         } else {
             convert_float_gas_to_u256(POLYGON_STARTING_GAS_PRICE)
         };
@@ -237,7 +245,7 @@ pub async fn send_transactions(
             &tx.tx_id,
             encoded,
             hex::encode(&signature),
-            Some(convert_u256_gas_to_float(new_gas_price)),
+            Some(new_gas_price.to_string()),
         )
         .await;
 
@@ -254,7 +262,7 @@ pub async fn send_transactions(
                 dao.transaction_sent(
                     &tx.tx_id,
                     &str_tx_hash,
-                    Some(convert_u256_gas_to_float(raw_tx.gas_price)),
+                    Some(raw_tx.gas_price.to_string()),
                 )
                 .await;
                 log::info!("Send transaction. hash={}", &str_tx_hash);

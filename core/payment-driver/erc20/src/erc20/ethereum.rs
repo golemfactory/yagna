@@ -15,6 +15,7 @@ use bigdecimal::BigDecimal;
 use bigdecimal::ToPrimitive;
 use ethabi::Token;
 use uuid::Uuid;
+use ya_payment_driver::utils::big_dec_to_u256;
 
 pub const POLYGON_PREFERRED_GAS_PRICES: [f64; 6] = [0.0, 10.01, 15.01, 20.01, 25.01, 30.01];
 pub const POLYGON_STARTING_GAS_PRICE: f64 = 10.01;
@@ -108,8 +109,8 @@ pub async fn sign_faucet_tx(
     Ok(create_dao_entity(
         nonce,
         address,
-        utils::convert_u256_gas_to_float(gas_price),
-        utils::convert_u256_gas_to_float(gas_price),
+        gas_price.to_string(),
+        gas_price.to_string(),
         GLM_FAUCET_GAS.as_u32() as i32,
         serde_json::to_string(&tx).map_err(GenericError::new)?,
         network,
@@ -403,8 +404,8 @@ fn prepare_glm_faucet_contract(
 pub fn create_dao_entity(
     nonce: U256,
     sender: H160,
-    starting_gas_price: f64,
-    max_gas_price: f64,
+    starting_gas_price: String,
+    max_gas_price: String,
     gas_limit: i32,
     encoded_raw_tx: String,
     network: Network,
@@ -423,8 +424,8 @@ pub fn create_dao_entity(
         time_confirmed: None,
         max_gas_price: Some(max_gas_price),
         final_gas_used: None,
-        amount_base: Some(0.0),
-        amount_erc20: amount.as_ref().map(|a| a.to_f64().unwrap_or(0.0)),
+        amount_base: Some("0".to_string()),
+        amount_erc20: amount.as_ref().map(|a| big_dec_to_u256(a).to_string()),
         gas_limit: Some(gas_limit),
         starting_gas_price: Some(starting_gas_price),
         current_gas_price: None,

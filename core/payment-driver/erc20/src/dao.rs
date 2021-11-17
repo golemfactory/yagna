@@ -65,7 +65,7 @@ impl Erc20Dao {
         msg: &SchedulePayment,
     ) -> Result<(), GenericError> {
         let recipient = msg.recipient().to_owned();
-        let glm_amount = utils::big_dec_to_u256(msg.amount());
+        let glm_amount = utils::big_dec_to_u256(&msg.amount());
         let gas_amount = Default::default();
         let (network, _token) = platform_to_network_token(msg.platform())?;
 
@@ -182,7 +182,7 @@ impl Erc20Dao {
         &self,
         tx_id: &str,
         final_hash: &str,
-        final_gas_price: Option<f64>,
+        final_gas_price: Option<String>,
     ) {
         if let Err(e) = self
             .transaction()
@@ -204,7 +204,7 @@ impl Erc20Dao {
         &self,
         tx_id: &str,
         final_hash: &str,
-        final_gas_price: Option<f64>,
+        final_gas_price: Option<String>,
         error: &str,
     ) {
         if let Err(e) = self
@@ -278,7 +278,7 @@ impl Erc20Dao {
         tx_id: &str,
         encoded: String,
         signature: String,
-        current_gas_price: Option<f64>,
+        current_gas_price: Option<String>,
     ) {
         if let Err(e) = self
             .transaction()
@@ -308,7 +308,7 @@ impl Erc20Dao {
         }
     }
 
-    pub async fn transaction_sent(&self, tx_id: &str, tx_hash: &str, gas_price: Option<f64>) {
+    pub async fn transaction_sent(&self, tx_id: &str, tx_hash: &str, gas_price: Option<String>) {
         if let Err(e) = self
             .transaction()
             .update_tx_sent(tx_id.to_string(), tx_hash.to_string(), gas_price)
