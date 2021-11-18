@@ -18,8 +18,7 @@ use url::Url;
 
 use ya_core_model::net::{self, net_service};
 use ya_core_model::NodeId;
-use ya_net_server::testing::client::ForwardReceiver;
-use ya_net_server::testing::{Client, ClientBuilder};
+use ya_relay_client::{client::ForwardReceiver, Client, ClientBuilder};
 use ya_relay_proto::codec::forward::{PrefixedSink, PrefixedStream, SinkKind};
 use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::CallReplyCode;
