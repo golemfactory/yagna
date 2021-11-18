@@ -5178,7 +5178,7 @@ version = "0.5.1"
 source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6c848541e89262f90ca693d9e1a84c6f3df0953b"
 dependencies = [
  "lazy_static",
- "parking_lot 0.11.1",
+ "parking_lot 0.10.2",
  "serial_test_derive",
 ]
 
@@ -7196,7 +7196,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=26a4099c7c55f8ae53ae459e4c58f3c639a183af#26a4099c7c55f8ae53ae459e4c58f3c639a183af"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=1052108b786c75c996f9c6db8bc52d8ddab04c45#1052108b786c75c996f9c6db8bc52d8ddab04c45"
 dependencies = [
  "anyhow",
  "derive_more",
@@ -7214,7 +7214,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-core"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=26a4099c7c55f8ae53ae459e4c58f3c639a183af#26a4099c7c55f8ae53ae459e4c58f3c639a183af"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=1052108b786c75c996f9c6db8bc52d8ddab04c45#1052108b786c75c996f9c6db8bc52d8ddab04c45"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7240,7 +7240,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-proto"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=26a4099c7c55f8ae53ae459e4c58f3c639a183af#26a4099c7c55f8ae53ae459e4c58f3c639a183af"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=1052108b786c75c996f9c6db8bc52d8ddab04c45#1052108b786c75c996f9c6db8bc52d8ddab04c45"
 dependencies = [
  "bytes 0.5.6",
  "derive_more",
@@ -7256,7 +7256,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=26a4099c7c55f8ae53ae459e4c58f3c639a183af#26a4099c7c55f8ae53ae459e4c58f3c639a183af"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=1052108b786c75c996f9c6db8bc52d8ddab04c45#1052108b786c75c996f9c6db8bc52d8ddab04c45"
 dependencies = [
  "derive_more",
  "futures 0.3.13",
