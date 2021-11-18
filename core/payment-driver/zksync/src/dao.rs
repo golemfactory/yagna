@@ -64,7 +64,7 @@ impl ZksyncDao {
         msg: &SchedulePayment,
     ) -> Result<(), GenericError> {
         let recipient = msg.recipient().to_owned();
-        let glm_amount = utils::big_dec_to_u256(msg.amount());
+        let glm_amount = utils::big_dec_to_u256(&msg.amount());
         let gas_amount = Default::default();
         let (network, _token) = platform_to_network_token(msg.platform())?;
 
@@ -112,13 +112,9 @@ impl ZksyncDao {
             current_gas_price: None,
             starting_gas_price: None,
             max_gas_price: None,
-            final_gas_price: None,
-            final_gas_price_exact: None,
             final_gas_used: None,
             amount_base: None,
-            amount_base_exact: None,
             amount_erc20: None,
-            amount_erc20_exact: None,
             gas_limit: None,
             tx_type: TxType::Transfer as i32, // Zksync only knows transfers, unused field
             encoded: "".to_string(),          // not used till pre-sign

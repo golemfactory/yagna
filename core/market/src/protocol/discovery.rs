@@ -16,7 +16,6 @@ use ya_service_bus::{typed as bus, Error as BusError, RpcEndpoint, RpcMessage};
 use error::*;
 use message::*;
 use ya_core_model::market::BUS_ID;
-use ya_core_model::net::local as local_net;
 use ya_core_model::net::local::{BroadcastMessage, SendBroadcastMessage};
 use ya_net::{self as net, RemoteEndpoint};
 
@@ -111,16 +110,12 @@ impl Discovery {
         };
         let size = offer_ids.len();
         log::debug!("Broadcasting offers. count={}", size);
-        let bcast_msg = SendBroadcastMessage::new(OffersBcast { offer_ids });
 
         counter!("market.offers.broadcasts.net", 1);
         value!("market.offers.broadcasts.len", size as u64);
 
-        // TODO: We shouldn't use send_as. Put identity inside broadcasted message instead.
-        if let Err(e) = bus::service(local_net::BUS_ID)
-            .send_as(default_id, bcast_msg) // TODO: should we send as our (default) identity?
-            .await
-        {
+        // TODO: should we send as our (default) identity?
+        if let Err(e) = net::broadcast(default_id, OffersBcast { offer_ids }).await {
             log::error!("Error sending bcast, skipping... error={:?}", e);
             counter!("market.offers.broadcasts.net_errors", 1);
         };
@@ -210,15 +205,11 @@ impl Discovery {
 
         let size = offer_ids.len();
         log::debug!("Broadcasting unsubscribes. count={}", size);
-        let bcast_msg = SendBroadcastMessage::new(UnsubscribedOffersBcast { offer_ids });
         counter!("market.offers.unsubscribes.broadcasts.net", 1);
         value!("market.offers.unsubscribes.broadcasts.len", size as u64);
 
-        // TODO: We shouldn't use send_as. Put identity inside broadcasted message instead.
-        if let Err(e) = bus::service(local_net::BUS_ID)
-            .send_as(default_id, bcast_msg) // TODO: should we send as our (default) identity?
-            .await
-        {
+        // TODO: should we send as our (default) identity?
+        if let Err(e) = net::broadcast(default_id, UnsubscribedOffersBcast { offer_ids }).await {
             log::error!("Error sending bcast, skipping... error={:?}", e);
             counter!("market.offers.unsubscribes.broadcasts.net_errors", 1);
         };

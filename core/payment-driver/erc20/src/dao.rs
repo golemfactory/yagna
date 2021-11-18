@@ -2,9 +2,6 @@
     Database Access Object, all you need to interact with the database.
 */
 
-// Extrernal crates
-//use chrono::{DateTime, Utc};
-//use uuid::Uuid;
 use web3::types::U256;
 
 // Workspace uses
@@ -65,7 +62,7 @@ impl Erc20Dao {
         msg: &SchedulePayment,
     ) -> Result<(), GenericError> {
         let recipient = msg.recipient().to_owned();
-        let glm_amount = utils::big_dec_to_u256(msg.amount());
+        let glm_amount = utils::big_dec_to_u256(&msg.amount());
         let gas_amount = Default::default();
         let (network, _token) = platform_to_network_token(msg.platform())?;
 
@@ -112,54 +109,9 @@ impl Erc20Dao {
 
         Ok(next_nonce)
     }
-    /*
-    pub async fn insert_transaction2(
-        &self,
-        details: &PaymentDetails,
-        date: DateTime<Utc>,
-    ) -> String {
-        // TO CHECK: No difference between tx_id and tx_hash on erc20
-        // TODO: Implement pre-sign
-        let tx_id = Uuid::new_v4().to_string();
-        let current_naive_time = date.naive_utc();
-        let tx = TransactionEntity {
-            tx_id: tx_id.clone(),
-            sender: details.sender.clone(),
-            nonce: "".to_string(), // not used till pre-sign
-            status: TransactionStatus::Created as i32,
-            time_created: current_naive_time,
-            time_last_action: current_naive_time,
-            time_confirmed: None,
-            time_sent: None,
-            tx_type: 0,                // Erc20 only knows transfers, unused field
-            encoded: "".to_string(),   // not used till pre-sign
-            signature: "".to_string(), // not used till pre-sign
-            tx_hash: None,
-            network: Network::Rinkeby, // TODO: update network
-            current_gas_price: None,
-            starting_gas_price: None,
-            max_gas_price: None,
-            last_error_msg: None,
-            resent_times: 0,
-        };
-
-        if let Err(e) = self.transaction().insert_transactions(vec![tx]).await {
-            log::error!("Failed to store transaction for {:?} : {:?}", details, e)
-            // TO CHECK: Should it continue or stop the process...
-        }
-        tx_id
-    }*/
 
     pub async fn insert_raw_transaction(&self, tx: TransactionEntity) -> String {
         let tx_id = tx.tx_id.clone();
-        /*        match self.transaction().get(tx_id).await {
-            Some(res) => {
-                if let Some(tx) = res {
-                    self.transaction().del
-                }
-            }
-            Err(e) => log::error!("Error when checking for existing transactions: {:?}", e)
-        }*/
 
         if let Err(e) = self.transaction().insert_transactions(vec![tx]).await {
             log::error!("Failed to store transaction for {} : {:?}", tx_id, e)
@@ -182,9 +134,7 @@ impl Erc20Dao {
         &self,
         tx_id: &str,
         final_hash: &str,
-        final_gas_price: Option<f64>,
-        final_gas_price_exact: Option<String>,
-        final_gas_used: Option<i32>,
+        final_gas_price: Option<String>,
     ) {
         if let Err(e) = self
             .transaction()
@@ -194,8 +144,6 @@ impl Erc20Dao {
                 None,
                 Some(final_hash.to_string()),
                 final_gas_price,
-                final_gas_price_exact,
-                final_gas_used,
             )
             .await
         {
@@ -208,9 +156,7 @@ impl Erc20Dao {
         &self,
         tx_id: &str,
         final_hash: &str,
-        final_gas_price: Option<f64>,
-        final_gas_price_exact: Option<String>,
-        final_gas_used: Option<i32>,
+        final_gas_price: Option<String>,
         error: &str,
     ) {
         if let Err(e) = self
@@ -221,8 +167,6 @@ impl Erc20Dao {
                 Some(error.to_string()),
                 Some(final_hash.to_string()),
                 final_gas_price,
-                final_gas_price_exact,
-                final_gas_used,
             )
             .await
         {
@@ -238,8 +182,6 @@ impl Erc20Dao {
                 tx_id.to_string(),
                 TransactionStatus::ErrorNonceTooLow.into(),
                 Some(error.to_string()),
-                None,
-                None,
                 None,
                 None,
             )
@@ -288,7 +230,7 @@ impl Erc20Dao {
         tx_id: &str,
         encoded: String,
         signature: String,
-        current_gas_price: Option<f64>,
+        current_gas_price: Option<String>,
     ) {
         if let Err(e) = self
             .transaction()
@@ -318,7 +260,7 @@ impl Erc20Dao {
         }
     }
 
-    pub async fn transaction_sent(&self, tx_id: &str, tx_hash: &str, gas_price: Option<f64>) {
+    pub async fn transaction_sent(&self, tx_id: &str, tx_hash: &str, gas_price: Option<String>) {
         if let Err(e) = self
             .transaction()
             .update_tx_sent(tx_id.to_string(), tx_hash.to_string(), gas_price)

@@ -411,12 +411,14 @@ impl ServiceCommand {
                     }),
                     &vec![
                         ("actix_http::response", log::LevelFilter::Off),
+                        ("h2", log::LevelFilter::Info),
+                        ("hyper", log::LevelFilter::Info),
+                        ("reqwest", log::LevelFilter::Info),
                         ("tokio_core", log::LevelFilter::Info),
                         ("tokio_reactor", log::LevelFilter::Info),
-                        ("reqwest", log::LevelFilter::Info),
-                        ("hyper", log::LevelFilter::Info),
+                        ("trust_dns_resolver", log::LevelFilter::Info),
+                        ("trust_dns_proto", log::LevelFilter::Info),
                         ("web3", log::LevelFilter::Info),
-                        ("h2", log::LevelFilter::Info),
                     ],
                     force_debug,
                 )?;

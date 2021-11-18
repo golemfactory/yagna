@@ -1,9 +1,7 @@
 use std::process::Stdio;
-
 use anyhow::Context;
 use serde::Deserialize;
-use std::process::Stdio;
-use std::{collections::BTreeMap, process::Stdio};
+use std::collections::BTreeMap;
 use tokio::process::{Child, Command};
 
 use ya_core_model::payment::local::NetworkName;
@@ -20,6 +18,7 @@ pub struct YaProviderCommand {
 pub struct Preset {
     pub name: String,
     pub exeunit_name: String,
+    pub initial_price: f64,
     pub usage_coeffs: UsageDef,
 }
 
@@ -338,4 +337,5 @@ fn preset_command<'a, 'b>(
     cmd.arg("--pricing").arg("linear");
     for &(k, v) in usage_coeffs {
         cmd.arg("--price").arg(format!("{}={}", k, v));
+    }
 }

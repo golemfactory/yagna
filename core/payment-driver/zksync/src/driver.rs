@@ -453,29 +453,25 @@ impl PaymentDriverCron for ZksyncDriver {
                     None => continue,
                     Some(tx_hash) => tx_hash,
                 };
-                // Check payments before to fetch network
-                let first_payment: PaymentEntity = match self.dao.get_first_payment(&tx_hash).await
-                {
-                    Some(p) => p,
-                    None => continue,
-                };
 
                 log::debug!(
                     "Checking if tx was a success. network={}, hash={}",
                     &network,
                     &tx_hash
                 );
-                let tx_success = match wallet::check_tx(&tx_hash, first_payment.network).await {
+                let tx_success = match wallet::check_tx(&tx_hash, network).await {
                     None => continue, // Check_tx returns None when the result is unknown
                     Some(tx_success) => tx_success,
                 };
 
                 let payments = self.dao.transaction_confirmed(&tx.tx_id).await;
+
                 // Faucet can stop here IF the tx was a success.
                 if tx.tx_type == TxType::Faucet as i32 && tx_success.is_ok() {
                     log::debug!("Faucet tx confirmed, exit early. hash={}", &tx_hash);
                     continue;
                 }
+
                 let order_ids: Vec<String> = payments
                     .iter()
                     .map(|payment| payment.order_id.clone())
@@ -514,9 +510,8 @@ impl PaymentDriverCron for ZksyncDriver {
                 }
 
                 // TODO: Add token support
-                let platform =
-                    network_token_to_platform(Some(first_payment.network), None).unwrap(); // TODO: Catch error?
-                let details = match wallet::verify_tx(&tx_hash, first_payment.network).await {
+                let platform = network_token_to_platform(Some(network), None).unwrap(); // TODO: Catch error?
+                let details = match wallet::verify_tx(&tx_hash, network).await {
                     Ok(a) => a,
                     Err(e) => {
                         log::warn!("Failed to get transaction details from zksync, creating bespoke details. Error={}", e);
@@ -525,6 +520,11 @@ impl PaymentDriverCron for ZksyncDriver {
                         // - Sender + receiver are the same
                         // - Date is always now
                         // - Amount needs to be updated to total of all PaymentEntity's
+                        let first_payment: PaymentEntity =
+                            match self.dao.get_first_payment(&tx_hash).await {
+                                Some(p) => p,
+                                None => continue,
+                            };
                         let mut details = utils::db_to_payment_details(&first_payment);
                         details.amount = payments
                             .into_iter()
