@@ -144,7 +144,7 @@ impl<'c> TransactionDao<'c> {
         .await
     }
 
-    pub async fn get_by_statuses(
+    async fn get_by_statuses(
         &self,
         status1: TransactionStatus,
         status2: TransactionStatus,
