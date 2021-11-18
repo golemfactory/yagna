@@ -350,19 +350,13 @@ docker = ">=5.0,<6.0"
 docker-compose = ">=1.29,<2.0"
 dpath = ">=2.0,<3.0"
 func_timeout = "4.3.5"
-ghapi = "^0.1.16"
-mitmproxy = "^5.3"
-pyyaml = "^5.4"
-transitions = "^0.8"
-typing_extensions = "^3.10.0"
-urllib3 = "^1.26"
-ya-aioclient = "^0.6"
-
-[package.source]
-type = "git"
-url = "https://github.com/golemfactory/goth.git"
-reference = "8a01f6317f6efb592e4e6d7d0e0137ae8ae785e7"
-resolved_reference = "8a01f6317f6efb592e4e6d7d0e0137ae8ae785e7"
+ghapi = ">=0.1.16,<0.2.0"
+mitmproxy = ">=5.3,<6.0"
+pyyaml = ">=5.4,<6.0"
+transitions = ">=0.8,<0.9"
+typing_extensions = ">=3.10.0,<4.0.0"
+urllib3 = ">=1.26,<2.0"
+ya-aioclient = ">=0.6,<0.7"
 
 [[package]]
 name = "h11"
@@ -563,14 +557,14 @@ python-versions = "*"
 
 [[package]]
 name = "packaging"
-version = "21.2"
+version = "21.3"
 description = "Core utilities for Python packages"
 category = "main"
 optional = false
 python-versions = ">=3.6"
 
 [package.dependencies]
-pyparsing = ">=2.0.2,<3"
+pyparsing = ">=2.0.2,<3.0.5 || >3.0.5"
 
 [[package]]
 name = "paramiko"
@@ -1048,7 +1042,7 @@ python-versions = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8.0"
-content-hash = "b666403d9a1d3fae86252853b39019ab5dd3780e29e06510eb947d32c675f094"
+content-hash = "6493bd1dfa68da5e439167735e891b139b52475ba77ac9355ade09a8338310d0"
 
 [metadata.files]
 aiohttp = [
@@ -1560,8 +1554,8 @@ mypy-extensions = [
     {file = "mypy_extensions-0.4.3.tar.gz", hash = "sha256:2d82818f5bb3e369420cb3c4060a7970edba416647068eb4c5343488a6c604a8"},
 ]
 packaging = [
-    {file = "packaging-21.2-py3-none-any.whl", hash = "sha256:14317396d1e8cdb122989b916fa2c7e9ca8e2be9e8060a6eff75b6b7b4d8a7e0"},
-    {file = "packaging-21.2.tar.gz", hash = "sha256:096d689d78ca690e4cd8a89568ba06d07ca097e3306a4381635073ca91479966"},
+    {file = "packaging-21.3-py3-none-any.whl", hash = "sha256:ef103e05f519cdc783ae24ea4e2e0f508a9c99b2d4969652eed6a2e1ea5bd522"},
+    {file = "packaging-21.3.tar.gz", hash = "sha256:dd47c42927d89ab911e606518907cc2d3a1f38bbd026385970643f9c5b8ecfeb"},
 ]
 paramiko = [
     {file = "paramiko-2.8.0-py2.py3-none-any.whl", hash = "sha256:def3ec612399bab4e9f5eb66b0ae5983980db9dd9120d9e9c6ea3ff673865d1c"},
