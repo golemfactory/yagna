@@ -20,7 +20,7 @@ readme = "README.md"
 python = "^3.8.0"
 pytest = "^6.2"
 pytest-asyncio = "^0.14"
-goth = "^0.8"
+goth = "^0.9"
 # to use development goth version uncomment below
 # goth = { git = "https://github.com/golemfactory/goth.git", branch = "your-branch-here" }
 

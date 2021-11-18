@@ -337,7 +337,7 @@ dev = ["jsonref"]
 
 [[package]]
 name = "goth"
-version = "0.8.0"
+version = "0.9.0"
 description = "Golem Test Harness - integration testing framework"
 category = "main"
 optional = false
@@ -1042,7 +1042,7 @@ python-versions = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8.0"
-content-hash = "6493bd1dfa68da5e439167735e891b139b52475ba77ac9355ade09a8338310d0"
+content-hash = "ec43d044ee3a22bb0948422cb6ad7031481e96820fa53b308c798cea7f925793"
 
 [metadata.files]
 aiohttp = [
@@ -1306,8 +1306,8 @@ ghapi = [
     {file = "ghapi-0.1.19.tar.gz", hash = "sha256:d8d7012a6b275c1b691de9854504b11d6c41b36db7002992c2e2d51320f9758b"},
 ]
 goth = [
-    {file = "goth-0.8.0-py3-none-any.whl", hash = "sha256:cd71b20c2b0b6ded17f36d3ce8403e1933052d167f10608853495fa02b105054"},
-    {file = "goth-0.8.0.tar.gz", hash = "sha256:065a97634554b0556fef0cb5493ec7a7ad86fa5055b0b872228814bef5a16f93"},
+    {file = "goth-0.9.0-py3-none-any.whl", hash = "sha256:1ab224c99a8c110ffa654150729cb942680171d64129fa6d859c196909feaa16"},
+    {file = "goth-0.9.0.tar.gz", hash = "sha256:e4952449bacb69fb5d6de33611a468fdb61ead0e663179f1cbd16ca9ec17fa0c"},
 ]
 h11 = [
     {file = "h11-0.12.0-py3-none-any.whl", hash = "sha256:36a3cb8c0a032f56e2da7084577878a035d3b61d104230d4bd49c0c6b555a9c6"},
