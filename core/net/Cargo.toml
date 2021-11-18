@@ -11,8 +11,10 @@ service = []
 
 [dependencies]
 ya-core-model = { version = "^0.4", features=["net", "identity"] }
-ya-net-server = { git = "https://github.com/golemfactory/ya-relay.git", rev = "3e8701e2ffa0030bb6925e3a0db541cefe93c507" }
-ya-relay-proto = { git = "https://github.com/golemfactory/ya-relay.git", rev = "3e8701e2ffa0030bb6925e3a0db541cefe93c507", features = ["codec"] }
+#ya-net-server = { git = "https://github.com/golemfactory/ya-relay.git", rev = "3aca25c8e299e7d995a2ea70f1ce63d262fef7dd" }
+#ya-relay-proto = { git = "https://github.com/golemfactory/ya-relay.git", rev = "3aca25c8e299e7d995a2ea70f1ce63d262fef7dd", features = ["codec"] }
+ya-net-server = { path = "../../../ya-relay/server" }
+ya-relay-proto = { path = "../../../ya-relay/crates/proto", features = ["codec"] }
 ya-sb-proto = { version = "0.4" }
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.1"

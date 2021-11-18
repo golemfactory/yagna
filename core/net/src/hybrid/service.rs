@@ -154,6 +154,10 @@ pub async fn start_network(
         }
     });
 
+    if let Some(address) = client.public_addr().await {
+        log::info!("Public address: {}", address);
+    }
+
     Ok(())
 }
 
@@ -686,7 +690,7 @@ impl State {
                     .with(|c| c.borrow().clone())
                     .ok_or_else(|| anyhow::anyhow!("network not started"))?;
 
-                let session = client.server_session().await?;
+                let session = client.optimal_session(remote_id).await?;
                 let forward: NetSinkKind = if reliable {
                     PrefixedSink::new(session.forward(remote_id).await?).into()
                 } else {

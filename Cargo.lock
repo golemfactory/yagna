@@ -7073,7 +7073,6 @@ dependencies = [
 [[package]]
 name = "ya-net-server"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=3e8701e2ffa0030bb6925e3a0db541cefe93c507#3e8701e2ffa0030bb6925e3a0db541cefe93c507"
 dependencies = [
  "actix-rt",
  "anyhow",
@@ -7108,7 +7107,6 @@ dependencies = [
 [[package]]
 name = "ya-net-stack"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=3e8701e2ffa0030bb6925e3a0db541cefe93c507#3e8701e2ffa0030bb6925e3a0db541cefe93c507"
 dependencies = [
  "derive_more",
  "futures 0.3.13",
@@ -7278,8 +7276,8 @@ dependencies = [
 [[package]]
 name = "ya-relay-proto"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=3e8701e2ffa0030bb6925e3a0db541cefe93c507#3e8701e2ffa0030bb6925e3a0db541cefe93c507"
 dependencies = [
+ "anyhow",
  "bytes 0.5.6",
  "derive_more",
  "futures 0.3.13",
