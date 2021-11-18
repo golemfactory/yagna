@@ -121,9 +121,13 @@ pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
     cmd.yagna()?
         .payment_init(&address, &config.account.network, &ERC20_DRIVER)
         .await?;
-    cmd.yagna()?
+    if let Err(e) = cmd
+        .yagna()?
         .payment_init(&address, &config.account.network, &ZKSYNC_DRIVER)
-        .await?;
+        .await
+    {
+        log::debug!("Failed to initialize zkSync driver. e:{}", e);
+    };
 
     let provider = cmd.ya_provider()?.spawn(&app_key, &config).await?;
     let ctrl_c = tokio::signal::ctrl_c();

@@ -34,10 +34,10 @@ async fn payment_status(
             Ok((zk, StatusResult::default()))
         }
         (Err(e), Ok(erc20)) => {
-            log::warn!("yagna payment status for zkSync {} failed: {}", network, e);
+            log::debug!("yagna payment status for zkSync {} failed: {}", network, e);
             Ok((StatusResult::default(), erc20))
         }
-        (Err(e), _) => Err(e),
+        (_, Err(e)) => Err(e),
     }
 }
 
@@ -225,10 +225,11 @@ async fn get_payment_network() -> Result<(usize, NetworkName)> {
     let mut network = None;
     for net in NetworkName::VARIANTS {
         let net_to_check = net.parse()?;
-        let platform_property = &format!(
-            "golem.com.payment.platform.{}.address",
-            ZKSYNC_DRIVER.platform(&net_to_check)?.platform
-        );
+        let platform = ERC20_DRIVER
+            .platform(&net_to_check)
+            .or_else(|_e| ZKSYNC_DRIVER.platform(&net_to_check))?;
+        let platform_property =
+            &format!("golem.com.payment.platform.{}.address", platform.platform,);
         if latest_offer.properties.get(platform_property).is_some() {
             network = Some(net_to_check)
         };
