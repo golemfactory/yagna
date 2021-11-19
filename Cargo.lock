@@ -7520,7 +7520,6 @@ dependencies = [
  "walkdir",
  "ya-client-model",
  "ya-core-model",
- "ya-net",
  "ya-service-bus",
  "ya-utils-path",
  "zip",
