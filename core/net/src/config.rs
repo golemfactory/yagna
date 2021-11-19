@@ -29,8 +29,20 @@ impl Config {
     }
 }
 
+/// TODO: Remove compilation flag.
+///  This conditional compilation is hack to make Goth integration tests work.
+///  Current solution in Goth is to build separate binary with compilation flag.
+///  This is only temporary for transition period, to make this PR as small as possible.
+#[cfg(not(feature = "hybrid-net"))]
 impl Default for NetType {
     fn default() -> Self {
         NetType::Central
+    }
+}
+
+#[cfg(feature = "hybrid-net")]
+impl Default for NetType {
+    fn default() -> Self {
+        NetType::Hybrid
     }
 }
