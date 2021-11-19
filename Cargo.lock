@@ -3925,6 +3925,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "petname"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9474d20c003131d8945af478b25c8e29477a522e408ae4ca8e8822839f5fd2f2"
+dependencies = [
+ "itertools 0.10.1",
+ "rand 0.8.4",
+ "structopt",
+]
+
+[[package]]
 name = "pin-project"
 version = "0.4.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5531,9 +5542,9 @@ checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
 name = "structopt"
-version = "0.3.21"
+version = "0.3.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5277acd7ee46e63e5168a80734c9f6ee81b1367a7d8772a2d765df2a3705d28c"
+checksum = "40b9788f4202aa75c240ecc9c15c65185e6a39ccdeb0fd5d008b98825464c87c"
 dependencies = [
  "clap",
  "lazy_static",
@@ -5542,9 +5553,9 @@ dependencies = [
 
 [[package]]
 name = "structopt-derive"
-version = "0.4.14"
+version = "0.4.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ba9cdfda491b814720b6b06e0cac513d922fc407582032e8706e9f137976f90"
+checksum = "dcb5ae327f9cc13b68763b5749770cb9e048a99bd9dfdfa58d0cf05d5f64afe0"
 dependencies = [
  "heck",
  "proc-macro-error",
@@ -6706,6 +6717,7 @@ dependencies = [
  "chrono",
  "ethsign 0.8.0",
  "hex",
+ "petname",
  "regex",
  "semver 1.0.4",
  "serde",
@@ -7240,6 +7252,7 @@ dependencies = [
  "dotenv",
  "futures 0.3.13",
  "futures-util",
+ "hex",
  "humantime 2.1.0",
  "lazy_static",
  "libc",

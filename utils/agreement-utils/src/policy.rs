@@ -1,13 +1,17 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Not;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 
 use ethsign::PublicKey;
+use std::fs::OpenOptions;
+use std::io::Write;
 use structopt::StructOpt;
 use strum::{IntoEnumIterator, VariantNames};
 use strum_macros::{Display, EnumIter, EnumString, EnumVariantNames};
+
+const SCHEME_SECP256K1: &'static str = "secp256k1";
 
 /// Policy configuration
 #[derive(StructOpt, Clone, Debug, Default)]
@@ -89,38 +93,67 @@ impl FromStr for Match {
 
 #[derive(Clone, Default)]
 pub struct Keystore {
-    inner: Arc<RwLock<HashMap<Box<[u8]>, String>>>,
+    inner: Arc<RwLock<BTreeMap<Box<[u8]>, KeyMeta>>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct KeyMeta {
+    pub scheme: String,
+    pub name: String,
+}
+
+impl Default for KeyMeta {
+    fn default() -> Self {
+        KeyMeta::new(None, None)
+    }
+}
+
+impl KeyMeta {
+    pub fn new(scheme: Option<String>, name: Option<String>) -> Self {
+        KeyMeta {
+            scheme: scheme.unwrap_or_else(|| SCHEME_SECP256K1.to_string()),
+            name: name.unwrap_or_else(|| petname::petname(3, "-")),
+        }
+    }
 }
 
 impl Keystore {
-    pub fn from_path(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+    pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         let path = path.as_ref();
         let contents = std::fs::read_to_string(path)
             .map_err(|e| anyhow::anyhow!("cannot read the keystore file: {}", e))?;
 
-        let mut counter = 0_u32;
-        let mut map: HashMap<Box<[u8]>, String> = Default::default();
-
-        // <scheme> <key> <alias>
-        for line in contents.lines().map(|l| l.trim()) {
-            if line.is_empty() || line.starts_with("#") {
-                continue;
-            }
-
-            let parts = line.split_whitespace().collect::<Vec<_>>();
-            let alias = match parts.len() {
-                2 => format!("key_no_{}", counter + 1),
-                3 => parts[2].to_string(),
-                _ => anyhow::bail!("invalid key entry: {}", line),
-            };
-            let key = Self::parse_key(parts[0], parts[1])?;
-            map.insert(key, alias);
-            counter += 1;
-        }
+        let map = contents
+            .lines()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty() && !s.starts_with("#"))
+            .map(|s| parse_key_entry(s))
+            .collect::<Result<_, _>>()?;
 
         Ok(Keystore {
             inner: Arc::new(RwLock::new(map)),
         })
+    }
+
+    pub fn save(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
+        let lines: Vec<String> = {
+            let inner = self.inner.read().unwrap();
+            inner.iter().map(key_entry_to_string).collect()
+        };
+
+        let mut file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(path)?;
+        lines
+            .into_iter()
+            .try_for_each(|line| file.write_all(line.as_bytes()))?;
+
+        file.flush()?;
+        file.sync_all()?;
+
+        Ok(())
     }
 
     pub fn replace(&self, other: Keystore) {
@@ -131,27 +164,33 @@ impl Keystore {
         let mut inner = self.inner.write().unwrap();
         *inner = map;
     }
+}
 
+impl Keystore {
     pub fn contains(&self, key: &[u8]) -> bool {
         let inner = self.inner.read().unwrap();
         inner.contains_key(key)
     }
 
-    pub fn insert(&self, key: impl Into<Box<[u8]>>, name: impl ToString) {
+    pub fn insert(&self, key: impl Into<Box<[u8]>>, scheme: Option<String>, name: Option<String>) {
         let mut inner = self.inner.write().unwrap();
-        inner.insert(key.into(), name.to_string());
+        inner.insert(key.into(), KeyMeta::new(scheme, name));
     }
 
-    fn parse_key(scheme: &str, key: &str) -> anyhow::Result<Box<[u8]>> {
-        match scheme.to_lowercase().as_str() {
-            "secp256k1" => {
-                let key_bytes = hex::decode(key)?;
-                let key = PublicKey::from_slice(key_bytes.as_slice())
-                    .map_err(|_| anyhow::anyhow!("invalid key"))?;
-                Ok(key.bytes().to_vec().into())
-            }
-            _ => anyhow::bail!("invalid scheme: {}", scheme),
-        }
+    pub fn remove_by_name(&self, name: impl AsRef<str>) -> Option<Box<[u8]>> {
+        let name = name.as_ref();
+        let mut inner = self.inner.write().unwrap();
+        let key = inner
+            .iter()
+            .find(|(_, meta)| meta.name.as_str() == name)
+            .map(|(key, _)| key.clone())?;
+        inner.remove(&key);
+        Some(key)
+    }
+
+    pub fn keys(&self) -> BTreeMap<Box<[u8]>, KeyMeta> {
+        let inner = self.inner.read().unwrap();
+        (*inner).clone()
     }
 }
 
@@ -172,6 +211,37 @@ fn parse_property_match(input: &str) -> anyhow::Result<(String, Match)> {
         None => Match::All,
     };
     Ok((property, values))
+}
+
+fn parse_key(scheme: &str, key: &str) -> anyhow::Result<Box<[u8]>> {
+    match scheme.to_lowercase().as_str() {
+        SCHEME_SECP256K1 => {
+            let key_bytes = hex::decode(key)?;
+            let key = PublicKey::from_slice(key_bytes.as_slice())
+                .map_err(|_| anyhow::anyhow!("invalid key"))?;
+            Ok(key.bytes().to_vec().into())
+        }
+        _ => anyhow::bail!("invalid scheme: {}", scheme),
+    }
+}
+
+fn parse_key_entry(line: &str) -> anyhow::Result<(Box<[u8]>, KeyMeta)> {
+    let mut split = line.trim().split_whitespace();
+    let scheme = match split.next() {
+        Some(scheme) => scheme.to_string(),
+        None => anyhow::bail!("scheme missing"),
+    };
+    let key = match split.next() {
+        Some(key_hex) => parse_key(scheme.as_str(), key_hex)?,
+        None => anyhow::bail!("key missing"),
+    };
+    let name = split.next().map(|s| s.to_string());
+
+    Ok((key, KeyMeta::new(Some(scheme), name)))
+}
+
+fn key_entry_to_string((key, meta): (&Box<[u8]>, &KeyMeta)) -> String {
+    format!("{}\t{}\t{}\n", meta.scheme, hex::encode(key), meta.name)
 }
 
 #[cfg(test)]
