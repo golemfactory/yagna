@@ -1,7 +1,7 @@
 use std::process::Stdio;
-
 use anyhow::Context;
 use serde::Deserialize;
+use std::collections::BTreeMap;
 use tokio::process::{Child, Command};
 
 use ya_core_model::payment::local::NetworkName;
@@ -18,19 +18,11 @@ pub struct YaProviderCommand {
 pub struct Preset {
     pub name: String,
     pub exeunit_name: String,
+    pub initial_price: f64,
     pub usage_coeffs: UsageDef,
 }
 
-#[derive(Deserialize, Clone, Default)]
-#[serde(rename_all = "kebab-case")]
-pub struct UsageDef {
-    #[serde(default)]
-    pub cpu: f64,
-    #[serde(default)]
-    pub initial: f64,
-    #[serde(default)]
-    pub duration: f64,
-}
+pub type UsageDef = BTreeMap<String, f64>;
 
 impl UsageDef {
     pub fn for_runtime(&self, runtime: &RuntimeInfo) -> Vec<(&str, f64)> {

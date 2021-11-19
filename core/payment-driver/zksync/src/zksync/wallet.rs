@@ -10,9 +10,7 @@ use std::str::FromStr;
 use zksync::operations::SyncTransactionHandle;
 use zksync::types::BlockStatus;
 use zksync::zksync_types::{
-    tokens::{ChangePubKeyFeeType, ChangePubKeyFeeTypeArg},
-    tx::TxHash,
-    Address, Nonce, TxFeeTypes, H256,
+    tokens::ChangePubKeyFeeTypeArg, tx::TxHash, Address, Nonce, TxFeeTypes, H256,
 };
 use zksync::{
     provider::{Provider, RpcProvider},
@@ -34,6 +32,7 @@ use crate::{
     zksync::{faucet, signer::YagnaEthSigner, utils},
     DEFAULT_NETWORK,
 };
+use zksync::zksync_types::tx::ChangePubKeyType;
 use std::time::Duration;
 use ya_payment_driver::model::{ExitFee, FeeResult};
 
@@ -319,8 +318,9 @@ fn get_rpc_addr(network: Network) -> String {
             .unwrap_or("https://api.zksync.golem.network/jsrpc".to_string()),
         Network::Rinkeby => env::var("ZKSYNC_RINKEBY_RPC_ADDRESS")
             .unwrap_or("https://rinkeby-api.zksync.golem.network/jsrpc".to_string()),
-        Network::PolygonMainnet => panic!("Polygon mainnet not supported on zksync"),
-        Network::PolygonMumbai => panic!("Polygon mainnet not supported on zksync"),
+        Network::Goerli => panic!("Goerli not supported on zksync"),
+        Network::Polygon => panic!("Polygon not supported on zksync"),
+        Network::Mumbai => panic!("Mumbai not supported on zksync"),
     }
 }
 
@@ -331,8 +331,9 @@ fn get_ethereum_node_addr_from_env(network: Network) -> String {
         }
         Network::Rinkeby => env::var("RINKEBY_GETH_ADDR")
             .unwrap_or("http://geth.testnet.golem.network:55555".to_string()),
-        Network::PolygonMainnet => panic!("Polygon mainnet not supported on zksync"),
-        Network::PolygonMumbai => panic!("Polygon mainnet not supported on zksync"),
+        Network::Goerli => panic!("Goerli not supported on zksync"),
+        Network::Polygon => panic!("Polygon mainnet not supported on zksync"),
+        Network::Mumbai => panic!("Polygon mumbai not supported on zksync"),
     }
 }
 
@@ -503,7 +504,7 @@ async fn get_unlock_fee<S: EthereumSigner + Clone, P: Provider + Clone>(
         .provider
         .get_tx_fee(
             TxFeeTypes::ChangePubKey(ChangePubKeyFeeTypeArg::ContractsV4Version(
-                ChangePubKeyFeeType::ECDSA,
+                ChangePubKeyType::ECDSA,
             )),
             wallet.address(),
             token,
@@ -520,7 +521,7 @@ pub async fn deposit<S: EthereumSigner + Clone, P: Provider + Clone>(
     amount: BigDecimal,
 ) -> Result<H256, GenericError> {
     let token = get_network_token(network, None);
-    let amount = base_utils::big_dec_to_u256(amount);
+    let amount = base_utils::big_dec_to_u256(&amount);
     let address = wallet.address();
 
     log::info!(

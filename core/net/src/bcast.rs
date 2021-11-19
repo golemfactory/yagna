@@ -1,24 +1,23 @@
 // Broadcast support service
 
-use std::cell::RefCell;
 use std::collections::BTreeMap;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use ya_core_model::net::local as local_net;
 
 #[derive(Clone, Default)]
 pub struct BCastService {
-    inner: Rc<RefCell<BCastServiceInner>>,
+    inner: Arc<Mutex<BCastServiceInner>>,
 }
 
 #[derive(Default)]
 struct BCastServiceInner {
     last_id: u64,
-    topics: BTreeMap<String, Vec<(u64, Rc<str>)>>,
+    topics: BTreeMap<String, Vec<(u64, Arc<str>)>>,
 }
 
 impl BCastService {
     pub fn add(&self, subscribe: local_net::Subscribe) -> (bool, u64) {
-        let mut me = self.inner.borrow_mut();
+        let mut me = self.inner.lock().unwrap();
         let id = me.last_id;
         let receivers = me
             .topics
@@ -31,8 +30,8 @@ impl BCastService {
         (is_new, id)
     }
 
-    pub fn resolve(&self, topic: &str) -> Vec<Rc<str>> {
-        let me = self.inner.borrow();
+    pub fn resolve(&self, topic: &str) -> Vec<Arc<str>> {
+        let me = self.inner.lock().unwrap();
         me.topics
             .get(topic)
             .map(|receivers| {

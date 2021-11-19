@@ -113,10 +113,7 @@ pub async fn setup(run_config: &RunConfig, force: bool) -> Result<i32> {
                 config.subnet = None;
             }
         }
-        let subnet = promptly::prompt_default(
-            "Subnet ",
-            config.subnet.unwrap_or_else(|| DEFAULT_SUBNET.to_string()),
-        )?;
+        let subnet = config.subnet.unwrap_or_else(|| DEFAULT_SUBNET.to_string());
 
         let account_msg = &config
             .account
@@ -175,11 +172,10 @@ pub async fn setup(run_config: &RunConfig, force: bool) -> Result<i32> {
         let default_glm_per_h = 0.1;
         let glm_per_h = promptly::prompt_default("Price GLM per hour", default_glm_per_h)?;
 
-        let usage = UsageDef {
-            cpu: glm_per_h / 3600.0,
-            duration: glm_per_h / 3600.0 / 5.0,
-            initial: 0.0,
-        };
+        let mut usage = UsageDef::new();
+        usage.insert("CPU".into(), glm_per_h / 3600.0);
+        usage.insert("Duration".into(), glm_per_h / 3600.0 / 5.0);
+        usage.insert("Init price".into(), 0.0);
 
         for runtime in &runtimes {
             eprintln!(

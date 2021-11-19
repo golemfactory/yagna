@@ -600,7 +600,7 @@ impl PaymentProcessor {
     pub async fn verify_payment(
         &self,
         payment: Payment,
-        signature: Option<Vec<u8>>,
+        signature: Vec<u8>,
     ) -> Result<(), VerifyPaymentError> {
         // TODO: Split this into smaller functions
         log::info!("Entered verify_payment {:?}, sign={:?}", payment, signature);
@@ -611,18 +611,16 @@ impl PaymentProcessor {
             AccountMode::RECV,
         )?;
 
-        if let Some(signature) = signature {
-            if !driver_endpoint(&driver)
-                .send(driver::VerifySignature::new(payment.clone(), signature))
-                .await??
-            {
-                log::error!(
-                    "invalid payment signature from: {}/{}",
-                    payment.payer_id,
-                    payment.payment_platform
-                );
-                return Err(VerifyPaymentError::InvalidSignature);
-            }
+        if !driver_endpoint(&driver)
+            .send(driver::VerifySignature::new(payment.clone(), signature))
+            .await??
+        {
+            log::error!(
+                "invalid payment signature from: {}/{}",
+                payment.payer_id,
+                payment.payment_platform
+            );
+            return Err(VerifyPaymentError::InvalidSignature);
         }
 
         log::info!("check for confirmation for: {}", payment.payment_id);

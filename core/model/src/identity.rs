@@ -213,6 +213,16 @@ impl RpcMessage for Subscribe {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct GetPubKey(pub NodeId);
+
+impl RpcMessage for GetPubKey {
+    const ID: &'static str = "GetPubKey";
+    type Item = Vec<u8>;
+    type Error = Error;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetKeyFile(pub NodeId);
 
 impl RpcMessage for GetKeyFile {

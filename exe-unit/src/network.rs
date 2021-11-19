@@ -254,9 +254,9 @@ impl Handler<Packet> for Vpn {
             };
 
             if let Some(ip) = ip {
-                log::debug!("Adding new node: {} {}", ip, node_id);
                 self.networks.get_mut(&network_id).map(|network| {
                     if !network.nodes().contains_key(&node_id) {
+                        log::debug!("Adding new node: {} {}", ip, node_id);
                         network.add_node(ip, &node_id, gsb_endpoint);
                     }
                 });

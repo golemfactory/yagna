@@ -480,6 +480,8 @@ pub mod local {
         Mainnet,
         #[strum(props(token = "tGLM"))]
         Rinkeby,
+        #[strum(props(token = "tGLM"))]
+        Goerli,
         #[strum(props(token = "GLM"))]
         Polygon,
         #[strum(props(token = "tGLM"))]
@@ -504,12 +506,11 @@ pub mod local {
     pub enum DriverName {
         ZkSync,
         Erc20,
-        Polygon,
     }
 
     #[derive(StructOpt, Debug, Clone)]
     pub struct AccountCli {
-        /// Wallet address [default: <DEFAULT_IDENTIDITY>]
+        /// Wallet address [default: <DEFAULT_IDENTITY>]
         #[structopt(long, env = "YA_ACCOUNT")]
         pub account: Option<NodeId>,
         /// Payment driver
@@ -716,14 +717,13 @@ pub mod public {
     // *************************** PAYMENT ****************************
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     pub struct SendPayment {
-        #[serde(flatten)] // Flatten is required for backwards compatability with 0.6.x
+        #[serde(flatten)]
         pub payment: Payment,
-        #[serde(default)] // Optional is required for backwards compatability with 0.6.x
-        pub signature: Option<Vec<u8>>,
+        pub signature: Vec<u8>,
     }
 
     impl SendPayment {
-        pub fn new(payment: Payment, signature: Option<Vec<u8>>) -> Self {
+        pub fn new(payment: Payment, signature: Vec<u8>) -> Self {
             Self { payment, signature }
         }
     }

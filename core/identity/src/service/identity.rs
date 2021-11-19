@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use actix_rt::Arbiter;
 use chrono::Utc;
-use ethsign::{KeyFile, Protected};
+use ethsign::{KeyFile, Protected, PublicKey};
 use futures::lock::Mutex;
 use futures::prelude::*;
 use ya_client_model::NodeId;
@@ -367,6 +367,14 @@ impl IdentityService {
         Ok(model::Ack {})
     }
 
+    pub async fn get_pub_key(
+        &mut self,
+        key_id: model::GetPubKey,
+    ) -> Result<PublicKey, model::Error> {
+        let key = self.get_key_by_id(&key_id.0)?;
+        key.to_pub_key().map_err(|e| model::Error::new_err_msg(e))
+    }
+
     pub async fn get_key_file(
         &mut self,
         key_id: model::GetKeyFile,
@@ -477,6 +485,17 @@ impl IdentityService {
         let _ = bus::bind(model::BUS_ID, move |subscribe: model::Subscribe| {
             let this = this.clone();
             async move { this.lock().await.subscribe(subscribe).await }
+        });
+        let this = me.clone();
+        let _ = bus::bind(model::BUS_ID, move |node_id: model::GetPubKey| {
+            let this = this.clone();
+            async move {
+                this.lock()
+                    .await
+                    .get_pub_key(node_id)
+                    .await
+                    .map(|key| key.bytes().to_vec())
+            }
         });
         let this = me.clone();
         let _ = bus::bind(model::BUS_ID, move |node_id: model::GetKeyFile| {

@@ -100,6 +100,10 @@ impl PresetUpdater {
             .position(|exeunit| exeunit == &self.preset.exeunit_name)
             .unwrap_or(0);
 
+        if self.exeunits.is_empty() {
+            bail!("ExeUnits list empty");
+        }
+
         let exeunit_idx = Select::new()
             .with_prompt("ExeUnit")
             .items(&self.exeunits[..])

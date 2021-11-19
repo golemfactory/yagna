@@ -33,10 +33,16 @@ pub enum TxType {
 
 #[derive(FromPrimitive)]
 pub enum TransactionStatus {
-    Failed = 0,
+    Unused = 0, //previous failure
     Created = 1,
     Sent = 2,
-    Confirmed = 3,
+    Pending = 3,
+    Confirmed = 4,
+    Resend = 5,
+    ResendAndBumpGas = 6,
+    ErrorSent = 10,
+    ErrorOnChain = 11,
+    ErrorNonceTooLow = 12,
 }
 
 impl TryFrom<i32> for TransactionStatus {
@@ -49,19 +55,32 @@ impl TryFrom<i32> for TransactionStatus {
 }
 
 #[derive(Clone, Queryable, Debug, Identifiable, Insertable, PartialEq)]
-#[primary_key(tx_hash)]
+#[primary_key(tx_id)]
 #[table_name = "transaction"]
 pub struct TransactionEntity {
     pub tx_id: String,
     pub sender: String,
-    pub nonce: String,
-    pub timestamp: NaiveDateTime,
+    pub nonce: i32,
     pub status: i32,
     pub tx_type: i32,
-    pub encoded: String,
-    pub signature: String,
-    pub tx_hash: Option<String>,
+    pub tmp_onchain_txs: Option<String>,
+    pub final_tx: Option<String>,
     pub network: Network,
+    pub starting_gas_price: Option<String>,
+    pub current_gas_price: Option<String>,
+    pub max_gas_price: Option<String>,
+    pub final_gas_used: Option<i32>,
+    pub amount_base: Option<String>,
+    pub amount_erc20: Option<String>,
+    pub gas_limit: Option<i32>,
+    pub time_created: NaiveDateTime,
+    pub time_last_action: NaiveDateTime,
+    pub time_sent: Option<NaiveDateTime>,
+    pub time_confirmed: Option<NaiveDateTime>,
+    pub last_error_msg: Option<String>,
+    pub resent_times: i32,
+    pub signature: Option<String>,
+    pub encoded: String,
 }
 
 #[derive(Queryable, Clone, Debug, Identifiable, Insertable, PartialEq)]
@@ -82,10 +101,11 @@ pub struct PaymentEntity {
 #[derive(AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy, FromPrimitive)]
 #[sql_type = "Integer"]
 pub enum Network {
-    Mainnet = 1,
-    Rinkeby = 4,
-    PolygonMumbai = 80001,
-    PolygonMainnet = 137,
+    Mainnet = 1,    //Main Ethereum chain
+    Rinkeby = 4,    //Rinkeby is Ethereum testnet
+    Goerli = 5,     //Goerli is another Ethereum testnet
+    Mumbai = 80001, //Mumbai is testnet for Polygon network
+    Polygon = 137,  //Polygon is Polygon production network
 }
 
 impl Default for Network {
@@ -101,8 +121,9 @@ impl FromStr for Network {
         match s.to_lowercase().as_str() {
             "mainnet" => Ok(Network::Mainnet),
             "rinkeby" => Ok(Network::Rinkeby),
-            "polygon" => Ok(Network::PolygonMainnet),
-            "mumbai" => Ok(Network::PolygonMumbai),
+            "goerli" => Ok(Network::Goerli),
+            "polygon" => Ok(Network::Polygon),
+            "mumbai" => Ok(Network::Mumbai),
             _ => Err(DbError::InvalidData(format!(
                 "Invalid network: {}",
                 s.to_string()
@@ -116,8 +137,9 @@ impl Display for Network {
         match *self {
             Network::Mainnet => f.write_str("mainnet"),
             Network::Rinkeby => f.write_str("rinkeby"),
-            Network::PolygonMumbai => f.write_str("mumbai"),
-            Network::PolygonMainnet => f.write_str("polygon"),
+            Network::Goerli => f.write_str("goerli"),
+            Network::Mumbai => f.write_str("mumbai"),
+            Network::Polygon => f.write_str("polygon"),
         }
     }
 }
@@ -140,8 +162,9 @@ where
         Ok(match i32::from_sql(bytes)? {
             1 => Network::Mainnet,
             4 => Network::Rinkeby,
-            137 => Network::PolygonMainnet,
-            80001 => Network::PolygonMumbai,
+            5 => Network::Goerli,
+            137 => Network::Polygon,
+            80001 => Network::Mumbai,
             _ => return Err(anyhow::anyhow!("invalid value").into()),
         })
     }
