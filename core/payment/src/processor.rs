@@ -461,7 +461,7 @@ impl PaymentProcessor {
                                 }
                             };
 
-                            let msg = SendPayment::new(payment, Some(signature));
+                            let msg = SendPayment::new(payment, signature);
 
                             match ya_net::from(payer_id)
                                 .to(payee_id)
@@ -551,7 +551,7 @@ impl PaymentProcessor {
                 .await??;
 
             counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "platform" => payment_platform);
-            let msg = SendPayment::new(payment, Some(signature));
+            let msg = SendPayment::new(payment, signature);
 
             // Spawning to avoid deadlock in a case that payee is the same node as payer
             Arbiter::spawn(

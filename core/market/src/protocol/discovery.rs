@@ -11,7 +11,7 @@ use tokio::time::delay_for;
 use ya_client::model::NodeId;
 use ya_service_bus::timeout::{IntoDuration, IntoTimeoutFuture};
 use ya_service_bus::typed::ServiceBinder;
-use ya_service_bus::{typed as bus, Error as BusError, RpcEndpoint, RpcMessage};
+use ya_service_bus::{Error as BusError, RpcEndpoint, RpcMessage};
 
 use error::*;
 use message::*;
