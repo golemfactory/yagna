@@ -1,8 +1,7 @@
-use actix_rt::Arbiter;
 use actix_web::http::header;
 use actix_web::{web, Either, HttpRequest, HttpResponse, Responder};
 use bytes::{BufMut, Bytes, BytesMut};
-use futures::{FutureExt, StreamExt, TryFutureExt};
+use futures::StreamExt;
 use metrics::counter;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -10,7 +9,7 @@ use std::time::Duration;
 
 use ya_client_model::activity::{
     ActivityState, CreateActivityRequest, CreateActivityResult, Credentials, ExeScriptCommand,
-    ExeScriptRequest, RuntimeEvent, RuntimeEventKind, SgxCredentials, State,
+    ExeScriptRequest, SgxCredentials, State,
 };
 use ya_client_model::market::Agreement;
 use ya_core_model::{activity, Role};
@@ -20,7 +19,7 @@ use ya_service_api_web::middleware::Identity;
 use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
 
 use crate::common::*;
-use crate::dao::{ActivityDao, RuntimeEventDao};
+use crate::dao::ActivityDao;
 use crate::{error::Error, Result};
 
 pub fn extend_web_scope(scope: actix_web::Scope) -> actix_web::Scope {
@@ -211,8 +210,7 @@ async fn get_batch_results(
 
     if let Some(value) = request.headers().get(header::ACCEPT) {
         if value.eq(mime::TEXT_EVENT_STREAM.essence_str()) {
-            let db = db.get_ref().clone();
-            return Ok(Either::A(stream_results(db, agreement, path, id)?));
+            return Ok(Either::A(stream_results(agreement, path, id)?));
         }
     }
     Ok(Either::B(await_results(agreement, path, query, id).await?))
@@ -242,7 +240,6 @@ async fn await_results(
 }
 
 fn stream_results(
-    db: DbExecutor,
     agreement: Agreement,
     path: web::Path<PathActivityBatch>,
     id: Identity,
@@ -257,10 +254,6 @@ fn stream_results(
         .to(agreement.provider_id().clone())
         .service(&activity::exeunit::bus_id(&path.activity_id))
         .call_streaming(msg)
-        .inspect(move |entry| match entry {
-            Ok(Ok(evt)) => persist_event(&db, &path.activity_id, &evt),
-            _ => (),
-        })
         .map(|item| match item {
             Ok(result) => result.map_err(Error::from),
             Err(e) => Err(Error::from(e)),
@@ -276,26 +269,6 @@ fn stream_results(
         .keep_alive()
         .content_type(mime::TEXT_EVENT_STREAM.essence_str())
         .streaming(stream))
-}
-
-fn persist_event(db: &DbExecutor, activity_id: &String, event: &RuntimeEvent) {
-    match &event.kind {
-        RuntimeEventKind::StdOut(_) | RuntimeEventKind::StdErr(_) => (),
-        _ => {
-            let db = db.clone();
-            let activity_id = activity_id.clone();
-            let event = event.clone();
-
-            let fut = async move {
-                db.as_dao::<RuntimeEventDao>()
-                    .create(&activity_id, event)
-                    .map_err(|e| log::warn!("Cannot persist event: {:?}", e))
-                    .map(|_| ())
-                    .await;
-            };
-            Arbiter::spawn(fut)
-        }
-    }
 }
 
 fn map_event_result<T: Serialize>(

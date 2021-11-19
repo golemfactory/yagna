@@ -39,7 +39,15 @@ pub async fn init(driver: &Erc20Driver, msg: Init) -> Result<(), GenericError> {
 
     let network = network::network_like_to_network(msg.network());
     let token = network::get_network_token(network, msg.token());
-    bus::register_account(driver, &msg.address(), &network.to_string(), &token, mode).await?;
+    bus::register_account(
+        driver,
+        &msg.address(),
+        &network.to_string(),
+        &token,
+        mode,
+        msg.batch(),
+    )
+    .await?;
 
     log::info!(
         "Initialised payment account. mode={:?}, address={}, driver={}, network={}, token={}",
@@ -70,6 +78,8 @@ pub async fn fund(dao: &Erc20Dao, msg: Fund) -> Result<String, GenericError> {
                 .map_err(GenericError::new)??;
             format!("Received funds from the faucet. address=0x{:x}", &address)
         }
+        Network::PolygonMainnet => format!("PolygonMainnet not supported on ERC20 driver"),
+        Network::PolygonMumbai => format!("PolygonMumbai not supported on ERC20 driver"),
         Network::Mainnet => format!(
             r#"Your mainnet ethereum address is {}.
 

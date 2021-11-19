@@ -41,6 +41,7 @@ mod local {
             .bind_with_processor(get_accounts)
             .bind_with_processor(validate_allocation)
             .bind_with_processor(get_drivers)
+            .bind_with_processor(build_payments)
             .bind_with_processor(shut_down);
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
@@ -300,6 +301,15 @@ mod local {
         Ok(processor.lock().await.get_drivers().await)
     }
 
+    async fn build_payments(
+        db: DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        _caller: String,
+        msg: BuildPayments,
+    ) -> Result<String, NoError> {
+        todo!()
+    }
+
     async fn shut_down(
         db: DbExecutor,
         processor: Arc<Mutex<PaymentProcessor>>,
@@ -394,8 +404,8 @@ mod public {
 
             log::info!(
                 "DebitNote [{}] received from node [{}].",
-                node_id,
-                debit_note_id
+                debit_note_id,
+                issuer_id
             );
             counter!("payment.debit_notes.requestor.received", 1);
             Ok(())

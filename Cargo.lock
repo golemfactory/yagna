@@ -6901,6 +6901,7 @@ dependencies = [
  "ya-metrics",
  "ya-net",
  "ya-persistence",
+ "ya-polygon-driver",
  "ya-sb-router",
  "ya-service-api",
  "ya-service-api-interfaces",
@@ -6963,6 +6964,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-polygon-driver"
+version = "0.3.0"
+dependencies = [
+ "actix-rt",
+ "anyhow",
+ "async-trait",
+ "awc",
+ "bigdecimal 0.2.0",
+ "chrono",
+ "dotenv",
+ "env_logger",
+ "ethabi",
+ "ethereum-tx-sign",
+ "futures 0.3.13",
+ "hex",
+ "lazy_static",
+ "log",
+ "maplit",
+ "num-bigint 0.3.2",
+ "num-traits",
+ "rlp",
+ "serde",
+ "serde_json",
+ "sha3 0.8.2",
+ "structopt",
+ "tiny-keccak 2.0.2",
+ "tokio 0.2.25",
+ "uuid",
+ "web3",
+ "ya-client-model",
+ "ya-payment-driver",
+ "ya-service-api-interfaces",
+ "ya-utils-futures",
+ "ya-utils-networking",
+]
+
+[[package]]
 name = "ya-provider"
 version = "0.2.0"
 dependencies = [
@@ -7018,7 +7056,7 @@ dependencies = [
 
 [[package]]
 name = "ya-runtime-api"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "bytes 0.5.6",
@@ -7457,6 +7495,7 @@ dependencies = [
  "ya-net",
  "ya-payment",
  "ya-persistence",
+ "ya-polygon-driver",
  "ya-provider",
  "ya-sb-proto",
  "ya-sb-router",

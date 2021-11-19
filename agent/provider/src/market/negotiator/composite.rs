@@ -9,6 +9,7 @@ use ya_client::model::market::NewOffer;
 use super::builtin::{LimitExpiration, MaxAgreements};
 use super::common::{offer_definition_to_offer, AgreementResponse, Negotiator, ProposalResponse};
 use super::{NegotiationResult, NegotiatorsPack};
+use crate::market::negotiator::builtin::PriceNego;
 use crate::market::negotiator::common::{
     reason_with_extra, AgreementFinalized, CreateOffer, ReactToAgreement, ReactToProposal,
 };
@@ -34,6 +35,10 @@ impl CompositeNegotiator {
             .add_component(
                 "LimitExpiration",
                 Box::new(LimitExpiration::new(&config.expire_agreements_config)?),
+            )
+            .add_component(
+                "Price",
+                Box::new(PriceNego::new(&config.expire_agreements_config)?),
             );
 
         Ok(CompositeNegotiator { components })

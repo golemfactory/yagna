@@ -9,7 +9,7 @@ use chrono::Utc;
 use futures::channel::{mpsc, oneshot};
 use futures::{FutureExt, SinkExt};
 use ya_client_model::activity::{
-    activity_state::StatePair, ActivityUsage, CommandOutput, ExeScriptCommand, RuntimeEvent, State,
+    activity_state::StatePair, ActivityUsage, CommandOutput, ExeScriptCommand, State,
 };
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
 

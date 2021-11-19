@@ -9,6 +9,7 @@ use diesel::{self, ExpressionMethods, QueryDsl, RunQueryDsl};
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
 
 // Local uses
+use crate::db::models::PAYMENT_STATUS_ACCEPTED;
 use crate::{
     dao::DbResult,
     db::{
@@ -38,6 +39,23 @@ impl<'c> PaymentDao<'c> {
             let payments: Vec<PaymentEntity> = dsl::payment
                 .filter(dsl::sender.eq(address))
                 .filter(dsl::status.eq(PAYMENT_STATUS_NOT_YET))
+                .filter(dsl::network.eq(network))
+                .order(dsl::payment_due_date.asc())
+                .load(conn)?;
+            Ok(payments)
+        })
+        .await
+    }
+
+    pub async fn get_accpeted_payments(
+        &self,
+        address: String,
+        network: Network,
+    ) -> DbResult<Vec<PaymentEntity>> {
+        readonly_transaction(self.pool, move |conn| {
+            let payments: Vec<PaymentEntity> = dsl::payment
+                .filter(dsl::sender.eq(address))
+                .filter(dsl::status.eq(PAYMENT_STATUS_ACCEPTED))
                 .filter(dsl::network.eq(network))
                 .order(dsl::payment_due_date.asc())
                 .load(conn)?;

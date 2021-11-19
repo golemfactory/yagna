@@ -58,6 +58,28 @@ impl ZksyncDao {
         }
     }
 
+    pub async fn get_accepted_payments(
+        &self,
+        node_id: &str,
+        network: Network,
+    ) -> Vec<PaymentEntity> {
+        match self
+            .payment()
+            .get_accpeted_payments(node_id.to_string(), network)
+            .await
+        {
+            Ok(payments) => payments,
+            Err(e) => {
+                log::error!(
+                    "Failed to fetch pending payments for {:?} : {:?}",
+                    node_id,
+                    e
+                );
+                vec![]
+            }
+        }
+    }
+
     pub async fn insert_payment(
         &self,
         order_id: &str,
@@ -189,6 +211,21 @@ impl ZksyncDao {
         {
             log::error!(
                 "Failed to update transaction failed in `payment` {:?} : {:?}",
+                order_id,
+                e
+            )
+            // TO CHECK: Should it continue or stop the process...
+        }
+    }
+
+    pub async fn retry_payment(&self, order_id: &str) {
+        if let Err(e) = self
+            .payment()
+            .update_status(order_id.to_string(), PAYMENT_STATUS_NOT_YET)
+            .await
+        {
+            log::error!(
+                "Failed to set status of the `payment` {:?} to be retried : {:?}",
                 order_id,
                 e
             )

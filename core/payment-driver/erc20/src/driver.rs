@@ -24,7 +24,7 @@ use ya_payment_driver::{
 };
 
 // Local uses
-use crate::{dao::Erc20Dao, network::SUPPORTED_NETWORKS, DEFAULT_NETWORK, DRIVER_NAME};
+use crate::{dao::Erc20Dao, network::SUPPORTED_NETWORKS, DRIVER_NAME, RINKEBY_NETWORK};
 
 mod api;
 mod cli;
@@ -135,7 +135,7 @@ impl PaymentDriver for Erc20Driver {
     }
 
     fn get_default_network(&self) -> String {
-        DEFAULT_NETWORK.to_string()
+        RINKEBY_NETWORK.to_string()
     }
 
     fn get_networks(&self) -> HashMap<String, NetworkConfig> {
@@ -225,8 +225,6 @@ impl PaymentDriver for Erc20Driver {
         }
         Ok(())
     }
-
-
 }
 
 #[async_trait(?Send)]

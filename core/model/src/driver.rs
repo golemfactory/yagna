@@ -198,6 +198,15 @@ impl RpcMessage for Fund {
 }
 
 // ************************** INIT **************************
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum BatchMode {
+    Manual {},
+    Auto {
+        internal: Duration,
+        min_amount: BigDecimal,
+        max_delay: Duration,
+    },
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Init {
@@ -205,6 +214,7 @@ pub struct Init {
     network: Option<String>,
     token: Option<String>,
     mode: AccountMode,
+    batch: Option<BatchMode>,
 }
 
 impl Init {
@@ -213,12 +223,14 @@ impl Init {
         network: Option<String>,
         token: Option<String>,
         mode: AccountMode,
+        batch: Option<BatchMode>,
     ) -> Init {
         Init {
             address,
             network,
             token,
             mode,
+            batch,
         }
     }
     pub fn address(&self) -> String {
@@ -232,6 +244,9 @@ impl Init {
     }
     pub fn mode(&self) -> AccountMode {
         self.mode.clone()
+    }
+    pub fn batch(&self) -> Option<BatchMode> {
+        self.batch.clone()
     }
 }
 
