@@ -32,10 +32,16 @@ pub enum TxType {
 
 #[derive(FromPrimitive)]
 pub enum TransactionStatus {
-    Failed = 0,
+    Unused = 0, //previous failure
     Created = 1,
     Sent = 2,
-    Confirmed = 3,
+    Pending = 3,
+    Confirmed = 4,
+    Resend = 5,
+    ResendAndBumpGas = 6,
+    ErrorSent = 10,
+    ErrorOnChain = 11,
+    ErrorNonceTooLow = 12,
 }
 
 impl TryFrom<i32> for TransactionStatus {
@@ -48,19 +54,32 @@ impl TryFrom<i32> for TransactionStatus {
 }
 
 #[derive(Clone, Queryable, Debug, Identifiable, Insertable, PartialEq)]
-#[primary_key(tx_hash)]
+#[primary_key(tx_id)]
 #[table_name = "transaction"]
 pub struct TransactionEntity {
     pub tx_id: String,
     pub sender: String,
-    pub nonce: String,
-    pub timestamp: NaiveDateTime,
+    pub nonce: i32,
     pub status: i32,
     pub tx_type: i32,
-    pub encoded: String,
-    pub signature: String,
-    pub tx_hash: Option<String>,
+    pub tmp_onchain_txs: Option<String>,
+    pub final_tx: Option<String>,
     pub network: Network,
+    pub starting_gas_price: Option<String>,
+    pub current_gas_price: Option<String>,
+    pub max_gas_price: Option<String>,
+    pub final_gas_used: Option<i32>,
+    pub amount_base: Option<String>,
+    pub amount_erc20: Option<String>,
+    pub gas_limit: Option<i32>,
+    pub time_created: NaiveDateTime,
+    pub time_last_action: NaiveDateTime,
+    pub time_sent: Option<NaiveDateTime>,
+    pub time_confirmed: Option<NaiveDateTime>,
+    pub last_error_msg: Option<String>,
+    pub resent_times: i32,
+    pub signature: Option<String>,
+    pub encoded: String,
 }
 
 #[derive(Queryable, Clone, Debug, Identifiable, Insertable, PartialEq)]
