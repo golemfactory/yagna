@@ -31,7 +31,7 @@ pub mod local {
     use ya_client_model::NodeId;
 
     pub const BUS_ID: &'static str = "/local/payment";
-    pub const DEFAULT_PAYMENT_DRIVER: &str = "zksync";
+    pub const DEFAULT_PAYMENT_DRIVER: &str = "erc20";
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct DebitNotePayment {
@@ -514,7 +514,7 @@ pub mod local {
         #[structopt(long, env = "YA_ACCOUNT")]
         pub account: Option<NodeId>,
         /// Payment driver
-        #[structopt(long, possible_values = DriverName::VARIANTS, default_value = DriverName::ZkSync.into())]
+        #[structopt(long, possible_values = DriverName::VARIANTS, default_value = DriverName::Erc20.into())]
         pub driver: DriverName,
         /// Payment network
         #[structopt(long, possible_values = NetworkName::VARIANTS, default_value = NetworkName::Rinkeby.into())]
@@ -547,7 +547,7 @@ pub mod local {
         fn test_cli_defaults() {
             let a = AccountCli::from_iter(&[""]);
             assert_eq!(None, a.address());
-            assert_eq!("zksync", a.driver());
+            assert_eq!("erc20", a.driver());
             assert_eq!("rinkeby", a.network());
             assert_eq!("tGLM", a.token());
         }

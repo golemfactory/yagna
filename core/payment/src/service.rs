@@ -70,6 +70,7 @@ mod local {
         counter!("payment.invoices.provider.paid", 0);
         counter!("payment.invoices.provider.accepted", 0);
         counter!("payment.invoices.provider.accepted.call", 0);
+        counter!("payment.invoices.requestor.not-enough-funds", 0);
 
         counter!("payment.amount.received", 0, "platform" => "erc20-rinkeby-tglm");
         counter!("payment.amount.received", 0, "platform" => "erc20-mainnet-glm");
