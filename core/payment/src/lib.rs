@@ -28,7 +28,7 @@ pub mod migrations {
     struct _Dummy;
 }
 
-pub const DEFAULT_PAYMENT_PLATFORM: &str = "zksync-rinkeby-tglm"; // TODO: remove
+pub const DEFAULT_PAYMENT_PLATFORM: &str = "erc20-rinkeby-tglm";
 pub use ya_core_model::payment::local::DEFAULT_PAYMENT_DRIVER;
 
 lazy_static::lazy_static! {
