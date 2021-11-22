@@ -1,13 +1,12 @@
-use std::collections::{HashMap, HashSet};
-use std::fs;
-use std::path::PathBuf;
-
 use anyhow::Result;
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
-use structopt::clap;
+use std::collections::{HashMap, HashSet};
+use std::fs;
+use std::path::PathBuf;
 use structopt::StructOpt;
 
+use structopt::clap;
 use ya_core_model::NodeId;
 use ya_provider::ReceiverAccount;
 
@@ -189,11 +188,11 @@ pub async fn setup(run_config: &RunConfig, force: bool) -> Result<i32> {
             );
             if presets.contains(&runtime.name) {
                 cmd.ya_provider()?
-                    .update_preset(&runtime.name, &runtime.name, &usage.for_runtime(&runtime))
+                    .update_preset(&runtime.name, &runtime.name, &usage)
                     .await?;
             } else {
                 cmd.ya_provider()?
-                    .create_preset(&runtime.name, &runtime.name, &usage.for_runtime(&runtime))
+                    .create_preset(&runtime.name, &runtime.name, &usage)
                     .await?;
             }
             cmd.ya_provider()?

@@ -64,26 +64,6 @@ lazy_static! {
         );
         PaymentDriver(erc20)
     };
-    pub static ref POLYGON_DRIVER: PaymentDriver = {
-        let mut polygon = HashMap::new();
-        polygon.insert(
-            NetworkName::Polygon.into(),
-            PaymentPlatform {
-                platform: "polygon-polygon-glm",
-                driver: "polygon",
-                token: "GLM",
-            },
-        );
-        polygon.insert(
-            NetworkName::Mumbai.into(),
-            PaymentPlatform {
-                platform: "polygon-mumbai-tglm",
-                driver: "polygon",
-                token: "tGLM",
-            },
-        );
-        PaymentDriver(polygon)
-    };
 }
 
 impl PaymentDriver {
