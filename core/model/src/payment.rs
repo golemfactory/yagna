@@ -507,7 +507,7 @@ pub mod local {
         fn test_cli_defaults() {
             let a = AccountCli::from_iter(&[""]);
             assert_eq!(None, a.address());
-            assert_eq!("Erc20", a.driver());
+            assert_eq!("erc20", a.driver());
             assert_eq!("rinkeby", a.network());
             assert_eq!("tGLM", a.token());
         }
