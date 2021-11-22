@@ -33,7 +33,7 @@ enum Command {
         incremental: bool,
         #[structopt(long, default_value = "0x206bfe4f439a83b65a5b9c2c3b1cc6cb49054cc4")]
         owner: NodeId,
-        #[structopt(long, default_value = "polygon-mumbai-tglm")]
+        #[structopt(long, default_value = "erc20-mumbai-tglm")]
         payment_platform: String,
     },
     SendPayments {
@@ -103,7 +103,7 @@ async fn list_dn(db: DbExecutor) -> anyhow::Result<()> {
         .as_dao::<BatchDao>()
         .list_debit_notes(
             "0xf7530cbcd3685a997b1e49974f68dbe94b1116be".parse()?,
-            "polygon-mumbai-tglm".to_string(),
+            "erc20-mumbai-tglm".to_string(),
             chrono::Utc::now() + chrono::Duration::days(-30),
         )
         .await?
