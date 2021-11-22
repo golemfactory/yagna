@@ -20,6 +20,7 @@ use ya_utils_networking::resolver;
 use crate::bcast::BCastService;
 use crate::central::handler::CentralBusHandler;
 use crate::central::SUBSCRIPTIONS;
+use crate::config::Config;
 
 const CENTRAL_ADDR_ENV_VAR: &str = "CENTRAL_NET_HOST";
 
@@ -387,7 +388,7 @@ impl Default for ReconnectContext {
 pub struct Net;
 
 impl Net {
-    pub async fn gsb<Context>(_: Context) -> anyhow::Result<()> {
+    pub async fn gsb<Context>(_: Context, _config: Config) -> anyhow::Result<()> {
         let (default_id, ids) = crate::service::identities().await?;
         log::info!("using default identity as network id: {:?}", default_id);
 
