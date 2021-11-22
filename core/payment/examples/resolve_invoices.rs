@@ -33,8 +33,8 @@ enum Command {
         incremental: bool,
         #[structopt(long, default_value = "0x206bfe4f439a83b65a5b9c2c3b1cc6cb49054cc4")]
         owner: NodeId,
-        #[structopt(long, default_value = "polygon-mumbai-tglm")]
-        payment_playform: String,
+        #[structopt(long, default_value = "erc20-mumbai-tglm")]
+        payment_platform: String,
     },
     SendPayments {
         #[structopt(long)]
@@ -44,7 +44,7 @@ enum Command {
         #[structopt(long)]
         owner: NodeId,
         #[structopt(long)]
-        payment_playform: String,
+        payment_platform: String,
         #[structopt(long)]
         interval: Option<humantime::Duration>,
     },
@@ -72,26 +72,26 @@ async fn main() -> anyhow::Result<()> {
     match args.command {
         Command::Generate {
             dry_run,
-            payment_playform,
+            payment_platform,
             owner,
             incremental,
-        } => generate(db, owner, payment_playform, dry_run, incremental).await?,
+        } => generate(db, owner, payment_platform, dry_run, incremental).await?,
         Command::SendPayments { order_id } => send_payments(db, order_id).await?,
         Command::Run {
             owner,
-            payment_playform,
+            payment_platform,
             interval,
         } => {
             if let Some(duration) = interval {
                 loop {
                     tokio::time::delay_for(duration.into()).await;
-                    log::info!("sending payments for {} {}", owner, payment_playform);
-                    if let Err(e) = run(db.clone(), owner, payment_playform.clone()).await {
+                    log::info!("sending payments for {} {}", owner, payment_platform);
+                    if let Err(e) = run(db.clone(), owner, payment_platform.clone()).await {
                         log::error!("failed to process order: {:?}", e);
                     }
                 }
             } else {
-                run(db, owner, payment_playform).await?;
+                run(db, owner, payment_platform).await?;
             }
         }
     }
@@ -103,7 +103,7 @@ async fn list_dn(db: DbExecutor) -> anyhow::Result<()> {
         .as_dao::<BatchDao>()
         .list_debit_notes(
             "0xf7530cbcd3685a997b1e49974f68dbe94b1116be".parse()?,
-            "polygon-mumbai-tglm".to_string(),
+            "erc20-mumbai-tglm".to_string(),
             chrono::Utc::now() + chrono::Duration::days(-30),
         )
         .await?
@@ -389,7 +389,7 @@ async fn send_payments(db: DbExecutor, order_id: String) -> anyhow::Result<()> {
         .get_unsent_batch_items(order_id.clone())
         .await?;
     eprintln!("got {} orders", items.len());
-    let bus_id = driver_bus_id("polygon");
+    let bus_id = driver_bus_id("erc20");
     for item in items {
         eprintln!("sending: {:?}", &item);
         let payment_order_id = bus::service(&bus_id)
