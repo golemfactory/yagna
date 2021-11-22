@@ -9,6 +9,8 @@ pub use ya_provider::GlobalsState as ProviderConfig;
 
 use crate::setup::RunConfig;
 
+const CLASSIC_RUNTIMES: &'static [&'static str] = &["wasm", "vw"];
+
 pub struct YaProviderCommand {
     pub(super) cmd: Command,
 }
@@ -179,7 +181,7 @@ impl YaProviderCommand {
         self.exec_no_output().await
     }
 
-    pub async fn update_all_presets(
+    pub async fn update_classic_presets(
         mut self,
         starting_fee: Option<f64>,
         env_per_sec: Option<f64>,
@@ -197,7 +199,9 @@ impl YaProviderCommand {
         if let Some(initial) = starting_fee {
             cmd.arg("--price").arg(format!("Init price={}", initial));
         }
-        cmd.arg("--all");
+        for runtime_name in CLASSIC_RUNTIMES {
+            cmd.arg(format!("--name {}", runtime_name));
+        }
         self.exec_no_output().await
     }
 
