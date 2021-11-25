@@ -195,7 +195,7 @@ impl<'c> DebitNoteDao<'c> {
 
     pub async fn get_all(&self) -> DbResult<Vec<DebitNote>> {
         readonly_transaction(self.pool, move |conn| {
-            let debit_notes: Vec<ReadObj> = query!().load(conn)?;
+            let debit_notes: Vec<ReadObj> = query!().order_by(dsl::timestamp.desc()).load(conn)?;
             debit_notes.into_iter().map(TryInto::try_into).collect()
         })
         .await
@@ -212,6 +212,7 @@ impl<'c> DebitNoteDao<'c> {
             if let Some(date) = after_timestamp {
                 query = query.filter(dsl::timestamp.gt(date))
             }
+            query = query.order_by(dsl::timestamp.desc());
             if let Some(items) = max_items {
                 query = query.limit(items.into())
             }
