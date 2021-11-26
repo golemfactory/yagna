@@ -45,19 +45,28 @@ pub fn get_polygon_starting_price() -> f64 {
 
 pub fn get_polygon_maximum_price() -> f64 {
     match get_polygon_priority() {
-        PolygonPriority::PolygonPrioritySlow => POLYGON_PREFERRED_GAS_PRICES_SLOW[POLYGON_PREFERRED_GAS_PRICES_SLOW.len() - 1],
-        PolygonPriority::PolygonPriorityFast => POLYGON_PREFERRED_GAS_PRICES_FAST[POLYGON_PREFERRED_GAS_PRICES_FAST.len() - 1],
-        PolygonPriority::PolygonPriorityExpress => POLYGON_PREFERRED_GAS_PRICES_EXPRESS[POLYGON_PREFERRED_GAS_PRICES_EXPRESS.len() - 1],
+        PolygonPriority::PolygonPrioritySlow => {
+            POLYGON_PREFERRED_GAS_PRICES_SLOW[POLYGON_PREFERRED_GAS_PRICES_SLOW.len() - 1]
+        }
+        PolygonPriority::PolygonPriorityFast => {
+            POLYGON_PREFERRED_GAS_PRICES_FAST[POLYGON_PREFERRED_GAS_PRICES_FAST.len() - 1]
+        }
+        PolygonPriority::PolygonPriorityExpress => {
+            POLYGON_PREFERRED_GAS_PRICES_EXPRESS[POLYGON_PREFERRED_GAS_PRICES_EXPRESS.len() - 1]
+        }
     }
 }
 
-
 pub fn get_polygon_priority() -> PolygonPriority {
-    match std::env::var("POLYGON_PRIORITY").unwrap_or("slow".to_string()).to_lowercase().as_str() {
+    match std::env::var("POLYGON_PRIORITY")
+        .unwrap_or("fast".to_string())
+        .to_lowercase()
+        .as_str()
+    {
         "slow" => PolygonPriority::PolygonPrioritySlow,
         "fast" => PolygonPriority::PolygonPriorityFast,
         "express" => PolygonPriority::PolygonPriorityExpress,
-        _ => PolygonPriority::PolygonPrioritySlow
+        _ => PolygonPriority::PolygonPrioritySlow,
     }
 }
 
