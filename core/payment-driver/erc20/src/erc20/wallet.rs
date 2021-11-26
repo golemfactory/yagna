@@ -4,7 +4,9 @@
 
 // External crates
 use crate::erc20::ethereum::{
-    get_polygon_priority, PolygonPriority, POLYGON_PREFERRED_GAS_PRICES_EXPRESS, POLYGON_PREFERRED_GAS_PRICES_FAST, POLYGON_PREFERRED_GAS_PRICES_SLOW, get_polygon_maximum_price, get_polygon_starting_price,
+    get_polygon_maximum_price, get_polygon_priority, get_polygon_starting_price, PolygonPriority,
+    POLYGON_PREFERRED_GAS_PRICES_EXPRESS, POLYGON_PREFERRED_GAS_PRICES_FAST,
+    POLYGON_PREFERRED_GAS_PRICES_SLOW,
 };
 use bigdecimal::BigDecimal;
 use chrono::Utc;
@@ -197,9 +199,7 @@ fn bump_gas_price(gas_in_gwei: f64, limit_in_gwei: Option<f64>) -> f64 {
         }
     }
     for n in 1..(gas_prices.len()) {
-        if gas_in_gwei > gas_prices[n - 1]
-            && gas_in_gwei < gas_prices[n]
-        {
+        if gas_in_gwei > gas_prices[n - 1] && gas_in_gwei < gas_prices[n] {
             result = gas_prices[n];
         }
     }
