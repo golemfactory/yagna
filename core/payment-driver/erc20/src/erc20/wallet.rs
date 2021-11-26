@@ -4,7 +4,7 @@
 
 // External crates
 use crate::erc20::ethereum::{
-    POLYGON_MAXIMUM_GAS_PRICE, POLYGON_PREFERRED_GAS_PRICES, POLYGON_STARTING_GAS_PRICE,
+    get_polygon_priority, PolygonPriority, POLYGON_PREFERRED_GAS_PRICES_EXPRESS, POLYGON_PREFERRED_GAS_PRICES_FAST, POLYGON_PREFERRED_GAS_PRICES_SLOW, get_polygon_maximum_price, get_polygon_starting_price,
 };
 use bigdecimal::BigDecimal;
 use chrono::Utc;
@@ -141,11 +141,11 @@ pub async fn make_transfer(
     let amount = big_dec_to_u256(&amount_big_dec)?;
     let gas_price = match gas_price {
         Some(gas_price) => big_dec_gwei_to_u256(gas_price)?,
-        None => convert_float_gas_to_u256(POLYGON_STARTING_GAS_PRICE),
+        None => convert_float_gas_to_u256(get_polygon_starting_price()),
     };
     let max_gas_price = match max_gas_price {
         Some(max_gas_price) => big_dec_gwei_to_u256(max_gas_price)?,
-        None => convert_float_gas_to_u256(POLYGON_MAXIMUM_GAS_PRICE),
+        None => convert_float_gas_to_u256(get_polygon_maximum_price()),
     };
 
     let address = str_to_addr(&details.sender)?;
@@ -182,16 +182,25 @@ pub async fn make_transfer(
 
 fn bump_gas_price(gas_in_gwei: f64, limit_in_gwei: Option<f64>) -> f64 {
     let mut result = -1.0;
-    for n in 1..(POLYGON_PREFERRED_GAS_PRICES.len() - 1) {
-        if gas_float_equals(POLYGON_PREFERRED_GAS_PRICES[n], gas_in_gwei) {
-            result = POLYGON_PREFERRED_GAS_PRICES[n + 1];
+
+    let polygon_prices = get_polygon_priority();
+
+    let gas_prices = match polygon_prices {
+        PolygonPriority::PolygonPriorityExpress => POLYGON_PREFERRED_GAS_PRICES_EXPRESS.to_vec(),
+        PolygonPriority::PolygonPriorityFast => POLYGON_PREFERRED_GAS_PRICES_FAST.to_vec(),
+        PolygonPriority::PolygonPrioritySlow => POLYGON_PREFERRED_GAS_PRICES_SLOW.to_vec(),
+    };
+
+    for n in 1..(gas_prices.len() - 1) {
+        if gas_float_equals(gas_prices[n], gas_in_gwei) {
+            result = gas_prices[n + 1];
         }
     }
-    for n in 1..(POLYGON_PREFERRED_GAS_PRICES.len()) {
-        if gas_in_gwei > POLYGON_PREFERRED_GAS_PRICES[n - 1]
-            && gas_in_gwei < POLYGON_PREFERRED_GAS_PRICES[n]
+    for n in 1..(gas_prices.len()) {
+        if gas_in_gwei > gas_prices[n - 1]
+            && gas_in_gwei < gas_prices[n]
         {
-            result = POLYGON_PREFERRED_GAS_PRICES[n];
+            result = gas_prices[n];
         }
     }
 
@@ -234,7 +243,7 @@ pub async fn send_transactions(
         } else if let Some(starting_gas_price) = tx.starting_gas_price {
             U256::from_dec_str(&starting_gas_price).map_err(GenericError::new)?
         } else {
-            convert_float_gas_to_u256(POLYGON_STARTING_GAS_PRICE)
+            convert_float_gas_to_u256(get_polygon_starting_price())
         };
         raw_tx.gas_price = new_gas_price;
 
