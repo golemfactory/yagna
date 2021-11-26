@@ -27,20 +27,28 @@ struct Cli {
     binary: PathBuf,
     #[structopt(flatten)]
     supervise: SuperviseCli,
+    /// Additional runtime arguments
+    #[structopt(
+        long,
+        short,
+        set = clap::ArgSettings::Global,
+        number_of_values = 1,
+    )]
+    runtime_arg: Vec<String>,
     /// Enclave secret key used in secure communication
     #[structopt(
-    long,
-    env = "EXE_UNIT_SEC_KEY",
-    hide_env_values = true,
-    set = clap::ArgSettings::Global,
+        long,
+        env = "EXE_UNIT_SEC_KEY",
+        hide_env_values = true,
+        set = clap::ArgSettings::Global,
     )]
     sec_key: Option<String>,
     /// Requestor public key used in secure communication
     #[structopt(
-    long,
-    env = "EXE_UNIT_REQUESTOR_PUB_KEY",
-    hide_env_values = true,
-    set = clap::ArgSettings::Global,
+        long,
+        env = "EXE_UNIT_REQUESTOR_PUB_KEY",
+        hide_env_values = true,
+        set = clap::ArgSettings::Global,
     )]
     requestor_pub_key: Option<String>,
     #[structopt(subcommand)]
@@ -51,17 +59,17 @@ struct Cli {
 struct SuperviseCli {
     /// Hardware resources are handled by the runtime
     #[structopt(
-    long = "runtime-managed-hardware",
-    alias = "cap-handoff",
-    parse(from_flag = std::ops::Not::not),
-    set = clap::ArgSettings::Global,
+        long = "runtime-managed-hardware",
+        alias = "cap-handoff",
+        parse(from_flag = std::ops::Not::not),
+        set = clap::ArgSettings::Global,
     )]
     hardware: bool,
     /// Images are handled by the runtime
     #[structopt(
-    long = "runtime-managed-image",
-    parse(from_flag = std::ops::Not::not),
-    set = clap::ArgSettings::Global,
+        long = "runtime-managed-image",
+        parse(from_flag = std::ops::Not::not),
+        set = clap::ArgSettings::Global,
     )]
     image: bool,
 }
@@ -261,6 +269,7 @@ fn run() -> anyhow::Result<()> {
         agreement,
         work_dir,
         cache_dir,
+        runtime_args: cli.runtime_arg.clone(),
         acl: Default::default(),
         credentials: None,
         #[cfg(feature = "sgx")]
