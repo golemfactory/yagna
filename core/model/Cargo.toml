@@ -22,6 +22,7 @@ full = [
     'gftp',
     'sgx',
     'version',
+    'misc',
 ]
 activity = []
 appkey = []
@@ -33,6 +34,7 @@ net = []
 payment = ['bigdecimal', 'bitflags']
 sgx = ['graphene-sgx']
 version = []
+misc = []
 
 [dependencies]
 ya-client-model = "0.3"

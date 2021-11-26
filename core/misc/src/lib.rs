@@ -6,4 +6,4 @@ extern crate diesel_migrations;
 mod notifier;
 mod service;
 
-pub use service::VersionService;
+pub use service::MiscService;

@@ -2,17 +2,8 @@ use std::time::Duration;
 
 use ya_persistence::executor::DbExecutor;
 
-use crate::db::dao::ReleaseDAO;
-use crate::github;
-use crate::github::check_running_release;
-use crate::service::cli::ReleaseMessage;
 
 pub async fn on_start(db: &DbExecutor) -> anyhow::Result<()> {
-    check_running_release(&db).await?;
-
-    if let Err(e) = github::check_latest_release(&db).await {
-        log::error!("Failed to check for new Yagna release: {}", e);
-    };
 
     let worker_db = db.clone();
     tokio::task::spawn_local(async move { crate::notifier::worker(worker_db).await });
@@ -27,9 +18,7 @@ pub(crate) async fn worker(db: DbExecutor) {
     let mut interval = tokio::time::interval(Duration::from_secs(3600 * 24));
     loop {
         interval.tick().await;
-        if let Err(e) = github::check_latest_release(&db).await {
-            log::error!("Failed to check for new Yagna release: {}", e);
-        };
+        log::info!("miscellaneous worker happily looping :)");
     }
 }
 
@@ -37,17 +26,8 @@ pub(crate) async fn pinger(db: DbExecutor) -> ! {
     // TODO: make interval configurable
     let mut interval = tokio::time::interval(Duration::from_secs(30 * 60));
     loop {
-        let release_dao = db.as_dao::<ReleaseDAO>();
         interval.tick().await;
-        match release_dao.pending_release().await {
-            Ok(Some(release)) => {
-                if !release.seen {
-                    log::warn!("{}", ReleaseMessage::Available(&release.into()))
-                }
-            }
-            Ok(None) => log::trace!("Your Yagna is up to date"),
-            Err(e) => log::error!("Fetching new Yagna release from DB: {}", e),
-        }
+        log::info!("miscellaneous pinger happily pinging :)");
     }
 }
 

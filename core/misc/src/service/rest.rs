@@ -1,22 +1,17 @@
-use crate::db::dao::ReleaseDAO;
-
 use ya_client::model::ErrorMessage;
 use ya_persistence::executor::DbExecutor;
 
 use actix_web::{web, HttpResponse, Responder};
 
-pub const VERSION_API_PATH: &str = "/version";
+pub const MISC_API_PATH: &str = "/misc";
 
 pub fn web_scope(db: DbExecutor) -> actix_web::Scope {
-    actix_web::web::scope(VERSION_API_PATH)
+    actix_web::web::scope(MISC_API_PATH)
         .data(db)
-        .service(get_version)
+        .service(get_misc)
 }
 
 #[actix_web::get("/get")]
-async fn get_version(db: web::Data<DbExecutor>) -> impl Responder {
-    match db.as_dao::<ReleaseDAO>().version().await {
-        Ok(v) => HttpResponse::Ok().json(v),
-        Err(e) => HttpResponse::InternalServerError().json(ErrorMessage::new(e.to_string())),
-    }
+async fn get_misc(db: web::Data<DbExecutor>) -> impl Responder {
+    HttpResponse::Ok().json("")
 }

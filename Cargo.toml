@@ -49,6 +49,7 @@ ya-utils-futures = "0.1"
 ya-utils-process = { version = "0.1", features = ["lock"] }
 ya-utils-networking = "0.1"
 ya-version = "0.1"
+ya-misc = "0.1"
 ya-vpn = "0.1"
 
 gftp = { version = "^0.2", optional = true } # just to enable gftp build for cargo-deb
@@ -164,6 +165,7 @@ ya-dummy-driver = { path = "core/payment-driver/dummy" }
 ya-erc20-driver = { path = "core/payment-driver/erc20" }
 ya-zksync-driver = { path = "core/payment-driver/zksync" }
 ya-version = { path = "core/version" }
+ya-misc = { path = "core/misc" }
 ya-vpn = { path = "core/vpn" }
 
 ## CORE UTILS

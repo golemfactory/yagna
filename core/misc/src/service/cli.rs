@@ -1,62 +1,34 @@
 use structopt::{clap::AppSettings, StructOpt};
 
-use ya_core_model::version;
+use ya_core_model::misc;
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
-const UPDATE_CMD: &'static str = "curl -sSf https://join.golem.network/as-provider | bash -";
-
-#[derive(thiserror::Error, Debug, Clone)]
-pub(crate) enum ReleaseMessage<'a> {
-    #[error("New Yagna {0} is available! Update via `{UPDATE_CMD}`")]
-    Available(&'a version::Release),
-    #[error("Your Yagna is up to date: {0}")]
-    UpToDate(&'a version::Release),
-    #[error("Release skipped: {0}")]
-    Skipped(&'a version::Release),
-    #[error("No pending release to skip")]
-    NotSkipped,
-}
 
 /// Yagna version management.
 #[derive(StructOpt, Debug)]
-pub enum VersionCLI {
+pub enum MiscCLI {
     /// Show current Yagna version and updates if available.
     Show,
     /// Checks if there is new Yagna version available and shows it.
-    Check,
-    /// Stop logging warnings about latest Yagna release availability.
-    #[structopt(setting = AppSettings::Hidden)]
-    Skip,
+    Check
 }
 
-impl VersionCLI {
+impl MiscCLI {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
-            VersionCLI::Show => show(version::Get::show_only(), ctx).await,
-            VersionCLI::Check => show(version::Get::with_check(), ctx).await,
-            VersionCLI::Skip => CommandOutput::object(
-                match bus::service(version::BUS_ID)
-                    .send(version::Skip())
-                    .await??
-                {
-                    Some(r) => ReleaseMessage::Skipped(&r).to_string(),
-                    None => ReleaseMessage::NotSkipped.to_string(),
-                },
-            ),
+            MiscCLI::Show => show(misc::Get::show_only(), ctx).await,
+            MiscCLI::Check => show(misc::Get::with_check(), ctx).await,
         }
     }
 }
 
-async fn show(msg: version::Get, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
-    let version_info = bus::service(version::BUS_ID).send(msg).await??;
+async fn show(msg: misc::Get, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
+    let version_info = bus::service(misc::BUS_ID).send(msg).await??;
     if ctx.json_output {
         return CommandOutput::object(version_info);
     }
-    CommandOutput::object(match &version_info.pending {
-        Some(r) => ReleaseMessage::Available(r).to_string(),
-        None => ReleaseMessage::UpToDate(&version_info.current).to_string(),
-    })
+    CommandOutput::object("tesciki".to_string())
 }
 
 #[cfg(test)]

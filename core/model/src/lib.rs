@@ -31,6 +31,9 @@ pub mod sgx;
 #[cfg(feature = "version")]
 pub mod version;
 
+#[cfg(feature = "misc")]
+pub mod misc;
+
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 pub use ya_client_model::NodeId;

@@ -1,24 +1,20 @@
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::{Provider, Service};
 
-use crate::db::migrations;
-
 pub(crate) mod cli;
 mod gsb;
 mod rest;
 
-pub struct VersionService;
+pub struct MiscService;
 
-impl Service for VersionService {
-    type Cli = cli::VersionCLI;
+impl Service for MiscService {
+    type Cli = cli::MiscCLI;
 }
 
-impl VersionService {
+impl MiscService {
     pub async fn gsb<C: Provider<Self, DbExecutor>>(ctx: &C) -> anyhow::Result<()> {
-        let db = ctx.component();
-        db.apply_migration(migrations::run_with_output)?;
-        crate::notifier::on_start(&db).await?;
-        gsb::bind_gsb(&db);
+        crate::notifier::on_start(&ctx.component()).await?;
+        gsb::bind_gsb(&ctx.component());
 
         Ok(())
     }

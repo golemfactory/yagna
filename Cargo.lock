@@ -5184,7 +5184,7 @@ version = "0.5.1"
 source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6c848541e89262f90ca693d9e1a84c6f3df0953b"
 dependencies = [
  "lazy_static",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.1",
  "serial_test_derive",
 ]
 
@@ -7088,6 +7088,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-misc"
+version = "0.1.0"
+dependencies = [
+ "actix-web",
+ "anyhow",
+ "chrono",
+ "diesel",
+ "diesel_migrations",
+ "log",
+ "metrics 0.12.1",
+ "self_update",
+ "serde",
+ "serde_json",
+ "structopt",
+ "thiserror",
+ "tokio 0.2.25",
+ "ya-client",
+ "ya-compile-time-utils",
+ "ya-core-model",
+ "ya-persistence",
+ "ya-service-api",
+ "ya-service-api-interfaces",
+ "ya-service-bus",
+]
+
+[[package]]
 name = "ya-net"
 version = "0.2.0"
 dependencies = [
@@ -7789,6 +7815,7 @@ dependencies = [
  "ya-identity",
  "ya-market",
  "ya-metrics",
+ "ya-misc",
  "ya-net",
  "ya-payment",
  "ya-persistence",
