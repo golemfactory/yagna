@@ -1,6 +1,7 @@
 use anyhow::Result;
 use prettytable::{color, format, format::TableFormat, Attr, Cell, Row, Table};
 use serde::Serialize;
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, Default)]
@@ -55,14 +56,40 @@ impl CommandOutput {
                 header,
             } => {
                 if json_output {
-                    println!(
-                        "{}",
-                        serde_json::to_string_pretty(&serde_json::json!({
-                            "headers": columns,
-                            "values": values
-                        }))
-                        .unwrap()
-                    )
+                    let columns_size_eq_values_size = values.iter().all(|row| match row {
+                        serde_json::Value::Array(values) => values.len() == columns.len(),
+                        _ => false,
+                    });
+                    if columns_size_eq_values_size {
+                        let kvs: Vec<HashMap<&String, &serde_json::Value>> = values
+                            .iter()
+                            .map(|row| match row {
+                                serde_json::Value::Array(row_values)
+                                    if columns.len() == row_values.len() =>
+                                {
+                                    columns
+                                        .into_iter()
+                                        .enumerate()
+                                        .map(|(idx, key)| (key, &row_values[idx]))
+                                        .collect()
+                                }
+                                _ => unreachable!(),
+                            })
+                            .collect();
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&serde_json::json!(kvs)).unwrap()
+                        )
+                    } else {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&serde_json::json!({
+                                "headers": columns,
+                                "values": values
+                            }))
+                            .unwrap()
+                        )
+                    }
                 } else {
                     if let Some(txt) = header {
                         println!("{}", txt);
