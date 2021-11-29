@@ -16,9 +16,15 @@ use ethabi::Token;
 use uuid::Uuid;
 use ya_payment_driver::utils::big_dec_to_u256;
 
-pub const POLYGON_PREFERRED_GAS_PRICES: [f64; 6] = [0.0, 10.01, 15.01, 20.01, 25.01, 30.01];
-pub const POLYGON_STARTING_GAS_PRICE: f64 = 10.01;
-pub const POLYGON_MAXIMUM_GAS_PRICE: f64 = 30.01;
+pub enum PolygonPriority {
+    PolygonPrioritySlow,
+    PolygonPriorityFast,
+    PolygonPriorityExpress,
+}
+
+pub const POLYGON_PREFERRED_GAS_PRICES_SLOW: [f64; 6] = [0.0, 10.01, 15.01, 20.01, 25.01, 30.01];
+pub const POLYGON_PREFERRED_GAS_PRICES_FAST: [f64; 3] = [0.0, 30.01, 40.01];
+pub const POLYGON_PREFERRED_GAS_PRICES_EXPRESS: [f64; 3] = [0.0, 60.01, 100.01];
 
 lazy_static! {
     pub static ref GLM_FAUCET_GAS: U256 = U256::from(90_000);
@@ -28,6 +34,41 @@ lazy_static! {
 const CREATE_FAUCET_FUNCTION: &str = "create";
 const BALANCE_ERC20_FUNCTION: &str = "balanceOf";
 const TRANSFER_ERC20_FUNCTION: &str = "transfer";
+
+pub fn get_polygon_starting_price() -> f64 {
+    match get_polygon_priority() {
+        PolygonPriority::PolygonPrioritySlow => POLYGON_PREFERRED_GAS_PRICES_SLOW[1],
+        PolygonPriority::PolygonPriorityFast => POLYGON_PREFERRED_GAS_PRICES_FAST[1],
+        PolygonPriority::PolygonPriorityExpress => POLYGON_PREFERRED_GAS_PRICES_EXPRESS[1],
+    }
+}
+
+pub fn get_polygon_maximum_price() -> f64 {
+    match get_polygon_priority() {
+        PolygonPriority::PolygonPrioritySlow => {
+            POLYGON_PREFERRED_GAS_PRICES_SLOW[POLYGON_PREFERRED_GAS_PRICES_SLOW.len() - 1]
+        }
+        PolygonPriority::PolygonPriorityFast => {
+            POLYGON_PREFERRED_GAS_PRICES_FAST[POLYGON_PREFERRED_GAS_PRICES_FAST.len() - 1]
+        }
+        PolygonPriority::PolygonPriorityExpress => {
+            POLYGON_PREFERRED_GAS_PRICES_EXPRESS[POLYGON_PREFERRED_GAS_PRICES_EXPRESS.len() - 1]
+        }
+    }
+}
+
+pub fn get_polygon_priority() -> PolygonPriority {
+    match std::env::var("POLYGON_PRIORITY")
+        .unwrap_or("fast".to_string())
+        .to_lowercase()
+        .as_str()
+    {
+        "slow" => PolygonPriority::PolygonPrioritySlow,
+        "fast" => PolygonPriority::PolygonPriorityFast,
+        "express" => PolygonPriority::PolygonPriorityExpress,
+        _ => PolygonPriority::PolygonPrioritySlow,
+    }
+}
 
 pub async fn get_glm_balance(address: H160, network: Network) -> Result<U256, GenericError> {
     let client = get_client(network)?;
