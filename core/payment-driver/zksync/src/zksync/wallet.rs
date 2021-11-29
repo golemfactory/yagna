@@ -32,9 +32,9 @@ use crate::{
     zksync::{faucet, signer::YagnaEthSigner, utils},
     DEFAULT_NETWORK,
 };
-use zksync::zksync_types::tx::ChangePubKeyType;
 use std::time::Duration;
 use ya_payment_driver::model::{ExitFee, FeeResult};
+use zksync::zksync_types::tx::ChangePubKeyType;
 
 pub async fn account_balance(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
     let pub_address = Address::from_str(&address[2..]).map_err(GenericError::new)?;
