@@ -34,6 +34,7 @@ use crate::{
     RINKEBY_NETWORK,
 };
 use ya_payment_driver::db::models::TransactionStatus;
+use ya_payment_driver::db::schema::transaction::columns::last_error_msg;
 
 pub async fn account_balance(address: H160, network: Network) -> Result<BigDecimal, GenericError> {
     let balance_com = ethereum::get_glm_balance(address, network).await?;
@@ -211,8 +212,16 @@ pub async fn send_transactions(
 ) -> Result<(), GenericError> {
     // TODO: Use batch sending?
     for tx in txs {
-        let mut raw_tx: YagnaRawTransaction =
-            serde_json::from_str(&tx.encoded).map_err(GenericError::new)?;
+        let mut raw_tx: YagnaRawTransaction = match serde_json::from_str::<YagnaRawTransaction>(&tx.encoded) {
+            Ok(raw_tx) => raw_tx,
+            Err(err) => {
+                //handle problem when deserializing transaction
+                dao.transaction_confirmed_and_failed(&tx.tx_id, "", None, "Json parse failed, unrecoverable error")
+                    .await;
+                continue;
+            }
+        };
+
         let address = str_to_addr(&tx.sender)?;
 
         let new_gas_price = if let Some(current_gas_price) = tx.current_gas_price {
@@ -271,11 +280,12 @@ pub async fn send_transactions(
                     log::error!("Nonce too low: {:?}", e);
                     dao.transaction_failed_with_nonce_too_low(&tx.tx_id, e.to_string().as_str())
                         .await;
+                    continue;
                 }
                 if e.to_string().contains("already known") {
                     log::error!("Already known: {:?}. Send transaction with higher gas to get from this error loop. (resent won't fix anything)", e);
                     dao.retry_send_transaction(&tx.tx_id, true).await;
-                    return Ok(());
+                    continue;
                 }
 
                 dao.transaction_failed_send(&tx.tx_id, e.to_string().as_str())
