@@ -4,7 +4,7 @@ Choices: no, yes
 Description: Do you accept ?
   By installing this software you declare that you have read,
   understood and hereby accept the disclaimer and privacy warning
-  found at https://handbook.golem.network/see-also/terms.
+  found at https://handbook.golem.network/see-also/terms
 
 Template: golem/terms/subsidy-01
 Type: select
@@ -12,7 +12,7 @@ Choices: no, yes
 Description: Do you accept ?
   By installing this software you declare that you have read,
   understood and hereby accept the disclaimer and privacy warning
-  found at https://handbook.golem.network/see-also/terms#subsidy.
+  found at https://handbook.golem.network/see-also/provider-subsidy-terms
 
 Template: golem/gsb-port
 Type: string
