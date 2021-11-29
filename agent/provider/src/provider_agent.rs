@@ -131,7 +131,9 @@ impl ProviderAgent {
         let network = args.node.account.network.clone();
         let net_color = match network {
             NetworkName::Mainnet => yansi::Color::Magenta,
+            NetworkName::Polygon => yansi::Color::Magenta,
             NetworkName::Rinkeby => yansi::Color::Cyan,
+            NetworkName::Mumbai => yansi::Color::Cyan,
             _ => yansi::Color::Red,
         };
         log::info!("Using payment network: {}", net_color.paint(&network));
