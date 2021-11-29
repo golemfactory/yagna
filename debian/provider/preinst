@@ -1,0 +1,28 @@
+#!/bin/sh
+
+[ "$1" = "install" ] || return 0
+
+. /usr/share/debconf/confmodule
+
+accept_tos() {
+  template=$1
+  rejected=$2
+
+  db_input critical $template
+  db_go
+
+  db_get $template || true
+
+  if [ "$RET" != "yes" ]; then
+      db_input critical $rejected
+      db_go
+      db_reset $template
+      exit 1
+  fi
+}
+
+
+db_version 2.0
+
+accept_tos "golem/terms/testnet-01" "golem/tos-rejected"
+accept_tos "golem/terms/subsidy-01" "golem/subsidy-tos-rejected"
