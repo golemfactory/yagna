@@ -6,6 +6,7 @@ use tokio::process::{Child, Command};
 use ya_core_model::payment::local::NetworkName;
 pub use ya_provider::GlobalsState as ProviderConfig;
 
+use crate::command::NETWORK_GROUP_MAP;
 use crate::setup::RunConfig;
 
 const CLASSIC_RUNTIMES: &'static [&'static str] = &["wasm", "vw"];
@@ -268,14 +269,12 @@ impl YaProviderCommand {
     }
 
     pub async fn spawn(mut self, app_key: &str, run_cfg: &RunConfig) -> anyhow::Result<Child> {
-        self.cmd
-            .args(&[
-                "run",
-                "--payment-network",
-                &run_cfg.account.network.to_string(),
-            ])
-            .env("YAGNA_APPKEY", app_key);
+        self.cmd.args(&["run"]).env("YAGNA_APPKEY", app_key);
 
+        for nn in NETWORK_GROUP_MAP[&run_cfg.account.network].iter() {
+            self.cmd.arg("--payment-network").arg(nn.to_string());
+            break; // ya-provider doesn't support many payment networks yet
+        }
         if let Some(node_name) = &run_cfg.node_name {
             self.cmd.arg("--node-name").arg(node_name);
         }
