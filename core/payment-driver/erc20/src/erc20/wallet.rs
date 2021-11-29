@@ -36,7 +36,6 @@ use crate::{
     RINKEBY_NETWORK,
 };
 use ya_payment_driver::db::models::TransactionStatus;
-use ya_payment_driver::db::schema::transaction::columns::last_error_msg;
 
 pub async fn account_balance(address: H160, network: Network) -> Result<BigDecimal, GenericError> {
     let balance_com = ethereum::get_glm_balance(address, network).await?;
@@ -225,14 +224,10 @@ pub async fn send_transactions(
             match serde_json::from_str::<YagnaRawTransaction>(&tx.encoded) {
                 Ok(raw_tx) => raw_tx,
                 Err(err) => {
+                    let error = format!("JSON parse failed, unrecoverable error: {}", err);
                     //handle problem when deserializing transaction
-                    dao.transaction_confirmed_and_failed(
-                        &tx.tx_id,
-                        "",
-                        None,
-                        "Json parse failed, unrecoverable error",
-                    )
-                    .await;
+                    dao.transaction_confirmed_and_failed(&tx.tx_id, "", None, error.as_str())
+                        .await;
                     continue;
                 }
             };
