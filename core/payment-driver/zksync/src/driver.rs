@@ -302,7 +302,8 @@ impl PaymentDriver for ZksyncDriver {
                 r#"Using this driver is not recommended. Consider using the Polygon driver instead.
                 
 Your mainnet zkSync address is {}.
-To be able to use zkSync driver please send some GLM tokens and optionally ETH for gas to this address."#,
+To be able to use zkSync driver please send some GLM tokens and optionally ETH for gas to this address.
+"#,
                 address
             )),
         }
