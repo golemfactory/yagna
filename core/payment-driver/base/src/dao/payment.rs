@@ -90,7 +90,7 @@ impl<'c> PaymentDao<'c> {
             let payments: PaymentEntity = dsl::payment
                 .inner_join(transaction::table)
                 .select(payment::all_columns)
-                .filter(transaction::dsl::tx_hash.eq(tx_hash))
+                .filter(transaction::dsl::final_tx.eq(tx_hash))
                 .first(conn)?;
             Ok(payments)
         })

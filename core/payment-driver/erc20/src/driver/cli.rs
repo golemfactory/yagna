@@ -70,6 +70,17 @@ pub async fn fund(dao: &Erc20Dao, msg: Fund) -> Result<String, GenericError> {
                 .map_err(GenericError::new)??;
             format!("Received funds from the faucet. address=0x{:x}", &address)
         }
+        Network::Goerli => {
+            format!("Goerli faucet not supported")
+        }
+        Network::Polygon => format!(
+            r#"Your mainnet/polygon ethereum address is {}.
+
+            Send some GLM tokens and MATIC for gas to this address to be able to use this driver.
+            "#,
+            address
+        ),
+        Network::Mumbai => format!("Mumbai faucet not supported on ERC20 driver"),
         Network::Mainnet => format!(
             r#"Your mainnet ethereum address is {}.
 
@@ -93,6 +104,9 @@ pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericEr
     let sender_h160 = utils::str_to_addr(&sender)?;
     let recipient = msg.to;
     let amount = msg.amount;
+    let gas_limit = msg.gas_limit;
+    let gas_price = msg.gas_price;
+    let max_gas_price = msg.max_gas_price;
     let glm_balance = wallet::account_balance(sender_h160, network).await?;
 
     if amount > glm_balance {
@@ -110,7 +124,15 @@ pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericEr
     };
 
     let nonce = wallet::get_next_nonce(dao, sender_h160, network).await?;
-    let db_tx = wallet::make_transfer(&details, nonce, network).await?;
+    let db_tx = wallet::make_transfer(
+        &details,
+        nonce,
+        network,
+        gas_price,
+        max_gas_price,
+        gas_limit,
+    )
+    .await?;
 
     // Check if there is enough ETH for gas
     let human_gas_cost = wallet::has_enough_eth_for_gas(&db_tx, network).await?;

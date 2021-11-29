@@ -1,4 +1,4 @@
-name: CI
+name: Build binaries (x86-64) hybrid-net
 
 on:
   push:
@@ -12,7 +12,7 @@ on:
 
 jobs:
   build:
-    name: Unit Tests
+    name: Build binaries (x86-64) hybrid-net
     env:
       # `-D warnings` means any warnings emitted will cause build to fail
       RUSTFLAGS: "-D warnings -C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
@@ -20,7 +20,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        os: [ubuntu-latest]
 
     steps:
       - name: Checkout
@@ -38,12 +38,6 @@ jobs:
           command: tree
           args: --locked
 
-      - name: Check formatting
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
-
       - name: Install openssl ( Windows only )
         if: runner.os == 'Windows'
         run: |
@@ -51,9 +45,31 @@ jobs:
           vcpkg list
           vcpkg integrate install
 
-      - name: Unit tests
+      - name: Build binaries
         uses: actions-rs/cargo@v1
         with:
-          command: test
-          args: --tests --workspace --exclude=["./agent/provider/src/market"] --locked
+          command: build
+          args: --workspace --features hybrid-net
 
+      - name: Copy binaries
+        shell: bash
+        run: |
+          mkdir build
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            cp target/debug/{yagna,ya-provider,exe-unit,golemsp,gftp} build
+            strip -x build/*
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            cp target/debug/{yagna,gftp} build
+            strip -x build/*
+          elif [ "$RUNNER_OS" == "Windows" ]; then
+            cp target/debug/{yagna,gftp}.exe build
+          else
+            echo "$RUNNER_OS not supported"
+            exit 1
+          fi
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v1
+        with:
+          name: Yagna ${{ runner.os }} hybrid-net
+          path: build

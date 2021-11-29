@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.7.3"
+version = "0.8.0"
 description = "Open platform and marketplace for distributed computations"
 readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
@@ -16,6 +16,8 @@ dummy-driver = ['ya-dummy-driver']
 erc20-driver = ['ya-erc20-driver']
 zksync-driver = ['ya-zksync-driver']
 tos = []
+# Temporary to make goth integration tests work
+hybrid-net = ['ya-net/hybrid-net']
 
 [[bin]]
 name = "yagna"

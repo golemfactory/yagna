@@ -3,9 +3,7 @@ use diesel::expression::dsl::now as sql_now;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 use ya_client::model::NodeId;
-use ya_persistence::executor::{
-    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
-};
+use ya_persistence::executor::{do_with_transaction, readonly_transaction, ConnType, PoolType};
 
 use crate::db::model::SubscriptionId;
 use crate::db::model::{Offer, OfferUnsubscribed};
@@ -13,15 +11,15 @@ use crate::db::schema::market_offer::dsl as offer;
 use crate::db::schema::market_offer::dsl::market_offer;
 use crate::db::schema::market_offer_unsubscribed::dsl as unsubscribed;
 use crate::db::schema::market_offer_unsubscribed::dsl::market_offer_unsubscribed;
-use crate::db::{DbError, DbResult};
+use crate::db::{AsMixedDao, DbError, DbResult};
 
 pub struct OfferDao<'c> {
     pool: &'c PoolType,
 }
 
-impl<'c> AsDao<'c> for OfferDao<'c> {
-    fn as_dao(pool: &'c PoolType) -> Self {
-        Self { pool }
+impl<'a> AsMixedDao<'a> for OfferDao<'a> {
+    fn as_dao(_disk_pool: &'a PoolType, ram_pool: &'a PoolType) -> Self {
+        Self { pool: ram_pool }
     }
 }
 

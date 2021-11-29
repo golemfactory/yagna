@@ -39,14 +39,14 @@ pub fn kvm_status() -> Status {
         }
         if path::Path::new("/.dockerenv").exists() {
             return Status::InvalidEnv(Cow::Borrowed(
-                "running inside Docker without access to /dev/kvm",
+                "running inside Docker without access to /dev/kvm. For additional help see: https://handbook.golem.network/troubleshooting/provider-troubleshooting#invalid-vm",
             ));
         }
         return Status::Permission(Cow::Borrowed("kvm kernel module is not installed"));
     }
     match nix::unistd::access(dev_kvm, AccessFlags::W_OK | AccessFlags::R_OK) {
         Ok(()) => Status::Valid,
-        Err(_) => Status::Permission(Cow::Borrowed("the user has no access to /dev/kvm")),
+        Err(_) => Status::Permission(Cow::Borrowed("the user has no access to /dev/kvm. For additional help see: https://handbook.golem.network/troubleshooting/provider-troubleshooting#invalid-vm")),
     }
 }
 

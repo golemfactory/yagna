@@ -4,7 +4,7 @@ use std::convert::TryFrom;
 
 use anyhow::Context;
 use ethsign::keyfile::Bytes;
-use ethsign::{KeyFile, Protected, SecretKey};
+use ethsign::{KeyFile, Protected, PublicKey, SecretKey};
 use rand::Rng;
 use ya_client_model::NodeId;
 
@@ -31,6 +31,13 @@ impl IdentityKey {
 
     pub fn replace_alias(&mut self, new_alias: Option<String>) -> Option<String> {
         std::mem::replace(&mut self.alias, new_alias)
+    }
+
+    pub fn to_pub_key(&self) -> Result<PublicKey, Error> {
+        match &self.secret {
+            Some(secret) => Ok(secret.public()),
+            None => Err(Error::internal("key locked")),
+        }
     }
 
     pub fn to_key_file(&self) -> Result<String, serde_json::Error> {

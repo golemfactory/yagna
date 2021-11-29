@@ -62,6 +62,30 @@ lazy_static! {
                 token: "tGLM",
             },
         );
+        erc20.insert(
+            NetworkName::Goerli.into(),
+            PaymentPlatform {
+                platform: "erc20-goerli-tglm",
+                driver: "erc20",
+                token: "tGLM",
+            },
+        );
+        erc20.insert(
+            NetworkName::Mumbai.into(),
+            PaymentPlatform {
+                platform: "erc20-mumbai-tglm",
+                driver: "erc20",
+                token: "tGLM",
+            },
+        );
+        erc20.insert(
+            NetworkName::Polygon.into(),
+            PaymentPlatform {
+                platform: "erc20-polygon-glm",
+                driver: "erc20",
+                token: "GLM",
+            },
+        );
         PaymentDriver(erc20)
     };
 }

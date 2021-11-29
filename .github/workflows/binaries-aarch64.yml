@@ -1,4 +1,4 @@
-name: CI aarch64
+name: Build binaries (aarch64)
 
 on:
   push:
@@ -12,7 +12,7 @@ on:
 
 jobs:
   build:
-    name: Build
+    name: Build binaries (aarch64)
     env:
       RUSTFLAGS: "-C link-arg=-s"
     runs-on: ubuntu-latest

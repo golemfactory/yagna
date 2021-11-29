@@ -24,7 +24,7 @@ use ya_payment_driver::{
 };
 
 // Local uses
-use crate::{dao::Erc20Dao, network::SUPPORTED_NETWORKS, DEFAULT_NETWORK, DRIVER_NAME};
+use crate::{dao::Erc20Dao, network::SUPPORTED_NETWORKS, DRIVER_NAME, RINKEBY_NETWORK};
 
 mod api;
 mod cli;
@@ -35,14 +35,14 @@ lazy_static::lazy_static! {
             std::env::var("ERC20_SENDOUT_INTERVAL_SECS")
                 .ok()
                 .and_then(|x| x.parse().ok())
-                .unwrap_or(10),
+                .unwrap_or(30),
         );
 
     static ref TX_CONFIRMATION_INTERVAL: std::time::Duration = std::time::Duration::from_secs(
             std::env::var("ERC20_CONFIRMATION_INTERVAL_SECS")
                 .ok()
                 .and_then(|x| x.parse().ok())
-                .unwrap_or(5),
+                .unwrap_or(30),
         );
 }
 
@@ -130,7 +130,7 @@ impl PaymentDriver for Erc20Driver {
     }
 
     fn get_default_network(&self) -> String {
-        DEFAULT_NETWORK.to_string()
+        RINKEBY_NETWORK.to_string()
     }
 
     fn get_networks(&self) -> HashMap<String, NetworkConfig> {
