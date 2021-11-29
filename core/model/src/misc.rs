@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use ya_client_model::ErrorMessage;
 use ya_service_bus::RpcMessage;
 
-pub const BUS_ID: &'static str = "/local/version";
+pub const BUS_ID: &'static str = "/local/misc";
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

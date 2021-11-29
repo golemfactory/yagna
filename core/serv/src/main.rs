@@ -38,6 +38,7 @@ use ya_sgx::SgxService;
 use ya_utils_path::data_dir::DataDir;
 use ya_utils_process::lock::ProcLock;
 use ya_version::VersionService;
+use ya_misc::MiscService;
 use ya_vpn::VpnService;
 
 mod autocomplete;
@@ -250,6 +251,8 @@ enum Services {
     Payment(PaymentService),
     #[enable(gsb)]
     SgxDriver(SgxService),
+    #[enable(gsb, rest, cli)]
+    Misc(MiscService),
 }
 
 #[cfg(not(any(
