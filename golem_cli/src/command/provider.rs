@@ -50,7 +50,7 @@ impl YaProviderCommand {
     pub async fn set_config(
         self,
         config: &ProviderConfig,
-        network: &NetworkName,
+        networks: &Vec<NetworkName>,
     ) -> anyhow::Result<()> {
         let mut cmd = self.cmd;
 
@@ -66,7 +66,9 @@ impl YaProviderCommand {
         if let Some(account) = &config.account {
             cmd.args(&["--account", &account.to_string()]);
         }
-        cmd.args(&["--payment-network", &network.to_string()]);
+        for n in networks.iter() {
+            cmd.args(&["--payment-network", &n.to_string()]);
+        }
 
         log::debug!("executing: {:?}", cmd);
 
@@ -273,7 +275,6 @@ impl YaProviderCommand {
 
         for nn in NETWORK_GROUP_MAP[&run_cfg.account.network].iter() {
             self.cmd.arg("--payment-network").arg(nn.to_string());
-            break; // ya-provider doesn't support many payment networks yet
         }
         if let Some(node_name) = &run_cfg.node_name {
             self.cmd.arg("--node-name").arg(node_name);

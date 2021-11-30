@@ -146,9 +146,9 @@ pub async fn setup(run_config: &RunConfig, force: bool) -> Result<i32> {
 
         config.node_name = Some(node_name);
         config.subnet = Some(subnet);
-        for nn in NETWORK_GROUP_MAP[&run_config.account.network].iter() {
-            cmd.ya_provider()?.set_config(&config, &nn).await?;
-        }
+        cmd.ya_provider()?
+            .set_config(&config, &NETWORK_GROUP_MAP[&run_config.account.network])
+            .await?;
     }
 
     let is_configured = {

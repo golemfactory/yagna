@@ -50,7 +50,7 @@ pub async fn run(settings: Settings) -> Result</*exit code*/ i32> {
                     node_name: settings.node_name,
                     ..ProviderConfig::default()
                 },
-                &settings.account.network,
+                &settings.account.networks,
             )
             .await?;
     }
@@ -62,7 +62,7 @@ pub async fn run(settings: Settings) -> Result</*exit code*/ i32> {
                     account: settings.account.account,
                     ..ProviderConfig::default()
                 },
-                &settings.account.network,
+                &settings.account.networks,
             )
             .await?;
     }

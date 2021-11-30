@@ -105,9 +105,9 @@ impl ProviderConfig {
 
 #[derive(StructOpt, Clone, Debug, Serialize, Deserialize, derive_more::Display)]
 #[display(
-    fmt = "{}Network: {}",
+    fmt = "{}Networks: {:?}",
     "account.map(|a| format!(\"Address: {}\n\", a)).unwrap_or(\"\".into())",
-    network
+    networks
 )]
 pub struct ReceiverAccount {
     /// Account for payments.
@@ -115,7 +115,7 @@ pub struct ReceiverAccount {
     pub account: Option<NodeId>,
     /// Payment network.
     #[structopt(long = "payment-network", env = "YA_PAYMENT_NETWORK", possible_values = NetworkName::VARIANTS, default_value = NetworkName::Mainnet.into())]
-    pub network: NetworkName,
+    pub networks: Vec<NetworkName>,
 }
 
 #[derive(StructOpt, Clone, Debug)]
