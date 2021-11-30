@@ -114,6 +114,8 @@ impl PaymentDriver {
     PartialEq,
     Serialize,
 )]
+#[strum(serialize_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum NetworkGroup {
     Mainnet,
     Testnet,
