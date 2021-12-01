@@ -54,7 +54,7 @@ pub async fn push_forever(host_url: &str) {
 }
 
 pub async fn push(client: &Client, push_url: String) {
-    let metrics = crate::service::export_metrics().await;
+    let metrics = crate::service::export_metrics(false).await;
     let res = client
         .put(push_url.as_str())
         .send_body(metrics.clone())

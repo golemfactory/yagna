@@ -3,7 +3,11 @@ use structopt::{clap::AppSettings, StructOpt};
 use ya_core_model::misc;
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_bus::{typed as bus, RpcEndpoint};
+use ya_service_bus::router_error::{get_last_router_error};
 
+use anyhow::anyhow;
+use ya_core_model::misc::MiscInfo;
+use serde::{Serialize, Deserialize};
 
 /// Yagna version management.
 #[derive(StructOpt, Debug)]
@@ -23,10 +27,52 @@ impl MiscCLI {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct JsonResponse {
+    success: bool,
+    value: Option<MiscInfo>,
+    error: Option<String>,
+    router_error: Option<String>,
+}
+
 async fn show(msg: misc::Get, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
-    let version_info = bus::service(misc::BUS_ID).send(msg).await??;
+    let bus_endpoint = bus::service(misc::BUS_ID); /*{
+        Ok(bus_endpoint) => bus_endpoint,
+        Err(err) => {
+            log::error!("Bus endpoint cannot be created");
+            return Err(err);
+        }
+    };*/
+    let bus_response = match bus_endpoint.send(msg).await {
+        Ok(bus_response) => bus_response,
+        Err(err) => {
+            log::error!("Error when sending message to bus: {:?}", err);
+
+            let last_error = get_last_router_error();
+
+            if ctx.json_output {
+                let jsonResponse = JsonResponse{error:Some(err.to_string()), router_error: last_error, success:false, value:None};
+                return CommandOutput::object(jsonResponse);
+            }
+            return Err(anyhow!(err));
+        }
+    };
+
+    let miscInfo = match bus_response {
+        Ok(miscInfo) => miscInfo,
+        Err(err) => {
+            log::error!("Misc info returned error: {:?}", err);
+            if ctx.json_output {
+                let jsonResponse = JsonResponse{error:Some(err.to_string()), router_error: None, success:false, value:None};
+                return CommandOutput::object(jsonResponse);
+            }
+            return Err(anyhow!(err));
+        }
+    };
+
     if ctx.json_output {
-        return CommandOutput::object(version_info);
+        return CommandOutput::object(miscInfo);
     }
     CommandOutput::object("tesciki".to_string())
 }

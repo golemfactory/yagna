@@ -322,11 +322,13 @@ where
                 }
                 reconnect.replace(Default::default());
                 metrics::counter!("net.connect", 1);
+                metrics::gauge!("net.is_connected", 1);
 
                 let reconnect_clone = reconnect.clone();
                 Arbiter::spawn(async move {
                     if let Ok(_) = dc_rx.await {
                         metrics::counter!("net.disconnect", 1);
+                        metrics::gauge!("net.is_connected", 0);
                         reconnect_clone.borrow_mut().last_disconnect = Some(Instant::now());
                         log::warn!("Handlers disconnected");
                         (*unbind_clone.borrow_mut())().await;
