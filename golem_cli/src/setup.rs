@@ -23,7 +23,7 @@ pub struct ConfigAccount {
     #[structopt(long, env = "YA_ACCOUNT")]
     pub account: Option<NodeId>,
     /// Payment network.
-    #[structopt(long = "payment-network", env = "YA_PAYMENT_NETWORK", possible_values = NetworkGroup::VARIANTS, default_value = NetworkGroup::Mainnet.into())]
+    #[structopt(long = "payment-network", env = "YA_PAYMENT_NETWORK_GROUP", possible_values = NetworkGroup::VARIANTS, default_value = NetworkGroup::Mainnet.into())]
     pub network: NetworkGroup,
 }
 

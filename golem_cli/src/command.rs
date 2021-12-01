@@ -46,10 +46,6 @@ impl YaCommand {
                 cmd.env("EXE_UNIT_PATH", plugins_dir.join("ya-*.json"));
             }
         }
-        // YA_PAYMENT_NETWORK is used in different context in golemsp
-        // and in ya-provider. golemsp always passes commandline
-        // --payment-network arg, so it's safe to just remove it here.
-        cmd.env_remove("YA_PAYMENT_NETWORK");
 
         Ok(YaProviderCommand { cmd })
     }

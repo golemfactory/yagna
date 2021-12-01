@@ -24,13 +24,7 @@ async fn payment_status(
 ) -> anyhow::Result<BTreeMap<String, StatusResult>> {
     let address = payment_account(&cmd, account).await?;
 
-    let network_group = {
-        if NETWORK_GROUP_MAP[&NetworkGroup::Mainnet].contains(network) {
-            NetworkGroup::Mainnet
-        } else {
-            NetworkGroup::Testnet
-        }
-    };
+    let network_group = get_network_group(network);
 
     let mut result = BTreeMap::new();
     let (futures, labels) = {
@@ -63,6 +57,14 @@ async fn payment_status(
         n += 1;
     }
     Ok(result)
+}
+
+fn get_network_group(network: &NetworkName) -> NetworkGroup {
+    if NETWORK_GROUP_MAP[&NetworkGroup::Mainnet].contains(network) {
+        NetworkGroup::Mainnet
+    } else {
+        NetworkGroup::Testnet
+    }
 }
 
 pub async fn run() -> Result</*exit code*/ i32> {
@@ -131,6 +133,7 @@ pub async fn run() -> Result</*exit code*/ i32> {
 
     if is_running {
         let (_offers_cnt, network) = get_payment_network().await?;
+        let network_group = get_network_group(&network);
 
         let payments = {
             let (id, invoice_status) =
@@ -154,15 +157,14 @@ pub async fn run() -> Result</*exit code*/ i32> {
             table.add_row(row![H2->Style::new().fg(Colour::Fixed(63)).paint(&account)]);
             table.add_empty_row();
 
-            let net_color = match network {
-                NetworkName::Mainnet => Colour::Purple,
-                NetworkName::Rinkeby => Colour::Cyan,
-                _ => Colour::Red,
+            let net_color = match network_group {
+                NetworkGroup::Mainnet => Colour::Purple,
+                NetworkGroup::Testnet => Colour::Cyan,
             };
 
             table.add_row(row![
                 "network",
-                Style::new().fg(net_color).paint(network.to_string())
+                Style::new().fg(net_color).paint(network_group.to_string())
             ]);
             let total_amount: BigDecimal =
                 payment_statuses.values().cloned().map(|ps| ps.amount).sum();
