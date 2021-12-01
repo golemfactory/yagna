@@ -1,80 +1,44 @@
-use metrics_core::{Builder, Drain, Key, Label, Observe, Observer};
+use metrics_core::{Builder, Drain, Key, Observe, Observer};
 use std::collections::{BTreeMap};
 use metrics_runtime::Controller;
 use metrics_runtime::observers::PrometheusBuilder;
 
-/// Exports metrics by converting them to a textual representation and logging them.
-pub struct StringExporter<C, B>
-where
-    B: Builder,
-{
-    controller: C,
-    builder: B,
-}
-
-impl<C, B> StringExporter<C, B>
-where
-    B: Builder,
-    B::Output: Drain<String> + Observer,
-    C: Observe,
-{
-    /// Creates a new [`StringExporter`] that logs at the configurable level.
-    ///
-    /// Observers expose their output by being converted into strings.
-    pub fn new(controller: C, builder: B) -> Self {
-        StringExporter {
-            controller,
-            builder,
-        }
-    }
-
-    /// Run this exporter, logging output only once.
-    pub fn turn(&mut self) -> String {
-        let mut observer = self.builder.build();
-        self.controller.observe(&mut observer);
-        return observer.drain();
-    }
-}
-
-pub struct JsonExporter {
+pub struct CustomMetricsExporter {
     controller : Controller,
-    builder : JsonBuilder,
-    builder2 : PrometheusBuilder,
+    json_builder : JsonBuilder,
+    prometheus_builder : PrometheusBuilder,
 }
 
-impl JsonExporter
+impl CustomMetricsExporter
 {
-    pub fn new(controller: Controller, builder: JsonBuilder, builder2: PrometheusBuilder) -> Self {
-        JsonExporter {
+    pub fn new(controller: Controller, json_builder: JsonBuilder, prometheus_builder: PrometheusBuilder) -> Self {
+        CustomMetricsExporter {
             controller,
-            builder,
-            builder2
+            json_builder,
+            prometheus_builder
         }
     }
 
-    pub fn turn(&mut self) -> String {
-        let mut observer = self.builder.build();
+    pub fn turn_json(&mut self) -> String {
+        let mut observer = self.json_builder.build();
         self.controller.observe(&mut observer);
         return observer.drain();
     }
 
     pub fn turn_prometheus(&mut self) -> String {
-        let mut observer = self.builder2.build();
+        let mut observer = self.prometheus_builder.build();
         self.controller.observe(&mut observer);
         return observer.drain();
     }
 
 }
 
-/// Builder for [`JsonObserver`].
 pub struct JsonBuilder {
     pretty: bool,
 }
 
 impl JsonBuilder {
-    /// Creates a new [`JsonBuilder`] with default values.
     pub fn new() -> Self {
-
         Self {
             pretty: true,
         }

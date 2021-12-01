@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use ya_persistence::executor::DbExecutor;
-
+use ya_metrics::service::export_metrics_json;
 
 pub async fn on_start(db: &DbExecutor) -> anyhow::Result<()> {
 
@@ -14,16 +14,20 @@ pub async fn on_start(db: &DbExecutor) -> anyhow::Result<()> {
 }
 
 pub(crate) async fn worker(db: DbExecutor) {
+
     // TODO: make interval configurable
     let mut interval = tokio::time::interval(Duration::from_secs(3600 * 24));
     loop {
         interval.tick().await;
+
+        let metrics = export_metrics_json().await;
         log::info!("miscellaneous worker happily looping :)");
     }
 }
 
 pub(crate) async fn pinger(db: DbExecutor) -> ! {
     // TODO: make interval configurable
+
     let mut interval = tokio::time::interval(Duration::from_secs(30 * 60));
     loop {
         interval.tick().await;

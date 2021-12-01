@@ -59,20 +59,20 @@ async fn show(msg: misc::Get, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         }
     };
 
-    let miscInfo = match bus_response {
+    let misc_info = match bus_response {
         Ok(miscInfo) => miscInfo,
         Err(err) => {
             log::error!("Misc info returned error: {:?}", err);
             if ctx.json_output {
-                let jsonResponse = JsonResponse{error:Some(err.to_string()), router_error: None, success:false, value:None};
-                return CommandOutput::object(jsonResponse);
+                let json_response = JsonResponse{error:Some(err.to_string()), router_error: None, success:false, value:None};
+                return CommandOutput::object(json_response);
             }
             return Err(anyhow!(err));
         }
     };
 
     if ctx.json_output {
-        return CommandOutput::object(miscInfo);
+        return CommandOutput::object(misc_info);
     }
     CommandOutput::object("tesciki".to_string())
 }
