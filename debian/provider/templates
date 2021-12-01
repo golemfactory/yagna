@@ -1,27 +1,18 @@
-Template: golem/terms/testnet-01
-Type: select
-Choices: no, yes
-Description: Do you accept ?
-  By installing this software you declare that you have read,
-  understood and hereby accept the disclaimer and privacy warning
-  found at https://handbook.golem.network/see-also/terms
-
 Template: golem/terms/subsidy-01
 Type: select
 Choices: no, yes
 Description: Do you accept ?
   By installing this software you declare that you have read,
-  understood and hereby accept the disclaimer and privacy warning
-  found at https://handbook.golem.network/see-also/provider-subsidy-terms
+  understood and hereby accept the disclaimers and privacy warnings
+  found at
+    https://handbook.golem.network/see-also/terms
+  and
+    https://handbook.golem.network/see-also/provider-subsidy-terms
 
 Template: golem/gsb-port
 Type: string
 Default: 7464
 Description: Local GSB port
-
-Template: golem/tos-rejected
-Type: note
-Description: You must accept the terms of use to install this package.
 
 Template: golem/subsidy-tos-rejected
 Type: note
