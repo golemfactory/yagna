@@ -9,7 +9,7 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Mutex};
 use std::task::Poll;
 
-use anyhow::Context as AnyhowContext;
+use anyhow::{anyhow, Context as AnyhowContext};
 use futures::channel::mpsc;
 use futures::stream::LocalBoxStream;
 use futures::{FutureExt, SinkExt, Stream, StreamExt, TryStreamExt};
@@ -54,10 +54,10 @@ thread_local! {
     static CLIENT: RefCell<Option<Client>> = Default::default();
 }
 
-async fn relay_addr(config: &Config) -> std::io::Result<SocketAddr> {
-    Ok(match std::env::var(&config.host) {
-        Ok(val) => val,
-        Err(_) => resolver::resolve_yagna_srv_record("_net_relay._udp")
+async fn relay_addr(config: &Config) -> anyhow::Result<SocketAddr> {
+    Ok(match &config.host {
+        Some(val) => val.to_string(),
+        None => resolver::resolve_yagna_srv_record("_net_relay._udp")
             .await
             // FIXME: remove
             .unwrap_or_else(|_| DEFAULT_NET_RELAY_HOST.to_string()),
@@ -88,10 +88,15 @@ pub async fn start_network(
     default_id: NodeId,
     ids: Vec<NodeId>,
 ) -> anyhow::Result<()> {
-    let url = Url::parse(&format!("udp://{}", relay_addr(&config).await?))?;
+    let url = Url::parse(&format!(
+        "udp://{}",
+        relay_addr(&config)
+            .await
+            .map_err(|e| anyhow!("Resolving hybrid NET relay server failed. Error: {}", e))?
+    ))?;
     let provider = IdentityCryptoProvider::new(default_id);
 
-    log::info!("starting network (hybrid) with identity: {}", default_id);
+    log::info!("Starting network (hybrid) with identity: {}", default_id);
 
     let client = ClientBuilder::from_url(url)
         .crypto(provider)
