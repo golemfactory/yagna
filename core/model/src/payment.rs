@@ -31,7 +31,7 @@ pub mod local {
     use ya_client_model::NodeId;
 
     pub const BUS_ID: &'static str = "/local/payment";
-    pub const DEFAULT_PAYMENT_DRIVER: &str = "zksync";
+    pub const DEFAULT_PAYMENT_DRIVER: &str = "erc20";
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct DebitNotePayment {
@@ -470,11 +470,11 @@ pub mod local {
 
     #[derive(StructOpt, Debug, Clone)]
     pub struct AccountCli {
-        /// Wallet address [default: <DEFAULT_IDENTIDITY>]
+        /// Wallet address [default: <DEFAULT_IDENTITY>]
         #[structopt(long, env = "YA_ACCOUNT")]
         pub account: Option<NodeId>,
         /// Payment driver
-        #[structopt(long, possible_values = DriverName::VARIANTS, default_value = DriverName::ZkSync.into())]
+        #[structopt(long, possible_values = DriverName::VARIANTS, default_value = DriverName::Erc20.into())]
         pub driver: DriverName,
         /// Payment network
         #[structopt(long, possible_values = NetworkName::VARIANTS, default_value = NetworkName::Rinkeby.into())]
@@ -507,7 +507,7 @@ pub mod local {
         fn test_cli_defaults() {
             let a = AccountCli::from_iter(&[""]);
             assert_eq!(None, a.address());
-            assert_eq!("zksync", a.driver());
+            assert_eq!("erc20", a.driver());
             assert_eq!("rinkeby", a.network());
             assert_eq!("tGLM", a.token());
         }
@@ -677,14 +677,13 @@ pub mod public {
     // *************************** PAYMENT ****************************
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     pub struct SendPayment {
-        #[serde(flatten)] // Flatten is required for backwards compatability with 0.6.x
+        #[serde(flatten)]
         pub payment: Payment,
-        #[serde(default)] // Optional is required for backwards compatability with 0.6.x
-        pub signature: Option<Vec<u8>>,
+        pub signature: Vec<u8>,
     }
 
     impl SendPayment {
-        pub fn new(payment: Payment, signature: Option<Vec<u8>>) -> Self {
+        pub fn new(payment: Payment, signature: Vec<u8>) -> Self {
             Self { payment, signature }
         }
     }

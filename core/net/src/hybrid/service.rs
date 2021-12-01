@@ -18,8 +18,7 @@ use url::Url;
 
 use ya_core_model::net::{self, net_service};
 use ya_core_model::NodeId;
-use ya_net_server::testing::client::ForwardReceiver;
-use ya_net_server::testing::{Client, ClientBuilder};
+use ya_relay_client::{Client, ClientBuilder, ForwardReceiver};
 use ya_relay_proto::codec::forward::{PrefixedSink, PrefixedStream, SinkKind};
 use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::CallReplyCode;
@@ -147,7 +146,7 @@ pub async fn start_network(
         let mut interval = time::interval(config.ping_interval);
         loop {
             interval.tick().await;
-            if let Ok(session) = client_.server_session().await {
+            if let Ok(session) = client_.sessions.server_session().await {
                 log::trace!("Sending ping to keep session alive.");
                 let _ = session.ping().await;
             }
@@ -356,8 +355,7 @@ fn broadcast_handler(rx: NetReceiver) -> impl Future<Output = ()> + Unpin + 'sta
             let client = CLIENT
                 .with(|c| c.borrow().clone())
                 .ok_or_else(|| anyhow::anyhow!("network not initialized"))?;
-            let session = client.server_session().await?;
-            session
+            client
                 .broadcast(payload, DEFAULT_BROADCAST_NODE_COUNT)
                 .await
                 .context("broadcast failed")
@@ -690,11 +688,10 @@ impl State {
                     .with(|c| c.borrow().clone())
                     .ok_or_else(|| anyhow::anyhow!("network not started"))?;
 
-                let session = client.optimal_session(remote_id).await?;
                 let forward: NetSinkKind = if reliable {
-                    PrefixedSink::new(session.forward(remote_id).await?).into()
+                    PrefixedSink::new(client.forward(remote_id).await?).into()
                 } else {
-                    session.forward_unreliable(remote_id).await?.into()
+                    client.forward_unreliable(remote_id).await?.into()
                 };
 
                 let mut inner = self.inner.borrow_mut();

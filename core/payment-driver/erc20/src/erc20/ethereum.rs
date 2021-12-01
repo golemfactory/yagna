@@ -1,48 +1,29 @@
 use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
-use num_traits::FromPrimitive;
-use sha3::{Digest, Sha3_512};
-use std::env;
 use web3::contract::{Contract, Options};
 use web3::transports::Http;
-use web3::types::{Bytes, TransactionReceipt, H160, H256, U256, U64};
+use web3::types::{Bytes, Transaction, TransactionId, TransactionReceipt, H160, H256, U256, U64};
 use web3::Web3;
 
 use ya_client_model::NodeId;
 use ya_payment_driver::db::models::{Network, TransactionEntity, TransactionStatus, TxType};
-use ya_payment_driver::{bus, model::GenericError, utils as base_utils};
+use ya_payment_driver::{bus, model::GenericError};
 
-use crate::erc20::transaction::RawTransaction;
+use crate::erc20::transaction::YagnaRawTransaction;
 use crate::erc20::{config, eth_utils};
+use bigdecimal::BigDecimal;
+use ethabi::Token;
+use uuid::Uuid;
+use ya_payment_driver::utils::big_dec_to_u256;
+
+pub const POLYGON_PREFERRED_GAS_PRICES: [f64; 6] = [0.0, 10.01, 15.01, 20.01, 25.01, 30.01];
+pub const POLYGON_STARTING_GAS_PRICE: f64 = 10.01;
+pub const POLYGON_MAXIMUM_GAS_PRICE: f64 = 30.01;
 
 lazy_static! {
     pub static ref GLM_FAUCET_GAS: U256 = U256::from(90_000);
     pub static ref GLM_TRANSFER_GAS: U256 = U256::from(55_000);
     pub static ref GLM_POLYGON_GAS_LIMIT: U256 = U256::from(100_000);
-
-    /*
-        Comment by scx1332:
-        In production I suggest limiting to 31.101 Gwei to not pay too much fees in extreme network situations
-        Use:
-        GLM_POLYGON_MAX_GAS_PRICE=31101000000
-    */
-    pub static ref GLM_POLYGON_MAX_GAS_PRICE: u64 =
-        match env::var("GLM_POLYGON_MAX_GAS_PRICE").map(|s| s.parse()) {
-            Ok(Ok(x)) => x,
-            _ => 1000000000000, //1000 Gwei
-        };
-    /*
-        Comment by scx1332:
-        30.101 Gwei (as of 2021-10-08 30GWEI is minimum accepted gas price,
-        network is under-utilised right now so 30.1 should result in express transactions
-        USD cost as of 2021-10-08 of transaction is about 0,16 cents (USD)
-    */
-
-    pub static ref GLM_POLYGON_MIN_GAS_PRICE: u64 =
-        match env::var("GLM_POLYGON_MIN_GAS_PRICE").map(|s| s.parse()) {
-            Ok(Ok(x)) => x,
-            _ => 30101000000,
-    };
 }
 const CREATE_FAUCET_FUNCTION: &str = "create";
 const BALANCE_ERC20_FUNCTION: &str = "balanceOf";
@@ -112,7 +93,7 @@ pub async fn sign_faucet_tx(
 
     let data = eth_utils::contract_encode(&contract, CREATE_FAUCET_FUNCTION, ()).unwrap();
     let gas_price = client.eth().gas_price().await.map_err(GenericError::new)?;
-    let tx = RawTransaction {
+    let tx = YagnaRawTransaction {
         nonce,
         to: Some(contract.address()),
         value: U256::from(0),
@@ -120,80 +101,71 @@ pub async fn sign_faucet_tx(
         gas: *GLM_FAUCET_GAS,
         data,
     };
-    let chain_id = network as u64;
-    let node_id = NodeId::from(address.as_ref());
-    let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
+    //let chain_id = network as u64;
+    //let node_id = NodeId::from(address.as_ref());
+    //let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
 
-    Ok(raw_tx_to_entity(
-        &tx,
+    Ok(create_dao_entity(
+        nonce,
         address,
-        chain_id,
+        gas_price.to_string(),
+        gas_price.to_string(),
+        GLM_FAUCET_GAS.as_u32() as i32,
+        serde_json::to_string(&tx).map_err(GenericError::new)?,
+        network,
         Utc::now(),
-        &signature,
         TxType::Faucet,
+        None,
     ))
 }
 
-pub async fn sign_transfer_tx(
+pub async fn sign_raw_transfer_transaction(
     address: H160,
+    network: Network,
+    tx: &YagnaRawTransaction,
+) -> Result<Vec<u8>, GenericError> {
+    let chain_id = network as u64;
+    let node_id = NodeId::from(address.as_ref());
+    let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
+    Ok(signature)
+}
+
+pub async fn prepare_raw_transaction(
+    _address: H160,
     recipient: H160,
     amount: U256,
     network: Network,
     nonce: U256,
-) -> Result<TransactionEntity, GenericError> {
+    gas_price_override: Option<U256>,
+    gas_limit_override: Option<u32>,
+) -> Result<YagnaRawTransaction, GenericError> {
     let env = get_env(network);
     let client = get_client(network)?;
     let contract = prepare_erc20_contract(&client, &env)?;
 
     let data = eth_utils::contract_encode(&contract, TRANSFER_ERC20_FUNCTION, (recipient, amount))
         .map_err(GenericError::new)?;
-    let mut gas_price = client.eth().gas_price().await.map_err(GenericError::new)?;
 
-    match network {
-        Network::Polygon | Network::Mumbai => {
-            if gas_price > U256::from(*GLM_POLYGON_MAX_GAS_PRICE) {
-                log::warn!(
-                    "Gas price higher than maximum {}/{}. Continuing with lower gas price...",
-                    gas_price,
-                    *GLM_POLYGON_MAX_GAS_PRICE
-                );
-                gas_price = U256::from(*GLM_POLYGON_MAX_GAS_PRICE);
-            };
+    //get gas price from network in not provided
+    let gas_price = match gas_price_override {
+        Some(gas_price_new) => gas_price_new,
+        None => client.eth().gas_price().await.map_err(GenericError::new)?,
+    };
 
-            if gas_price < U256::from(*GLM_POLYGON_MIN_GAS_PRICE) {
-                log::info!(
-                    "Gas price lower than mininimum {}/{}. Continuing with higher gas price...",
-                    gas_price,
-                    *GLM_POLYGON_MIN_GAS_PRICE
-                );
-                gas_price = U256::from(*GLM_POLYGON_MIN_GAS_PRICE);
-            }
-        }
-        Network::Mainnet | Network::Rinkeby | Network::Goerli => {
-            log::info!("Gas limits not implemented for Mainnet, Rinkeby and Goerli networks",);
-        }
-    }
+    let gas_limit = match gas_limit_override {
+        Some(gas_limit_override) => U256::from(gas_limit_override),
+        None => *GLM_POLYGON_GAS_LIMIT,
+    };
 
-    let tx = RawTransaction {
+    let tx = YagnaRawTransaction {
         nonce,
         to: Some(contract.address()),
         value: U256::from(0),
         gas_price,
-        gas: *GLM_POLYGON_GAS_LIMIT,
+        gas: gas_limit,
         data,
     };
-    let chain_id = network as u64;
-    let node_id = NodeId::from(address.as_ref());
-    let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
-
-    Ok(raw_tx_to_entity(
-        &tx,
-        address,
-        chain_id,
-        Utc::now(),
-        &signature,
-        TxType::Transfer,
-    ))
+    Ok(tx)
 }
 
 pub async fn send_tx(signed_tx: Vec<u8>, network: Network) -> Result<H256, GenericError> {
@@ -206,29 +178,108 @@ pub async fn send_tx(signed_tx: Vec<u8>, network: Network) -> Result<H256, Gener
     Ok(tx_hash)
 }
 
-pub async fn is_tx_confirmed(
+pub struct TransactionChainStatus {
+    pub exists_on_chain: bool,
+    pub pending: bool,
+    pub confirmed: bool,
+    pub succeeded: bool,
+    pub gas_used: Option<U256>,
+    pub gas_price: Option<U256>,
+}
+
+pub async fn get_tx_on_chain_status(
     tx_hash: H256,
-    current_block: &U64,
+    current_block: Option<u64>,
     network: Network,
-) -> Result<bool, GenericError> {
+) -> Result<TransactionChainStatus, GenericError> {
+    let mut res = TransactionChainStatus {
+        exists_on_chain: false,
+        pending: false,
+        confirmed: false,
+        succeeded: false,
+        gas_price: None,
+        gas_used: None,
+    };
     let env = get_env(network);
     let tx = get_tx_receipt(tx_hash, network).await?;
     if let Some(tx) = tx {
+        res.exists_on_chain = true;
+        res.gas_used = tx.gas_used;
+        const TRANSACTION_STATUS_SUCCESS: u64 = 1;
+        if tx.status == Some(ethereum_types::U64::from(TRANSACTION_STATUS_SUCCESS)) {
+            res.succeeded = true;
+        }
         if let Some(tx_bn) = tx.block_number {
             // TODO: Store tx.block_number in DB and check only once after required_confirmations.
             log::trace!(
                 "is_tx_confirmed? tb + rq - 1 <= cb. tb={}, rq={}, cb={}",
                 tx_bn,
                 env.required_confirmations,
-                current_block
+                current_block.unwrap_or(0)
             );
             // tx.block_number is the first confirmation, so we need to - 1
-            if tx_bn + env.required_confirmations - 1 <= *current_block {
-                return Ok(true);
+            if let Some(current_block) = current_block {
+                if tx_bn.as_u64() + env.required_confirmations - 1 <= current_block {
+                    res.confirmed = true;
+                }
             }
+            let transaction = get_tx_from_network(tx_hash, network).await?;
+            if let Some(t) = transaction {
+                res.gas_price = Some(t.gas_price);
+            }
+        } else {
+        }
+    } else {
+        let transaction = get_tx_from_network(tx_hash, network).await?;
+        if let Some(_transaction) = transaction {
+            res.exists_on_chain = true;
+            res.pending = true;
         }
     }
-    Ok(false)
+    Ok(res)
+}
+
+//unused but tested that it is working for transfers
+pub fn decode_encoded_transaction_data(
+    network: Network,
+    encoded: &str,
+) -> Result<(ethereum_types::Address, ethereum_types::U256), GenericError> {
+    let env = get_env(network);
+    let client = get_client(network)?;
+    let contract = prepare_erc20_contract(&client, &env)?;
+
+    let raw_tx: YagnaRawTransaction = serde_json::from_str(encoded).map_err(GenericError::new)?;
+
+    let tokens = eth_utils::contract_decode(&contract, TRANSFER_ERC20_FUNCTION, raw_tx.data)
+        .map_err(GenericError::new)?;
+    let mut address: Option<H160> = None;
+    let mut amount: Option<U256> = None;
+    for token in tokens {
+        match token {
+            Token::Address(val) => address = Some(val),
+            Token::Uint(am) => amount = Some(am),
+            _ => {}
+        };
+    }
+    if let Some(add) = address {
+        if let Some(am) = amount {
+            return Ok((add, am));
+        }
+    }
+    Err(GenericError::new("Failed to parse tokens"))
+}
+
+pub async fn get_tx_from_network(
+    tx_hash: H256,
+    network: Network,
+) -> Result<Option<Transaction>, GenericError> {
+    let client = get_client(network)?;
+    let result = client
+        .eth()
+        .transaction(TransactionId::from(tx_hash))
+        .await
+        .map_err(GenericError::new)?;
+    Ok(result)
 }
 
 pub async fn get_tx_receipt(
@@ -316,40 +367,48 @@ fn prepare_glm_faucet_contract(
     }
 }
 
-fn raw_tx_to_entity(
-    raw_tx: &RawTransaction,
+pub fn create_dao_entity(
+    nonce: U256,
     sender: H160,
-    chain_id: u64,
+    starting_gas_price: String,
+    max_gas_price: String,
+    gas_limit: i32,
+    encoded_raw_tx: String,
+    network: Network,
     timestamp: DateTime<Utc>,
-    signature: &Vec<u8>,
     tx_type: TxType,
+    amount: Option<BigDecimal>,
 ) -> TransactionEntity {
+    let current_naive_time = timestamp.naive_utc();
     TransactionEntity {
-        tx_id: prepare_tx_id(&raw_tx, chain_id, sender),
+        tx_id: Uuid::new_v4().to_string(),
         sender: format!("0x{:x}", sender),
-        nonce: base_utils::u256_to_big_endian_hex(raw_tx.nonce),
-        timestamp: timestamp.naive_utc(),
-        encoded: serde_json::to_string(raw_tx).unwrap(),
+        nonce: nonce.as_u32() as i32,
+        time_created: current_naive_time,
+        time_last_action: current_naive_time,
+        time_sent: None,
+        time_confirmed: None,
+        max_gas_price: Some(max_gas_price),
+        final_gas_used: None,
+        amount_base: Some("0".to_string()),
+        amount_erc20: amount.as_ref().map(|a| big_dec_to_u256(a).to_string()),
+        gas_limit: Some(gas_limit),
+        starting_gas_price: Some(starting_gas_price),
+        current_gas_price: None,
+        encoded: encoded_raw_tx,
         status: TransactionStatus::Created as i32,
         tx_type: tx_type as i32,
-        signature: hex::encode(signature),
-        tx_hash: None,
-        network: Network::from_u64(chain_id).unwrap(),
+        signature: None,
+        tmp_onchain_txs: None,
+        final_tx: None,
+        network,
+        last_error_msg: None,
+        resent_times: 0,
     }
 }
 
-// We need a function to prepare an unique identifier for tx
-// that could be calculated easily from RawTransaction data
-// Explanation: RawTransaction::hash() can produce the same output (sender does not have any impact)
-pub fn prepare_tx_id(raw_tx: &RawTransaction, chain_id: u64, sender: H160) -> String {
-    let mut bytes = eth_utils::get_tx_hash(raw_tx, chain_id);
-    let mut address = sender.as_bytes().to_vec();
-    bytes.append(&mut address);
-    // TODO: Try https://docs.rs/web3/0.13.0/web3/api/struct.Web3Api.html#method.sha3
-    format!("{:x}", Sha3_512::digest(&bytes))
-}
-
 pub fn get_max_gas_costs(db_tx: &TransactionEntity) -> Result<U256, GenericError> {
-    let raw_tx: RawTransaction = serde_json::from_str(&db_tx.encoded).map_err(GenericError::new)?;
+    let raw_tx: YagnaRawTransaction =
+        serde_json::from_str(&db_tx.encoded).map_err(GenericError::new)?;
     Ok(raw_tx.gas_price * raw_tx.gas)
 }

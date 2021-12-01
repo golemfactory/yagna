@@ -87,7 +87,7 @@ pub async fn run(settings: Settings) -> Result</*exit code*/ i32> {
         || settings.cpu_per_hour.is_some()
     {
         cmd.ya_provider()?
-            .update_all_presets(
+            .update_classic_presets(
                 settings.starting_fee,
                 settings.env_per_hour.map(|p| p / 3600.0),
                 settings.cpu_per_hour.map(|p| p / 3600.0),

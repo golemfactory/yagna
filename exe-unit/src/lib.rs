@@ -420,6 +420,7 @@ pub struct ExeUnitContext {
     pub agreement: Agreement,
     pub work_dir: PathBuf,
     pub cache_dir: PathBuf,
+    pub runtime_args: Vec<String>,
     pub acl: Acl,
     pub credentials: Option<Credentials>,
     #[cfg(feature = "sgx")]

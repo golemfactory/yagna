@@ -105,7 +105,7 @@ impl PresetUpdater {
         }
 
         let exeunit_idx = Select::new()
-            .with_prompt("ExeUnit")
+            .with_prompt("ExeUnit [select with arrow keys]")
             .items(&self.exeunits[..])
             .default(prev_exeunit)
             .interact()?;
@@ -121,7 +121,7 @@ impl PresetUpdater {
             .unwrap_or(0);
 
         let pricing_idx = Select::new()
-            .with_prompt("Pricing model")
+            .with_prompt("Pricing model [select with arrow keys]")
             .items(&self.pricing_models[..])
             .default(prev_pricing)
             .interact()?;
