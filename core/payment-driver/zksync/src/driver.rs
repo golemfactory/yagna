@@ -295,18 +295,15 @@ impl PaymentDriver for ZksyncDriver {
                     &address
                 ))
             }
-            DbNetwork::Goerli => Ok(format!("PolygonMumbai Not supported")),
-            DbNetwork::Mumbai => Ok(format!("PolygonMumbai Not supported")),
-            DbNetwork::Polygon => Ok(format!("PolygonMainnet Not supported")),
+            DbNetwork::Goerli => Ok(format!("Goerli network is not supported by this driver.")),
+            DbNetwork::Mumbai => Ok(format!("Mumbai network is not supported by this driver.")),
+            DbNetwork::Polygon => Ok(format!("Polygon network is not supported by this driver.")),
             DbNetwork::Mainnet => Ok(format!(
-                r#"Your mainnet zkSync address is {}.
-
-To fund your wallet and be able to pay for your activities on Golem head to
-the https://chat.golem.network, join the #funding channel and type /terms
-and follow instructions to request GLMs.
-
-Mind that to be eligible you have to run your app at least once on testnet -
-- we will verify if that is true so we can avoid people requesting "free GLMs"."#,
+                r#"Using this driver is not recommended. Consider using the Polygon driver instead.
+                
+Your mainnet zkSync address is {}.
+To be able to use zkSync driver please send some GLM tokens and optionally ETH for gas to this address.
+"#,
                 address
             )),
         }

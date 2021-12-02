@@ -2373,6 +2373,7 @@ dependencies = [
  "strip-ansi-escapes",
  "structopt",
  "strum 0.20.0",
+ "strum_macros 0.20.1",
  "tokio 0.2.25",
  "url",
  "ya-client",

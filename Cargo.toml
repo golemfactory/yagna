@@ -92,7 +92,7 @@ An open platform and marketplace for distributed computations.
 [package.metadata.deb.variants.provider]
 name="golem-provider"
 replaces="golem-requestor"
-maintainer-scripts="debian/core"
+maintainer-scripts="debian/provider"
 features=["static-openssl"]
 depends="libgcc1, libc6 (>= 2.23)"
 assets = [
