@@ -1,14 +1,13 @@
-use structopt::{clap::AppSettings, StructOpt};
+use structopt::{StructOpt};
 
 use ya_core_model::misc;
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_bus::{typed as bus, RpcEndpoint};
-use ya_service_bus::router_error::{get_last_router_error};
 
 use anyhow::anyhow;
 use ya_core_model::misc::MiscInfo;
 use serde::{Serialize, Deserialize};
-
+use chrono::Utc;
 /// Yagna version management.
 #[derive(StructOpt, Debug)]
 pub enum MiscCLI {
@@ -21,8 +20,8 @@ pub enum MiscCLI {
 impl MiscCLI {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
-            MiscCLI::Show => show(misc::Get::show_only(), ctx).await,
-            MiscCLI::Check => show(misc::Get::with_check(), ctx).await,
+            MiscCLI::Show => show(misc::MiscGet::show_only(), ctx).await,
+            MiscCLI::Check => show(misc::MiscGet::with_check(), ctx).await,
         }
     }
 }
@@ -33,10 +32,16 @@ struct JsonResponse {
     success: bool,
     value: Option<MiscInfo>,
     error: Option<String>,
-    router_error: Option<String>,
 }
 
-async fn show(msg: misc::Get, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct HumanFriendlyResponse {
+    message: String
+}
+
+
+async fn show(msg: misc::MiscGet, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
     let bus_endpoint = bus::service(misc::BUS_ID); /*{
         Ok(bus_endpoint) => bus_endpoint,
         Err(err) => {
@@ -49,11 +54,10 @@ async fn show(msg: misc::Get, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         Err(err) => {
             log::error!("Error when sending message to bus: {:?}", err);
 
-            let last_error = get_last_router_error();
 
             if ctx.json_output {
-                let jsonResponse = JsonResponse{error:Some(err.to_string()), router_error: last_error, success:false, value:None};
-                return CommandOutput::object(jsonResponse);
+                let json_response = JsonResponse{error:Some(err.to_string()), success:false, value:None};
+                return CommandOutput::object(json_response);
             }
             return Err(anyhow!(err));
         }
@@ -64,7 +68,7 @@ async fn show(msg: misc::Get, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         Err(err) => {
             log::error!("Misc info returned error: {:?}", err);
             if ctx.json_output {
-                let json_response = JsonResponse{error:Some(err.to_string()), router_error: None, success:false, value:None};
+                let json_response = JsonResponse{error:Some(err.to_string()), success:false, value:None};
                 return CommandOutput::object(json_response);
             }
             return Err(anyhow!(err));
@@ -72,9 +76,33 @@ async fn show(msg: misc::Get, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
     };
 
     if ctx.json_output {
-        return CommandOutput::object(misc_info);
+        let json_response = JsonResponse{error:None, success:true, value:Some(misc_info)};
+        CommandOutput::object(json_response)
+    } else {
+        let mut string_output = "".to_string();
+        string_output += "*********************\n";
+        string_output += "*** Health report ***\n";
+        string_output += "*********************\n";
+
+        let current_time = Utc::now().timestamp();
+        let connected_for : Option<i64> = misc_info.last_connected_time.map(|val| {current_time - val});
+        let disconnected_for : Option<i64> = misc_info.last_disconnnected_time.map(|val| {current_time - val});
+
+        if let (Some(is_net_connected), Some(connected_for)) = (misc_info.is_net_connected, connected_for) {
+            if is_net_connected == 1 {
+                string_output += format!("[OK] - Yagna connected to GSB for {} seconds.\n", connected_for).as_str();
+            } else {
+                if let Some(disconnected_for) = disconnected_for {
+                    string_output += format!("[FAIL] - Yagna disconnected from GSB, disconnected for {} seconds. Last connect {} seconds ago.\n", disconnected_for, connected_for).as_str();
+                }
+            }
+        } else {
+            string_output += "[FAIL] - Cannot get info about connection\n";
+        }
+
+
+        Ok(CommandOutput::PlainString(string_output))
     }
-    CommandOutput::object("tesciki".to_string())
 }
 
 #[cfg(test)]

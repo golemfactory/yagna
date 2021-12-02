@@ -21,6 +21,7 @@ use crate::bcast::BCastService;
 use crate::central::handler::CentralBusHandler;
 use crate::central::SUBSCRIPTIONS;
 use crate::config::Config;
+use chrono::Utc;
 
 const CENTRAL_ADDR_ENV_VAR: &str = "CENTRAL_NET_HOST";
 
@@ -323,12 +324,14 @@ where
                 reconnect.replace(Default::default());
                 metrics::counter!("net.connect", 1);
                 metrics::gauge!("net.is_connected", 1);
+                metrics::gauge!("net.last_connected_time", Utc::now().timestamp());
 
                 let reconnect_clone = reconnect.clone();
                 Arbiter::spawn(async move {
                     if let Ok(_) = dc_rx.await {
                         metrics::counter!("net.disconnect", 1);
                         metrics::gauge!("net.is_connected", 0);
+                        metrics::gauge!("net.last_disconnected_time", Utc::now().timestamp());
                         reconnect_clone.borrow_mut().last_disconnect = Some(Instant::now());
                         log::warn!("Handlers disconnected");
                         (*unbind_clone.borrow_mut())().await;

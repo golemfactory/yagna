@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use ya_persistence::executor::DbExecutor;
-use ya_metrics::service::export_metrics_json;
 
 pub async fn on_start(db: &DbExecutor) -> anyhow::Result<()> {
 
@@ -20,7 +19,7 @@ pub(crate) async fn worker(db: DbExecutor) {
     loop {
         interval.tick().await;
 
-        let metrics = export_metrics_json().await;
+
         log::info!("miscellaneous worker happily looping :)");
     }
 }

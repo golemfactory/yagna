@@ -1,4 +1,3 @@
-use ya_client::model::ErrorMessage;
 use ya_persistence::executor::DbExecutor;
 
 use actix_web::{web, HttpResponse, Responder};
@@ -12,6 +11,6 @@ pub fn web_scope(db: DbExecutor) -> actix_web::Scope {
 }
 
 #[actix_web::get("/get")]
-async fn get_misc(db: web::Data<DbExecutor>) -> impl Responder {
+async fn get_misc(_db: web::Data<DbExecutor>) -> impl Responder {
     HttpResponse::Ok().json("")
 }

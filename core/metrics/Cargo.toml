@@ -28,3 +28,5 @@ percent-encoding = "2.1.0"
 structopt = "0.3"
 tokio = { version = "0.2", features = ["time", "sync"] }
 url = "2.1.1"
+serde = "1.0"
+serde_json = "1.0"

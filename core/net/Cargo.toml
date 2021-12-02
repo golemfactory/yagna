@@ -39,6 +39,7 @@ tokio-util = { version = "0.3" }
 url = { version = "2.2" }
 prost = { version = "0.6" }
 rand = { version = "0.7"}
+chrono = "0.4"
 
 [dev-dependencies]
 ya-sb-proto = "0.4"

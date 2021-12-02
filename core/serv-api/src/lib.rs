@@ -27,6 +27,7 @@ impl CliCtx {
 pub enum CommandOutput {
     NoOutput,
     Object(serde_json::Value),
+    PlainString(String),
     Table {
         columns: Vec<String>,
         values: Vec<serde_json::Value>,
@@ -69,6 +70,9 @@ impl CommandOutput {
                     }
                     print_table(columns, values, summary);
                 }
+            }
+            CommandOutput::PlainString(v) => {
+                println!("{}", v);
             }
             CommandOutput::Object(v) => {
                 if json_output {
