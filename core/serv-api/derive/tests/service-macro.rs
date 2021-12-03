@@ -125,6 +125,7 @@ pub mod rest_cli {
     /// rest_cli command help
     pub struct Commands {
         /// baz flag help
+        #[allow(unused)]
         #[structopt(short, long)]
         baz: bool,
     }

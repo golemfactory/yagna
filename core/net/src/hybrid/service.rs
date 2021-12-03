@@ -709,8 +709,10 @@ impl State {
 
 #[derive(Clone)]
 struct Request<S: Clone> {
+    #[allow(unused)]
     caller_id: NodeId,
     remote_id: NodeId,
+    #[allow(unused)]
     address: String,
     tx: S,
 }
