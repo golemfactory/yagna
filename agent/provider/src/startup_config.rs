@@ -204,6 +204,7 @@ pub enum Commands {
 
 #[derive(Debug)]
 pub struct FileMonitor {
+    #[allow(dead_code)]
     pub(crate) path: PathBuf,
     pub(crate) thread_ctl: Option<oneshot::Sender<()>>,
 }
