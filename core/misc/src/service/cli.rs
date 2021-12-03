@@ -5,7 +5,7 @@ use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 use anyhow::anyhow;
-use ya_core_model::misc::MiscInfo;
+use ya_core_model::misc::HealthInfo;
 use serde::{Serialize, Deserialize};
 use chrono::Utc;
 /// Yagna version management.
@@ -30,7 +30,7 @@ impl MiscCLI {
 #[serde(rename_all = "camelCase")]
 struct JsonResponse {
     success: bool,
-    value: Option<MiscInfo>,
+    value: Option<HealthInfo>,
     error: Option<String>,
 }
 
@@ -63,8 +63,8 @@ async fn show(msg: misc::MiscGet, ctx: &CliCtx) -> anyhow::Result<CommandOutput>
         }
     };
 
-    let misc_info = match bus_response {
-        Ok(miscInfo) => miscInfo,
+    let health_info = match bus_response {
+        Ok(health_info) => health_info,
         Err(err) => {
             log::error!("Misc info returned error: {:?}", err);
             if ctx.json_output {
@@ -76,7 +76,7 @@ async fn show(msg: misc::MiscGet, ctx: &CliCtx) -> anyhow::Result<CommandOutput>
     };
 
     if ctx.json_output {
-        let json_response = JsonResponse{error:None, success:true, value:Some(misc_info)};
+        let json_response = JsonResponse{error:None, success:true, value:Some(health_info)};
         CommandOutput::object(json_response)
     } else {
         let mut string_output = "".to_string();
@@ -85,10 +85,10 @@ async fn show(msg: misc::MiscGet, ctx: &CliCtx) -> anyhow::Result<CommandOutput>
         string_output += "*********************\n";
 
         let current_time = Utc::now().timestamp();
-        let connected_for : Option<i64> = misc_info.last_connected_time.map(|val| {current_time - val});
-        let disconnected_for : Option<i64> = misc_info.last_disconnnected_time.map(|val| {current_time - val});
+        let connected_for : Option<i64> = health_info.last_connected_time.map(|val| {current_time - val});
+        let disconnected_for : Option<i64> = health_info.last_disconnnected_time.map(|val| {current_time - val});
 
-        if let (Some(is_net_connected), Some(connected_for)) = (misc_info.is_net_connected, connected_for) {
+        if let (Some(is_net_connected), Some(connected_for)) = (health_info.is_net_connected, connected_for) {
             if is_net_connected == 1 {
                 string_output += format!("[OK] - Yagna connected to GSB for {} seconds.\n", connected_for).as_str();
             } else {
@@ -99,6 +99,12 @@ async fn show(msg: misc::MiscGet, ctx: &CliCtx) -> anyhow::Result<CommandOutput>
         } else {
             string_output += "[FAIL] - Cannot get info about connection\n";
         }
+
+        let last_healthcheck : Option<i64> = health_info.last_health_check_worker.map(|val| {current_time - val});
+        if let Some(last_healthcheck) = last_healthcheck {
+            string_output += format!("[OK] - Last healthcheck performed {} seconds ago.\n", last_healthcheck).as_str();
+        }
+
 
 
         Ok(CommandOutput::PlainString(string_output))

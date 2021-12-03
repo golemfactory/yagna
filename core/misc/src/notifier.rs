@@ -1,36 +1,26 @@
 use std::time::Duration;
+use metrics::gauge;
+use chrono::Utc;
 
 use ya_persistence::executor::DbExecutor;
 
 pub async fn on_start(db: &DbExecutor) -> anyhow::Result<()> {
 
     let worker_db = db.clone();
-    tokio::task::spawn_local(async move { crate::notifier::worker(worker_db).await });
-    let pinger_db = db.clone();
-    tokio::task::spawn_local(async move { crate::notifier::pinger(pinger_db).await });
+    tokio::task::spawn_local(async move { crate::notifier::health_worker(worker_db).await });
 
     Ok(())
 }
 
-pub(crate) async fn worker(db: DbExecutor) {
+pub(crate) async fn health_worker(db: DbExecutor) {
 
     // TODO: make interval configurable
-    let mut interval = tokio::time::interval(Duration::from_secs(3600 * 24));
+    let mut interval = tokio::time::interval(Duration::from_secs(60));
     loop {
         interval.tick().await;
+        gauge!("health.last_loop_time", Utc::now().timestamp());
 
-
-        log::info!("miscellaneous worker happily looping :)");
-    }
-}
-
-pub(crate) async fn pinger(db: DbExecutor) -> ! {
-    // TODO: make interval configurable
-
-    let mut interval = tokio::time::interval(Duration::from_secs(30 * 60));
-    loop {
-        interval.tick().await;
-        log::info!("miscellaneous pinger happily pinging :)");
+        log::info!("Performing health check");
     }
 }
 
