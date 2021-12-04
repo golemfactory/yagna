@@ -28,6 +28,7 @@ struct Cli {
     #[structopt(flatten)]
     supervise: SuperviseCli,
     /// Enclave secret key used in secure communication
+    #[allow(unused)]
     #[structopt(
     long,
     env = "EXE_UNIT_SEC_KEY",
@@ -36,6 +37,7 @@ struct Cli {
     )]
     sec_key: Option<String>,
     /// Requestor public key used in secure communication
+    #[allow(unused)]
     #[structopt(
     long,
     env = "EXE_UNIT_REQUESTOR_PUB_KEY",

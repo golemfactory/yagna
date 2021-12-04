@@ -8,6 +8,7 @@ use ya_transfer::TransferUrl;
 #[derive(Debug, Clone)]
 pub(crate) struct Cache {
     dir: PathBuf,
+    #[allow(unused)]
     tmp_dir: PathBuf,
 }
 
