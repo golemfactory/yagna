@@ -34,6 +34,7 @@ struct Cli {
     hide_env_values = true,
     set = clap::ArgSettings::Global,
     )]
+    #[allow(dead_code)]
     sec_key: Option<String>,
     /// Requestor public key used in secure communication
     #[structopt(
@@ -42,6 +43,7 @@ struct Cli {
     hide_env_values = true,
     set = clap::ArgSettings::Global,
     )]
+    #[allow(dead_code)]
     requestor_pub_key: Option<String>,
     #[structopt(subcommand)]
     command: Command,
