@@ -1,5 +1,8 @@
+use std::collections::BTreeMap;
+
 use ansi_term::{Colour, Style};
 use anyhow::{anyhow, Result};
+use bigdecimal::BigDecimal;
 use futures::prelude::*;
 use prettytable::{cell, format, row, Table};
 use strum::VariantNames;
@@ -8,7 +11,9 @@ use ya_core_model::payment::local::{NetworkName, StatusResult};
 use ya_core_model::NodeId;
 
 use crate::appkey;
-use crate::command::{PaymentSummary, YaCommand, ERC20_DRIVER, ZKSYNC_DRIVER};
+use crate::command::{
+    NetworkGroup, PaymentSummary, YaCommand, ERC20_DRIVER, NETWORK_GROUP_MAP, ZKSYNC_DRIVER,
+};
 use crate::platform::Status as KvmStatus;
 use crate::utils::{is_yagna_running, payment_account};
 
@@ -16,28 +21,49 @@ async fn payment_status(
     cmd: &YaCommand,
     network: &NetworkName,
     account: &Option<NodeId>,
-) -> anyhow::Result<(StatusResult, StatusResult)> {
+) -> anyhow::Result<BTreeMap<String, StatusResult>> {
     let address = payment_account(&cmd, account).await?;
 
-    let (status_zk, status_erc20) = future::join(
-        cmd.yagna()?
-            .payment_status(&address, network, &ZKSYNC_DRIVER),
-        cmd.yagna()?
-            .payment_status(&address, network, &ERC20_DRIVER),
-    )
-    .await;
+    let network_group = get_network_group(network);
 
-    match (status_zk, status_erc20) {
-        (Ok(zk), Ok(eth)) => Ok((zk, eth)),
-        (Ok(zk), Err(e)) => {
-            log::warn!("yagna payment status for ERC-20 {} failed: {}", network, e);
-            Ok((zk, StatusResult::default()))
+    let mut result = BTreeMap::new();
+    let (futures, labels) = {
+        let mut f = vec![];
+        let mut l = vec![];
+        for nn in NETWORK_GROUP_MAP[&network_group].iter() {
+            if let Ok(_) = ZKSYNC_DRIVER.platform(&nn) {
+                l.push("zksync".to_string());
+                f.push(cmd.yagna()?.payment_status(&address, nn, &ZKSYNC_DRIVER));
+            }
+            if nn == &NetworkName::Mainnet {
+                l.push("on-chain".to_string());
+            } else {
+                l.push(nn.to_string().to_lowercase());
+            };
+            f.push(cmd.yagna()?.payment_status(&address, nn, &ERC20_DRIVER));
         }
-        (Err(e), Ok(erc20)) => {
-            log::debug!("yagna payment status for zkSync {} failed: {}", network, e);
-            Ok((StatusResult::default(), erc20))
-        }
-        (_, Err(e)) => Err(e),
+        (f, l)
+    };
+    let fr = future::join_all(futures).await;
+    let mut n = 0;
+    for r in fr {
+        result.insert(
+            labels[n].clone(),
+            r.unwrap_or_else(|e| {
+                log::warn!("yagna payment status for {} failed: {}", labels[n], e);
+                StatusResult::default()
+            }),
+        );
+        n += 1;
+    }
+    Ok(result)
+}
+
+fn get_network_group(network: &NetworkName) -> NetworkGroup {
+    if NETWORK_GROUP_MAP[&NetworkGroup::Mainnet].contains(network) {
+        NetworkGroup::Mainnet
+    } else {
+        NetworkGroup::Testnet
     }
 }
 
@@ -107,17 +133,18 @@ pub async fn run() -> Result</*exit code*/ i32> {
 
     if is_running {
         let (_offers_cnt, network) = get_payment_network().await?;
+        let network_group = get_network_group(&network);
 
         let payments = {
             let (id, invoice_status) =
                 future::try_join(cmd.yagna()?.default_id(), cmd.yagna()?.invoice_status()).await?;
-            let (zk_payment_status, erc20_payment_status) =
-                payment_status(&cmd, &network, &config.account).await?;
+            let payment_statuses = payment_status(&cmd, &network, &config.account).await?;
 
-            let token = match zk_payment_status.token.len() {
-                0 => erc20_payment_status.token,
-                _ => zk_payment_status.token,
-            };
+            let token = &payment_statuses
+                .values()
+                .cloned()
+                .collect::<Vec<StatusResult>>()[0]
+                .token;
 
             let mut table = Table::new();
             let format = format::FormatBuilder::new().padding(1, 1).build();
@@ -130,29 +157,27 @@ pub async fn run() -> Result</*exit code*/ i32> {
             table.add_row(row![H2->Style::new().fg(Colour::Fixed(63)).paint(&account)]);
             table.add_empty_row();
 
-            let net_color = match network {
-                NetworkName::Mainnet => Colour::Purple,
-                NetworkName::Rinkeby => Colour::Cyan,
-                _ => Colour::Red,
+            let net_color = match network_group {
+                NetworkGroup::Mainnet => Colour::Purple,
+                NetworkGroup::Testnet => Colour::Cyan,
             };
 
             table.add_row(row![
                 "network",
-                Style::new().fg(net_color).paint(network.to_string())
+                Style::new().fg(net_color).paint(network_group.to_string())
             ]);
-            let total_amount = &zk_payment_status.amount + &erc20_payment_status.amount;
+            let total_amount: BigDecimal =
+                payment_statuses.values().cloned().map(|ps| ps.amount).sum();
             table.add_row(row![
                 "amount (total)",
                 format!("{} {}", total_amount, token)
             ]);
-            table.add_row(row![
-                "    (on-chain)",
-                format!("{} {}", &erc20_payment_status.amount, token)
-            ]);
-            table.add_row(row![
-                "     (zk-sync)",
-                format!("{} {}", &zk_payment_status.amount, token)
-            ]);
+            for (label, status) in payment_statuses {
+                table.add_row(row![
+                    format!("    ({})", label),
+                    format!("{} {}", status.amount, token)
+                ]);
+            }
             table.add_empty_row();
             {
                 let (pending, pending_cnt) = invoice_status.provider.total_pending();

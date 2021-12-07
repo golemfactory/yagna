@@ -30,7 +30,7 @@ tokio = { version = "0.2", features = ["macros"] }
 
 ## yagna dependencies
 ya-client-model = "0.3"
-ya-core-model = { version = "^0.4", features = ["driver", "identity", "payment"] }
+ya-core-model = { version = "^0.5", features = ["driver", "identity", "payment"] }
 ya-persistence = "0.2"
 ya-service-bus = "0.4"
 
