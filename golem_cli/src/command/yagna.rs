@@ -4,9 +4,10 @@ use chrono::{DateTime, Utc};
 use futures::prelude::*;
 use lazy_static::lazy_static;
 use serde::de::DeserializeOwned;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::process::Stdio;
+use strum_macros::{Display, EnumString, EnumVariantNames, IntoStaticStr};
 
 use crate::setup::RunConfig;
 use tokio::process::{Child, Command};
@@ -98,6 +99,45 @@ impl PaymentDriver {
             network
         ))?)
     }
+}
+
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Display,
+    EnumVariantNames,
+    EnumString,
+    Eq,
+    Hash,
+    IntoStaticStr,
+    PartialEq,
+    Serialize,
+)]
+#[strum(serialize_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum NetworkGroup {
+    Mainnet,
+    Testnet,
+}
+
+lazy_static! {
+    pub static ref NETWORK_GROUP_MAP: HashMap<NetworkGroup, Vec<NetworkName>> = {
+        let mut ngm = HashMap::new();
+        ngm.insert(
+            NetworkGroup::Mainnet,
+            vec![NetworkName::Mainnet, NetworkName::Polygon],
+        );
+        ngm.insert(
+            NetworkGroup::Testnet,
+            vec![
+                NetworkName::Rinkeby,
+                NetworkName::Mumbai,
+                NetworkName::Goerli,
+            ],
+        );
+        ngm
+    };
 }
 
 #[derive(Deserialize)]

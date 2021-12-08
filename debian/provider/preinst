@@ -1,0 +1,18 @@
+#!/bin/sh
+
+[ "$1" = "install" ] || return 0
+
+. /usr/share/debconf/confmodule
+
+db_version 2.0
+db_input critical golem/terms/subsidy-01
+db_go
+
+db_get golem/terms/subsidy-01 || true
+
+if [ "$RET" != "yes" ]; then
+    db_input critical golem/subsidy-tos-rejected
+    db_go
+    db_reset golem/terms/subsidy-01
+    exit 1
+fi
