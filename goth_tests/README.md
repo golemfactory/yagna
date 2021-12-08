@@ -152,7 +152,8 @@ from pathlib import Path
 from typing import List, Optional
 
 from goth.configuration import load_yaml, Override
-from goth.runner.probe import ProviderProbe, RequestorProbe
+from goth.runner.probe import RequestorProbe
+from goth_tests.helpers.probe import ProviderProbe
 
 @pytest.mark.asyncio
 async def test_example(
@@ -176,7 +177,7 @@ async def test_example(
         assert drivers and drivers.items()
 
         for provider in providers:
-            await provider.provider_agent.wait_for_log("Subscribed offer")
+            await provider.wait_for_offer_subscribed()
 ```
 
 The above is an example of a test case, showcasing some of the basic `goth` functionalities.
@@ -260,7 +261,7 @@ node-types:                                     # User-defined node types to be 
     class: "goth.runner.probe.RequestorProbe"
 
   - name: "Provider"
-    class: "goth.runner.probe.ProviderProbe"
+    class: "goth_tests.helpers.probe.ProviderProbe"
     mount: ...
 
 nodes:                                          # List of yagna nodes to be run in the test
