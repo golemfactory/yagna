@@ -115,7 +115,7 @@ async def test_custom_runtime_counter(
         )
 
         debit_notes = await requestor.api.payment.get_debit_notes()
-        last_debit_note = debit_notes[-1]
+        last_debit_note = debit_notes[0]
         logger.info("last debit note: %r", last_debit_note)
 
         assert len(last_debit_note.usage_counter_vector) == len(usage_vector)

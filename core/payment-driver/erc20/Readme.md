@@ -113,16 +113,16 @@ That way we can save money on gas and also have bigger chance of transactions no
 
 Currently we proposed following gas levels for polygon network:
 ```
-10.011, 
-15.011, 
-20.011, 
-25.011, 
-30.011, //minimum suggested gas price 
-33.011, 
-36.011, 
-40.011, 
-50.011, 
-60.011, 
+10.011, //LOW PRIORITY
+15.011, //LOW PRIORITY
+20.011, //LOW PRIORITY
+25.011, //LOW PRIORITY
+30.011, //minimum suggested gas price - FAST PRIORITY 
+33.011, //not used 
+36.011, //not used 
+40.011, //not used 
+50.011, //not used 
+60.011, //EXPRESS PRIORITY
 80.011,
 100.011
 ```
@@ -130,6 +130,17 @@ Note that we add 0.011 to increase the chance of getting inline of someone setti
 
 Note that on test networks gas doesn't matter and transaction is processed instantly regardless of gas set. So to test this
 feature you have to use Polygon network and pay some Matic for gas.
+
+## VARIABLES:
+
+POLYGON_PRIORITY:
+possible values:
+slow - normal, low priority, economic mode,
+fast - fast transaction (for testing or normal mode)
+express - express transaction (for testing)
+
+ERC20_WAIT_FOR_PENDING_ON_NETWORK: (duration)
+after that time transaction is resent with higher gas
 
 ## List of known errors:
 

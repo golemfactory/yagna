@@ -718,8 +718,10 @@ impl State {
 #[allow(dead_code)]
 #[derive(Clone)]
 struct Request<S: Clone> {
+    #[allow(dead_code)]
     caller_id: NodeId,
     remote_id: NodeId,
+    #[allow(dead_code)]
     address: String,
     tx: S,
 }

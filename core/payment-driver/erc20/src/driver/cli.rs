@@ -70,24 +70,45 @@ pub async fn fund(dao: &Erc20Dao, msg: Fund) -> Result<String, GenericError> {
                 .map_err(GenericError::new)??;
             format!("Received funds from the faucet. address=0x{:x}", &address)
         }
-        Network::Goerli => {
-            format!("Goerli faucet not supported")
-        }
-        Network::Polygon => format!(
-            r#"Your mainnet/polygon ethereum address is {}.
+        Network::Goerli => format!(
+            r#"Your Goerli Polygon address is {}.
 
-            Send some GLM tokens and MATIC for gas to this address to be able to use this driver.
-            "#,
+Goerli GLM/MATIC faucet is not supported. Please use erc20/rinkeby (`--driver erc20 --network rinkeby`) instead.
+
+To be able to use Goerli Polygon network, please send some GLM tokens and MATIC for gas to this address.
+"#,
             address
         ),
-        Network::Mumbai => format!("Mumbai faucet not supported on ERC20 driver"),
+        Network::Mumbai => format!(
+            r#"Your Mumbai Polygon address is {}.
+
+Mumbai GLM/MATIC faucet is not supported. Please use erc20/rinkeby (`--driver erc20 --network rinkeby`) instead.
+
+To be able to use Mumbai Polygon network, please send some GLM tokens and MATIC for gas to this address.
+"#,
+            address
+        ),
+        Network::Polygon => format!(
+            r#"Your mainnet Polygon address is {}.
+
+To fund your wallet and be able to pay for your activities on Golem head to
+the https://chat.golem.network, join the #funding channel and type /terms
+and follow instructions to request GLMs.
+
+Mind that to be eligible you have to run your app at least once on testnet -
+- we will verify if that is true so we can avoid people requesting "free GLMs".
+
+You will also need some MATIC for gas. You can acquire them by visiting
+  https://macncheese.finance/matic-polygon-mainnet-faucet.php
+"#,
+            address
+        ),
         Network::Mainnet => format!(
-            r#"Your mainnet ethereum address is {}.
+            r#"Using this driver is not recommended. Consider using the Polygon driver instead.
 
-Send some GLM tokens and ETH for gas to this address to be able to use this driver.
-
-Using this driver is not recommended.
-If you want to easily acquire some GLM to try Golem on mainnet please use zksync driver."#,
+Your mainnet ethereum address is {}.
+To be able to use mainnet Ethereum driver please send some GLM tokens and ETH for gas to this address.
+"#,
             address
         ),
     };
