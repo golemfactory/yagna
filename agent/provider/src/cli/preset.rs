@@ -62,10 +62,10 @@ impl PresetsConfig {
                 if no_interactive {
                     update_presets(&config, names, params)
                 } else {
-                    if names.all || names.names.len() != 1 {
+                    if names.all || names.name.len() != 1 {
                         anyhow::bail!("choose one name for interactive update");
                     }
-                    update_preset_interactive(config, names.names.drain(..).next().unwrap())
+                    update_preset_interactive(config, names.name.drain(..).next().unwrap())
                 }
             }
             PresetsConfig::Activate { name } => activate_preset(config, name),
@@ -296,7 +296,7 @@ fn update_presets(
     let names = if names.all {
         presets.list_names()
     } else {
-        names.names
+        names.name
     };
 
     for name in names {
