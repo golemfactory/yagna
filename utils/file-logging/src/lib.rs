@@ -83,14 +83,6 @@ pub fn start_logger(
     }
 
     let log_spec = log_spec_builder.finalize();
-
-    for filter in log_spec.module_filters() {
-        println!(
-            "[Logs] Filtering module '{:?}' with level {}",
-            filter.module_name, filter.level_filter
-        );
-    }
-
     let mut logger = Logger::with(log_spec).format(log_format);
     if let Some(log_dir) = log_dir {
         logger = set_logging_to_files(logger, log_dir);
