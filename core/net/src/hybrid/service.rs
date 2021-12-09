@@ -100,6 +100,7 @@ pub async fn start_network(
 
     let client = ClientBuilder::from_url(url)
         .crypto(provider)
+        .listen(config.bind_url.clone())
         .connect()
         .build()
         .await?;
@@ -714,6 +715,7 @@ impl State {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 struct Request<S: Clone> {
     caller_id: NodeId,
