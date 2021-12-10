@@ -400,7 +400,6 @@ impl ServiceCommand {
                         ("web3", log::LevelFilter::Info),
                         ("tokio_util", log::LevelFilter::Off),
                         ("mio", log::LevelFilter::Off),
-                        ("ya_persistence::executor", log::LevelFilter::Debug),
                     ],
                     force_debug,
                 )?;
