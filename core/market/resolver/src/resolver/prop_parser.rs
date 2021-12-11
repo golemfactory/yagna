@@ -1,6 +1,8 @@
 use std::str;
+use std::string::String;
 
 use nom::digit;
+use nom::AsBytes;
 use nom::IResult;
 
 named!(prop_def <&str, &str>,
@@ -173,6 +175,7 @@ named!(prop_ref_list_item <&str, &str>,
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal<'a> {
     Str(&'a str),
+    String(String),
     Number(&'a str),
     Decimal(&'a str),
     Bool(bool),
@@ -184,7 +187,7 @@ pub enum Literal<'a> {
 named!(
     val_literal<Literal>,
     alt!(
-        string_literal
+        str_literal
             | version_literal
             | datetime_literal
             | true_literal
@@ -192,6 +195,7 @@ named!(
             | decimal_literal
             | number_literal
             | list_literal
+            | string_literal
     )
 );
 
@@ -209,10 +213,35 @@ named!(
 );
 
 named!(
-    string_literal<Literal>,
+    str_literal<Literal>,
     ws!(delimited!(
         char!('"'),
         do_parse!(val: take_until!("\"") >> (Literal::Str(str::from_utf8(val).unwrap()))),
+        char!('"')
+    ))
+);
+
+named!(
+    string_literal<Literal>,
+    ws!(delimited!(
+        char!('"'),
+        map!(
+            fold_many1!(
+                alt!(
+                    verify!(is_not!("\"\\"), |s: &[u8]| !s.is_empty())
+                        | preceded!(
+                            char!('\\'),
+                            alt!(
+                                value!(b"\\".as_bytes(), char!('\\'))
+                                    | value!(b"\"".as_bytes(), char!('"'))
+                            )
+                        )
+                ),
+                String::new(),
+                |acc, fragment| acc + str::from_utf8(fragment).unwrap()
+            ),
+            |str| Literal::String(str)
+        ),
         char!('"')
     ))
 );
@@ -413,7 +442,11 @@ pub fn parse_prop_value_literal(input: &str) -> Result<Literal, String> {
             if rest.len() == 0 {
                 Ok(t)
             } else {
-                Err(format!("Unknown literal type: {}", input))
+                // should remove it after upgrade nom and refactor str_literal using all_consuming combinator
+                match string_literal(input.as_bytes()) {
+                    IResult::Done(rest, t) if rest.len() == 0 => Ok(t),
+                    _ => Err(format!("Unknown literal type: {}", input)),
+                }
             }
         }
         IResult::Error(error_kind) => Err(format!(
@@ -439,7 +472,7 @@ mod tests {
 
     #[test]
     fn default_parse() {
-        assert!(match string_literal("\"input\"".as_bytes()) {
+        assert!(match str_literal("\"input\"".as_bytes()) {
             IResult::Done(rest, t) => rest.len() == 0 && t == Literal::Str("input"),
             IResult::Error(_) => false,
             IResult::Incomplete(_) => false,
@@ -448,10 +481,13 @@ mod tests {
 
     #[test]
     fn double_quoted_parse() {
-        assert!(match string_literal("\"king node\\\"\"".as_bytes()) {
-            IResult::Done(rest, t) => rest.len() == 0 && t == Literal::Str("king node\""),
-            IResult::Error(_) => false,
-            IResult::Incomplete(_) => false,
-        })
+        assert!(
+            match string_literal("\"\\\"king\\\" \\\"node\\\"\"".as_bytes()) {
+                IResult::Done(rest, t) =>
+                    rest.len() == 0 && t == Literal::String(String::from("\"king\" \"node\"")),
+                IResult::Error(_) => false,
+                IResult::Incomplete(_) => false,
+            }
+        )
     }
 }
