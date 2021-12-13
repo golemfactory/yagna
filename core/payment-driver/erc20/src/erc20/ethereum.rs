@@ -187,10 +187,15 @@ pub async fn prepare_raw_transaction(
     let data = eth_utils::contract_encode(&contract, TRANSFER_ERC20_FUNCTION, (recipient, amount))
         .map_err(GenericError::new)?;
 
-    //get gas price from network in not provided
-    let gas_price = match gas_price_override {
-        Some(gas_price_new) => gas_price_new,
-        None => client.eth().gas_price().await.map_err(GenericError::new)?,
+    let gas_price = match network {
+        Network::Rinkeby => U256::from(1),
+        _ => {
+            //get gas price from network in not provided
+            match gas_price_override {
+                Some(gas_price_new) => gas_price_new,
+                None => client.eth().gas_price().await.map_err(GenericError::new)?,
+            }
+        }
     };
 
     let gas_limit = match gas_limit_override {
