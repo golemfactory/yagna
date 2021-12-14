@@ -193,9 +193,9 @@ pub async fn prepare_raw_transaction(
         None => client.eth().gas_price().await.map_err(GenericError::new)?,
     };
 
-    let gas_limit = match gas_limit_override {
-        Some(gas_limit_override) => U256::from(gas_limit_override),
-        None => *GLM_POLYGON_GAS_LIMIT,
+    let gas_limit = match network {
+        Network::Polygon => gas_limit_override.map_or(*GLM_POLYGON_GAS_LIMIT, |v| U256::from(v)),
+        _ => gas_limit_override.map_or(*GLM_TRANSFER_GAS, |v| U256::from(v)),
     };
 
     let tx = YagnaRawTransaction {
