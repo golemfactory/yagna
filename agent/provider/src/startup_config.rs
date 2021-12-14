@@ -169,8 +169,8 @@ pub struct UpdateNames {
     #[structopt(long, group = "update_names")]
     pub all: bool,
 
-    #[structopt(group = "update_names")]
-    pub names: Vec<String>,
+    #[structopt(long, group = "update_names")]
+    pub name: Vec<String>,
 }
 
 #[derive(StructOpt, Clone)]

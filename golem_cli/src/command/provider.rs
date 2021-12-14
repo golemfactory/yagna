@@ -9,7 +9,7 @@ pub use ya_provider::GlobalsState as ProviderConfig;
 use crate::command::NETWORK_GROUP_MAP;
 use crate::setup::RunConfig;
 
-const CLASSIC_RUNTIMES: &'static [&'static str] = &["wasm", "vw"];
+const CLASSIC_RUNTIMES: &'static [&'static str] = &["wasmtime", "vm"];
 
 pub struct YaProviderCommand {
     pub(super) cmd: Command,
