@@ -150,7 +150,7 @@ pub async fn sign_faucet_tx(
         nonce,
         address,
         gas_price.to_string(),
-        gas_price.to_string(),
+        Some(gas_price.to_string()),
         GLM_FAUCET_GAS.as_u32() as i32,
         serde_json::to_string(&tx).map_err(GenericError::new)?,
         network,
@@ -193,9 +193,9 @@ pub async fn prepare_raw_transaction(
         None => client.eth().gas_price().await.map_err(GenericError::new)?,
     };
 
-    let gas_limit = match gas_limit_override {
-        Some(gas_limit_override) => U256::from(gas_limit_override),
-        None => *GLM_POLYGON_GAS_LIMIT,
+    let gas_limit = match network {
+        Network::Polygon => gas_limit_override.map_or(*GLM_POLYGON_GAS_LIMIT, |v| U256::from(v)),
+        _ => gas_limit_override.map_or(*GLM_TRANSFER_GAS, |v| U256::from(v)),
     };
 
     let tx = YagnaRawTransaction {
@@ -412,7 +412,7 @@ pub fn create_dao_entity(
     nonce: U256,
     sender: H160,
     starting_gas_price: String,
-    max_gas_price: String,
+    max_gas_price: Option<String>,
     gas_limit: i32,
     encoded_raw_tx: String,
     network: Network,
@@ -429,7 +429,7 @@ pub fn create_dao_entity(
         time_last_action: current_naive_time,
         time_sent: None,
         time_confirmed: None,
-        max_gas_price: Some(max_gas_price),
+        max_gas_price,
         final_gas_used: None,
         amount_base: Some("0".to_string()),
         amount_erc20: amount.as_ref().map(|a| big_dec_to_u256(a).to_string()),
