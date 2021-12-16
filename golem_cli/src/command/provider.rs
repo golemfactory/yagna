@@ -183,7 +183,7 @@ impl YaProviderCommand {
             cmd.arg("--price").arg(format!("Init price={}", initial));
         }
         for runtime_name in CLASSIC_RUNTIMES {
-            cmd.arg(format!("--name {}", runtime_name));
+            cmd.arg("--name").arg(runtime_name);
         }
         self.exec_no_output().await
     }
