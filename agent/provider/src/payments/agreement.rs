@@ -52,6 +52,7 @@ pub struct AgreementPayment {
     pub activities: HashMap<String, ActivityPayment>,
 
     pub update_interval: std::time::Duration,
+    pub accept_timeout: Option<chrono::Duration>,
     pub payment_timeout: Option<chrono::Duration>,
     // If at least one deadline elapses, we don't want to generate any
     // new unnecessary events.
@@ -74,13 +75,21 @@ pub struct ActivitiesWaiter {
 impl AgreementPayment {
     pub fn new(agreement: &AgreementView) -> Result<AgreementPayment> {
         let payment_description = PaymentDescription::new(agreement)?;
-        let update_interval = payment_description.get_update_interval()?;
-        let debit_deadline = payment_description.get_debit_note_deadline()?;
         let payment_model = PaymentModelFactory::create(&payment_description)?;
+        let update_interval = payment_description.get_update_interval()?;
+        let accept_timeout = payment_description.get_debit_note_accept_timeout()?;
+        let payment_timeout = payment_description.get_payment_timeout()?;
 
-        if let Some(deadline) = &debit_deadline {
+        if let Some(deadline) = &accept_timeout {
             log::info!(
                 "Requestor is expected to accept DebitNotes for Agreement [{}] in {}",
+                &agreement.agreement_id,
+                deadline.display()
+            );
+        }
+        if let Some(deadline) = &payment_timeout {
+            log::info!(
+                "Requestor is expected to pay DebitNotes for Agreement [{}] in {}",
                 &agreement.agreement_id,
                 deadline.display()
             );
@@ -94,7 +103,8 @@ impl AgreementPayment {
             activities: HashMap::new(),
             payment_model,
             update_interval,
-            payment_timeout: debit_deadline,
+            accept_timeout,
+            payment_timeout,
             deadline_elapsed: false,
             last_send_debit_note: Utc::now(),
             watch_sender: sender,

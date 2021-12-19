@@ -186,7 +186,10 @@ impl ProviderAgent {
         for preset in presets {
             let pricing_model: Box<dyn PricingOffer> = match preset.pricing_model.as_str() {
                 "linear" => match std::env::var("DEBIT_NOTE_INTERVAL") {
-                    Ok(val) => Box::new(LinearPricingOffer::default().interval(val.parse()?)),
+                    Ok(val) => {
+                        let interval = humantime::parse_duration(&val)?;
+                        Box::new(LinearPricingOffer::default().interval(interval.as_secs() as f64))
+                    }
                     Err(_) => Box::new(LinearPricingOffer::default()),
                 },
                 other => return Err(anyhow!("Unsupported pricing model: {}", other)),

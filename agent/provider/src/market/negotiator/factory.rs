@@ -28,6 +28,28 @@ pub struct AgreementExpirationNegotiatorConfig {
     pub debit_note_acceptance_deadline: std::time::Duration,
 }
 
+/// Configuration for DebitNoteInterval negotiator
+#[derive(StructOpt, Clone, Debug)]
+pub struct DebitNoteIntervalConfig {
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "1s")]
+    pub min_debit_note_interval: std::time::Duration,
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "24h")]
+    pub max_debit_note_interval: std::time::Duration,
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "2min")]
+    pub debit_note_interval: std::time::Duration,
+}
+
+/// Configuration for PaymentTimeout negotiator
+#[derive(StructOpt, Clone, Debug)]
+pub struct PaymentTimeoutConfig {
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "15s")]
+    pub min_payment_timeout: std::time::Duration,
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "24h")]
+    pub max_payment_timeout: std::time::Duration,
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "2min")]
+    pub payment_timeout: std::time::Duration,
+}
+
 /// Configuration for LimitAgreements Negotiator.
 #[derive(StructOpt, Clone, Debug)]
 pub struct CompositeNegotiatorConfig {
@@ -35,6 +57,10 @@ pub struct CompositeNegotiatorConfig {
     pub limit_agreements_config: LimitAgreementsNegotiatorConfig,
     #[structopt(flatten)]
     pub expire_agreements_config: AgreementExpirationNegotiatorConfig,
+    #[structopt(flatten)]
+    pub debit_note_interval_config: DebitNoteIntervalConfig,
+    #[structopt(flatten)]
+    pub payment_timeout_config: PaymentTimeoutConfig,
 }
 
 #[derive(StructOpt, Clone, Debug)]
