@@ -6654,7 +6654,7 @@ dependencies = [
 
 [[package]]
 name = "ya-agreement-utils"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "serde",
