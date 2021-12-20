@@ -141,13 +141,28 @@ pub async fn make_transfer(
     );
     let amount_big_dec = details.amount.clone();
     let amount = big_dec_to_u256(&amount_big_dec)?;
-    let gas_price = match gas_price {
-        Some(gas_price) => big_dec_gwei_to_u256(gas_price)?,
-        None => convert_float_gas_to_u256(get_polygon_starting_price()),
-    };
-    let max_gas_price = match max_gas_price {
-        Some(max_gas_price) => big_dec_gwei_to_u256(max_gas_price)?,
-        None => convert_float_gas_to_u256(get_polygon_maximum_price()),
+
+    let (gas_price, max_gas_price) = match network {
+        Network::Polygon => (
+            Some(match gas_price {
+                Some(v) => big_dec_gwei_to_u256(v)?,
+                None => convert_float_gas_to_u256(get_polygon_starting_price()),
+            }),
+            Some(match max_gas_price {
+                Some(v) => big_dec_gwei_to_u256(v)?,
+                None => convert_float_gas_to_u256(get_polygon_maximum_price()),
+            }),
+        ),
+        _ => (
+            match gas_price {
+                None => None,
+                Some(v) => Some(big_dec_gwei_to_u256(v)?),
+            },
+            match max_gas_price {
+                None => None,
+                Some(v) => Some(big_dec_gwei_to_u256(v)?),
+            },
+        ),
     };
 
     let address = str_to_addr(&details.sender)?;
@@ -155,13 +170,7 @@ pub async fn make_transfer(
     // TODO: Implement token
     //let token = get_network_token(network, None);
     let raw_tx = ethereum::prepare_raw_transaction(
-        address,
-        recipient,
-        amount,
-        network,
-        nonce,
-        Some(gas_price),
-        gas_limit,
+        address, recipient, amount, network, nonce, gas_price, gas_limit,
     )
     .await?;
     //    Ok(raw_tx)
@@ -172,7 +181,7 @@ pub async fn make_transfer(
         nonce,
         address,
         raw_tx.gas_price.to_string(),
-        max_gas_price.to_string(),
+        max_gas_price.map(|v| v.to_string()),
         raw_tx.gas.as_u32() as i32,
         serde_json::to_string(&raw_tx).map_err(GenericError::new)?,
         network,
