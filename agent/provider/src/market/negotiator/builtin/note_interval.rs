@@ -51,24 +51,32 @@ impl NegotiatorComponent for DebitNoteInterval {
         let offer_interval = read_duration(DEBIT_NOTE_INTERVAL_PROPERTY, &offer)?;
         let demand_interval = read_duration(DEBIT_NOTE_INTERVAL_PROPERTY, demand)?;
 
-        if let Some(interval) = demand_interval {
-            let offer_interval = offer_interval
-                .ok_or_else(|| anyhow::anyhow!("DebitNote interval not found in the Offer"))?;
+        match demand_interval {
+            Some(interval) => {
+                let offer_interval = offer_interval
+                    .ok_or_else(|| anyhow::anyhow!("DebitNote interval not found in the Offer"))?;
 
-            if interval < self.min_interval || interval > self.max_interval {
-                return Ok(NegotiationResult::Reject {
-                    message: format!(
-                        "Demand DebitNote interval {} not in acceptable range of [{}; {}]",
-                        interval.display(),
-                        self.min_interval.display(),
-                        self.max_interval.display(),
-                    ),
-                    is_final: true,
-                });
-            } else if offer_interval != interval {
-                let property = offer.pointer_mut(DEBIT_NOTE_INTERVAL_PROPERTY).unwrap();
-                *property = serde_json::Value::Number(interval.num_seconds().into());
-                return Ok(NegotiationResult::Negotiating { offer });
+                if interval < self.min_interval || interval > self.max_interval {
+                    return Ok(NegotiationResult::Reject {
+                        message: format!(
+                            "Demand DebitNote interval {} not in acceptable range of [{}; {}]",
+                            interval.display(),
+                            self.min_interval.display(),
+                            self.max_interval.display(),
+                        ),
+                        is_final: true,
+                    });
+                } else if offer_interval != interval {
+                    let property = offer.pointer_mut(DEBIT_NOTE_INTERVAL_PROPERTY).unwrap();
+                    *property = serde_json::Value::Number(interval.num_seconds().into());
+                    return Ok(NegotiationResult::Negotiating { offer });
+                }
+            }
+            None => {
+                if offer_interval.is_some() {
+                    let _ = offer.remove_property(DEBIT_NOTE_INTERVAL_PROPERTY);
+                    return Ok(NegotiationResult::Negotiating { offer });
+                }
             }
         }
 

@@ -48,6 +48,7 @@ pub enum ActivityPayment {
 /// We must wait until agreement will be closed, before we send invoice.
 pub struct AgreementPayment {
     pub agreement_id: String,
+    pub approved_ts: DateTime<Utc>,
     pub payment_model: Arc<dyn PaymentModel>,
     pub activities: HashMap<String, ActivityPayment>,
 
@@ -79,6 +80,7 @@ impl AgreementPayment {
         let update_interval = payment_description.get_update_interval()?;
         let accept_timeout = payment_description.get_debit_note_accept_timeout()?;
         let payment_timeout = payment_description.get_payment_timeout()?;
+        let approved_ts = payment_description.get_approved_ts()?;
 
         if let Some(deadline) = &accept_timeout {
             log::info!(
@@ -100,6 +102,7 @@ impl AgreementPayment {
 
         Ok(AgreementPayment {
             agreement_id: agreement.agreement_id.clone(),
+            approved_ts,
             activities: HashMap::new(),
             payment_model,
             update_interval,

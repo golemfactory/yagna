@@ -65,4 +65,9 @@ impl<'a> PaymentDescription<'a> {
             Err(err) => Err(err.into()),
         }
     }
+
+    pub fn get_approved_ts(&self) -> Result<chrono::DateTime<chrono::Utc>> {
+        let rfc3339 = self.agreement.pointer_typed::<String>("/timestamp")?;
+        Ok(chrono::DateTime::parse_from_rfc3339(&rfc3339)?.with_timezone(&chrono::Utc))
+    }
 }

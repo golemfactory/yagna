@@ -1,13 +1,16 @@
+use std::sync::{Arc, Mutex};
+
 use actix::prelude::*;
 use anyhow::{anyhow, Result};
 
 /// Actor that provides signal subscriptions
+#[derive(Clone)]
 pub struct SignalSlot<MessageType>
 where
     MessageType: Message + std::marker::Send + std::marker::Sync + std::clone::Clone,
     MessageType::Result: std::marker::Send + std::marker::Sync,
 {
-    subscribers: Vec<Recipient<MessageType>>,
+    subscribers: Arc<Mutex<Vec<Recipient<MessageType>>>>,
 }
 
 /// Subscribe to process signals.
@@ -34,14 +37,14 @@ where
 {
     pub fn new() -> SignalSlot<MessageType> {
         SignalSlot::<MessageType> {
-            subscribers: vec![],
+            subscribers: Default::default(),
         }
     }
 
     /// Send signal to all subscribers
     pub fn send_signal(&self, message: MessageType) -> Result<()> {
-        let errors = self
-            .subscribers
+        let subscribers = self.subscribers.lock().unwrap();
+        let errors = subscribers
             .iter()
             .map(|subscriber| subscriber.do_send(message.clone()))
             .filter_map(|result| {
@@ -67,7 +70,8 @@ where
     }
 
     pub fn subscribe(&mut self, subscriber: Recipient<MessageType>) {
-        self.subscribers.push(subscriber);
+        let mut subscribers = self.subscribers.lock().unwrap();
+        subscribers.push(subscriber);
     }
 
     pub fn on_subscribe(&mut self, msg: Subscribe<MessageType>) {

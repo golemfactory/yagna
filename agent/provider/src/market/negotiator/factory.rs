@@ -42,7 +42,7 @@ pub struct DebitNoteIntervalConfig {
 /// Configuration for PaymentTimeout negotiator
 #[derive(StructOpt, Clone, Debug)]
 pub struct PaymentTimeoutConfig {
-    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "15s")]
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "1s")]
     pub min_payment_timeout: std::time::Duration,
     #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "24h")]
     pub max_payment_timeout: std::time::Duration,
