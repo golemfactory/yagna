@@ -70,9 +70,9 @@ fn proposal_expiration_from(proposal: &ProposalView) -> Result<DateTime<Utc>> {
 }
 
 fn debit_deadline_from(proposal: &ProposalView) -> Result<Option<Duration>> {
-    match proposal.pointer_typed::<i64>(DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY) {
+    match proposal.pointer_typed::<u32>(DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY) {
         // Requestor is able to accept DebitNotes, because he set this property.
-        Ok(deadline) => Ok(Some(Duration::seconds(deadline))),
+        Ok(deadline) => Ok(Some(Duration::seconds(deadline as i64))),
         // If he didn't set this property, he is unable to accept DebitNotes.
         Err(Error::NoKey { .. }) => Ok(None),
         // Property has invalid type. We shouldn't continue negotiations, since
