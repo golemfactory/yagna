@@ -48,6 +48,8 @@ pub struct PaymentTimeoutConfig {
     pub max_payment_timeout: std::time::Duration,
     #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "2min")]
     pub payment_timeout: std::time::Duration,
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "10h")]
+    pub payment_timeout_required_duration: std::time::Duration,
 }
 
 /// Configuration for LimitAgreements Negotiator.

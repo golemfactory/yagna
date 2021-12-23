@@ -1,4 +1,4 @@
-use chrono::Duration;
+use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 
 use ya_agreement_utils::{Error, OfferDefinition};
 
@@ -10,12 +10,14 @@ use crate::market::negotiator::{
 
 const PAYMENT_TIMEOUT_PROPERTY_FLAT: &'static str = "golem.com.scheme.payu.payment-timeout-sec?";
 pub const PAYMENT_TIMEOUT_PROPERTY: &'static str = "/golem/com/scheme/payu/payment-timeout-sec?";
+const EXPIRATION_PROPERTY: &'static str = "/golem/srv/comp/expiration";
 
 /// PaymentTimeout negotiator
 pub struct PaymentTimeout {
     min_timeout: Duration,
     max_timeout: Duration,
     timeout: Duration,
+    required_from: Duration,
 }
 
 impl PaymentTimeout {
@@ -23,6 +25,7 @@ impl PaymentTimeout {
         let min_timeout = Duration::from_std(config.min_payment_timeout)?;
         let max_timeout = Duration::from_std(config.max_payment_timeout)?;
         let timeout = Duration::from_std(config.payment_timeout)?;
+        let required_from = Duration::from_std(config.payment_timeout_required_duration)?;
 
         if min_timeout > max_timeout {
             anyhow::bail!(
@@ -36,6 +39,7 @@ impl PaymentTimeout {
             min_timeout,
             max_timeout,
             timeout,
+            required_from,
         })
     }
 }
@@ -48,6 +52,17 @@ impl NegotiatorComponent for PaymentTimeout {
     ) -> anyhow::Result<NegotiationResult> {
         let offer_timeout = read_duration(PAYMENT_TIMEOUT_PROPERTY, &offer)?;
         let demand_timeout = read_duration(PAYMENT_TIMEOUT_PROPERTY, demand)?;
+        let expires_at = read_utc_timestamp(EXPIRATION_PROPERTY, demand)?;
+
+        let now = Utc::now();
+        let allow_compat = if expires_at > now {
+            (expires_at - now) < self.required_from
+        } else {
+            return Ok(NegotiationResult::Reject {
+                message: "Computation expiration time was set in the past".to_string(),
+                is_final: true,
+            });
+        };
 
         match demand_timeout {
             Some(timeout) => {
@@ -72,7 +87,18 @@ impl NegotiatorComponent for PaymentTimeout {
                 }
             }
             None => {
-                if offer_timeout.is_some() {
+                if !allow_compat {
+                    return Ok(NegotiationResult::Reject {
+                        message: format!(
+                            "Expiration time {} exceeds the {} threshold of enforcing mid-agreement payments \
+                            but the required property '{}' was not present in the Demand",
+                            expires_at.to_rfc3339(),
+                            self.required_from.display(),
+                            PAYMENT_TIMEOUT_PROPERTY_FLAT
+                        ),
+                        is_final: true,
+                    });
+                } else if offer_timeout.is_some() {
                     let _ = offer.remove_property(PAYMENT_TIMEOUT_PROPERTY);
                     return Ok(NegotiationResult::Negotiating { offer });
                 }
@@ -110,6 +136,18 @@ fn read_duration(pointer: &str, proposal: &ProposalView) -> anyhow::Result<Optio
     match proposal.pointer_typed::<u32>(pointer) {
         Ok(val) => Ok(Some(Duration::seconds(val as i64))),
         Err(Error::NoKey { .. }) => Ok(None),
+        Err(err) => Err(err.into()),
+    }
+}
+
+fn read_utc_timestamp(pointer: &str, proposal: &ProposalView) -> anyhow::Result<DateTime<Utc>> {
+    match proposal.pointer_typed::<u64>(pointer) {
+        Ok(val) => {
+            let secs = (val / 1000) as i64;
+            let nsecs = 1_000_000 * (val % 1000) as u32;
+            let naive = NaiveDateTime::from_timestamp(secs, nsecs);
+            Ok(DateTime::from_utc(naive, Utc))
+        }
         Err(err) => Err(err.into()),
     }
 }
