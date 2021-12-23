@@ -38,7 +38,10 @@ impl<'a> PaymentDescription<'a> {
             DEBIT_NOTE_INTERVAL_PROPERTY
         )) {
             Ok(interval) => interval,
-            Err(Error::NoKey(_)) => DEFAULT_DEBIT_NOTE_INTERVAL_SEC,
+            Err(Error::NoKey(_)) => match std::env::var("DEBIT_NOTE_INTERVAL") {
+                Ok(val) => humantime::parse_duration(&val)?.as_secs() as u32,
+                Err(_) => DEFAULT_DEBIT_NOTE_INTERVAL_SEC,
+            },
             Err(error) => return Err(error.into()),
         };
         Ok(Duration::from_secs(interval as u64))

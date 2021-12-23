@@ -109,7 +109,7 @@ impl AgreementPayment {
             accept_timeout,
             payment_timeout,
             deadline_elapsed: false,
-            last_send_debit_note: Utc::now(),
+            last_send_debit_note: approved_ts,
             watch_sender: sender,
             activities_watch: ActivitiesWaiter {
                 watch_receiver: receiver,
@@ -118,10 +118,6 @@ impl AgreementPayment {
     }
 
     pub fn add_created_activity(&mut self, activity_id: &str) {
-        // Track ability to send DebitNotes from Activity start.
-        // Note: we have single timestamp for all activities.
-        self.last_send_debit_note = Utc::now();
-
         let activity = ActivityPayment::Running {
             activity_id: activity_id.to_string(),
         };

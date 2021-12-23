@@ -109,7 +109,6 @@ pub struct DebitNoteInfo {
     pub activity_id: String,
     pub accept_timeout: Option<chrono::Duration>,
     pub payment_timeout: Option<chrono::Duration>,
-    pub reference_ts: chrono::DateTime<Utc>,
 }
 
 /// Configuration for Payments actor.
@@ -507,21 +506,34 @@ impl Handler<CreateActivity> for Payments {
             &msg.activity_id
         );
 
-        // Sending UpdateCost with last_debit_note: None will start new
-        // DebitNotes chain for this activity.
-        let msg = UpdateCost {
-            invoice_info: DebitNoteInfo {
-                agreement_id: msg.agreement_id.clone(),
-                activity_id: msg.activity_id.clone(),
-                accept_timeout: None,  // Will be added in UpdateCost handler.
-                payment_timeout: None, // Will be added in UpdateCost handler.
-                reference_ts: agreement.approved_ts,
-            },
+        // Add activity to list and send debit note after a delay.
+        agreement.add_created_activity(&msg.activity_id);
+
+        // Start a new DebitNote chain for this activity.
+        let invoice_info = DebitNoteInfo {
+            agreement_id: msg.agreement_id.clone(),
+            activity_id: msg.activity_id.clone(),
+            accept_timeout: agreement.accept_timeout,
+            payment_timeout: agreement.payment_timeout,
         };
 
-        // Add activity to list and send debit note after update_interval.
-        agreement.add_created_activity(&msg.invoice_info.activity_id);
-        ctx.notify_later(msg, agreement.update_interval);
+        let interval = chrono::Duration::from_std(agreement.update_interval)?;
+        let now = Utc::now();
+
+        const MAX_ITERATIONS: i32 = 10;
+        let mut i = 0;
+        let delay = loop {
+            i += 1;
+
+            let value = agreement.approved_ts + (interval * i);
+            if value >= now {
+                break (value - now);
+            } else if i >= MAX_ITERATIONS {
+                anyhow::bail!("Activity created after {} DebitNote intervals", i);
+            }
+        };
+
+        ctx.notify_later(UpdateCost { invoice_info }, delay.to_std()?);
 
         Ok(())
     }
@@ -557,7 +569,6 @@ impl Handler<ActivityDestroyed> for Payments {
             agreement_id: msg.agreement_id.clone(),
             accept_timeout: agreement.accept_timeout,
             payment_timeout: agreement.payment_timeout,
-            reference_ts: agreement.approved_ts,
         };
 
         let future = async move {
@@ -609,6 +620,7 @@ impl Handler<UpdateCost> for Payments {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: UpdateCost, _ctx: &mut Context<Self>) -> Self::Result {
+        let started = Utc::now();
         let agreement = match self
             .agreements
             .get(&msg.invoice_info.agreement_id)
@@ -627,13 +639,15 @@ impl Handler<UpdateCost> for Payments {
                 let payment_model = agreement.payment_model.clone();
                 let context = self.context.clone();
 
-                let update_interval = agreement.update_interval;
-                let last_debit_note = agreement.last_send_debit_note.clone();
+                let last_debit_note = agreement.last_send_debit_note;
                 let accept_timeout = agreement.accept_timeout;
+                let update_interval = match chrono::Duration::from_std(agreement.update_interval) {
+                    Ok(interval) => interval,
+                    Err(err) => return ActorResponse::reply(Err(err.into())),
+                };
                 let invoice_info = DebitNoteInfo {
                     accept_timeout,
                     payment_timeout: agreement.payment_timeout,
-                    reference_ts: agreement.approved_ts,
                     ..msg.invoice_info.clone()
                 };
 
@@ -666,12 +680,22 @@ impl Handler<UpdateCost> for Payments {
                     } else {
                         myself.agreements
                             .get_mut(&msg.invoice_info.agreement_id)
-                            .map(|agreement| agreement.last_send_debit_note = Utc::now());
+                            .map(|agreement| agreement.last_send_debit_note = last_debit_note + update_interval);
                     }
 
                     // Don't bother, if previous debit note was sent successfully or not.
                     // Schedule UpdateCost for later.
-                    ctx.notify_later(msg, update_interval);
+
+                    let delta = Utc::now() - started;
+                    let delay = if update_interval > delta {
+                        // schedule the next debit note as close to `update_interval` as possible
+                        (update_interval - delta).to_std()?
+                    } else {
+                        // the process lasted longer than `update_interval`, continue immediately
+                        Duration::from_secs(0)
+                    };
+
+                    ctx.notify_later(msg, delay);
                     Ok(())
                 });
                 ActorResponse::r#async(debit_note_future)
