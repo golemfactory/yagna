@@ -520,7 +520,6 @@ impl Handler<CreateActivity> for Payments {
         let interval = chrono::Duration::from_std(agreement.update_interval)?;
         let now = Utc::now();
 
-        const MAX_ITERATIONS: i32 = 10;
         let mut i = 0;
         let delay = loop {
             i += 1;
@@ -528,7 +527,7 @@ impl Handler<CreateActivity> for Payments {
             let value = agreement.approved_ts + (interval * i);
             if value >= now {
                 break (value - now);
-            } else if i >= MAX_ITERATIONS {
+            } else if i == i32::MAX {
                 anyhow::bail!("Activity created after {} DebitNote intervals", i);
             }
         };
@@ -757,12 +756,11 @@ impl Handler<AgreementClosed> for Payments {
             let ctx = self.context.clone();
 
             let future = async move {
-                ctx.debit_checker
-                    .send(StopTrackingCategory {
-                        category: agreement_id.clone(),
-                    })
-                    .await
-                    .ok();
+                let stop_tracking = StopTrackingCategory {
+                    category: agreement_id.clone(),
+                };
+                let _ = ctx.debit_checker.send(stop_tracking.clone()).await;
+                let _ = ctx.payment_checker.send(stop_tracking).await;
 
                 activities_watch.wait_for_finish().await;
 
@@ -996,13 +994,6 @@ impl Handler<DeadlineElapsed> for Payments {
             );
             return;
         };
-
-        self.context.debit_checker.do_send(StopTrackingCategory {
-            category: msg.category.clone(),
-        });
-        self.context.payment_checker.do_send(StopTrackingCategory {
-            category: msg.category.clone(),
-        });
 
         self.break_agreement_signal
             .send_signal(BreakAgreement {
