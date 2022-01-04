@@ -486,4 +486,3 @@ pub fn get_gas_price_from_db_tx(db_tx: &TransactionEntity) -> Result<U256, Gener
         serde_json::from_str(&db_tx.encoded).map_err(GenericError::new)?;
     Ok(raw_tx.gas_price)
 }
-

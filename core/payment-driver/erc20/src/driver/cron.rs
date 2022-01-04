@@ -16,6 +16,7 @@ use ya_payment_driver::{
 };
 
 // Local uses
+use crate::erc20::utils::{convert_u256_gas_to_float, str_to_big_dec};
 use crate::{
     dao::Erc20Dao,
     erc20::{ethereum, wallet},
@@ -182,8 +183,32 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
 
                 continue;
             } else if s.pending {
-                log::info!("Transaction found on chain but is still pending");
                 if time_elapsed_from_last_action > *ERC20_WAIT_FOR_PENDING_ON_NETWORK {
+                    let cur_gas_price_f64 = tx
+                        .current_gas_price
+                        .map(|str| U256::from_dec_str(&str).unwrap_or(U256::from(0)))
+                        .map(convert_u256_gas_to_float)
+                        .unwrap_or(0.0);
+
+                    let max_gas_price_f64 = tx
+                        .max_gas_price
+                        .map(|str| U256::from_dec_str(&str).unwrap_or(U256::from(0)))
+                        .map(convert_u256_gas_to_float)
+                        .unwrap_or(0.0);
+
+                    if cur_gas_price_f64 <= 0.0 || max_gas_price_f64 <= 0.0 {
+                        log::debug!(
+                            "Wrong gas prices: cur_gas_price: {} max_gas_price: {}",
+                            cur_gas_price_f64,
+                            max_gas_price_f64
+                        );
+                        continue;
+                    }
+                    if cur_gas_price_f64 >= max_gas_price_f64 {
+                        log::debug!("Cannot bump gas more: Current gas price current_gas_price: {} max_gas_price: {}", cur_gas_price_f64, max_gas_price_f64);
+                        continue;
+                    }
+
                     log::warn!(
                         "Transaction not found on chain for {:?}",
                         time_elapsed_from_sent
@@ -191,6 +216,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                     log::warn!("Time since last action {:?}", time_elapsed_from_last_action);
                     dao.retry_send_transaction(&tx.tx_id, true).await;
                 }
+
                 continue;
             } else if !s.confirmed {
                 log::info!("Transaction is commited, but we are waiting for confirmations");

@@ -210,32 +210,43 @@ pub async fn make_transfer(
 fn bump_gas_price(gas_in_gwei: f64, limit_in_gwei: Option<f64>) -> f64 {
     let mut result = -1.0;
 
-    let polygon_prices = get_polygon_priority();
+    match get_polygon_gas_price_method() {
+        PolygonGasPriceMethod::PolygonGasPriceDynamic => {
+            //ignore maximum gas price, because we have to bump at least 10% so the transaction will be accepted
+            result = gas_in_gwei * 1.11;
+            result
+        }
+        PolygonGasPriceMethod::PolygonGasPriceStatic => {
+            let polygon_prices = get_polygon_priority();
 
-    let gas_prices = match polygon_prices {
-        PolygonPriority::PolygonPriorityExpress => POLYGON_PREFERRED_GAS_PRICES_EXPRESS.to_vec(),
-        PolygonPriority::PolygonPriorityFast => POLYGON_PREFERRED_GAS_PRICES_FAST.to_vec(),
-        PolygonPriority::PolygonPrioritySlow => POLYGON_PREFERRED_GAS_PRICES_SLOW.to_vec(),
-    };
+            let gas_prices = match polygon_prices {
+                PolygonPriority::PolygonPriorityExpress => {
+                    POLYGON_PREFERRED_GAS_PRICES_EXPRESS.to_vec()
+                }
+                PolygonPriority::PolygonPriorityFast => POLYGON_PREFERRED_GAS_PRICES_FAST.to_vec(),
+                PolygonPriority::PolygonPrioritySlow => POLYGON_PREFERRED_GAS_PRICES_SLOW.to_vec(),
+            };
 
-    for n in 1..(gas_prices.len() - 1) {
-        if gas_float_equals(gas_prices[n], gas_in_gwei) {
-            result = gas_prices[n + 1];
+            for n in 1..(gas_prices.len() - 1) {
+                if gas_float_equals(gas_prices[n], gas_in_gwei) {
+                    result = gas_prices[n + 1];
+                }
+            }
+            for n in 1..(gas_prices.len()) {
+                if gas_in_gwei > gas_prices[n - 1] && gas_in_gwei < gas_prices[n] {
+                    result = gas_prices[n];
+                }
+            }
+
+            if result < 0.0 {
+                result = gas_in_gwei * 1.2
+            }
+            if let Some(limit_in_gwei) = limit_in_gwei {
+                result = Float::min(result, limit_in_gwei);
+            }
+            result
         }
     }
-    for n in 1..(gas_prices.len()) {
-        if gas_in_gwei > gas_prices[n - 1] && gas_in_gwei < gas_prices[n] {
-            result = gas_prices[n];
-        }
-    }
-
-    if result < 0.0 {
-        result = gas_in_gwei * 1.2
-    }
-    if let Some(limit_in_gwei) = limit_in_gwei {
-        result = Float::min(result, limit_in_gwei);
-    }
-    result
 }
 
 pub async fn send_transactions(
