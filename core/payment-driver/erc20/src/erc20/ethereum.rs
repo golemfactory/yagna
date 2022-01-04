@@ -22,6 +22,11 @@ pub enum PolygonPriority {
     PolygonPriorityExpress,
 }
 
+pub enum PolygonGasPriceMethod {
+    PolygonGasPriceStatic,
+    PolygonGasPriceDynamic,
+}
+
 pub const POLYGON_PREFERRED_GAS_PRICES_SLOW: [f64; 6] = [0.0, 10.01, 15.01, 20.01, 25.01, 30.01];
 pub const POLYGON_PREFERRED_GAS_PRICES_FAST: [f64; 3] = [0.0, 30.01, 40.01];
 pub const POLYGON_PREFERRED_GAS_PRICES_EXPRESS: [f64; 3] = [0.0, 60.01, 100.01];
@@ -44,16 +49,38 @@ pub fn get_polygon_starting_price() -> f64 {
 }
 
 pub fn get_polygon_maximum_price() -> f64 {
-    match get_polygon_priority() {
-        PolygonPriority::PolygonPrioritySlow => {
-            POLYGON_PREFERRED_GAS_PRICES_SLOW[POLYGON_PREFERRED_GAS_PRICES_SLOW.len() - 1]
-        }
-        PolygonPriority::PolygonPriorityFast => {
-            POLYGON_PREFERRED_GAS_PRICES_FAST[POLYGON_PREFERRED_GAS_PRICES_FAST.len() - 1]
-        }
-        PolygonPriority::PolygonPriorityExpress => {
-            POLYGON_PREFERRED_GAS_PRICES_EXPRESS[POLYGON_PREFERRED_GAS_PRICES_EXPRESS.len() - 1]
-        }
+    match get_polygon_gas_price_method() {
+        PolygonGasPriceMethod::PolygonGasPriceStatic => match get_polygon_priority() {
+            PolygonPriority::PolygonPrioritySlow => {
+                POLYGON_PREFERRED_GAS_PRICES_SLOW[POLYGON_PREFERRED_GAS_PRICES_SLOW.len() - 1]
+            }
+            PolygonPriority::PolygonPriorityFast => {
+                POLYGON_PREFERRED_GAS_PRICES_FAST[POLYGON_PREFERRED_GAS_PRICES_FAST.len() - 1]
+            }
+            PolygonPriority::PolygonPriorityExpress => {
+                POLYGON_PREFERRED_GAS_PRICES_EXPRESS[POLYGON_PREFERRED_GAS_PRICES_EXPRESS.len() - 1]
+            }
+        },
+        PolygonGasPriceMethod::PolygonGasPriceDynamic => get_polygon_max_gas_price_dynamic(),
+    }
+}
+
+pub fn get_polygon_max_gas_price_dynamic() -> f64 {
+    return std::env::var("POLYGON_MAX_GAS_PRICE_DYNAMIC")
+        .unwrap_or("1000.0".to_string())
+        .parse::<f64>()
+        .unwrap_or(1000.0);
+}
+
+pub fn get_polygon_gas_price_method() -> PolygonGasPriceMethod {
+    match std::env::var("POLYGON_GAS_PRICE_METHOD")
+        .unwrap_or("fast".to_string())
+        .to_lowercase()
+        .as_str()
+    {
+        "static" => PolygonGasPriceMethod::PolygonGasPriceStatic,
+        "dynamic" => PolygonGasPriceMethod::PolygonGasPriceDynamic,
+        _ => PolygonGasPriceMethod::PolygonGasPriceDynamic,
     }
 }
 
@@ -453,3 +480,10 @@ pub fn get_max_gas_costs(db_tx: &TransactionEntity) -> Result<U256, GenericError
         serde_json::from_str(&db_tx.encoded).map_err(GenericError::new)?;
     Ok(raw_tx.gas_price * raw_tx.gas)
 }
+
+pub fn get_gas_price_from_db_tx(db_tx: &TransactionEntity) -> Result<U256, GenericError> {
+    let raw_tx: YagnaRawTransaction =
+        serde_json::from_str(&db_tx.encoded).map_err(GenericError::new)?;
+    Ok(raw_tx.gas_price)
+}
+

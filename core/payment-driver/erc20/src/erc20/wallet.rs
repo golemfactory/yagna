@@ -4,7 +4,8 @@
 
 // External crates
 use crate::erc20::ethereum::{
-    get_polygon_maximum_price, get_polygon_priority, get_polygon_starting_price, PolygonPriority,
+    get_polygon_gas_price_method, get_polygon_maximum_price, get_polygon_priority,
+    get_polygon_starting_price, PolygonGasPriceMethod, PolygonPriority,
     POLYGON_PREFERRED_GAS_PRICES_EXPRESS, POLYGON_PREFERRED_GAS_PRICES_FAST,
     POLYGON_PREFERRED_GAS_PRICES_SLOW,
 };
@@ -108,12 +109,15 @@ pub async fn has_enough_eth_for_gas(
     let sender_h160 = str_to_addr(&db_tx.sender)?;
     let eth_balance = ethereum::get_balance(sender_h160, network).await?;
     let gas_costs = ethereum::get_max_gas_costs(db_tx)?;
+    let gas_price = ethereum::get_gas_price_from_db_tx(db_tx)?;
     let human_gas_cost = u256_to_big_dec(gas_costs)?;
+    let human_gas_price = convert_u256_gas_to_float(gas_price);
     if gas_costs > eth_balance {
         return Err(GenericError::new(format!(
-            "Not enough ETH balance for gas. balance={}, gas_cost={}, address={}, network={}",
+            "Not enough ETH balance for gas. balance={}, gas_cost={}, gas_price={} Gwei, address={}, network={}",
             u256_to_big_dec(eth_balance)?,
             &human_gas_cost,
+            &human_gas_price,
             &db_tx.sender,
             &db_tx.network
         )));
@@ -143,16 +147,28 @@ pub async fn make_transfer(
     let amount = big_dec_to_u256(&amount_big_dec)?;
 
     let (gas_price, max_gas_price) = match network {
-        Network::Polygon => (
-            Some(match gas_price {
-                Some(v) => big_dec_gwei_to_u256(v)?,
-                None => convert_float_gas_to_u256(get_polygon_starting_price()),
-            }),
-            Some(match max_gas_price {
-                Some(v) => big_dec_gwei_to_u256(v)?,
-                None => convert_float_gas_to_u256(get_polygon_maximum_price()),
-            }),
-        ),
+        Network::Polygon => match get_polygon_gas_price_method() {
+            PolygonGasPriceMethod::PolygonGasPriceStatic => (
+                Some(match gas_price {
+                    Some(v) => big_dec_gwei_to_u256(v)?,
+                    None => convert_float_gas_to_u256(get_polygon_starting_price()),
+                }),
+                Some(match max_gas_price {
+                    Some(v) => big_dec_gwei_to_u256(v)?,
+                    None => convert_float_gas_to_u256(get_polygon_maximum_price()),
+                }),
+            ),
+            PolygonGasPriceMethod::PolygonGasPriceDynamic => (
+                match gas_price {
+                    None => None,
+                    Some(v) => Some(big_dec_gwei_to_u256(v)?),
+                },
+                Some(match max_gas_price {
+                    Some(v) => big_dec_gwei_to_u256(v)?,
+                    None => convert_float_gas_to_u256(get_polygon_maximum_price()),
+                }),
+            ),
+        },
         _ => (
             match gas_price {
                 None => None,
