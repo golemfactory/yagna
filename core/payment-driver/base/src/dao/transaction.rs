@@ -236,6 +236,33 @@ impl<'c> TransactionDao<'c> {
         .await
     }
 
+    pub async fn update_error_sent(
+        &self,
+        tx_id: String,
+        status: TransactionStatus,
+        new_resent_count: i32,
+        err: Option<String>,
+    ) -> DbResult<()> {
+        let current_time = Utc::now().naive_utc();
+        let confirmed_time = match status {
+            TransactionStatus::Confirmed => Some(current_time),
+            _ => None,
+        };
+        do_with_transaction(self.pool, move |conn| {
+            diesel::update(dsl::transaction.find(tx_id))
+                .set((
+                    dsl::status.eq(status as i32),
+                    dsl::time_last_action.eq(current_time),
+                    dsl::time_confirmed.eq(confirmed_time),
+                    dsl::last_error_msg.eq(err),
+                    dsl::resent_times.eq(new_resent_count),
+                ))
+                .execute(conn)?;
+            Ok(())
+        })
+        .await
+    }
+
     pub async fn update_tx_status(
         &self,
         tx_id: String,
