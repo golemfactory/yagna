@@ -1,13 +1,15 @@
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Duration, TimeZone, Utc};
+use humantime;
+use serde::{Deserialize, Serialize};
+use structopt::StructOpt;
 
-use ya_agreement_utils::{Error, OfferDefinition};
+use ya_agreement_utils::{Error, OfferTemplate, ProposalView};
+use ya_negotiators::component::{RejectReason, Score};
+use ya_negotiators::factory::{LoadMode, NegotiatorConfig};
+use ya_negotiators::{NegotiationResult, NegotiatorComponent};
 
 use crate::display::EnableDisplay;
-use crate::market::negotiator::factory::AgreementExpirationNegotiatorConfig;
-use crate::market::negotiator::{
-    AgreementResult, NegotiationResult, NegotiatorComponent, ProposalView,
-};
 
 /// Negotiator that can reject Requestors, that request too long Agreement
 /// expiration time. Expiration limit can be different in case, when Requestor
@@ -37,8 +39,26 @@ pub static DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY_FLAT: &'static str =
 #[allow(dead_code)]
 pub static AGREEMENT_EXPIRATION_PROPERTY_FLAT: &'static str = "golem.srv.comp.expiration";
 
+/// Configuration for LimitAgreements Negotiator.
+#[derive(StructOpt, Clone, Debug, Serialize, Deserialize)]
+pub struct Config {
+    #[serde(with = "humantime_serde")]
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "5min")]
+    pub min_agreement_expiration: std::time::Duration,
+    #[serde(with = "humantime_serde")]
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "10h")]
+    pub max_agreement_expiration: std::time::Duration,
+    #[serde(with = "humantime_serde")]
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "30min")]
+    pub max_agreement_expiration_without_deadline: std::time::Duration,
+    #[serde(with = "humantime_serde")]
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "4min")]
+    pub debit_note_acceptance_deadline: std::time::Duration,
+}
+
 impl LimitExpiration {
-    pub fn new(config: &AgreementExpirationNegotiatorConfig) -> anyhow::Result<LimitExpiration> {
+    pub fn new(config: serde_yaml::Value) -> anyhow::Result<LimitExpiration> {
+        let config: Config = serde_yaml::from_value(config)?;
         let component = LimitExpiration {
             min_expiration: chrono::Duration::from_std(config.min_agreement_expiration)?,
             max_expiration: chrono::Duration::from_std(config.max_agreement_expiration)?,
@@ -84,12 +104,13 @@ fn debit_deadline_from(proposal: &ProposalView) -> Result<Option<Duration>> {
 impl NegotiatorComponent for LimitExpiration {
     fn negotiate_step(
         &mut self,
-        demand: &ProposalView,
-        mut offer: ProposalView,
+        their: &ProposalView,
+        mut ours: ProposalView,
+        score: Score,
     ) -> anyhow::Result<NegotiationResult> {
-        let req_deadline = debit_deadline_from(demand)?;
-        let our_deadline = debit_deadline_from(&offer)?;
-        let req_expiration = proposal_expiration_from(&demand)?;
+        let req_deadline = debit_deadline_from(their)?;
+        let our_deadline = debit_deadline_from(&ours)?;
+        let req_expiration = proposal_expiration_from(&their)?;
 
         // Let's check if Requestor is able to accept DebitNotes.
         let max_expiration_delta = match &req_deadline {
@@ -106,16 +127,16 @@ impl NegotiatorComponent for LimitExpiration {
         if too_soon || too_late {
             log::info!(
                 "Negotiator: Reject proposal [{}] due to expiration limits.",
-                demand.agreement_id
+                their.id
             );
 
             return Ok(NegotiationResult::Reject {
-                message: format!(
+                reason: RejectReason::new(format!(
                     "Proposal expires at: {} which is less than {} or more than {} from now",
                     req_expiration,
                     self.min_expiration.display(),
                     max_expiration_delta.display()
-                ),
+                )),
                 is_final: too_late, // when it's too soon we could try later
             });
         };
@@ -127,68 +148,83 @@ impl NegotiatorComponent for LimitExpiration {
             (Some(req_deadline), Some(our_deadline)) => {
                 if req_deadline > our_deadline {
                     NegotiationResult::Reject {
-                        message: format!(
+                        reason: RejectReason::new(format!(
                             "DebitNote acceptance deadline should be less than {}.",
                             self.payment_deadline.display()
-                        ),
+                        )),
                         is_final: true,
                     }
                 } else if req_deadline == our_deadline {
                     // We agree with Requestor to the same deadline.
-                    NegotiationResult::Ready { offer }
+                    NegotiationResult::Ready {
+                        proposal: ours,
+                        score,
+                    }
                 } else {
                     // Below certain timeout it is impossible for Requestor to accept DebitNotes.
                     if req_deadline.num_seconds() < self.min_deadline {
                         return Ok(NegotiationResult::Reject {
-                            message: format!(
+                            reason: RejectReason::new(format!(
                                 "To low DebitNotes timeout: {}",
                                 req_deadline.display()
-                            ),
+                            )),
                             is_final: true,
                         });
                     }
 
                     // Requestor proposed better deadline, than we required.
                     // We are expected to set property to the same value if we agree.
-                    let deadline_prop = offer
+                    let deadline_prop = ours
                         .pointer_mut(DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY)
                         .unwrap();
                     *deadline_prop = serde_json::Value::Number(req_deadline.num_seconds().into());
 
                     // Since we changed our proposal, we can't return `Ready`.
-                    NegotiationResult::Negotiating { offer }
+                    NegotiationResult::Negotiating {
+                        proposal: ours,
+                        score,
+                    }
                 }
             }
             // Requestor doesn't support DebitNotes acceptance, so we should
             // remove our property from Proposal to match with his.
             (None, Some(_)) => {
-                offer.remove_property(DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY)?;
-                NegotiationResult::Negotiating { offer }
+                ours.remove_property(DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY)?;
+                NegotiationResult::Negotiating {
+                    proposal: ours,
+                    score,
+                }
             }
             // We agree with Requestor, that he won't accept DebitNotes.
-            (None, None) => NegotiationResult::Ready { offer },
+            (None, None) => NegotiationResult::Ready {
+                proposal: ours,
+                score,
+            },
             _ => return Err(anyhow!("Shouldn't be in this state.")),
         })
     }
 
-    fn fill_template(&mut self, mut template: OfferDefinition) -> anyhow::Result<OfferDefinition> {
-        template.offer.set_property(
+    fn fill_template(&mut self, mut template: OfferTemplate) -> anyhow::Result<OfferTemplate> {
+        template.set_property(
             DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY_FLAT,
             serde_json::Value::Number(self.payment_deadline.num_seconds().into()),
         );
         Ok(template)
     }
+}
 
-    fn on_agreement_terminated(
-        &mut self,
-        _agreement_id: &str,
-        _result: &AgreementResult,
-    ) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    fn on_agreement_approved(&mut self, _agreement_id: &str) -> anyhow::Result<()> {
-        Ok(())
+impl Config {
+    pub fn from_env() -> anyhow::Result<NegotiatorConfig> {
+        // Empty command line arguments, because we want to use ENV fallback
+        // or default values if ENV variables are not set.
+        let config = Config::from_iter_safe(&[""])?;
+        Ok(NegotiatorConfig {
+            name: "LimitExpiration".to_string(),
+            load_mode: LoadMode::StaticLib {
+                library: "ya-provider".to_string(),
+            },
+            params: serde_yaml::to_value(&config)?,
+        })
     }
 }
 
@@ -196,42 +232,57 @@ impl NegotiatorComponent for LimitExpiration {
 mod test_expiration_negotiator {
     use super::*;
     use ya_agreement_utils::agreement::expand;
-    use ya_agreement_utils::{InfNodeInfo, NodeInfo, OfferTemplate, ServiceInfo};
+    use ya_agreement_utils::{InfNodeInfo, NodeInfo, OfferDefinition, OfferTemplate, ServiceInfo};
+    use ya_client_model::market::proposal::State;
 
-    fn expiration_config() -> AgreementExpirationNegotiatorConfig {
-        AgreementExpirationNegotiatorConfig {
+    fn expiration_config() -> serde_yaml::Value {
+        serde_yaml::to_value(&Config {
             min_agreement_expiration: std::time::Duration::from_secs(5 * 60),
             max_agreement_expiration: std::time::Duration::from_secs(30 * 60),
             max_agreement_expiration_without_deadline: std::time::Duration::from_secs(10 * 60),
             debit_note_acceptance_deadline: std::time::Duration::from_secs(120),
-        }
+        })
+        .unwrap()
     }
 
     fn properties_to_proposal(value: serde_json::Value) -> ProposalView {
         ProposalView {
-            agreement_id: "2332850934yer".to_string(),
-            json: expand(value),
+            content: OfferTemplate {
+                properties: expand(value),
+                constraints: "()".to_string(),
+            },
+            id: "2332850934yer".to_string(),
+            issuer: Default::default(),
+            state: State::Initial,
+            timestamp: Utc::now(),
         }
     }
 
-    fn example_offer() -> OfferDefinition {
+    fn example_offer() -> OfferTemplate {
         OfferDefinition {
             node_info: NodeInfo::with_name("nanana"),
             srv_info: ServiceInfo::new(InfNodeInfo::default(), serde_json::Value::Null),
             com_info: Default::default(),
             offer: OfferTemplate::default(),
         }
+        .into_template()
     }
 
     trait ToProposal {
         fn to_proposal(self) -> ProposalView;
     }
 
-    impl ToProposal for OfferDefinition {
+    impl ToProposal for OfferTemplate {
         fn to_proposal(self) -> ProposalView {
             ProposalView {
-                agreement_id: "sagdshgdfgd".to_string(),
-                json: expand(self.into_json()),
+                content: OfferTemplate {
+                    properties: expand(self.properties),
+                    constraints: self.constraints,
+                },
+                id: "sagdshgdfgd".to_string(),
+                issuer: Default::default(),
+                state: State::Initial,
+                timestamp: Utc::now(),
             }
         }
     }
@@ -242,7 +293,7 @@ mod test_expiration_negotiator {
     #[test]
     fn test_lower_deadline() {
         let config = expiration_config();
-        let mut negotiator = LimitExpiration::new(&config).unwrap();
+        let mut negotiator = LimitExpiration::new(config).unwrap();
 
         let offer_proposal = negotiator
             .fill_template(example_offer())
@@ -255,11 +306,13 @@ mod test_expiration_negotiator {
         }));
 
         match negotiator
-            .negotiate_step(&proposal, offer_proposal)
+            .negotiate_step(&proposal, offer_proposal, Score::default())
             .unwrap()
         {
             // Negotiator is expected to take better proposal and change adjust property.
-            NegotiationResult::Negotiating { offer } => {
+            NegotiationResult::Negotiating {
+                proposal: offer, ..
+            } => {
                 assert_eq!(
                     debit_deadline_from(&offer).unwrap().unwrap(),
                     Duration::seconds(50)
@@ -273,7 +326,7 @@ mod test_expiration_negotiator {
     #[test]
     fn test_greater_deadline() {
         let config = expiration_config();
-        let mut negotiator = LimitExpiration::new(&config).unwrap();
+        let mut negotiator = LimitExpiration::new(config).unwrap();
 
         let offer_proposal = negotiator
             .fill_template(example_offer())
@@ -286,11 +339,13 @@ mod test_expiration_negotiator {
         }));
 
         match negotiator
-            .negotiate_step(&proposal, offer_proposal)
+            .negotiate_step(&proposal, offer_proposal, Score::default())
             .unwrap()
         {
-            NegotiationResult::Reject { message, is_final } => {
-                assert!(message.contains("DebitNote acceptance deadline should be less than"));
+            NegotiationResult::Reject { reason, is_final } => {
+                assert!(reason
+                    .message
+                    .contains("DebitNote acceptance deadline should be less than"));
                 assert!(is_final)
             }
             result => panic!("Expected NegotiationResult::Reject. Got: {:?}", result),
@@ -302,7 +357,7 @@ mod test_expiration_negotiator {
     #[test]
     fn test_equal_deadline() {
         let config = expiration_config();
-        let mut negotiator = LimitExpiration::new(&config).unwrap();
+        let mut negotiator = LimitExpiration::new(config).unwrap();
 
         let offer_proposal = negotiator
             .fill_template(example_offer())
@@ -315,10 +370,12 @@ mod test_expiration_negotiator {
         }));
 
         match negotiator
-            .negotiate_step(&proposal, offer_proposal)
+            .negotiate_step(&proposal, offer_proposal, Score::default())
             .unwrap()
         {
-            NegotiationResult::Ready { offer } => {
+            NegotiationResult::Ready {
+                proposal: offer, ..
+            } => {
                 assert_eq!(
                     debit_deadline_from(&offer).unwrap().unwrap(),
                     Duration::seconds(120)
@@ -335,7 +392,7 @@ mod test_expiration_negotiator {
     #[test]
     fn test_requestor_doesnt_accept_debit_notes_to_high_expiration() {
         let config = expiration_config();
-        let mut negotiator = LimitExpiration::new(&config).unwrap();
+        let mut negotiator = LimitExpiration::new(config).unwrap();
 
         let offer_proposal = negotiator
             .fill_template(example_offer())
@@ -347,11 +404,11 @@ mod test_expiration_negotiator {
         }));
 
         match negotiator
-            .negotiate_step(&proposal, offer_proposal)
+            .negotiate_step(&proposal, offer_proposal, Score::default())
             .unwrap()
         {
-            NegotiationResult::Reject { message, is_final } => {
-                assert!(message.contains("Proposal expires at"));
+            NegotiationResult::Reject { reason, is_final } => {
+                assert!(reason.message.contains("Proposal expires at"));
                 assert!(!is_final)
             }
             result => panic!("Expected NegotiationResult::Reject. Got: {:?}", result),
@@ -365,7 +422,7 @@ mod test_expiration_negotiator {
     #[test]
     fn test_requestor_doesnt_accept_debit_notes_expiration_ok() {
         let config = expiration_config();
-        let mut negotiator = LimitExpiration::new(&config).unwrap();
+        let mut negotiator = LimitExpiration::new(config).unwrap();
 
         let offer_proposal = negotiator
             .fill_template(example_offer())
@@ -377,10 +434,12 @@ mod test_expiration_negotiator {
         }));
 
         match negotiator
-            .negotiate_step(&proposal, offer_proposal)
+            .negotiate_step(&proposal, offer_proposal, Score::default())
             .unwrap()
         {
-            NegotiationResult::Negotiating { offer } => {
+            NegotiationResult::Negotiating {
+                proposal: offer, ..
+            } => {
                 assert!(debit_deadline_from(&offer).unwrap().is_none())
             }
             result => panic!("Expected NegotiationResult::Negotiating. Got: {:?}", result),

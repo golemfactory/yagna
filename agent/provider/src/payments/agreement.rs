@@ -81,7 +81,7 @@ impl AgreementPayment {
         if let Some(deadline) = &debit_deadline {
             log::info!(
                 "Requestor is expected to accept DebitNotes for Agreement [{}] in {}",
-                &agreement.agreement_id,
+                &agreement.id,
                 deadline.display()
             );
         }
@@ -90,7 +90,7 @@ impl AgreementPayment {
         let (sender, receiver) = watch::channel(0);
 
         Ok(AgreementPayment {
-            agreement_id: agreement.agreement_id.clone(),
+            agreement_id: agreement.id.clone(),
             activities: HashMap::new(),
             payment_model,
             update_interval,

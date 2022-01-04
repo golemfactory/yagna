@@ -178,20 +178,19 @@ impl Payments {
     ) -> Result<()> {
         log::info!(
             "Payments got signed agreement [{}]. Waiting for activities creation...",
-            &msg.agreement.agreement_id
+            &msg.agreement.id
         );
 
         match AgreementPayment::new(&msg.agreement) {
             Ok(agreement) => {
-                self.agreements
-                    .insert(msg.agreement.agreement_id.clone(), agreement);
+                self.agreements.insert(msg.agreement.id.clone(), agreement);
                 Ok(())
             }
             Err(error) => {
                 //TODO: What should we do? Maybe terminate agreement?
                 log::error!(
                     "Failed to create payment model for agreement [{}]. Error: {}",
-                    &msg.agreement.agreement_id,
+                    &msg.agreement.id,
                     error
                 );
                 Err(error)

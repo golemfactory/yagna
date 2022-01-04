@@ -384,7 +384,7 @@ impl TaskRunner {
         log::debug!("[TaskRunner] Got new Agreement: {}", msg.agreement);
 
         // Agreement waits for first create activity event.
-        let agreement_id = msg.agreement.agreement_id.clone();
+        let agreement_id = msg.agreement.id.clone();
         self.active_agreements.insert(agreement_id, msg.agreement);
         Ok(())
     }

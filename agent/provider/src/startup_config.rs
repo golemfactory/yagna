@@ -27,9 +27,9 @@ use crate::payments::PaymentsConfig;
 use crate::tasks::config::TaskConfig;
 
 lazy_static::lazy_static! {
-    static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
+    pub static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
 
-    static ref DEFAULT_PLUGINS_DIR : PathBuf = default_plugins();
+    pub static ref DEFAULT_PLUGINS_DIR : PathBuf = default_plugins();
 }
 pub(crate) const PRESETS_JSON: &'static str = "presets.json";
 pub(crate) const HARDWARE_JSON: &'static str = "hardware.json";

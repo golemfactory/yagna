@@ -11,6 +11,21 @@ use crate::display::EnableDisplay;
 
 use ya_client::model::market::Reason;
 
+#[derive(Clone)]
+pub enum ProviderAgreementResult {
+    /// Failed to approve agreement. (Agreement even wasn't created)
+    /// It can happen for Provider in case call to `approve_agreement` will fail.
+    ApprovalFailed,
+    /// Agreement was finished with success after first Activity.
+    ClosedByUs,
+    /// Agreement was finished with success by Requestor.
+    ClosedByRequestor,
+    /// Agreement was broken by us. It indicates not successful end of Agreement.
+    BrokenByUs { reason: BreakReason },
+    /// Agreement was broken by Requestor. It indicates not successful end of Agreement.
+    BrokenByRequestor { reason: Option<Reason> },
+}
+
 #[derive(Display, EnumMessage, Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum BreakReason {

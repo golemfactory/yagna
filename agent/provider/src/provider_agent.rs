@@ -147,7 +147,7 @@ impl ProviderAgent {
         let mut hardware = hardware::Manager::try_new(&config)?;
         hardware.spawn_monitor(&config.hardware_file)?;
 
-        let market = ProviderMarket::new(api.market, args.market).start();
+        let market = ProviderMarket::new(api.market, &data_dir, args.market)?.start();
         let payments = Payments::new(api.activity.clone(), api.payment, args.payment).start();
         let runner = TaskRunner::new(api.activity, args.runner, registry, data_dir)?.start();
         let task_manager =

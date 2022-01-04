@@ -13,7 +13,6 @@ name = "ya-provider"
 path = "src/main.rs"
 
 [dependencies]
-ya-agreement-utils = { version = "^0.2"}
 ya-client = { version = "0.5", features = ['cli'] }
 ya-client-model = "0.3"
 ya-compile-time-utils = "0.2"
@@ -23,6 +22,8 @@ ya-utils-actix = "0.1"
 ya-utils-path = "0.1"
 ya-utils-process = { version = "0.1", features = ['lock'] }
 ya-std-utils = "0.1"
+ya-negotiators = { version = "0.1", path = "../../../../experiments/ya-negotiators"}
+ya-agreement-utils = { version = "0.2", path = "../../../../experiments/ya-negotiators/agreement-utils"}
 
 actix = { version = "0.10", default-features = false }
 actix-rt = "1.1.1"
@@ -39,6 +40,7 @@ dotenv = "0.15.0"
 futures = "0.3"
 futures-util = "0.3.4"
 humantime = "2.0.0"
+humantime-serde = "1"
 lazy_static = "1.4.0"
 libc = "0.2"
 log = "0.4.8"
@@ -49,6 +51,7 @@ path-clean = "0.1.0"
 semver = { version = "0.11", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+serde_yaml = "0.8"
 shared_child = "0.3.4"
 signal-hook = "0.1.13"
 structopt = "0.3.20"
