@@ -74,7 +74,7 @@ pub fn get_polygon_max_gas_price_dynamic() -> f64 {
 
 pub fn get_polygon_gas_price_method() -> PolygonGasPriceMethod {
     match std::env::var("POLYGON_GAS_PRICE_METHOD")
-        .unwrap_or("fast".to_string())
+        .unwrap_or("default".to_string())
         .to_lowercase()
         .as_str()
     {
@@ -86,7 +86,7 @@ pub fn get_polygon_gas_price_method() -> PolygonGasPriceMethod {
 
 pub fn get_polygon_priority() -> PolygonPriority {
     match std::env::var("POLYGON_PRIORITY")
-        .unwrap_or("fast".to_string())
+        .unwrap_or("default".to_string())
         .to_lowercase()
         .as_str()
     {
