@@ -16,7 +16,7 @@ use ya_payment_driver::{
 };
 
 // Local uses
-use crate::erc20::utils::{convert_u256_gas_to_float, str_to_big_dec};
+use crate::erc20::utils::convert_u256_gas_to_float;
 use crate::{
     dao::Erc20Dao,
     erc20::{ethereum, wallet},
