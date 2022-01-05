@@ -218,7 +218,17 @@ pub async fn prepare_raw_transaction(
     //get gas price from network in not provided
     let gas_price = match gas_price_override {
         Some(gas_price_new) => gas_price_new,
-        None => client.eth().gas_price().await.map_err(GenericError::new)?,
+        None => {
+            let small_gas_bump = U256::from(1000);
+            let mut gas_price_from_network =
+                client.eth().gas_price().await.map_err(GenericError::new)?;
+
+            //add small amount of gas to be first in queue
+            if gas_price_from_network / 1000 > small_gas_bump {
+                gas_price_from_network += small_gas_bump;
+            }
+            gas_price_from_network
+        }
     };
 
     let gas_limit = match network {

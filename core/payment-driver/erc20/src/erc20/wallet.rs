@@ -183,13 +183,16 @@ pub async fn make_transfer(
     let recipient = str_to_addr(&details.recipient)?;
     // TODO: Implement token
     //let token = get_network_token(network, None);
-    let raw_tx = ethereum::prepare_raw_transaction(
+    let mut raw_tx = ethereum::prepare_raw_transaction(
         address, recipient, amount, network, nonce, gas_price, gas_limit,
     )
     .await?;
-    //    Ok(raw_tx)
 
-    //let chain_id = network as u64;
+    if let Some(max_gas_price) = max_gas_price {
+        if raw_tx.gas_price > max_gas_price {
+            raw_tx.gas_price = max_gas_price;
+        }
+    }
 
     Ok(ethereum::create_dao_entity(
         nonce,
