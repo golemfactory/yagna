@@ -12,7 +12,6 @@ use crate::erc20::ethereum::{
 use bigdecimal::BigDecimal;
 use chrono::Utc;
 use num_bigint::BigUint;
-use num_traits::Float;
 use std::str::FromStr;
 use web3::types::{H160, H256, U256, U64};
 
@@ -30,8 +29,7 @@ use crate::{
         eth_utils, ethereum, faucet,
         utils::{
             big_dec_gwei_to_u256, big_dec_to_u256, big_uint_to_big_dec, convert_float_gas_to_u256,
-            convert_u256_gas_to_float, gas_float_equals, str_to_addr, topic_to_str_address,
-            u256_to_big_dec,
+            convert_u256_gas_to_float, str_to_addr, topic_to_str_address, u256_to_big_dec,
         },
     },
     RINKEBY_NETWORK,
@@ -207,44 +205,32 @@ pub async fn make_transfer(
     ))
 }
 
-fn bump_gas_price(gas_in_gwei: f64, limit_in_gwei: Option<f64>) -> f64 {
-    let mut result = -1.0;
+fn bump_gas_price(gas_in_gwei: U256) -> U256 {
+    let min_bump_num: U256 = U256::from(111u64);
+    let min_bump_den: U256 = U256::from(100u64);
+    let min_gas = gas_in_gwei * min_bump_num / min_bump_den;
 
     match get_polygon_gas_price_method() {
         PolygonGasPriceMethod::PolygonGasPriceDynamic => {
             //ignore maximum gas price, because we have to bump at least 10% so the transaction will be accepted
-            result = gas_in_gwei * 1.11;
-            result
+            min_gas
         }
         PolygonGasPriceMethod::PolygonGasPriceStatic => {
             let polygon_prices = get_polygon_priority();
 
-            let gas_prices = match polygon_prices {
+            let gas_prices: &[f64] = match polygon_prices {
                 PolygonPriority::PolygonPriorityExpress => {
-                    POLYGON_PREFERRED_GAS_PRICES_EXPRESS.to_vec()
+                    &POLYGON_PREFERRED_GAS_PRICES_EXPRESS[..]
                 }
-                PolygonPriority::PolygonPriorityFast => POLYGON_PREFERRED_GAS_PRICES_FAST.to_vec(),
-                PolygonPriority::PolygonPrioritySlow => POLYGON_PREFERRED_GAS_PRICES_SLOW.to_vec(),
+                PolygonPriority::PolygonPriorityFast => &POLYGON_PREFERRED_GAS_PRICES_FAST[..],
+                PolygonPriority::PolygonPrioritySlow => &POLYGON_PREFERRED_GAS_PRICES_SLOW[..],
             };
 
-            for n in 1..(gas_prices.len() - 1) {
-                if gas_float_equals(gas_prices[n], gas_in_gwei) {
-                    result = gas_prices[n + 1];
-                }
-            }
-            for n in 1..(gas_prices.len()) {
-                if gas_in_gwei > gas_prices[n - 1] && gas_in_gwei < gas_prices[n] {
-                    result = gas_prices[n];
-                }
-            }
-
-            if result < 0.0 {
-                result = gas_in_gwei * 1.2
-            }
-            if let Some(limit_in_gwei) = limit_in_gwei {
-                result = Float::min(result, limit_in_gwei);
-            }
-            result
+            gas_prices
+                .iter()
+                .map(|&f| convert_float_gas_to_u256(f))
+                .find(|&gas_price_step| gas_price_step > min_gas)
+                .unwrap_or(min_gas)
         }
     }
 }
@@ -278,16 +264,24 @@ pub async fn send_transactions(
         let new_gas_price = if let Some(current_gas_price) = tx.current_gas_price {
             if tx.status == TransactionStatus::ResendAndBumpGas as i32 {
                 let gas_u256 = U256::from_dec_str(&current_gas_price).map_err(GenericError::new)?;
-                let mut gas_f64 = convert_u256_gas_to_float(gas_u256);
 
                 let max_gas_u256 = match tx.max_gas_price {
-                    Some(max_gas_price) => Some(convert_u256_gas_to_float(
-                        U256::from_dec_str(&max_gas_price).map_err(GenericError::new)?,
-                    )),
+                    Some(max_gas_price) => {
+                        Some(U256::from_dec_str(&max_gas_price).map_err(GenericError::new)?)
+                    }
                     None => None,
                 };
-                gas_f64 = bump_gas_price(gas_f64, max_gas_u256);
-                convert_float_gas_to_u256(gas_f64)
+                let new_gas = bump_gas_price(gas_u256);
+                if let Some(max_gas_u256) = max_gas_u256 {
+                    if gas_u256 > max_gas_u256 {
+                        log::warn!(
+                            "bump gas ({}) larger than max gas ({}) price",
+                            gas_u256,
+                            max_gas_u256
+                        )
+                    }
+                }
+                new_gas
             } else {
                 U256::from_dec_str(&current_gas_price).map_err(GenericError::new)?
             }
@@ -328,7 +322,8 @@ pub async fn send_transactions(
             Err(e) => {
                 log::error!("Error sending transaction: {:?}", e);
                 if e.to_string().contains("nonce too low") {
-                    if tx.tmp_onchain_txs.map(|t| t.len()).unwrap_or(0) > 2 && tx.resent_times < 5 {
+                    if tx.tmp_onchain_txs.filter(|v| !v.is_empty()).is_some() && tx.resent_times < 5
+                    {
                         //if tmp on-chain tx transactions exist give it a chance but marking it as failed sent
                         dao.transaction_failed_send(
                             &tx.tx_id,

@@ -16,7 +16,6 @@ use ya_payment_driver::{
 };
 
 // Local uses
-use crate::erc20::utils::convert_u256_gas_to_float;
 use crate::{
     dao::Erc20Dao,
     erc20::{ethereum, wallet},
@@ -184,28 +183,26 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 continue;
             } else if s.pending {
                 if time_elapsed_from_last_action > *ERC20_WAIT_FOR_PENDING_ON_NETWORK {
-                    let cur_gas_price_f64 = tx
+                    let cur_gas_price = tx
                         .current_gas_price
-                        .map(|str| U256::from_dec_str(&str).unwrap_or(U256::from(0)))
-                        .map(convert_u256_gas_to_float)
-                        .unwrap_or(0.0);
+                        .and_then(|str| U256::from_dec_str(&str).ok())
+                        .unwrap_or_default();
 
-                    let max_gas_price_f64 = tx
+                    let max_gas_price = tx
                         .max_gas_price
-                        .map(|str| U256::from_dec_str(&str).unwrap_or(U256::from(0)))
-                        .map(convert_u256_gas_to_float)
-                        .unwrap_or(0.0);
+                        .and_then(|str| U256::from_dec_str(&str).ok())
+                        .unwrap_or_default();
 
-                    if cur_gas_price_f64 <= 0.0 || max_gas_price_f64 <= 0.0 {
+                    if cur_gas_price.is_zero() || max_gas_price.is_zero() {
                         log::debug!(
                             "Wrong gas prices: cur_gas_price: {} max_gas_price: {}",
-                            cur_gas_price_f64,
-                            max_gas_price_f64
+                            cur_gas_price,
+                            max_gas_price
                         );
                         continue;
                     }
-                    if cur_gas_price_f64 >= max_gas_price_f64 {
-                        log::debug!("Cannot bump gas more: Current gas price current_gas_price: {} max_gas_price: {}", cur_gas_price_f64, max_gas_price_f64);
+                    if cur_gas_price >= max_gas_price {
+                        log::debug!("Cannot bump gas more: Current gas price current_gas_price: {} max_gas_price: {}", cur_gas_price, max_gas_price);
                         continue;
                     }
 

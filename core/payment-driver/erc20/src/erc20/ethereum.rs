@@ -67,19 +67,20 @@ pub fn get_polygon_maximum_price() -> f64 {
 
 pub fn get_polygon_max_gas_price_dynamic() -> f64 {
     return std::env::var("POLYGON_MAX_GAS_PRICE_DYNAMIC")
-        .unwrap_or("1000.0".to_string())
-        .parse::<f64>()
-        .unwrap_or(1000.0);
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(1000.0f64);
 }
 
 pub fn get_polygon_gas_price_method() -> PolygonGasPriceMethod {
     match std::env::var("POLYGON_GAS_PRICE_METHOD")
-        .unwrap_or("fast".to_string())
-        .to_lowercase()
-        .as_str()
+        .ok()
+        .map(|v| v.to_lowercase())
+        .as_ref()
+        .map(AsRef::as_ref) // Option<&str>
     {
-        "static" => PolygonGasPriceMethod::PolygonGasPriceStatic,
-        "dynamic" => PolygonGasPriceMethod::PolygonGasPriceDynamic,
+        Some("static") => PolygonGasPriceMethod::PolygonGasPriceStatic,
+        Some("dynamic") => PolygonGasPriceMethod::PolygonGasPriceDynamic,
         _ => PolygonGasPriceMethod::PolygonGasPriceDynamic,
     }
 }
