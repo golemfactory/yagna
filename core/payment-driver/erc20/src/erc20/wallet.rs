@@ -246,7 +246,7 @@ pub async fn send_transactions(
             match serde_json::from_str::<YagnaRawTransaction>(&tx.encoded) {
                 Ok(raw_tx) => raw_tx,
                 Err(err) => {
-                    log::error!("Error during serialization of json: {:?}", err);
+                    log::error!("send_transactions - YagnaRawTransaction serialization failed: {:?}", err);
                     //handle problem when deserializing transaction
                     dao.transaction_confirmed_and_failed(
                         &tx.tx_id,
