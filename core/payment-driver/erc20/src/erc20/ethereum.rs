@@ -87,7 +87,7 @@ pub fn get_polygon_gas_price_method() -> PolygonGasPriceMethod {
 
 pub fn get_polygon_priority() -> PolygonPriority {
     match std::env::var("POLYGON_PRIORITY")
-        .unwrap_or("fast".to_string())
+        .unwrap_or("default".to_string())
         .to_lowercase()
         .as_str()
     {
