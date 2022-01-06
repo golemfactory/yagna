@@ -322,7 +322,7 @@ pub async fn send_transactions(
                 };
                 dao.transaction_sent(&tx.tx_id, &str_tx_hash, Some(raw_tx.gas_price.to_string()))
                     .await;
-                log::info!("Send transaction. hash={}", &str_tx_hash);
+                log::info!("Send transaction. hash={}", &tx_hash);
                 log::debug!("id={}", &tx.tx_id);
             }
             Err(e) => {

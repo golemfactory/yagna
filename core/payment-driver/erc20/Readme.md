@@ -155,6 +155,18 @@ RPC error: Error { code: ServerError(-32000), message: "already known", data: No
 RPC error: Error { code: ServerError(-32000), message: "nonce too low", data: None }
 ```
 
+## TO DO:
+
+* more universal code (Polygon/Other chains)
+* limit active transactions (do not append new transactions when previous are not confirmed)
+* check transactions with current nonce to resolve errors and checks faster
+* if current nonce greater than pending transaction check if succeeded or if not fail.
+* find a way to get transaction id by nonce??
+* Special error when funds run out. Bonus: Do not repeat until funds ready.
+* When transaction is still pending do not check other transactions, they will be pending also (but bump gas should be done if needed)
+* Do not bump gas pending transactions higher than current transaction! That doesn't make sense.
+* 
+
 
 
 
