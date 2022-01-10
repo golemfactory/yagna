@@ -80,24 +80,51 @@ pub async fn fund(dao: &Erc20Dao, address: H160, network: Network) -> Result<(),
     Ok(())
 }
 
+#[derive(Debug)]
+pub struct NextNonceInfo {
+    pub network_nonce_pending: U256,
+    pub network_nonce_latest: U256,
+    pub db_nonce_pending: Option<U256>,
+}
+
+pub async fn get_next_nonce_info(
+    dao: &Erc20Dao,
+    address: H160,
+    network: Network,
+) -> Result<NextNonceInfo, GenericError> {
+    let str_addr = format!("0x{:x}", &address);
+    let network_nonce_pending = ethereum::get_transaction_count(address, network, true).await?;
+    let network_nonce_latest = ethereum::get_transaction_count(address, network, false).await?;
+    let db_nonce_pending = dao
+        .get_nonce_pending(&str_addr, network)
+        .await?
+        .map(|nonce| nonce + 1);
+
+    Ok(NextNonceInfo {
+        network_nonce_pending,
+        network_nonce_latest,
+        db_nonce_pending,
+    })
+}
+
 pub async fn get_next_nonce(
     dao: &Erc20Dao,
     address: H160,
     network: Network,
 ) -> Result<U256, GenericError> {
-    let network_nonce = ethereum::get_next_nonce_pending(address, network).await?;
-    let str_addr = format!("0x{:x}", &address);
-    let db_nonce = dao.get_next_nonce(&str_addr, network).await?;
+    let nonce_info = get_next_nonce_info(dao, address, network).await?;
 
-    if db_nonce > network_nonce {
-        warn!(
-            "Network nonce different than db nonce: {} != {}",
-            network_nonce, db_nonce
-        );
-        return Ok(db_nonce);
+    if let Some(db_nonce_pending) = nonce_info.db_nonce_pending {
+        if nonce_info.network_nonce_pending > db_nonce_pending {
+            warn!(
+                "Network nonce higher than db nonce: {} != {}",
+                nonce_info.network_nonce_pending, db_nonce_pending
+            )
+        };
+        Ok(db_nonce_pending)
+    } else {
+        Ok(nonce_info.network_nonce_pending)
     }
-
-    Ok(network_nonce)
 }
 
 pub async fn has_enough_eth_for_gas(

@@ -89,25 +89,17 @@ impl Erc20Dao {
         Ok(())
     }
 
-    pub async fn get_next_nonce(
+    pub async fn get_nonce_pending(
         &self,
         address: &str,
         network: Network,
-    ) -> Result<U256, GenericError> {
-        let list_of_nonces = self
+    ) -> Result<Option<U256>, GenericError> {
+        let res = self
             .transaction()
-            .get_used_nonces(address, network)
+            .get_last_db_nonce(address, network)
             .await
             .map_err(GenericError::new)?;
-
-        let max_nonce = list_of_nonces.into_iter().max();
-
-        let next_nonce = match max_nonce {
-            Some(nonce) => U256::from(nonce + 1),
-            None => U256::from(0),
-        };
-
-        Ok(next_nonce)
+        Ok(res.map(U256::from))
     }
 
     pub async fn insert_raw_transaction(&self, tx: TransactionEntity) -> String {

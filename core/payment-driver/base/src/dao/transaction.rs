@@ -55,6 +55,30 @@ impl<'c> TransactionDao<'c> {
         .await
     }
 
+    pub async fn get_last_db_nonce(
+        &self,
+        address: &str,
+        network: Network,
+    ) -> DbResult<Option<i32>> {
+        let address = address.to_string();
+        let not_older_than = (Utc::now() - Duration::hours(24)).naive_utc();
+        readonly_transaction(self.pool, move |conn| {
+            let nonce_vec: Vec<i32> = dsl::transaction
+                .filter(
+                    dsl::sender
+                        .eq(address)
+                        .and(dsl::network.eq(network))
+                        .and(dsl::time_created.gt(not_older_than)),
+                )
+                .select(dsl::nonce)
+                .order(dsl::nonce.asc())
+                .limit(1)
+                .load(conn)?;
+            Ok(nonce_vec.first().map(|el| *el))
+        })
+        .await
+    }
+
     pub async fn get_used_nonces(&self, address: &str, network: Network) -> DbResult<Vec<i32>> {
         let address = address.to_string();
         let not_older_than = (Utc::now() - Duration::days(7)).naive_utc();

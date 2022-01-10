@@ -248,7 +248,9 @@ impl PaymentDriverCron for Erc20Driver {
             let network = Network::from_str(&network_key).unwrap();
             // Process payment rows
             for node_id in self.active_accounts.borrow().list_accounts() {
-                cron::process_payments_for_account(&self.dao, &node_id, network).await;
+                cron::process_payments_for_account(&self.dao, &node_id, network)
+                    .await
+                    .unwrap();
             }
             // Process transaction rows
             cron::process_transactions(&self.dao, network).await;

@@ -22,6 +22,7 @@ use crate::{
     network,
 };
 use ya_payment_driver::db::models::TransactionStatus;
+use ya_payment_driver::model::GenericError;
 
 lazy_static! {
     static ref TX_SUMBIT_TIMEOUT: Duration = Duration::minutes(15);
@@ -308,7 +309,11 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
     }
 }
 
-pub async fn process_payments_for_account(dao: &Erc20Dao, node_id: &str, network: Network) {
+pub async fn process_payments_for_account(
+    dao: &Erc20Dao,
+    node_id: &str,
+    network: Network,
+) -> Result<(), GenericError> {
     log::trace!(
         "Processing payments for node_id={}, network={}",
         node_id,
@@ -322,18 +327,30 @@ pub async fn process_payments_for_account(dao: &Erc20Dao, node_id: &str, network
             network,
             node_id
         );
-        let mut nonce = wallet::get_next_nonce(
-            dao,
-            crate::erc20::utils::str_to_addr(&node_id).unwrap(),
-            network,
-        )
-        .await
-        .unwrap();
-        log::debug!("Payments: nonce={}, details={:?}", &nonce, payments);
+        let next_nonce_info =
+            wallet::get_next_nonce_info(dao, crate::erc20::utils::str_to_addr(&node_id)?, network)
+                .await?;
+
+        let mut next_nonce = if let Some(db_nonce_pending) = next_nonce_info.db_nonce_pending {
+            db_nonce_pending
+        } else {
+            next_nonce_info.network_nonce_pending
+        };
+
+        log::debug!(
+            "Payments: nonce_info={:?}, details={:?}",
+            &next_nonce_info,
+            payments
+        );
+        let env = ethereum::get_env(network);
         for payment in payments {
-            handle_payment(&dao, payment, &mut nonce).await;
+            if next_nonce > next_nonce_info.network_nonce_latest + env.payment_max_processed {
+                break;
+            }
+            handle_payment(&dao, payment, &mut next_nonce).await;
         }
     }
+    Ok(())
 }
 
 pub async fn process_transactions(dao: &Erc20Dao, network: Network) {

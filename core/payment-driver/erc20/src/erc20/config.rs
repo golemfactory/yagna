@@ -17,7 +17,10 @@ pub struct EnvConfiguration {
     pub glm_contract_address: Address,
     pub glm_faucet_address: Option<Address>,
     pub required_confirmations: u64,
+    pub payment_max_processed: u64,
 }
+
+pub const DEFAULT_MAX_PROCESSED: u64 = 30;
 
 lazy_static! {
     pub static ref RINKEBY_CONFIG: EnvConfiguration = EnvConfiguration {
@@ -38,6 +41,12 @@ lazy_static! {
                 Ok(Ok(x)) => x,
                 _ => 3,
             }
+        },
+        payment_max_processed: {
+            match env::var("ERC20_RINKEBY_PAYMENT_MAX_PROCESSED").map(|s| s.parse()) {
+                Ok(Ok(x)) => x,
+                _ => DEFAULT_MAX_PROCESSED,
+            }
         }
     };
     pub static ref MAINNET_CONFIG: EnvConfiguration = EnvConfiguration {
@@ -51,6 +60,12 @@ lazy_static! {
             match env::var("ERC20_MAINNET_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
                 Ok(Ok(x)) => x,
                 _ => 5,
+            }
+        },
+        payment_max_processed: {
+            match env::var("ERC20_MAINNET_PAYMENT_MAX_PROCESSED").map(|s| s.parse()) {
+                Ok(Ok(x)) => x,
+                _ => DEFAULT_MAX_PROCESSED,
             }
         }
     };
@@ -66,6 +81,12 @@ lazy_static! {
                 Ok(Ok(x)) => x,
                 _ => 3,
             }
+        },
+        payment_max_processed: {
+            match env::var("ERC20_GOERLI_PAYMENT_MAX_PROCESSED").map(|s| s.parse()) {
+                Ok(Ok(x)) => x,
+                _ => DEFAULT_MAX_PROCESSED,
+            }
         }
     };
     pub static ref MUMBAI_CONFIG: EnvConfiguration = EnvConfiguration {
@@ -80,6 +101,12 @@ lazy_static! {
                 Ok(Ok(x)) => x,
                 _ => 3,
             }
+        },
+        payment_max_processed: {
+            match env::var("ERC20_MUMBAI_PAYMENT_MAX_PROCESSED").map(|s| s.parse()) {
+                Ok(Ok(x)) => x,
+                _ => DEFAULT_MAX_PROCESSED,
+            }
         }
     };
     pub static ref POLYGON_MAINNET_CONFIG: EnvConfiguration = EnvConfiguration {
@@ -93,6 +120,12 @@ lazy_static! {
             match env::var("ERC20_POLYGON_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
                 Ok(Ok(x)) => x,
                 _ => 5,
+            }
+        },
+        payment_max_processed: {
+            match env::var("ERC20_POLYGON_PAYMENT_MAX_PROCESSED").map(|s| s.parse()) {
+                Ok(Ok(x)) => x,
+                _ => DEFAULT_MAX_PROCESSED,
             }
         }
     };

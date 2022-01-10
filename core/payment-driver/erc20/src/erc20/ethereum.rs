@@ -124,11 +124,19 @@ pub async fn get_balance(address: H160, network: Network) -> Result<U256, Generi
         .map_err(GenericError::new)?)
 }
 
-pub async fn get_next_nonce_pending(address: H160, network: Network) -> Result<U256, GenericError> {
+pub async fn get_transaction_count(
+    address: H160,
+    network: Network,
+    pending: bool,
+) -> Result<U256, GenericError> {
+    let nonce_type = match pending {
+        true => web3::types::BlockNumber::Pending,
+        false => web3::types::BlockNumber::Latest,
+    };
     let client = get_client(network)?;
     let nonce = client
         .eth()
-        .transaction_count(address, Some(web3::types::BlockNumber::Pending))
+        .transaction_count(address, Some(nonce_type))
         .await
         .map_err(GenericError::new)?;
     Ok(nonce)
@@ -399,7 +407,7 @@ fn get_client(network: Network) -> Result<Web3<Http>, GenericError> {
     Ok(Web3::new(transport))
 }
 
-fn get_env(network: Network) -> config::EnvConfiguration {
+pub fn get_env(network: Network) -> config::EnvConfiguration {
     match network {
         Network::Mainnet => *config::MAINNET_CONFIG,
         Network::Rinkeby => *config::RINKEBY_CONFIG,
