@@ -271,12 +271,13 @@ impl Erc20Dao {
         }
     }
 
-    pub async fn transaction_failed_send(&self, tx_id: &str, error: &str) {
+    pub async fn transaction_failed_send(&self, tx_id: &str, new_resent_count: i32, error: &str) {
         if let Err(e) = self
             .transaction()
-            .update_tx_status(
+            .update_error_sent(
                 tx_id.to_string(),
                 TransactionStatus::ErrorSent.into(),
+                new_resent_count,
                 Some(error.to_string()),
             )
             .await
