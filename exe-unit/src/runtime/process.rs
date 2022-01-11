@@ -138,6 +138,8 @@ impl RuntimeProcess {
             }
         }
 
+        args.args(self.ctx.runtime_args.iter());
+
         Ok(args)
     }
 }

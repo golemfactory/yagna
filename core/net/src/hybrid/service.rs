@@ -9,7 +9,7 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Mutex};
 use std::task::Poll;
 
-use anyhow::Context as AnyhowContext;
+use anyhow::{anyhow, Context as AnyhowContext};
 use futures::channel::mpsc;
 use futures::stream::LocalBoxStream;
 use futures::{FutureExt, SinkExt, Stream, StreamExt, TryStreamExt};
@@ -18,7 +18,7 @@ use url::Url;
 
 use ya_core_model::net::{self, net_service};
 use ya_core_model::NodeId;
-use ya_relay_client::{client::ForwardReceiver, Client, ClientBuilder};
+use ya_relay_client::{Client, ClientBuilder, ForwardReceiver};
 use ya_relay_proto::codec::forward::{PrefixedSink, PrefixedStream, SinkKind};
 use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::CallReplyCode;
@@ -54,10 +54,10 @@ thread_local! {
     static CLIENT: RefCell<Option<Client>> = Default::default();
 }
 
-async fn relay_addr(config: &Config) -> std::io::Result<SocketAddr> {
-    Ok(match std::env::var(&config.host) {
-        Ok(val) => val,
-        Err(_) => resolver::resolve_yagna_srv_record("_net_relay._udp")
+async fn relay_addr(config: &Config) -> anyhow::Result<SocketAddr> {
+    Ok(match &config.host {
+        Some(val) => val.to_string(),
+        None => resolver::resolve_yagna_srv_record("_net_relay._udp")
             .await
             // FIXME: remove
             .unwrap_or_else(|_| DEFAULT_NET_RELAY_HOST.to_string()),
@@ -88,13 +88,19 @@ pub async fn start_network(
     default_id: NodeId,
     ids: Vec<NodeId>,
 ) -> anyhow::Result<()> {
-    let url = Url::parse(&format!("udp://{}", relay_addr(&config).await?))?;
+    let url = Url::parse(&format!(
+        "udp://{}",
+        relay_addr(&config)
+            .await
+            .map_err(|e| anyhow!("Resolving hybrid NET relay server failed. Error: {}", e))?
+    ))?;
     let provider = IdentityCryptoProvider::new(default_id);
 
-    log::info!("starting network (hybrid) with identity: {}", default_id);
+    log::info!("Starting network (hybrid) with identity: {}", default_id);
 
     let client = ClientBuilder::from_url(url)
         .crypto(provider)
+        .listen(config.bind_url.clone())
         .connect()
         .build()
         .await?;
@@ -146,12 +152,16 @@ pub async fn start_network(
         let mut interval = time::interval(config.ping_interval);
         loop {
             interval.tick().await;
-            if let Ok(session) = client_.server_session().await {
+            if let Ok(session) = client_.sessions.server_session().await {
                 log::trace!("Sending ping to keep session alive.");
                 let _ = session.ping().await;
             }
         }
     });
+
+    if let Some(address) = client.public_addr().await {
+        log::info!("Public address: {}", address);
+    }
 
     Ok(())
 }
@@ -351,8 +361,7 @@ fn broadcast_handler(rx: NetReceiver) -> impl Future<Output = ()> + Unpin + 'sta
             let client = CLIENT
                 .with(|c| c.borrow().clone())
                 .ok_or_else(|| anyhow::anyhow!("network not initialized"))?;
-            let session = client.server_session().await?;
-            session
+            client
                 .broadcast(payload, DEFAULT_BROADCAST_NODE_COUNT)
                 .await
                 .context("broadcast failed")
@@ -685,11 +694,10 @@ impl State {
                     .with(|c| c.borrow().clone())
                     .ok_or_else(|| anyhow::anyhow!("network not started"))?;
 
-                let session = client.server_session().await?;
                 let forward: NetSinkKind = if reliable {
-                    PrefixedSink::new(session.forward(remote_id).await?).into()
+                    PrefixedSink::new(client.forward(remote_id).await?).into()
                 } else {
-                    session.forward_unreliable(remote_id).await?.into()
+                    client.forward_unreliable(remote_id).await?.into()
                 };
 
                 let mut inner = self.inner.borrow_mut();
@@ -707,6 +715,7 @@ impl State {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 struct Request<S: Clone> {
     #[allow(dead_code)]

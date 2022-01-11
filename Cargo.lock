@@ -5164,7 +5164,7 @@ version = "0.5.1"
 source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6c848541e89262f90ca693d9e1a84c6f3df0953b"
 dependencies = [
  "lazy_static",
- "parking_lot 0.10.2",
+ "parking_lot 0.11.1",
  "serial_test_derive",
 ]
 
@@ -6812,7 +6812,7 @@ dependencies = [
 
 [[package]]
 name = "ya-exe-unit"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "actix",
  "actix-files",
@@ -7038,6 +7038,7 @@ dependencies = [
  "url",
  "ya-core-model",
  "ya-relay-client",
+ "ya-relay-core",
  "ya-relay-proto",
  "ya-sb-proto",
  "ya-sb-router",
@@ -7205,9 +7206,10 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=1052108b786c75c996f9c6db8bc52d8ddab04c45#1052108b786c75c996f9c6db8bc52d8ddab04c45"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=fbb2f4a5589890d2d3e8cef271fe647e0798d26d#fbb2f4a5589890d2d3e8cef271fe647e0798d26d"
 dependencies = [
  "anyhow",
+ "chrono",
  "derive_more",
  "env_logger 0.8.4",
  "futures 0.3.13",
@@ -7223,7 +7225,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-core"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=1052108b786c75c996f9c6db8bc52d8ddab04c45#1052108b786c75c996f9c6db8bc52d8ddab04c45"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=fbb2f4a5589890d2d3e8cef271fe647e0798d26d#fbb2f4a5589890d2d3e8cef271fe647e0798d26d"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7237,6 +7239,7 @@ dependencies = [
  "serde_json",
  "sha2 0.9.3",
  "sha3 0.9.1",
+ "thiserror",
  "tokio 0.2.25",
  "tokio-util 0.3.1",
  "url",
@@ -7249,8 +7252,9 @@ dependencies = [
 [[package]]
 name = "ya-relay-proto"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=1052108b786c75c996f9c6db8bc52d8ddab04c45#1052108b786c75c996f9c6db8bc52d8ddab04c45"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=fbb2f4a5589890d2d3e8cef271fe647e0798d26d#fbb2f4a5589890d2d3e8cef271fe647e0798d26d"
 dependencies = [
+ "anyhow",
  "bytes 0.5.6",
  "derive_more",
  "futures 0.3.13",
@@ -7265,7 +7269,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=1052108b786c75c996f9c6db8bc52d8ddab04c45#1052108b786c75c996f9c6db8bc52d8ddab04c45"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=fbb2f4a5589890d2d3e8cef271fe647e0798d26d#fbb2f4a5589890d2d3e8cef271fe647e0798d26d"
 dependencies = [
  "derive_more",
  "futures 0.3.13",
