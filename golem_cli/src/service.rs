@@ -122,6 +122,9 @@ pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
         cmd.yagna()?
             .payment_init(&address, &nn, &ERC20_DRIVER)
             .await?;
+        if ZKSYNC_DRIVER.platform(&nn).is_err() {
+            continue;
+        }
         if let Err(e) = cmd
             .yagna()?
             .payment_init(&address, &nn, &ZKSYNC_DRIVER)
