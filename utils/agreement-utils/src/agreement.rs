@@ -435,7 +435,7 @@ properties:
     com:
       scheme: payu
       scheme.payu:
-        interval_sec: 60
+        debit-note.interval-sec?: 60
       pricing:
         model: linear
         model.linear:
@@ -468,7 +468,7 @@ constraints: |
 			"com": {
 				"scheme": "payu",
 				"scheme.payu": {
-					"interval_sec": 60
+					"debit-note.interval-sec?": 60
 				},
 				"pricing": {
 					"model": "linear",
@@ -529,18 +529,6 @@ constraints: |
                 .as_typed(Value::as_str)
                 .unwrap(),
             "payu"
-        );
-        assert_eq!(
-            o.pointer("/properties/golem/com/scheme/payu/interval_sec")
-                .as_typed(Value::as_i64)
-                .unwrap(),
-            60i64
-        );
-        assert_eq!(
-            o.pointer("/properties/golem/com/scheme/payu/interval_sec")
-                .as_typed(Value::as_f64)
-                .unwrap(),
-            60f64
         );
         assert_eq!(
             o.pointer("/properties/golem/com/pricing/model/linear/coeffs")
