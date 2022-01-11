@@ -32,7 +32,7 @@ pub enum BreakReason {
     )]
     #[strum(message = "DebitNotesDeadline")]
     DebitNotesDeadline(chrono::Duration),
-    #[display(fmt = "Requestor rejected the debit note: {:?}", _0)]
+    #[display(fmt = "Requestor rejected the debit note: {:?}", "_0.rejection_reason")]
     #[strum(message = "DebitNoteRejected")]
     DebitNoteRejected(Rejection),
     #[display(fmt = "Provider cancelled the debit note")]
