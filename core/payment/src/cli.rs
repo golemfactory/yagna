@@ -97,7 +97,7 @@ pub enum PaymentCli {
 #[derive(StructOpt, Debug)]
 pub enum InvoiceCommand {
     Status {
-        #[structopt(long)]
+        #[structopt(long, help = "Prints invoice status from the given period of time")]
         last: Option<humantime::Duration>,
     },
 }
