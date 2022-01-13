@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -14,7 +15,7 @@ use serde_json::json;
 use structopt::StructOpt;
 use ya_client::activity::ActivityProviderApi;
 use ya_client::model::payment::{DebitNote, Invoice, NewDebitNote, NewInvoice};
-use ya_client::model::payment::{DebitNoteEventType, InvoiceEventType};
+use ya_client::model::payment::{DebitNoteEvent, DebitNoteEventType, InvoiceEventType};
 use ya_client::payment::PaymentApi;
 
 use ya_std_utils::LogErr;
@@ -59,6 +60,7 @@ pub struct FinalizeActivity {
 #[rtype(result = "Result<Invoice>")]
 struct IssueInvoice {
     costs_summary: CostsSummary,
+    payment_timeout: Option<chrono::Duration>,
 }
 
 /// Message for sending invoice to the requestor. Sent after invoice is issued.
@@ -105,6 +107,7 @@ struct CostsSummary {
 pub struct DebitNoteInfo {
     pub agreement_id: String,
     pub activity_id: String,
+    pub accept_timeout: Option<chrono::Duration>,
     pub payment_timeout: Option<chrono::Duration>,
 }
 
@@ -129,9 +132,8 @@ pub struct PaymentsConfig {
 struct ProviderCtx {
     activity_api: Arc<ActivityProviderApi>,
     payment_api: Arc<PaymentApi>,
-
     debit_checker: Addr<DeadlineChecker>,
-
+    payment_checker: Addr<DeadlineChecker>,
     config: PaymentsConfig,
 }
 
@@ -159,6 +161,7 @@ impl Payments {
             activity_api: Arc::new(activity_api),
             payment_api: Arc::new(payment_api),
             debit_checker: DeadlineChecker::new().start(),
+            payment_checker: DeadlineChecker::new().start(),
             config,
         };
 
@@ -209,7 +212,7 @@ async fn send_debit_note(
         activity_id: debit_note_info.activity_id.clone(),
         total_amount_due: cost_info.cost,
         usage_counter_vector: Some(json!(cost_info.usage)),
-        payment_due_date: None,
+        payment_due_date: debit_note_info.payment_timeout.map(|dur| Utc::now() + dur),
     };
 
     log::debug!(
@@ -233,7 +236,7 @@ async fn send_debit_note(
     // debit_note, because debit note events can arrive
     // before debit_note.send() call actually returns.
     if let Some(deadline) = debit_note_info
-        .payment_timeout
+        .accept_timeout
         .map(|timeout| Utc::now() + timeout)
     {
         provider_context
@@ -241,7 +244,17 @@ async fn send_debit_note(
             .send(TrackDeadline {
                 category: debit_note.agreement_id.clone(),
                 deadline,
-                id: debit_note.debit_note_id.clone(),
+                id: note_accept_id(&debit_note.debit_note_id),
+            })
+            .await?;
+    }
+    if let Some(deadline) = debit_note.payment_due_date {
+        provider_context
+            .payment_checker
+            .send(TrackDeadline {
+                category: debit_note.agreement_id.clone(),
+                deadline,
+                id: note_payment_id(&debit_note.debit_note_id),
             })
             .await?;
     }
@@ -263,14 +276,20 @@ async fn send_debit_note(
             )
         });
     if send_result.is_err() {
-        provider_context
+        let _ = provider_context
             .debit_checker
             .send(StopTracking {
-                id: debit_note.debit_note_id.clone(),
+                id: note_accept_id(&debit_note.debit_note_id),
                 category: Some(debit_note.agreement_id.clone()),
             })
-            .await
-            .ok();
+            .await;
+        let _ = provider_context
+            .payment_checker
+            .send(StopTracking {
+                id: note_payment_id(&debit_note.debit_note_id),
+                category: Some(debit_note.agreement_id.clone()),
+            })
+            .await;
     }
     send_result?;
 
@@ -333,15 +352,15 @@ async fn check_invoice_events(provider_ctx: Arc<ProviderCtx>, payments_addr: Add
 
 async fn check_debit_notes_events(
     provider_ctx: Arc<ProviderCtx>,
-    debit_checker: Addr<DeadlineChecker>,
+    provider_signal: SignalSlot<BreakAgreement>,
 ) {
     let config = &provider_ctx.config;
-    let timeout = config.get_events_timeout.clone();
-    let error_timeout = config.get_events_error_timeout.clone();
+    let timeout = config.get_events_timeout;
+    let error_timeout = config.get_events_error_timeout;
     let mut lather_than = Utc::now();
 
     loop {
-        let events = match provider_ctx
+        match provider_ctx
             .payment_api
             .get_debit_note_events(
                 Some(&lather_than),
@@ -351,35 +370,96 @@ async fn check_debit_notes_events(
             )
             .await
         {
-            Ok(events) => events,
+            Ok(events) => {
+                for event in events {
+                    lather_than = event.event_date;
+                    handle_debit_note_event(event, &provider_ctx, &provider_signal).await;
+                }
+            }
             Err(e) => {
                 log::error!("Can't query debit note events: {}", e);
                 tokio::time::delay_for(error_timeout).await;
-                vec![]
             }
         };
-
-        for event in events {
-            match event.event_type {
-                DebitNoteEventType::DebitNoteAcceptedEvent => debit_checker
-                    .send(StopTracking {
-                        id: event.debit_note_id.clone(),
-                        category: None,
-                    })
-                    .await
-                    .map(|_| log::debug!("DebitNote [{}] accepted.", event.debit_note_id))
-                    .map_err(|_| {
-                        log::warn!(
-                            "Failed to notify about accepted DebitNote {}",
-                            event.debit_note_id
-                        )
-                    })
-                    .ok(),
-                _ => None,
-            };
-            lather_than = event.event_date;
-        }
     }
+}
+
+async fn handle_debit_note_event(
+    event: DebitNoteEvent,
+    provider_ctx: &Arc<ProviderCtx>,
+    provider_signal: &SignalSlot<BreakAgreement>,
+) {
+    match &event.event_type {
+        DebitNoteEventType::DebitNoteAcceptedEvent => provider_ctx
+            .debit_checker
+            .send(StopTracking {
+                id: note_accept_id(&event.debit_note_id),
+                category: None,
+            })
+            .await
+            .map(|_| log::debug!("DebitNote [{}] accepted.", event.debit_note_id))
+            .map_err(|_| {
+                log::warn!(
+                    "Failed to notify about accepted DebitNote {}",
+                    event.debit_note_id
+                )
+            })
+            .ok(),
+        DebitNoteEventType::DebitNoteSettledEvent => provider_ctx
+            .payment_checker
+            .send(StopTracking {
+                id: note_payment_id(&event.debit_note_id),
+                category: None,
+            })
+            .await
+            .map(|_| log::debug!("DebitNote [{}] paid.", event.debit_note_id))
+            .map_err(|_| {
+                log::warn!(
+                    "Failed to notify about a paid DebitNote {}",
+                    event.debit_note_id
+                )
+            })
+            .ok(),
+        DebitNoteEventType::DebitNoteCancelledEvent
+        | DebitNoteEventType::DebitNoteRejectedEvent { .. } => {
+            let debit_note = match provider_ctx
+                .payment_api
+                .get_debit_note(&event.debit_note_id)
+                .await
+            {
+                Ok(note) => note,
+                Err(err) => {
+                    log::error!(
+                        "Failed to break agreement for DebitNote [{}] because the DebitNote cannot be retrieved: {}",
+                        event.debit_note_id,
+                        err
+                    );
+                    return;
+                }
+            };
+
+            provider_ctx.debit_checker.do_send(StopTrackingCategory {
+                category: debit_note.agreement_id.clone(),
+            });
+            provider_ctx.payment_checker.do_send(StopTrackingCategory {
+                category: debit_note.agreement_id.clone(),
+            });
+
+            let reason = BreakReason::try_from(event.event_type.clone()).unwrap();
+            provider_signal
+                .send_signal(BreakAgreement {
+                    agreement_id: debit_note.agreement_id.clone(),
+                    reason: reason.clone(),
+                })
+                .log_err_msg(&format!(
+                    "Failed to send BreakAgreement for [{}] with reason: {}",
+                    debit_note.agreement_id,
+                    reason.to_string()
+                ))
+                .ok()
+        }
+        _ => None,
+    };
 }
 
 async fn compute_cost_and_send_debit_note(
@@ -426,19 +506,33 @@ impl Handler<CreateActivity> for Payments {
             &msg.activity_id
         );
 
-        // Sending UpdateCost with last_debit_note: None will start new
-        // DebitNotes chain for this activity.
-        let msg = UpdateCost {
-            invoice_info: DebitNoteInfo {
-                agreement_id: msg.agreement_id.clone(),
-                activity_id: msg.activity_id.clone(),
-                payment_timeout: None, // Will be added in UpdateCost handler.
-            },
+        // Add activity to list and send debit note after a delay.
+        agreement.add_created_activity(&msg.activity_id);
+
+        // Start a new DebitNote chain for this activity.
+        let invoice_info = DebitNoteInfo {
+            agreement_id: msg.agreement_id.clone(),
+            activity_id: msg.activity_id.clone(),
+            accept_timeout: agreement.accept_timeout,
+            payment_timeout: agreement.payment_timeout,
         };
 
-        // Add activity to list and send debit note after update_interval.
-        agreement.add_created_activity(&msg.invoice_info.activity_id);
-        ctx.notify_later(msg, agreement.update_interval);
+        let interval = chrono::Duration::from_std(agreement.update_interval)?;
+        let now = Utc::now();
+
+        let mut i = 0;
+        let delay = loop {
+            i += 1;
+
+            let value = agreement.approved_ts + (interval * i);
+            if value >= now {
+                break (value - now);
+            } else if i == i32::MAX {
+                anyhow::bail!("Activity created after {} DebitNote intervals", i);
+            }
+        };
+
+        ctx.notify_later(UpdateCost { invoice_info }, delay.to_std()?);
 
         Ok(())
     }
@@ -472,6 +566,7 @@ impl Handler<ActivityDestroyed> for Payments {
         let debit_note_info = DebitNoteInfo {
             activity_id: msg.activity_id.clone(),
             agreement_id: msg.agreement_id.clone(),
+            accept_timeout: agreement.accept_timeout,
             payment_timeout: agreement.payment_timeout,
         };
 
@@ -524,6 +619,7 @@ impl Handler<UpdateCost> for Payments {
     type Result = ActorResponse<Self, (), Error>;
 
     fn handle(&mut self, msg: UpdateCost, _ctx: &mut Context<Self>) -> Self::Result {
+        let started = Utc::now();
         let agreement = match self
             .agreements
             .get(&msg.invoice_info.agreement_id)
@@ -542,11 +638,15 @@ impl Handler<UpdateCost> for Payments {
                 let payment_model = agreement.payment_model.clone();
                 let context = self.context.clone();
 
-                let update_interval = agreement.update_interval;
-                let last_debit_note = agreement.last_send_debit_note.clone();
-                let timeout = agreement.payment_timeout.clone();
+                let last_debit_note = agreement.last_send_debit_note;
+                let accept_timeout = agreement.accept_timeout;
+                let update_interval = match chrono::Duration::from_std(agreement.update_interval) {
+                    Ok(interval) => interval,
+                    Err(err) => return ActorResponse::reply(Err(err.into())),
+                };
                 let invoice_info = DebitNoteInfo {
-                    payment_timeout: timeout.clone(),
+                    accept_timeout,
+                    payment_timeout: agreement.payment_timeout,
                     ..msg.invoice_info.clone()
                 };
 
@@ -564,11 +664,11 @@ impl Handler<UpdateCost> for Payments {
                 .map(move |result: Result<_, anyhow::Error>, myself, ctx| {
                     // We break Agreement, if we weren't able to send any DebitNote lately.
                     if result.is_err() {
-                        if timeout.is_some() && Utc::now() > last_debit_note + timeout.unwrap() {
+                        if accept_timeout.is_some() && Utc::now() > last_debit_note + accept_timeout.unwrap() {
                             myself.break_agreement_signal
                                 .send_signal(BreakAgreement {
                                     agreement_id: msg.invoice_info.agreement_id.clone(),
-                                    reason: BreakReason::RequestorUnreachable(timeout.unwrap()),
+                                    reason: BreakReason::RequestorUnreachable(accept_timeout.unwrap()),
                                 })
                                 .log_err_msg(&format!(
                                     "Failed to send BreakAgreement for [{}], when Requestor is unreachable.",
@@ -579,12 +679,22 @@ impl Handler<UpdateCost> for Payments {
                     } else {
                         myself.agreements
                             .get_mut(&msg.invoice_info.agreement_id)
-                            .map(|agreement| agreement.last_send_debit_note = Utc::now());
+                            .map(|agreement| agreement.last_send_debit_note = last_debit_note + update_interval);
                     }
 
                     // Don't bother, if previous debit note was sent successfully or not.
                     // Schedule UpdateCost for later.
-                    ctx.notify_later(msg, update_interval);
+
+                    let delta = Utc::now() - started;
+                    let delay = if update_interval > delta {
+                        // schedule the next debit note as close to `update_interval` as possible
+                        (update_interval - delta).to_std()?
+                    } else {
+                        // the process lasted longer than `update_interval`, continue immediately
+                        Duration::from_secs(0)
+                    };
+
+                    ctx.notify_later(msg, delay);
                     Ok(())
                 });
                 ActorResponse::r#async(debit_note_future)
@@ -641,21 +751,26 @@ impl Handler<AgreementClosed> for Payments {
 
             let activities_watch = agreement.activities_watch.clone();
             let agreement_id = msg.agreement_id.clone();
+            let payment_timeout = agreement.payment_timeout;
             let myself = ctx.address().clone();
             let ctx = self.context.clone();
 
             let future = async move {
-                ctx.debit_checker
-                    .send(StopTrackingCategory {
-                        category: agreement_id.clone(),
-                    })
-                    .await
-                    .ok();
+                let stop_tracking = StopTrackingCategory {
+                    category: agreement_id.clone(),
+                };
+                let _ = ctx.debit_checker.send(stop_tracking.clone()).await;
+                let _ = ctx.payment_checker.send(stop_tracking).await;
 
                 activities_watch.wait_for_finish().await;
 
                 let costs_summary = myself.send(GetAgreementSummary { agreement_id }).await??;
-                let invoice = myself.send(IssueInvoice { costs_summary }).await??;
+                let invoice = myself
+                    .send(IssueInvoice {
+                        costs_summary,
+                        payment_timeout,
+                    })
+                    .await??;
                 // We do not want to wait for sending Invoice, as we are eager to start new
                 // negotiations. Waiting for invoice to be sent to Requestor could result in
                 // hanging Provider waiting for Requestor to appear in the net and receive the Invoice
@@ -687,13 +802,14 @@ impl Handler<IssueInvoice> for Payments {
             cost_info.usage,
         );
 
+        let payment_timeout = msg
+            .payment_timeout
+            .unwrap_or_else(|| chrono::Duration::days(1));
         let invoice = NewInvoice {
             agreement_id,
             activity_ids: Some(activity_ids),
             amount: cost_info.cost,
-            // TODO: Change this date to meaningful value.
-            //  Now all our invoices are immediately outdated.
-            payment_due_date: Utc::now(),
+            payment_due_date: Utc::now() + payment_timeout,
         };
 
         let provider_ctx = self.context.clone();
@@ -826,55 +942,68 @@ impl Handler<DeadlineElapsed> for Payments {
     type Result = ();
 
     fn handle(&mut self, msg: DeadlineElapsed, _ctx: &mut Context<Self>) -> Self::Result {
-        let timeout = match self.agreements.get_mut(&msg.category) {
-            Some(agreement) => match agreement.payment_timeout {
-                Some(timeout) => {
-                    match agreement.deadline_elapsed {
-                        false => {
-                            agreement.deadline_elapsed = true;
-                            timeout
-                        }
-                        // If at least one deadline elapses, we don't want to generate any
-                        // new unnecessary events.
-                        true => return (),
-                    }
+        let agreement = match self.agreements.get_mut(&msg.category) {
+            Some(agreement) => {
+                // If at least one deadline elapses, we don't want to generate any
+                // new unnecessary events.
+                if agreement.deadline_elapsed {
+                    return;
                 }
-                None => {
-                    log::error!(
-                        "DeadlineElapsed for Agreement [{}], that's deadline shouldn't be tracked.",
-                        msg.category
-                    );
-                    return ();
-                }
-            },
+                agreement
+            }
             None => {
                 log::error!(
                     "DeadlineElapsed for not existing Agreement [{}].",
                     msg.category
                 );
-                return ();
+                return;
             }
         };
+        let reason = if msg.id.starts_with(ACCEPT_PREFIX) {
+            match agreement.accept_timeout {
+                Some(timeout) => {
+                    log::warn!(
+                        "Deadline {} elapsed for accepting DebitNote [{}] for Agreement [{}]",
+                        msg.deadline,
+                        msg.id,
+                        msg.category,
+                    );
 
-        log::warn!(
-            "Deadline {} elapsed for accepting DebitNote [{}] for Agreement [{}].",
-            msg.deadline,
-            msg.id,
-            msg.category
-        );
-
-        self.context.debit_checker.do_send(StopTrackingCategory {
-            category: msg.category.clone(),
-        });
+                    agreement.deadline_elapsed = true;
+                    BreakReason::DebitNotesDeadline(timeout)
+                }
+                None => return,
+            }
+        } else if msg.id.starts_with(PAYMENT_PREFIX) {
+            match agreement.payment_timeout {
+                Some(timeout) => {
+                    log::warn!(
+                        "Deadline {} elapsed for DebitNote [{}] payment for Agreement [{}]",
+                        msg.deadline,
+                        msg.id,
+                        msg.category,
+                    );
+                    BreakReason::DebitNoteNotPaid(timeout)
+                }
+                None => return,
+            }
+        } else {
+            log::error!(
+                "DeadlineElapsed for Agreement [{}] is of an unknown type",
+                msg.category
+            );
+            return;
+        };
 
         self.break_agreement_signal
             .send_signal(BreakAgreement {
                 agreement_id: msg.category.clone(),
-                reason: BreakReason::DebitNotesDeadline(timeout),
+                reason: reason.clone(),
             })
             .log_err_msg(&format!(
-                "Failed to send BreakAgreement when deadline elapsed for [{}]",
+                "Failed to send BreakAgreement for [{}] with reason: {}",
                 msg.category,
+                reason.to_string(),
             ))
             .ok();
     }
@@ -904,6 +1033,7 @@ impl Actor for Payments {
 
     fn started(&mut self, ctx: &mut Context<Self>) {
         // Start checking incoming payments.
+        let provider_signal = self.break_agreement_signal.clone();
         let provider_ctx = self.context.clone();
         let payment_addr = ctx.address();
 
@@ -912,14 +1042,13 @@ impl Actor for Payments {
             payment_addr.clone(),
         ));
         Arbiter::spawn(async move {
-            let debit_checker = provider_ctx.debit_checker.clone();
-            provider_ctx
-                .debit_checker
-                .send(Subscribe(payment_addr.recipient()))
-                .await
-                .map_err(|_| log::error!("Subscribing to DebitNotes deadline checker failed."))
-                .ok();
-            check_debit_notes_events(provider_ctx, debit_checker).await;
+            for checker in vec![&provider_ctx.debit_checker, &provider_ctx.payment_checker] {
+                let _ = checker
+                    .send(Subscribe(payment_addr.clone().recipient()))
+                    .await
+                    .map_err(|_| log::error!("Subscribing to DebitNotes deadline checker failed."));
+            }
+            check_debit_notes_events(provider_ctx, provider_signal).await;
         });
     }
 }
@@ -933,4 +1062,17 @@ fn get_backoff() -> backoff::ExponentialBackoff {
         max_elapsed_time: Some(std::time::Duration::from_secs(u64::MAX)),
         ..Default::default()
     }
+}
+
+const ACCEPT_PREFIX: &'static str = "debit-";
+const PAYMENT_PREFIX: &'static str = "payment-";
+
+#[inline(always)]
+fn note_accept_id(id: impl AsRef<str>) -> String {
+    format!("{}{}", ACCEPT_PREFIX, id.as_ref())
+}
+
+#[inline(always)]
+fn note_payment_id(id: impl AsRef<str>) -> String {
+    format!("{}{}", PAYMENT_PREFIX, id.as_ref())
 }

@@ -56,7 +56,7 @@ Provider subscribes to the network as many Offers as presets enumerated from CLI
             },
             "scheme": "payu",
             "scheme.payu": {
-              "interval_sec": 120.0
+              "debit-note.interval-sec?": 120.0
             },
             "usage": {
               "vector": [
@@ -107,11 +107,10 @@ On activity finish Provider Agent will initiate Agreement termination.
 This is workaround because `terminate_agreement` operation is not supported yet in Market API.
 
 ### Payments
-Provider agent issues Debit Notes periodically (every `scheme.payu.interval_sec`;
-default value is [120s](src/payments/pricing.rs#L85): `interval` within `LinearPricingOffer`).
-It is not subject for negotiations.
+Provider agent issues Debit Notes every `scheme.payu.debit-note.interval-sec?` (120s by default).
+The property is a subject of negotiations.
 
-During negotiation Requestor and Provider both agrees on `timeout` at which Debit Notes are accepted by
+During negotiation Requestor and Provider both agree on `timeout` at which Debit Notes are accepted by
 Requestor. A property responsible for this is named `golem.com.payment.debit-notes.accept-timeout?`.
 Provider starts negotiations with [4min](src/market/negotiator/factory.rs#L27) and it might be only
 lower ie. Requestor might propose lower value, which Provider will accept as long as it is more than
