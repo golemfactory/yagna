@@ -66,7 +66,7 @@ async fn relay_addr(config: &Config) -> anyhow::Result<SocketAddr> {
     let (host, port) = &host_port
         .split_once(":")
         .context("Please use host:port format")?;
-    let ip = resolver::resolve_dns_record_host(&host.to_string()).await?;
+    let ip = resolver::resolve_dns_record_host(&host).await?;
     let ip_port = format!("{}:{}", ip, port);
     let socket = ip_port
         .to_socket_addrs()?

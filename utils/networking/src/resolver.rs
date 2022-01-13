@@ -48,11 +48,11 @@ pub async fn resolve_dns_record(request_url: &str) -> anyhow::Result<String> {
     Ok(request_url.replace(&request_host, &address))
 }
 
-pub async fn resolve_dns_record_host(host: &String) -> anyhow::Result<String> {
+pub async fn resolve_dns_record_host(host: &str) -> anyhow::Result<String> {
     let resolver =
         TokioAsyncResolver::tokio(ResolverConfig::google(), ResolverOpts::default()).await?;
 
-    let response = resolver.lookup_ip(host.as_str()).await?;
+    let response = resolver.lookup_ip(host).await?;
     let address = response
         .iter()
         .next()
