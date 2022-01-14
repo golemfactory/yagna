@@ -55,16 +55,24 @@ thread_local! {
 }
 
 async fn relay_addr(config: &Config) -> anyhow::Result<SocketAddr> {
-    Ok(match &config.host {
+    let host_port = match &config.host {
         Some(val) => val.to_string(),
         None => resolver::resolve_yagna_srv_record("_net_relay._udp")
             .await
             // FIXME: remove
             .unwrap_or_else(|_| DEFAULT_NET_RELAY_HOST.to_string()),
-    }
-    .to_socket_addrs()?
-    .next()
-    .expect("relay address needed"))
+    };
+    log::trace!("resolving host_port: {}", host_port);
+    let (host, port) = &host_port
+        .split_once(":")
+        .context("Please use host:port format")?;
+    let ip = resolver::resolve_dns_record_host(&host).await?;
+    let ip_port = format!("{}:{}", ip, port);
+    let socket = ip_port
+        .to_socket_addrs()?
+        .next()
+        .expect("relay address needed");
+    Ok(socket)
 }
 
 pub struct Net;
@@ -94,6 +102,7 @@ pub async fn start_network(
             .await
             .map_err(|e| anyhow!("Resolving hybrid NET relay server failed. Error: {}", e))?
     ))?;
+    log::debug!("Setting up hybrid net with url: {}", url);
     let provider = IdentityCryptoProvider::new(default_id);
 
     log::info!("Starting network (hybrid) with identity: {}", default_id);
