@@ -97,8 +97,18 @@ pub enum PaymentCli {
 #[derive(StructOpt, Debug)]
 pub enum InvoiceCommand {
     Status {
-        #[structopt(long, help = "Prints invoice status from the given period of time")]
+        #[structopt(long, help = "Print invoice status from the given period of time")]
         last: Option<humantime::Duration>,
+        #[structopt(
+            long = "payment-network",
+            help = "Filter by network",
+            possible_values = NetworkName::VARIANTS)]
+        network: Option<pay::NetworkName>,
+        #[structopt(
+            long = "payment-driver",
+            help = "Filter by driver",
+            possible_values = DriverName::VARIANTS)]
+        driver: Option<pay::DriverName>,
     },
 }
 
@@ -217,7 +227,7 @@ impl PaymentCli {
             }
             PaymentCli::Invoice {
                 address,
-                command: InvoiceCommand::Status { last },
+                command: InvoiceCommand::Status { last, network, driver },
             } => {
                 let seconds = last.map(|d| d.as_secs() as i64).unwrap_or(3600);
                 let address = resolve_address(address).await?;
@@ -226,6 +236,8 @@ impl PaymentCli {
                         .call(pay::GetInvoiceStats::new(
                             address.parse()?,
                             Utc::now() + chrono::Duration::seconds(-seconds),
+                            network,
+                            driver,
                         ))
                         .await??,
                 )

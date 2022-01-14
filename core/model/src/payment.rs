@@ -335,15 +335,23 @@ pub mod local {
         pub requestor: bool,
         pub provider: bool,
         pub since: DateTime<Utc>,
+        pub network: Option<NetworkName>,
+        pub driver: Option<DriverName>,
     }
 
     impl GetInvoiceStats {
-        pub fn new(node_id: NodeId, since: DateTime<Utc>) -> Self {
+        pub fn new(
+            node_id: NodeId,
+            since: DateTime<Utc>,
+            network: Option<NetworkName>,
+            driver: Option<DriverName>) -> Self {
             Self {
                 node_id,
                 requestor: true,
                 provider: true,
                 since,
+                network,
+                driver,
             }
         }
     }
