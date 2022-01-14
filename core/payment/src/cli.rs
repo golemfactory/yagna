@@ -102,12 +102,12 @@ pub enum InvoiceCommand {
         #[structopt(
             long = "payment-network",
             help = "Filter by network",
-            possible_values = NetworkName::VARIANTS)]
+            possible_values = pay::NetworkName::VARIANTS)]
         network: Option<pay::NetworkName>,
         #[structopt(
             long = "payment-driver",
             help = "Filter by driver",
-            possible_values = DriverName::VARIANTS)]
+            possible_values = pay::DriverName::VARIANTS)]
         driver: Option<pay::DriverName>,
     },
 }
