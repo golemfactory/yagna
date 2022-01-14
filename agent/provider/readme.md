@@ -138,7 +138,7 @@ and change `NODE_NAME` there.
 
 ### Command line parameters
 
-This can be displayed using `cargo run -p ya-provider run --help`
+This can be displayed using `cargo run -p ya-provider -- run --help`
 
 | Parameter      | Description | Env var | 
 | -------------- | ----------- | ------- |
@@ -201,7 +201,7 @@ cargo build -p ya-exe-unit
 You can list available ExeUnits with command:
 
 ```bash
-$ cargo run -p ya-provider exe-unit list
+$ cargo run -p ya-provider -- exe-unit list
 
 Available ExeUnits:
 
@@ -238,7 +238,7 @@ Provider uses presets to create market offers. On the first run, the Provider Ag
 a `default` preset. Presets are saved in a `presets.json` file, located in application's data directory.
 
 You can list presets by running command:
-`cargo run -p ya-provider preset list`
+`cargo run -p ya-provider -- preset list`
 
 The result will be something like this:
 ```
@@ -267,7 +267,7 @@ In order to publish an offer based on a preset, that preset needs to be activate
 To list all active presets, type:
 
 ```bash
-cargo run -p ya-provider preset active
+cargo run -p ya-provider -- preset active
 ```
 
 ### Creating presets
@@ -275,13 +275,13 @@ cargo run -p ya-provider preset active
 You can create preset in the interactive mode:
 
 ```bash
-cargo run -p ya-provider preset create
+cargo run -p ya-provider -- preset create
 ```
 
 ...and non-interactively also:
 
 ```bash
-cargo run -p ya-provider preset create \
+cargo run -p ya-provider -- preset create \
     --no-interactive \
     --preset-name new-preset \
     --exe-unit wasmtime \
@@ -299,13 +299,13 @@ Note: updating a preset will cancel (unsubscribe) all related offer subscription
 Updating in interactive mode:
 
 ```bash
-cargo run -p ya-provider preset update new-preset
+cargo run -p ya-provider -- preset update --name new-preset
 ```
 
 or using command line parameters:
 
 ```bash
-cargo run -p ya-provider preset update new-preset \
+cargo run -p ya-provider -- preset update --name new-preset \
     --no-interactive \
     --exe-unit wasmtime \
     --pricing linear \
@@ -319,7 +319,7 @@ You can omit some parameters and the will be filled with previous values.
 Note: removing a preset will cancel (unsubscribe) all related offer subscriptions.
 
 ```bash
-cargo run -p ya-provider preset remove new-preset
+cargo run -p ya-provider -- preset remove new-preset
 ```
 
 ### Activating and deactivating presets
@@ -327,13 +327,13 @@ cargo run -p ya-provider preset remove new-preset
 When you activate a preset, a new offer will be published (subscribed) to the marketplace.
 
 ```bash
-cargo run -p ya-provider preset activate new-preset
+cargo run -p ya-provider -- preset activate new-preset
 ```
 
 Note: deactivating a preset will cancel all related offer subscriptions.
 
 ```bash
-cargo run -p ya-provider preset deactivate new-preset
+cargo run -p ya-provider -- preset deactivate new-preset
 ```
 
 ### Listing metrics
@@ -341,7 +341,7 @@ cargo run -p ya-provider preset deactivate new-preset
 You can list available metrics with command:
 
 ```bash
-$ cargo run -p ya-provider preset list-metrics
+$ cargo run -p ya-provider -- preset list-metrics
 
 Duration       golem.usage.duration_sec
 CPU            golem.usage.cpu_sec
@@ -372,7 +372,7 @@ activate    Activate a profile
 ### Listing profiles
 
 ```bash
-cargo run -p ya-provider profile list
+cargo run -p ya-provider -- profile list
 ```
 
 will print an output similar to:
@@ -390,7 +390,7 @@ will print an output similar to:
 ### Display the active profile
 
 ```bash
-cargo run -p ya-provider profile active
+cargo run -p ya-provider -- profile active
 ```
 
 will print:
@@ -423,7 +423,7 @@ Usage is similar to profile creation.
 
 E.g.:
 ```bash
-ya-provider profile update half --cpu-threads 3  --mem-gib 5. --storage-gib 128.
+ya-provider profile update --name half --cpu-threads 3  --mem-gib 5. --storage-gib 128.
 ```
 
 ### Removing a profile
@@ -450,7 +450,7 @@ While the yagna service is still running (and you are in the `ya-prov` directory
 you can now start Provider Agent.
 
 ```bash
-cargo run -p ya-provider run
+cargo run -p ya-provider -- run
 ```
 
 ## Central setup
