@@ -241,22 +241,20 @@ impl<'a> AgreementDao<'a> {
         after_timestamp: DateTime<Utc>,
     ) -> DbResult<StatusNotes> {
         readonly_transaction(self.pool, move |conn| {
-            let mut query = dsl::pay_agreement
+            let agreements: Vec<ReadObj> = dsl::pay_agreement
+                .inner_join(
+                    invoice_dsl::pay_invoice.on(dsl::id
+                        .eq(invoice_dsl::agreement_id)
+                        .and(invoice_dsl::timestamp.gt(after_timestamp.naive_utc()))),
+                )
                 .filter(dsl::role.eq(Role::Provider))
                 .filter(dsl::payment_platform.eq(platform))
-                .filter(dsl::payee_addr.eq(payee_addr));
-
-            query = query.inner_join(
-                invoice_dsl::pay_invoice.on(dsl::id
-                    .eq(invoice_dsl::agreement_id)
-                    .and(invoice_dsl::timestamp.gt(after_timestamp.naive_utc()))),
-            )
-                .select(dsl::pay_agreement);
-
-             let agreements: Vec<ReadObj> = query.get_results(conn)?;
+                .filter(dsl::payee_addr.eq(payee_addr))
+                .select(crate::schema::pay_agreement::all_columns)
+                .get_results(conn)?;
             Ok(make_summary(agreements))
         })
-        .await
+            .await
     }
 
     /// Get total requested/accepted/paid amount of outgoing transactions
@@ -267,23 +265,20 @@ impl<'a> AgreementDao<'a> {
         after_timestamp: DateTime<Utc>,
     ) -> DbResult<StatusNotes> {
         readonly_transaction(self.pool, move |conn| {
-            let mut query = dsl::pay_agreement
+            let agreements: Vec<ReadObj> = dsl::pay_agreement
+                .inner_join(
+                    invoice_dsl::pay_invoice.on(dsl::id
+                        .eq(invoice_dsl::agreement_id)
+                        .and(invoice_dsl::timestamp.gt(after_timestamp.naive_utc()))),
+                )
                 .filter(dsl::role.eq(Role::Requestor))
                 .filter(dsl::payment_platform.eq(platform))
-                .filter(dsl::payer_addr.eq(payer_addr));
-
-            query = query.inner_join(
-                invoice_dsl::pay_invoice.on(dsl::id
-                    .eq(invoice_dsl::agreement_id)
-                    .and(invoice_dsl::timestamp.gt(after_timestamp.naive_utc()))
-                ),
-            )
-                .select(dsl::pay_agreement);
-
-            let agreements: Vec<ReadObj> = query.get_results(conn)?;
+                .filter(dsl::payer_addr.eq(payer_addr))
+                .select(crate::schema::pay_agreement::all_columns)
+                .get_results(conn)?;
             Ok(make_summary(agreements))
         })
-        .await
+            .await
     }
 }
 
