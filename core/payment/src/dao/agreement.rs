@@ -6,7 +6,7 @@ use crate::schema::pay_agreement::dsl;
 use crate::schema::pay_invoice::dsl as invoice_dsl;
 use bigdecimal::{BigDecimal, Zero};
 use chrono::{DateTime, Utc};
-use diesel::{BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl};
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use ya_client_model::market::Agreement;
 use ya_client_model::payment::{DocumentStatus, InvoiceEventType};
 use ya_client_model::NodeId;
@@ -242,14 +242,15 @@ impl<'a> AgreementDao<'a> {
     ) -> DbResult<StatusNotes> {
         readonly_transaction(self.pool, move |conn| {
             let agreements: Vec<ReadObj> = dsl::pay_agreement
-                .inner_join(
-                    invoice_dsl::pay_invoice.on(dsl::id
-                        .eq(invoice_dsl::agreement_id)
-                        .and(invoice_dsl::timestamp.gt(after_timestamp.naive_utc()))),
-                )
                 .filter(dsl::role.eq(Role::Provider))
                 .filter(dsl::payment_platform.eq(platform))
                 .filter(dsl::payee_addr.eq(payee_addr))
+                .filter(diesel::dsl::exists(
+                    invoice_dsl::pay_invoice
+                        .filter(invoice_dsl::agreement_id.eq(dsl::id))
+                        .filter(invoice_dsl::timestamp.gt(after_timestamp.naive_utc()))
+                        .select(invoice_dsl::id),
+                ))
                 .select(crate::schema::pay_agreement::all_columns)
                 .get_results(conn)?;
             Ok(make_summary(agreements))
@@ -266,14 +267,15 @@ impl<'a> AgreementDao<'a> {
     ) -> DbResult<StatusNotes> {
         readonly_transaction(self.pool, move |conn| {
             let agreements: Vec<ReadObj> = dsl::pay_agreement
-                .inner_join(
-                    invoice_dsl::pay_invoice.on(dsl::id
-                        .eq(invoice_dsl::agreement_id)
-                        .and(invoice_dsl::timestamp.gt(after_timestamp.naive_utc()))),
-                )
                 .filter(dsl::role.eq(Role::Requestor))
                 .filter(dsl::payment_platform.eq(platform))
                 .filter(dsl::payer_addr.eq(payer_addr))
+                .filter(diesel::dsl::exists(
+                    invoice_dsl::pay_invoice
+                        .filter(invoice_dsl::agreement_id.eq(dsl::id))
+                        .filter(invoice_dsl::timestamp.gt(after_timestamp.naive_utc()))
+                        .select(invoice_dsl::id),
+                ))
                 .select(crate::schema::pay_agreement::all_columns)
                 .get_results(conn)?;
             Ok(make_summary(agreements))
