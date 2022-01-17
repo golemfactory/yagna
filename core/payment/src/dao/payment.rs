@@ -19,6 +19,11 @@ use ya_client_model::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
+use ya_core_model::payment::local::{DriverName, NetworkName};
+
+lazy_static::lazy_static! {
+   static ref SQL_STR_WILDCARD: String = "%".to_string();
+}
 
 pub struct PaymentDao<'c> {
     pool: &'c PoolType,
@@ -181,6 +186,8 @@ impl<'c> PaymentDao<'c> {
         after_timestamp: Option<NaiveDateTime>,
         max_events: Option<u32>,
         app_session_id: Option<String>,
+        network: Option<NetworkName>,
+        driver: Option<DriverName>,
     ) -> DbResult<Vec<Payment>> {
         readonly_transaction(self.pool, move |conn| {
             let mut query = dsl::pay_payment
@@ -193,6 +200,21 @@ impl<'c> PaymentDao<'c> {
             if let Some(limit) = max_events {
                 query = query.limit(limit.into());
             }
+            if let Some(network) = network {
+                query = query
+                    .filter(agreement_dsl::payment_platform
+                                         .like(format!(
+                                             "{}%",
+                                             network.as_ref().unwrap_or(&*SQL_STR_WILDCARD));););
+            }
+            if let Some(driver) = driver {
+                query = query
+                    .filter(agreement_dsl::payment_platform
+                                         .like(format!(
+                                             "%{}%",
+                                             driver.as_ref().unwrap_or(&*SQL_STR_WILDCARD));););
+            }
+
             let payments: Vec<ReadObj> = query.load(conn)?;
 
             let activity_payments = {

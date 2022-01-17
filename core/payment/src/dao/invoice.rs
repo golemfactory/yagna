@@ -19,10 +19,6 @@ use ya_persistence::executor::{
 };
 use ya_persistence::types::{BigDecimalField, Role, Summable};
 
-lazy_static::lazy_static! {
-   static ref SQL_STR_WILDCARD: String = "%".to_string();
-}
-
 pub struct InvoiceDao<'c> {
     pool: &'c PoolType,
 }
@@ -215,24 +211,11 @@ impl<'c> InvoiceDao<'c> {
         &self,
         node_id: NodeId,
         since: DateTime<Utc>,
-        network: Option<NetworkName>,
-        driver: Option<DriverName>,
     ) -> DbResult<BTreeMap<(Role, DocumentStatus), StatValue>> {
         let results = readonly_transaction(self.pool, move |conn| {
-            let mut query = query!()
+            let invoices: Vec<ReadObj> = query!()
                 .filter(dsl::owner_id.eq(node_id))
-                .filter(dsl::timestamp.gt(since.naive_utc()));
-            if network.is_some() || driver.is_some() {
-                query = query
-                    .filter(agreement_dsl::payment_platform
-                        .like(format!(
-                            "{}-{}%",
-                            network.as_ref().unwrap_or(&*SQL_STR_WILDCARD),
-                            driver.as_ref().unwrap_or(&*SQL_STR_WILDCARD));
-                        );
-                    );
-            };
-            let invoices: Vec<ReadObj> = query.load(conn)?;
+                .filter(dsl::timestamp.gt(since.naive_utc()))load(conn)?;
             Ok::<_, DbError>(invoices)
         })
         .await?;

@@ -39,6 +39,8 @@ pub enum PaymentCli {
     Status {
         #[structopt(flatten)]
         account: pay::AccountCli,
+        #[structopt(long, help = "Display account balance from the given period of time")]
+        last: Option<humantime::Duration>,
     },
 
     /// Enter layer 2 (deposit funds to layer 2 network)
@@ -97,18 +99,8 @@ pub enum PaymentCli {
 #[derive(StructOpt, Debug)]
 pub enum InvoiceCommand {
     Status {
-        #[structopt(long, help = "Print invoice status from the given period of time")]
+        #[structopt(long, help = "Display invoice status from the given period of time")]
         last: Option<humantime::Duration>,
-        #[structopt(
-            long = "payment-network",
-            help = "Filter by network",
-            possible_values = pay::NetworkName::VARIANTS)]
-        network: Option<pay::NetworkName>,
-        #[structopt(
-            long = "payment-driver",
-            help = "Filter by driver",
-            possible_values = pay::DriverName::VARIANTS)]
-        driver: Option<pay::DriverName>,
     },
 }
 
@@ -140,14 +132,16 @@ impl PaymentCli {
                 init_account(account).await?;
                 Ok(CommandOutput::NoOutput)
             }
-            PaymentCli::Status { account } => {
+            PaymentCli::Status { account, last } => {
                 let address = resolve_address(account.address()).await?;
+                let seconds = last.map(|d| d.as_secs() as i64).unwrap_or(Utc::now().timestamp());
                 let status = bus::service(pay::BUS_ID)
                     .call(pay::GetStatus {
                         address: address.clone(),
                         driver: account.driver(),
                         network: Some(account.network()),
                         token: None,
+                        since: seconds,
                     })
                     .await??;
                 if ctx.json_output {
@@ -227,7 +221,7 @@ impl PaymentCli {
             }
             PaymentCli::Invoice {
                 address,
-                command: InvoiceCommand::Status { last, network, driver },
+                command: InvoiceCommand::Status { last },
             } => {
                 let seconds = last.map(|d| d.as_secs() as i64).unwrap_or(3600);
                 let address = resolve_address(address).await?;
@@ -235,9 +229,7 @@ impl PaymentCli {
                     bus::service(pay::BUS_ID)
                         .call(pay::GetInvoiceStats::new(
                             address.parse()?,
-                            Utc::now() + chrono::Duration::seconds(-seconds),
-                            network,
-                            driver,
+                            Utc::now() + chrono::Duration::seconds(-seconds)
                         ))
                         .await??,
                 )

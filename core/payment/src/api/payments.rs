@@ -1,9 +1,11 @@
 // Extrnal crates
 use actix_web::web::{get, Data, Path, Query};
 use actix_web::{HttpResponse, Scope};
+use std::str::FromStr;
 
 // Workspace uses
 use ya_client_model::payment::*;
+use ya_core_model::payment::local::{NetworkName, DriverName};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
@@ -19,14 +21,16 @@ pub fn register_endpoints(scope: Scope) -> Scope {
 
 async fn get_payments(
     db: Data<DbExecutor>,
-    query: Query<params::EventParams>,
+    query: Query<params::DriverNetworkParams>,
     id: Identity,
 ) -> HttpResponse {
     let node_id = id.identity;
-    let timeout_secs = query.timeout.unwrap_or(params::DEFAULT_EVENT_TIMEOUT);
-    let after_timestamp = query.after_timestamp.map(|d| d.naive_utc());
-    let max_events = query.max_events;
-    let app_session_id = &query.app_session_id;
+    let timeout_secs = query.event_params.timeout.unwrap_or(params::DEFAULT_EVENT_TIMEOUT);
+    let after_timestamp = query.event_params.after_timestamp.map(|d| d.naive_utc());
+    let network = query.network.map(|n| NetworkName::from_str(n.as_str())?);
+    let driver = query.driver.map(|d| DriverName::from_str(d.as_str())?);
+    let max_events = query.event_params.max_events;
+    let app_session_id = &query.event_params.app_session_id;
 
     let dao: PaymentDao = db.as_dao();
     let getter = || async {
@@ -35,6 +39,8 @@ async fn get_payments(
             after_timestamp.clone(),
             max_events.clone(),
             app_session_id.clone(),
+            network,
+            driver,
         )
         .await
     };

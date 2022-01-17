@@ -5,7 +5,8 @@ use crate::schema::pay_activity::dsl as activity_dsl;
 use crate::schema::pay_agreement::dsl;
 use crate::schema::pay_invoice::dsl as invoice_dsl;
 use bigdecimal::{BigDecimal, Zero};
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use chrono::{DateTime, Utc};
+use diesel::{BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl};
 use ya_client_model::market::Agreement;
 use ya_client_model::payment::{DocumentStatus, InvoiceEventType};
 use ya_client_model::NodeId;
@@ -237,13 +238,22 @@ impl<'a> AgreementDao<'a> {
         &self,
         platform: String,
         payee_addr: String,
+        after_timestamp: DateTime<Utc>,
     ) -> DbResult<StatusNotes> {
         readonly_transaction(self.pool, move |conn| {
-            let agreements: Vec<ReadObj> = dsl::pay_agreement
+            let mut query = dsl::pay_agreement
                 .filter(dsl::role.eq(Role::Provider))
                 .filter(dsl::payment_platform.eq(platform))
-                .filter(dsl::payee_addr.eq(payee_addr))
-                .get_results(conn)?;
+                .filter(dsl::payee_addr.eq(payee_addr));
+
+            query = query.inner_join(
+                invoice_dsl::pay_invoice.on(dsl::id
+                    .eq(invoice_dsl::agreement_id)
+                    .and(invoice_dsl::timestamp.gt(after_timestamp.naive_utc()))),
+            )
+                .select((dsl::pay_agreement));
+
+             let agreements: Vec<ReadObj> = query.get_results(conn)?;
             Ok(make_summary(agreements))
         })
         .await
@@ -254,13 +264,22 @@ impl<'a> AgreementDao<'a> {
         &self,
         platform: String,
         payer_addr: String,
+        after_timestamp: DateTime<Utc>,
     ) -> DbResult<StatusNotes> {
         readonly_transaction(self.pool, move |conn| {
-            let agreements: Vec<ReadObj> = dsl::pay_agreement
+            let mut query = dsl::pay_agreement
                 .filter(dsl::role.eq(Role::Requestor))
                 .filter(dsl::payment_platform.eq(platform))
-                .filter(dsl::payer_addr.eq(payer_addr))
-                .get_results(conn)?;
+                .filter(dsl::payee_addr.eq(payer_addr));
+
+            query = query.inner_join(
+                invoice_dsl::pay_invoice.on(dsl::id
+                    .eq(invoice_dsl::agreement_id)
+                    .and(invoice_dsl::timestamp.gt(after_timestamp.naive_utc()))),
+            )
+                .select((dsl::pay_agreement));
+
+            let agreements: Vec<ReadObj> = query.get_results(conn)?;
             Ok(make_summary(agreements))
         })
         .await
