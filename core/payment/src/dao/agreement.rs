@@ -249,6 +249,7 @@ impl<'a> AgreementDao<'a> {
                     invoice_dsl::pay_invoice
                         .filter(invoice_dsl::agreement_id.eq(dsl::id))
                         .filter(invoice_dsl::timestamp.gt(after_timestamp.naive_utc()))
+                        .limit(1)
                         .select(invoice_dsl::id),
                 ))
                 .select(crate::schema::pay_agreement::all_columns)
@@ -274,6 +275,7 @@ impl<'a> AgreementDao<'a> {
                     invoice_dsl::pay_invoice
                         .filter(invoice_dsl::agreement_id.eq(dsl::id))
                         .filter(invoice_dsl::timestamp.gt(after_timestamp.naive_utc()))
+                        .limit(1)
                         .select(invoice_dsl::id),
                 ))
                 .select(crate::schema::pay_agreement::all_columns)
