@@ -14,6 +14,7 @@ releases/
 .idea
 .vs
 .vscode
+.devcontainer
 
 **/.env
 .*.swp
