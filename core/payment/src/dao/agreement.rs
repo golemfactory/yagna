@@ -251,7 +251,7 @@ impl<'a> AgreementDao<'a> {
                     .eq(invoice_dsl::agreement_id)
                     .and(invoice_dsl::timestamp.gt(after_timestamp.naive_utc()))),
             )
-                .select((dsl::pay_agreement));
+                .select(dsl::pay_agreement);
 
              let agreements: Vec<ReadObj> = query.get_results(conn)?;
             Ok(make_summary(agreements))
@@ -270,14 +270,15 @@ impl<'a> AgreementDao<'a> {
             let mut query = dsl::pay_agreement
                 .filter(dsl::role.eq(Role::Requestor))
                 .filter(dsl::payment_platform.eq(platform))
-                .filter(dsl::payee_addr.eq(payer_addr));
+                .filter(dsl::payer_addr.eq(payer_addr));
 
             query = query.inner_join(
                 invoice_dsl::pay_invoice.on(dsl::id
                     .eq(invoice_dsl::agreement_id)
-                    .and(invoice_dsl::timestamp.gt(after_timestamp.naive_utc()))),
+                    .and(invoice_dsl::timestamp.gt(after_timestamp.naive_utc()))
+                ),
             )
-                .select((dsl::pay_agreement));
+                .select(dsl::pay_agreement);
 
             let agreements: Vec<ReadObj> = query.get_results(conn)?;
             Ok(make_summary(agreements))

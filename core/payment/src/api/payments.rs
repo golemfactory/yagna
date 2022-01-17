@@ -27,8 +27,8 @@ async fn get_payments(
     let node_id = id.identity;
     let timeout_secs = query.event_params.timeout.unwrap_or(params::DEFAULT_EVENT_TIMEOUT);
     let after_timestamp = query.event_params.after_timestamp.map(|d| d.naive_utc());
-    let network = query.network.map(|n| NetworkName::from_str(n.as_str())?);
-    let driver = query.driver.map(|d| DriverName::from_str(d.as_str())?);
+    let network = query.network.as_ref().map(|n| NetworkName::from_str(n.as_str()).unwrap());
+    let driver = query.driver.as_ref().map(|d| DriverName::from_str(d.as_str()).unwrap());
     let max_events = query.event_params.max_events;
     let app_session_id = &query.event_params.app_session_id;
 
@@ -39,8 +39,8 @@ async fn get_payments(
             after_timestamp.clone(),
             max_events.clone(),
             app_session_id.clone(),
-            network,
-            driver,
+            network.clone(),
+            driver.clone(),
         )
         .await
     };

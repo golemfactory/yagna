@@ -11,7 +11,7 @@ use crate::schema::pay_payment::dsl;
 use bigdecimal::BigDecimal;
 use chrono::NaiveDateTime;
 use diesel::{
-    BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
+    BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, TextExpressionMethods
 };
 use std::collections::HashMap;
 use ya_client_model::payment::{ActivityPayment, AgreementPayment, Payment};
@@ -20,10 +20,6 @@ use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
 use ya_core_model::payment::local::{DriverName, NetworkName};
-
-lazy_static::lazy_static! {
-   static ref SQL_STR_WILDCARD: String = "%".to_string();
-}
 
 pub struct PaymentDao<'c> {
     pool: &'c PoolType,
@@ -202,17 +198,11 @@ impl<'c> PaymentDao<'c> {
             }
             if let Some(network) = network {
                 query = query
-                    .filter(agreement_dsl::payment_platform
-                                         .like(format!(
-                                             "{}%",
-                                             network.as_ref().unwrap_or(&*SQL_STR_WILDCARD));););
+                    .filter(dsl::payment_platform.like(format!("{}%", network)));
             }
             if let Some(driver) = driver {
                 query = query
-                    .filter(agreement_dsl::payment_platform
-                                         .like(format!(
-                                             "%{}%",
-                                             driver.as_ref().unwrap_or(&*SQL_STR_WILDCARD));););
+                    .filter(dsl::payment_platform.like(format!("%{}%", driver)));
             }
 
             let payments: Vec<ReadObj> = query.load(conn)?;

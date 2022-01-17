@@ -13,7 +13,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::convert::TryFrom;
 use ya_client_model::payment::{DocumentStatus, Invoice, InvoiceEventType, NewInvoice};
 use ya_client_model::NodeId;
-use ya_core_model::payment::local::{DriverName, NetworkName, StatValue};
+use ya_core_model::payment::local::StatValue;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
@@ -215,7 +215,7 @@ impl<'c> InvoiceDao<'c> {
         let results = readonly_transaction(self.pool, move |conn| {
             let invoices: Vec<ReadObj> = query!()
                 .filter(dsl::owner_id.eq(node_id))
-                .filter(dsl::timestamp.gt(since.naive_utc()))load(conn)?;
+                .filter(dsl::timestamp.gt(since.naive_utc())).load(conn)?;
             Ok::<_, DbError>(invoices)
         })
         .await?;
