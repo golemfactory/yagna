@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 // Workspace uses
 use ya_client_model::payment::*;
-use ya_core_model::payment::local::{NetworkName, DriverName};
+use ya_core_model::payment::local::{DriverName, NetworkName};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
@@ -25,10 +25,19 @@ async fn get_payments(
     id: Identity,
 ) -> HttpResponse {
     let node_id = id.identity;
-    let timeout_secs = query.event_params.timeout.unwrap_or(params::DEFAULT_EVENT_TIMEOUT);
+    let timeout_secs = query
+        .event_params
+        .timeout
+        .unwrap_or(params::DEFAULT_EVENT_TIMEOUT);
     let after_timestamp = query.event_params.after_timestamp.map(|d| d.naive_utc());
-    let network = query.network.as_ref().map(|n| NetworkName::from_str(n.as_str()).unwrap());
-    let driver = query.driver.as_ref().map(|d| DriverName::from_str(d.as_str()).unwrap());
+    let network = query
+        .network
+        .as_ref()
+        .map(|n| NetworkName::from_str(n.as_str()).unwrap());
+    let driver = query
+        .driver
+        .as_ref()
+        .map(|d| DriverName::from_str(d.as_str()).unwrap());
     let max_events = query.event_params.max_events;
     let app_session_id = &query.event_params.app_session_id;
 

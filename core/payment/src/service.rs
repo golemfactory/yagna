@@ -21,8 +21,8 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
 mod local {
     use super::*;
     use crate::dao::*;
-    use std::collections::BTreeMap;
     use chrono::Utc;
+    use std::collections::BTreeMap;
     use ya_client_model::payment::{Account, DocumentStatus, DriverDetails};
     use ya_core_model::payment::local::*;
     use ya_persistence::types::Role;
@@ -164,7 +164,7 @@ mod local {
             driver,
             network,
             token,
-            since
+            since,
         } = msg;
 
         let (network, network_details) = processor
@@ -187,21 +187,33 @@ mod local {
 
         let incoming_fut = async {
             db.as_dao::<AgreementDao>()
-                .incoming_transaction_summary(platform.clone(), address.clone(), after_timestamp.clone())
+                .incoming_transaction_summary(
+                    platform.clone(),
+                    address.clone(),
+                    after_timestamp.clone(),
+                )
                 .await
         }
         .map_err(GenericError::new);
 
         let outgoing_fut = async {
             db.as_dao::<AgreementDao>()
-                .outgoing_transaction_summary(platform.clone(), address.clone(), after_timestamp.clone())
+                .outgoing_transaction_summary(
+                    platform.clone(),
+                    address.clone(),
+                    after_timestamp.clone(),
+                )
                 .await
         }
         .map_err(GenericError::new);
 
         let reserved_fut = async {
             db.as_dao::<AllocationDao>()
-                .total_remaining_allocation(platform.clone(), address.clone(), after_timestamp.clone())
+                .total_remaining_allocation(
+                    platform.clone(),
+                    address.clone(),
+                    after_timestamp.clone(),
+                )
                 .await
         }
         .map_err(GenericError::new);

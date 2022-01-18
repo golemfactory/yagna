@@ -134,7 +134,9 @@ impl PaymentCli {
             }
             PaymentCli::Status { account, last } => {
                 let address = resolve_address(account.address()).await?;
-                let seconds = last.map(|d| d.as_secs() as i64).unwrap_or(Utc::now().timestamp());
+                let seconds = last
+                    .map(|d| d.as_secs() as i64)
+                    .unwrap_or(Utc::now().timestamp());
                 let status = bus::service(pay::BUS_ID)
                     .call(pay::GetStatus {
                         address: address.clone(),
@@ -229,7 +231,7 @@ impl PaymentCli {
                     bus::service(pay::BUS_ID)
                         .call(pay::GetInvoiceStats::new(
                             address.parse()?,
-                            Utc::now() + chrono::Duration::seconds(-seconds)
+                            Utc::now() + chrono::Duration::seconds(-seconds),
                         ))
                         .await??,
                 )

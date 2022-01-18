@@ -256,7 +256,7 @@ impl<'a> AgreementDao<'a> {
                 .get_results(conn)?;
             Ok(make_summary(agreements))
         })
-            .await
+        .await
     }
 
     /// Get total requested/accepted/paid amount of outgoing transactions
@@ -282,7 +282,7 @@ impl<'a> AgreementDao<'a> {
                 .get_results(conn)?;
             Ok(make_summary(agreements))
         })
-            .await
+        .await
     }
 }
 

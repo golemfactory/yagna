@@ -339,7 +339,7 @@ pub mod local {
     }
 
     impl GetInvoiceStats {
-        pub fn new(node_id: NodeId, since: DateTime<Utc>)-> Self {
+        pub fn new(node_id: NodeId, since: DateTime<Utc>) -> Self {
             Self {
                 node_id,
                 requestor: true,

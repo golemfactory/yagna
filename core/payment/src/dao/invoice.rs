@@ -215,7 +215,8 @@ impl<'c> InvoiceDao<'c> {
         let results = readonly_transaction(self.pool, move |conn| {
             let invoices: Vec<ReadObj> = query!()
                 .filter(dsl::owner_id.eq(node_id))
-                .filter(dsl::timestamp.gt(since.naive_utc())).load(conn)?;
+                .filter(dsl::timestamp.gt(since.naive_utc()))
+                .load(conn)?;
             Ok::<_, DbError>(invoices)
         })
         .await?;
