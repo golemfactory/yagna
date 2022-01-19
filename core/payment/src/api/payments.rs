@@ -1,4 +1,4 @@
-// Extrnal crates
+// External crates
 use actix_web::web::{get, Data, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use std::str::FromStr;
@@ -30,14 +30,24 @@ async fn get_payments(
         .timeout
         .unwrap_or(params::DEFAULT_EVENT_TIMEOUT);
     let after_timestamp = query.event_params.after_timestamp.map(|d| d.naive_utc());
-    let network = query
+    let network = match query
         .network
         .as_ref()
-        .map(|n| NetworkName::from_str(n.as_str()).unwrap());
-    let driver = query
+        .map(|n| NetworkName::from_str(n.as_str()))
+        .map_or(Ok(None), |v| v.map(Some))
+    {
+        Ok(network) => network,
+        Err(e) => return response::server_error(&e),
+    };
+    let driver = match query
         .driver
         .as_ref()
-        .map(|d| DriverName::from_str(d.as_str()).unwrap());
+        .map(|d| DriverName::from_str(d.as_str()))
+        .map_or(Ok(None), |v| v.map(Some))
+    {
+        Ok(driver) => driver,
+        Err(e) => return response::server_error(&e),
+    };
     let max_events = query.event_params.max_events;
     let app_session_id = &query.event_params.app_session_id;
 

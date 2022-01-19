@@ -239,7 +239,7 @@ pub mod local {
         pub driver: String,
         pub network: Option<String>,
         pub token: Option<String>,
-        pub since: i64,
+        pub last: i64,
     }
 
     impl RpcMessage for GetStatus {

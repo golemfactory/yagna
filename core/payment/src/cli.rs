@@ -39,7 +39,7 @@ pub enum PaymentCli {
     Status {
         #[structopt(flatten)]
         account: pay::AccountCli,
-        #[structopt(long, help = "Display account balance from the given period of time")]
+        #[structopt(long, help = "Display account balance for the given time period")]
         last: Option<humantime::Duration>,
     },
 
@@ -143,7 +143,7 @@ impl PaymentCli {
                         driver: account.driver(),
                         network: Some(account.network()),
                         token: None,
-                        since: seconds,
+                        last: seconds,
                     })
                     .await??;
                 if ctx.json_output {

@@ -164,7 +164,7 @@ mod local {
             driver,
             network,
             token,
-            since,
+            last,
         } = msg;
 
         let (network, network_details) = processor
@@ -174,7 +174,7 @@ mod local {
             .await
             .map_err(GenericError::new)?;
         let token = token.unwrap_or(network_details.default_token.clone());
-        let after_timestamp = Utc::now() + chrono::Duration::seconds(-since);
+        let after_timestamp = Utc::now() + chrono::Duration::seconds(-last);
         let platform = match network_details.tokens.get(&token) {
             Some(platform) => platform.clone(),
             None => {
