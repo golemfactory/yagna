@@ -13,7 +13,7 @@ use anyhow::{anyhow, Context as AnyhowContext};
 use futures::channel::mpsc;
 use futures::stream::LocalBoxStream;
 use futures::{FutureExt, SinkExt, Stream, StreamExt, TryStreamExt};
-use tokio::time::{self};
+use tokio::time;
 use url::Url;
 
 use ya_core_model::net::{self, net_service};
@@ -126,7 +126,7 @@ pub async fn start_network(
 
     // outbound traffic
     let state_ = state.clone();
-    bind_local_bus(net::BUS_ID, state.clone(), move |_, addr| {
+    bind_local_bus(net::BUS_ID, state.clone(), true, move |_, addr| {
         let from_node = default_id.clone();
         let (to_node, addr) = match parse_net_to_addr(addr) {
             Ok(id) => id,
@@ -140,13 +140,27 @@ pub async fn start_network(
     });
 
     let state_ = state.clone();
-    bind_local_bus("/from", state.clone(), move |_, addr| {
+    bind_local_bus("/from", state.clone(), true, move |_, addr| {
         let (from_node, to_node, addr) = match parse_from_to_addr(addr) {
             Ok(tup) => tup,
             Err(err) => anyhow::bail!("invalid address: {}", err),
         };
 
         if !state_.inner.borrow().ids.contains(&from_node) {
+            anyhow::bail!("unknown identity: {:?}", from_node);
+        }
+        Ok((from_node, to_node, addr))
+    });
+    let udp_state = state.clone();
+    bind_local_bus("/u/net", state.clone(), false, move |_, addr| {
+        let address = addr.strip_prefix("/u/net").unwrap_or("");
+        let from_node = default_id.clone();
+        let (to_node, addr) = match parse_net_to_addr(address) {
+            Ok(tup) => tup,
+            Err(err) => anyhow::bail!("invalid address: {}", err),
+        };
+
+        if !udp_state.inner.borrow().ids.contains(&from_node) {
             anyhow::bail!("unknown identity: {:?}", from_node);
         }
         Ok((from_node, to_node, addr))
@@ -175,7 +189,7 @@ pub async fn start_network(
     Ok(())
 }
 
-fn bind_local_bus<F>(address: &'static str, state: State, resolver: F)
+fn bind_local_bus<F>(address: &'static str, state: State, reliable: bool, resolver: F)
 where
     F: Fn(&str, &str) -> anyhow::Result<(NodeId, NodeId, String)> + 'static,
 {
@@ -206,7 +220,7 @@ where
             forward_bus_to_local(&caller_id.to_string(), addr, msg, &state_, tx);
             rx
         } else {
-            forward_bus_to_net(caller_id, remote_id, address, msg, &state_)
+            forward_bus_to_net(caller_id, remote_id, address, msg, &state_, reliable)
         };
 
         async move {
@@ -248,7 +262,7 @@ where
             forward_bus_to_local(&caller_id.to_string(), addr, msg, &state, tx);
             rx
         } else {
-            forward_bus_to_net(caller_id, remote_id, address, msg, &state)
+            forward_bus_to_net(caller_id, remote_id, address, msg, &state, reliable)
         };
 
         let eos = Rc::new(AtomicBool::new(false));
@@ -311,6 +325,7 @@ fn forward_bus_to_net(
     address: impl ToString,
     msg: &[u8],
     state: &State,
+    reliable: bool,
 ) -> BusReceiver {
     let address = address.to_string();
     let state = state.clone();
@@ -346,7 +361,7 @@ fn forward_bus_to_net(
             msg.len()
         );
 
-        match state.forward_sink(remote_id, true).await {
+        match state.forward_sink(remote_id, reliable).await {
             Ok(mut session) => {
                 let _ = session.send(msg).await.map_err(|_| {
                     let err = format!("error sending message: session closed");
