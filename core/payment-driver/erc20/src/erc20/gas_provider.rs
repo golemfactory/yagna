@@ -1,19 +1,17 @@
 use web3::types::U256;
 use ya_payment_driver::db::models::Network;
 use ya_payment_driver::model::GenericError;
-use crate::erc20::ethereum::{get_env, get_client};
+use crate::erc20::ethereum::{get_env, get_network_gas_price_eth};
 
 pub async fn get_network_gas_price(network: Network) -> Result<U256, GenericError>{
-    let _env = get_env(network);
-    let client = get_client(network)?;
+    let env = get_env(network);
+    if env.use_external_gas_provider {
+        Err(GenericError::new("TODO - implement external gas provider"))
+    } else {
+        //use internal gas provider (from Geth/Bor node)
+        let gas_price_internal = get_network_gas_price_eth(network).await?;
 
-    let small_gas_bump = U256::from(1000);
-    let mut gas_price_from_network =
-        client.eth().gas_price().await.map_err(GenericError::new)?;
-
-    //add small amount of gas to be first in queue
-    if gas_price_from_network / 1000 > small_gas_bump {
-        gas_price_from_network += small_gas_bump;
+        //test - set starting price as half of current network price
+        Ok(gas_price_internal / U256::from(2))
     }
-    Ok(gas_price_from_network)
 }

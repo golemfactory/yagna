@@ -23,6 +23,7 @@ use crate::{
 };
 use ya_payment_driver::db::models::TransactionStatus;
 use ya_payment_driver::model::GenericError;
+use crate::erc20::ethereum::get_env;
 
 lazy_static! {
     static ref TX_SUMBIT_TIMEOUT: Duration = Duration::minutes(15);
@@ -68,7 +69,8 @@ fn tmp_onchain_tx_to_vec(tmp_onchain_txs: Option<String>) -> Vec<String> {
 
 pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
     let network = Network::from_str(&network_key).unwrap();
-    let txs = dao.get_unconfirmed_txs(network).await;
+    let env = get_env(network);
+    let txs = dao.get_unconfirmed_txs(network, env.payment_max_processed as i64).await;
     //log::debug!("confirm_payments {:?}", txs);
     let current_time = Utc::now().naive_utc();
 
@@ -88,7 +90,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
         'main_tx_loop: for tx in txs {
             log::debug!("checking tx {:?}", &tx);
 
-            let time_elapsed_from_sent = tx.time_sent;
+            let time_elapsed_from_sent = tx.time_sent.map(|ts|current_time - ts);
 
             let time_elapsed_from_last_action = current_time - tx.time_last_action;
 
@@ -362,8 +364,9 @@ pub async fn process_payments_for_account(
 }
 
 pub async fn process_transactions(dao: &Erc20Dao, network: Network) {
-    let transactions: Vec<TransactionEntity> = dao.get_unsent_txs(network).await;
-
+    let env = get_env(network);
+    let transactions: Vec<TransactionEntity> = dao.get_unsent_txs(network, env.payment_max_processed as i64).await;
+todo get proper nonce
     if !transactions.is_empty() {
         log::debug!("transactions: {:?}", transactions);
         match wallet::send_transactions(dao, transactions, network).await {
@@ -373,7 +376,7 @@ pub async fn process_transactions(dao: &Erc20Dao, network: Network) {
     }
 }
 
-async fn handle_payment(dao: &Erc20Dao, payment: PaymentEntity, nonce: &mut U256) {
+async fn handle_payment(dao: &Erc20Dao, payment: PaymentEntity, nonce: &mut u64) {
     let details = utils::db_to_payment_details(&payment);
     let tx_nonce = nonce.to_owned();
 
@@ -381,7 +384,7 @@ async fn handle_payment(dao: &Erc20Dao, payment: PaymentEntity, nonce: &mut U256
         Ok(db_tx) => {
             let tx_id = dao.insert_raw_transaction(db_tx).await;
             dao.transaction_saved(&tx_id, &payment.order_id).await;
-            *nonce += U256::from(1);
+            *nonce += 1;
         }
         Err(e) => {
             let deadline = Utc.from_utc_datetime(&payment.payment_due_date) + *TX_SUMBIT_TIMEOUT;

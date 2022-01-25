@@ -71,9 +71,12 @@ impl<'c> TransactionDao<'c> {
                         .and(dsl::time_created.gt(not_older_than)),
                 )
                 .select(dsl::nonce)
-                .order(dsl::nonce.asc())
+                .order(dsl::nonce.desc())
                 .limit(1)
                 .load(conn)?;
+
+            log::error!("{:?}", nonce_vec);
+
             Ok(nonce_vec.first().map(|el| *el))
         })
         .await
@@ -123,21 +126,23 @@ impl<'c> TransactionDao<'c> {
         .await
     }
 
-    pub async fn get_unsent_txs(&self, network: Network) -> DbResult<Vec<TransactionEntity>> {
+    pub async fn get_unsent_txs(&self, network: Network, limit: i64) -> DbResult<Vec<TransactionEntity>> {
         self.get_by_statuses(
             TransactionStatus::Created,
             TransactionStatus::Resend,
             TransactionStatus::ResendAndBumpGas,
-            network,
+            limit,
+            network
         )
         .await
     }
 
-    pub async fn get_unconfirmed_txs(&self, network: Network) -> DbResult<Vec<TransactionEntity>> {
+    pub async fn get_unconfirmed_txs(&self, network: Network, limit: i64) -> DbResult<Vec<TransactionEntity>> {
         self.get_by_statuses(
             TransactionStatus::Sent,
             TransactionStatus::ErrorSent,
             TransactionStatus::Pending,
+            limit,
             network,
         )
         .await
@@ -173,6 +178,7 @@ impl<'c> TransactionDao<'c> {
         status1: TransactionStatus,
         status2: TransactionStatus,
         status3: TransactionStatus,
+        limit: i64,
         network: Network,
     ) -> DbResult<Vec<TransactionEntity>> {
         readonly_transaction(self.pool, move |conn| {
@@ -184,6 +190,7 @@ impl<'c> TransactionDao<'c> {
                         .or(dsl::status.eq(status3 as i32)))
                     .and(dsl::network.eq(network)),
                 )
+                .order(dsl::nonce.asc()).limit(limit)
                 .load(conn)?;
             Ok(txs)
         })

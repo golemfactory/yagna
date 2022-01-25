@@ -83,9 +83,9 @@ pub async fn fund(dao: &Erc20Dao, address: H160, network: Network) -> Result<(),
 
 #[derive(Debug)]
 pub struct NextNonceInfo {
-    pub network_nonce_pending: U256,
-    pub network_nonce_latest: U256,
-    pub db_nonce_pending: Option<U256>,
+    pub network_nonce_pending: u64,
+    pub network_nonce_latest: u64,
+    pub db_nonce_pending: Option<u64>,
 }
 
 pub async fn get_next_nonce_info(
@@ -94,12 +94,14 @@ pub async fn get_next_nonce_info(
     network: Network,
 ) -> Result<NextNonceInfo, GenericError> {
     let str_addr = format!("0x{:x}", &address);
-    let network_nonce_pending = ethereum::get_transaction_count(address, network, true).await?;
-    let network_nonce_latest = ethereum::get_transaction_count(address, network, false).await?;
+    let network_transaction_count_pending = ethereum::get_transaction_count(address, network, true).await?;
+    let network_transaction_count_latest = ethereum::get_transaction_count(address, network, false).await?;
     let db_nonce_pending = dao
-        .get_nonce_pending(&str_addr, network)
-        .await?
-        .map(|nonce| nonce + 1);
+        .get_last_db_nonce_pending(&str_addr, network)
+        .await?.map(|last_db_nonce_pending|last_db_nonce_pending + 1);
+
+    let network_nonce_pending = network_transaction_count_pending + 1;
+    let network_nonce_latest = network_transaction_count_latest + 1;
 
     Ok(NextNonceInfo {
         network_nonce_pending,
@@ -112,7 +114,7 @@ pub async fn get_next_nonce(
     dao: &Erc20Dao,
     address: H160,
     network: Network,
-) -> Result<U256, GenericError> {
+) -> Result<u64, GenericError> {
     let nonce_info = get_next_nonce_info(dao, address, network).await?;
 
     if let Some(db_nonce_pending) = nonce_info.db_nonce_pending {
@@ -157,7 +159,7 @@ pub async fn get_block_number(network: Network) -> Result<U64, GenericError> {
 
 pub async fn make_transfer(
     details: &PaymentDetails,
-    nonce: U256,
+    nonce: u64,
     network: Network,
     gas_price: Option<BigDecimal>,
     max_gas_price: Option<BigDecimal>,
@@ -212,7 +214,7 @@ pub async fn make_transfer(
     // TODO: Implement token
     //let token = get_network_token(network, None);
     let mut raw_tx = ethereum::prepare_raw_transaction(
-        address, recipient, amount, network, nonce, gas_price, gas_limit,
+        address, recipient, amount, network, U256::from(nonce), gas_price, gas_limit,
     )
     .await?;
 
@@ -223,7 +225,7 @@ pub async fn make_transfer(
     }
 
     Ok(ethereum::create_dao_entity(
-        nonce,
+        U256::from(nonce),
         address,
         raw_tx.gas_price.to_string(),
         max_gas_price.map(|v| v.to_string()),
@@ -272,6 +274,7 @@ pub async fn send_transactions(
     network: Network,
 ) -> Result<(), GenericError> {
     // TODO: Use batch sending?
+    let mut current_max_gas_price = U256::from(0);
     for tx in txs {
         let mut raw_tx: YagnaRawTransaction =
             match serde_json::from_str::<YagnaRawTransaction>(&tx.encoded) {
@@ -357,6 +360,13 @@ pub async fn send_transactions(
             convert_float_gas_to_u256(get_polygon_starting_price())
         };
         raw_tx.gas_price = new_gas_price;
+        if new_gas_price > current_max_gas_price && current_max_gas_price != U256::from(0) {
+            // Do not send transaction with gas higher than previously sent transaction.
+            // This is preventing bumping gas for future transaction over existing ones
+            log::debug!("Skipping transaction send, because transaction with lower gas is already waiting");
+            continue;
+        }
+        current_max_gas_price = new_gas_price;
 
         let encoded = serde_json::to_string(&raw_tx).map_err(GenericError::new)?;
         let signature = ethereum::sign_raw_transfer_transaction(address, network, &raw_tx).await?;

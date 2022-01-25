@@ -2,8 +2,6 @@
     Database Access Object, all you need to interact with the database.
 */
 
-use web3::types::U256;
-
 // Workspace uses
 use ya_payment_driver::{
     dao::{payment::PaymentDao, transaction::TransactionDao, DbExecutor},
@@ -89,17 +87,17 @@ impl Erc20Dao {
         Ok(())
     }
 
-    pub async fn get_nonce_pending(
+    pub async fn get_last_db_nonce_pending(
         &self,
         address: &str,
         network: Network,
-    ) -> Result<Option<U256>, GenericError> {
+    ) -> Result<Option<u64>, GenericError> {
         let res = self
             .transaction()
             .get_last_db_nonce(address, network)
             .await
             .map_err(GenericError::new)?;
-        Ok(res.map(U256::from))
+        Ok(res.map(|val| val as u64))
     }
 
     pub async fn insert_raw_transaction(&self, tx: TransactionEntity) -> String {
@@ -298,8 +296,8 @@ impl Erc20Dao {
         }
     }
 
-    pub async fn get_unsent_txs(&self, network: Network) -> Vec<TransactionEntity> {
-        match self.transaction().get_unsent_txs(network).await {
+    pub async fn get_unsent_txs(&self, network: Network, limit: i64) -> Vec<TransactionEntity> {
+        match self.transaction().get_unsent_txs(network, limit).await {
             Ok(txs) => txs,
             Err(e) => {
                 log::error!("Failed to fetch unconfirmed transactions : {:?}", e);
@@ -308,8 +306,8 @@ impl Erc20Dao {
         }
     }
 
-    pub async fn get_unconfirmed_txs(&self, network: Network) -> Vec<TransactionEntity> {
-        match self.transaction().get_unconfirmed_txs(network).await {
+    pub async fn get_unconfirmed_txs(&self, network: Network, limit: i64) -> Vec<TransactionEntity> {
+        match self.transaction().get_unconfirmed_txs(network, limit).await {
             Ok(txs) => txs,
             Err(e) => {
                 log::error!("Failed to fetch unconfirmed transactions : {:?}", e);

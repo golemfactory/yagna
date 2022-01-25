@@ -128,7 +128,7 @@ pub async fn get_transaction_count(
     address: H160,
     network: Network,
     pending: bool,
-) -> Result<U256, GenericError> {
+) -> Result<u64, GenericError> {
     let nonce_type = match pending {
         true => web3::types::BlockNumber::Pending,
         false => web3::types::BlockNumber::Latest,
@@ -139,7 +139,7 @@ pub async fn get_transaction_count(
         .transaction_count(address, Some(nonce_type))
         .await
         .map_err(GenericError::new)?;
-    Ok(nonce)
+    Ok(nonce.as_u64())
 }
 
 pub async fn block_number(network: Network) -> Result<U64, GenericError> {
@@ -154,7 +154,7 @@ pub async fn block_number(network: Network) -> Result<U64, GenericError> {
 pub async fn sign_faucet_tx(
     address: H160,
     network: Network,
-    nonce: U256,
+    nonce: u64,
 ) -> Result<TransactionEntity, GenericError> {
     let env = get_env(network);
     let client = get_client(network)?;
@@ -171,7 +171,7 @@ pub async fn sign_faucet_tx(
     let data = eth_utils::contract_encode(&contract, CREATE_FAUCET_FUNCTION, ()).unwrap();
     let gas_price = client.eth().gas_price().await.map_err(GenericError::new)?;
     let tx = YagnaRawTransaction {
-        nonce,
+        nonce: U256::from(nonce),
         to: Some(contract.address()),
         value: U256::from(0),
         gas_price,
@@ -183,7 +183,7 @@ pub async fn sign_faucet_tx(
     //let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
 
     Ok(create_dao_entity(
-        nonce,
+        U256::from(nonce),
         address,
         gas_price.to_string(),
         Some(gas_price.to_string()),
@@ -399,8 +399,7 @@ fn get_rpc_addr_from_env(network: Network) -> String {
     }
 }
 
-//TODO change back to private
-pub fn get_client(network: Network) -> Result<Web3<Http>, GenericError> {
+fn get_client(network: Network) -> Result<Web3<Http>, GenericError> {
     let geth_addr = get_rpc_addr_from_env(network);
 
     let transport = web3::transports::Http::new(&geth_addr).map_err(GenericError::new)?;
@@ -505,4 +504,19 @@ pub fn get_gas_price_from_db_tx(db_tx: &TransactionEntity) -> Result<U256, Gener
     let raw_tx: YagnaRawTransaction =
         serde_json::from_str(&db_tx.encoded).map_err(GenericError::new)?;
     Ok(raw_tx.gas_price)
+}
+
+pub async fn get_network_gas_price_eth(network: Network) -> Result<U256, GenericError>{
+    let _env = get_env(network);
+    let client = get_client(network)?;
+
+    let small_gas_bump = U256::from(1000);
+    let mut gas_price_from_network =
+        client.eth().gas_price().await.map_err(GenericError::new)?;
+
+    //add small amount of gas to be first in queue
+    if gas_price_from_network / 1000 > small_gas_bump {
+        gas_price_from_network += small_gas_bump;
+    }
+    Ok(gas_price_from_network)
 }

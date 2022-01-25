@@ -18,6 +18,7 @@ pub struct EnvConfiguration {
     pub glm_faucet_address: Option<Address>,
     pub required_confirmations: u64,
     pub payment_max_processed: u64,
+    pub use_external_gas_provider: bool,
 }
 
 pub const DEFAULT_MAX_PROCESSED: u64 = 30;
@@ -47,7 +48,8 @@ lazy_static! {
                 Ok(Ok(x)) => x,
                 _ => DEFAULT_MAX_PROCESSED,
             }
-        }
+        },
+        use_external_gas_provider: false
     };
     pub static ref MAINNET_CONFIG: EnvConfiguration = EnvConfiguration {
         glm_contract_address: utils::str_to_addr(
@@ -67,7 +69,8 @@ lazy_static! {
                 Ok(Ok(x)) => x,
                 _ => DEFAULT_MAX_PROCESSED,
             }
-        }
+        },
+        use_external_gas_provider: false
     };
     pub static ref GOERLI_CONFIG: EnvConfiguration = EnvConfiguration {
         glm_contract_address: utils::str_to_addr(
@@ -87,7 +90,8 @@ lazy_static! {
                 Ok(Ok(x)) => x,
                 _ => DEFAULT_MAX_PROCESSED,
             }
-        }
+        },
+        use_external_gas_provider: false
     };
     pub static ref MUMBAI_CONFIG: EnvConfiguration = EnvConfiguration {
         glm_contract_address: utils::str_to_addr(
@@ -107,7 +111,8 @@ lazy_static! {
                 Ok(Ok(x)) => x,
                 _ => DEFAULT_MAX_PROCESSED,
             }
-        }
+        },
+        use_external_gas_provider: false
     };
     pub static ref POLYGON_MAINNET_CONFIG: EnvConfiguration = EnvConfiguration {
         glm_contract_address: utils::str_to_addr(
@@ -127,6 +132,7 @@ lazy_static! {
                 Ok(Ok(x)) => x,
                 _ => DEFAULT_MAX_PROCESSED,
             }
-        }
+        },
+        use_external_gas_provider: false
     };
 }

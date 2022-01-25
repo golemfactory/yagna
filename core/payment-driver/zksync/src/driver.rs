@@ -433,7 +433,7 @@ impl PaymentDriverCron for ZksyncDriver {
                         continue;
                     }
                 };
-            let txs = self.dao.get_unconfirmed_txs(network).await;
+            let txs = self.dao.get_unconfirmed_txs(network, 1000000000).await;
             log::trace!("confirm_payments network={} txs={:?}", &network_key, &txs);
 
             for tx in txs {
