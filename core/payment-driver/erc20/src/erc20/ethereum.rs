@@ -399,7 +399,8 @@ fn get_rpc_addr_from_env(network: Network) -> String {
     }
 }
 
-fn get_client(network: Network) -> Result<Web3<Http>, GenericError> {
+//TODO change back to private
+pub fn get_client(network: Network) -> Result<Web3<Http>, GenericError> {
     let geth_addr = get_rpc_addr_from_env(network);
 
     let transport = web3::transports::Http::new(&geth_addr).map_err(GenericError::new)?;

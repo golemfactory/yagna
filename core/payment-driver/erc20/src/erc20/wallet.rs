@@ -35,6 +35,7 @@ use crate::{
     RINKEBY_NETWORK,
 };
 use ya_payment_driver::db::models::TransactionStatus;
+use crate::erc20::gas_provider::get_network_gas_price;
 
 pub async fn account_balance(address: H160, network: Network) -> Result<BigDecimal, GenericError> {
     let balance_com = ethereum::get_glm_balance(address, network).await?;
@@ -184,10 +185,10 @@ pub async fn make_transfer(
                 }),
             ),
             PolygonGasPriceMethod::PolygonGasPriceDynamic => (
-                match gas_price {
-                    None => None,
-                    Some(v) => Some(big_dec_gwei_to_u256(v)?),
-                },
+                Some(match gas_price {
+                    Some(v) => big_dec_gwei_to_u256(v)?,
+                    None => convert_float_gas_to_u256(get_polygon_starting_price()),
+                }),
                 Some(match max_gas_price {
                     Some(v) => big_dec_gwei_to_u256(v)?,
                     None => convert_float_gas_to_u256(get_polygon_maximum_price()),
@@ -295,6 +296,11 @@ pub async fn send_transactions(
         let address = str_to_addr(&tx.sender)?;
 
         let new_gas_price = if let Some(current_gas_price) = tx.current_gas_price {
+            //***************************************
+            // resolve gas bump transaction here
+            //***************************************
+
+
             if tx.status == TransactionStatus::ResendAndBumpGas as i32 {
                 let gas_u256 = U256::from_dec_str(&current_gas_price).map_err(GenericError::new)?;
 
@@ -319,7 +325,34 @@ pub async fn send_transactions(
                 U256::from_dec_str(&current_gas_price).map_err(GenericError::new)?
             }
         } else if let Some(starting_gas_price) = tx.starting_gas_price {
-            U256::from_dec_str(&starting_gas_price).map_err(GenericError::new)?
+            //*******************************************
+            // resolve first transaction gas price here
+            //*******************************************
+
+            let network_price = get_network_gas_price(network).await?;
+            let minimum_price = U256::from_dec_str(&starting_gas_price).map_err(GenericError::new)?;
+
+            let mut new_gas_price = if network_price > minimum_price {
+                network_price
+            } else {
+                minimum_price
+            };
+
+            let max_gas_price = match tx.max_gas_price {
+                Some(max_gas_price) => {
+                    Some(U256::from_dec_str(&max_gas_price).map_err(GenericError::new)?)
+                }
+                None => None,
+            };
+            //first transaction gas_price cannot be bigger than max_gas_price set
+            if let Some(max_gas_price) = max_gas_price {
+                new_gas_price = if max_gas_price < new_gas_price {
+                    max_gas_price
+                } else {
+                    new_gas_price
+                }
+            }
+            new_gas_price
         } else {
             convert_float_gas_to_u256(get_polygon_starting_price())
         };
