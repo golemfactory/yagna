@@ -32,7 +32,7 @@ lazy_static! {
     .map(|str| str.parse::<i64>())
     {
         Ok(Ok(seconds)) => Duration::seconds(seconds),
-        _ => Duration::seconds(60),
+        _ => Duration::seconds(300),
     };
     static ref ERC20_WAIT_FOR_PENDING_ON_NETWORK: Duration =
         match std::env::var("ERC20_WAIT_FOR_PENDING_ON_NETWORK").map(|str| str.parse::<i64>()) {
@@ -47,6 +47,23 @@ lazy_static! {
         Ok(Ok(seconds)) => Duration::seconds(seconds),
         _ => Duration::seconds(200),
     };
+}
+
+fn tmp_onchain_tx_to_vec(tmp_onchain_txs: Option<String>) -> Vec<String> {
+    let tmp_onchain_txs = match tmp_onchain_txs {
+        Some(tmp_onchain_txs) => tmp_onchain_txs,
+        None => "".to_string(),
+    };
+
+    let mut tmp_onchain_txs_vec: Vec<String> = vec![];
+    const EXPECTED_TRANSACTION_LENGTH : usize = 66;
+    for str in tmp_onchain_txs.split(";") {
+        if str.len() == EXPECTED_TRANSACTION_LENGTH && str.starts_with("0x") {
+            //todo make proper validation of transaction hash
+            tmp_onchain_txs_vec.push(str.to_string());
+        }
+    }
+    tmp_onchain_txs_vec
 }
 
 pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
@@ -75,20 +92,11 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
 
             let time_elapsed_from_last_action = current_time - tx.time_last_action;
 
-            let tmp_onchain_txs = match &tx.tmp_onchain_txs {
-                Some(tmp_onchain_txs) => tmp_onchain_txs.clone(),
-                None => "".to_string(),
-            };
-
-            let mut tmp_onchain_txs_vec: Vec<&str> = vec![];
-            for str in tmp_onchain_txs.split(";") {
-                if str.len() > 2 {
-                    //todo make proper validation of transaction hash
-                    tmp_onchain_txs_vec.push(str);
-                }
-            }
+            let tmp_onchain_txs_vec= tmp_onchain_tx_to_vec(tx.tmp_onchain_txs);
 
             if tx.status == TransactionStatus::ErrorSent as i32 {
+                //try to check older transactions for success
+                //the error should be nonce too low - maybe we should check for this here
                 for existing_tx_hash in &tmp_onchain_txs_vec {
                     //ignore malformed strings
                     let hex_hash = match H256::from_str(&existing_tx_hash[2..]) {
@@ -127,7 +135,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                         time_elapsed_from_sent
                     );
                     log::warn!("Time since last action {:?}", time_elapsed_from_last_action);
-                    dao.retry_send_transaction(&tx.tx_id, false).await;
+                    continue;
                 }
             }
 
@@ -136,7 +144,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
             }
 
             let newest_tx = match tmp_onchain_txs_vec.last() {
-                Some(last_el) => *last_el,
+                Some(last_el) => last_el.as_str(),
                 None => {
                     log::error!("Error when getting last onchain tx from db");
                     continue;
@@ -150,14 +158,14 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 &newest_tx
             );
 
-            let hex_hash = match H256::from_str(&newest_tx[2..]) {
+            let tx_hex_hash = match H256::from_str(&newest_tx[2..]) {
                 Ok(hex_hash) => hex_hash,
                 Err(err) => {
                     log::error!("Error when getting transaction hex hash: {:?}", err);
                     continue;
                 }
             };
-            let s = match ethereum::get_tx_on_chain_status(hex_hash, block_number, network).await {
+            let transaction_chain_status = match ethereum::get_tx_on_chain_status(tx_hex_hash, block_number, network).await {
                 Ok(hex_hash) => hex_hash,
                 Err(err) => {
                     log::error!("Error when getting get_tx_on_chain_status: {:?}", err);
@@ -165,13 +173,13 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 }
             };
 
-            let final_gas_price = match s.gas_price {
+            let final_gas_price = match transaction_chain_status.gas_price {
                 Some(gas_price) => Some(gas_price.to_string()),
                 None => None,
             };
 
-            if !s.exists_on_chain {
-                log::info!("Transaction not found on chain");
+            if !transaction_chain_status.exists_on_chain {
+                log::warn!("Transaction not found on chain");
                 if time_elapsed_from_last_action > *ERC20_WAIT_FOR_TRANSACTION_ON_NETWORK {
                     log::warn!(
                         "Transaction not found on chain for {:?}",
@@ -182,7 +190,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 }
 
                 continue;
-            } else if s.pending {
+            } else if transaction_chain_status.pending {
                 if time_elapsed_from_last_action > *ERC20_WAIT_FOR_PENDING_ON_NETWORK {
                     let cur_gas_price = tx
                         .current_gas_price
@@ -216,13 +224,13 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 }
 
                 continue;
-            } else if !s.confirmed {
-                log::info!("Transaction is commited, but we are waiting for confirmations");
+            } else if !transaction_chain_status.confirmed {
+                log::debug!("Transaction is commited, but we are waiting for confirmations");
                 continue;
-            } else if s.succeeded {
+            } else if transaction_chain_status.succeeded {
                 log::info!("Transaction confirmed and succeeded");
 
-                dao.transaction_confirmed(&tx.tx_id, newest_tx, final_gas_price)
+                dao.transaction_confirmed(&tx.tx_id, &newest_tx, final_gas_price)
                     .await;
                 // Faucet can stop here IF the tx was a success.
                 if tx.tx_type == TxType::Faucet as i32 {
@@ -288,7 +296,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
 
                 dao.transaction_confirmed_and_failed(
                     &tx.tx_id,
-                    newest_tx,
+                    &newest_tx,
                     final_gas_price,
                     "Failure on chain during execution",
                 )
