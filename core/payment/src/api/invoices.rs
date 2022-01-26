@@ -394,6 +394,8 @@ async fn accept_invoice(
             "Not enough funds. Allocated: {} Needed: {}",
             allocation.remaining_amount, amount_to_pay
         );
+
+        counter!("payment.invoices.requestor.not-enough-funds", 1);
         return response::bad_request(&msg);
     }
 

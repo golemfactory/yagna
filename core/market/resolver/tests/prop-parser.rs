@@ -106,6 +106,14 @@ fn parse_prop_value_from_literal_string() {
 }
 
 #[test]
+fn parse_prop_value_from_literal_string_with_escaped_quotes() {
+    assert_eq!(
+        parse_prop_value_literal("\"\\\"king\\\" \\\"node\\\"\""),
+        Ok(Literal::String(String::from("\"king\" \"node\"")))
+    );
+}
+
+#[test]
 fn parse_prop_value_from_literal_datetime() {
     assert_eq!(
         parse_prop_value_literal("t\"dblah\""),

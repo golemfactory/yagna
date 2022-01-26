@@ -48,10 +48,12 @@ pub enum ActivityPayment {
 /// We must wait until agreement will be closed, before we send invoice.
 pub struct AgreementPayment {
     pub agreement_id: String,
+    pub approved_ts: DateTime<Utc>,
     pub payment_model: Arc<dyn PaymentModel>,
     pub activities: HashMap<String, ActivityPayment>,
 
     pub update_interval: std::time::Duration,
+    pub accept_timeout: Option<chrono::Duration>,
     pub payment_timeout: Option<chrono::Duration>,
     // If at least one deadline elapses, we don't want to generate any
     // new unnecessary events.
@@ -74,13 +76,22 @@ pub struct ActivitiesWaiter {
 impl AgreementPayment {
     pub fn new(agreement: &AgreementView) -> Result<AgreementPayment> {
         let payment_description = PaymentDescription::new(agreement)?;
-        let update_interval = payment_description.get_update_interval()?;
-        let debit_deadline = payment_description.get_debit_note_deadline()?;
         let payment_model = PaymentModelFactory::create(&payment_description)?;
+        let update_interval = payment_description.get_update_interval()?;
+        let accept_timeout = payment_description.get_debit_note_accept_timeout()?;
+        let payment_timeout = payment_description.get_payment_timeout()?;
+        let approved_ts = payment_description.get_approved_ts()?;
 
-        if let Some(deadline) = &debit_deadline {
+        if let Some(deadline) = &accept_timeout {
             log::info!(
                 "Requestor is expected to accept DebitNotes for Agreement [{}] in {}",
+                &agreement.agreement_id,
+                deadline.display()
+            );
+        }
+        if let Some(deadline) = &payment_timeout {
+            log::info!(
+                "Requestor is expected to pay DebitNotes for Agreement [{}] in {}",
                 &agreement.agreement_id,
                 deadline.display()
             );
@@ -91,12 +102,14 @@ impl AgreementPayment {
 
         Ok(AgreementPayment {
             agreement_id: agreement.agreement_id.clone(),
+            approved_ts,
             activities: HashMap::new(),
             payment_model,
             update_interval,
-            payment_timeout: debit_deadline,
+            accept_timeout,
+            payment_timeout,
             deadline_elapsed: false,
-            last_send_debit_note: Utc::now(),
+            last_send_debit_note: approved_ts,
             watch_sender: sender,
             activities_watch: ActivitiesWaiter {
                 watch_receiver: receiver,
@@ -105,10 +118,6 @@ impl AgreementPayment {
     }
 
     pub fn add_created_activity(&mut self, activity_id: &str) {
-        // Track ability to send DebitNotes from Activity start.
-        // Note: we have single timestamp for all activities.
-        self.last_send_debit_note = Utc::now();
-
         let activity = ActivityPayment::Running {
             activity_id: activity_id.to_string(),
         };

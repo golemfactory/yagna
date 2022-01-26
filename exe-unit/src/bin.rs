@@ -1,12 +1,13 @@
 use actix::{Actor, Addr, Arbiter, System};
 use anyhow::bail;
-use flexi_logger::{DeferredNow, Record};
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use structopt::{clap, StructOpt};
+
 use ya_client_model::activity::ExeScriptCommand;
 use ya_core_model::activity;
 use ya_exe_unit::agreement::Agreement;
+use ya_exe_unit::logger::*;
 use ya_exe_unit::message::{GetState, GetStateResponse, Register};
 use ya_exe_unit::runtime::process::RuntimeProcess;
 use ya_exe_unit::service::metrics::MetricsService;
@@ -26,21 +27,31 @@ struct Cli {
     binary: PathBuf,
     #[structopt(flatten)]
     supervise: SuperviseCli,
+    /// Additional runtime arguments
+    #[structopt(
+        long,
+        short,
+        set = clap::ArgSettings::Global,
+        number_of_values = 1,
+    )]
+    runtime_arg: Vec<String>,
     /// Enclave secret key used in secure communication
     #[structopt(
-    long,
-    env = "EXE_UNIT_SEC_KEY",
-    hide_env_values = true,
-    set = clap::ArgSettings::Global,
+        long,
+        env = "EXE_UNIT_SEC_KEY",
+        hide_env_values = true,
+        set = clap::ArgSettings::Global,
     )]
+    #[allow(dead_code)]
     sec_key: Option<String>,
     /// Requestor public key used in secure communication
     #[structopt(
-    long,
-    env = "EXE_UNIT_REQUESTOR_PUB_KEY",
-    hide_env_values = true,
-    set = clap::ArgSettings::Global,
+        long,
+        env = "EXE_UNIT_REQUESTOR_PUB_KEY",
+        hide_env_values = true,
+        set = clap::ArgSettings::Global,
     )]
+    #[allow(dead_code)]
     requestor_pub_key: Option<String>,
     #[structopt(subcommand)]
     command: Command,
@@ -50,17 +61,17 @@ struct Cli {
 struct SuperviseCli {
     /// Hardware resources are handled by the runtime
     #[structopt(
-    long = "runtime-managed-hardware",
-    alias = "cap-handoff",
-    parse(from_flag = std::ops::Not::not),
-    set = clap::ArgSettings::Global,
+        long = "runtime-managed-hardware",
+        alias = "cap-handoff",
+        parse(from_flag = std::ops::Not::not),
+        set = clap::ArgSettings::Global,
     )]
     hardware: bool,
     /// Images are handled by the runtime
     #[structopt(
-    long = "runtime-managed-image",
-    parse(from_flag = std::ops::Not::not),
-    set = clap::ArgSettings::Global,
+        long = "runtime-managed-image",
+        parse(from_flag = std::ops::Not::not),
+        set = clap::ArgSettings::Global,
     )]
     image: bool,
 }
@@ -260,6 +271,7 @@ fn run() -> anyhow::Result<()> {
         agreement,
         work_dir,
         cache_dir,
+        runtime_args: cli.runtime_arg.clone(),
         acl: Default::default(),
         credentials: None,
         #[cfg(feature = "sgx")]
@@ -289,35 +301,11 @@ fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn colored_stderr_exeunit_prefixed_format(
-    w: &mut dyn std::io::Write,
-    now: &mut DeferredNow,
-    record: &Record,
-) -> Result<(), std::io::Error> {
-    write!(w, "{}", yansi::Color::Fixed(92).paint("[ExeUnit] "))?;
-    flexi_logger::colored_opt_format(w, now, record)
-}
-
-fn configure_logger(logger: flexi_logger::Logger) -> flexi_logger::Logger {
-    logger
-        .format(flexi_logger::colored_opt_format)
-        .duplicate_to_stderr(flexi_logger::Duplicate::Debug)
-        .format_for_stderr(colored_stderr_exeunit_prefixed_format)
-}
-
 fn main() {
-    let default_log_level = "info";
-    if configure_logger(flexi_logger::Logger::with_env_or_str(default_log_level))
-        .log_to_file()
-        .directory("logs")
-        .start()
-        .is_err()
-    {
-        configure_logger(flexi_logger::Logger::with_env_or_str(default_log_level))
-            .start()
-            .expect("Failed to initialize logging");
-        log::warn!("Switched to fallback logging method");
-    }
+    if let Err(error) = start_file_logger() {
+        start_logger().expect("Failed to start logging");
+        log::warn!("Using fallback logging due to an error: {:?}", error);
+    };
 
     std::process::exit(match run() {
         Ok(_) => 0,
@@ -326,12 +314,4 @@ fn main() {
             1
         }
     })
-}
-
-#[cfg(test)]
-mod test {
-    #[test]
-    fn test_paint() {
-        println!("Some: {}", yansi::Color::Fixed(92).paint("violet text!"));
-    }
 }

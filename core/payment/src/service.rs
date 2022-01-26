@@ -21,6 +21,7 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
 mod local {
     use super::*;
     use crate::dao::*;
+    use chrono::Utc;
     use std::collections::BTreeMap;
     use ya_client_model::payment::{Account, DocumentStatus, DriverDetails};
     use ya_core_model::payment::local::*;
@@ -69,6 +70,7 @@ mod local {
         counter!("payment.invoices.provider.paid", 0);
         counter!("payment.invoices.provider.accepted", 0);
         counter!("payment.invoices.provider.accepted.call", 0);
+        counter!("payment.invoices.requestor.not-enough-funds", 0);
 
         counter!("payment.amount.received", 0, "platform" => "erc20-rinkeby-tglm");
         counter!("payment.amount.received", 0, "platform" => "erc20-mainnet-glm");
@@ -162,6 +164,7 @@ mod local {
             driver,
             network,
             token,
+            last,
         } = msg;
 
         let (network, network_details) = processor
@@ -171,6 +174,7 @@ mod local {
             .await
             .map_err(GenericError::new)?;
         let token = token.unwrap_or(network_details.default_token.clone());
+        let after_timestamp = Utc::now() + chrono::Duration::seconds(-last);
         let platform = match network_details.tokens.get(&token) {
             Some(platform) => platform.clone(),
             None => {
@@ -183,21 +187,33 @@ mod local {
 
         let incoming_fut = async {
             db.as_dao::<AgreementDao>()
-                .incoming_transaction_summary(platform.clone(), address.clone())
+                .incoming_transaction_summary(
+                    platform.clone(),
+                    address.clone(),
+                    after_timestamp.clone(),
+                )
                 .await
         }
         .map_err(GenericError::new);
 
         let outgoing_fut = async {
             db.as_dao::<AgreementDao>()
-                .outgoing_transaction_summary(platform.clone(), address.clone())
+                .outgoing_transaction_summary(
+                    platform.clone(),
+                    address.clone(),
+                    after_timestamp.clone(),
+                )
                 .await
         }
         .map_err(GenericError::new);
 
         let reserved_fut = async {
             db.as_dao::<AllocationDao>()
-                .total_remaining_allocation(platform.clone(), address.clone())
+                .total_remaining_allocation(
+                    platform.clone(),
+                    address.clone(),
+                    after_timestamp.clone(),
+                )
                 .await
         }
         .map_err(GenericError::new);

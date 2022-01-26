@@ -49,7 +49,12 @@ async def test_e2e_vm(
         assert providers
 
         # Market
-        demand = DemandBuilder(requestor).props_from_template(vm_task_package).build()
+        demand = (
+            DemandBuilder(requestor)
+            .props_from_template(vm_task_package)
+            .constraints("(&(golem.runtime.name=vm))")
+            .build()
+        )
 
         agreement_providers = await negotiate_agreements(
             requestor,

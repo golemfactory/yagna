@@ -9,7 +9,7 @@ pub static POC_OFFER_PROPERTIES_JSON: &str = r#"
     1.0
   ],
   "golem.com.scheme": "payu",
-  "golem.com.scheme.payu.interval_sec": 6.0,
+  "golem.com.scheme.payu.debit-note.interval-sec?": 6.0,
   "golem.com.usage.vector": [
     "golem.usage.duration_sec",
     "golem.usage.cpu_sec"
@@ -39,7 +39,7 @@ pub static POC_OFFER_PROPERTIES_JSON_DEEP: &str = r#"
       },
       "scheme": "payu",
       "scheme.payu": {
-        "interval_sec": 6.0
+        "debit-note.interval-sec?": 6.0
       },
       "usage": {
         "vector": [
@@ -76,7 +76,7 @@ pub static POC_OFFER_PROPERTIES_FLAT: &'static [&'static str] = &[
     "golem.com.pricing.model=\"linear\"",
     "golem.com.pricing.model.linear.coeffs=[0.1,0.2,1.0]",
     "golem.com.scheme=\"payu\"",
-    "golem.com.scheme.payu.interval_sec=6.0",
+    "golem.com.scheme.payu.debit-note.interval-sec?=6.0",
     "golem.com.usage.vector=[\"golem.usage.duration_sec\",\"golem.usage.cpu_sec\"]",
     "golem.inf.mem.gib=1.0",
     "golem.inf.storage.gib=10.0",

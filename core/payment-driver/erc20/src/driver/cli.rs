@@ -70,13 +70,45 @@ pub async fn fund(dao: &Erc20Dao, msg: Fund) -> Result<String, GenericError> {
                 .map_err(GenericError::new)??;
             format!("Received funds from the faucet. address=0x{:x}", &address)
         }
+        Network::Goerli => format!(
+            r#"Your Goerli Polygon address is {}.
+
+Goerli GLM/MATIC faucet is not supported. Please use erc20/rinkeby (`--driver erc20 --network rinkeby`) instead.
+
+To be able to use Goerli Polygon network, please send some GLM tokens and MATIC for gas to this address.
+"#,
+            address
+        ),
+        Network::Mumbai => format!(
+            r#"Your Mumbai Polygon address is {}.
+
+Mumbai GLM/MATIC faucet is not supported. Please use erc20/rinkeby (`--driver erc20 --network rinkeby`) instead.
+
+To be able to use Mumbai Polygon network, please send some GLM tokens and MATIC for gas to this address.
+"#,
+            address
+        ),
+        Network::Polygon => format!(
+            r#"Your mainnet Polygon address is {}.
+
+To fund your wallet and be able to pay for your activities on Golem head to
+the https://chat.golem.network, join the #funding channel and type /terms
+and follow instructions to request GLMs.
+
+Mind that to be eligible you have to run your app at least once on testnet -
+- we will verify if that is true so we can avoid people requesting "free GLMs".
+
+You will also need some MATIC for gas. You can acquire them by visiting
+  https://macncheese.finance/matic-polygon-mainnet-faucet.php
+"#,
+            address
+        ),
         Network::Mainnet => format!(
-            r#"Your mainnet ethereum address is {}.
+            r#"Using this driver is not recommended. Consider using the Polygon driver instead.
 
-Send some GLM tokens and ETH for gas to this address to be able to use this driver.
-
-Using this driver is not recommended.
-If you want to easily acquire some GLM to try Golem on mainnet please use zksync driver."#,
+Your mainnet ethereum address is {}.
+To be able to use mainnet Ethereum driver please send some GLM tokens and ETH for gas to this address.
+"#,
             address
         ),
     };
@@ -93,6 +125,9 @@ pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericEr
     let sender_h160 = utils::str_to_addr(&sender)?;
     let recipient = msg.to;
     let amount = msg.amount;
+    let gas_limit = msg.gas_limit;
+    let gas_price = msg.gas_price;
+    let max_gas_price = msg.max_gas_price;
     let glm_balance = wallet::account_balance(sender_h160, network).await?;
 
     if amount > glm_balance {
@@ -110,7 +145,15 @@ pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericEr
     };
 
     let nonce = wallet::get_next_nonce(dao, sender_h160, network).await?;
-    let db_tx = wallet::make_transfer(&details, nonce, network).await?;
+    let db_tx = wallet::make_transfer(
+        &details,
+        nonce,
+        network,
+        gas_price,
+        max_gas_price,
+        gas_limit,
+    )
+    .await?;
 
     // Check if there is enough ETH for gas
     let human_gas_cost = wallet::has_enough_eth_for_gas(&db_tx, network).await?;

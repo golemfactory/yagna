@@ -1,0 +1,67 @@
+# Note: values of keys denoting paths are resolved relative to the directory
+# in which this file is located.
+# The tokens `~` and `~user` are also replaced by the corresponding users's
+# home directory.
+
+docker-compose:
+
+  docker-dir: "../../assets/docker/"
+
+  build-environment:
+    # TODO:
+    # For now these settings are common to all `yagna` containers.
+    # In future we may want to have nodes running different versions
+    # of `yagna` in the test network.
+
+    # binary-path: ...
+    # deb-path: ...
+    # branch: ...
+    # commit-hash: ...
+    # release-tag: ...
+
+  compose-log-patterns:
+    ethereum: ".*Wallets supplied."
+    zksync: ".*Running on http://.*:3030/.*"
+
+
+key-dir: "../../assets/keys"
+
+
+web-root: "../../assets/web-root"
+
+
+node-types:
+  # Each node type is a collection of attributes common to a group of nodes.
+  # Required attributes are "name" and "class".
+
+  - name: "Requestor"
+    class: "goth.runner.probe.RequestorProbe"
+    environment:
+      - "ERC20_SENDOUT_INTERVAL_SECS=1"
+      - "ERC20_CONFIRMATION_INTERVAL_SECS=1"
+
+  - name: "Provider"
+    class: "goth_tests.helpers.probe.ProviderProbe"
+    mount:
+      - read-only: "../../assets/provider/presets.json"
+        destination: "/root/.local/share/ya-provider/presets.json"
+      - read-only: "../../assets/provider/hardware.json"
+        destination: "/root/.local/share/ya-provider/hardware.json"
+    privileged-mode: True
+    environment:
+      - "IDLE_AGREEMENT_TIMEOUT=5s"
+      - "DEBIT_NOTE_ACCEPTANCE_DEADLINE=8s"
+      - "DEBIT_NOTE_INTERVAL=3s"
+      - "PAYMENT_TIMEOUT=5s"
+      - "ERC20_CONFIRMATION_INTERVAL_SECS=1"
+
+nodes:
+
+  - name: "requestor"
+    type: "Requestor"
+    payment-config: "erc20"
+
+  - name: "provider-1"
+    type: "Provider"
+    use-proxy: True
+    payment-config: "erc20"

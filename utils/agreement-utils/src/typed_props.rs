@@ -195,7 +195,7 @@ impl ComInfo {
 // R: golem.activity.timeout_secs
 
 // golem.com.payment.scheme="payu"
-// golem.com.payment.scheme.payu.interval_sec=3600
+// golem.com.payment.scheme.payu.debit-note.interval-sec?=3600
 // golem.com.pricing.model="linear"
 // golem.com.pricing.model.linear.coeffs=[0.3, 0]
 // golem.usage.vector=["golem.usage.duration_sec"]

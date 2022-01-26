@@ -4,17 +4,28 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
-use structopt::StructOpt;
-
 use structopt::clap;
-use ya_core_model::NodeId;
-use ya_provider::ReceiverAccount;
+use structopt::StructOpt;
+use strum::VariantNames;
 
+use ya_core_model::NodeId;
+
+use crate::command::NetworkGroup;
 use crate::command::UsageDef;
 use crate::terminal::clear_stdin;
 
 const OLD_DEFAULT_SUBNETS: &[&'static str] = &["community", "community.3", "community.4"];
 const DEFAULT_SUBNET: &str = "public-beta";
+
+#[derive(StructOpt, Clone, Debug, Deserialize, Serialize)]
+pub struct ConfigAccount {
+    /// Account for payments.
+    #[structopt(long, env = "YA_ACCOUNT")]
+    pub account: Option<NodeId>,
+    /// Payment network.
+    #[structopt(long = "payment-network", env = "YA_PAYMENT_NETWORK_GROUP", possible_values = NetworkGroup::VARIANTS, default_value = NetworkGroup::Mainnet.into())]
+    pub network: NetworkGroup,
+}
 
 #[derive(StructOpt, Debug, Clone, Serialize, Deserialize)]
 pub struct RunConfig {
@@ -24,7 +35,7 @@ pub struct RunConfig {
     pub subnet: Option<String>,
 
     #[structopt(flatten)]
-    pub account: ReceiverAccount,
+    pub account: ConfigAccount,
 
     /// changes log level from info to debug
     #[structopt(long)]
@@ -112,10 +123,7 @@ pub async fn setup(run_config: &RunConfig, force: bool) -> Result<i32> {
                 config.subnet = None;
             }
         }
-        let subnet = promptly::prompt_default(
-            "Subnet ",
-            config.subnet.unwrap_or_else(|| DEFAULT_SUBNET.to_string()),
-        )?;
+        let subnet = config.subnet.unwrap_or_else(|| DEFAULT_SUBNET.to_string());
 
         let account_msg = &config
             .account

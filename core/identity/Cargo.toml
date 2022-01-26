@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 ya-client-model = { version = "0.3", features = ["with-diesel"] }
-ya-core-model = { version = "^0.4", features = ["identity", "appkey"] }
+ya-core-model = { version = "^0.5", features = ["identity", "appkey"] }
 ya-persistence = "0.2"
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.1"
@@ -19,10 +19,7 @@ appdirs = "0.2"
 chrono = { version = "0.4", features = ["serde"] }
 diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
 diesel_migrations = "1.4"
-# Lock ethsign on this commit to match parity-crypto=0.6 from zksync_eth_client
-ethsign = { git = "https://github.com/tomusdrw/ethsign.git", rev = "1b93031d2c45f3a3313e5418876b3d3e751ba87e" }
-# TODO: Upgrade to latest = 0.8 after zksync_eth_client is updated
-# ethsign = "0.8"
+ethsign = "0.8"
 futures = "0.3"
 log = "0.4"
 promptly = "0.3.0"
