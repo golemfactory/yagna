@@ -7,7 +7,7 @@ use actix::prelude::*;
 use anyhow::{anyhow, Error, Result};
 use backoff::backoff::Backoff;
 use bigdecimal::{BigDecimal, Zero};
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use futures_util::FutureExt;
 use humantime;
 use log;
@@ -27,6 +27,7 @@ use ya_utils_actix::deadline_checker::{
 use ya_utils_actix::{actix_signal_handler, forward_actix_handler};
 
 use crate::execution::{ActivityDestroyed, CreateActivity};
+use crate::interval::RelativeInterval;
 use crate::market::provider_market::NewAgreement;
 use crate::market::termination_reason::BreakReason;
 use crate::tasks::{AgreementBroken, AgreementClosed, BreakAgreement};
@@ -40,10 +41,11 @@ use super::model::PaymentModel;
 
 /// Checks activity usage counters and updates service
 /// cost. Sends debit note to requestor.
-#[derive(Message, Clone)]
+#[derive(Message)]
 #[rtype(result = "Result<()>")]
 pub struct UpdateCost {
     pub invoice_info: DebitNoteInfo,
+    pub interval_ctx: RelativeInterval,
 }
 
 /// Changes activity state to Finalized and computes final cost.
@@ -207,12 +209,15 @@ async fn send_debit_note(
     provider_context: Arc<ProviderCtx>,
     debit_note_info: DebitNoteInfo,
     cost_info: CostInfo,
+    reference_date: DateTime<Utc>,
 ) -> Result<DebitNote> {
     let debit_note = NewDebitNote {
         activity_id: debit_note_info.activity_id.clone(),
         total_amount_due: cost_info.cost,
         usage_counter_vector: Some(json!(cost_info.usage)),
-        payment_due_date: debit_note_info.payment_timeout.map(|dur| Utc::now() + dur),
+        payment_due_date: debit_note_info
+            .payment_timeout
+            .map(|dur| reference_date + dur),
     };
 
     log::debug!(
@@ -465,6 +470,7 @@ async fn handle_debit_note_event(
 async fn compute_cost_and_send_debit_note(
     provider_context: Arc<ProviderCtx>,
     payment_model: Arc<dyn PaymentModel>,
+    reference_date: DateTime<Utc>,
     invoice_info: &DebitNoteInfo,
 ) -> Result<(DebitNote, CostInfo)> {
     let cost_info = compute_cost(
@@ -481,8 +487,13 @@ async fn compute_cost_and_send_debit_note(
         &cost_info.usage
     );
 
-    let debit_note =
-        send_debit_note(provider_context, invoice_info.clone(), cost_info.clone()).await?;
+    let debit_note = send_debit_note(
+        provider_context,
+        invoice_info.clone(),
+        cost_info.clone(),
+        reference_date,
+    )
+    .await?;
     Ok((debit_note, cost_info))
 }
 
@@ -517,22 +528,17 @@ impl Handler<CreateActivity> for Payments {
             payment_timeout: agreement.payment_timeout,
         };
 
-        let interval = chrono::Duration::from_std(agreement.update_interval)?;
-        let now = Utc::now();
+        let mut interval_ctx =
+            RelativeInterval::new(agreement.approved_ts, agreement.update_interval)?;
+        let delay = interval_ctx.advance()?;
 
-        let mut i = 0;
-        let delay = loop {
-            i += 1;
-
-            let value = agreement.approved_ts + (interval * i);
-            if value >= now {
-                break (value - now);
-            } else if i == i32::MAX {
-                anyhow::bail!("Activity created after {} DebitNote intervals", i);
-            }
-        };
-
-        ctx.notify_later(UpdateCost { invoice_info }, delay.to_std()?);
+        ctx.notify_later(
+            UpdateCost {
+                invoice_info,
+                interval_ctx,
+            },
+            delay,
+        );
 
         Ok(())
     }
@@ -578,6 +584,7 @@ impl Handler<ActivityDestroyed> for Payments {
                 match compute_cost_and_send_debit_note(
                     provider_context.clone(),
                     payment_model.clone(),
+                    Utc::now(),
                     &debit_note_info,
                 )
                 .await
@@ -618,8 +625,7 @@ impl Handler<ActivityDestroyed> for Payments {
 impl Handler<UpdateCost> for Payments {
     type Result = ActorResponse<Self, (), Error>;
 
-    fn handle(&mut self, msg: UpdateCost, _ctx: &mut Context<Self>) -> Self::Result {
-        let started = Utc::now();
+    fn handle(&mut self, mut msg: UpdateCost, _ctx: &mut Context<Self>) -> Self::Result {
         let agreement = match self
             .agreements
             .get(&msg.invoice_info.agreement_id)
@@ -632,71 +638,63 @@ impl Handler<UpdateCost> for Payments {
             Ok(agreement) => agreement,
             Err(e) => return ActorResponse::reply(Err(e)),
         };
+        let scheduled_date = msg.interval_ctx.current();
 
         return match agreement.activities.get(&msg.invoice_info.activity_id) {
             Some(ActivityPayment::Running { .. }) => {
-                let payment_model = agreement.payment_model.clone();
-                let context = self.context.clone();
-
                 let last_debit_note = agreement.last_send_debit_note;
                 let accept_timeout = agreement.accept_timeout;
-                let update_interval = match chrono::Duration::from_std(agreement.update_interval) {
-                    Ok(interval) => interval,
-                    Err(err) => return ActorResponse::reply(Err(err.into())),
-                };
-                let invoice_info = DebitNoteInfo {
-                    accept_timeout,
-                    payment_timeout: agreement.payment_timeout,
-                    ..msg.invoice_info.clone()
-                };
+                let invoice_info = msg.invoice_info.clone();
+                let payment_model = agreement.payment_model.clone();
+                let context = self.context.clone();
 
                 let debit_note_future = async move {
                     let (debit_note, _cost) = compute_cost_and_send_debit_note(
                         context.clone(),
                         payment_model.clone(),
+                        scheduled_date,
                         &invoice_info,
                     )
-                    .await
-                    .log_err()?;
+                        .await
+                        .log_err()?;
                     Ok(debit_note)
                 }
-                .into_actor(self)
-                .map(move |result: Result<_, anyhow::Error>, myself, ctx| {
-                    // We break Agreement, if we weren't able to send any DebitNote lately.
-                    if result.is_err() {
-                        if accept_timeout.is_some() && Utc::now() > last_debit_note + accept_timeout.unwrap() {
-                            myself.break_agreement_signal
-                                .send_signal(BreakAgreement {
-                                    agreement_id: msg.invoice_info.agreement_id.clone(),
-                                    reason: BreakReason::RequestorUnreachable(accept_timeout.unwrap()),
-                                })
-                                .log_err_msg(&format!(
-                                    "Failed to send BreakAgreement for [{}], when Requestor is unreachable.",
-                                    msg.invoice_info.agreement_id
-                                ))
-                                .ok();
+                    .into_actor(self)
+                    .map(move |result: Result<_, anyhow::Error>, myself, ctx| {
+                        // We break Agreement, if we weren't able to send any DebitNote lately.
+                        if result.is_err() {
+                            if accept_timeout.is_some() && Utc::now() > last_debit_note + accept_timeout.unwrap() {
+                                myself.break_agreement_signal
+                                    .send_signal(BreakAgreement {
+                                        agreement_id: msg.invoice_info.agreement_id.clone(),
+                                        reason: BreakReason::RequestorUnreachable(accept_timeout.unwrap()),
+                                    })
+                                    .log_err_msg(&format!(
+                                        "Failed to send BreakAgreement for [{}], when Requestor is unreachable.",
+                                        msg.invoice_info.agreement_id
+                                    ))
+                                    .ok();
+                            }
+                        } else {
+                            myself.agreements
+                                .get_mut(&msg.invoice_info.agreement_id)
+                                // Payment due date is always set _before_ sending the DebitNote.
+                                // The following synchronises the acceptance timeout check.
+                                .map(|agreement| agreement.last_send_debit_note = scheduled_date);
                         }
-                    } else {
-                        myself.agreements
-                            .get_mut(&msg.invoice_info.agreement_id)
-                            .map(|agreement| agreement.last_send_debit_note = last_debit_note + update_interval);
-                    }
 
-                    // Don't bother, if previous debit note was sent successfully or not.
-                    // Schedule UpdateCost for later.
+                        // A note regarding short debit note intervals:
+                        // If sending a DebitNote note takes longer than the interval duration,
+                        // the next DebitNote will be scheduled at the next possible interval,
+                        // relative to agreement approval date, and based on current time.
+                        let delay = msg.interval_ctx.advance()?;
 
-                    let delta = Utc::now() - started;
-                    let delay = if update_interval > delta {
-                        // schedule the next debit note as close to `update_interval` as possible
-                        (update_interval - delta).to_std()?
-                    } else {
-                        // the process lasted longer than `update_interval`, continue immediately
-                        Duration::from_secs(0)
-                    };
+                        // Don't bother, if previous debit note was sent successfully or not.
+                        // Schedule UpdateCost for later.
+                        ctx.notify_later(msg, delay);
 
-                    ctx.notify_later(msg, delay);
-                    Ok(())
-                });
+                        Ok(())
+                    });
                 ActorResponse::r#async(debit_note_future)
             }
             Some(_) => {
