@@ -233,6 +233,15 @@ impl Discovery {
             log::info!("Dropping previous lazy_binder_prefix, and replacing it with new one. old={}, new={}", old_prefix, local_prefix);
         };
 
+        // We don't lazy bind broadcasts handlers anymore on first Demand creation.
+        // But we still have option to do this easy in the future.
+        self.lazy_bind_gsb().await.map_or_else(
+            |e| {
+                log::warn!("Failed to subscribe to broadcasts. Error: {:?}.", e,);
+            },
+            |_| (),
+        );
+
         Ok(())
     }
 
@@ -287,7 +296,7 @@ impl Discovery {
         // Other attempts to add them will end with error and we will filter all Offers, that already
         // occurred and re-broadcast only new ones.
         // But still it is worth to limit network traffic.
-        let _new_offer_ids = {
+        let new_offer_ids = {
             let offer_handlers = match self.inner.offer_handlers.try_lock() {
                 Ok(h) => h,
                 Err(_) => {
@@ -326,22 +335,20 @@ impl Discovery {
             }
         };
 
-        // I'm ceasing rebroadcast to reduce net traffic. It should be restored when we have P2P net
+        if !new_offer_ids.is_empty() {
+            log::debug!(
+                "Propagating {}/{} Offers received from [{}].",
+                new_offer_ids.len(),
+                num_ids_received,
+                &caller
+            );
 
-        // if !new_offer_ids.is_empty() {
-        //     log::debug!(
-        //         "Propagating {}/{} Offers received from [{}].",
-        //         new_offer_ids.len(),
-        //         num_ids_received,
-        //         &caller
-        //     );
-        //
-        //     // We could broadcast outside of lock, but it shouldn't hurt either, because
-        //     // we don't wait for any responses from remote nodes.
-        //     self.bcast_offers(new_offer_ids)
-        //         .await
-        //         .map_err(|e| log::warn!("Failed to bcast. Error: {}", e))?;
-        // }
+            // We could broadcast outside of lock, but it shouldn't hurt either, because
+            // we don't wait for any responses from remote nodes.
+            self.bcast_offers(new_offer_ids)
+                .await
+                .map_err(|e| log::warn!("Failed to bcast. Error: {}", e))?;
+        }
 
         let end = Instant::now();
         timing!("market.offers.incoming.time", start, end);
@@ -375,23 +382,21 @@ impl Discovery {
         }
 
         let offer_unsubscribe_handler = self.inner.offer_unsubscribe_handler.clone();
-        let _unsubscribed_offer_ids = offer_unsubscribe_handler.call(caller.clone(), msg).await?;
+        let unsubscribed_offer_ids = offer_unsubscribe_handler.call(caller.clone(), msg).await?;
 
-        // I'm ceasing rebroadcast to reduce net traffic. It should be restored when we have P2P net
+        if !unsubscribed_offer_ids.is_empty() {
+            log::debug!(
+                "Propagating {}/{} unsubscribed Offers received from [{}].",
+                unsubscribed_offer_ids.len(),
+                num_received_ids,
+                &caller,
+            );
 
-        // if !unsubscribed_offer_ids.is_empty() {
-        //     log::debug!(
-        //         "Propagating {}/{} unsubscribed Offers received from [{}].",
-        //         unsubscribed_offer_ids.len(),
-        //         num_received_ids,
-        //         &caller,
-        //     );
-        //
-        //     // No need to retry broadcasting, since we send cyclic broadcasts.
-        //     if let Err(error) = self.bcast_unsubscribes(unsubscribed_offer_ids).await {
-        //         log::error!("Error propagating unsubscribed Offers further: {}", error,);
-        //     }
-        // }
+            // No need to retry broadcasting, since we send cyclic broadcasts.
+            if let Err(error) = self.bcast_unsubscribes(unsubscribed_offer_ids).await {
+                log::error!("Error propagating unsubscribed Offers further: {}", error,);
+            }
+        }
         let end = Instant::now();
         timing!("market.offers.unsubscribes.incoming.time", start, end);
         Ok(())
