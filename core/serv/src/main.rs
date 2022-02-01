@@ -290,7 +290,7 @@ impl CliCommand {
     pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
             CliCommand::Commands(command) => {
-                start_logger("warn", None, &vec![], false)?;
+                start_logger("warn", None, "", false)?;
                 command.run_command(ctx).await
             }
             CliCommand::Complete(complete) => complete.run_command(ctx),
@@ -369,17 +369,21 @@ impl ServiceCommand {
                 log_dir,
                 debug,
             }) => {
-                // workaround to silence middleware logger by default
-                // to enable it explicitly set RUST_LOG=info or more verbose
-                env::set_var(
-                    "RUST_LOG",
-                    env::var("RUST_LOG")
-                        .unwrap_or(format!("info,actix_web::middleware::logger=warn",)),
-                );
-
                 //this force_debug flag sets default log level to debug
                 //if the --debug option is set
                 let force_debug = *debug;
+                let module_overrides = "\
+                actix_http::response=warn,\
+                h2=warn,\
+                hyper=info,\
+                mio=warn,\
+                reqwest=info,\
+                tokio_core=info,\
+                tokio_reactor=info,\
+                tokio_util=warn,\
+                trust_dns_proto=info,\
+                trust_dns_resolver=info,\
+                web3=info";
                 let logger_handle = start_logger(
                     "info",
                     log_dir.as_deref().or(Some(&ctx.data_dir)).and_then(|path| {
@@ -388,19 +392,7 @@ impl ServiceCommand {
                             _ => Some(path),
                         }
                     }),
-                    &vec![
-                        ("actix_http::response", log::LevelFilter::Off),
-                        ("h2", log::LevelFilter::Off),
-                        ("hyper", log::LevelFilter::Info),
-                        ("reqwest", log::LevelFilter::Info),
-                        ("tokio_core", log::LevelFilter::Info),
-                        ("tokio_reactor", log::LevelFilter::Info),
-                        ("trust_dns_resolver", log::LevelFilter::Info),
-                        ("trust_dns_proto", log::LevelFilter::Info),
-                        ("web3", log::LevelFilter::Info),
-                        ("tokio_util", log::LevelFilter::Off),
-                        ("mio", log::LevelFilter::Off),
-                    ],
+                    module_overrides,
                     force_debug,
                 )?;
 
