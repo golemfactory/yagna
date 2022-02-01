@@ -155,7 +155,7 @@ pub async fn start_network(
         }
     };
     bind_local_bus("/from", state.clone(), true, from_handler());
-    bind_local_bus("/u/from", state.clone(), true, from_handler());
+    bind_local_bus("/u/from", state.clone(), false, from_handler());
 
     tokio::task::spawn_local(broadcast_handler(brx));
     tokio::task::spawn_local(forward_handler(receiver, state.clone()));
