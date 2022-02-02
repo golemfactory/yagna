@@ -717,7 +717,7 @@ fn gsb_local_url(net_id: &str) -> String {
 }
 
 fn gsb_remote_url(node_id: &str, net_id: &str) -> Endpoint {
-    typed::service(format!("/net/{}/vpn/{}", node_id, net_id))
+    typed::service(format!("/u/net/{}/vpn/{}", node_id, net_id))
 }
 
 trait ArbiterExt {
