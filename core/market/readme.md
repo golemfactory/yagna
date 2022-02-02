@@ -6,9 +6,11 @@ resources (Offers).
 
 This implementation conforms with Cabability Level 1 of the 
 [Market API specification](
-https://docs.google.com/document/d/1Zny_vfgWV-hcsKS7P-Kdr3Fb0dwfl-6T_cYKVQ9mkNg/edit#heading=h.8anq3nlk2en7
+https://golem-network.gitbook.io/golem-infrastructure-documentation-develop/architecture/golem-market-api
 ) which means support for the three basic phases of the market interaction:
-[Discovery](#discovery-phase), [Negotiation](#negotiation-phase) and [Agreement](#agreement-phase).
+[Discovery](https://golem-network.gitbook.io/golem-infrastructure-documentation-develop/architecture/golem-market-api#discovery-phase-demand-and-offer-matching), 
+[Negotiation](https://golem-network.gitbook.io/golem-infrastructure-documentation-develop/architecture/golem-market-api#negotiation-phase-dynamic-property-resolution) 
+and [Agreement](https://golem-network.gitbook.io/golem-infrastructure-documentation-develop/architecture/golem-market-api#agreement-phase-the-handshake).
 
 ## Yagna Market API
 The Yagna Market API is the entry to the Yagna Market through which
@@ -28,10 +30,10 @@ Market interaction is divided into tree phases described below.
 ### Discovery Phase
 Users are joining the Yagna Network by publishing their Offers or Demands.
 Yagna Market is [matching incoming Demands and Offers](
-https://docs.google.com/document/d/1yTupuRsN9DKVrK1TPhM6dBxKCAPk0wCB8KxRf57ZkV4
+https://golem-network.gitbook.io/golem-infrastructure-documentation-develop/architecture/golem-market-api#discovery-phase-demand-and-offer-matching
 ) and creates Proposals. Proposal is a pair of Offer and Demand which are
 matching. The matching can be [strong or weak](
-https://docs.google.com/document/d/1tzMrhdBr9wiUXtSn1JO18MmIiP31dkMakdjStnF3eZY/edit#heading=h.jzr5wr9i4uh5
+https://golem-network.gitbook.io/golem-infrastructure-documentation-develop/architecture/golem-demand-and-offer-specification-language#demand-offer-matching
 ). Each Proposal is then fed to the Requestor (ie an issuer of its Demand
 component).
 
@@ -44,7 +46,7 @@ constraints for owned component to strongly match Offer with Demand.
 
 Current Market implementation does **not** support [dynamic property resolution nor
 pseudo-function support](
-https://docs.google.com/document/d/1Zny_vfgWV-hcsKS7P-Kdr3Fb0dwfl-6T_cYKVQ9mkNg/edit#heading=h.6y5qk7bcl9qy
+https://golem-network.gitbook.io/golem-infrastructure-documentation-develop/architecture/golem-market-api#negotiation-phase-dynamic-property-resolution
 ) during the Negotiation phase.
 
 ### Agreement Phase
