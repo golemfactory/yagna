@@ -85,7 +85,7 @@ impl ProviderAgent {
 
         //start_logger is using env var RUST_LOG internally.
         //args.debug options sets default logger to debug
-        let log_handler = start_logger("info", Some(&log_dir), &[], args.debug)?;
+        let log_handler = start_logger("info", Some(&log_dir), "", args.debug)?;
 
         let app_name = structopt::clap::crate_name!();
         log::info!(
