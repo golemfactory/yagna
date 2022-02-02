@@ -228,10 +228,12 @@ impl Discovery {
             },
         );
         // Subscribe to receiving broadcasts only when demand is subscribed for the first time.
-        let mut prefix_guard = self.inner.lazy_binder_prefix.lock().await;
-        if let Some(old_prefix) = (*prefix_guard).replace(local_prefix.to_string()) {
-            log::info!("Dropping previous lazy_binder_prefix, and replacing it with new one. old={}, new={}", old_prefix, local_prefix);
-        };
+        {
+            let mut prefix_guard = self.inner.lazy_binder_prefix.lock().await;
+            if let Some(old_prefix) = (*prefix_guard).replace(local_prefix.to_string()) {
+                log::info!("Dropping previous lazy_binder_prefix, and replacing it with new one. old={}, new={}", old_prefix, local_prefix);
+            };
+        }
 
         // We don't lazy bind broadcasts handlers anymore on first Demand creation.
         // But we still have option to do this easy in the future.
