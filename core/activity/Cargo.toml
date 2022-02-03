@@ -21,7 +21,6 @@ bytes = "0.5"
 chrono = "0.4"
 diesel = { version = "1.4", features = ["chrono", "sqlite", "r2d2"] }
 diesel_migrations = "1.4"
-env_logger = "0.7"
 futures = "0.3"
 hex = "0.4"
 metrics="0.12"
@@ -40,5 +39,4 @@ structopt = "0.3.7"
 
 [dev-dependencies]
 ya-sb-router = "0.4"
-
-
+env_logger = "0.7"

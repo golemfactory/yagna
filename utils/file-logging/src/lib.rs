@@ -3,7 +3,8 @@ use chrono::format::strftime::StrftimeItems;
 use chrono::format::DelayedFormat;
 use chrono::{DateTime, Local};
 use flexi_logger::{
-    style, AdaptiveFormat, Age, Cleanup, Criterion, DeferredNow, Duplicate, Logger, Naming, Record,
+    style, AdaptiveFormat, Age, Cleanup, Criterion, DeferredNow, Duplicate, FileSpec, Logger,
+    Naming, Record,
 };
 use std::path::Path;
 
@@ -43,7 +44,7 @@ fn log_format_color(
         w,
         "[{} {:5} {}] {}",
         yansi::Color::Fixed(247).paint(log_format_date(now)),
-        style(level, level),
+        style(level).paint(level.to_string()),
         yansi::Color::Fixed(247).paint(record.module_path().unwrap_or("<unnamed>")),
         &record.args()
     )
@@ -51,8 +52,7 @@ fn log_format_color(
 
 fn set_logging_to_files(logger: Logger, log_dir: &Path) -> Logger {
     logger
-        .log_to_file()
-        .directory(log_dir)
+        .log_to_file(FileSpec::default().directory(log_dir))
         .rotate(
             Criterion::AgeOrSize(Age::Day, /*size in bytes*/ 1024 * 1024 * 1024),
             Naming::Timestamps,
@@ -77,7 +77,7 @@ pub fn start_logger(
         if force_debug { "debug" } else { default_level }
     );
 
-    let mut logger = Logger::with_env_or_str(default_log_str).format(log_format);
+    let mut logger = Logger::try_with_env_or_str(default_log_str)?.format(log_format);
     if let Some(log_dir) = log_dir {
         logger = set_logging_to_files(logger, log_dir);
     }
