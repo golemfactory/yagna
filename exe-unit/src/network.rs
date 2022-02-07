@@ -479,7 +479,7 @@ fn write_prefix(dst: &mut Vec<u8>) {
 }
 
 fn gsb_endpoint(node_id: &str, net_id: &str) -> GsbEndpoint {
-    typed::service(format!("/u/net/{}/vpn/{}", node_id, net_id))
+    typed::service(format!("/udp/net/{}/vpn/{}", node_id, net_id))
 }
 
 #[cfg(test)]
