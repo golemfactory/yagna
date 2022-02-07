@@ -124,7 +124,7 @@ pub async fn start_network(
     let mut services: HashSet<_> = Default::default();
     ids.iter().for_each(|id| {
         let service = net_service(id);
-        services.insert(format!("/u{}", service));
+        services.insert(format!("/udp{}", service));
         services.insert(service);
     });
     let state = State::new(ids, services);
@@ -140,8 +140,8 @@ pub async fn start_network(
             }
         }
     };
-    bind_local_bus(net::BUS_ID, state.clone(), true, net_handler());
     bind_local_bus(net::BUS_ID_UDP, state.clone(), false, net_handler());
+    bind_local_bus(net::BUS_ID, state.clone(), true, net_handler());
 
     let from_handler = || {
         let state_from = state.clone();
@@ -155,7 +155,7 @@ pub async fn start_network(
         }
     };
     bind_local_bus("/from", state.clone(), true, from_handler());
-    bind_local_bus("/u/from", state.clone(), false, from_handler());
+    bind_local_bus("/udp/from", state.clone(), false, from_handler());
 
     tokio::task::spawn_local(broadcast_handler(brx));
     tokio::task::spawn_local(forward_handler(receiver, state.clone()));
@@ -772,8 +772,8 @@ fn parse_net_to_addr(addr: &str) -> anyhow::Result<(NodeId, String)> {
 
     let mut it = addr.split("/").fuse().skip(1).peekable();
     let (prefix, to) = match (it.next(), it.next(), it.next()) {
+        (Some("udp"), Some("net"), Some(to)) if it.peek().is_some() => ("/udp", to),
         (Some("net"), Some(to), Some(_)) => ("", to),
-        (Some("u"), Some("net"), Some(to)) if it.peek().is_some() => ("/u", to),
         _ => anyhow::bail!("invalid net-to destination: {}", addr),
     };
 
@@ -789,10 +789,10 @@ fn parse_from_to_addr(addr: &str) -> anyhow::Result<(NodeId, NodeId, String)> {
 
     let mut it = addr.split("/").fuse().skip(1).peekable();
     let (prefix, from, to) = match (it.next(), it.next(), it.next(), it.next(), it.next()) {
-        (Some("from"), Some(from), Some("to"), Some(to), Some(_)) => ("", from, to),
-        (Some("u"), Some("from"), Some(from), Some("to"), Some(to)) if it.peek().is_some() => {
-            ("/u", from, to)
+        (Some("udp"), Some("from"), Some(from), Some("to"), Some(to)) if it.peek().is_some() => {
+            ("/udp", from, to)
         }
+        (Some("from"), Some(from), Some("to"), Some(to), Some(_)) => ("", from, to),
         _ => anyhow::bail!("invalid net-from-to destination: {}", addr),
     };
 

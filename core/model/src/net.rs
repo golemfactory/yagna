@@ -3,7 +3,7 @@ use ya_client_model::NodeId;
 use ya_service_bus::typed as bus;
 
 pub const BUS_ID: &str = "/net";
-pub const BUS_ID_UDP: &str = "/u/net";
+pub const BUS_ID_UDP: &str = "/udp/net";
 
 // TODO: replace with dedicated endpoint/service descriptor with enum for visibility
 pub const PUBLIC_PREFIX: &str = "/public";
