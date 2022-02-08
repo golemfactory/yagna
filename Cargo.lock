@@ -3053,6 +3053,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c75de51135344a4f8ed3cfe2720dc27736f7711989703a0b43aadf3753c55577"
 
 [[package]]
+name = "managed"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ca88d725a0a943b096803bd34e73a4437208b6077654cc4ecb2947a5f91618d"
+
+[[package]]
 name = "maplit"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4353,7 +4359,7 @@ checksum = "2e7573632e6454cf6b99d7aac4ccca54be06da05aca2ef7423d22d27d4d4bcd8"
 dependencies = [
  "libc",
  "rand_chacha 0.3.0",
- "rand_core 0.6.2",
+ "rand_core 0.6.3",
  "rand_hc 0.3.0",
 ]
 
@@ -4384,7 +4390,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e12735cf05c9e10bf21534da50a147b924d555dc7a547c42e6bb2d5b6017ae0d"
 dependencies = [
  "ppv-lite86",
- "rand_core 0.6.2",
+ "rand_core 0.6.3",
 ]
 
 [[package]]
@@ -4413,9 +4419,9 @@ dependencies = [
 
 [[package]]
 name = "rand_core"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34cf66eb183df1c5876e2dcf6b13d57340741e8dc255b48e40a26de954d06ae7"
+checksum = "d34f1408f55294453790c48b2f1ebbb1c5b4b7563eb1f418bcfcfdbb06ebb4e7"
 dependencies = [
  "getrandom 0.2.2",
 ]
@@ -4444,7 +4450,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3190ef7066a446f2e7f42e239d161e905420ccab01eb967c9eb27d21b2322a73"
 dependencies = [
- "rand_core 0.6.2",
+ "rand_core 0.6.3",
 ]
 
 [[package]]
@@ -5420,7 +5426,21 @@ dependencies = [
  "byteorder",
  "libc",
  "log",
- "managed",
+ "managed 0.7.2",
+]
+
+[[package]]
+name = "smoltcp"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2308a1657c8db1f5b4993bab4e620bdbe5623bd81f254cf60326767bb243237"
+dependencies = [
+ "bitflags",
+ "byteorder",
+ "libc",
+ "log",
+ "managed 0.8.0",
+ "rand_core 0.6.3",
 ]
 
 [[package]]
@@ -7141,6 +7161,7 @@ dependencies = [
  "num-bigint 0.3.2",
  "r2d2",
  "rand 0.7.3",
+ "rand_core 0.6.3",
  "serde",
  "serde_json",
  "structopt",
@@ -7274,7 +7295,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=eeb2ff2e482166e4715434eac6235bad4886de72#eeb2ff2e482166e4715434eac6235bad4886de72"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=e1a2029c66d4aee5b07d6bda83c387a0c97c1321#e1a2029c66d4aee5b07d6bda83c387a0c97c1321"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7292,7 +7313,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-core"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=eeb2ff2e482166e4715434eac6235bad4886de72#eeb2ff2e482166e4715434eac6235bad4886de72"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=e1a2029c66d4aee5b07d6bda83c387a0c97c1321#e1a2029c66d4aee5b07d6bda83c387a0c97c1321"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7320,7 +7341,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-proto"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=eeb2ff2e482166e4715434eac6235bad4886de72#eeb2ff2e482166e4715434eac6235bad4886de72"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=e1a2029c66d4aee5b07d6bda83c387a0c97c1321#e1a2029c66d4aee5b07d6bda83c387a0c97c1321"
 dependencies = [
  "anyhow",
  "bytes 0.5.6",
@@ -7337,14 +7358,14 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=eeb2ff2e482166e4715434eac6235bad4886de72#eeb2ff2e482166e4715434eac6235bad4886de72"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=e1a2029c66d4aee5b07d6bda83c387a0c97c1321#e1a2029c66d4aee5b07d6bda83c387a0c97c1321"
 dependencies = [
  "derive_more",
  "futures 0.3.13",
  "log",
- "managed",
+ "managed 0.8.0",
  "rand 0.8.4",
- "smoltcp",
+ "smoltcp 0.8.0",
  "thiserror",
  "tokio 0.2.25",
 ]
@@ -7691,13 +7712,13 @@ dependencies = [
  "ipnet",
  "lazy_static",
  "log",
- "managed",
+ "managed 0.7.2",
  "mime",
  "rand 0.7.3",
  "serde",
  "serde_json",
  "sha3 0.8.2",
- "smoltcp",
+ "smoltcp 0.7.3",
  "structopt",
  "thiserror",
  "tokio 0.2.25",
