@@ -487,7 +487,7 @@ fn write_prefix(dst: &mut Vec<u8>) {
 fn gsb_endpoint(node_id: &str, net_id: &str) -> DuoEndpoint<GsbEndpoint> {
     DuoEndpoint {
         tcp: typed::service(format!("/net/{}/vpn/{}", node_id, net_id)),
-        udp: typed::service(format!("/u/net/{}/vpn/{}", node_id, net_id)),
+        udp: typed::service(format!("/udp/net/{}/vpn/{}", node_id, net_id)),
     }
 }
 

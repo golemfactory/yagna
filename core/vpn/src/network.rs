@@ -719,7 +719,7 @@ fn gsb_local_url(net_id: &str) -> String {
 fn gsb_remote_url(node_id: &str, net_id: &str) -> network::DuoEndpoint<Endpoint> {
     network::DuoEndpoint {
         tcp: typed::service(format!("/net/{}/vpn/{}", node_id, net_id)),
-        udp: typed::service(format!("/u/net/{}/vpn/{}", node_id, net_id)),
+        udp: typed::service(format!("/udp/net/{}/vpn/{}", node_id, net_id)),
     }
 }
 

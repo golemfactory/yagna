@@ -12,9 +12,14 @@ hybrid-net = []
 
 [dependencies]
 ya-core-model = { version = "^0.5", features=["net", "identity"] }
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "8e5fc0661bb7963d2c2328a24a7e438fb0091b8a" }
-ya-relay-core = { git = "https://github.com/golemfactory/ya-relay.git", rev = "8e5fc0661bb7963d2c2328a24a7e438fb0091b8a" }
-ya-relay-proto = { git = "https://github.com/golemfactory/ya-relay.git", rev = "8e5fc0661bb7963d2c2328a24a7e438fb0091b8a", features = ["codec"] }
+
+ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "eeb2ff2e482166e4715434eac6235bad4886de72" }
+ya-relay-core = { git = "https://github.com/golemfactory/ya-relay.git", rev = "eeb2ff2e482166e4715434eac6235bad4886de72" }
+ya-relay-proto = { git = "https://github.com/golemfactory/ya-relay.git", rev = "eeb2ff2e482166e4715434eac6235bad4886de72", features = ["codec"] }
+#ya-relay-client = { path = "../../../ya-relay/client" }
+#ya-relay-core = { path = "../../../ya-relay/crates/core" }
+#ya-relay-proto = { path = "../../../ya-relay/crates/proto", features = ["codec"] }
+
 ya-sb-proto = { version = "0.4" }
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.1"

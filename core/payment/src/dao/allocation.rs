@@ -2,7 +2,7 @@ use crate::error::{DbError, DbResult};
 use crate::models::allocation::{ReadObj, WriteObj};
 use crate::schema::pay_allocation::dsl;
 use bigdecimal::BigDecimal;
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::NaiveDateTime;
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use ya_client_model::payment::{Allocation, NewAllocation};
 use ya_client_model::NodeId;
@@ -154,7 +154,7 @@ impl<'c> AllocationDao<'c> {
         &self,
         platform: String,
         address: String,
-        after_timestamp: DateTime<Utc>,
+        after_timestamp: NaiveDateTime,
     ) -> DbResult<BigDecimal> {
         readonly_transaction(self.pool, move |conn| {
             let total_remaining_amount = dsl::pay_allocation
@@ -162,7 +162,7 @@ impl<'c> AllocationDao<'c> {
                 .filter(dsl::payment_platform.eq(platform))
                 .filter(dsl::address.eq(address))
                 .filter(dsl::released.eq(false))
-                .filter(dsl::timestamp.gt(after_timestamp.naive_utc()))
+                .filter(dsl::timestamp.gt(after_timestamp))
                 .get_results::<BigDecimalField>(conn)?
                 .sum();
 
