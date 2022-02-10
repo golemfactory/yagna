@@ -21,7 +21,7 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
 mod local {
     use super::*;
     use crate::dao::*;
-    use chrono::Utc;
+    use chrono::NaiveDateTime;
     use std::collections::BTreeMap;
     use ya_client_model::payment::{Account, DocumentStatus, DriverDetails};
     use ya_core_model::payment::local::*;
@@ -164,7 +164,7 @@ mod local {
             driver,
             network,
             token,
-            last,
+            after_timestamp,
         } = msg;
 
         let (network, network_details) = processor
@@ -174,7 +174,7 @@ mod local {
             .await
             .map_err(GenericError::new)?;
         let token = token.unwrap_or(network_details.default_token.clone());
-        let after_timestamp = Utc::now() + chrono::Duration::seconds(-last);
+        let after_timestamp = NaiveDateTime::from_timestamp(after_timestamp, 0);
         let platform = match network_details.tokens.get(&token) {
             Some(platform) => platform.clone(),
             None => {

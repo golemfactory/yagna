@@ -20,6 +20,7 @@ async fn get_requestor_balance_and_platform() -> anyhow::Result<(BigDecimal, Str
                     driver: account.driver,
                     network: Some(account.network),
                     token: Some(account.token),
+                    after_timestamp: 0,
                 })
                 .await??;
             return Ok((status.amount, account.platform));
