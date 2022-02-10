@@ -1,4 +1,5 @@
-use crate::schema::pay_order;
+use crate::schema::*;
+
 use ya_client_model::NodeId;
 use ya_core_model::payment::local::{PaymentTitle, SchedulePayment};
 use ya_persistence::types::BigDecimalField;

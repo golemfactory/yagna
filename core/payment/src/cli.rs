@@ -1,17 +1,17 @@
 // External crates
 use bigdecimal::BigDecimal;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use std::str::FromStr;
-use std::time::UNIX_EPOCH;
 use structopt::*;
 
 // Workspace uses
+use ya_core_model::driver::BatchMode;
 use ya_core_model::{identity as id_api, payment::local as pay};
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
-use crate::accounts::{init_account, Account};
+use crate::accounts::{init_account, Account, SendMode};
 use crate::wallet;
 
 /// Payment management.
@@ -32,8 +32,12 @@ pub enum PaymentCli {
         account: pay::AccountCli,
         #[structopt(long, help = "Initialize account for sending")]
         sender: bool,
+        #[structopt(long, help = "Batching interval")]
+        send_interval: Option<humantime::Duration>,
         #[structopt(long, help = "Initialize account for receiving")]
         receiver: bool,
+        #[structopt(long, help = "Disable outgoing payment batching")]
+        disable_batching: bool,
     },
 
     /// Display account balance and a summary of sent/received payments
@@ -63,6 +67,12 @@ pub enum PaymentCli {
         to_address: Option<String>,
         #[structopt(long, help = "Optional amount to exit [default: <ALL_FUNDS>]")]
         amount: Option<String>,
+
+        #[structopt(long)]
+        check_only: bool,
+
+        #[structopt(long)]
+        fee_limit: Option<BigDecimal>,
     },
 
     Transfer {
@@ -120,14 +130,22 @@ impl PaymentCli {
             PaymentCli::Init {
                 account,
                 sender,
+                send_interval,
                 receiver,
+                disable_batching,
             } => {
+                let send = if disable_batching {
+                    SendMode::Simple(sender)
+                } else {
+                    SendMode::Batch(BatchMode::Manual {})
+                };
+
                 let account = Account {
                     driver: account.driver(),
                     address: resolve_address(account.address()).await?,
                     network: Some(account.network()),
                     token: None, // Use default -- we don't yet support other tokens than GLM
-                    send: sender,
+                    send,
                     receive: receiver,
                 };
                 init_account(account).await?;
@@ -135,17 +153,15 @@ impl PaymentCli {
             }
             PaymentCli::Status { account, last } => {
                 let address = resolve_address(account.address()).await?;
-                let timestamp = last
-                    .map(|d| Utc::now() - chrono::Duration::seconds(d.as_secs() as i64))
-                    .unwrap_or(DateTime::from(UNIX_EPOCH))
-                    .timestamp();
                 let status = bus::service(pay::BUS_ID)
                     .call(pay::GetStatus {
                         address: address.clone(),
                         driver: account.driver(),
                         network: Some(account.network()),
                         token: None,
-                        after_timestamp: timestamp,
+                        since: last.map(|d| {
+                            chrono::Utc::now() - chrono::Duration::seconds(d.as_secs() as i64)
+                        }),
                     })
                     .await??;
                 if ctx.json_output {
@@ -185,6 +201,18 @@ impl PaymentCli {
                             "requested",
                             format!("{} {}", status.incoming.requested.total_amount, status.token),
                             format!("{} {}", status.outgoing.requested.total_amount, status.token),
+                        ]},
+                        serde_json::json! {[
+                            "",
+                            "",
+                            "",
+                            "overdue",
+                            if let Some(overdue) = status.incoming.overdue {
+                              format!("{} {}", overdue.total_amount, status.token)
+                            } else {
+                                Default::default()
+                            },
+                            String::default(),
                         ]},
                     ],
                 }
@@ -252,22 +280,39 @@ impl PaymentCli {
                 account,
                 to_address,
                 amount,
+                fee_limit,
+                check_only,
             } => {
                 let amount = match amount {
                     None => None,
                     Some(a) => Some(BigDecimal::from_str(&a)?),
                 };
-                CommandOutput::object(
-                    wallet::exit(
-                        resolve_address(account.address()).await?,
-                        to_address,
-                        amount,
-                        account.driver(),
-                        Some(account.network()),
-                        None,
+                if check_only {
+                    return CommandOutput::object(
+                        wallet::exit_fee(
+                            resolve_address(account.address()).await?,
+                            to_address,
+                            amount,
+                            account.driver(),
+                            Some(account.network()),
+                            None,
+                        )
+                        .await?,
+                    );
+                } else {
+                    CommandOutput::object(
+                        wallet::exit(
+                            resolve_address(account.address()).await?,
+                            to_address,
+                            amount,
+                            account.driver(),
+                            Some(account.network()),
+                            None,
+                            fee_limit,
+                        )
+                        .await?,
                     )
-                    .await?,
-                )
+                }
             }
             PaymentCli::Transfer {
                 account,

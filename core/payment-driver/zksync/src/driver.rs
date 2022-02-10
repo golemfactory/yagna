@@ -206,6 +206,10 @@ impl PaymentDriver for ZksyncDriver {
         ))
     }
 
+    async fn exit_fee(&self, msg: ExitFee) -> Result<FeeResult, GenericError> {
+        Ok(wallet::exit_fee(&msg).await?)
+    }
+
     async fn get_account_balance(
         &self,
         _db: DbExecutor,
@@ -257,7 +261,7 @@ impl PaymentDriver for ZksyncDriver {
             DbNetwork::from_str(&network).map_err(GenericError::new)?,
             msg.token(),
         );
-        bus::register_account(self, &address, &network, &token, mode).await?;
+        bus::register_account(self, &address, &network, &token, mode, msg.batch()).await?;
 
         log::info!(
             "Initialised payment account. mode={:?}, address={}, driver={}, network={}, token={}",
@@ -317,6 +321,10 @@ To be able to use zkSync driver please send some GLM tokens and optionally ETH f
     ) -> Result<String, GenericError> {
         log::info!("TRANSFER = Not Implemented: {:?}", msg);
         Ok("NOT_IMPLEMENTED".to_string())
+    }
+
+    async fn transfer_fee(&self, _msg: TransferFee) -> Result<FeeResult, GenericError> {
+        Err(GenericError::new("NOT_IMPLEMENTED"))
     }
 
     async fn schedule_payment(

@@ -23,6 +23,7 @@ use ya_service_bus::{
 // Local uses
 use crate::dao::DbExecutor;
 use crate::driver::PaymentDriver;
+use crate::model::BatchMode;
 
 pub async fn bind_service<Driver: PaymentDriver + 'static>(
     db: &DbExecutor,
@@ -45,6 +46,7 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
         .bind_with_processor(
             move |db, dr, c, m| async move { dr.enter(db, c, m).await }
         )
+        .bind_with_processor(move |_, dr, _, m| async move { dr.exit_fee(m).await })
         .bind_with_processor(
             move |db, dr, c, m| async move { dr.exit(db, c, m).await }
         )
@@ -60,6 +62,7 @@ pub async fn bind_service<Driver: PaymentDriver + 'static>(
         .bind_with_processor(
             move |db, dr, c, m| async move { dr.transfer(db, c, m).await }
         )
+        .bind_with_processor(move |_, dr, _, m| async move { dr.transfer_fee(m).await })
         .bind_with_processor(
             move |db, dr, c, m| async move { dr.schedule_payment(db, c, m).await }
         )
@@ -127,6 +130,7 @@ pub async fn register_account(
     network: &str,
     token: &str,
     mode: AccountMode,
+    batch: Option<BatchMode>,
 ) -> Result<(), GenericError> {
     let msg = payment_srv::RegisterAccount {
         address: address.to_string(),
@@ -134,6 +138,7 @@ pub async fn register_account(
         network: network.to_string(),
         token: token.to_string(),
         mode,
+        batch,
     };
     service(payment_srv::BUS_ID)
         .send(msg)

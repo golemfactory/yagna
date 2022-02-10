@@ -26,8 +26,8 @@ pub use ya_core_model::identity::{event::Event as IdentityEvent, Error as Identi
 pub trait PaymentDriver {
     async fn account_event(
         &self,
-        _db: DbExecutor,
-        _caller: String,
+        db: DbExecutor,
+        caller: String,
         msg: IdentityEvent,
     ) -> Result<(), IdentityError>;
 
@@ -48,6 +48,8 @@ pub trait PaymentDriver {
     async fn exit(&self, db: DbExecutor, caller: String, msg: Exit)
         -> Result<String, GenericError>;
 
+    async fn exit_fee(&self, msg: ExitFee) -> Result<FeeResult, GenericError>;
+
     // used by bus to bind service
     fn get_name(&self) -> String;
     fn get_default_network(&self) -> String;
@@ -64,6 +66,8 @@ pub trait PaymentDriver {
         caller: String,
         msg: Transfer,
     ) -> Result<String, GenericError>;
+
+    async fn transfer_fee(&self, msg: TransferFee) -> Result<FeeResult, GenericError>;
 
     async fn schedule_payment(
         &self,

@@ -19,7 +19,7 @@ pub enum RpcMessageError {
 
 pub mod local {
     use super::*;
-    use crate::driver::{AccountMode, PaymentConfirmation};
+    use crate::driver::{AccountMode, BatchMode, PaymentConfirmation};
     use bigdecimal::{BigDecimal, Zero};
     use chrono::{DateTime, Utc};
     use std::fmt::Display;
@@ -182,6 +182,7 @@ pub mod local {
         pub network: String,
         pub token: String,
         pub mode: AccountMode,
+        pub batch: Option<BatchMode>,
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize, thiserror::Error)]
@@ -239,7 +240,7 @@ pub mod local {
         pub driver: String,
         pub network: Option<String>,
         pub token: Option<String>,
-        pub after_timestamp: i64,
+        pub since: Option<DateTime<Utc>>,
     }
 
     impl RpcMessage for GetStatus {
@@ -300,6 +301,7 @@ pub mod local {
         pub requested: StatValue,
         pub accepted: StatValue,
         pub confirmed: StatValue,
+        pub overdue: Option<StatValue>,
     }
 
     impl std::ops::Add for StatusNotes {
@@ -310,6 +312,12 @@ pub mod local {
                 requested: self.requested + rhs.requested,
                 accepted: self.accepted + rhs.accepted,
                 confirmed: self.confirmed + rhs.confirmed,
+                overdue: match (self.overdue, rhs.overdue) {
+                    (None, None) => None,
+                    (Some(l), Some(r)) => Some(l + r),
+                    (Some(l), None) => Some(l),
+                    (None, Some(r)) => Some(r),
+                },
             }
         }
     }
@@ -392,6 +400,15 @@ pub mod local {
         AccountNotRegistered,
         #[error("Error while validating allocation: {0}")]
         Other(String),
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct BuildPayments {}
+
+    impl RpcMessage for BuildPayments {
+        const ID: &'static str = "BuildPayments";
+        type Item = String;
+        type Error = NoError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]

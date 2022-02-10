@@ -116,6 +116,11 @@ impl PaymentDriver for Erc20Driver {
         Ok("NOT_IMPLEMENTED".to_string())
     }
 
+    async fn exit_fee(&self, _: ExitFee) -> Result<FeeResult, GenericError> {
+        log::info!("EXIT_FEE = Not Implemented");
+        Err(GenericError::new("EXIT_FEE = Not Implemented"))
+    }
+
     async fn get_account_balance(
         &self,
         _db: DbExecutor,
@@ -163,6 +168,11 @@ impl PaymentDriver for Erc20Driver {
     ) -> Result<String, GenericError> {
         self.is_account_active(&msg.sender)?;
         cli::transfer(&self.dao, msg).await
+    }
+
+    async fn transfer_fee(&self, _msg: TransferFee) -> Result<FeeResult, GenericError> {
+        log::info!("transfer_fee = Not Implemented");
+        Err(GenericError::new("transfer_fee = Not Implemented"))
     }
 
     async fn schedule_payment(

@@ -81,6 +81,7 @@ pub fn increase_amount_paid(
     conn: &ConnType,
 ) -> DbResult<()> {
     assert!(amount > &BigDecimal::zero().into()); // TODO: Remove when payment service is production-ready.
+
     let (total_amount_paid, agreement_id, role): (BigDecimalField, String, Role) =
         dsl::pay_activity
             .find((activity_id, owner_id))
@@ -114,6 +115,8 @@ pub fn increase_amount_paid(
             )?;
         }
     }
+
+    agreement::increase_amount_paid(&agreement_id, owner_id, amount, conn)?;
 
     Ok(())
 }

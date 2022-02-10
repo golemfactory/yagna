@@ -63,6 +63,17 @@ impl<'c> AllocationDao<'c> {
         .await
     }
 
+    pub async fn spend_from_allocation(
+        &self,
+        allocation_id: String,
+        amount: BigDecimal,
+    ) -> DbResult<()> {
+        do_with_transaction(self.pool, move |conn| {
+            spend_from_allocation(&allocation_id, &amount.into(), conn)
+        })
+        .await
+    }
+
     pub async fn get(
         &self,
         allocation_id: String,

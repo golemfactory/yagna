@@ -21,8 +21,9 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
 mod local {
     use super::*;
     use crate::dao::*;
-    use chrono::NaiveDateTime;
+    use chrono::DateTime;
     use std::collections::BTreeMap;
+    use std::time::SystemTime;
     use ya_client_model::payment::{Account, DocumentStatus, DriverDetails};
     use ya_core_model::payment::local::*;
     use ya_persistence::types::Role;
@@ -164,7 +165,7 @@ mod local {
             driver,
             network,
             token,
-            after_timestamp,
+            since,
         } = msg;
 
         let (network, network_details) = processor
@@ -174,7 +175,6 @@ mod local {
             .await
             .map_err(GenericError::new)?;
         let token = token.unwrap_or(network_details.default_token.clone());
-        let after_timestamp = NaiveDateTime::from_timestamp(after_timestamp, 0);
         let platform = match network_details.tokens.get(&token) {
             Some(platform) => platform.clone(),
             None => {
@@ -187,33 +187,24 @@ mod local {
 
         let incoming_fut = async {
             db.as_dao::<AgreementDao>()
-                .incoming_transaction_summary(
-                    platform.clone(),
-                    address.clone(),
-                    after_timestamp.clone(),
-                )
+                .incoming_transaction_summary(platform.clone(), address.clone(), since)
                 .await
         }
         .map_err(GenericError::new);
 
         let outgoing_fut = async {
             db.as_dao::<AgreementDao>()
-                .outgoing_transaction_summary(
-                    platform.clone(),
-                    address.clone(),
-                    after_timestamp.clone(),
-                )
+                .outgoing_transaction_summary(platform.clone(), address.clone(), since)
                 .await
         }
         .map_err(GenericError::new);
 
         let reserved_fut = async {
+            let after_timestamp = since
+                .unwrap_or_else(|| DateTime::from(SystemTime::UNIX_EPOCH))
+                .naive_utc();
             db.as_dao::<AllocationDao>()
-                .total_remaining_allocation(
-                    platform.clone(),
-                    address.clone(),
-                    after_timestamp.clone(),
-                )
+                .total_remaining_allocation(platform.clone(), address.clone(), after_timestamp)
                 .await
         }
         .map_err(GenericError::new);
@@ -715,6 +706,7 @@ mod public {
         let platform = payment.payment_platform.clone();
         let amount = payment.amount.clone();
         let num_paid_invoices = payment.agreement_payments.len() as u64;
+        let payment_id = payment.payment_id.clone();
         match processor
             .lock()
             .await
@@ -726,13 +718,16 @@ mod public {
                 counter!("payment.invoices.provider.paid", num_paid_invoices);
                 Ok(Ack {})
             }
-            Err(e) => match e {
-                VerifyPaymentError::ConfirmationEncoding => {
-                    Err(SendError::BadRequest(e.to_string()))
+            Err(e) => {
+                log::error!("Payment {} verification failed {:?}", payment_id, e);
+                match e {
+                    VerifyPaymentError::ConfirmationEncoding => {
+                        Err(SendError::BadRequest(e.to_string()))
+                    }
+                    VerifyPaymentError::Validation(e) => Err(SendError::BadRequest(e)),
+                    _ => Err(SendError::ServiceError(e.to_string())),
                 }
-                VerifyPaymentError::Validation(e) => Err(SendError::BadRequest(e)),
-                _ => Err(SendError::ServiceError(e.to_string())),
-            },
+            }
         }
     }
 }

@@ -35,6 +35,8 @@ table! {
         total_amount_scheduled -> Text,
         total_amount_paid -> Text,
         app_session_id -> Nullable<Text>,
+        created_ts -> Nullable<Timestamp>,
+        updated_ts -> Nullable<Timestamp>,
     }
 }
 
@@ -61,6 +63,37 @@ table! {
         timeout -> Nullable<Timestamp>,
         make_deposit -> Bool,
         released -> Bool,
+    }
+}
+
+table! {
+    pay_batch_order (id) {
+        id -> Text,
+        ts -> Timestamp,
+        owner_id -> Text,
+        payer_addr -> Text,
+        platform -> Text,
+        total_amount -> Nullable<Float>,
+        paid -> Bool,
+    }
+}
+
+table! {
+    pay_batch_order_item (id, payee_addr) {
+        id -> Text,
+        payee_addr -> Text,
+        amount -> Text,
+        driver_order_id -> Nullable<Text>,
+        paid -> Bool,
+    }
+}
+
+table! {
+    pay_batch_order_item_payment (id, payee_addr, payee_id) {
+        id -> Text,
+        payee_addr -> Text,
+        payee_id -> Text,
+        json -> Text,
     }
 }
 
@@ -189,6 +222,7 @@ table! {
 
 joinable!(pay_activity_payment -> pay_allocation (allocation_id));
 joinable!(pay_agreement_payment -> pay_allocation (allocation_id));
+joinable!(pay_batch_order_item -> pay_batch_order (id));
 joinable!(pay_debit_note -> pay_document_status (status));
 joinable!(pay_debit_note_event -> pay_event_type (event_type));
 joinable!(pay_invoice -> pay_document_status (status));
@@ -201,6 +235,9 @@ allow_tables_to_appear_in_same_query!(
     pay_agreement,
     pay_agreement_payment,
     pay_allocation,
+    pay_batch_order,
+    pay_batch_order_item,
+    pay_batch_order_item_payment,
     pay_debit_note,
     pay_debit_note_event,
     pay_debit_note_event_read,
