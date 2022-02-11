@@ -13,6 +13,7 @@ use anyhow::{anyhow, Context as AnyhowContext};
 use futures::channel::mpsc;
 use futures::stream::LocalBoxStream;
 use futures::{FutureExt, SinkExt, Stream, StreamExt, TryStreamExt};
+use metrics::counter;
 use tokio::time;
 use url::Url;
 
@@ -96,6 +97,9 @@ pub async fn start_network(
     default_id: NodeId,
     ids: Vec<NodeId>,
 ) -> anyhow::Result<()> {
+    counter!("net.connections.p2p", 0);
+    counter!("net.connections.relay", 0);
+
     let url = Url::parse(&format!(
         "udp://{}",
         relay_addr(&config)
@@ -175,6 +179,9 @@ pub async fn start_network(
 
     if let Some(address) = client.public_addr().await {
         log::info!("Public address: {}", address);
+        counter!("net.public-addresses", 1);
+    } else {
+        counter!("net.public-addresses", 0);
     }
 
     Ok(())
@@ -713,6 +720,12 @@ impl State {
                     PrefixedSink::new(client.forward(remote_id).await?).into()
                 } else {
                     client.forward_unreliable(remote_id).await?.into()
+                };
+
+                if client.sessions.has_p2p_connection(remote_id).await {
+                    counter!("net.connections.p2p", 1)
+                } else {
+                    counter!("net.connections.relay", 1)
                 };
 
                 let mut inner = self.inner.borrow_mut();
