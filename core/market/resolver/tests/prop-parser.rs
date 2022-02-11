@@ -100,17 +100,29 @@ fn parse_prop_ref_as_list_syntax_error2() {
 #[test]
 fn parse_prop_value_from_literal_string() {
     assert_eq!(
-        parse_prop_value_literal("\"dblah\""),
+        parse_prop_value_literal(r#""dblah""#),
         Ok(Literal::Str("dblah"))
     );
 }
 
 #[test]
-fn parse_prop_value_from_literal_string_with_escaped_quotes() {
+fn parse_prop_value_from_literal_string_with_quotes() {
     assert_eq!(
-        parse_prop_value_literal("\"\\\"king\\\" \\\"node\\\"\""),
-        Ok(Literal::String(String::from("\"king\" \"node\"")))
+        parse_prop_value_literal(r#""one \"two\" \tthree\n""#),
+        Ok(Literal::Str(r#"one \"two\" \tthree\n"#))
     );
+}
+
+#[test]
+fn parse_prop() {
+    assert_eq!(
+        parse_prop_value_literal(
+            r#""hash:sha3:aabb:http://repo.some.network:8000/some-image-ddee0011.gvmi\n""#
+        ),
+        Ok(Literal::Str(
+            r#"hash:sha3:aabb:http://repo.some.network:8000/some-image-ddee0011.gvmi\n"#
+        ))
+    )
 }
 
 #[test]

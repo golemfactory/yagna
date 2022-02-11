@@ -1,15 +1,18 @@
+use std::collections::HashMap;
+use std::convert::TryFrom;
+use std::time::Duration;
+
 use chrono::{DateTime, Utc};
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
-use std::time::Duration;
 use strum::EnumMessage;
 use strum_macros::*;
 
 use crate::display::EnableDisplay;
 
 use ya_client::model::market::Reason;
+use ya_client::model::payment::{DebitNoteEventType, Rejection};
 
 #[derive(Clone)]
 pub enum ProviderAgreementResult {
@@ -44,9 +47,35 @@ pub enum BreakReason {
     )]
     #[strum(message = "DebitNotesDeadline")]
     DebitNotesDeadline(chrono::Duration),
+    #[display(fmt = "Requestor rejected the debit note: {:?}", "_0.rejection_reason")]
+    #[strum(message = "DebitNoteRejected")]
+    DebitNoteRejected(Rejection),
+    #[display(fmt = "Provider cancelled the debit note")]
+    #[strum(message = "DebitNoteCancelled")]
+    DebitNoteCancelled,
+    #[display(
+        fmt = "Requestor didn't pay for DebitNote in time ({})",
+        "_0.display()"
+    )]
+    #[strum(message = "DebitNoteNotPaid")]
+    DebitNoteNotPaid(chrono::Duration),
     #[display(fmt = "Requestor is unreachable more than {}", "_0.display()")]
     #[strum(message = "RequestorUnreachable")]
     RequestorUnreachable(chrono::Duration),
+}
+
+impl TryFrom<DebitNoteEventType> for BreakReason {
+    type Error = ();
+
+    fn try_from(event: DebitNoteEventType) -> Result<Self, Self::Error> {
+        match event {
+            DebitNoteEventType::DebitNoteRejectedEvent { rejection } => {
+                Ok(Self::DebitNoteRejected(rejection))
+            }
+            DebitNoteEventType::DebitNoteCancelledEvent => Ok(Self::DebitNoteCancelled),
+            _ => Err(()),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

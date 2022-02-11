@@ -4,14 +4,14 @@
 
 // External crates
 use crate::erc20::ethereum::{
-    get_polygon_maximum_price, get_polygon_priority, get_polygon_starting_price, PolygonPriority,
+    get_polygon_gas_price_method, get_polygon_maximum_price, get_polygon_priority,
+    get_polygon_starting_price, PolygonGasPriceMethod, PolygonPriority,
     POLYGON_PREFERRED_GAS_PRICES_EXPRESS, POLYGON_PREFERRED_GAS_PRICES_FAST,
     POLYGON_PREFERRED_GAS_PRICES_SLOW,
 };
 use bigdecimal::BigDecimal;
 use chrono::Utc;
 use num_bigint::BigUint;
-use num_traits::Float;
 use std::str::FromStr;
 use web3::types::{H160, H256, U256, U64};
 
@@ -29,8 +29,7 @@ use crate::{
         eth_utils, ethereum, faucet,
         utils::{
             big_dec_gwei_to_u256, big_dec_to_u256, big_uint_to_big_dec, convert_float_gas_to_u256,
-            convert_u256_gas_to_float, gas_float_equals, str_to_addr, topic_to_str_address,
-            u256_to_big_dec,
+            convert_u256_gas_to_float, str_to_addr, topic_to_str_address, u256_to_big_dec,
         },
     },
     RINKEBY_NETWORK,
@@ -108,12 +107,15 @@ pub async fn has_enough_eth_for_gas(
     let sender_h160 = str_to_addr(&db_tx.sender)?;
     let eth_balance = ethereum::get_balance(sender_h160, network).await?;
     let gas_costs = ethereum::get_max_gas_costs(db_tx)?;
+    let gas_price = ethereum::get_gas_price_from_db_tx(db_tx)?;
     let human_gas_cost = u256_to_big_dec(gas_costs)?;
+    let human_gas_price = convert_u256_gas_to_float(gas_price);
     if gas_costs > eth_balance {
         return Err(GenericError::new(format!(
-            "Not enough ETH balance for gas. balance={}, gas_cost={}, address={}, network={}",
+            "Not enough ETH balance for gas. balance={}, gas_cost={}, gas_price={} Gwei, address={}, network={}",
             u256_to_big_dec(eth_balance)?,
             &human_gas_cost,
+            &human_gas_price,
             &db_tx.sender,
             &db_tx.network
         )));
@@ -143,16 +145,28 @@ pub async fn make_transfer(
     let amount = big_dec_to_u256(&amount_big_dec)?;
 
     let (gas_price, max_gas_price) = match network {
-        Network::Polygon => (
-            Some(match gas_price {
-                Some(v) => big_dec_gwei_to_u256(v)?,
-                None => convert_float_gas_to_u256(get_polygon_starting_price()),
-            }),
-            Some(match max_gas_price {
-                Some(v) => big_dec_gwei_to_u256(v)?,
-                None => convert_float_gas_to_u256(get_polygon_maximum_price()),
-            }),
-        ),
+        Network::Polygon => match get_polygon_gas_price_method() {
+            PolygonGasPriceMethod::PolygonGasPriceStatic => (
+                Some(match gas_price {
+                    Some(v) => big_dec_gwei_to_u256(v)?,
+                    None => convert_float_gas_to_u256(get_polygon_starting_price()),
+                }),
+                Some(match max_gas_price {
+                    Some(v) => big_dec_gwei_to_u256(v)?,
+                    None => convert_float_gas_to_u256(get_polygon_maximum_price()),
+                }),
+            ),
+            PolygonGasPriceMethod::PolygonGasPriceDynamic => (
+                match gas_price {
+                    None => None,
+                    Some(v) => Some(big_dec_gwei_to_u256(v)?),
+                },
+                Some(match max_gas_price {
+                    Some(v) => big_dec_gwei_to_u256(v)?,
+                    None => convert_float_gas_to_u256(get_polygon_maximum_price()),
+                }),
+            ),
+        },
         _ => (
             match gas_price {
                 None => None,
@@ -169,13 +183,16 @@ pub async fn make_transfer(
     let recipient = str_to_addr(&details.recipient)?;
     // TODO: Implement token
     //let token = get_network_token(network, None);
-    let raw_tx = ethereum::prepare_raw_transaction(
+    let mut raw_tx = ethereum::prepare_raw_transaction(
         address, recipient, amount, network, nonce, gas_price, gas_limit,
     )
     .await?;
-    //    Ok(raw_tx)
 
-    //let chain_id = network as u64;
+    if let Some(max_gas_price) = max_gas_price {
+        if raw_tx.gas_price > max_gas_price {
+            raw_tx.gas_price = max_gas_price;
+        }
+    }
 
     Ok(ethereum::create_dao_entity(
         nonce,
@@ -191,35 +208,34 @@ pub async fn make_transfer(
     ))
 }
 
-fn bump_gas_price(gas_in_gwei: f64, limit_in_gwei: Option<f64>) -> f64 {
-    let mut result = -1.0;
+fn bump_gas_price(gas_in_gwei: U256) -> U256 {
+    let min_bump_num: U256 = U256::from(111u64);
+    let min_bump_den: U256 = U256::from(100u64);
+    let min_gas = gas_in_gwei * min_bump_num / min_bump_den;
 
-    let polygon_prices = get_polygon_priority();
+    match get_polygon_gas_price_method() {
+        PolygonGasPriceMethod::PolygonGasPriceDynamic => {
+            //ignore maximum gas price, because we have to bump at least 10% so the transaction will be accepted
+            min_gas
+        }
+        PolygonGasPriceMethod::PolygonGasPriceStatic => {
+            let polygon_prices = get_polygon_priority();
 
-    let gas_prices = match polygon_prices {
-        PolygonPriority::PolygonPriorityExpress => POLYGON_PREFERRED_GAS_PRICES_EXPRESS.to_vec(),
-        PolygonPriority::PolygonPriorityFast => POLYGON_PREFERRED_GAS_PRICES_FAST.to_vec(),
-        PolygonPriority::PolygonPrioritySlow => POLYGON_PREFERRED_GAS_PRICES_SLOW.to_vec(),
-    };
+            let gas_prices: &[f64] = match polygon_prices {
+                PolygonPriority::PolygonPriorityExpress => {
+                    &POLYGON_PREFERRED_GAS_PRICES_EXPRESS[..]
+                }
+                PolygonPriority::PolygonPriorityFast => &POLYGON_PREFERRED_GAS_PRICES_FAST[..],
+                PolygonPriority::PolygonPrioritySlow => &POLYGON_PREFERRED_GAS_PRICES_SLOW[..],
+            };
 
-    for n in 1..(gas_prices.len() - 1) {
-        if gas_float_equals(gas_prices[n], gas_in_gwei) {
-            result = gas_prices[n + 1];
+            gas_prices
+                .iter()
+                .map(|&f| convert_float_gas_to_u256(f))
+                .find(|&gas_price_step| gas_price_step > min_gas)
+                .unwrap_or(min_gas)
         }
     }
-    for n in 1..(gas_prices.len()) {
-        if gas_in_gwei > gas_prices[n - 1] && gas_in_gwei < gas_prices[n] {
-            result = gas_prices[n];
-        }
-    }
-
-    if result < 0.0 {
-        result = gas_in_gwei * 1.2
-    }
-    if let Some(limit_in_gwei) = limit_in_gwei {
-        result = Float::min(result, limit_in_gwei);
-    }
-    result
 }
 
 pub async fn send_transactions(
@@ -233,10 +249,18 @@ pub async fn send_transactions(
             match serde_json::from_str::<YagnaRawTransaction>(&tx.encoded) {
                 Ok(raw_tx) => raw_tx,
                 Err(err) => {
-                    let error = format!("JSON parse failed, unrecoverable error: {}", err);
+                    log::error!(
+                        "send_transactions - YagnaRawTransaction serialization failed: {:?}",
+                        err
+                    );
                     //handle problem when deserializing transaction
-                    dao.transaction_confirmed_and_failed(&tx.tx_id, "", None, error.as_str())
-                        .await;
+                    dao.transaction_confirmed_and_failed(
+                        &tx.tx_id,
+                        "",
+                        None,
+                        "Json parse failed, unrecoverable error",
+                    )
+                    .await;
                     continue;
                 }
             };
@@ -246,16 +270,24 @@ pub async fn send_transactions(
         let new_gas_price = if let Some(current_gas_price) = tx.current_gas_price {
             if tx.status == TransactionStatus::ResendAndBumpGas as i32 {
                 let gas_u256 = U256::from_dec_str(&current_gas_price).map_err(GenericError::new)?;
-                let mut gas_f64 = convert_u256_gas_to_float(gas_u256);
 
                 let max_gas_u256 = match tx.max_gas_price {
-                    Some(max_gas_price) => Some(convert_u256_gas_to_float(
-                        U256::from_dec_str(&max_gas_price).map_err(GenericError::new)?,
-                    )),
+                    Some(max_gas_price) => {
+                        Some(U256::from_dec_str(&max_gas_price).map_err(GenericError::new)?)
+                    }
                     None => None,
                 };
-                gas_f64 = bump_gas_price(gas_f64, max_gas_u256);
-                convert_float_gas_to_u256(gas_f64)
+                let new_gas = bump_gas_price(gas_u256);
+                if let Some(max_gas_u256) = max_gas_u256 {
+                    if gas_u256 > max_gas_u256 {
+                        log::warn!(
+                            "bump gas ({}) larger than max gas ({}) price",
+                            gas_u256,
+                            max_gas_u256
+                        )
+                    }
+                }
+                new_gas
             } else {
                 U256::from_dec_str(&current_gas_price).map_err(GenericError::new)?
             }
@@ -296,10 +328,26 @@ pub async fn send_transactions(
             Err(e) => {
                 log::error!("Error sending transaction: {:?}", e);
                 if e.to_string().contains("nonce too low") {
-                    log::error!("Nonce too low: {:?}", e);
-                    dao.transaction_failed_with_nonce_too_low(&tx.tx_id, e.to_string().as_str())
+                    if tx.tmp_onchain_txs.filter(|v| !v.is_empty()).is_some() && tx.resent_times < 5
+                    {
+                        //if tmp on-chain tx transactions exist give it a chance but marking it as failed sent
+                        dao.transaction_failed_send(
+                            &tx.tx_id,
+                            tx.resent_times + 1,
+                            e.to_string().as_str(),
+                        )
                         .await;
-                    continue;
+                        continue;
+                    } else {
+                        //if trying to sent transaction too much times just end with unrecoverable error
+                        log::error!("Nonce too low: {:?}", e);
+                        dao.transaction_failed_with_nonce_too_low(
+                            &tx.tx_id,
+                            e.to_string().as_str(),
+                        )
+                        .await;
+                        continue;
+                    }
                 }
                 if e.to_string().contains("already known") {
                     log::error!("Already known: {:?}. Send transaction with higher gas to get from this error loop. (resent won't fix anything)", e);
@@ -307,7 +355,7 @@ pub async fn send_transactions(
                     continue;
                 }
 
-                dao.transaction_failed_send(&tx.tx_id, e.to_string().as_str())
+                dao.transaction_failed_send(&tx.tx_id, tx.resent_times, e.to_string().as_str())
                     .await;
             }
         }

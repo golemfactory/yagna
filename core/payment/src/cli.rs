@@ -1,7 +1,8 @@
 // External crates
 use bigdecimal::BigDecimal;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use std::str::FromStr;
+use std::time::UNIX_EPOCH;
 use structopt::*;
 
 // Workspace uses
@@ -39,6 +40,8 @@ pub enum PaymentCli {
     Status {
         #[structopt(flatten)]
         account: pay::AccountCli,
+        #[structopt(long, help = "Display account balance for the given time period")]
+        last: Option<humantime::Duration>,
     },
 
     /// Enter layer 2 (deposit funds to layer 2 network)
@@ -97,7 +100,7 @@ pub enum PaymentCli {
 #[derive(StructOpt, Debug)]
 pub enum InvoiceCommand {
     Status {
-        #[structopt(long)]
+        #[structopt(long, help = "Display invoice status from the given period of time")]
         last: Option<humantime::Duration>,
     },
 }
@@ -130,14 +133,19 @@ impl PaymentCli {
                 init_account(account).await?;
                 Ok(CommandOutput::NoOutput)
             }
-            PaymentCli::Status { account } => {
+            PaymentCli::Status { account, last } => {
                 let address = resolve_address(account.address()).await?;
+                let timestamp = last
+                    .map(|d| Utc::now() - chrono::Duration::seconds(d.as_secs() as i64))
+                    .unwrap_or(DateTime::from(UNIX_EPOCH))
+                    .timestamp();
                 let status = bus::service(pay::BUS_ID)
                     .call(pay::GetStatus {
                         address: address.clone(),
                         driver: account.driver(),
                         network: Some(account.network()),
                         token: None,
+                        after_timestamp: timestamp,
                     })
                     .await??;
                 if ctx.json_output {

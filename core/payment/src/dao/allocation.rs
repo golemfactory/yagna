@@ -154,6 +154,7 @@ impl<'c> AllocationDao<'c> {
         &self,
         platform: String,
         address: String,
+        after_timestamp: NaiveDateTime,
     ) -> DbResult<BigDecimal> {
         readonly_transaction(self.pool, move |conn| {
             let total_remaining_amount = dsl::pay_allocation
@@ -161,6 +162,7 @@ impl<'c> AllocationDao<'c> {
                 .filter(dsl::payment_platform.eq(platform))
                 .filter(dsl::address.eq(address))
                 .filter(dsl::released.eq(false))
+                .filter(dsl::timestamp.gt(after_timestamp))
                 .get_results::<BigDecimalField>(conn)?
                 .sum();
 

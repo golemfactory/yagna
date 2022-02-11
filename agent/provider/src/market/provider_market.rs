@@ -160,6 +160,12 @@ fn load_negotiators_config(data_dir: &Path) -> Result<NegotiatorsConfig> {
             negotiator_config
                 .negotiators
                 .push(max_agreements::Config::from_env()?);
+            negotiator_config
+                .negotiators
+                .push(payment_timeout::Config::from_env()?);
+            negotiator_config
+                .negotiators
+                .push(note_interval::Config::from_env()?);
 
             let content = serde_yaml::to_string(&negotiator_config)?;
             File::create(&path)

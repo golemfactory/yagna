@@ -174,7 +174,6 @@ named!(prop_ref_list_item <&str, &str>,
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal<'a> {
     Str(&'a str),
-    String(String),
     Number(&'a str),
     Decimal(&'a str),
     Bool(bool),
@@ -186,7 +185,7 @@ pub enum Literal<'a> {
 named!(
     val_literal<Literal>,
     alt!(
-        string_literal
+        str_literal
             | version_literal
             | datetime_literal
             | true_literal
@@ -211,20 +210,14 @@ named!(
 );
 
 named!(
-    string_literal<Literal>,
-    ws!(do_parse!(
-        val: delimited!(
-            tag!("\""),
-            escaped!(none_of!("\\\""), '\\', one_of!("\\\"")),
-            tag!("\"")
-        ) >> ({
-            let val = str::from_utf8(val).unwrap();
-            if !val.contains("\\\"") {
-                Literal::Str(val)
-            } else {
-                Literal::String(val.replace("\\\"", "\""))
-            }
-        })
+    str_literal<Literal>,
+    ws!(delimited!(
+        char!('"'),
+        do_parse!(
+            val: escaped!(none_of!(r#"\""#), '\\', one_of!("\"nt0\\"))
+                >> (Literal::Str(str::from_utf8(val).unwrap()))
+        ),
+        char!('"')
     ))
 );
 
@@ -442,32 +435,4 @@ pub fn is_equal_sign(chr: char) -> bool {
 
 pub fn is_delimiter(chr: char) -> bool {
     chr == '[' || chr == ']' || chr == '$'
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn default_parse() {
-        assert!(match string_literal("\"input\"".as_bytes()) {
-            IResult::Done(rest, t) => {
-                rest.len() == 0 && t == Literal::Str("input")
-            }
-            IResult::Error(_) => false,
-            IResult::Incomplete(_) => false,
-        })
-    }
-
-    #[test]
-    fn double_quoted_parse() {
-        assert!(
-            match string_literal("\"\\\"king\\\" \\\"node\\\"\"".as_bytes()) {
-                IResult::Done(rest, t) =>
-                    rest.len() == 0 && t == Literal::String(String::from("\"king\" \"node\"")),
-                IResult::Error(_) => false,
-                IResult::Incomplete(_) => false,
-            }
-        )
-    }
 }
