@@ -48,6 +48,19 @@ impl Net {
             NetType::Hybrid => crate::hybrid::Net::gsb(ctx, config).await,
         }
     }
+
+    pub async fn shutdown() -> anyhow::Result<()> {
+        let config = Config::from_env()?;
+
+        {
+            (*NET_TYPE.write().unwrap()) = config.net_type.clone();
+        }
+
+        match &config.net_type {
+            NetType::Central => Ok(()),
+            NetType::Hybrid => crate::hybrid::Net::shutdown().await,
+        }
+    }
 }
 
 /// Chooses one of implementations of `broadcast` function

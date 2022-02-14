@@ -84,6 +84,13 @@ impl Net {
         start_network(config, default_id, ids).await?;
         Ok(())
     }
+
+    pub async fn shutdown() -> anyhow::Result<()> {
+        let mut client = CLIENT
+            .with(|c| c.borrow().clone())
+            .ok_or_else(|| anyhow::anyhow!("network not initialized"))?;
+        client.shutdown().await
+    }
 }
 
 // FIXME: examples compatibility
