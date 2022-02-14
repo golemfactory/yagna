@@ -14,7 +14,6 @@ use futures::channel::mpsc;
 use futures::stream::LocalBoxStream;
 use futures::{FutureExt, SinkExt, Stream, StreamExt, TryStreamExt};
 use metrics::counter;
-use tokio::time;
 use url::Url;
 
 use ya_core_model::net::{self, net_service};
@@ -32,7 +31,6 @@ use crate::hybrid::codec;
 use crate::hybrid::crypto::IdentityCryptoProvider;
 
 const DEFAULT_NET_RELAY_HOST: &str = "127.0.0.1:7464";
-const DEFAULT_BROADCAST_NODE_COUNT: u32 = 12;
 
 pub type BCastHandler = Box<dyn FnMut(String, &[u8]) + Send>;
 
@@ -81,7 +79,7 @@ pub struct Net;
 impl Net {
     pub async fn gsb<Context>(_: Context, config: Config) -> anyhow::Result<()> {
         let (default_id, ids) = crate::service::identities().await?;
-        start_network(config, default_id, ids).await?;
+        start_network(Arc::new(config), default_id, ids).await?;
         Ok(())
     }
 
@@ -96,11 +94,11 @@ impl Net {
 // FIXME: examples compatibility
 #[allow(unused)]
 pub async fn bind_remote<T>(_: T, default_id: NodeId, ids: Vec<NodeId>) -> anyhow::Result<()> {
-    start_network(Config::from_env()?, default_id, ids).await
+    start_network(Arc::new(Config::from_env()?), default_id, ids).await
 }
 
 pub async fn start_network(
-    config: Config,
+    config: Arc<Config>,
     default_id: NodeId,
     ids: Vec<NodeId>,
 ) -> anyhow::Result<()> {
@@ -121,6 +119,7 @@ pub async fn start_network(
     let client = ClientBuilder::from_url(url)
         .crypto(provider)
         .listen(config.bind_url.clone())
+        .expire_session_after(config.session_expiration.clone())
         .connect()
         .build()
         .await?;
@@ -168,21 +167,8 @@ pub async fn start_network(
     bind_local_bus("/from", state.clone(), true, from_handler());
     bind_local_bus("/udp/from", state.clone(), false, from_handler());
 
-    tokio::task::spawn_local(broadcast_handler(brx));
+    tokio::task::spawn_local(broadcast_handler(brx, config.clone()));
     tokio::task::spawn_local(forward_handler(receiver, state.clone()));
-
-    // Keep server connection alive by pinging every `YA_NET_DEFAULT_PING_INTERVAL` seconds.
-    let client_ = client.clone();
-    tokio::task::spawn_local(async move {
-        let mut interval = time::interval(config.ping_interval);
-        loop {
-            interval.tick().await;
-            if let Ok(session) = client_.sessions.server_session().await {
-                log::trace!("Sending ping to keep session alive.");
-                let _ = session.ping().await;
-            }
-        }
-    });
 
     if let Some(address) = client.public_addr().await {
         log::info!("Public address: {}", address);
@@ -384,14 +370,18 @@ fn forward_bus_to_net(
 }
 
 /// Forward broadcast messages from the network to the local bus
-fn broadcast_handler(rx: NetReceiver) -> impl Future<Output = ()> + Unpin + 'static {
+fn broadcast_handler(
+    rx: NetReceiver,
+    config: Arc<Config>,
+) -> impl Future<Output = ()> + Unpin + 'static {
     StreamExt::for_each(rx, move |payload| {
+        let config = config.clone();
         async move {
             let client = CLIENT
                 .with(|c| c.borrow().clone())
                 .ok_or_else(|| anyhow::anyhow!("network not initialized"))?;
             client
-                .broadcast(payload, DEFAULT_BROADCAST_NODE_COUNT)
+                .broadcast(payload, config.broadcast_size)
                 .await
                 .context("broadcast failed")
         }
