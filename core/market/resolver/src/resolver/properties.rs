@@ -16,8 +16,7 @@ type d128 = BigDecimal;
 // #region PropertyValue
 #[derive(Debug, Clone, PartialEq)]
 pub enum PropertyValue<'a> {
-    Str(&'a str),   // Str
-    String(String), // String
+    Str(&'a str), // Str
     Boolean(bool),
     //Int(i32),
     //Long(i64),
@@ -57,7 +56,6 @@ impl<'a> PropertyValue<'a> {
                 Ok(result) => &result == value,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::String(value) => PropertyValue::str_equal_with_wildcard(other, value),
         }
     }
 
@@ -83,7 +81,6 @@ impl<'a> PropertyValue<'a> {
             }, // ignore parsing error, assume false
             PropertyValue::List(_) => false,             // operator meaningless for List
             PropertyValue::Boolean(_) => false,          // operator meaningless for bool
-            PropertyValue::String(value) => value.as_str() < other,
         }
     }
 
@@ -109,7 +106,6 @@ impl<'a> PropertyValue<'a> {
             }, // ignore parsing error, assume false
             PropertyValue::List(_) => false,              // operator meaningless for List
             PropertyValue::Boolean(_) => false,           // operator meaningless for bool
-            PropertyValue::String(value) => value.as_str() <= other,
         }
     }
 
@@ -135,7 +131,6 @@ impl<'a> PropertyValue<'a> {
             }, // ignore parsing error, assume false
             PropertyValue::List(_) => false,             // operator meaningless for List
             PropertyValue::Boolean(_) => false,          // operator meaningless for bool
-            PropertyValue::String(value) => value.as_str() > other,
         }
     }
 
@@ -161,7 +156,6 @@ impl<'a> PropertyValue<'a> {
             }, // ignore parsing error, assume false
             PropertyValue::List(_) => false,              // operator meaningless for List
             PropertyValue::Boolean(_) => false,           // operator meaningless for bool
-            PropertyValue::String(value) => value.as_str() >= other,
         }
     }
 
@@ -314,7 +308,6 @@ impl<'a> PropertyValue<'a> {
                         .collect(),
                 ))
             }
-            Literal::String(val) => Ok(PropertyValue::String(val)),
         }
     }
 

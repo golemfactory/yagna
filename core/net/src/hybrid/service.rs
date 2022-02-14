@@ -13,13 +13,14 @@ use anyhow::{anyhow, Context as AnyhowContext};
 use futures::channel::mpsc;
 use futures::stream::LocalBoxStream;
 use futures::{FutureExt, SinkExt, Stream, StreamExt, TryStreamExt};
+use metrics::counter;
 use tokio::time;
 use url::Url;
 
 use ya_core_model::net::{self, net_service};
 use ya_core_model::NodeId;
+use ya_relay_client::codec::forward::{PrefixedSink, PrefixedStream, SinkKind};
 use ya_relay_client::{Client, ClientBuilder, ForwardReceiver};
-use ya_relay_proto::codec::forward::{PrefixedSink, PrefixedStream, SinkKind};
 use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::CallReplyCode;
 use ya_service_bus::{untyped as local_bus, Error, ResponseChunk};
@@ -96,6 +97,9 @@ pub async fn start_network(
     default_id: NodeId,
     ids: Vec<NodeId>,
 ) -> anyhow::Result<()> {
+    counter!("net.connections.p2p", 0);
+    counter!("net.connections.relay", 0);
+
     let url = Url::parse(&format!(
         "udp://{}",
         relay_addr(&config)
@@ -124,7 +128,7 @@ pub async fn start_network(
     let mut services: HashSet<_> = Default::default();
     ids.iter().for_each(|id| {
         let service = net_service(id);
-        services.insert(format!("/u{}", service));
+        services.insert(format!("/udp{}", service));
         services.insert(service);
     });
     let state = State::new(ids, services);
@@ -140,8 +144,8 @@ pub async fn start_network(
             }
         }
     };
-    bind_local_bus(net::BUS_ID, state.clone(), true, net_handler());
     bind_local_bus(net::BUS_ID_UDP, state.clone(), false, net_handler());
+    bind_local_bus(net::BUS_ID, state.clone(), true, net_handler());
 
     let from_handler = || {
         let state_from = state.clone();
@@ -155,7 +159,7 @@ pub async fn start_network(
         }
     };
     bind_local_bus("/from", state.clone(), true, from_handler());
-    bind_local_bus("/u/from", state.clone(), false, from_handler());
+    bind_local_bus("/udp/from", state.clone(), false, from_handler());
 
     tokio::task::spawn_local(broadcast_handler(brx));
     tokio::task::spawn_local(forward_handler(receiver, state.clone()));
@@ -175,6 +179,9 @@ pub async fn start_network(
 
     if let Some(address) = client.public_addr().await {
         log::info!("Public address: {}", address);
+        counter!("net.public-addresses", 1);
+    } else {
+        counter!("net.public-addresses", 0);
     }
 
     Ok(())
@@ -715,6 +722,12 @@ impl State {
                     client.forward_unreliable(remote_id).await?.into()
                 };
 
+                if client.sessions.has_p2p_connection(remote_id).await {
+                    counter!("net.connections.p2p", 1)
+                } else {
+                    counter!("net.connections.relay", 1)
+                };
+
                 let mut inner = self.inner.borrow_mut();
                 inner.forward.insert((remote_id, reliable), forward.clone());
 
@@ -772,8 +785,8 @@ fn parse_net_to_addr(addr: &str) -> anyhow::Result<(NodeId, String)> {
 
     let mut it = addr.split("/").fuse().skip(1).peekable();
     let (prefix, to) = match (it.next(), it.next(), it.next()) {
+        (Some("udp"), Some("net"), Some(to)) if it.peek().is_some() => ("/udp", to),
         (Some("net"), Some(to), Some(_)) => ("", to),
-        (Some("u"), Some("net"), Some(to)) if it.peek().is_some() => ("/u", to),
         _ => anyhow::bail!("invalid net-to destination: {}", addr),
     };
 
@@ -789,10 +802,10 @@ fn parse_from_to_addr(addr: &str) -> anyhow::Result<(NodeId, NodeId, String)> {
 
     let mut it = addr.split("/").fuse().skip(1).peekable();
     let (prefix, from, to) = match (it.next(), it.next(), it.next(), it.next(), it.next()) {
-        (Some("from"), Some(from), Some("to"), Some(to), Some(_)) => ("", from, to),
-        (Some("u"), Some("from"), Some(from), Some("to"), Some(to)) if it.peek().is_some() => {
-            ("/u", from, to)
+        (Some("udp"), Some("from"), Some(from), Some("to"), Some(to)) if it.peek().is_some() => {
+            ("/udp", from, to)
         }
+        (Some("from"), Some(from), Some("to"), Some(to), Some(_)) => ("", from, to),
         _ => anyhow::bail!("invalid net-from-to destination: {}", addr),
     };
 

@@ -181,13 +181,13 @@ impl VpnSupervisor {
 }
 
 pub struct Vpn {
-    vpn: Network<Endpoint>,
+    vpn: Network<network::DuoEndpoint<Endpoint>>,
     stack: Stack<'static>,
     connections: HashMap<SocketHandle, Connection>,
 }
 
 impl Vpn {
-    pub fn new(stack: Stack<'static>, vpn: Network<Endpoint>) -> Self {
+    pub fn new(stack: Stack<'static>, vpn: Network<network::DuoEndpoint<Endpoint>>) -> Self {
         Self {
             vpn,
             stack,
@@ -306,8 +306,8 @@ impl Vpn {
 
             let id = vpn_id.clone();
             tokio::task::spawn_local(async move {
-                if let Err(err) = endpoint.send(VpnPacket(frame.into())).await {
-                    let addr = endpoint.addr();
+                if let Err(err) = endpoint.udp.send(VpnPacket(frame.into())).await {
+                    let addr = endpoint.tcp.addr();
                     log::warn!("VPN {}: send error to endpoint '{}': {}", id, addr, err);
                 }
             });
@@ -424,7 +424,7 @@ impl Handler<AddNode> for Vpn {
             .values()
             .cloned()
             .map(|e| {
-                e.send(VpnControl::AddNodes {
+                e.tcp.send(VpnControl::AddNodes {
                     network_id: vpn_id.clone(),
                     nodes: vec![(msg.address.clone(), msg.id.clone())]
                         .into_iter()
@@ -454,7 +454,7 @@ impl Handler<RemoveNode> for Vpn {
             .values()
             .cloned()
             .map(|e| {
-                e.send(VpnControl::RemoveNodes {
+                e.tcp.send(VpnControl::RemoveNodes {
                     network_id: vpn_id.clone(),
                     node_ids: vec![msg.id.clone()].into_iter().collect(),
                 })
@@ -716,8 +716,11 @@ fn gsb_local_url(net_id: &str) -> String {
     format!("/public/vpn/{}", net_id)
 }
 
-fn gsb_remote_url(node_id: &str, net_id: &str) -> Endpoint {
-    typed::service(format!("/u/net/{}/vpn/{}", node_id, net_id))
+fn gsb_remote_url(node_id: &str, net_id: &str) -> network::DuoEndpoint<Endpoint> {
+    network::DuoEndpoint {
+        tcp: typed::service(format!("/net/{}/vpn/{}", node_id, net_id)),
+        udp: typed::service(format!("/udp/net/{}/vpn/{}", node_id, net_id)),
+    }
 }
 
 trait ArbiterExt {

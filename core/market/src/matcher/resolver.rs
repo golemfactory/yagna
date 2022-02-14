@@ -117,6 +117,7 @@ fn matches(offer: &Offer, demand: &Demand) -> bool {
         );
         return false;
     }
+
     match match_demand_offer(
         &demand.properties,
         &demand.constraints,
