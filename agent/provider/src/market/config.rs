@@ -1,11 +1,10 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use structopt::StructOpt;
 
-use crate::startup_config::DEFAULT_DATA_DIR;
 use crate::startup_config::DEFAULT_PLUGINS_DIR;
 
 lazy_static::lazy_static! {
-    pub static ref DEFAULT_NEGOTIATORS_WORKDIR_DIR: PathBuf = default_negotiators_workdir();
+    pub static ref DEFAULT_NEGOTIATORS_PLUGINS_DIR: PathBuf = default_negotiators_plugins();
 }
 
 /// Configuration for ProviderMarket actor.
@@ -25,12 +24,15 @@ pub struct MarketConfig {
     /// Uses ExeUnit plugins directory by default
     #[structopt(
         long,
-        default_value_os = DEFAULT_PLUGINS_DIR.as_ref(),
+        default_value_os = DEFAULT_NEGOTIATORS_PLUGINS_DIR.as_ref(),
         required = false,
     )]
     pub negotiators_plugins: PathBuf,
 }
 
-fn default_negotiators_workdir() -> PathBuf {
-    PathBuf::from(&*DEFAULT_DATA_DIR).join("negotiations")
+fn default_negotiators_plugins() -> PathBuf {
+    PathBuf::from(&*DEFAULT_PLUGINS_DIR)
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or("/.local/lib/yagna/plugins/".into())
 }
