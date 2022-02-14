@@ -227,7 +227,7 @@ impl Discovery {
                 myself.on_get_remote_offers(caller, msg)
             },
         );
-        // Subscribe to receiving broadcasts only when demand is subscribed for the first time.
+        // Subscribe to offer broadcasts.
         {
             let mut prefix_guard = self.inner.lazy_binder_prefix.lock().await;
             if let Some(old_prefix) = (*prefix_guard).replace(local_prefix.to_string()) {
@@ -236,8 +236,8 @@ impl Discovery {
         }
 
         // We don't lazy bind broadcasts handlers anymore on first Demand creation.
-        // But we still have option to do this easy in the future.
-        self.lazy_bind_gsb().await.map_or_else(
+        // But we still have option to do this easily in the future.
+        self.bind_gsb_broadcast().await.map_or_else(
             |e| {
                 log::warn!("Failed to subscribe to broadcasts. Error: {:?}.", e,);
             },
@@ -247,7 +247,7 @@ impl Discovery {
         Ok(())
     }
 
-    pub async fn lazy_bind_gsb(&self) -> Result<(), DiscoveryInitError> {
+    pub async fn bind_gsb_broadcast(&self) -> Result<(), DiscoveryInitError> {
         log::trace!("LazyBroadcastBind");
         let myself = self.clone();
 
