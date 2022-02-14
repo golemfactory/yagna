@@ -248,7 +248,7 @@ impl Discovery {
     }
 
     pub async fn bind_gsb_broadcast(&self) -> Result<(), DiscoveryInitError> {
-        log::trace!("LazyBroadcastBind");
+        log::trace!("GsbBroadcastBind");
         let myself = self.clone();
 
         // /local/market/market-protocol-mk1-offer
