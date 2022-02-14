@@ -86,6 +86,13 @@ struct InvoiceSettled {
     pub invoice_id: String,
 }
 
+/// Message sent when invoice is rejected.
+#[derive(Message, Clone)]
+#[rtype(result = "Result<()>")]
+struct InvoiceRejected {
+    pub invoice_id: String,
+}
+
 /// Gets costs summary for agreement.
 #[derive(Message, Clone)]
 #[rtype(result = "Result<CostsSummary>")]
@@ -99,6 +106,27 @@ struct CostsSummary {
     pub agreement_id: String,
     pub cost_summary: CostInfo,
     pub activities: Vec<String>,
+}
+
+// =========================================== //
+// Emitted signals
+// =========================================== //
+
+#[derive(Debug, Clone)]
+pub enum ProviderInvoiceEvent {
+    InvoiceAcceptedEvent,
+    InvoiceRejectedEvent,
+    InvoiceSettledEvent,
+}
+
+/// Payment module sends emits this signal after it will handle
+/// Invoice event from `yagna`.
+#[derive(Message, Clone)]
+#[rtype(result = "Result<()>")]
+pub struct InvoiceNotification {
+    pub agreement_id: String,
+    pub invoice_id: String,
+    pub event: ProviderInvoiceEvent,
 }
 
 // =========================================== //
@@ -149,9 +177,11 @@ pub struct Payments {
     earnings: BigDecimal,
 
     break_agreement_signal: SignalSlot<BreakAgreement>,
+    invoice_signal: SignalSlot<InvoiceNotification>,
 }
 
 actix_signal_handler!(Payments, BreakAgreement, break_agreement_signal);
+actix_signal_handler!(Payments, InvoiceNotification, invoice_signal);
 
 impl Payments {
     pub fn new(
@@ -173,6 +203,7 @@ impl Payments {
             invoices_to_pay: vec![],
             earnings: BigDecimal::zero(),
             break_agreement_signal: SignalSlot::<BreakAgreement>::new(),
+            invoice_signal: SignalSlot::<InvoiceNotification>::new(),
         }
     }
 
@@ -336,17 +367,16 @@ async fn check_invoice_events(provider_ctx: Arc<ProviderCtx>, payments_addr: Add
             match event.event_type {
                 InvoiceEventType::InvoiceAcceptedEvent => {
                     log::info!("Invoice [{}] accepted by requestor.", invoice_id);
-                    payments_addr.do_send(InvoiceAccepted { invoice_id })
+                    payments_addr.do_send(InvoiceAccepted { invoice_id });
                 }
                 InvoiceEventType::InvoiceSettledEvent => {
                     log::info!("Invoice [{}] settled by requestor.", invoice_id);
                     payments_addr.do_send(InvoiceSettled { invoice_id })
                 }
-                // InvoiceEventType::InvoiceRejectedEvent {} => {
-                //     log::warn!("Invoice [{}] rejected by requestor.", invoice_id)
-                //     // TODO: Send signal to other provider's modules to react to this situation.
-                //     //       Probably we don't want to cooperate with this Requestor anymore.
-                // }
+                InvoiceEventType::InvoiceRejectedEvent { .. } => {
+                    log::warn!("Invoice [{}] rejected by requestor.", invoice_id);
+                    payments_addr.do_send(InvoiceRejected { invoice_id })
+                }
                 _ => log::warn!("Unexpected event received: {:?}", event.event_type),
             }
             after_timestamp = event.event_date;
@@ -894,7 +924,13 @@ impl Handler<InvoiceAccepted> for Payments {
             .into_actor(self)
             .map(|result, myself, _ctx| match result {
                 Ok(invoice) => {
+                    let notification = InvoiceNotification {
+                        agreement_id: invoice.agreement_id.clone(),
+                        invoice_id: invoice.invoice_id.clone(),
+                        event: ProviderInvoiceEvent::InvoiceAcceptedEvent,
+                    };
                     myself.invoices_to_pay.push(invoice);
+                    myself.invoice_signal.send_signal(notification).ok();
                     Ok(())
                 }
                 Err(e) => Err(anyhow!("Cannot get invoice: {}", e)),
@@ -926,12 +962,50 @@ impl Handler<InvoiceSettled> for Payments {
                         .retain(|x| x.invoice_id != invoice.invoice_id);
                     myself.earnings += invoice.amount;
                     log::info!("Current earnings: {}", myself.earnings);
+
+                    myself
+                        .invoice_signal
+                        .send_signal(InvoiceNotification {
+                            agreement_id: invoice.agreement_id.clone(),
+                            invoice_id: invoice.invoice_id.clone(),
+                            event: ProviderInvoiceEvent::InvoiceSettledEvent,
+                        })
+                        .ok();
                     Ok(())
                 }
                 Err(e) => Err(anyhow!("Cannot get invoice: {}", e)),
             });
 
         ActorResponse::r#async(future)
+    }
+}
+
+impl Handler<InvoiceRejected> for Payments {
+    type Result = ActorResponse<Self, (), Error>;
+
+    fn handle(&mut self, msg: InvoiceRejected, _ctx: &mut Context<Self>) -> Self::Result {
+        let provider_ctx = self.context.clone();
+
+        let future = async move { provider_ctx.payment_api.get_invoice(&msg.invoice_id).await }
+            .into_actor(self)
+            .map(|result, myself, _ctx| match result {
+                Ok(invoice) => {
+                    myself
+                        .invoice_signal
+                        .send_signal(InvoiceNotification {
+                            agreement_id: invoice.agreement_id.clone(),
+                            invoice_id: invoice.invoice_id.clone(),
+                            event: ProviderInvoiceEvent::InvoiceRejectedEvent,
+                        })
+                        .ok();
+
+                    // We don't handle this rejection, because Agreement is already terminated.
+                    Ok(())
+                }
+                Err(e) => Err(anyhow!("Cannot get invoice: {}", e)),
+            });
+
+        return ActorResponse::r#async(future);
     }
 }
 

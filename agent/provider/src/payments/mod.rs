@@ -5,5 +5,5 @@ mod payments;
 mod pricing;
 
 pub use factory::PaymentModelFactory;
-pub use payments::{Payments, PaymentsConfig};
+pub use payments::{InvoiceNotification, Payments, PaymentsConfig, ProviderInvoiceEvent};
 pub use pricing::{AccountView, LinearPricing, LinearPricingOffer, PricingOffer};

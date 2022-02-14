@@ -1,3 +1,4 @@
+use actix::dev::ToEnvelope;
 use std::sync::{Arc, Mutex};
 
 use actix::prelude::*;
@@ -79,6 +80,29 @@ where
     }
 }
 
+/// Message type is necessary, so we can implement this trait in macro
+/// multiple times.
+pub trait ToActorAddr<MessageType, Actor>
+where
+    Actor: actix::Actor,
+{
+    fn to_actix_addr(&self) -> Addr<Actor>;
+}
+
+pub trait SendSignalActor<MessageType, Actor>
+where
+    MessageType: Message + std::marker::Send + std::marker::Sync + std::clone::Clone,
+    MessageType::Result: std::marker::Send + std::marker::Sync,
+    Actor: Handler<Signal<MessageType>>,
+    <Actor as actix::Actor>::Context: ToEnvelope<Actor, Signal<MessageType>>,
+    Self: ToActorAddr<MessageType, Actor>,
+{
+    fn signal(&self, msg: MessageType) {
+        let addr = self.to_actix_addr();
+        addr.do_send(Signal::<MessageType>(msg));
+    }
+}
+
 #[macro_export]
 macro_rules! actix_signal_handler {
     ($ActorType:ty, $MessageType:ty, $SignalFieldName:tt) => {
@@ -105,5 +129,13 @@ macro_rules! actix_signal_handler {
                 self.$SignalFieldName.send_signal(msg.0)
             }
         }
+
+        impl $crate::actix_signal::ToActorAddr<$MessageType, $ActorType> for Addr<$ActorType> {
+            fn to_actix_addr(&self) -> Addr<$ActorType> {
+                self.clone()
+            }
+        }
+
+        impl $crate::actix_signal::SendSignalActor<$MessageType, $ActorType> for Addr<$ActorType> {}
     };
 }

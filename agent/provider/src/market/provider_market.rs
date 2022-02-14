@@ -5,7 +5,7 @@ use backoff::backoff::Backoff;
 use chrono::Utc;
 use derive_more::Display;
 use futures::prelude::*;
-use futures_util::FutureExt;
+use futures_util::{FutureExt, TryFutureExt};
 use serde_yaml;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
@@ -22,10 +22,12 @@ use ya_client::model::market::proposal::State;
 use ya_client::model::market::{Agreement, NewOffer, Proposal, ProviderEvent, Reason};
 use ya_client::model::NodeId;
 use ya_client_model::market::NewProposal;
+use ya_negotiators::component::AgreementEvent;
 use ya_negotiators::factory::NegotiatorsConfig;
 use ya_negotiators::{
     factory, AgreementAction, AgreementResult, NegotiatorAddr, NegotiatorCallbacks, ProposalAction,
 };
+
 use ya_std_utils::LogErr;
 use ya_utils_actix::{
     actix_handler::ResultTypeGetter, actix_signal::SignalSlot, actix_signal_handler,
@@ -37,6 +39,7 @@ use crate::display::EnableDisplay;
 use crate::market::config::MarketConfig;
 use crate::market::negotiator::builtin::*;
 use crate::market::termination_reason::{GolemReason, ProviderAgreementResult};
+use crate::payments::{InvoiceNotification, ProviderInvoiceEvent};
 use crate::tasks::task_manager::ClosingCause;
 use crate::tasks::{AgreementBroken, AgreementClosed, CloseAgreement};
 
@@ -1031,6 +1034,29 @@ impl Handler<Unsubscribe> for ProviderMarket {
             });
 
         unsubscribe_all(self.api.clone(), subscriptions).boxed_local()
+    }
+}
+
+/// If we get Invoice notification, we should pass it to negotiators.
+impl Handler<InvoiceNotification> for ProviderMarket {
+    type Result = ResponseFuture<Result<(), Error>>;
+
+    fn handle(&mut self, msg: InvoiceNotification, _ctx: &mut Context<Self>) -> Self::Result {
+        let event = match msg.event {
+            ProviderInvoiceEvent::InvoiceAcceptedEvent => AgreementEvent::InvoiceAccepted,
+            ProviderInvoiceEvent::InvoiceRejectedEvent => AgreementEvent::InvoiceRejected,
+            ProviderInvoiceEvent::InvoiceSettledEvent => AgreementEvent::InvoicePaid,
+        };
+
+        let negotiator = self.negotiator.clone();
+
+        async move {
+            negotiator
+                .post_agreement_event(&msg.agreement_id, event)
+                .await
+                .log_err_msg("Negotiators failed to handle Post Agreement event.")
+        }
+        .boxed_local()
     }
 }
 

@@ -20,7 +20,7 @@ use ya_client::model::activity::provider_event::ProviderEventType;
 use ya_client::model::activity::{ActivityState, ProviderEvent, State, StatePair};
 use ya_std_utils::LogErr;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
-use ya_utils_actix::actix_signal::{Signal, SignalSlot};
+use ya_utils_actix::actix_signal::{SendSignalActor, SignalSlot};
 use ya_utils_actix::{actix_signal_handler, forward_actix_handler};
 use ya_utils_path::SecurePath;
 use ya_utils_process::ExeUnitExitStatus;
@@ -229,13 +229,11 @@ impl TaskRunner {
             .map(|(event, myself)| async move {
                 let _ = match event.event_type {
                     ProviderEventType::CreateActivity { requestor_pub_key } => {
-                        myself
-                            .send(Signal(CreateActivity {
-                                activity_id: event.activity_id,
-                                agreement_id: event.agreement_id,
-                                requestor_pub_key,
-                            }))
-                            .await?
+                        Ok(myself.signal(CreateActivity {
+                            activity_id: event.activity_id,
+                            agreement_id: event.agreement_id,
+                            requestor_pub_key,
+                        }))
                     }
                     ProviderEventType::DestroyActivity {} => {
                         myself
