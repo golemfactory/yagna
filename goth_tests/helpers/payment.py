@@ -85,28 +85,32 @@ async def accept_debit_notes(
             await asyncio.sleep(0.5)
 
 
-async def get_debit_note_events_raw(requestor: RequestorProbe, ts: datetime) -> List[Dict]:
+async def get_debit_note_events_raw(
+    requestor: RequestorProbe, ts: datetime
+) -> List[Dict]:
     client = requestor.api.payment.api_client
 
     path_params = {}
     query_params = {"afterTimestamp": ts}
-    header_params = {"Accept": client.select_header_accept(['application/json'])}
+    header_params = {"Accept": client.select_header_accept(["application/json"])}
 
     return await client.call_api(
-        '/debitNoteEvents', 'GET',
+        "/debitNoteEvents",
+        "GET",
         path_params,
         query_params,
         header_params,
-        response_type='object',
-        auth_settings=['app_key'],
+        response_type="object",
+        auth_settings=["app_key"],
         _return_http_data_only=True,
-        _preload_content=True)
+        _preload_content=True,
+    )
 
 
 @dataclass
 class DebitNoteStats:
     accepted: int = 0
-    amount: float = 0.
+    amount: float = 0.0
 
 
 @dataclass
