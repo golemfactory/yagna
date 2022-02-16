@@ -8,9 +8,10 @@ use ya_core_model::payment::local::{
 };
 use ya_core_model::NodeId;
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
+use ya_persistence::types::BigDecimalField;
 
 use crate::dao::{activity, agreement, allocation};
-use crate::error::{DbError, DbResult};
+use crate::error::DbResult;
 use crate::models::batch::DbBatchOrderItem;
 use crate::models::order::{ReadObj, WriteObj};
 use crate::schema::pay_batch_order::dsl as odsl;
@@ -148,27 +149,20 @@ impl<'c> OrderDao<'c> {
         platform: String,
     ) -> DbResult<HashMap<(String, String), BigDecimal>> {
         readonly_transaction(self.pool, move |conn| {
-            let data: Vec<(String, String, String, bool)> = odsl::pay_batch_order
+            let data: Vec<(String, String, BigDecimalField)> = odsl::pay_batch_order
                 .filter(
                     odsl::platform
                         .eq(&platform)
                         .and(odsl::owner_id.eq(owner_id)),
                 )
                 .inner_join(oidsl::pay_batch_order_item)
-                .select((
-                    odsl::payer_addr,
-                    oidsl::payee_addr,
-                    oidsl::amount,
-                    oidsl::paid,
-                ))
+                .select((odsl::payer_addr, oidsl::payee_addr, oidsl::amount))
                 .load(conn)?;
 
-            data
+            Ok(data
                 .into_iter()
-                .map(|(payer_addr, payee_addr, amount, paid)| -> Result<((String, String), BigDecimal), DbError> {
-                    Ok(((payer_addr, payee_addr), amount.parse().map_err(|e : bigdecimal::ParseBigDecimalError| DbError::Integrity(e.to_string()))?))
-                })
-                .collect()
+                .map(|(payer_addr, payee_addr, amount)| ((payer_addr, payee_addr), amount.0))
+                .collect())
         })
         .await
     }

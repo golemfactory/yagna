@@ -32,6 +32,7 @@ mod local {
         log::debug!("Binding payment local service to service bus");
 
         ServiceBinder::new(BUS_ID, db, processor)
+            .bind_with_processor(batch_payment)
             .bind_with_processor(schedule_payment)
             .bind_with_processor(register_driver)
             .bind_with_processor(unregister_driver)
@@ -40,6 +41,7 @@ mod local {
             .bind_with_processor(notify_payment)
             .bind_with_processor(get_status)
             .bind_with_processor(get_invoice_stats)
+            .bind_with_processor(get_account)
             .bind_with_processor(get_accounts)
             .bind_with_processor(validate_allocation)
             .bind_with_processor(get_drivers)
@@ -84,6 +86,16 @@ mod local {
         counter!("payment.amount.sent", 0, "platform" => "zksync-mainnet-glm");
 
         log::debug!("Successfully bound payment local service to service bus");
+    }
+
+    async fn batch_payment(
+        db: DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        sender: String,
+        msg: BatchPayment,
+    ) -> Result<(), GenericError> {
+        processor.lock().await.batch_payment(msg).await?;
+        Ok(())
     }
 
     async fn schedule_payment(
@@ -132,6 +144,19 @@ mod local {
     ) -> Result<(), NoError> {
         processor.lock().await.unregister_account(msg).await;
         Ok(())
+    }
+
+    async fn get_account(
+        db: DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        sender: String,
+        msg: GetAccount,
+    ) -> Result<Option<Account>, GenericError> {
+        Ok(processor
+            .lock()
+            .await
+            .get_account(&msg.platform, &msg.address, msg.mode)
+            .await)
     }
 
     async fn get_accounts(

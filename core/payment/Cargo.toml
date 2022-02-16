@@ -1,6 +1,6 @@
 [package]
 name = "ya-payment"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
@@ -53,6 +53,7 @@ ya-zksync-driver = "0.2"
 ya-net = { version = "0.2", features = ["service"] }
 ya-sb-router = "0.4"
 
+dirs = "4.0"
 actix-rt = "1.0"
 
 rand = "0.7"

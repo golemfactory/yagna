@@ -32,12 +32,12 @@ pub enum PaymentCli {
         account: pay::AccountCli,
         #[structopt(long, help = "Initialize account for sending")]
         sender: bool,
-        #[structopt(long, help = "Batching interval")]
-        send_interval: Option<humantime::Duration>,
+        #[structopt(long, help = "Disable payment batching")]
+        send_immediately: bool,
+        #[structopt(long, help = "Send payments when called by CLI")]
+        send_manually: bool,
         #[structopt(long, help = "Initialize account for receiving")]
         receiver: bool,
-        #[structopt(long, help = "Disable outgoing payment batching")]
-        disable_batching: bool,
     },
 
     /// Display account balance and a summary of sent/received payments
@@ -68,10 +68,11 @@ pub enum PaymentCli {
         #[structopt(long, help = "Optional amount to exit [default: <ALL_FUNDS>]")]
         amount: Option<String>,
 
-        #[structopt(long)]
+        // FIXME: `exit_fee` is not implemented
+        #[structopt(skip = false)]
         check_only: bool,
-
-        #[structopt(long)]
+        // FIXME: `exit_fee` is not implemented
+        #[structopt(skip = None)]
         fee_limit: Option<BigDecimal>,
     },
 
@@ -130,14 +131,16 @@ impl PaymentCli {
             PaymentCli::Init {
                 account,
                 sender,
-                send_interval,
+                send_immediately,
+                send_manually,
                 receiver,
-                disable_batching,
             } => {
-                let send = if disable_batching {
+                let send = if send_immediately {
                     SendMode::Simple(sender)
-                } else {
+                } else if send_manually {
                     SendMode::Batch(BatchMode::Manual {})
+                } else {
+                    SendMode::Batch(BatchMode::default())
                 };
 
                 let account = Account {

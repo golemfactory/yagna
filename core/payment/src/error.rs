@@ -150,6 +150,8 @@ pub mod processor {
         Driver(#[from] ya_core_model::driver::GenericError),
         #[error("Database error: {0}")]
         Database(#[from] DbError),
+        #[error("Batch error: {0}")]
+        Batch(String),
         #[error("Payment service is shutting down")]
         Shutdown,
     }

@@ -14,6 +14,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::time::Duration;
 
+use crate::batch::BatchScheduler;
 use ya_client_model::payment::{
     Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
 };
@@ -22,8 +23,8 @@ use ya_core_model::driver::{
     ValidateAllocation,
 };
 use ya_core_model::payment::local::{
-    NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver, RegisterDriverError,
-    SchedulePayment, UnregisterAccount, UnregisterDriver,
+    BatchPayment, NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver,
+    RegisterDriverError, SchedulePayment, UnregisterAccount, UnregisterDriver,
 };
 use ya_core_model::payment::public::{SendPayment, BUS_ID};
 use ya_net::RemoteEndpoint;
@@ -69,7 +70,7 @@ async fn validate_orders(
 }
 
 #[derive(Clone, Debug)]
-struct AccountDetails {
+pub struct AccountDetails {
     pub driver: String,
     pub network: String,
     pub token: String,
@@ -204,6 +205,18 @@ impl DriverRegistry {
             .collect()
     }
 
+    pub fn get_account(
+        &self,
+        platform: &str,
+        address: &str,
+        mode: AccountMode,
+    ) -> Result<&AccountDetails, AccountNotRegistered> {
+        self.accounts
+            .get(&(platform.to_owned(), address.to_owned()))
+            .filter(|acc| acc.mode.contains(mode))
+            .ok_or_else(|| AccountNotRegistered::new(platform, address, mode))
+    }
+
     pub fn get_driver(&self, driver: &str) -> Result<&DriverDetails, RegisterAccountError> {
         match self.drivers.get(driver) {
             None => Err(RegisterAccountError::DriverNotRegistered(driver.into())),
@@ -287,14 +300,17 @@ impl DriverRegistry {
 #[derive(Clone)]
 pub struct PaymentProcessor {
     db_executor: DbExecutor,
+    batching: BatchScheduler,
     registry: DriverRegistry,
     in_shutdown: bool,
 }
 
 impl PaymentProcessor {
     pub fn new(db_executor: DbExecutor) -> Self {
+        let batching = BatchScheduler::new(db_executor.clone());
         Self {
             db_executor,
+            batching,
             registry: Default::default(),
             in_shutdown: false,
         }
@@ -320,6 +336,27 @@ impl PaymentProcessor {
 
     pub async fn unregister_account(&mut self, msg: UnregisterAccount) {
         self.registry.unregister_account(msg)
+    }
+
+    pub async fn get_account(
+        &self,
+        platform: &str,
+        address: &str,
+        mode: AccountMode,
+    ) -> Option<Account> {
+        self.registry
+            .get_account(platform, address, mode)
+            .ok()
+            .cloned()
+            .map(|details| Account {
+                platform: platform.to_string(),
+                address: address.to_string(),
+                driver: details.driver,
+                network: details.network,
+                token: details.token,
+                send: details.mode.contains(AccountMode::SEND),
+                receive: details.mode.contains(AccountMode::RECV),
+            })
     }
 
     pub async fn get_accounts(&self) -> Vec<Account> {
@@ -396,6 +433,7 @@ impl PaymentProcessor {
                         let driver = driver.clone();
                         let payment_platform = payment_platform.clone();
                         let confirmation = confirmation.clone();
+
                         let agreement_payments = obligations
                             .iter()
                             .filter_map(|obligation: &BatchPaymentObligation| match obligation {
@@ -410,7 +448,22 @@ impl PaymentProcessor {
                                 }),
                                 _ => None,
                             })
+                            .fold(HashMap::<String, AgreementPayment>::new(), |mut acc, p| {
+                                match acc.get_mut(&p.agreement_id) {
+                                    Some(entry) => {
+                                        entry.amount += p.amount;
+                                    }
+                                    None => {
+                                        acc.insert(p.agreement_id.clone(), p);
+                                    }
+                                }
+                                acc
+                            })
+                            .into_values()
                             .collect::<Vec<_>>();
+
+                        // FIXME: multiple payments per activity_id have to be squashed;
+                        //  DB constraints do not allow multiple entries for a single payment_id
                         let activity_payments = obligations
                             .iter()
                             .filter_map(|obligation: &BatchPaymentObligation| match obligation {
@@ -425,6 +478,18 @@ impl PaymentProcessor {
                                 }),
                                 _ => None,
                             })
+                            .fold(HashMap::<String, ActivityPayment>::new(), |mut acc, p| {
+                                match acc.get_mut(&p.activity_id) {
+                                    Some(entry) => {
+                                        entry.amount += p.amount;
+                                    }
+                                    None => {
+                                        acc.insert(p.activity_id.clone(), p);
+                                    }
+                                }
+                                acc
+                            })
+                            .into_values()
                             .collect::<Vec<_>>();
 
                         Arbiter::spawn(async move {
@@ -571,14 +636,37 @@ impl PaymentProcessor {
         Ok(())
     }
 
+    pub async fn batch_payment(&self, msg: BatchPayment) -> Result<(), SchedulePaymentError> {
+        if self.in_shutdown {
+            return Err(SchedulePaymentError::Shutdown);
+        }
+
+        let msg = msg.into_inner();
+        let account = self
+            .registry
+            .get_account(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?
+            .clone();
+
+        match &account.batch {
+            // schedule without delay
+            None => self.schedule_payment(msg).await,
+            // payments are grouped and scheduled manually
+            Some(BatchMode::Manual {}) => Ok(()),
+            // payments are grouped within a payment time window
+            Some(BatchMode::Auto { .. }) => self.batching.add_payment(account, msg).await,
+        }
+    }
+
     pub async fn schedule_payment(&self, msg: SchedulePayment) -> Result<(), SchedulePaymentError> {
         if self.in_shutdown {
             return Err(SchedulePaymentError::Shutdown);
         }
+
         let amount = msg.amount.clone();
         let driver =
             self.registry
                 .driver(&msg.payment_platform, &msg.payer_addr, AccountMode::SEND)?;
+
         let order_id = driver_endpoint(&driver)
             .send(driver::SchedulePayment::new(
                 amount,
@@ -621,6 +709,7 @@ impl PaymentProcessor {
             Ok(confirmation) => PaymentConfirmation { confirmation },
             Err(e) => return Err(VerifyPaymentError::ConfirmationEncoding),
         };
+
         let details: PaymentDetails = driver_endpoint(&driver)
             .send(driver::VerifyPayment::new(confirmation, platform.clone()))
             .await??;
@@ -646,6 +735,7 @@ impl PaymentProcessor {
         if &details.recipient != payee_addr {
             return VerifyPaymentError::recipient(payee_addr, &details.recipient);
         }
+
         if &details.sender != payer_addr {
             return VerifyPaymentError::sender(payer_addr, &details.sender);
         }
@@ -739,19 +829,28 @@ impl PaymentProcessor {
 
     pub fn shut_down(&mut self, timeout: Duration) -> impl futures::Future<Output = ()> + 'static {
         self.in_shutdown = true;
+
+        let batching_shutdown_future = self.batching.shutdown();
         let driver_shutdown_futures = self
             .registry
             .iter_drivers()
-            .map(|driver| shut_down_driver(driver, timeout));
-        futures::future::join_all(driver_shutdown_futures).map(|_| ())
+            .cloned()
+            .map(|driver| shut_down_driver(driver, timeout))
+            .collect::<Vec<_>>();
+
+        async move {
+            batching_shutdown_future.await;
+            futures::future::join_all(driver_shutdown_futures)
+                .map(|_| ())
+                .await
+        }
     }
 }
 
 fn shut_down_driver(
-    driver: &str,
+    driver: String,
     timeout: Duration,
 ) -> impl futures::Future<Output = ()> + 'static {
-    let driver = driver.to_string();
     let endpoint = driver_endpoint(&driver);
     let shutdown_msg = ShutDown::new(timeout);
     async move {

@@ -21,6 +21,12 @@ pub(crate) enum SendMode {
     Batch(BatchMode),
 }
 
+impl Default for SendMode {
+    fn default() -> Self {
+        Self::Batch(BatchMode::default())
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct Account {
     pub driver: String,
@@ -98,7 +104,7 @@ pub async fn save_default_account(data_dir: &Path, drivers: Vec<String>) -> anyh
             address: default_node_id.to_string(),
             network: None, // Use default
             token: None,   // Use default
-            send: SendMode::Batch(BatchMode::Manual {}),
+            send: SendMode::default(),
             receive: true,
         })
         .collect();

@@ -52,6 +52,15 @@ pub mod local {
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct BatchPayment(pub SchedulePayment);
+
+    impl BatchPayment {
+        pub fn into_inner(self) -> SchedulePayment {
+            self.0
+        }
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct SchedulePayment {
         pub title: PaymentTitle,
         pub payer_id: NodeId,
@@ -121,6 +130,12 @@ pub mod local {
                 }
             }
         }
+    }
+
+    impl RpcMessage for BatchPayment {
+        const ID: &'static str = "BatchPayment";
+        type Item = ();
+        type Error = GenericError;
     }
 
     impl RpcMessage for SchedulePayment {
@@ -326,6 +341,19 @@ pub mod local {
         fn sum<I: Iterator<Item = StatusNotes>>(iter: I) -> Self {
             iter.fold(Default::default(), |acc, item| acc + item)
         }
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct GetAccount {
+        pub platform: String,
+        pub address: String,
+        pub mode: AccountMode,
+    }
+
+    impl RpcMessage for GetAccount {
+        const ID: &'static str = "GetAccount";
+        type Item = Option<Account>;
+        type Error = GenericError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]

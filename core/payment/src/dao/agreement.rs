@@ -270,22 +270,21 @@ impl<'a> AgreementDao<'a> {
         since: Option<DateTime<Utc>>,
     ) -> DbResult<StatusNotes> {
         readonly_transaction(self.pool, move |conn| {
-            let last_days = chrono::Utc::now() - chrono::Duration::days(1);
+            let after_timestamp = since.map(|d| d.naive_utc());
+
             let invoices: Vec<Invoice> =
-                crate::dao::invoice::get_for_payee(conn, &payee_addr, Some(last_days.naive_utc()))?;
+                crate::dao::invoice::get_for_payee(conn, &payee_addr, after_timestamp)?;
 
             let query = dsl::pay_agreement
                 .filter(dsl::role.eq(Role::Provider))
                 .filter(dsl::payment_platform.eq(platform))
                 .filter(dsl::payee_addr.eq(payee_addr));
 
-            let agreements: Vec<crate::models::agreement::ReadObj> = if let Some(last_days) = since
-            {
-                query
-                    .filter(dsl::created_ts.ge(last_days.naive_utc()))
-                    .get_results(conn)?
-            } else {
-                query.get_results(conn)?
+            let agreements: Vec<crate::models::agreement::ReadObj> = match after_timestamp {
+                Some(after_timestamp) => query
+                    .filter(dsl::created_ts.ge(after_timestamp))
+                    .get_results(conn)?,
+                None => query.get_results(conn)?,
             };
 
             Ok(make_summary2(agreements, invoices))

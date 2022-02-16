@@ -265,6 +265,7 @@ async fn main() -> anyhow::Result<()> {
             args.network.clone(),
             None,
             AccountMode::RECV,
+            None,
         ))
         .await??;
 
@@ -281,6 +282,7 @@ async fn main() -> anyhow::Result<()> {
             args.network.clone(),
             None,
             AccountMode::SEND,
+            None,
         ))
         .await??;
 

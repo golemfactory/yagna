@@ -13,6 +13,7 @@ extern crate diesel;
 
 pub mod accounts;
 pub mod api;
+mod batch;
 mod cli;
 pub mod dao;
 pub mod error;

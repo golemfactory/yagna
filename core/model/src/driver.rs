@@ -1,9 +1,11 @@
+use std::fmt::{self, Display};
+use std::time::Duration;
+
 use bigdecimal::BigDecimal;
 use bitflags::bitflags;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use std::fmt::Display;
-use std::time::Duration;
+use serde::{de, ser, Deserialize, Serialize};
+
 use ya_client_model::payment::{Allocation, Payment};
 use ya_service_bus::RpcMessage;
 
@@ -198,14 +200,82 @@ impl RpcMessage for Fund {
 }
 
 // ************************** INIT **************************
-#[derive(Clone, Debug, Serialize, Deserialize)]
+const BATCH_DEFAULT_PROCESSING_TIME_ENV_VAR: &str = "BATCH_DEFAULT_PROCESSING_TIME_SECS";
+const BATCH_DEFAULT_PROCESSING_TIME: u64 = 15 * 60;
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(remote = "Self")]
+#[serde(rename_all = "lowercase")]
 pub enum BatchMode {
-    Manual {},
     Auto {
-        internal: Duration,
-        min_amount: BigDecimal,
-        max_delay: Duration,
+        #[serde(default = "default_max_processing_time")]
+        max_processing_time: u64,
     },
+    Manual {},
+}
+
+impl Default for BatchMode {
+    fn default() -> Self {
+        Self::Auto {
+            max_processing_time: default_max_processing_time(),
+        }
+    }
+}
+
+fn default_max_processing_time() -> u64 {
+    std::env::var(BATCH_DEFAULT_PROCESSING_TIME_ENV_VAR)
+        .map(|s| {
+            s.parse()
+                .expect(&format!("{} is not an unsigned integer", s))
+        })
+        .unwrap_or(BATCH_DEFAULT_PROCESSING_TIME)
+}
+
+/// Deserialize from map or variant name only (with defaults)
+pub struct BatchModeVisitor;
+
+impl<'de> de::Visitor<'de> for BatchModeVisitor {
+    type Value = BatchMode;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "a str variant name or map")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        match v {
+            "auto" => Ok(Default::default()),
+            "manual" => Ok(BatchMode::Manual {}),
+            _ => Err(de::Error::invalid_value(de::Unexpected::Str(v), &self)),
+        }
+    }
+
+    fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+    where
+        A: de::MapAccess<'de>,
+    {
+        BatchMode::deserialize(de::value::MapAccessDeserializer::new(map))
+    }
+}
+
+impl Serialize for BatchMode {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: ser::Serializer,
+    {
+        BatchMode::serialize(self, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for BatchMode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: de::Deserializer<'de>,
+    {
+        deserializer.deserialize_any(BatchModeVisitor)
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -84,7 +84,8 @@ table! {
         payee_addr -> Text,
         amount -> Text,
         driver_order_id -> Nullable<Text>,
-        paid -> Bool,
+        status -> Text,
+        payment_due_date -> Nullable<Timestamp>,
     }
 }
 
