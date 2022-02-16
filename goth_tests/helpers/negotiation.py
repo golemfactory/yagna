@@ -121,7 +121,9 @@ async def negotiate_agreements(
             if new_proposal.properties == prev_proposal.properties:
                 break
             elif exchanges >= MAX_PROPOSAL_EXCHANGES:
-                raise RuntimeError("Reach a maximum of %d proposal exchanges", MAX_PROPOSAL_EXCHANGES)
+                raise RuntimeError(
+                    "Reach a maximum of %d proposal exchanges", MAX_PROPOSAL_EXCHANGES
+                )
 
         logger.info("Creating agreement after %d proposal exchanges", exchanges)
 
