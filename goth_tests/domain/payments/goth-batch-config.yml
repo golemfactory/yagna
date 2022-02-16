@@ -1,0 +1,43 @@
+docker-compose:
+  docker-dir: "../../assets/docker/"
+  build-environment:
+    # default
+  compose-log-patterns:
+    ethereum: ".*Wallets supplied."
+    zksync: ".*Running on http://.*:3030/.*"
+
+key-dir: "../../assets/keys"
+web-root: "../../assets/web-root"
+
+node-types:
+  - name: "Requestor"
+    class: "goth.runner.probe.RequestorProbe"
+    environment:
+      - "ERC20_SENDOUT_INTERVAL_SECS=1"
+      - "ERC20_CONFIRMATION_INTERVAL_SECS=1"
+      - "BATCH_DEFAULT_PROCESSING_TIME_SECS=3"
+
+  - name: "Provider"
+    class: "goth_tests.helpers.probe.ProviderProbe"
+    mount:
+      - read-only: "../../assets/provider/presets.json"
+        destination: "/root/.local/share/ya-provider/presets.json"
+      - read-only: "../../assets/provider/hardware.json"
+        destination: "/root/.local/share/ya-provider/hardware.json"
+    privileged-mode: True
+    environment:
+      - "IDLE_AGREEMENT_TIMEOUT=5s"
+      - "DEBIT_NOTE_ACCEPTANCE_DEADLINE=8s"
+      - "DEBIT_NOTE_INTERVAL=2s"
+      - "PAYMENT_TIMEOUT=30s"
+      - "ERC20_CONFIRMATION_INTERVAL_SECS=1"
+
+nodes:
+  - name: "requestor"
+    type: "Requestor"
+    payment-config: "erc20_batching"
+
+  - name: "provider-1"
+    type: "Provider"
+    use-proxy: True
+    payment-config: "erc20"

@@ -4,6 +4,7 @@ import asyncio
 import logging
 import pytest
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Tuple
@@ -14,22 +15,33 @@ from goth.runner.probe import RequestorProbe
 
 from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
 from goth_tests.helpers.probe import ProviderProbe
-from goth_tests.helpers.payment import accept_debit_notes, DebitNoteStats
+from goth_tests.helpers.payment import accept_debit_notes, pay_all, DebitNoteStats
 
 logger = logging.getLogger("goth.test.mid_payments")
 
-DEBIT_NOTE_INTERVAL_SEC = 2
-PAYMENT_TIMEOUT_SEC = 5
-ITERATION_COUNT = 4
+ITERATION_COUNT = 5
+
+
+@dataclass
+class DemandProperties:
+    debit_note_interval_sec: int = 2
+    payment_timeout_sec: int = 5
+
 
 def build_demand(
     requestor: RequestorProbe,
+    properties: DemandProperties,
 ):
     return (
         DemandBuilder(requestor)
         .props_from_template(None)
-        .property("golem.com.scheme.payu.debit-note.interval-sec?", DEBIT_NOTE_INTERVAL_SEC)
-        .property("golem.com.scheme.payu.payment-timeout-sec?", PAYMENT_TIMEOUT_SEC)
+        .property(
+            "golem.com.scheme.payu.debit-note.interval-sec?",
+            properties.debit_note_interval_sec,
+        )
+        .property(
+            "golem.com.scheme.payu.payment-timeout-sec?", properties.payment_timeout_sec
+        )
         .constraints(
             "(&(golem.com.pricing.model=linear)\
                 (golem.runtime.name=wasmtime))"
@@ -38,12 +50,14 @@ def build_demand(
     )
 
 
-
 def _create_runner(
-    common_assets: Path, config_overrides: List[Override], log_dir: Path
+    config_name: str,
+    common_assets: Path,
+    config_overrides: List[Override],
+    log_dir: Path,
 ) -> Tuple[Runner, Configuration]:
     goth_config = load_yaml(
-        Path(__file__).parent / "goth-config.yml",
+        Path(__file__).parent / config_name,
         config_overrides,
     )
 
@@ -56,16 +70,14 @@ def _create_runner(
     return runner, goth_config
 
 
-@pytest.mark.asyncio
-async def test_mid_agreement_payments(
-    common_assets: Path,
-    config_overrides: List[Override],
-    log_dir: Path,
+async def run_mid_agreement_payments(
+    runner: Runner,
+    config: Configuration,
+    properties: DemandProperties,
 ):
     """Test mid-agreement payments"""
-    runner, config = _create_runner(common_assets, config_overrides, log_dir)
     ts = datetime.now(timezone.utc)
-    amount = 0.
+    amount = 0.0
 
     async with runner(config.containers):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
@@ -74,7 +86,7 @@ async def test_mid_agreement_payments(
 
         agreement_providers = await negotiate_agreements(
             requestor,
-            build_demand(requestor),
+            build_demand(requestor, properties),
             providers,
         )
 
@@ -86,14 +98,48 @@ async def test_mid_agreement_payments(
         await provider.wait_for_exeunit_started()
 
         for i in range(0, ITERATION_COUNT):
-            await asyncio.sleep(PAYMENT_TIMEOUT_SEC)
+            await asyncio.sleep(5)
             payments = await provider.api.payment.get_payments(after_timestamp=ts)
             for payment in payments:
+                logger.info("Payment: %r", payment)
                 amount += float(payment.amount)
                 ts = payment.timestamp if payment.timestamp > ts else ts
-            # prevent new debit notes in the last iteration
-            if i == ITERATION_COUNT - 2:
+            # prevent new debit notes in last iterations
+            if i == ITERATION_COUNT - 3:
                 await requestor.destroy_activity(activity_id)
                 await provider.wait_for_exeunit_finished()
+            elif i == ITERATION_COUNT - 2:
+                await pay_all(
+                    requestor, [(agreement_id, provider)], await_payment=False
+                )
+                await asyncio.sleep(30)
 
         assert round(stats.amount, 12) == round(amount, 12)
+
+
+@pytest.mark.asyncio
+async def test_mid_agreement_payments(
+    common_assets: Path,
+    config_overrides: List[Override],
+    log_dir: Path,
+):
+    runner, config = _create_runner(
+        "goth-config.yml", common_assets, config_overrides, log_dir
+    )
+    properties = DemandProperties()
+
+    await run_mid_agreement_payments(runner, config, properties)
+
+
+@pytest.mark.asyncio
+async def test_mid_agreement_payments_batching(
+    common_assets: Path,
+    config_overrides: List[Override],
+    log_dir: Path,
+):
+    runner, config = _create_runner(
+        "goth-batch-config.yml", common_assets, config_overrides, log_dir
+    )
+    properties = DemandProperties(2, 30)
+
+    await run_mid_agreement_payments(runner, config, properties)

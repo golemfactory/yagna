@@ -17,6 +17,7 @@ logger = logging.getLogger("goth.tests.helpers.payment")
 async def pay_all(
     requestor: RequestorProbe,
     agreements: List[Tuple[str, ProviderProbe]],
+    await_payment: bool = True,
 ):
     """Pay for all Agreements."""
     for agreement_id, provider in agreements:
@@ -25,7 +26,8 @@ async def pay_all(
         assert all(inv.agreement_id == agreement_id for inv in invoices)
         # TODO:
         await requestor.pay_invoices(invoices)
-        await provider.wait_for_invoice_paid()
+        if await_payment:
+            await provider.wait_for_invoice_paid()
 
 
 async def accept_debit_notes(
