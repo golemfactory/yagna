@@ -351,17 +351,18 @@ async fn accept_debit_note(
                 .service(PUBLIC_SERVICE)
                 .call(accept_msg)
                 .await??;
+            log::trace!("Accepting Debit Note [{}] in DB", debit_note_id);
+            db.as_dao::<DebitNoteDao>()
+                .accept(debit_note_id.clone(), node_id)
+                .await?;
+            log::trace!("Debit Note accepted successfully for [{}]", debit_note_id);
+
             if let Some(msg) = schedule_msg {
                 log::trace!("Calling BatchPayment [{}] locally", debit_note_id);
                 bus::service(LOCAL_SERVICE)
                     .send(BatchPayment(msg))
                     .await??;
             }
-            log::trace!("Accepting Debit Note [{}] in DB", debit_note_id);
-            db.as_dao::<DebitNoteDao>()
-                .accept(debit_note_id.clone(), node_id)
-                .await?;
-            log::trace!("Debit Note accepted successfully for [{}]", debit_note_id);
             Ok(())
         }
         .timeout(Some(timeout))

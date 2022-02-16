@@ -130,7 +130,7 @@ pub fn batch_payments(
         match existing {
             Some((order_id, total_amount, payment_amount, payment_due_date, payee_id, json)) => {
                 log::debug!(
-                    "Adding a payment of {} to {} ({}) to an existing batch: {}",
+                    "Adding payment of {} to {} ({}) to an existing batch: {}",
                     sub_amount,
                     payee_addr,
                     platform,
@@ -175,7 +175,7 @@ pub fn batch_payments(
             }
             None => {
                 log::debug!(
-                    "Adding a payment of {} to {} ({}) to a new batch",
+                    "Adding payment of {} to {} ({}) to a new batch",
                     sub_amount,
                     payee_addr,
                     platform,
@@ -365,7 +365,7 @@ fn collect_pending_payments(
             .bind::<Text, _>(&owner_id)
             .load::<Activity>(conn)?;
 
-        log::info!("{} activites found", v.len());
+        log::info!("{} debit notes found", v.len());
 
         for a in v {
             let amount = a.total_amount_accepted.0 - a.total_amount_scheduled.0;

@@ -433,6 +433,7 @@ impl PaymentProcessor {
                         let driver = driver.clone();
                         let payment_platform = payment_platform.clone();
                         let confirmation = confirmation.clone();
+                        let mut amount = BigDecimal::from(0u64);
 
                         let agreement_payments = obligations
                             .iter()
@@ -449,6 +450,7 @@ impl PaymentProcessor {
                                 _ => None,
                             })
                             .fold(HashMap::<String, AgreementPayment>::new(), |mut acc, p| {
+                                amount += p.amount.clone();
                                 match acc.get_mut(&p.agreement_id) {
                                     Some(entry) => {
                                         entry.amount += p.amount;
@@ -479,6 +481,7 @@ impl PaymentProcessor {
                                 _ => None,
                             })
                             .fold(HashMap::<String, ActivityPayment>::new(), |mut acc, p| {
+                                amount += p.amount.clone();
                                 match acc.get_mut(&p.activity_id) {
                                     Some(entry) => {
                                         entry.amount += p.amount;
@@ -500,7 +503,7 @@ impl PaymentProcessor {
                                 payer_addr: payer_addr.clone(),
                                 payee_addr: payee_addr.clone(),
                                 payment_platform,
-                                amount: Default::default(),
+                                amount,
                                 timestamp: Utc::now(),
                                 agreement_payments,
                                 activity_payments,

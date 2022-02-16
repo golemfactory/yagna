@@ -60,6 +60,8 @@ impl BatchScheduler {
         account: AccountDetails,
         msg: pay::SchedulePayment,
     ) -> Result<(), SchedulePaymentError> {
+        log::debug!("Add payment: {:?}", msg);
+
         let now = Utc::now();
         let since;
         {
@@ -151,12 +153,13 @@ async fn collect_payments(
     );
 
     let now = Utc::now();
-    let (_, date) = db
+    let (items, date) = db
         .as_dao::<BatchDao>()
         .batch(payer_id, payer_addr, payment_platform, since, now)
         .await?;
 
-    Ok(date)
+    // DebitNotes may be skipped e.g. if an invoice is present (but not e.g. accepted yet)
+    Ok(if items.is_empty() { since } else { date })
 }
 
 async fn send_payments_at(db: DbExecutor, at: DateTime<Utc>, due_date: Option<DateTime<Utc>>) {

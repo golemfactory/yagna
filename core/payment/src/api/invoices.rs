@@ -413,12 +413,6 @@ async fn accept_invoice(
                 .service(PUBLIC_SERVICE)
                 .call(accept_msg)
                 .await??;
-            if let Some(msg) = schedule_msg {
-                log::trace!("Calling BatchPayment [{}] locally", invoice_id);
-                bus::service(LOCAL_SERVICE)
-                    .send(BatchPayment(msg))
-                    .await??;
-            }
             log::trace!("Accepting Invoice [{}] in DB", invoice_id);
             db.as_dao::<AllocationDao>()
                 .spend_from_allocation(allocation_id, amount_to_pay)
@@ -427,6 +421,13 @@ async fn accept_invoice(
                 .accept(invoice_id.clone(), node_id)
                 .await?;
             log::trace!("Invoice accepted successfully for [{}]", invoice_id);
+
+            if let Some(msg) = schedule_msg {
+                log::trace!("Calling BatchPayment [{}] locally", invoice_id);
+                bus::service(LOCAL_SERVICE)
+                    .send(BatchPayment(msg))
+                    .await??;
+            }
             Ok(())
         }
         .timeout(Some(timeout))
