@@ -135,12 +135,60 @@ impl<'c> AllocationDao<'c> {
         .await
     }
 
+    pub async fn get_filtered(
+        &self,
+        owner_id: Option<NodeId>,
+        after_timestamp: Option<NaiveDateTime>,
+        max_items: Option<u32>,
+        payment_platform: Option<String>,
+        address: Option<String>,
+    ) -> DbResult<Vec<Allocation>> {
+        readonly_transaction(self.pool, move |conn| {
+            let mut query = dsl::pay_allocation
+                // .filter(dsl::owner_id.eq(owner_id))
+                .filter(dsl::released.eq(false))
+                .into_boxed();
+            if let Some(owner_id) = owner_id {
+                query = query.filter(dsl::owner_id.eq(owner_id))
+            }
+            if let Some(after_timestamp) = after_timestamp {
+                query = query.filter(dsl::timestamp.gt(after_timestamp))
+            }
+            if let Some(payment_platform) = payment_platform {
+                query = query.filter(dsl::timestamp.gt(payment_platform))
+            }
+            if let Some(address) = address {
+                query = query.filter(dsl::timestamp.gt(address))
+            }
+            if let Some(max_items) = max_items {
+                query = query.limit(max_items.into())
+            }
+            let allocations: Vec<ReadObj> = query.load(conn)?;
+            Ok(allocations.into_iter().map(Into::into).collect())
+        })
+        .await
+    }
+
     pub async fn release(&self, allocation_id: String, owner_id: NodeId) -> DbResult<bool> {
         do_with_transaction(self.pool, move |conn| {
             let num_released = diesel::update(
                 dsl::pay_allocation
                     .filter(dsl::id.eq(allocation_id))
                     .filter(dsl::owner_id.eq(owner_id))
+                    .filter(dsl::released.eq(false)),
+            )
+            .set(dsl::released.eq(true))
+            .execute(conn)?;
+            Ok(num_released > 0)
+        })
+        .await
+    }
+
+    pub async fn release_allocation(&self, allocation_id: String) -> DbResult<bool> {
+        do_with_transaction(self.pool, move |conn| {
+            let num_released = diesel::update(
+                dsl::pay_allocation
+                    .filter(dsl::id.eq(allocation_id))
                     .filter(dsl::released.eq(false)),
             )
             .set(dsl::released.eq(true))

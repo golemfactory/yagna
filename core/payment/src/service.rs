@@ -181,7 +181,7 @@ mod local {
                 return Err(GenericError::new(format!(
                     "Unsupported token. driver={} network={} token={}",
                     driver, network, token
-                )))
+                )));
             }
         };
 
@@ -464,7 +464,7 @@ mod public {
             DocumentStatus::Cancelled => {
                 return Err(AcceptRejectError::BadRequest(
                     "Cannot accept cancelled debit note".to_owned(),
-                ))
+                ));
             }
             _ => (),
         }
@@ -540,7 +540,7 @@ mod public {
                     return Err(SendError::BadRequest(format!(
                         "Activity not found: {}",
                         activity_id
-                    )))
+                    )));
                 }
                 Err(e) => return Err(SendError::ServiceError(e.to_string())),
                 _ => (),
@@ -625,7 +625,7 @@ mod public {
             DocumentStatus::Cancelled => {
                 return Err(AcceptRejectError::BadRequest(
                     "Cannot accept cancelled invoice".to_owned(),
-                ))
+                ));
             }
             _ => (),
         }
@@ -680,7 +680,7 @@ mod public {
             DocumentStatus::Rejected => (),
             DocumentStatus::Cancelled => return Ok(Ack {}),
             DocumentStatus::Accepted | DocumentStatus::Settled | DocumentStatus::Failed => {
-                return Err(CancelError::Conflict)
+                return Err(CancelError::Conflict);
             }
         }
 

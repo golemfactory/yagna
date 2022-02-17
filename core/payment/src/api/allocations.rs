@@ -1,7 +1,10 @@
-// Extrnal crates
+use std::time::Duration;
+// External crates
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
+use chrono::Utc;
 use serde_json::value::Value::Null;
+use ya_client_model::NodeId;
 
 // Workspace uses
 use ya_agreement_utils::{ClauseOperator, ConstraintKey, Constraints};
@@ -61,12 +64,27 @@ async fn create_allocation(
         Err(e) => return response::server_error(&e),
     }
 
-    let dao: AllocationDao = db.as_dao();
+    let db_ = db.clone();
+    let dao = db.as_dao::<AllocationDao>();
+
     match async move {
         let allocation_id = dao
             .create(allocation, node_id, payment_platform, address)
             .await?;
-        Ok(dao.get(allocation_id, node_id).await?)
+        let allocation_id_ = allocation_id.clone();
+        match dao.get(allocation_id, node_id).await? {
+            None => Ok(None),
+            Some(allocation) => {
+                let deadline = allocation.timeout.clone().unwrap_or(Utc::now());
+                tokio::task::spawn_local(async move {
+                    let deadline = deadline - Utc::now();
+                    tokio::time::delay_for(deadline.to_std().unwrap_or(Duration::from_secs(0)))
+                        .await;
+                    release_alloc(db_, allocation_id_, node_id.clone()).await;
+                });
+                Ok(Some(allocation))
+            }
+        }
     }
     .await
     {
@@ -122,12 +140,8 @@ async fn release_allocation(
 ) -> HttpResponse {
     let allocation_id = path.allocation_id.clone();
     let node_id = id.identity;
-    let dao: AllocationDao = db.as_dao();
-    match dao.release(allocation_id, node_id).await {
-        Ok(true) => response::ok(Null),
-        Ok(false) => response::not_found(),
-        Err(e) => response::server_error(&e),
-    }
+
+    release_alloc(db, allocation_id, node_id).await
 }
 
 async fn get_demand_decorations(
@@ -165,4 +179,17 @@ async fn get_demand_decorations(
         properties,
         constraints,
     })
+}
+
+pub async fn release_alloc(
+    db: Data<DbExecutor>,
+    allocation_id: String,
+    node_id: NodeId,
+) -> HttpResponse {
+    let dao = db.as_dao::<AllocationDao>();
+    match dao.release(allocation_id, node_id).await {
+        Ok(true) => response::ok(Null),
+        Ok(false) => response::not_found(),
+        Err(e) => response::server_error(&e),
+    }
 }
