@@ -1,14 +1,15 @@
 use std::time::Duration;
+
 // External crates
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use chrono::Utc;
 use serde_json::value::Value::Null;
-use ya_client_model::NodeId;
 
 // Workspace uses
 use ya_agreement_utils::{ClauseOperator, ConstraintKey, Constraints};
 use ya_client_model::payment::*;
+use ya_client_model::NodeId;
 use ya_core_model::payment::local::{
     ValidateAllocation, ValidateAllocationError, BUS_ID as LOCAL_SERVICE,
 };
@@ -71,17 +72,10 @@ async fn create_allocation(
         let allocation_id = dao
             .create(allocation, node_id, payment_platform, address)
             .await?;
-        let allocation_id_ = allocation_id.clone();
         match dao.get(allocation_id, node_id).await? {
             None => Ok(None),
             Some(allocation) => {
-                let deadline = allocation.timeout.clone().unwrap_or(Utc::now());
-                tokio::task::spawn_local(async move {
-                    let deadline = deadline - Utc::now();
-                    tokio::time::delay_for(deadline.to_std().unwrap_or(Duration::from_secs(0)))
-                        .await;
-                    release_alloc(db_, allocation_id_, node_id.clone()).await;
-                });
+                release_allocation_after(db_, allocation.clone(), Some(node_id.clone())).await;
                 Ok(Some(allocation))
             }
         }
@@ -141,7 +135,7 @@ async fn release_allocation(
     let allocation_id = path.allocation_id.clone();
     let node_id = id.identity;
 
-    release_alloc(db, allocation_id, node_id).await
+    release(db, allocation_id, Some(node_id)).await
 }
 
 async fn get_demand_decorations(
@@ -181,15 +175,35 @@ async fn get_demand_decorations(
     })
 }
 
-pub async fn release_alloc(
+pub async fn release(
     db: Data<DbExecutor>,
     allocation_id: String,
-    node_id: NodeId,
+    node_id: Option<NodeId>,
 ) -> HttpResponse {
     let dao = db.as_dao::<AllocationDao>();
-    match dao.release(allocation_id, node_id).await {
-        Ok(true) => response::ok(Null),
-        Ok(false) => response::not_found(),
+
+    match dao.release(allocation_id.clone(), node_id).await {
+        Ok(true) => {
+            log::info!("Allocation {} released.", allocation_id);
+            response::ok(Null)
+        }
+        Ok(false) => {
+            log::warn!("Allocation {} not found. Release failed.", allocation_id);
+            response::not_found()
+        }
         Err(e) => response::server_error(&e),
     }
+}
+
+pub async fn release_allocation_after(
+    db: Data<DbExecutor>,
+    allocation: Allocation,
+    node_id: Option<NodeId>,
+) {
+    let deadline = allocation.timeout.clone().unwrap_or(Utc::now()) - Utc::now();
+    let allocation_id = allocation.allocation_id.clone();
+    tokio::task::spawn_local(async move {
+        tokio::time::delay_for(deadline.to_std().unwrap_or(Duration::from_secs(0))).await;
+        release(db, allocation_id, node_id).await
+    });
 }

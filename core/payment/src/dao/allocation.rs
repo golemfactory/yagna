@@ -102,21 +102,8 @@ impl<'c> AllocationDao<'c> {
         after_timestamp: Option<NaiveDateTime>,
         max_items: Option<u32>,
     ) -> DbResult<Vec<Allocation>> {
-        readonly_transaction(self.pool, move |conn| {
-            let mut query = dsl::pay_allocation
-                .filter(dsl::owner_id.eq(owner_id))
-                .filter(dsl::released.eq(false))
-                .into_boxed();
-            if let Some(date) = after_timestamp {
-                query = query.filter(dsl::timestamp.gt(date))
-            }
-            if let Some(items) = max_items {
-                query = query.limit(items.into())
-            }
-            let allocations: Vec<ReadObj> = query.load(conn)?;
-            Ok(allocations.into_iter().map(Into::into).collect())
-        })
-        .await
+        self.get_filtered(Some(owner_id), after_timestamp, max_items, None, None)
+            .await
     }
 
     pub async fn get_for_address(
@@ -124,15 +111,8 @@ impl<'c> AllocationDao<'c> {
         payment_platform: String,
         address: String,
     ) -> DbResult<Vec<Allocation>> {
-        readonly_transaction(self.pool, move |conn| {
-            let allocations: Vec<ReadObj> = dsl::pay_allocation
-                .filter(dsl::payment_platform.eq(payment_platform))
-                .filter(dsl::address.eq(address))
-                .filter(dsl::released.eq(false))
-                .load(conn)?;
-            Ok(allocations.into_iter().map(Into::into).collect())
-        })
-        .await
+        self.get_filtered(None, None, None, Some(payment_platform), Some(address))
+            .await
     }
 
     pub async fn get_filtered(
@@ -145,7 +125,6 @@ impl<'c> AllocationDao<'c> {
     ) -> DbResult<Vec<Allocation>> {
         readonly_transaction(self.pool, move |conn| {
             let mut query = dsl::pay_allocation
-                // .filter(dsl::owner_id.eq(owner_id))
                 .filter(dsl::released.eq(false))
                 .into_boxed();
             if let Some(owner_id) = owner_id {
@@ -169,30 +148,19 @@ impl<'c> AllocationDao<'c> {
         .await
     }
 
-    pub async fn release(&self, allocation_id: String, owner_id: NodeId) -> DbResult<bool> {
+    pub async fn release(&self, allocation_id: String, owner_id: Option<NodeId>) -> DbResult<bool> {
         do_with_transaction(self.pool, move |conn| {
-            let num_released = diesel::update(
-                dsl::pay_allocation
-                    .filter(dsl::id.eq(allocation_id))
-                    .filter(dsl::owner_id.eq(owner_id))
-                    .filter(dsl::released.eq(false)),
-            )
-            .set(dsl::released.eq(true))
-            .execute(conn)?;
-            Ok(num_released > 0)
-        })
-        .await
-    }
+            let mut query = diesel::update(dsl::pay_allocation)
+                .filter(dsl::released.eq(false))
+                .filter(dsl::id.eq(allocation_id))
+                .into_boxed();
 
-    pub async fn release_allocation(&self, allocation_id: String) -> DbResult<bool> {
-        do_with_transaction(self.pool, move |conn| {
-            let num_released = diesel::update(
-                dsl::pay_allocation
-                    .filter(dsl::id.eq(allocation_id))
-                    .filter(dsl::released.eq(false)),
-            )
-            .set(dsl::released.eq(true))
-            .execute(conn)?;
+            if let Some(owner_id) = owner_id {
+                query = query.filter(dsl::owner_id.eq(owner_id));
+            }
+
+            let num_released = query.set(dsl::released.eq(true)).execute(conn)?;
+
             Ok(num_released > 0)
         })
         .await

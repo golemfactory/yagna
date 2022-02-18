@@ -1,7 +1,7 @@
 #![allow(dead_code)] // Crate under development
 #![allow(unused_variables)] // Crate under development
 use crate::processor::PaymentProcessor;
-use chrono::Utc;
+use actix_web::web::Data;
 use futures::FutureExt;
 use std::time::Duration;
 use ya_core_model::payment::local as pay_local;
@@ -30,6 +30,8 @@ pub mod migrations {
 }
 
 pub const DEFAULT_PAYMENT_PLATFORM: &str = "erc20-rinkeby-tglm";
+
+use crate::api::allocations::release_allocation_after;
 pub use ya_core_model::payment::local::DEFAULT_PAYMENT_DRIVER;
 
 lazy_static::lazy_static! {
@@ -49,8 +51,9 @@ impl Service for PaymentService {
 
 impl PaymentService {
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
-        let db: DbExecutor = context.component();
-        release_allocation(db.clone()).await;
+        let db = Data::new(context.clone().component());
+        release_allocations(db.clone()).await;
+        let db = context.component();
         db.apply_migration(migrations::run_with_output)?;
         let processor = PaymentProcessor::new(db.clone());
         self::service::bind_service(&db, processor);
@@ -76,29 +79,26 @@ impl PaymentService {
     }
 }
 
-async fn release_allocation(db: DbExecutor) {
-    if let Ok(allocations) = db
-        .as_dao::<dao::AllocationDao>()
-        .get_filtered(None, None, None, None, None)
-        .await
-    {
-        allocations.iter().for_each(|a| {
-            let allocation = a.clone();
-            let db = db.clone();
-            let deadline = allocation.timeout.clone().unwrap_or(Utc::now());
-            tokio::task::spawn_local(async move {
-                let deadline = deadline - Utc::now();
-                tokio::time::delay_for(deadline.to_std().unwrap_or(Duration::from_secs(0))).await;
-                let dao = db.as_dao::<dao::AllocationDao>();
-                let allocation_id = allocation.allocation_id.clone();
-                match dao.release_allocation(allocation_id.clone()).await {
-                    Ok(true) => log::info!("Allocation {} released.", allocation_id),
-                    Ok(false) => {
-                        log::warn!("Allocation {} not found. Release failed.", allocation_id)
+async fn release_allocations(db: Data<DbExecutor>) {
+    loop {
+        match db
+            .as_dao::<dao::AllocationDao>()
+            .get_filtered(None, None, None, None, None)
+            .await
+        {
+            Ok(allocations) => {
+                if !allocations.is_empty() {
+                    for a in allocations {
+                        release_allocation_after(db.clone(), a, None).await
                     }
-                    Err(e) => log::error!("{}", e),
                 }
-            });
-        });
+                break;
+            }
+            Err(e) => {
+                log::error!("Db error: {}", e);
+                tokio::time::delay_for(Duration::from_secs(10)).await;
+                continue;
+            }
+        };
     }
 }
