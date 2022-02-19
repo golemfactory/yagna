@@ -353,8 +353,8 @@ fn forward_bus_to_net(
         );
 
         match state.forward_sink(remote_id, reliable).await {
-            Ok(mut session) => {
-                let _ = session.send(msg).await.map_err(|_| {
+            Ok(mut sink) => {
+                let _ = sink.send(msg).await.map_err(|_| {
                     let err = format!("error sending message: session closed");
                     handler_reply_service_err(request_id, err, tx);
                 });
@@ -430,7 +430,7 @@ fn forward_handler(
 
                 if tx.send(fwd.payload.into()).await.is_err() {
                     log::debug!("net routing error: channel closed");
-                    state.remove_sink(&key);
+                    state.remove(&key);
                 }
             }
         })
@@ -686,7 +686,6 @@ struct State {
 struct StateInner {
     requests: HashMap<String, Request<BusSender>>,
     routes: HashMap<NetSinkKey, NetSender>,
-    forward: HashMap<NetSinkKey, NetSinkKind>,
     ids: HashSet<NodeId>,
     services: HashSet<String>,
 }
@@ -703,40 +702,29 @@ impl State {
     }
 
     async fn forward_sink(&self, remote_id: NodeId, reliable: bool) -> anyhow::Result<NetSinkKind> {
-        match {
-            let inner = self.inner.borrow();
-            inner.forward.get(&(remote_id, reliable)).cloned()
-        } {
-            Some(sink) => Ok(sink),
-            None => {
-                let client = CLIENT
-                    .with(|c| c.borrow().clone())
-                    .ok_or_else(|| anyhow::anyhow!("network not started"))?;
+        let client = CLIENT
+            .with(|c| c.borrow().clone())
+            .ok_or_else(|| anyhow::anyhow!("network not started"))?;
 
-                let forward: NetSinkKind = if reliable {
-                    PrefixedSink::new(client.forward(remote_id).await?).into()
-                } else {
-                    client.forward_unreliable(remote_id).await?.into()
-                };
+        let forward: NetSinkKind = if reliable {
+            PrefixedSink::new(client.forward(remote_id).await?).into()
+        } else {
+            client.forward_unreliable(remote_id).await?.into()
+        };
 
-                if client.sessions.has_p2p_connection(remote_id).await {
-                    counter!("net.connections.p2p", 1)
-                } else {
-                    counter!("net.connections.relay", 1)
-                };
+        // FIXME: yagna daemon doesn't handle connections; ya-relay-client does
+        // if client.sessions.has_p2p_connection(remote_id).await {
+        //     counter!("net.connections.p2p", 1)
+        // } else {
+        //     counter!("net.connections.relay", 1)
+        // };
 
-                let mut inner = self.inner.borrow_mut();
-                inner.forward.insert((remote_id, reliable), forward.clone());
-
-                Ok(forward)
-            }
-        }
+        Ok(forward)
     }
 
-    fn remove_sink(&self, key: &NetSinkKey) {
+    fn remove(&self, key: &NetSinkKey) {
         let mut inner = self.inner.borrow_mut();
         inner.routes.remove(&key);
-        inner.forward.remove(&key);
     }
 }
 
