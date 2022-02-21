@@ -80,25 +80,20 @@ impl PaymentService {
 }
 
 async fn release_allocations(db: Data<DbExecutor>) {
-    loop {
-        match db
-            .as_dao::<dao::AllocationDao>()
-            .get_filtered(None, None, None, None, None)
-            .await
-        {
-            Ok(allocations) => {
-                if !allocations.is_empty() {
-                    for a in allocations {
-                        release_allocation_after(db.clone(), a, None).await
-                    }
+    match db
+        .as_dao::<dao::AllocationDao>()
+        .get_filtered(None, None, None, None, None)
+        .await
+    {
+        Ok(allocations) => {
+            if !allocations.is_empty() {
+                for a in allocations {
+                    release_allocation_after(db.clone(), a, None).await
                 }
-                break;
             }
-            Err(e) => {
-                log::error!("Db error: {}", e);
-                tokio::time::delay_for(Duration::from_secs(10)).await;
-                continue;
-            }
-        };
+        }
+        Err(e) => {
+            log::error!("Allocations release failed. Restart yagna to retry allocations release. Db error occurred: {}.", e);
+        }
     }
 }

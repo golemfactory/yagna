@@ -1,10 +1,9 @@
-use std::time::Duration;
-
 // External crates
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use chrono::Utc;
 use serde_json::value::Value::Null;
+use std::time::Duration;
 
 // Workspace uses
 use ya_agreement_utils::{ClauseOperator, ConstraintKey, Constraints};
@@ -200,10 +199,20 @@ pub async fn release_allocation_after(
     allocation: Allocation,
     node_id: Option<NodeId>,
 ) {
-    let deadline = allocation.timeout.clone().unwrap_or(Utc::now()) - Utc::now();
-    let allocation_id = allocation.allocation_id.clone();
-    tokio::task::spawn_local(async move {
-        tokio::time::delay_for(deadline.to_std().unwrap_or(Duration::from_secs(0))).await;
-        release(db, allocation_id, node_id).await
-    });
+    if let Some(timeout) = allocation.timeout.clone() {
+        let allocation_id = allocation.allocation_id.clone();
+
+        tokio::task::spawn_local(async move {
+            let timestamp = timeout.timestamp() - Utc::now().timestamp();
+            let mut deadline = 0u64;
+
+            if timestamp.is_positive() {
+                deadline = timestamp as u64;
+            }
+
+            tokio::time::delay_for(Duration::from_secs(deadline)).await;
+
+            release(db, allocation_id, node_id).await
+        });
+    }
 }
