@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - release/*
+      - mwu/pull_1723
   pull_request:
     branches:
       - master
