@@ -6,14 +6,16 @@ use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::task::Poll;
 
 use anyhow::{anyhow, Context as AnyhowContext};
 use futures::channel::mpsc;
+use futures::lock::Mutex;
 use futures::stream::LocalBoxStream;
 use futures::{FutureExt, SinkExt, Stream, StreamExt, TryStreamExt};
 use metrics::counter;
+use tokio::sync::RwLock;
 use url::Url;
 
 use ya_core_model::net::{self, net_service};
@@ -41,12 +43,18 @@ type NetReceiver = mpsc::Receiver<Vec<u8>>;
 type NetSinkKind = SinkKind<NetSender, mpsc::SendError>;
 type NetSinkKey = (NodeId, bool);
 
-type ArcMap<K, V> = Arc<Mutex<HashMap<K, V>>>;
+type ArcMap<K, V> = Arc<RwLock<HashMap<K, V>>>;
 
 lazy_static::lazy_static! {
     pub(crate) static ref BCAST: BCastService = Default::default();
+}
+
+lazy_static::lazy_static! {
     pub(crate) static ref BCAST_HANDLERS: ArcMap<String, Arc<Mutex<BCastHandler>>> = Default::default();
-    pub(crate) static ref BCAST_SENDER: Arc<Mutex<Option<NetSender>>> = Default::default();
+}
+
+lazy_static::lazy_static! {
+    pub(crate) static ref BCAST_SENDER: Arc<RwLock<Option<NetSender>>> = Default::default();
 }
 
 thread_local! {
@@ -128,7 +136,9 @@ pub async fn start_network(
     });
 
     let (btx, brx) = mpsc::channel(1);
-    BCAST_SENDER.lock().unwrap().replace(btx);
+    {
+        BCAST_SENDER.write().await.replace(btx);
+    }
 
     let receiver = client.forward_receiver().await.unwrap();
     let mut services: HashSet<_> = Default::default();
@@ -663,13 +673,14 @@ fn handle_broadcast(
         let data: Rc<[u8]> = request.data.into();
         let topic = request.topic;
 
-        let handlers = BCAST_HANDLERS.lock().unwrap();
+        let handlers = BCAST_HANDLERS.read().await;
         for handler in BCAST
             .resolve(&topic)
+            .await
             .into_iter()
             .filter_map(|e| handlers.get(e.as_ref()).clone())
         {
-            let mut h = handler.lock().unwrap();
+            let mut h = handler.lock().await;
             (*(h))(caller.clone(), data.as_ref());
         }
     });
