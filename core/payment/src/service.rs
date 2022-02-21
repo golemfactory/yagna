@@ -21,6 +21,7 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
 mod local {
     use super::*;
     use crate::dao::*;
+    use actix_web::web::Data;
     use chrono::NaiveDateTime;
     use std::collections::BTreeMap;
     use ya_client_model::payment::{Account, DocumentStatus, DriverDetails};
@@ -41,6 +42,7 @@ mod local {
             .bind_with_processor(get_invoice_stats)
             .bind_with_processor(get_accounts)
             .bind_with_processor(validate_allocation)
+            .bind_with_processor(release_allocations)
             .bind_with_processor(get_drivers)
             .bind_with_processor(shut_down);
 
@@ -304,6 +306,19 @@ mod local {
             .await
             .validate_allocation(msg.platform, msg.address, msg.amount)
             .await?)
+    }
+
+    async fn release_allocations(
+        db: DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        _caller: String,
+        msg: ReleaseAllocations,
+    ) -> Result<(), GenericError> {
+        Ok(processor
+            .lock()
+            .await
+            .release_allocations(Data::new(db))
+            .await)
     }
 
     async fn get_drivers(

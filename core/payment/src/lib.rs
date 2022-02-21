@@ -31,7 +31,6 @@ pub mod migrations {
 
 pub const DEFAULT_PAYMENT_PLATFORM: &str = "erc20-rinkeby-tglm";
 
-use crate::api::allocations::release_allocation_after;
 pub use ya_core_model::payment::local::DEFAULT_PAYMENT_DRIVER;
 
 lazy_static::lazy_static! {
@@ -52,7 +51,7 @@ impl Service for PaymentService {
 impl PaymentService {
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
         let db = Data::new(context.clone().component());
-        release_allocations(db.clone()).await;
+        api::allocations::release_allocations(db.clone(), false).await;
         let db = context.component();
         db.apply_migration(migrations::run_with_output)?;
         let processor = PaymentProcessor::new(db.clone());
@@ -76,24 +75,5 @@ impl PaymentService {
         )
         .await;
         log::info!("Payment service stopped.");
-    }
-}
-
-async fn release_allocations(db: Data<DbExecutor>) {
-    match db
-        .as_dao::<dao::AllocationDao>()
-        .get_filtered(None, None, None, None, None)
-        .await
-    {
-        Ok(allocations) => {
-            if !allocations.is_empty() {
-                for a in allocations {
-                    release_allocation_after(db.clone(), a, None).await
-                }
-            }
-        }
-        Err(e) => {
-            log::error!("Allocations release failed. Restart yagna to retry allocations release. Db error occurred: {}.", e);
-        }
     }
 }

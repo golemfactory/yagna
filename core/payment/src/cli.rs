@@ -95,6 +95,9 @@ pub enum PaymentCli {
 
     /// List registered drivers, networks, tokens and platforms
     Drivers,
+
+    /// Clear all existing allocations
+    ReleaseAllocations,
 }
 
 #[derive(StructOpt, Debug)]
@@ -349,6 +352,11 @@ impl PaymentCli {
                         .collect()
                 }.into())
             }
+            PaymentCli::ReleaseAllocations => CommandOutput::object(
+                bus::service(pay::BUS_ID)
+                    .call(pay::ReleaseAllocations {})
+                    .await??,
+            ),
         }
     }
 }

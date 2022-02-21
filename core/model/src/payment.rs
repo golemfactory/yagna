@@ -395,6 +395,15 @@ pub mod local {
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct ReleaseAllocations {}
+
+    impl RpcMessage for ReleaseAllocations {
+        const ID: &'static str = "ReleaseAllocations";
+        type Item = ();
+        type Error = GenericError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct GetDrivers {}
 
     impl RpcMessage for GetDrivers {

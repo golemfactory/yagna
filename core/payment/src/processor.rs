@@ -1,3 +1,4 @@
+use crate::api::allocations;
 use crate::dao::{ActivityDao, AgreementDao, AllocationDao, OrderDao, PaymentDao};
 use crate::error::processor::{
     AccountNotRegistered, GetStatusError, NotifyPaymentError, OrderValidationError,
@@ -5,6 +6,7 @@ use crate::error::processor::{
 };
 use crate::models::order::ReadObj as DbOrder;
 use actix_web::rt::Arbiter;
+use actix_web::web::Data;
 use bigdecimal::{BigDecimal, Zero};
 use futures::FutureExt;
 use metrics::counter;
@@ -602,6 +604,10 @@ impl PaymentProcessor {
         };
         let result = driver_endpoint(&driver).send(msg).await??;
         Ok(result)
+    }
+
+    pub async fn release_allocations(&self, db: Data<DbExecutor>) {
+        allocations::release_allocations(db, true).await
     }
 
     pub fn shut_down(&mut self, timeout: Duration) -> impl futures::Future<Output = ()> + 'static {

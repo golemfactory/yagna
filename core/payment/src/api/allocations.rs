@@ -21,7 +21,7 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 use crate::dao::*;
 use crate::error::{DbError, Error};
 use crate::utils::response;
-use crate::DEFAULT_PAYMENT_PLATFORM;
+use crate::{dao, DEFAULT_PAYMENT_PLATFORM};
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -57,7 +57,7 @@ async fn create_allocation(
     };
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
         Ok(true) => {}
-        Ok(false) => return response::bad_request(&"Insufficient funds to make allocation"),
+        Ok(false) => return response::bad_request(&"Insufficient funds to make allocation. Release all existing allocations to unlock the funds via `yagna payment release-allocations`"),
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
             ValidateAllocationError::AccountNotRegistered,
         ))) => return response::bad_request(&"Account not registered"),
@@ -215,4 +215,43 @@ pub async fn release_allocation_after(
             release(db, allocation_id, node_id).await
         });
     }
+}
+
+/// This function releases allocations.
+/// When `bool` is `true` all existing allocations are released immediately.
+/// For `false` each allocation timestamp is respected.
+pub async fn release_allocations(db: Data<DbExecutor>, force: bool) {
+    log::info!("Checking for allocations to be released...");
+    match db
+        .as_dao::<dao::AllocationDao>()
+        .get_filtered(None, None, None, None, None)
+        .await
+    {
+        Ok(allocations) => {
+            if !allocations.is_empty() {
+                for a in allocations {
+                    if force {
+                        forced_release_allocation(db.clone(), a, None).await
+                    } else {
+                        release_allocation_after(db.clone(), a, None).await
+                    }
+                }
+            } else {
+                log::info!("No allocations to be released.")
+            }
+        }
+        Err(e) => {
+            log::error!("Allocations release failed. Restart yagna to retry allocations release. Db error occurred: {}.", e);
+        }
+    }
+}
+
+async fn forced_release_allocation(
+    db: Data<DbExecutor>,
+    allocation: Allocation,
+    node_id: Option<NodeId>,
+) {
+    let allocation_id = allocation.allocation_id.clone();
+
+    tokio::task::spawn_local(async move { release(db, allocation_id, node_id).await });
 }
