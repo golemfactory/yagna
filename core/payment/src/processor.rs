@@ -611,9 +611,7 @@ impl PaymentProcessor {
     /// For `false` each allocation timestamp is respected.
     pub async fn release_allocations(&self, force: bool) {
         let dao = self.db_executor.as_dao::<AllocationDao>();
-        let existing_allocations = dao
-            .get_filtered(None, None, None, None, None)
-            .await;
+        let existing_allocations = dao.get_filtered(None, None, None, None, None).await;
 
         log::info!("Checking for allocations to be released...");
 
@@ -622,17 +620,15 @@ impl PaymentProcessor {
                 if !allocations.is_empty() {
                     for allocation in allocations {
                         if force {
-                            dao
-                                .forced_release_allocation(allocation.allocation_id, None)
+                            dao.forced_release_allocation(allocation.allocation_id, None)
                                 .await
                         } else {
-                            dao
-                                .release_allocation_after(
-                                    allocation.allocation_id,
-                                    allocation.timeout,
-                                    None,
-                                )
-                                .await
+                            dao.release_allocation_after(
+                                allocation.allocation_id,
+                                allocation.timeout,
+                                None,
+                            )
+                            .await
                         }
                     }
                 } else {
