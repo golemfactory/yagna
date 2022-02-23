@@ -1,4 +1,3 @@
-use crate::dao;
 use crate::dao::{ActivityDao, AgreementDao, AllocationDao, OrderDao, PaymentDao};
 use crate::error::processor::{
     AccountNotRegistered, GetStatusError, NotifyPaymentError, OrderValidationError,
@@ -611,9 +610,8 @@ impl PaymentProcessor {
     /// When `bool` is `true` all existing allocations are released immediately.
     /// For `false` each allocation timestamp is respected.
     pub async fn release_allocations(&self, force: bool) {
-        let existing_allocations = self
-            .db_executor
-            .as_dao::<AllocationDao>()
+        let dao = self.db_executor.as_dao::<AllocationDao>();
+        let existing_allocations = dao
             .get_filtered(None, None, None, None, None)
             .await;
 
@@ -624,13 +622,11 @@ impl PaymentProcessor {
                 if !allocations.is_empty() {
                     for allocation in allocations {
                         if force {
-                            self.db_executor
-                                .as_dao::<dao::AllocationDao>()
+                            dao
                                 .forced_release_allocation(allocation.allocation_id, None)
                                 .await
                         } else {
-                            self.db_executor
-                                .as_dao::<dao::AllocationDao>()
+                            dao
                                 .release_allocation_after(
                                     allocation.allocation_id,
                                     allocation.timeout,
