@@ -21,7 +21,6 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
 mod local {
     use super::*;
     use crate::dao::*;
-    use actix_web::web::Data;
     use chrono::NaiveDateTime;
     use std::collections::BTreeMap;
     use ya_client_model::payment::{Account, DocumentStatus, DriverDetails};
@@ -314,11 +313,7 @@ mod local {
         _caller: String,
         msg: ReleaseAllocations,
     ) -> Result<(), GenericError> {
-        Ok(processor
-            .lock()
-            .await
-            .release_allocations(Data::new(db))
-            .await)
+        Ok(processor.lock().await.release_allocations(true).await)
     }
 
     async fn get_drivers(

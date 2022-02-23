@@ -2,8 +2,9 @@ use crate::error::{DbError, DbResult};
 use crate::models::allocation::{ReadObj, WriteObj};
 use crate::schema::pay_allocation::dsl;
 use bigdecimal::BigDecimal;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use std::time::Duration;
 use ya_client_model::payment::{Allocation, NewAllocation};
 use ya_client_model::NodeId;
 use ya_persistence::executor::{
@@ -149,10 +150,11 @@ impl<'c> AllocationDao<'c> {
     }
 
     pub async fn release(&self, allocation_id: String, owner_id: Option<NodeId>) -> DbResult<bool> {
-        do_with_transaction(self.pool, move |conn| {
+        let id = allocation_id.clone();
+        match do_with_transaction(self.pool, move |conn| {
             let mut query = diesel::update(dsl::pay_allocation)
                 .filter(dsl::released.eq(false))
-                .filter(dsl::id.eq(allocation_id))
+                .filter(dsl::id.eq(id))
                 .into_boxed();
 
             if let Some(owner_id) = owner_id {
@@ -164,6 +166,24 @@ impl<'c> AllocationDao<'c> {
             Ok(num_released > 0)
         })
         .await
+        {
+            Ok(true) => {
+                log::info!("Allocation {} released.", allocation_id);
+                Ok(true)
+            }
+            Ok(false) => {
+                log::warn!("Allocation {} not found. Release failed.", allocation_id);
+                Ok(false)
+            }
+            Err(e) => {
+                log::warn!(
+                    "Allocation {} release failed. Db error ocurred: {}",
+                    allocation_id,
+                    e
+                );
+                Err(e)
+            }
+        }
     }
 
     pub async fn total_remaining_allocation(
@@ -185,5 +205,29 @@ impl<'c> AllocationDao<'c> {
             Ok(total_remaining_amount)
         })
         .await
+    }
+
+    pub async fn release_allocation_after(
+        &self,
+        allocation_id: String,
+        allocation_timeout: Option<DateTime<Utc>>,
+        node_id: Option<NodeId>,
+    ) {
+        if let Some(timeout) = allocation_timeout {
+            let timestamp = timeout.timestamp() - Utc::now().timestamp();
+            let mut deadline = 0u64;
+
+            if timestamp.is_positive() {
+                deadline = timestamp as u64;
+            }
+
+            tokio::time::delay_for(Duration::from_secs(deadline)).await;
+
+            let _ = self.release(allocation_id, node_id).await;
+        }
+    }
+
+    pub async fn forced_release_allocation(&self, allocation_id: String, node_id: Option<NodeId>) {
+        let _ = self.release(allocation_id, node_id).await;
     }
 }

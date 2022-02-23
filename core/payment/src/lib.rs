@@ -1,7 +1,6 @@
 #![allow(dead_code)] // Crate under development
 #![allow(unused_variables)] // Crate under development
 use crate::processor::PaymentProcessor;
-use actix_web::web::Data;
 use futures::FutureExt;
 use std::time::Duration;
 use ya_core_model::payment::local as pay_local;
@@ -50,12 +49,16 @@ impl Service for PaymentService {
 
 impl PaymentService {
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
-        let db = Data::new(context.clone().component());
-        api::allocations::release_allocations(db.clone(), false).await;
         let db = context.component();
         db.apply_migration(migrations::run_with_output)?;
+
         let processor = PaymentProcessor::new(db.clone());
-        self::service::bind_service(&db, processor);
+        self::service::bind_service(&db, processor.clone());
+
+        tokio::task::spawn(async move {
+            processor.release_allocations(false).await;
+        });
+
         Ok(())
     }
 

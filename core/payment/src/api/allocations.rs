@@ -1,14 +1,11 @@
 // External crates
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
-use chrono::Utc;
 use serde_json::value::Value::Null;
-use std::time::Duration;
 
 // Workspace uses
 use ya_agreement_utils::{ClauseOperator, ConstraintKey, Constraints};
 use ya_client_model::payment::*;
-use ya_client_model::NodeId;
 use ya_core_model::payment::local::{
     ValidateAllocation, ValidateAllocationError, BUS_ID as LOCAL_SERVICE,
 };
@@ -21,7 +18,7 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 use crate::dao::*;
 use crate::error::{DbError, Error};
 use crate::utils::response;
-use crate::{dao, DEFAULT_PAYMENT_PLATFORM};
+use crate::DEFAULT_PAYMENT_PLATFORM;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
@@ -59,22 +56,29 @@ async fn create_allocation(
         Ok(true) => {}
         Ok(false) => return response::bad_request(&"Insufficient funds to make allocation. Release all existing allocations to unlock the funds via `yagna payment release-allocations`"),
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
-            ValidateAllocationError::AccountNotRegistered,
-        ))) => return response::bad_request(&"Account not registered"),
+                           ValidateAllocationError::AccountNotRegistered,
+                       ))) => return response::bad_request(&"Account not registered"),
         Err(e) => return response::server_error(&e),
     }
 
-    let db_ = db.clone();
-    let dao = db.as_dao::<AllocationDao>();
-
     match async move {
+        let dao = db.as_dao::<AllocationDao>();
         let allocation_id = dao
             .create(allocation, node_id, payment_platform, address)
             .await?;
+
         match dao.get(allocation_id, node_id).await? {
             None => Ok(None),
             Some(allocation) => {
-                release_allocation_after(db_, allocation.clone(), Some(node_id.clone())).await;
+                let allocation_id = allocation.allocation_id.clone();
+                let allocation_timeout = allocation.timeout.clone();
+
+                tokio::task::spawn(async move {
+                    db.as_dao::<AllocationDao>()
+                        .release_allocation_after(allocation_id, allocation_timeout, Some(node_id))
+                        .await;
+                });
+
                 Ok(Some(allocation))
             }
         }
@@ -132,9 +136,14 @@ async fn release_allocation(
     id: Identity,
 ) -> HttpResponse {
     let allocation_id = path.allocation_id.clone();
-    let node_id = id.identity;
+    let node_id = Some(id.identity);
+    let dao = db.as_dao::<AllocationDao>();
 
-    release(db, allocation_id, Some(node_id)).await
+    match dao.release(allocation_id, node_id).await {
+        Ok(true) => response::ok(Null),
+        Ok(false) => response::not_found(),
+        Err(e) => response::server_error(&e),
+    }
 }
 
 async fn get_demand_decorations(
@@ -172,86 +181,4 @@ async fn get_demand_decorations(
         properties,
         constraints,
     })
-}
-
-pub async fn release(
-    db: Data<DbExecutor>,
-    allocation_id: String,
-    node_id: Option<NodeId>,
-) -> HttpResponse {
-    let dao = db.as_dao::<AllocationDao>();
-
-    match dao.release(allocation_id.clone(), node_id).await {
-        Ok(true) => {
-            log::info!("Allocation {} released.", allocation_id);
-            response::ok(Null)
-        }
-        Ok(false) => {
-            log::warn!("Allocation {} not found. Release failed.", allocation_id);
-            response::not_found()
-        }
-        Err(e) => response::server_error(&e),
-    }
-}
-
-pub async fn release_allocation_after(
-    db: Data<DbExecutor>,
-    allocation: Allocation,
-    node_id: Option<NodeId>,
-) {
-    if let Some(timeout) = allocation.timeout.clone() {
-        let allocation_id = allocation.allocation_id.clone();
-
-        tokio::task::spawn_local(async move {
-            let timestamp = timeout.timestamp() - Utc::now().timestamp();
-            let mut deadline = 0u64;
-
-            if timestamp.is_positive() {
-                deadline = timestamp as u64;
-            }
-
-            tokio::time::delay_for(Duration::from_secs(deadline)).await;
-
-            release(db, allocation_id, node_id).await
-        });
-    }
-}
-
-/// This function releases allocations.
-/// When `bool` is `true` all existing allocations are released immediately.
-/// For `false` each allocation timestamp is respected.
-pub async fn release_allocations(db: Data<DbExecutor>, force: bool) {
-    log::info!("Checking for allocations to be released...");
-    match db
-        .as_dao::<dao::AllocationDao>()
-        .get_filtered(None, None, None, None, None)
-        .await
-    {
-        Ok(allocations) => {
-            if !allocations.is_empty() {
-                for a in allocations {
-                    if force {
-                        forced_release_allocation(db.clone(), a, None).await
-                    } else {
-                        release_allocation_after(db.clone(), a, None).await
-                    }
-                }
-            } else {
-                log::info!("No allocations to be released.")
-            }
-        }
-        Err(e) => {
-            log::error!("Allocations release failed. Restart yagna to retry allocations release. Db error occurred: {}.", e);
-        }
-    }
-}
-
-async fn forced_release_allocation(
-    db: Data<DbExecutor>,
-    allocation: Allocation,
-    node_id: Option<NodeId>,
-) {
-    let allocation_id = allocation.allocation_id.clone();
-
-    tokio::task::spawn_local(async move { release(db, allocation_id, node_id).await });
 }
