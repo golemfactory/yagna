@@ -1,4 +1,4 @@
-// Extrnal crates
+// External crates
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
 use serde_json::value::Value::Null;
@@ -54,19 +54,34 @@ async fn create_allocation(
     };
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
         Ok(true) => {}
-        Ok(false) => return response::bad_request(&"Insufficient funds to make allocation"),
+        Ok(false) => return response::bad_request(&"Insufficient funds to make allocation. Release all existing allocations to unlock the funds via `yagna payment release-allocations`"),
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
-            ValidateAllocationError::AccountNotRegistered,
-        ))) => return response::bad_request(&"Account not registered"),
+                           ValidateAllocationError::AccountNotRegistered,
+                       ))) => return response::bad_request(&"Account not registered"),
         Err(e) => return response::server_error(&e),
     }
 
-    let dao: AllocationDao = db.as_dao();
     match async move {
+        let dao = db.as_dao::<AllocationDao>();
         let allocation_id = dao
             .create(allocation, node_id, payment_platform, address)
             .await?;
-        Ok(dao.get(allocation_id, node_id).await?)
+
+        match dao.get(allocation_id, node_id).await? {
+            None => Ok(None),
+            Some(allocation) => {
+                let allocation_id = allocation.allocation_id.clone();
+                let allocation_timeout = allocation.timeout.clone();
+
+                tokio::task::spawn(async move {
+                    db.as_dao::<AllocationDao>()
+                        .release_allocation_after(allocation_id, allocation_timeout, Some(node_id))
+                        .await;
+                });
+
+                Ok(Some(allocation))
+            }
+        }
     }
     .await
     {
@@ -121,8 +136,9 @@ async fn release_allocation(
     id: Identity,
 ) -> HttpResponse {
     let allocation_id = path.allocation_id.clone();
-    let node_id = id.identity;
-    let dao: AllocationDao = db.as_dao();
+    let node_id = Some(id.identity);
+    let dao = db.as_dao::<AllocationDao>();
+
     match dao.release(allocation_id, node_id).await {
         Ok(true) => response::ok(Null),
         Ok(false) => response::not_found(),
