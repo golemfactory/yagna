@@ -211,13 +211,24 @@ async fn send_debit_note(
     cost_info: CostInfo,
     reference_date: DateTime<Utc>,
 ) -> Result<DebitNote> {
+    let payment_due_date = match debit_note_info.payment_timeout {
+        Some(dur) => {
+            let accept_timeout = debit_note_info.accept_timeout.unwrap().num_seconds();
+            // Only send the first debit note in each `payment_timeout` windows with a due date
+            let activity_active_settings = (Utc::now() - reference_date).num_seconds();
+            if activity_active_settings % dur.num_seconds() < accept_timeout {
+                None
+            } else {
+                Some(reference_date + dur)
+            }
+        }
+        None => None,
+    };
     let debit_note = NewDebitNote {
         activity_id: debit_note_info.activity_id.clone(),
         total_amount_due: cost_info.cost,
         usage_counter_vector: Some(json!(cost_info.usage)),
-        payment_due_date: debit_note_info
-            .payment_timeout
-            .map(|dur| reference_date + dur),
+        payment_due_date,
     };
 
     log::debug!(
