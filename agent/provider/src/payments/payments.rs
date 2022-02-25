@@ -209,17 +209,15 @@ async fn send_debit_note(
     provider_context: Arc<ProviderCtx>,
     debit_note_info: DebitNoteInfo,
     cost_info: CostInfo,
-    reference_date: DateTime<Utc>,
+    last_payable_debit_note: DateTime<Utc>,
 ) -> Result<DebitNote> {
     let payment_due_date = match debit_note_info.payment_timeout {
-        Some(dur) => {
-            let accept_timeout = debit_note_info.accept_timeout.unwrap().num_seconds();
-            // Only send the first debit note in each `payment_timeout` windows with a due date
-            let activity_active_settings = (Utc::now() - reference_date).num_seconds();
-            if activity_active_settings % dur.num_seconds() < accept_timeout {
+        Some(payment_timeout) => {
+            let send_payable_at = last_payable_debit_note + payment_timeout;
+            if send_payable_at > Utc::now() {
                 None
             } else {
-                Some(reference_date + dur)
+                Some(send_payable_at + payment_timeout)
             }
         }
         None => None,
@@ -481,7 +479,7 @@ async fn handle_debit_note_event(
 async fn compute_cost_and_send_debit_note(
     provider_context: Arc<ProviderCtx>,
     payment_model: Arc<dyn PaymentModel>,
-    reference_date: DateTime<Utc>,
+    last_payable_debit_node: DateTime<Utc>,
     invoice_info: &DebitNoteInfo,
 ) -> Result<(DebitNote, CostInfo)> {
     let cost_info = compute_cost(
@@ -502,7 +500,7 @@ async fn compute_cost_and_send_debit_note(
         provider_context,
         invoice_info.clone(),
         cost_info.clone(),
-        reference_date,
+        last_payable_debit_node,
     )
     .await?;
     Ok((debit_note, cost_info))
@@ -578,6 +576,7 @@ impl Handler<ActivityDestroyed> for Payments {
         agreement.activity_destroyed(&msg.activity_id).unwrap();
 
         let payment_model = agreement.payment_model.clone();
+        let last_payable_debit_node = agreement.last_payable_debit_note;
         let provider_context = self.context.clone();
         let address = ctx.address();
         let debit_note_info = DebitNoteInfo {
@@ -595,7 +594,7 @@ impl Handler<ActivityDestroyed> for Payments {
                 match compute_cost_and_send_debit_note(
                     provider_context.clone(),
                     payment_model.clone(),
-                    Utc::now(),
+                    last_payable_debit_node,
                     &debit_note_info,
                 )
                 .await
@@ -649,11 +648,11 @@ impl Handler<UpdateCost> for Payments {
             Ok(agreement) => agreement,
             Err(e) => return ActorResponse::reply(Err(e)),
         };
-        let scheduled_date = msg.interval_ctx.current();
 
         return match agreement.activities.get(&msg.invoice_info.activity_id) {
             Some(ActivityPayment::Running { .. }) => {
                 let last_debit_note = agreement.last_send_debit_note;
+                let last_payable_debit_node = agreement.last_payable_debit_note;
                 let accept_timeout = agreement.accept_timeout;
                 let invoice_info = msg.invoice_info.clone();
                 let payment_model = agreement.payment_model.clone();
@@ -663,7 +662,7 @@ impl Handler<UpdateCost> for Payments {
                     let (debit_note, _cost) = compute_cost_and_send_debit_note(
                         context.clone(),
                         payment_model.clone(),
-                        scheduled_date,
+                        last_payable_debit_node,
                         &invoice_info,
                     )
                         .await
@@ -673,25 +672,33 @@ impl Handler<UpdateCost> for Payments {
                     .into_actor(self)
                     .map(move |result: Result<_, anyhow::Error>, myself, ctx| {
                         // We break Agreement, if we weren't able to send any DebitNote lately.
-                        if result.is_err() {
-                            if accept_timeout.is_some() && Utc::now() > last_debit_note + accept_timeout.unwrap() {
-                                myself.break_agreement_signal
-                                    .send_signal(BreakAgreement {
-                                        agreement_id: msg.invoice_info.agreement_id.clone(),
-                                        reason: BreakReason::RequestorUnreachable(accept_timeout.unwrap()),
-                                    })
-                                    .log_err_msg(&format!(
-                                        "Failed to send BreakAgreement for [{}], when Requestor is unreachable.",
-                                        msg.invoice_info.agreement_id
-                                    ))
-                                    .ok();
+                        match result {
+                            Err(_) => {
+                                if accept_timeout.is_some() && Utc::now() > last_debit_note + accept_timeout.unwrap() {
+                                    myself.break_agreement_signal
+                                        .send_signal(BreakAgreement {
+                                            agreement_id: msg.invoice_info.agreement_id.clone(),
+                                            reason: BreakReason::RequestorUnreachable(accept_timeout.unwrap()),
+                                        })
+                                        .log_err_msg(&format!(
+                                            "Failed to send BreakAgreement for [{}], when Requestor is unreachable.",
+                                            msg.invoice_info.agreement_id
+                                        ))
+                                        .ok();
+                                }
+                            },
+                            Ok(debit_note) => {
+                                myself.agreements
+                                    .get_mut(&msg.invoice_info.agreement_id)
+                                    // Payment due date is always set _before_ sending the DebitNote.
+                                    // The following synchronises the acceptance timeout check.
+                                    .map(|agreement| {
+                                        agreement.last_send_debit_note = debit_note.timestamp;
+                                        if debit_note.payment_due_date.is_some() {
+                                            agreement.last_payable_debit_note = debit_note.timestamp
+                                        }
+                                    });
                             }
-                        } else {
-                            myself.agreements
-                                .get_mut(&msg.invoice_info.agreement_id)
-                                // Payment due date is always set _before_ sending the DebitNote.
-                                // The following synchronises the acceptance timeout check.
-                                .map(|agreement| agreement.last_send_debit_note = scheduled_date);
                         }
 
                         // A note regarding short debit note intervals:
