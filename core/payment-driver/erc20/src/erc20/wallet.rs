@@ -60,14 +60,14 @@ pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
         let h160_addr = str_to_addr(&address)?;
 
         let glm_balance = ethereum::get_glm_balance(h160_addr, network).await?;
-        if glm_balance == U256::zero() {
+        /*if glm_balance == U256::zero() {
             return Err(GenericError::new("Insufficient GLM"));
-        }
+        }*/
 
         let eth_balance = ethereum::get_balance(h160_addr, network).await?;
-        if eth_balance == U256::zero() {
+        /*if eth_balance == U256::zero() {
             return Err(GenericError::new("Insufficient ETH"));
-        }
+        }*/
     }
     Ok(())
 }

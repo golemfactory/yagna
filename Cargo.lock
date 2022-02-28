@@ -7815,7 +7815,6 @@ dependencies = [
  "ya-utils-process",
  "ya-version",
  "ya-vpn",
- "ya-zksync-driver",
 ]
 
 [[package]]
