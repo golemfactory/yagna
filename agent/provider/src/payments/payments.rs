@@ -308,9 +308,10 @@ async fn send_debit_note(
     send_result?;
 
     log::info!(
-        "Debit note [{}] for activity [{}] sent.",
+        "Debit note [{}] for activity [{}] sent with due date: {:?}.",
         &debit_note.debit_note_id,
-        &debit_note_info.activity_id
+        &debit_note_info.activity_id,
+        &debit_note.payment_due_date
     );
 
     Ok(debit_note)
