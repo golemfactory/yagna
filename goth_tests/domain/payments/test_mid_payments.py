@@ -97,5 +97,11 @@ async def test_mid_agreement_payments(
             if i == ITERATION_COUNT - 2:
                 await requestor.destroy_activity(activity_id)
                 await provider.wait_for_exeunit_finished()
+                # Invoice is required for the last payment
+                await provider.wait_for_invoice_sent()
+                invoices = await requestor.gather_invoices(agreement_id)
+                assert all(inv.agreement_id == agreement_id for inv in invoices)
+                await requestor.pay_invoices(invoices)
+                await provider.wait_for_invoice_paid()
 
         assert round(stats.amount, 12) == round(amount, 12)
