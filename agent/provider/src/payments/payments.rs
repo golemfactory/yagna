@@ -577,7 +577,12 @@ impl Handler<ActivityDestroyed> for Payments {
         agreement.activity_destroyed(&msg.activity_id).unwrap();
 
         let payment_model = agreement.payment_model.clone();
-        let last_payable_debit_node = agreement.last_payable_debit_note;
+        let last_payable_debit_node = match agreement.payment_timeout {
+            // Ensure that last debit note is always payable, by
+            Some(timeout) => Utc::now() - timeout,
+            // Without payment timeout the last_payable_debit_node is ignored.
+            None => agreement.last_payable_debit_note,
+        };
         let provider_context = self.context.clone();
         let address = ctx.address();
         let debit_note_info = DebitNoteInfo {
