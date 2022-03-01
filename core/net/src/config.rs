@@ -14,7 +14,7 @@ pub enum NetType {
 #[derive(StructOpt, Clone)]
 #[structopt(rename_all = "kebab-case")]
 pub struct Config {
-    #[structopt(env = "YA_NET_TYPE", possible_values = NetType::VARIANTS, default_value = NetType::Central.into())]
+    #[structopt(env = "YA_NET_TYPE", possible_values = NetType::VARIANTS, default_value = NetType::default().into())]
     pub net_type: NetType,
     #[structopt(env = "YA_NET_RELAY_HOST")]
     pub host: Option<String>,
