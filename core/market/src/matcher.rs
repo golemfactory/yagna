@@ -234,6 +234,14 @@ impl Matcher {
         demand: &NewDemand,
         id: &Identity,
     ) -> Result<Demand, MatcherError> {
+        if !self.discovery.re_broadcast_enabled() {
+            self.discovery.bind_gsb_broadcast().await.map_or_else(
+                |e| {
+                    log::warn!("Failed to subscribe to broadcasts. Error: {:?}.", e,);
+                },
+                |_| (),
+            );
+        }
         let demand = self.store.create_demand(id, demand).await?;
         self.resolver.receive(&demand);
 

@@ -61,7 +61,7 @@ impl Resolver {
         mut subscription_rx: UnboundedReceiver<Subscription>,
     ) {
         while let Some(s) = subscription_rx.recv().await {
-            log::debug!("Resolving incoming {}", s);
+            log::trace!("Resolving incoming {}", s);
             if let Err(e) = self.process_single_subscription(&s).await {
                 log::warn!("Failed resolve [{}]. Error: {}", s, e);
             }
