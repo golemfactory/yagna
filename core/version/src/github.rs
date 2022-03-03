@@ -74,7 +74,6 @@ pub(crate) async fn check_running_release(db: &DbExecutor) -> anyhow::Result<Rel
             .repo_name(REPO_NAME)
             .bin_name("") // seems required by builder but unused
             .current_version("") // similar as above
-            .target_version_tag("latest")
             .build()?
             .get_release_version(running_tag)
     })
