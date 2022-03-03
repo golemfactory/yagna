@@ -79,6 +79,10 @@ pub struct Net;
 impl Net {
     pub async fn gsb<Context>(_: Context, config: Config) -> anyhow::Result<()> {
         let (default_id, ids) = crate::service::identities().await?;
+        log::info!(
+            "HYBRID_NET - Using default identity as network id: {:?}",
+            default_id
+        );
         start_network(Arc::new(config), default_id, ids).await?;
         Ok(())
     }
