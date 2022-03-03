@@ -62,6 +62,12 @@ pub(crate) async fn check_running_release(db: &DbExecutor) -> anyhow::Result<Rel
     let running_tag = ya_compile_time_utils::git_tag!();
     log::debug!("Checking release for running tag: {}", running_tag);
 
+    if running_tag.contains("-rc") {
+        log::trace!("Currently running Yagna rc release. Not stored in DB.");
+
+        return Ok(DBRelease::current()?.into());
+    }
+
     let db_rel = match tokio::task::spawn_blocking(move || {
         UpdateBuilder::new()
             .repo_owner(REPO_OWNER)
