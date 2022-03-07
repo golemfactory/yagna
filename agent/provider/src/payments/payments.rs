@@ -596,6 +596,8 @@ impl Handler<ActivityDestroyed> for Payments {
             // Computing last DebitNote can't fail, so we must repeat it until
             // it reaches Requestor. DebitNote itself is not important so much, but
             // we must ensure that we send FinalizeActivity and Invoice in consequence.
+
+            let mut repeats = get_backoff();
             let (debit_note, cost_info) = loop {
                 match compute_cost_and_send_debit_note(
                     provider_context.clone(),
@@ -606,15 +608,10 @@ impl Handler<ActivityDestroyed> for Payments {
                 .await
                 {
                     Ok(debit_note) => break debit_note,
-                    Err(error) => {
-                        let interval = provider_context.config.invoice_resend_interval;
-
-                        log::error!(
-                            "{} Final debit note will be resent after {:#?}.",
-                            error,
-                            interval
-                        );
-                        tokio::time::delay_for(interval).await
+                    Err(e) => {
+                        let delay = repeats.next_backoff().unwrap_or(repeats.current_interval);
+                        log::warn!("Error sending debit note: {} Retry in {:#?}.", e, delay);
+                        tokio::time::delay_for(delay).await
                     }
                 }
             };
