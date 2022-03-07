@@ -244,8 +244,6 @@ impl Discovery {
 
         // Only bind broadcasts when re-broadcasts are enabled
         if self.re_broadcast_enabled() {
-            // We don't lazy bind broadcasts handlers anymore on first Demand creation.
-            // But we still have option to do this easily in the future.
             self.bind_gsb_broadcast().await.map_or_else(
                 |e| {
                     log::warn!("Failed to subscribe to broadcasts. Error: {:?}.", e,);
