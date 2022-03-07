@@ -48,6 +48,7 @@ impl Default for NetType {
 #[cfg(feature = "hybrid-net")]
 impl Default for NetType {
     fn default() -> Self {
+        std::env::set_var("YA_NET_TYPE", "hybrid");
         NetType::Hybrid
     }
 }
