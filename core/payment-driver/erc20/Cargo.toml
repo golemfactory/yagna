@@ -41,5 +41,5 @@ ya-utils-networking = "0.1"
 [dev-dependencies]
 actix-rt = "1.0"
 dotenv = "0.15.0"
-env_logger = "0.7.1"
+env_logger = "0.8"
 structopt = "0.3"

@@ -1,8 +1,7 @@
 use chrono::NaiveDateTime;
 use diesel::sql_types::Text;
-use digest::Digest;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
-use sha3::Sha3_256;
+use sha3::{Digest, Sha3_256};
 use std::str::FromStr;
 use uuid::Uuid;
 

@@ -9,7 +9,6 @@ proc-macro = true
 
 [dependencies]
 lazy_static = "1.4"
-proc-macro-hack = "0.5"
 proc-macro2 = "1.0"
 quote = "1.0"
 strum = "0.19"

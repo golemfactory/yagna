@@ -11,6 +11,5 @@ proc-macro = true
 [dependencies]
 syn = "1.0.48"
 diesel = { version = "1.4", features = ["chrono", "sqlite", "r2d2"] }
-proc-macro-hack = "0.5"
 proc-macro2 = "1.0"
 quote = "1.0"

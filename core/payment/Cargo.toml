@@ -28,7 +28,6 @@ chrono = { version = "0.4", features = ["serde"] }
 diesel = { version = "1.4", features = [ "sqlite", "r2d2", "chrono", "bigdecimal" ] }
 diesel_migrations = "1.4"
 dotenv = "0.15.0"
-env_logger = "0.7"
 futures = "0.3"
 hex = "0.4"
 metrics="0.12"
@@ -54,9 +53,6 @@ ya-net = { version = "0.2", features = ["service"] }
 ya-sb-router = "0.4"
 
 actix-rt = "1.0"
-
+env_logger = "0.8"
+ethsign = "0.8"
 rand = "0.7"
-# Lock ethsign on this commit to match parity-crypto=0.6 from zksync_eth_client
-ethsign = { git = "https://github.com/tomusdrw/ethsign.git", rev = "1b93031d2c45f3a3313e5418876b3d3e751ba87e" }
-# TODO: Upgrade to latest = 0.8 after zksync_eth_client is updated
-# ethsign = "0.8"
