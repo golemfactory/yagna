@@ -65,7 +65,7 @@ async fn relay_addr(config: &Config) -> anyhow::Result<SocketAddr> {
     let (host, port) = &host_port
         .split_once(":")
         .context("Please use host:port format")?;
-    let ip = resolver::resolve_dns_record_host(&host).await?;
+    let ip = resolver::try_resolve_dns_record(&host).await;
     let ip_port = format!("{}:{}", ip, port);
     let socket = ip_port
         .to_socket_addrs()?
@@ -79,6 +79,10 @@ pub struct Net;
 impl Net {
     pub async fn gsb<Context>(_: Context, config: Config) -> anyhow::Result<()> {
         let (default_id, ids) = crate::service::identities().await?;
+        log::info!(
+            "HYBRID_NET - Using default identity as network id: {:?}",
+            default_id
+        );
         start_network(Arc::new(config), default_id, ids).await?;
         Ok(())
     }
