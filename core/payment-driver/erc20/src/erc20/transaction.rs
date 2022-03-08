@@ -2,7 +2,7 @@ use ethereum_types::{H160, U256};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Clone, PartialEq, Deserialize, Serialize)]
-pub struct RawTransaction {
+pub struct YagnaRawTransaction {
     /// Nonce value
     pub nonce: U256,
     /// Recipient, None when creating contract

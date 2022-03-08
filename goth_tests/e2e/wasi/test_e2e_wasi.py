@@ -46,7 +46,12 @@ async def test_e2e_wasi(
         assert providers
 
         # Market
-        demand = DemandBuilder(requestor).props_from_template(wasi_task_package).build()
+        demand = (
+            DemandBuilder(requestor)
+            .props_from_template(wasi_task_package)
+            .constraints("(&(golem.runtime.name=wasmtime))")
+            .build()
+        )
 
         agreement_providers = await negotiate_agreements(
             requestor,

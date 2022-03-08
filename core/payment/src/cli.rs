@@ -1,7 +1,8 @@
 // External crates
 use bigdecimal::BigDecimal;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use std::str::FromStr;
+use std::time::UNIX_EPOCH;
 use structopt::*;
 
 // Workspace uses
@@ -39,6 +40,8 @@ pub enum PaymentCli {
     Status {
         #[structopt(flatten)]
         account: pay::AccountCli,
+        #[structopt(long, help = "Display account balance for the given time period")]
+        last: Option<humantime::Duration>,
     },
 
     /// Enter layer 2 (deposit funds to layer 2 network)
@@ -55,7 +58,7 @@ pub enum PaymentCli {
         account: pay::AccountCli,
         #[structopt(
             long,
-            help = "Optional address to exit to [default: <DEFAULT_IDENTIDITY>]"
+            help = "Optional address to exit to [default: <DEFAULT_IDENTITY>]"
         )]
         to_address: Option<String>,
         #[structopt(long, help = "Optional amount to exit [default: <ALL_FUNDS>]")]
@@ -65,10 +68,24 @@ pub enum PaymentCli {
     Transfer {
         #[structopt(flatten)]
         account: pay::AccountCli,
-        #[structopt(long)]
+        #[structopt(long, help = "Recipient address")]
         to_address: String,
-        #[structopt(long)]
+        #[structopt(long, help = "Amount in GLM for example 1.45")]
         amount: String,
+        #[structopt(long, help = "Override gas price (in Gwei)", default_value = "auto")]
+        gas_price: String,
+        #[structopt(
+            long,
+            help = "Override maximum gas price (in Gwei)",
+            default_value = "auto"
+        )]
+        max_gas_price: String,
+        #[structopt(
+            long,
+            help = "Override gas limit (at least 48000 to account with GLM, 60000 to new account without GLM)",
+            default_value = "auto"
+        )]
+        gas_limit: String,
     },
     Invoice {
         address: Option<String>,
@@ -78,12 +95,15 @@ pub enum PaymentCli {
 
     /// List registered drivers, networks, tokens and platforms
     Drivers,
+
+    /// Clear all existing allocations
+    ReleaseAllocations,
 }
 
 #[derive(StructOpt, Debug)]
 pub enum InvoiceCommand {
     Status {
-        #[structopt(long)]
+        #[structopt(long, help = "Display invoice status from the given period of time")]
         last: Option<humantime::Duration>,
     },
 }
@@ -116,14 +136,19 @@ impl PaymentCli {
                 init_account(account).await?;
                 Ok(CommandOutput::NoOutput)
             }
-            PaymentCli::Status { account } => {
+            PaymentCli::Status { account, last } => {
                 let address = resolve_address(account.address()).await?;
+                let timestamp = last
+                    .map(|d| Utc::now() - chrono::Duration::seconds(d.as_secs() as i64))
+                    .unwrap_or(DateTime::from(UNIX_EPOCH))
+                    .timestamp();
                 let status = bus::service(pay::BUS_ID)
                     .call(pay::GetStatus {
                         address: address.clone(),
                         driver: account.driver(),
                         network: Some(account.network()),
                         token: None,
+                        after_timestamp: timestamp,
                     })
                     .await??;
                 if ctx.json_output {
@@ -251,9 +276,30 @@ impl PaymentCli {
                 account,
                 to_address,
                 amount,
+                gas_price,
+                max_gas_price,
+                gas_limit,
             } => {
                 let address = resolve_address(account.address()).await?;
                 let amount = BigDecimal::from_str(&amount)?;
+
+                let gas_price = if gas_price.is_empty() || gas_price == "auto" {
+                    None
+                } else {
+                    Some(BigDecimal::from_str(&gas_price)?)
+                };
+                let max_gas_price = if max_gas_price.is_empty() || max_gas_price == "auto" {
+                    None
+                } else {
+                    Some(BigDecimal::from_str(&max_gas_price)?)
+                };
+
+                let gas_limit = if gas_limit.is_empty() || gas_limit == "auto" {
+                    None
+                } else {
+                    Some(u32::from_str(&gas_limit)?)
+                };
+
                 CommandOutput::object(
                     wallet::transfer(
                         address,
@@ -262,6 +308,9 @@ impl PaymentCli {
                         account.driver(),
                         Some(account.network()),
                         None,
+                        gas_price,
+                        max_gas_price,
+                        gas_limit,
                     )
                     .await?,
                 )
@@ -303,6 +352,11 @@ impl PaymentCli {
                         .collect()
                 }.into())
             }
+            PaymentCli::ReleaseAllocations => CommandOutput::object(
+                bus::service(pay::BUS_ID)
+                    .call(pay::ReleaseAllocations {})
+                    .await??,
+            ),
         }
     }
 }

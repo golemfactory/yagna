@@ -7,9 +7,16 @@ edition = "2018"
 [features]
 default = []
 service = []
+# Temporary to make goth integration tests work
+hybrid-net = []
 
 [dependencies]
-ya-core-model = { version = "^0.4", features=["net", "identity"] }
+ya-core-model = { version = "^0.5", features=["net", "identity"] }
+
+ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c3f6b367745321270d90aa1e8cacab2ca291590e" }
+#ya-relay-client = { path = "../../../ya-relay/client" }
+
+ya-sb-proto = { version = "0.4" }
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.1"
 ya-service-bus = "0.4"
@@ -18,12 +25,22 @@ ya-utils-networking = "0.1"
 actix-rt = "1.0"
 anyhow = "1.0"
 futures = "0.3"
+humantime = "2.1"
 lazy_static = "1.4"
 log = "0.4"
 metrics="0.12"
 serde_json = "1.0"
+structopt = "0.3"
+strum = { version = "0.22", features = ["derive"] }
 thiserror = "1.0"
 tokio = { version = "0.2", features = ["time"] }
+
+bytes = { version = "0.5" }
+ethsign = { version = "0.8" }
+tokio-util = { version = "0.3" }
+url = { version = "2.2" }
+prost = { version = "0.6" }
+rand = { version = "0.7"}
 
 [dev-dependencies]
 ya-sb-proto = "0.4"

@@ -62,10 +62,10 @@ impl PresetsConfig {
                 if no_interactive {
                     update_presets(&config, names, params)
                 } else {
-                    if names.all || names.names.len() != 1 {
+                    if names.all || names.name.len() != 1 {
                         anyhow::bail!("choose one name for interactive update");
                     }
-                    update_preset_interactive(config, names.names.drain(..).next().unwrap())
+                    update_preset_interactive(config, names.name.drain(..).next().unwrap())
                 }
             }
             PresetsConfig::Activate { name } => activate_preset(config, name),
@@ -105,7 +105,7 @@ impl PresetUpdater {
         }
 
         let exeunit_idx = Select::new()
-            .with_prompt("ExeUnit")
+            .with_prompt("ExeUnit [select with arrow keys]")
             .items(&self.exeunits[..])
             .default(prev_exeunit)
             .interact()?;
@@ -121,7 +121,7 @@ impl PresetUpdater {
             .unwrap_or(0);
 
         let pricing_idx = Select::new()
-            .with_prompt("Pricing model")
+            .with_prompt("Pricing model [select with arrow keys]")
             .items(&self.pricing_models[..])
             .default(prev_pricing)
             .interact()?;
@@ -296,7 +296,7 @@ fn update_presets(
     let names = if names.all {
         presets.list_names()
     } else {
-        names.names
+        names.name
     };
 
     for name in names {

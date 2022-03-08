@@ -91,6 +91,7 @@ fn get_release(conn: &ConnType, ver: &str) -> anyhow::Result<Option<Release>> {
 fn get_pending_release(conn: &ConnType, include_seen: bool) -> anyhow::Result<Option<Release>> {
     let mut query = version_release
         // insertion_ts is to distinguish among fake-entries of `DBRelease::current`
+        .filter(release::version.not_like("%rc%"))
         .order((release::release_ts.desc(), release::insertion_ts.desc()))
         .into_boxed();
     if !include_seen {

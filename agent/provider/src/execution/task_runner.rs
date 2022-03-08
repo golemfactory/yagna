@@ -2,7 +2,7 @@ use actix::prelude::*;
 use anyhow::{anyhow, bail, Error, Result};
 use chrono::{DateTime, Utc};
 use derive_more::Display;
-use futures::future::join_all;
+use futures::future::{join_all, select, Either};
 use futures::{FutureExt, TryFutureExt};
 use humantime;
 use log_derive::{logfn, logfn_inputs};
@@ -17,7 +17,7 @@ use structopt::StructOpt;
 use ya_agreement_utils::{AgreementView, OfferTemplate};
 use ya_client::activity::ActivityProviderApi;
 use ya_client::model::activity::provider_event::ProviderEventType;
-use ya_client::model::activity::{ActivityState, ProviderEvent, State};
+use ya_client::model::activity::{ActivityState, ProviderEvent, State, StatePair};
 use ya_std_utils::LogErr;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
 use ya_utils_actix::actix_signal::{Signal, SignalSlot};
@@ -280,6 +280,30 @@ impl TaskRunner {
 
         let process = task.exeunit.get_process_handle();
         self.tasks.push(task);
+
+        // Log ExeUnit initialization message
+        let activity_id = msg.activity_id.clone();
+        let api = self.api.clone();
+        let proc = process.clone();
+
+        Arbiter::spawn(async move {
+            let mut finished = Box::pin(proc.wait_until_finished());
+            let mut monitor = StateMonitor::default();
+
+            loop {
+                match select(Box::pin(api.get_activity_state(&activity_id)), finished).await {
+                    Either::Left((result, fut)) => {
+                        finished = fut;
+
+                        if let Ok(state) = result {
+                            monitor.update(state.state);
+                        }
+                        monitor.sleep().await;
+                    }
+                    Either::Right(_) => break,
+                }
+            }
+        });
 
         // We need to discover that ExeUnit process finished.
         // We can't be sure that Requestor will send DestroyActivity.
@@ -808,5 +832,55 @@ impl Handler<Shutdown> for TaskRunner {
         };
 
         ActorResponse::r#async(fut.into_actor(self))
+    }
+}
+
+struct StateMonitor {
+    state: StatePair,
+    interval: Duration,
+}
+
+impl Default for StateMonitor {
+    fn default() -> Self {
+        StateMonitor {
+            state: StatePair(State::New, None),
+            interval: Self::INITIAL_INTERVAL,
+        }
+    }
+}
+
+impl StateMonitor {
+    const INITIAL_INTERVAL: Duration = Duration::from_millis(750);
+    const INTERVAL: Duration = Duration::from_secs(5);
+
+    fn update(&mut self, state: StatePair) {
+        match state {
+            StatePair(State::Initialized, None)
+            | StatePair(State::Deployed, _)
+            | StatePair(State::Ready, _) => {
+                if self.state.0 == State::New {
+                    log::info!("ExeUnit initialized");
+                    self.interval = Self::INTERVAL;
+                }
+            }
+            StatePair(State::Unresponsive, _) => {
+                if self.state.0 != State::Unresponsive {
+                    log::warn!("ExeUnit is unresponsive");
+                }
+            }
+            _ => {}
+        }
+
+        if self.state.0 == State::Unresponsive {
+            if state.0 != State::Unresponsive {
+                log::warn!("ExeUnit is now responsive");
+            }
+        }
+
+        self.state = state;
+    }
+
+    fn sleep(&self) -> impl Future<Output = ()> {
+        tokio::time::delay_for(self.interval)
     }
 }

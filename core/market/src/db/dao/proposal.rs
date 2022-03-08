@@ -2,14 +2,12 @@ use diesel::expression::dsl::now as sql_now;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use serde::{Deserialize, Serialize};
 
-use ya_persistence::executor::{
-    do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
-};
+use ya_persistence::executor::{do_with_transaction, readonly_transaction, ConnType, PoolType};
 
 use crate::db::model::{DbProposal, Negotiation, Proposal, ProposalId, ProposalState};
 use crate::db::schema::market_negotiation::dsl as dsl_negotiation;
 use crate::db::schema::market_proposal::dsl;
-use crate::db::{DbError, DbResult};
+use crate::db::{AsMixedDao, DbError, DbResult};
 
 #[derive(thiserror::Error, Debug)]
 pub enum SaveProposalError {
@@ -34,9 +32,9 @@ pub struct ProposalDao<'c> {
     pool: &'c PoolType,
 }
 
-impl<'c> AsDao<'c> for ProposalDao<'c> {
-    fn as_dao(pool: &'c PoolType) -> Self {
-        Self { pool }
+impl<'a> AsMixedDao<'a> for ProposalDao<'a> {
+    fn as_dao(_disk_pool: &'a PoolType, ram_pool: &'a PoolType) -> Self {
+        Self { pool: ram_pool }
     }
 }
 

@@ -44,20 +44,21 @@ pub async fn resolve_dns_record(request_url: &str) -> anyhow::Result<String> {
         .ok_or(anyhow::anyhow!("Invalid url: {}", request_url))?
         .to_string();
 
+    let address = resolve_dns_record_host(&request_host).await?;
+    Ok(request_url.replace(&request_host, &address))
+}
+
+pub async fn resolve_dns_record_host(host: &str) -> anyhow::Result<String> {
     let resolver =
         TokioAsyncResolver::tokio(ResolverConfig::google(), ResolverOpts::default()).await?;
 
-    let response = resolver.lookup_ip(request_host.as_str()).await?;
+    let response = resolver.lookup_ip(host).await?;
     let address = response
         .iter()
         .next()
-        .ok_or(anyhow::anyhow!(
-            "DNS resolution failed for host: {}",
-            request_host
-        ))?
+        .ok_or(anyhow::anyhow!("DNS resolution failed for host: {}", host))?
         .to_string();
-
-    Ok(request_url.replace(&request_host, &address))
+    Ok(address)
 }
 
 /// Try resolving hostname with `resolve_dns_record`. Return the original URL if it fails

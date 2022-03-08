@@ -9,12 +9,11 @@ use tokio::time::delay_for;
 
 use ya_client::model::NodeId;
 use ya_core_model::market::BUS_ID;
-use ya_core_model::net::local as local_net;
 use ya_core_model::net::local::{BroadcastMessage, SendBroadcastMessage};
 use ya_net::{self as net, RemoteEndpoint};
 use ya_service_bus::timeout::{IntoDuration, IntoTimeoutFuture};
 use ya_service_bus::typed::ServiceBinder;
-use ya_service_bus::{typed as bus, Error as BusError, RpcEndpoint, RpcMessage};
+use ya_service_bus::{Error as BusError, RpcEndpoint, RpcMessage};
 
 use super::callback::HandlerSlot;
 use crate::config::DiscoveryConfig;
@@ -57,6 +56,13 @@ pub struct DiscoveryImpl {
 }
 
 impl Discovery {
+    pub fn re_broadcast_enabled(&self) -> bool {
+        match std::env::var("YA_NET_TYPE") {
+            Ok(val) => val == "hybrid",
+            Err(_) => false,
+        }
+    }
+
     pub async fn bcast_offers(&self, offer_ids: Vec<SubscriptionId>) -> Result<(), DiscoveryError> {
         if offer_ids.is_empty() {
             return Ok(());
@@ -110,16 +116,12 @@ impl Discovery {
         };
         let size = offer_ids.len();
         log::debug!("Broadcasting offers. count={}", size);
-        let bcast_msg = SendBroadcastMessage::new(OffersBcast { offer_ids });
 
         counter!("market.offers.broadcasts.net", 1);
         value!("market.offers.broadcasts.len", size as u64);
 
-        // TODO: We shouldn't use send_as. Put identity inside broadcasted message instead.
-        if let Err(e) = bus::service(local_net::BUS_ID)
-            .send_as(default_id, bcast_msg) // TODO: should we send as our (default) identity?
-            .await
-        {
+        // TODO: should we send as our (default) identity?
+        if let Err(e) = net::broadcast(default_id, OffersBcast { offer_ids }).await {
             log::error!("Error sending bcast, skipping... error={:?}", e);
             counter!("market.offers.broadcasts.net_errors", 1);
         };
@@ -209,15 +211,11 @@ impl Discovery {
 
         let size = offer_ids.len();
         log::debug!("Broadcasting unsubscribes. count={}", size);
-        let bcast_msg = SendBroadcastMessage::new(UnsubscribedOffersBcast { offer_ids });
         counter!("market.offers.unsubscribes.broadcasts.net", 1);
         value!("market.offers.unsubscribes.broadcasts.len", size as u64);
 
-        // TODO: We shouldn't use send_as. Put identity inside broadcasted message instead.
-        if let Err(e) = bus::service(local_net::BUS_ID)
-            .send_as(default_id, bcast_msg) // TODO: should we send as our (default) identity?
-            .await
-        {
+        // TODO: should we send as our (default) identity?
+        if let Err(e) = net::broadcast(default_id, UnsubscribedOffersBcast { offer_ids }).await {
             log::error!("Error sending bcast, skipping... error={:?}", e);
             counter!("market.offers.unsubscribes.broadcasts.net_errors", 1);
         };
@@ -236,17 +234,29 @@ impl Discovery {
                 myself.on_get_remote_offers(caller, msg)
             },
         );
-        // Subscribe to receiving broadcasts only when demand is subscribed for the first time.
-        let mut prefix_guard = self.inner.lazy_binder_prefix.lock().await;
-        if let Some(old_prefix) = (*prefix_guard).replace(local_prefix.to_string()) {
-            log::info!("Dropping previous lazy_binder_prefix, and replacing it with new one. old={}, new={}", old_prefix, local_prefix);
-        };
+        // Subscribe to offer broadcasts.
+        {
+            let mut prefix_guard = self.inner.lazy_binder_prefix.lock().await;
+            if let Some(old_prefix) = (*prefix_guard).replace(local_prefix.to_string()) {
+                log::info!("Dropping previous lazy_binder_prefix, and replacing it with new one. old={}, new={}", old_prefix, local_prefix);
+            };
+        }
+
+        // Only bind broadcasts when re-broadcasts are enabled
+        if self.re_broadcast_enabled() {
+            self.bind_gsb_broadcast().await.map_or_else(
+                |e| {
+                    log::warn!("Failed to subscribe to broadcasts. Error: {:?}.", e,);
+                },
+                |_| (),
+            );
+        }
 
         Ok(())
     }
 
-    pub async fn lazy_bind_gsb(&self) -> Result<(), DiscoveryInitError> {
-        log::trace!("LazyBroadcastBind");
+    pub async fn bind_gsb_broadcast(&self) -> Result<(), DiscoveryInitError> {
+        log::trace!("GsbBroadcastBind");
         let myself = self.clone();
 
         // /local/market/market-protocol-mk1-offer
@@ -296,7 +306,7 @@ impl Discovery {
         // Other attempts to add them will end with error and we will filter all Offers, that already
         // occurred and re-broadcast only new ones.
         // But still it is worth to limit network traffic.
-        let _new_offer_ids = {
+        let new_offer_ids = {
             let offer_handlers = match self.inner.offer_handlers.try_lock() {
                 Ok(h) => h,
                 Err(_) => {
@@ -335,22 +345,20 @@ impl Discovery {
             }
         };
 
-        // I'm ceasing rebroadcast to reduce net traffic. It should be restored when we have P2P net
+        if self.re_broadcast_enabled() && !new_offer_ids.is_empty() {
+            log::trace!(
+                "Propagating {}/{} Offers received from [{}].",
+                new_offer_ids.len(),
+                num_ids_received,
+                &caller
+            );
 
-        // if !new_offer_ids.is_empty() {
-        //     log::debug!(
-        //         "Propagating {}/{} Offers received from [{}].",
-        //         new_offer_ids.len(),
-        //         num_ids_received,
-        //         &caller
-        //     );
-        //
-        //     // We could broadcast outside of lock, but it shouldn't hurt either, because
-        //     // we don't wait for any responses from remote nodes.
-        //     self.bcast_offers(new_offer_ids)
-        //         .await
-        //         .map_err(|e| log::warn!("Failed to bcast. Error: {}", e))?;
-        // }
+            // We could broadcast outside of lock, but it shouldn't hurt either, because
+            // we don't wait for any responses from remote nodes.
+            self.bcast_offers(new_offer_ids)
+                .await
+                .map_err(|e| log::warn!("Failed to bcast. Error: {}", e))?;
+        }
 
         let end = Instant::now();
         timing!("market.offers.incoming.time", start, end);
@@ -384,23 +392,21 @@ impl Discovery {
         }
 
         let offer_unsubscribe_handler = self.inner.offer_unsubscribe_handler.clone();
-        let _unsubscribed_offer_ids = offer_unsubscribe_handler.call(caller.clone(), msg).await?;
+        let unsubscribed_offer_ids = offer_unsubscribe_handler.call(caller.clone(), msg).await?;
 
-        // I'm ceasing rebroadcast to reduce net traffic. It should be restored when we have P2P net
+        if self.re_broadcast_enabled() && !unsubscribed_offer_ids.is_empty() {
+            log::trace!(
+                "Propagating {}/{} unsubscribed Offers received from [{}].",
+                unsubscribed_offer_ids.len(),
+                num_received_ids,
+                &caller,
+            );
 
-        // if !unsubscribed_offer_ids.is_empty() {
-        //     log::debug!(
-        //         "Propagating {}/{} unsubscribed Offers received from [{}].",
-        //         unsubscribed_offer_ids.len(),
-        //         num_received_ids,
-        //         &caller,
-        //     );
-        //
-        //     // No need to retry broadcasting, since we send cyclic broadcasts.
-        //     if let Err(error) = self.bcast_unsubscribes(unsubscribed_offer_ids).await {
-        //         log::error!("Error propagating unsubscribed Offers further: {}", error,);
-        //     }
-        // }
+            // No need to retry broadcasting, since we send cyclic broadcasts.
+            if let Err(error) = self.bcast_unsubscribes(unsubscribed_offer_ids).await {
+                log::error!("Error propagating unsubscribed Offers further: {}", error,);
+            }
+        }
         let end = Instant::now();
         timing!("market.offers.unsubscribes.incoming.time", start, end);
         Ok(())

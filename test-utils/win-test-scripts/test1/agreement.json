@@ -19,7 +19,7 @@
         "pricing.model":"linear",
         "pricing.model.linear.coeffs":[0.01,0.2,1.0],
         "scheme":"payu",
-        "scheme.payu.interval_sec":6.0,
+        "scheme.payu.debit-note.interval-sec?":6.0,
         "usage.vector": [
           "golem.usage.duration_sec",
           "golem.usage.cpu_sec"

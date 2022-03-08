@@ -138,6 +138,8 @@ impl RuntimeProcess {
             }
         }
 
+        args.args(self.ctx.runtime_args.iter());
+
         Ok(args)
     }
 }
@@ -314,12 +316,12 @@ impl RuntimeProcess {
             run_process.bin = entry_point;
             run_process.args = args;
 
-            let process = match service.run_process(run_process).await {
-                Ok(result) => result,
-                Err(error) => return Err(Error::RuntimeError(format!("{:?}", error))),
+            let handle = monitor.next_process(ctx);
+            if let Err(error) = service.run_process(run_process).await {
+                return Err(Error::RuntimeError(format!("{:?}", error)));
             };
 
-            Ok(monitor.process(ctx, process.pid).await)
+            Ok(handle.await)
         };
 
         async move {

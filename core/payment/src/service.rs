@@ -21,6 +21,7 @@ pub fn bind_service(db: &DbExecutor, processor: PaymentProcessor) {
 mod local {
     use super::*;
     use crate::dao::*;
+    use chrono::NaiveDateTime;
     use std::collections::BTreeMap;
     use ya_client_model::payment::{Account, DocumentStatus, DriverDetails};
     use ya_core_model::payment::local::*;
@@ -40,6 +41,7 @@ mod local {
             .bind_with_processor(get_invoice_stats)
             .bind_with_processor(get_accounts)
             .bind_with_processor(validate_allocation)
+            .bind_with_processor(release_allocations)
             .bind_with_processor(get_drivers)
             .bind_with_processor(shut_down);
 
@@ -69,6 +71,7 @@ mod local {
         counter!("payment.invoices.provider.paid", 0);
         counter!("payment.invoices.provider.accepted", 0);
         counter!("payment.invoices.provider.accepted.call", 0);
+        counter!("payment.invoices.requestor.not-enough-funds", 0);
 
         counter!("payment.amount.received", 0, "platform" => "erc20-rinkeby-tglm");
         counter!("payment.amount.received", 0, "platform" => "erc20-mainnet-glm");
@@ -162,6 +165,7 @@ mod local {
             driver,
             network,
             token,
+            after_timestamp,
         } = msg;
 
         let (network, network_details) = processor
@@ -171,33 +175,46 @@ mod local {
             .await
             .map_err(GenericError::new)?;
         let token = token.unwrap_or(network_details.default_token.clone());
+        let after_timestamp = NaiveDateTime::from_timestamp(after_timestamp, 0);
         let platform = match network_details.tokens.get(&token) {
             Some(platform) => platform.clone(),
             None => {
                 return Err(GenericError::new(format!(
                     "Unsupported token. driver={} network={} token={}",
                     driver, network, token
-                )))
+                )));
             }
         };
 
         let incoming_fut = async {
             db.as_dao::<AgreementDao>()
-                .incoming_transaction_summary(platform.clone(), address.clone())
+                .incoming_transaction_summary(
+                    platform.clone(),
+                    address.clone(),
+                    after_timestamp.clone(),
+                )
                 .await
         }
         .map_err(GenericError::new);
 
         let outgoing_fut = async {
             db.as_dao::<AgreementDao>()
-                .outgoing_transaction_summary(platform.clone(), address.clone())
+                .outgoing_transaction_summary(
+                    platform.clone(),
+                    address.clone(),
+                    after_timestamp.clone(),
+                )
                 .await
         }
         .map_err(GenericError::new);
 
         let reserved_fut = async {
             db.as_dao::<AllocationDao>()
-                .total_remaining_allocation(platform.clone(), address.clone())
+                .total_remaining_allocation(
+                    platform.clone(),
+                    address.clone(),
+                    after_timestamp.clone(),
+                )
                 .await
         }
         .map_err(GenericError::new);
@@ -288,6 +305,15 @@ mod local {
             .await
             .validate_allocation(msg.platform, msg.address, msg.amount)
             .await?)
+    }
+
+    async fn release_allocations(
+        db: DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        _caller: String,
+        msg: ReleaseAllocations,
+    ) -> Result<(), GenericError> {
+        Ok(processor.lock().await.release_allocations(true).await)
     }
 
     async fn get_drivers(
@@ -448,7 +474,7 @@ mod public {
             DocumentStatus::Cancelled => {
                 return Err(AcceptRejectError::BadRequest(
                     "Cannot accept cancelled debit note".to_owned(),
-                ))
+                ));
             }
             _ => (),
         }
@@ -524,7 +550,7 @@ mod public {
                     return Err(SendError::BadRequest(format!(
                         "Activity not found: {}",
                         activity_id
-                    )))
+                    )));
                 }
                 Err(e) => return Err(SendError::ServiceError(e.to_string())),
                 _ => (),
@@ -609,7 +635,7 @@ mod public {
             DocumentStatus::Cancelled => {
                 return Err(AcceptRejectError::BadRequest(
                     "Cannot accept cancelled invoice".to_owned(),
-                ))
+                ));
             }
             _ => (),
         }
@@ -664,7 +690,7 @@ mod public {
             DocumentStatus::Rejected => (),
             DocumentStatus::Cancelled => return Ok(Ack {}),
             DocumentStatus::Accepted | DocumentStatus::Settled | DocumentStatus::Failed => {
-                return Err(CancelError::Conflict)
+                return Err(CancelError::Conflict);
             }
         }
 
