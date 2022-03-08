@@ -25,8 +25,8 @@ serde_json = "^1.0"
 tiny-keccak = "1.4.2"
 tokio = { version = "0.2", features = ["full"] }
 uuid = { version = "0.8", features = ["v4"] }
-zksync = { git = "https://github.com/matter-labs/zksync", rev = "f958bd54000c5203ed54b55dee073d5b03f192be"}
-zksync_eth_signer = { git = "https://github.com/matter-labs/zksync", rev = "f958bd54000c5203ed54b55dee073d5b03f192be"}
+zksync = { git = "https://github.com/matter-labs/zksync", rev = "262165ef29f47803e1efb9576641d23231f451ce"}
+zksync_eth_signer = { git = "https://github.com/matter-labs/zksync", rev = "262165ef29f47803e1efb9576641d23231f451ce"}
 
 ## yagna dependencies
 ya-payment-driver = "0.2"
