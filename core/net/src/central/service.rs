@@ -437,7 +437,10 @@ pub struct Net;
 impl Net {
     pub async fn gsb<Context>(_: Context, _config: Config) -> anyhow::Result<()> {
         let (default_id, ids) = crate::service::identities().await?;
-        log::info!("using default identity as network id: {:?}", default_id);
+        log::info!(
+            "CENTRAL_NET - Using default identity as network id: {:?}",
+            default_id
+        );
 
         let client_info = ClientInfo::new("sb-client-net");
         let ids_clone = ids.clone();
