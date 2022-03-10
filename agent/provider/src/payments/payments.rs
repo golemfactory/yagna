@@ -122,10 +122,6 @@ pub struct PaymentsConfig {
     pub get_events_error_timeout: Duration,
     #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "5s")]
     pub invoice_reissue_interval: Duration,
-    /// Deprecated! Will be removed in future releases. Please do not use it.
-    /// We will use progressive increasing (exponentially) time periods between retries.
-    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "50s")]
-    pub invoice_resend_interval: Duration,
     #[structopt(skip = "you-forgot-to-set-session-id")]
     pub session_id: String,
 }
