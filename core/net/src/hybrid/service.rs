@@ -209,7 +209,7 @@ where
             Ok(id) => id,
             Err(err) => {
                 log::debug!("rpc {} forward error: {}", addr, err);
-                return async move { Ok(chunk_err(0, err).unwrap().into_bytes()) }.left_future();
+                return async move { Ok(chunk_err(0u8, err).unwrap().into_bytes()) }.left_future();
             }
         };
 
@@ -231,7 +231,7 @@ where
         async move {
             match rx.next().await.ok_or(Error::Cancelled) {
                 Ok(chunk) => match chunk {
-                    ResponseChunk::Full(vec) => Ok(vec),
+                    ResponseChunk::Full(data) => codec::decode_reply(data),
                     ResponseChunk::Part(_) => {
                         Err(Error::GsbFailure("partial response".to_string()))
                     }
@@ -249,7 +249,7 @@ where
             Ok(id) => id,
             Err(err) => {
                 log::debug!("local bus: stream call (egress) to {} error: {}", addr, err);
-                return futures::stream::once(async move { chunk_err(0, err) })
+                return futures::stream::once(async move { chunk_err(0u8, err) })
                     .boxed_local()
                     .left_stream();
             }
@@ -754,10 +754,12 @@ struct Request<S: Clone> {
     tx: S,
 }
 
+#[inline]
 fn handler_reply_bad_request(request_id: impl ToString, error: impl ToString, tx: BusSender) {
     handler_reply_err(request_id, error, CallReplyCode::CallReplyBadRequest, tx);
 }
 
+#[inline]
 fn handler_reply_service_err(request_id: impl ToString, error: impl ToString, tx: BusSender) {
     handler_reply_err(request_id, error, CallReplyCode::ServiceFailure, tx);
 }
@@ -774,9 +776,9 @@ fn handler_reply_err(
     });
 }
 
-fn chunk_err(request_id: impl ToString, err: impl ToString) -> Result<ResponseChunk, Error> {
+fn chunk_err(request_id: impl ToString, error: impl ToString) -> Result<ResponseChunk, Error> {
     Ok(ResponseChunk::Full(codec::encode_message(
-        codec::reply_err(request_id.to_string(), err),
+        codec::reply_err(request_id.to_string(), error),
     )?))
 }
 
