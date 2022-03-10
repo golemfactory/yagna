@@ -56,6 +56,13 @@ pub struct DiscoveryImpl {
 }
 
 impl Discovery {
+    pub fn re_broadcast_enabled(&self) -> bool {
+        match std::env::var("YA_NET_TYPE") {
+            Ok(val) => val == "hybrid",
+            Err(_) => false,
+        }
+    }
+
     pub async fn bcast_offers(&self, offer_ids: Vec<SubscriptionId>) -> Result<(), DiscoveryError> {
         if offer_ids.is_empty() {
             return Ok(());
@@ -235,14 +242,15 @@ impl Discovery {
             };
         }
 
-        // We don't lazy bind broadcasts handlers anymore on first Demand creation.
-        // But we still have option to do this easily in the future.
-        self.bind_gsb_broadcast().await.map_or_else(
-            |e| {
-                log::warn!("Failed to subscribe to broadcasts. Error: {:?}.", e,);
-            },
-            |_| (),
-        );
+        // Only bind broadcasts when re-broadcasts are enabled
+        if self.re_broadcast_enabled() {
+            self.bind_gsb_broadcast().await.map_or_else(
+                |e| {
+                    log::warn!("Failed to subscribe to broadcasts. Error: {:?}.", e,);
+                },
+                |_| (),
+            );
+        }
 
         Ok(())
     }
@@ -337,8 +345,8 @@ impl Discovery {
             }
         };
 
-        if !new_offer_ids.is_empty() {
-            log::debug!(
+        if self.re_broadcast_enabled() && !new_offer_ids.is_empty() {
+            log::trace!(
                 "Propagating {}/{} Offers received from [{}].",
                 new_offer_ids.len(),
                 num_ids_received,
@@ -386,8 +394,8 @@ impl Discovery {
         let offer_unsubscribe_handler = self.inner.offer_unsubscribe_handler.clone();
         let unsubscribed_offer_ids = offer_unsubscribe_handler.call(caller.clone(), msg).await?;
 
-        if !unsubscribed_offer_ids.is_empty() {
-            log::debug!(
+        if self.re_broadcast_enabled() && !unsubscribed_offer_ids.is_empty() {
+            log::trace!(
                 "Propagating {}/{} unsubscribed Offers received from [{}].",
                 unsubscribed_offer_ids.len(),
                 num_received_ids,
