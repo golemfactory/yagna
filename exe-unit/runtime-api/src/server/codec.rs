@@ -3,7 +3,9 @@ use futures::{Sink, Stream};
 use prost::Message;
 
 use std::marker::PhantomData;
-use tokio::io::{AsyncRead, AsyncWrite};
+// use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::io::AsyncRead;
+use tokio::io::AsyncWrite;
 use tokio_util::codec::{Decoder, Encoder};
 
 pub struct Codec<M: Message> {
@@ -23,7 +25,7 @@ impl<M: Message> Codec<M> {
         }
     }
 
-    pub fn stream(output: impl AsyncRead) -> impl Stream<Item = Result<M, anyhow::Error>>
+    pub fn stream(output: impl tokio::io::AsyncRead) -> impl Stream<Item = Result<M, anyhow::Error>>
     where
         M: Default,
     {

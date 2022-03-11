@@ -191,7 +191,7 @@ pub async fn spawn(
     command.stdin(Stdio::piped()).stdout(Stdio::piped());
     command.kill_on_drop(true);
     let mut child: process::Child = command.spawn()?;
-    let pid = child.id();
+    let pid = child.id().unwrap();
     let stdin =
         tokio_util::codec::FramedWrite::new(child.stdin.take().unwrap(), codec::Codec::default());
     let stdout = child.stdout.take().unwrap();
@@ -212,14 +212,23 @@ pub async fn spawn(
                 }
             }
         };
+         ///     tokio::spawn(async move { send.send(()) });
+    ///     tokio::select! {
+    ///         _ = child.wait() => {}
+    ///         _ = recv => child.kill().await.expect("kill failed"),
+    ///     }
         let _ = tokio::task::spawn(async move {
             futures::pin_mut!(child);
+            let wait = child.wait();
+
+            futures::pin_mut!(wait);
+
             futures::pin_mut!(kill_rx);
             futures::pin_mut!(pump);
-            let code = match future::select(child, future::select(pump, kill_rx)).await {
+            let code = match future::select(wait, future::select(pump, kill_rx)).await {
                 future::Either::Left((result, _)) => map_return_code(result, pid),
-                future::Either::Right((_, mut child)) => {
-                    let _ = child.kill();
+                future::Either::Right((a, mut child)) => {
+                    // let _ = child.kill().await;
                     map_return_code(child.await, pid)
                 }
             };
