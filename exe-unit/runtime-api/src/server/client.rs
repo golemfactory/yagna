@@ -212,26 +212,41 @@ pub async fn spawn(
                 }
             }
         };
-         ///     tokio::spawn(async move { send.send(()) });
-    ///     tokio::select! {
-    ///         _ = child.wait() => {}
-    ///         _ = recv => child.kill().await.expect("kill failed"),
-    ///     }
-        let _ = tokio::task::spawn(async move {
-            futures::pin_mut!(child);
-            let wait = child.wait();
 
-            futures::pin_mut!(wait);
+        let _ = tokio::task::spawn(async move {
+            // futures::pin_mut!(child);
+            // let wait = child.wait();
+            // futures::pin_mut!(wait);
+
+            // futures::pin_mut!(kill_rx);
+            // futures::pin_mut!(pump);
+            // let code = match future::select(wait, future::select(pump, kill_rx)).await {
+            //     future::Either::Left((wait_result, _second_select)) => map_return_code(wait_result, pid),
+            //     // future::Either::Right((_, mut child)) => {
+            //     //     let _ = child.kill();
+            //     //     map_return_code(child.await, pid)
+            //     // }
+   
+            //     future::Either::Right((_second_select_result, wait)) => {
+            //         let _ = child.kill();
+            //         let wait_result = wait.await;
+            //         map_return_code(wait_result, pid)
+            //     }
+            // };
 
             futures::pin_mut!(kill_rx);
             futures::pin_mut!(pump);
-            let code = match future::select(wait, future::select(pump, kill_rx)).await {
-                future::Either::Left((result, _)) => map_return_code(result, pid),
-                future::Either::Right((a, mut child)) => {
-                    // let _ = child.kill().await;
-                    map_return_code(child.await, pid)
+            let code = tokio::select! {
+                result = child.wait() => {
+                    map_return_code(result, pid)
+                },
+                _ = future::select(pump, kill_rx) => {
+                    let _ = child.kill();
+                    let result = child.wait().await;
+                    map_return_code(result, pid)
                 }
             };
+
             if let Err(_) = status_tx.send(code) {
                 log::warn!("Unable to update process {} status: receiver is gone", pid);
             }
