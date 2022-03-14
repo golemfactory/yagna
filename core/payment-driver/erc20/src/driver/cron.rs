@@ -16,6 +16,7 @@ use ya_payment_driver::{
 };
 
 // Local uses
+use crate::erc20::ethereum::get_env;
 use crate::{
     dao::Erc20Dao,
     erc20::{ethereum, wallet},
@@ -23,7 +24,6 @@ use crate::{
 };
 use ya_payment_driver::db::models::TransactionStatus;
 use ya_payment_driver::model::GenericError;
-use crate::erc20::ethereum::get_env;
 
 lazy_static! {
     static ref TX_SUMBIT_TIMEOUT: Duration = Duration::minutes(15);
@@ -57,7 +57,7 @@ fn tmp_onchain_tx_to_vec(tmp_onchain_txs: Option<String>) -> Vec<String> {
     };
 
     let mut tmp_onchain_txs_vec: Vec<String> = vec![];
-    const EXPECTED_TRANSACTION_LENGTH : usize = 66;
+    const EXPECTED_TRANSACTION_LENGTH: usize = 66;
     for str in tmp_onchain_txs.split(";") {
         if str.len() == EXPECTED_TRANSACTION_LENGTH && str.starts_with("0x") {
             //todo make proper validation of transaction hash
@@ -67,34 +67,71 @@ fn tmp_onchain_tx_to_vec(tmp_onchain_txs: Option<String>) -> Vec<String> {
     tmp_onchain_txs_vec
 }
 
+async fn check_if_synched_and_get_block_number(network: Network) -> Result<u64, GenericError> {
+    let env = get_env(network);
+
+    // TODO: Store block number and continue only on new block
+    let block_number = match wallet::get_block_number(network).await {
+        Ok(block_number) => block_number.as_u64(),
+        Err(err) => {
+            return Err(GenericError::new(std::format!(
+                "No block info can be downloaded, probably no connection to RPC: {:?}",
+                err
+            )));
+        }
+    };
+    match ethereum::get_last_block_date(network, block_number).await {
+        Ok(block_date) => {
+            let current_time = Utc::now().naive_utc();
+            let time_diff = current_time - block_date.naive_utc();
+            if time_diff.num_seconds() < 0 {
+                return Err(GenericError::new( "Last confirmed block time newer than current time, probably you system clock is setup wrongly"));
+            }
+
+            if time_diff.num_seconds() > env.latest_block_max_seconds_behind {
+                return Err(GenericError::new(std::format!(
+                    "RPC node is not synced. Last block is {} seconds behind",
+                    time_diff.num_seconds()
+                )));
+            }
+        }
+        Err(err) => {
+            return Err(GenericError::new(std::format!(
+                "Last block info cannot be downloaded: {:?}",
+                err
+            )));
+        }
+    };
+    Ok(block_number)
+}
+
 pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
     let network = Network::from_str(&network_key).unwrap();
     let env = get_env(network);
-    let txs = dao.get_unconfirmed_txs(network, env.payment_max_processed as i64).await;
+    let txs = dao
+        .get_unconfirmed_txs(network, env.payment_max_processed as i64)
+        .await;
     //log::debug!("confirm_payments {:?}", txs);
-    let current_time = Utc::now().naive_utc();
 
     if !txs.is_empty() {
         // TODO: Store block number and continue only on new block
-        let block_number = match wallet::get_block_number(network).await {
-            Ok(block_number) => Some(block_number.as_u64()),
+        let block_number = match check_if_synched_and_get_block_number(network).await {
+            Ok(block_number) => block_number,
             Err(err) => {
-                log::error!(
-                    "No block info can be downloaded, probably no connection to RPC: {:?}",
-                    err
-                );
-                None
+                log::error!("{:?}", err);
+                return;
             }
         };
+        let current_time = Utc::now().naive_utc();
 
         'main_tx_loop: for tx in txs {
             log::debug!("checking tx {:?}", &tx);
 
-            let time_elapsed_from_sent = tx.time_sent.map(|ts|current_time - ts);
+            let time_elapsed_from_sent = tx.time_sent.map(|ts| current_time - ts);
 
             let time_elapsed_from_last_action = current_time - tx.time_last_action;
 
-            let tmp_onchain_txs_vec= tmp_onchain_tx_to_vec(tx.tmp_onchain_txs);
+            let tmp_onchain_txs_vec = tmp_onchain_tx_to_vec(tx.tmp_onchain_txs);
 
             if tx.status == TransactionStatus::ErrorSent as i32 {
                 //try to check older transactions for success
@@ -156,7 +193,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
             log::debug!(
                 "Checking if tx was a success. network={}, block={}, hash={}",
                 &network,
-                block_number.unwrap_or(0),
+                block_number,
                 &newest_tx
             );
 
@@ -167,13 +204,14 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                     continue;
                 }
             };
-            let transaction_chain_status = match ethereum::get_tx_on_chain_status(tx_hex_hash, block_number, network).await {
-                Ok(hex_hash) => hex_hash,
-                Err(err) => {
-                    log::error!("Error when getting get_tx_on_chain_status: {:?}", err);
-                    continue;
-                }
-            };
+            let transaction_chain_status =
+                match ethereum::get_tx_on_chain_status(tx_hex_hash, block_number, network).await {
+                    Ok(hex_hash) => hex_hash,
+                    Err(err) => {
+                        log::error!("Error when getting get_tx_on_chain_status: {:?}", err);
+                        continue;
+                    }
+                };
 
             let final_gas_price = match transaction_chain_status.gas_price {
                 Some(gas_price) => Some(gas_price.to_string()),
@@ -331,6 +369,14 @@ pub async fn process_payments_for_account(
     );
     let payments: Vec<PaymentEntity> = dao.get_pending_payments(node_id, network).await;
     if !payments.is_empty() {
+        let _block_number = match check_if_synched_and_get_block_number(network).await {
+            Ok(block_number) => block_number,
+            Err(err) => {
+                log::error!("{:?}", err);
+                return Err(err);
+            }
+        };
+
         log::info!(
             "Processing payments. count={}, network={} node_id={}",
             payments.len(),
@@ -344,17 +390,14 @@ pub async fn process_payments_for_account(
         let mut next_nonce = if let Some(db_nonce_pending) = next_nonce_info.db_nonce_pending {
             db_nonce_pending
         } else {
-            next_nonce_info.network_nonce_pending
+            next_nonce_info.network_nonce_latest
         };
 
-        log::debug!(
-            "Payments: nonce_info={:?}, details={:?}",
-            &next_nonce_info,
-            payments
-        );
+        log::warn!("Payments: nonce_info={:?}", &next_nonce_info);
         let env = ethereum::get_env(network);
+        log::warn!("Max processed {}", env.payment_max_processed);
         for payment in payments {
-            if next_nonce > next_nonce_info.network_nonce_latest + env.payment_max_processed {
+            if next_nonce >= next_nonce_info.network_nonce_latest + env.payment_max_processed {
                 break;
             }
             handle_payment(&dao, payment, &mut next_nonce).await;
@@ -365,10 +408,21 @@ pub async fn process_payments_for_account(
 
 pub async fn process_transactions(dao: &Erc20Dao, network: Network) {
     let env = get_env(network);
-    let transactions: Vec<TransactionEntity> = dao.get_unsent_txs(network, env.payment_max_processed as i64).await;
-todo get proper nonce
+    let transactions: Vec<TransactionEntity> = dao
+        .get_unsent_txs(network, env.payment_max_processed as i64)
+        .await;
+    //todo get proper nonce
     if !transactions.is_empty() {
         log::debug!("transactions: {:?}", transactions);
+
+        let _block_number = match check_if_synched_and_get_block_number(network).await {
+            Ok(block_number) => block_number,
+            Err(err) => {
+                log::error!("{:?}", err);
+                return;
+            }
+        };
+
         match wallet::send_transactions(dao, transactions, network).await {
             Ok(()) => log::debug!("transactions sent!"),
             Err(e) => log::error!("transactions sent ERROR: {:?}", e),

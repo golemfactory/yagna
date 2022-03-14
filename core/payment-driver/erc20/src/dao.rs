@@ -306,7 +306,11 @@ impl Erc20Dao {
         }
     }
 
-    pub async fn get_unconfirmed_txs(&self, network: Network, limit: i64) -> Vec<TransactionEntity> {
+    pub async fn get_unconfirmed_txs(
+        &self,
+        network: Network,
+        limit: i64,
+    ) -> Vec<TransactionEntity> {
         match self.transaction().get_unconfirmed_txs(network, limit).await {
             Ok(txs) => txs,
             Err(e) => {

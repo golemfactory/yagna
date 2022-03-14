@@ -1,8 +1,11 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use lazy_static::lazy_static;
 use web3::contract::{Contract, Options};
 use web3::transports::Http;
-use web3::types::{Bytes, Transaction, TransactionId, TransactionReceipt, H160, H256, U256, U64};
+use web3::types::{
+    BlockId, BlockNumber, Bytes, Transaction, TransactionId, TransactionReceipt, H160, H256, U256,
+    U64,
+};
 use web3::Web3;
 
 use ya_client_model::NodeId;
@@ -13,6 +16,7 @@ use crate::erc20::transaction::YagnaRawTransaction;
 use crate::erc20::{config, eth_utils};
 use bigdecimal::BigDecimal;
 use ethabi::Token;
+use num_traits::ToPrimitive;
 use uuid::Uuid;
 use ya_payment_driver::utils::big_dec_to_u256;
 
@@ -140,6 +144,33 @@ pub async fn get_transaction_count(
         .await
         .map_err(GenericError::new)?;
     Ok(nonce.as_u64())
+}
+
+pub async fn get_last_block_date(
+    network: Network,
+    block_number: u64,
+) -> Result<DateTime<Utc>, GenericError> {
+    let client = get_client(network)?;
+    let block_info = client
+        .eth()
+        .block(BlockId::Number(BlockNumber::Number(U64::from(
+            block_number,
+        ))))
+        .await
+        .map_err(GenericError::new)?
+        .ok_or(GenericError::new("No latest block info returned"))?;
+    let dt = DateTime::<Utc>::from_utc(
+        NaiveDateTime::from_timestamp(
+            block_info
+                .timestamp
+                .as_u64()
+                .to_i64()
+                .ok_or(GenericError::new("Failed timestamp convertion"))?,
+            0,
+        ),
+        Utc,
+    );
+    Ok(dt)
 }
 
 pub async fn block_number(network: Network) -> Result<U64, GenericError> {
@@ -276,7 +307,7 @@ pub struct TransactionChainStatus {
 
 pub async fn get_tx_on_chain_status(
     tx_hash: H256,
-    current_block: Option<u64>,
+    current_block: u64,
     network: Network,
 ) -> Result<TransactionChainStatus, GenericError> {
     let mut res = TransactionChainStatus {
@@ -302,13 +333,11 @@ pub async fn get_tx_on_chain_status(
                 "is_tx_confirmed? tb + rq - 1 <= cb. tb={}, rq={}, cb={}",
                 tx_bn,
                 env.required_confirmations,
-                current_block.unwrap_or(0)
+                current_block
             );
             // tx.block_number is the first confirmation, so we need to - 1
-            if let Some(current_block) = current_block {
-                if tx_bn.as_u64() + env.required_confirmations - 1 <= current_block {
-                    res.confirmed = true;
-                }
+            if tx_bn.as_u64() + env.required_confirmations - 1 <= current_block {
+                res.confirmed = true;
             }
             let transaction = get_tx_from_network(tx_hash, network).await?;
             if let Some(t) = transaction {
@@ -506,13 +535,12 @@ pub fn get_gas_price_from_db_tx(db_tx: &TransactionEntity) -> Result<U256, Gener
     Ok(raw_tx.gas_price)
 }
 
-pub async fn get_network_gas_price_eth(network: Network) -> Result<U256, GenericError>{
+pub async fn get_network_gas_price_eth(network: Network) -> Result<U256, GenericError> {
     let _env = get_env(network);
     let client = get_client(network)?;
 
     let small_gas_bump = U256::from(1000);
-    let mut gas_price_from_network =
-        client.eth().gas_price().await.map_err(GenericError::new)?;
+    let mut gas_price_from_network = client.eth().gas_price().await.map_err(GenericError::new)?;
 
     //add small amount of gas to be first in queue
     if gas_price_from_network / 1000 > small_gas_bump {

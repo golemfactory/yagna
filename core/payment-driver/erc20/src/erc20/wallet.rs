@@ -22,6 +22,7 @@ use ya_payment_driver::{
 };
 
 // Local uses
+use crate::erc20::gas_provider::get_network_gas_price;
 use crate::erc20::transaction::YagnaRawTransaction;
 use crate::{
     dao::Erc20Dao,
@@ -35,7 +36,6 @@ use crate::{
     RINKEBY_NETWORK,
 };
 use ya_payment_driver::db::models::TransactionStatus;
-use crate::erc20::gas_provider::get_network_gas_price;
 
 pub async fn account_balance(address: H160, network: Network) -> Result<BigDecimal, GenericError> {
     let balance_com = ethereum::get_glm_balance(address, network).await?;
@@ -94,14 +94,12 @@ pub async fn get_next_nonce_info(
     network: Network,
 ) -> Result<NextNonceInfo, GenericError> {
     let str_addr = format!("0x{:x}", &address);
-    let network_transaction_count_pending = ethereum::get_transaction_count(address, network, true).await?;
-    let network_transaction_count_latest = ethereum::get_transaction_count(address, network, false).await?;
+    let network_nonce_pending = ethereum::get_transaction_count(address, network, true).await?;
+    let network_nonce_latest = ethereum::get_transaction_count(address, network, false).await?;
     let db_nonce_pending = dao
         .get_last_db_nonce_pending(&str_addr, network)
-        .await?.map(|last_db_nonce_pending|last_db_nonce_pending + 1);
-
-    let network_nonce_pending = network_transaction_count_pending + 1;
-    let network_nonce_latest = network_transaction_count_latest + 1;
+        .await?
+        .map(|last_db_nonce_pending| last_db_nonce_pending + 1);
 
     Ok(NextNonceInfo {
         network_nonce_pending,
@@ -214,7 +212,13 @@ pub async fn make_transfer(
     // TODO: Implement token
     //let token = get_network_token(network, None);
     let mut raw_tx = ethereum::prepare_raw_transaction(
-        address, recipient, amount, network, U256::from(nonce), gas_price, gas_limit,
+        address,
+        recipient,
+        amount,
+        network,
+        U256::from(nonce),
+        gas_price,
+        gas_limit,
     )
     .await?;
 
@@ -303,7 +307,6 @@ pub async fn send_transactions(
             // resolve gas bump transaction here
             //***************************************
 
-
             if tx.status == TransactionStatus::ResendAndBumpGas as i32 {
                 let gas_u256 = U256::from_dec_str(&current_gas_price).map_err(GenericError::new)?;
 
@@ -333,7 +336,8 @@ pub async fn send_transactions(
             //*******************************************
 
             let network_price = get_network_gas_price(network).await?;
-            let minimum_price = U256::from_dec_str(&starting_gas_price).map_err(GenericError::new)?;
+            let minimum_price =
+                U256::from_dec_str(&starting_gas_price).map_err(GenericError::new)?;
 
             let mut new_gas_price = if network_price > minimum_price {
                 network_price
@@ -363,7 +367,9 @@ pub async fn send_transactions(
         if new_gas_price > current_max_gas_price && current_max_gas_price != U256::from(0) {
             // Do not send transaction with gas higher than previously sent transaction.
             // This is preventing bumping gas for future transaction over existing ones
-            log::debug!("Skipping transaction send, because transaction with lower gas is already waiting");
+            log::debug!(
+                "Skipping transaction send, because transaction with lower gas is already waiting"
+            );
             continue;
         }
         current_max_gas_price = new_gas_price;
