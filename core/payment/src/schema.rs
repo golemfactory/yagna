@@ -97,6 +97,8 @@ table! {
         timestamp -> Timestamp,
         details -> Nullable<Text>,
         app_session_id -> Nullable<Text>,
+        id -> Text,
+        role -> Text,
     }
 }
 

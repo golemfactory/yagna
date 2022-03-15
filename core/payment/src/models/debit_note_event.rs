@@ -47,6 +47,8 @@ pub struct ReadObj {
     pub timestamp: NaiveDateTime,
     pub details: Option<String>,
     pub app_session_id: Option<String>,
+    pub id: String,
+    pub role: String,
 }
 
 impl TryFrom<ReadObj> for DebitNoteEvent {
@@ -65,6 +67,9 @@ impl TryFrom<ReadObj> for DebitNoteEvent {
             None => None,
         };
         Ok(Self {
+            role_id: event.role,
+            node_id: event.owner_id.to_string(),
+            agreement_id: event.id,
             debit_note_id: event.debit_note_id,
             event_date: Utc.from_utc_datetime(&event.timestamp),
             event_type,
