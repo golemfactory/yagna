@@ -123,13 +123,12 @@ pub async fn start_network(
             .await
             .map_err(|e| anyhow!("Resolving hybrid NET relay server failed. Error: {}", e))?
     ))?;
-    log::debug!("Setting up hybrid net with url: {}", url);
-    let provider = IdentityCryptoProvider::new(default_id);
 
+    log::debug!("Setting up hybrid net with url: {}", url);
     log::info!("Starting network (hybrid) with identity: {}", default_id);
 
     let client = ClientBuilder::from_url(url)
-        .crypto(provider)
+        .crypto(IdentityCryptoProvider::new(default_id))
         .listen(config.bind_url.clone())
         .expire_session_after(config.session_expiration.clone())
         .virtual_tcp_buffer_size_multiplier(config.vtcp_buffer_size_multiplier)
@@ -210,7 +209,7 @@ where
             Ok(id) => id,
             Err(err) => {
                 log::debug!("rpc {} forward error: {}", addr, err);
-                return async move { Ok(chunk_err(0u8, err).unwrap().into_bytes()) }.left_future();
+                return async move { Err(Error::GsbFailure(err.to_string())) }.left_future();
             }
         };
 
@@ -250,9 +249,11 @@ where
             Ok(id) => id,
             Err(err) => {
                 log::debug!("local bus: stream call (egress) to {} error: {}", addr, err);
-                return futures::stream::once(async move { chunk_err(0u8, err) })
-                    .boxed_local()
-                    .left_stream();
+                return futures::stream::once(
+                    async move { Err(Error::GsbFailure(err.to_string())) },
+                )
+                .boxed_local()
+                .left_stream();
             }
         };
 
@@ -274,9 +275,12 @@ where
         let eos = Rc::new(AtomicBool::new(false));
         let eos_chain = eos.clone();
 
-        rx.map(move |v| {
-            v.is_full().then(|| eos.store(true, Relaxed));
-            Ok(v)
+        rx.map(move |chunk| match chunk {
+            ResponseChunk::Full(v) => {
+                eos.store(true, Relaxed);
+                codec::decode_reply(v).map(ResponseChunk::Full)
+            }
+            chunk => Ok(chunk),
         })
         .chain(futures::stream::poll_fn(move |_| {
             if eos_chain.load(Relaxed) {
@@ -318,7 +322,6 @@ fn forward_bus_to_local(caller: &str, addr: &str, data: &[u8], state: &State, tx
     let send = local_bus::call_stream(address.as_str(), caller, data);
     tokio::task::spawn_local(async move {
         let _ = send
-            .map_err(|e| Error::GsbFailure(e.to_string()))
             .forward(tx.sink_map_err(|e| Error::GsbFailure(e.to_string())))
             .await;
     });
@@ -553,10 +556,16 @@ fn handle_request(
         }
     }
     .map(move |result| match result {
-        Ok(chunk) => {
-            chunk.is_full().then(|| eos_map.store(true, Relaxed));
-            codec::reply_ok(request_id.clone(), chunk)
-        }
+        Ok(chunk) => match chunk {
+            ResponseChunk::Full(v) => {
+                eos_map.store(true, Relaxed);
+                match codec::decode_reply(v) {
+                    Ok(v) => codec::reply_ok(request_id.clone(), ResponseChunk::Full(v)),
+                    Err(err) => codec::reply_err(request_id.clone(), err),
+                }
+            }
+            chunk => codec::reply_ok(request_id.clone(), chunk),
+        },
         Err(err) => {
             eos_map.store(true, Relaxed);
             codec::reply_err(request_id.clone(), err)
@@ -581,7 +590,7 @@ fn handle_request(
                 Some(Ok::<Vec<u8>, mpsc::SendError>(vec))
             }
             Err(e) => {
-                log::debug!("handle request: reply encoding error: {}", e);
+                log::debug!("handle request: encode reply error: {}", e);
                 None
             }
         };
@@ -775,12 +784,6 @@ fn handler_reply_err(
     tokio::task::spawn_local(async move {
         let _ = tx.send(ResponseChunk::Full(err)).await;
     });
-}
-
-fn chunk_err(request_id: impl ToString, error: impl ToString) -> Result<ResponseChunk, Error> {
-    Ok(ResponseChunk::Full(codec::encode_message(
-        codec::reply_err(request_id.to_string(), error),
-    )?))
 }
 
 fn parse_net_to_addr(addr: &str) -> anyhow::Result<(NodeId, String)> {
