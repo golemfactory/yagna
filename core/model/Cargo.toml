@@ -36,7 +36,9 @@ version = []
 
 [dependencies]
 ya-client-model = "0.3"
-ya-service-bus = "0.4"
+# ya-service-bus = "0.4"
+ya-service-bus ={ git = "https://github.com/golemfactory/ya-service-bus", branch = "sz/update_libs"}
+
 
 bigdecimal = { version = "0.2", features = ["serde"], optional = true }
 bitflags = { version = "1.2", optional = true }

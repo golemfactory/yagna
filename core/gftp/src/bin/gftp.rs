@@ -134,13 +134,17 @@ async fn server_loop() {
                     continue;
                 }
                 match msg.body {
-                    RpcBody::Request { request } => Arbiter::spawn(async move {
-                        if let ExecMode::Shutdown = execute(id, request, verbose).await {
-                            tokio::time::delay_for(Duration::from_secs(1)).await;
-                            std::process::exit(0);
-                        }
-                    }),
-                    _ => RpcMessage::request_error(id.as_ref()).print(verbose),
+                    RpcBody::Request { request } => {
+                        actix_rt::spawn(async move {
+                            if let ExecMode::Shutdown = execute(id, request, verbose).await {
+                                tokio::time::sleep(Duration::from_secs(1)).await;
+                                std::process::exit(0);
+                            }
+                        });
+                    }
+                    _ => {
+                        RpcMessage::request_error(id.as_ref()).print(verbose);
+                    }
                 }
             }
             Err(err) => RpcMessage::error(None, err).print(verbose),
