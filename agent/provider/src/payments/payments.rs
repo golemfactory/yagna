@@ -214,11 +214,7 @@ async fn send_debit_note(
     let payment_due_date = debit_note_info.payment_timeout.and_then(|payment_timeout| {
         let send_payable_at = last_payable_debit_note + payment_timeout;
         let now = Utc::now();
-        if send_payable_at > now {
-            None
-        } else {
-            Some(now + payment_timeout)
-        }
+        (send_payable_at <= now).then(|| now + payment_timeout)
     });
     let debit_note = NewDebitNote {
         activity_id: debit_note_info.activity_id.clone(),
