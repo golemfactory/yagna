@@ -90,8 +90,10 @@ async fn check_if_synched_and_get_block_number(network: Network) -> Result<u64, 
 
             if time_diff.num_seconds() > env.latest_block_max_seconds_behind {
                 return Err(GenericError::new(std::format!(
-                    "RPC node is not synced. Last block is {} seconds behind",
-                    time_diff.num_seconds()
+                    "RPC node {} is not synced. Last block is {} seconds behind. Last synched block {}",
+                    network,
+                    time_diff.num_seconds(),
+                    block_number
                 )));
             }
         }
@@ -168,12 +170,13 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
             }
             if tx.status == TransactionStatus::ErrorSent as i32 {
                 if time_elapsed_from_last_action > *ERC20_WAIT_FOR_ERROR_SENT_TRANSACTION {
-                    log::info!("Transaction not sent, retrying");
                     log::warn!(
-                        "Transaction not found on chain for {:?}",
+                        "Transaction {} not found on chain for {:?}",
+                        tx.tx_id,
                         time_elapsed_from_sent
                     );
                     log::warn!("Time since last action {:?}", time_elapsed_from_last_action);
+                    dao.retry_send_transaction(&tx.tx_id, false).await;
                     continue;
                 }
             }
@@ -222,7 +225,8 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 log::warn!("Transaction not found on chain");
                 if time_elapsed_from_last_action > *ERC20_WAIT_FOR_TRANSACTION_ON_NETWORK {
                     log::warn!(
-                        "Transaction not found on chain for {:?}",
+                        "Transaction {} not found on chain for {:?}",
+                        tx.tx_id,
                         time_elapsed_from_sent
                     );
                     log::warn!("Time since last action {:?}", time_elapsed_from_last_action);
@@ -373,7 +377,7 @@ pub async fn process_payments_for_account(
             Ok(block_number) => block_number,
             Err(err) => {
                 log::error!("{:?}", err);
-                return Err(err);
+                return Ok(());
             }
         };
 
@@ -409,7 +413,7 @@ pub async fn process_payments_for_account(
 pub async fn process_transactions(dao: &Erc20Dao, network: Network) {
     let env = get_env(network);
     let transactions: Vec<TransactionEntity> = dao
-        .get_unsent_txs(network, env.payment_max_processed as i64)
+        .get_unsent_txs(network, (env.payment_max_processed) as i64)
         .await;
     //todo get proper nonce
     if !transactions.is_empty() {
