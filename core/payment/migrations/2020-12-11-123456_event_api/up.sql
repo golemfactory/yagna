@@ -24,8 +24,8 @@ SELECT
     dne.timestamp,
     dne.details,
     agr.app_session_id,
-    agr.id,
-    agr.role
+    act.agreement_id,
+    dn.activity_id
 
 FROM
     pay_debit_note_event dne
