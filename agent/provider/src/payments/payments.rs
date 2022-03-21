@@ -211,17 +211,11 @@ async fn send_debit_note(
     cost_info: CostInfo,
     last_payable_debit_note: DateTime<Utc>,
 ) -> Result<DebitNote> {
-    let payment_due_date = match debit_note_info.payment_timeout {
-        Some(payment_timeout) => {
-            let send_payable_at = last_payable_debit_note + payment_timeout;
-            if send_payable_at > Utc::now() {
-                None
-            } else {
-                Some(send_payable_at + payment_timeout)
-            }
-        }
-        None => None,
-    };
+    let payment_due_date = debit_note_info.payment_timeout.and_then(|payment_timeout| {
+        let send_payable_at = last_payable_debit_note + payment_timeout;
+        let now = Utc::now();
+        (send_payable_at <= now).then(|| now + payment_timeout)
+    });
     let debit_note = NewDebitNote {
         activity_id: debit_note_info.activity_id.clone(),
         total_amount_due: cost_info.cost,
