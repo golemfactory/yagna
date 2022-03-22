@@ -10,8 +10,8 @@ use strum::VariantNames;
 
 use ya_core_model::NodeId;
 
+use crate::command::NetworkGroup;
 use crate::command::UsageDef;
-use crate::command::{NetworkGroup, NETWORK_GROUP_MAP};
 use crate::terminal::clear_stdin;
 
 const OLD_DEFAULT_SUBNETS: &[&'static str] = &["community", "community.3", "community.4"];
@@ -147,7 +147,7 @@ pub async fn setup(run_config: &RunConfig, force: bool) -> Result<i32> {
         config.node_name = Some(node_name);
         config.subnet = Some(subnet);
         cmd.ya_provider()?
-            .set_config(&config, &NETWORK_GROUP_MAP[&run_config.account.network])
+            .set_config(&config, &run_config.account.network)
             .await?;
     }
 

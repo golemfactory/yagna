@@ -2,6 +2,7 @@ use std::time::Duration;
 use structopt::StructOpt;
 use strum::VariantNames;
 use strum::{EnumString, EnumVariantNames, IntoStaticStr};
+use url::Url;
 
 #[derive(StructOpt, EnumString, EnumVariantNames, IntoStaticStr, Clone)]
 #[strum(serialize_all = "lowercase")]
@@ -15,10 +16,14 @@ pub enum NetType {
 pub struct Config {
     #[structopt(env = "YA_NET_TYPE", possible_values = NetType::VARIANTS, default_value = NetType::Central.into())]
     pub net_type: NetType,
-    #[structopt(env = "YA_NET_DEFAULT_PING_INTERVAL", parse(try_from_str = humantime::parse_duration), default_value = "15s")]
-    pub ping_interval: Duration,
-    #[structopt(env = "YA_NET_RELAY_HOST", default_value = "127.0.0.1:7464")]
-    pub host: String,
+    #[structopt(env = "YA_NET_RELAY_HOST")]
+    pub host: Option<String>,
+    #[structopt(env = "YA_NET_BIND_URL", default_value = "udp://0.0.0.0:11500")]
+    pub bind_url: Url,
+    #[structopt(env = "YA_NET_BROADCAST_SIZE", default_value = "12")]
+    pub broadcast_size: u32,
+    #[structopt(env = "YA_NET_SESSION_EXPIRATION", parse(try_from_str = humantime::parse_duration), default_value = "15s")]
+    pub session_expiration: Duration,
 }
 
 impl Config {
@@ -43,6 +48,7 @@ impl Default for NetType {
 #[cfg(feature = "hybrid-net")]
 impl Default for NetType {
     fn default() -> Self {
+        std::env::set_var("YA_NET_TYPE", "hybrid");
         NetType::Hybrid
     }
 }

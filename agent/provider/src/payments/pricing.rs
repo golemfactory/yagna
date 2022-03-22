@@ -118,9 +118,7 @@ impl PricingOffer for LinearPricingOffer {
 
         let mut params = json!({
             "scheme": "payu".to_string(),
-            "scheme.payu": json!({
-                "interval_sec": self.interval
-            }),
+            "scheme.payu": json!({}),
             "pricing": json!({
                 "model": "linear".to_string(),
                 "model.linear": json!({

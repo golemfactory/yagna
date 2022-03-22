@@ -1,7 +1,7 @@
 use anyhow::Result;
+use chrono::format::strftime::StrftimeItems;
+use chrono::format::DelayedFormat;
 use chrono::{DateTime, Local};
-use chrono::format::{DelayedFormat};
-use chrono::format::strftime::{StrftimeItems};
 use flexi_logger::{
     style, AdaptiveFormat, Age, Cleanup, Criterion, DeferredNow, Duplicate, LogSpecBuilder,
     LogSpecification, Logger, Naming, Record,
@@ -10,7 +10,7 @@ use std::path::Path;
 
 pub use flexi_logger::LoggerHandle;
 
-fn log_format_date(now: &mut DeferredNow) -> DelayedFormat<StrftimeItems>{
+fn log_format_date(now: &mut DeferredNow) -> DelayedFormat<StrftimeItems> {
     //use DateTime::<Local> instead of DateTime::<UTC> to obtain local date
     let local_date = DateTime::<Local>::from(*now.now());
 
@@ -31,7 +31,7 @@ fn log_format(
         record.level(),
         record.module_path().unwrap_or("<unnamed>"),
         record.args()
-    )    
+    )
 }
 
 fn log_format_color(
@@ -43,8 +43,7 @@ fn log_format_color(
     write!(
         w,
         "[{} {:5} {}] {}",
-        yansi::Color::Fixed(247)
-            .paint(log_format_date(now)),
+        yansi::Color::Fixed(247).paint(log_format_date(now)),
         style(level, level),
         yansi::Color::Fixed(247).paint(record.module_path().unwrap_or("<unnamed>")),
         &record.args()
@@ -68,14 +67,14 @@ pub fn start_logger(
     default_log_spec: &str,
     log_dir: Option<&Path>,
     module_filters: &[(&str, log::LevelFilter)],
-    force_debug: bool
+    force_debug: bool,
 ) -> Result<LoggerHandle> {
     let log_spec = LogSpecification::env_or_parse(default_log_spec)?;
     let mut log_spec_builder = LogSpecBuilder::from_module_filters(log_spec.module_filters());
     for filter in module_filters {
         log_spec_builder.module(filter.0, filter.1);
     }
-    
+
     //override default log level if force_debug is set
     //it leaves module_filters log levels unchanged
     //used for --debug option
@@ -84,7 +83,6 @@ pub fn start_logger(
     }
 
     let log_spec = log_spec_builder.finalize();
-
     let mut logger = Logger::with(log_spec).format(log_format);
     if let Some(log_dir) = log_dir {
         logger = set_logging_to_files(logger, log_dir);

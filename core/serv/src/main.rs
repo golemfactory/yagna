@@ -390,7 +390,7 @@ impl ServiceCommand {
                     }),
                     &vec![
                         ("actix_http::response", log::LevelFilter::Off),
-                        ("h2", log::LevelFilter::Info),
+                        ("h2", log::LevelFilter::Off),
                         ("hyper", log::LevelFilter::Info),
                         ("reqwest", log::LevelFilter::Info),
                         ("tokio_core", log::LevelFilter::Info),
@@ -398,6 +398,8 @@ impl ServiceCommand {
                         ("trust_dns_resolver", log::LevelFilter::Info),
                         ("trust_dns_proto", log::LevelFilter::Info),
                         ("web3", log::LevelFilter::Info),
+                        ("tokio_util", log::LevelFilter::Off),
+                        ("mio", log::LevelFilter::Off),
                     ],
                     force_debug,
                 )?;
@@ -451,6 +453,10 @@ impl ServiceCommand {
 
                 log::info!("{} service successfully finished!", app_name);
 
+                NetService::shutdown()
+                    .await
+                    .map_err(|e| log::error!("Error shutting down NET: {}", e))
+                    .ok();
                 PaymentService::shut_down().await;
                 logger_handle.shutdown();
                 Ok(CommandOutput::NoOutput)

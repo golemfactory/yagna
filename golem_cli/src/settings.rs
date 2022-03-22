@@ -1,9 +1,10 @@
-use crate::command::{ProviderConfig, YaCommand};
+use crate::{
+    command::{ProviderConfig, YaCommand},
+    setup::ConfigAccount,
+};
 use anyhow::Result;
 use byte_unit::{Byte as Bytes, ByteUnit};
 use structopt::StructOpt;
-
-use ya_provider::ReceiverAccount;
 
 /// Manage settings
 #[derive(StructOpt, Debug)]
@@ -36,7 +37,7 @@ pub struct Settings {
     cpu_per_hour: Option<f64>,
 
     #[structopt(flatten)]
-    pub account: ReceiverAccount,
+    pub account: ConfigAccount,
 }
 
 pub async fn run(settings: Settings) -> Result</*exit code*/ i32> {
@@ -50,7 +51,7 @@ pub async fn run(settings: Settings) -> Result</*exit code*/ i32> {
                     node_name: settings.node_name,
                     ..ProviderConfig::default()
                 },
-                &settings.account.networks,
+                &settings.account.network,
             )
             .await?;
     }
@@ -62,7 +63,7 @@ pub async fn run(settings: Settings) -> Result</*exit code*/ i32> {
                     account: settings.account.account,
                     ..ProviderConfig::default()
                 },
-                &settings.account.networks,
+                &settings.account.network,
             )
             .await?;
     }

@@ -3,13 +3,12 @@ use serde::Deserialize;
 use std::{collections::BTreeMap, process::Stdio};
 use tokio::process::{Child, Command};
 
-use ya_core_model::payment::local::NetworkName;
 pub use ya_provider::GlobalsState as ProviderConfig;
 
-use crate::command::NETWORK_GROUP_MAP;
+use crate::command::{NetworkGroup, NETWORK_GROUP_MAP};
 use crate::setup::RunConfig;
 
-const CLASSIC_RUNTIMES: &'static [&'static str] = &["wasm", "vw"];
+const CLASSIC_RUNTIMES: &'static [&'static str] = &["wasmtime", "vm"];
 
 pub struct YaProviderCommand {
     pub(super) cmd: Command,
@@ -50,7 +49,7 @@ impl YaProviderCommand {
     pub async fn set_config(
         self,
         config: &ProviderConfig,
-        networks: &Vec<NetworkName>,
+        network_group: &NetworkGroup,
     ) -> anyhow::Result<()> {
         let mut cmd = self.cmd;
 
@@ -66,7 +65,7 @@ impl YaProviderCommand {
         if let Some(account) = &config.account {
             cmd.args(&["--account", &account.to_string()]);
         }
-        for n in networks.iter() {
+        for n in NETWORK_GROUP_MAP[&network_group].iter() {
             cmd.args(&["--payment-network", &n.to_string()]);
         }
 
@@ -151,7 +150,7 @@ impl YaProviderCommand {
         disk: Option<f64>,
     ) -> anyhow::Result<()> {
         let cmd = &mut self.cmd;
-        cmd.arg("profile").arg("update").arg(name);
+        cmd.arg("profile").arg("update").arg("--name").arg(name);
         if let Some(cores) = cores {
             cmd.arg("--cpu-threads").arg(cores.to_string());
         }
@@ -183,7 +182,7 @@ impl YaProviderCommand {
             cmd.arg("--price").arg(format!("Init price={}", initial));
         }
         for runtime_name in CLASSIC_RUNTIMES {
-            cmd.arg(format!("--name {}", runtime_name));
+            cmd.arg("--name").arg(runtime_name);
         }
         self.exec_no_output().await
     }

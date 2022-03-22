@@ -29,6 +29,7 @@ pub mod migrations {
 }
 
 pub const DEFAULT_PAYMENT_PLATFORM: &str = "erc20-rinkeby-tglm";
+
 pub use ya_core_model::payment::local::DEFAULT_PAYMENT_DRIVER;
 
 lazy_static::lazy_static! {
@@ -48,10 +49,16 @@ impl Service for PaymentService {
 
 impl PaymentService {
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
-        let db: DbExecutor = context.component();
+        let db = context.component();
         db.apply_migration(migrations::run_with_output)?;
+
         let processor = PaymentProcessor::new(db.clone());
-        self::service::bind_service(&db, processor);
+        self::service::bind_service(&db, processor.clone());
+
+        tokio::task::spawn(async move {
+            processor.release_allocations(false).await;
+        });
+
         Ok(())
     }
 

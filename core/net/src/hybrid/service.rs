@@ -9,17 +9,17 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Mutex};
 use std::task::Poll;
 
-use anyhow::Context as AnyhowContext;
+use anyhow::{anyhow, Context as AnyhowContext};
 use futures::channel::mpsc;
 use futures::stream::LocalBoxStream;
 use futures::{FutureExt, SinkExt, Stream, StreamExt, TryStreamExt};
-use tokio::time::{self};
+use metrics::counter;
 use url::Url;
 
 use ya_core_model::net::{self, net_service};
 use ya_core_model::NodeId;
-use ya_relay_client::{client::ForwardReceiver, Client, ClientBuilder};
-use ya_relay_proto::codec::forward::{PrefixedSink, PrefixedStream, SinkKind};
+use ya_relay_client::codec::forward::{PrefixedSink, PrefixedStream, SinkKind};
+use ya_relay_client::{Client, ClientBuilder, ForwardReceiver};
 use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::CallReplyCode;
 use ya_service_bus::{untyped as local_bus, Error, ResponseChunk};
@@ -31,7 +31,6 @@ use crate::hybrid::codec;
 use crate::hybrid::crypto::IdentityCryptoProvider;
 
 const DEFAULT_NET_RELAY_HOST: &str = "127.0.0.1:7464";
-const DEFAULT_BROADCAST_NODE_COUNT: u32 = 12;
 
 pub type BCastHandler = Box<dyn FnMut(String, &[u8]) + Send>;
 
@@ -54,17 +53,25 @@ thread_local! {
     static CLIENT: RefCell<Option<Client>> = Default::default();
 }
 
-async fn relay_addr(config: &Config) -> std::io::Result<SocketAddr> {
-    Ok(match std::env::var(&config.host) {
-        Ok(val) => val,
-        Err(_) => resolver::resolve_yagna_srv_record("_net_relay._udp")
+async fn relay_addr(config: &Config) -> anyhow::Result<SocketAddr> {
+    let host_port = match &config.host {
+        Some(val) => val.to_string(),
+        None => resolver::resolve_yagna_srv_record("_net_relay._udp")
             .await
             // FIXME: remove
             .unwrap_or_else(|_| DEFAULT_NET_RELAY_HOST.to_string()),
-    }
-    .to_socket_addrs()?
-    .next()
-    .expect("relay address needed"))
+    };
+    log::trace!("resolving host_port: {}", host_port);
+    let (host, port) = &host_port
+        .split_once(":")
+        .context("Please use host:port format")?;
+    let ip = resolver::resolve_dns_record_host(&host).await?;
+    let ip_port = format!("{}:{}", ip, port);
+    let socket = ip_port
+        .to_socket_addrs()?
+        .next()
+        .expect("relay address needed");
+    Ok(socket)
 }
 
 pub struct Net;
@@ -72,29 +79,47 @@ pub struct Net;
 impl Net {
     pub async fn gsb<Context>(_: Context, config: Config) -> anyhow::Result<()> {
         let (default_id, ids) = crate::service::identities().await?;
-        start_network(config, default_id, ids).await?;
+        start_network(Arc::new(config), default_id, ids).await?;
         Ok(())
+    }
+
+    pub async fn shutdown() -> anyhow::Result<()> {
+        let mut client = CLIENT
+            .with(|c| c.borrow().clone())
+            .ok_or_else(|| anyhow::anyhow!("network not initialized"))?;
+        client.shutdown().await
     }
 }
 
 // FIXME: examples compatibility
 #[allow(unused)]
 pub async fn bind_remote<T>(_: T, default_id: NodeId, ids: Vec<NodeId>) -> anyhow::Result<()> {
-    start_network(Config::from_env()?, default_id, ids).await
+    start_network(Arc::new(Config::from_env()?), default_id, ids).await
 }
 
 pub async fn start_network(
-    config: Config,
+    config: Arc<Config>,
     default_id: NodeId,
     ids: Vec<NodeId>,
 ) -> anyhow::Result<()> {
-    let url = Url::parse(&format!("udp://{}", relay_addr(&config).await?))?;
+    counter!("net.connections.p2p", 0);
+    counter!("net.connections.relay", 0);
+
+    let url = Url::parse(&format!(
+        "udp://{}",
+        relay_addr(&config)
+            .await
+            .map_err(|e| anyhow!("Resolving hybrid NET relay server failed. Error: {}", e))?
+    ))?;
+    log::debug!("Setting up hybrid net with url: {}", url);
     let provider = IdentityCryptoProvider::new(default_id);
 
-    log::info!("starting network (hybrid) with identity: {}", default_id);
+    log::info!("Starting network (hybrid) with identity: {}", default_id);
 
     let client = ClientBuilder::from_url(url)
         .crypto(provider)
+        .listen(config.bind_url.clone())
+        .expire_session_after(config.session_expiration.clone())
         .connect()
         .build()
         .await?;
@@ -106,57 +131,56 @@ pub async fn start_network(
     BCAST_SENDER.lock().unwrap().replace(btx);
 
     let receiver = client.forward_receiver().await.unwrap();
-    let services = ids.iter().map(|id| net_service(id)).collect();
+    let mut services: HashSet<_> = Default::default();
+    ids.iter().for_each(|id| {
+        let service = net_service(id);
+        services.insert(format!("/udp{}", service));
+        services.insert(service);
+    });
     let state = State::new(ids, services);
 
     // outbound traffic
-    let state_ = state.clone();
-    bind_local_bus(net::BUS_ID, state.clone(), move |_, addr| {
-        let from_node = default_id.clone();
-        let (to_node, addr) = match parse_net_to_addr(addr) {
-            Ok(id) => id,
-            Err(err) => anyhow::bail!("invalid address: {}", err),
-        };
-
-        if !state_.inner.borrow().ids.contains(&from_node) {
-            anyhow::bail!("unknown identity: {:?}", from_node);
-        }
-        Ok((from_node, to_node, addr))
-    });
-
-    let state_ = state.clone();
-    bind_local_bus("/from", state.clone(), move |_, addr| {
-        let (from_node, to_node, addr) = match parse_from_to_addr(addr) {
-            Ok(tup) => tup,
-            Err(err) => anyhow::bail!("invalid address: {}", err),
-        };
-
-        if !state_.inner.borrow().ids.contains(&from_node) {
-            anyhow::bail!("unknown identity: {:?}", from_node);
-        }
-        Ok((from_node, to_node, addr))
-    });
-
-    tokio::task::spawn_local(broadcast_handler(brx));
-    tokio::task::spawn_local(forward_handler(receiver, state.clone()));
-
-    // Keep server connection alive by pinging every `YA_NET_DEFAULT_PING_INTERVAL` seconds.
-    let client_ = client.clone();
-    tokio::task::spawn_local(async move {
-        let mut interval = time::interval(config.ping_interval);
-        loop {
-            interval.tick().await;
-            if let Ok(session) = client_.server_session().await {
-                log::trace!("Sending ping to keep session alive.");
-                let _ = session.ping().await;
+    let net_handler = || {
+        let default_id = default_id.clone();
+        move |_: &str, addr: &str| {
+            let from = default_id.clone();
+            match parse_net_to_addr(addr) {
+                Ok((to, addr)) => Ok((from, to, addr)),
+                Err(err) => anyhow::bail!("invalid address: {}", err),
             }
         }
-    });
+    };
+    bind_local_bus(net::BUS_ID_UDP, state.clone(), false, net_handler());
+    bind_local_bus(net::BUS_ID, state.clone(), true, net_handler());
+
+    let from_handler = || {
+        let state_from = state.clone();
+        move |_: &str, addr: &str| {
+            let (from, to, addr) =
+                parse_from_to_addr(addr).map_err(|e| anyhow::anyhow!("invalid address: {}", e))?;
+            if !state_from.inner.borrow().ids.contains(&from) {
+                anyhow::bail!("unknown identity: {:?}", from);
+            }
+            Ok((from, to, addr))
+        }
+    };
+    bind_local_bus("/from", state.clone(), true, from_handler());
+    bind_local_bus("/udp/from", state.clone(), false, from_handler());
+
+    tokio::task::spawn_local(broadcast_handler(brx, config.clone()));
+    tokio::task::spawn_local(forward_handler(receiver, state.clone()));
+
+    if let Some(address) = client.public_addr().await {
+        log::info!("Public address: {}", address);
+        counter!("net.public-addresses", 1);
+    } else {
+        counter!("net.public-addresses", 0);
+    }
 
     Ok(())
 }
 
-fn bind_local_bus<F>(address: &'static str, state: State, resolver: F)
+fn bind_local_bus<F>(address: &'static str, state: State, reliable: bool, resolver: F)
 where
     F: Fn(&str, &str) -> anyhow::Result<(NodeId, NodeId, String)> + 'static,
 {
@@ -187,7 +211,7 @@ where
             forward_bus_to_local(&caller_id.to_string(), addr, msg, &state_, tx);
             rx
         } else {
-            forward_bus_to_net(caller_id, remote_id, address, msg, &state_)
+            forward_bus_to_net(caller_id, remote_id, address, msg, &state_, reliable)
         };
 
         async move {
@@ -229,7 +253,7 @@ where
             forward_bus_to_local(&caller_id.to_string(), addr, msg, &state, tx);
             rx
         } else {
-            forward_bus_to_net(caller_id, remote_id, address, msg, &state)
+            forward_bus_to_net(caller_id, remote_id, address, msg, &state, reliable)
         };
 
         let eos = Rc::new(AtomicBool::new(false));
@@ -292,6 +316,7 @@ fn forward_bus_to_net(
     address: impl ToString,
     msg: &[u8],
     state: &State,
+    reliable: bool,
 ) -> BusReceiver {
     let address = address.to_string();
     let state = state.clone();
@@ -327,7 +352,7 @@ fn forward_bus_to_net(
             msg.len()
         );
 
-        match state.forward_sink(remote_id, true).await {
+        match state.forward_sink(remote_id, reliable).await {
             Ok(mut session) => {
                 let _ = session.send(msg).await.map_err(|_| {
                     let err = format!("error sending message: session closed");
@@ -345,15 +370,18 @@ fn forward_bus_to_net(
 }
 
 /// Forward broadcast messages from the network to the local bus
-fn broadcast_handler(rx: NetReceiver) -> impl Future<Output = ()> + Unpin + 'static {
+fn broadcast_handler(
+    rx: NetReceiver,
+    config: Arc<Config>,
+) -> impl Future<Output = ()> + Unpin + 'static {
     StreamExt::for_each(rx, move |payload| {
+        let config = config.clone();
         async move {
             let client = CLIENT
                 .with(|c| c.borrow().clone())
                 .ok_or_else(|| anyhow::anyhow!("network not initialized"))?;
-            let session = client.server_session().await?;
-            session
-                .broadcast(payload, DEFAULT_BROADCAST_NODE_COUNT)
+            client
+                .broadcast(payload, config.broadcast_size)
                 .await
                 .context("broadcast failed")
         }
@@ -685,11 +713,16 @@ impl State {
                     .with(|c| c.borrow().clone())
                     .ok_or_else(|| anyhow::anyhow!("network not started"))?;
 
-                let session = client.server_session().await?;
                 let forward: NetSinkKind = if reliable {
-                    PrefixedSink::new(session.forward(remote_id).await?).into()
+                    PrefixedSink::new(client.forward(remote_id).await?).into()
                 } else {
-                    session.forward_unreliable(remote_id).await?.into()
+                    client.forward_unreliable(remote_id).await?.into()
+                };
+
+                if client.sessions.has_p2p_connection(remote_id).await {
+                    counter!("net.connections.p2p", 1)
+                } else {
+                    counter!("net.connections.relay", 1)
                 };
 
                 let mut inner = self.inner.borrow_mut();
@@ -707,6 +740,7 @@ impl State {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 struct Request<S: Clone> {
     #[allow(dead_code)]
@@ -744,36 +778,40 @@ fn chunk_err(request_id: impl ToString, err: impl ToString) -> Result<ResponseCh
 }
 
 fn parse_net_to_addr(addr: &str) -> anyhow::Result<(NodeId, String)> {
-    let mut it = addr.split("/").fuse();
-    if let (Some(""), Some("net"), Some(to_node_id)) = (it.next(), it.next(), it.next()) {
-        let to_id = to_node_id.parse::<NodeId>()?;
+    const ADDR_CONST: usize = 6;
 
-        let prefix = 6 + to_node_id.len();
-        let service_id = &addr[prefix..];
+    let mut it = addr.split("/").fuse().skip(1).peekable();
+    let (prefix, to) = match (it.next(), it.next(), it.next()) {
+        (Some("udp"), Some("net"), Some(to)) if it.peek().is_some() => ("/udp", to),
+        (Some("net"), Some(to), Some(_)) => ("", to),
+        _ => anyhow::bail!("invalid net-to destination: {}", addr),
+    };
 
-        if let Some(_) = it.next() {
-            return Ok((to_id, net_service(format!("{}/{}", to_node_id, service_id))));
-        }
-    }
-    anyhow::bail!("invalid net-to destination: {}", addr)
+    let to_id = to.parse::<NodeId>()?;
+    let skip = prefix.len() + ADDR_CONST + to.len();
+    let addr = net_service(format!("{}/{}", to, &addr[skip..]));
+
+    Ok((to_id, format!("{}{}", prefix, addr)))
 }
 
 fn parse_from_to_addr(addr: &str) -> anyhow::Result<(NodeId, NodeId, String)> {
-    let mut it = addr.split("/").fuse();
-    if let (Some(""), Some("from"), Some(from_node_id), Some("to"), Some(to_node_id)) =
-        (it.next(), it.next(), it.next(), it.next(), it.next())
-    {
-        let from_id = from_node_id.parse::<NodeId>()?;
-        let to_id = to_node_id.parse::<NodeId>()?;
+    const ADDR_CONST: usize = 10;
 
-        let prefix = 10 + from_node_id.len();
-        let service_id = &addr[prefix..];
-
-        if let Some(_) = it.next() {
-            return Ok((from_id, to_id, net_service(service_id)));
+    let mut it = addr.split("/").fuse().skip(1).peekable();
+    let (prefix, from, to) = match (it.next(), it.next(), it.next(), it.next(), it.next()) {
+        (Some("udp"), Some("from"), Some(from), Some("to"), Some(to)) if it.peek().is_some() => {
+            ("/udp", from, to)
         }
-    }
-    anyhow::bail!("invalid net-from-to destination: {}", addr)
+        (Some("from"), Some(from), Some("to"), Some(to), Some(_)) => ("", from, to),
+        _ => anyhow::bail!("invalid net-from-to destination: {}", addr),
+    };
+
+    let from_id = from.parse::<NodeId>()?;
+    let to_id = to.parse::<NodeId>()?;
+    let skip = prefix.len() + ADDR_CONST + from.len();
+    let addr = net_service(&addr[skip..]);
+
+    Ok((from_id, to_id, format!("{}{}", prefix, addr)))
 }
 
 fn gen_id() -> u64 {

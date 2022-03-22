@@ -182,8 +182,30 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
 
                 continue;
             } else if s.pending {
-                log::info!("Transaction found on chain but is still pending");
                 if time_elapsed_from_last_action > *ERC20_WAIT_FOR_PENDING_ON_NETWORK {
+                    let cur_gas_price = tx
+                        .current_gas_price
+                        .and_then(|str| U256::from_dec_str(&str).ok())
+                        .unwrap_or_default();
+
+                    let max_gas_price = tx
+                        .max_gas_price
+                        .and_then(|str| U256::from_dec_str(&str).ok())
+                        .unwrap_or_default();
+
+                    if cur_gas_price.is_zero() || max_gas_price.is_zero() {
+                        log::debug!(
+                            "Wrong gas prices: cur_gas_price: {} max_gas_price: {}",
+                            cur_gas_price,
+                            max_gas_price
+                        );
+                        continue;
+                    }
+                    if cur_gas_price >= max_gas_price {
+                        log::debug!("Cannot bump gas more: Current gas price current_gas_price: {} max_gas_price: {}", cur_gas_price, max_gas_price);
+                        continue;
+                    }
+
                     log::warn!(
                         "Transaction not found on chain for {:?}",
                         time_elapsed_from_sent
@@ -191,6 +213,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                     log::warn!("Time since last action {:?}", time_elapsed_from_last_action);
                     dao.retry_send_transaction(&tx.tx_id, true).await;
                 }
+
                 continue;
             } else if !s.confirmed {
                 log::info!("Transaction is commited, but we are waiting for confirmations");

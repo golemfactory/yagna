@@ -55,5 +55,5 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --tests --workspace --exclude=["./agent/provider/src/market"] --locked
+          args: --workspace --exclude=["./agent/provider/src/market"] --locked
 

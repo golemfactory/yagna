@@ -75,8 +75,10 @@ struct AccountDetails {
 
 #[derive(Clone, Default)]
 struct DriverRegistry {
-    accounts: HashMap<(String, String), AccountDetails>, // (platform, address) -> details
-    drivers: HashMap<String, DriverDetails>,             // driver_name -> details
+    accounts: HashMap<(String, String), AccountDetails>,
+    // (platform, address) -> details
+    drivers: HashMap<String, DriverDetails>,
+    // driver_name -> details
     platforms: HashMap<String, HashMap<String, bool>>, // platform -> (driver_name -> recv_init_required)
 }
 
@@ -142,7 +144,7 @@ impl DriverRegistry {
                 return Err(RegisterAccountError::UnsupportedNetwork(
                     msg.network,
                     msg.driver,
-                ))
+                ));
             }
             Some(network) => network,
         };
@@ -152,7 +154,7 @@ impl DriverRegistry {
                     msg.token,
                     msg.network,
                     msg.driver,
-                ))
+                ));
             }
             Some(platform) => platform.clone(),
         };
@@ -525,16 +527,16 @@ impl PaymentProcessor {
             match agreement {
                 None => return VerifyPaymentError::agreement_not_found(agreement_id),
                 Some(agreement) if &agreement.payee_addr != payee_addr => {
-                    return VerifyPaymentError::agreement_payee(&agreement, payee_addr)
+                    return VerifyPaymentError::agreement_payee(&agreement, payee_addr);
                 }
                 Some(agreement) if &agreement.payer_addr != payer_addr => {
-                    return VerifyPaymentError::agreement_payer(&agreement, payer_addr)
+                    return VerifyPaymentError::agreement_payer(&agreement, payer_addr);
                 }
                 Some(agreement) if &agreement.payment_platform != &payment.payment_platform => {
                     return VerifyPaymentError::agreement_platform(
                         &agreement,
                         &payment.payment_platform,
-                    )
+                    );
                 }
                 _ => (),
             }
@@ -548,10 +550,10 @@ impl PaymentProcessor {
             match activity {
                 None => return VerifyPaymentError::activity_not_found(activity_id),
                 Some(activity) if &activity.payee_addr != payee_addr => {
-                    return VerifyPaymentError::activity_payee(&activity, payee_addr)
+                    return VerifyPaymentError::activity_payee(&activity, payee_addr);
                 }
                 Some(activity) if &activity.payer_addr != payer_addr => {
-                    return VerifyPaymentError::activity_payer(&activity, payer_addr)
+                    return VerifyPaymentError::activity_payer(&activity, payer_addr);
                 }
                 _ => (),
             }
@@ -602,6 +604,41 @@ impl PaymentProcessor {
         };
         let result = driver_endpoint(&driver).send(msg).await??;
         Ok(result)
+    }
+
+    /// This function releases allocations.
+    /// When `bool` is `true` all existing allocations are released immediately.
+    /// For `false` each allocation timestamp is respected.
+    pub async fn release_allocations(&self, force: bool) {
+        let dao = self.db_executor.as_dao::<AllocationDao>();
+        let existing_allocations = dao.get_filtered(None, None, None, None, None).await;
+
+        log::info!("Checking for allocations to be released...");
+
+        match existing_allocations {
+            Ok(allocations) => {
+                if !allocations.is_empty() {
+                    for allocation in allocations {
+                        if force {
+                            dao.forced_release_allocation(allocation.allocation_id, None)
+                                .await
+                        } else {
+                            dao.release_allocation_after(
+                                allocation.allocation_id,
+                                allocation.timeout,
+                                None,
+                            )
+                            .await
+                        }
+                    }
+                } else {
+                    log::info!("No allocations to be released.")
+                }
+            }
+            Err(e) => {
+                log::error!("Allocations release failed. Restart yagna to retry allocations release. Db error occurred: {}.", e);
+            }
+        }
     }
 
     pub fn shut_down(&mut self, timeout: Duration) -> impl futures::Future<Output = ()> + 'static {
