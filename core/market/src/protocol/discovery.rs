@@ -1,5 +1,6 @@
 //! Discovery protocol interface
 use actix_rt::Arbiter;
+use futures::TryFutureExt;
 use metrics::{counter, timing, value};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -26,8 +27,9 @@ pub mod message;
 
 use crate::PROTOCOL_VERSION;
 use error::*;
-use futures::TryFutureExt;
 use message::*;
+
+const MAX_OFFER_IDS_PER_BROADCAST: usize = 8;
 
 /// Responsible for communication with markets on other nodes
 /// during discovery phase.
@@ -94,14 +96,14 @@ impl Discovery {
 
     /// Broadcasts Offers to other nodes in network. Connected nodes will
     /// get call to function bound at `OfferBcast`.
-    async fn send_bcast_offers(&self) -> () {
+    async fn send_bcast_offers(&self) {
         // `...offer_queue` MUST be empty to trigger the sending again
         let offer_ids: Vec<SubscriptionId> =
-            self.inner.offer_queue.lock().await.drain(..).collect();
+            std::mem::take(&mut *self.inner.offer_queue.lock().await);
 
         // Should never happen, but just to be certain.
         if offer_ids.is_empty() {
-            return ();
+            return;
         }
 
         let default_id = match self.default_identity().await {
@@ -120,11 +122,15 @@ impl Discovery {
         counter!("market.offers.broadcasts.net", 1);
         value!("market.offers.broadcasts.len", size as u64);
 
-        // TODO: should we send as our (default) identity?
-        if let Err(e) = net::broadcast(default_id, OffersBcast { offer_ids }).await {
-            log::error!("Error sending bcast, skipping... error={:?}", e);
-            counter!("market.offers.broadcasts.net_errors", 1);
-        };
+        let mut iter = offer_ids.into_iter().peekable();
+        while iter.peek().is_some() {
+            let chunk = iter.by_ref().take(MAX_OFFER_IDS_PER_BROADCAST).collect();
+            // TODO: should we send as our (default) identity?
+            if let Err(e) = net::broadcast(default_id, OffersBcast { offer_ids: chunk }).await {
+                log::error!("Error sending bcast, skipping... error={:?}", e);
+                counter!("market.offers.broadcasts.net_errors", 1);
+            };
+        }
     }
 
     /// Ask remote Node for specified Offers.
@@ -214,11 +220,17 @@ impl Discovery {
         counter!("market.offers.unsubscribes.broadcasts.net", 1);
         value!("market.offers.unsubscribes.broadcasts.len", size as u64);
 
-        // TODO: should we send as our (default) identity?
-        if let Err(e) = net::broadcast(default_id, UnsubscribedOffersBcast { offer_ids }).await {
-            log::error!("Error sending bcast, skipping... error={:?}", e);
-            counter!("market.offers.unsubscribes.broadcasts.net_errors", 1);
-        };
+        let mut iter = offer_ids.into_iter().peekable();
+        while iter.peek().is_some() {
+            let chunk = iter.by_ref().take(MAX_OFFER_IDS_PER_BROADCAST).collect();
+            // TODO: should we send as our (default) identity?
+            if let Err(e) =
+                net::broadcast(default_id, UnsubscribedOffersBcast { offer_ids: chunk }).await
+            {
+                log::error!("Error sending bcast, skipping... error={:?}", e);
+                counter!("market.offers.unsubscribes.broadcasts.net_errors", 1);
+            };
+        }
     }
 
     pub async fn bind_gsb(
