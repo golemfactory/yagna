@@ -25,7 +25,7 @@ SELECT
     dne.details,
     agr.app_session_id,
     act.agreement_id,
-    dn.activity_id
+    dne.total_amount_due
 
 FROM
     pay_debit_note_event dne
