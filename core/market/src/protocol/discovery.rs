@@ -58,7 +58,12 @@ pub struct DiscoveryImpl {
 }
 
 impl Discovery {
+    #[inline]
     pub fn re_broadcast_enabled(&self) -> bool {
+        self.is_hybrid_net()
+    }
+
+    pub fn is_hybrid_net(&self) -> bool {
         match std::env::var("YA_NET_TYPE") {
             Ok(val) => val == "hybrid",
             Err(_) => false,
@@ -122,14 +127,14 @@ impl Discovery {
         counter!("market.offers.broadcasts.net", 1);
         value!("market.offers.broadcasts.len", size as u64);
 
-        let mut iter = offer_ids.into_iter().peekable();
-        while iter.peek().is_some() {
-            let chunk = iter.by_ref().take(MAX_OFFER_IDS_PER_BROADCAST).collect();
-            // TODO: should we send as our (default) identity?
-            if let Err(e) = net::broadcast(default_id, OffersBcast { offer_ids: chunk }).await {
-                log::error!("Error sending bcast, skipping... error={:?}", e);
-                counter!("market.offers.broadcasts.net_errors", 1);
-            };
+        if self.is_hybrid_net() {
+            let mut iter = offer_ids.into_iter().peekable();
+            while iter.peek().is_some() {
+                let chunk = iter.by_ref().take(MAX_OFFER_IDS_PER_BROADCAST).collect();
+                broadcast_offers(default_id, chunk).await;
+            }
+        } else {
+            broadcast_offers(default_id, offer_ids).await;
         }
     }
 
@@ -220,16 +225,14 @@ impl Discovery {
         counter!("market.offers.unsubscribes.broadcasts.net", 1);
         value!("market.offers.unsubscribes.broadcasts.len", size as u64);
 
-        let mut iter = offer_ids.into_iter().peekable();
-        while iter.peek().is_some() {
-            let chunk = iter.by_ref().take(MAX_OFFER_IDS_PER_BROADCAST).collect();
-            // TODO: should we send as our (default) identity?
-            if let Err(e) =
-                net::broadcast(default_id, UnsubscribedOffersBcast { offer_ids: chunk }).await
-            {
-                log::error!("Error sending bcast, skipping... error={:?}", e);
-                counter!("market.offers.unsubscribes.broadcasts.net_errors", 1);
-            };
+        if self.is_hybrid_net() {
+            let mut iter = offer_ids.into_iter().peekable();
+            while iter.peek().is_some() {
+                let chunk = iter.by_ref().take(MAX_OFFER_IDS_PER_BROADCAST).collect();
+                broadcast_unsubscribed(default_id, chunk).await;
+            }
+        } else {
+            broadcast_unsubscribed(default_id, offer_ids).await;
         }
     }
 
@@ -427,4 +430,18 @@ impl Discovery {
     async fn default_identity(&self) -> Result<NodeId, IdentityError> {
         Ok(self.inner.identity.default_identity().await?)
     }
+}
+
+async fn broadcast_offers(node_id: NodeId, offer_ids: Vec<SubscriptionId>) {
+    if let Err(e) = net::broadcast(node_id, OffersBcast { offer_ids }).await {
+        log::error!("Error broadcasting offers: {:?}", e);
+        counter!("market.offers.broadcasts.net_errors", 1);
+    };
+}
+
+async fn broadcast_unsubscribed(node_id: NodeId, offer_ids: Vec<SubscriptionId>) {
+    if let Err(e) = net::broadcast(node_id, UnsubscribedOffersBcast { offer_ids }).await {
+        log::error!("Error broadcasting unsubscribed offers: {:?}", e);
+        counter!("market.offers.unsubscribes.broadcasts.net_errors", 1);
+    };
 }
