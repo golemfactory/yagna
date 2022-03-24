@@ -68,21 +68,19 @@ impl NetCommand {
 
                 Ok(ResponseTable {
                     columns: vec![
-                        "protocol".into(),
-                        "state".into(),
-                        "".into(),
+                        "socket".into(),
                         "address".into(),
                         "port".into(),
+                        "state".into(),
                     ],
                     values: sockets
                         .into_iter()
                         .map(|s| {
                             serde_json::json! {[
-                                s.protocol,
-                                s.state,
-                                s.local_port,
+                                format!("{}:{}", s.protocol, s.local_port),
                                 s.remote_addr,
                                 s.remote_port,
+                                s.state,
                             ]}
                         })
                         .collect(),

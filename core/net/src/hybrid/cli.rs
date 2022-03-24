@@ -30,9 +30,9 @@ pub(crate) fn bind_service() {
             let kind = match node_id {
                 Some(id) => {
                     let is_p2p = client.sessions.is_p2p(&id).await;
-                    is_p2p.then(|| "p2p").unwrap_or("relayed")
+                    is_p2p.then(|| "p2p").unwrap_or("relay")
                 }
-                None => "relay",
+                None => "",
             };
 
             responses.push(model::SessionResponse {
@@ -55,7 +55,7 @@ pub(crate) fn bind_service() {
             .sockets()
             .into_iter()
             .map(|(desc, state)| model::SocketResponse {
-                protocol: desc.protocol.to_string(),
+                protocol: desc.protocol.to_string().to_lowercase(),
                 state: state.to_string(),
                 local_port: desc.local.port_repr(),
                 remote_addr: desc.remote.addr_repr(),
