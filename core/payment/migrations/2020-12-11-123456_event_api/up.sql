@@ -23,10 +23,7 @@ SELECT
     dne.event_type,
     dne.timestamp,
     dne.details,
-    agr.app_session_id,
-    act.agreement_id,
-    dne.total_amount_due
-
+    agr.app_session_id
 FROM
     pay_debit_note_event dne
     INNER JOIN pay_debit_note dn ON dne.owner_id = dn.owner_id AND dne.debit_note_id = dn.id

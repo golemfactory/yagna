@@ -6,7 +6,6 @@ use serde::Serialize;
 use std::convert::TryFrom;
 use ya_client_model::payment::{DebitNoteEvent, DebitNoteEventType};
 use ya_client_model::NodeId;
-use ya_persistence::types::BigDecimalField;
 
 #[derive(Debug, Identifiable, Insertable)]
 #[table_name = "pay_debit_note_event"]
@@ -48,8 +47,6 @@ pub struct ReadObj {
     pub timestamp: NaiveDateTime,
     pub details: Option<String>,
     pub app_session_id: Option<String>,
-    pub agreement_id: String,
-    pub total_amount_due: BigDecimalField,
 }
 
 impl TryFrom<ReadObj> for DebitNoteEvent {
@@ -68,8 +65,6 @@ impl TryFrom<ReadObj> for DebitNoteEvent {
             None => None,
         };
         Ok(Self {
-            agreement_id: event.agreement_id,
-            total_amount_due: event.total_amount_due.into(),
             debit_note_id: event.debit_note_id,
             event_date: Utc.from_utc_datetime(&event.timestamp),
             event_type,
