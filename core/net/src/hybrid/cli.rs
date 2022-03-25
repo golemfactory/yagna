@@ -1,4 +1,5 @@
 use std::time::Instant;
+
 use ya_core_model::net::local as model;
 use ya_service_bus::typed as bus;
 
@@ -25,6 +26,8 @@ pub(crate) fn bind_service() {
         })?;
 
         let mut responses = Vec::new();
+        let now = Instant::now();
+
         for session in client.sessions().await {
             let node_id = client.remote_id(&session.remote).await;
             let kind = match node_id {
@@ -40,7 +43,8 @@ pub(crate) fn bind_service() {
                 id: session.id.to_string(),
                 session_type: kind.to_string(),
                 remote_address: session.remote,
-                duration: Instant::now() - session.created,
+                seen: now - session.last_seen,
+                duration: now - session.created,
             });
         }
 

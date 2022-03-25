@@ -161,6 +161,7 @@ pub mod local {
         pub id: String,
         pub session_type: String,
         pub remote_address: SocketAddr,
+        pub seen: Duration,
         pub duration: Duration,
     }
 

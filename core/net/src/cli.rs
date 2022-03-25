@@ -38,17 +38,21 @@ impl NetCommand {
                         "node".into(),
                         "address".into(),
                         "type".into(),
+                        "seen".into(),
                         "time".into(),
                     ],
                     values: sessions
                         .into_iter()
                         .map(|s| {
-                            let time = Duration::from_secs(s.duration.as_secs());
+                            let seen = Duration::from_secs(s.seen.as_secs());
+                            let duration = Duration::from_secs(s.duration.as_secs());
+
                             serde_json::json! {[
                                 s.node_id.map(|id| id.to_string()).unwrap_or_default(),
                                 s.remote_address.to_string(),
                                 s.session_type,
-                                format_duration(time).to_string(),
+                                format_duration(seen).to_string(),
+                                format_duration(duration).to_string(),
                             ]}
                         })
                         .collect(),
