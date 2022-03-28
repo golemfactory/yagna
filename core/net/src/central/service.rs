@@ -78,9 +78,11 @@ pub async fn bind_remote(
         let bcast = bcast.clone();
 
         move |caller: String, topic: String, msg: Vec<u8>| {
-            let endpoints = bcast.resolve(&topic);
             let msg: Rc<[u8]> = msg.into();
+            let bcast = bcast.clone();
+
             Arbiter::spawn(async move {
+                let endpoints = bcast.resolve(&topic).await;
                 log::trace!("Received broadcast to topic {} from [{}].", &topic, &caller);
                 for endpoint in endpoints {
                     let addr = format!("{}/{}", endpoint, bcast_service_id);
@@ -117,10 +119,11 @@ pub async fn bind_remote(
 
         let _ = bus::bind(local_net::BUS_ID, move |subscribe: local_net::Subscribe| {
             let topic = subscribe.topic().to_owned();
-            let (is_new, id) = bcast.add(subscribe);
+            let bcast = bcast.clone();
             let central_bus = central_bus.clone();
             async move {
                 log::debug!("Subscribe topic {} on central bus.", topic);
+                let (is_new, id) = bcast.add(subscribe).await;
                 if is_new {
                     if let Err(e) = central_bus.subscribe(topic.clone()).await {
                         log::error!("fail to subscribe to: {}, {}", topic, e);

@@ -6,14 +6,16 @@ use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::task::Poll;
 
 use anyhow::{anyhow, Context as AnyhowContext};
 use futures::channel::mpsc;
+use futures::lock::Mutex;
 use futures::stream::LocalBoxStream;
 use futures::{FutureExt, SinkExt, Stream, StreamExt, TryStreamExt};
 use metrics::counter;
+use tokio::sync::RwLock;
 use url::Url;
 
 use ya_core_model::net::{self, net_service};
@@ -41,12 +43,18 @@ type NetReceiver = mpsc::Receiver<Vec<u8>>;
 type NetSinkKind = SinkKind<NetSender, mpsc::SendError>;
 type NetSinkKey = (NodeId, bool);
 
-type ArcMap<K, V> = Arc<Mutex<HashMap<K, V>>>;
+type ArcMap<K, V> = Arc<RwLock<HashMap<K, V>>>;
 
 lazy_static::lazy_static! {
     pub(crate) static ref BCAST: BCastService = Default::default();
+}
+
+lazy_static::lazy_static! {
     pub(crate) static ref BCAST_HANDLERS: ArcMap<String, Arc<Mutex<BCastHandler>>> = Default::default();
-    pub(crate) static ref BCAST_SENDER: Arc<Mutex<Option<NetSender>>> = Default::default();
+}
+
+lazy_static::lazy_static! {
+    pub(crate) static ref BCAST_SENDER: Arc<RwLock<Option<NetSender>>> = Default::default();
 }
 
 thread_local! {
@@ -115,15 +123,15 @@ pub async fn start_network(
             .await
             .map_err(|e| anyhow!("Resolving hybrid NET relay server failed. Error: {}", e))?
     ))?;
-    log::debug!("Setting up hybrid net with url: {}", url);
-    let provider = IdentityCryptoProvider::new(default_id);
 
+    log::debug!("Setting up hybrid net with url: {}", url);
     log::info!("Starting network (hybrid) with identity: {}", default_id);
 
     let client = ClientBuilder::from_url(url)
-        .crypto(provider)
+        .crypto(IdentityCryptoProvider::new(default_id))
         .listen(config.bind_url.clone())
         .expire_session_after(config.session_expiration.clone())
+        .virtual_tcp_buffer_size_multiplier(config.vtcp_buffer_size_multiplier)
         .connect()
         .build()
         .await?;
@@ -132,7 +140,9 @@ pub async fn start_network(
     });
 
     let (btx, brx) = mpsc::channel(1);
-    BCAST_SENDER.lock().unwrap().replace(btx);
+    {
+        BCAST_SENDER.write().await.replace(btx);
+    }
 
     let receiver = client.forward_receiver().await.unwrap();
     let mut services: HashSet<_> = Default::default();
@@ -199,7 +209,7 @@ where
             Ok(id) => id,
             Err(err) => {
                 log::debug!("rpc {} forward error: {}", addr, err);
-                return async move { Ok(chunk_err(0, err).unwrap().into_bytes()) }.left_future();
+                return async move { Err(Error::GsbFailure(err.to_string())) }.left_future();
             }
         };
 
@@ -221,7 +231,7 @@ where
         async move {
             match rx.next().await.ok_or(Error::Cancelled) {
                 Ok(chunk) => match chunk {
-                    ResponseChunk::Full(vec) => Ok(vec),
+                    ResponseChunk::Full(data) => codec::decode_reply(data),
                     ResponseChunk::Part(_) => {
                         Err(Error::GsbFailure("partial response".to_string()))
                     }
@@ -239,9 +249,11 @@ where
             Ok(id) => id,
             Err(err) => {
                 log::debug!("local bus: stream call (egress) to {} error: {}", addr, err);
-                return futures::stream::once(async move { chunk_err(0, err) })
-                    .boxed_local()
-                    .left_stream();
+                return futures::stream::once(
+                    async move { Err(Error::GsbFailure(err.to_string())) },
+                )
+                .boxed_local()
+                .left_stream();
             }
         };
 
@@ -263,9 +275,12 @@ where
         let eos = Rc::new(AtomicBool::new(false));
         let eos_chain = eos.clone();
 
-        rx.map(move |v| {
-            v.is_full().then(|| eos.store(true, Relaxed));
-            Ok(v)
+        rx.map(move |chunk| match chunk {
+            ResponseChunk::Full(v) => {
+                eos.store(true, Relaxed);
+                codec::decode_reply(v).map(ResponseChunk::Full)
+            }
+            chunk => Ok(chunk),
         })
         .chain(futures::stream::poll_fn(move |_| {
             if eos_chain.load(Relaxed) {
@@ -307,7 +322,6 @@ fn forward_bus_to_local(caller: &str, addr: &str, data: &[u8], state: &State, tx
     let send = local_bus::call_stream(address.as_str(), caller, data);
     tokio::task::spawn_local(async move {
         let _ = send
-            .map_err(|e| Error::GsbFailure(e.to_string()))
             .forward(tx.sink_map_err(|e| Error::GsbFailure(e.to_string())))
             .await;
     });
@@ -357,8 +371,8 @@ fn forward_bus_to_net(
         );
 
         match state.forward_sink(remote_id, reliable).await {
-            Ok(mut session) => {
-                let _ = session.send(msg).await.map_err(|_| {
+            Ok(mut sink) => {
+                let _ = sink.send(msg).await.map_err(|_| {
                     let err = format!("error sending message: session closed");
                     handler_reply_service_err(request_id, err, tx);
                 });
@@ -434,7 +448,7 @@ fn forward_handler(
 
                 if tx.send(fwd.payload.into()).await.is_err() {
                     log::debug!("net routing error: channel closed");
-                    state.remove_sink(&key);
+                    state.remove(&key);
                 }
             }
         })
@@ -542,10 +556,16 @@ fn handle_request(
         }
     }
     .map(move |result| match result {
-        Ok(chunk) => {
-            chunk.is_full().then(|| eos_map.store(true, Relaxed));
-            codec::reply_ok(request_id.clone(), chunk)
-        }
+        Ok(chunk) => match chunk {
+            ResponseChunk::Full(v) => {
+                eos_map.store(true, Relaxed);
+                match codec::decode_reply(v) {
+                    Ok(v) => codec::reply_ok(request_id.clone(), ResponseChunk::Full(v)),
+                    Err(err) => codec::reply_err(request_id.clone(), err),
+                }
+            }
+            chunk => codec::reply_ok(request_id.clone(), chunk),
+        },
         Err(err) => {
             eos_map.store(true, Relaxed);
             codec::reply_err(request_id.clone(), err)
@@ -570,7 +590,7 @@ fn handle_request(
                 Some(Ok::<Vec<u8>, mpsc::SendError>(vec))
             }
             Err(e) => {
-                log::debug!("handle request: reply encoding error: {}", e);
+                log::debug!("handle request: encode reply error: {}", e);
                 None
             }
         };
@@ -667,13 +687,14 @@ fn handle_broadcast(
         let data: Rc<[u8]> = request.data.into();
         let topic = request.topic;
 
-        let handlers = BCAST_HANDLERS.lock().unwrap();
+        let handlers = BCAST_HANDLERS.read().await;
         for handler in BCAST
             .resolve(&topic)
+            .await
             .into_iter()
             .filter_map(|e| handlers.get(e.as_ref()).clone())
         {
-            let mut h = handler.lock().unwrap();
+            let mut h = handler.lock().await;
             (*(h))(caller.clone(), data.as_ref());
         }
     });
@@ -690,7 +711,6 @@ struct State {
 struct StateInner {
     requests: HashMap<String, Request<BusSender>>,
     routes: HashMap<NetSinkKey, NetSender>,
-    forward: HashMap<NetSinkKey, NetSinkKind>,
     ids: HashSet<NodeId>,
     services: HashSet<String>,
 }
@@ -707,40 +727,29 @@ impl State {
     }
 
     async fn forward_sink(&self, remote_id: NodeId, reliable: bool) -> anyhow::Result<NetSinkKind> {
-        match {
-            let inner = self.inner.borrow();
-            inner.forward.get(&(remote_id, reliable)).cloned()
-        } {
-            Some(sink) => Ok(sink),
-            None => {
-                let client = CLIENT
-                    .with(|c| c.borrow().clone())
-                    .ok_or_else(|| anyhow::anyhow!("network not started"))?;
+        let client = CLIENT
+            .with(|c| c.borrow().clone())
+            .ok_or_else(|| anyhow::anyhow!("network not started"))?;
 
-                let forward: NetSinkKind = if reliable {
-                    PrefixedSink::new(client.forward(remote_id).await?).into()
-                } else {
-                    client.forward_unreliable(remote_id).await?.into()
-                };
+        let forward: NetSinkKind = if reliable {
+            PrefixedSink::new(client.forward(remote_id).await?).into()
+        } else {
+            client.forward_unreliable(remote_id).await?.into()
+        };
 
-                if client.sessions.has_p2p_connection(remote_id).await {
-                    counter!("net.connections.p2p", 1)
-                } else {
-                    counter!("net.connections.relay", 1)
-                };
+        // FIXME: yagna daemon doesn't handle connections; ya-relay-client does
+        // if client.sessions.has_p2p_connection(remote_id).await {
+        //     counter!("net.connections.p2p", 1)
+        // } else {
+        //     counter!("net.connections.relay", 1)
+        // };
 
-                let mut inner = self.inner.borrow_mut();
-                inner.forward.insert((remote_id, reliable), forward.clone());
-
-                Ok(forward)
-            }
-        }
+        Ok(forward)
     }
 
-    fn remove_sink(&self, key: &NetSinkKey) {
+    fn remove(&self, key: &NetSinkKey) {
         let mut inner = self.inner.borrow_mut();
         inner.routes.remove(&key);
-        inner.forward.remove(&key);
     }
 }
 
@@ -755,10 +764,12 @@ struct Request<S: Clone> {
     tx: S,
 }
 
+#[inline]
 fn handler_reply_bad_request(request_id: impl ToString, error: impl ToString, tx: BusSender) {
     handler_reply_err(request_id, error, CallReplyCode::CallReplyBadRequest, tx);
 }
 
+#[inline]
 fn handler_reply_service_err(request_id: impl ToString, error: impl ToString, tx: BusSender) {
     handler_reply_err(request_id, error, CallReplyCode::ServiceFailure, tx);
 }
@@ -773,12 +784,6 @@ fn handler_reply_err(
     tokio::task::spawn_local(async move {
         let _ = tx.send(ResponseChunk::Full(err)).await;
     });
-}
-
-fn chunk_err(request_id: impl ToString, err: impl ToString) -> Result<ResponseChunk, Error> {
-    Ok(ResponseChunk::Full(codec::encode_message(
-        codec::reply_err(request_id.to_string(), err),
-    )?))
 }
 
 fn parse_net_to_addr(addr: &str) -> anyhow::Result<(NodeId, String)> {

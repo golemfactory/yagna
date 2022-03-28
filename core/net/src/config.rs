@@ -24,6 +24,8 @@ pub struct Config {
     pub broadcast_size: u32,
     #[structopt(env = "YA_NET_SESSION_EXPIRATION", parse(try_from_str = humantime::parse_duration), default_value = "15s")]
     pub session_expiration: Duration,
+    #[structopt(env = "YA_NET_VIRTUAL_TCP_BUFFER_SIZE_MULTIPLIER", default_value = "4")]
+    pub vtcp_buffer_size_multiplier: usize,
 }
 
 impl Config {
