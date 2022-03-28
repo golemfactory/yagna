@@ -223,11 +223,25 @@ impl<'c> AllocationDao<'c> {
 
             tokio::time::delay_for(Duration::from_secs(deadline)).await;
 
-            let _ = self.release(allocation_id, node_id).await;
+            if let Ok(false) = self.is_released(allocation_id.clone()).await {
+                let _ = self.release(allocation_id, node_id).await;
+            }
         }
     }
 
     pub async fn forced_release_allocation(&self, allocation_id: String, node_id: Option<NodeId>) {
         let _ = self.release(allocation_id, node_id).await;
+    }
+
+    async fn is_released(&self, allocation_id: String) -> DbResult<bool> {
+        readonly_transaction(self.pool, move |conn| {
+            let num_release = dsl::pay_allocation
+                .filter(dsl::id.eq(allocation_id))
+                .filter(dsl::released.eq(true))
+                .execute(conn)?;
+
+            Ok(num_release > 0)
+        })
+        .await
     }
 }
