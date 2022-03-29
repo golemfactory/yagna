@@ -122,10 +122,6 @@ pub struct PaymentsConfig {
     pub get_events_error_timeout: Duration,
     #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "5s")]
     pub invoice_reissue_interval: Duration,
-    /// Deprecated! Will be removed in future releases. Please do not use it.
-    /// We will use progressive increasing (exponentially) time periods between retries.
-    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "50s")]
-    pub invoice_resend_interval: Duration,
     #[structopt(skip = "you-forgot-to-set-session-id")]
     pub session_id: String,
 }
@@ -596,6 +592,8 @@ impl Handler<ActivityDestroyed> for Payments {
             // Computing last DebitNote can't fail, so we must repeat it until
             // it reaches Requestor. DebitNote itself is not important so much, but
             // we must ensure that we send FinalizeActivity and Invoice in consequence.
+
+            let mut repeats = get_backoff();
             let (debit_note, cost_info) = loop {
                 match compute_cost_and_send_debit_note(
                     provider_context.clone(),
@@ -606,15 +604,10 @@ impl Handler<ActivityDestroyed> for Payments {
                 .await
                 {
                     Ok(debit_note) => break debit_note,
-                    Err(error) => {
-                        let interval = provider_context.config.invoice_resend_interval;
-
-                        log::error!(
-                            "{} Final debit note will be resent after {:#?}.",
-                            error,
-                            interval
-                        );
-                        tokio::time::delay_for(interval).await
+                    Err(e) => {
+                        let delay = repeats.next_backoff().unwrap_or(repeats.current_interval);
+                        log::warn!("Error sending debit note: {} Retry in {:#?}.", e, delay);
+                        tokio::time::delay_for(delay).await
                     }
                 }
             };
