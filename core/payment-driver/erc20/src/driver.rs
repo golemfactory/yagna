@@ -243,6 +243,7 @@ impl PaymentDriverCron for Erc20Driver {
             }
             Some(guard) => guard,
         };
+
         log::trace!("Running ERC-20 send-out job...");
         'outer: for network_key in self.get_networks().keys() {
             let network = Network::from_str(&network_key).unwrap();
@@ -251,7 +252,11 @@ impl PaymentDriverCron for Erc20Driver {
                 if let Err(e) =
                     cron::process_payments_for_account(&self.dao, &node_id, network).await
                 {
-                    log::error!("cron::process_payments_for_account returned error: {:?}", e);
+                    log::error!(
+                        "Cron: processing payment for account [{}] failed with error: {}",
+                        node_id,
+                        e
+                    );
                     continue 'outer;
                 };
             }
@@ -259,6 +264,7 @@ impl PaymentDriverCron for Erc20Driver {
             cron::process_transactions(&self.dao, network).await;
         }
         log::trace!("ERC-20 send-out job complete.");
+
         drop(guard); // Explicit drop to tell Rust that guard is not unused variable
     }
 
