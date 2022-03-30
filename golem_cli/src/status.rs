@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use ansi_term::{Colour, Style};
 use anyhow::{anyhow, Result};
-use bigdecimal::BigDecimal;
+use bigdecimal::{BigDecimal,FromPrimitive};
 use futures::prelude::*;
 use prettytable::{cell, format, row, Table};
 use strum::VariantNames;
@@ -168,6 +168,44 @@ pub async fn run() -> Result</*exit code*/ i32> {
             ]);
             let total_amount: BigDecimal =
                 payment_statuses.values().cloned().map(|ps| ps.amount).sum();
+            
+            let currency = "usd";
+            match ureq::get("https://api.coingecko.com/api/v3/simple/price")
+                .query("ids","golem")
+                .query("vs_currencies",currency)
+                .call() {
+                    Ok(response) => {
+                        let response_json: serde_json::Value = response.into_json().unwrap();
+                        match response_json["golem"][currency].as_f64() {
+                            Some(glm_price) => {
+                                table.add_row(row!["GLM price",
+                                format!("{} {}", glm_price, currency.to_uppercase())]);
+
+                                let rate_bd: BigDecimal = BigDecimal::from_f64(glm_price).unwrap();
+                                let value: BigDecimal = total_amount.clone() * rate_bd;
+                                table.add_row(row![
+                                    "total value",
+                                    format!("{} {}", BigDecimal::round(&value,2), currency.to_uppercase())
+                                ]);
+                            }
+                            None => {
+                                table.add_row(row![
+                                    "GLM price", 
+                                    format!("Unsupported currency: {}", currency)
+                                ]);
+                            }
+                        };
+                    }
+                    Err(_) => {
+                        table.add_row(row![
+                            "GLM price",
+                            "Prices currently unavailable"
+                        ]);
+                    }
+
+                };
+            table.add_empty_row();
+
             table.add_row(row![
                 "amount (total)",
                 format!("{} {}", total_amount, token)
