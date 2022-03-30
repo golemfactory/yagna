@@ -62,6 +62,8 @@ pub async fn resolve_dns_record_host(host: &str) -> anyhow::Result<String> {
 }
 
 /// Try resolving hostname with `resolve_dns_record`. Return the original URL if it fails
+/// Remember to always include scheme part of the url, otherwise you'll just get your
+/// default (`request_url`) because of: ParseError::RelativeUrlWithoutBase.
 pub async fn try_resolve_dns_record(request_url: &str) -> String {
     match resolve_dns_record(request_url).await {
         Ok(url) => url,
