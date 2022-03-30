@@ -11,7 +11,7 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
 /// Network management
 pub enum NetCommand {
-    /// Network status
+    /// Show network status
     Status {},
     /// List network sessions
     Sessions {},
