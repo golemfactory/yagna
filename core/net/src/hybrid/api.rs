@@ -1,5 +1,6 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
+use futures::lock::Mutex;
 use futures::SinkExt;
 
 use ya_core_model::net::local::{
@@ -26,8 +27,8 @@ where
     S: ToString + 'static,
 {
     let mut sender = BCAST_SENDER
-        .lock()
-        .unwrap()
+        .read()
+        .await
         .clone()
         .ok_or_else(|| Error::Closed("network not initialized".to_string()))?;
 
@@ -76,7 +77,7 @@ where
                 let m = SendBroadcastMessage::new(m);
                 let handler = handler_rc.clone();
                 tokio::task::spawn_local(async move {
-                    let mut h = handler.lock().unwrap();
+                    let mut h = handler.lock().await;
                     let _ = (*(h))(caller, m).await;
                 });
             }
@@ -86,10 +87,10 @@ where
         };
     };
 
-    BCAST.add(subscription);
+    BCAST.add(subscription).await;
     BCAST_HANDLERS
-        .lock()
-        .unwrap()
+        .write()
+        .await
         .insert(address, Arc::new(Mutex::new(Box::new(handler))));
 
     Ok(())
