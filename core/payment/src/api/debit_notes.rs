@@ -108,7 +108,7 @@ async fn get_debit_note_events(
         .get("X-Requestor-Events")
         .and_then(|v| v.to_str().ok())
         .map(|v| v.split(",").map(|s| Cow::Owned(s.to_owned())).collect())
-        .unwrap_or_else(|| vec![Cow::Borrowed("RECEIVED"), Cow::Borrowed("CANCELLED")]);
+        .unwrap_or_else(|| vec!["RECEIVED".into(), "CANCELLED".into()]);
 
     let provider_events: Vec<Cow<'static, str>> = req
         .headers()
