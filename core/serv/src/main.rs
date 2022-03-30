@@ -224,7 +224,7 @@ enum Services {
     Metrics(MetricsService),
     #[enable(gsb, rest, cli)]
     Version(VersionService),
-    #[enable(gsb)]
+    #[enable(gsb, cli)]
     Net(NetService),
     #[enable(rest)]
     Vpn(VpnService),

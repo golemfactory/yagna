@@ -58,7 +58,7 @@ lazy_static::lazy_static! {
 }
 
 thread_local! {
-    static CLIENT: RefCell<Option<Client>> = Default::default();
+    pub(crate) static CLIENT: RefCell<Option<Client>> = Default::default();
 }
 
 async fn relay_addr(config: &Config) -> anyhow::Result<SocketAddr> {

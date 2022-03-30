@@ -11,8 +11,13 @@ pub const PUBLIC_PREFIX: &str = "/public";
 ///
 ///
 pub mod local {
+    use std::net::SocketAddr;
+    use std::time::Duration;
+
     use serde::de::DeserializeOwned;
     use serde::{Deserialize, Serialize};
+
+    use ya_client_model::NodeId;
     use ya_service_bus::RpcMessage;
 
     pub const BUS_ID: &str = "/local/net";
@@ -112,6 +117,72 @@ pub mod local {
         SubscribeError(#[from] SubscribeError),
         #[error(transparent)]
         GsbError(#[from] ya_service_bus::error::Error),
+    }
+
+    #[derive(thiserror::Error, Clone, Debug, Serialize, Deserialize)]
+    pub enum StatusError {
+        #[error("{0}")]
+        RuntimeException(String),
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Status {}
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct StatusResponse {
+        pub node_id: NodeId,
+        pub listen_address: Option<SocketAddr>,
+        pub public_address: Option<SocketAddr>,
+        pub sessions: usize,
+    }
+
+    impl RpcMessage for Status {
+        const ID: &'static str = "Status";
+        type Item = StatusResponse;
+        type Error = StatusError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Sessions {}
+
+    impl RpcMessage for Sessions {
+        const ID: &'static str = "Sessions";
+        type Item = Vec<SessionResponse>;
+        type Error = StatusError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct SessionResponse {
+        pub node_id: Option<NodeId>,
+        pub id: String,
+        pub session_type: String,
+        pub remote_address: SocketAddr,
+        pub seen: Duration,
+        pub duration: Duration,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+    #[serde(rename_all = "camelCase")]
+    pub struct Sockets {}
+
+    impl RpcMessage for Sockets {
+        const ID: &'static str = "Sockets";
+        type Item = Vec<SocketResponse>;
+        type Error = StatusError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct SocketResponse {
+        pub protocol: String,
+        pub state: String,
+        pub local_port: String,
+        pub remote_addr: String,
+        pub remote_port: String,
     }
 }
 
