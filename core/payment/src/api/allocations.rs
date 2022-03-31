@@ -204,24 +204,32 @@ pub async fn release_allocation_after(
             }
 
             tokio::time::delay_for(Duration::from_secs(deadline)).await;
-        }
 
-        match db
-            .as_dao::<AllocationDao>()
-            .release(allocation_id.clone(), node_id)
-            .await
-        {
-            Ok(true) => {
-                log::info!("Allocation {} released.", allocation_id);
-            }
-            Ok(false) => (),
-            Err(e) => {
-                log::warn!(
-                    "Releasing allocation {} failed. Db error occurred: {}",
-                    allocation_id,
-                    e
-                );
-            }
+            forced_release_allocation(db, allocation_id, node_id).await;
         }
     });
+}
+
+pub async fn forced_release_allocation(
+    db: Data<DbExecutor>,
+    allocation_id: String,
+    node_id: Option<NodeId>,
+) {
+    match db
+        .as_dao::<AllocationDao>()
+        .release(allocation_id.clone(), node_id)
+        .await
+    {
+        Ok(true) => {
+            log::info!("Allocation {} released.", allocation_id);
+        }
+        Ok(false) => (),
+        Err(e) => {
+            log::warn!(
+                "Releasing allocation {} failed. Db error occurred: {}",
+                allocation_id,
+                e
+            );
+        }
+    }
 }

@@ -1,4 +1,4 @@
-use crate::api::allocations::release_allocation_after;
+use crate::api::allocations::{forced_release_allocation, release_allocation_after};
 use crate::dao::{ActivityDao, AgreementDao, AllocationDao, OrderDao, PaymentDao};
 use crate::error::processor::{
     AccountNotRegistered, GetStatusError, NotifyPaymentError, OrderValidationError,
@@ -625,13 +625,8 @@ impl PaymentProcessor {
                 if !allocations.is_empty() {
                     for allocation in allocations {
                         if force {
-                            release_allocation_after(
-                                db.clone(),
-                                allocation.allocation_id,
-                                None,
-                                None,
-                            )
-                            .await
+                            forced_release_allocation(db.clone(), allocation.allocation_id, None)
+                                .await
                         } else {
                             release_allocation_after(
                                 db.clone(),
