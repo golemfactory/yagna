@@ -217,7 +217,7 @@ pub async fn release_allocation_after(
             Ok(false) => (),
             Err(e) => {
                 log::warn!(
-                    "Allocation {} release failed. Db error occurred: {}",
+                    "Releasing allocation {} failed. Db error occurred: {}",
                     allocation_id,
                     e
                 );
