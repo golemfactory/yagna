@@ -453,11 +453,12 @@ impl ServiceCommand {
 
                 log::info!("{} service successfully finished!", app_name);
 
+                PaymentService::shut_down().await;
                 NetService::shutdown()
                     .await
                     .map_err(|e| log::error!("Error shutting down NET: {}", e))
                     .ok();
-                PaymentService::shut_down().await;
+
                 logger_handle.shutdown();
                 Ok(CommandOutput::NoOutput)
             }
