@@ -2,6 +2,7 @@ use prost::Message;
 
 use ya_core_model::NodeId;
 use ya_sb_proto::codec::{GsbMessage, ProtocolError};
+use ya_sb_proto::CallReplyCode;
 use ya_service_bus::{Error, ResponseChunk};
 
 pub(crate) fn encode_message(msg: GsbMessage) -> Result<Vec<u8>, Error> {
@@ -40,6 +41,33 @@ pub(crate) fn decode_message(src: &[u8]) -> Result<Option<GsbMessage>, Error> {
     }
 }
 
+pub(crate) fn decode_reply(data: Vec<u8>) -> Result<Vec<u8>, Error> {
+    use std::convert::TryInto;
+
+    let msg = match decode_message(data.as_slice()) {
+        Ok(Some(packet)) => packet,
+        _ => return Ok(data),
+    };
+    let reply = match msg {
+        GsbMessage::CallReply(reply) => reply,
+        _ => return Ok(data),
+    };
+    let code = match reply.code.try_into() {
+        Ok(code) => code,
+        _ => return Ok(data),
+    };
+
+    match code {
+        CallReplyCode::CallReplyOk => Ok(data),
+        CallReplyCode::CallReplyBadRequest => Err(Error::GsbBadRequest(
+            String::from_utf8_lossy(&reply.data).to_string(),
+        )),
+        CallReplyCode::ServiceFailure => Err(Error::GsbFailure(
+            String::from_utf8_lossy(&reply.data).to_string(),
+        )),
+    }
+}
+
 pub(crate) fn encode_request(
     caller: NodeId,
     address: String,
@@ -55,6 +83,7 @@ pub(crate) fn encode_request(
     Ok(encode_message(message)?)
 }
 
+#[inline]
 pub(crate) fn encode_reply(reply: ya_sb_proto::CallReply) -> anyhow::Result<Vec<u8>> {
     Ok(encode_message(GsbMessage::CallReply(reply))?)
 }

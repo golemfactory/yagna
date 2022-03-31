@@ -98,4 +98,4 @@ async def test_mid_agreement_payments(
                 await requestor.destroy_activity(activity_id)
                 await provider.wait_for_exeunit_finished()
 
-        assert round(stats.amount, 12) == round(amount, 12)
+        assert round(stats.amount, 9) == round(amount, 9)
