@@ -1,10 +1,11 @@
+use crate::api::allocations::{forced_release_allocation, release_allocation_after};
 use crate::dao::{ActivityDao, AgreementDao, AllocationDao, OrderDao, PaymentDao};
 use crate::error::processor::{
     AccountNotRegistered, GetStatusError, NotifyPaymentError, OrderValidationError,
     SchedulePaymentError, ValidateAllocationError, VerifyPaymentError,
 };
 use crate::models::order::ReadObj as DbOrder;
-use actix_web::rt::Arbiter;
+use actix_web::{rt::Arbiter, web::Data};
 use bigdecimal::{BigDecimal, Zero};
 use futures::FutureExt;
 use metrics::counter;
@@ -610,8 +611,12 @@ impl PaymentProcessor {
     /// When `bool` is `true` all existing allocations are released immediately.
     /// For `false` each allocation timestamp is respected.
     pub async fn release_allocations(&self, force: bool) {
-        let dao = self.db_executor.as_dao::<AllocationDao>();
-        let existing_allocations = dao.get_filtered(None, None, None, None, None).await;
+        let db = Data::new(self.db_executor.clone());
+        let existing_allocations = db
+            .clone()
+            .as_dao::<AllocationDao>()
+            .get_filtered(None, None, None, None, None)
+            .await;
 
         log::info!("Checking for allocations to be released...");
 
@@ -620,10 +625,11 @@ impl PaymentProcessor {
                 if !allocations.is_empty() {
                     for allocation in allocations {
                         if force {
-                            dao.forced_release_allocation(allocation.allocation_id, None)
+                            forced_release_allocation(db.clone(), allocation.allocation_id, None)
                                 .await
                         } else {
-                            dao.release_allocation_after(
+                            release_allocation_after(
+                                db.clone(),
                                 allocation.allocation_id,
                                 allocation.timeout,
                                 None,
