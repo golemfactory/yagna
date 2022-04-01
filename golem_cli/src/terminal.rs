@@ -1,4 +1,4 @@
-use crossterm::style::Colorize;
+use crossterm::style::Stylize;
 use crossterm::*;
 
 use crossterm::tty::IsTty;
