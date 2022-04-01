@@ -180,11 +180,11 @@ ya-service-api-web = { path = "core/serv-api/web" }
 #ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "c4f16a69be383d9534f99928fccb64a558c47ff2"}
 
 ## CLIENT
-#ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "0b6a9a5b24cd1d858fb483f616e0e4df00842955"}
-#ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "0b6a9a5b24cd1d858fb483f616e0e4df00842955"}
+ya-client = { git = "https://github.com/golemfactory/ya-client.git"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git"}
 
-ya-client = { path = "../ya-client" }
-ya-client-model = { path = "../ya-client/model" }
+#ya-client = { path = "../ya-client" }
+#ya-client-model = { path = "../ya-client/model" }
 
 ## OTHERS
 gftp = { path = "core/gftp" }
@@ -212,6 +212,6 @@ web3 = { git = "https://github.com/golemfactory/rust-web3", branch = "update_eth
 split-debuginfo = "unpacked"
 
 #TODO: Delete when ya-relay is released
-[patch."https://github.com/golemfactory/ya-client"]
-ya-client = { path = "../ya-client" }
-ya-client-model = { path = "../ya-client/model" }
+#[patch."https://github.com/golemfactory/ya-client"]
+#ya-client = { path = "../ya-client" }
+#ya-client-model = { path = "../ya-client/model" }
