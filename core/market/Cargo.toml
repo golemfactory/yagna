@@ -12,7 +12,7 @@ bcast-singleton = []
 [dependencies]
 ya-agreement-utils = { version = "^0.2"}
 ya-client = "0.6"
-ya-core-model = { version = "^0.5", features = ["market", "net"] }
+ya-core-model = { version = "^0.6", features = ["market", "net"] }
 ya-diesel-utils = { version = "0.1" }
 ya-market-resolver = "0.2"
 ya-net = "0.2"
