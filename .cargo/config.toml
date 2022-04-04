@@ -11,8 +11,8 @@ name = "Golem Factory"
 email = "contact@golem.network"
 
 [profile.release]
-lto="fat"
+#lto="fat"
 opt-level=3
-codegen-units=1
+codegen-units=7
 
 

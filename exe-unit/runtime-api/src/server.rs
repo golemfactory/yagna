@@ -1,3 +1,25 @@
+use std::process::{ExitStatus, Stdio};
+use std::sync::Arc;
+
+use futures::future::{BoxFuture, LocalBoxFuture};
+use futures::prelude::*;
+use tokio::process;
+
+pub use client::spawn;
+#[cfg(feature = "codec")]
+pub use codec::Codec;
+pub use proto::request::{CreateNetwork, KillProcess, RunProcess};
+pub use proto::response::create_network::Endpoint as NetworkEndpoint;
+pub use proto::response::runtime_status::Counter as RuntimeCounter;
+pub use proto::response::runtime_status::Kind as RuntimeStatusKind;
+pub use proto::response::runtime_status::State as RuntimeState;
+pub use proto::response::CreateNetwork as CreateNetworkResp;
+pub use proto::response::Error as ErrorResponse;
+pub use proto::response::RunProcess as RunProcessResp;
+pub use proto::response::{ErrorCode, ProcessStatus, RuntimeStatus};
+pub use proto::Network;
+pub use service::{run, run_async};
+
 pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/ya_runtime_api.rs"));
 
@@ -11,25 +33,6 @@ pub mod proto {
     }
 }
 mod codec;
-
-#[cfg(feature = "codec")]
-pub use codec::Codec;
-pub use proto::request::{CreateNetwork, KillProcess, RunProcess};
-pub use proto::response::create_network::Endpoint as NetworkEndpoint;
-pub use proto::response::runtime_status::Counter as RuntimeCounter;
-pub use proto::response::runtime_status::Kind as RuntimeStatusKind;
-pub use proto::response::runtime_status::State as RuntimeState;
-pub use proto::response::CreateNetwork as CreateNetworkResp;
-pub use proto::response::Error as ErrorResponse;
-pub use proto::response::RunProcess as RunProcessResp;
-pub use proto::response::{ErrorCode, ProcessStatus, RuntimeStatus};
-pub use proto::Network;
-
-use futures::future::{BoxFuture, LocalBoxFuture};
-use futures::prelude::*;
-use std::process::{ExitStatus, Stdio};
-use std::sync::Arc;
-use tokio::process;
 
 pub type AsyncResponse<'a, T> = LocalBoxFuture<'a, Result<T, ErrorResponse>>;
 
@@ -67,6 +70,3 @@ pub trait RuntimeControl {
 
 mod client;
 mod service;
-
-pub use client::spawn;
-pub use service::{run, run_async};

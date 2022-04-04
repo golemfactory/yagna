@@ -1,8 +1,10 @@
-use crate::vpn::common::{hton, to_ip, to_octets};
-use crate::vpn::Error;
-use ipnet::IpNet;
 use std::collections::{BTreeSet, HashMap};
 use std::net::IpAddr;
+
+use ipnet::IpNet;
+
+use crate::vpn::common::{hton, to_ip, to_octets};
+use crate::vpn::Error;
 
 pub struct Networks<E> {
     networks: HashMap<String, Network<E>>,

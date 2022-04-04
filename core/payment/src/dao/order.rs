@@ -1,17 +1,24 @@
-use crate::dao::{activity, agreement, allocation};
-use crate::error::DbResult;
-use crate::models::order::{ReadObj, WriteObj};
-use crate::schema::pay_debit_note::dsl as debit_note_dsl;
-use crate::schema::pay_invoice::dsl as invoice_dsl;
-use crate::schema::pay_order::dsl;
-use diesel::{
-    self, BoolExpressionMethods, ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl,
-    RunQueryDsl,
-};
+use std::collections::HashMap;
+
+use bigdecimal::BigDecimal;
+use diesel::prelude::*;
+
 use ya_core_model::payment::local::{
     DebitNotePayment, InvoicePayment, PaymentTitle, SchedulePayment,
 };
+use ya_core_model::NodeId;
 use ya_persistence::executor::{do_with_transaction, readonly_transaction, AsDao, PoolType};
+
+use crate::dao::{activity, agreement, allocation};
+use crate::error::{DbError, DbResult};
+use crate::models::batch::DbBatchOrderItem;
+use crate::models::order::{ReadObj, WriteObj};
+use crate::schema::pay_batch_order::dsl as odsl;
+use crate::schema::pay_batch_order_item::dsl as oidsl;
+use crate::schema::pay_debit_note::dsl as debit_note_dsl;
+use crate::schema::pay_invoice::dsl as invoice_dsl;
+
+use crate::schema::pay_order::dsl;
 
 pub struct OrderDao<'c> {
     pool: &'c PoolType,
@@ -26,7 +33,7 @@ impl<'c> AsDao<'c> for OrderDao<'c> {
 impl<'c> OrderDao<'c> {
     pub async fn create(&self, msg: SchedulePayment, id: String, driver: String) -> DbResult<()> {
         do_with_transaction(self.pool, move |conn| {
-            match &msg.title {
+            match msg.title.as_ref().unwrap() {
                 PaymentTitle::DebitNote(DebitNotePayment { activity_id, .. }) => {
                     activity::increase_amount_scheduled(
                         activity_id,
@@ -67,7 +74,7 @@ impl<'c> OrderDao<'c> {
                         .eq(debit_note_dsl::id.nullable())
                         .and(dsl::payer_id.eq(debit_note_dsl::owner_id))),
                 )
-                .filter(dsl::id.eq_any(ids))
+                .filter(dsl::id.eq_any(&ids))
                 .filter(dsl::driver.eq(driver))
                 .select((
                     dsl::id,
@@ -86,7 +93,83 @@ impl<'c> OrderDao<'c> {
                     debit_note_dsl::activity_id.nullable(),
                 ))
                 .load(conn)?;
+
             Ok(orders)
+        })
+        .await
+    }
+
+    pub async fn get_orders(
+        &self,
+        ids: Vec<String>,
+        driver: String,
+    ) -> DbResult<(Vec<ReadObj>, Vec<DbBatchOrderItem>)> {
+        readonly_transaction(self.pool, move |conn| {
+            let orders = dsl::pay_order
+                .left_join(
+                    invoice_dsl::pay_invoice.on(dsl::invoice_id
+                        .eq(invoice_dsl::id.nullable())
+                        .and(dsl::payer_id.eq(invoice_dsl::owner_id))),
+                )
+                .left_join(
+                    debit_note_dsl::pay_debit_note.on(dsl::debit_note_id
+                        .eq(debit_note_dsl::id.nullable())
+                        .and(dsl::payer_id.eq(debit_note_dsl::owner_id))),
+                )
+                .filter(dsl::id.eq_any(&ids))
+                .filter(dsl::driver.eq(&driver))
+                .select((
+                    dsl::id,
+                    dsl::driver,
+                    dsl::amount,
+                    dsl::payee_id,
+                    dsl::payer_id,
+                    dsl::payee_addr,
+                    dsl::payer_addr,
+                    dsl::payment_platform,
+                    dsl::invoice_id,
+                    dsl::debit_note_id,
+                    dsl::allocation_id,
+                    dsl::is_paid,
+                    invoice_dsl::agreement_id.nullable(),
+                    debit_note_dsl::activity_id.nullable(),
+                ))
+                .load(conn)?;
+
+            let batch_orders = super::batch::get_batch_orders(conn, &ids, &driver)?;
+
+            Ok((orders, batch_orders))
+        })
+        .await
+    }
+
+    pub async fn get_batch_items(
+        &self,
+        owner_id: NodeId,
+        platform: String,
+    ) -> DbResult<HashMap<(String, String), BigDecimal>> {
+        readonly_transaction(self.pool, move |conn| {
+            let data: Vec<(String, String, String, bool)> = odsl::pay_batch_order
+                .filter(
+                    odsl::platform
+                        .eq(&platform)
+                        .and(odsl::owner_id.eq(owner_id)),
+                )
+                .inner_join(oidsl::pay_batch_order_item)
+                .select((
+                    odsl::payer_addr,
+                    oidsl::payee_addr,
+                    oidsl::amount,
+                    oidsl::paid,
+                ))
+                .load(conn)?;
+
+            data
+                .into_iter()
+                .map(|(payer_addr, payee_addr, amount, paid)| -> Result<((String, String), BigDecimal), DbError> {
+                    Ok(((payer_addr, payee_addr), amount.parse().map_err(|e : bigdecimal::ParseBigDecimalError| DbError::Integrity(e.to_string()))?))
+                })
+                .collect()
         })
         .await
     }

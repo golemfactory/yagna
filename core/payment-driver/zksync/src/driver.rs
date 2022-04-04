@@ -105,8 +105,11 @@ impl ZksyncDriver {
         log::trace!("Processing payments for node_id={}", node_id);
         for network_key in self.get_networks().keys() {
             let network = DbNetwork::from_str(&network_key).unwrap();
-            let payments: Vec<PaymentEntity> =
-                self.dao.get_pending_payments(node_id, network).await;
+            let payments: Vec<PaymentEntity> = if network == DbNetwork::Mainnet {
+                self.dao.get_accepted_payments(node_id, network).await
+            } else {
+                self.dao.get_pending_payments(node_id, network).await
+            };
             let mut nonce = 0;
             if !payments.is_empty() {
                 log::info!(
@@ -169,6 +172,21 @@ impl PaymentDriver for ZksyncDriver {
         Ok(())
     }
 
+    async fn get_account_balance(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        msg: GetAccountBalance,
+    ) -> Result<BigDecimal, GenericError> {
+        log::debug!("get_account_balance: {:?}", msg);
+        let (network, _) = platform_to_network_token(msg.platform())?;
+
+        let balance = wallet::account_balance(&msg.address(), network).await?;
+
+        log::debug!("get_account_balance - result: {}", &balance);
+        Ok(balance)
+    }
+
     async fn enter(
         &self,
         _db: DbExecutor,
@@ -206,19 +224,8 @@ impl PaymentDriver for ZksyncDriver {
         ))
     }
 
-    async fn get_account_balance(
-        &self,
-        _db: DbExecutor,
-        _caller: String,
-        msg: GetAccountBalance,
-    ) -> Result<BigDecimal, GenericError> {
-        log::debug!("get_account_balance: {:?}", msg);
-        let (network, _) = platform_to_network_token(msg.platform())?;
-
-        let balance = wallet::account_balance(&msg.address(), network).await?;
-
-        log::debug!("get_account_balance - result: {}", &balance);
-        Ok(balance)
+    async fn exit_fee(&self, msg: ExitFee) -> Result<FeeResult, GenericError> {
+        Ok(wallet::exit_fee(&msg).await?)
     }
 
     fn get_name(&self) -> String {
@@ -257,7 +264,7 @@ impl PaymentDriver for ZksyncDriver {
             DbNetwork::from_str(&network).map_err(GenericError::new)?,
             msg.token(),
         );
-        bus::register_account(self, &address, &network, &token, mode).await?;
+        bus::register_account(self, &address, &network, &token, mode, msg.batch()).await?;
 
         log::info!(
             "Initialised payment account. mode={:?}, address={}, driver={}, network={}, token={}",
@@ -320,6 +327,10 @@ Mind that to be eligible you have to run your app at least once on testnet -
     ) -> Result<String, GenericError> {
         log::info!("TRANSFER = Not Implemented: {:?}", msg);
         Ok("NOT_IMPLEMENTED".to_string())
+    }
+
+    async fn transfer_fee(&self, _msg: TransferFee) -> Result<FeeResult, GenericError> {
+        Err(GenericError::new("NOT_IMPLEMENTED"))
     }
 
     async fn schedule_payment(

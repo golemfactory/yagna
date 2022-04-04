@@ -1,17 +1,19 @@
-use actix::{Actor, System};
-use actix_web::{middleware, web, App, HttpResponse, HttpServer};
-use futures::StreamExt;
-use rand::Rng;
 use std::collections::HashMap;
 use std::env;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
+
+use actix::{Actor, System};
+use actix_web::{middleware, web, App, HttpResponse, HttpServer};
+use futures::StreamExt;
+use rand::Rng;
 use tempdir::TempDir;
 use tokio::time::delay_for;
-use ya_agreement_utils::AgreementView;
 use ya_client_model::activity::TransferArgs;
+
+use ya_agreement_utils::AgreementView;
 use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::message::{Shutdown, ShutdownReason};
 use ya_exe_unit::service::transfer::{AbortTransfers, TransferResource, TransferService};

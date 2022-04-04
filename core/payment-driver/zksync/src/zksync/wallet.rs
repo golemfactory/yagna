@@ -24,6 +24,7 @@ use ya_payment_driver::{
     model::{AccountMode, Enter, Exit, GenericError, Init, PaymentDetails},
     utils as base_utils,
 };
+use ya_service_api::awc;
 
 // Local uses
 use crate::{
@@ -31,6 +32,8 @@ use crate::{
     zksync::{faucet, signer::YagnaEthSigner, utils},
     DEFAULT_NETWORK,
 };
+use std::time::Duration;
+use ya_payment_driver::model::{ExitFee, FeeResult};
 use zksync::zksync_types::tx::ChangePubKeyType;
 
 pub async fn account_balance(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
@@ -84,6 +87,23 @@ pub async fn fund(address: &str, network: Network) -> Result<(), GenericError> {
     Ok(())
 }
 
+pub async fn exit_fee(msg: &ExitFee) -> Result<FeeResult, GenericError> {
+    let network = msg
+        .network
+        .as_ref()
+        .map(AsRef::as_ref)
+        .unwrap_or(DEFAULT_NETWORK);
+    let network = Network::from_str(network).map_err(|e| GenericError::new(e))?;
+    let wallet = get_wallet(&msg.sender, network).await?;
+    let token = get_network_token(network, None);
+    let unlock_fee = get_unlock_fee(&wallet, &token).await?;
+    let withdraw_fee = get_withdraw_fee(&wallet, &token).await?;
+    Ok(FeeResult {
+        amount: utils::big_uint_to_big_dec(unlock_fee + withdraw_fee),
+        token,
+    })
+}
+
 pub async fn exit(msg: &Exit) -> Result<String, GenericError> {
     let network = msg.network().unwrap_or(DEFAULT_NETWORK.to_string());
     let network = Network::from_str(&network).map_err(|e| GenericError::new(e))?;
@@ -94,6 +114,16 @@ pub async fn exit(msg: &Exit) -> Result<String, GenericError> {
     let unlock_fee = get_unlock_fee(&wallet, &token).await?;
     let withdraw_fee = get_withdraw_fee(&wallet, &token).await?;
     let total_fee = unlock_fee + withdraw_fee;
+    if let Some(fee_limit_decimal) = msg.fee_limit() {
+        let fee_limit = utils::big_dec_to_big_uint(fee_limit_decimal.clone())?;
+        if total_fee > fee_limit {
+            return Err(GenericError::new(format!(
+                "minimum withdraw fees is {} {}",
+                utils::big_uint_to_big_dec(total_fee),
+                token
+            )));
+        }
+    }
     if balance < total_fee {
         return Err(GenericError::new(format!(
             "Not enough balance to exit. Minimum required balance to pay withdraw fees is {} {}",
@@ -235,12 +265,17 @@ struct TxRespObj {
 pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails, GenericError> {
     let provider_url = get_rpc_addr(network);
 
+    let client: awc::Client = awc::client_builder()
+        .await
+        .map_err(GenericError::new)?
+        .timeout(Duration::from_secs(300))
+        .finish();
+
     // HACK: Get the transaction data from v0.1 api
     let api_url = provider_url.replace("/jsrpc", "/api/v0.1");
     let req_url = format!("{}/transactions_all/{}", api_url, tx_hash);
     log::debug!("Request URL: {}", &req_url);
 
-    let client = awc::Client::new();
     let response = client
         .get(req_url)
         .send()

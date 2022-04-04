@@ -1,5 +1,6 @@
-use futures::channel::oneshot::Canceled;
 use std::net::{AddrParseError, IpAddr};
+
+use futures::channel::oneshot::Canceled;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {

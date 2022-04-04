@@ -2,21 +2,17 @@
 
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import pytest
 
-from goth.address import (
-    PROXY_HOST,
-    YAGNA_REST_URL,
-)
 from goth.configuration import load_yaml, Override
 from goth.node import node_environment
 from goth.runner import Runner
 from goth.runner.probe import RequestorProbe
 from ya_payment import InvoiceStatus
 
-from goth_tests.helpers.activity import wasi_exe_script, wasi_task_package
+from goth_tests.helpers.activity import wasi_task_package
 from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
 from goth_tests.helpers.probe import ProviderProbe
 

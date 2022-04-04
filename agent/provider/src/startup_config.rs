@@ -20,6 +20,7 @@ use crate::cli::config::ConfigConfig;
 use crate::cli::exe_unit::ExeUnitsConfig;
 pub use crate::cli::preset::PresetsConfig;
 use crate::cli::profile::ProfileConfig;
+use crate::config::globals::Frequency;
 pub(crate) use crate::config::globals::GLOBALS_JSON;
 use crate::execution::{ExeUnitsRegistry, TaskRunnerConfig};
 use crate::market::config::MarketConfig;
@@ -127,6 +128,9 @@ pub struct NodeConfig {
     /// with other identifiers than selected. Useful for test purposes.
     #[structopt(long, env = "SUBNET")]
     pub subnet: Option<String>,
+
+    #[structopt(long, env = "SETTLEMENT_FREQUENCY")]
+    pub settlement_frequency: Option<Frequency>,
 
     #[structopt(flatten)]
     pub account: ReceiverAccount,

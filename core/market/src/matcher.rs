@@ -1,17 +1,23 @@
-use actix::prelude::*;
-use chrono::{TimeZone, Utc};
-use metrics::counter;
 use std::str::FromStr;
 use std::sync::Arc;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
+use actix::prelude::*;
+use chrono::{TimeZone, Utc};
+use futures::FutureExt;
+use metrics::counter;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use ya_client::model::market::{NewDemand, NewOffer};
+
+use error::{MatcherError, MatcherInitError, QueryOfferError, QueryOffersError};
+use resolver::Resolver;
+use store::SubscriptionStore;
 use ya_service_api_web::middleware::Identity;
 use ya_utils_actix::deadline_checker::{
     bind_deadline_reaction, DeadlineChecker, StopTracking, TrackDeadline,
 };
 
 use crate::config::Config;
+use crate::db::dao::{DemandDao, DemandState};
 use crate::db::model::{Demand, Offer, SubscriptionId};
 use crate::identity::IdentityApi;
 use crate::protocol::discovery::{builder::DiscoveryBuilder, Discovery};
@@ -21,12 +27,6 @@ pub mod error;
 pub(crate) mod handlers;
 pub(crate) mod resolver;
 pub(crate) mod store;
-
-use crate::db::dao::{DemandDao, DemandState};
-use error::{MatcherError, MatcherInitError, QueryOfferError, QueryOffersError};
-use futures::FutureExt;
-use resolver::Resolver;
-use store::SubscriptionStore;
 
 /// Stores proposal generated from resolver.
 #[derive(Debug)]

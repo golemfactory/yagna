@@ -2,10 +2,12 @@ use std::hash::Hash;
 use std::mem;
 use std::ptr;
 use std::sync::{Arc, Mutex};
+
 use thiserror::Error;
 use winapi::shared::minwindef::{DWORD, LPDWORD, LPVOID};
 use winapi::shared::ntdef::{HANDLE, NULL};
 use winapi::um;
+use winapi::um::handleapi::INVALID_HANDLE_VALUE;
 
 lazy_static::lazy_static! {
     static ref JOB_OBJECT: Arc<Mutex<JobObject>> = {
@@ -182,8 +184,11 @@ impl JobObject {
 
 impl Drop for JobObject {
     fn drop(&mut self) {
-        if unsafe { um::handleapi::CloseHandle(self.handle) } == 0 {
-            log::error!("{:?}", SystemError::last());
+        let handle = mem::replace(&mut self.handle, INVALID_HANDLE_VALUE);
+        if handle != INVALID_HANDLE_VALUE {
+            if unsafe { um::handleapi::CloseHandle(self.handle) } == 0 {
+                log::error!("{:?}", SystemError::last());
+            }
         }
     }
 }

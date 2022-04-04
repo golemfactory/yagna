@@ -1,5 +1,6 @@
-use rand::seq::SliceRandom;
 use std::time::Duration;
+
+use rand::seq::SliceRandom;
 
 use ya_market::assert_err_eq;
 use ya_market::testing::{

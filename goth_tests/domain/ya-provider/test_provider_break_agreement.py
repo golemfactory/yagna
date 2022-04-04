@@ -6,15 +6,9 @@ from typing import List, Tuple
 
 import pytest
 
-from goth.address import (
-    PROXY_HOST,
-    YAGNA_REST_URL,
-)
 from goth.configuration import load_yaml, Override, Configuration
 from goth.node import node_environment
 from goth.runner import Runner
-from goth.runner.container.payment import PaymentIdPool
-from goth.runner.container.yagna import YagnaContainerConfig
 from goth.runner.probe import RequestorProbe
 
 from goth_tests.helpers.activity import run_activity, wasi_exe_script, wasi_task_package

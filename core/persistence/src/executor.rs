@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use diesel::connection::SimpleConnection;
 use diesel::migration::RunMigrationsError;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};

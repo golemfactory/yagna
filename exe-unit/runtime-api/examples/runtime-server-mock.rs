@@ -70,7 +70,7 @@ impl EventMock {
     }
 
     fn get_last_status(&self) -> ProcessStatus {
-        self.0.lock().unwrap().clone()
+        ProcessStatus::clone(&self.0.lock().unwrap())
     }
 }
 

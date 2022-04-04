@@ -1,4 +1,5 @@
 use std::time::Duration;
+
 use structopt::StructOpt;
 
 #[derive(StructOpt, Clone)]

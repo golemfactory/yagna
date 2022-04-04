@@ -2,6 +2,7 @@ use std::env;
 use std::fs::OpenOptions;
 use std::io::{ErrorKind, Read};
 use std::path::Path;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -12,7 +13,6 @@ use structopt::StructOpt;
 use tempdir::TempDir;
 use url::Url;
 
-use std::rc::Rc;
 use ya_transfer::error::{Error, HttpError};
 use ya_transfer::*;
 

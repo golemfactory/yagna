@@ -1,3 +1,9 @@
+use std::collections::HashMap;
+use std::env;
+use std::fs::OpenOptions;
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
+
 use actix::{Actor, Addr, System};
 use actix_web::{middleware, web, App, HttpResponse, HttpServer};
 use futures::StreamExt;
@@ -5,14 +11,10 @@ use rand::Rng;
 use serde_json::Value;
 use sha3::digest::generic_array::GenericArray;
 use sha3::Digest;
-use std::collections::HashMap;
-use std::env;
-use std::fs::OpenOptions;
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
 use tempdir::TempDir;
-use ya_agreement_utils::AgreementView;
 use ya_client_model::activity::TransferArgs;
+
+use ya_agreement_utils::AgreementView;
 use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::error::Error;
 use ya_exe_unit::service::transfer::{AddVolumes, DeployImage, TransferResource, TransferService};

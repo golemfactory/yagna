@@ -1,3 +1,5 @@
+use std::path::{Path, PathBuf};
+
 use actix::prelude::*;
 use actix_web_actors::ws;
 use actix_web_actors::ws::Frame;
@@ -5,7 +7,6 @@ use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
 use sha3::digest::generic_array::GenericArray;
 use sha3::Digest;
-use std::path::{Path, PathBuf};
 use structopt::StructOpt;
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};

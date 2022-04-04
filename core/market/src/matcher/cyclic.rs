@@ -1,12 +1,13 @@
 //! Cyclic methods for Matcher spawned after binding to GSB
+use std::collections::HashSet;
+use std::hash::Hash;
+use std::time::Instant;
+
 use metrics::{counter, timing};
 use rand::seq::IteratorRandom;
 use rand::Rng;
-use std::collections::HashSet;
-use std::hash::Hash;
 
 use super::Matcher;
-use std::time::Instant;
 
 pub(super) async fn bcast_offers(matcher: Matcher) {
     if matcher.config.discovery.max_bcasted_offers <= 0 {
@@ -135,9 +136,11 @@ async fn wait_random_interval(mean_interval: std::time::Duration) {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::db::model::SubscriptionId;
     use std::str::FromStr;
+
+    use crate::db::model::SubscriptionId;
+
+    use super::*;
 
     #[test]
     fn test_randomize_cap_0() {

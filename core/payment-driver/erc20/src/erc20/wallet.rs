@@ -212,7 +212,22 @@ pub async fn send_transactions(
     // TODO: Use batch sending?
     for tx in txs {
         let mut raw_tx: YagnaRawTransaction =
-            serde_json::from_str(&tx.encoded).map_err(GenericError::new)?;
+            match serde_json::from_str::<YagnaRawTransaction>(&tx.encoded) {
+                Ok(raw_tx) => raw_tx,
+                Err(err) => {
+                    log::error!("Error during serialization of json: {:?}", err);
+                    //handle problem when deserializing transaction
+                    dao.transaction_confirmed_and_failed(
+                        &tx.tx_id,
+                        "",
+                        None,
+                        "Json parse failed, unrecoverable error",
+                    )
+                    .await;
+                    continue;
+                }
+            };
+
         let address = str_to_addr(&tx.sender)?;
 
         let new_gas_price = if let Some(current_gas_price) = tx.current_gas_price {
@@ -268,17 +283,33 @@ pub async fn send_transactions(
             Err(e) => {
                 log::error!("Error sending transaction: {:?}", e);
                 if e.to_string().contains("nonce too low") {
-                    log::error!("Nonce too low: {:?}", e);
-                    dao.transaction_failed_with_nonce_too_low(&tx.tx_id, e.to_string().as_str())
+                    if tx.tmp_onchain_txs.map(|t| t.len()).unwrap_or(0) > 2 && tx.resent_times < 5 {
+                        //if tmp on-chain tx transactions exist give it a chance but marking it as failed sent
+                        dao.transaction_failed_send(
+                            &tx.tx_id,
+                            tx.resent_times + 1,
+                            e.to_string().as_str(),
+                        )
                         .await;
+                        continue;
+                    } else {
+                        //if trying to sent transaction too much times just end with unrecoverable error
+                        log::error!("Nonce too low: {:?}", e);
+                        dao.transaction_failed_with_nonce_too_low(
+                            &tx.tx_id,
+                            e.to_string().as_str(),
+                        )
+                        .await;
+                        continue;
+                    }
                 }
                 if e.to_string().contains("already known") {
                     log::error!("Already known: {:?}. Send transaction with higher gas to get from this error loop. (resent won't fix anything)", e);
                     dao.retry_send_transaction(&tx.tx_id, true).await;
-                    return Ok(());
+                    continue;
                 }
 
-                dao.transaction_failed_send(&tx.tx_id, e.to_string().as_str())
+                dao.transaction_failed_send(&tx.tx_id, tx.resent_times, e.to_string().as_str())
                     .await;
             }
         }

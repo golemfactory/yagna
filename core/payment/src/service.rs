@@ -41,6 +41,7 @@ mod local {
             .bind_with_processor(get_accounts)
             .bind_with_processor(validate_allocation)
             .bind_with_processor(get_drivers)
+            .bind_with_processor(build_payments)
             .bind_with_processor(shut_down);
 
         // Initialize counters to 0 value. Otherwise they won't appear on metrics endpoint
@@ -163,6 +164,7 @@ mod local {
             driver,
             network,
             token,
+            since,
         } = msg;
 
         let (network, network_details) = processor
@@ -184,14 +186,14 @@ mod local {
 
         let incoming_fut = async {
             db.as_dao::<AgreementDao>()
-                .incoming_transaction_summary(platform.clone(), address.clone())
+                .incoming_transaction_summary(platform.clone(), address.clone(), since)
                 .await
         }
         .map_err(GenericError::new);
 
         let outgoing_fut = async {
             db.as_dao::<AgreementDao>()
-                .outgoing_transaction_summary(platform.clone(), address.clone())
+                .outgoing_transaction_summary(platform.clone(), address.clone(), since)
                 .await
         }
         .map_err(GenericError::new);
@@ -298,6 +300,15 @@ mod local {
         msg: GetDrivers,
     ) -> Result<HashMap<String, DriverDetails>, NoError> {
         Ok(processor.lock().await.get_drivers().await)
+    }
+
+    async fn build_payments(
+        db: DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        _caller: String,
+        msg: BuildPayments,
+    ) -> Result<String, NoError> {
+        todo!()
     }
 
     async fn shut_down(
@@ -700,6 +711,7 @@ mod public {
         let platform = payment.payment_platform.clone();
         let amount = payment.amount.clone();
         let num_paid_invoices = payment.agreement_payments.len() as u64;
+        let payment_id = payment.payment_id.clone();
         match processor
             .lock()
             .await
@@ -711,13 +723,16 @@ mod public {
                 counter!("payment.invoices.provider.paid", num_paid_invoices);
                 Ok(Ack {})
             }
-            Err(e) => match e {
-                VerifyPaymentError::ConfirmationEncoding => {
-                    Err(SendError::BadRequest(e.to_string()))
+            Err(e) => {
+                log::error!("verify_payment payment {} failed {:?}", payment_id, e);
+                match e {
+                    VerifyPaymentError::ConfirmationEncoding => {
+                        Err(SendError::BadRequest(e.to_string()))
+                    }
+                    VerifyPaymentError::Validation(e) => Err(SendError::BadRequest(e)),
+                    _ => Err(SendError::ServiceError(e.to_string())),
                 }
-                VerifyPaymentError::Validation(e) => Err(SendError::BadRequest(e)),
-                _ => Err(SendError::ServiceError(e.to_string())),
-            },
+            }
         }
     }
 }
