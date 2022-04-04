@@ -28,7 +28,7 @@ libproc = "0.7"
 winapi = { version = "0.3.8", features = ["jobapi2", "processthreadsapi"] }
 
 [dependencies]
-ya-agreement-utils = { version = "^0.2"}
+ya-agreement-utils = { version = "^0.3" }
 ya-client-model = "0.4"
 ya-compile-time-utils = "0.2"
 ya-core-model = { version = "^0.6", features = ["activity", "appkey"] }
