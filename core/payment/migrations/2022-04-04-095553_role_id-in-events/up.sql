@@ -3,7 +3,7 @@ DROP VIEW pay_debit_note_event_read;
 
 CREATE VIEW pay_debit_note_event_read AS
 SELECT
-    dn.role_id,
+    dn.role,
     dne.debit_note_id,
     dne.owner_id,
     dne.event_type,

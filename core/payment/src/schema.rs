@@ -91,6 +91,7 @@ table! {
 
 table! {
     pay_debit_note_event_read (debit_note_id, event_type) {
+        role -> Text,
         debit_note_id -> Text,
         owner_id -> Text,
         event_type -> Text,
