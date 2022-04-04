@@ -2,6 +2,7 @@ use std::sync::{Arc, RwLock};
 
 use ya_core_model::net::local::{BindBroadcastError, BroadcastMessage, SendBroadcastMessage};
 use ya_core_model::{identity, NodeId};
+use ya_service_api_interfaces::Service;
 use ya_service_bus::{Error, RpcEndpoint, RpcMessage};
 
 use crate::config::{Config, NetType};
@@ -35,6 +36,10 @@ lazy_static::lazy_static! {
     pub(crate) static ref NET_TYPE: Arc<RwLock<NetType>> = Default::default();
 }
 
+impl Service for Net {
+    type Cli = crate::cli::NetCommand;
+}
+
 impl Net {
     pub async fn gsb<Context>(ctx: Context) -> anyhow::Result<()> {
         let config = Config::from_env()?;
@@ -44,8 +49,27 @@ impl Net {
         }
 
         match &config.net_type {
-            NetType::Central => crate::central::Net::gsb(ctx, config).await,
-            NetType::Hybrid => crate::hybrid::Net::gsb(ctx, config).await,
+            NetType::Central => {
+                crate::central::cli::bind_service();
+                crate::central::Net::gsb(ctx, config).await
+            }
+            NetType::Hybrid => {
+                crate::hybrid::cli::bind_service();
+                crate::hybrid::Net::gsb(ctx, config).await
+            }
+        }
+    }
+
+    pub async fn shutdown() -> anyhow::Result<()> {
+        let config = Config::from_env()?;
+
+        {
+            (*NET_TYPE.write().unwrap()) = config.net_type.clone();
+        }
+
+        match &config.net_type {
+            NetType::Central => Ok(()),
+            NetType::Hybrid => crate::hybrid::Net::shutdown().await,
         }
     }
 }

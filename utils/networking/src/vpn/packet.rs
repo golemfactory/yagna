@@ -1,10 +1,9 @@
 #![allow(unused)]
 
-use std::convert::TryFrom;
-use std::ops::Deref;
-
 use crate::vpn::packet::field::*;
 use crate::vpn::{Error, Protocol};
+use std::convert::TryFrom;
+use std::ops::Deref;
 
 pub const ETHERNET_HDR_SIZE: usize = 14;
 

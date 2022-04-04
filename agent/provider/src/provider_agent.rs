@@ -69,7 +69,7 @@ pub struct ProviderAgent {
     hardware: hardware::Manager,
     accounts: Vec<AccountView>,
     log_handler: LoggerHandle,
-    network: NetworkName,
+    networks: Vec<NetworkName>,
 }
 
 impl ProviderAgent {
@@ -128,13 +128,18 @@ impl ProviderAgent {
         args.runner.session_id = args.market.session_id.clone();
         args.payment.session_id = args.market.session_id.clone();
 
-        let network = args.node.account.network.clone();
-        let net_color = match network {
-            NetworkName::Mainnet => yansi::Color::Magenta,
-            NetworkName::Rinkeby => yansi::Color::Cyan,
-            _ => yansi::Color::Red,
-        };
-        log::info!("Using payment network: {}", net_color.paint(&network));
+        let networks = args.node.account.networks.clone();
+        for n in networks.iter() {
+            let net_color = match n {
+                NetworkName::Mainnet => yansi::Color::Magenta,
+                NetworkName::Polygon => yansi::Color::Magenta,
+                NetworkName::Rinkeby => yansi::Color::Cyan,
+                NetworkName::Mumbai => yansi::Color::Cyan,
+                NetworkName::Goerli => yansi::Color::Cyan,
+                _ => yansi::Color::Red,
+            };
+            log::info!("Using payment network: {}", net_color.paint(&n));
+        }
         let mut globals = GlobalsManager::try_new(&config.globals_file, args.node)?;
         globals.spawn_monitor(&config.globals_file)?;
         let mut presets = PresetManager::load_or_create(&config.presets_file)?;
@@ -157,7 +162,7 @@ impl ProviderAgent {
             hardware,
             accounts,
             log_handler,
-            network,
+            networks,
         })
     }
 
@@ -180,10 +185,7 @@ impl ProviderAgent {
 
         for preset in presets {
             let pricing_model: Box<dyn PricingOffer> = match preset.pricing_model.as_str() {
-                "linear" => match std::env::var("DEBIT_NOTE_INTERVAL") {
-                    Ok(val) => Box::new(LinearPricingOffer::default().interval(val.parse()?)),
-                    Err(_) => Box::new(LinearPricingOffer::default()),
-                },
+                "linear" => Box::new(LinearPricingOffer::default()),
                 other => return Err(anyhow!("Unsupported pricing model: {}", other)),
             };
             let mut offer: OfferTemplate = offer_templates
@@ -247,18 +249,18 @@ impl ProviderAgent {
         }
     }
 
-    fn accounts(&self, network: &NetworkName) -> anyhow::Result<Vec<AccountView>> {
+    fn accounts(&self, networks: &Vec<NetworkName>) -> anyhow::Result<Vec<AccountView>> {
         let globals = self.globals.get_state();
         if let Some(address) = &globals.account {
             log::info!(
-                "Filtering payment accounts by address={} and network={}",
+                "Filtering payment accounts by address={} and networks={:?}",
                 address,
-                network
+                networks,
             );
             let accounts: Vec<AccountView> = self
                 .accounts
                 .iter()
-                .filter(|acc| &acc.address == address && &acc.network == network)
+                .filter(|acc| &acc.address == address && networks.contains(&acc.network))
                 .cloned()
                 .collect();
 
@@ -268,21 +270,21 @@ impl ProviderAgent {
                     \t`yagna payment init --receiver --network {} --account {}`\n\
                     for all drivers you want to use.",
                     address,
-                    network,
+                    networks[0],
                     address,
                 )
             }
 
             Ok(accounts)
         } else {
-            log::debug!("Filtering payment accounts by network={}", network);
+            log::debug!("Filtering payment accounts by networks={:?}", networks);
             let accounts: Vec<AccountView> = self
                 .accounts
                 .iter()
                 // FIXME: this is dirty fix -- we can get more that one address from this filter
                 // FIXME: use /me endpoint and filter out only accounts bound to given app-key
                 // FIXME: or introduce param to getProviderAccounts to filter out external account above
-                .filter(|acc| &acc.network == network)
+                .filter(|acc| networks.contains(&acc.network))
                 .cloned()
                 .collect();
 
@@ -291,7 +293,7 @@ impl ProviderAgent {
                     "Default payment account not initialized. Please run\n\
                     \t`yagna payment init --receiver --network {}`\n\
                     for all drivers you want to use.",
-                    network,
+                    networks[0],
                 )
             }
 
@@ -469,7 +471,7 @@ impl Handler<CreateOffers> for ProviderAgent {
         let runner = self.runner.clone();
         let market = self.market.clone();
         let node_info = self.create_node_info();
-        let accounts = match self.accounts(&self.network) {
+        let accounts = match self.accounts(&self.networks) {
             Ok(acc) => acc,
             Err(e) => return future::err(e).boxed_local(),
         };

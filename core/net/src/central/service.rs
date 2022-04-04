@@ -6,12 +6,13 @@ use actix_rt::Arbiter;
 use futures::channel::oneshot;
 use futures::prelude::*;
 use tokio::time::{Duration, Instant};
+use ya_sb_proto::codec::{GsbMessage, ProtocolError};
 
 use ya_core_model::net;
 use ya_core_model::net::local::{BindBroadcastError, SendBroadcastMessage, SendBroadcastStub};
 use ya_core_model::net::{local as local_net, net_service};
 use ya_core_model::NodeId;
-use ya_service_bus::connection::ClientInfo;
+use ya_service_bus::connection::{CallRequestHandler, ClientInfo, ConnectionRef};
 use ya_service_bus::{
     connection, serialization, typed as bus, untyped as local_bus, Error, RpcEndpoint, RpcMessage,
 };
@@ -77,9 +78,11 @@ pub async fn bind_remote(
         let bcast = bcast.clone();
 
         move |caller: String, topic: String, msg: Vec<u8>| {
-            let endpoints = bcast.resolve(&topic);
             let msg: Rc<[u8]> = msg.into();
+            let bcast = bcast.clone();
+
             Arbiter::spawn(async move {
+                let endpoints = bcast.resolve(&topic).await;
                 log::trace!("Received broadcast to topic {} from [{}].", &topic, &caller);
                 for endpoint in endpoints {
                     let addr = format!("{}/{}", endpoint, bcast_service_id);
@@ -103,97 +106,11 @@ pub async fn bind_remote(
         log::info!("network service bound at: {} under: {}", hub_addr, addr);
     }
 
-    // bind /net on my local bus and forward all calls to remote bus under /net
-    {
-        let log_message = |caller: &str, addr: &str, label: &str| {
-            log::trace!(
-                "Sending {} message to hub. Called by: {}, addr: {}.",
-                label,
-                net_service(&caller),
-                addr
-            );
-        };
+    bind_net_handler(net::BUS_ID, central_bus.clone(), default_node_id);
+    bind_net_handler(net::BUS_ID_UDP, central_bus.clone(), default_node_id);
 
-        // `caller` is usually "local", so we replace it with our default node id
-        let central_bus_rpc = central_bus.clone();
-        let default_caller_rpc = default_node_id.to_string();
-        let rpc = move |_caller: &str, addr: &str, msg: &[u8]| {
-            let caller = default_caller_rpc.clone();
-            log_message("rpc", &caller, addr);
-            let addr = addr.to_string();
-            central_bus_rpc
-                .call(caller, addr.clone(), Vec::from(msg))
-                .map_err(|e| Error::RemoteError(addr, e.to_string()))
-        };
-
-        let central_bus_stream = central_bus.clone();
-        let default_caller_stream = default_node_id.to_string();
-        let stream = move |_caller: &str, addr: &str, msg: &[u8]| {
-            let caller = default_caller_stream.clone();
-            log_message("stream", &caller, addr);
-            let addr = addr.to_string();
-            central_bus_stream
-                .call_streaming(caller, addr.clone(), Vec::from(msg))
-                .map_err(move |e| Error::RemoteError(addr.clone(), e.to_string()))
-        };
-
-        local_bus::subscribe(net::BUS_ID, rpc, stream);
-    }
-
-    // bind /from/<caller>/to/<addr> on my local bus and forward all calls to remote bus under /net
-    {
-        let nodes_rpc = nodes.clone();
-        let central_bus_rpc = central_bus.clone();
-        let rpc = move |_caller: &str, addr: &str, msg: &[u8]| {
-            let (from_node, to_addr) = match parse_from_addr(addr) {
-                Ok(v) => v,
-                Err(e) => return future::err(Error::GsbBadRequest(e.to_string())).left_future(),
-            };
-            log::trace!("{} is calling (rpc) {}", from_node, to_addr);
-            if !nodes_rpc.contains(&from_node) {
-                return future::err(Error::GsbBadRequest(format!(
-                    "caller: {:?} is not on src list: {:?}",
-                    from_node, nodes_rpc,
-                )))
-                .left_future();
-            }
-
-            central_bus_rpc
-                .call(from_node.to_string(), to_addr.clone(), Vec::from(msg))
-                .map_err(|e| Error::RemoteError(to_addr, e.to_string()))
-                .right_future()
-        };
-
-        let nodes_stream = nodes.clone();
-        let central_bus_stream = central_bus.clone();
-        let stream = move |_caller: &str, addr: &str, msg: &[u8]| {
-            let (from_node, to_addr) = match parse_from_addr(addr) {
-                Ok(v) => v,
-                Err(e) => {
-                    let err = Error::GsbBadRequest(e.to_string());
-                    return stream::once(async move { Err(err) })
-                        .boxed_local()
-                        .left_stream();
-                }
-            };
-            log::trace!("{} is calling (stream) {}", from_node, to_addr);
-            if !nodes_stream.contains(&from_node) {
-                let err = Error::GsbBadRequest(format!(
-                    "caller: {:?} is not on src list: {:?}",
-                    from_node, nodes_stream,
-                ));
-                return stream::once(async move { Err(err) })
-                    .boxed_local()
-                    .left_stream();
-            }
-
-            central_bus_stream
-                .call_streaming(from_node.to_string(), to_addr, Vec::from(msg))
-                .right_stream()
-        };
-
-        local_bus::subscribe("/from", rpc, stream);
-    }
+    bind_from_handler("/from", central_bus.clone(), nodes.clone());
+    bind_from_handler("/udp/from", central_bus.clone(), nodes.clone());
 
     // Subscribe broadcast on remote
     {
@@ -202,10 +119,11 @@ pub async fn bind_remote(
 
         let _ = bus::bind(local_net::BUS_ID, move |subscribe: local_net::Subscribe| {
             let topic = subscribe.topic().to_owned();
-            let (is_new, id) = bcast.add(subscribe);
+            let bcast = bcast.clone();
             let central_bus = central_bus.clone();
             async move {
                 log::debug!("Subscribe topic {} on central bus.", topic);
+                let (is_new, id) = bcast.add(subscribe).await;
                 if is_new {
                     if let Err(e) = central_bus.subscribe(topic.clone()).await {
                         log::error!("fail to subscribe to: {}, {}", topic, e);
@@ -258,6 +176,135 @@ pub async fn bind_remote(
     }
 
     Ok(done_rx)
+}
+
+fn strip_udp(addr: &str) -> &str {
+    // Central NET doesn't support unreliable transport, so we just remove prefix
+    // and use reliable protocol.
+    match addr.strip_prefix("/udp") {
+        None => addr,
+        Some(wo_prefix) => wo_prefix,
+    }
+}
+
+fn bind_net_handler<Transport, H>(
+    addr: &str,
+    central_bus: ConnectionRef<Transport, H>,
+    default_node_id: NodeId,
+) where
+    Transport: Sink<GsbMessage, Error = ProtocolError>
+        + Stream<Item = Result<GsbMessage, ProtocolError>>
+        + Unpin
+        + 'static,
+    H: CallRequestHandler + Unpin + 'static,
+{
+    // bind /net on my local bus and forward all calls to remote bus under /net
+    let log_message = |caller: &str, addr: &str, label: &str| {
+        log::trace!(
+            "Sending {} message to hub. Called by: {}, addr: {}.",
+            label,
+            net_service(&caller),
+            addr
+        );
+    };
+
+    // `caller` is usually "local", so we replace it with our default node id
+    let central_bus_rpc = central_bus.clone();
+    let default_caller_rpc = default_node_id.to_string();
+    let rpc = move |_caller: &str, addr: &str, msg: &[u8]| {
+        let caller = default_caller_rpc.clone();
+        let addr = strip_udp(addr);
+
+        log_message("rpc", &caller, addr);
+        let addr = addr.to_string();
+        central_bus_rpc
+            .call(caller, addr.clone(), Vec::from(msg))
+            .map_err(|e| Error::RemoteError(addr, e.to_string()))
+    };
+
+    let central_bus_stream = central_bus.clone();
+    let default_caller_stream = default_node_id.to_string();
+    let stream = move |_caller: &str, addr: &str, msg: &[u8]| {
+        let caller = default_caller_stream.clone();
+        let addr = strip_udp(addr);
+
+        log_message("stream", &caller, addr);
+        let addr = addr.to_string();
+        central_bus_stream
+            .call_streaming(caller, addr.clone(), Vec::from(msg))
+            .map_err(move |e| Error::RemoteError(addr.clone(), e.to_string()))
+    };
+
+    local_bus::subscribe(addr, rpc, stream);
+}
+
+fn bind_from_handler<Transport, H>(
+    addr: &str,
+    central_bus: ConnectionRef<Transport, H>,
+    nodes: Vec<NodeId>,
+) where
+    Transport: Sink<GsbMessage, Error = ProtocolError>
+        + Stream<Item = Result<GsbMessage, ProtocolError>>
+        + Unpin
+        + 'static,
+    H: CallRequestHandler + Unpin + 'static,
+{
+    // bind /from/<caller>/to/<addr> on my local bus and forward all calls to remote bus under /net
+    let nodes_rpc = nodes.clone();
+    let central_bus_rpc = central_bus.clone();
+    let rpc = move |_caller: &str, addr: &str, msg: &[u8]| {
+        let addr = strip_udp(addr);
+
+        let (from_node, to_addr) = match parse_from_addr(addr) {
+            Ok(v) => v,
+            Err(e) => return future::err(Error::GsbBadRequest(e.to_string())).left_future(),
+        };
+        log::trace!("{} is calling (rpc) {}", from_node, to_addr);
+        if !nodes_rpc.contains(&from_node) {
+            return future::err(Error::GsbBadRequest(format!(
+                "caller: {:?} is not on src list: {:?}",
+                from_node, nodes_rpc,
+            )))
+            .left_future();
+        }
+
+        central_bus_rpc
+            .call(from_node.to_string(), to_addr.clone(), Vec::from(msg))
+            .map_err(|e| Error::RemoteError(to_addr, e.to_string()))
+            .right_future()
+    };
+
+    let nodes_stream = nodes.clone();
+    let central_bus_stream = central_bus.clone();
+    let stream = move |_caller: &str, addr: &str, msg: &[u8]| {
+        let addr = strip_udp(addr);
+
+        let (from_node, to_addr) = match parse_from_addr(addr) {
+            Ok(v) => v,
+            Err(e) => {
+                let err = Error::GsbBadRequest(e.to_string());
+                return stream::once(async move { Err(err) })
+                    .boxed_local()
+                    .left_stream();
+            }
+        };
+        log::trace!("{} is calling (stream) {}", from_node, to_addr);
+        if !nodes_stream.contains(&from_node) {
+            let err = Error::GsbBadRequest(format!(
+                "caller: {:?} is not on src list: {:?}",
+                from_node, nodes_stream,
+            ));
+            return stream::once(async move { Err(err) })
+                .boxed_local()
+                .left_stream();
+        }
+
+        central_bus_stream
+            .call_streaming(from_node.to_string(), to_addr, Vec::from(msg))
+            .right_stream()
+    };
+
+    local_bus::subscribe(addr, rpc, stream);
 }
 
 async fn unbind_remote(nodes: Vec<NodeId>) {
@@ -390,7 +437,10 @@ pub struct Net;
 impl Net {
     pub async fn gsb<Context>(_: Context, _config: Config) -> anyhow::Result<()> {
         let (default_id, ids) = crate::service::identities().await?;
-        log::info!("using default identity as network id: {:?}", default_id);
+        log::info!(
+            "CENTRAL_NET - Using default identity as network id: {:?}",
+            default_id
+        );
 
         let client_info = ClientInfo::new("sb-client-net");
         let ids_clone = ids.clone();

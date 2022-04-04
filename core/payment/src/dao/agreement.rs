@@ -5,7 +5,7 @@ use crate::schema::pay_activity::dsl as activity_dsl;
 use crate::schema::pay_agreement::dsl;
 use crate::schema::pay_invoice::dsl as invoice_dsl;
 use bigdecimal::{BigDecimal, Zero};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use std::collections::HashMap;
 use ya_client_model::market::Agreement;
@@ -267,28 +267,23 @@ impl<'a> AgreementDao<'a> {
         &self,
         platform: String,
         payee_addr: String,
-        since: Option<DateTime<Utc>>,
+        after_timestamp: NaiveDateTime,
     ) -> DbResult<StatusNotes> {
         readonly_transaction(self.pool, move |conn| {
-            let last_days = chrono::Utc::now() - chrono::Duration::days(1);
-            let invoices: Vec<Invoice> =
-                crate::dao::invoice::get_for_payee(conn, &payee_addr, Some(last_days.naive_utc()))?;
-
-            let query = dsl::pay_agreement
+            let agreements: Vec<ReadObj> = dsl::pay_agreement
                 .filter(dsl::role.eq(Role::Provider))
                 .filter(dsl::payment_platform.eq(platform))
-                .filter(dsl::payee_addr.eq(payee_addr));
-
-            let agreements: Vec<crate::models::agreement::ReadObj> = if let Some(last_days) = since
-            {
-                query
-                    .filter(dsl::created_ts.ge(last_days.naive_utc()))
-                    .get_results(conn)?
-            } else {
-                query.get_results(conn)?
-            };
-
-            Ok(make_summary2(agreements, invoices))
+                .filter(dsl::payee_addr.eq(payee_addr))
+                .filter(diesel::dsl::exists(
+                    invoice_dsl::pay_invoice
+                        .filter(invoice_dsl::agreement_id.eq(dsl::id))
+                        .filter(invoice_dsl::timestamp.gt(after_timestamp))
+                        .limit(1)
+                        .select(invoice_dsl::id),
+                ))
+                .select(crate::schema::pay_agreement::all_columns)
+                .get_results(conn)?;
+            Ok(make_summary(agreements))
         })
         .await
     }
@@ -298,20 +293,22 @@ impl<'a> AgreementDao<'a> {
         &self,
         platform: String,
         payer_addr: String,
-        since: Option<DateTime<Utc>>,
+        after_timestamp: NaiveDateTime,
     ) -> DbResult<StatusNotes> {
         readonly_transaction(self.pool, move |conn| {
-            let query = dsl::pay_agreement
+            let agreements: Vec<ReadObj> = dsl::pay_agreement
                 .filter(dsl::role.eq(Role::Requestor))
                 .filter(dsl::payment_platform.eq(platform))
-                .filter(dsl::payer_addr.eq(payer_addr));
-            let agreements: Vec<ReadObj> = if let Some(since) = since {
-                query
-                    .filter(dsl::created_ts.ge(since.naive_utc()))
-                    .get_results(conn)?
-            } else {
-                query.get_results(conn)?
-            };
+                .filter(dsl::payer_addr.eq(payer_addr))
+                .filter(diesel::dsl::exists(
+                    invoice_dsl::pay_invoice
+                        .filter(invoice_dsl::agreement_id.eq(dsl::id))
+                        .filter(invoice_dsl::timestamp.gt(after_timestamp))
+                        .limit(1)
+                        .select(invoice_dsl::id),
+                ))
+                .select(crate::schema::pay_agreement::all_columns)
+                .get_results(conn)?;
             Ok(make_summary(agreements))
         })
         .await
@@ -325,7 +322,7 @@ fn make_summary(agreements: Vec<ReadObj>) -> StatusNotes {
             requested: StatValue::new(agreement.total_amount_due),
             accepted: StatValue::new(agreement.total_amount_accepted),
             confirmed: StatValue::new(agreement.total_amount_paid),
-            overdue: None,
+            overdue: None
         })
         .sum()
 }

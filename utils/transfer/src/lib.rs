@@ -1,3 +1,12 @@
+mod archive;
+pub mod error;
+mod file;
+mod gftp;
+mod http;
+mod location;
+mod retry;
+mod traverse;
+
 use std::cell::RefCell;
 use std::pin::Pin;
 use std::rc::Rc;
@@ -13,10 +22,10 @@ use futures::task::{Context, Poll};
 use sha3::digest::DynDigest;
 use sha3::{Sha3_224, Sha3_256, Sha3_384, Sha3_512};
 use url::Url;
-use ya_client_model::activity::TransferArgs;
+
+use crate::error::Error;
 
 pub use crate::archive::{archive, extract, ArchiveFormat};
-use crate::error::Error;
 pub use crate::file::{DirTransferProvider, FileTransferProvider};
 pub use crate::gftp::GftpTransferProvider;
 pub use crate::http::HttpTransferProvider;
@@ -24,14 +33,7 @@ pub use crate::location::{TransferUrl, UrlExt};
 pub use crate::retry::Retry;
 pub use crate::traverse::PathTraverse;
 
-mod archive;
-pub mod error;
-mod file;
-mod gftp;
-mod http;
-mod location;
-mod retry;
-mod traverse;
+use ya_client_model::activity::TransferArgs;
 
 /// Transfers data from `stream` to a `TransferSink`
 pub async fn transfer<S, T>(stream: S, mut sink: TransferSink<T, Error>) -> Result<(), Error>

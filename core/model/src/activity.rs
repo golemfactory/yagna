@@ -2,17 +2,16 @@
 //!
 //! Top level objects constitutes public activity API.
 //! Local and Exeunit are in dedicated submodules.
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
-use serde::{Deserialize, Serialize};
+use crate::Role;
 use ya_client_model::activity::{
     ActivityState, ActivityUsage, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
     RuntimeEvent,
 };
 use ya_client_model::NodeId;
 use ya_service_bus::{RpcMessage, RpcStreamMessage};
-
-use crate::Role;
 
 /// Public Activity bus address.
 ///
@@ -278,11 +277,9 @@ impl RpcMessage for GetRunningCommand {
 ///
 /// Should be accessible only from local service bus (not via net ie. from remote hosts).
 pub mod local {
-    use std::collections::BTreeMap;
-
-    use chrono::{DateTime, Utc};
-
     use super::*;
+    use chrono::{DateTime, Utc};
+    use std::collections::BTreeMap;
 
     /// Local activity bus address.
     pub const BUS_ID: &str = "/local/activity";

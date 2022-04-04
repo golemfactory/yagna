@@ -1,23 +1,17 @@
-use std::str::FromStr;
-use std::sync::Arc;
-
 use actix::prelude::*;
 use chrono::{TimeZone, Utc};
-use futures::FutureExt;
 use metrics::counter;
+use std::str::FromStr;
+use std::sync::Arc;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
-use ya_client::model::market::{NewDemand, NewOffer};
 
-use error::{MatcherError, MatcherInitError, QueryOfferError, QueryOffersError};
-use resolver::Resolver;
-use store::SubscriptionStore;
+use ya_client::model::market::{NewDemand, NewOffer};
 use ya_service_api_web::middleware::Identity;
 use ya_utils_actix::deadline_checker::{
     bind_deadline_reaction, DeadlineChecker, StopTracking, TrackDeadline,
 };
 
 use crate::config::Config;
-use crate::db::dao::{DemandDao, DemandState};
 use crate::db::model::{Demand, Offer, SubscriptionId};
 use crate::identity::IdentityApi;
 use crate::protocol::discovery::{builder::DiscoveryBuilder, Discovery};
@@ -27,6 +21,12 @@ pub mod error;
 pub(crate) mod handlers;
 pub(crate) mod resolver;
 pub(crate) mod store;
+
+use crate::db::dao::{DemandDao, DemandState};
+use error::{MatcherError, MatcherInitError, QueryOfferError, QueryOffersError};
+use futures::FutureExt;
+use resolver::Resolver;
+use store::SubscriptionStore;
 
 /// Stores proposal generated from resolver.
 #[derive(Debug)]
@@ -234,12 +234,15 @@ impl Matcher {
         demand: &NewDemand,
         id: &Identity,
     ) -> Result<Demand, MatcherError> {
-        self.discovery.lazy_bind_gsb().await.map_or_else(
-            |e| {
-                log::warn!("Failed to subscribe to broadcasts. Error: {:?}.", e,);
-            },
-            |_| (),
-        );
+        if !self.discovery.re_broadcast_enabled() {
+            // If re-broadcasts are disabled, fallback to lazy broadcast binding
+            self.discovery.bind_gsb_broadcast().await.map_or_else(
+                |e| {
+                    log::warn!("Failed to subscribe to broadcasts. Error: {:?}.", e,);
+                },
+                |_| (),
+            );
+        }
         let demand = self.store.create_demand(id, demand).await?;
         self.resolver.receive(&demand);
 

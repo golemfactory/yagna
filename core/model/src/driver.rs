@@ -198,6 +198,7 @@ impl RpcMessage for Fund {
 }
 
 // ************************** INIT **************************
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum BatchMode {
     Manual {},

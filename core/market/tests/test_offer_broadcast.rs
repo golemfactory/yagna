@@ -1,9 +1,6 @@
-use std::str::FromStr;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
-
 use chrono::Utc;
 use futures::{channel::mpsc, prelude::*};
+use std::str::FromStr;
 use tokio::time::Duration;
 
 use ya_market::assert_err_eq;

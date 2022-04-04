@@ -1,5 +1,12 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
+use ethabi::Token;
 use lazy_static::lazy_static;
+use tokio::sync::RwLock;
+use uuid::Uuid;
 use web3::contract::{Contract, Options};
 use web3::transports::Http;
 use web3::types::{Bytes, Transaction, TransactionId, TransactionReceipt, H160, H256, U256, U64};
@@ -7,30 +14,97 @@ use web3::Web3;
 
 use ya_client_model::NodeId;
 use ya_payment_driver::db::models::{Network, TransactionEntity, TransactionStatus, TxType};
+use ya_payment_driver::utils::big_dec_to_u256;
 use ya_payment_driver::{bus, model::GenericError};
 
 use crate::erc20::transaction::YagnaRawTransaction;
 use crate::erc20::{config, eth_utils};
-use bigdecimal::BigDecimal;
-use ethabi::Token;
-use uuid::Uuid;
-use ya_payment_driver::utils::big_dec_to_u256;
 
-pub const POLYGON_PREFERRED_GAS_PRICES: [f64; 6] = [0.0, 10.01, 15.01, 20.01, 25.01, 30.01];
-pub const POLYGON_STARTING_GAS_PRICE: f64 = 10.01;
-pub const POLYGON_MAXIMUM_GAS_PRICE: f64 = 30.01;
+pub enum PolygonPriority {
+    PolygonPrioritySlow,
+    PolygonPriorityFast,
+    PolygonPriorityExpress,
+}
+
+pub enum PolygonGasPriceMethod {
+    PolygonGasPriceStatic,
+    PolygonGasPriceDynamic,
+}
+
+pub const POLYGON_PREFERRED_GAS_PRICES_SLOW: [f64; 6] = [0.0, 10.01, 15.01, 20.01, 25.01, 30.01];
+pub const POLYGON_PREFERRED_GAS_PRICES_FAST: [f64; 3] = [0.0, 30.01, 40.01];
+pub const POLYGON_PREFERRED_GAS_PRICES_EXPRESS: [f64; 3] = [0.0, 60.01, 100.01];
 
 lazy_static! {
     pub static ref GLM_FAUCET_GAS: U256 = U256::from(90_000);
     pub static ref GLM_TRANSFER_GAS: U256 = U256::from(55_000);
     pub static ref GLM_POLYGON_GAS_LIMIT: U256 = U256::from(100_000);
+    static ref WEB3_CLIENT_MAP: Arc<RwLock<HashMap<String, Web3<Http>>>> = Default::default();
 }
 const CREATE_FAUCET_FUNCTION: &str = "create";
 const BALANCE_ERC20_FUNCTION: &str = "balanceOf";
 const TRANSFER_ERC20_FUNCTION: &str = "transfer";
 
+pub fn get_polygon_starting_price() -> f64 {
+    match get_polygon_priority() {
+        PolygonPriority::PolygonPrioritySlow => POLYGON_PREFERRED_GAS_PRICES_SLOW[1],
+        PolygonPriority::PolygonPriorityFast => POLYGON_PREFERRED_GAS_PRICES_FAST[1],
+        PolygonPriority::PolygonPriorityExpress => POLYGON_PREFERRED_GAS_PRICES_EXPRESS[1],
+    }
+}
+
+pub fn get_polygon_maximum_price() -> f64 {
+    match get_polygon_gas_price_method() {
+        PolygonGasPriceMethod::PolygonGasPriceStatic => match get_polygon_priority() {
+            PolygonPriority::PolygonPrioritySlow => {
+                POLYGON_PREFERRED_GAS_PRICES_SLOW[POLYGON_PREFERRED_GAS_PRICES_SLOW.len() - 1]
+            }
+            PolygonPriority::PolygonPriorityFast => {
+                POLYGON_PREFERRED_GAS_PRICES_FAST[POLYGON_PREFERRED_GAS_PRICES_FAST.len() - 1]
+            }
+            PolygonPriority::PolygonPriorityExpress => {
+                POLYGON_PREFERRED_GAS_PRICES_EXPRESS[POLYGON_PREFERRED_GAS_PRICES_EXPRESS.len() - 1]
+            }
+        },
+        PolygonGasPriceMethod::PolygonGasPriceDynamic => get_polygon_max_gas_price_dynamic(),
+    }
+}
+
+pub fn get_polygon_max_gas_price_dynamic() -> f64 {
+    return std::env::var("POLYGON_MAX_GAS_PRICE_DYNAMIC")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(1000.0f64);
+}
+
+pub fn get_polygon_gas_price_method() -> PolygonGasPriceMethod {
+    match std::env::var("POLYGON_GAS_PRICE_METHOD")
+        .ok()
+        .map(|v| v.to_lowercase())
+        .as_ref()
+        .map(AsRef::as_ref) // Option<&str>
+    {
+        Some("static") => PolygonGasPriceMethod::PolygonGasPriceStatic,
+        Some("dynamic") => PolygonGasPriceMethod::PolygonGasPriceDynamic,
+        _ => PolygonGasPriceMethod::PolygonGasPriceDynamic,
+    }
+}
+
+pub fn get_polygon_priority() -> PolygonPriority {
+    match std::env::var("POLYGON_PRIORITY")
+        .unwrap_or("default".to_string())
+        .to_lowercase()
+        .as_str()
+    {
+        "slow" => PolygonPriority::PolygonPrioritySlow,
+        "fast" => PolygonPriority::PolygonPriorityFast,
+        "express" => PolygonPriority::PolygonPriorityExpress,
+        _ => PolygonPriority::PolygonPrioritySlow,
+    }
+}
+
 pub async fn get_glm_balance(address: H160, network: Network) -> Result<U256, GenericError> {
-    let client = get_client(network)?;
+    let client = get_client(network).await?;
     let env = get_env(network);
 
     let glm_contract = prepare_erc20_contract(&client, &env)?;
@@ -47,7 +121,7 @@ pub async fn get_glm_balance(address: H160, network: Network) -> Result<U256, Ge
 }
 
 pub async fn get_balance(address: H160, network: Network) -> Result<U256, GenericError> {
-    let client = get_client(network)?;
+    let client = get_client(network).await?;
     Ok(client
         .eth()
         .balance(address, None)
@@ -56,7 +130,7 @@ pub async fn get_balance(address: H160, network: Network) -> Result<U256, Generi
 }
 
 pub async fn get_next_nonce_pending(address: H160, network: Network) -> Result<U256, GenericError> {
-    let client = get_client(network)?;
+    let client = get_client(network).await?;
     let nonce = client
         .eth()
         .transaction_count(address, Some(web3::types::BlockNumber::Pending))
@@ -66,7 +140,7 @@ pub async fn get_next_nonce_pending(address: H160, network: Network) -> Result<U
 }
 
 pub async fn block_number(network: Network) -> Result<U64, GenericError> {
-    let client = get_client(network)?;
+    let client = get_client(network).await?;
     Ok(client
         .eth()
         .block_number()
@@ -80,7 +154,7 @@ pub async fn sign_faucet_tx(
     nonce: U256,
 ) -> Result<TransactionEntity, GenericError> {
     let env = get_env(network);
-    let client = get_client(network)?;
+    let client = get_client(network).await?;
     let contract = prepare_glm_faucet_contract(&client, &env)?;
     let contract = match contract {
         Some(c) => c,
@@ -109,7 +183,7 @@ pub async fn sign_faucet_tx(
         nonce,
         address,
         gas_price.to_string(),
-        gas_price.to_string(),
+        Some(gas_price.to_string()),
         GLM_FAUCET_GAS.as_u32() as i32,
         serde_json::to_string(&tx).map_err(GenericError::new)?,
         network,
@@ -140,7 +214,7 @@ pub async fn prepare_raw_transaction(
     gas_limit_override: Option<u32>,
 ) -> Result<YagnaRawTransaction, GenericError> {
     let env = get_env(network);
-    let client = get_client(network)?;
+    let client = get_client(network).await?;
     let contract = prepare_erc20_contract(&client, &env)?;
 
     let data = eth_utils::contract_encode(&contract, TRANSFER_ERC20_FUNCTION, (recipient, amount))
@@ -149,12 +223,22 @@ pub async fn prepare_raw_transaction(
     //get gas price from network in not provided
     let gas_price = match gas_price_override {
         Some(gas_price_new) => gas_price_new,
-        None => client.eth().gas_price().await.map_err(GenericError::new)?,
+        None => {
+            let small_gas_bump = U256::from(1000);
+            let mut gas_price_from_network =
+                client.eth().gas_price().await.map_err(GenericError::new)?;
+
+            //add small amount of gas to be first in queue
+            if gas_price_from_network / 1000 > small_gas_bump {
+                gas_price_from_network += small_gas_bump;
+            }
+            gas_price_from_network
+        }
     };
 
-    let gas_limit = match gas_limit_override {
-        Some(gas_limit_override) => U256::from(gas_limit_override),
-        None => *GLM_POLYGON_GAS_LIMIT,
+    let gas_limit = match network {
+        Network::Polygon => gas_limit_override.map_or(*GLM_POLYGON_GAS_LIMIT, |v| U256::from(v)),
+        _ => gas_limit_override.map_or(*GLM_TRANSFER_GAS, |v| U256::from(v)),
     };
 
     let tx = YagnaRawTransaction {
@@ -169,7 +253,7 @@ pub async fn prepare_raw_transaction(
 }
 
 pub async fn send_tx(signed_tx: Vec<u8>, network: Network) -> Result<H256, GenericError> {
-    let client = get_client(network)?;
+    let client = get_client(network).await?;
     let tx_hash = client
         .eth()
         .send_raw_transaction(Bytes::from(signed_tx))
@@ -240,12 +324,12 @@ pub async fn get_tx_on_chain_status(
 }
 
 //unused but tested that it is working for transfers
-pub fn decode_encoded_transaction_data(
+pub async fn decode_encoded_transaction_data(
     network: Network,
     encoded: &str,
 ) -> Result<(ethereum_types::Address, ethereum_types::U256), GenericError> {
     let env = get_env(network);
-    let client = get_client(network)?;
+    let client = get_client(network).await?;
     let contract = prepare_erc20_contract(&client, &env)?;
 
     let raw_tx: YagnaRawTransaction = serde_json::from_str(encoded).map_err(GenericError::new)?;
@@ -273,7 +357,7 @@ pub async fn get_tx_from_network(
     tx_hash: H256,
     network: Network,
 ) -> Result<Option<Transaction>, GenericError> {
-    let client = get_client(network)?;
+    let client = get_client(network).await?;
     let result = client
         .eth()
         .transaction(TransactionId::from(tx_hash))
@@ -286,7 +370,7 @@ pub async fn get_tx_receipt(
     tx_hash: H256,
     network: Network,
 ) -> Result<Option<TransactionReceipt>, GenericError> {
-    let client = get_client(network)?;
+    let client = get_client(network).await?;
     let result = client
         .eth()
         .transaction_receipt(tx_hash)
@@ -312,12 +396,23 @@ fn get_rpc_addr_from_env(network: Network) -> String {
     }
 }
 
-fn get_client(network: Network) -> Result<Web3<Http>, GenericError> {
+async fn get_client(network: Network) -> Result<Web3<Http>, GenericError> {
     let geth_addr = get_rpc_addr_from_env(network);
 
-    let transport = web3::transports::Http::new(&geth_addr).map_err(GenericError::new)?;
+    {
+        let client_map = WEB3_CLIENT_MAP.read().await;
+        if let Some(client) = client_map.get(&geth_addr).cloned() {
+            return Ok(client);
+        }
+    }
 
-    Ok(Web3::new(transport))
+    let transport = web3::transports::Http::new(&geth_addr).map_err(GenericError::new)?;
+    let client = Web3::new(transport);
+
+    let mut client_map = WEB3_CLIENT_MAP.write().await;
+    client_map.insert(geth_addr, client.clone());
+
+    Ok(client)
 }
 
 fn get_env(network: Network) -> config::EnvConfiguration {
@@ -371,7 +466,7 @@ pub fn create_dao_entity(
     nonce: U256,
     sender: H160,
     starting_gas_price: String,
-    max_gas_price: String,
+    max_gas_price: Option<String>,
     gas_limit: i32,
     encoded_raw_tx: String,
     network: Network,
@@ -388,7 +483,7 @@ pub fn create_dao_entity(
         time_last_action: current_naive_time,
         time_sent: None,
         time_confirmed: None,
-        max_gas_price: Some(max_gas_price),
+        max_gas_price,
         final_gas_used: None,
         amount_base: Some("0".to_string()),
         amount_erc20: amount.as_ref().map(|a| big_dec_to_u256(a).to_string()),
@@ -411,4 +506,10 @@ pub fn get_max_gas_costs(db_tx: &TransactionEntity) -> Result<U256, GenericError
     let raw_tx: YagnaRawTransaction =
         serde_json::from_str(&db_tx.encoded).map_err(GenericError::new)?;
     Ok(raw_tx.gas_price * raw_tx.gas)
+}
+
+pub fn get_gas_price_from_db_tx(db_tx: &TransactionEntity) -> Result<U256, GenericError> {
+    let raw_tx: YagnaRawTransaction =
+        serde_json::from_str(&db_tx.encoded).map_err(GenericError::new)?;
+    Ok(raw_tx.gas_price)
 }

@@ -174,6 +174,7 @@ async fn main() -> anyhow::Result<()> {
         agreement,
         work_dir,
         cache_dir,
+        runtime_args: Default::default(),
         #[cfg(feature = "sgx")]
         crypto: init_crypto()?,
     };
