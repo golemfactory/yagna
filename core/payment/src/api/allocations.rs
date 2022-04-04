@@ -1,7 +1,10 @@
+use std::time::Duration;
 // External crates
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
+use chrono::{DateTime, Utc};
 use serde_json::value::Value::Null;
+use ya_client_model::NodeId;
 
 // Workspace uses
 use ya_agreement_utils::{ClauseOperator, ConstraintKey, Constraints};
@@ -73,11 +76,13 @@ async fn create_allocation(
                 let allocation_id = allocation.allocation_id.clone();
                 let allocation_timeout = allocation.timeout.clone();
 
-                tokio::task::spawn(async move {
-                    db.as_dao::<AllocationDao>()
-                        .release_allocation_after(allocation_id, allocation_timeout, Some(node_id))
-                        .await;
-                });
+                release_allocation_after(
+                    db.clone(),
+                    allocation_id,
+                    allocation_timeout,
+                    Some(node_id),
+                )
+                .await;
 
                 Ok(Some(allocation))
             }
@@ -181,4 +186,50 @@ async fn get_demand_decorations(
         properties,
         constraints,
     })
+}
+
+pub async fn release_allocation_after(
+    db: Data<DbExecutor>,
+    allocation_id: String,
+    allocation_timeout: Option<DateTime<Utc>>,
+    node_id: Option<NodeId>,
+) {
+    tokio::task::spawn(async move {
+        if let Some(timeout) = allocation_timeout {
+            let timestamp = timeout.timestamp() - Utc::now().timestamp();
+            let mut deadline = 0u64;
+
+            if timestamp.is_positive() {
+                deadline = timestamp as u64;
+            }
+
+            tokio::time::delay_for(Duration::from_secs(deadline)).await;
+
+            forced_release_allocation(db, allocation_id, node_id).await;
+        }
+    });
+}
+
+pub async fn forced_release_allocation(
+    db: Data<DbExecutor>,
+    allocation_id: String,
+    node_id: Option<NodeId>,
+) {
+    match db
+        .as_dao::<AllocationDao>()
+        .release(allocation_id.clone(), node_id)
+        .await
+    {
+        Ok(true) => {
+            log::info!("Allocation {} released.", allocation_id);
+        }
+        Ok(false) => (),
+        Err(e) => {
+            log::warn!(
+                "Releasing allocation {} failed. Db error occurred: {}",
+                allocation_id,
+                e
+            );
+        }
+    }
 }

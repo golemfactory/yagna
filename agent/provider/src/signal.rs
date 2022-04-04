@@ -3,11 +3,17 @@ use futures::{Future, SinkExt, Stream};
 use futures_util::task::{Context, Poll};
 use std::pin::Pin;
 
+use signal_hook::{
+    consts::*,
+    low_level::{register, unregister},
+    SigId,
+};
+
 pub(crate) type Signal = (i32, &'static str);
 
 pub struct SignalMonitor {
     rx: mpsc::Receiver<Signal>,
-    hooks: Vec<signal_hook::SigId>,
+    hooks: Vec<SigId>,
 }
 
 impl SignalMonitor {
@@ -25,14 +31,10 @@ impl SignalMonitor {
 impl Default for SignalMonitor {
     fn default() -> Self {
         #[allow(unused)]
-        let mut signals = vec![
-            signal_hook::SIGABRT,
-            signal_hook::SIGINT,
-            signal_hook::SIGTERM,
-        ];
+        let mut signals = vec![SIGABRT, SIGINT, SIGTERM];
 
         #[cfg(not(windows))]
-        signals.push(signal_hook::SIGQUIT);
+        signals.push(SIGQUIT);
 
         Self::new(signals)
     }
@@ -54,12 +56,12 @@ impl Drop for SignalMonitor {
         std::mem::replace(&mut self.hooks, Vec::new())
             .into_iter()
             .for_each(|s| {
-                signal_hook::unregister(s);
+                unregister(s);
             });
     }
 }
 
-fn register_signal(tx: mpsc::Sender<Signal>, signal: i32) -> signal_hook::SigId {
+fn register_signal(tx: mpsc::Sender<Signal>, signal: i32) -> SigId {
     log::trace!("Registering signal {} ({})", signal_to_str(signal), signal);
 
     let action = move || {
@@ -72,27 +74,27 @@ fn register_signal(tx: mpsc::Sender<Signal>, signal: i32) -> signal_hook::SigId 
         });
     };
 
-    unsafe { signal_hook::register(signal, action) }.unwrap()
+    unsafe { register(signal, action) }.unwrap()
 }
 
 fn signal_to_str(signal: i32) -> &'static str {
     match signal {
         #[cfg(not(windows))]
-        signal_hook::SIGHUP => "SIGHUP",
+        SIGHUP => "SIGHUP",
         #[cfg(not(windows))]
-        signal_hook::SIGQUIT => "SIGQUIT",
+        SIGQUIT => "SIGQUIT",
         #[cfg(not(windows))]
-        signal_hook::SIGKILL => "SIGKILL",
+        SIGKILL => "SIGKILL",
         #[cfg(not(windows))]
-        signal_hook::SIGPIPE => "SIGPIPE",
+        SIGPIPE => "SIGPIPE",
         #[cfg(not(windows))]
-        signal_hook::SIGALRM => "SIGALRM",
-        signal_hook::SIGINT => "SIGINT",
-        signal_hook::SIGILL => "SIGILL",
-        signal_hook::SIGABRT => "SIGABRT",
-        signal_hook::SIGFPE => "SIGFPE",
-        signal_hook::SIGSEGV => "SIGSEGV",
-        signal_hook::SIGTERM => "SIGTERM",
+        SIGALRM => "SIGALRM",
+        SIGINT => "SIGINT",
+        SIGILL => "SIGILL",
+        SIGABRT => "SIGABRT",
+        SIGFPE => "SIGFPE",
+        SIGSEGV => "SIGSEGV",
+        SIGTERM => "SIGTERM",
         _ => "SIG?",
     }
 }
