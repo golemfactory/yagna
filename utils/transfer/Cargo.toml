@@ -6,7 +6,7 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-ya-client-model = "0.3"
+ya-client-model = "0.4"
 ya-core-model = { version = "^0.5"}
 ya-service-bus = "0.4"
 ya-utils-path = "0.1"

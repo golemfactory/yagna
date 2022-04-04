@@ -33,7 +33,7 @@ web3 = "0.15"
 
 ## yagna dependencies
 ya-payment-driver = "0.2"
-ya-client-model = "0.3"
+ya-client-model = "0.4"
 ya-service-api-interfaces = "0.1"
 ya-utils-futures = "0.1"
 ya-utils-networking = "0.1"

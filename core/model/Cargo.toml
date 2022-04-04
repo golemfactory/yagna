@@ -35,7 +35,7 @@ sgx = ['graphene-sgx']
 version = []
 
 [dependencies]
-ya-client-model = "0.3"
+ya-client-model = "0.4"
 ya-service-bus = "0.4"
 
 bigdecimal = { version = "0.2", features = ["serde"], optional = true }
