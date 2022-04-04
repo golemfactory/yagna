@@ -20,8 +20,8 @@ use crate::erc20::{config, eth_utils};
 use bigdecimal::BigDecimal;
 use ethabi::Token;
 use num_traits::ToPrimitive;
-use uuid::Uuid;
-use ya_payment_driver::utils::big_dec_to_u256;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 pub enum PolygonPriority {
     PolygonPrioritySlow,
@@ -154,7 +154,7 @@ pub async fn get_last_block_date(
     network: Network,
     block_number: u64,
 ) -> Result<DateTime<Utc>, GenericError> {
-    let client = get_client(network)?;
+    let client = get_client(network).await?;
     let block_info = client
         .eth()
         .block(BlockId::Number(BlockNumber::Number(U64::from(
@@ -552,7 +552,7 @@ pub fn get_gas_price_from_db_tx(db_tx: &TransactionEntity) -> Result<U256, Gener
 
 pub async fn get_network_gas_price_eth(network: Network) -> Result<U256, GenericError> {
     let _env = get_env(network);
-    let client = get_client(network)?;
+    let client = get_client(network).await?;
 
     let small_gas_bump = U256::from(1000);
     let mut gas_price_from_network = client.eth().gas_price().await.map_err(GenericError::new)?;
