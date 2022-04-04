@@ -239,6 +239,7 @@ pub mod local {
         pub driver: String,
         pub network: Option<String>,
         pub token: Option<String>,
+        pub after_timestamp: i64,
     }
 
     impl RpcMessage for GetStatus {
@@ -391,6 +392,15 @@ pub mod local {
         AccountNotRegistered,
         #[error("Error while validating allocation: {0}")]
         Other(String),
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct ReleaseAllocations {}
+
+    impl RpcMessage for ReleaseAllocations {
+        const ID: &'static str = "ReleaseAllocations";
+        type Item = ();
+        type Error = GenericError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -12,10 +12,12 @@ use bigdecimal::BigDecimal;
 use chrono::NaiveDateTime;
 use diesel::{
     BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
+    TextExpressionMethods,
 };
 use std::collections::HashMap;
 use ya_client_model::payment::{ActivityPayment, AgreementPayment, Payment};
 use ya_client_model::NodeId;
+use ya_core_model::payment::local::{DriverName, NetworkName};
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
@@ -181,6 +183,8 @@ impl<'c> PaymentDao<'c> {
         after_timestamp: Option<NaiveDateTime>,
         max_events: Option<u32>,
         app_session_id: Option<String>,
+        network: Option<NetworkName>,
+        driver: Option<DriverName>,
     ) -> DbResult<Vec<Payment>> {
         readonly_transaction(self.pool, move |conn| {
             let mut query = dsl::pay_payment
@@ -193,6 +197,13 @@ impl<'c> PaymentDao<'c> {
             if let Some(limit) = max_events {
                 query = query.limit(limit.into());
             }
+            if let Some(network) = network {
+                query = query.filter(dsl::payment_platform.like(format!("{}%", network)));
+            }
+            if let Some(driver) = driver {
+                query = query.filter(dsl::payment_platform.like(format!("%{}%", driver)));
+            }
+
             let payments: Vec<ReadObj> = query.load(conn)?;
 
             let activity_payments = {

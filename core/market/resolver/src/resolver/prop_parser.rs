@@ -1,4 +1,5 @@
 use std::str;
+use std::string::String;
 
 use nom::digit;
 use nom::IResult;
@@ -184,7 +185,7 @@ pub enum Literal<'a> {
 named!(
     val_literal<Literal>,
     alt!(
-        string_literal
+        str_literal
             | version_literal
             | datetime_literal
             | true_literal
@@ -209,10 +210,13 @@ named!(
 );
 
 named!(
-    string_literal<Literal>,
+    str_literal<Literal>,
     ws!(delimited!(
         char!('"'),
-        do_parse!(val: take_until!("\"") >> (Literal::Str(str::from_utf8(val).unwrap()))),
+        do_parse!(
+            val: escaped!(none_of!(r#"\""#), '\\', one_of!("\"nt0\\"))
+                >> (Literal::Str(str::from_utf8(val).unwrap()))
+        ),
         char!('"')
     ))
 );

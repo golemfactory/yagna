@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.9.1"
+version = "0.9.2"
 description = "Open platform and marketplace for distributed computations"
 readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
@@ -180,8 +180,8 @@ ya-service-api-web = { path = "core/serv-api/web" }
 #ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "c4f16a69be383d9534f99928fccb64a558c47ff2"}
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "b13ddfd138d5b0aabeb5cfef4ea74f03a4bc16cf"}
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "b13ddfd138d5b0aabeb5cfef4ea74f03a4bc16cf"}
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "0b6a9a5b24cd1d858fb483f616e0e4df00842955"}
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "0b6a9a5b24cd1d858fb483f616e0e4df00842955"}
 
 #ya-client = { path = "../ya-client" }
 #ya-client-model = { path = "../ya-client/model" }

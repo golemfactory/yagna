@@ -16,7 +16,7 @@ type d128 = BigDecimal;
 // #region PropertyValue
 #[derive(Debug, Clone, PartialEq)]
 pub enum PropertyValue<'a> {
-    Str(&'a str), // String
+    Str(&'a str), // Str
     Boolean(bool),
     //Int(i32),
     //Long(i64),
@@ -29,30 +29,30 @@ pub enum PropertyValue<'a> {
 
 impl<'a> PropertyValue<'a> {
     // TODO Implement equals() for remaining types
-    pub fn equals(&self, val: &str) -> bool {
+    pub fn equals(&self, other: &str) -> bool {
         match self {
-            PropertyValue::Str(value) => PropertyValue::str_equal_with_wildcard(val, *value), // enhanced string comparison
-            PropertyValue::Number(value) => match val.parse::<f64>() {
+            PropertyValue::Str(value) => PropertyValue::str_equal_with_wildcard(other, *value), // enhanced string comparison
+            PropertyValue::Number(value) => match other.parse::<f64>() {
                 Ok(parsed_value) => parsed_value == *value,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::Decimal(value) => match val.parse::<BigDecimal>() {
+            PropertyValue::Decimal(value) => match other.parse::<BigDecimal>() {
                 Ok(parsed_value) => parsed_value == *value,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) {
+            PropertyValue::DateTime(value) => match PropertyValue::parse_date(other) {
                 Ok(parsed_value) => parsed_value == *value,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::Version(value) => match Version::parse(val) {
+            PropertyValue::Version(value) => match Version::parse(other) {
                 Ok(parsed_value) => parsed_value == *value,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::List(value) => match PropertyValue::equals_list(value, val) {
+            PropertyValue::List(value) => match PropertyValue::equals_list(value, other) {
                 Ok(result) => result,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::Boolean(value) => match val.parse::<bool>() {
+            PropertyValue::Boolean(value) => match other.parse::<bool>() {
                 Ok(result) => &result == value,
                 _ => false,
             }, // ignore parsing error, assume false
@@ -60,102 +60,102 @@ impl<'a> PropertyValue<'a> {
     }
 
     // TODO Implement less() for remaining types
-    pub fn less(&self, val: &str) -> bool {
+    pub fn less(&self, other: &str) -> bool {
         match self {
-            PropertyValue::Str(value) => *value < val, // trivial string comparison
-            PropertyValue::Number(value) => match val.parse::<f64>() {
+            PropertyValue::Str(value) => *value < other, // trivial string comparison
+            PropertyValue::Number(value) => match other.parse::<f64>() {
                 Ok(parsed_value) => *value < parsed_value,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::Decimal(value) => match val.parse::<d128>() {
+            PropertyValue::Decimal(value) => match other.parse::<d128>() {
                 Ok(parsed_value) => *value < parsed_value,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) {
+            PropertyValue::DateTime(value) => match PropertyValue::parse_date(other) {
                 Ok(parsed_value) => *value < parsed_value,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::Version(value) => match Version::parse(val) {
+            PropertyValue::Version(value) => match Version::parse(other) {
                 Ok(parsed_value) => *value < parsed_value,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::List(_) => false,           // operator meaningless for List
-            PropertyValue::Boolean(_) => false,        // operator meaningless for bool
+            PropertyValue::List(_) => false,             // operator meaningless for List
+            PropertyValue::Boolean(_) => false,          // operator meaningless for bool
         }
     }
 
     // TODO Implement less_equal() for remaining types
-    pub fn less_equal(&self, val: &str) -> bool {
+    pub fn less_equal(&self, other: &str) -> bool {
         match self {
-            PropertyValue::Str(value) => *value <= val, // trivial string comparison
-            PropertyValue::Number(value) => match val.parse::<f64>() {
+            PropertyValue::Str(value) => *value <= other, // trivial string comparison
+            PropertyValue::Number(value) => match other.parse::<f64>() {
                 Ok(parsed_value) => *value <= parsed_value,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::Decimal(value) => match val.parse::<d128>() {
+            PropertyValue::Decimal(value) => match other.parse::<d128>() {
                 Ok(parsed_value) => *value <= parsed_value,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) {
+            PropertyValue::DateTime(value) => match PropertyValue::parse_date(other) {
                 Ok(parsed_value) => *value <= parsed_value,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::Version(value) => match Version::parse(val) {
+            PropertyValue::Version(value) => match Version::parse(other) {
                 Ok(parsed_value) => *value <= parsed_value,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::List(_) => false,            // operator meaningless for List
-            PropertyValue::Boolean(_) => false,         // operator meaningless for bool
+            PropertyValue::List(_) => false,              // operator meaningless for List
+            PropertyValue::Boolean(_) => false,           // operator meaningless for bool
         }
     }
 
     // TODO Implement greater() for remaining types
-    pub fn greater(&self, val: &str) -> bool {
+    pub fn greater(&self, other: &str) -> bool {
         match self {
-            PropertyValue::Str(value) => *value > val, // trivial string comparison
-            PropertyValue::Number(value) => match val.parse::<f64>() {
+            PropertyValue::Str(value) => *value > other, // trivial string comparison
+            PropertyValue::Number(value) => match other.parse::<f64>() {
                 Ok(parsed_value) => *value > parsed_value,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::Decimal(value) => match val.parse::<d128>() {
+            PropertyValue::Decimal(value) => match other.parse::<d128>() {
                 Ok(parsed_value) => *value > parsed_value,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) {
+            PropertyValue::DateTime(value) => match PropertyValue::parse_date(other) {
                 Ok(parsed_value) => *value > parsed_value,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::Version(value) => match Version::parse(val) {
+            PropertyValue::Version(value) => match Version::parse(other) {
                 Ok(parsed_value) => *value > parsed_value,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::List(_) => false,           // operator meaningless for List
-            PropertyValue::Boolean(_) => false,        // operator meaningless for bool
+            PropertyValue::List(_) => false,             // operator meaningless for List
+            PropertyValue::Boolean(_) => false,          // operator meaningless for bool
         }
     }
 
     // TODO Implement greater_equal() for remaining types
-    pub fn greater_equal(&self, val: &str) -> bool {
+    pub fn greater_equal(&self, other: &str) -> bool {
         match self {
-            PropertyValue::Str(value) => *value >= val, // trivial string comparison
-            PropertyValue::Number(value) => match val.parse::<f64>() {
+            PropertyValue::Str(value) => *value >= other, // trivial string comparison
+            PropertyValue::Number(value) => match other.parse::<f64>() {
                 Ok(parsed_value) => *value >= parsed_value,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::Decimal(value) => match val.parse::<d128>() {
+            PropertyValue::Decimal(value) => match other.parse::<d128>() {
                 Ok(parsed_value) => *value >= parsed_value,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::DateTime(value) => match PropertyValue::parse_date(val) {
+            PropertyValue::DateTime(value) => match PropertyValue::parse_date(other) {
                 Ok(parsed_value) => *value >= parsed_value,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::Version(value) => match Version::parse(val) {
+            PropertyValue::Version(value) => match Version::parse(other) {
                 Ok(parsed_value) => *value >= parsed_value,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::List(_) => false,            // operator meaningless for List
-            PropertyValue::Boolean(_) => false,         // operator meaningless for bool
+            PropertyValue::List(_) => false,              // operator meaningless for List
+            PropertyValue::Boolean(_) => false,           // operator meaningless for bool
         }
     }
 
@@ -311,11 +311,11 @@ impl<'a> PropertyValue<'a> {
         }
     }
 
-    fn equals_list(list_items: &Vec<Box<PropertyValue>>, val: &str) -> Result<bool, String> {
+    fn equals_list(list_items: &Vec<Box<PropertyValue>>, other: &str) -> Result<bool, String> {
         // if val is a proper list syntax - parse it and test list equality
         // otherwise, if val isnt a list - treat it as a single item and execute "IN" operator
         // TODO this is lazy list equality comparison (returns invalid results where eg lists include multiple copies of the same item)
-        match prop_parser::parse_prop_ref_as_list(val) {
+        match prop_parser::parse_prop_ref_as_list(other) {
             Ok(list_vals) => {
                 // eager test of list length - if different then lists differ
                 if list_vals.len() != list_items.len() {
@@ -339,7 +339,7 @@ impl<'a> PropertyValue<'a> {
             }
             Err(_) => {
                 for item in list_items {
-                    if item.equals(val) {
+                    if item.equals(other) {
                         return Ok(true);
                     }
                 }

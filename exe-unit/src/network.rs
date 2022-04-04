@@ -20,8 +20,8 @@ use ya_service_bus::{actix_rpc, typed, typed::Endpoint as GsbEndpoint, RpcEnvelo
 use ya_utils_networking::vpn::common::ntoh;
 use ya_utils_networking::vpn::error::Error as VpnError;
 use ya_utils_networking::vpn::{
-    self, ArpField, ArpPacket, EtherFrame, EtherType, IpPacket, Networks, PeekPacket,
-    MAX_FRAME_SIZE,
+    self, network::DuoEndpoint, ArpField, ArpPacket, EtherFrame, EtherType, IpPacket, Networks,
+    PeekPacket, MAX_FRAME_SIZE,
 };
 
 pub(crate) async fn start_vpn<R: RuntimeService>(
@@ -56,7 +56,7 @@ pub(crate) async fn start_vpn<R: RuntimeService>(
 pub(crate) struct Vpn {
     // TODO: Populate & use ACL
     acl: Acl,
-    networks: Networks<GsbEndpoint>,
+    networks: Networks<DuoEndpoint<GsbEndpoint>>,
     endpoint: VpnEndpoint,
     rx_buf: Option<RxBuffer>,
 }
@@ -95,7 +95,7 @@ impl Vpn {
                 .networks
                 .endpoints()
                 .into_iter()
-                .map(|e| e.call(activity::VpnPacket(frame.as_ref().to_vec())))
+                .map(|e| e.udp.call(activity::VpnPacket(frame.as_ref().to_vec())))
                 .collect::<Vec<_>>();
             futs.is_empty().not().then(|| {
                 let fut = future::join_all(futs).then(|_| future::ready(()));
@@ -124,11 +124,17 @@ impl Vpn {
         }
     }
 
-    fn forward_frame(&mut self, endpoint: GsbEndpoint, frame: EtherFrame, ctx: &mut Context<Self>) {
+    fn forward_frame(
+        &mut self,
+        endpoint: DuoEndpoint<GsbEndpoint>,
+        frame: EtherFrame,
+        ctx: &mut Context<Self>,
+    ) {
         let pkt: Vec<_> = frame.into();
         log::trace!("Egress {} b", pkt.len());
 
         endpoint
+            .udp
             .call(activity::VpnPacket(pkt))
             .map_err(|err| log::debug!("VPN call error: {}", err))
             .then(|_| future::ready(()))
@@ -478,8 +484,11 @@ fn write_prefix(dst: &mut Vec<u8>) {
     dst.splice(0..0, u16::to_ne_bytes(len_u16).to_vec());
 }
 
-fn gsb_endpoint(node_id: &str, net_id: &str) -> GsbEndpoint {
-    typed::service(format!("/net/{}/vpn/{}", node_id, net_id))
+fn gsb_endpoint(node_id: &str, net_id: &str) -> DuoEndpoint<GsbEndpoint> {
+    DuoEndpoint {
+        tcp: typed::service(format!("/net/{}/vpn/{}", node_id, net_id)),
+        udp: typed::service(format!("/udp/net/{}/vpn/{}", node_id, net_id)),
+    }
 }
 
 #[cfg(test)]

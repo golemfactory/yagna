@@ -420,6 +420,7 @@ pub struct ExeUnitContext {
     pub agreement: Agreement,
     pub work_dir: PathBuf,
     pub cache_dir: PathBuf,
+    pub runtime_args: Vec<String>,
     pub acl: Acl,
     pub credentials: Option<Credentials>,
     #[cfg(feature = "sgx")]
@@ -454,8 +455,13 @@ impl<T> Default for Channel<T> {
     }
 }
 
-pub(crate) async fn report<M: RpcMessage + Unpin + 'static>(url: String, msg: M) -> bool {
-    match ya_service_bus::typed::service(&url).send(msg).await {
+pub(crate) async fn report<S, M>(url: S, msg: M) -> bool
+where
+    M: RpcMessage + Unpin + 'static,
+    S: AsRef<str>,
+{
+    let url = url.as_ref();
+    match ya_service_bus::typed::service(url).send(msg).await {
         Err(ya_service_bus::Error::Timeout(msg)) => {
             log::warn!("Timed out reporting to {}: {}", url, msg);
             true
@@ -489,9 +495,9 @@ async fn report_usage<R: Runtime>(
                     },
                     timeout: None,
                 };
-                if !report(report_url, msg).await {
+                if !report(&report_url, msg).await {
                     exe_unit.do_send(Shutdown(ShutdownReason::Error(error::Error::RuntimeError(
-                        "Reporting endpoint is not available".to_string(),
+                        format!("Reporting endpoint '{}' is not available", report_url),
                     ))));
                 }
             }
