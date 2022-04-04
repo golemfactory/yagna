@@ -1,11 +1,8 @@
+use crate::Result;
+use rand::distributions::{Distribution, Uniform};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::RangeInclusive;
-
-use rand::distributions::{Distribution, Uniform};
-
 use ya_utils_networking::vpn::{Error, Protocol};
-
-use crate::Result;
 
 #[derive(Default)]
 pub struct Allocator {

@@ -1,35 +1,31 @@
 //! Discovery protocol interface
+use actix_rt::Arbiter;
 use futures::TryFutureExt;
+use metrics::{counter, timing, value};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
-
-use actix_rt::Arbiter;
-use metrics::{counter, timing, value};
 use tokio::sync::Mutex;
 use tokio::time::delay_for;
+
 use ya_client::model::NodeId;
+use ya_core_model::market::BUS_ID;
+use ya_core_model::net::local::{BroadcastMessage, SendBroadcastMessage};
+use ya_net::{self as net, RemoteEndpoint};
 use ya_service_bus::timeout::{IntoDuration, IntoTimeoutFuture};
 use ya_service_bus::typed::ServiceBinder;
 use ya_service_bus::{Error as BusError, RpcEndpoint, RpcMessage};
 
-use error::*;
-use message::*;
-use ya_core_model::market::BUS_ID;
-use ya_core_model::net::local::{BroadcastMessage, SendBroadcastMessage};
-use ya_net::{self as net, RemoteEndpoint};
-
+use super::callback::HandlerSlot;
 use crate::config::DiscoveryConfig;
 use crate::db::model::{Offer as ModelOffer, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityError};
-use crate::PROTOCOL_VERSION;
-
-use super::callback::HandlerSlot;
 
 pub mod builder;
 pub mod error;
 pub mod message;
 
+use crate::PROTOCOL_VERSION;
 use error::*;
 use message::*;
 

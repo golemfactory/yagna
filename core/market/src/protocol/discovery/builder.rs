@@ -1,15 +1,14 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::sync::Arc;
-
 use tokio::sync::Mutex;
 
-use crate::config::DiscoveryConfig;
 use crate::protocol::callback::{CallbackFuture, OutputFuture};
 use crate::protocol::callback::{CallbackHandler, CallbackMessage, HandlerSlot};
-use crate::protocol::discovery::OfferHandlers;
 
 use super::{Discovery, DiscoveryImpl};
+use crate::config::DiscoveryConfig;
+use crate::protocol::discovery::OfferHandlers;
 
 #[derive(Default)]
 pub struct DiscoveryBuilder {

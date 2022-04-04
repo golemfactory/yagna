@@ -1,20 +1,17 @@
-use std::sync::Arc;
-use std::time::{Duration, Instant};
-
+use crate::message::*;
+use crate::network::VpnSupervisor;
 use actix::prelude::*;
 use actix_web::{web, HttpRequest, HttpResponse, Responder, ResponseError};
 use actix_web_actors::ws;
 use futures::channel::mpsc;
 use futures::lock::Mutex;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 use ya_client_model::net::*;
 use ya_client_model::ErrorMessage;
-
 use ya_service_api_web::middleware::Identity;
 use ya_utils_networking::vpn::{Error as VpnError, Protocol};
-
-use crate::message::*;
-use crate::network::VpnSupervisor;
 
 pub const NET_API_PATH: &str = "/net-api/v1/";
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
