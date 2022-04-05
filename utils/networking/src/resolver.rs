@@ -1,3 +1,5 @@
+use lazy_static::lazy_static;
+use regex::Regex;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::TokioAsyncResolver;
@@ -61,15 +63,27 @@ pub async fn resolve_dns_record_host(host: &str) -> anyhow::Result<String> {
     Ok(address)
 }
 
-/// Try resolving hostname with `resolve_dns_record`. Return the original URL if it fails
-/// Remember to always include scheme part of the url, otherwise you'll just get your
-/// default (`request_url`) because of: ParseError::RelativeUrlWithoutBase.
-pub async fn try_resolve_dns_record(request_url: &str) -> String {
-    match resolve_dns_record(request_url).await {
+/// Try resolving hostname with `resolve_dns_record` or `resolve_dns_record_host`.
+/// Returns the original URL if it fails.
+pub async fn try_resolve_dns_record(request_url_or_host: &str) -> String {
+    lazy_static! {
+        static ref SCHEME_RE: Regex = Regex::new("^[a-z0-9\\-\\.]+?:").unwrap();
+    }
+    match {
+        if SCHEME_RE.is_match(request_url_or_host) {
+            resolve_dns_record(request_url_or_host).await
+        } else {
+            resolve_dns_record_host(request_url_or_host).await
+        }
+    } {
         Ok(url) => url,
         Err(e) => {
-            log::warn!("Error resolving hostname: {} url={}", e, request_url);
-            request_url.to_owned()
+            log::warn!(
+                "Error resolving hostname: {} url={}",
+                e,
+                request_url_or_host
+            );
+            request_url_or_host.to_owned()
         }
     }
 }
