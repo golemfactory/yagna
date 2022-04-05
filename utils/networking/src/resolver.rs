@@ -67,7 +67,7 @@ pub async fn resolve_dns_record_host(host: &str) -> anyhow::Result<String> {
 /// Returns the original URL if it fails.
 pub async fn try_resolve_dns_record(request_url_or_host: &str) -> String {
     lazy_static! {
-        static ref SCHEME_RE: Regex = Regex::new("^[a-z0-9\\-\\.]+?:").unwrap();
+        static ref SCHEME_RE: Regex = Regex::new("(?i)^[a-z0-9\\-\\.]+?:").unwrap();
     }
     match {
         if SCHEME_RE.is_match(request_url_or_host) {
