@@ -6,12 +6,14 @@ use chrono::NaiveDateTime;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 use serde::Serialize;
 use std::borrow::Cow;
+use std::collections::HashSet;
 use std::convert::TryInto;
 use ya_client_model::payment::{InvoiceEvent, InvoiceEventType};
 use ya_client_model::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
+use ya_persistence::types::Role;
 
 pub fn create<T: Serialize>(
     invoice_id: String,
@@ -57,10 +59,9 @@ impl<'c> InvoiceEventDao<'c> {
         after_timestamp: Option<NaiveDateTime>,
         max_events: Option<u32>,
         app_session_id: Option<String>,
-        _requestor_events: Vec<Cow<'static, str>>,
-        _provider_events: Vec<Cow<'static, str>>,
+        requestor_events: Vec<Cow<'static, str>>,
+        provider_events: Vec<Cow<'static, str>>,
     ) -> DbResult<Vec<InvoiceEvent>> {
-        // TODO: filter out by _requestor_events, _provider_events
         readonly_transaction(self.pool, move |conn| {
             let mut query = read_dsl::pay_invoice_event_read
                 .filter(read_dsl::owner_id.eq(node_id))
@@ -76,8 +77,18 @@ impl<'c> InvoiceEventDao<'c> {
                 query = query.limit(limit.into());
             }
             let events: Vec<ReadObj> = query.load(conn)?;
-            events.into_iter().map(TryInto::try_into).collect()
+            let requestor_events: HashSet<Cow<'static, str>> =
+                requestor_events.into_iter().collect();
+            let provider_events: HashSet<Cow<'static, str>> = provider_events.into_iter().collect();
+            events
+                .into_iter()
+                .filter(|e| match e.role {
+                    Role::Requestor => requestor_events.contains(e.event_type.as_str()),
+                    Role::Provider => provider_events.contains(e.event_type.as_str()),
+                })
+                .map(TryInto::try_into)
+                .collect()
         })
-        .await
+            .await
     }
 }

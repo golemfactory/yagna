@@ -62,7 +62,6 @@ impl<'c> DebitNoteEventDao<'c> {
         requestor_events: Vec<Cow<'static, str>>,
         provider_events: Vec<Cow<'static, str>>,
     ) -> DbResult<Vec<DebitNoteEvent>> {
-        // TODO: filter out by _requestor_events, _provider_events
         readonly_transaction(self.pool, move |conn| {
             let mut query = read_dsl::pay_debit_note_event_read
                 .filter(read_dsl::owner_id.eq(node_id))
