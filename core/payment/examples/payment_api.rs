@@ -21,7 +21,6 @@ use ya_erc20_driver as erc20;
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::{migrations, utils, PaymentService};
 use ya_persistence::executor::DbExecutor;
-use ya_polygon_driver as polygon;
 use ya_service_api_web::middleware::auth::dummy::DummyAuth;
 use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::rest_api_addr;
@@ -45,7 +44,6 @@ impl FromStr for Driver {
             "dummy" => Ok(Driver::Dummy),
             "erc20" => Ok(Driver::Erc20),
             "zksync" => Ok(Driver::Zksync),
-            "polygon" => Ok(Driver::Polygon),
             s => Err(anyhow::Error::msg(format!("Invalid driver: {}", s))),
         }
     }
@@ -57,7 +55,6 @@ impl std::fmt::Display for Driver {
             Driver::Dummy => write!(f, "dummy"),
             Driver::Erc20 => write!(f, "erc20"),
             Driver::Zksync => write!(f, "zksync"),
-            Driver::Polygon => write!(f, "polygon"),
         }
     }
 }
@@ -102,21 +99,6 @@ pub async fn start_erc20_driver(
     fake_subscribe_to_events();
 
     erc20::PaymentDriverService::gsb(db).await?;
-
-    let requestor_sign_tx = get_sign_tx(requestor_account);
-    fake_sign_tx(Box::new(requestor_sign_tx));
-    Ok(())
-}
-
-pub async fn start_polygon_driver(
-    db: &DbExecutor,
-    requestor_account: SecretKey,
-) -> anyhow::Result<()> {
-    let requestor = NodeId::from(requestor_account.public().address().as_ref());
-    fake_list_identities(vec![requestor]);
-    fake_subscribe_to_events();
-
-    polygon::PaymentDriverService::gsb(db).await?;
 
     let requestor_sign_tx = get_sign_tx(requestor_account);
     fake_sign_tx(Box::new(requestor_sign_tx));
@@ -274,10 +256,6 @@ async fn main() -> anyhow::Result<()> {
         }
         Driver::Zksync => {
             start_zksync_driver(&db, requestor_account).await?;
-            zksync::DRIVER_NAME
-        }
-        Driver::Polygon => {
-            start_polygon_driver(&db, requestor_account).await?;
             zksync::DRIVER_NAME
         }
     };

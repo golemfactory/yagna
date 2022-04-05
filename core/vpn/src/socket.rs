@@ -1,9 +1,7 @@
-use std::time::Duration;
-
 use managed::ManagedSlice;
 use smoltcp::socket::*;
 use smoltcp::wire::{IpProtocol, IpVersion};
-
+use std::time::Duration;
 use ya_utils_networking::vpn::MAX_FRAME_SIZE;
 
 pub const TCP_CONN_TIMEOUT: Duration = Duration::from_secs(5);

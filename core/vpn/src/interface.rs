@@ -1,10 +1,8 @@
-use std::collections::BTreeMap;
-
+use super::device::CaptureDevice;
 use managed::{ManagedMap, ManagedSlice};
 use smoltcp::iface::{EthernetInterface, EthernetInterfaceBuilder, NeighborCache, Route, Routes};
 use smoltcp::wire::{EthernetAddress, IpCidr};
-
-use super::device::CaptureDevice;
+use std::collections::BTreeMap;
 
 pub type CaptureInterface<'a> = EthernetInterface<'a, CaptureDevice>;
 

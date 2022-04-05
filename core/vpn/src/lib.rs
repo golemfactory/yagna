@@ -1,5 +1,3 @@
-pub use self::service::VpnService;
-
 mod device;
 mod interface;
 mod message;
@@ -9,5 +7,7 @@ mod requestor;
 mod service;
 mod socket;
 mod stack;
+
+pub use self::service::VpnService;
 
 pub type Result<T> = std::result::Result<T, ya_utils_networking::vpn::Error>;

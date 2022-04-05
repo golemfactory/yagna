@@ -353,6 +353,7 @@ pub async fn send_transactions(
                 if e.to_string().contains("already known") {
                     log::error!("Already known: {:?}. Send transaction with higher gas to get from this error loop. (resent won't fix anything)", e);
                     dao.retry_send_transaction(&tx.tx_id, true).await;
+                    continue;
                 }
 
                 dao.transaction_failed_send(&tx.tx_id, tx.resent_times, e.to_string().as_str())
