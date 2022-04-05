@@ -301,7 +301,7 @@ impl<'a> AgreementDao<'a> {
         payer_addr: String,
         after_timestamp: NaiveDateTime,
     ) -> DbResult<StatusNotes> {
-        let since = Some(DateTime::<Utc>::from_utc(after_timestamp, chrono::Utc));    
+        let since = Some(DateTime::<Utc>::from_utc(after_timestamp, chrono::Utc));
         readonly_transaction(self.pool, move |conn| {
             let query = dsl::pay_agreement
                 .filter(dsl::role.eq(Role::Requestor))

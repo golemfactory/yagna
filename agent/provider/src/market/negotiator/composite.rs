@@ -36,7 +36,6 @@ impl CompositeNegotiator {
                 "LimitExpiration",
                 Box::new(LimitExpiration::new(&config.expire_agreements_config)?),
             )
-
             .add_component(
                 "DebitNoteInterval",
                 Box::new(DebitNoteInterval::new(&config.debit_note_interval_config)?),

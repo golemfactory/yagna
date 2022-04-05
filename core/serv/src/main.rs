@@ -36,7 +36,11 @@ use ya_utils_process::lock::ProcLock;
 use ya_version::VersionService;
 use ya_vpn::VpnService;
 
+use ya_service_bus::typed as gsb;
+
 mod autocomplete;
+mod model;
+
 use autocomplete::CompleteCommand;
 
 use ya_activity::TrackerRef;
