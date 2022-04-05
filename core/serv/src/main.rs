@@ -157,7 +157,7 @@ impl<S: 'static> Provider<S, DbMixedExecutor> for ServiceContext {
         }
     }
 }
-	
+
 impl<S: 'static> Provider<S, ya_activity::TrackerRef> for ServiceContext {
     fn component(&self) -> ya_activity::TrackerRef {
         self.activity_tracker.clone()

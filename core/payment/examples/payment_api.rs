@@ -34,7 +34,7 @@ use ya_zksync_driver as zksync;
 enum Driver {
     Dummy,
     Erc20,
-    Zksync
+    Zksync,
 }
 
 impl FromStr for Driver {
