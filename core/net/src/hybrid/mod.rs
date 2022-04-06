@@ -1,4 +1,5 @@
 mod api;
+pub(crate) mod cli;
 mod codec;
 mod crypto;
 mod service;

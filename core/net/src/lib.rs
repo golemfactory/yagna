@@ -9,4 +9,5 @@ pub mod central;
 pub mod hybrid;
 mod service;
 
+mod cli;
 mod config;

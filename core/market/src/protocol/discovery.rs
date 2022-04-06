@@ -1,5 +1,6 @@
 //! Discovery protocol interface
 use actix_rt::Arbiter;
+use futures::TryFutureExt;
 use metrics::{counter, timing, value};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -26,8 +27,9 @@ pub mod message;
 
 use crate::PROTOCOL_VERSION;
 use error::*;
-use futures::TryFutureExt;
 use message::*;
+
+const MAX_OFFER_IDS_PER_BROADCAST: usize = 8;
 
 /// Responsible for communication with markets on other nodes
 /// during discovery phase.
@@ -56,6 +58,18 @@ pub struct DiscoveryImpl {
 }
 
 impl Discovery {
+    #[inline]
+    pub fn re_broadcast_enabled(&self) -> bool {
+        self.is_hybrid_net()
+    }
+
+    pub fn is_hybrid_net(&self) -> bool {
+        match std::env::var("YA_NET_TYPE") {
+            Ok(val) => val == "hybrid",
+            Err(_) => false,
+        }
+    }
+
     pub async fn bcast_offers(&self, offer_ids: Vec<SubscriptionId>) -> Result<(), DiscoveryError> {
         if offer_ids.is_empty() {
             return Ok(());
@@ -87,14 +101,14 @@ impl Discovery {
 
     /// Broadcasts Offers to other nodes in network. Connected nodes will
     /// get call to function bound at `OfferBcast`.
-    async fn send_bcast_offers(&self) -> () {
+    async fn send_bcast_offers(&self) {
         // `...offer_queue` MUST be empty to trigger the sending again
         let offer_ids: Vec<SubscriptionId> =
-            self.inner.offer_queue.lock().await.drain(..).collect();
+            std::mem::take(&mut *self.inner.offer_queue.lock().await);
 
         // Should never happen, but just to be certain.
         if offer_ids.is_empty() {
-            return ();
+            return;
         }
 
         let default_id = match self.default_identity().await {
@@ -113,11 +127,15 @@ impl Discovery {
         counter!("market.offers.broadcasts.net", 1);
         value!("market.offers.broadcasts.len", size as u64);
 
-        // TODO: should we send as our (default) identity?
-        if let Err(e) = net::broadcast(default_id, OffersBcast { offer_ids }).await {
-            log::error!("Error sending bcast, skipping... error={:?}", e);
-            counter!("market.offers.broadcasts.net_errors", 1);
-        };
+        if self.is_hybrid_net() {
+            let mut iter = offer_ids.into_iter().peekable();
+            while iter.peek().is_some() {
+                let chunk = iter.by_ref().take(MAX_OFFER_IDS_PER_BROADCAST).collect();
+                broadcast_offers(default_id, chunk).await;
+            }
+        } else {
+            broadcast_offers(default_id, offer_ids).await;
+        }
     }
 
     /// Ask remote Node for specified Offers.
@@ -207,11 +225,15 @@ impl Discovery {
         counter!("market.offers.unsubscribes.broadcasts.net", 1);
         value!("market.offers.unsubscribes.broadcasts.len", size as u64);
 
-        // TODO: should we send as our (default) identity?
-        if let Err(e) = net::broadcast(default_id, UnsubscribedOffersBcast { offer_ids }).await {
-            log::error!("Error sending bcast, skipping... error={:?}", e);
-            counter!("market.offers.unsubscribes.broadcasts.net_errors", 1);
-        };
+        if self.is_hybrid_net() {
+            let mut iter = offer_ids.into_iter().peekable();
+            while iter.peek().is_some() {
+                let chunk = iter.by_ref().take(MAX_OFFER_IDS_PER_BROADCAST).collect();
+                broadcast_unsubscribed(default_id, chunk).await;
+            }
+        } else {
+            broadcast_unsubscribed(default_id, offer_ids).await;
+        }
     }
 
     pub async fn bind_gsb(
@@ -235,14 +257,15 @@ impl Discovery {
             };
         }
 
-        // We don't lazy bind broadcasts handlers anymore on first Demand creation.
-        // But we still have option to do this easily in the future.
-        self.bind_gsb_broadcast().await.map_or_else(
-            |e| {
-                log::warn!("Failed to subscribe to broadcasts. Error: {:?}.", e,);
-            },
-            |_| (),
-        );
+        // Only bind broadcasts when re-broadcasts are enabled
+        if self.re_broadcast_enabled() {
+            self.bind_gsb_broadcast().await.map_or_else(
+                |e| {
+                    log::warn!("Failed to subscribe to broadcasts. Error: {:?}.", e,);
+                },
+                |_| (),
+            );
+        }
 
         Ok(())
     }
@@ -337,8 +360,8 @@ impl Discovery {
             }
         };
 
-        if !new_offer_ids.is_empty() {
-            log::debug!(
+        if self.re_broadcast_enabled() && !new_offer_ids.is_empty() {
+            log::trace!(
                 "Propagating {}/{} Offers received from [{}].",
                 new_offer_ids.len(),
                 num_ids_received,
@@ -386,8 +409,8 @@ impl Discovery {
         let offer_unsubscribe_handler = self.inner.offer_unsubscribe_handler.clone();
         let unsubscribed_offer_ids = offer_unsubscribe_handler.call(caller.clone(), msg).await?;
 
-        if !unsubscribed_offer_ids.is_empty() {
-            log::debug!(
+        if self.re_broadcast_enabled() && !unsubscribed_offer_ids.is_empty() {
+            log::trace!(
                 "Propagating {}/{} unsubscribed Offers received from [{}].",
                 unsubscribed_offer_ids.len(),
                 num_received_ids,
@@ -407,4 +430,18 @@ impl Discovery {
     async fn default_identity(&self) -> Result<NodeId, IdentityError> {
         Ok(self.inner.identity.default_identity().await?)
     }
+}
+
+async fn broadcast_offers(node_id: NodeId, offer_ids: Vec<SubscriptionId>) {
+    if let Err(e) = net::broadcast(node_id, OffersBcast { offer_ids }).await {
+        log::error!("Error broadcasting offers: {:?}", e);
+        counter!("market.offers.broadcasts.net_errors", 1);
+    };
+}
+
+async fn broadcast_unsubscribed(node_id: NodeId, offer_ids: Vec<SubscriptionId>) {
+    if let Err(e) = net::broadcast(node_id, UnsubscribedOffersBcast { offer_ids }).await {
+        log::error!("Error broadcasting unsubscribed offers: {:?}", e);
+        counter!("market.offers.unsubscribes.broadcasts.net_errors", 1);
+    };
 }

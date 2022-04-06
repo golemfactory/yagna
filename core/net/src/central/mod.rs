@@ -1,4 +1,5 @@
 mod api;
+pub(crate) mod cli;
 mod handler;
 mod service;
 
