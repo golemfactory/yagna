@@ -217,6 +217,10 @@ pub mod response {
     pub fn conflict(e: &impl ToString) -> HttpResponse {
         HttpResponse::Conflict().json(ErrorMessage::new(e.to_string()))
     }
+
+    pub fn gone(e: &impl ToString) -> HttpResponse {
+        HttpResponse::Gone().json(ErrorMessage::new(e.to_string()))
+    }
 }
 
 // These JSON methods exist for the sole purpose of converting error type. It cannot be done by
