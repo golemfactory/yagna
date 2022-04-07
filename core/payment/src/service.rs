@@ -228,8 +228,23 @@ mod local {
         }
         .map_err(GenericError::new);
 
-        let (incoming, outgoing, amount, reserved) =
-            future::try_join4(incoming_fut, outgoing_fut, amount_fut, reserved_fut).await?;
+        let gas_amount_fut = async {
+            processor
+                .lock()
+                .await
+                .get_gas_balance(platform.clone(), address.clone())
+                .await
+        }
+        .map_err(GenericError::new);
+
+        let (incoming, outgoing, amount, gas, reserved) = future::try_join5(
+            incoming_fut,
+            outgoing_fut,
+            amount_fut,
+            gas_amount_fut,
+            reserved_fut,
+        )
+        .await?;
 
         Ok(StatusResult {
             amount,
@@ -239,6 +254,7 @@ mod local {
             driver,
             network,
             token,
+            gas,
         })
     }
 

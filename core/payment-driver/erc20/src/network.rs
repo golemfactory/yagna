@@ -7,9 +7,12 @@ use ya_payment_driver::{db::models::Network as DbNetwork, driver::Network, model
 
 // Local uses
 use crate::{
-    GOERLI_NETWORK, GOERLI_PLATFORM, GOERLI_TOKEN, MAINNET_NETWORK, MAINNET_PLATFORM,
-    MAINNET_TOKEN, MUMBAI_NETWORK, MUMBAI_PLATFORM, MUMBAI_TOKEN, POLYGON_MAINNET_NETWORK,
-    POLYGON_MAINNET_PLATFORM, POLYGON_MAINNET_TOKEN, RINKEBY_NETWORK, RINKEBY_PLATFORM,
+    GOERLI_CURRENCY_LONG, GOERLI_CURRENCY_SHORT, GOERLI_NETWORK, GOERLI_PLATFORM, GOERLI_TOKEN,
+    MAINNET_CURRENCY_LONG, MAINNET_CURRENCY_SHORT, MAINNET_NETWORK, MAINNET_PLATFORM,
+    MAINNET_TOKEN, MUMBAI_CURRENCY_LONG, MUMBAI_CURRENCY_SHORT, MUMBAI_NETWORK, MUMBAI_PLATFORM,
+    MUMBAI_TOKEN, POLYGON_MAINNET_CURRENCY_LONG, POLYGON_MAINNET_CURRENCY_SHORT,
+    POLYGON_MAINNET_NETWORK, POLYGON_MAINNET_PLATFORM, POLYGON_MAINNET_TOKEN,
+    RINKEBY_CURRENCY_LONG, RINKEBY_CURRENCY_SHORT, RINKEBY_NETWORK, RINKEBY_PLATFORM,
     RINKEBY_TOKEN,
 };
 
@@ -98,6 +101,35 @@ pub fn network_token_to_platform(
         }
     };
     Ok(platform.to_string())
+}
+
+pub fn platform_to_currency(platform: String) -> Result<(String, String), GenericError> {
+    match platform.as_str() {
+        RINKEBY_PLATFORM => Ok((
+            RINKEBY_CURRENCY_SHORT.to_owned(),
+            RINKEBY_CURRENCY_LONG.to_owned(),
+        )),
+        GOERLI_PLATFORM => Ok((
+            GOERLI_CURRENCY_SHORT.to_owned(),
+            GOERLI_CURRENCY_LONG.to_owned(),
+        )),
+        MAINNET_PLATFORM => Ok((
+            MAINNET_CURRENCY_SHORT.to_owned(),
+            MAINNET_CURRENCY_LONG.to_owned(),
+        )),
+        MUMBAI_PLATFORM => Ok((
+            MUMBAI_CURRENCY_SHORT.to_owned(),
+            MUMBAI_CURRENCY_LONG.to_owned(),
+        )),
+        POLYGON_MAINNET_PLATFORM => Ok((
+            POLYGON_MAINNET_CURRENCY_SHORT.to_owned(),
+            POLYGON_MAINNET_CURRENCY_LONG.to_owned(),
+        )),
+        other => Err(GenericError::new(format!(
+            "Unable to find network currency for platform: {}",
+            other
+        ))),
+    }
 }
 
 pub fn get_network_token(network: DbNetwork, token: Option<String>) -> String {

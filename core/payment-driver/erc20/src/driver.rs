@@ -125,6 +125,15 @@ impl PaymentDriver for Erc20Driver {
         api::get_account_balance(msg).await
     }
 
+    async fn get_account_gas_balance(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        msg: GetAccountGasBalance,
+    ) -> Result<Option<GasDetails>, GenericError> {
+        api::get_account_gas_balance(msg).await
+    }
+
     fn get_name(&self) -> String {
         DRIVER_NAME.to_string()
     }
