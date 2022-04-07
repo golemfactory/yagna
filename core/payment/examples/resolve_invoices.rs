@@ -39,7 +39,7 @@ enum Command {
         payment_platform: String,
         //parse(try_from_str) added to get rid of "default_value is meaningless for bool" error
         #[structopt(long, parse(try_from_str), default_value = "true")]
-        resolve_debit_notes: bool
+        resolve_debit_notes: bool,
     },
     SendPayments {
         #[structopt(long)]
@@ -83,20 +83,37 @@ async fn main() -> anyhow::Result<()> {
             payment_platform,
             owner,
             incremental,
-            resolve_debit_notes
-        } => generate(db, owner, payment_platform, dry_run, incremental, resolve_debit_notes).await?,
+            resolve_debit_notes,
+        } => {
+            generate(
+                db,
+                owner,
+                payment_platform,
+                dry_run,
+                incremental,
+                resolve_debit_notes,
+            )
+            .await?
+        }
         Command::SendPayments { order_id } => send_payments(db, order_id).await?,
         Command::Run {
             owner,
             payment_platform,
             interval,
-            resolve_debit_notes
+            resolve_debit_notes,
         } => {
             if let Some(duration) = interval {
                 loop {
                     tokio::time::delay_for(duration.into()).await;
                     log::info!("sending payments for {} {}", owner, payment_platform);
-                    if let Err(e) = run(db.clone(), owner, payment_platform.clone(), resolve_debit_notes).await {
+                    if let Err(e) = run(
+                        db.clone(),
+                        owner,
+                        payment_platform.clone(),
+                        resolve_debit_notes,
+                    )
+                    .await
+                    {
                         log::error!("failed to process order: {:?}", e);
                     }
                 }
@@ -162,12 +179,18 @@ async fn generate(
     payment_platform: String,
     dry_run: bool,
     incremental: bool,
-    resolve_debit_notes: bool
+    resolve_debit_notes: bool,
 ) -> anyhow::Result<()> {
     let ts = chrono::Utc::now() + chrono::Duration::days(-7);
     let order_id = db
         .as_dao::<BatchDao>()
-        .resolve(owner_id, owner_id.to_string(), payment_platform, resolve_debit_notes, ts)
+        .resolve(
+            owner_id,
+            owner_id.to_string(),
+            payment_platform,
+            resolve_debit_notes,
+            ts,
+        )
         .await?;
 
     /*
@@ -419,12 +442,23 @@ async fn send_payments(db: DbExecutor, order_id: String) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn run(db: DbExecutor, owner_id: NodeId, payment_platform: String, resolve_debit_notes: bool) -> anyhow::Result<()> {
+async fn run(
+    db: DbExecutor,
+    owner_id: NodeId,
+    payment_platform: String,
+    resolve_debit_notes: bool,
+) -> anyhow::Result<()> {
     let ts = chrono::Utc::now() + chrono::Duration::days(-15);
 
     if let Some(order_id) = db
         .as_dao::<BatchDao>()
-        .resolve(owner_id, owner_id.to_string(), payment_platform, resolve_debit_notes, ts)
+        .resolve(
+            owner_id,
+            owner_id.to_string(),
+            payment_platform,
+            resolve_debit_notes,
+            ts,
+        )
         .await?
     {
         send_payments(db, order_id).await?;

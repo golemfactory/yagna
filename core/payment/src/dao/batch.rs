@@ -284,7 +284,14 @@ impl<'c> BatchDao<'c> {
         since: DateTime<Utc>,
     ) -> DbResult<Option<String>> {
         do_with_transaction(self.pool, move |conn| {
-            resolve_invoices(conn, owner_id, &payer_addr, &platform, resolve_debit_notes, since)
+            resolve_invoices(
+                conn,
+                owner_id,
+                &payer_addr,
+                &platform,
+                resolve_debit_notes,
+                since,
+            )
         })
         .await
     }
