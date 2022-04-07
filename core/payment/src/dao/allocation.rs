@@ -63,11 +63,7 @@ impl<'c> AllocationDao<'c> {
         .await
     }
 
-    pub async fn get(
-        &self,
-        allocation_id: String,
-        owner_id: NodeId,
-    ) -> DbResult<Option<Allocation>> {
+    pub async fn get(&self, allocation_id: String, owner_id: NodeId) -> DbResult<AllocationStatus> {
         readonly_transaction(self.pool, move |conn| {
             let allocation: Option<ReadObj> = dsl::pay_allocation
                 .filter(dsl::owner_id.eq(owner_id))
@@ -75,7 +71,15 @@ impl<'c> AllocationDao<'c> {
                 .find(allocation_id)
                 .first(conn)
                 .optional()?;
-            Ok(allocation.map(Into::into))
+
+            if let Some(allocation) = allocation {
+                return if !allocation.released {
+                    Ok(AllocationStatus::Active(allocation.into()))
+                } else {
+                    Ok(AllocationStatus::Gone)
+                };
+            }
+            Ok(AllocationStatus::NotFound)
         })
         .await
     }
@@ -187,4 +191,10 @@ impl<'c> AllocationDao<'c> {
         })
         .await
     }
+}
+
+pub enum AllocationStatus {
+    Active(Allocation),
+    Gone,
+    NotFound,
 }

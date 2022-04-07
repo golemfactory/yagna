@@ -319,8 +319,9 @@ async fn accept_debit_note(
         .get(allocation_id.clone(), node_id)
         .await
     {
-        Ok(Some(allocation)) => allocation,
-        Ok(None) => {
+        Ok(AllocationStatus::Active(allocation)) => allocation,
+        Ok(AllocationStatus::Gone) => return response::gone(&format!("Allocation {} has been already released", allocation_id)),
+        Ok(AllocationStatus::NotFound) => {
             return response::bad_request(&format!("Allocation {} not found", allocation_id))
         }
         Err(e) => return response::server_error(&e),

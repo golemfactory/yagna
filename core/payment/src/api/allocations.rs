@@ -64,15 +64,14 @@ async fn create_allocation(
         Err(e) => return response::server_error(&e),
     }
 
-    match async move {
-        let dao = db.as_dao::<AllocationDao>();
-        let allocation_id = dao
-            .create(allocation, node_id, payment_platform, address)
-            .await?;
+    let dao = db.as_dao::<AllocationDao>();
 
-        match dao.get(allocation_id, node_id).await? {
-            None => Ok(None),
-            Some(allocation) => {
+    match dao
+        .create(allocation, node_id, payment_platform, address)
+        .await
+    {
+        Ok(allocation_id) => match dao.get(allocation_id, node_id).await {
+            Ok(AllocationStatus::Active(allocation)) => {
                 let allocation_id = allocation.allocation_id.clone();
                 let allocation_timeout = allocation.timeout.clone();
 
@@ -84,16 +83,14 @@ async fn create_allocation(
                 )
                 .await;
 
-                Ok(Some(allocation))
+                response::created(allocation)
             }
-        }
-    }
-    .await
-    {
-        Ok(Some(allocation)) => response::created(allocation),
-        Ok(None) => response::server_error(&"Database error"),
-        Err(DbError::Query(e)) => response::bad_request(&e),
-        Err(e) => response::server_error(&e),
+            Ok(AllocationStatus::NotFound) => return response::server_error(&"Database error"),
+            Ok(AllocationStatus::Gone) => return response::server_error(&"Database error"),
+            Err(DbError::Query(e)) => return response::bad_request(&e),
+            Err(e) => return response::server_error(&e),
+        },
+        Err(e) => return response::server_error(&e),
     }
 }
 
@@ -120,9 +117,11 @@ async fn get_allocation(
     let allocation_id = path.allocation_id.clone();
     let node_id = id.identity;
     let dao: AllocationDao = db.as_dao();
-    match dao.get(allocation_id, node_id).await {
-        Ok(Some(allocation)) => response::ok(allocation),
-        Ok(None) => response::not_found(),
+
+    match dao.get(allocation_id.clone(), node_id).await {
+        Ok(AllocationStatus::Active(allocation)) => response::ok(allocation),
+        Ok(AllocationStatus::Gone) => response::gone(&format!("Allocation {} has been already released", allocation_id)),
+        Ok(AllocationStatus::NotFound) => response::not_found(),
         Err(e) => response::server_error(&e),
     }
 }
