@@ -33,6 +33,7 @@ pub fn resolve_invoices(
     owner_id: NodeId,
     payer_addr: &str,
     platform: &str,
+    resolve_debit_notes: bool,
     since: DateTime<Utc>,
 ) -> DbResult<Option<String>> {
     use crate::schema::pay_agreement::dsl as pa;
@@ -137,7 +138,7 @@ pub fn resolve_invoices(
             conn,
         )?;
     }
-    {
+    if resolve_debit_notes {
         table! {
             sql_activity (id, owner_id) {
                 id -> Text,
@@ -279,10 +280,11 @@ impl<'c> BatchDao<'c> {
         owner_id: NodeId,
         payer_addr: String,
         platform: String,
+        resolve_debit_notes: bool,
         since: DateTime<Utc>,
     ) -> DbResult<Option<String>> {
         do_with_transaction(self.pool, move |conn| {
-            resolve_invoices(conn, owner_id, &payer_addr, &platform, since)
+            resolve_invoices(conn, owner_id, &payer_addr, &platform, resolve_debit_notes, since)
         })
         .await
     }

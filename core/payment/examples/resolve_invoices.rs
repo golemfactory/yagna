@@ -22,6 +22,8 @@ use ya_service_bus::typed as bus;
 struct Args {
     #[structopt(subcommand)]
     command: Command,
+    #[structopt(long)]
+    payment_db_location: Option<String>,
 }
 
 #[derive(StructOpt)]
@@ -35,6 +37,9 @@ enum Command {
         owner: NodeId,
         #[structopt(long, default_value = "erc20-mumbai-tglm")]
         payment_platform: String,
+        //parse(try_from_str) added to get rid of "default_value is meaningless for bool" error
+        #[structopt(long, parse(try_from_str), default_value = "true")]
+        resolve_debit_notes: bool
     },
     SendPayments {
         #[structopt(long)]
@@ -47,6 +52,9 @@ enum Command {
         payment_platform: String,
         #[structopt(long)]
         interval: Option<humantime::Duration>,
+        //parse(try_from_str) added to get rid of "default_value is meaningless for bool" error
+        #[structopt(long, parse(try_from_str), default_value = "true")]
+        resolve_debit_notes: bool,
     },
 }
 
@@ -60,10 +68,10 @@ async fn main() -> anyhow::Result<()> {
     log::info!("test1");
 
     let db = {
-        let database_url = format!(
+        let database_url = args.payment_db_location.unwrap_or(format!(
             "file:{}/.local/share/yagna/payment.db",
             std::env::home_dir().unwrap().display()
-        );
+        ));
         let db = DbExecutor::new(database_url)?;
         db.apply_migration(ya_payment::migrations::run_with_output)?;
         db
@@ -75,23 +83,25 @@ async fn main() -> anyhow::Result<()> {
             payment_platform,
             owner,
             incremental,
-        } => generate(db, owner, payment_platform, dry_run, incremental).await?,
+            resolve_debit_notes
+        } => generate(db, owner, payment_platform, dry_run, incremental, resolve_debit_notes).await?,
         Command::SendPayments { order_id } => send_payments(db, order_id).await?,
         Command::Run {
             owner,
             payment_platform,
             interval,
+            resolve_debit_notes
         } => {
             if let Some(duration) = interval {
                 loop {
                     tokio::time::delay_for(duration.into()).await;
                     log::info!("sending payments for {} {}", owner, payment_platform);
-                    if let Err(e) = run(db.clone(), owner, payment_platform.clone()).await {
+                    if let Err(e) = run(db.clone(), owner, payment_platform.clone(), resolve_debit_notes).await {
                         log::error!("failed to process order: {:?}", e);
                     }
                 }
             } else {
-                run(db, owner, payment_platform).await?;
+                run(db, owner, payment_platform, resolve_debit_notes).await?;
             }
         }
     }
@@ -152,13 +162,14 @@ async fn generate(
     payment_platform: String,
     dry_run: bool,
     incremental: bool,
+    resolve_debit_notes: bool
 ) -> anyhow::Result<()> {
     let ts = chrono::Utc::now() + chrono::Duration::days(-7);
-
     let order_id = db
         .as_dao::<BatchDao>()
-        .resolve(owner_id, owner_id.to_string(), payment_platform, ts)
+        .resolve(owner_id, owner_id.to_string(), payment_platform, resolve_debit_notes, ts)
         .await?;
+
     /*
     let invoices = db
         .as_dao::<InvoiceDao>()
@@ -408,12 +419,12 @@ async fn send_payments(db: DbExecutor, order_id: String) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn run(db: DbExecutor, owner_id: NodeId, payment_platform: String) -> anyhow::Result<()> {
+async fn run(db: DbExecutor, owner_id: NodeId, payment_platform: String, resolve_debit_notes: bool) -> anyhow::Result<()> {
     let ts = chrono::Utc::now() + chrono::Duration::days(-15);
 
     if let Some(order_id) = db
         .as_dao::<BatchDao>()
-        .resolve(owner_id, owner_id.to_string(), payment_platform, ts)
+        .resolve(owner_id, owner_id.to_string(), payment_platform, resolve_debit_notes, ts)
         .await?
     {
         send_payments(db, order_id).await?;
