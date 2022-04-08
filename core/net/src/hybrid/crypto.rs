@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use ethsign::{PublicKey, Signature};
 use futures::future::LocalBoxFuture;
@@ -13,6 +13,7 @@ use ya_service_bus::RpcEndpoint;
 
 pub struct IdentityCryptoProvider {
     default_id: NodeId,
+    aliases: Rc<RefCell<AliasCache>>,
     cache: Rc<RefCell<HashMap<NodeId, Rc<dyn Crypto>>>>,
 }
 
@@ -20,6 +21,7 @@ impl IdentityCryptoProvider {
     pub fn new(default_id: NodeId) -> Self {
         Self {
             default_id,
+            aliases: Default::default(),
             cache: Default::default(),
         }
     }
@@ -28,6 +30,33 @@ impl IdentityCryptoProvider {
 impl CryptoProvider for IdentityCryptoProvider {
     fn default_id<'a>(&self) -> LocalBoxFuture<'a, anyhow::Result<NodeId>> {
         futures::future::ok(self.default_id).boxed_local()
+    }
+
+    fn aliases<'a>(&self) -> LocalBoxFuture<'a, anyhow::Result<Vec<NodeId>>> {
+        let aliases = self.aliases.borrow();
+        if aliases.valid_ttl() {
+            return futures::future::ok(aliases.data.clone()).boxed_local();
+        }
+
+        let aliases_rfc = self.aliases.clone();
+        async move {
+            let identities = ya_service_bus::typed::service(identity::BUS_ID)
+                .send(identity::List {})
+                .await
+                .map_err(anyhow::Error::msg)??;
+
+            let node_ids: Vec<_> = identities
+                .into_iter()
+                .filter(|info| !(info.is_default || info.is_locked))
+                .map(|info| info.node_id)
+                .collect();
+
+            let mut aliases = aliases_rfc.borrow_mut();
+            aliases.update(node_ids.clone());
+
+            Ok(node_ids)
+        }
+        .boxed_local()
     }
 
     fn get<'a>(&self, node_id: NodeId) -> LocalBoxFuture<'a, anyhow::Result<Rc<dyn Crypto>>> {
@@ -97,7 +126,31 @@ impl Crypto for IdentityCrypto {
         .boxed_local()
     }
 
-    fn encrypt<'a>(&self, _message: &'a [u8]) -> LocalBoxFuture<'a, anyhow::Result<Vec<u8>>> {
+    fn encrypt<'a>(
+        &self,
+        _message: &'a [u8],
+        _remote_key: &'a PublicKey,
+    ) -> LocalBoxFuture<'a, anyhow::Result<Vec<u8>>> {
         todo!()
+    }
+}
+
+#[derive(Default)]
+struct AliasCache {
+    updated: Option<Instant>,
+    data: Vec<NodeId>,
+}
+
+impl AliasCache {
+    fn valid_ttl(&self) -> bool {
+        const ALIAS_CACHE_TTL_SEC: Duration = Duration::from_secs(5);
+        self.updated
+            .map(|updated| Instant::now() - updated < ALIAS_CACHE_TTL_SEC)
+            .unwrap_or(false)
+    }
+
+    fn update(&mut self, data: Vec<NodeId>) {
+        self.updated.replace(Instant::now());
+        self.data = data;
     }
 }
