@@ -51,20 +51,20 @@ async def test_payment_release_allocations(
         allocation = await requestor.create_allocation()
 
         # Confirming that allocation exists
-        assert await requestor.get_allocation(allocation)
+        assert await requestor.get_allocation(allocation.allocation_id)
 
         requestor.cli.payment_release_allocations()
 
         # Confirming that allocation does not exist after release
         with pytest.raises(ApiException):
-            await requestor.get_allocation(allocation)
+            await requestor.get_allocation(allocation.allocation_id)
 
         # Test allocation timeout logic
 
         allocation = await requestor.create_allocation(timeout)
 
         # Confirming that allocation exists
-        assert await requestor.get_allocation(allocation)
+        assert await requestor.get_allocation(allocation.allocation_id)
 
         # Wait some time to ensure that specified timeout has passed
         waiting_time = deadline * 2
@@ -72,4 +72,4 @@ async def test_payment_release_allocations(
 
         # Confirming that allocation does not exist after release
         with pytest.raises(ApiException):
-            await requestor.get_allocation(allocation)
+            await requestor.get_allocation(allocation.allocation_id)
