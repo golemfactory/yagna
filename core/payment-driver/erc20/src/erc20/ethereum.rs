@@ -232,9 +232,10 @@ pub async fn prepare_raw_transaction(
             if gas_price_from_network / 1000 > small_gas_bump {
                 gas_price_from_network += small_gas_bump;
             }
-            //big gas bump to be sure that transaction went by
             if network == Network::Rinkeby {
-                gas_price_from_network *= 1.2
+                //for testnet bump gas by 20% to not allow transactions to be stuck
+                gas_price_from_network *= U256::from(1200);
+                gas_price_from_network /= U256::from(1000);
             }
             gas_price_from_network
         }
