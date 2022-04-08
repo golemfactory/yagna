@@ -384,7 +384,12 @@ async fn accept_invoice(
         .await
     {
         Ok(AllocationStatus::Active(allocation)) => allocation,
-        Ok(AllocationStatus::Gone) => return response::gone(&format!("Allocation {} has been already released", allocation_id)),
+        Ok(AllocationStatus::Gone) => {
+            return response::gone(&format!(
+                "Allocation {} has been already released",
+                allocation_id
+            ))
+        }
         Ok(AllocationStatus::NotFound) => {
             return response::bad_request(&format!("Allocation {} not found", allocation_id))
         }

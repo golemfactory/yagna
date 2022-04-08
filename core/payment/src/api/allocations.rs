@@ -120,7 +120,10 @@ async fn get_allocation(
 
     match dao.get(allocation_id.clone(), node_id).await {
         Ok(AllocationStatus::Active(allocation)) => response::ok(allocation),
-        Ok(AllocationStatus::Gone) => response::gone(&format!("Allocation {} has been already released", allocation_id)),
+        Ok(AllocationStatus::Gone) => response::gone(&format!(
+            "Allocation {} has been already released",
+            allocation_id
+        )),
         Ok(AllocationStatus::NotFound) => response::not_found(),
         Err(e) => response::server_error(&e),
     }
