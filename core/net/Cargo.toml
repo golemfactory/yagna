@@ -11,9 +11,9 @@ service = []
 hybrid-net = []
 
 [dependencies]
-ya-core-model = { version = "^0.5", features=["net", "identity"] }
+ya-core-model = { version = "^0.6", features=["net", "identity"] }
 
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "ea95e911581700ee256f3c5122ffae11dd6036c0" }
+ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "e826d07c22427ac49503936822fcec97bd1e44ed" }
 #ya-relay-client = { path = "../../../ya-relay/client" }
 
 ya-sb-proto = { version = "0.4" }

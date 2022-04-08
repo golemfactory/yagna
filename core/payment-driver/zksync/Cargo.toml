@@ -31,7 +31,7 @@ zksync_eth_signer = { git = "https://github.com/matter-labs/zksync", rev = "0e28
 
 ## yagna dependencies
 ya-payment-driver = "0.2"
-ya-client-model = "0.3"
+ya-client-model = "0.4"
 ya-service-api-interfaces = "0.1"
 ya-utils-futures = "0.1"
 ya-utils-networking = "0.1"

@@ -1,0 +1,1 @@
+drop index pay_invoice_agreement_id_timestamp_idx;
