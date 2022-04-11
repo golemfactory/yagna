@@ -146,9 +146,13 @@ async fn release_allocation(
     let node_id = Some(id.identity);
     let dao = db.as_dao::<AllocationDao>();
 
-    match dao.release(allocation_id, node_id).await {
-        Ok(true) => response::ok(Null),
-        Ok(false) => response::not_found(),
+    match dao.release(allocation_id.clone(), node_id).await {
+        Ok(AllocationReleaseStatus::Released) => response::ok(Null),
+        Ok(AllocationReleaseStatus::NotFound) => response::not_found(),
+        Ok(AllocationReleaseStatus::Gone) => response::gone(&format!(
+            "Allocation {} has been already released",
+            allocation_id
+        )),
         Err(e) => response::server_error(&e),
     }
 }
@@ -222,10 +226,9 @@ pub async fn forced_release_allocation(
         .release(allocation_id.clone(), node_id)
         .await
     {
-        Ok(true) => {
+        Ok(AllocationReleaseStatus::Released) => {
             log::info!("Allocation {} released.", allocation_id);
         }
-        Ok(false) => (),
         Err(e) => {
             log::warn!(
                 "Releasing allocation {} failed. Db error occurred: {}",
@@ -233,5 +236,6 @@ pub async fn forced_release_allocation(
                 e
             );
         }
+        _ => (),
     }
 }

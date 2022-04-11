@@ -152,12 +152,31 @@ impl<'c> AllocationDao<'c> {
         .await
     }
 
-    pub async fn release(&self, allocation_id: String, owner_id: Option<NodeId>) -> DbResult<bool> {
+    pub async fn release(
+        &self,
+        allocation_id: String,
+        owner_id: Option<NodeId>,
+    ) -> DbResult<AllocationReleaseStatus> {
         let id = allocation_id.clone();
         do_with_transaction(self.pool, move |conn| {
+            let mut query = dsl::pay_allocation
+                .filter(dsl::id.eq(id.clone()))
+                .filter(dsl::released.eq(true))
+                .into_boxed();
+
+            if let Some(owner_id) = owner_id {
+                query = query.filter(dsl::owner_id.eq(owner_id));
+            }
+
+            let allocation: Option<ReadObj> = query.first(conn).optional()?;
+
+            if let Some(allocation) = allocation {
+                return Ok(AllocationReleaseStatus::Gone);
+            }
+
             let mut query = diesel::update(dsl::pay_allocation)
                 .filter(dsl::released.eq(false))
-                .filter(dsl::id.eq(id))
+                .filter(dsl::id.eq(id.clone()))
                 .into_boxed();
 
             if let Some(owner_id) = owner_id {
@@ -166,7 +185,11 @@ impl<'c> AllocationDao<'c> {
 
             let num_released = query.set(dsl::released.eq(true)).execute(conn)?;
 
-            Ok(num_released > 0)
+            if num_released > 0 {
+                return Ok(AllocationReleaseStatus::Released);
+            } else {
+                Ok(AllocationReleaseStatus::NotFound)
+            }
         })
         .await
     }
@@ -197,4 +220,10 @@ pub enum AllocationStatus {
     Active(Allocation),
     Gone,
     NotFound,
+}
+
+pub enum AllocationReleaseStatus {
+    Gone,
+    NotFound,
+    Released,
 }
