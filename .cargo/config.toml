@@ -6,6 +6,12 @@ rustflags = ["-C", "target-feature=+crt-static"]
 [target.x86_64-pc-windows-gnu]
 rustflags = ["-C", "target-feature=+crt-static"]
 
+[target.aarch64-unknown-linux-gnu]
+rustflags=["-C", "target-cpu=cortex-a72", "-C", "target-feature=+fp,+crc,+neon" ]
+
+[target.aarch64-unknown-linux-musl]
+rustflags=["-C", "target-cpu=cortex-a72", "-C", "target-feature=+fp,+crc,+neon" ]
+
 [cargo-new]
 name = "Golem Factory"
 email = "contact@golem.network"
