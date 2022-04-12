@@ -227,7 +227,7 @@ async def test_provider_timeout_unresponsive_requestor(
         # First DebitNote will be sent after 15s. Let's wait with some margin.
         await providers[0].wait_for_agreement_broken(
             "Requestor is unreachable more than",
-            timeout=18,
+            timeout=60,
         )
 
         # Note that Agreement will be broken, but Provider won't be
