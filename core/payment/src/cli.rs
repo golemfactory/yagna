@@ -155,6 +155,11 @@ impl PaymentCli {
                     return CommandOutput::object(status);
                 }
 
+                let gas_info = match status.gas {
+                    Some(details) => format!("{} {}", details.balance, details.currency_short_name),
+                    None => format!("N/A"),
+                };
+
                 Ok(ResponseTable {
                     columns: vec![
                         "platform".to_owned(),
@@ -163,6 +168,7 @@ impl PaymentCli {
                         "amount".to_owned(),
                         "incoming".to_owned(),
                         "outgoing".to_owned(),
+                        "gas".to_owned(),
                     ],
                     values: vec![
                         serde_json::json! {[
@@ -172,6 +178,7 @@ impl PaymentCli {
                             "accepted",
                             format!("{} {}", status.incoming.accepted.total_amount, status.token),
                             format!("{} {}", status.outgoing.accepted.total_amount, status.token),
+                            gas_info,
                         ]},
                         serde_json::json! {[
                             format!("network: {}", status.network),
@@ -180,6 +187,7 @@ impl PaymentCli {
                             "confirmed",
                             format!("{} {}", status.incoming.confirmed.total_amount, status.token),
                             format!("{} {}", status.outgoing.confirmed.total_amount, status.token),
+                            ""
                         ]},
                         serde_json::json! {[
                             format!("token: {}", status.token),
@@ -188,6 +196,7 @@ impl PaymentCli {
                             "requested",
                             format!("{} {}", status.incoming.requested.total_amount, status.token),
                             format!("{} {}", status.outgoing.requested.total_amount, status.token),
+                            ""
                         ]},
                     ],
                 }

@@ -46,6 +46,24 @@ pub async fn account_balance(address: H160, network: Network) -> Result<BigDecim
         &network,
         &balance
     );
+
+    Ok(balance)
+}
+
+pub async fn account_gas_balance(
+    address: H160,
+    network: Network,
+) -> Result<BigDecimal, GenericError> {
+    let balance_com = ethereum::get_balance(address, network).await?;
+    let balance = u256_to_big_dec(balance_com)?;
+
+    log::debug!(
+        "account_gas_balance. address={}, network={}, balance={}",
+        address,
+        &network,
+        &balance
+    );
+
     Ok(balance)
 }
 
