@@ -11,6 +11,7 @@ use ya_core_model::{identity, NodeId};
 use ya_relay_client::crypto::{Crypto, CryptoProvider};
 use ya_service_bus::RpcEndpoint;
 
+#[derive(Clone)]
 pub struct IdentityCryptoProvider {
     default_id: NodeId,
     aliases: Rc<RefCell<AliasCache>>,
@@ -24,6 +25,12 @@ impl IdentityCryptoProvider {
             aliases: Default::default(),
             cache: Default::default(),
         }
+    }
+}
+
+impl IdentityCryptoProvider {
+    pub fn reset_alias_cache(&self) {
+        self.aliases.borrow_mut().reset();
     }
 }
 
@@ -152,5 +159,10 @@ impl AliasCache {
     fn update(&mut self, data: Vec<NodeId>) {
         self.updated.replace(Instant::now());
         self.data = data;
+    }
+
+    fn reset(&mut self) {
+        self.updated.take();
+        self.data.clear();
     }
 }
