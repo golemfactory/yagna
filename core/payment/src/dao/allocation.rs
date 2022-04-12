@@ -159,37 +159,39 @@ impl<'c> AllocationDao<'c> {
     ) -> DbResult<AllocationReleaseStatus> {
         let id = allocation_id.clone();
         do_with_transaction(self.pool, move |conn| {
-            let mut query = dsl::pay_allocation
-                .filter(dsl::id.eq(id.clone()))
-                .filter(dsl::released.eq(true))
-                .into_boxed();
+            let allocation: Option<ReadObj> = dsl::pay_allocation
+                .find(id.clone())
+                .first(conn)
+                .optional()?;
 
-            if let Some(owner_id) = owner_id {
-                query = query.filter(dsl::owner_id.eq(owner_id));
+            match allocation {
+                Some(allocation) => {
+                    if let Some(owner_id) = owner_id {
+                        if owner_id != allocation.owner_id {
+                            return Ok(AllocationReleaseStatus::NotFound);
+                        }
+                    }
+
+                    if allocation.released {
+                        return Ok(AllocationReleaseStatus::Gone);
+                    }
+                }
+                None => return Ok(AllocationReleaseStatus::NotFound),
             }
 
-            let allocation: Option<ReadObj> = query.first(conn).optional()?;
-
-            if let Some(allocation) = allocation {
-                return Ok(AllocationReleaseStatus::Gone);
-            }
-
-            let mut query = diesel::update(dsl::pay_allocation)
+            let num_released = diesel::update(dsl::pay_allocation)
                 .filter(dsl::released.eq(false))
                 .filter(dsl::id.eq(id.clone()))
-                .into_boxed();
+                .set(dsl::released.eq(true))
+                .execute(conn)?;
 
-            if let Some(owner_id) = owner_id {
-                query = query.filter(dsl::owner_id.eq(owner_id));
-            }
-
-            let num_released = query.set(dsl::released.eq(true)).execute(conn)?;
-
-            if num_released > 0 {
-                return Ok(AllocationReleaseStatus::Released);
-            } else {
-                Ok(AllocationReleaseStatus::NotFound)
-            }
+            return match num_released {
+                1 => Ok(AllocationReleaseStatus::Released),
+                _ => Err(DbError::Query(format!(
+                    "Update error occurred when releasing allocation {}",
+                    allocation_id
+                ))),
+            };
         })
         .await
     }
