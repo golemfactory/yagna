@@ -164,7 +164,7 @@ pub async fn approve_multi_payment_contract(dao: &Erc20Dao, address: H160, netwo
                 None,
             );
             log::debug!("insert raw transaction");
-            dao.insert_raw_transaction(dao_entity);
+            dao.insert_raw_transaction(dao_entity).await.map_err(GenericError::new)?;
         }
     }
     Ok(())
@@ -258,14 +258,9 @@ pub async fn sign_faucet_tx(
     let env = get_env(network);
     let client = get_client(network).await?;
     let contract = prepare_glm_faucet_contract(&client, &env)?;
-    let contract = match contract {
-        Some(c) => c,
-        None => {
-            return Err(GenericError::new(
-                "Failed to get faucet fn, are you on the right network?",
-            ))
-        }
-    };
+    let contract = contract.ok_or(GenericError::new(
+        "Failed to get faucet fn, are you on the right network?",
+    ))?;
 
     let data = eth_utils::contract_encode(&contract, CREATE_FAUCET_FUNCTION, ()).unwrap();
     let gas_price = client.eth().gas_price().await.map_err(GenericError::new)?;

@@ -12,6 +12,7 @@ use ya_payment_driver::{
     model::{GenericError, SchedulePayment},
     utils,
 };
+use ya_payment_driver::dao::DbError;
 
 use crate::network::platform_to_network_token;
 
@@ -100,14 +101,14 @@ impl Erc20Dao {
         Ok(res.map(|val| val as u64))
     }
 
-    pub async fn insert_raw_transaction(&self, tx: TransactionEntity) -> String {
+    pub async fn insert_raw_transaction(&self, tx: TransactionEntity) -> Result<String, DbError> {
         let tx_id = tx.tx_id.clone();
 
-        if let Err(e) = self.transaction().insert_transactions(vec![tx]).await {
-            log::error!("Failed to store transaction for {} : {:?}", tx_id, e)
-            // TO CHECK: Should it continue or stop the process...
-        }
-        tx_id
+        self.transaction().insert_transactions(vec![tx]).await.map_err(|e| {
+            log::error!("Failed to store transaction for {} : {:?}", tx_id, e);
+            e
+        })?;
+        Ok(tx_id)
     }
 
     pub async fn get_payments_based_on_tx(&self, tx_id: &str) -> Vec<PaymentEntity> {

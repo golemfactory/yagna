@@ -404,7 +404,7 @@ pub async fn process_payments_for_account(
             if next_nonce >= next_nonce_info.network_nonce_latest + env.payment_max_processed {
                 break;
             }
-            handle_payment(&dao, payment, &mut next_nonce).await;
+            handle_payment(&dao, payment, &mut next_nonce).await?;
         }
     }
     Ok(())
@@ -434,13 +434,13 @@ pub async fn process_transactions(dao: &Erc20Dao, network: Network) {
     }
 }
 
-async fn handle_payment(dao: &Erc20Dao, payment: PaymentEntity, nonce: &mut u64) {
+async fn handle_payment(dao: &Erc20Dao, payment: PaymentEntity, nonce: &mut u64) -> Result<(), GenericError>{
     let details = utils::db_to_payment_details(&payment);
     let tx_nonce = nonce.to_owned();
 
     match wallet::make_transfer(&details, tx_nonce, payment.network, None, None, None).await {
         Ok(db_tx) => {
-            let tx_id = dao.insert_raw_transaction(db_tx).await;
+            let tx_id = dao.insert_raw_transaction(db_tx).await.map_err(GenericError::new)?;
             dao.transaction_saved(&tx_id, &payment.order_id).await;
             *nonce += 1;
         }
@@ -457,4 +457,5 @@ async fn handle_payment(dao: &Erc20Dao, payment: PaymentEntity, nonce: &mut u64)
             };
         }
     };
+    Ok(())
 }

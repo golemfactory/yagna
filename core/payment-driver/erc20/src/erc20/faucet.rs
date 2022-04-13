@@ -79,7 +79,7 @@ pub async fn request_glm(
     }
     let pending = dao.get_pending_faucet_txs(&str_addr, network).await;
     for _tx in pending {
-        log::info!("Already pending a mint transactin.");
+        log::info!("Already pending a mint transaction.");
         return Ok(());
     }
     log::info!(
@@ -90,7 +90,7 @@ pub async fn request_glm(
     let nonce = wallet::get_next_nonce(dao, address, network).await?;
     let db_tx = ethereum::sign_faucet_tx(address, network, nonce).await?;
     // After inserting into the database, the tx will get send by the send_payments job
-    dao.insert_raw_transaction(db_tx).await;
+    dao.insert_raw_transaction(db_tx).await.map_err(GenericError::new)?;
 
     // Wait for tx to get mined:
     // - send_payments job runs every 10 seconds

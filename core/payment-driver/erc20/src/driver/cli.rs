@@ -167,7 +167,7 @@ pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericEr
     let human_gas_cost = wallet::has_enough_eth_for_gas(&db_tx, network).await?;
 
     // Everything ok, put the transaction in the queue
-    let tx_id = dao.insert_raw_transaction(db_tx).await;
+    let tx_id = dao.insert_raw_transaction(db_tx).await.map_err(GenericError::new)?;
 
     let message = format!(
         "Scheduled {} transfer. details={:?}, max_gas_cost={} ETH, network={}",
