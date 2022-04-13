@@ -23,7 +23,22 @@ impl NetCommand {
     pub async fn run_command(self, _ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
             NetCommand::Status {} => {
-                CommandOutput::object(bus::service(model::BUS_ID).send(model::Status {}).await??)
+                let status = bus::service(model::BUS_ID).send(model::Status {}).await??;
+
+                CommandOutput::object(serde_json::json!({
+                    "nodeId": status.node_id,
+                    "listenAddress": status.listen_address,
+                    "publicAddress": status.public_address,
+                    "sessions": status.sessions,
+                    "bandwidth": {
+                        "out": to_kib(status.metrics.tx_current),
+                        "outAvg": to_kib(status.metrics.tx_avg),
+                        "outMib": to_mib(status.metrics.tx_total),
+                        "in": to_kib(status.metrics.rx_current),
+                        "inAvg": to_kib(status.metrics.rx_avg),
+                        "inMib": to_mib(status.metrics.rx_total),
+                    }
+                }))
             }
             NetCommand::Sessions {} => {
                 let mut sessions: Vec<model::SessionResponse> = bus::service(model::BUS_ID)
@@ -35,7 +50,7 @@ impl NetCommand {
 
                 Ok(ResponseTable {
                     columns: vec![
-                        "node".into(),
+                        "nodeId".into(),
                         "address".into(),
                         "type".into(),
                         "seen".into(),
@@ -72,19 +87,25 @@ impl NetCommand {
 
                 Ok(ResponseTable {
                     columns: vec![
-                        "socket".into(),
-                        "address".into(),
+                        "type".into(),
                         "port".into(),
+                        "to addr".into(),
+                        "to port".into(),
                         "state".into(),
+                        "out [KiB/s]".into(),
+                        "in [KiB/s]".into(),
                     ],
                     values: sockets
                         .into_iter()
                         .map(|s| {
                             serde_json::json! {[
-                                format!("{}:{}", s.protocol, s.local_port),
+                                s.protocol.to_string(),
+                                s.local_port.to_string(),
                                 s.remote_addr,
                                 s.remote_port,
                                 s.state,
+                                to_kib(s.metrics.tx_current),
+                                to_kib(s.metrics.rx_current),
                             ]}
                         })
                         .collect(),
@@ -93,4 +114,13 @@ impl NetCommand {
             }
         }
     }
+}
+
+/// format floats for display purposes
+fn to_kib(value: f32) -> String {
+    format!("{:.2}", value / 1024.)
+}
+
+fn to_mib(value: usize) -> String {
+    format!("{:.2}", value as f64 / (1024. * 1024.))
 }
