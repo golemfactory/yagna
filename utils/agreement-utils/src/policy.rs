@@ -172,9 +172,22 @@ impl Keystore {
         inner.contains_key(key)
     }
 
-    pub fn insert(&self, key: impl Into<Box<[u8]>>, scheme: Option<String>, name: Option<String>) {
+    pub fn insert(
+        &self,
+        key: impl Into<Box<[u8]>>,
+        scheme: Option<String>,
+        name: Option<String>,
+    ) -> anyhow::Result<()> {
         let mut inner = self.inner.write().unwrap();
-        inner.insert(key.into(), KeyMeta::new(scheme, name));
+        let meta = KeyMeta::new(scheme, name);
+        let boxed_key = key.into();
+        let verification_key = boxed_key.clone();
+        // Verify key
+        PublicKey::from_slice(&*verification_key)
+            .map_err(|e| anyhow::anyhow!(format!("invalid key provided: {:?}", e)))?;
+
+        inner.insert(boxed_key, meta);
+        Ok(())
     }
 
     pub fn remove_by_name(&self, name: impl AsRef<str>) -> Option<Box<[u8]>> {
