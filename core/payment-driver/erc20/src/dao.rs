@@ -2,8 +2,6 @@
     Database Access Object, all you need to interact with the database.
 */
 
-use web3::types::U256;
-
 // Workspace uses
 use ya_payment_driver::{
     dao::{payment::PaymentDao, transaction::TransactionDao, DbExecutor},

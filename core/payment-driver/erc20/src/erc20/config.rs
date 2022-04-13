@@ -23,6 +23,8 @@ pub struct EnvConfiguration {
     pub latest_block_max_seconds_behind: i64,
 }
 
+pub const DEFAULT_MAX_PROCESSED: u64 = 30;
+
 lazy_static! {
     pub static ref RINKEBY_CONFIG: EnvConfiguration = EnvConfiguration {
         glm_contract_address: utils::str_to_addr(

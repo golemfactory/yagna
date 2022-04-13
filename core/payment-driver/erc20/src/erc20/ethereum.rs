@@ -22,6 +22,7 @@ use ya_payment_driver::{bus, model::GenericError};
 
 use crate::erc20::transaction::YagnaRawTransaction;
 use crate::erc20::{config, eth_utils};
+use num_traits::ToPrimitive;
 use crate::dao::Erc20Dao;
 use crate::erc20::wallet::get_next_nonce_info;
 
@@ -150,7 +151,7 @@ pub async fn approve_multi_payment_contract(dao: &Erc20Dao, address: H160, netwo
                 gas: *GLM_APPROVE_GAS,
                 data,
             };
-            let daoEnt : TransactionEntity = create_dao_entity(
+            let dao_entity : TransactionEntity = create_dao_entity(
                 U256::from(nonce_info.network_nonce_latest),
                 address,
                 gas_price.to_string(),
@@ -163,7 +164,7 @@ pub async fn approve_multi_payment_contract(dao: &Erc20Dao, address: H160, netwo
                 None,
             );
             log::debug!("insert raw transaction");
-            dao.insert_raw_transaction(daoEnt);
+            dao.insert_raw_transaction(dao_entity);
         }
     }
     Ok(())

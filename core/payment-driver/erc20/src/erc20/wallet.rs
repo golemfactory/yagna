@@ -461,14 +461,8 @@ pub async fn send_transactions(
 
 pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails, GenericError> {
     log::debug!("verify_tx. hash={}", tx_hash);
-    let hex_hash = H256::from_str(&tx_hash[2..]).map_err(|err| {
-        log::error!("tx hash failed to parse: {}", tx_hash);
-        GenericError::new(err)
-    })?;
-    let tx = ethereum::get_tx_receipt(hex_hash, network).await.map_err(|err| {
-        log::error!("Failed to obtain tx receipt from blockchain network: {}", hex_hash);
-        err
-    })?;
+    let hex_hash = H256::from_str(&tx_hash[2..]).unwrap();
+    let tx = ethereum::get_tx_receipt(hex_hash, network).await?.unwrap();
     // TODO: Properly parse logs after https://github.com/tomusdrw/rust-web3/issues/208
     let tx_log = &tx.logs[0];
     let sender = topic_to_str_address(&tx_log.topics[1]);
