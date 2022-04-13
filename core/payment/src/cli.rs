@@ -320,14 +320,16 @@ impl PaymentCli {
                 if ctx.json_output {
                     return CommandOutput::object(drivers);
                 }
-                Ok(ResponseTable { columns: vec![
+                Ok(ResponseTable {
+                    columns: vec![
                         "driver".to_owned(),
                         "network".to_owned(),
                         "default?".to_owned(),
                         "token".to_owned(),
                         "default?".to_owned(),
                         "platform".to_owned(),
-                    ], values: drivers
+                    ],
+                    values: drivers
                         .iter()
                         .flat_map(|(driver, dd)| {
                             dd.networks
@@ -349,14 +351,15 @@ impl PaymentCli {
                                 })
                                 .collect::<Vec<serde_json::Value>>()
                         })
-                        .collect()
+                        .collect(),
                 }.into())
             }
-            PaymentCli::ReleaseAllocations => CommandOutput::object(
-                bus::service(pay::BUS_ID)
+            PaymentCli::ReleaseAllocations => {
+                let _ = bus::service(pay::BUS_ID)
                     .call(pay::ReleaseAllocations {})
-                    .await??,
-            ),
+                    .await;
+                Ok(CommandOutput::NoOutput)
+            }
         }
     }
 }

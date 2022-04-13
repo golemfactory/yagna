@@ -1,7 +1,10 @@
+use std::time::Duration;
 // External crates
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
+use chrono::{DateTime, Utc};
 use serde_json::value::Value::Null;
+use ya_client_model::NodeId;
 
 // Workspace uses
 use ya_agreement_utils::{ClauseOperator, ConstraintKey, Constraints};
@@ -61,34 +64,33 @@ async fn create_allocation(
         Err(e) => return response::server_error(&e),
     }
 
-    match async move {
-        let dao = db.as_dao::<AllocationDao>();
-        let allocation_id = dao
-            .create(allocation, node_id, payment_platform, address)
-            .await?;
+    let dao = db.as_dao::<AllocationDao>();
 
-        match dao.get(allocation_id, node_id).await? {
-            None => Ok(None),
-            Some(allocation) => {
+    match dao
+        .create(allocation, node_id, payment_platform, address)
+        .await
+    {
+        Ok(allocation_id) => match dao.get(allocation_id, node_id).await {
+            Ok(AllocationStatus::Active(allocation)) => {
                 let allocation_id = allocation.allocation_id.clone();
                 let allocation_timeout = allocation.timeout.clone();
 
-                tokio::task::spawn(async move {
-                    db.as_dao::<AllocationDao>()
-                        .release_allocation_after(allocation_id, allocation_timeout, Some(node_id))
-                        .await;
-                });
+                release_allocation_after(
+                    db.clone(),
+                    allocation_id,
+                    allocation_timeout,
+                    Some(node_id),
+                )
+                .await;
 
-                Ok(Some(allocation))
+                response::created(allocation)
             }
-        }
-    }
-    .await
-    {
-        Ok(Some(allocation)) => response::created(allocation),
-        Ok(None) => response::server_error(&"Database error"),
-        Err(DbError::Query(e)) => response::bad_request(&e),
-        Err(e) => response::server_error(&e),
+            Ok(AllocationStatus::NotFound) => return response::server_error(&"Database error"),
+            Ok(AllocationStatus::Gone) => return response::server_error(&"Database error"),
+            Err(DbError::Query(e)) => return response::bad_request(&e),
+            Err(e) => return response::server_error(&e),
+        },
+        Err(e) => return response::server_error(&e),
     }
 }
 
@@ -115,9 +117,14 @@ async fn get_allocation(
     let allocation_id = path.allocation_id.clone();
     let node_id = id.identity;
     let dao: AllocationDao = db.as_dao();
-    match dao.get(allocation_id, node_id).await {
-        Ok(Some(allocation)) => response::ok(allocation),
-        Ok(None) => response::not_found(),
+
+    match dao.get(allocation_id.clone(), node_id).await {
+        Ok(AllocationStatus::Active(allocation)) => response::ok(allocation),
+        Ok(AllocationStatus::Gone) => response::gone(&format!(
+            "Allocation {} has been already released",
+            allocation_id
+        )),
+        Ok(AllocationStatus::NotFound) => response::not_found(),
         Err(e) => response::server_error(&e),
     }
 }
@@ -139,9 +146,13 @@ async fn release_allocation(
     let node_id = Some(id.identity);
     let dao = db.as_dao::<AllocationDao>();
 
-    match dao.release(allocation_id, node_id).await {
-        Ok(true) => response::ok(Null),
-        Ok(false) => response::not_found(),
+    match dao.release(allocation_id.clone(), node_id).await {
+        Ok(AllocationReleaseStatus::Released) => response::ok(Null),
+        Ok(AllocationReleaseStatus::NotFound) => response::not_found(),
+        Ok(AllocationReleaseStatus::Gone) => response::gone(&format!(
+            "Allocation {} has been already released",
+            allocation_id
+        )),
         Err(e) => response::server_error(&e),
     }
 }
@@ -181,4 +192,50 @@ async fn get_demand_decorations(
         properties,
         constraints,
     })
+}
+
+pub async fn release_allocation_after(
+    db: Data<DbExecutor>,
+    allocation_id: String,
+    allocation_timeout: Option<DateTime<Utc>>,
+    node_id: Option<NodeId>,
+) {
+    tokio::task::spawn(async move {
+        if let Some(timeout) = allocation_timeout {
+            let timestamp = timeout.timestamp() - Utc::now().timestamp();
+            let mut deadline = 0u64;
+
+            if timestamp.is_positive() {
+                deadline = timestamp as u64;
+            }
+
+            tokio::time::delay_for(Duration::from_secs(deadline)).await;
+
+            forced_release_allocation(db, allocation_id, node_id).await;
+        }
+    });
+}
+
+pub async fn forced_release_allocation(
+    db: Data<DbExecutor>,
+    allocation_id: String,
+    node_id: Option<NodeId>,
+) {
+    match db
+        .as_dao::<AllocationDao>()
+        .release(allocation_id.clone(), node_id)
+        .await
+    {
+        Ok(AllocationReleaseStatus::Released) => {
+            log::info!("Allocation {} released.", allocation_id);
+        }
+        Err(e) => {
+            log::warn!(
+                "Releasing allocation {} failed. Db error occurred: {}",
+                allocation_id,
+                e
+            );
+        }
+        _ => (),
+    }
 }
