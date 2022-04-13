@@ -1,6 +1,8 @@
-use humantime::format_duration;
 use std::cmp::Ordering;
+use std::fmt::Display;
 use std::time::Duration;
+
+use humantime::format_duration;
 use structopt::*;
 
 use ya_core_model::net::local as model;
@@ -20,7 +22,9 @@ pub enum NetCommand {
 }
 
 impl NetCommand {
-    pub async fn run_command(self, _ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
+    pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
+        let is_json = ctx.json_output;
+
         match self {
             NetCommand::Status {} => {
                 let status = bus::service(model::BUS_ID).send(model::Status {}).await??;
@@ -31,12 +35,12 @@ impl NetCommand {
                     "publicAddress": status.public_address,
                     "sessions": status.sessions,
                     "bandwidth": {
-                        "out": to_kib(status.metrics.tx_current),
-                        "outAvg": to_kib(status.metrics.tx_avg),
-                        "outMib": to_mib(status.metrics.tx_total),
-                        "in": to_kib(status.metrics.rx_current),
-                        "inAvg": to_kib(status.metrics.rx_avg),
-                        "inMib": to_mib(status.metrics.rx_total),
+                        "out": to_kib(status.metrics.tx_current, is_json),
+                        "outAvg": to_kib(status.metrics.tx_avg, is_json),
+                        "outMib": to_mib(status.metrics.tx_total, is_json),
+                        "in": to_kib(status.metrics.rx_current, is_json),
+                        "inAvg": to_kib(status.metrics.rx_avg, is_json),
+                        "inMib": to_mib(status.metrics.rx_total, is_json),
                     }
                 }))
             }
@@ -104,8 +108,8 @@ impl NetCommand {
                                 s.remote_addr,
                                 s.remote_port,
                                 s.state,
-                                to_kib(s.metrics.tx_current),
-                                to_kib(s.metrics.rx_current),
+                                to_kib(s.metrics.tx_current, is_json),
+                                to_kib(s.metrics.rx_current, is_json),
                             ]}
                         })
                         .collect(),
@@ -116,11 +120,26 @@ impl NetCommand {
     }
 }
 
-/// format floats for display purposes
-fn to_kib(value: f32) -> String {
-    format!("{:.2}", value / 1024.)
+#[inline]
+fn to_kib(value: f32, is_json: bool) -> serde_json::Value {
+    format_number(value / 1024., is_json)
 }
 
-fn to_mib(value: usize) -> String {
-    format!("{:.2}", value as f64 / (1024. * 1024.))
+#[inline]
+fn to_mib(value: usize, is_json: bool) -> serde_json::Value {
+    format_number(value as f64 / (1024. * 1024.), is_json)
+}
+
+fn format_number<T>(value: T, is_json: bool) -> serde_json::Value
+where
+    T: Display,
+    f64: From<T>,
+{
+    let value: f64 = value.into();
+    if is_json {
+        return serde_json::Value::Number(
+            serde_json::Number::from_f64(value).unwrap_or_else(|| serde_json::Number::from(0)),
+        );
+    }
+    serde_json::Value::String(format!("{:.2}", value))
 }
