@@ -22,6 +22,7 @@ use ya_payment_driver::{
 };
 
 // Local uses
+use crate::erc20::gas_provider::get_network_gas_price;
 use crate::erc20::transaction::YagnaRawTransaction;
 use crate::{
     dao::Erc20Dao,
@@ -82,24 +83,51 @@ pub async fn fund(dao: &Erc20Dao, address: H160, network: Network) -> Result<(),
     Ok(())
 }
 
+#[derive(Debug)]
+pub struct NextNonceInfo {
+    pub network_nonce_pending: u64,
+    pub network_nonce_latest: u64,
+    pub db_nonce_pending: Option<u64>,
+}
+
+pub async fn get_next_nonce_info(
+    dao: &Erc20Dao,
+    address: H160,
+    network: Network,
+) -> Result<NextNonceInfo, GenericError> {
+    let str_addr = format!("0x{:x}", &address);
+    let network_nonce_pending = ethereum::get_transaction_count(address, network, true).await?;
+    let network_nonce_latest = ethereum::get_transaction_count(address, network, false).await?;
+    let db_nonce_pending = dao
+        .get_last_db_nonce_pending(&str_addr, network)
+        .await?
+        .map(|last_db_nonce_pending| last_db_nonce_pending + 1);
+
+    Ok(NextNonceInfo {
+        network_nonce_pending,
+        network_nonce_latest,
+        db_nonce_pending,
+    })
+}
+
 pub async fn get_next_nonce(
     dao: &Erc20Dao,
     address: H160,
     network: Network,
-) -> Result<U256, GenericError> {
-    let network_nonce = ethereum::get_next_nonce_pending(address, network).await?;
-    let str_addr = format!("0x{:x}", &address);
-    let db_nonce = dao.get_next_nonce(&str_addr, network).await?;
+) -> Result<u64, GenericError> {
+    let nonce_info = get_next_nonce_info(dao, address, network).await?;
 
-    if db_nonce > network_nonce {
-        warn!(
-            "Network nonce different than db nonce: {} != {}",
-            network_nonce, db_nonce
-        );
-        return Ok(db_nonce);
+    if let Some(db_nonce_pending) = nonce_info.db_nonce_pending {
+        if nonce_info.network_nonce_pending > db_nonce_pending {
+            warn!(
+                "Network nonce higher than db nonce: {} != {}",
+                nonce_info.network_nonce_pending, db_nonce_pending
+            )
+        };
+        Ok(db_nonce_pending)
+    } else {
+        Ok(nonce_info.network_nonce_pending)
     }
-
-    Ok(network_nonce)
 }
 
 pub async fn has_enough_eth_for_gas(
@@ -131,7 +159,7 @@ pub async fn get_block_number(network: Network) -> Result<U64, GenericError> {
 
 pub async fn make_transfer(
     details: &PaymentDetails,
-    nonce: U256,
+    nonce: u64,
     network: Network,
     gas_price: Option<BigDecimal>,
     max_gas_price: Option<BigDecimal>,
@@ -159,10 +187,10 @@ pub async fn make_transfer(
                 }),
             ),
             PolygonGasPriceMethod::PolygonGasPriceDynamic => (
-                match gas_price {
-                    None => None,
-                    Some(v) => Some(big_dec_gwei_to_u256(v)?),
-                },
+                Some(match gas_price {
+                    Some(v) => big_dec_gwei_to_u256(v)?,
+                    None => convert_float_gas_to_u256(get_polygon_starting_price()),
+                }),
                 Some(match max_gas_price {
                     Some(v) => big_dec_gwei_to_u256(v)?,
                     None => convert_float_gas_to_u256(get_polygon_maximum_price()),
@@ -186,7 +214,13 @@ pub async fn make_transfer(
     // TODO: Implement token
     //let token = get_network_token(network, None);
     let mut raw_tx = ethereum::prepare_raw_transaction(
-        address, recipient, amount, network, nonce, gas_price, gas_limit,
+        address,
+        recipient,
+        amount,
+        network,
+        U256::from(nonce),
+        gas_price,
+        gas_limit,
     )
     .await?;
 
@@ -197,7 +231,7 @@ pub async fn make_transfer(
     }
 
     Ok(ethereum::create_dao_entity(
-        nonce,
+        U256::from(nonce),
         address,
         raw_tx.gas_price.to_string(),
         max_gas_price.map(|v| v.to_string()),
@@ -246,6 +280,7 @@ pub async fn send_transactions(
     network: Network,
 ) -> Result<(), GenericError> {
     // TODO: Use batch sending?
+    let mut current_max_gas_price = U256::from(0);
     for tx in txs {
         let mut raw_tx: YagnaRawTransaction =
             match serde_json::from_str::<YagnaRawTransaction>(&tx.encoded) {
@@ -271,6 +306,10 @@ pub async fn send_transactions(
         let address = str_to_addr(&tx.sender)?;
 
         let new_gas_price = if let Some(current_gas_price) = tx.current_gas_price {
+            //***************************************
+            // resolve gas bump transaction here
+            //***************************************
+
             if tx.status == TransactionStatus::ResendAndBumpGas as i32 {
                 let gas_u256 = U256::from_dec_str(&current_gas_price).map_err(GenericError::new)?;
 
@@ -295,11 +334,48 @@ pub async fn send_transactions(
                 U256::from_dec_str(&current_gas_price).map_err(GenericError::new)?
             }
         } else if let Some(starting_gas_price) = tx.starting_gas_price {
-            U256::from_dec_str(&starting_gas_price).map_err(GenericError::new)?
+            //*******************************************
+            // resolve first transaction gas price here
+            //*******************************************
+
+            let network_price = get_network_gas_price(network).await?;
+            let minimum_price =
+                U256::from_dec_str(&starting_gas_price).map_err(GenericError::new)?;
+
+            let mut new_gas_price = if network_price > minimum_price {
+                network_price
+            } else {
+                minimum_price
+            };
+
+            let max_gas_price = match tx.max_gas_price {
+                Some(max_gas_price) => {
+                    Some(U256::from_dec_str(&max_gas_price).map_err(GenericError::new)?)
+                }
+                None => None,
+            };
+            //first transaction gas_price cannot be bigger than max_gas_price set
+            if let Some(max_gas_price) = max_gas_price {
+                new_gas_price = if max_gas_price < new_gas_price {
+                    max_gas_price
+                } else {
+                    new_gas_price
+                }
+            }
+            new_gas_price
         } else {
             convert_float_gas_to_u256(get_polygon_starting_price())
         };
         raw_tx.gas_price = new_gas_price;
+        if new_gas_price > current_max_gas_price && current_max_gas_price != U256::from(0) {
+            // Do not send transaction with gas higher than previously sent transaction.
+            // This is preventing bumping gas for future transaction over existing ones
+            log::debug!(
+                "Skipping transaction send, because transaction with lower gas is already waiting"
+            );
+            continue;
+        }
+        current_max_gas_price = new_gas_price;
 
         let encoded = serde_json::to_string(&raw_tx).map_err(GenericError::new)?;
         let signature = ethereum::sign_raw_transfer_transaction(address, network, &raw_tx).await?;
@@ -325,7 +401,7 @@ pub async fn send_transactions(
                 };
                 dao.transaction_sent(&tx.tx_id, &str_tx_hash, Some(raw_tx.gas_price.to_string()))
                     .await;
-                log::info!("Send transaction. hash={}", &str_tx_hash);
+                log::info!("Send transaction. hash={}", &tx_hash);
                 log::debug!("id={}", &tx.tx_id);
             }
             Err(e) => {
@@ -385,8 +461,14 @@ pub async fn send_transactions(
 
 pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails, GenericError> {
     log::debug!("verify_tx. hash={}", tx_hash);
-    let hex_hash = H256::from_str(&tx_hash[2..]).unwrap();
-    let tx = ethereum::get_tx_receipt(hex_hash, network).await?.unwrap();
+    let hex_hash = H256::from_str(&tx_hash[2..]).map_err(|err| {
+        log::error!("tx hash failed to parse: {}", tx_hash);
+        GenericError::new(err)
+    })?;
+    let tx = ethereum::get_tx_receipt(hex_hash, network).await.map_err(|err| {
+        log::error!("Failed to obtain tx receipt from blockchain network: {}", hex_hash);
+        err
+    })?;
     // TODO: Properly parse logs after https://github.com/tomusdrw/rust-web3/issues/208
     let tx_log = &tx.logs[0];
     let sender = topic_to_str_address(&tx_log.topics[1]);

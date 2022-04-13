@@ -2,14 +2,17 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use bigdecimal::BigDecimal;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use ethabi::Token;
 use lazy_static::lazy_static;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 use web3::contract::{Contract, Options};
 use web3::transports::Http;
-use web3::types::{Bytes, Transaction, TransactionId, TransactionReceipt, H160, H256, U256, U64};
+use web3::types::{
+    BlockId, BlockNumber, Bytes, Transaction, TransactionId, TransactionReceipt, H160, H256, U256,
+    U64,
+};
 use web3::Web3;
 
 use ya_client_model::NodeId;
@@ -20,6 +23,7 @@ use ya_payment_driver::{bus, model::GenericError};
 use crate::erc20::transaction::YagnaRawTransaction;
 use crate::erc20::{config, eth_utils};
 use crate::dao::Erc20Dao;
+use crate::erc20::wallet::get_next_nonce_info;
 
 pub enum PolygonPriority {
     PolygonPrioritySlow,
@@ -136,9 +140,10 @@ pub async fn approve_multi_payment_contract(dao: &Erc20Dao, address: H160, netwo
             let gas_price = client.eth().gas_price().await.map_err(GenericError::new)?;
             //increase gas price by 100% to make sure transaction will proceed without issues
             let gas_price = gas_price * U256::from(15) / U256::from(10);
-            let nonce = get_next_nonce_latest(address, network).await?;
+            let nonce_info = get_next_nonce_info(dao, address, network).await?;
+
             let tx = YagnaRawTransaction {
-                nonce,
+                nonce: U256::from(nonce_info.network_nonce_latest),
                 to: Some(glm_contract.address()),
                 value: U256::from(0),
                 gas_price,
@@ -146,7 +151,7 @@ pub async fn approve_multi_payment_contract(dao: &Erc20Dao, address: H160, netwo
                 data,
             };
             let daoEnt : TransactionEntity = create_dao_entity(
-                nonce,
+                U256::from(nonce_info.network_nonce_latest),
                 address,
                 gas_price.to_string(),
                 Some(gas_price.to_string()),
@@ -190,25 +195,49 @@ pub async fn get_balance(address: H160, network: Network) -> Result<U256, Generi
         .map_err(GenericError::new)?)
 }
 
-
-pub async fn get_next_nonce_latest(address: H160, network: Network) -> Result<U256, GenericError> {
+pub async fn get_transaction_count(
+    address: H160,
+    network: Network,
+    pending: bool,
+) -> Result<u64, GenericError> {
+    let nonce_type = match pending {
+        true => web3::types::BlockNumber::Pending,
+        false => web3::types::BlockNumber::Latest,
+    };
     let client = get_client(network).await?;
     let nonce = client
         .eth()
-        .transaction_count(address, Some(web3::types::BlockNumber::Latest))
+        .transaction_count(address, Some(nonce_type))
         .await
         .map_err(GenericError::new)?;
-    Ok(nonce)
+    Ok(nonce.as_u64())
 }
 
-pub async fn get_next_nonce_pending(address: H160, network: Network) -> Result<U256, GenericError> {
+pub async fn get_last_block_date(
+    network: Network,
+    block_number: u64,
+) -> Result<DateTime<Utc>, GenericError> {
     let client = get_client(network).await?;
-    let nonce = client
+    let block_info = client
         .eth()
-        .transaction_count(address, Some(web3::types::BlockNumber::Pending))
+        .block(BlockId::Number(BlockNumber::Number(U64::from(
+            block_number,
+        ))))
         .await
-        .map_err(GenericError::new)?;
-    Ok(nonce)
+        .map_err(GenericError::new)?
+        .ok_or(GenericError::new("No latest block info returned"))?;
+    let dt = DateTime::<Utc>::from_utc(
+        NaiveDateTime::from_timestamp(
+            block_info
+                .timestamp
+                .as_u64()
+                .to_i64()
+                .ok_or(GenericError::new("Failed timestamp convertion"))?,
+            0,
+        ),
+        Utc,
+    );
+    Ok(dt)
 }
 
 pub async fn block_number(network: Network) -> Result<U64, GenericError> {
@@ -223,7 +252,7 @@ pub async fn block_number(network: Network) -> Result<U64, GenericError> {
 pub async fn sign_faucet_tx(
     address: H160,
     network: Network,
-    nonce: U256,
+    nonce: u64,
 ) -> Result<TransactionEntity, GenericError> {
     let env = get_env(network);
     let client = get_client(network).await?;
@@ -242,7 +271,7 @@ pub async fn sign_faucet_tx(
     //bump gas to prevent stuck transaction
     let gas_price = gas_price * U256::from(15) / U256::from(10);
     let tx = YagnaRawTransaction {
-        nonce,
+        nonce: U256::from(nonce),
         to: Some(contract.address()),
         value: U256::from(0),
         gas_price,
@@ -256,7 +285,7 @@ pub async fn sign_faucet_tx(
     //let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
 
     Ok(create_dao_entity(
-        nonce,
+        U256::from(nonce),
         address,
         gas_price.to_string(),
         Some(gas_price.to_string()),
@@ -354,7 +383,7 @@ pub struct TransactionChainStatus {
 
 pub async fn get_tx_on_chain_status(
     tx_hash: H256,
-    current_block: Option<u64>,
+    current_block: u64,
     network: Network,
 ) -> Result<TransactionChainStatus, GenericError> {
     let mut res = TransactionChainStatus {
@@ -380,13 +409,11 @@ pub async fn get_tx_on_chain_status(
                 "is_tx_confirmed? tb + rq - 1 <= cb. tb={}, rq={}, cb={}",
                 tx_bn,
                 env.required_confirmations,
-                current_block.unwrap_or(0)
+                current_block
             );
             // tx.block_number is the first confirmation, so we need to - 1
-            if let Some(current_block) = current_block {
-                if tx_bn.as_u64() + env.required_confirmations - 1 <= current_block {
-                    res.confirmed = true;
-                }
+            if tx_bn.as_u64() + env.required_confirmations - 1 <= current_block {
+                res.confirmed = true;
             }
             let transaction = get_tx_from_network(tx_hash, network).await?;
             if let Some(t) = transaction {
@@ -496,7 +523,7 @@ async fn get_client(network: Network) -> Result<Web3<Http>, GenericError> {
     Ok(client)
 }
 
-fn get_env(network: Network) -> config::EnvConfiguration {
+pub fn get_env(network: Network) -> config::EnvConfiguration {
     match network {
         Network::Mainnet => *config::MAINNET_CONFIG,
         Network::Rinkeby => *config::RINKEBY_CONFIG,
@@ -593,4 +620,18 @@ pub fn get_gas_price_from_db_tx(db_tx: &TransactionEntity) -> Result<U256, Gener
     let raw_tx: YagnaRawTransaction =
         serde_json::from_str(&db_tx.encoded).map_err(GenericError::new)?;
     Ok(raw_tx.gas_price)
+}
+
+pub async fn get_network_gas_price_eth(network: Network) -> Result<U256, GenericError> {
+    let _env = get_env(network);
+    let client = get_client(network).await?;
+
+    let small_gas_bump = U256::from(1000);
+    let mut gas_price_from_network = client.eth().gas_price().await.map_err(GenericError::new)?;
+
+    //add small amount of gas to be first in queue
+    if gas_price_from_network / 1000 > small_gas_bump {
+        gas_price_from_network += small_gas_bump;
+    }
+    Ok(gas_price_from_network)
 }

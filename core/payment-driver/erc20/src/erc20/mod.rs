@@ -9,4 +9,5 @@ pub mod wallet;
 
 mod config;
 pub mod eth_utils;
+pub mod gas_provider;
 pub mod transaction;

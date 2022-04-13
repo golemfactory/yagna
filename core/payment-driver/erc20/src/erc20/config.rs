@@ -18,6 +18,9 @@ pub struct EnvConfiguration {
     pub glm_multi_transfer_contract_address: Option<Address>,
     pub glm_faucet_address: Option<Address>,
     pub required_confirmations: u64,
+    pub payment_max_processed: u64,
+    pub use_external_gas_provider: bool,
+    pub latest_block_max_seconds_behind: i64,
 }
 
 lazy_static! {
@@ -44,7 +47,20 @@ lazy_static! {
                 Ok(Ok(x)) => x,
                 _ => 3,
             }
-        }
+        },
+        payment_max_processed: {
+            match env::var("ERC20_RINKEBY_PAYMENT_MAX_PROCESSED").map(|s| s.parse()) {
+                Ok(Ok(x)) => x,
+                _ => DEFAULT_MAX_PROCESSED,
+            }
+        },
+        latest_block_max_seconds_behind: {
+            match env::var("ERC20_RINKEBY_LATEST_BLOCK_SECONDS_BEHIND").map(|s| s.parse()) {
+                Ok(Ok(x)) => x,
+                _ => 600,
+            }
+        },
+        use_external_gas_provider: false
     };
     pub static ref MAINNET_CONFIG: EnvConfiguration = EnvConfiguration {
         glm_contract_address: utils::str_to_addr(
@@ -59,7 +75,20 @@ lazy_static! {
                 Ok(Ok(x)) => x,
                 _ => 5,
             }
-        }
+        },
+        payment_max_processed: {
+            match env::var("ERC20_MAINNET_PAYMENT_MAX_PROCESSED").map(|s| s.parse()) {
+                Ok(Ok(x)) => x,
+                _ => DEFAULT_MAX_PROCESSED,
+            }
+        },
+        latest_block_max_seconds_behind: {
+            match env::var("ERC20_MAINNET_LATEST_BLOCK_SECONDS_BEHIND").map(|s| s.parse()) {
+                Ok(Ok(x)) => x,
+                _ => 120,
+            }
+        },
+        use_external_gas_provider: false
     };
     pub static ref GOERLI_CONFIG: EnvConfiguration = EnvConfiguration {
         glm_contract_address: utils::str_to_addr(
@@ -74,7 +103,20 @@ lazy_static! {
                 Ok(Ok(x)) => x,
                 _ => 3,
             }
-        }
+        },
+        payment_max_processed: {
+            match env::var("ERC20_GOERLI_PAYMENT_MAX_PROCESSED").map(|s| s.parse()) {
+                Ok(Ok(x)) => x,
+                _ => DEFAULT_MAX_PROCESSED,
+            }
+        },
+        latest_block_max_seconds_behind: {
+            match env::var("ERC20_GOERLI_LATEST_BLOCK_SECONDS_BEHIND").map(|s| s.parse()) {
+                Ok(Ok(x)) => x,
+                _ => 600,
+            }
+        },
+        use_external_gas_provider: false
     };
     pub static ref MUMBAI_CONFIG: EnvConfiguration = EnvConfiguration {
         glm_contract_address: utils::str_to_addr(
@@ -89,7 +131,20 @@ lazy_static! {
                 Ok(Ok(x)) => x,
                 _ => 3,
             }
-        }
+        },
+        payment_max_processed: {
+            match env::var("ERC20_MUMBAI_PAYMENT_MAX_PROCESSED").map(|s| s.parse()) {
+                Ok(Ok(x)) => x,
+                _ => DEFAULT_MAX_PROCESSED,
+            }
+        },
+        latest_block_max_seconds_behind: {
+            match env::var("ERC20_MUMBAI_LATEST_BLOCK_SECONDS_BEHIND").map(|s| s.parse()) {
+                Ok(Ok(x)) => x,
+                _ => 600,
+            }
+        },
+        use_external_gas_provider: false
     };
     pub static ref POLYGON_MAINNET_CONFIG: EnvConfiguration = EnvConfiguration {
         glm_contract_address: utils::str_to_addr(
@@ -108,6 +163,19 @@ lazy_static! {
                 Ok(Ok(x)) => x,
                 _ => 5,
             }
-        }
+        },
+        payment_max_processed: {
+            match env::var("ERC20_POLYGON_PAYMENT_MAX_PROCESSED").map(|s| s.parse()) {
+                Ok(Ok(x)) => x,
+                _ => DEFAULT_MAX_PROCESSED,
+            }
+        },
+        latest_block_max_seconds_behind: {
+            match env::var("ERC20_POLYGON_LATEST_BLOCK_SECONDS_BEHIND").map(|s| s.parse()) {
+                Ok(Ok(x)) => x,
+                _ => 30,
+            }
+        },
+        use_external_gas_provider: false
     };
 }

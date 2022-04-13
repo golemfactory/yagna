@@ -70,8 +70,8 @@ DB fields explained
 * tmp_onchain_txs - hashes of all transactions that are sent to the chain (important for checking transaction status when gas is increased)
 * final_tx - onchain transaction hash only when transaction is CONFIRMED or ERRORONCHAIN. tmp_onchain_txs are removed to reduce clutter.
 * starting_gas_price - gas in Gwei
-* current_gas_price - starts with null then it has assigned higher level of gas until transaction is processed
-* max_gas_price - limit for current_gas_price
+* current_gas_price - starts with null then it has assigned last sent transaction gas price
+* max_gas_price - limit for gas price (note that current_gas_price can sometimes be greater than this limit)
 * final_gas_price - assigned after transaction is CONFIRMED or ERRORONCHAIN.
 * final_gas_used - assigned after transaction is CONFIRMED or ERRORONCHAIN. use final_gas_used * final_gas_price to have transaction cost in Gwei  
 * gas_limit - assigned max gas for transaction. If set to low ends with error during transaction sent or error on chain depending on set value.
@@ -107,29 +107,9 @@ There is function that is estimating current gas price but it is far from perfec
 Also we want to pay for gas as little as possible. 
 For example on Polygon Network if you sent transaction for 30.01Gwei you can be pretty sure it get proceeded fairly smoothly
 right now, but when the network is congested transaction can get stuck for indefinite amount of time.
-When network usage is lower you can try to make transaction for lower gas fee (for example 20Gwei).
-To resolve this issue we implemented automatic gas bumping. Every set amount of time gas is increased to increase probability of transaction getting processed.
-That way we can save money on gas and also have bigger chance of transactions not getting stuck.
+When network usage is lower you can try to make transaction for lower gas fee.
 
-Currently we proposed following gas levels for polygon network:
-```
-10.011, //LOW PRIORITY
-15.011, //LOW PRIORITY
-20.011, //LOW PRIORITY
-25.011, //LOW PRIORITY
-30.011, //minimum suggested gas price - FAST PRIORITY 
-33.011, //not used 
-36.011, //not used 
-40.011, //not used 
-50.011, //not used 
-60.011, //EXPRESS PRIORITY
-80.011,
-100.011
-```
-Note that we add 0.011 to increase the chance of getting inline of someone setting whole number as gas price (which people tend to do). It costs almost nothing but significally increase your chance of transaction beeing processed.
 
-Note that on test networks gas doesn't matter and transaction is processed instantly regardless of gas set. So to test this
-feature you have to use Polygon network and pay some Matic for gas.
 
 ## VARIABLES:
 
@@ -154,6 +134,19 @@ RPC error: Error { code: ServerError(-32000), message: "already known", data: No
 ```
 RPC error: Error { code: ServerError(-32000), message: "nonce too low", data: None }
 ```
+
+## TO DO:
+
+* Check for current block date on Ethereum provider?
+* more universal code (Polygon/Other chains)
+* limit active transactions (do not append new transactions when previous are not confirmed)
+* check transactions with current nonce to resolve errors and checks faster
+* if current nonce greater than pending transaction check if succeeded or if not fail.
+* find a way to get transaction id by nonce??
+* Special error when funds run out. Bonus: Do not repeat until funds ready.
+* When transaction is still pending do not check other transactions, they will be pending also (but bump gas should be done if needed)
+* Do not bump gas pending transactions higher than current transaction! That doesn't make sense. (done)
+* 
 
 
 
