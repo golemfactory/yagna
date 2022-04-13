@@ -35,11 +35,11 @@ impl NetCommand {
                     "publicAddress": status.public_address,
                     "sessions": status.sessions,
                     "bandwidth": {
-                        "out": to_kib(status.metrics.tx_current, is_json),
-                        "outAvg": to_kib(status.metrics.tx_avg, is_json),
+                        "outKiBps": to_kib(status.metrics.tx_current, is_json),
+                        "outAvgKiBps": to_kib(status.metrics.tx_avg, is_json),
                         "outMib": to_mib(status.metrics.tx_total, is_json),
-                        "in": to_kib(status.metrics.rx_current, is_json),
-                        "inAvg": to_kib(status.metrics.rx_avg, is_json),
+                        "inKiBps": to_kib(status.metrics.rx_current, is_json),
+                        "inAvgKiBps": to_kib(status.metrics.rx_avg, is_json),
                         "inMib": to_mib(status.metrics.rx_total, is_json),
                     }
                 }))
