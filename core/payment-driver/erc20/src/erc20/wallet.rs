@@ -417,29 +417,15 @@ pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails
     if let Some(tx) = tx {
         // TODO: Properly parse logs after https://github.com/tomusdrw/rust-web3/issues/208
         // let tx_log = tx.logs.get(0).unwrap_or_else(|| GenericError::new(format!("Failure when parsing tx: {} ", tx_hash)))?;
-        let tx_log = match tx.logs.get(0) {
-            Some(tx_log) => tx_log,
-            None => {
-                return Err(GenericError::new(format!(
-                    "Failure when parsing tx.logs.get(0): {} ",
-                    tx_hash
-                )))
-            }
-        };
-        let topic1 = match tx_log.topics.get(1) {
-            Some(t) => t,
-            None => {
+
+        let tx_log = tx.logs.get(0).ok_or_else(|| {
+            GenericError::new(format!("Failure when parsing tx.logs.get(0): {} ", tx_hash))
+        })?;
+        let (topic1, topic2) = match tx_log.topics.as_slice() {
+            [_, t1, t2] => (t1, t2),
+            _ => {
                 return Err(GenericError::new(format!(
                     "Failure when parsing tx_log.topics.get(1): {} ",
-                    tx_hash
-                )))
-            }
-        };
-        let topic2 = match tx_log.topics.get(2) {
-            Some(t) => t,
-            None => {
-                return Err(GenericError::new(format!(
-                    "Failure when parsing tx_log.topics.get(2): {} ",
                     tx_hash
                 )))
             }
