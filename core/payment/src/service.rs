@@ -175,7 +175,9 @@ mod local {
             .await
             .map_err(GenericError::new)?;
         let token = token.unwrap_or(network_details.default_token.clone());
-        let after_timestamp = NaiveDateTime::from_timestamp(after_timestamp, 0);
+        let after_timestamp = after_timestamp
+            .map(|t| t.naive_utc())
+            .unwrap_or(NaiveDateTime::from_timestamp(0, 0));
         let platform = match network_details.tokens.get(&token) {
             Some(platform) => platform.clone(),
             None => {

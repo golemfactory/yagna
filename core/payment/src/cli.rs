@@ -1,8 +1,8 @@
+use std::ops::Deref;
 // External crates
 use bigdecimal::BigDecimal;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use std::str::FromStr;
-use std::time::UNIX_EPOCH;
 use structopt::*;
 
 // Workspace uses
@@ -138,17 +138,19 @@ impl PaymentCli {
             }
             PaymentCli::Status { account, last } => {
                 let address = resolve_address(account.address()).await?;
-                let timestamp = last
-                    .map(|d| Utc::now() - chrono::Duration::seconds(d.as_secs() as i64))
-                    .unwrap_or(DateTime::from(UNIX_EPOCH))
-                    .timestamp();
+                let after_timestamp = if let Some(duration) = last {
+                    let duration_chrono = chrono::Duration::from_std(*duration.deref())?;
+                    Utc::now().checked_sub_signed(duration_chrono)
+                } else {
+                    None
+                };
                 let status = bus::service(pay::BUS_ID)
                     .call(pay::GetStatus {
                         address: address.clone(),
                         driver: account.driver(),
                         network: Some(account.network()),
                         token: None,
-                        after_timestamp: timestamp,
+                        after_timestamp,
                     })
                     .await??;
                 if ctx.json_output {

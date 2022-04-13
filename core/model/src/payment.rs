@@ -234,12 +234,13 @@ pub mod local {
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
     pub struct GetStatus {
         pub address: String,
         pub driver: String,
         pub network: Option<String>,
         pub token: Option<String>,
-        pub after_timestamp: i64,
+        pub after_timestamp: Option<DateTime<Utc>>,
     }
 
     impl RpcMessage for GetStatus {
