@@ -3,6 +3,7 @@
 */
 
 // Workspace uses
+use ya_payment_driver::dao::DbError;
 use ya_payment_driver::{
     dao::{payment::PaymentDao, transaction::TransactionDao, DbExecutor},
     db::models::{
@@ -12,7 +13,6 @@ use ya_payment_driver::{
     model::{GenericError, SchedulePayment},
     utils,
 };
-use ya_payment_driver::dao::DbError;
 
 use crate::network::platform_to_network_token;
 
@@ -104,10 +104,13 @@ impl Erc20Dao {
     pub async fn insert_raw_transaction(&self, tx: TransactionEntity) -> Result<String, DbError> {
         let tx_id = tx.tx_id.clone();
 
-        self.transaction().insert_transactions(vec![tx]).await.map_err(|e| {
-            log::error!("Failed to store transaction for {} : {:?}", tx_id, e);
-            e
-        })?;
+        self.transaction()
+            .insert_transactions(vec![tx])
+            .await
+            .map_err(|e| {
+                log::error!("Failed to store transaction for {} : {:?}", tx_id, e);
+                e
+            })?;
         Ok(tx_id)
     }
 

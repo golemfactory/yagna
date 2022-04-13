@@ -32,11 +32,13 @@ lazy_static! {
                 .unwrap_or("0xd94e3DC39d4Cad1DAd634e7eb585A57A19dC7EFE".to_string())
         )
         .unwrap(),
-        glm_multi_transfer_contract_address: Some(utils::str_to_addr(
-            &env::var("RINKEBY_MULTI_TRANSFER_CONTRACT_ADDRESS")
-                .unwrap_or("0x121F36E0Fa04fe6fBbEE84451F3371386B035fBA".to_string())
-        )
-        .unwrap()),
+        glm_multi_transfer_contract_address: Some(
+            utils::str_to_addr(
+                &env::var("RINKEBY_MULTI_TRANSFER_CONTRACT_ADDRESS")
+                    .unwrap_or("0x121F36E0Fa04fe6fBbEE84451F3371386B035fBA".to_string())
+            )
+            .unwrap()
+        ),
         glm_faucet_address: Some(
             utils::str_to_addr(
                 &env::var("RINKEBY_TGLM_FAUCET_ADDRESS")
@@ -154,11 +156,13 @@ lazy_static! {
                 .unwrap_or("0x0b220b82f3ea3b7f6d9a1d8ab58930c064a2b5bf".to_string())
         )
         .unwrap(),
-        glm_multi_transfer_contract_address: Some(utils::str_to_addr(
-            &env::var("POLYGON_MULTI_TRANSFER_CONTRACT_ADDRESS")
-                .unwrap_or("0x21cCe3a0F851394fcDD27b28c65232be98fc6Ce2".to_string())
-        )
-        .unwrap()),
+        glm_multi_transfer_contract_address: Some(
+            utils::str_to_addr(
+                &env::var("POLYGON_MULTI_TRANSFER_CONTRACT_ADDRESS")
+                    .unwrap_or("0x21cCe3a0F851394fcDD27b28c65232be98fc6Ce2".to_string())
+            )
+            .unwrap()
+        ),
         glm_faucet_address: None,
         required_confirmations: {
             match env::var("ERC20_POLYGON_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {

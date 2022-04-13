@@ -15,6 +15,7 @@ use ya_payment_driver::{
 use ya_utils_futures::timeout::IntoTimeoutFuture;
 
 // Local uses
+use crate::erc20::ethereum::{FUND_WALLET_WAIT_TIME, INIT_WALLET_WAIT_TIME};
 use crate::{
     dao::Erc20Dao,
     driver::Erc20Driver,
@@ -33,9 +34,9 @@ pub async fn init(driver: &Erc20Driver, msg: Init) -> Result<(), GenericError> {
     }
 
     wallet::init_wallet(&driver.dao, &msg)
-        .timeout(Some(30))
+        .timeout(Some(INIT_WALLET_WAIT_TIME))
         .await
-        .map_err(GenericError::new)??;
+        .map_err(|err| GenericError::new(format!("Init wallet future timed out: {}", err)))??;
 
     let network = network::network_like_to_network(msg.network());
     let token = network::get_network_token(network, msg.token());
@@ -73,9 +74,11 @@ pub async fn fund(dao: &Erc20Dao, msg: Fund) -> Result<String, GenericError> {
                 &address
             );
             wallet::fund(dao, address, network)
-                .timeout(Some(60)) // Regular scenario =~ 30s
+                .timeout(Some(FUND_WALLET_WAIT_TIME))
                 .await
-                .map_err(GenericError::new)??;
+                .map_err(|err| {
+                    GenericError::new(format!("Fund wallet future timed out: {}", err))
+                })??;
             format!("Received funds from the faucet. address=0x{:x}", &address)
         }
         Network::Goerli => format!(
@@ -167,7 +170,10 @@ pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericEr
     let human_gas_cost = wallet::has_enough_eth_for_gas(&db_tx, network).await?;
 
     // Everything ok, put the transaction in the queue
-    let tx_id = dao.insert_raw_transaction(db_tx).await.map_err(GenericError::new)?;
+    let tx_id = dao
+        .insert_raw_transaction(db_tx)
+        .await
+        .map_err(GenericError::new)?;
 
     let message = format!(
         "Scheduled {} transfer. details={:?}, max_gas_cost={} ETH, network={}",

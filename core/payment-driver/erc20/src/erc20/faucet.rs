@@ -24,7 +24,7 @@ const FAUCET_ADDR_ENVAR: &str = "ETH_FAUCET_ADDRESS";
 const MAX_FAUCET_REQUESTS: u32 = 6;
 
 lazy_static! {
-    static ref MIN_GLM_BALANCE: U256 = utils::big_dec_to_u256(&BigDecimal::from(50));
+    static ref MIN_GLM_BALANCE: U256 = utils::big_dec_to_u256(&BigDecimal::from(500));
     static ref MIN_ETH_BALANCE: U256 =
         utils::big_dec_to_u256(&BigDecimal::from_f64(0.005).unwrap());
     static ref MAX_WAIT: Duration = Duration::minutes(1);
@@ -90,7 +90,9 @@ pub async fn request_glm(
     let nonce = wallet::get_next_nonce(dao, address, network).await?;
     let db_tx = ethereum::sign_faucet_tx(address, network, nonce).await?;
     // After inserting into the database, the tx will get send by the send_payments job
-    dao.insert_raw_transaction(db_tx).await.map_err(GenericError::new)?;
+    dao.insert_raw_transaction(db_tx)
+        .await
+        .map_err(GenericError::new)?;
 
     // Wait for tx to get mined:
     // - send_payments job runs every 10 seconds

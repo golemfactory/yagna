@@ -281,6 +281,10 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                     log::debug!("Faucet tx confirmed, exit early. hash={}", &newest_tx);
                     continue;
                 }
+                if tx.tx_type == TxType::Approve as i32 {
+                    log::debug!("Approve tx confirmed, exit early. hash={}", &newest_tx);
+                    continue;
+                }
 
                 let payments = dao.get_payments_based_on_tx(&tx.tx_id).await;
 
@@ -434,13 +438,20 @@ pub async fn process_transactions(dao: &Erc20Dao, network: Network) {
     }
 }
 
-async fn handle_payment(dao: &Erc20Dao, payment: PaymentEntity, nonce: &mut u64) -> Result<(), GenericError>{
+async fn handle_payment(
+    dao: &Erc20Dao,
+    payment: PaymentEntity,
+    nonce: &mut u64,
+) -> Result<(), GenericError> {
     let details = utils::db_to_payment_details(&payment);
     let tx_nonce = nonce.to_owned();
 
     match wallet::make_transfer(&details, tx_nonce, payment.network, None, None, None).await {
         Ok(db_tx) => {
-            let tx_id = dao.insert_raw_transaction(db_tx).await.map_err(GenericError::new)?;
+            let tx_id = dao
+                .insert_raw_transaction(db_tx)
+                .await
+                .map_err(GenericError::new)?;
             dao.transaction_saved(&tx_id, &payment.order_id).await;
             *nonce += 1;
         }

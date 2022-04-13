@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::{Path, PathBuf};
 
+use crate::accounts::SendMode::Simple;
 use tokio::fs;
 use ya_core_model::driver::{driver_bus_id, AccountMode, BatchMode, Init};
 use ya_core_model::identity;
@@ -98,7 +99,7 @@ pub async fn save_default_account(data_dir: &Path, drivers: Vec<String>) -> anyh
             address: default_node_id.to_string(),
             network: None, // Use default
             token: None,   // Use default
-            send: SendMode::Batch(BatchMode::Manual {}),
+            send: Simple(false),
             receive: true,
         })
         .collect();

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -20,11 +21,17 @@ use ya_payment_driver::db::models::{Network, TransactionEntity, TransactionStatu
 use ya_payment_driver::utils::big_dec_to_u256;
 use ya_payment_driver::{bus, model::GenericError};
 
+use crate::dao::Erc20Dao;
 use crate::erc20::transaction::YagnaRawTransaction;
+use crate::erc20::wallet::get_next_nonce_info;
 use crate::erc20::{config, eth_utils};
 use num_traits::ToPrimitive;
-use crate::dao::Erc20Dao;
-use crate::erc20::wallet::get_next_nonce_info;
+use tokio::time::delay_for;
+
+pub const FUND_WALLET_WAIT_TIME: u32 = 120;
+
+pub const INIT_WALLET_WAIT_TIME: u32 = 500;
+pub const APPROVE_CONTRACT_WAIT_TIME: u32 = INIT_WALLET_WAIT_TIME + 100;
 
 pub enum PolygonPriority {
     PolygonPrioritySlow,
@@ -47,7 +54,6 @@ lazy_static! {
     pub static ref GLM_TRANSFER_GAS: U256 = U256::from(55_000);
     pub static ref GLM_POLYGON_GAS_LIMIT: U256 = U256::from(100_000);
     static ref WEB3_CLIENT_MAP: Arc<RwLock<HashMap<String, Web3<Http>>>> = Default::default();
-
     pub static ref GLM_MINIMUM_ALLOWANCE: U256 = U256::max_value() / U256::from(2);
 }
 const CREATE_FAUCET_FUNCTION: &str = "create";
@@ -112,14 +118,18 @@ pub fn get_polygon_priority() -> PolygonPriority {
     }
 }
 
-pub async fn approve_multi_payment_contract(dao: &Erc20Dao, address: H160, network: Network) -> Result<(), GenericError> {
+pub async fn approve_multi_payment_contract(
+    dao: &Erc20Dao,
+    address: H160,
+    network: Network,
+) -> Result<(), GenericError> {
     let client = get_client(network).await?;
     let env = get_env(network);
 
-    log::debug!("check_multi_payment_contract start");
     if let Some(contract_address) = env.glm_multi_transfer_contract_address {
+        log::debug!("Checking multi payment contract for allowance...");
         let glm_contract = prepare_erc20_contract(&client, &env)?;
-        let allowance : U256 = glm_contract
+        let allowance: U256 = glm_contract
             .query(
                 "allowance",
                 (address, contract_address),
@@ -130,13 +140,20 @@ pub async fn approve_multi_payment_contract(dao: &Erc20Dao, address: H160, netwo
             .await
             .map_err(GenericError::new)?;
 
-        log::debug!("Address: {} Contract: {} Allowance: {} Max allowance: {}", address, contract_address, allowance, *GLM_MINIMUM_ALLOWANCE);
-
         if allowance < *GLM_MINIMUM_ALLOWANCE {
-            log::debug!("smaller");
+            log::info!(
+                "Allowance to low, calling approve: Address: {} Contract: {} Allowance: {:#x}",
+                address,
+                contract_address,
+                allowance
+            );
             //we have to approve multi payment contract to use our address
-            let data : Vec<u8> = eth_utils::contract_encode(&glm_contract, "approve", (contract_address, U256::max_value()))
-                .map_err(GenericError::new)?;
+            let data: Vec<u8> = eth_utils::contract_encode(
+                &glm_contract,
+                "approve",
+                (contract_address, U256::max_value()),
+            )
+            .map_err(GenericError::new)?;
 
             let gas_price = client.eth().gas_price().await.map_err(GenericError::new)?;
             //increase gas price by 100% to make sure transaction will proceed without issues
@@ -151,7 +168,7 @@ pub async fn approve_multi_payment_contract(dao: &Erc20Dao, address: H160, netwo
                 gas: *GLM_APPROVE_GAS,
                 data,
             };
-            let dao_entity : TransactionEntity = create_dao_entity(
+            let dao_entity: TransactionEntity = create_dao_entity(
                 U256::from(nonce_info.network_nonce_latest),
                 address,
                 gas_price.to_string(),
@@ -163,8 +180,42 @@ pub async fn approve_multi_payment_contract(dao: &Erc20Dao, address: H160, netwo
                 TxType::Approve,
                 None,
             );
-            log::debug!("insert raw transaction");
-            dao.insert_raw_transaction(dao_entity).await.map_err(GenericError::new)?;
+            dao.insert_raw_transaction(dao_entity)
+                .await
+                .map_err(GenericError::new)?;
+            let start_time = SystemTime::now();
+            log::info!("Wait until transaction is proceeded 30s...");
+            delay_for(Duration::from_secs(30)).await;
+            loop {
+                log::info!("Checking allowance ...");
+                let allowance: U256 = glm_contract
+                    .query(
+                        "allowance",
+                        (address, contract_address),
+                        None,
+                        Options::default(),
+                        None,
+                    )
+                    .await
+                    .map_err(GenericError::new)?;
+
+                if allowance >= *GLM_MINIMUM_ALLOWANCE {
+                    break;
+                }
+                if start_time.elapsed().map_err(GenericError::new)?.as_secs() > 500 {
+                    log::warn!("Waiting too long, transaction probably failed or is still waiting on chain");
+                    break;
+                }
+                log::info!("Wait until transaction is proceeded 10s...");
+                delay_for(Duration::from_secs(10)).await;
+            }
+        } else {
+            log::debug!(
+                "Allowance OK: Address: {} Contract: {} Allowance: {:#x}",
+                address,
+                contract_address,
+                allowance
+            );
         }
     }
     Ok(())
@@ -274,7 +325,6 @@ pub async fn sign_faucet_tx(
         gas: *GLM_FAUCET_GAS,
         data,
     };
-
 
     //let chain_id = network as u64;
     //let node_id = NodeId::from(address.as_ref());
