@@ -32,7 +32,7 @@ pub async fn init(driver: &Erc20Driver, msg: Init) -> Result<(), GenericError> {
         driver.is_account_active(&address)?
     }
 
-    wallet::init_wallet(&msg)
+    wallet::init_wallet(&driver.dao, &msg)
         .timeout(Some(30))
         .await
         .map_err(GenericError::new)??;

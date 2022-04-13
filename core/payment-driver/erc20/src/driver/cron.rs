@@ -309,6 +309,49 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
     }
 }
 
+pub async fn process_payments_for_account_multi(
+    dao: &Erc20Dao,
+    node_id: &str,
+    network: Network,
+) -> anyhow::Result<()> {
+    log::trace!(
+        "Processing payments for node_id={}, network={}",
+        node_id,
+        network
+    );
+    let payments: Vec<PaymentEntity> = dao.get_pending_payments(node_id, network).await;
+    if !payments.is_empty() {
+        log::info!(
+            "Processing payments. count={}, network={} node_id={}",
+            payments.len(),
+            network,
+            node_id
+        );
+        /*
+        let mut nonce = wallet::get_next_nonce(
+            dao,
+            crate::erc20::utils::str_to_addr(&node_id).unwrap(),
+            network,
+        )
+            .await
+            .map_err(|e| {
+                anyhow!(
+                "Failed to get nonce for account [{}] ({}). Error: {}",
+                node_id,
+                network,
+                e
+            )
+            })?;
+
+        log::debug!("Payments: nonce={}, details={:?}", &nonce, payments);
+        for payment in payments {
+
+            handle_payment(&dao, payment, &mut nonce).await;
+        }*/
+    }
+    Ok(())
+}
+
 pub async fn process_payments_for_account(
     dao: &Erc20Dao,
     node_id: &str,

@@ -260,7 +260,7 @@ impl PaymentDriverCron for Erc20Driver {
             // Process payment rows
             for node_id in self.active_accounts.borrow().list_accounts() {
                 if let Err(e) =
-                    cron::process_payments_for_account(&self.dao, &node_id, network).await
+                    cron::process_payments_for_account_multi(&self.dao, &node_id, network).await
                 {
                     log::error!(
                         "Cron: processing payment for account [{}] failed with error: {}",

@@ -19,6 +19,7 @@ use ya_payment_driver::{bus, model::GenericError};
 
 use crate::erc20::transaction::YagnaRawTransaction;
 use crate::erc20::{config, eth_utils};
+use crate::dao::Erc20Dao;
 
 pub enum PolygonPriority {
     PolygonPrioritySlow,
@@ -37,9 +38,12 @@ pub const POLYGON_PREFERRED_GAS_PRICES_EXPRESS: [f64; 3] = [0.0, 60.01, 100.01];
 
 lazy_static! {
     pub static ref GLM_FAUCET_GAS: U256 = U256::from(90_000);
+    pub static ref GLM_APPROVE_GAS: U256 = U256::from(200_000);
     pub static ref GLM_TRANSFER_GAS: U256 = U256::from(55_000);
     pub static ref GLM_POLYGON_GAS_LIMIT: U256 = U256::from(100_000);
     static ref WEB3_CLIENT_MAP: Arc<RwLock<HashMap<String, Web3<Http>>>> = Default::default();
+
+    pub static ref GLM_MINIMUM_ALLOWANCE: U256 = U256::max_value() / U256::from(2);
 }
 const CREATE_FAUCET_FUNCTION: &str = "create";
 const BALANCE_ERC20_FUNCTION: &str = "balanceOf";
@@ -103,6 +107,63 @@ pub fn get_polygon_priority() -> PolygonPriority {
     }
 }
 
+pub async fn approve_multi_payment_contract(dao: &Erc20Dao, address: H160, network: Network) -> Result<(), GenericError> {
+    let client = get_client(network).await?;
+    let env = get_env(network);
+
+    log::debug!("check_multi_payment_contract start");
+    if let Some(contract_address) = env.glm_multi_transfer_contract_address {
+        let glm_contract = prepare_erc20_contract(&client, &env)?;
+        let allowance : U256 = glm_contract
+            .query(
+                "allowance",
+                (address, contract_address),
+                None,
+                Options::default(),
+                None,
+            )
+            .await
+            .map_err(GenericError::new)?;
+
+        log::debug!("Address: {} Contract: {} Allowance: {} Max allowance: {}", address, contract_address, allowance, *GLM_MINIMUM_ALLOWANCE);
+
+        if allowance < *GLM_MINIMUM_ALLOWANCE {
+            log::debug!("smaller");
+            //we have to approve multi payment contract to use our address
+            let data : Vec<u8> = eth_utils::contract_encode(&glm_contract, "approve", (contract_address, U256::max_value()))
+                .map_err(GenericError::new)?;
+
+            let gas_price = client.eth().gas_price().await.map_err(GenericError::new)?;
+            //increase gas price by 100% to make sure transaction will proceed without issues
+            let gas_price = gas_price * U256::from(15) / U256::from(10);
+            let nonce = get_next_nonce_latest(address, network).await?;
+            let tx = YagnaRawTransaction {
+                nonce,
+                to: Some(glm_contract.address()),
+                value: U256::from(0),
+                gas_price,
+                gas: *GLM_APPROVE_GAS,
+                data,
+            };
+            let daoEnt : TransactionEntity = create_dao_entity(
+                nonce,
+                address,
+                gas_price.to_string(),
+                Some(gas_price.to_string()),
+                GLM_APPROVE_GAS.as_u32() as i32,
+                serde_json::to_string(&tx).map_err(GenericError::new)?,
+                network,
+                Utc::now(),
+                TxType::Approve,
+                None,
+            );
+            log::debug!("insert raw transaction");
+            dao.insert_raw_transaction(daoEnt);
+        }
+    }
+    Ok(())
+}
+
 pub async fn get_glm_balance(address: H160, network: Network) -> Result<U256, GenericError> {
     let client = get_client(network).await?;
     let env = get_env(network);
@@ -127,6 +188,17 @@ pub async fn get_balance(address: H160, network: Network) -> Result<U256, Generi
         .balance(address, None)
         .await
         .map_err(GenericError::new)?)
+}
+
+
+pub async fn get_next_nonce_latest(address: H160, network: Network) -> Result<U256, GenericError> {
+    let client = get_client(network).await?;
+    let nonce = client
+        .eth()
+        .transaction_count(address, Some(web3::types::BlockNumber::Latest))
+        .await
+        .map_err(GenericError::new)?;
+    Ok(nonce)
 }
 
 pub async fn get_next_nonce_pending(address: H160, network: Network) -> Result<U256, GenericError> {
@@ -167,6 +239,8 @@ pub async fn sign_faucet_tx(
 
     let data = eth_utils::contract_encode(&contract, CREATE_FAUCET_FUNCTION, ()).unwrap();
     let gas_price = client.eth().gas_price().await.map_err(GenericError::new)?;
+    //bump gas to prevent stuck transaction
+    let gas_price = gas_price * U256::from(15) / U256::from(10);
     let tx = YagnaRawTransaction {
         nonce,
         to: Some(contract.address()),
@@ -175,6 +249,8 @@ pub async fn sign_faucet_tx(
         gas: *GLM_FAUCET_GAS,
         data,
     };
+
+
     //let chain_id = network as u64;
     //let node_id = NodeId::from(address.as_ref());
     //let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;

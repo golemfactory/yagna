@@ -29,6 +29,7 @@ pub const PAYMENT_STATUS_ACCEPTED: i32 = 99;
 pub enum TxType {
     Faucet = 0,
     Transfer = 1,
+    Approve = 2,
 }
 
 #[derive(FromPrimitive)]

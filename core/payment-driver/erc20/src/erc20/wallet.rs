@@ -49,7 +49,7 @@ pub async fn account_balance(address: H160, network: Network) -> Result<BigDecim
     Ok(balance)
 }
 
-pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
+pub async fn init_wallet(dao: &Erc20Dao, msg: &Init) -> Result<(), GenericError> {
     log::debug!("init_wallet. msg={:?}", msg);
     let mode = msg.mode();
     let address = msg.address();
@@ -68,6 +68,8 @@ pub async fn init_wallet(msg: &Init) -> Result<(), GenericError> {
         if eth_balance == U256::zero() {
             return Err(GenericError::new("Insufficient ETH"));
         }
+
+        ethereum::approve_multi_payment_contract(dao, h160_addr, network).await?;
     }
     Ok(())
 }
