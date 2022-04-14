@@ -95,6 +95,13 @@ pub enum PaymentCli {
             default_value = "auto"
         )]
         gas_limit: String,
+        #[structopt(
+            long,
+            help = "Wait for transaction to be confirmed (may take longer)",
+            parse(try_from_str),
+            default_value = "false"
+        )]
+        wait_for_tx: bool,
     },
     MultiTransfer {
         #[structopt(flatten)]
@@ -123,6 +130,13 @@ pub enum PaymentCli {
             default_value = "auto"
         )]
         gas_limit: String,
+        #[structopt(
+            long,
+            help = "Wait for transaction to be confirmed (may take longer)",
+            parse(try_from_str),
+            default_value = "false"
+        )]
+        wait_for_tx: bool,
     },
     Invoice {
         address: Option<String>,
@@ -355,6 +369,7 @@ impl PaymentCli {
                 gas_price,
                 max_gas_price,
                 gas_limit,
+                wait_for_tx,
             } => {
                 let address = resolve_address(account.address()).await?;
                 let amount = BigDecimal::from_str(&amount)?;
@@ -387,6 +402,7 @@ impl PaymentCli {
                         gas_price,
                         max_gas_price,
                         gas_limit,
+                        wait_for_tx,
                     )
                     .await?,
                 )
@@ -398,6 +414,7 @@ impl PaymentCli {
                 gas_price,
                 max_gas_price,
                 gas_limit,
+                wait_for_tx,
             } => {
                 let address = resolve_address(account.address()).await?;
                 //let amount = BigDecimal::from_str(&amount)?;
@@ -446,6 +463,7 @@ impl PaymentCli {
                         gas_price,
                         max_gas_price,
                         gas_limit,
+                        wait_for_tx,
                     )
                     .await?,
                 )

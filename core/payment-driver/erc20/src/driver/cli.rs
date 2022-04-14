@@ -3,6 +3,7 @@
 
     Please limit the logic in this file, use local mods to handle the calls.
 */
+use std::time::Duration;
 // Extrnal crates
 use chrono::Utc;
 
@@ -22,6 +23,8 @@ use crate::{
     erc20::{utils, wallet},
     network, DRIVER_NAME,
 };
+use std::convert::TryFrom;
+use ya_payment_driver::db::models::TransactionStatus;
 
 pub async fn init(driver: &Erc20Driver, msg: Init) -> Result<(), GenericError> {
     log::debug!("init: {:?}", msg);
@@ -224,11 +227,44 @@ pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericEr
         .await
         .map_err(GenericError::new)?;
 
-    let message = format!(
-        "Scheduled {} transfer. details={:?}, max_gas_cost={} ETH, network={}",
-        &token, &details_str, &human_gas_cost, &network
-    );
-    log::info!("{}", message);
     log::debug!("tx_id={}", tx_id);
-    Ok(message)
+    log::info!("{}, gas cost: {}", details_str, human_gas_cost);
+    if msg.wait_for_tx {
+        let tx_hash = loop {
+            log::warn!("Waiting for confirmation 10s.");
+            tokio::time::delay_for(Duration::from_secs(10)).await;
+            let transaction_entity = dao.get_transaction_from_tx(&tx_id).await?;
+            match TransactionStatus::try_from(transaction_entity.status)
+                .map_err(GenericError::new)?
+            {
+                TransactionStatus::Unused => {}
+                TransactionStatus::Created => {}
+                TransactionStatus::Sent => {}
+                TransactionStatus::Pending => {}
+                TransactionStatus::Confirmed => {
+                    break transaction_entity.final_tx;
+                }
+                TransactionStatus::Resend => {}
+                TransactionStatus::ResendAndBumpGas => {}
+                TransactionStatus::ErrorSent => {
+                    break None;
+                }
+                TransactionStatus::ErrorOnChain => {
+                    break transaction_entity.final_tx;
+                }
+                TransactionStatus::ErrorNonceTooLow => {
+                    break None;
+                }
+            }
+        };
+        if let Some(tx_hash) = tx_hash {
+            let message = format!("tx_hash: {}", tx_hash);
+            Ok(message)
+        } else {
+            Ok("Cannot extract tx hash. Check yagna logs for details".to_string())
+        }
+    } else {
+        let message = format!("tx_id: {}", tx_id);
+        Ok(message)
+    }
 }
