@@ -286,6 +286,16 @@ impl YagnaCommand {
         self.run().await
     }
 
+    pub async fn forward(self, args: Vec<String>) -> anyhow::Result<i32> {
+        let mut cmd = self.cmd;
+        let output = cmd.arg("--quiet").args(args).status().await?;
+
+        match output.code() {
+            Some(c) => Ok(c),
+            None => anyhow::bail!("Unknown process exit code"),
+        }
+    }
+
     pub async fn service_run(self, run_cfg: &RunConfig) -> anyhow::Result<Child> {
         let mut cmd = self.cmd;
 
