@@ -422,7 +422,6 @@ pub async fn prepare_erc20_multi_transfer(
     let client = get_client(network).await?;
     let contract = prepare_erc20_multi_contract(&client, &env)?;
 
-
     let packed: Vec<[u8; 32]> = receivers
         .iter()
         .zip(amounts.iter())
@@ -434,25 +433,34 @@ pub async fn prepare_erc20_multi_transfer(
         })
         .collect();
 
-
     let amount_sum = amounts.iter().fold(U256::from(0), |sum, e| sum + e);
     //for know use both methods interchangeably
     let direct = nonce.as_u64() % 2 == 0;
     let gas_estimation: U256;
-    let data:Vec<u8>;
+    let data: Vec<u8>;
     if direct {
         let method = "golemTransferDirectPacked";
 
-        gas_estimation = contract.estimate_gas(method, packed.clone(), _address, Options::default()).await.map_err(|err| GenericError::new(format!("Error when trying estimate gas {}", err)))?;
+        gas_estimation = contract
+            .estimate_gas(method, packed.clone(), _address, Options::default())
+            .await
+            .map_err(|err| GenericError::new(format!("Error when trying estimate gas {}", err)))?;
         //add some gas to increase gas limit just to be sure
 
         log::debug!("Gas estimation {}", gas_estimation);
-        data = eth_utils::contract_encode(&contract, method, packed)
-            .map_err(GenericError::new)?;
+        data = eth_utils::contract_encode(&contract, method, packed).map_err(GenericError::new)?;
     } else {
         let method = "golemTransferIndirectPacked";
 
-        gas_estimation = contract.estimate_gas(method, (packed.clone(), amount_sum), _address, Options::default()).await.map_err(|err| GenericError::new(format!("Error when trying estimate gas {}", err)))?;
+        gas_estimation = contract
+            .estimate_gas(
+                method,
+                (packed.clone(), amount_sum),
+                _address,
+                Options::default(),
+            )
+            .await
+            .map_err(|err| GenericError::new(format!("Error when trying estimate gas {}", err)))?;
         //add some gas to increase gas limit just to be sure
 
         log::debug!("Gas estimation {}", gas_estimation);
@@ -694,7 +702,10 @@ fn prepare_erc20_multi_contract(
 ) -> Result<Contract<Http>, GenericError> {
     prepare_contract(
         ethereum_client,
-        env.glm_multi_transfer_contract_address.ok_or(GenericError::new("No multipayment contract defined for this environment"))?,
+        env.glm_multi_transfer_contract_address
+            .ok_or(GenericError::new(
+                "No multipayment contract defined for this environment",
+            ))?,
         include_bytes!("../contracts/multi_transfer_erc20.json"),
     )
 }

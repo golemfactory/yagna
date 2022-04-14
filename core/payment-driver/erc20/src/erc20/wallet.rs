@@ -258,8 +258,10 @@ pub async fn make_multi_transfer(
         &nonce,
         &details_array
     );
-    let amounts = details_array.iter().map(|details| big_dec_to_u256(&details.amount)).collect::<Result<Vec<U256>, GenericError>>()?;
-
+    let amounts = details_array
+        .iter()
+        .map(|details| big_dec_to_u256(&details.amount))
+        .collect::<Result<Vec<U256>, GenericError>>()?;
 
     let (gas_price, max_gas_price) = match network {
         Network::Polygon => match get_polygon_gas_price_method() {
@@ -296,17 +298,28 @@ pub async fn make_multi_transfer(
         ),
     };
 
-    let senders = details_array.iter().map(|details| str_to_addr(&details.sender)).collect::<Result<Vec<web3::types::Address>, GenericError>>()?;
-    let address = senders.get(0).ok_or(GenericError::new("Senders cannot be empty"))?;
+    let senders = details_array
+        .iter()
+        .map(|details| str_to_addr(&details.sender))
+        .collect::<Result<Vec<web3::types::Address>, GenericError>>()?;
+    let address = senders
+        .get(0)
+        .ok_or(GenericError::new("Senders cannot be empty"))?;
     for (index, sender) in senders.iter().enumerate() {
         if address != sender {
-            return Err(GenericError::new(format!("Senders have to be the same idx:{} left:{} right:{}", index, address, sender)));
+            return Err(GenericError::new(format!(
+                "Senders have to be the same idx:{} left:{} right:{}",
+                index, address, sender
+            )));
         }
     }
 
     let amount_sum = amounts.iter().fold(U256::from(0), |sum, e| sum + e);
 
-    let recipients = details_array.iter().map(|details| str_to_addr(&details.recipient)).collect::<Result<Vec<web3::types::Address>, GenericError>>()?;
+    let recipients = details_array
+        .iter()
+        .map(|details| str_to_addr(&details.recipient))
+        .collect::<Result<Vec<web3::types::Address>, GenericError>>()?;
     // TODO: Implement token
     //let token = get_network_token(network, None);
     let mut raw_tx = ethereum::prepare_erc20_multi_transfer(
