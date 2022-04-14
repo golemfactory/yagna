@@ -52,6 +52,7 @@ lazy_static! {
     pub static ref GLM_FAUCET_GAS: U256 = U256::from(90_000);
     pub static ref GLM_APPROVE_GAS: U256 = U256::from(200_000);
     pub static ref GLM_TRANSFER_GAS: U256 = U256::from(55_000);
+    pub static ref CONTRACT_EXTRA_OVER_ESTIMATION: U256 = U256::from(20_000);
     pub static ref GLM_POLYGON_GAS_LIMIT: U256 = U256::from(100_000);
     static ref WEB3_CLIENT_MAP: Arc<RwLock<HashMap<String, Web3<Http>>>> = Default::default();
     pub static ref GLM_MINIMUM_ALLOWANCE: U256 = U256::max_value() / U256::from(2);
@@ -433,12 +434,31 @@ pub async fn prepare_erc20_multi_transfer(
         })
         .collect();
 
-    let method = "golemTransferDirectPacked";
 
-    let gas_estimation: U256 = contract.estimate_gas(method, packed.clone(), _address, Options::default()).await.map_err(|err| GenericError::new(format!("Error when trying estimate gas {}", err)))?;
-    log::error!("Gas estimation {}", gas_estimation);
-    let data = eth_utils::contract_encode(&contract, method, packed)
-        .map_err(GenericError::new)?;
+    let amount_sum = amounts.iter().fold(U256::from(0), |sum, e| sum + e);
+    //for know use both methods interchangeably
+    let direct = nonce.as_u64() % 2 == 0;
+    let gas_estimation: U256;
+    let data:Vec<u8>;
+    if direct {
+        let method = "golemTransferDirectPacked";
+
+        gas_estimation = contract.estimate_gas(method, packed.clone(), _address, Options::default()).await.map_err(|err| GenericError::new(format!("Error when trying estimate gas {}", err)))?;
+        //add some gas to increase gas limit just to be sure
+
+        log::debug!("Gas estimation {}", gas_estimation);
+        data = eth_utils::contract_encode(&contract, method, packed)
+            .map_err(GenericError::new)?;
+    } else {
+        let method = "golemTransferIndirectPacked";
+
+        gas_estimation = contract.estimate_gas(method, (packed.clone(), amount_sum), _address, Options::default()).await.map_err(|err| GenericError::new(format!("Error when trying estimate gas {}", err)))?;
+        //add some gas to increase gas limit just to be sure
+
+        log::debug!("Gas estimation {}", gas_estimation);
+        data = eth_utils::contract_encode(&contract, method, (packed, amount_sum))
+            .map_err(GenericError::new)?;
+    }
 
     //get gas price from network in not provided
     let gas_price = match gas_price_override {
@@ -461,10 +481,8 @@ pub async fn prepare_erc20_multi_transfer(
         }
     };
 
-    let gas_limit = match network {
-        Network::Polygon => gas_limit_override.map_or(*GLM_POLYGON_GAS_LIMIT, |v| U256::from(v)),
-        _ => gas_limit_override.map_or(*GLM_TRANSFER_GAS, |v| U256::from(v)),
-    };
+    let gas_estimation = gas_estimation + *CONTRACT_EXTRA_OVER_ESTIMATION;
+    let gas_limit = gas_limit_override.map_or(gas_estimation, |v| U256::from(v));
 
     let tx = YagnaRawTransaction {
         nonce,
