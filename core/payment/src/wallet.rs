@@ -59,8 +59,34 @@ pub async fn transfer(
     let driver_id = driver_bus_id(driver);
     let message = Transfer::new(
         sender,
-        to,
-        amount,
+        vec![to],
+        vec![amount],
+        network,
+        token,
+        gas_price,
+        max_gas_price,
+        gas_limit,
+    );
+    let tx_id = bus::service(driver_id).call(message).await??;
+    Ok(tx_id)
+}
+
+pub async fn multi_transfer(
+    sender: String,
+    receivers: Vec<String>,
+    amounts: Vec<BigDecimal>,
+    driver: String,
+    network: Option<String>,
+    token: Option<String>,
+    gas_price: Option<BigDecimal>,
+    max_gas_price: Option<BigDecimal>,
+    gas_limit: Option<u32>,
+) -> anyhow::Result<String> {
+    let driver_id = driver_bus_id(driver);
+    let message = Transfer::new(
+        sender,
+        receivers,
+        amounts,
         network,
         token,
         gas_price,

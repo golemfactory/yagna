@@ -134,8 +134,16 @@ pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericEr
     let token = network::get_network_token(network, None);
     let sender = msg.sender;
     let sender_h160 = utils::str_to_addr(&sender)?;
-    let recipient = msg.to;
-    let amount = msg.amount;
+    let recipient = msg
+        .receivers
+        .get(0)
+        .ok_or(GenericError::new("receivers cannot be empty"))?
+        .clone();
+    let amount = msg
+        .amounts
+        .get(0)
+        .ok_or(GenericError::new("amounts cannot be empty"))?
+        .clone();
     let gas_limit = msg.gas_limit;
     let gas_price = msg.gas_price;
     let max_gas_price = msg.max_gas_price;

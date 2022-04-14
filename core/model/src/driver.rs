@@ -475,8 +475,8 @@ impl RpcMessage for ExitFee {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Transfer {
     pub sender: String,
-    pub to: String,
-    pub amount: BigDecimal,
+    pub receivers: Vec<String>,
+    pub amounts: Vec<BigDecimal>,
     pub network: Option<String>,
     pub token: Option<String>,
     pub gas_price: Option<BigDecimal>,
@@ -488,8 +488,8 @@ pub struct Transfer {
 impl Transfer {
     pub fn new(
         sender: String,
-        to: String,
-        amount: BigDecimal,
+        receivers: Vec<String>,
+        amounts: Vec<BigDecimal>,
         network: Option<String>,
         token: Option<String>,
         gas_price: Option<BigDecimal>,
@@ -498,8 +498,8 @@ impl Transfer {
     ) -> Transfer {
         Transfer {
             sender,
-            to,
-            amount,
+            receivers,
+            amounts,
             network,
             token,
             gas_price,

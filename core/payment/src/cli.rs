@@ -13,7 +13,7 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 // Local uses
 use crate::accounts::{init_account, Account, SendMode};
 use crate::wallet;
-use ya_core_model::driver::BatchMode;
+use ya_core_model::driver::{BatchMode, GenericError};
 
 /// Payment management.
 #[derive(StructOpt, Debug)]
@@ -81,6 +81,34 @@ pub enum PaymentCli {
         to_address: String,
         #[structopt(long, help = "Amount in GLM for example 1.45")]
         amount: String,
+        #[structopt(long, help = "Override gas price (in Gwei)", default_value = "auto")]
+        gas_price: String,
+        #[structopt(
+            long,
+            help = "Override maximum gas price (in Gwei)",
+            default_value = "auto"
+        )]
+        max_gas_price: String,
+        #[structopt(
+            long,
+            help = "Override gas limit (at least 48000 to account with GLM, 60000 to new account without GLM)",
+            default_value = "auto"
+        )]
+        gas_limit: String,
+    },
+    MultiTransfer {
+        #[structopt(flatten)]
+        account: pay::AccountCli,
+        #[structopt(
+            long,
+            help = "Recipient addresses, separated by space, for example: 0x5555555555555555555555555555555555555001 0x5555555555555555555555555555555555555002 0x5555555555555555555555555555555555555003"
+        )]
+        to_addresses: Vec<String>,
+        #[structopt(
+            long,
+            help = "Amounts in GLMs for example: 0.000000000000000011 0.000000000000000012 0.000000000000000013"
+        )]
+        amounts: Vec<String>,
         #[structopt(long, help = "Override gas price (in Gwei)", default_value = "auto")]
         gas_price: String,
         #[structopt(
@@ -353,6 +381,65 @@ impl PaymentCli {
                         address,
                         to_address,
                         amount,
+                        account.driver(),
+                        Some(account.network()),
+                        None,
+                        gas_price,
+                        max_gas_price,
+                        gas_limit,
+                    )
+                    .await?,
+                )
+            }
+            PaymentCli::MultiTransfer {
+                account,
+                to_addresses,
+                amounts,
+                gas_price,
+                max_gas_price,
+                gas_limit,
+            } => {
+                let address = resolve_address(account.address()).await?;
+                //let amount = BigDecimal::from_str(&amount)?;
+
+                let amounts = amounts
+                    .iter()
+                    .enumerate()
+                    .map(|(element_no, str)| {
+                        BigDecimal::from_str(str).map_err(|err| {
+                            GenericError::new(format!(
+                                "Failed to parsed {}, Element no: {}, Err: {}",
+                                str, element_no, err
+                            ))
+                        })
+                    })
+                    .collect::<Result<Vec<BigDecimal>, GenericError>>()?;
+
+                //let amounts: Result<Vec<BigDecimal>, ).collect();
+                // let amounts = amounts?;
+
+                let gas_price = if gas_price.is_empty() || gas_price == "auto" {
+                    None
+                } else {
+                    Some(BigDecimal::from_str(&gas_price)?)
+                };
+                let max_gas_price = if max_gas_price.is_empty() || max_gas_price == "auto" {
+                    None
+                } else {
+                    Some(BigDecimal::from_str(&max_gas_price)?)
+                };
+
+                let gas_limit = if gas_limit.is_empty() || gas_limit == "auto" {
+                    None
+                } else {
+                    Some(u32::from_str(&gas_limit)?)
+                };
+
+                CommandOutput::object(
+                    wallet::multi_transfer(
+                        address,
+                        to_addresses,
+                        amounts,
                         account.driver(),
                         Some(account.network()),
                         None,
