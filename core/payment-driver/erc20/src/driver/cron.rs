@@ -404,12 +404,26 @@ pub async fn process_payments_for_account(
         log::warn!("Payments: nonce_info={:?}", &next_nonce_info);
         let env = ethereum::get_env(network);
         log::warn!("Max processed {}", env.payment_max_processed);
-        for payment in payments {
-            if next_nonce >= next_nonce_info.network_nonce_latest + env.payment_max_processed {
-                break;
+
+        let multi_batching = true;
+
+
+        if multi_batching {
+            if payments.len() >= 1 {
+                handle_multi_payment(&dao, payments, &mut next_nonce).await?;
             }
-            handle_payment(&dao, payment, &mut next_nonce).await?;
+        } else {
+            for payment in payments {
+                if next_nonce >= next_nonce_info.network_nonce_latest + env.payment_max_processed {
+                    break;
+                }
+                handle_payment(&dao, payment, &mut next_nonce).await?;
+            }
         }
+
+
+
+
     }
     Ok(())
 }
@@ -436,6 +450,47 @@ pub async fn process_transactions(dao: &Erc20Dao, network: Network) {
             Err(e) => log::error!("transactions sent ERROR: {:?}", e),
         };
     }
+}
+
+async fn handle_multi_payment(
+    dao: &Erc20Dao,
+    payments: Vec<PaymentEntity>,
+    nonce: &mut u64,
+) -> Result<(), GenericError> {
+    let details_array = payments.iter().map(|payment| utils::db_to_payment_details(&payment)).collect();
+
+    let tx_nonce = nonce.to_owned();
+
+    let network = payments.get(0).ok_or(GenericError::new("TODO: Empty array"))?.network;
+
+    match wallet::make_multi_transfer(details_array, tx_nonce, network, None, None, None).await {
+        Ok(db_tx) => {
+            let tx_id = dao
+                .insert_raw_transaction(db_tx)
+                .await
+                .map_err(GenericError::new)?;
+            for payment in payments {
+                dao.transaction_saved(&tx_id, &payment.order_id).await;
+            }
+            *nonce += 1;
+        }
+        Err(e) => {
+            log::error!("Failed to send multipayments {:?}", e);
+            /*let deadline = Utc.from_utc_datetime(&payment.payment_due_date) + *TX_SUMBIT_TIMEOUT;
+            if Utc::now() > deadline {
+                log::error!("Failed to submit erc20 transaction. Retry deadline reached. details={:?} error={}", payment, e);
+                for payment in payments {
+                    dao.payment_failed(&payment.order_id).await;
+                }
+            } else {
+                log::warn!(
+                    "Failed to submit erc20 transaction. Payment will be retried until {}. details={:?} error={:?}",
+                    deadline, payment, e
+                );
+            };*/
+        }
+    };
+    Ok(())
 }
 
 async fn handle_payment(
