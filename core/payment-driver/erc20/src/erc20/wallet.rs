@@ -213,7 +213,7 @@ pub async fn make_transfer(
     let recipient = str_to_addr(&details.recipient)?;
     // TODO: Implement token
     //let token = get_network_token(network, None);
-    let mut raw_tx = ethereum::prepare_raw_transaction(
+    let mut raw_tx = ethereum::prepare_erc20_transfer(
         address,
         recipient,
         amount,
@@ -241,6 +241,102 @@ pub async fn make_transfer(
         Utc::now(),
         TxType::Transfer,
         Some(amount_big_dec),
+    ))
+}
+
+pub async fn make_multi_transfer(
+    details_array: Vec<PaymentDetails>,
+    nonce: u64,
+    network: Network,
+    gas_price: Option<BigDecimal>,
+    max_gas_price: Option<BigDecimal>,
+    gas_limit: Option<u32>,
+) -> Result<TransactionEntity, GenericError> {
+    log::debug!(
+        "make_transfer(). network={}, nonce={}, details={:?}",
+        &network,
+        &nonce,
+        &details_array
+    );
+    let amounts = details_array.iter().map(|details| big_dec_to_u256(&details.amount)).collect::<Result<Vec<U256>, GenericError>>()?;
+
+
+    let (gas_price, max_gas_price) = match network {
+        Network::Polygon => match get_polygon_gas_price_method() {
+            PolygonGasPriceMethod::PolygonGasPriceStatic => (
+                Some(match gas_price {
+                    Some(v) => big_dec_gwei_to_u256(v)?,
+                    None => convert_float_gas_to_u256(get_polygon_starting_price()),
+                }),
+                Some(match max_gas_price {
+                    Some(v) => big_dec_gwei_to_u256(v)?,
+                    None => convert_float_gas_to_u256(get_polygon_maximum_price()),
+                }),
+            ),
+            PolygonGasPriceMethod::PolygonGasPriceDynamic => (
+                Some(match gas_price {
+                    Some(v) => big_dec_gwei_to_u256(v)?,
+                    None => convert_float_gas_to_u256(get_polygon_starting_price()),
+                }),
+                Some(match max_gas_price {
+                    Some(v) => big_dec_gwei_to_u256(v)?,
+                    None => convert_float_gas_to_u256(get_polygon_maximum_price()),
+                }),
+            ),
+        },
+        _ => (
+            match gas_price {
+                None => None,
+                Some(v) => Some(big_dec_gwei_to_u256(v)?),
+            },
+            match max_gas_price {
+                None => None,
+                Some(v) => Some(big_dec_gwei_to_u256(v)?),
+            },
+        ),
+    };
+
+    let senders = details_array.iter().map(|details| str_to_addr(&details.sender)).collect::<Result<Vec<web3::types::Address>, GenericError>>()?;
+    let address = senders.get(0).ok_or(GenericError::new("Senders cannot be empty"))?;
+    for (index, sender) in senders.iter().enumerate() {
+        if address != sender {
+            return Err(GenericError::new(format!("Senders have to be the same idx:{} left:{} right:{}", index, address, sender)));
+        }
+    }
+
+    let amount_sum = amounts.iter().fold(U256::from(0), |sum, e| sum + e);
+
+    let recipients = details_array.iter().map(|details| str_to_addr(&details.recipient)).collect::<Result<Vec<web3::types::Address>, GenericError>>()?;
+    // TODO: Implement token
+    //let token = get_network_token(network, None);
+    let mut raw_tx = ethereum::prepare_erc20_multi_transfer(
+        *address,
+        recipients,
+        amounts,
+        network,
+        U256::from(nonce),
+        gas_price,
+        gas_limit,
+    )
+    .await?;
+
+    if let Some(max_gas_price) = max_gas_price {
+        if raw_tx.gas_price > max_gas_price {
+            raw_tx.gas_price = max_gas_price;
+        }
+    }
+
+    Ok(ethereum::create_dao_entity(
+        U256::from(nonce),
+        *address,
+        raw_tx.gas_price.to_string(),
+        max_gas_price.map(|v| v.to_string()),
+        raw_tx.gas.as_u32() as i32,
+        serde_json::to_string(&raw_tx).map_err(GenericError::new)?,
+        network,
+        Utc::now(),
+        TxType::Transfer,
+        Some(u256_to_big_dec(amount_sum)?),
     ))
 }
 

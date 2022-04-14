@@ -355,7 +355,7 @@ pub async fn sign_raw_transfer_transaction(
     Ok(signature)
 }
 
-pub async fn prepare_raw_transaction(
+pub async fn prepare_erc20_transfer(
     _address: H160,
     recipient: H160,
     amount: U256,
@@ -369,6 +369,75 @@ pub async fn prepare_raw_transaction(
     let contract = prepare_erc20_contract(&client, &env)?;
 
     let data = eth_utils::contract_encode(&contract, TRANSFER_ERC20_FUNCTION, (recipient, amount))
+        .map_err(GenericError::new)?;
+
+    //get gas price from network in not provided
+    let gas_price = match gas_price_override {
+        Some(gas_price_new) => gas_price_new,
+        None => {
+            let small_gas_bump = U256::from(1000);
+            let mut gas_price_from_network =
+                client.eth().gas_price().await.map_err(GenericError::new)?;
+
+            //add small amount of gas to be first in queue
+            if gas_price_from_network / 1000 > small_gas_bump {
+                gas_price_from_network += small_gas_bump;
+            }
+            if network == Network::Rinkeby {
+                //for testnet bump gas by 20% to not allow transactions to be stuck
+                gas_price_from_network *= U256::from(1200);
+                gas_price_from_network /= U256::from(1000);
+            }
+            gas_price_from_network
+        }
+    };
+
+    let gas_limit = match network {
+        Network::Polygon => gas_limit_override.map_or(*GLM_POLYGON_GAS_LIMIT, |v| U256::from(v)),
+        _ => gas_limit_override.map_or(*GLM_TRANSFER_GAS, |v| U256::from(v)),
+    };
+
+    let tx = YagnaRawTransaction {
+        nonce,
+        to: Some(contract.address()),
+        value: U256::from(0),
+        gas_price,
+        gas: gas_limit,
+        data,
+    };
+    Ok(tx)
+}
+
+pub async fn prepare_erc20_multi_transfer(
+    _address: H160,
+    receivers: Vec<H160>,
+    amounts: Vec<U256>,
+    network: Network,
+    nonce: U256,
+    gas_price_override: Option<U256>,
+    gas_limit_override: Option<u32>,
+) -> Result<YagnaRawTransaction, GenericError> {
+    let env = get_env(network);
+    let client = get_client(network).await?;
+    let contract = prepare_erc20_multi_contract(&client, &env)?;
+
+
+    let packed: Vec<[u8; 32]> = receivers
+        .iter()
+        .zip(amounts.iter())
+        .map(|(&receiver, &amount)| {
+            let mut packet2 = [0u8; 32];
+            amount.to_big_endian(&mut packet2[..]);
+            packet2[..20].copy_from_slice(&receiver[..20]);
+            packet2
+        })
+        .collect();
+
+    let method = "golemTransferDirectPacked";
+
+    let gas_estimation: U256 = contract.estimate_gas(method, packed.clone(), _address, Options::default()).await.map_err(|err| GenericError::new(format!("Error when trying estimate gas {}", err)))?;
+    log::error!("Gas estimation {}", gas_estimation);
+    let data = eth_utils::contract_encode(&contract, method, packed)
         .map_err(GenericError::new)?;
 
     //get gas price from network in not provided
@@ -598,6 +667,17 @@ fn prepare_erc20_contract(
         ethereum_client,
         env.glm_contract_address,
         include_bytes!("../contracts/ierc20.json"),
+    )
+}
+
+fn prepare_erc20_multi_contract(
+    ethereum_client: &Web3<Http>,
+    env: &config::EnvConfiguration,
+) -> Result<Contract<Http>, GenericError> {
+    prepare_contract(
+        ethereum_client,
+        env.glm_multi_transfer_contract_address.ok_or(GenericError::new("No multipayment contract defined for this environment"))?,
+        include_bytes!("../contracts/multi_transfer_erc20.json"),
     )
 }
 

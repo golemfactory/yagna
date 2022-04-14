@@ -134,45 +134,86 @@ pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericEr
     let token = network::get_network_token(network, None);
     let sender = msg.sender;
     let sender_h160 = utils::str_to_addr(&sender)?;
-    let recipient = msg
-        .receivers
-        .get(0)
-        .ok_or(GenericError::new("receivers cannot be empty"))?
-        .clone();
-    let amount = msg
-        .amounts
-        .get(0)
-        .ok_or(GenericError::new("amounts cannot be empty"))?
-        .clone();
+
+    if msg.receivers.len() != msg.amounts.len() {
+        return Err(GenericError::new(format!(
+            "Amounts and receivers has to be the same length {} vs {}",
+            msg.receivers.len(),
+            msg.amounts.len()
+        )));
+    }
+    if msg.receivers.len() == 0 {
+        return Err(GenericError::new(
+            "Receiver list (to-address) cannot be empty",
+        ));
+    }
+
     let gas_limit = msg.gas_limit;
     let gas_price = msg.gas_price;
     let max_gas_price = msg.max_gas_price;
     let glm_balance = wallet::account_balance(sender_h160, network).await?;
 
-    if amount > glm_balance {
-        return Err(GenericError::new(format!(
-            "Not enough {} balance for transfer. balance={}, tx_amount={}, address={}, network={}",
-            token, glm_balance, amount, sender, network
-        )));
-    }
-
-    let details = PaymentDetails {
-        recipient,
-        sender,
-        amount,
-        date: Some(Utc::now()),
-    };
-
     let nonce = wallet::get_next_nonce(dao, sender_h160, network).await?;
-    let db_tx = wallet::make_transfer(
-        &details,
-        nonce,
-        network,
-        gas_price,
-        max_gas_price,
-        gas_limit,
-    )
-    .await?;
+
+    let details_str: String;
+    let db_tx = if msg.receivers.len() == 1 {
+        let recipient = msg
+            .receivers
+            .get(0)
+            .ok_or(GenericError::new("receivers cannot be empty"))?
+            .clone();
+        let amount = msg
+            .amounts
+            .get(0)
+            .ok_or(GenericError::new("amounts cannot be empty"))?
+            .clone();
+
+        if amount > glm_balance {
+            return Err(GenericError::new(format!(
+                "Not enough {} balance for transfer. balance={}, tx_amount={}, address={}, network={}",
+                token, glm_balance, amount, sender, network
+            )));
+        }
+        let details = PaymentDetails {
+            recipient,
+            sender,
+            amount,
+            date: Some(Utc::now()),
+        };
+        details_str = format!("{:?}", details);
+        wallet::make_transfer(
+            &details,
+            nonce,
+            network,
+            gas_price,
+            max_gas_price,
+            gas_limit,
+        )
+        .await?
+    } else {
+        let details_array = msg
+            .receivers
+            .into_iter()
+            .zip(msg.amounts.into_iter())
+            .map(|(recipient, amount)| PaymentDetails {
+                recipient,
+                sender: sender.clone(),
+                amount,
+                date: Some(Utc::now()),
+            })
+            .collect();
+        details_str = format!("{:?}", details_array);
+
+        wallet::make_multi_transfer(
+            details_array,
+            nonce,
+            network,
+            gas_price,
+            max_gas_price,
+            gas_limit,
+        )
+        .await?
+    };
 
     // Check if there is enough ETH for gas
     let human_gas_cost = wallet::has_enough_eth_for_gas(&db_tx, network).await?;
@@ -185,7 +226,7 @@ pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericEr
 
     let message = format!(
         "Scheduled {} transfer. details={:?}, max_gas_cost={} ETH, network={}",
-        &token, &details, &human_gas_cost, &network
+        &token, &details_str, &human_gas_cost, &network
     );
     log::info!("{}", message);
     log::debug!("tx_id={}", tx_id);

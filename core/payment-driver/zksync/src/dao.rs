@@ -251,7 +251,11 @@ impl ZksyncDao {
     }
 
     pub async fn get_unconfirmed_txs(&self, network: Network) -> Vec<TransactionEntity> {
-        match self.transaction().get_unconfirmed_txs(network).await {
+        match self
+            .transaction()
+            .get_unconfirmed_txs(network, 100000)
+            .await
+        {
             Ok(txs) => txs,
             Err(e) => {
                 log::error!("Failed to fetch unconfirmed transactions : {:?}", e);
