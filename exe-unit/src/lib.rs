@@ -83,10 +83,10 @@ impl<R: Runtime> ExeUnit<R> {
         }
     }
 
-    pub fn offer_template(binary: PathBuf) -> Result<OfferTemplate> {
+    pub fn offer_template(binary: PathBuf, args: Vec<String>) -> Result<OfferTemplate> {
         use crate::runtime::process::RuntimeProcess;
 
-        let runtime_template = RuntimeProcess::offer_template(binary)?;
+        let runtime_template = RuntimeProcess::offer_template(binary, args)?;
         let supervisor_template = OfferTemplate::new(serde_json::json!({
             "golem.com.usage.vector": MetricsService::usage_vector(),
             "golem.activity.caps.transfer.protocol": TransferService::schemes(),

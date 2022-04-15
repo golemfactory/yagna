@@ -227,7 +227,8 @@ fn run() -> anyhow::Result<()> {
             args
         }
         Command::OfferTemplate => {
-            let offer_template = ExeUnit::<RuntimeProcess>::offer_template(cli.binary)?;
+            let args = cli.runtime_arg.clone();
+            let offer_template = ExeUnit::<RuntimeProcess>::offer_template(cli.binary, args)?;
             println!("{}", serde_json::to_string(&offer_template)?);
             return Ok(());
         }

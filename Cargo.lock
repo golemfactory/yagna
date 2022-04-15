@@ -7136,6 +7136,7 @@ dependencies = [
  "url",
  "ya-core-model",
  "ya-relay-client",
+ "ya-relay-core",
  "ya-sb-proto",
  "ya-sb-router",
  "ya-service-api",
@@ -7302,8 +7303,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e986a9dc5bcef813a13aa47859fb924e4cce9a1359c6c7a637d2ebddd7d40f7"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=620baa80bc5f382eaa87a047767479f74fe9ebf0#620baa80bc5f382eaa87a047767479f74fe9ebf0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7321,8 +7321,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-core"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "455463a90273fb258233070eafc808994245ca71c209f34c56164152d6fff210"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=620baa80bc5f382eaa87a047767479f74fe9ebf0#620baa80bc5f382eaa87a047767479f74fe9ebf0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7350,8 +7349,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-proto"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4243e6ca2968729edcb785a642053d9994a80687e181b4e4a9c2037b12787f8"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=620baa80bc5f382eaa87a047767479f74fe9ebf0#620baa80bc5f382eaa87a047767479f74fe9ebf0"
 dependencies = [
  "anyhow",
  "bytes 0.5.6",
@@ -7368,8 +7366,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "662fabfbf1de7ef351edba111a049999c96d958b60374d371007359973c8656b"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=620baa80bc5f382eaa87a047767479f74fe9ebf0#620baa80bc5f382eaa87a047767479f74fe9ebf0"
 dependencies = [
  "derive_more",
  "futures 0.3.13",
