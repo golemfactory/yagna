@@ -107,7 +107,11 @@ async fn check_if_synched_and_get_block_number(network: Network) -> Result<u64, 
     Ok(block_number)
 }
 
-pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
+pub async fn confirm_payments(
+    dao: &Erc20Dao,
+    name: &str,
+    network_key: &str,
+) -> Result<bool, GenericError> {
     let network = Network::from_str(&network_key).unwrap();
     let env = get_env(network);
     let txs = dao
@@ -115,13 +119,15 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
         .await;
     //log::debug!("confirm_payments {:?}", txs);
 
-    if !txs.is_empty() {
+    if txs.is_empty() {
+        Ok(true)
+    } else {
         // TODO: Store block number and continue only on new block
         let block_number = match check_if_synched_and_get_block_number(network).await {
             Ok(block_number) => block_number,
             Err(err) => {
-                log::error!("{:?}", err);
-                return;
+                //log::error!("{:?}", err);
+                return Err(err);
             }
         };
         let current_time = Utc::now().naive_utc();
@@ -362,6 +368,7 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                 continue;
             }
         }
+        Ok(false)
     }
 }
 
@@ -407,7 +414,6 @@ pub async fn process_payments_for_account(
 
         let multi_batching = true;
 
-
         if multi_batching {
             if payments.len() >= 1 {
                 handle_multi_payment(&dao, payments, &mut next_nonce).await?;
@@ -420,10 +426,6 @@ pub async fn process_payments_for_account(
                 handle_payment(&dao, payment, &mut next_nonce).await?;
             }
         }
-
-
-
-
     }
     Ok(())
 }
@@ -457,11 +459,17 @@ async fn handle_multi_payment(
     payments: Vec<PaymentEntity>,
     nonce: &mut u64,
 ) -> Result<(), GenericError> {
-    let details_array = payments.iter().map(|payment| utils::db_to_payment_details(&payment)).collect();
+    let details_array = payments
+        .iter()
+        .map(|payment| utils::db_to_payment_details(&payment))
+        .collect();
 
     let tx_nonce = nonce.to_owned();
 
-    let network = payments.get(0).ok_or(GenericError::new("TODO: Empty array"))?.network;
+    let network = payments
+        .get(0)
+        .ok_or(GenericError::new("TODO: Empty array"))?
+        .network;
 
     match wallet::make_multi_transfer(details_array, tx_nonce, network, None, None, None).await {
         Ok(db_tx) => {

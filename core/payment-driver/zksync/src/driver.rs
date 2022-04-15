@@ -11,6 +11,7 @@ use num_bigint::BigInt;
 use std::collections::HashMap;
 use std::env;
 use std::str::FromStr;
+use std::sync::Arc;
 use uuid::Uuid;
 
 // Workspace uses
@@ -420,9 +421,7 @@ To be able to use zkSync driver please send some GLM tokens and optionally ETH f
         Ok(())
     }
 }
-
-#[async_trait(?Send)]
-impl PaymentDriverCron for ZksyncDriver {
+impl ZksyncDriver {
     async fn confirm_payments(&self) {
         let guard = match self.confirmation_lock.try_lock() {
             None => {
@@ -573,8 +572,14 @@ impl PaymentDriverCron for ZksyncDriver {
     fn sendout_interval(&self) -> std::time::Duration {
         *TX_SENDOUT_INTERVAL
     }
-
-    fn confirmation_interval(&self) -> std::time::Duration {
-        *TX_CONFIRMATION_INTERVAL
+}
+#[async_trait(?Send)]
+impl PaymentDriverCron for ZksyncDriver {
+    async fn start_confirmation_job(self: Arc<Self>) {
+        loop {
+            self.confirm_payments().await;
+            self.send_out_payments().await;
+            tokio::time::delay_for(self.sendout_interval()).await;
+        }
     }
 }

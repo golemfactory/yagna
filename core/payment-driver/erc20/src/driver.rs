@@ -4,10 +4,11 @@
     Please limit the logic in this file, use local mods to handle the calls.
 */
 // Extrnal crates
-use chrono::{Duration, Utc};
-use futures::lock::Mutex;
+use log;
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::sync::Arc;
+use tokio::sync::Notify;
 
 // Workspace uses
 use ya_payment_driver::{
@@ -35,22 +36,21 @@ lazy_static::lazy_static! {
             std::env::var("ERC20_SENDOUT_INTERVAL_SECS")
                 .ok()
                 .and_then(|x| x.parse().ok())
-                .unwrap_or(30),
+                .unwrap_or(120),
         );
 
     static ref TX_CONFIRMATION_INTERVAL: std::time::Duration = std::time::Duration::from_secs(
             std::env::var("ERC20_CONFIRMATION_INTERVAL_SECS")
                 .ok()
                 .and_then(|x| x.parse().ok())
-                .unwrap_or(30),
+                .unwrap_or(10),
         );
 }
 
 pub struct Erc20Driver {
     active_accounts: AccountsRc,
     dao: Erc20Dao,
-    sendout_lock: Mutex<()>,
-    confirmation_lock: Mutex<()>,
+    notify: Arc<Notify>, //can be Rc also, but Arc looks nicer
 }
 
 impl Erc20Driver {
@@ -58,8 +58,7 @@ impl Erc20Driver {
         Self {
             active_accounts: Accounts::new_rc(),
             dao: Erc20Dao::new(db),
-            sendout_lock: Default::default(),
-            confirmation_lock: Default::default(),
+            notify: Arc::new(Notify::new()),
         }
     }
 
@@ -167,7 +166,11 @@ impl PaymentDriver for Erc20Driver {
         msg: Transfer,
     ) -> Result<String, GenericError> {
         self.is_account_active(&msg.sender)?;
-        cli::transfer(&self.dao, msg).await
+        let res = cli::transfer(&self.dao, msg).await;
+        if res.is_ok() {
+            self.notify.notify();
+        }
+        res
     }
 
     async fn transfer_fee(&self, _msg: TransferFee) -> Result<FeeResult, GenericError> {
@@ -209,51 +212,39 @@ impl PaymentDriver for Erc20Driver {
         &self,
         _db: DbExecutor,
         _caller: String,
-        msg: ShutDown,
+        _msg: ShutDown,
     ) -> Result<(), GenericError> {
-        self.send_out_payments().await;
+        //TODO - add proper shutdown code
+        //self.send_out_payments().await;
         // HACK: Make sure that send-out job did complete. It might have just been running in another thread (cron). In such case .send_out_payments() would not block.
-        self.sendout_lock.lock().await;
+        //self.sendout_lock.lock().await;
+        /*
         let timeout = Duration::from_std(msg.timeout)
             .map_err(|e| GenericError::new(format!("Invalid shutdown timeout: {}", e)))?;
         let deadline = Utc::now() + timeout - Duration::seconds(1);
         while {
-            self.confirm_payments().await; // Run it at least once
+            //self.confirm_payments().await; // Run it at least once
             Utc::now() < deadline && self.dao.has_unconfirmed_txs().await? // Stop if deadline passes or there are no more transactions to confirm
         } {
             tokio::time::delay_for(std::time::Duration::from_secs(1)).await;
-        }
+        }*/
         Ok(())
     }
 }
 
-#[async_trait(?Send)]
-impl PaymentDriverCron for Erc20Driver {
-    async fn confirm_payments(&self) {
-        let guard = match self.confirmation_lock.try_lock() {
-            None => {
-                log::trace!("ERC-20 confirmation job in progress.");
-                return;
-            }
-            Some(guard) => guard,
-        };
+impl Erc20Driver {
+    async fn confirm_payments(&self) -> Result<bool, GenericError> {
         log::trace!("Running ERC-20 confirmation job...");
         for network_key in self.get_networks().keys() {
-            cron::confirm_payments(&self.dao, &self.get_name(), network_key).await;
+            if !cron::confirm_payments(&self.dao, &self.get_name(), network_key).await? {
+                return Ok(false);
+            }
         }
         log::trace!("ERC-20 confirmation job complete.");
-        drop(guard); // Explicit drop to tell Rust that guard is not unused variable
+        Ok(true)
     }
 
     async fn send_out_payments(&self) {
-        let guard = match self.sendout_lock.try_lock() {
-            None => {
-                log::trace!("ERC-20 send-out job in progress.");
-                return;
-            }
-            Some(guard) => guard,
-        };
-
         log::trace!("Running ERC-20 send-out job...");
         'outer: for network_key in self.get_networks().keys() {
             let network = Network::from_str(&network_key).unwrap();
@@ -274,15 +265,63 @@ impl PaymentDriverCron for Erc20Driver {
             cron::process_transactions(&self.dao, network).await;
         }
         log::trace!("ERC-20 send-out job complete.");
-
-        drop(guard); // Explicit drop to tell Rust that guard is not unused variable
     }
+}
 
-    fn sendout_interval(&self) -> std::time::Duration {
-        *TX_SENDOUT_INTERVAL
-    }
+#[async_trait(?Send)]
+impl PaymentDriverCron for Erc20Driver {
+    async fn start_confirmation_job(self: Arc<Self>) {
+        let driver = self.clone();
+        loop {
+            tokio::select! {
+                val = driver.notify.notified() => {
+                    log::debug!("Received notification {:?}", val);
+                }
+                val = tokio::time::delay_for(*TX_SENDOUT_INTERVAL) => {
+                    log::debug!("Start payment driver cron loop {:?}", val);
+                }
+            }
+            self.send_out_payments().await;
+            loop {
+                tokio::time::delay_for(*TX_CONFIRMATION_INTERVAL).await;
+                let res = self.confirm_payments().await.unwrap_or_else(|err| {
+                    log::error!("Error when trying to confirm payments {}", err);
+                    false
+                });
+                if res {
+                    break;
+                }
+            }
+        }
 
-    fn confirmation_interval(&self) -> std::time::Duration {
-        *TX_CONFIRMATION_INTERVAL
+        /*
+        let driver1 = self.clone();
+        Arbiter::spawn(async move {
+            loop {
+                tokio::select! {
+                    val = driver1.notify.notified() => {
+                        log::debug!("Received notification {:?}", val);
+                    }
+                    val = tokio::time::delay_for(*TX_SENDOUT_INTERVAL) => {
+                        log::debug!("Start payment driver cron loop {:?}", val);
+                    }
+                }
+                driver1.send_out_payments().await;
+            }
+        });
+        let driver2 = self.clone();
+        Arbiter::spawn(async move {
+            loop {
+                tokio::select! {
+                    val = driver2.notify.notified() => {
+                        log::debug!("Received notification {:?}", val);
+                    }
+                    val = tokio::time::delay_for(*TX_SENDOUT_INTERVAL) => {
+                        log::debug!("Start payment driver cron loop {:?}", val);
+                    }
+                }
+                driver2.confirm_payments().await;
+            }
+        });*/
     }
 }
