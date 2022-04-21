@@ -202,8 +202,8 @@ pub async fn release_allocation_after(
 ) {
     tokio::task::spawn(async move {
         if let Some(timeout) = allocation_timeout {
-            //FIXME when upgrading to tokio 1.0 or greater. The maximum duration of delay in tokio 0.2 is equal to max_duration(millis).
-            let max_duration: i64 = 1 << 36;
+            //FIXME when upgrading to tokio 1.0 or greater. In tokio 0.2 timer panics when maximum duration of delay is exceeded.
+            let max_duration: i64 = 1 << 35;
 
             loop {
                 let time_diff = timeout.timestamp_millis() - Utc::now().timestamp_millis();
