@@ -111,6 +111,7 @@ pub async fn cli_ping(_msg: model::GsbPing) -> Result<Vec<GsbPingResponse>, Stat
 
     let nodes = client.connected_nodes().await;
     let our_node_id = client.node_id();
+    let ping_timeout = Duration::from_secs(10);
 
     log::debug!("Ping: Num connected nodes: {}", nodes.len());
 
@@ -124,7 +125,7 @@ pub async fn cli_ping(_msg: model::GsbPing) -> Result<Vec<GsbPingResponse>, Stat
                     .to(*id)
                     .service(ya_net::DIAGNOSTIC)
                     .send(GsbRemotePing {})
-                    .timeout(Some(Duration::from_secs(10)))
+                    .timeout(Some(ping_timeout))
                     .await???;
 
                 let tcp_ping = tcp_before.elapsed();
@@ -134,7 +135,7 @@ pub async fn cli_ping(_msg: model::GsbPing) -> Result<Vec<GsbPingResponse>, Stat
                     .to(*id)
                     .service_udp(ya_net::DIAGNOSTIC)
                     .send(GsbRemotePing {})
-                    .timeout(Some(Duration::from_secs(10)))
+                    .timeout(Some(ping_timeout))
                     .await???;
 
                 let udp_ping = udp_before.elapsed();
@@ -156,7 +157,12 @@ pub async fn cli_ping(_msg: model::GsbPing) -> Result<Vec<GsbPingResponse>, Stat
         Ok(ping) => Some(ping),
         Err(e) => {
             log::warn!("Failed to ping node: {}. {}", nodes[idx].0, e);
-            None
+            Some(GsbPingResponse {
+                node_id: nodes[idx].0,
+                node_alias: nodes[idx].1,
+                tcp_ping: ping_timeout.clone(),
+                udp_ping: ping_timeout,
+            })
         }
     })
     .collect();

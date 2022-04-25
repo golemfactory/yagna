@@ -137,11 +137,13 @@ impl NetCommand {
                     values: pings
                         .into_iter()
                         .map(|s| {
+                            let tcp_ping = Duration::from_millis(s.tcp_ping.as_millis() as u64);
+                            let udp_ping = Duration::from_millis(s.udp_ping.as_millis() as u64);
                             serde_json::json! {[
                                 s.node_id,
                                 s.node_alias,
-                                s.tcp_ping,
-                                s.udp_ping,
+                                format_duration(tcp_ping).to_string(),
+                                format_duration(udp_ping).to_string(),
                             ]}
                         })
                         .collect(),
