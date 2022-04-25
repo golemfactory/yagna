@@ -131,11 +131,23 @@ pub mod local {
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
+    pub struct StatusMetrics {
+        pub tx_total: usize,
+        pub tx_current: f32,
+        pub tx_avg: f32,
+        pub rx_total: usize,
+        pub rx_current: f32,
+        pub rx_avg: f32,
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
     pub struct StatusResponse {
         pub node_id: NodeId,
         pub listen_address: Option<SocketAddr>,
         pub public_address: Option<SocketAddr>,
         pub sessions: usize,
+        pub metrics: StatusMetrics,
     }
 
     impl RpcMessage for Status {
@@ -183,6 +195,7 @@ pub mod local {
         pub local_port: String,
         pub remote_addr: String,
         pub remote_port: String,
+        pub metrics: StatusMetrics,
     }
 }
 

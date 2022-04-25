@@ -1,6 +1,8 @@
-use humantime::format_duration;
 use std::cmp::Ordering;
+use std::fmt::Display;
 use std::time::Duration;
+
+use humantime::format_duration;
 use structopt::*;
 
 use ya_core_model::net::local as model;
@@ -20,10 +22,27 @@ pub enum NetCommand {
 }
 
 impl NetCommand {
-    pub async fn run_command(self, _ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
+    pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
+        let is_json = ctx.json_output;
+
         match self {
             NetCommand::Status {} => {
-                CommandOutput::object(bus::service(model::BUS_ID).send(model::Status {}).await??)
+                let status = bus::service(model::BUS_ID).send(model::Status {}).await??;
+
+                CommandOutput::object(serde_json::json!({
+                    "nodeId": status.node_id,
+                    "listenAddress": status.listen_address,
+                    "publicAddress": status.public_address,
+                    "sessions": status.sessions,
+                    "bandwidth": {
+                        "outKiBps": to_kib(status.metrics.tx_current, is_json),
+                        "outAvgKiBps": to_kib(status.metrics.tx_avg, is_json),
+                        "outMib": to_mib(status.metrics.tx_total, is_json),
+                        "inKiBps": to_kib(status.metrics.rx_current, is_json),
+                        "inAvgKiBps": to_kib(status.metrics.rx_avg, is_json),
+                        "inMib": to_mib(status.metrics.rx_total, is_json),
+                    }
+                }))
             }
             NetCommand::Sessions {} => {
                 let mut sessions: Vec<model::SessionResponse> = bus::service(model::BUS_ID)
@@ -35,7 +54,7 @@ impl NetCommand {
 
                 Ok(ResponseTable {
                     columns: vec![
-                        "node".into(),
+                        "nodeId".into(),
                         "address".into(),
                         "type".into(),
                         "seen".into(),
@@ -72,19 +91,25 @@ impl NetCommand {
 
                 Ok(ResponseTable {
                     columns: vec![
-                        "socket".into(),
-                        "address".into(),
+                        "type".into(),
                         "port".into(),
+                        "to addr".into(),
+                        "to port".into(),
                         "state".into(),
+                        "out [KiB/s]".into(),
+                        "in [KiB/s]".into(),
                     ],
                     values: sockets
                         .into_iter()
                         .map(|s| {
                             serde_json::json! {[
-                                format!("{}:{}", s.protocol, s.local_port),
+                                s.protocol.to_string(),
+                                s.local_port.to_string(),
                                 s.remote_addr,
                                 s.remote_port,
                                 s.state,
+                                to_kib(s.metrics.tx_current, is_json),
+                                to_kib(s.metrics.rx_current, is_json),
                             ]}
                         })
                         .collect(),
@@ -93,4 +118,28 @@ impl NetCommand {
             }
         }
     }
+}
+
+#[inline]
+fn to_kib(value: f32, is_json: bool) -> serde_json::Value {
+    format_number(value / 1024., is_json)
+}
+
+#[inline]
+fn to_mib(value: usize, is_json: bool) -> serde_json::Value {
+    format_number(value as f64 / (1024. * 1024.), is_json)
+}
+
+fn format_number<T>(value: T, is_json: bool) -> serde_json::Value
+where
+    T: Display,
+    f64: From<T>,
+{
+    let value: f64 = value.into();
+    if is_json {
+        return serde_json::Value::Number(
+            serde_json::Number::from_f64(value).unwrap_or_else(|| serde_json::Number::from(0)),
+        );
+    }
+    serde_json::Value::String(format!("{:.2}", value))
 }
