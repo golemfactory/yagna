@@ -112,6 +112,8 @@ pub async fn cli_ping(_msg: model::GsbPing) -> Result<Vec<GsbPingResponse>, Stat
     let nodes = client.connected_nodes().await;
     let our_node_id = client.node_id();
 
+    log::debug!("Ping: Num connected nodes: {}", nodes.len());
+
     let results = join_all(
         nodes
             .iter()
@@ -120,7 +122,7 @@ pub async fn cli_ping(_msg: model::GsbPing) -> Result<Vec<GsbPingResponse>, Stat
 
                 ya_net::from(our_node_id)
                     .to(*id)
-                    .service(ya_net::remote::DIAGNOSTIC_TCP)
+                    .service(ya_net::DIAGNOSTIC)
                     .send(GsbRemotePing {})
                     .timeout(Some(Duration::from_secs(10)))
                     .await???;
@@ -130,7 +132,7 @@ pub async fn cli_ping(_msg: model::GsbPing) -> Result<Vec<GsbPingResponse>, Stat
 
                 ya_net::from(our_node_id)
                     .to(*id)
-                    .service(ya_net::remote::DIAGNOSTIC_UDP)
+                    .service_udp(ya_net::DIAGNOSTIC)
                     .send(GsbRemotePing {})
                     .timeout(Some(Duration::from_secs(10)))
                     .await???;
