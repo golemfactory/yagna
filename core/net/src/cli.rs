@@ -19,6 +19,8 @@ pub enum NetCommand {
     Sessions {},
     /// List virtual sockets
     Sockets {},
+    /// Ping connected nodes
+    Ping {},
 }
 
 impl NetCommand {
@@ -59,12 +61,14 @@ impl NetCommand {
                         "type".into(),
                         "seen".into(),
                         "time".into(),
+                        "ping".into(),
                     ],
                     values: sessions
                         .into_iter()
                         .map(|s| {
                             let seen = Duration::from_secs(s.seen.as_secs());
                             let duration = Duration::from_secs(s.duration.as_secs());
+                            let ping = Duration::from_millis(s.ping.as_millis() as u64);
 
                             serde_json::json! {[
                                 s.node_id.map(|id| id.to_string()).unwrap_or_default(),
@@ -72,6 +76,7 @@ impl NetCommand {
                                 s.session_type,
                                 format_duration(seen).to_string(),
                                 format_duration(duration).to_string(),
+                                format_duration(ping).to_string(),
                             ]}
                         })
                         .collect(),
@@ -110,6 +115,33 @@ impl NetCommand {
                                 s.state,
                                 to_kib(s.metrics.tx_current, is_json),
                                 to_kib(s.metrics.rx_current, is_json),
+                            ]}
+                        })
+                        .collect(),
+                }
+                .into())
+            }
+            NetCommand::Ping { .. } => {
+                let pings = bus::service(model::BUS_ID)
+                    .send(model::GsbPing {})
+                    .await
+                    .map_err(|e| anyhow::Error::msg(e))??;
+
+                Ok(ResponseTable {
+                    columns: vec![
+                        "node".into(),
+                        "alias".into(),
+                        "ping (tcp)".into(),
+                        "ping (udp)".into(),
+                    ],
+                    values: pings
+                        .into_iter()
+                        .map(|s| {
+                            serde_json::json! {[
+                                s.node_id,
+                                s.node_alias,
+                                s.tcp_ping,
+                                s.udp_ping,
                             ]}
                         })
                         .collect(),

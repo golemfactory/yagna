@@ -1,12 +1,23 @@
-use std::time::Instant;
+use futures::future::join_all;
+use futures::TryFutureExt;
+use std::time::{Duration, Instant};
 
-use ya_core_model::net::local as model;
+use ya_core_model::net as ya_net;
+use ya_core_model::net::local::{GsbPingResponse, StatusError};
+use ya_core_model::net::{local as model, GsbRemotePing, RemoteEndpoint, DIAGNOSTIC};
 use ya_relay_client::ChannelMetrics;
-use ya_service_bus::typed as bus;
+use ya_service_bus::timeout::IntoTimeoutFuture;
+use ya_service_bus::typed::ServiceBinder;
+use ya_service_bus::{typed as bus, RpcEndpoint};
 
 use crate::hybrid::service::CLIENT;
 
 pub(crate) fn bind_service() {
+    let _ = bus::bind(model::BUS_ID, cli_ping);
+
+    ServiceBinder::new(DIAGNOSTIC, &(), ())
+        .bind(move |_, _caller: String, _msg: GsbRemotePing| async move { Ok(GsbRemotePing {}) });
+
     let _ = bus::bind(model::BUS_ID, move |_: model::Status| async move {
         let client = {
             CLIENT.with(|c| c.borrow().clone()).ok_or_else(|| {
@@ -47,6 +58,7 @@ pub(crate) fn bind_service() {
                 remote_address: session.remote,
                 seen: now - session.last_seen,
                 duration: now - session.created,
+                ping: session.last_ping,
             });
         }
 
@@ -84,4 +96,67 @@ fn to_status_metrics(metrics: &mut ChannelMetrics) -> model::StatusMetrics {
         rx_avg: metrics.rx.long.average(time),
         rx_current: metrics.rx.short.average(time),
     }
+}
+
+pub async fn cli_ping(_msg: model::GsbPing) -> Result<Vec<GsbPingResponse>, StatusError> {
+    let client = {
+        CLIENT.with(|c| c.borrow().clone()).ok_or_else(|| {
+            model::StatusError::RuntimeException("client not initialized".to_string())
+        })?
+    };
+
+    // This will update sessions ping. We don't display them in this view
+    // but I think it is good place to enforce this.
+    client.ping_sessions().await;
+
+    let nodes = client.connected_nodes().await;
+    let our_node_id = client.node_id();
+
+    let results = join_all(
+        nodes
+            .iter()
+            .map(|(id, alias)| async move {
+                let tcp_before = Instant::now();
+
+                ya_net::from(our_node_id)
+                    .to(*id)
+                    .service(ya_net::remote::DIAGNOSTIC_TCP)
+                    .send(GsbRemotePing {})
+                    .timeout(Some(Duration::from_secs(10)))
+                    .await???;
+
+                let tcp_ping = tcp_before.elapsed();
+                let udp_before = Instant::now();
+
+                ya_net::from(our_node_id)
+                    .to(*id)
+                    .service(ya_net::remote::DIAGNOSTIC_UDP)
+                    .send(GsbRemotePing {})
+                    .timeout(Some(Duration::from_secs(10)))
+                    .await???;
+
+                let udp_ping = udp_before.elapsed();
+
+                anyhow::Ok(GsbPingResponse {
+                    node_id: *id,
+                    node_alias: alias.clone(),
+                    tcp_ping,
+                    udp_ping,
+                })
+            })
+            .map(|future| future.map_err(|e| StatusError::RuntimeException(e.to_string())))
+            .collect::<Vec<_>>(),
+    )
+    .await
+    .into_iter()
+    .enumerate()
+    .filter_map(|(idx, result)| match result {
+        Ok(ping) => Some(ping),
+        Err(e) => {
+            log::warn!("Failed to ping node: {}. {}", nodes[idx].0, e);
+            None
+        }
+    })
+    .collect();
+    Ok(results)
 }

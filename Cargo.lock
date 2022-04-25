@@ -507,9 +507,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.39"
+version = "1.0.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81cddc5f91628367664cc7c69714ff08deee8a3efc54623011c772544d7b2767"
+checksum = "08f9b8508dccb7687a1d6c4ce66b2b0ecef467c94667de27d8d7fe1f8d2a9cdc"
 
 [[package]]
 name = "appdirs"
@@ -7325,7 +7325,6 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=46c83612d37ba336a3a1228188e9dc941ffb8c64#46c83612d37ba336a3a1228188e9dc941ffb8c64"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7333,6 +7332,7 @@ dependencies = [
  "env_logger 0.8.4",
  "futures 0.3.13",
  "log",
+ "thiserror",
  "tokio 0.2.25",
  "url",
  "ya-relay-core",
@@ -7343,7 +7343,6 @@ dependencies = [
 [[package]]
 name = "ya-relay-core"
 version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=46c83612d37ba336a3a1228188e9dc941ffb8c64#46c83612d37ba336a3a1228188e9dc941ffb8c64"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7371,7 +7370,6 @@ dependencies = [
 [[package]]
 name = "ya-relay-proto"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=46c83612d37ba336a3a1228188e9dc941ffb8c64#46c83612d37ba336a3a1228188e9dc941ffb8c64"
 dependencies = [
  "anyhow",
  "bytes 0.5.6",
@@ -7388,7 +7386,6 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=46c83612d37ba336a3a1228188e9dc941ffb8c64#46c83612d37ba336a3a1228188e9dc941ffb8c64"
 dependencies = [
  "derive_more",
  "futures 0.3.13",

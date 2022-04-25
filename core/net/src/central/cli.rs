@@ -17,4 +17,8 @@ pub(crate) fn bind_service() {
     let _ = bus::bind(model::BUS_ID, move |_: model::Sockets| {
         futures::future::err(err.clone())
     });
+    let err = error.clone();
+    let _ = bus::bind(model::BUS_ID, move |_: model::GsbPing| {
+        futures::future::err(err.clone())
+    });
 }
