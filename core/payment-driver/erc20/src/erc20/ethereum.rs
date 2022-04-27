@@ -163,15 +163,78 @@ pub async fn get_next_nonce_pending(address: H160, network: Network) -> Result<U
     Err(GenericError::new("Web3 clients failed."))
 }
 
-pub async fn block_number(network: Network) -> Result<U64, GenericError> {
+pub async fn with_clients<T, F, R>(network: Network, mut f: F) -> Result<T, GenericError>
+where
+    F: FnMut(Web3<Http>) -> R,
+    R: futures::Future<Output = Result<T, CustomError>>
+{
     let clients = get_clients(network).await?;
+    let mut last_err: Option<CustomError> = None;
 
     for client in clients {
-        if let Ok(result) = client.eth().block_number().await.map_err(GenericError::new) {
-            return Ok(result);
+        match f(client).await {
+            Ok(result) => return Ok(result),
+            Err(CustomError::Web3(e)) => {
+                match e {
+                    e @ web3::error::Error::Internal | e @ web3::error::Error::Recovery(_) | e @ web3::error::Error::Rpc(_) | e @ web3::error::Error::Decoder(_) => return Err(CustomError::from(e).into()),
+                    _ => {
+                        last_err.replace(e.into());
+                    },
+                }
+            }
+            Err(e) => {
+                last_err.replace(e);
+            },
         }
     }
-    Err(GenericError::new("Web3 clients failed."))
+
+    match last_err {
+        Some(e) => Err(e.into()),
+        _ => Err(GenericError::new("Web3 clients failed.")),
+    }
+}
+
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum CustomError {
+    #[error("{0}")]
+    Web3(web3::error::Error),
+    #[error("{0}")]
+    Other(GenericError),
+}
+
+impl CustomError {
+    pub fn new(value: impl std::fmt::Display) -> Self {
+        Self::Other(GenericError::new(value))
+    }
+}
+
+impl From<web3::error::Error> for CustomError {
+    fn from(e: web3::error::Error) -> Self {
+        Self::Web3(e)
+    }
+}
+
+impl From<GenericError> for CustomError {
+    fn from(e: GenericError) -> Self {
+        Self::Other(e)
+    }
+}
+
+impl From<CustomError> for GenericError {
+    fn from(e: CustomError) -> Self {
+        match e {
+            CustomError::Other(e) => e,
+            CustomError::Web3(e) => GenericError::new(e),
+        }
+    }
+}
+
+pub async fn block_number(network: Network) -> Result<U64, GenericError> {
+    with_clients(network, |client| block_number_with(client)).await
+}
+
+pub async fn block_number_with(client: Web3<Http>) -> Result<U64, CustomError> {
+    client.eth().block_number().await.map_err(Into::into)
 }
 
 pub async fn sign_faucet_tx(
@@ -179,54 +242,52 @@ pub async fn sign_faucet_tx(
     network: Network,
     nonce: U256,
 ) -> Result<TransactionEntity, GenericError> {
+    with_clients(network, |client| sign_faucet_tx_with(client, address, network, nonce)).await
+}
+
+pub async fn sign_faucet_tx_with(
+    client: Web3<Http>,
+    address: H160,
+    network: Network,
+    nonce: U256,
+) -> Result<TransactionEntity, CustomError> {
     let env = get_env(network);
-    let clients = get_clients(network).await?;
+    let contract = prepare_glm_faucet_contract(&client, &env)?;
+    let contract = match contract {
+        Some(c) => c,
+        None => {
+            return Err(CustomError::new(
+                "Failed to get faucet fn, are you on the right network?",
+            ))
+        }
+    };
 
-    for client in clients {
-        let contract = match prepare_glm_faucet_contract(&client, &env) {
-            Ok(contract) => contract,
-            Err(_) => continue,
-        };
-        let contract = match contract {
-            Some(c) => c,
-            None => {
-                return Err(GenericError::new(
-                    "Failed to get faucet fn, are you on the right network?",
-                ))
-            }
-        };
+    let data = eth_utils::contract_encode(&contract, CREATE_FAUCET_FUNCTION, ()).unwrap();
+    let gas_price = client.eth().gas_price().await.map_err(GenericError::new)?;
+    let tx = YagnaRawTransaction {
+        nonce,
+        to: Some(contract.address()),
+        value: U256::from(0),
+        gas_price,
+        gas: *GLM_FAUCET_GAS,
+        data,
+    };
+    //let chain_id = network as u64;
+    //let node_id = NodeId::from(address.as_ref());
+    //let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
 
-        let data = eth_utils::contract_encode(&contract, CREATE_FAUCET_FUNCTION, ()).unwrap();
-        let gas_price = match client.eth().gas_price().await.map_err(GenericError::new) {
-            Ok(gas_price) => gas_price,
-            Err(_) => continue,
-        };
-        let tx = YagnaRawTransaction {
-            nonce,
-            to: Some(contract.address()),
-            value: U256::from(0),
-            gas_price,
-            gas: *GLM_FAUCET_GAS,
-            data,
-        };
-        //let chain_id = network as u64;
-        //let node_id = NodeId::from(address.as_ref());
-        //let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
-
-        return Ok(create_dao_entity(
-            nonce,
-            address,
-            gas_price.to_string(),
-            Some(gas_price.to_string()),
-            GLM_FAUCET_GAS.as_u32() as i32,
-            serde_json::to_string(&tx).map_err(GenericError::new)?,
-            network,
-            Utc::now(),
-            TxType::Faucet,
-            None,
-        ));
-    }
-    Err(GenericError::new("Web3 clients failed."))
+     Ok(create_dao_entity(
+        nonce,
+        address,
+        gas_price.to_string(),
+        Some(gas_price.to_string()),
+        GLM_FAUCET_GAS.as_u32() as i32,
+        serde_json::to_string(&tx).map_err(GenericError::new)?,
+        network,
+        Utc::now(),
+        TxType::Faucet,
+        None,
+    ))
 }
 
 pub async fn sign_raw_transfer_transaction(
