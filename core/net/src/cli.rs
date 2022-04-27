@@ -131,6 +131,7 @@ impl NetCommand {
                     columns: vec![
                         "node".into(),
                         "alias".into(),
+                        "p2p".into(),
                         "ping (tcp)".into(),
                         "ping (udp)".into(),
                     ],
@@ -142,6 +143,7 @@ impl NetCommand {
                             serde_json::json! {[
                                 s.node_id,
                                 s.node_alias,
+                                s.is_p2p,
                                 format_duration(tcp_ping).to_string(),
                                 format_duration(udp_ping).to_string(),
                             ]}

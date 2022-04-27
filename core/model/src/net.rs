@@ -225,6 +225,7 @@ pub mod local {
         pub node_alias: Option<NodeId>,
         pub tcp_ping: Duration,
         pub udp_ping: Duration,
+        pub is_p2p: bool,
     }
 }
 

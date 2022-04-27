@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use futures::future::join_all;
 use futures::TryFutureExt;
 use std::time::{Duration, Instant};
@@ -115,36 +116,47 @@ pub async fn cli_ping(_msg: model::GsbPing) -> Result<Vec<GsbPingResponse>, Stat
 
     log::debug!("Ping: Num connected nodes: {}", nodes.len());
 
-    let results = join_all(
+    let mut results = join_all(
         nodes
             .iter()
-            .map(|(id, alias)| async move {
-                let tcp_before = Instant::now();
+            .map(|(id, alias)| {
+                let target_id = *id;
 
-                ya_net::from(our_node_id)
-                    .to(*id)
-                    .service(ya_net::DIAGNOSTIC)
-                    .send(GsbRemotePing {})
-                    .timeout(Some(ping_timeout))
-                    .await???;
+                async move {
+                    let udp_before = Instant::now();
 
-                let tcp_ping = tcp_before.elapsed();
-                let udp_before = Instant::now();
+                    ya_net::from(our_node_id)
+                        .to(target_id)
+                        .service_udp(ya_net::DIAGNOSTIC)
+                        .send(GsbRemotePing {})
+                        .timeout(Some(ping_timeout))
+                        .await???;
 
-                ya_net::from(our_node_id)
-                    .to(*id)
-                    .service_udp(ya_net::DIAGNOSTIC)
-                    .send(GsbRemotePing {})
-                    .timeout(Some(ping_timeout))
-                    .await???;
+                    anyhow::Ok(udp_before.elapsed())
+                }
+                .map_err(|e| anyhow!("(Udp ping). {}", e))
+                .and_then(move |udp_ping| {
+                    async move {
+                        let tcp_before = Instant::now();
 
-                let udp_ping = udp_before.elapsed();
+                        ya_net::from(our_node_id)
+                            .to(target_id)
+                            .service(ya_net::DIAGNOSTIC)
+                            .send(GsbRemotePing {})
+                            .timeout(Some(ping_timeout))
+                            .await???;
 
-                anyhow::Ok(GsbPingResponse {
-                    node_id: *id,
-                    node_alias: alias.clone(),
-                    tcp_ping,
-                    udp_ping,
+                        let tcp_ping = tcp_before.elapsed();
+
+                        anyhow::Ok(GsbPingResponse {
+                            node_id: target_id,
+                            node_alias: alias.clone(),
+                            tcp_ping,
+                            udp_ping,
+                            is_p2p: false, // Updated later
+                        })
+                    }
+                    .map_err(|e| anyhow!("(Tcp ping). {}", e))
                 })
             })
             .map(|future| future.map_err(|e| StatusError::RuntimeException(e.to_string())))
@@ -153,18 +165,27 @@ pub async fn cli_ping(_msg: model::GsbPing) -> Result<Vec<GsbPingResponse>, Stat
     .await
     .into_iter()
     .enumerate()
-    .filter_map(|(idx, result)| match result {
-        Ok(ping) => Some(ping),
+    .map(|(idx, result)| match result {
+        Ok(ping) => ping,
         Err(e) => {
-            log::warn!("Failed to ping node: {}. {}", nodes[idx].0, e);
-            Some(GsbPingResponse {
+            log::warn!("Failed to ping node: {} {}", nodes[idx].0, e);
+            GsbPingResponse {
                 node_id: nodes[idx].0,
                 node_alias: nodes[idx].1,
                 tcp_ping: ping_timeout.clone(),
                 udp_ping: ping_timeout,
-            })
+                is_p2p: false, // Updated later
+            }
         }
     })
-    .collect();
+    .collect::<Vec<_>>();
+
+    for result in &mut results {
+        let main_id = match result.node_alias {
+            Some(id) => id,
+            None => result.node_id,
+        };
+        result.is_p2p = client.sessions.is_p2p(&main_id).await;
+    }
     Ok(results)
 }
