@@ -16,6 +16,7 @@ pub struct CliCtx {
     pub gsb_url: Option<url::Url>,
     pub json_output: bool,
     pub accept_terms: bool,
+    pub quiet: bool,
     pub metrics_ctx: Option<MetricsCtx>,
 }
 
