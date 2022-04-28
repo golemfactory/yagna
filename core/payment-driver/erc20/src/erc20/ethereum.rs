@@ -7,11 +7,13 @@ use ethabi::Token;
 use lazy_static::lazy_static;
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use web3::contract::{Contract, Options};
-use web3::transports::Http;
-use web3::types::{Bytes, Transaction, TransactionId, TransactionReceipt, H160, H256, U256, U64};
-use web3::Web3;
-
+use web3::{
+    contract::{Contract, Options},
+    error::Error,
+    transports::Http,
+    types::{Bytes, Transaction, TransactionId, TransactionReceipt, H160, H256, U256, U64},
+    Web3,
+};
 use ya_client_model::NodeId;
 use ya_payment_driver::db::models::{Network, TransactionEntity, TransactionStatus, TxType};
 use ya_payment_driver::utils::big_dec_to_u256;
@@ -104,69 +106,65 @@ pub fn get_polygon_priority() -> PolygonPriority {
 }
 
 pub async fn get_glm_balance(address: H160, network: Network) -> Result<U256, GenericError> {
-    let clients = get_clients(network).await?;
+    with_clients(network, |client| {
+        get_glm_balance_with(address, network, client)
+    })
+    .await
+}
+
+async fn get_glm_balance_with(
+    address: H160,
+    network: Network,
+    client: Web3<Http>,
+) -> Result<U256, CustomError> {
     let env = get_env(network);
-
-    for client in clients {
-        let glm_contract = match prepare_erc20_contract(&client, &env) {
-            Ok(glm_contract) => glm_contract,
-            Err(_) => continue,
-        };
-        let glm_contract = glm_contract
-            .query(
-                BALANCE_ERC20_FUNCTION,
-                (address,),
-                None,
-                Options::default(),
-                None,
-            )
-            .await
-            .map_err(GenericError::new);
-
-        if let Ok(glm_contract) = glm_contract {
-            return Ok(glm_contract);
-        }
-    }
-    Err(GenericError::new("Web3 clients failed."))
+    let glm_contract = prepare_erc20_contract(&client, &env)?;
+    glm_contract
+        .query(
+            BALANCE_ERC20_FUNCTION,
+            (address,),
+            None,
+            Options::default(),
+            None,
+        )
+        .await
+        .map_err(Into::into)
 }
 
 pub async fn get_balance(address: H160, network: Network) -> Result<U256, GenericError> {
-    let clients = get_clients(network).await?;
+    with_clients(network, |client| get_balance_with(address, client)).await
+}
 
-    for client in clients {
-        if let Ok(result) = client
-            .eth()
-            .balance(address, None)
-            .await
-            .map_err(GenericError::new)
-        {
-            return Ok(result);
-        }
-    }
-    Err(GenericError::new("Web3 clients failed."))
+async fn get_balance_with(address: H160, client: Web3<Http>) -> Result<U256, CustomError> {
+    client
+        .eth()
+        .balance(address, None)
+        .await
+        .map_err(Into::into)
 }
 
 pub async fn get_next_nonce_pending(address: H160, network: Network) -> Result<U256, GenericError> {
-    let clients = get_clients(network).await?;
+    with_clients(network, |client| {
+        get_next_nonce_pending_with(address, client)
+    })
+    .await
+}
 
-    for client in clients {
-        if let Ok(nonce) = client
-            .eth()
-            .transaction_count(address, Some(web3::types::BlockNumber::Pending))
-            .await
-            .map_err(GenericError::new)
-        {
-            return Ok(nonce);
-        }
-    }
-
-    Err(GenericError::new("Web3 clients failed."))
+async fn get_next_nonce_pending_with(
+    address: H160,
+    client: Web3<Http>,
+) -> Result<U256, CustomError> {
+    client
+        .eth()
+        .transaction_count(address, Some(web3::types::BlockNumber::Pending))
+        .await
+        .map_err(Into::into)
 }
 
 pub async fn with_clients<T, F, R>(network: Network, mut f: F) -> Result<T, GenericError>
 where
     F: FnMut(Web3<Http>) -> R,
-    R: futures::Future<Output = Result<T, CustomError>>
+    R: futures::Future<Output = Result<T, CustomError>>,
 {
     let clients = get_clients(network).await?;
     let mut last_err: Option<CustomError> = None;
@@ -174,17 +172,18 @@ where
     for client in clients {
         match f(client).await {
             Ok(result) => return Ok(result),
-            Err(CustomError::Web3(e)) => {
-                match e {
-                    e @ web3::error::Error::Internal | e @ web3::error::Error::Recovery(_) | e @ web3::error::Error::Rpc(_) | e @ web3::error::Error::Decoder(_) => return Err(CustomError::from(e).into()),
-                    _ => {
-                        last_err.replace(e.into());
-                    },
+            Err(CustomError::Web3(e)) => match e {
+                Error::Internal | Error::Recovery(_) | Error::Rpc(_) | Error::Decoder(_) => {
+                    return Err(CustomError::from(e).into())
                 }
-            }
+                Error::Unreachable
+                | Error::InvalidResponse(_)
+                | Error::Transport(_)
+                | Error::Io(_) => continue,
+            },
             Err(e) => {
                 last_err.replace(e);
-            },
+            }
         }
     }
 
@@ -214,6 +213,12 @@ impl From<web3::error::Error> for CustomError {
     }
 }
 
+impl From<web3::contract::Error> for CustomError {
+    fn from(e: web3::contract::Error) -> Self {
+        Self::Other(GenericError::new(e))
+    }
+}
+
 impl From<GenericError> for CustomError {
     fn from(e: GenericError) -> Self {
         Self::Other(e)
@@ -233,7 +238,7 @@ pub async fn block_number(network: Network) -> Result<U64, GenericError> {
     with_clients(network, |client| block_number_with(client)).await
 }
 
-pub async fn block_number_with(client: Web3<Http>) -> Result<U64, CustomError> {
+async fn block_number_with(client: Web3<Http>) -> Result<U64, CustomError> {
     client.eth().block_number().await.map_err(Into::into)
 }
 
@@ -242,10 +247,13 @@ pub async fn sign_faucet_tx(
     network: Network,
     nonce: U256,
 ) -> Result<TransactionEntity, GenericError> {
-    with_clients(network, |client| sign_faucet_tx_with(client, address, network, nonce)).await
+    with_clients(network, |client| {
+        sign_faucet_tx_with(client, address, network, nonce)
+    })
+    .await
 }
 
-pub async fn sign_faucet_tx_with(
+async fn sign_faucet_tx_with(
     client: Web3<Http>,
     address: H160,
     network: Network,
@@ -276,7 +284,7 @@ pub async fn sign_faucet_tx_with(
     //let node_id = NodeId::from(address.as_ref());
     //let signature = bus::sign(node_id, eth_utils::get_tx_hash(&tx, chain_id)).await?;
 
-     Ok(create_dao_entity(
+    Ok(create_dao_entity(
         nonce,
         address,
         gas_price.to_string(),
@@ -310,72 +318,79 @@ pub async fn prepare_raw_transaction(
     gas_price_override: Option<U256>,
     gas_limit_override: Option<u32>,
 ) -> Result<YagnaRawTransaction, GenericError> {
-    let env = get_env(network);
-    let clients = get_clients(network).await?;
-
-    for client in clients {
-        let contract = match prepare_erc20_contract(&client, &env) {
-            Ok(contract) => contract,
-            Err(_) => continue,
-        };
-
-        let data =
-            eth_utils::contract_encode(&contract, TRANSFER_ERC20_FUNCTION, (recipient, amount))
-                .map_err(GenericError::new)?;
-
-        //get gas price from network in not provided
-        let gas_price = match gas_price_override {
-            Some(gas_price_new) => gas_price_new,
-            None => {
-                let small_gas_bump = U256::from(1000);
-                let mut gas_price_from_network =
-                    match client.eth().gas_price().await.map_err(GenericError::new) {
-                        Ok(gas_price_from_network) => gas_price_from_network,
-                        Err(_) => continue,
-                    };
-
-                //add small amount of gas to be first in queue
-                if gas_price_from_network / 1000 > small_gas_bump {
-                    gas_price_from_network += small_gas_bump;
-                }
-                gas_price_from_network
-            }
-        };
-
-        let gas_limit = match network {
-            Network::Polygon => {
-                gas_limit_override.map_or(*GLM_POLYGON_GAS_LIMIT, |v| U256::from(v))
-            }
-            _ => gas_limit_override.map_or(*GLM_TRANSFER_GAS, |v| U256::from(v)),
-        };
-
-        let tx = YagnaRawTransaction {
+    with_clients(network, |client| {
+        prepare_raw_transaction_with(
+            _address,
+            recipient,
+            amount,
+            network,
             nonce,
-            to: Some(contract.address()),
-            value: U256::from(0),
-            gas_price,
-            gas: gas_limit,
-            data,
-        };
-        return Ok(tx);
-    }
-    Err(GenericError::new("Web3 clients failed."))
+            gas_price_override,
+            gas_limit_override,
+            client,
+        )
+    })
+    .await
+}
+
+async fn prepare_raw_transaction_with(
+    _address: H160,
+    recipient: H160,
+    amount: U256,
+    network: Network,
+    nonce: U256,
+    gas_price_override: Option<U256>,
+    gas_limit_override: Option<u32>,
+    client: Web3<Http>,
+) -> Result<YagnaRawTransaction, CustomError> {
+    let env = get_env(network);
+    let contract = prepare_erc20_contract(&client, &env)?;
+    let data = eth_utils::contract_encode(&contract, TRANSFER_ERC20_FUNCTION, (recipient, amount))
+        .map_err(GenericError::new)?;
+
+    //get gas price from network in not provided
+    let gas_price = match gas_price_override {
+        Some(gas_price_new) => gas_price_new,
+        None => {
+            let small_gas_bump = U256::from(1000);
+            let mut gas_price_from_network =
+                client.eth().gas_price().await.map_err(GenericError::new)?;
+
+            //add small amount of gas to be first in queue
+            if gas_price_from_network / 1000 > small_gas_bump {
+                gas_price_from_network += small_gas_bump;
+            }
+            gas_price_from_network
+        }
+    };
+
+    let gas_limit = match network {
+        Network::Polygon => gas_limit_override.map_or(*GLM_POLYGON_GAS_LIMIT, |v| U256::from(v)),
+        _ => gas_limit_override.map_or(*GLM_TRANSFER_GAS, |v| U256::from(v)),
+    };
+
+    let tx = YagnaRawTransaction {
+        nonce,
+        to: Some(contract.address()),
+        value: U256::from(0),
+        gas_price,
+        gas: gas_limit,
+        data,
+    };
+
+    Ok(tx)
 }
 
 pub async fn send_tx(signed_tx: Vec<u8>, network: Network) -> Result<H256, GenericError> {
-    let clients = get_clients(network).await?;
+    with_clients(network, |client| send_tx_with(signed_tx.clone(), client)).await
+}
 
-    for client in clients {
-        if let Ok(tx_hash) = client
-            .eth()
-            .send_raw_transaction(Bytes::from(signed_tx.clone()))
-            .await
-            .map_err(GenericError::new)
-        {
-            return Ok(tx_hash);
-        }
-    }
-    Err(GenericError::new("Web3 clients failed."))
+async fn send_tx_with(signed_tx: Vec<u8>, client: Web3<Http>) -> Result<H256, CustomError> {
+    client
+        .eth()
+        .send_raw_transaction(Bytes::from(signed_tx))
+        .await
+        .map_err(Into::into)
 }
 
 pub struct TransactionChainStatus {
@@ -444,75 +459,74 @@ pub async fn decode_encoded_transaction_data(
     network: Network,
     encoded: &str,
 ) -> Result<(ethereum_types::Address, ethereum_types::U256), GenericError> {
+    with_clients(network, |client| {
+        decode_encoded_transaction_data_with(network, encoded, client)
+    })
+    .await
+}
+
+async fn decode_encoded_transaction_data_with(
+    network: Network,
+    encoded: &str,
+    client: Web3<Http>,
+) -> Result<(ethereum_types::Address, ethereum_types::U256), CustomError> {
     let env = get_env(network);
-    let clients = get_clients(network).await?;
+    let contract = prepare_erc20_contract(&client, &env)?;
+    let raw_tx: YagnaRawTransaction = serde_json::from_str(encoded).map_err(GenericError::new)?;
 
-    for client in clients {
-        let contract = match prepare_erc20_contract(&client, &env) {
-            Ok(contract) => contract,
-            Err(_) => continue,
+    let tokens = eth_utils::contract_decode(&contract, TRANSFER_ERC20_FUNCTION, raw_tx.data)
+        .map_err(GenericError::new)?;
+    let mut address: Option<H160> = None;
+    let mut amount: Option<U256> = None;
+    for token in tokens {
+        match token {
+            Token::Address(val) => address = Some(val),
+            Token::Uint(am) => amount = Some(am),
+            _ => {}
         };
-
-        let raw_tx: YagnaRawTransaction =
-            serde_json::from_str(encoded).map_err(GenericError::new)?;
-
-        let tokens = eth_utils::contract_decode(&contract, TRANSFER_ERC20_FUNCTION, raw_tx.data)
-            .map_err(GenericError::new)?;
-        let mut address: Option<H160> = None;
-        let mut amount: Option<U256> = None;
-        for token in tokens {
-            match token {
-                Token::Address(val) => address = Some(val),
-                Token::Uint(am) => amount = Some(am),
-                _ => {}
-            };
-        }
-        if let Some(add) = address {
-            if let Some(am) = amount {
-                return Ok((add, am));
-            }
-        }
-        return Err(GenericError::new("Failed to parse tokens"));
     }
-    Err(GenericError::new("Web3 clients failed."))
+    if let Some(add) = address {
+        if let Some(am) = amount {
+            return Ok((add, am));
+        }
+    }
+    return Err(GenericError::new("Failed to parse tokens").into());
 }
 
 pub async fn get_tx_from_network(
     tx_hash: H256,
     network: Network,
 ) -> Result<Option<Transaction>, GenericError> {
-    let clients = get_clients(network).await?;
+    with_clients(network, |client| get_tx_from_network_with(tx_hash, client)).await
+}
 
-    for client in clients {
-        if let Ok(result) = client
-            .eth()
-            .transaction(TransactionId::from(tx_hash))
-            .await
-            .map_err(GenericError::new)
-        {
-            return Ok(result);
-        }
-    }
-    Err(GenericError::new("Web3 clients failed."))
+async fn get_tx_from_network_with(
+    tx_hash: H256,
+    client: Web3<Http>,
+) -> Result<Option<Transaction>, CustomError> {
+    client
+        .eth()
+        .transaction(TransactionId::from(tx_hash))
+        .await
+        .map_err(Into::into)
 }
 
 pub async fn get_tx_receipt(
     tx_hash: H256,
     network: Network,
 ) -> Result<Option<TransactionReceipt>, GenericError> {
-    let clients = get_clients(network).await?;
+    with_clients(network, |client| get_tx_receipt_with(tx_hash, client)).await
+}
 
-    for client in clients {
-        if let Ok(result) = client
-            .eth()
-            .transaction_receipt(tx_hash)
-            .await
-            .map_err(GenericError::new)
-        {
-            return Ok(result);
-        }
-    }
-    Err(GenericError::new("Web3 clients failed."))
+async fn get_tx_receipt_with(
+    tx_hash: H256,
+    client: Web3<Http>,
+) -> Result<Option<TransactionReceipt>, CustomError> {
+    client
+        .eth()
+        .transaction_receipt(tx_hash)
+        .await
+        .map_err(Into::into)
 }
 
 fn get_rpc_addr_from_env(network: Network) -> Vec<String> {
