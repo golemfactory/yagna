@@ -1,10 +1,16 @@
 #!/bin/bash
 
-# Example usage `sudo ./local-build-targz.sh ubuntu v0.10-rc3` from yagna directory
+# Example usage `./local-build-targz.sh ubuntu v0.10-rc3` from yagna directory
 # Result build will be named the same as CI build with tag `pre-rel-local-v0.10-rc3`
 # You need sudo to install musl and rust musl target.
 
-sudo apt-get install musl musl-tools
+if ! command -v musl-gcc --h &> /dev/null
+then
+    echo "musl-gcc could not be found. Install it with:"
+    echo "sudo apt-get install musl musl-tools"
+    exit
+fi
+
 rustup target add x86_64-unknown-linux-musl
 
 export OPENSSL_STATIC=1
