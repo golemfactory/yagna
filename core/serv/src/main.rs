@@ -12,6 +12,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use structopt::{clap, StructOpt};
+use strum::VariantNames;
 use url::Url;
 
 use ya_activity::service::Activity as ActivityService;
@@ -39,6 +40,7 @@ use ya_vpn::VpnService;
 mod autocomplete;
 mod extension;
 
+use crate::extension::{ExtensionConf, ExtensionManager, Requirement};
 use autocomplete::CompleteCommand;
 
 lazy_static::lazy_static! {
@@ -320,13 +322,61 @@ impl CliCommand {
 enum ExtensionCommand {
     /// List available extensions
     List {},
+    /// List autostart extensions
+    Registered {},
+    /// Autostart extension
+    Register {
+        name: String,
+        args: Vec<String>,
+        #[structopt(
+            long,
+            possible_values = Requirement::VARIANTS,
+            case_insensitive = true,
+        )]
+        requires: Vec<Requirement>,
+    },
+    /// Remove extension from autostart
+    Unregister { name: String },
 }
 
 impl ExtensionCommand {
-    pub async fn run_command(self, _ctx: &CliCtx) -> Result<CommandOutput> {
+    pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
-            // FIXME: improve presentation
-            ExtensionCommand::List {} => Ok(CommandOutput::object(extension::list())?),
+            ExtensionCommand::List {} => Ok(CommandOutput::object(ExtensionManager::list())?),
+            ExtensionCommand::Registered {} => {
+                let man = ExtensionManager::new(&ctx.data_dir)?;
+                let mut extensions = man.read_conf().await?;
+                extensions.retain(|_, conf| conf.autostart);
+
+                Ok(CommandOutput::object(extensions)?)
+            }
+            ExtensionCommand::Register {
+                name,
+                args,
+                requires,
+            } => {
+                let man = ExtensionManager::new(&ctx.data_dir)?;
+                man.update_conf(|conf| {
+                    let ext_conf = ExtensionConf {
+                        args,
+                        requires: requires.into_iter().collect(),
+                        autostart: true,
+                    };
+                    conf.insert(name, ext_conf);
+                })
+                .await?;
+
+                Ok(CommandOutput::NoOutput)
+            }
+            ExtensionCommand::Unregister { name } => {
+                let man = ExtensionManager::new(&ctx.data_dir)?;
+                man.update_conf(|conf| {
+                    let _ = conf.remove(&name);
+                })
+                .await?;
+
+                Ok(CommandOutput::NoOutput)
+            }
         }
     }
 }
@@ -480,6 +530,10 @@ impl ServiceCommand {
                 .keep_alive(max_rest_timeout.clone())
                 .bind(api_host_port.clone())
                 .context(format!("Failed to bind http server on {:?}", api_host_port))?;
+
+                let _ = extension::autostart(&ctx.data_dir, &api_url, &ctx.gsb_url)
+                    .await
+                    .map_err(|e| log::warn!("Failed to autostart extensions: {e}"));
 
                 future::try_join(server.run(), sd_notify(false, "READY=1")).await?;
 
