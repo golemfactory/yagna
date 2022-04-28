@@ -1,12 +1,17 @@
 use ya_client_model::node_id::ParseError;
 use ya_client_model::NodeId;
-use ya_service_bus::typed as bus;
+use ya_service_bus::{typed as bus, RpcMessage};
+
+use serde::{Deserialize, Serialize};
+use ya_service_bus::typed::Endpoint;
 
 pub const BUS_ID: &str = "/net";
 pub const BUS_ID_UDP: &str = "/udp/net";
 
 // TODO: replace with dedicated endpoint/service descriptor with enum for visibility
 pub const PUBLIC_PREFIX: &str = "/public";
+
+pub const DIAGNOSTIC: &str = "/public/diagnostic/net";
 
 ///
 ///
@@ -175,6 +180,7 @@ pub mod local {
         pub remote_address: SocketAddr,
         pub seen: Duration,
         pub duration: Duration,
+        pub ping: Duration,
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
@@ -197,7 +203,46 @@ pub mod local {
         pub remote_port: String,
         pub metrics: StatusMetrics,
     }
+
+    /// Measures time between sending GSB message and getting response.
+    /// This is different from session ping, because it takes into account
+    /// Virtual TCP overhead. Moreover we can measure ping between Nodes
+    /// using `ya-relay-server` for communication.
+    #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+    #[serde(rename_all = "camelCase")]
+    pub struct GsbPing {}
+
+    impl RpcMessage for GsbPing {
+        const ID: &'static str = "GsbPing";
+        type Item = Vec<GsbPingResponse>;
+        type Error = StatusError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct GsbPingResponse {
+        pub node_id: NodeId,
+        pub node_alias: Option<NodeId>,
+        pub tcp_ping: Duration,
+        pub udp_ping: Duration,
+        pub is_p2p: bool,
+    }
 }
+
+/// For documentation check local::GsbPing
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct GsbRemotePing {}
+
+impl RpcMessage for GsbRemotePing {
+    const ID: &'static str = "GsbRemotePing";
+    type Item = GsbRemotePing;
+    type Error = GenericNetError;
+}
+
+#[derive(thiserror::Error, Debug, Serialize, Deserialize)]
+#[error("{0}")]
+pub struct GenericNetError(pub String);
 
 #[derive(thiserror::Error, Debug)]
 pub enum NetApiError {
@@ -252,6 +297,11 @@ pub fn net_service(service: impl ToString) -> String {
     format!("{}/{}", BUS_ID, service.to_string())
 }
 
+#[inline]
+pub fn net_service_udp(service: impl ToString) -> String {
+    format!("{}/{}", BUS_ID_UDP, service.to_string())
+}
+
 fn extract_exported_part(local_service_addr: &str) -> &str {
     assert!(local_service_addr.starts_with(PUBLIC_PREFIX));
     &local_service_addr[PUBLIC_PREFIX.len()..]
@@ -259,6 +309,7 @@ fn extract_exported_part(local_service_addr: &str) -> &str {
 
 pub trait RemoteEndpoint {
     fn service(&self, bus_addr: &str) -> bus::Endpoint;
+    fn service_udp(&self, bus_addr: &str) -> bus::Endpoint;
 }
 
 impl RemoteEndpoint for NodeId {
@@ -269,12 +320,29 @@ impl RemoteEndpoint for NodeId {
             extract_exported_part(bus_addr)
         ))
     }
+
+    fn service_udp(&self, bus_addr: &str) -> Endpoint {
+        bus::service(format!(
+            "{}{}",
+            net_service_udp(self),
+            extract_exported_part(bus_addr)
+        ))
+    }
 }
 
 impl RemoteEndpoint for NetDst {
     fn service(&self, bus_addr: &str) -> bus::Endpoint {
         bus::service(format!(
             "/from/{}/to/{}{}",
+            self.src,
+            self.dst,
+            extract_exported_part(bus_addr)
+        ))
+    }
+
+    fn service_udp(&self, bus_addr: &str) -> Endpoint {
+        bus::service(format!(
+            "/udp/from/{}/to/{}{}",
             self.src,
             self.dst,
             extract_exported_part(bus_addr)
