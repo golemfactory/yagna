@@ -196,9 +196,9 @@ where
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum CustomError {
     #[error("{0}")]
-    Web3(web3::error::Error),
+    Web3(#[from] web3::error::Error),
     #[error("{0}")]
-    Other(GenericError),
+    Other(#[from] GenericError),
 }
 
 impl CustomError {
@@ -207,21 +207,9 @@ impl CustomError {
     }
 }
 
-impl From<web3::error::Error> for CustomError {
-    fn from(e: web3::error::Error) -> Self {
-        Self::Web3(e)
-    }
-}
-
 impl From<web3::contract::Error> for CustomError {
     fn from(e: web3::contract::Error) -> Self {
         Self::Other(GenericError::new(e))
-    }
-}
-
-impl From<GenericError> for CustomError {
-    fn from(e: GenericError) -> Self {
-        Self::Other(e)
     }
 }
 
