@@ -6,7 +6,7 @@ use ya_agreement_utils::agreement::{expand, flatten_value};
 use ya_agreement_utils::AgreementView;
 use ya_client::model::market::NewOffer;
 
-use super::builtin::{LimitExpiration, ManifestSignature, MaxAgreements};
+use super::builtin::{DebitNoteInterval, LimitExpiration, ManifestSignature, MaxAgreements, PaymentTimeout};
 use super::common::{offer_definition_to_offer, AgreementResponse, Negotiator, ProposalResponse};
 use super::{NegotiationResult, NegotiatorsPack};
 use crate::market::negotiator::common::{
@@ -34,6 +34,14 @@ impl CompositeNegotiator {
             .add_component(
                 "LimitExpiration",
                 Box::new(LimitExpiration::new(&config.expire_agreements_config)?),
+            )
+            .add_component(
+                "DebitNoteInterval",
+                Box::new(DebitNoteInterval::new(&config.debit_note_interval_config)?),
+            )
+            .add_component(
+                "PaymentTimeout",
+                Box::new(PaymentTimeout::new(&config.payment_timeout_config)?),
             )
             .add_component(
                 "ManifestSignature",

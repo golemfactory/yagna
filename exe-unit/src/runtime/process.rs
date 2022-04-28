@@ -70,9 +70,9 @@ impl RuntimeProcess {
         }
     }
 
-    pub fn offer_template(binary: PathBuf) -> Result<OfferTemplate, Error> {
+    pub fn offer_template(binary: PathBuf, mut args: Vec<String>) -> Result<OfferTemplate, Error> {
         let current_path = std::env::current_dir();
-        let args = vec![OsString::from("offer-template")];
+        args.push("offer-template".to_string());
 
         log::info!(
             "Executing {:?} with {:?} from path {:?}",
@@ -142,6 +142,8 @@ impl RuntimeProcess {
                 args.arg(val.to_string());
             }
         }
+
+        args.args(self.ctx.runtime_args.iter());
 
         Ok(args)
     }

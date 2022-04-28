@@ -37,6 +37,8 @@ use ya_version::VersionService;
 use ya_vpn::VpnService;
 
 mod autocomplete;
+mod extension;
+
 use autocomplete::CompleteCommand;
 
 lazy_static::lazy_static! {
@@ -88,6 +90,10 @@ struct CliArgs {
     #[structopt(long, set = clap::ArgSettings::Global)]
     json: bool,
 
+    #[structopt(hidden = true)]
+    #[structopt(long, set = clap::ArgSettings::Global)]
+    quiet: bool,
+
     #[structopt(subcommand)]
     command: CliCommand,
 }
@@ -115,6 +121,7 @@ impl TryFrom<&CliArgs> for CliCtx {
             data_dir,
             gsb_url: Some(args.gsb_url.clone()),
             json_output: args.json,
+            quiet: args.quiet,
             accept_terms: if cfg!(feature = "tos") {
                 args.accept_terms
             } else {
@@ -224,7 +231,7 @@ enum Services {
     Metrics(MetricsService),
     #[enable(gsb, rest, cli)]
     Version(VersionService),
-    #[enable(gsb)]
+    #[enable(gsb, cli)]
     Net(NetService),
     #[enable(rest)]
     Vpn(VpnService),
@@ -284,6 +291,14 @@ enum CliCommand {
     /// Core service usage
     #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
     Service(ServiceCommand),
+
+    /// Extension management
+    #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
+    Extension(ExtensionCommand),
+
+    #[structopt(external_subcommand)]
+    #[structopt(setting = structopt::clap::AppSettings::Hidden)]
+    Other(Vec<String>),
 }
 
 impl CliCommand {
@@ -295,6 +310,23 @@ impl CliCommand {
             }
             CliCommand::Complete(complete) => complete.run_command(ctx),
             CliCommand::Service(service) => service.run_command(ctx).await,
+            CliCommand::Extension(ext) => ext.run_command(ctx).await,
+            CliCommand::Other(args) => extension::run_command::<CliArgs>(args, !ctx.quiet).await,
+        }
+    }
+}
+
+#[derive(StructOpt, Debug)]
+enum ExtensionCommand {
+    /// List available extensions
+    List {},
+}
+
+impl ExtensionCommand {
+    pub async fn run_command(self, _ctx: &CliCtx) -> Result<CommandOutput> {
+        match self {
+            // FIXME: improve presentation
+            ExtensionCommand::List {} => Ok(CommandOutput::object(extension::list())?),
         }
     }
 }
@@ -390,7 +422,7 @@ impl ServiceCommand {
                     }),
                     &vec![
                         ("actix_http::response", log::LevelFilter::Off),
-                        ("h2", log::LevelFilter::Info),
+                        ("h2", log::LevelFilter::Off),
                         ("hyper", log::LevelFilter::Info),
                         ("reqwest", log::LevelFilter::Info),
                         ("tokio_core", log::LevelFilter::Info),
@@ -398,6 +430,8 @@ impl ServiceCommand {
                         ("trust_dns_resolver", log::LevelFilter::Info),
                         ("trust_dns_proto", log::LevelFilter::Info),
                         ("web3", log::LevelFilter::Info),
+                        ("tokio_util", log::LevelFilter::Off),
+                        ("mio", log::LevelFilter::Off),
                     ],
                     force_debug,
                 )?;
@@ -452,6 +486,11 @@ impl ServiceCommand {
                 log::info!("{} service successfully finished!", app_name);
 
                 PaymentService::shut_down().await;
+                NetService::shutdown()
+                    .await
+                    .map_err(|e| log::error!("Error shutting down NET: {}", e))
+                    .ok();
+
                 logger_handle.shutdown();
                 Ok(CommandOutput::NoOutput)
             }

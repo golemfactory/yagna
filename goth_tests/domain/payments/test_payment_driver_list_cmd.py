@@ -15,7 +15,7 @@ from goth.runner import Runner
 from goth.runner.probe import RequestorProbe
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("goth.test.payments.driver-list")
 
 
 @pytest.mark.asyncio

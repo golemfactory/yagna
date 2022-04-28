@@ -44,7 +44,7 @@
           "scheme": {
             "@tag": "payu",
             "payu": {
-              "interval_sec": 6.0
+              "debit-note.interval-sec?": 6.0
             }
           },
           "usage": {

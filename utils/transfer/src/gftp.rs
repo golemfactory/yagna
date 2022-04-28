@@ -12,7 +12,7 @@ use url::Url;
 use ya_core_model::gftp as model;
 use ya_core_model::gftp::Error as GftpError;
 use ya_core_model::gftp::GftpChunk;
-use ya_net::TryRemoteEndpoint;
+use ya_core_model::net::TryRemoteEndpoint;
 use ya_service_bus::RpcEndpoint;
 
 pub struct GftpTransferProvider {

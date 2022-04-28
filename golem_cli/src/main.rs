@@ -3,6 +3,7 @@
 use anyhow::Result;
 
 use std::env;
+use std::io::Write;
 use structopt::{clap, StructOpt};
 
 mod appkey;
@@ -44,6 +45,10 @@ enum Commands {
 
     #[structopt(setting = structopt::clap::AppSettings::Hidden)]
     Complete(CompleteCommand),
+
+    #[structopt(external_subcommand)]
+    #[structopt(setting = structopt::clap::AppSettings::Hidden)]
+    Other(Vec<String>),
 }
 
 #[derive(StructOpt)]
@@ -102,6 +107,18 @@ async fn my_main() -> Result</*exit code*/ i32> {
                 &mut std::io::stdout(),
             );
             Ok(0)
+        }
+        Commands::Other(args) => {
+            let cmd = crate::command::YaCommand::new()?;
+            match cmd.yagna()?.forward(args).await? {
+                1 => {
+                    let mut clap = Commands::clap();
+                    let _ = clap.print_help();
+                    let _ = std::io::stdout().write_all(b"\r\n");
+                    std::process::exit(101);
+                }
+                code => Ok(code),
+            }
         }
     }
 }

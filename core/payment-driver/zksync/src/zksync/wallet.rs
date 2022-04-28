@@ -486,7 +486,7 @@ pub async fn deposit<S: EthereumSigner + Clone, P: Provider + Clone>(
     amount: BigDecimal,
 ) -> Result<H256, GenericError> {
     let token = get_network_token(network, None);
-    let amount = base_utils::big_dec_to_u256(amount);
+    let amount = base_utils::big_dec_to_u256(&amount);
     let address = wallet.address();
 
     log::info!(

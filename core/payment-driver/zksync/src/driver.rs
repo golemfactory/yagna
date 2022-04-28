@@ -221,6 +221,17 @@ impl PaymentDriver for ZksyncDriver {
         Ok(balance)
     }
 
+    async fn get_account_gas_balance(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        _msg: GetAccountGasBalance,
+    ) -> Result<Option<GasDetails>, GenericError> {
+        log::debug!("get_account_gas_balance:  unsupported");
+
+        Ok(None)
+    }
+
     fn get_name(&self) -> String {
         DRIVER_NAME.to_string()
     }
@@ -295,18 +306,15 @@ impl PaymentDriver for ZksyncDriver {
                     &address
                 ))
             }
-            DbNetwork::Goerli => Ok(format!("PolygonMumbai Not supported")),
-            DbNetwork::Mumbai => Ok(format!("PolygonMumbai Not supported")),
-            DbNetwork::Polygon => Ok(format!("PolygonMainnet Not supported")),
+            DbNetwork::Goerli => Ok(format!("Goerli network is not supported by this driver.")),
+            DbNetwork::Mumbai => Ok(format!("Mumbai network is not supported by this driver.")),
+            DbNetwork::Polygon => Ok(format!("Polygon network is not supported by this driver.")),
             DbNetwork::Mainnet => Ok(format!(
-                r#"Your mainnet zkSync address is {}.
+                r#"Using this driver is not recommended. Consider using the Polygon driver instead.
 
-To fund your wallet and be able to pay for your activities on Golem head to
-the https://chat.golem.network, join the #funding channel and type /terms
-and follow instructions to request GLMs.
-
-Mind that to be eligible you have to run your app at least once on testnet -
-- we will verify if that is true so we can avoid people requesting "free GLMs"."#,
+Your mainnet zkSync address is {}.
+To be able to use zkSync driver please send some GLM tokens and optionally ETH for gas to this address.
+"#,
                 address
             )),
         }
@@ -441,15 +449,9 @@ impl PaymentDriverCron for ZksyncDriver {
 
             for tx in txs {
                 log::trace!("checking tx {:?}", &tx);
-                let tx_hash = match &tx.tx_hash {
+                let tx_hash = match &tx.tmp_onchain_txs {
                     None => continue,
                     Some(tx_hash) => tx_hash,
-                };
-                // Check payments before to fetch network
-                let first_payment: PaymentEntity = match self.dao.get_first_payment(&tx_hash).await
-                {
-                    Some(p) => p,
-                    None => continue,
                 };
 
                 log::debug!(
@@ -457,17 +459,19 @@ impl PaymentDriverCron for ZksyncDriver {
                     &network,
                     &tx_hash
                 );
-                let tx_success = match wallet::check_tx(&tx_hash, first_payment.network).await {
+                let tx_success = match wallet::check_tx(&tx_hash, network).await {
                     None => continue, // Check_tx returns None when the result is unknown
                     Some(tx_success) => tx_success,
                 };
 
                 let payments = self.dao.transaction_confirmed(&tx.tx_id).await;
+
                 // Faucet can stop here IF the tx was a success.
                 if tx.tx_type == TxType::Faucet as i32 && tx_success.is_ok() {
                     log::debug!("Faucet tx confirmed, exit early. hash={}", &tx_hash);
                     continue;
                 }
+
                 let order_ids: Vec<String> = payments
                     .iter()
                     .map(|payment| payment.order_id.clone())
@@ -499,14 +503,15 @@ impl PaymentDriverCron for ZksyncDriver {
                         }
                     }
 
-                    self.dao.transaction_failed(&tx.tx_id).await;
+                    self.dao
+                        .transaction_failed(&tx.tx_id, "Unknown error")
+                        .await;
                     return;
                 }
 
                 // TODO: Add token support
-                let platform =
-                    network_token_to_platform(Some(first_payment.network), None).unwrap(); // TODO: Catch error?
-                let details = match wallet::verify_tx(&tx_hash, first_payment.network).await {
+                let platform = network_token_to_platform(Some(network), None).unwrap(); // TODO: Catch error?
+                let details = match wallet::verify_tx(&tx_hash, network).await {
                     Ok(a) => a,
                     Err(e) => {
                         log::warn!("Failed to get transaction details from zksync, creating bespoke details. Error={}", e);
@@ -515,6 +520,11 @@ impl PaymentDriverCron for ZksyncDriver {
                         // - Sender + receiver are the same
                         // - Date is always now
                         // - Amount needs to be updated to total of all PaymentEntity's
+                        let first_payment: PaymentEntity =
+                            match self.dao.get_first_payment(&tx_hash).await {
+                                Some(p) => p,
+                                None => continue,
+                            };
                         let mut details = utils::db_to_payment_details(&first_payment);
                         details.amount = payments
                             .into_iter()

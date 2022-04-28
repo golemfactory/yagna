@@ -29,6 +29,14 @@ struct Cli {
     binary: PathBuf,
     #[structopt(flatten)]
     supervise: SuperviseCli,
+    /// Additional runtime arguments
+    #[structopt(
+        long,
+        short,
+        set = clap::ArgSettings::Global,
+        number_of_values = 1,
+    )]
+    runtime_arg: Vec<String>,
     /// Enclave secret key used in secure communication
     #[structopt(
         long,
@@ -36,6 +44,7 @@ struct Cli {
         hide_env_values = true,
         set = clap::ArgSettings::Global,
     )]
+    #[allow(dead_code)]
     sec_key: Option<String>,
     /// Requestor public key used in secure communication
     #[structopt(
@@ -44,6 +53,7 @@ struct Cli {
         hide_env_values = true,
         set = clap::ArgSettings::Global,
     )]
+    #[allow(dead_code)]
     requestor_pub_key: Option<String>,
     #[structopt(subcommand)]
     command: Command,
@@ -219,7 +229,8 @@ fn run() -> anyhow::Result<()> {
             args
         }
         Command::OfferTemplate => {
-            let offer_template = ExeUnit::<RuntimeProcess>::offer_template(cli.binary)?;
+            let args = cli.runtime_arg.clone();
+            let offer_template = ExeUnit::<RuntimeProcess>::offer_template(cli.binary, args)?;
             println!("{}", serde_json::to_string(&offer_template)?);
             return Ok(());
         }
@@ -273,6 +284,7 @@ fn run() -> anyhow::Result<()> {
         agreement,
         work_dir,
         cache_dir,
+        runtime_args: cli.runtime_arg.clone(),
         acl: Default::default(),
         credentials: None,
         #[cfg(feature = "sgx")]
