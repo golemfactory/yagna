@@ -22,6 +22,35 @@ use ya_payment_driver::{bus, model::GenericError};
 use crate::erc20::transaction::YagnaRawTransaction;
 use crate::erc20::{config, eth_utils};
 
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum ClientError {
+    #[error("{0}")]
+    Web3(#[from] Error),
+    #[error("{0}")]
+    Other(#[from] GenericError),
+}
+
+impl ClientError {
+    pub fn new(value: impl std::fmt::Display) -> Self {
+        Self::Other(GenericError::new(value))
+    }
+}
+
+impl From<web3::contract::Error> for ClientError {
+    fn from(e: web3::contract::Error) -> Self {
+        Self::Other(GenericError::new(e))
+    }
+}
+
+impl From<ClientError> for GenericError {
+    fn from(e: ClientError) -> Self {
+        match e {
+            ClientError::Other(e) => e,
+            ClientError::Web3(e) => GenericError::new(e),
+        }
+    }
+}
+
 pub enum PolygonPriority {
     PolygonPrioritySlow,
     PolygonPriorityFast,
@@ -107,16 +136,16 @@ pub fn get_polygon_priority() -> PolygonPriority {
 
 pub async fn get_glm_balance(address: H160, network: Network) -> Result<U256, GenericError> {
     with_clients(network, |client| {
-        get_glm_balance_with(address, network, client)
+        get_glm_balance_with(client, address, network)
     })
     .await
 }
 
 async fn get_glm_balance_with(
+    client: Web3<Http>,
     address: H160,
     network: Network,
-    client: Web3<Http>,
-) -> Result<U256, CustomError> {
+) -> Result<U256, ClientError> {
     let env = get_env(network);
     let glm_contract = prepare_erc20_contract(&client, &env)?;
     glm_contract
@@ -135,7 +164,7 @@ pub async fn get_balance(address: H160, network: Network) -> Result<U256, Generi
     with_clients(network, |client| get_balance_with(address, client)).await
 }
 
-async fn get_balance_with(address: H160, client: Web3<Http>) -> Result<U256, CustomError> {
+async fn get_balance_with(address: H160, client: Web3<Http>) -> Result<U256, ClientError> {
     client
         .eth()
         .balance(address, None)
@@ -145,15 +174,15 @@ async fn get_balance_with(address: H160, client: Web3<Http>) -> Result<U256, Cus
 
 pub async fn get_next_nonce_pending(address: H160, network: Network) -> Result<U256, GenericError> {
     with_clients(network, |client| {
-        get_next_nonce_pending_with(address, client)
+        get_next_nonce_pending_with(client, address)
     })
     .await
 }
 
 async fn get_next_nonce_pending_with(
-    address: H160,
     client: Web3<Http>,
-) -> Result<U256, CustomError> {
+    address: H160,
+) -> Result<U256, ClientError> {
     client
         .eth()
         .transaction_count(address, Some(web3::types::BlockNumber::Pending))
@@ -164,27 +193,22 @@ async fn get_next_nonce_pending_with(
 pub async fn with_clients<T, F, R>(network: Network, mut f: F) -> Result<T, GenericError>
 where
     F: FnMut(Web3<Http>) -> R,
-    R: futures::Future<Output = Result<T, CustomError>>,
+    R: futures::Future<Output = Result<T, ClientError>>,
 {
     let clients = get_clients(network).await?;
-    let mut last_err: Option<CustomError> = None;
+    let mut last_err: Option<ClientError> = None;
 
     for client in clients {
         match f(client).await {
             Ok(result) => return Ok(result),
-            Err(CustomError::Web3(e)) => match e {
+            Err(ClientError::Web3(e)) => match e {
                 Error::Internal | Error::Recovery(_) | Error::Rpc(_) | Error::Decoder(_) => {
-                    return Err(CustomError::from(e).into())
+                    return Err(GenericError::new(e))
                 }
-                Error::Unreachable
-                | Error::InvalidResponse(_)
-                | Error::Transport(_)
-                | Error::Io(_) => continue,
+                _ => continue,
             },
-            Err(e) => {
-                last_err.replace(e);
-            }
-        }
+            Err(e) => last_err.replace(e),
+        };
     }
 
     match last_err {
@@ -193,40 +217,11 @@ where
     }
 }
 
-#[derive(Clone, Debug, thiserror::Error)]
-pub enum CustomError {
-    #[error("{0}")]
-    Web3(#[from] web3::error::Error),
-    #[error("{0}")]
-    Other(#[from] GenericError),
-}
-
-impl CustomError {
-    pub fn new(value: impl std::fmt::Display) -> Self {
-        Self::Other(GenericError::new(value))
-    }
-}
-
-impl From<web3::contract::Error> for CustomError {
-    fn from(e: web3::contract::Error) -> Self {
-        Self::Other(GenericError::new(e))
-    }
-}
-
-impl From<CustomError> for GenericError {
-    fn from(e: CustomError) -> Self {
-        match e {
-            CustomError::Other(e) => e,
-            CustomError::Web3(e) => GenericError::new(e),
-        }
-    }
-}
-
 pub async fn block_number(network: Network) -> Result<U64, GenericError> {
     with_clients(network, |client| block_number_with(client)).await
 }
 
-async fn block_number_with(client: Web3<Http>) -> Result<U64, CustomError> {
+async fn block_number_with(client: Web3<Http>) -> Result<U64, ClientError> {
     client.eth().block_number().await.map_err(Into::into)
 }
 
@@ -246,13 +241,13 @@ async fn sign_faucet_tx_with(
     address: H160,
     network: Network,
     nonce: U256,
-) -> Result<TransactionEntity, CustomError> {
+) -> Result<TransactionEntity, ClientError> {
     let env = get_env(network);
     let contract = prepare_glm_faucet_contract(&client, &env)?;
     let contract = match contract {
         Some(c) => c,
         None => {
-            return Err(CustomError::new(
+            return Err(ClientError::new(
                 "Failed to get faucet fn, are you on the right network?",
             ))
         }
@@ -308,6 +303,7 @@ pub async fn prepare_raw_transaction(
 ) -> Result<YagnaRawTransaction, GenericError> {
     with_clients(network, |client| {
         prepare_raw_transaction_with(
+            client,
             _address,
             recipient,
             amount,
@@ -315,13 +311,13 @@ pub async fn prepare_raw_transaction(
             nonce,
             gas_price_override,
             gas_limit_override,
-            client,
         )
     })
     .await
 }
 
 async fn prepare_raw_transaction_with(
+    client: Web3<Http>,
     _address: H160,
     recipient: H160,
     amount: U256,
@@ -329,8 +325,7 @@ async fn prepare_raw_transaction_with(
     nonce: U256,
     gas_price_override: Option<U256>,
     gas_limit_override: Option<u32>,
-    client: Web3<Http>,
-) -> Result<YagnaRawTransaction, CustomError> {
+) -> Result<YagnaRawTransaction, ClientError> {
     let env = get_env(network);
     let contract = prepare_erc20_contract(&client, &env)?;
     let data = eth_utils::contract_encode(&contract, TRANSFER_ERC20_FUNCTION, (recipient, amount))
@@ -370,10 +365,10 @@ async fn prepare_raw_transaction_with(
 }
 
 pub async fn send_tx(signed_tx: Vec<u8>, network: Network) -> Result<H256, GenericError> {
-    with_clients(network, |client| send_tx_with(signed_tx.clone(), client)).await
+    with_clients(network, |client| send_tx_with(client, signed_tx.clone())).await
 }
 
-async fn send_tx_with(signed_tx: Vec<u8>, client: Web3<Http>) -> Result<H256, CustomError> {
+async fn send_tx_with(client: Web3<Http>, signed_tx: Vec<u8>) -> Result<H256, ClientError> {
     client
         .eth()
         .send_raw_transaction(Bytes::from(signed_tx))
@@ -448,16 +443,16 @@ pub async fn decode_encoded_transaction_data(
     encoded: &str,
 ) -> Result<(ethereum_types::Address, ethereum_types::U256), GenericError> {
     with_clients(network, |client| {
-        decode_encoded_transaction_data_with(network, encoded, client)
+        decode_encoded_transaction_data_with(client, network, encoded)
     })
     .await
 }
 
 async fn decode_encoded_transaction_data_with(
+    client: Web3<Http>,
     network: Network,
     encoded: &str,
-    client: Web3<Http>,
-) -> Result<(ethereum_types::Address, ethereum_types::U256), CustomError> {
+) -> Result<(ethereum_types::Address, ethereum_types::U256), ClientError> {
     let env = get_env(network);
     let contract = prepare_erc20_contract(&client, &env)?;
     let raw_tx: YagnaRawTransaction = serde_json::from_str(encoded).map_err(GenericError::new)?;
@@ -478,20 +473,20 @@ async fn decode_encoded_transaction_data_with(
             return Ok((add, am));
         }
     }
-    return Err(GenericError::new("Failed to parse tokens").into());
+    Err(GenericError::new("Failed to parse tokens").into())
 }
 
 pub async fn get_tx_from_network(
     tx_hash: H256,
     network: Network,
 ) -> Result<Option<Transaction>, GenericError> {
-    with_clients(network, |client| get_tx_from_network_with(tx_hash, client)).await
+    with_clients(network, |client| get_tx_from_network_with(client, tx_hash)).await
 }
 
 async fn get_tx_from_network_with(
-    tx_hash: H256,
     client: Web3<Http>,
-) -> Result<Option<Transaction>, CustomError> {
+    tx_hash: H256,
+) -> Result<Option<Transaction>, ClientError> {
     client
         .eth()
         .transaction(TransactionId::from(tx_hash))
@@ -503,13 +498,13 @@ pub async fn get_tx_receipt(
     tx_hash: H256,
     network: Network,
 ) -> Result<Option<TransactionReceipt>, GenericError> {
-    with_clients(network, |client| get_tx_receipt_with(tx_hash, client)).await
+    with_clients(network, |client| get_tx_receipt_with(client, tx_hash)).await
 }
 
 async fn get_tx_receipt_with(
-    tx_hash: H256,
     client: Web3<Http>,
-) -> Result<Option<TransactionReceipt>, CustomError> {
+    tx_hash: H256,
+) -> Result<Option<TransactionReceipt>, ClientError> {
     client
         .eth()
         .transaction_receipt(tx_hash)
@@ -520,81 +515,34 @@ async fn get_tx_receipt_with(
 fn get_rpc_addr_from_env(network: Network) -> Vec<String> {
     match network {
         Network::Mainnet => {
-            let mut vec: Vec<String> = Default::default();
-            let env = std::env::var("MAINNET_GETH_ADDR").ok();
-            if let Some(env) = env {
-                vec.push(env)
-            }
-
-            for (key, value) in std::env::vars() {
-                if key.contains("MAINNET_GETH_ADDR_") {
-                    vec.push(value)
-                }
-            }
-            vec.push("https://geth.golem.network:55555".to_string());
-            vec
+            collect_rpc_addr_from("MAINNET_GETH_ADDR", "https://geth.golem.network:55555")
         }
-        Network::Rinkeby => {
-            let mut vec: Vec<String> = Default::default();
-            let env = std::env::var("RINKEBY_GETH_ADDR").ok();
-            if let Some(env) = env {
-                vec.push(env)
-            }
-
-            for (key, value) in std::env::vars() {
-                if key.contains("RINKEBY_GETH_ADDR_") {
-                    vec.push(value)
-                }
-            }
-            vec.push("http://geth.testnet.golem.network:55555".to_string());
-            vec
-        }
+        Network::Rinkeby => collect_rpc_addr_from(
+            "RINKEBY_GETH_ADDR",
+            "http://geth.testnet.golem.network:55555",
+        ),
         Network::Goerli => {
-            let mut vec: Vec<String> = Default::default();
-            let env = std::env::var("GOERLI_GETH_ADDR").ok();
-            if let Some(env) = env {
-                vec.push(env)
-            }
-
-            for (key, value) in std::env::vars() {
-                if key.contains("GOERLI_GETH_ADDR_") {
-                    vec.push(value)
-                }
-            }
-            vec.push("https://rpc.goerli.mudit.blog".to_string());
-            vec
+            collect_rpc_addr_from("GOERLI_GETH_ADDR", "https://rpc.goerli.mudit.blog")
         }
-        Network::Polygon => {
-            let mut vec: Vec<String> = Default::default();
-            let env = std::env::var("POLYGON_GETH_ADDR").ok();
-            if let Some(env) = env {
-                vec.push(env)
-            }
-
-            for (key, value) in std::env::vars() {
-                if key.contains("POLYGON_GETH_ADDR_") {
-                    vec.push(value)
-                }
-            }
-            vec.push("https://bor.golem.network".to_string());
-            vec
-        }
-        Network::Mumbai => {
-            let mut vec: Vec<String> = Default::default();
-            let env = std::env::var("MUMBAI_GETH_ADDR").ok();
-            if let Some(env) = env {
-                vec.push(env)
-            }
-
-            for (key, value) in std::env::vars() {
-                if key.contains("MUMBAI_GETH_ADDR_") {
-                    vec.push(value)
-                }
-            }
-            vec.push("https://matic-mumbai.chainstacklabs.com".to_string());
-            vec
-        }
+        Network::Polygon => collect_rpc_addr_from("POLYGON_GETH_ADDR", "https://bor.golem.network"),
+        Network::Mumbai => collect_rpc_addr_from(
+            "MUMBAI_GETH_ADDR",
+            "https://matic-mumbai.chainstacklabs.com",
+        ),
     }
+}
+
+fn collect_rpc_addr_from(env: &str, default: &str) -> Vec<String> {
+    let mut vec: Vec<String> = Default::default();
+    let env = std::env::var(env).ok();
+    if let Some(env) = env {
+        env.split(',')
+            .collect::<Vec<_>>()
+            .iter()
+            .for_each(|env| vec.push(env.to_string()))
+    };
+    vec.push(default.to_string());
+    vec
 }
 
 async fn get_clients(network: Network) -> Result<Vec<Web3<Http>>, GenericError> {
