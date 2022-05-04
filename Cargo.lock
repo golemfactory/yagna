@@ -7801,7 +7801,6 @@ dependencies = [
  "serde",
  "serde_json",
  "structopt",
- "strum 0.22.0",
  "tokio 0.2.25",
  "tokio-util 0.3.1",
  "url",

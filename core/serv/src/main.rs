@@ -12,7 +12,6 @@ use std::{
     path::{Path, PathBuf},
 };
 use structopt::{clap, StructOpt};
-use strum::VariantNames;
 use url::Url;
 
 use ya_activity::service::Activity as ActivityService;
@@ -25,7 +24,7 @@ use ya_payment::{accounts as payment_accounts, PaymentService};
 use ya_persistence::executor::{DbExecutor, DbMixedExecutor};
 use ya_persistence::service::Persistence as PersistenceService;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
-use ya_service_api::{CliCtx, CommandOutput};
+use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_api_interfaces::Provider;
 use ya_service_api_web::{
     middleware::{auth, Identity},
@@ -40,7 +39,7 @@ use ya_vpn::VpnService;
 mod autocomplete;
 mod extension;
 
-use crate::extension::{ExtensionConf, ExtensionManager, Requirement};
+use crate::extension::Extension;
 use autocomplete::CompleteCommand;
 
 lazy_static::lazy_static! {
@@ -313,7 +312,7 @@ impl CliCommand {
             CliCommand::Complete(complete) => complete.run_command(ctx),
             CliCommand::Service(service) => service.run_command(ctx).await,
             CliCommand::Extension(ext) => ext.run_command(ctx).await,
-            CliCommand::Other(args) => extension::run_command::<CliArgs>(args, !ctx.quiet).await,
+            CliCommand::Other(args) => extension::run::<CliArgs>(ctx, args).await,
         }
     }
 }
@@ -322,19 +321,8 @@ impl CliCommand {
 enum ExtensionCommand {
     /// List available extensions
     List {},
-    /// List autostart extensions
-    Registered {},
     /// Autostart extension
-    Register {
-        name: String,
-        args: Vec<String>,
-        #[structopt(
-            long,
-            possible_values = Requirement::VARIANTS,
-            case_insensitive = true,
-        )]
-        requires: Vec<Requirement>,
-    },
+    Register { args: Vec<String> },
     /// Remove extension from autostart
     Unregister { name: String },
 }
@@ -342,42 +330,66 @@ enum ExtensionCommand {
 impl ExtensionCommand {
     pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
-            ExtensionCommand::List {} => Ok(CommandOutput::object(ExtensionManager::list())?),
-            ExtensionCommand::Registered {} => {
-                let man = ExtensionManager::new(&ctx.data_dir)?;
-                let mut extensions = man.read_conf().await?;
-                extensions.retain(|_, conf| conf.autostart);
+            ExtensionCommand::List {} => {
+                let extensions = Extension::list();
 
-                Ok(CommandOutput::object(extensions)?)
+                if ctx.json_output {
+                    Self::map(extensions.into_iter())
+                } else {
+                    Self::table(extensions.into_iter())
+                }
             }
-            ExtensionCommand::Register {
-                name,
-                args,
-                requires,
-            } => {
-                let man = ExtensionManager::new(&ctx.data_dir)?;
-                man.update_conf(|conf| {
-                    let ext_conf = ExtensionConf {
-                        args,
-                        requires: requires.into_iter().collect(),
-                        autostart: true,
-                    };
-                    conf.insert(name, ext_conf);
-                })
-                .await?;
+            ExtensionCommand::Register { mut args } => {
+                let mut ext = Extension::find(args.clone())?;
+                args.remove(0);
+
+                ext.conf.args = args;
+                ext.conf.autostart = true;
+                ext.write_conf().await?;
 
                 Ok(CommandOutput::NoOutput)
             }
             ExtensionCommand::Unregister { name } => {
-                let man = ExtensionManager::new(&ctx.data_dir)?;
-                man.update_conf(|conf| {
-                    let _ = conf.remove(&name);
-                })
-                .await?;
+                let mut ext = Extension::find(vec![name])?;
+                ext.conf.autostart = false;
+                ext.write_conf().await?;
 
                 Ok(CommandOutput::NoOutput)
             }
         }
+    }
+
+    fn map<I: Iterator<Item = Extension>>(extensions: I) -> Result<CommandOutput> {
+        Ok(CommandOutput::object(
+            extensions
+                .map(|mut ext| {
+                    let name = std::mem::take(&mut ext.name);
+                    (name, ext)
+                })
+                .collect::<HashMap<_, _>>(),
+        )?)
+    }
+
+    fn table<I: Iterator<Item = Extension>>(extensions: I) -> Result<CommandOutput> {
+        Ok(ResponseTable {
+            columns: vec![
+                "name".into(),
+                "autostart".into(),
+                "path".into(),
+                "args".into(),
+            ],
+            values: extensions
+                .map(|ext| {
+                    serde_json::json! {[
+                        ext.name,
+                        if ext.conf.autostart { 'x' } else { ' ' },
+                        ext.path,
+                        ext.conf.args.join(" "),
+                    ]}
+                })
+                .collect(),
+        }
+        .into())
     }
 }
 
