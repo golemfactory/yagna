@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "goth-tests"
-version = "0.1.0"
+version = "0.1.1"
 description = "Integration tests for yagna"
 authors = ["GolemFactory <contact@golem.network>"]
 license = "LGPL-3.0-or-later"
@@ -20,7 +20,7 @@ readme = "README.md"
 python = "^3.8.0"
 pytest = "^6.2"
 pytest-asyncio = "^0.14"
-goth = "^0.10"
+goth = "^0.11"
 # to use development goth version uncomment below
 # goth = { git = "https://github.com/golemfactory/goth.git", branch = "your-branch-here" }
 

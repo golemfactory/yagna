@@ -71,13 +71,10 @@ struct StartupConfig {
 
 async fn my_main() -> Result</*exit code*/ i32> {
     dotenv::dotenv().ok();
-    let config_file = setup::init()?;
-
     if env::var_os(env_logger::DEFAULT_FILTER_ENV).is_none() {
         env::set_var(env_logger::DEFAULT_FILTER_ENV, "info");
     }
     env_logger::init();
-    log::debug!("Using config file: {}", config_file.display());
 
     let cli_args: StartupConfig = StartupConfig::from_args();
 
