@@ -8,7 +8,7 @@ use lazy_static::lazy_static;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 use web3::{
-    contract::{Contract, Options},
+    contract::{tokens::Tokenize, Contract, Options},
     error::Error,
     transports::Http,
     types::{Bytes, Transaction, TransactionId, TransactionReceipt, H160, H256, U256, U64},
@@ -710,13 +710,18 @@ pub async fn get_nonce_from_contract(
     address: H160,
     network: Network,
 ) -> Result<U256, GenericError> {
-    let env = get_env(network);
+    with_clients(network, |client| {
+        get_nonce_from_contract_with(address, network, client)
+    })
+    .await
+}
 
-    let client = get_client(network).await.map_err(|e| {
-        GenericError::new(format!(
-            "Unable to create web3 client, while querying nonce from contract, reason: {e}"
-        ))
-    })?;
+async fn get_nonce_from_contract_with(
+    address: H160,
+    network: Network,
+    client: Web3<Http>,
+) -> Result<U256, ClientError> {
+    let env = get_env(network);
 
     let meta_tx_contract = prepare_meta_transaction_contract(&client, &env)?;
     let nonce: U256 = meta_tx_contract
@@ -727,8 +732,7 @@ pub async fn get_nonce_from_contract(
             Options::default(),
             None,
         )
-        .await
-        .map_err(GenericError::new)?;
+        .await?;
 
     Ok(nonce)
 }
@@ -738,20 +742,28 @@ pub async fn encode_transfer_abi(
     amount: U256,
     network: Network,
 ) -> Result<Vec<u8>, GenericError> {
+    with_clients(network, |client| {
+        encode_transfer_abi_with(recipient, amount, network, client)
+    })
+    .await
+}
+
+async fn encode_transfer_abi_with(
+    recipient: H160,
+    amount: U256,
+    network: Network,
+    client: Web3<Http>,
+) -> Result<Vec<u8>, ClientError> {
     let env = get_env(network);
-    let client = get_client(network).await.map_err(|e| {
-        GenericError::new(format!(
-            "Unable to create web3 client, while encoding 'transfer' ABI, reason: {e}"
-        ))
-    })?;
 
     let erc20_contract = prepare_erc20_contract(&client, &env)?;
+
     let function_abi = eth_utils::contract_encode(
         &erc20_contract,
         TRANSFER_ERC20_FUNCTION,
         (recipient, amount),
     )
-    .map_err(GenericError::new)?;
+    .map_err(ClientError::new)?;
 
     Ok(function_abi)
 }
@@ -766,6 +778,29 @@ pub async fn encode_meta_transaction_to_eip712(
     function_abi: &[u8],
     network: Network,
 ) -> Result<Vec<u8>, GenericError> {
+    with_clients(network, |client| {
+        encode_meta_transaction_to_eip712_with(
+            sender,
+            recipient,
+            amount,
+            nonce,
+            function_abi,
+            network,
+            client,
+        )
+    })
+    .await
+}
+
+async fn encode_meta_transaction_to_eip712_with(
+    sender: H160,
+    recipient: H160,
+    amount: U256,
+    nonce: U256,
+    function_abi: &[u8],
+    network: Network,
+    client: Web3<Http>,
+) -> Result<Vec<u8>, ClientError> {
     info!("Creating meta tx for sender {sender:02X?}, recipient {recipient:02X?}, amount {amount:?}, nonce {nonce:?}, network {network:?}");
 
     const META_TRANSACTION_SIGNATURE: &str =
@@ -773,13 +808,8 @@ pub async fn encode_meta_transaction_to_eip712(
     const MAGIC: [u8; 2] = [0x19, 0x1];
 
     let env = get_env(network);
-    let client = get_client(network).await.map_err(|e| {
-        GenericError::new(format!(
-            "Unable to create web3 client, while encoding meta transaction, reason: {e}"
-        ))
-    })?;
-
     let eip712_contract = prepare_eip712_contract(&client, &env)?;
+
     let domain_separator: Vec<u8> = eip712_contract
         .query(
             GET_DOMAIN_SEPARATOR_FUNCTION,
