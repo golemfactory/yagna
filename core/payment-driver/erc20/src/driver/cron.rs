@@ -2,6 +2,7 @@
     Driver helper for handling timer events from a cron.
 */
 // Extrnal crates
+use anyhow::anyhow;
 use chrono::{Duration, TimeZone, Utc};
 use lazy_static::lazy_static;
 use std::str::FromStr;
@@ -308,7 +309,11 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
     }
 }
 
-pub async fn process_payments_for_account(dao: &Erc20Dao, node_id: &str, network: Network) {
+pub async fn process_payments_for_account(
+    dao: &Erc20Dao,
+    node_id: &str,
+    network: Network,
+) -> anyhow::Result<()> {
     log::trace!(
         "Processing payments for node_id={}, network={}",
         node_id,
@@ -328,12 +333,21 @@ pub async fn process_payments_for_account(dao: &Erc20Dao, node_id: &str, network
             network,
         )
         .await
-        .unwrap();
+        .map_err(|e| {
+            anyhow!(
+                "Failed to get nonce for account [{}] ({}). Error: {}",
+                node_id,
+                network,
+                e
+            )
+        })?;
+
         log::debug!("Payments: nonce={}, details={:?}", &nonce, payments);
         for payment in payments {
             handle_payment(&dao, payment, &mut nonce).await;
         }
     }
+    Ok(())
 }
 
 pub async fn process_transactions(dao: &Erc20Dao, network: Network) {

@@ -9,7 +9,10 @@ use uuid::Uuid;
 // Workspace uses
 use ya_payment_driver::{
     driver::BigDecimal,
-    model::{GenericError, GetAccountBalance, SchedulePayment, ValidateAllocation, VerifyPayment},
+    model::{
+        GasDetails, GenericError, GetAccountBalance, GetAccountGasBalance, SchedulePayment,
+        ValidateAllocation, VerifyPayment,
+    },
 };
 
 // Local uses
@@ -48,6 +51,30 @@ pub async fn get_account_balance(msg: GetAccountBalance) -> Result<BigDecimal, G
         &balance
     );
     Ok(balance)
+}
+
+pub async fn get_account_gas_balance(
+    msg: GetAccountGasBalance,
+) -> Result<Option<GasDetails>, GenericError> {
+    log::debug!("get_account_gas_balance: {:?}", msg);
+    let (currency_short_name, currency_long_name) = network::platform_to_currency(msg.platform())?;
+    let (network, _) = network::platform_to_network_token(msg.platform())?;
+
+    let address = utils::str_to_addr(&msg.address())?;
+
+    let balance = wallet::account_gas_balance(address, network).await?;
+
+    log::info!(
+        "get_account_gas_balance() - account={}, balance={}, currency {}",
+        &msg.address(),
+        &balance,
+        currency_long_name
+    );
+    Ok(Some(GasDetails {
+        currency_short_name,
+        currency_long_name,
+        balance,
+    }))
 }
 
 pub async fn schedule_payment(
