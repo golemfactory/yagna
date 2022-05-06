@@ -202,14 +202,19 @@ pub async fn release_allocation_after(
 ) {
     tokio::task::spawn(async move {
         if let Some(timeout) = allocation_timeout {
-            let timestamp = timeout.timestamp() - Utc::now().timestamp();
-            let mut deadline = 0u64;
+            //FIXME when upgrading to tokio 1.0 or greater. In tokio 0.2 timer panics when maximum duration of delay is exceeded.
+            let max_duration: i64 = 1 << 35;
 
-            if timestamp.is_positive() {
-                deadline = timestamp as u64;
+            loop {
+                let time_diff = timeout.timestamp_millis() - Utc::now().timestamp_millis();
+
+                if time_diff.is_negative() {
+                    break;
+                }
+
+                let timeout = time_diff.min(max_duration) as u64;
+                tokio::time::delay_for(Duration::from_millis(timeout)).await;
             }
-
-            tokio::time::delay_for(Duration::from_secs(deadline)).await;
 
             forced_release_allocation(db, allocation_id, node_id).await;
         }

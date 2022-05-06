@@ -435,7 +435,7 @@ fn broadcast_handler(
             client
                 .broadcast(payload, config.broadcast_size)
                 .await
-                .context("broadcast failed")
+                .map_err(|e| anyhow!("Broadcast failed: {}", e))
         }
         .then(|result: anyhow::Result<()>| async move {
             if let Err(e) = result {
