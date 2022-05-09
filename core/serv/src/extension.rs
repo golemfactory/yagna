@@ -68,7 +68,7 @@ pub async fn autostart(
 
     let ctx = ExtensionCtx::Autostart {
         node_id,
-        app_key: app_key.clone(),
+        app_key,
         data_dir: data_dir.as_ref().to_path_buf(),
         api_url: api_url.clone(),
         gsb_url: gsb_url.clone(),
@@ -81,7 +81,7 @@ pub async fn autostart(
     Ok(())
 }
 
-async fn resolve_identity_and_key() -> anyhow::Result<(NodeId, AppKey)> {
+async fn resolve_identity_and_key() -> anyhow::Result<(NodeId, Option<AppKey>)> {
     let identities = bus::service(model::identity::BUS_ID)
         .call(model::identity::List {})
         .await?
@@ -101,10 +101,7 @@ async fn resolve_identity_and_key() -> anyhow::Result<(NodeId, AppKey)> {
         .await?
         .context("Failed to call the app key service")?;
 
-    let app_key = app_key
-        .get(0)
-        .cloned()
-        .ok_or_else(|| anyhow::anyhow!("App key for default identity was not found"))?;
+    let app_key = app_key.get(0).cloned();
 
     Ok((node_id, app_key))
 }
@@ -143,7 +140,7 @@ pub enum ExtensionCtx {
     },
     Autostart {
         node_id: NodeId,
-        app_key: AppKey,
+        app_key: Option<AppKey>,
         data_dir: PathBuf,
         api_url: url::Url,
         gsb_url: Option<url::Url>,
@@ -177,8 +174,12 @@ impl ExtensionCtx {
             } => {
                 command
                     .env(VAR_YAGNA_NODE_ID, node_id.to_string())
-                    .env(VAR_YAGNA_APP_KEY, &app_key.key)
                     .env(VAR_YAGNA_API_URL, api_url.to_string());
+
+                if let Some(app_key) = app_key {
+                    command.env(VAR_YAGNA_APP_KEY, &app_key.key);
+                }
+
                 (data_dir, gsb_url)
             }
         };
