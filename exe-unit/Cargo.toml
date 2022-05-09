@@ -41,6 +41,7 @@ ya-utils-networking = { version = "0.1", default-features = false, features = ["
 actix = { version = "0.10", default-features = false }
 anyhow = "1.0.19"
 async-trait = "0.1.24"
+bytes = "0.5"
 chrono = "0.4.10"
 derivative = "2.1"
 derive_more = "0.99"

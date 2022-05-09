@@ -1,10 +1,8 @@
 use std::convert::TryFrom;
 use std::path::Path;
 
-use actix::prelude::*;
 use futures::channel::mpsc;
-use futures::{future, SinkExt, Stream, StreamExt, TryStreamExt};
-use tokio::io;
+use futures::Stream;
 
 use ya_runtime_api::deploy::ContainerEndpoint;
 use ya_runtime_api::server::Network;
@@ -34,7 +32,10 @@ impl Endpoint {
 
     #[cfg(unix)]
     async fn connect_to_socket<P: AsRef<Path>>(path: P) -> Result<Self> {
+        use actix::prelude::*;
         use bytes::Bytes;
+        use futures::{future, SinkExt, StreamExt, TryStreamExt};
+        use tokio::io;
         use tokio_util::codec::{BytesCodec, FramedRead, FramedWrite};
 
         let socket = tokio::net::UnixStream::connect(path.as_ref()).await?;
@@ -60,7 +61,7 @@ impl Endpoint {
     }
 
     #[cfg(not(unix))]
-    async fn connect_to_socket<P: AsRef<Path>>(path: P) -> Result<Self> {
+    async fn connect_to_socket<P: AsRef<Path>>(_path: P) -> Result<Self> {
         Err(Error::Other("OS not supported".into()))
     }
 }
