@@ -10,7 +10,7 @@ use ya_agreement_utils::OfferDefinition;
 
 use crate::market::negotiator::*;
 
-const CAPABILITY_INET: &'static str = "inet";
+const CAPABILITY_INET: &str = "inet";
 
 pub struct ManifestSignature {
     enabled: bool,
@@ -153,31 +153,31 @@ mod tests {
             "TEST \
             --policy-disable-component manifest_signature_validation \
             --policy-trust-property {}",
-            PROPERTY_CAPABILITIES
+            DEMAND_CAPABILITIES_PROPERTY
         ));
-        assert_eq!(policy.enabled, false);
+        assert!(!policy.enabled);
 
         let policy = build_policy(format!(
             "TEST \
             --policy-disable-component manifest_signature_validation \
             --policy-trust-property {}={}",
-            PROPERTY_CAPABILITIES, CAPABILITY_INET
+            DEMAND_CAPABILITIES_PROPERTY, CAPABILITY_INET
         ));
-        assert_eq!(policy.enabled, false);
+        assert!(!policy.enabled);
 
         let policy = build_policy(format!(
             "TEST \
             --policy-trust-property {}={}",
-            PROPERTY_CAPABILITIES, CAPABILITY_INET
+            DEMAND_CAPABILITIES_PROPERTY, CAPABILITY_INET
         ));
-        assert_eq!(policy.enabled, false);
+        assert!(!policy.enabled);
 
         let policy = build_policy(&format!(
             "TEST \
             --policy-trust-property {}",
-            PROPERTY_CAPABILITIES
+            DEMAND_CAPABILITIES_PROPERTY
         ));
-        assert_eq!(policy.enabled, false);
+        assert!(!policy.enabled);
 
         let policy = build_policy(
             "TEST \

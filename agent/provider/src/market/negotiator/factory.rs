@@ -65,6 +65,7 @@ pub struct CompositeNegotiatorConfig {
     pub debit_note_interval_config: DebitNoteIntervalConfig,
     #[structopt(flatten)]
     pub payment_timeout_config: PaymentTimeoutConfig,
+    #[structopt(flatten)]
     pub policy_config: PolicyConfig,
 }
 

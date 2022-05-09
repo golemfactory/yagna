@@ -186,7 +186,7 @@ impl<R: Runtime> RuntimeRef<R> {
             }
 
             if return_code != 0 {
-                let message = message.unwrap_or("reason unspecified".into());
+                let message = message.unwrap_or_else(|| "reason unspecified".into());
                 log::warn!("Batch {} execution interrupted: {}", batch_id, message);
                 break;
             }
@@ -257,7 +257,7 @@ impl<R: Runtime> RuntimeRef<R> {
 
         log::info!("Executing command: {:?}", runtime_cmd.command);
 
-        self.pre_runtime(&runtime_cmd, &runtime, &transfer_service)
+        self.pre_runtime(&runtime_cmd, runtime, transfer_service)
             .await?;
 
         let exit_code = runtime.send(runtime_cmd.clone()).await??;
@@ -265,7 +265,7 @@ impl<R: Runtime> RuntimeRef<R> {
             return Err(Error::CommandExitCodeError(exit_code));
         }
 
-        self.post_runtime(&runtime_cmd, &runtime, &transfer_service)
+        self.post_runtime(&runtime_cmd, runtime, transfer_service)
             .await?;
 
         let state_cur = self.send(GetState {}).await?.0;
@@ -445,7 +445,7 @@ pub struct ExeUnitContext {
     pub credentials: Option<Credentials>,
     #[cfg(feature = "sgx")]
     #[derivative(Debug = "ignore")]
-    pub crypto: crate::crypto::Crypto,
+    pub crypto: crypto::Crypto,
 }
 
 impl ExeUnitContext {
@@ -516,7 +516,7 @@ async fn report_usage<R: Runtime>(
                     timeout: None,
                 };
                 if !report(&report_url, msg).await {
-                    exe_unit.do_send(Shutdown(ShutdownReason::Error(error::Error::RuntimeError(
+                    exe_unit.do_send(Shutdown(ShutdownReason::Error(Error::RuntimeError(
                         format!("Reporting endpoint '{}' is not available", report_url),
                     ))));
                 }

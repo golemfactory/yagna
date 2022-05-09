@@ -171,7 +171,7 @@ async fn send_script(
     log::debug!("Executing commands: {:?}", exe_script);
 
     let msg = activity::Exec {
-        activity_id: activity_id.unwrap_or_else(Default::default),
+        activity_id: activity_id.unwrap_or_default(),
         batch_id: hex::encode(&rand::random::<[u8; 16]>()),
         exe_script,
         timeout: None,
@@ -205,13 +205,12 @@ fn run() -> anyhow::Result<()> {
             input,
         } => {
             let contents = std::fs::read_to_string(input).map_err(|e| {
-                anyhow::anyhow!("Cannot read commands from file {}: {}", input.display(), e)
+                anyhow::anyhow!("Cannot read commands from file {}: {e}", input.display())
             })?;
             let contents = serde_json::from_str(&contents).map_err(|e| {
                 anyhow::anyhow!(
-                    "Cannot deserialize commands from file {}: {}",
+                    "Cannot deserialize commands from file {}: {e}",
                     input.display(),
-                    e
                 )
             })?;
             ctx_activity_id = service_id.clone();
@@ -244,23 +243,20 @@ fn run() -> anyhow::Result<()> {
     }
     let work_dir = create_path(&args.work_dir).map_err(|e| {
         anyhow::anyhow!(
-            "Cannot create the working directory {}: {}",
+            "Cannot create the working directory {}: {e}",
             args.work_dir.display(),
-            e
         )
     })?;
     let cache_dir = create_path(&args.cache_dir).map_err(|e| {
         anyhow::anyhow!(
-            "Cannot create the cache directory {}: {}",
+            "Cannot create the cache directory {}: {e}",
             args.work_dir.display(),
-            e
         )
     })?;
     let mut agreement = Agreement::try_from(&args.agreement).map_err(|e| {
         anyhow::anyhow!(
-            "Error parsing the agreement from {}: {}",
+            "Error parsing the agreement from {}: {e}",
             args.agreement.display(),
-            e
         )
     })?;
 

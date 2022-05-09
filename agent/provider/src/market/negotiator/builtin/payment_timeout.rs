@@ -48,6 +48,7 @@ impl NegotiatorComponent for PaymentTimeout {
     fn negotiate_step(
         &mut self,
         demand: &ProposalView,
+        _demand_constraints: &String,
         mut offer: ProposalView,
     ) -> anyhow::Result<NegotiationResult> {
         let offer_timeout = read_duration(PAYMENT_TIMEOUT_PROPERTY, &offer)?;

@@ -31,6 +31,7 @@ pub enum ValidationError {
     Url(String),
 }
 
+#[derive(Default)]
 pub struct ManifestContext {
     pub manifest: Arc<Option<AppManifest>>,
     pub policy: Arc<PolicyConfig>,
@@ -40,8 +41,8 @@ pub struct ManifestContext {
 
 impl ManifestContext {
     pub fn try_new(agreement: &AgreementView) -> anyhow::Result<Self> {
-        let manifest = read_manifest(&agreement).context("Unable to read manifest")?;
-        let features = Self::build_features(&agreement);
+        let manifest = read_manifest(agreement).context("Unable to read manifest")?;
+        let features = Self::build_features(agreement);
         let policy = PolicyConfig::from_args_safe().unwrap_or_default();
 
         Ok(Self {
@@ -176,8 +177,9 @@ impl FromStr for Feature {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.to_lowercase();
-        match s.as_str() {
+        match s.trim() {
             "inet" => Ok(Self::Inet),
+            "vpn" => Ok(Self::Vpn),
             _ => anyhow::bail!("unknown feature: {}", s),
         }
     }
@@ -214,10 +216,8 @@ impl ManifestValidator for ScriptValidator {
             .comp_manifest
             .as_ref()
             .and_then(|m| m.script.as_ref())
-            .and_then(|s| {
-                Some(Self {
-                    inner: Arc::new(s.clone()),
-                })
+            .map(|s| Self {
+                inner: Arc::new(s.clone()),
             });
 
         futures::future::ok(validator).boxed_local()
@@ -229,9 +229,8 @@ impl ScriptValidator {
         &self,
         iter: impl IntoIterator<Item = &'a ExeScriptCommand>,
     ) -> Result<(), ValidationError> {
-        Ok(iter
-            .into_iter()
-            .try_for_each(|cmd| self.validate_command(&*self.inner, cmd))?)
+        iter.into_iter()
+            .try_for_each(|cmd| self.validate_command(&*self.inner, cmd))
     }
 
     fn validate_command(
@@ -255,7 +254,7 @@ impl ScriptValidator {
         from: &String,
         to: &String,
     ) -> Result<(), ValidationError> {
-        const NAME: &'static str = "transfer";
+        const NAME: &str = "transfer";
 
         let transfer = format!("{} {} {}", NAME, from, to);
         let mut valid = false;
@@ -307,9 +306,9 @@ impl ScriptValidator {
     fn validate_run(
         script: &Script,
         entry_point: &String,
-        args: &Vec<String>,
+        args: &[String],
     ) -> Result<(), ValidationError> {
-        const NAME: &'static str = "run";
+        const NAME: &str = "run";
 
         let run = format!("{} {} {}", NAME, entry_point, args.join(" "));
         let mut valid = false;
@@ -333,7 +332,7 @@ impl ScriptValidator {
                     let args = match obj.get("args") {
                         Some(args) => match args {
                             Value::Array(arr) => arr
-                                .into_iter()
+                                .iter()
                                 .map(|e| e.to_string())
                                 .collect::<Vec<_>>()
                                 .join(" "),
@@ -453,7 +452,7 @@ impl UrlValidator {
         (Protocol::Udp, Ipv4Addr::new(149, 112, 112, 112), 53),
     ];
 
-    pub fn validate<'a>(
+    pub fn validate(
         &self,
         protocol: Protocol,
         ip: IpAddr,
@@ -474,7 +473,7 @@ async fn resolve_ips<'a>(
     urls: impl Iterator<Item = &'a Url>,
 ) -> anyhow::Result<HashSet<(Protocol, IpAddr, u16)>> {
     futures::stream::iter(urls)
-        .map(anyhow::Result::Ok)
+        .map(Ok)
         .try_fold(HashSet::default(), |mut set, url| async move {
             let protocol = match url.scheme() {
                 "udp" => Protocol::Udp,

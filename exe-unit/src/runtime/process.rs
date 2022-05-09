@@ -83,8 +83,8 @@ impl RuntimeProcess {
 
         let child = std::process::Command::new(binary.clone())
             .args(args)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
             .spawn()?;
 
         let result = child.wait_with_output()?;
@@ -157,7 +157,7 @@ impl RuntimeProcess {
     ) -> LocalBoxFuture<'f, Result<i32, Error>> {
         let mut rt_args = match self.args() {
             Ok(args) => args,
-            Err(err) => return futures::future::err(err).boxed_local(),
+            Err(err) => return future::err(err).boxed_local(),
         };
 
         let (cmd, ctx) = cmd.split();
@@ -238,7 +238,7 @@ impl RuntimeProcess {
     ) -> LocalBoxFuture<'f, Result<i32, Error>> {
         let mut rt_args = match self.args() {
             Ok(rt_args) => rt_args,
-            Err(err) => return futures::future::err(err).boxed_local(),
+            Err(err) => return future::err(err).boxed_local(),
         };
         rt_args.arg("start").args(args);
 
@@ -474,6 +474,7 @@ impl Handler<Shutdown> for RuntimeProcess {
 #[derive(Clone)]
 struct RuntimeProcessContext {
     work_dir: PathBuf,
+    runtime_args: Vec<String>,
     supervise_image: bool,
     supervise_hardware: bool,
     infrastructure: HashMap<String, f64>,
@@ -484,14 +485,16 @@ struct RuntimeProcessContext {
 
 impl<'a> From<&'a ExeUnitContext> for RuntimeProcessContext {
     fn from(ctx: &'a ExeUnitContext) -> Self {
+        let manifest = &ctx.supervise.manifest;
         Self {
             work_dir: ctx.work_dir.clone(),
+            runtime_args: ctx.runtime_args.clone(),
             supervise_image: ctx.supervise.image,
             supervise_hardware: ctx.supervise.hardware,
             infrastructure: ctx.agreement.infrastructure.clone(),
-            feature_vpn: ctx.supervise.manifest.features().contains(&Feature::Vpn),
-            feature_inet: ctx.supervise.manifest.features().contains(&Feature::Inet),
-            feature_inet_filter: ctx.supervise.manifest.validator::<UrlValidator>(),
+            feature_vpn: manifest.features().contains(&Feature::Vpn),
+            feature_inet: manifest.features().contains(&Feature::Inet),
+            feature_inet_filter: manifest.validator::<UrlValidator>(),
         }
     }
 }

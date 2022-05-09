@@ -5418,9 +5418,9 @@ checksum = "fe0f37c9e8f3c5a4a66ad655a93c74daac4ad00c441533bf5c6e7990bb42604e"
 
 [[package]]
 name = "smoltcp"
-version = "0.7.3"
+version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11b5647cc4676e9358e6b15b6536b34e5b413e5ae946a06b3f85e713132bcdfa"
+checksum = "3e4a069bef843d170df47e7c0a8bf8d037f217d9f5b325865acc3e466ffe40d3"
 dependencies = [
  "bitflags",
  "byteorder",
@@ -7204,23 +7204,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ya-net-stack"
-version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?branch=mf/inet#c0e60ae31a7b1200f8d40ef9fbb9c78694866685"
-dependencies = [
- "derive_more",
- "futures 0.3.13",
- "log",
- "managed 0.7.2",
- "num-derive",
- "num-traits",
- "rand 0.8.4",
- "smoltcp 0.7.3",
- "thiserror",
- "tokio 0.2.25",
-]
-
-[[package]]
 name = "ya-payment"
 version = "0.2.0"
 dependencies = [
@@ -7393,7 +7376,7 @@ dependencies = [
  "url",
  "ya-relay-core",
  "ya-relay-proto",
- "ya-relay-stack",
+ "ya-relay-stack 0.3.0",
 ]
 
 [[package]]
@@ -7421,7 +7404,7 @@ dependencies = [
  "uuid",
  "ya-client-model 0.4.0",
  "ya-relay-proto",
- "ya-relay-stack",
+ "ya-relay-stack 0.3.0",
 ]
 
 [[package]]
@@ -7450,6 +7433,23 @@ dependencies = [
  "futures 0.3.13",
  "log",
  "managed 0.8.0",
+ "rand 0.8.4",
+ "smoltcp 0.8.0",
+ "thiserror",
+ "tokio 0.2.25",
+]
+
+[[package]]
+name = "ya-relay-stack"
+version = "0.3.1"
+source = "git+https://github.com/golemfactory/ya-relay.git?branch=mf/outbound-inet#754abc52985954c9c21af0e23a25c3ef437a507e"
+dependencies = [
+ "derive_more",
+ "futures 0.3.13",
+ "log",
+ "managed 0.8.0",
+ "num-derive",
+ "num-traits",
  "rand 0.8.4",
  "smoltcp 0.8.0",
  "thiserror",
@@ -7724,7 +7724,7 @@ dependencies = [
  "thiserror",
  "trust-dns-resolver",
  "url",
- "ya-net-stack",
+ "ya-relay-stack 0.3.1",
 ]
 
 [[package]]
@@ -7807,7 +7807,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha3 0.8.2",
- "smoltcp 0.7.3",
+ "smoltcp 0.7.5",
  "structopt",
  "thiserror",
  "tokio 0.2.25",

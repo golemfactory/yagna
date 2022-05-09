@@ -54,7 +54,7 @@ pub enum StateError {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Supervision {
     pub hardware: bool,
     pub image: bool,

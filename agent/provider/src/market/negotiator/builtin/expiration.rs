@@ -87,7 +87,7 @@ impl NegotiatorComponent for LimitExpiration {
         demand: &ProposalView,
         _demand_constraints: &String,
         mut offer: ProposalView,
-    ) -> anyhow::Result<NegotiationResult> {
+    ) -> Result<NegotiationResult> {
         let req_deadline = debit_deadline_from(demand)?;
         let our_deadline = debit_deadline_from(&offer)?;
         let req_expiration = proposal_expiration_from(&demand)?;
@@ -172,7 +172,7 @@ impl NegotiatorComponent for LimitExpiration {
         })
     }
 
-    fn fill_template(&mut self, mut template: OfferDefinition) -> anyhow::Result<OfferDefinition> {
+    fn fill_template(&mut self, mut template: OfferDefinition) -> Result<OfferDefinition> {
         template.offer.set_property(
             DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY_FLAT,
             serde_json::Value::Number(self.accept_timeout.num_seconds().into()),
@@ -184,11 +184,11 @@ impl NegotiatorComponent for LimitExpiration {
         &mut self,
         _agreement_id: &str,
         _result: &AgreementResult,
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         Ok(())
     }
 
-    fn on_agreement_approved(&mut self, _agreement_id: &str) -> anyhow::Result<()> {
+    fn on_agreement_approved(&mut self, _agreement_id: &str) -> Result<()> {
         Ok(())
     }
 }
@@ -244,6 +244,7 @@ mod test_expiration_negotiator {
     fn test_lower_deadline() {
         let config = expiration_config();
         let mut negotiator = LimitExpiration::new(&config).unwrap();
+        let demand_constraints = String::new();
 
         let offer_proposal = negotiator
             .fill_template(example_offer())
@@ -256,7 +257,7 @@ mod test_expiration_negotiator {
         }));
 
         match negotiator
-            .negotiate_step(&proposal, offer_proposal)
+            .negotiate_step(&proposal, &demand_constraints, offer_proposal)
             .unwrap()
         {
             // Negotiator is expected to take better proposal and change adjust property.
@@ -275,6 +276,7 @@ mod test_expiration_negotiator {
     fn test_greater_deadline() {
         let config = expiration_config();
         let mut negotiator = LimitExpiration::new(&config).unwrap();
+        let demand_constraints = String::new();
 
         let offer_proposal = negotiator
             .fill_template(example_offer())
@@ -287,7 +289,7 @@ mod test_expiration_negotiator {
         }));
 
         match negotiator
-            .negotiate_step(&proposal, offer_proposal)
+            .negotiate_step(&proposal, &demand_constraints, offer_proposal)
             .unwrap()
         {
             NegotiationResult::Reject { message, is_final } => {
@@ -304,6 +306,7 @@ mod test_expiration_negotiator {
     fn test_equal_deadline() {
         let config = expiration_config();
         let mut negotiator = LimitExpiration::new(&config).unwrap();
+        let demand_constraints = String::new();
 
         let offer_proposal = negotiator
             .fill_template(example_offer())
@@ -316,7 +319,7 @@ mod test_expiration_negotiator {
         }));
 
         match negotiator
-            .negotiate_step(&proposal, offer_proposal)
+            .negotiate_step(&proposal, &demand_constraints, offer_proposal)
             .unwrap()
         {
             NegotiationResult::Ready { offer } => {
@@ -337,6 +340,7 @@ mod test_expiration_negotiator {
     fn test_requestor_doesnt_accept_debit_notes_to_high_expiration() {
         let config = expiration_config();
         let mut negotiator = LimitExpiration::new(&config).unwrap();
+        let demand_constraints = String::new();
 
         let offer_proposal = negotiator
             .fill_template(example_offer())
@@ -348,7 +352,7 @@ mod test_expiration_negotiator {
         }));
 
         match negotiator
-            .negotiate_step(&proposal, offer_proposal)
+            .negotiate_step(&proposal, &demand_constraints, offer_proposal)
             .unwrap()
         {
             NegotiationResult::Reject { message, is_final } => {
@@ -367,6 +371,7 @@ mod test_expiration_negotiator {
     fn test_requestor_doesnt_accept_debit_notes_expiration_ok() {
         let config = expiration_config();
         let mut negotiator = LimitExpiration::new(&config).unwrap();
+        let demand_constraints = String::new();
 
         let offer_proposal = negotiator
             .fill_template(example_offer())
@@ -378,7 +383,7 @@ mod test_expiration_negotiator {
         }));
 
         match negotiator
-            .negotiate_step(&proposal, offer_proposal)
+            .negotiate_step(&proposal, &demand_constraints, offer_proposal)
             .unwrap()
         {
             NegotiationResult::Negotiating { offer } => {
