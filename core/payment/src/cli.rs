@@ -86,6 +86,13 @@ pub enum PaymentCli {
             default_value = "auto"
         )]
         gas_limit: String,
+
+        #[structopt(
+            long,
+            help = "Use gasless forwarder, no gas on account is required",
+            conflicts_with_all(&["gas-limit", "max-gas-price", "gas-price"])
+        )]
+        gasless: bool,
     },
     Invoice {
         address: Option<String>,
@@ -288,6 +295,7 @@ impl PaymentCli {
                 gas_price,
                 max_gas_price,
                 gas_limit,
+                gasless,
             } => {
                 let address = resolve_address(account.address()).await?;
                 let amount = BigDecimal::from_str(&amount)?;
@@ -320,6 +328,7 @@ impl PaymentCli {
                         gas_price,
                         max_gas_price,
                         gas_limit,
+                        gasless,
                     )
                     .await?,
                 )

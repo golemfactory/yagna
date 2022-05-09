@@ -3,11 +3,14 @@
 */
 
 // External crates
-use crate::erc20::ethereum::{
-    get_polygon_gas_price_method, get_polygon_maximum_price, get_polygon_priority,
-    get_polygon_starting_price, PolygonGasPriceMethod, PolygonPriority,
-    POLYGON_PREFERRED_GAS_PRICES_EXPRESS, POLYGON_PREFERRED_GAS_PRICES_FAST,
-    POLYGON_PREFERRED_GAS_PRICES_SLOW,
+use crate::erc20::{
+    ethereum::{
+        get_polygon_gas_price_method, get_polygon_maximum_price, get_polygon_priority,
+        get_polygon_starting_price, PolygonGasPriceMethod, PolygonPriority,
+        POLYGON_PREFERRED_GAS_PRICES_EXPRESS, POLYGON_PREFERRED_GAS_PRICES_FAST,
+        POLYGON_PREFERRED_GAS_PRICES_SLOW,
+    },
+    gasless_transfer,
 };
 use bigdecimal::BigDecimal;
 use chrono::Utc;
@@ -224,6 +227,25 @@ pub async fn make_transfer(
         TxType::Transfer,
         Some(amount_big_dec),
     ))
+}
+
+pub async fn make_gasless_transfer(
+    details: &PaymentDetails,
+    network: Network,
+) -> Result<H256, GenericError> {
+    log::debug!(
+        "make_gasless_transfer(). network={}, details={:?}",
+        &network,
+        &details
+    );
+
+    if network != Network::Polygon {
+        return Err(GenericError::new(format!(
+            "Unsupported network type: {network} for gasless transaction"
+        )));
+    }
+
+    gasless_transfer::send_gasless_transfer(details, network).await
 }
 
 fn bump_gas_price(gas_in_gwei: U256) -> U256 {

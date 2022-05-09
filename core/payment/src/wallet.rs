@@ -54,6 +54,7 @@ pub async fn transfer(
     gas_price: Option<BigDecimal>,
     max_gas_price: Option<BigDecimal>,
     gas_limit: Option<u32>,
+    gasless: bool,
 ) -> anyhow::Result<String> {
     let driver_id = driver_bus_id(driver);
     let message = Transfer::new(
@@ -65,6 +66,7 @@ pub async fn transfer(
         gas_price,
         max_gas_price,
         gas_limit,
+        gasless,
     );
     let tx_id = bus::service(driver_id).call(message).await??;
     Ok(tx_id)
