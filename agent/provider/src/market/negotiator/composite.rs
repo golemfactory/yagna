@@ -6,7 +6,9 @@ use ya_agreement_utils::agreement::{expand, flatten_value};
 use ya_agreement_utils::AgreementView;
 use ya_client::model::market::NewOffer;
 
-use super::builtin::{DebitNoteInterval, LimitExpiration, ManifestSignature, MaxAgreements, PaymentTimeout};
+use super::builtin::{
+    DebitNoteInterval, LimitExpiration, ManifestSignature, MaxAgreements, PaymentTimeout,
+};
 use super::common::{offer_definition_to_offer, AgreementResponse, Negotiator, ProposalResponse};
 use super::{NegotiationResult, NegotiatorsPack};
 use crate::market::negotiator::common::{
