@@ -89,6 +89,6 @@ impl<'c> InvoiceEventDao<'c> {
                 .map(TryInto::try_into)
                 .collect()
         })
-            .await
+        .await
     }
 }
