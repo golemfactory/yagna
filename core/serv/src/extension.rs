@@ -388,7 +388,7 @@ impl Extension {
                 tokio::task::spawn_local(BufReader::new(stderr).lines().for_each(move |s| {
                     let name_ = name.clone();
                     async move {
-                        let _ = s.map(|s| log::warn!("{name_}: {s}"));
+                        let _ = s.map(|s| log::info!("{name_}: {s}"));
                     }
                 }));
 
