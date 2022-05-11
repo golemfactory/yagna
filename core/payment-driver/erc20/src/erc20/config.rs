@@ -49,7 +49,7 @@ lazy_static! {
         required_confirmations: {
             match env::var("ERC20_RINKEBY_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
                 Ok(Ok(x)) => x,
-                _ => 3,
+                _ => 1,
             }
         },
         payment_max_processed: {
@@ -167,7 +167,7 @@ lazy_static! {
         required_confirmations: {
             match env::var("ERC20_POLYGON_REQUIRED_CONFIRMATIONS").map(|s| s.parse()) {
                 Ok(Ok(x)) => x,
-                _ => 5,
+                _ => 1 ,
             }
         },
         payment_max_processed: {
