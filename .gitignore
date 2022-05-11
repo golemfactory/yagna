@@ -8,6 +8,7 @@
 ## Workdir
 workdir/*
 core/market/decentralized/tests/test-workdir/*
+releases/
 
 # IDEs
 .idea

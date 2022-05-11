@@ -2,9 +2,8 @@ use crate::error::{DbError, DbResult};
 use crate::models::allocation::{ReadObj, WriteObj};
 use crate::schema::pay_allocation::dsl;
 use bigdecimal::BigDecimal;
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::NaiveDateTime;
 use diesel::{self, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
-use std::time::Duration;
 use ya_client_model::payment::{Allocation, NewAllocation};
 use ya_client_model::NodeId;
 use ya_persistence::executor::{
@@ -75,11 +74,7 @@ impl<'c> AllocationDao<'c> {
         .await
     }
 
-    pub async fn get(
-        &self,
-        allocation_id: String,
-        owner_id: NodeId,
-    ) -> DbResult<Option<Allocation>> {
+    pub async fn get(&self, allocation_id: String, owner_id: NodeId) -> DbResult<AllocationStatus> {
         readonly_transaction(self.pool, move |conn| {
             let allocation: Option<ReadObj> = dsl::pay_allocation
                 .filter(dsl::owner_id.eq(owner_id))
@@ -87,7 +82,15 @@ impl<'c> AllocationDao<'c> {
                 .find(allocation_id)
                 .first(conn)
                 .optional()?;
-            Ok(allocation.map(Into::into))
+
+            if let Some(allocation) = allocation {
+                return if !allocation.released {
+                    Ok(AllocationStatus::Active(allocation.into()))
+                } else {
+                    Ok(AllocationStatus::Gone)
+                };
+            }
+            Ok(AllocationStatus::NotFound)
         })
         .await
     }
@@ -160,41 +163,48 @@ impl<'c> AllocationDao<'c> {
         .await
     }
 
-    pub async fn release(&self, allocation_id: String, owner_id: Option<NodeId>) -> DbResult<bool> {
+    pub async fn release(
+        &self,
+        allocation_id: String,
+        owner_id: Option<NodeId>,
+    ) -> DbResult<AllocationReleaseStatus> {
         let id = allocation_id.clone();
-        match do_with_transaction(self.pool, move |conn| {
-            let mut query = diesel::update(dsl::pay_allocation)
-                .filter(dsl::released.eq(false))
-                .filter(dsl::id.eq(id))
-                .into_boxed();
+        do_with_transaction(self.pool, move |conn| {
+            let allocation: Option<ReadObj> = dsl::pay_allocation
+                .find(id.clone())
+                .first(conn)
+                .optional()?;
 
-            if let Some(owner_id) = owner_id {
-                query = query.filter(dsl::owner_id.eq(owner_id));
+            match allocation {
+                Some(allocation) => {
+                    if let Some(owner_id) = owner_id {
+                        if owner_id != allocation.owner_id {
+                            return Ok(AllocationReleaseStatus::NotFound);
+                        }
+                    }
+
+                    if allocation.released {
+                        return Ok(AllocationReleaseStatus::Gone);
+                    }
+                }
+                None => return Ok(AllocationReleaseStatus::NotFound),
             }
 
-            let num_released = query.set(dsl::released.eq(true)).execute(conn)?;
+            let num_released = diesel::update(dsl::pay_allocation)
+                .filter(dsl::released.eq(false))
+                .filter(dsl::id.eq(id.clone()))
+                .set(dsl::released.eq(true))
+                .execute(conn)?;
 
-            Ok(num_released > 0)
+            return match num_released {
+                1 => Ok(AllocationReleaseStatus::Released),
+                _ => Err(DbError::Query(format!(
+                    "Update error occurred when releasing allocation {}",
+                    allocation_id
+                ))),
+            };
         })
         .await
-        {
-            Ok(true) => {
-                log::info!("Allocation {} released.", allocation_id);
-                Ok(true)
-            }
-            Ok(false) => {
-                log::warn!("Allocation {} not found. Release failed.", allocation_id);
-                Ok(false)
-            }
-            Err(e) => {
-                log::warn!(
-                    "Allocation {} release failed. Db error ocurred: {}",
-                    allocation_id,
-                    e
-                );
-                Err(e)
-            }
-        }
     }
 
     pub async fn total_remaining_allocation(
@@ -217,28 +227,16 @@ impl<'c> AllocationDao<'c> {
         })
         .await
     }
+}
 
-    pub async fn release_allocation_after(
-        &self,
-        allocation_id: String,
-        allocation_timeout: Option<DateTime<Utc>>,
-        node_id: Option<NodeId>,
-    ) {
-        if let Some(timeout) = allocation_timeout {
-            let timestamp = timeout.timestamp() - Utc::now().timestamp();
-            let mut deadline = 0u64;
+pub enum AllocationStatus {
+    Active(Allocation),
+    Gone,
+    NotFound,
+}
 
-            if timestamp.is_positive() {
-                deadline = timestamp as u64;
-            }
-
-            tokio::time::delay_for(Duration::from_secs(deadline)).await;
-
-            let _ = self.release(allocation_id, node_id).await;
-        }
-    }
-
-    pub async fn forced_release_allocation(&self, allocation_id: String, node_id: Option<NodeId>) {
-        let _ = self.release(allocation_id, node_id).await;
-    }
+pub enum AllocationReleaseStatus {
+    Gone,
+    NotFound,
+    Released,
 }

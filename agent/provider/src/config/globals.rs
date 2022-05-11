@@ -8,6 +8,11 @@ use std::{fs, io};
 use ya_utils_path::SwapSave;
 
 pub(crate) const GLOBALS_JSON: &'static str = "globals.json";
+pub(crate) const DEFAULT_SUBNET: &'static str = "public-beta";
+
+fn default_subnet() -> Option<String> {
+    Some(DEFAULT_SUBNET.into())
+}
 
 #[derive(Clone, Debug, Default, Serialize, derive_more::Display)]
 #[display(
@@ -96,6 +101,8 @@ impl GlobalsState {
         }
         if node_config.subnet.is_some() {
             self.subnet = node_config.subnet;
+        } else {
+            self.subnet = default_subnet();
         }
         if node_config.account.account.is_some() {
             self.account = node_config.account.account;

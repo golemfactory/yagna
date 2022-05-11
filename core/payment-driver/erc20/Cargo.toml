@@ -13,6 +13,7 @@ anyhow = "1.0"
 awc = { version = "2.0", features = ["openssl"] }
 bigdecimal = { version = "0.2" }
 chrono = { version = "0.4", features = ["serde"] }
+derive_more = "0.99"
 ethabi = "14.1"
 ethereum-types = "0.11"
 futures = "0.3"
@@ -26,6 +27,7 @@ rlp = "0.5"
 serde = "1.0"
 serde_json = "^1.0"
 sha3 = "0.8"
+thiserror = "1.0"
 tiny-keccak = { version = "2.0", features = ["keccak"] }
 tokio = { version = "0.2", features = ["full"] }
 uuid = { version = "0.8", features = ["v4"] }
@@ -33,7 +35,7 @@ web3 = "0.15"
 
 ## yagna dependencies
 ya-payment-driver = "0.2"
-ya-client-model = "0.3"
+ya-client-model = "0.4"
 ya-service-api-interfaces = "0.1"
 ya-utils-futures = "0.1"
 ya-utils-networking = "0.1"
