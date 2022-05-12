@@ -6,14 +6,14 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::Context;
+use futures::future::LocalBoxFuture;
 use futures::{FutureExt, StreamExt, TryStreamExt};
 use serde_json::{Map, Value};
 use structopt::StructOpt;
 use url::Url;
 
-use futures::future::LocalBoxFuture;
 use ya_agreement_utils::manifest::{
-    read_manifest, AppManifest, ArgMatch, Command, Script, CONSTRAINT_CAPABILITIES_REGEX,
+    read_manifest, AppManifest, ArgMatch, Command, Feature, Script,
 };
 use ya_agreement_utils::policy::{Policy, PolicyConfig};
 use ya_agreement_utils::AgreementView;
@@ -23,6 +23,8 @@ use ya_utils_networking::vpn::Protocol;
 
 type ValidatorMap = HashMap<Validator, Box<dyn Any>>;
 
+static DEFAULT_FEATURES: [Feature; 1] = [Feature::Vpn];
+
 #[derive(Debug, thiserror::Error)]
 pub enum ValidationError {
     #[error("script validation error: {0}")]
@@ -31,7 +33,6 @@ pub enum ValidationError {
     Url(String),
 }
 
-#[derive(Default)]
 pub struct ManifestContext {
     pub manifest: Arc<Option<AppManifest>>,
     pub policy: Arc<PolicyConfig>,
@@ -39,10 +40,21 @@ pub struct ManifestContext {
     validators: ValidatorMap,
 }
 
+impl Default for ManifestContext {
+    fn default() -> Self {
+        Self {
+            manifest: Default::default(),
+            policy: Default::default(),
+            features: HashSet::from(DEFAULT_FEATURES),
+            validators: Default::default(),
+        }
+    }
+}
+
 impl ManifestContext {
     pub fn try_new(agreement: &AgreementView) -> anyhow::Result<Self> {
         let manifest = read_manifest(agreement).context("Unable to read manifest")?;
-        let features = Self::build_features(agreement);
+        let features = Self::build_features(&manifest);
         let policy = PolicyConfig::from_args_safe().unwrap_or_default();
 
         Ok(Self {
@@ -108,15 +120,12 @@ impl ManifestContext {
             })
     }
 
-    fn build_features(agreement: &AgreementView) -> HashSet<Feature> {
-        agreement
-            .constraints(CONSTRAINT_CAPABILITIES_REGEX, 1)
-            .map(|s| {
-                s.into_iter()
-                    .filter_map(|s| Feature::from_str(s.as_str()).ok())
-                    .collect()
-            })
-            .unwrap_or_default()
+    fn build_features(manifest: &Option<AppManifest>) -> HashSet<Feature> {
+        let mut features = HashSet::from(DEFAULT_FEATURES);
+        if let Some(ref manifest) = manifest {
+            features.extend(manifest.features());
+        }
+        features
     }
 }
 
@@ -161,26 +170,6 @@ impl<C: ManifestValidator> ManifestValidatorExt for Option<C> {
         match self.as_ref() {
             Some(c) => f(c),
             None => Ok(T::default()),
-        }
-    }
-}
-
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub enum Feature {
-    Inet,
-    Vpn,
-}
-
-impl FromStr for Feature {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let s = s.to_lowercase();
-        match s.trim() {
-            "inet" => Ok(Self::Inet),
-            "vpn" => Ok(Self::Vpn),
-            _ => anyhow::bail!("unknown feature: {}", s),
         }
     }
 }

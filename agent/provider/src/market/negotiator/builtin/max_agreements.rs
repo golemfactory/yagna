@@ -31,7 +31,6 @@ impl NegotiatorComponent for MaxAgreements {
     fn negotiate_step(
         &mut self,
         demand: &ProposalView,
-        _demand_constraints: &String,
         offer: ProposalView,
     ) -> anyhow::Result<NegotiationResult> {
         if self.has_free_slot() {

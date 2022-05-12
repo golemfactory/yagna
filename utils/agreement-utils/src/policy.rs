@@ -78,7 +78,7 @@ impl FromStr for Match {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // use '|' instead of ',' to support multi-value
         // environment variables
-        let values: Vec<_> = s.split("|").map(|v| v.trim().to_string()).collect();
+        let values: Vec<_> = s.split('|').map(|v| v.trim().to_string()).collect();
         Ok(if values.is_empty() {
             Match::All
         } else {
@@ -103,7 +103,7 @@ impl Keystore {
 
         // <scheme> <key> <alias>
         for line in contents.lines().map(|l| l.trim()) {
-            if line.is_empty() || line.starts_with("#") {
+            if line.is_empty() || line.starts_with('#') {
                 continue;
             }
 

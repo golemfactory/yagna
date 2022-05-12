@@ -12,12 +12,13 @@ use futures::{FutureExt, TryFutureExt};
 use tokio::process::Command;
 
 use ya_agreement_utils::agreement::OfferTemplate;
+use ya_agreement_utils::manifest::Feature;
 use ya_client_model::activity::{CommandOutput, ExeScriptCommand};
 use ya_runtime_api::server::{spawn, RunProcess, RuntimeControl, RuntimeService};
 
 use crate::acl::Acl;
 use crate::error::Error;
-use crate::manifest::{Feature, UrlValidator};
+use crate::manifest::UrlValidator;
 use crate::message::{
     CommandContext, ExecuteCommand, RuntimeEvent, Shutdown, ShutdownReason, UpdateDeployment,
 };

@@ -46,7 +46,6 @@ impl NegotiatorComponent for DebitNoteInterval {
     fn negotiate_step(
         &mut self,
         demand: &ProposalView,
-        _demand_constraints: &String,
         mut offer: ProposalView,
     ) -> anyhow::Result<NegotiationResult> {
         let offer_interval = read_duration(DEBIT_NOTE_INTERVAL_PROPERTY, &offer)?;
