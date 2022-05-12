@@ -1,11 +1,11 @@
 use std::ops::Not;
 
-use ya_agreement_utils::manifest::{
+use ya_agreement_utils::{Error, OfferDefinition};
+use ya_manifest_utils::manifest::{
     decode_manifest, Feature, Signature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_PROPERTY,
     DEMAND_MANIFEST_SIG_PROPERTY,
 };
-use ya_agreement_utils::policy::{Keystore, Match, Policy, PolicyConfig};
-use ya_agreement_utils::{Error, OfferDefinition};
+use ya_manifest_utils::policy::{Keystore, Match, Policy, PolicyConfig};
 
 use crate::market::negotiator::*;
 

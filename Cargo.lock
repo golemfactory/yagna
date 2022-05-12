@@ -6780,24 +6780,13 @@ name = "ya-agreement-utils"
 version = "0.4.0"
 dependencies = [
  "anyhow",
- "base64 0.13.0",
- "chrono",
- "ethsign 0.8.0",
- "hex",
  "regex",
- "semver 1.0.4",
  "serde",
  "serde_json",
  "serde_yaml",
- "sha2 0.9.3",
  "shlex 1.1.0",
- "snailquote",
- "structopt",
- "strum 0.22.0",
- "strum_macros 0.22.0",
  "tempdir",
  "thiserror",
- "url",
  "ya-client-model 0.4.0",
 ]
 
@@ -7013,6 +7002,7 @@ dependencies = [
  "ya-client-model 0.4.0",
  "ya-compile-time-utils",
  "ya-core-model",
+ "ya-manifest-utils",
  "ya-runtime-api",
  "ya-sb-router",
  "ya-service-bus",
@@ -7071,6 +7061,31 @@ dependencies = [
  "ya-service-api-derive",
  "ya-service-api-interfaces",
  "ya-service-bus",
+]
+
+[[package]]
+name = "ya-manifest-utils"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.13.0",
+ "chrono",
+ "ethsign 0.8.0",
+ "hex",
+ "semver 1.0.4",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2 0.9.3",
+ "shlex 1.1.0",
+ "snailquote",
+ "structopt",
+ "strum 0.22.0",
+ "strum_macros 0.22.0",
+ "tempdir",
+ "thiserror",
+ "url",
+ "ya-agreement-utils 0.4.0",
 ]
 
 [[package]]
@@ -7354,6 +7369,7 @@ dependencies = [
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-file-logging",
+ "ya-manifest-utils",
  "ya-std-utils",
  "ya-utils-actix",
  "ya-utils-path",

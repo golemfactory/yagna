@@ -12,8 +12,8 @@ use futures::{FutureExt, TryFutureExt};
 use tokio::process::Command;
 
 use ya_agreement_utils::agreement::OfferTemplate;
-use ya_agreement_utils::manifest::Feature;
 use ya_client_model::activity::{CommandOutput, ExeScriptCommand};
+use ya_manifest_utils::Feature;
 use ya_runtime_api::server::{spawn, RunProcess, RuntimeControl, RuntimeService};
 
 use crate::acl::Acl;

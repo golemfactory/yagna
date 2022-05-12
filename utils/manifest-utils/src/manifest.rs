@@ -8,7 +8,8 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use url::Url;
 
-use crate::AgreementView;
+use ya_agreement_utils::AgreementView;
+use ya_agreement_utils::Error as AgreementError;
 
 pub const AGREEMENT_MANIFEST_PROPERTY: &str =
     "demand.properties.golem.experimental.srv.comp.payload.@tag";
@@ -22,7 +23,7 @@ pub const DEMAND_MANIFEST_SIG_PROPERTY: &str = "golem.experimental.srv.comp.payl
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("agreement error: {0}")]
-    AgreementError(#[from] crate::agreement::Error),
+    AgreementError(#[from] AgreementError),
     #[error("invalid input base64: {0}")]
     BlobBase64(#[from] base64::DecodeError),
     #[error("invalid escaped json string: {0}")]
@@ -46,7 +47,7 @@ pub enum Error {
 pub fn read_manifest(view: &AgreementView) -> Result<Option<AppManifest>, Error> {
     let manifest: String = match view.get_property(AGREEMENT_MANIFEST_PROPERTY) {
         Ok(value) => value,
-        Err(crate::agreement::Error::NoKey(_)) => return Ok(None),
+        Err(AgreementError::NoKey(_)) => return Ok(None),
         Err(err) => return Err(err.into()),
     };
     Ok(Some(decode_manifest(manifest)?))

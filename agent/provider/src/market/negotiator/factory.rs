@@ -3,7 +3,7 @@ use humantime;
 use std::sync::Arc;
 use structopt::StructOpt;
 
-use ya_agreement_utils::policy::PolicyConfig;
+use ya_manifest_utils::PolicyConfig;
 
 use super::common::NegotiatorAddr;
 use crate::market::config::MarketConfig;

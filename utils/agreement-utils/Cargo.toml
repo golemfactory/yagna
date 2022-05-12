@@ -11,10 +11,6 @@ keywords=["golem", "yagna"]
 
 [features]
 default = []
-manifest = [
-    "anyhow", "base64", "chrono", "ethsign", "hex", "semver", "sha2",
-    "snailquote", "strum", "strum_macros", "structopt", "url"
-]
 
 [dependencies]
 ya-client-model = "0.4"
@@ -24,19 +20,6 @@ serde = "1.0"
 serde_json = "1.0"
 serde_yaml = "0.8.11"
 thiserror = "1.0.10"
-
-anyhow = { version = "1.0", optional = true }
-base64 = { version = "0.13", optional = true }
-chrono = { version = "0.4", features = ["serde"], optional = true }
-ethsign = { version = "0.8.0", optional = true }
-hex = { version = "0.4", optional = true }
-semver = { version = "1.0", features = ["serde"], optional = true }
-sha2 = { version = "0.9", optional = true }
-snailquote = { version = "0.3", optional = true }
-structopt = { version =  "0.3", optional = true }
-strum = {version = "0.22", optional = true }
-strum_macros = {version = "0.22", optional = true }
-url = {version = "2.2", features = ["serde"], optional = true }
 
 [dev-dependencies]
 anyhow = "1.0.31"

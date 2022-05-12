@@ -12,12 +12,10 @@ use serde_json::{Map, Value};
 use structopt::StructOpt;
 use url::Url;
 
-use ya_agreement_utils::manifest::{
-    read_manifest, AppManifest, ArgMatch, Command, Feature, Script,
-};
-use ya_agreement_utils::policy::{Policy, PolicyConfig};
 use ya_agreement_utils::AgreementView;
 use ya_client_model::activity::ExeScriptCommand;
+use ya_manifest_utils::{read_manifest, AppManifest, ArgMatch, Command, Feature, Script};
+use ya_manifest_utils::{Policy, PolicyConfig};
 use ya_utils_networking::resolver::resolve_domain_name;
 use ya_utils_networking::vpn::Protocol;
 

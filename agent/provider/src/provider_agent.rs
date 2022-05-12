@@ -8,11 +8,11 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
 use ya_agreement_utils::agreement::TypedArrayPointer;
-use ya_agreement_utils::policy::Keystore;
 use ya_agreement_utils::*;
 use ya_client::cli::ProviderApi;
 use ya_core_model::payment::local::NetworkName;
 use ya_file_logging::{start_logger, LoggerHandle};
+use ya_manifest_utils::Keystore;
 
 use crate::config::globals::GlobalsState;
 use crate::dir::clean_provider_dir;
