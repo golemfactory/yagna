@@ -73,9 +73,11 @@ fn list(config: ProviderConfig) -> anyhow::Result<()> {
 
 fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
     let path = keystore_path(&config)?;
+    log::error!("key: {}", add.key);
     let key = hex::decode(add.key).context("key is not a hex string")?;
+    log::error!("decoded: {:?}", key);
     let keystore = Keystore::load(&path)?;
-    keystore.insert(key, add.scheme, add.name);
+    keystore.insert(key, add.scheme, add.name)?;
     keystore.save(path)?;
     Ok(())
 }
