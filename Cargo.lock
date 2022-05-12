@@ -7379,8 +7379,8 @@ dependencies = [
 
 [[package]]
 name = "ya-relay-client"
-version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=620baa80bc5f382eaa87a047767479f74fe9ebf0#620baa80bc5f382eaa87a047767479f74fe9ebf0"
+version = "0.3.0"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=b5d6b5bcf2276c3143e0b967a8666869afaab8c4#b5d6b5bcf2276c3143e0b967a8666869afaab8c4"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7392,13 +7392,13 @@ dependencies = [
  "url",
  "ya-relay-core",
  "ya-relay-proto",
- "ya-relay-stack 0.3.0",
+ "ya-relay-stack",
 ]
 
 [[package]]
 name = "ya-relay-core"
-version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=620baa80bc5f382eaa87a047767479f74fe9ebf0#620baa80bc5f382eaa87a047767479f74fe9ebf0"
+version = "0.3.0"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=b5d6b5bcf2276c3143e0b967a8666869afaab8c4#b5d6b5bcf2276c3143e0b967a8666869afaab8c4"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7420,13 +7420,13 @@ dependencies = [
  "uuid",
  "ya-client-model 0.4.0",
  "ya-relay-proto",
- "ya-relay-stack 0.3.0",
+ "ya-relay-stack",
 ]
 
 [[package]]
 name = "ya-relay-proto"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=620baa80bc5f382eaa87a047767479f74fe9ebf0#620baa80bc5f382eaa87a047767479f74fe9ebf0"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=b5d6b5bcf2276c3143e0b967a8666869afaab8c4#b5d6b5bcf2276c3143e0b967a8666869afaab8c4"
 dependencies = [
  "anyhow",
  "bytes 0.5.6",
@@ -7442,23 +7442,8 @@ dependencies = [
 
 [[package]]
 name = "ya-relay-stack"
-version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=620baa80bc5f382eaa87a047767479f74fe9ebf0#620baa80bc5f382eaa87a047767479f74fe9ebf0"
-dependencies = [
- "derive_more",
- "futures 0.3.13",
- "log",
- "managed 0.8.0",
- "rand 0.8.4",
- "smoltcp 0.8.0",
- "thiserror",
- "tokio 0.2.25",
-]
-
-[[package]]
-name = "ya-relay-stack"
-version = "0.3.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?branch=mf/outbound-inet#754abc52985954c9c21af0e23a25c3ef437a507e"
+version = "0.4.0"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=b5d6b5bcf2276c3143e0b967a8666869afaab8c4#b5d6b5bcf2276c3143e0b967a8666869afaab8c4"
 dependencies = [
  "derive_more",
  "futures 0.3.13",
@@ -7740,7 +7725,7 @@ dependencies = [
  "thiserror",
  "trust-dns-resolver",
  "url",
- "ya-relay-stack 0.3.1",
+ "ya-relay-stack",
 ]
 
 [[package]]
