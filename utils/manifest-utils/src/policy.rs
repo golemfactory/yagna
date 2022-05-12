@@ -11,7 +11,7 @@ use structopt::StructOpt;
 use strum::{IntoEnumIterator, VariantNames};
 use strum_macros::{Display, EnumIter, EnumString, EnumVariantNames};
 
-const SCHEME_SECP256K1: &'static str = "secp256k1";
+const SCHEME_SECP256K1: &str = "secp256k1";
 
 /// Policy configuration
 #[derive(StructOpt, Clone, Debug, Default)]
@@ -126,8 +126,8 @@ impl Keystore {
         let map = contents
             .lines()
             .map(|s| s.trim())
-            .filter(|s| !s.is_empty() && !s.starts_with("#"))
-            .map(|s| parse_key_entry(s))
+            .filter(|s| !s.is_empty() && !s.starts_with('#'))
+            .map(parse_key_entry)
             .collect::<Result<_, _>>()?;
 
         Ok(Keystore {
@@ -201,7 +201,7 @@ impl std::fmt::Debug for Keystore {
 }
 
 fn parse_property_match(input: &str) -> anyhow::Result<(String, Match)> {
-    let mut split = input.splitn(2, "=");
+    let mut split = input.splitn(2, '=');
     let property = split
         .next()
         .ok_or_else(|| anyhow::anyhow!("missing property name"))?
