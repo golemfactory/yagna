@@ -4,9 +4,9 @@ use std::str::FromStr;
 
 use ipnet::IpNet;
 
-use ya_net_stack::Error;
+use ya_relay_stack::Error;
 
-pub const MAX_FRAME_SIZE: usize = 14 + 65521; // Ethernet II + payload
+pub const DEFAULT_MAX_FRAME_SIZE: usize = 1500;
 pub const DEFAULT_IPV4_NET_MASK: &'static str = "255.255.255.0";
 
 #[inline(always)]

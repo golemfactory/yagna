@@ -4,8 +4,10 @@ use std::future::Future;
 use std::iter::FromIterator;
 use std::net::{IpAddr, SocketAddr};
 use std::pin::Pin;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::task::Poll;
+use std::time::Duration;
 
 use actix::prelude::*;
 use bytes::{Bytes, BytesMut};
@@ -17,14 +19,16 @@ use tokio_util::codec::{BytesCodec, Framed};
 use tokio_util::udp::UdpFramed;
 
 use net::connection::{Connection, ConnectionMeta};
-use net::interface::default_iface_builder;
+use net::interface::tap_iface;
 use net::smoltcp::wire::{IpAddress, IpCidr, IpEndpoint};
 use net::socket::SocketDesc;
 use net::{EgressReceiver, IngressEvent, IngressReceiver};
-use net::{Error as NetError, Protocol, MAX_FRAME_SIZE};
+use net::{Error as NetError, Protocol};
 use ya_runtime_api::server::{CreateNetwork, NetworkInterface, RuntimeService};
-use ya_utils_networking::vpn::common::ntoh;
+use ya_utils_networking::vpn::common::{ntoh, DEFAULT_MAX_FRAME_SIZE};
 use ya_utils_networking::vpn::stack as net;
+use ya_utils_networking::vpn::stack::smoltcp::wire::{EthernetAddress, HardwareAddress};
+use ya_utils_networking::vpn::stack::NetworkConfig;
 use ya_utils_networking::vpn::{
     EtherFrame, EtherType, IpPacket, PeekPacket, SocketEndpoint, TcpPacket, UdpPacket,
 };
@@ -34,10 +38,10 @@ use crate::message::Shutdown;
 use crate::network;
 use crate::network::{Endpoint, RxBuffer};
 use crate::{Error, Result};
-use ya_utils_networking::vpn::stack::socket::DEFAULT_TCP_KEEP_ALIVE;
 
 const IP4_ADDRESS: std::net::Ipv4Addr = std::net::Ipv4Addr::new(9, 0, 0x0d, 0x01);
 const IP6_ADDRESS: std::net::Ipv6Addr = IP4_ADDRESS.to_ipv6_mapped();
+const TCP_KEEP_ALIVE: Duration = Duration::from_secs(30);
 const DEFAULT_PREFIX_LEN: u8 = 24;
 
 type TcpSender = Arc<Mutex<SplitSink<Framed<TcpStream, BytesCodec>, Bytes>>>;
@@ -57,6 +61,8 @@ pub(crate) async fn start_inet<R: RuntimeService>(
     filter: Option<UrlValidator>,
 ) -> Result<Addr<Inet>> {
     use ya_runtime_api::server::Network;
+
+    log::info!("Starting outbound network service...");
 
     let ip4_net = ipnet::Ipv4Net::new(IP4_ADDRESS, DEFAULT_PREFIX_LEN).unwrap();
     // let ip6_net = ipnet::Ipv6Net::new(IP6_ADDRESS, 128 - DEFAULT_PREFIX_LEN).unwrap();
@@ -91,7 +97,7 @@ pub(crate) async fn start_inet<R: RuntimeService>(
 
     let endpoint = match response.endpoint {
         Some(endpoint) => Endpoint::connect(endpoint).await?,
-        None => return Err(Error::Other("endpoint already connected".into()).into()),
+        None => return Err(Error::Other("endpoint already connected".into())),
     };
 
     Ok(Inet::new(endpoint, filter).start())
@@ -115,13 +121,28 @@ impl Inet {
     }
 
     fn create_network() -> net::Network {
-        let iface = default_iface_builder().finalize();
-        let stack = net::Stack::new(iface);
+        let config = Rc::new(NetworkConfig {
+            max_transmission_unit: DEFAULT_MAX_FRAME_SIZE,
+            buffer_size_multiplier: 4,
+        });
+
+        let ethernet_addr = loop {
+            let addr = EthernetAddress(rand::random());
+            if addr.is_unicast() {
+                break addr;
+            }
+        };
+
+        let iface = tap_iface(
+            HardwareAddress::Ethernet(ethernet_addr),
+            config.max_transmission_unit,
+        );
+        let stack = net::Stack::new(iface, config.clone());
 
         stack.add_address(IpCidr::new(IP4_ADDRESS.into(), 16));
         stack.add_address(IpCidr::new(IP6_ADDRESS.into(), 0));
 
-        net::Network::new("inet", stack)
+        net::Network::new("inet", config, stack)
     }
 }
 
@@ -495,10 +516,10 @@ async fn inet_tcp_proxy<'a>(ip: IpAddr, port: u16) -> Result<(TransportSender, T
     log::debug!("[inet] connecting TCP to {}:{}", ip, port);
 
     let tcp_stream = TcpStream::connect((ip, port)).await?;
-    let _ = tcp_stream.set_keepalive(Some(DEFAULT_TCP_KEEP_ALIVE.into()));
+    let _ = tcp_stream.set_keepalive(Some(TCP_KEEP_ALIVE));
     let _ = tcp_stream.set_nodelay(true);
 
-    let stream = Framed::with_capacity(tcp_stream, BytesCodec::new(), MAX_FRAME_SIZE);
+    let stream = Framed::with_capacity(tcp_stream, BytesCodec::new(), DEFAULT_MAX_FRAME_SIZE);
     let (tx, rx) = stream.split();
     Ok((
         TransportSender::Tcp(Arc::new(Mutex::new(tx))),
@@ -509,7 +530,7 @@ async fn inet_tcp_proxy<'a>(ip: IpAddr, port: u16) -> Result<(TransportSender, T
 async fn inet_udp_proxy<'a>(ip: IpAddr, port: u16) -> Result<(TransportSender, TransportReceiver)> {
     log::debug!("[inet] opening UDP socket with {}:{}", ip, port);
 
-    let socket_addr: std::net::SocketAddr = ((ip, port)).into();
+    let socket_addr: SocketAddr = (ip, port).into();
     let udp_socket = tokio::net::UdpSocket::bind("0.0.0.0:0").await?;
     udp_socket.connect(socket_addr).await?;
 
@@ -661,11 +682,11 @@ impl<'a> TransportKeyExt for &'a SocketDesc {
     }
 }
 
-fn conv_ip_addr(addr: IpAddress) -> Result<std::net::IpAddr> {
+fn conv_ip_addr(addr: IpAddress) -> Result<IpAddr> {
     match addr {
         IpAddress::Ipv4(ipv4) => Ok(IpAddr::V4(ipv4.into())),
         IpAddress::Ipv6(ipv6) => Ok(IpAddr::V6(ipv6.into())),
-        _ => return Err(NetError::EndpointInvalid(IpEndpoint::from((addr, 0)).into()).into()),
+        _ => Err(NetError::EndpointInvalid(IpEndpoint::from((addr, 0)).into()).into()),
     }
 }
 

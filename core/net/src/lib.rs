@@ -1,17 +1,13 @@
-#[cfg(not(feature = "hybrid-net"))]
-pub use central::*;
-#[cfg(feature = "hybrid-net")]
-pub use hybrid::*;
-
 pub use ya_core_model::net::{
     from, NetApiError, NetDst, NetSrc, RemoteEndpoint, TryRemoteEndpoint,
 };
 
-#[cfg(any(feature = "service", test))]
+pub use service::{bind_broadcast_with_caller, broadcast, Net};
+
 mod bcast;
-#[cfg(not(feature = "hybrid-net"))]
-mod central;
-#[cfg(feature = "hybrid-net")]
-mod hybrid;
-#[cfg(any(feature = "service", test))]
+pub mod central;
+pub mod hybrid;
 mod service;
+
+mod cli;
+mod config;

@@ -5,7 +5,7 @@ use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 
-use ya_agreement_utils::policy::{KeyMeta, Keystore};
+use ya_manifest_utils::{KeyMeta, Keystore};
 
 use crate::startup_config::ProviderConfig;
 

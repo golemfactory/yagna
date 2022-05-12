@@ -1,15 +1,14 @@
 use std::convert::TryFrom;
 use std::path::Path;
 
-use actix::prelude::*;
 use futures::channel::mpsc;
-use futures::{future, SinkExt, Stream, StreamExt, TryStreamExt};
-use tokio::io;
-use ya_service_bus::{typed, typed::Endpoint as GsbEndpoint};
+use futures::Stream;
 
 use ya_runtime_api::deploy::ContainerEndpoint;
 use ya_runtime_api::server::Network;
-use ya_utils_networking::vpn::{Error as NetError, MAX_FRAME_SIZE};
+use ya_service_bus::{typed, typed::Endpoint as GsbEndpoint};
+use ya_utils_networking::vpn::common::DEFAULT_MAX_FRAME_SIZE;
+use ya_utils_networking::vpn::{network::DuoEndpoint, Error as NetError};
 
 use crate::error::Error;
 use crate::state::DeploymentNetwork;
@@ -33,17 +32,20 @@ impl Endpoint {
 
     #[cfg(unix)]
     async fn connect_to_socket<P: AsRef<Path>>(path: P) -> Result<Self> {
+        use actix::prelude::*;
         use bytes::Bytes;
+        use futures::{future, SinkExt, StreamExt, TryStreamExt};
+        use tokio::io;
         use tokio_util::codec::{BytesCodec, FramedRead, FramedWrite};
 
         let socket = tokio::net::UnixStream::connect(path.as_ref()).await?;
         let (read, write) = io::split(socket);
 
         let sink = FramedWrite::new(write, BytesCodec::new()).with(|v| future::ok(Bytes::from(v)));
-        let stream = FramedRead::with_capacity(read, BytesCodec::new(), MAX_FRAME_SIZE)
+        let stream = FramedRead::with_capacity(read, BytesCodec::new(), DEFAULT_MAX_FRAME_SIZE)
             .into_stream()
             .map_ok(|b| b.to_vec())
-            .map_err(|e| Error::from(e));
+            .map_err(Error::from);
 
         let (tx_si, rx_si) = mpsc::channel(1);
         Arbiter::spawn(async move {
@@ -59,7 +61,7 @@ impl Endpoint {
     }
 
     #[cfg(not(unix))]
-    async fn connect_to_socket<P: AsRef<Path>>(path: P) -> Result<Self> {
+    async fn connect_to_socket<P: AsRef<Path>>(_path: P) -> Result<Self> {
         Err(Error::Other("OS not supported".into()))
     }
 }
@@ -74,7 +76,7 @@ impl<'a> TryFrom<&'a DeploymentNetwork> for Network {
             .network
             .hosts()
             .find(|ip_| ip_ != &ip)
-            .ok_or_else(|| NetError::NetAddrTaken(ip))?;
+            .ok_or(NetError::NetAddrTaken(ip))?;
 
         Ok(Network {
             addr: ip.to_string(),
@@ -97,7 +99,7 @@ impl Default for RxBuffer {
     fn default() -> Self {
         Self {
             expected: 0,
-            inner: Vec::with_capacity(PREFIX_SIZE + MAX_FRAME_SIZE),
+            inner: Vec::with_capacity(PREFIX_SIZE + DEFAULT_MAX_FRAME_SIZE),
         }
     }
 }
@@ -138,7 +140,7 @@ impl<'a> Iterator for RxIterator<'a> {
             }
         }
 
-        self.buffer.inner.extend(self.received.drain(..));
+        self.buffer.inner.append(&mut self.received);
         if let Some(len) = read_prefix(&self.buffer.inner) {
             self.buffer.expected = len as usize;
         }
@@ -155,7 +157,7 @@ fn take_next(src: &mut Vec<u8>, len: Prefix) -> Option<Vec<u8>> {
     None
 }
 
-fn read_prefix(src: &Vec<u8>) -> Option<Prefix> {
+fn read_prefix(src: &[u8]) -> Option<Prefix> {
     if src.len() < PREFIX_SIZE {
         return None;
     }
@@ -170,8 +172,11 @@ fn write_prefix(dst: &mut Vec<u8>) {
     dst.splice(0..0, u16::to_ne_bytes(len_u16).to_vec());
 }
 
-fn gsb_endpoint(node_id: &str, net_id: &str) -> GsbEndpoint {
-    typed::service(format!("/net/{}/vpn/{}", node_id, net_id))
+fn gsb_endpoint(node_id: &str, net_id: &str) -> DuoEndpoint<GsbEndpoint> {
+    DuoEndpoint {
+        tcp: typed::service(format!("/net/{}/vpn/{}", node_id, net_id)),
+        udp: typed::service(format!("/udp/net/{}/vpn/{}", node_id, net_id)),
+    }
 }
 
 #[cfg(test)]
@@ -197,7 +202,7 @@ mod test {
     #[test]
     fn rx_buffer() {
         for tx in vec![TxMode::Full, TxMode::Chunked(1), TxMode::Chunked(2)] {
-            for sz in vec![1, 2, 3, 5, 7, 12, 64] {
+            for sz in [1, 2, 3, 5, 7, 12, 64] {
                 let src = (0..=255u8)
                     .into_iter()
                     .map(|e| Vec::from_iter(std::iter::repeat(e).take(sz)))

@@ -1,7 +1,7 @@
 use structopt::StructOpt;
 
 use crate::market::negotiator::factory::NegotiatorsConfig;
-use ya_agreement_utils::policy::Keystore;
+use ya_manifest_utils::Keystore;
 
 /// Configuration for ProviderMarket actor.
 #[derive(StructOpt, Clone)]

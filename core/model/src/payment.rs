@@ -19,7 +19,7 @@ pub enum RpcMessageError {
 
 pub mod local {
     use super::*;
-    use crate::driver::{AccountMode, PaymentConfirmation};
+    use crate::driver::{AccountMode, GasDetails, PaymentConfirmation};
     use bigdecimal::{BigDecimal, Zero};
     use chrono::{DateTime, Utc};
     use std::fmt::Display;
@@ -31,7 +31,7 @@ pub mod local {
     use ya_client_model::NodeId;
 
     pub const BUS_ID: &'static str = "/local/payment";
-    pub const DEFAULT_PAYMENT_DRIVER: &str = "zksync";
+    pub const DEFAULT_PAYMENT_DRIVER: &str = "erc20";
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct DebitNotePayment {
@@ -239,6 +239,7 @@ pub mod local {
         pub driver: String,
         pub network: Option<String>,
         pub token: Option<String>,
+        pub after_timestamp: i64,
     }
 
     impl RpcMessage for GetStatus {
@@ -256,6 +257,7 @@ pub mod local {
         pub driver: String,
         pub network: String,
         pub token: String,
+        pub gas: Option<GasDetails>,
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -394,6 +396,15 @@ pub mod local {
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct ReleaseAllocations {}
+
+    impl RpcMessage for ReleaseAllocations {
+        const ID: &'static str = "ReleaseAllocations";
+        type Item = ();
+        type Error = GenericError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct GetDrivers {}
 
     impl RpcMessage for GetDrivers {
@@ -470,11 +481,11 @@ pub mod local {
 
     #[derive(StructOpt, Debug, Clone)]
     pub struct AccountCli {
-        /// Wallet address [default: <DEFAULT_IDENTIDITY>]
+        /// Wallet address [default: <DEFAULT_IDENTITY>]
         #[structopt(long, env = "YA_ACCOUNT")]
         pub account: Option<NodeId>,
         /// Payment driver
-        #[structopt(long, possible_values = DriverName::VARIANTS, default_value = DriverName::ZkSync.into())]
+        #[structopt(long, possible_values = DriverName::VARIANTS, default_value = DriverName::Erc20.into())]
         pub driver: DriverName,
         /// Payment network
         #[structopt(long, possible_values = NetworkName::VARIANTS, default_value = NetworkName::Rinkeby.into())]
@@ -507,7 +518,7 @@ pub mod local {
         fn test_cli_defaults() {
             let a = AccountCli::from_iter(&[""]);
             assert_eq!(None, a.address());
-            assert_eq!("zksync", a.driver());
+            assert_eq!("erc20", a.driver());
             assert_eq!("rinkeby", a.network());
             assert_eq!("tGLM", a.token());
         }

@@ -6,22 +6,22 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::Context;
+use futures::future::LocalBoxFuture;
 use futures::{FutureExt, StreamExt, TryStreamExt};
 use serde_json::{Map, Value};
 use structopt::StructOpt;
 use url::Url;
 
-use futures::future::LocalBoxFuture;
-use ya_agreement_utils::manifest::{
-    read_manifest, AppManifest, ArgMatch, Command, Script, CONSTRAINT_CAPABILITIES_REGEX,
-};
-use ya_agreement_utils::policy::{Policy, PolicyConfig};
 use ya_agreement_utils::AgreementView;
 use ya_client_model::activity::ExeScriptCommand;
+use ya_manifest_utils::{read_manifest, AppManifest, ArgMatch, Command, Feature, Script};
+use ya_manifest_utils::{Policy, PolicyConfig};
 use ya_utils_networking::resolver::resolve_domain_name;
 use ya_utils_networking::vpn::Protocol;
 
 type ValidatorMap = HashMap<Validator, Box<dyn Any>>;
+
+static DEFAULT_FEATURES: [Feature; 1] = [Feature::Vpn];
 
 #[derive(Debug, thiserror::Error)]
 pub enum ValidationError {
@@ -38,10 +38,21 @@ pub struct ManifestContext {
     validators: ValidatorMap,
 }
 
+impl Default for ManifestContext {
+    fn default() -> Self {
+        Self {
+            manifest: Default::default(),
+            policy: Default::default(),
+            features: HashSet::from(DEFAULT_FEATURES),
+            validators: Default::default(),
+        }
+    }
+}
+
 impl ManifestContext {
     pub fn try_new(agreement: &AgreementView) -> anyhow::Result<Self> {
-        let manifest = read_manifest(&agreement).context("Unable to read manifest")?;
-        let features = Self::build_features(&agreement);
+        let manifest = read_manifest(agreement).context("Unable to read manifest")?;
+        let features = Self::build_features(&manifest);
         let policy = PolicyConfig::from_args_safe().unwrap_or_default();
 
         Ok(Self {
@@ -107,15 +118,12 @@ impl ManifestContext {
             })
     }
 
-    fn build_features(agreement: &AgreementView) -> HashSet<Feature> {
-        agreement
-            .constraints(CONSTRAINT_CAPABILITIES_REGEX, 1)
-            .map(|s| {
-                s.into_iter()
-                    .filter_map(|s| Feature::from_str(s.as_str()).ok())
-                    .collect()
-            })
-            .unwrap_or_default()
+    fn build_features(manifest: &Option<AppManifest>) -> HashSet<Feature> {
+        let mut features = HashSet::from(DEFAULT_FEATURES);
+        if let Some(ref manifest) = manifest {
+            features.extend(manifest.features());
+        }
+        features
     }
 }
 
@@ -166,25 +174,6 @@ impl<C: ManifestValidator> ManifestValidatorExt for Option<C> {
 
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub enum Feature {
-    Inet,
-    Vpn,
-}
-
-impl FromStr for Feature {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let s = s.to_lowercase();
-        match s.as_str() {
-            "inet" => Ok(Self::Inet),
-            _ => anyhow::bail!("unknown feature: {}", s),
-        }
-    }
-}
-
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum Validator {
     Script,
     Url,
@@ -214,10 +203,8 @@ impl ManifestValidator for ScriptValidator {
             .comp_manifest
             .as_ref()
             .and_then(|m| m.script.as_ref())
-            .and_then(|s| {
-                Some(Self {
-                    inner: Arc::new(s.clone()),
-                })
+            .map(|s| Self {
+                inner: Arc::new(s.clone()),
             });
 
         futures::future::ok(validator).boxed_local()
@@ -229,9 +216,8 @@ impl ScriptValidator {
         &self,
         iter: impl IntoIterator<Item = &'a ExeScriptCommand>,
     ) -> Result<(), ValidationError> {
-        Ok(iter
-            .into_iter()
-            .try_for_each(|cmd| self.validate_command(&*self.inner, cmd))?)
+        iter.into_iter()
+            .try_for_each(|cmd| self.validate_command(&*self.inner, cmd))
     }
 
     fn validate_command(
@@ -255,7 +241,7 @@ impl ScriptValidator {
         from: &String,
         to: &String,
     ) -> Result<(), ValidationError> {
-        const NAME: &'static str = "transfer";
+        const NAME: &str = "transfer";
 
         let transfer = format!("{} {} {}", NAME, from, to);
         let mut valid = false;
@@ -307,9 +293,9 @@ impl ScriptValidator {
     fn validate_run(
         script: &Script,
         entry_point: &String,
-        args: &Vec<String>,
+        args: &[String],
     ) -> Result<(), ValidationError> {
-        const NAME: &'static str = "run";
+        const NAME: &str = "run";
 
         let run = format!("{} {} {}", NAME, entry_point, args.join(" "));
         let mut valid = false;
@@ -333,7 +319,7 @@ impl ScriptValidator {
                     let args = match obj.get("args") {
                         Some(args) => match args {
                             Value::Array(arr) => arr
-                                .into_iter()
+                                .iter()
                                 .map(|e| e.to_string())
                                 .collect::<Vec<_>>()
                                 .join(" "),
@@ -453,7 +439,7 @@ impl UrlValidator {
         (Protocol::Udp, Ipv4Addr::new(149, 112, 112, 112), 53),
     ];
 
-    pub fn validate<'a>(
+    pub fn validate(
         &self,
         protocol: Protocol,
         ip: IpAddr,
@@ -474,7 +460,7 @@ async fn resolve_ips<'a>(
     urls: impl Iterator<Item = &'a Url>,
 ) -> anyhow::Result<HashSet<(Protocol, IpAddr, u16)>> {
     futures::stream::iter(urls)
-        .map(anyhow::Result::Ok)
+        .map(Ok)
         .try_fold(HashSet::default(), |mut set, url| async move {
             let protocol = match url.scheme() {
                 "udp" => Protocol::Udp,

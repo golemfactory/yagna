@@ -1,12 +1,12 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::ops::Not;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 
 use ethsign::PublicKey;
-use std::fs::OpenOptions;
-use std::io::Write;
 use structopt::StructOpt;
 use strum::{IntoEnumIterator, VariantNames};
 use strum_macros::{Display, EnumIter, EnumString, EnumVariantNames};
@@ -82,7 +82,7 @@ impl FromStr for Match {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // use '|' instead of ',' to support multi-value
         // environment variables
-        let values: Vec<_> = s.split("|").map(|v| v.trim().to_string()).collect();
+        let values: Vec<_> = s.split('|').map(|v| v.trim().to_string()).collect();
         Ok(if values.is_empty() {
             Match::All
         } else {

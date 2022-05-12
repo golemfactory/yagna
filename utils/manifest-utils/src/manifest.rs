@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::ops::Not;
 
 use chrono::{DateTime, Utc};
@@ -7,24 +8,22 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use url::Url;
 
-use crate::AgreementView;
+use ya_agreement_utils::AgreementView;
+use ya_agreement_utils::Error as AgreementError;
 
-pub const AGREEMENT_MANIFEST_PROPERTY: &'static str =
+pub const AGREEMENT_MANIFEST_PROPERTY: &str =
     "demand.properties.golem.experimental.srv.comp.payload.@tag";
-pub const AGREEMENT_MANIFEST_SIG_PROPERTY: &'static str =
+pub const AGREEMENT_MANIFEST_SIG_PROPERTY: &str =
     "demand.properties.golem.experimental.srv.comp.payload.sig";
 
-pub const DEMAND_CAPABILITIES_PROPERTY: &'static str = "golem.runtime.capabilities";
-pub const DEMAND_MANIFEST_PROPERTY: &'static str = "golem.experimental.srv.comp.payload.@tag";
-pub const DEMAND_MANIFEST_SIG_PROPERTY: &'static str = "golem.experimental.srv.comp.payload.sig";
-
-pub const CONSTRAINT_CAPABILITIES_REGEX: &'static str =
-    r"golem\.runtime\.capabilities\s*=\s*\[?([^\)\]]*\]?)";
+pub const CAPABILITIES_PROPERTY: &str = "golem.runtime.capabilities";
+pub const DEMAND_MANIFEST_PROPERTY: &str = "golem.experimental.srv.comp.payload.@tag";
+pub const DEMAND_MANIFEST_SIG_PROPERTY: &str = "golem.experimental.srv.comp.payload.sig";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("agreement error: {0}")]
-    AgreementError(#[from] crate::agreement::Error),
+    AgreementError(#[from] AgreementError),
     #[error("invalid input base64: {0}")]
     BlobBase64(#[from] base64::DecodeError),
     #[error("invalid escaped json string: {0}")]
@@ -48,13 +47,13 @@ pub enum Error {
 pub fn read_manifest(view: &AgreementView) -> Result<Option<AppManifest>, Error> {
     let manifest: String = match view.get_property(AGREEMENT_MANIFEST_PROPERTY) {
         Ok(value) => value,
-        Err(crate::agreement::Error::NoKey(_)) => return Ok(None),
+        Err(AgreementError::NoKey(_)) => return Ok(None),
         Err(err) => return Err(err.into()),
     };
-    Ok(Some(decode_str(manifest)?))
+    Ok(Some(decode_manifest(manifest)?))
 }
 
-fn decode_str<S: AsRef<str>>(input: S) -> Result<AppManifest, Error> {
+pub fn decode_manifest<S: AsRef<str>>(input: S) -> Result<AppManifest, Error> {
     match decode_base64(&input) {
         Ok(manifest) => Ok(manifest),
         Err(_) => decode_escaped_json(input),
@@ -69,6 +68,23 @@ fn decode_base64<S: AsRef<str>>(input: S) -> Result<AppManifest, Error> {
 fn decode_escaped_json<S: AsRef<str>>(input: S) -> Result<AppManifest, Error> {
     let decoded = snailquote::unescape(input.as_ref())?;
     Ok(serde_json::de::from_str(&decoded)?)
+}
+
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub enum Feature {
+    Inet,
+    Vpn,
+}
+
+impl ToString for Feature {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Inet => "inet",
+            Self::Vpn => "vpn",
+        }
+        .to_string()
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -102,12 +118,25 @@ impl AppManifest {
             })
             .map(|payload| {
                 let url = payload.urls.first().unwrap();
-                format!("hash:{}:{}", payload.hash, url.to_string())
+                format!("hash:{}:{}", payload.hash, url)
             })
     }
 
-    pub fn list_payloads(&self) -> Vec<String> {
-        self.payload.iter().map(|p| format!("{:?}", p)).collect()
+    pub fn features(&self) -> HashSet<Feature> {
+        let mut features = HashSet::new();
+
+        if let Some(ref comp) = self.comp_manifest {
+            if comp
+                .net
+                .as_ref()
+                .map(|net| net.inet.is_some())
+                .unwrap_or(false)
+            {
+                features.insert(Feature::Inet);
+            }
+        }
+
+        features
     }
 }
 
@@ -137,7 +166,7 @@ pub struct AppPayload {
 
 impl AppPayload {
     pub fn parse_hash(&self) -> Result<(String, Vec<u8>), Error> {
-        let mut split = self.hash.splitn(2, ":");
+        let mut split = self.hash.splitn(2, ':');
         let algo = split
             .next()
             .ok_or_else(|| Error::HashFormat(self.hash.clone()))?
@@ -293,7 +322,7 @@ fn verify_secp256k1(input: &[u8], sig: &[u8]) -> Result<Vec<u8>, Error> {
     let hash = Sha256::digest(input);
     let key = ethsign::Signature { v, r, s }
         .recover(hash.as_slice())
-        .map_err(|e| ethsign::Error::Secp256k1(e))?;
+        .map_err(ethsign::Error::Secp256k1)?;
 
     Ok(key.bytes().to_vec())
 }

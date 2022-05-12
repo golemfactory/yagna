@@ -35,14 +35,14 @@ lazy_static::lazy_static! {
             std::env::var("ERC20_SENDOUT_INTERVAL_SECS")
                 .ok()
                 .and_then(|x| x.parse().ok())
-                .unwrap_or(10),
+                .unwrap_or(30),
         );
 
     static ref TX_CONFIRMATION_INTERVAL: std::time::Duration = std::time::Duration::from_secs(
             std::env::var("ERC20_CONFIRMATION_INTERVAL_SECS")
                 .ok()
                 .and_then(|x| x.parse().ok())
-                .unwrap_or(5),
+                .unwrap_or(30),
         );
 }
 
@@ -123,6 +123,15 @@ impl PaymentDriver for Erc20Driver {
         msg: GetAccountBalance,
     ) -> Result<BigDecimal, GenericError> {
         api::get_account_balance(msg).await
+    }
+
+    async fn get_account_gas_balance(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        msg: GetAccountGasBalance,
+    ) -> Result<Option<GasDetails>, GenericError> {
+        api::get_account_gas_balance(msg).await
     }
 
     fn get_name(&self) -> String {
@@ -243,17 +252,28 @@ impl PaymentDriverCron for Erc20Driver {
             }
             Some(guard) => guard,
         };
+
         log::trace!("Running ERC-20 send-out job...");
-        for network_key in self.get_networks().keys() {
+        'outer: for network_key in self.get_networks().keys() {
             let network = Network::from_str(&network_key).unwrap();
             // Process payment rows
             for node_id in self.active_accounts.borrow().list_accounts() {
-                cron::process_payments_for_account(&self.dao, &node_id, network).await;
+                if let Err(e) =
+                    cron::process_payments_for_account(&self.dao, &node_id, network).await
+                {
+                    log::error!(
+                        "Cron: processing payment for account [{}] failed with error: {}",
+                        node_id,
+                        e
+                    );
+                    continue 'outer;
+                };
             }
             // Process transaction rows
             cron::process_transactions(&self.dao, network).await;
         }
         log::trace!("ERC-20 send-out job complete.");
+
         drop(guard); // Explicit drop to tell Rust that guard is not unused variable
     }
 

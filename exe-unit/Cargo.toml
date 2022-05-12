@@ -28,19 +28,21 @@ libproc = "0.7"
 winapi = { version = "0.3.8", features = ["jobapi2", "processthreadsapi"] }
 
 [dependencies]
-ya-agreement-utils = { version = "^0.2", features = ["manifest"] }
-ya-client-model = "0.3"
+ya-agreement-utils = { version = "^0.4" }
+ya-manifest-utils = { version = "^0.1" }
+ya-client-model = "0.4"
 ya-compile-time-utils = "0.2"
-ya-core-model = { version = "^0.4", features = ["activity", "appkey"] }
+ya-core-model = { version = "^0.6", features = ["activity", "appkey"] }
 ya-runtime-api = { version = "0.4", path = "runtime-api", features = ["server"] }
 ya-service-bus = "0.4"
 ya-transfer = "0.1"
 ya-utils-path = "0.1"
-ya-utils-networking = { version = "0.1", default-features = false, features = ["vpn"]}
+ya-utils-networking = { version = "0.1", default-features = false, features = ["dns", "vpn"]}
 
 actix = { version = "0.10", default-features = false }
 anyhow = "1.0.19"
 async-trait = "0.1.24"
+bytes = "0.5"
 chrono = "0.4.10"
 derivative = "2.1"
 derive_more = "0.99"
@@ -61,7 +63,7 @@ serde = { version = "^1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.8.11"
 sha3 = "0.8.2"
-signal-hook = { version = "0.1.13", features = ["tokio-support"] }
+signal-hook = "0.3" 
 structopt = "0.3"
 thiserror = "1.0.10"
 tokio = { version = "0.2.11", features = ["process", "signal", "time", "tcp", "udp"] }
