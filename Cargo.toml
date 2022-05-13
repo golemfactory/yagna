@@ -143,6 +143,7 @@ members = [
     "utils/agreement-utils",
     "utils/compile-time-utils",
     "utils/futures",
+    "utils/manifest-utils",
     "utils/networking",
     "utils/path",
     "utils/process",
@@ -192,6 +193,7 @@ ya-std-utils = { path = "utils/std-utils" }
 ya-compile-time-utils = { path = "utils/compile-time-utils" }
 ya-exe-unit = { path = "exe-unit" }
 ya-file-logging = { path = "utils/file-logging" }
+ya-manifest-utils = { path = "utils/manifest-utils" }
 ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
 ya-utils-futures = { path = "utils/futures" }

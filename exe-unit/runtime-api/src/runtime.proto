@@ -32,6 +32,7 @@ message Request {
     message CreateNetwork {
         repeated Network networks = 1;
         map<string, string> hosts = 2;
+        NetworkInterface interface = 3;
     }
 
     message Shutdown {}
@@ -118,6 +119,11 @@ message Network {
     string gateway = 2;
     string mask = 3;
     string if_addr = 4;
+}
+
+enum NetworkInterface {
+    VPN = 0;
+    INET = 1;
 }
 
 message Output {

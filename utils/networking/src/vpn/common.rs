@@ -1,10 +1,12 @@
-use crate::vpn::error::Error;
-use ipnet::IpNet;
 use std::convert::TryInto;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 
-pub const MAX_FRAME_SIZE: usize = 14 + 65521; // Ethernet II + payload
+use ipnet::IpNet;
+
+use ya_relay_stack::Error;
+
+pub const DEFAULT_MAX_FRAME_SIZE: usize = 1500;
 pub const DEFAULT_IPV4_NET_MASK: &'static str = "255.255.255.0";
 
 #[inline(always)]
