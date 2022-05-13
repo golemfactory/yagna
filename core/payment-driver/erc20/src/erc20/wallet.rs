@@ -570,24 +570,60 @@ pub async fn send_transactions(
 
 pub async fn verify_tx(tx_hash: &str, network: Network) -> Result<PaymentDetails, GenericError> {
     log::debug!("verify_tx. hash={}", tx_hash);
-    let hex_hash = H256::from_str(&tx_hash[2..]).unwrap();
-    let tx = ethereum::get_tx_receipt(hex_hash, network).await?.unwrap();
-    // TODO: Properly parse logs after https://github.com/tomusdrw/rust-web3/issues/208
-    let tx_log = &tx.logs[0];
-    let sender = topic_to_str_address(&tx_log.topics[1]);
-    let recipient = topic_to_str_address(&tx_log.topics[2]);
-    let amount = big_uint_to_big_dec(BigUint::from_bytes_be(&tx_log.data.0));
-    // TODO: Get date from block
-    // let date_str = format!("{}Z", v.created_at);
-    let date = Some(chrono::Utc::now());
+    let hex_hash = H256::from_str(&tx_hash[2..]).map_err(|err| {
+        log::warn!("tx hash failed to parse: {}", tx_hash);
+        GenericError::new(err)
+    })?;
+    let tx = ethereum::get_tx_receipt(hex_hash, network)
+        .await
+        .map_err(|err| {
+            log::warn!(
+                "Failed to obtain tx receipt from blockchain network: {}",
+                hex_hash
+            );
+            err
+        })?;
 
-    let details = PaymentDetails {
-        recipient,
-        sender,
-        amount,
-        date,
-    };
-    log::debug!("PaymentDetails from server: {:?}", &details);
+    if let Some(tx) = tx {
+        // TODO: Properly parse logs after https://github.com/tomusdrw/rust-web3/issues/208
+        // let tx_log = tx.logs.get(0).unwrap_or_else(|| GenericError::new(format!("Failure when parsing tx: {} ", tx_hash)))?;
 
-    Ok(details)
+        let tx_log = tx.logs.get(0).ok_or_else(|| {
+            GenericError::new(format!("Failure when parsing tx.logs.get(0): {} ", tx_hash))
+        })?;
+        let (topic1, topic2) = match tx_log.topics.as_slice() {
+            [_, t1, t2] => (t1, t2),
+            _ => {
+                return Err(GenericError::new(format!(
+                    "Failure when parsing tx_log.topics.get(1): {} ",
+                    tx_hash
+                )))
+            }
+        };
+
+        let sender = topic_to_str_address(topic1);
+        let recipient = topic_to_str_address(topic2);
+
+        let amount = big_uint_to_big_dec(BigUint::from_bytes_be(&tx_log.data.0));
+
+        if let Some(_block_number) = tx_log.block_number {
+            // TODO: Get date from block
+        }
+        let date = Some(chrono::Utc::now());
+
+        let details = PaymentDetails {
+            recipient,
+            sender,
+            amount,
+            date,
+        };
+        log::debug!("PaymentDetails from blockchain: {:?}", &details);
+
+        Ok(details)
+    } else {
+        Err(GenericError::new(format!(
+            "Transaction {} not found on chain",
+            tx_hash
+        )))
+    }
 }
