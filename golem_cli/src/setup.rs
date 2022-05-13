@@ -1,8 +1,6 @@
 use anyhow::Result;
-use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::fs;
 use std::path::PathBuf;
 use structopt::clap;
 use structopt::StructOpt;
@@ -13,9 +11,6 @@ use ya_core_model::NodeId;
 use crate::command::NetworkGroup;
 use crate::command::UsageDef;
 use crate::terminal::clear_stdin;
-
-const OLD_DEFAULT_SUBNETS: &[&'static str] = &["community", "community.3", "community.4"];
-const DEFAULT_SUBNET: &str = "public-beta";
 
 #[derive(StructOpt, Clone, Debug, Deserialize, Serialize)]
 pub struct ConfigAccount {
@@ -47,40 +42,6 @@ pub struct RunConfig {
         set = clap::ArgSettings::Global
     )]
     pub log_dir: Option<PathBuf>,
-}
-
-impl RunConfig {
-    fn save(&self) -> Result<()> {
-        let env_path = config_file();
-        if !env_path.exists() {
-            fs::create_dir_all(env_path.parent().unwrap())?;
-        }
-        let mut vars = Vec::new();
-        if let Some(node_name) = &self.node_name {
-            vars.push(format!("NODE_NAME={}", node_name))
-        }
-        if let Some(subnet) = &self.subnet {
-            vars.push(format!("SUBNET={}", subnet))
-        }
-
-        fs::write(env_path, vars.join("\n"))?;
-        Ok(())
-    }
-}
-
-fn project_dirs() -> ProjectDirs {
-    ProjectDirs::from("", "GolemFactory", "yagna").unwrap()
-}
-
-fn config_file() -> PathBuf {
-    let project_dirs = project_dirs();
-    project_dirs.config_dir().join("provider.env")
-}
-
-pub fn init() -> Result<PathBuf> {
-    let config_file = config_file();
-    dotenv::from_path(&config_file).ok();
-    Ok(config_file)
 }
 
 pub async fn setup(run_config: &RunConfig, force: bool) -> Result<i32> {
@@ -117,14 +78,6 @@ pub async fn setup(run_config: &RunConfig, force: bool) -> Result<i32> {
                 .clone()
                 .unwrap_or_else(|| names::Generator::default().next().unwrap_or_default()),
         )?;
-        // Force subnet upgrade.
-        if let Some(subn) = config.subnet.as_deref() {
-            if OLD_DEFAULT_SUBNETS.iter().any(|n| n == &subn) {
-                config.subnet = None;
-            }
-        }
-        let subnet = config.subnet.unwrap_or_else(|| DEFAULT_SUBNET.to_string());
-
         let account_msg = &config
             .account
             .map(|n| n.to_string())
@@ -145,7 +98,6 @@ pub async fn setup(run_config: &RunConfig, force: bool) -> Result<i32> {
         }
 
         config.node_name = Some(node_name);
-        config.subnet = Some(subnet);
         cmd.ya_provider()?
             .set_config(&config, &run_config.account.network)
             .await?;
@@ -222,7 +174,6 @@ pub async fn setup(run_config: &RunConfig, force: bool) -> Result<i32> {
                 .set_profile_activity("default", false)
                 .await?;
         }
-        run_config.save()?;
     }
 
     Ok(0)

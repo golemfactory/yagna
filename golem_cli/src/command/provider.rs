@@ -58,9 +58,6 @@ impl YaProviderCommand {
         if let Some(node_name) = &config.node_name {
             cmd.arg("--node-name").arg(&node_name);
         }
-        if let Some(subnet) = &config.subnet {
-            cmd.arg("--subnet").arg(subnet);
-        }
 
         if let Some(account) = &config.account {
             cmd.args(&["--account", &account.to_string()]);
