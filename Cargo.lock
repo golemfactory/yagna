@@ -7404,11 +7404,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=620baa80bc5f382eaa87a047767479f74fe9ebf0#620baa80bc5f382eaa87a047767479f74fe9ebf0"
-version = "0.2.0"
 source = "git+https://github.com/golemfactory/ya-relay.git?rev=8bbb42abc878f94cd663677b0d47ddfa4ccf24c0#8bbb42abc878f94cd663677b0d47ddfa4ccf24c0"
-version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=b5d6b5bcf2276c3143e0b967a8666869afaab8c4#b5d6b5bcf2276c3143e0b967a8666869afaab8c4"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7421,7 +7417,7 @@ dependencies = [
  "url",
  "ya-relay-core",
  "ya-relay-proto",
- "ya-relay-stack",
+ "ya-relay-stack 0.3.0",
 ]
 
 [[package]]
@@ -7449,15 +7445,13 @@ dependencies = [
  "uuid",
  "ya-client-model 0.4.0",
  "ya-relay-proto",
- "ya-relay-stack",
+ "ya-relay-stack 0.3.0",
 ]
 
 [[package]]
 name = "ya-relay-proto"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=620baa80bc5f382eaa87a047767479f74fe9ebf0#620baa80bc5f382eaa87a047767479f74fe9ebf0"
 source = "git+https://github.com/golemfactory/ya-relay.git?rev=8bbb42abc878f94cd663677b0d47ddfa4ccf24c0#8bbb42abc878f94cd663677b0d47ddfa4ccf24c0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=b5d6b5bcf2276c3143e0b967a8666869afaab8c4#b5d6b5bcf2276c3143e0b967a8666869afaab8c4"
 dependencies = [
  "anyhow",
  "bytes 0.5.6",
@@ -7474,9 +7468,22 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=620baa80bc5f382eaa87a047767479f74fe9ebf0#620baa80bc5f382eaa87a047767479f74fe9ebf0"
-version = "0.3.0"
 source = "git+https://github.com/golemfactory/ya-relay.git?rev=8bbb42abc878f94cd663677b0d47ddfa4ccf24c0#8bbb42abc878f94cd663677b0d47ddfa4ccf24c0"
+dependencies = [
+ "derive_more",
+ "futures 0.3.13",
+ "log",
+ "managed 0.8.0",
+ "num-derive",
+ "num-traits",
+ "rand 0.8.4",
+ "smoltcp 0.8.0",
+ "thiserror",
+ "tokio 0.2.25",
+]
+
+[[package]]
+name = "ya-relay-stack"
 version = "0.4.0"
 source = "git+https://github.com/golemfactory/ya-relay.git?rev=b5d6b5bcf2276c3143e0b967a8666869afaab8c4#b5d6b5bcf2276c3143e0b967a8666869afaab8c4"
 dependencies = [
@@ -7760,7 +7767,7 @@ dependencies = [
  "thiserror",
  "trust-dns-resolver",
  "url",
- "ya-relay-stack",
+ "ya-relay-stack 0.4.0",
 ]
 
 [[package]]
