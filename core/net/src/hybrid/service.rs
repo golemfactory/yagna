@@ -18,13 +18,12 @@ use metrics::counter;
 use tokio::sync::RwLock;
 use url::Url;
 
-use ya_core_model::net::{self, net_service};
-use ya_core_model::NodeId;
+use ya_core_model::{identity, net, NodeId};
 use ya_relay_client::codec::forward::{PrefixedSink, PrefixedStream, SinkKind};
 use ya_relay_client::{Client, ClientBuilder, ForwardReceiver};
 use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::CallReplyCode;
-use ya_service_bus::{untyped as local_bus, Error, ResponseChunk};
+use ya_service_bus::{typed, untyped as local_bus, Error, ResponseChunk, RpcEndpoint};
 use ya_utils_networking::resolver;
 
 use crate::bcast::BCastService;
@@ -127,8 +126,9 @@ pub async fn start_network(
     log::debug!("Setting up hybrid net with url: {}", url);
     log::info!("Starting network (hybrid) with identity: {}", default_id);
 
+    let crypto = IdentityCryptoProvider::new(default_id);
     let client = ClientBuilder::from_url(url)
-        .crypto(IdentityCryptoProvider::new(default_id))
+        .crypto(crypto.clone())
         .listen(config.bind_url.clone())
         .expire_session_after(config.session_expiration.clone())
         .virtual_tcp_buffer_size_multiplier(config.vtcp_buffer_size_multiplier)
@@ -147,7 +147,7 @@ pub async fn start_network(
     let receiver = client.forward_receiver().await.unwrap();
     let mut services: HashSet<_> = Default::default();
     ids.iter().for_each(|id| {
-        let service = net_service(id);
+        let service = net::net_service(id);
         services.insert(format!("/udp{}", service));
         services.insert(service);
     });
@@ -183,6 +183,8 @@ pub async fn start_network(
 
     tokio::task::spawn_local(broadcast_handler(brx, config.clone()));
     tokio::task::spawn_local(forward_handler(receiver, state.clone()));
+
+    bind_identity_event_handler(crypto).await;
 
     if let Some(address) = client.public_addr().await {
         log::info!("Public address: {}", address);
@@ -298,6 +300,38 @@ where
     local_bus::subscribe(address, rpc, stream);
 }
 
+/// Handle identity changes
+async fn bind_identity_event_handler(crypto: IdentityCryptoProvider) {
+    let endpoint = format!("{}/id", net::BUS_ID);
+
+    typed::bind(endpoint.as_str(), move |event: identity::event::Event| {
+        log::debug!("Identity event received: {:?}", event);
+
+        crypto.reset_alias_cache();
+        let client = CLIENT.with(|c| c.borrow().clone());
+
+        async move {
+            Ok(if let Some(client) = client {
+                match event {
+                    identity::event::Event::AccountUnlocked { .. }
+                    | identity::event::Event::AccountLocked { .. } => {
+                        client.reconnect_server().await
+                    }
+                }
+            })
+        }
+    });
+
+    match typed::service(identity::BUS_ID)
+        .send(identity::Subscribe { endpoint })
+        .await
+    {
+        Err(e) => log::warn!("Identity event subscription failed: {}", e),
+        Ok(Err(e)) => log::warn!("Identity event subscription failed: {}", e),
+        Ok(_) => log::debug!("Successfully subscribed to identity events"),
+    }
+}
+
 /// Forward requests from and to the local bus
 fn forward_bus_to_local(caller: &str, addr: &str, data: &[u8], state: &State, tx: BusSender) {
     let address = match {
@@ -401,7 +435,7 @@ fn broadcast_handler(
             client
                 .broadcast(payload, config.broadcast_size)
                 .await
-                .context("broadcast failed")
+                .map_err(|e| anyhow!("Broadcast failed: {}", e))
         }
         .then(|result: anyhow::Result<()>| async move {
             if let Err(e) = result {
@@ -798,7 +832,7 @@ fn parse_net_to_addr(addr: &str) -> anyhow::Result<(NodeId, String)> {
 
     let to_id = to.parse::<NodeId>()?;
     let skip = prefix.len() + ADDR_CONST + to.len();
-    let addr = net_service(format!("{}/{}", to, &addr[skip..]));
+    let addr = net::net_service(format!("{}/{}", to, &addr[skip..]));
 
     Ok((to_id, format!("{}{}", prefix, addr)))
 }
@@ -818,7 +852,7 @@ fn parse_from_to_addr(addr: &str) -> anyhow::Result<(NodeId, NodeId, String)> {
     let from_id = from.parse::<NodeId>()?;
     let to_id = to.parse::<NodeId>()?;
     let skip = prefix.len() + ADDR_CONST + from.len();
-    let addr = net_service(&addr[skip..]);
+    let addr = net::net_service(&addr[skip..]);
 
     Ok((from_id, to_id, format!("{}{}", prefix, addr)))
 }

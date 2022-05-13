@@ -64,15 +64,14 @@ async fn create_allocation(
         Err(e) => return response::server_error(&e),
     }
 
-    match async move {
-        let dao = db.as_dao::<AllocationDao>();
-        let allocation_id = dao
-            .create(allocation, node_id, payment_platform, address)
-            .await?;
+    let dao = db.as_dao::<AllocationDao>();
 
-        match dao.get(allocation_id, node_id).await? {
-            None => Ok(None),
-            Some(allocation) => {
+    match dao
+        .create(allocation, node_id, payment_platform, address)
+        .await
+    {
+        Ok(allocation_id) => match dao.get(allocation_id, node_id).await {
+            Ok(AllocationStatus::Active(allocation)) => {
                 let allocation_id = allocation.allocation_id.clone();
                 let allocation_timeout = allocation.timeout.clone();
 
@@ -84,16 +83,14 @@ async fn create_allocation(
                 )
                 .await;
 
-                Ok(Some(allocation))
+                response::created(allocation)
             }
-        }
-    }
-    .await
-    {
-        Ok(Some(allocation)) => response::created(allocation),
-        Ok(None) => response::server_error(&"Database error"),
-        Err(DbError::Query(e)) => response::bad_request(&e),
-        Err(e) => response::server_error(&e),
+            Ok(AllocationStatus::NotFound) => return response::server_error(&"Database error"),
+            Ok(AllocationStatus::Gone) => return response::server_error(&"Database error"),
+            Err(DbError::Query(e)) => return response::bad_request(&e),
+            Err(e) => return response::server_error(&e),
+        },
+        Err(e) => return response::server_error(&e),
     }
 }
 
@@ -120,9 +117,14 @@ async fn get_allocation(
     let allocation_id = path.allocation_id.clone();
     let node_id = id.identity;
     let dao: AllocationDao = db.as_dao();
-    match dao.get(allocation_id, node_id).await {
-        Ok(Some(allocation)) => response::ok(allocation),
-        Ok(None) => response::not_found(),
+
+    match dao.get(allocation_id.clone(), node_id).await {
+        Ok(AllocationStatus::Active(allocation)) => response::ok(allocation),
+        Ok(AllocationStatus::Gone) => response::gone(&format!(
+            "Allocation {} has been already released",
+            allocation_id
+        )),
+        Ok(AllocationStatus::NotFound) => response::not_found(),
         Err(e) => response::server_error(&e),
     }
 }
@@ -144,9 +146,13 @@ async fn release_allocation(
     let node_id = Some(id.identity);
     let dao = db.as_dao::<AllocationDao>();
 
-    match dao.release(allocation_id, node_id).await {
-        Ok(true) => response::ok(Null),
-        Ok(false) => response::not_found(),
+    match dao.release(allocation_id.clone(), node_id).await {
+        Ok(AllocationReleaseStatus::Released) => response::ok(Null),
+        Ok(AllocationReleaseStatus::NotFound) => response::not_found(),
+        Ok(AllocationReleaseStatus::Gone) => response::gone(&format!(
+            "Allocation {} has been already released",
+            allocation_id
+        )),
         Err(e) => response::server_error(&e),
     }
 }
@@ -196,14 +202,19 @@ pub async fn release_allocation_after(
 ) {
     tokio::task::spawn(async move {
         if let Some(timeout) = allocation_timeout {
-            let timestamp = timeout.timestamp() - Utc::now().timestamp();
-            let mut deadline = 0u64;
+            //FIXME when upgrading to tokio 1.0 or greater. In tokio 0.2 timer panics when maximum duration of delay is exceeded.
+            let max_duration: i64 = 1 << 35;
 
-            if timestamp.is_positive() {
-                deadline = timestamp as u64;
+            loop {
+                let time_diff = timeout.timestamp_millis() - Utc::now().timestamp_millis();
+
+                if time_diff.is_negative() {
+                    break;
+                }
+
+                let timeout = time_diff.min(max_duration) as u64;
+                tokio::time::delay_for(Duration::from_millis(timeout)).await;
             }
-
-            tokio::time::delay_for(Duration::from_secs(deadline)).await;
 
             forced_release_allocation(db, allocation_id, node_id).await;
         }
@@ -220,10 +231,9 @@ pub async fn forced_release_allocation(
         .release(allocation_id.clone(), node_id)
         .await
     {
-        Ok(true) => {
+        Ok(AllocationReleaseStatus::Released) => {
             log::info!("Allocation {} released.", allocation_id);
         }
-        Ok(false) => (),
         Err(e) => {
             log::warn!(
                 "Releasing allocation {} failed. Db error occurred: {}",
@@ -231,5 +241,6 @@ pub async fn forced_release_allocation(
                 e
             );
         }
+        _ => (),
     }
 }

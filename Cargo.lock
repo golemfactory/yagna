@@ -507,9 +507,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.39"
+version = "1.0.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81cddc5f91628367664cc7c69714ff08deee8a3efc54623011c772544d7b2767"
+checksum = "08f9b8508dccb7687a1d6c4ce66b2b0ecef467c94667de27d8d7fe1f8d2a9cdc"
 
 [[package]]
 name = "appdirs"
@@ -3710,9 +3710,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "openssl"
-version = "0.10.33"
+version = "0.10.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a61075b62a23fef5a29815de7536d940aa35ce96d18ce0cc5076272db678a577"
+checksum = "0c7ae222234c30df141154f159066c5093ff73b63204dcda7121eb082fc56a95"
 dependencies = [
  "bitflags",
  "cfg-if 1.0.0",
@@ -3724,9 +3724,9 @@ dependencies = [
 
 [[package]]
 name = "openssl-probe"
-version = "0.1.2"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77af24da69f9d9341038eba93a073b1fdaaa1b788221b00a69bce9e762cb32de"
+checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "openssl-src"
@@ -3739,9 +3739,9 @@ dependencies = [
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.61"
+version = "0.9.72"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "313752393519e876837e09e1fa183ddef0be7735868dced3196f4472d536277f"
+checksum = "7e46109c383602735fa0a2e48dd2b7c892b048e1bf69e5c3b1d804b7d9c203cb"
 dependencies = [
  "autocfg 1.0.1",
  "cc",
@@ -6881,6 +6881,7 @@ dependencies = [
  "awc",
  "bigdecimal 0.2.0",
  "chrono",
+ "derive_more",
  "dotenv",
  "env_logger 0.7.1",
  "ethabi",
@@ -6897,6 +6898,7 @@ dependencies = [
  "serde_json",
  "sha3 0.8.2",
  "structopt",
+ "thiserror",
  "tiny-keccak 2.0.2",
  "tokio 0.2.25",
  "uuid",
@@ -7136,6 +7138,7 @@ dependencies = [
  "url",
  "ya-core-model",
  "ya-relay-client",
+ "ya-relay-core",
  "ya-sb-proto",
  "ya-sb-router",
  "ya-service-api",
@@ -7302,8 +7305,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e986a9dc5bcef813a13aa47859fb924e4cce9a1359c6c7a637d2ebddd7d40f7"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=8bbb42abc878f94cd663677b0d47ddfa4ccf24c0#8bbb42abc878f94cd663677b0d47ddfa4ccf24c0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7311,6 +7313,7 @@ dependencies = [
  "env_logger 0.8.4",
  "futures 0.3.13",
  "log",
+ "thiserror",
  "tokio 0.2.25",
  "url",
  "ya-relay-core",
@@ -7321,8 +7324,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-core"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "455463a90273fb258233070eafc808994245ca71c209f34c56164152d6fff210"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=8bbb42abc878f94cd663677b0d47ddfa4ccf24c0#8bbb42abc878f94cd663677b0d47ddfa4ccf24c0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7350,8 +7352,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-proto"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4243e6ca2968729edcb785a642053d9994a80687e181b4e4a9c2037b12787f8"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=8bbb42abc878f94cd663677b0d47ddfa4ccf24c0#8bbb42abc878f94cd663677b0d47ddfa4ccf24c0"
 dependencies = [
  "anyhow",
  "bytes 0.5.6",
@@ -7368,13 +7369,14 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "662fabfbf1de7ef351edba111a049999c96d958b60374d371007359973c8656b"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=8bbb42abc878f94cd663677b0d47ddfa4ccf24c0#8bbb42abc878f94cd663677b0d47ddfa4ccf24c0"
 dependencies = [
  "derive_more",
  "futures 0.3.13",
  "log",
  "managed 0.8.0",
+ "num-derive",
+ "num-traits",
  "rand 0.8.4",
  "smoltcp 0.8.0",
  "thiserror",

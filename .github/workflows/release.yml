@@ -116,7 +116,7 @@ jobs:
       - name: Build linux
         if: matrix.os == 'ubuntu'
         run: |
-          cargo build --release --features openssl/vendored --target x86_64-unknown-linux-musl
+          cargo build --release --features static-openssl --target x86_64-unknown-linux-musl
           (cd core/gftp && cargo build --bin gftp -p gftp --features bin --release --target x86_64-unknown-linux-musl)
           (cd golem_cli && cargo build --bin golemsp -p golemsp --release --target x86_64-unknown-linux-musl)
           (cd agent/provider && cargo build --bin ya-provider -p ya-provider --release --target x86_64-unknown-linux-musl)
