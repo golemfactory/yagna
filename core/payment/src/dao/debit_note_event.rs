@@ -5,12 +5,15 @@ use crate::schema::pay_debit_note_event_read::dsl as read_dsl;
 use chrono::NaiveDateTime;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 use serde::Serialize;
+use std::borrow::Cow;
+use std::collections::HashSet;
 use std::convert::TryInto;
 use ya_client_model::payment::{DebitNoteEvent, DebitNoteEventType};
 use ya_client_model::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
+use ya_persistence::types::Role;
 
 pub fn create<T: Serialize>(
     debit_note_id: String,
@@ -56,6 +59,8 @@ impl<'c> DebitNoteEventDao<'c> {
         after_timestamp: Option<NaiveDateTime>,
         max_events: Option<u32>,
         app_session_id: Option<String>,
+        requestor_events: Vec<Cow<'static, str>>,
+        provider_events: Vec<Cow<'static, str>>,
     ) -> DbResult<Vec<DebitNoteEvent>> {
         readonly_transaction(self.pool, move |conn| {
             let mut query = read_dsl::pay_debit_note_event_read
@@ -72,7 +77,17 @@ impl<'c> DebitNoteEventDao<'c> {
                 query = query.limit(limit.into());
             }
             let events: Vec<ReadObj> = query.load(conn)?;
-            events.into_iter().map(TryInto::try_into).collect()
+            let requestor_events: HashSet<Cow<'static, str>> =
+                requestor_events.into_iter().collect();
+            let provider_events: HashSet<Cow<'static, str>> = provider_events.into_iter().collect();
+            events
+                .into_iter()
+                .filter(|e| match e.role {
+                    Role::Requestor => requestor_events.contains(e.event_type.as_str()),
+                    Role::Provider => provider_events.contains(e.event_type.as_str()),
+                })
+                .map(TryInto::try_into)
+                .collect()
         })
         .await
     }
