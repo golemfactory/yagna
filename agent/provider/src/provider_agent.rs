@@ -130,7 +130,7 @@ impl ProviderAgent {
             .unwrap_or_else(|| app_name.to_string());
 
         let keystore_path = data_dir.join(&config.trusted_keys_file);
-        let keystore = match Keystore::from_path(&keystore_path) {
+        let keystore = match Keystore::load(&keystore_path) {
             Ok(store) => {
                 log::info!("Trusted key store loaded from {}", keystore_path.display());
                 store
@@ -387,7 +387,7 @@ fn spawn_keystore_monitor<P: AsRef<Path>>(
     path: P,
     keystore: Keystore,
 ) -> Result<FileMonitor, Error> {
-    let handler = move |p: PathBuf| match Keystore::from_path(&p) {
+    let handler = move |p: PathBuf| match Keystore::load(&p) {
         Ok(new_keystore) => {
             keystore.replace(new_keystore);
             log::info!("Trusted keystore updated from {}", p.display());

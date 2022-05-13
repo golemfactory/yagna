@@ -2864,6 +2864,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a9a9d19fa1e79b6215ff29b9d6880b706147f16e9b1dbb1e4e5947b5b02bc5e3"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3965,6 +3974,17 @@ checksum = "467d164a6de56270bd7c4d070df81d07beace25012d5103ced4e9ff08d6afdb7"
 dependencies = [
  "fixedbitset",
  "indexmap",
+]
+
+[[package]]
+name = "petname"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9474d20c003131d8945af478b25c8e29477a522e408ae4ca8e8822839f5fd2f2"
+dependencies = [
+ "itertools 0.10.3",
+ "rand 0.8.4",
+ "structopt",
 ]
 
 [[package]]
@@ -7072,6 +7092,7 @@ dependencies = [
  "chrono",
  "ethsign 0.8.0",
  "hex",
+ "petname",
  "semver 1.0.4",
  "serde",
  "serde_json",
@@ -7337,6 +7358,7 @@ dependencies = [
  "dotenv",
  "futures 0.3.13",
  "futures-util",
+ "hex",
  "humantime 2.1.0",
  "lazy_static",
  "libc",
