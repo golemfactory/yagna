@@ -8,11 +8,7 @@ use lazy_static::lazy_static;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 use web3::{
-    contract::{
-    	Contract, 
-	Options,
-	tokens::Tokenize,
-	},
+    contract::{tokens::Tokenize, Contract, Options},
     error::Error,
     transports::Http,
     types::{Bytes, Transaction, TransactionId, TransactionReceipt, H160, H256, U256, U64},
@@ -715,23 +711,22 @@ pub async fn get_nonce_from_contract(
 ) -> Result<U256, GenericError> {
     let env = get_env(network);
 
-    with_clients(network, |client| {
-        async move {
-            let meta_tx_contract = prepare_meta_transaction_contract(&client, &env)?;
-            let nonce: U256 = meta_tx_contract
-                .query(
-                    GET_NONCE_FUNCTION,
-                    (address, ),
-                    None,
-                    Options::default(),
-                    None,
-                )
-                .await
-                .map_err(GenericError::new)?;
+    with_clients(network, |client| async move {
+        let meta_tx_contract = prepare_meta_transaction_contract(&client, &env)?;
+        let nonce: U256 = meta_tx_contract
+            .query(
+                GET_NONCE_FUNCTION,
+                (address,),
+                None,
+                Options::default(),
+                None,
+            )
+            .await
+            .map_err(GenericError::new)?;
 
-            Ok(nonce)
-        }
-    }).await
+        Ok(nonce)
+    })
+    .await
 }
 
 pub async fn encode_transfer_abi(
@@ -740,19 +735,18 @@ pub async fn encode_transfer_abi(
     network: Network,
 ) -> Result<Vec<u8>, GenericError> {
     let env = get_env(network);
-    with_clients(network, |client| {
-        async move {
-            let erc20_contract = prepare_erc20_contract(&client, &env)?;
-            let function_abi = eth_utils::contract_encode(
-                &erc20_contract,
-                TRANSFER_ERC20_FUNCTION,
-                (recipient, amount),
-            )
-                .map_err(GenericError::new)?;
+    with_clients(network, |client| async move {
+        let erc20_contract = prepare_erc20_contract(&client, &env)?;
+        let function_abi = eth_utils::contract_encode(
+            &erc20_contract,
+            TRANSFER_ERC20_FUNCTION,
+            (recipient, amount),
+        )
+        .map_err(GenericError::new)?;
 
-            Ok(function_abi)
-        }
-    }).await
+        Ok(function_abi)
+    })
+    .await
 }
 
 /// Creates EIP712 message for calling `function_abi` using contract's 'executeMetaTransaction' function
@@ -773,36 +767,35 @@ pub async fn encode_meta_transaction_to_eip712(
 
     let env = get_env(network);
 
-    with_clients(network, |client| {
-        async move {
-            let eip712_contract = prepare_eip712_contract(&client, &env)?;
-            let domain_separator: Vec<u8> = eip712_contract
-                .query(
-                    GET_DOMAIN_SEPARATOR_FUNCTION,
-                    (),
-                    None,
-                    Options::default(),
-                    None,
-                )
-                .await
-                .map_err(|e| GenericError::new(format!("Unable to query contract, reason: {e}")))?;
+    with_clients(network, |client| async move {
+        let eip712_contract = prepare_eip712_contract(&client, &env)?;
+        let domain_separator: Vec<u8> = eip712_contract
+            .query(
+                GET_DOMAIN_SEPARATOR_FUNCTION,
+                (),
+                None,
+                Options::default(),
+                None,
+            )
+            .await
+            .map_err(|e| GenericError::new(format!("Unable to query contract, reason: {e}")))?;
 
-            let mut eip712_message = Vec::from(MAGIC);
+        let mut eip712_message = Vec::from(MAGIC);
 
-            let abi_hash = H256::from_slice(&keccak256_hash(function_abi));
-            let encoded_data = ethabi::encode(&(nonce, sender, abi_hash).into_tokens());
+        let abi_hash = H256::from_slice(&keccak256_hash(function_abi));
+        let encoded_data = ethabi::encode(&(nonce, sender, abi_hash).into_tokens());
 
-            let type_hash = keccak256_hash(META_TRANSACTION_SIGNATURE.as_bytes());
-            let hash_struct = keccak256_hash(&[type_hash, encoded_data].concat());
+        let type_hash = keccak256_hash(META_TRANSACTION_SIGNATURE.as_bytes());
+        let hash_struct = keccak256_hash(&[type_hash, encoded_data].concat());
 
-            eip712_message.extend_from_slice(&domain_separator);
-            eip712_message.extend_from_slice(&hash_struct);
+        eip712_message.extend_from_slice(&domain_separator);
+        eip712_message.extend_from_slice(&hash_struct);
 
-            debug!("full eip712 message: {eip712_message:02X?}");
+        debug!("full eip712 message: {eip712_message:02X?}");
 
-            Ok(eip712_message)
-        }
-    }).await
+        Ok(eip712_message)
+    })
+    .await
 }
 
 #[cfg(test)]
