@@ -1,12 +1,17 @@
 use crate::message::{Shutdown, ShutdownReason};
 use actix::dev::ToEnvelope;
 use actix::prelude::*;
+use signal_hook::{
+    consts::*,
+    low_level::{register, unregister},
+    SigId,
+};
 
 pub struct SignalMonitor<A>
 where
     A: Actor<Context = Context<A>> + Handler<Shutdown>,
 {
-    signals: Vec<signal_hook::SigId>,
+    signals: Vec<SigId>,
     parent: Addr<A>,
 }
 
@@ -22,7 +27,7 @@ where
     }
 }
 
-fn register_signal<A>(addr: &Addr<A>, signal: i32) -> signal_hook::SigId
+fn register_signal<A>(addr: &Addr<A>, signal: i32) -> SigId
 where
     A: Actor<Context = Context<A>> + Handler<Shutdown>,
     <A as Actor>::Context: ToEnvelope<A, Shutdown>,
@@ -33,7 +38,7 @@ where
         handler_.do_send(Shutdown(ShutdownReason::Interrupted(signal)));
     };
 
-    unsafe { signal_hook::register(signal, f) }.unwrap()
+    unsafe { register(signal, f) }.unwrap()
 }
 
 impl<A> Actor for SignalMonitor<A>
@@ -44,15 +49,11 @@ where
     type Context = Context<Self>;
 
     fn started(&mut self, _: &mut Self::Context) {
-        self.signals
-            .push(register_signal(&self.parent, signal_hook::SIGABRT));
-        self.signals
-            .push(register_signal(&self.parent, signal_hook::SIGINT));
-        self.signals
-            .push(register_signal(&self.parent, signal_hook::SIGTERM));
+        self.signals.push(register_signal(&self.parent, SIGABRT));
+        self.signals.push(register_signal(&self.parent, SIGINT));
+        self.signals.push(register_signal(&self.parent, SIGTERM));
         #[cfg(not(windows))]
-        self.signals
-            .push(register_signal(&self.parent, signal_hook::SIGQUIT));
+        self.signals.push(register_signal(&self.parent, SIGQUIT));
 
         log::debug!("Signal monitoring service started");
     }
@@ -61,7 +62,7 @@ where
         std::mem::replace(&mut self.signals, Vec::new())
             .into_iter()
             .for_each(|s| {
-                signal_hook::unregister(s);
+                unregister(s);
             });
 
         log::debug!("Signal monitoring service stopped");

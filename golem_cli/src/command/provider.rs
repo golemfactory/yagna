@@ -266,6 +266,23 @@ impl YaProviderCommand {
         }
     }
 
+    pub async fn forward(self, args: Vec<String>) -> anyhow::Result<i32> {
+        let mut cmd = self.cmd;
+        let output = cmd
+            .args(args)
+            .stderr(Stdio::piped())
+            .stdout(Stdio::inherit())
+            .stdin(Stdio::null())
+            .output()
+            .await?;
+        if output.status.success() {
+            println!("{}", String::from_utf8_lossy(&output.stdout));
+            Ok(output.status.code().unwrap_or(0))
+        } else {
+            anyhow::bail!("{}", String::from_utf8_lossy(&output.stderr))
+        }
+    }
+
     pub async fn spawn(mut self, app_key: &str, run_cfg: &RunConfig) -> anyhow::Result<Child> {
         self.cmd.args(&["run"]).env("YAGNA_APPKEY", app_key);
 

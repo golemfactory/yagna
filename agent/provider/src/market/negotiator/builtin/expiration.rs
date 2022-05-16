@@ -86,7 +86,7 @@ impl NegotiatorComponent for LimitExpiration {
         &mut self,
         demand: &ProposalView,
         mut offer: ProposalView,
-    ) -> anyhow::Result<NegotiationResult> {
+    ) -> Result<NegotiationResult> {
         let req_deadline = debit_deadline_from(demand)?;
         let our_deadline = debit_deadline_from(&offer)?;
         let req_expiration = proposal_expiration_from(&demand)?;
@@ -171,7 +171,7 @@ impl NegotiatorComponent for LimitExpiration {
         })
     }
 
-    fn fill_template(&mut self, mut template: OfferDefinition) -> anyhow::Result<OfferDefinition> {
+    fn fill_template(&mut self, mut template: OfferDefinition) -> Result<OfferDefinition> {
         template.offer.set_property(
             DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY_FLAT,
             serde_json::Value::Number(self.accept_timeout.num_seconds().into()),
@@ -183,11 +183,11 @@ impl NegotiatorComponent for LimitExpiration {
         &mut self,
         _agreement_id: &str,
         _result: &AgreementResult,
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         Ok(())
     }
 
-    fn on_agreement_approved(&mut self, _agreement_id: &str) -> anyhow::Result<()> {
+    fn on_agreement_approved(&mut self, _agreement_id: &str) -> Result<()> {
         Ok(())
     }
 }

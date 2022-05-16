@@ -6,7 +6,9 @@ use ya_agreement_utils::agreement::{expand, flatten_value};
 use ya_agreement_utils::AgreementView;
 use ya_client::model::market::NewOffer;
 
-use super::builtin::{DebitNoteInterval, LimitExpiration, MaxAgreements, PaymentTimeout};
+use super::builtin::{
+    DebitNoteInterval, LimitExpiration, ManifestSignature, MaxAgreements, PaymentTimeout,
+};
 use super::common::{offer_definition_to_offer, AgreementResponse, Negotiator, ProposalResponse};
 use super::{NegotiationResult, NegotiatorsPack};
 use crate::market::negotiator::builtin::PriceNego;
@@ -45,6 +47,10 @@ impl CompositeNegotiator {
                 Box::new(PaymentTimeout::new(&config.payment_timeout_config)?),
             )
             .add_component(
+                "ManifestSignature",
+                Box::new(ManifestSignature::from(config.policy_config.clone())),
+            
+            .add_component(
                 "Price",
                 Box::new(PriceNego::new(&config.expire_agreements_config)?),
             );
@@ -69,6 +75,7 @@ impl Handler<ReactToProposal> for CompositeNegotiator {
         // In current implementation we don't allow to change constraints, so we take
         // them from initial Offer.
         let constraints = msg.prev_proposal.constraints;
+
         let proposal = ProposalView {
             agreement_id: msg.demand.proposal_id,
             json: expand(msg.demand.properties),
@@ -129,6 +136,7 @@ pub fn to_proposal_views(
         json: demand_proposal,
         agreement_id: demand_id,
     };
+
     Ok((demand_proposal, offer_proposal))
 }
 

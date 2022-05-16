@@ -8,6 +8,18 @@ use ethabi::Token;
 use lazy_static::lazy_static;
 use tokio::sync::RwLock;
 use uuid::Uuid;
+use web3::{
+    contract::{Contract, Options},
+    error::Error,
+    transports::Http,
+    types::{Bytes, Transaction, TransactionId, TransactionReceipt, H160, H256, U256, U64},
+    Web3,
+use web3::{
+    contract::{tokens::Tokenize, Contract, Options},
+    error::Error,
+    transports::Http,
+    types::{Bytes, Transaction, TransactionId, TransactionReceipt, H160, H256, U256, U64},
+    Web3,
 use web3::contract::{Contract, Options};
 use web3::transports::Http;
 use web3::types::{
@@ -21,6 +33,7 @@ use ya_payment_driver::db::models::{Network, TransactionEntity, TransactionStatu
 use ya_payment_driver::utils::big_dec_to_u256;
 use ya_payment_driver::{bus, model::GenericError};
 
+use crate::erc20::eth_utils::keccak256_hash;
 use crate::dao::Erc20Dao;
 use crate::erc20::transaction::YagnaRawTransaction;
 use crate::erc20::wallet::get_next_nonce_info;
@@ -60,6 +73,8 @@ lazy_static! {
 const CREATE_FAUCET_FUNCTION: &str = "create";
 const BALANCE_ERC20_FUNCTION: &str = "balanceOf";
 const TRANSFER_ERC20_FUNCTION: &str = "transfer";
+const GET_DOMAIN_SEPARATOR_FUNCTION: &str = "getDomainSeperator";
+const GET_NONCE_FUNCTION: &str = "getNonce";
 
 pub fn get_polygon_starting_price() -> f64 {
     match get_polygon_priority() {
@@ -356,6 +371,15 @@ pub async fn sign_raw_transfer_transaction(
     Ok(signature)
 }
 
+pub async fn prepare_raw_transaction(
+pub async fn sign_hash_of_data(address: H160, hash: Vec<u8>) -> Result<Vec<u8>, GenericError> {
+    let node_id = NodeId::from(address.as_ref());
+
+    let signature = bus::sign(node_id, hash).await?;
+    Ok(signature)
+}
+
+pub async fn prepare_raw_transaction(
 pub async fn prepare_erc20_transfer(
     _address: H160,
     recipient: H160,
@@ -725,6 +749,28 @@ fn prepare_glm_faucet_contract(
     }
 }
 
+fn prepare_eip712_contract(
+    ethereum_client: &Web3<Http>,
+    env: &config::EnvConfiguration,
+) -> Result<Contract<Http>, GenericError> {
+    prepare_contract(
+        ethereum_client,
+        env.glm_contract_address,
+        include_bytes!("../contracts/eip712.json"),
+    )
+}
+
+fn prepare_meta_transaction_contract(
+    ethereum_client: &Web3<Http>,
+    env: &config::EnvConfiguration,
+) -> Result<Contract<Http>, GenericError> {
+    prepare_contract(
+        ethereum_client,
+        env.glm_contract_address,
+        include_bytes!("../contracts/meta_transaction.json"),
+    )
+}
+
 pub fn create_dao_entity(
     nonce: U256,
     sender: H160,
@@ -777,6 +823,133 @@ pub fn get_gas_price_from_db_tx(db_tx: &TransactionEntity) -> Result<U256, Gener
     Ok(raw_tx.gas_price)
 }
 
+pub async fn get_nonce_from_contract(
+    address: H160,
+    network: Network,
+) -> Result<U256, GenericError> {
+    let env = get_env(network);
+
+    with_clients(network, |client| async move {
+        let meta_tx_contract = prepare_meta_transaction_contract(&client, &env)?;
+        let nonce: U256 = meta_tx_contract
+            .query(
+                GET_NONCE_FUNCTION,
+                (address,),
+                None,
+                Options::default(),
+                None,
+            )
+            .await
+            .map_err(GenericError::new)?;
+
+        Ok(nonce)
+    })
+    .await
+}
+
+pub async fn encode_transfer_abi(
+    recipient: H160,
+    amount: U256,
+    network: Network,
+) -> Result<Vec<u8>, GenericError> {
+    let env = get_env(network);
+    with_clients(network, |client| async move {
+        let erc20_contract = prepare_erc20_contract(&client, &env)?;
+        let function_abi = eth_utils::contract_encode(
+            &erc20_contract,
+            TRANSFER_ERC20_FUNCTION,
+            (recipient, amount),
+        )
+        .map_err(GenericError::new)?;
+
+        Ok(function_abi)
+    })
+    .await
+}
+
+/// Creates EIP712 message for calling `function_abi` using contract's 'executeMetaTransaction' function
+/// Message can be later signed, and send to the contract in order to make an indirect call.
+pub async fn encode_meta_transaction_to_eip712(
+    sender: H160,
+    recipient: H160,
+    amount: U256,
+    nonce: U256,
+    function_abi: &[u8],
+    network: Network,
+) -> Result<Vec<u8>, GenericError> {
+    info!("Creating meta tx for sender {sender:02X?}, recipient {recipient:02X?}, amount {amount:?}, nonce {nonce:?}, network {network:?}");
+
+    const META_TRANSACTION_SIGNATURE: &str =
+        "MetaTransaction(uint256 nonce,address from,bytes functionSignature)";
+    const MAGIC: [u8; 2] = [0x19, 0x1];
+
+    let env = get_env(network);
+
+    with_clients(network, |client| async move {
+        let eip712_contract = prepare_eip712_contract(&client, &env)?;
+        let domain_separator: Vec<u8> = eip712_contract
+            .query(
+                GET_DOMAIN_SEPARATOR_FUNCTION,
+                (),
+                None,
+                Options::default(),
+                None,
+            )
+            .await
+            .map_err(|e| GenericError::new(format!("Unable to query contract, reason: {e}")))?;
+
+        let mut eip712_message = Vec::from(MAGIC);
+
+        let abi_hash = H256::from_slice(&keccak256_hash(function_abi));
+        let encoded_data = ethabi::encode(&(nonce, sender, abi_hash).into_tokens());
+
+        let type_hash = keccak256_hash(META_TRANSACTION_SIGNATURE.as_bytes());
+        let hash_struct = keccak256_hash(&[type_hash, encoded_data].concat());
+
+        eip712_message.extend_from_slice(&domain_separator);
+        eip712_message.extend_from_slice(&hash_struct);
+
+        debug!("full eip712 message: {eip712_message:02X?}");
+
+        Ok(eip712_message)
+    })
+    .await
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use ethereum_types::U256;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_create_gasless_message() {
+        let sender = H160::from_str("0xfeaed3f817169c012d040f05c6c52bce5740fc37").unwrap();
+        let recipient = H160::from_str("0xd4EA255B238E214A9A0E5656eC36Fe27CD14adAC").unwrap();
+        let amount: U256 = U256::from_dec_str("12300000000000").unwrap();
+        let nonce = U256::from(27u32);
+        let network = Network::Polygon;
+
+        let transfer_abi = encode_transfer_abi(recipient, amount, network)
+            .await
+            .unwrap();
+        let encoded_meta_transfer = encode_meta_transaction_to_eip712(
+            sender,
+            recipient,
+            amount,
+            nonce,
+            &transfer_abi,
+            network,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(hex::encode(transfer_abi), "a9059cbb000000000000000000000000d4ea255b238e214a9a0e5656ec36fe27cd14adac00000000000000000000000000000000000000000000000000000b2fd1217800");
+        assert_eq!(hex::encode(encoded_meta_transfer), "1901804e8c6f5926bd56018ff8fa95b472e09d8b3612bf1b892f2d5e5f4365a5e95e7bc74d293cbaa554151b05ad958d04d7c19f2552a6315fe4a99f6aef60a887fd");
+    }
+}
 pub async fn get_network_gas_price_eth(network: Network) -> Result<U256, GenericError> {
     let _env = get_env(network);
     let client = get_client(network).await?;

@@ -17,7 +17,7 @@ pub fn get_tx_hash(tx: &YagnaRawTransaction, chain_id: u64) -> Vec<u8> {
     keccak256_hash(&hash.out())
 }
 
-fn keccak256_hash(bytes: &[u8]) -> Vec<u8> {
+pub fn keccak256_hash(bytes: &[u8]) -> Vec<u8> {
     let mut hasher = Keccak::v256();
     hasher.update(bytes);
     let mut resp: [u8; 32] = Default::default();

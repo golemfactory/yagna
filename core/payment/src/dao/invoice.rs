@@ -111,15 +111,13 @@ impl<'c> InvoiceDao<'c> {
                     .map(|_| ())
             })?;
 
-            if let Role::Requestor = role {
-                invoice_event::create::<()>(
-                    invoice_id,
-                    owner_id,
-                    InvoiceEventType::InvoiceReceivedEvent,
-                    None,
-                    conn,
-                )?;
-            }
+            invoice_event::create::<()>(
+                invoice_id,
+                owner_id,
+                InvoiceEventType::InvoiceReceivedEvent,
+                None,
+                conn,
+            )?;
 
             Ok(())
         })
@@ -259,16 +257,15 @@ impl<'c> InvoiceDao<'c> {
 
             update_status(&invoice_id, &owner_id, &status, conn)?;
             agreement::set_amount_accepted(&agreement_id, &owner_id, &amount, conn)?;
-            if let Role::Provider = role {
-                for event in events {
-                    invoice_event::create::<()>(
-                        invoice_id.clone(),
-                        owner_id.clone(),
-                        event,
-                        None,
-                        conn,
-                    )?;
-                }
+
+            for event in events {
+                invoice_event::create::<()>(
+                    invoice_id.clone(),
+                    owner_id.clone(),
+                    event,
+                    None,
+                    conn,
+                )?;
             }
 
             Ok(())
@@ -284,9 +281,8 @@ impl<'c> InvoiceDao<'c> {
     //             .select((dsl::agreement_id, dsl::amount, dsl::role))
     //             .first(conn)?;
     //         update_status(&invoice_id, &owner_id, &DocumentStatus::Accepted, conn)?;
-    //         if let Role::Provider = role {
     //             invoice_event::create::<()>(invoice_id, owner_id, InvoiceEventType::InvoiceRejectedEvent { ... }, None, conn)?;
-    //         }
+    //
     //         Ok(())
     //     })
     //     .await
@@ -302,15 +298,14 @@ impl<'c> InvoiceDao<'c> {
             agreement::compute_amount_due(&agreement_id, &owner_id, conn)?;
 
             update_status(&invoice_id, &owner_id, &DocumentStatus::Cancelled, conn)?;
-            if let Role::Requestor = role {
-                invoice_event::create::<()>(
-                    invoice_id,
-                    owner_id,
-                    InvoiceEventType::InvoiceCancelledEvent,
-                    None,
-                    conn,
-                )?;
-            }
+            invoice_event::create::<()>(
+                invoice_id,
+                owner_id,
+                InvoiceEventType::InvoiceCancelledEvent,
+                None,
+                conn,
+            )?;
+
             Ok(())
         })
         .await

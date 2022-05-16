@@ -35,6 +35,7 @@ pub mod crypto;
 pub mod error;
 mod handlers;
 pub mod logger;
+pub mod manifest;
 pub mod message;
 pub mod metrics;
 mod network;
@@ -185,7 +186,7 @@ impl<R: Runtime> RuntimeRef<R> {
             }
 
             if return_code != 0 {
-                let message = message.unwrap_or("reason unspecified".into());
+                let message = message.unwrap_or_else(|| "reason unspecified".into());
                 log::warn!("Batch {} execution interrupted: {}", batch_id, message);
                 break;
             }
@@ -256,7 +257,7 @@ impl<R: Runtime> RuntimeRef<R> {
 
         log::info!("Executing command: {:?}", runtime_cmd.command);
 
-        self.pre_runtime(&runtime_cmd, &runtime, &transfer_service)
+        self.pre_runtime(&runtime_cmd, runtime, transfer_service)
             .await?;
 
         let exit_code = runtime.send(runtime_cmd.clone()).await??;
@@ -264,7 +265,7 @@ impl<R: Runtime> RuntimeRef<R> {
             return Err(Error::CommandExitCodeError(exit_code));
         }
 
-        self.post_runtime(&runtime_cmd, &runtime, &transfer_service)
+        self.post_runtime(&runtime_cmd, runtime, transfer_service)
             .await?;
 
         let state_cur = self.send(GetState {}).await?.0;
@@ -299,7 +300,7 @@ impl<R: Runtime> RuntimeRef<R> {
                 let task_package = transfer_service.send(DeployImage {}).await??;
                 runtime
                     .send(UpdateDeployment {
-                        task_package: task_package,
+                        task_package,
                         networks: Some(net.clone()),
                         hosts: Some(hosts.clone()),
                         ..Default::default()
@@ -383,8 +384,27 @@ impl<R: Runtime> Actor for ExeUnit<R> {
             .finish()
             .spawn(ctx);
 
+        log::info!("Initializing manifests");
+        self.ctx
+            .supervise
+            .manifest
+            .build_validators()
+            .into_actor(self)
+            .map(|result, this, ctx| match result {
+                Ok(validators) => {
+                    this.ctx.supervise.manifest.add_validators(validators);
+                    log::info!("Manifest initialization complete");
+                }
+                Err(e) => {
+                    let err = Error::Other(format!("manifest initialization error: {}", e));
+                    log::error!("Supervisor is shutting down due to {}", err);
+                    let _ = ctx.address().do_send(Shutdown(ShutdownReason::Error(err)));
+                }
+            })
+            .wait(ctx);
+
         let addr_ = addr.clone();
-        let fut = async move {
+        async move {
             addr.send(Initialize).await?.map_err(Error::from)?;
             addr.send(SetState::from(State::Initialized)).await?;
             Ok::<_, Error>(())
@@ -398,9 +418,9 @@ impl<R: Runtime> Actor for ExeUnit<R> {
                     let _ = addr_.send(Shutdown(ShutdownReason::Error(err))).await;
                 }
             }
-        });
-
-        ctx.spawn(fut.into_actor(self));
+        })
+        .into_actor(self)
+        .spawn(ctx);
     }
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
@@ -413,7 +433,6 @@ impl<R: Runtime> Actor for ExeUnit<R> {
 
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
-#[derive(Clone)]
 pub struct ExeUnitContext {
     pub supervise: Supervision,
     pub activity_id: Option<String>,
@@ -426,7 +445,7 @@ pub struct ExeUnitContext {
     pub credentials: Option<Credentials>,
     #[cfg(feature = "sgx")]
     #[derivative(Debug = "ignore")]
-    pub crypto: crate::crypto::Crypto,
+    pub crypto: crypto::Crypto,
 }
 
 impl ExeUnitContext {
@@ -497,7 +516,7 @@ async fn report_usage<R: Runtime>(
                     timeout: None,
                 };
                 if !report(&report_url, msg).await {
-                    exe_unit.do_send(Shutdown(ShutdownReason::Error(error::Error::RuntimeError(
+                    exe_unit.do_send(Shutdown(ShutdownReason::Error(Error::RuntimeError(
                         format!("Reporting endpoint '{}' is not available", report_url),
                     ))));
                 }
