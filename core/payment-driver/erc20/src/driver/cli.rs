@@ -268,4 +268,3 @@ pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericEr
         Ok(message)
     }
 }
-

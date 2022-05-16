@@ -19,7 +19,7 @@ pub enum RpcMessageError {
 
 pub mod local {
     use super::*;
-    use crate::driver::{AccountMode, GasDetails, BatchMode, PaymentConfirmation};
+    use crate::driver::{AccountMode, BatchMode, GasDetails, PaymentConfirmation};
     use bigdecimal::{BigDecimal, Zero};
     use chrono::{DateTime, Utc};
     use std::fmt::Display;

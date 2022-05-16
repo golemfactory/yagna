@@ -19,8 +19,8 @@ use ya_client_model::payment::{
     Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
 };
 use ya_core_model::driver::{
-    self, driver_bus_id, AccountMode,  BatchMode,GasDetails, PaymentConfirmation, PaymentDetails, ShutDown,
-    ValidateAllocation,
+    self, driver_bus_id, AccountMode, BatchMode, GasDetails, PaymentConfirmation, PaymentDetails,
+    ShutDown, ValidateAllocation,
 };
 use ya_core_model::payment::local::{
     NotifyPayment, RegisterAccount, RegisterAccountError, RegisterDriver, RegisterDriverError,

@@ -3,8 +3,6 @@ use crate::error::Error;
 use crate::message::Shutdown;
 use crate::state::{Deployment, DeploymentNetwork};
 use crate::Result;
-#![allow(unused)]
-
 use std::convert::TryFrom;
 use std::ops::Not;
 use std::path::Path;
@@ -12,26 +10,25 @@ use std::path::Path;
 use ya_service_bus::{actix_rpc, typed, typed::Endpoint as GsbEndpoint, RpcEnvelope};
 
 use crate::acl::Acl;
-use ya_core_model::activity;
-use ya_core_model::activity::{RpcMessageError, VpnControl};
-use ya_runtime_api::server::{CreateNetwork, Network, NetworkEndpoint, RuntimeService};
 use futures::channel::mpsc;
 use futures::Stream;
 use ya_core_model::activity;
+use ya_core_model::activity;
+use ya_core_model::activity::{RpcMessageError, VpnControl};
 use ya_core_model::activity::{RpcMessageError, VpnControl};
 use ya_runtime_api::server::{CreateNetwork, Network, NetworkEndpoint, RuntimeService};
+use ya_runtime_api::server::{CreateNetwork, Network, NetworkEndpoint, RuntimeService};
 
-use ya_runtime_api::deploy::ContainerEndpoint;
-use ya_runtime_api::server::Network;
-use ya_service_bus::{typed, typed::Endpoint as GsbEndpoint};
-use ya_utils_networking::vpn::common::DEFAULT_MAX_FRAME_SIZE;
-use ya_utils_networking::vpn::{network::DuoEndpoint, Error as NetError};
 use crate::acl::Acl;
 use crate::error::Error;
 use crate::message::Shutdown;
 use crate::state::{Deployment, DeploymentNetwork};
 use crate::Result;
-
+use ya_runtime_api::deploy::ContainerEndpoint;
+use ya_runtime_api::server::Network;
+use ya_service_bus::{typed, typed::Endpoint as GsbEndpoint};
+use ya_utils_networking::vpn::common::DEFAULT_MAX_FRAME_SIZE;
+use ya_utils_networking::vpn::{network::DuoEndpoint, Error as NetError};
 
 use crate::error::Error;
 use crate::state::DeploymentNetwork;

@@ -49,7 +49,7 @@ impl CompositeNegotiator {
             .add_component(
                 "ManifestSignature",
                 Box::new(ManifestSignature::from(config.policy_config.clone())),
-            
+            )
             .add_component(
                 "Price",
                 Box::new(PriceNego::new(&config.expire_agreements_config)?),

@@ -131,7 +131,7 @@ impl PaymentDriver for Erc20Driver {
         msg: GetAccountGasBalance,
     ) -> Result<Option<GasDetails>, GenericError> {
         api::get_account_gas_balance(msg).await
-}
+    }
     async fn exit_fee(&self, _: ExitFee) -> Result<FeeResult, GenericError> {
         log::info!("EXIT_FEE = Not Implemented");
         Err(GenericError::new("EXIT_FEE = Not Implemented"))

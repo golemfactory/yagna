@@ -68,6 +68,7 @@ pub async fn transfer(
         gas_price,
         max_gas_price,
         gas_limit,
+        gasless,
         wait_for_tx,
     );
     let tx_id = bus::service(driver_id).call(message).await??;
@@ -96,7 +97,7 @@ pub async fn multi_transfer(
         gas_price,
         max_gas_price,
         gas_limit,
-        gasless,
+        false,
         wait_for_tx,
     );
     let tx_id = bus::service(driver_id).call(message).await??;

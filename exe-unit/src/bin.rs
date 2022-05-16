@@ -1,7 +1,6 @@
 use std::convert::TryFrom;
 use std::path::PathBuf;
 
-
 use actix::{Actor, Addr, Arbiter, System};
 use anyhow::{bail, Context};
 use structopt::{clap, StructOpt};

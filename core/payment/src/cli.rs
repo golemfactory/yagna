@@ -385,6 +385,7 @@ impl PaymentCli {
                 max_gas_price,
                 gas_limit,
                 wait_for_tx,
+                gasless,
             } => {
                 let address = resolve_address(account.address()).await?;
                 let amount = BigDecimal::from_str(&amount)?;
@@ -417,6 +418,7 @@ impl PaymentCli {
                         gas_price,
                         max_gas_price,
                         gas_limit,
+                        gasless,
                         wait_for_tx,
                     )
                     .await?,
@@ -429,7 +431,6 @@ impl PaymentCli {
                 gas_price,
                 max_gas_price,
                 gas_limit,
-                gasless,
                 wait_for_tx,
             } => {
                 let address = resolve_address(account.address()).await?;
@@ -479,7 +480,6 @@ impl PaymentCli {
                         gas_price,
                         max_gas_price,
                         gas_limit,
-                        gasless,
                         wait_for_tx,
                     )
                     .await?,
