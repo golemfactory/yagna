@@ -19,7 +19,7 @@ anyhow = "1.0"
 bigdecimal = "0.2"
 byte-unit = "4.0"
 chrono = { version = "0.4", features=["serde"] }
-crossterm="0.23"
+crossterm="0.18.0"
 directories = "2.0.2"
 dotenv = "0.15"
 env_logger = "0.7"

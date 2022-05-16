@@ -13,8 +13,7 @@ name = "ya-provider"
 path = "src/main.rs"
 
 [dependencies]
-ya-agreement-utils = { version = "^0.4" }
-ya-manifest-utils = { version = "^0.1" }
+ya-agreement-utils = { version = "^0.3" }
 ya-client = { version = "0.6", features = ['cli'] }
 ya-client-model = "0.4"
 ya-compile-time-utils = "0.2"
@@ -39,7 +38,6 @@ directories = "2.0.2"
 dotenv = "0.15.0"
 futures = "0.3"
 futures-util = "0.3.4"
-hex = "0.4"
 humantime = "2.0.0"
 lazy_static = "1.4.0"
 libc = "0.2"
@@ -47,14 +45,12 @@ log = "0.4.8"
 log-derive = "0.4"
 notify = "4.0.15"
 num_cpus = "1.13.0"
-num-traits = "0.2.14"
 path-clean = "0.1.0"
-regex = "1.5"
 semver = { version = "0.11", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 shared_child = "0.3.4"
-signal-hook = "0.3"
+signal-hook = "0.1.13"
 structopt = "0.3.20"
 strum = "0.20"
 strum_macros = "0.20"
@@ -72,4 +68,4 @@ nix = "0.22.0"
 winapi = { version = "0.3.8", features = ["fileapi"] }
 
 [dev-dependencies]
-shlex = "1.1.0"
+chrono = "0.4"
