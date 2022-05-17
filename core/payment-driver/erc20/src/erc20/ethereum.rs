@@ -259,27 +259,35 @@ pub async fn approve_multi_payment_contract(
 }
 
 pub async fn get_glm_balance(address: H160, network: Network) -> Result<U256, GenericError> {
-    with_clients(network, |client| async move {
-        let env = get_env(network);
-
-        let glm_contract = prepare_erc20_contract(&client, &env)?;
-        glm_contract
-            .query(
-                BALANCE_ERC20_FUNCTION,
-                (address,),
-                None,
-                Options::default(),
-                None,
-            )
-            .await
-            .map_err(ClientError::new)
+    with_clients(network, |client| {
+        get_glm_balance_with(client, address, network)
     })
     .await
+}
+
+async fn get_glm_balance_with(
+    client: Web3<Http>,
+    address: H160,
+    network: Network,
+) -> Result<U256, ClientError> {
+    let env = get_env(network);
+    let glm_contract = prepare_erc20_contract(&client, &env)?;
+    glm_contract
+        .query(
+            BALANCE_ERC20_FUNCTION,
+            (address,),
+            None,
+            Options::default(),
+            None,
+        )
+        .await
+        .map_err(Into::into)
 }
 
 pub async fn get_balance(address: H160, network: Network) -> Result<U256, GenericError> {
     with_clients(network, |client| get_balance_with(address, client)).await
 }
+
 async fn get_balance_with(address: H160, client: Web3<Http>) -> Result<U256, ClientError> {
     client
         .eth()

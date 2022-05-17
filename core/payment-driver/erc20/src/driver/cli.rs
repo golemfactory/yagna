@@ -150,6 +150,7 @@ pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericEr
             "Receiver list (to-address) cannot be empty",
         ));
     }
+    let is_multi_payment = msg.receivers.len() > 1;
 
     let gas_limit = msg.gas_limit;
     let gas_price = msg.gas_price;
@@ -157,114 +158,160 @@ pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericEr
     let glm_balance = wallet::account_balance(sender_h160, network).await?;
 
     let nonce = wallet::get_next_nonce(dao, sender_h160, network).await?;
-
+    let gasless = msg.gasless;
     let details_str: String;
-    let db_tx = if msg.receivers.len() == 1 {
-        let recipient = msg
-            .receivers
-            .get(0)
-            .ok_or(GenericError::new("receivers cannot be empty"))?
-            .clone();
-        let amount = msg
-            .amounts
-            .get(0)
-            .ok_or(GenericError::new("amounts cannot be empty"))?
-            .clone();
 
-        if amount > glm_balance {
-            return Err(GenericError::new(format!(
-                "Not enough {} balance for transfer. balance={}, tx_amount={}, address={}, network={}",
-                token, glm_balance, amount, sender, network
-            )));
-        }
-        let details = PaymentDetails {
-            recipient,
-            sender,
-            amount,
-            date: Some(Utc::now()),
-        };
-        details_str = format!("{:?}", details);
-        wallet::make_transfer(
-            &details,
-            nonce,
-            network,
-            gas_price,
-            max_gas_price,
-            gas_limit,
-        )
-        .await?
-    } else {
-        let details_array = msg
-            .receivers
-            .into_iter()
-            .zip(msg.amounts.into_iter())
-            .map(|(recipient, amount)| PaymentDetails {
+    if gasless {
+        if is_multi_payment {
+            Err(GenericError::new(format!(
+                "No support for multipayment and gasless transactions"
+            )))
+        } else {
+            let recipient = msg
+                .receivers
+                .get(0)
+                .ok_or(GenericError::new("receivers cannot be empty"))?
+                .clone();
+            let amount = msg
+                .amounts
+                .get(0)
+                .ok_or(GenericError::new("amounts cannot be empty"))?
+                .clone();
+
+            if amount > glm_balance {
+                return Err(GenericError::new(format!(
+                    "Not enough {} balance for transfer. balance={}, tx_amount={}, address={}, network={}",
+                    token, glm_balance, amount, sender, network
+                )));
+            }
+            let details = PaymentDetails {
                 recipient,
-                sender: sender.clone(),
+                sender,
                 amount,
                 date: Some(Utc::now()),
-            })
-            .collect();
-        details_str = format!("{:?}", details_array);
+            };
+            let tx_id = wallet::make_gasless_transfer(&details, network).await?;
 
-        wallet::make_multi_transfer(
-            details_array,
-            nonce,
-            network,
-            gas_price,
-            max_gas_price,
-            gas_limit,
-        )
-        .await?
-    };
+            let endpoint = match network {
+                Network::Polygon => "https://polygonscan.com/tx/",
+                Network::Mainnet => "https://etherscan.io/tx/",
+                Network::Rinkeby => "https://rinkeby.etherscan.io/tx/",
+                Network::Goerli => "https://goerli.etherscan.io/tx/",
+                Network::Mumbai => "https://mumbai.polygonscan.com/tx/",
+            };
 
-    // Check if there is enough ETH for gas
-    let human_gas_cost = wallet::has_enough_eth_for_gas(&db_tx, network).await?;
-
-    // Everything ok, put the transaction in the queue
-    let tx_id = dao
-        .insert_raw_transaction(db_tx)
-        .await
-        .map_err(GenericError::new)?;
-
-    log::debug!("tx_id={}", tx_id);
-    log::info!("{}, gas cost: {}", details_str, human_gas_cost);
-    if msg.wait_for_tx {
-        let tx_hash = loop {
-            log::info!("Waiting for confirmation 10s.");
-            tokio::time::delay_for(Duration::from_secs(10)).await;
-            let transaction_entity = dao.get_transaction_from_tx(&tx_id).await?;
-            match TransactionStatus::try_from(transaction_entity.status)
-                .map_err(GenericError::new)?
-            {
-                TransactionStatus::Unused => {}
-                TransactionStatus::Created => {}
-                TransactionStatus::Sent => {}
-                TransactionStatus::Pending => {}
-                TransactionStatus::Confirmed => {
-                    break transaction_entity.final_tx;
-                }
-                TransactionStatus::Resend => {}
-                TransactionStatus::ResendAndBumpGas => {}
-                TransactionStatus::ErrorSent => {
-                    break None;
-                }
-                TransactionStatus::ErrorOnChain => {
-                    break transaction_entity.final_tx;
-                }
-                TransactionStatus::ErrorNonceTooLow => {
-                    break None;
-                }
-            }
-        };
-        if let Some(tx_hash) = tx_hash {
-            let message = format!("tx_hash: {}", tx_hash);
+            let message = format!("Follow your transaction: {}0x{:x}", endpoint, tx_id);
             Ok(message)
-        } else {
-            Ok("Cannot extract tx hash. Check yagna logs for details".to_string())
         }
     } else {
-        let message = format!("tx_id: {}", tx_id);
-        Ok(message)
+        let db_tx = if is_multi_payment {
+            let details_array = msg
+                .receivers
+                .into_iter()
+                .zip(msg.amounts.into_iter())
+                .map(|(recipient, amount)| PaymentDetails {
+                    recipient,
+                    sender: sender.clone(),
+                    amount,
+                    date: Some(Utc::now()),
+                })
+                .collect();
+            details_str = format!("{:?}", details_array);
+
+            wallet::make_multi_transfer(
+                details_array,
+                nonce,
+                network,
+                gas_price,
+                max_gas_price,
+                gas_limit,
+            )
+            .await?
+        } else {
+            let recipient = msg
+                .receivers
+                .get(0)
+                .ok_or(GenericError::new("receivers cannot be empty"))?
+                .clone();
+            let amount = msg
+                .amounts
+                .get(0)
+                .ok_or(GenericError::new("amounts cannot be empty"))?
+                .clone();
+
+            if amount > glm_balance {
+                return Err(GenericError::new(format!(
+                    "Not enough {} balance for transfer. balance={}, tx_amount={}, address={}, network={}",
+                    token, glm_balance, amount, sender, network
+                )));
+            }
+            let details = PaymentDetails {
+                recipient,
+                sender,
+                amount,
+                date: Some(Utc::now()),
+            };
+            details_str = format!("{:?}", details);
+
+            wallet::make_transfer(
+                &details,
+                nonce,
+                network,
+                gas_price,
+                max_gas_price,
+                gas_limit,
+            )
+            .await?
+        };
+
+        // Check if there is enough ETH for gas
+        let human_gas_cost = wallet::has_enough_eth_for_gas(&db_tx, network).await?;
+
+        // Everything ok, put the transaction in the queue
+        let tx_id = dao
+            .insert_raw_transaction(db_tx)
+            .await
+            .map_err(GenericError::new)?;
+
+        log::debug!("tx_id={}", tx_id);
+        log::info!("{}, gas cost: {}", details_str, human_gas_cost);
+        if msg.wait_for_tx {
+            let tx_hash = loop {
+                log::info!("Waiting for confirmation 10s.");
+                tokio::time::delay_for(Duration::from_secs(10)).await;
+                let transaction_entity = dao.get_transaction_from_tx(&tx_id).await?;
+                match TransactionStatus::try_from(transaction_entity.status)
+                    .map_err(GenericError::new)?
+                {
+                    TransactionStatus::Unused => {}
+                    TransactionStatus::Created => {}
+                    TransactionStatus::Sent => {}
+                    TransactionStatus::Pending => {}
+                    TransactionStatus::Confirmed => {
+                        break transaction_entity.final_tx;
+                    }
+                    TransactionStatus::Resend => {}
+                    TransactionStatus::ResendAndBumpGas => {}
+                    TransactionStatus::ErrorSent => {
+                        break None;
+                    }
+                    TransactionStatus::ErrorOnChain => {
+                        break transaction_entity.final_tx;
+                    }
+                    TransactionStatus::ErrorNonceTooLow => {
+                        break None;
+                    }
+                }
+            };
+            if let Some(tx_hash) = tx_hash {
+                let message = format!("tx_hash: {}", tx_hash);
+                Ok(message)
+            } else {
+                Ok("Cannot extract tx hash. Check yagna logs for details".to_string())
+            }
+        } else {
+            let message = format!("tx_id: {}", tx_id);
+            Ok(message)
+        }
     }
 }
