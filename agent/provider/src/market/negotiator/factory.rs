@@ -3,6 +3,8 @@ use humantime;
 use std::sync::Arc;
 use structopt::StructOpt;
 
+use ya_manifest_utils::PolicyConfig;
+
 use super::common::NegotiatorAddr;
 use crate::market::config::MarketConfig;
 use crate::market::negotiator::{AcceptAllNegotiator, CompositeNegotiator};
@@ -63,6 +65,8 @@ pub struct CompositeNegotiatorConfig {
     pub debit_note_interval_config: DebitNoteIntervalConfig,
     #[structopt(flatten)]
     pub payment_timeout_config: PaymentTimeoutConfig,
+    #[structopt(flatten)]
+    pub policy_config: PolicyConfig,
 }
 
 #[derive(StructOpt, Clone, Debug)]

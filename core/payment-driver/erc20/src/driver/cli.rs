@@ -128,6 +128,7 @@ pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericEr
     let gas_limit = msg.gas_limit;
     let gas_price = msg.gas_price;
     let max_gas_price = msg.max_gas_price;
+    let gasless = msg.gasless;
     let glm_balance = wallet::account_balance(sender_h160, network).await?;
 
     if amount > glm_balance {
@@ -144,28 +145,44 @@ pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericEr
         date: Some(Utc::now()),
     };
 
-    let nonce = wallet::get_next_nonce(dao, sender_h160, network).await?;
-    let db_tx = wallet::make_transfer(
-        &details,
-        nonce,
-        network,
-        gas_price,
-        max_gas_price,
-        gas_limit,
-    )
-    .await?;
+    if gasless {
+        let tx_id = wallet::make_gasless_transfer(&details, network).await?;
 
-    // Check if there is enough ETH for gas
-    let human_gas_cost = wallet::has_enough_eth_for_gas(&db_tx, network).await?;
+        let endpoint = match network {
+            Network::Polygon => "https://polygonscan.com/tx/",
+            Network::Mainnet => "https://etherscan.io/tx/",
+            Network::Rinkeby => "https://rinkeby.etherscan.io/tx/",
+            Network::Goerli => "https://goerli.etherscan.io/tx/",
+            Network::Mumbai => "https://mumbai.polygonscan.com/tx/",
+        };
 
-    // Everything ok, put the transaction in the queue
-    let tx_id = dao.insert_raw_transaction(db_tx).await;
+        let message = format!("Follow your transaction: {}0x{:x}", endpoint, tx_id);
+        Ok(message)
+    } else {
+        let nonce = wallet::get_next_nonce(dao, sender_h160, network).await?;
 
-    let message = format!(
-        "Scheduled {} transfer. details={:?}, max_gas_cost={} ETH, network={}",
-        &token, &details, &human_gas_cost, &network
-    );
-    log::info!("{}", message);
-    log::debug!("tx_id={}", tx_id);
-    Ok(message)
+        let db_tx = wallet::make_transfer(
+            &details,
+            nonce,
+            network,
+            gas_price,
+            max_gas_price,
+            gas_limit,
+        )
+        .await?;
+
+        // Check if there is enough ETH for gas
+        let human_gas_cost = wallet::has_enough_eth_for_gas(&db_tx, network).await?;
+
+        // Everything ok, put the transaction in the queue
+        let tx_id = dao.insert_raw_transaction(db_tx).await;
+
+        let message = format!(
+            "Scheduled {} transfer. details={:?}, max_gas_cost={} ETH, network={}",
+            &token, &details, &human_gas_cost, &network
+        );
+        log::info!("{}", message);
+        log::debug!("tx_id={}", tx_id);
+        Ok(message)
+    }
 }

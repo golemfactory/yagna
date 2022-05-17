@@ -128,6 +128,7 @@ impl<'c> DebitNoteDao<'c> {
                 .optional()?;
             let debit_note = WriteObj::issued(debit_note, previous_debit_note_id, issuer_id);
             let debit_note_id = debit_note.id.clone();
+            let owner_id = debit_note.owner_id.clone();
             activity::set_amount_due(
                 &debit_note.activity_id,
                 &debit_note.owner_id,
@@ -137,6 +138,13 @@ impl<'c> DebitNoteDao<'c> {
             diesel::insert_into(dsl::pay_debit_note)
                 .values(debit_note)
                 .execute(conn)?;
+            debit_note_event::create::<()>(
+                debit_note_id.clone(),
+                owner_id,
+                DebitNoteEventType::DebitNoteReceivedEvent,
+                None,
+                conn,
+            )?;
             Ok(debit_note_id)
         })
         .await
@@ -250,16 +258,8 @@ impl<'c> DebitNoteDao<'c> {
 
             update_status(&vec![debit_note_id.clone()], &owner_id, &status, conn)?;
             activity::set_amount_accepted(&activity_id, &owner_id, &amount, conn)?;
-            if let Role::Provider = role {
-                for event in events {
-                    debit_note_event::create::<()>(
-                        debit_note_id.clone(),
-                        owner_id,
-                        event,
-                        None,
-                        conn,
-                    )?;
-                }
+            for event in events {
+                debit_note_event::create::<()>(debit_note_id.clone(), owner_id, event, None, conn)?;
             }
 
             Ok(())

@@ -69,8 +69,11 @@ lazy_static = "1.4"
 log = "0.4"
 openssl = "0.10"
 openssl-probe = { version = "0.1", optional = true }
+serde = "1.0"
+serde_json = "1.0"
 structopt = "0.3"
-tokio = {version = "0.2.22", features=["uds"]}
+tokio = { version = "0.2.22", features = ["uds"] }
+tokio-util = { version = "0.3", features = ["codec"] }
 url = "2.1.1"
 
 [package.metadata.deb]
@@ -140,6 +143,7 @@ members = [
     "utils/agreement-utils",
     "utils/compile-time-utils",
     "utils/futures",
+    "utils/manifest-utils",
     "utils/networking",
     "utils/path",
     "utils/process",
@@ -189,6 +193,7 @@ ya-std-utils = { path = "utils/std-utils" }
 ya-compile-time-utils = { path = "utils/compile-time-utils" }
 ya-exe-unit = { path = "exe-unit" }
 ya-file-logging = { path = "utils/file-logging" }
+ya-manifest-utils = { path = "utils/manifest-utils" }
 ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
 ya-utils-futures = { path = "utils/futures" }
