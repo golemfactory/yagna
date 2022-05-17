@@ -207,7 +207,7 @@ async fn send_debit_note(
     provider_context: Arc<ProviderCtx>,
     debit_note_info: DebitNoteInfo,
     cost_info: CostInfo,
-    last_payable_debit_note: DateTime<Utc>,
+    _last_payable_debit_note: DateTime<Utc>,
 ) -> Result<DebitNote> {
     let payment_due_date = if provider_context.config.payment_due_timeout.is_zero() {
         None
@@ -817,7 +817,7 @@ impl Handler<IssueInvoice> for Payments {
             + chrono::Duration::from_std(self.context.config.payment_due_timeout)
                 .unwrap_or_else(|_| chrono::Duration::days(1));
 
-        let payment_timeout = msg
+        let _payment_timeout = msg
             .payment_timeout
             .unwrap_or_else(|| chrono::Duration::days(1));
         let invoice = NewInvoice {

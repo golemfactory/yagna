@@ -1,5 +1,4 @@
 #![allow(unused)]
-use crate::error::Error;
 use crate::message::Shutdown;
 use crate::state::{Deployment, DeploymentNetwork};
 use crate::Result;
@@ -13,26 +12,14 @@ use crate::acl::Acl;
 use futures::channel::mpsc;
 use futures::Stream;
 use ya_core_model::activity;
-use ya_core_model::activity;
-use ya_core_model::activity::{RpcMessageError, VpnControl};
-use ya_core_model::activity::{RpcMessageError, VpnControl};
-use ya_runtime_api::server::{CreateNetwork, Network, NetworkEndpoint, RuntimeService};
+use ya_core_model::activity::{VpnControl};
 use ya_runtime_api::server::{CreateNetwork, Network, NetworkEndpoint, RuntimeService};
 
-use crate::acl::Acl;
-use crate::error::Error;
-use crate::message::Shutdown;
-use crate::state::{Deployment, DeploymentNetwork};
-use crate::Result;
 use ya_runtime_api::deploy::ContainerEndpoint;
-use ya_runtime_api::server::Network;
-use ya_service_bus::{typed, typed::Endpoint as GsbEndpoint};
 use ya_utils_networking::vpn::common::DEFAULT_MAX_FRAME_SIZE;
 use ya_utils_networking::vpn::{network::DuoEndpoint, Error as NetError};
 
 use crate::error::Error;
-use crate::state::DeploymentNetwork;
-use crate::Result;
 
 pub(crate) mod inet;
 pub(crate) mod vpn;
