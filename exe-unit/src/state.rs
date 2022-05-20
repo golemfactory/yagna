@@ -14,11 +14,7 @@ use tokio::sync::broadcast;
 
 pub use ya_client_model::activity::activity_state::{State, StatePair};
 use ya_client_model::activity::exe_script_command::Network;
-use ya_client_model::activity::{
-    Capture, CommandOutput, CommandResult, ExeScriptCommand, ExeScriptCommandResult,
-    ExeScriptCommandState, RuntimeEvent, RuntimeEventKind,
-};
-
+use ya_client_model::activity::*;
 use ya_core_model::activity::Exec;
 use ya_utils_networking::vpn::common::{to_ip, to_net};
 use ya_utils_networking::vpn::Error as NetError;

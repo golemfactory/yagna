@@ -1,9 +1,11 @@
-import pytest
 from datetime import datetime, timezone
-from goth.configuration import Override
-from goth.runner.log import configure_logging
 from pathlib import Path
 from typing import List
+
+import pytest
+
+from goth.configuration import Override
+from goth.runner.log import configure_logging
 
 
 def pytest_addoption(parser):

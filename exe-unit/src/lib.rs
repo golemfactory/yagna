@@ -8,15 +8,15 @@ use actix::prelude::*;
 use chrono::Utc;
 use futures::channel::{mpsc, oneshot};
 use futures::{FutureExt, SinkExt};
+
+use ya_agreement_utils::agreement::OfferTemplate;
 use ya_client_model::activity::{
     activity_state::StatePair, ActivityUsage, CommandOutput, ExeScriptCommand, State,
 };
-use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
-
-use ya_agreement_utils::agreement::OfferTemplate;
 use ya_core_model::activity;
 use ya_core_model::activity::local::Credentials;
 use ya_runtime_api::deploy;
+use ya_service_bus::{actix_rpc, RpcEndpoint, RpcMessage};
 
 use crate::acl::Acl;
 use crate::agreement::Agreement;

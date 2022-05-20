@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use actix::{Actor, Addr, Arbiter, System};
 use anyhow::{bail, Context};
 use structopt::{clap, StructOpt};
-
 use ya_client_model::activity::ExeScriptCommand;
 use ya_service_bus::RpcEnvelope;
 
