@@ -3,6 +3,7 @@ use std::path::Path;
 use ya_client::model::NodeId;
 
 use serde::{Deserialize, Deserializer, Serialize};
+use std::str::FromStr;
 use std::{fs, io};
 use ya_utils_path::SwapSave;
 
@@ -24,6 +25,7 @@ pub struct GlobalsState {
     pub node_name: Option<String>,
     pub subnet: Option<String>,
     pub account: Option<NodeId>,
+    pub settlement_frequency: Option<Frequency>,
 }
 
 impl<'de> Deserialize<'de> for GlobalsState {
@@ -54,6 +56,7 @@ impl<'de> Deserialize<'de> for GlobalsState {
             pub node_name: Option<String>,
             pub subnet: Option<String>,
             pub account: Option<Account>,
+            pub settlement_frequency: Option<Frequency>,
         }
 
         let s = GenericGlobalsState::deserialize(deserializer)?;
@@ -61,6 +64,7 @@ impl<'de> Deserialize<'de> for GlobalsState {
             node_name: s.node_name,
             subnet: s.subnet,
             account: s.account.map(|a| a.address()),
+            settlement_frequency: s.settlement_frequency,
         })
     }
 }
@@ -103,11 +107,36 @@ impl GlobalsState {
         if node_config.account.account.is_some() {
             self.account = node_config.account.account;
         }
+        if node_config.settlement_frequency.is_some() {
+            self.settlement_frequency = node_config.settlement_frequency;
+        }
+        eprintln!("new ! {:?} == {}", self, path.display());
         self.save(path)
     }
 
     pub fn save(&self, path: &Path) -> anyhow::Result<()> {
         Ok(path.swap_save(serde_json::to_string_pretty(self)?)?)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "kebab-case")]
+pub enum Frequency {
+    EndOfAgreement,
+    Hourly,
+    Daily,
+}
+
+impl FromStr for Frequency {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "eoa" | "end-of-agreement" => Frequency::EndOfAgreement,
+            "h" | "hourly" => Frequency::Hourly,
+            "d" | "daily" => Frequency::Daily,
+            other => anyhow::bail!("invalid frequency parameter: {}", other),
+        })
     }
 }
 
