@@ -6,6 +6,7 @@ use serde::Serialize;
 use std::convert::TryFrom;
 use ya_client_model::payment::{InvoiceEvent, InvoiceEventType};
 use ya_client_model::NodeId;
+use ya_persistence::types::Role;
 
 #[derive(Debug, Identifiable, Insertable)]
 #[table_name = "pay_invoice_event"]
@@ -41,6 +42,7 @@ impl WriteObj {
 #[table_name = "pay_invoice_event_read"]
 #[primary_key(invoice_id, event_type)]
 pub struct ReadObj {
+    pub role: Role,
     pub invoice_id: String,
     pub owner_id: NodeId,
     pub event_type: String,

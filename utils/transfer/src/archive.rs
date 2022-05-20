@@ -1,6 +1,5 @@
 use crate::error::Error;
 use crate::TransferData;
-use actix_rt::Arbiter;
 use async_compression::futures::bufread::{BzDecoder, BzEncoder};
 use async_compression::futures::bufread::{GzipDecoder, GzipEncoder};
 use async_compression::futures::bufread::{XzDecoder, XzEncoder};
@@ -317,7 +316,7 @@ where
         }
     });
 
-    Arbiter::new().spawn(Box::pin(fut));
+    tokio::task::spawn(fut);
 
     if let Some(Err(e)) = rx.next().await {
         return Box::pin(futures_stream_err(io_error(e)).map(BytesResult::convert));

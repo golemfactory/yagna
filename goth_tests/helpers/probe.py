@@ -25,9 +25,7 @@ class ProviderProbe(BaseProviderProbe):
     @step()
     async def wait_for_exeunit_started(self):
         """Wait until the provider agent starts the exe-unit."""
-        await self.provider_agent.wait_for_log(
-            r"(.*)\[ExeUnit\](.+)Supervisor initialized$"
-        )
+        await self.provider_agent.wait_for_log(r"(.*)ExeUnit initialized.*")
 
     @step()
     async def wait_for_exeunit_finished(self):
@@ -35,6 +33,11 @@ class ProviderProbe(BaseProviderProbe):
         await self.provider_agent.wait_for_log(
             r"(.*)ExeUnit process exited with status Finished - exit status: 0(.*)"
         )
+
+    @step(default_timeout=20)
+    async def wait_for_exeunit_exited(self):
+        """Wait until exe-unit exits."""
+        await self.provider_agent.wait_for_log(r".*ExeUnit process exited.*")
 
     @step()
     async def wait_for_agreement_terminated(self):

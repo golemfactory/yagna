@@ -1,34 +1,50 @@
-use crate::error::Error;
-use crate::notify::Notify;
-use crate::output::CapturedOutput;
-use crate::runtime::RuntimeMode;
+use std::collections::HashMap;
+use std::net::IpAddr;
+use std::path::PathBuf;
+use std::str::FromStr;
+
 use chrono::{DateTime, Utc};
 use futures::channel::{mpsc, oneshot};
 use futures::{SinkExt, StreamExt, TryStreamExt};
 use ipnet::IpNet;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::net::IpAddr;
-use std::path::PathBuf;
 use thiserror::Error;
 use tokio::sync::broadcast;
+
+pub use ya_client_model::activity::activity_state::{State, StatePair};
 use ya_client_model::activity::exe_script_command::Network;
-use ya_client_model::activity::{
-    Capture, CommandOutput, CommandResult, ExeScriptCommand, ExeScriptCommandResult,
-    ExeScriptCommandState, RuntimeEvent, RuntimeEventKind,
-};
+use ya_client_model::activity::*;
 use ya_core_model::activity::Exec;
 use ya_utils_networking::vpn::common::{to_ip, to_net};
-use ya_utils_networking::vpn::error::Error as VpnError;
+use ya_utils_networking::vpn::Error as NetError;
 
-use std::str::FromStr;
-pub use ya_client_model::activity::activity_state::{State, StatePair};
+use crate::error::Error;
+use crate::manifest::ManifestContext;
+use crate::notify::Notify;
+use crate::output::CapturedOutput;
+use crate::runtime::RuntimeMode;
+
+fn invalid_state_err_msg(state_pair: &StatePair) -> String {
+    match state_pair {
+        StatePair(State::Initialized, None) => {
+            format!("Activity is initialized - deploy() command is expected now")
+        }
+        StatePair(State::Deployed, None) => {
+            format!("Activity is deployed - start() command is expected now")
+        }
+        StatePair(State::Ready, None) => format!("Cannot send command after a successful start()"),
+        _ => format!(
+            "This command is not allowed when activity is in the {:?} state",
+            state_pair.0
+        ),
+    }
+}
 
 #[derive(Error, Debug, Serialize)]
 pub enum StateError {
     #[error("Busy: {0:?}")]
     Busy(StatePair),
-    #[error("Invalid state: {0:?}")]
+    #[error("{}", invalid_state_err_msg(.0))]
     InvalidState(StatePair),
     #[error("Unexpected state: {current:?}, expected {expected:?}")]
     UnexpectedState {
@@ -37,19 +53,11 @@ pub enum StateError {
     },
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug, Default)]
 pub struct Supervision {
     pub hardware: bool,
     pub image: bool,
-}
-
-impl Default for Supervision {
-    fn default() -> Self {
-        Supervision {
-            hardware: true,
-            image: true,
-        }
-    }
+    pub manifest: ManifestContext,
 }
 
 pub(crate) struct ExeUnitState {
@@ -417,12 +425,12 @@ impl Deployment {
                     },
                 ))
             })
-            .collect::<Result<Vec<_>, VpnError>>()?;
+            .collect::<Result<Vec<_>, NetError>>()?;
         self.networks.extend(networks.into_iter());
         Ok(())
     }
 
-    pub fn map_nodes(nodes: HashMap<String, String>) -> Result<HashMap<IpAddr, String>, VpnError> {
+    pub fn map_nodes(nodes: HashMap<String, String>) -> Result<HashMap<IpAddr, String>, NetError> {
         nodes
             .into_iter()
             .map(|(ip, id)| to_ip(ip.as_ref()).map(|ip| (ip, id)))

@@ -28,7 +28,7 @@ async fn test_query_events_non_existent_subscription() {
     let non_existent_id = "80da375cb604426fb6cddd64f4ccc715-85fdde1924371f4a3a412748f61e5b941c500ea69a55a5135b886a2bffcb8e55".parse().unwrap();
 
     // We expect that no events are available for non existent subscription.
-    let result = market1.query_events(&non_existent_id, 1.2, Some(5)).await;
+    let result = market1.query_events(&non_existent_id, 2.0, Some(5)).await;
 
     assert_err_eq!(TakeEventsError::NotFound(non_existent_id), result);
 }
@@ -58,7 +58,7 @@ async fn test_query_initial_proposal() {
 
     // We expect that proposal will be available as requestor event.
     let events = market1
-        .query_events(&demand_id, 1.0, Some(5))
+        .query_events(&demand_id, 5.0, Some(5))
         .await
         .unwrap();
 
@@ -74,7 +74,7 @@ async fn test_query_initial_proposal() {
 
     // We expect that, the same event won't be available again.
     let events = market1
-        .query_events(&demand_id, 0.2, Some(5))
+        .query_events(&demand_id, 0.1, Some(5))
         .await
         .unwrap();
 
@@ -108,7 +108,7 @@ async fn test_query_multiple_events() {
     for _ in 0..3 {
         events.append(
             &mut market1
-                .query_events(&demand_id, 1.0, Some(5))
+                .query_events(&demand_id, 2.0, Some(5))
                 .await
                 .unwrap(),
         );
@@ -127,7 +127,7 @@ async fn test_query_multiple_events() {
 
     // We expect that, the same events won't be available again.
     let events = market1
-        .query_events(&demand_id, 0.2, Some(5))
+        .query_events(&demand_id, 0.1, Some(5))
         .await
         .unwrap();
 
@@ -159,7 +159,7 @@ async fn test_query_events_timeout() {
     // We set timeout and we expect that function will wait until events will come.
     let query_handle = tokio::spawn(async move {
         let events = market1c
-            .query_events(&demand_id1c, 1.2, Some(5))
+            .query_events(&demand_id1c, 2.0, Some(5))
             .await
             .unwrap();
         assert_eq!(events.len(), 1);
@@ -174,7 +174,7 @@ async fn test_query_events_timeout() {
         .unwrap();
 
     // Protect from eternal waiting.
-    tokio::time::timeout(Duration::from_millis(1500), query_handle)
+    tokio::time::timeout(Duration::from_millis(2100), query_handle)
         .await
         .unwrap()
         .unwrap();
@@ -201,7 +201,7 @@ async fn test_query_events_unsubscribe_notification() {
     // Query events, when no Proposal are in the queue yet.
     // We set timeout and we expect that function will wait until events will come.
     let query_handle = tokio::spawn(async move {
-        match market1.query_events(&subscription_id, 1.2, Some(5)).await {
+        match market1.query_events(&subscription_id, 2.0, Some(5)).await {
             Err(QueryEventsError::TakeEvents(TakeEventsError::NotFound(id))) => {
                 assert_eq!(id, subscription_id);
             }
@@ -219,7 +219,7 @@ async fn test_query_events_unsubscribe_notification() {
         .unwrap();
 
     // Protect from eternal waiting.
-    tokio::time::timeout(Duration::from_millis(1500), query_handle)
+    tokio::time::timeout(Duration::from_millis(2100), query_handle)
         .await
         .unwrap()
         .unwrap();
@@ -253,17 +253,22 @@ async fn test_query_events_edge_cases() {
     assert_err_eq!(QueryEventsError::InvalidMaxEvents(-5, 100), result);
 
     // Negative timeout should be treated as immediate checking events and return.
-    tokio::time::sleep(Duration::from_millis(200)).await;
-    let events = tokio::time::timeout(
-        Duration::from_millis(20),
-        market1
-            .requestor_engine
-            .query_events(&demand_id, -5.0, None),
-    )
-    .await
-    .unwrap()
-    .unwrap();
-    assert_eq!(events.len(), 1);
+    for _ in 0..10 {
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let events = tokio::time::timeout(
+            Duration::from_millis(20),
+            market1
+                .requestor_engine
+                .query_events(&demand_id, -5.0, None),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        if events.len() > 0 {
+            assert_eq!(events.len(), 1);
+            break;
+        }
+    }
 
     // Restore available Proposal
     let demand_id = market1
@@ -276,7 +281,7 @@ async fn test_query_events_edge_cases() {
         .unwrap();
 
     // maxEvents equal to 0 is forbidden value now.
-    let result = market1.query_events(&demand_id, 0.2, Some(0)).await;
+    let result = market1.query_events(&demand_id, 0.1, Some(0)).await;
     assert_err_eq!(QueryEventsError::InvalidMaxEvents(0, 100), result);
 
     // Query events returns error, if Demand was unsubscribed.
@@ -323,7 +328,7 @@ async fn test_query_events_for_multiple_subscriptions() {
 
     // Check events related to first and last subscription.
     let events = market1
-        .query_events(&demand_id1, 2.0, Some(5))
+        .query_events(&demand_id1, 5.0, Some(5))
         .await
         .unwrap();
     assert_eq!(events.len(), 1);
@@ -335,7 +340,7 @@ async fn test_query_events_for_multiple_subscriptions() {
         .unwrap();
 
     let events = market1
-        .query_events(&demand_id2, 2.0, Some(5))
+        .query_events(&demand_id2, 5.0, Some(5))
         .await
         .unwrap();
     assert_eq!(events.len(), 1);
@@ -364,7 +369,7 @@ async fn test_simultaneous_query_events() {
     let market = market1.clone();
 
     let query1 = tokio::spawn(async move {
-        let events = market.query_events(&demand_id, 1.2, Some(5)).await.unwrap();
+        let events = market.query_events(&demand_id, 2.0, Some(5)).await.unwrap();
         Result::<_, anyhow::Error>::Ok(events)
     });
 
@@ -372,7 +377,7 @@ async fn test_simultaneous_query_events() {
     let demand_id = demand_id1.clone();
 
     let query2 = tokio::spawn(async move {
-        let events = market.query_events(&demand_id, 1.2, Some(5)).await.unwrap();
+        let events = market.query_events(&demand_id, 2.0, Some(5)).await.unwrap();
         Result::<_, anyhow::Error>::Ok(events)
     });
 
@@ -388,12 +393,12 @@ async fn test_simultaneous_query_events() {
         .await
         .unwrap();
 
-    let mut events1 = tokio::time::timeout(Duration::from_millis(1500), query1)
+    let mut events1 = tokio::time::timeout(Duration::from_millis(2100), query1)
         .await
         .unwrap()
         .unwrap()
         .unwrap();
-    let events2 = tokio::time::timeout(Duration::from_millis(1500), query2)
+    let events2 = tokio::time::timeout(Duration::from_millis(2100), query2)
         .await
         .unwrap()
         .unwrap()
@@ -448,7 +453,7 @@ async fn test_unsubscribe_demand_while_query_events_for_other() {
 
     let query = tokio::spawn(async move {
         let events = market_copy
-            .query_events(&demand_id1_copy, 1.2, Some(5))
+            .query_events(&demand_id1_copy, 2.0, Some(5))
             .await
             .unwrap();
         Result::<_, anyhow::Error>::Ok(events)
@@ -466,7 +471,7 @@ async fn test_unsubscribe_demand_while_query_events_for_other() {
         .unwrap();
 
     // Query events for first demand should return single Proposal.
-    let events = tokio::time::timeout(Duration::from_millis(1500), query)
+    let events = tokio::time::timeout(Duration::from_millis(2100), query)
         .await
         .unwrap()
         .unwrap()
@@ -508,7 +513,7 @@ async fn test_counter_initial_proposal() {
     // We expect that proposal will be available as event.
     let events = market1
         .requestor_engine
-        .query_events(&subscription_id, 1.0, Some(5))
+        .query_events(&subscription_id, 5.0, Some(5))
         .await
         .unwrap();
 
@@ -536,7 +541,7 @@ async fn test_counter_initial_proposal() {
     let new_proposal_id = new_proposal_id.translate(Owner::Provider);
     let events = market1
         .provider_engine
-        .query_events(&offer_id, 1.5, Some(5))
+        .query_events(&offer_id, 5.0, Some(5))
         .await
         .unwrap();
     assert_eq!(events.len(), 1);
@@ -607,7 +612,7 @@ async fn test_counter_initial_proposal() {
 //     // No new Proposal should appear on Provider Daemon side.
 //     assert!(prov_market
 //         .provider_engine
-//         .query_events(&info.negotiation.offer_id, 0.2, Some(2))
+//         .query_events(&info.negotiation.offer_id, 0.1, Some(2))
 //         .await
 //         .unwrap()
 //         .is_empty());

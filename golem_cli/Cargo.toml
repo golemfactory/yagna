@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 ya-client = { version = "0.6", features = ['cli'] }
 ya-compile-time-utils = "0.2"
-ya-core-model = { version = "^0.4", features=["payment", "version"] }
+ya-core-model = { version = "^0.6", features=["payment", "version"] }
 ya-provider = "0.2"
 ya-utils-path = "0.1.0"
 ya-utils-process = { version = "0.1.0", features = ["lock"] }
@@ -19,7 +19,7 @@ anyhow = "1.0"
 bigdecimal = "0.2"
 byte-unit = "4.0"
 chrono = { version = "0.4", features=["serde"] }
-crossterm="0.18.0"
+crossterm="0.23"
 directories = "2.0.2"
 dotenv = "0.15"
 env_logger = "0.7"
@@ -35,9 +35,10 @@ serde_json = "1.0"
 strip-ansi-escapes = "0.1"
 structopt = "0.3"
 strum = "0.20.0"
+strum_macros = "0.20.0"
 tokio = { version = "1", features = ["process", "signal", "time", "io-util", "io-std", "macros"] }
 url = "2.1"
 
 [target.'cfg(target_family = "unix")'.dependencies]
 libc="0.2.73"
-nix="0.18.0"
+nix="0.22.0"

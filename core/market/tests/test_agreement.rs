@@ -232,7 +232,7 @@ async fn second_creation_should_fail() {
     let req_id = network.get_default_id(REQ_NAME);
 
     // when: expiration time is now
-    let agreement_id = req_engine
+    let _agreement_id = req_engine
         .create_agreement(req_id.clone(), &proposal_id, Utc::now())
         .await
         .unwrap();
@@ -241,10 +241,7 @@ async fn second_creation_should_fail() {
         .create_agreement(req_id.clone(), &proposal_id, Utc::now())
         .await;
 
-    assert_err_eq!(
-        AgreementError::AlreadyExists(agreement_id, proposal_id),
-        result,
-    );
+    assert_err_eq!(AgreementError::ProposalAlreadyAccepted(proposal_id), result,);
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]

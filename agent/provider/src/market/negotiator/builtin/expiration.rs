@@ -17,7 +17,7 @@ pub struct LimitExpiration {
     max_expiration: Duration,
 
     /// DebitNote acceptance timeout. Base point for negotiations.
-    payment_deadline: Duration,
+    accept_timeout: Duration,
     /// If Requestor doesn't promise to accept DebitNotes, this alternative max_expiration will be used.
     max_expiration_without_deadline: Duration,
 
@@ -42,17 +42,17 @@ impl LimitExpiration {
         let component = LimitExpiration {
             min_expiration: chrono::Duration::from_std(config.min_agreement_expiration)?,
             max_expiration: chrono::Duration::from_std(config.max_agreement_expiration)?,
-            payment_deadline: chrono::Duration::from_std(config.debit_note_acceptance_deadline)?,
+            accept_timeout: chrono::Duration::from_std(config.debit_note_acceptance_deadline)?,
             max_expiration_without_deadline: chrono::Duration::from_std(
                 config.max_agreement_expiration_without_deadline,
             )?,
             min_deadline: 5,
         };
 
-        if component.payment_deadline.num_seconds() < component.min_deadline {
+        if component.accept_timeout.num_seconds() < component.min_deadline {
             return Err(anyhow!(
                 "To low DebitNotes deadline: {}",
-                component.payment_deadline.display()
+                component.accept_timeout.display()
             ));
         }
 
@@ -70,9 +70,9 @@ fn proposal_expiration_from(proposal: &ProposalView) -> Result<DateTime<Utc>> {
 }
 
 fn debit_deadline_from(proposal: &ProposalView) -> Result<Option<Duration>> {
-    match proposal.pointer_typed::<i64>(DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY) {
+    match proposal.pointer_typed::<u32>(DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY) {
         // Requestor is able to accept DebitNotes, because he set this property.
-        Ok(deadline) => Ok(Some(Duration::seconds(deadline))),
+        Ok(deadline) => Ok(Some(Duration::seconds(deadline as i64))),
         // If he didn't set this property, he is unable to accept DebitNotes.
         Err(Error::NoKey { .. }) => Ok(None),
         // Property has invalid type. We shouldn't continue negotiations, since
@@ -86,7 +86,7 @@ impl NegotiatorComponent for LimitExpiration {
         &mut self,
         demand: &ProposalView,
         mut offer: ProposalView,
-    ) -> anyhow::Result<NegotiationResult> {
+    ) -> Result<NegotiationResult> {
         let req_deadline = debit_deadline_from(demand)?;
         let our_deadline = debit_deadline_from(&offer)?;
         let req_expiration = proposal_expiration_from(&demand)?;
@@ -129,7 +129,7 @@ impl NegotiatorComponent for LimitExpiration {
                     NegotiationResult::Reject {
                         message: format!(
                             "DebitNote acceptance deadline should be less than {}.",
-                            self.payment_deadline.display()
+                            self.accept_timeout.display()
                         ),
                         is_final: true,
                     }
@@ -171,10 +171,10 @@ impl NegotiatorComponent for LimitExpiration {
         })
     }
 
-    fn fill_template(&mut self, mut template: OfferDefinition) -> anyhow::Result<OfferDefinition> {
+    fn fill_template(&mut self, mut template: OfferDefinition) -> Result<OfferDefinition> {
         template.offer.set_property(
             DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY_FLAT,
-            serde_json::Value::Number(self.payment_deadline.num_seconds().into()),
+            serde_json::Value::Number(self.accept_timeout.num_seconds().into()),
         );
         Ok(template)
     }
@@ -183,11 +183,11 @@ impl NegotiatorComponent for LimitExpiration {
         &mut self,
         _agreement_id: &str,
         _result: &AgreementResult,
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         Ok(())
     }
 
-    fn on_agreement_approved(&mut self, _agreement_id: &str) -> anyhow::Result<()> {
+    fn on_agreement_approved(&mut self, _agreement_id: &str) -> Result<()> {
         Ok(())
     }
 }

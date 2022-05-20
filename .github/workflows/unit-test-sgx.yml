@@ -1,0 +1,36 @@
+name: SGX Unit Tests
+
+on:
+  push:
+    branches:
+      - master
+      - release/*
+  pull_request:
+    branches:
+      - master
+      - release/*
+      - sgx/*
+
+jobs:
+  build:
+    name: SGX Unit Tests
+    env:
+      # `-D warnings` means any warnings emitted will cause build to fail
+      RUSTFLAGS: "-D warnings -C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+
+      - name: Install last stable Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Unit tests for SGX
+        working-directory: exe-unit
+        run: cargo test --features sgx

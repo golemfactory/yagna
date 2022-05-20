@@ -10,7 +10,9 @@ from goth.node import DEFAULT_SUBNET
 from goth.runner.probe import ProviderProbe, RequestorProbe
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("goth.tests.helpers.negotiation")
+
+MAX_PROPOSAL_EXCHANGES = 10
 
 
 class DemandBuilder:
@@ -26,7 +28,7 @@ class DemandBuilder:
         self._constraints = "()"
         self._properties["golem.node.debug.subnet"] = DEFAULT_SUBNET
 
-    def props_from_template(self, task_package: str) -> "DemandBuilder":
+    def props_from_template(self, task_package: Optional[str]) -> "DemandBuilder":
         """Build default properties."""
 
         new_props = {
@@ -34,8 +36,11 @@ class DemandBuilder:
             "golem.srv.comp.expiration": int(
                 (datetime.now() + timedelta(minutes=10)).timestamp() * 1000
             ),
-            "golem.srv.comp.task_package": task_package,
         }
+
+        if task_package is not None:
+            new_props["golem.srv.comp.task_package"] = task_package
+
         self._properties.update(new_props)
         return self
 
@@ -67,6 +72,7 @@ async def negotiate_agreements(
     demand: Demand,
     providers: List[ProviderProbe],
     proposal_filter: Optional[Callable[[Proposal], bool]] = lambda p: True,
+    wait_for_offers_subscribed: bool = True,
 ) -> List[Tuple[str, ProviderProbe]]:
     """Negotiate agreements with supplied providers.
 
@@ -74,8 +80,9 @@ async def negotiate_agreements(
     logic, but rather you want to test further parts of yagna protocol
     and need ready Agreements.
     """
-    for provider in providers:
-        await provider.wait_for_offer_subscribed()
+    if wait_for_offers_subscribed:
+        for provider in providers:
+            await provider.wait_for_offer_subscribed()
 
     subscription_id, demand = await requestor.subscribe_demand(demand)
 
@@ -90,20 +97,37 @@ async def negotiate_agreements(
 
     for proposal in proposals:
         provider = next(p for p in providers if p.address == proposal.issuer_id)
-        logger.info("Processing proposal from %s", provider.name)
+        new_proposal = proposal
+        exchanges = 0
 
-        counter_proposal_id = await requestor.counter_proposal(
-            subscription_id, demand, proposal
-        )
-        await provider.wait_for_proposal_accepted()
+        while True:
+            logger.info("Processing proposal from %s", provider.name)
 
-        new_proposals = await requestor.wait_for_proposals(
-            subscription_id,
-            (provider,),
-            lambda proposal: proposal.prev_proposal_id == counter_proposal_id,
-        )
+            counter_proposal_id = await requestor.counter_proposal(
+                subscription_id, demand, new_proposal
+            )
+            await provider.wait_for_proposal_accepted()
 
-        agreement_id = await requestor.create_agreement(new_proposals[0])
+            new_proposals = await requestor.wait_for_proposals(
+                subscription_id,
+                (provider,),
+                lambda p: p.prev_proposal_id == counter_proposal_id,
+            )
+
+            exchanges += 1
+            prev_proposal = new_proposal
+            new_proposal = new_proposals[0]
+
+            if new_proposal.properties == prev_proposal.properties:
+                break
+            elif exchanges >= MAX_PROPOSAL_EXCHANGES:
+                raise RuntimeError(
+                    "Reach a maximum of %d proposal exchanges", MAX_PROPOSAL_EXCHANGES
+                )
+
+        logger.info("Creating agreement after %d proposal exchanges", exchanges)
+
+        agreement_id = await requestor.create_agreement(new_proposal)
         await requestor.confirm_agreement(agreement_id)
         await provider.wait_for_agreement_approved()
         await requestor.wait_for_approval(agreement_id)

@@ -1,4 +1,4 @@
-name: Release
+name: Create release
 on:
   push:
     tags:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   create-release:
-    name: "Create Release"
+    name: Create release
     runs-on: ubuntu-latest
     steps:
       - name: Create Release
@@ -116,7 +116,7 @@ jobs:
       - name: Build linux
         if: matrix.os == 'ubuntu'
         run: |
-          cargo build --release --features openssl/vendored --target x86_64-unknown-linux-musl
+          cargo build --release --features static-openssl --target x86_64-unknown-linux-musl
           (cd core/gftp && cargo build --bin gftp -p gftp --features bin --release --target x86_64-unknown-linux-musl)
           (cd golem_cli && cargo build --bin golemsp -p golemsp --release --target x86_64-unknown-linux-musl)
           (cd agent/provider && cargo build --bin ya-provider -p ya-provider --release --target x86_64-unknown-linux-musl)
@@ -149,6 +149,83 @@ jobs:
           asset_path: ./releases/${{ steps.pack.outputs.providerArtifact }}
           asset_name: ${{ steps.pack.outputs.providerArtifact }}
           asset_content_type: ${{ steps.pack.outputs.providerMedia }}
+
+  build-aarch64:
+    env:
+      RUSTFLAGS: "-C link-arg=-s"
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get upload url
+        id: release_upload_url
+        uses: actions/github-script@0.9.0
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          result-encoding: string
+          script: |
+            let tag = context.payload.ref.replace(/.*\//, '');
+            let release =  await github.request("GET /repos/:owner/:repo/releases/tags/:tag", {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag: tag
+            });
+            console.log(release.data.upload_url);
+            return release.data.upload_url
+
+      - name: Check out repository
+        uses: actions/checkout@v2
+
+      - name: Setup toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: aarch64-unknown-linux-musl
+          override: true
+
+      - name: Build binaries
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: >
+            -p yagna
+            -p ya-exe-unit
+            -p ya-provider
+            -p golemsp
+            -p gftp
+            --release
+            --features static-openssl
+            --target aarch64-unknown-linux-musl
+
+      - name: Pack
+        id: pack
+        shell: bash
+        env:
+          OS_NAME: linux-aarch64
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          bash .ci/pack-build.sh
+      - name: Upload Release Asset [Requestor]
+        id: upload-release-asset-req
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.release_upload_url.outputs.result }}
+          asset_path: ./releases/${{ steps.pack.outputs.requestorArtifact }}
+          asset_name: ${{ steps.pack.outputs.requestorArtifact }}
+          asset_content_type: ${{ steps.pack.outputs.requestorMedia }}
+      - name: Upload Release Asset [Provider]
+        id: upload-release-asset-prov
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.release_upload_url.outputs.result }}
+          asset_path: ./releases/${{ steps.pack.outputs.providerArtifact }}
+          asset_name: ${{ steps.pack.outputs.providerArtifact }}
+          asset_content_type: ${{ steps.pack.outputs.providerMedia }}
+
   build-deb:
     needs: create-release
     runs-on: ubuntu-latest

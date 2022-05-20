@@ -12,6 +12,7 @@ use futures::{future, future::BoxFuture, Future, FutureExt, SinkExt, TryFutureEx
 use smoltcp::iface::Route;
 use smoltcp::socket::{Socket, SocketHandle};
 use smoltcp::wire::{IpAddress, IpCidr, IpEndpoint};
+use uuid::Uuid;
 
 use crate::message::*;
 use crate::socket::*;
@@ -79,14 +80,10 @@ impl VpnSupervisor {
     pub async fn create_network(
         &mut self,
         node_id: &NodeId,
-        network: ya_client_model::net::Network,
-    ) -> Result<()> {
-        if self.networks.contains_key(&network.id) {
-            return Err(Error::NetIdTaken(network.id));
-        }
-
+        network: ya_client_model::net::NewNetwork,
+    ) -> Result<ya_client_model::net::Network> {
         let net = to_net(&network.ip, network.mask.as_ref())?;
-        let net_id = network.id.clone();
+        let net_id = Uuid::new_v4().to_simple().to_string();
         let net_ip = IpCidr::new(net.addr().into(), net.prefix_len());
         let net_gw = match network
             .gateway
@@ -105,20 +102,27 @@ impl VpnSupervisor {
         let actor = self
             .arbiter
             .spawn_ext(async move {
-                let stack = Stack::new(net_ip, net_route(net_gw)?);
+                let stack = Stack::new(net_ip, net_route(net_gw.clone())?);
                 let vpn = Vpn::new(stack, vpn_net);
                 Ok::<_, Error>(vpn.start())
             })
             .await?;
 
+        let network = ya_client_model::net::Network {
+            id: net_id.clone(),
+            ip: net_ip.to_string(),
+            mask: net.netmask().to_string(),
+            gateway: net_gw.to_string(),
+        };
+
         self.networks.insert(net_id.clone(), actor);
-        self.blueprints.insert(net_id.clone(), network);
+        self.blueprints.insert(net_id.clone(), network.clone());
         self.ownership
             .entry(node_id.clone())
             .or_insert_with(Default::default)
             .insert(net_id);
 
-        Ok(())
+        Ok(network)
     }
 
     pub fn remove_network<'a>(
@@ -127,9 +131,12 @@ impl VpnSupervisor {
         network_id: &str,
     ) -> Result<BoxFuture<'a, Result<()>>> {
         self.owner(node_id, network_id)?;
-        self.networks.remove(network_id);
+        let vpn = self
+            .networks
+            .remove(network_id)
+            .ok_or_else(|| Error::NetNotFound)?;
         self.blueprints.remove(network_id);
-        self.forward(network_id, Shutdown {})
+        self.forward(vpn, Shutdown {})
     }
 
     pub fn remove_node<'a>(
@@ -140,12 +147,13 @@ impl VpnSupervisor {
     ) -> Result<BoxFuture<'a, Result<()>>> {
         self.owner(node_id, network_id)?;
         self.ownership.remove(node_id);
-        self.forward(network_id, RemoveNode { id })
+        let vpn = self.vpn(network_id)?;
+        self.forward(vpn, RemoveNode { id })
     }
 
     fn forward<'a, M, T>(
         &self,
-        network_id: &str,
+        vpn: Addr<Vpn>,
         msg: M,
     ) -> Result<BoxFuture<'a, <M as Message>::Result>>
     where
@@ -154,7 +162,6 @@ impl VpnSupervisor {
         <M as Message>::Result: Send + 'static,
         T: Send + 'static,
     {
-        let vpn = self.vpn(network_id)?;
         Ok(Box::pin(async move {
             match vpn.send(msg).await {
                 Ok(r) => r,
@@ -181,13 +188,13 @@ impl VpnSupervisor {
 }
 
 pub struct Vpn {
-    vpn: Network<Endpoint>,
+    vpn: Network<network::DuoEndpoint<Endpoint>>,
     stack: Stack<'static>,
     connections: HashMap<SocketHandle, Connection>,
 }
 
 impl Vpn {
-    pub fn new(stack: Stack<'static>, vpn: Network<Endpoint>) -> Self {
+    pub fn new(stack: Stack<'static>, vpn: Network<network::DuoEndpoint<Endpoint>>) -> Self {
         Self {
             vpn,
             stack,
@@ -306,8 +313,8 @@ impl Vpn {
 
             let id = vpn_id.clone();
             tokio::task::spawn_local(async move {
-                if let Err(err) = endpoint.send(VpnPacket(frame.into())).await {
-                    let addr = endpoint.addr();
+                if let Err(err) = endpoint.udp.send(VpnPacket(frame.into())).await {
+                    let addr = endpoint.tcp.addr();
                     log::warn!("VPN {}: send error to endpoint '{}': {}", id, addr, err);
                 }
             });
@@ -412,7 +419,10 @@ impl Handler<AddNode> for Vpn {
 
     fn handle(&mut self, msg: AddNode, _: &mut Self::Context) -> Self::Result {
         let ip = to_ip(&msg.address)?;
-        self.vpn.add_node(ip, &msg.id, gsb_remote_url)?;
+        match self.vpn.add_node(ip, &msg.id, gsb_remote_url) {
+            Ok(_) | Err(Error::IpAddrTaken(_)) => {}
+            Err(err) => return Err(err),
+        }
 
         let vpn_id = self.vpn.id().clone();
         let futs = self
@@ -421,7 +431,7 @@ impl Handler<AddNode> for Vpn {
             .values()
             .cloned()
             .map(|e| {
-                e.send(VpnControl::AddNodes {
+                e.tcp.send(VpnControl::AddNodes {
                     network_id: vpn_id.clone(),
                     nodes: vec![(msg.address.clone(), msg.id.clone())]
                         .into_iter()
@@ -451,7 +461,7 @@ impl Handler<RemoveNode> for Vpn {
             .values()
             .cloned()
             .map(|e| {
-                e.send(VpnControl::RemoveNodes {
+                e.tcp.send(VpnControl::RemoveNodes {
                     network_id: vpn_id.clone(),
                     node_ids: vec![msg.id.clone()].into_iter().collect(),
                 })
@@ -713,8 +723,11 @@ fn gsb_local_url(net_id: &str) -> String {
     format!("/public/vpn/{}", net_id)
 }
 
-fn gsb_remote_url(node_id: &str, net_id: &str) -> Endpoint {
-    typed::service(format!("/net/{}/vpn/{}", node_id, net_id))
+fn gsb_remote_url(node_id: &str, net_id: &str) -> network::DuoEndpoint<Endpoint> {
+    network::DuoEndpoint {
+        tcp: typed::service(format!("/net/{}/vpn/{}", node_id, net_id)),
+        udp: typed::service(format!("/udp/net/{}/vpn/{}", node_id, net_id)),
+    }
 }
 
 trait ArbiterExt {
@@ -746,5 +759,34 @@ impl ArbiterExt for Arbiter {
 
         self.spawn(tx_fut);
         Box::pin(rx_fut)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::network::VpnSupervisor;
+    use ya_client_model::net::NewNetwork;
+    use ya_core_model::NodeId;
+
+    #[actix_rt::test]
+    async fn create_remove_network() -> anyhow::Result<()> {
+        let node_id = NodeId::default();
+
+        let mut supervisor = VpnSupervisor::default();
+        let network = supervisor
+            .create_network(
+                &node_id,
+                NewNetwork {
+                    ip: "10.0.0.0".to_string(),
+                    mask: None,
+                    gateway: None,
+                },
+            )
+            .await?;
+
+        supervisor.get_network(&node_id, &network.id)?;
+        supervisor.remove_network(&node_id, &network.id)?;
+
+        Ok(())
     }
 }

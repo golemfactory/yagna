@@ -111,7 +111,7 @@ pub enum Error {
     #[error("Hex error: {0}")]
     HexError(#[from] hex::FromHexError),
     #[error("Net API error: {0}")]
-    NetApiError(#[from] ya_net::NetApiError),
+    NetApiError(#[from] ya_core_model::net::NetApiError),
     #[error("Cancelled")]
     Cancelled,
     #[error("{0}")]

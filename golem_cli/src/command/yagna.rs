@@ -3,9 +3,10 @@ use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
 use serde::de::DeserializeOwned;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::process::Stdio;
+use strum_macros::{Display, EnumString, EnumVariantNames, IntoStaticStr};
 
 use crate::setup::RunConfig;
 use tokio::process::{Child, Command};
@@ -61,6 +62,30 @@ lazy_static! {
                 token: "tGLM",
             },
         );
+        erc20.insert(
+            NetworkName::Goerli.into(),
+            PaymentPlatform {
+                platform: "erc20-goerli-tglm",
+                driver: "erc20",
+                token: "tGLM",
+            },
+        );
+        erc20.insert(
+            NetworkName::Mumbai.into(),
+            PaymentPlatform {
+                platform: "erc20-mumbai-tglm",
+                driver: "erc20",
+                token: "tGLM",
+            },
+        );
+        erc20.insert(
+            NetworkName::Polygon.into(),
+            PaymentPlatform {
+                platform: "erc20-polygon-glm",
+                driver: "erc20",
+                token: "GLM",
+            },
+        );
         PaymentDriver(erc20)
     };
 }
@@ -73,6 +98,45 @@ impl PaymentDriver {
             network
         ))?)
     }
+}
+
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Display,
+    EnumVariantNames,
+    EnumString,
+    Eq,
+    Hash,
+    IntoStaticStr,
+    PartialEq,
+    Serialize,
+)]
+#[strum(serialize_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum NetworkGroup {
+    Mainnet,
+    Testnet,
+}
+
+lazy_static! {
+    pub static ref NETWORK_GROUP_MAP: HashMap<NetworkGroup, Vec<NetworkName>> = {
+        let mut ngm = HashMap::new();
+        ngm.insert(
+            NetworkGroup::Mainnet,
+            vec![NetworkName::Mainnet, NetworkName::Polygon],
+        );
+        ngm.insert(
+            NetworkGroup::Testnet,
+            vec![
+                NetworkName::Rinkeby,
+                NetworkName::Mumbai,
+                NetworkName::Goerli,
+            ],
+        );
+        ngm
+    };
 }
 
 #[derive(Deserialize)]
@@ -219,6 +283,16 @@ impl YagnaCommand {
     pub async fn activity_status(mut self) -> anyhow::Result<ActivityStatus> {
         self.cmd.args(&["--json", "activity", "status"]);
         self.run().await
+    }
+
+    pub async fn forward(self, args: Vec<String>) -> anyhow::Result<i32> {
+        let mut cmd = self.cmd;
+        let output = cmd.arg("--quiet").args(args).status().await?;
+
+        match output.code() {
+            Some(c) => Ok(c),
+            None => anyhow::bail!("Unknown process exit code"),
+        }
     }
 
     pub async fn service_run(self, run_cfg: &RunConfig) -> anyhow::Result<Child> {

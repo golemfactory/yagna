@@ -11,9 +11,7 @@ use tokio_compat_02::FutureExt;
 use zksync::operations::SyncTransactionHandle;
 use zksync::types::BlockStatus;
 use zksync::zksync_types::{
-    tokens::{ChangePubKeyFeeType, ChangePubKeyFeeTypeArg},
-    tx::TxHash,
-    Address, Nonce, TxFeeTypes, H256,
+    tokens::ChangePubKeyFeeTypeArg, tx::TxHash, Address, Nonce, TxFeeTypes, H256,
 };
 use zksync::{
     provider::{Provider, RpcProvider},
@@ -34,6 +32,7 @@ use crate::{
     zksync::{faucet, signer::YagnaEthSigner, utils},
     DEFAULT_NETWORK,
 };
+use zksync::zksync_types::tx::ChangePubKeyType;
 
 pub async fn account_balance(address: &str, network: Network) -> Result<BigDecimal, GenericError> {
     let pub_address = Address::from_str(&address[2..]).map_err(GenericError::new)?;
@@ -291,6 +290,9 @@ fn get_rpc_addr(network: Network) -> String {
             .unwrap_or("https://api.zksync.golem.network/jsrpc".to_string()),
         Network::Rinkeby => env::var("ZKSYNC_RINKEBY_RPC_ADDRESS")
             .unwrap_or("https://rinkeby-api.zksync.golem.network/jsrpc".to_string()),
+        Network::Goerli => panic!("Goerli not supported on zksync"),
+        Network::Polygon => panic!("Polygon not supported on zksync"),
+        Network::Mumbai => panic!("Mumbai not supported on zksync"),
     }
 }
 
@@ -301,6 +303,9 @@ fn get_ethereum_node_addr_from_env(network: Network) -> String {
         }
         Network::Rinkeby => env::var("RINKEBY_GETH_ADDR")
             .unwrap_or("http://geth.testnet.golem.network:55555".to_string()),
+        Network::Goerli => panic!("Goerli not supported on zksync"),
+        Network::Polygon => panic!("Polygon mainnet not supported on zksync"),
+        Network::Mumbai => panic!("Polygon mumbai not supported on zksync"),
     }
 }
 
@@ -486,7 +491,7 @@ async fn get_unlock_fee<S: EthereumSigner + Clone, P: Provider + Clone>(
         .provider
         .get_tx_fee(
             TxFeeTypes::ChangePubKey(ChangePubKeyFeeTypeArg::ContractsV4Version(
-                ChangePubKeyFeeType::ECDSA,
+                ChangePubKeyType::ECDSA,
             )),
             wallet.address(),
             token,
@@ -504,7 +509,7 @@ pub async fn deposit<S: EthereumSigner + Clone, P: Provider + Clone>(
     amount: BigDecimal,
 ) -> Result<H256, GenericError> {
     let token = get_network_token(network, None);
-    let amount = base_utils::big_dec_to_u256(amount);
+    let amount = base_utils::big_dec_to_u256(&amount);
     let address = wallet.address();
 
     log::info!(
@@ -521,12 +526,12 @@ pub async fn deposit<S: EthereumSigner + Clone, P: Provider + Clone>(
     ethereum.set_confirmation_timeout(get_ethereum_confirmation_timeout());
 
     if !ethereum
-        .is_limited_erc20_deposit_approved(token.as_str(), u256_compat(amount))
+        .is_limited_erc20_deposit_approved(token.as_str(), amount)
         .await
         .unwrap()
     {
         let tx = ethereum
-            .limited_approve_erc20_token_deposits(token.as_str(), u256_compat(amount))
+            .limited_approve_erc20_token_deposits(token.as_str(), amount)
             .await
             .map_err(|err| GenericError::new(err))?;
         info!(
@@ -541,7 +546,7 @@ pub async fn deposit<S: EthereumSigner + Clone, P: Provider + Clone>(
     }
 
     let deposit_tx_hash = ethereum
-        .deposit(token.as_str(), u256_compat(amount), address)
+        .deposit(token.as_str(), amount, address)
         .await
         .map_err(|err| GenericError::new(err))?;
     info!(
@@ -550,11 +555,4 @@ pub async fn deposit<S: EthereumSigner + Clone, P: Provider + Clone>(
     );
 
     Ok(deposit_tx_hash)
-}
-
-#[inline(always)]
-fn u256_compat(src: ethereum_types::U256) -> zksync::zksync_types::U256 {
-    let mut ret = zksync::zksync_types::U256::from(0u32);
-    ret.0 = src.0;
-    ret
 }

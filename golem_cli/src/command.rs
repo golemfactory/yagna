@@ -43,7 +43,7 @@ impl YaCommand {
         if let Some(user_dirs) = UserDirs::new() {
             let plugins_dir = user_dirs.home_dir().join(".local/lib/yagna/plugins");
             if plugins_dir.exists() {
-                cmd.env("EXE_UNIT_PATH", plugins_dir.join("ya-runtime-*.json"));
+                cmd.env("EXE_UNIT_PATH", plugins_dir.join("ya-*.json"));
             }
         }
 

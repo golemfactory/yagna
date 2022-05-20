@@ -32,11 +32,10 @@ message Request {
     message CreateNetwork {
         repeated Network networks = 1;
         map<string, string> hosts = 2;
+        NetworkInterface interface = 3;
     }
 
-    message Shutdown {
-
-    }
+    message Shutdown {}
 }
 
 message Response {
@@ -53,6 +52,7 @@ message Response {
 
         // Events
         ProcessStatus status = 20;
+        RuntimeStatus rt_status = 21;
 
         // Network ctl
         CreateNetwork network = 30;
@@ -78,9 +78,7 @@ message Response {
         uint64 pid = 1;
     }
 
-    message KillProcess {
-
-    }
+    message KillProcess {}
 
     message ProcessStatus {
         uint64 pid = 1;
@@ -90,15 +88,30 @@ message Response {
         bytes stderr = 5;
     }
 
+    message RuntimeStatus {
+        message State {
+            string name = 1;
+            bytes value = 2;
+        }
+
+        message Counter {
+            string name = 1;
+            double value = 2;
+        }
+
+        oneof kind {
+            State state = 1;
+            Counter counter = 2;
+        }
+    }
+
     message CreateNetwork {
         oneof endpoint {
             string socket = 1;
         }
     }
 
-    message Shutdown {
-
-    }
+    message Shutdown {}
 }
 
 message Network {
@@ -108,6 +121,11 @@ message Network {
     string if_addr = 4;
 }
 
+enum NetworkInterface {
+    VPN = 0;
+    INET = 1;
+}
+
 message Output {
     // No-type = /dev/null
     // at_end(buffer size) = last n bytes are returned.
@@ -115,4 +133,3 @@ message Output {
         uint32 at_end = 2;
     }
 }
-

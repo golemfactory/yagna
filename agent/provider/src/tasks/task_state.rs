@@ -95,34 +95,25 @@ impl TaskState {
             Transition(_, Some(AgreementState::Broken { .. })) => false,
             // TODO: Consider what to do when payment wasn't accepted.
             Transition(_, Some(AgreementState::Closed)) => false,
-            Transition(AgreementState::New, None) => match new_state {
+            Transition(AgreementState::New, None) => matches!(
+                new_state,
                 AgreementState::Initialized
-                | AgreementState::Broken { .. }
-                | AgreementState::Closed => true,
-                _ => false,
-            },
-            Transition(AgreementState::Initialized, None) => match new_state {
-                AgreementState::Computing
-                | AgreementState::Broken { .. }
-                | AgreementState::Closed => true,
-                _ => false,
-            },
-            Transition(AgreementState::Computing, None) => match new_state {
-                AgreementState::Idle | AgreementState::Broken { .. } | AgreementState::Closed => {
-                    true
-                }
-                _ => false,
-            },
-            Transition(AgreementState::Idle, None) => match new_state {
-                AgreementState::Computing
-                | AgreementState::Broken { .. }
-                | AgreementState::Closed => true,
-                _ => false,
-            },
-            Transition(_, Some(_)) => match new_state {
-                AgreementState::Broken { .. } => true,
-                _ => false,
-            },
+                    | AgreementState::Broken { .. }
+                    | AgreementState::Closed
+            ),
+            Transition(AgreementState::Initialized, None) => matches!(
+                new_state,
+                AgreementState::Computing | AgreementState::Broken { .. } | AgreementState::Closed
+            ),
+            Transition(AgreementState::Computing, None) => matches!(
+                new_state,
+                AgreementState::Idle | AgreementState::Broken { .. } | AgreementState::Closed
+            ),
+            Transition(AgreementState::Idle, None) => matches!(
+                new_state,
+                AgreementState::Computing | AgreementState::Broken { .. } | AgreementState::Closed
+            ),
+            Transition(_, Some(_)) => matches!(new_state, AgreementState::Broken { .. }),
             _ => false,
         };
 
@@ -138,7 +129,7 @@ impl TaskState {
 
     pub fn start_transition(&mut self, new_state: AgreementState) -> Result<(), StateError> {
         self.allowed_transition(&new_state)?;
-        self.state = Transition(self.state.0.clone(), Some(new_state.clone()));
+        self.state = Transition(self.state.0.clone(), Some(new_state));
 
         self.changed_sender
             .send(StateChange::TransitionStarted(self.state.clone()))
@@ -161,11 +152,11 @@ impl TaskState {
                 })?;
             Ok(())
         } else {
-            return Err(StateError::InvalidTransition {
+            Err(StateError::InvalidTransition {
                 agreement_id: self.agreement_id.to_string(),
                 current_state: self.state.clone(),
                 new_state,
-            });
+            })
         }
     }
 
@@ -198,13 +189,13 @@ impl TasksStates {
     /// Agreement is finalized or is during finalizing.
     pub fn is_agreement_finalized(&self, agreement_id: &str) -> bool {
         if let Ok(task_state) = self.get_state(agreement_id) {
-            match task_state.state {
-                Transition(AgreementState::Closed, _) => true,
-                Transition(_, Some(AgreementState::Closed)) => true,
-                Transition(AgreementState::Broken { .. }, _) => true,
-                Transition(_, Some(AgreementState::Broken { .. })) => true,
-                _ => false,
-            }
+            matches!(
+                task_state.state,
+                Transition(AgreementState::Closed, _)
+                    | Transition(_, Some(AgreementState::Closed))
+                    | Transition(AgreementState::Broken { .. }, _)
+                    | Transition(_, Some(AgreementState::Broken { .. }))
+            )
         } else {
             false
         }
@@ -213,12 +204,12 @@ impl TasksStates {
     /// No Activity has been created for this Agreement
     pub fn not_active(&self, agreement_id: &str) -> bool {
         if let Ok(task_state) = self.get_state(agreement_id) {
-            match task_state.state {
-                Transition(AgreementState::New, _) => true,
-                Transition(AgreementState::Initialized, None) => true,
-                Transition(AgreementState::Idle, None) => true,
-                _ => false,
-            }
+            matches!(
+                task_state.state,
+                Transition(AgreementState::New, _)
+                    | Transition(AgreementState::Initialized, None)
+                    | Transition(AgreementState::Idle, None)
+            )
         } else {
             false
         }
@@ -285,9 +276,8 @@ impl StateWaiter {
             .map(|_| self.changed_receiver.borrow().clone())
             .ok()
         {
-            match change {
-                StateChange::TransitionFinished(state) => return Ok(state),
-                _ => (),
+            if let StateChange::TransitionFinished(state) = change {
+                return Ok(state);
             }
         }
         Err(anyhow!("Stopped waiting for transition finish."))

@@ -1,9 +1,11 @@
+use crate::api::allocations::{forced_release_allocation, release_allocation_after};
 use crate::dao::{ActivityDao, AgreementDao, AllocationDao, OrderDao, PaymentDao};
 use crate::error::processor::{
     AccountNotRegistered, GetStatusError, NotifyPaymentError, OrderValidationError,
     SchedulePaymentError, ValidateAllocationError, VerifyPaymentError,
 };
 use crate::models::order::ReadObj as DbOrder;
+use actix_web::web::Data;
 use bigdecimal::{BigDecimal, Zero};
 use futures::FutureExt;
 use metrics::counter;
@@ -14,7 +16,7 @@ use ya_client_model::payment::{
     Account, ActivityPayment, AgreementPayment, DriverDetails, Network, Payment,
 };
 use ya_core_model::driver::{
-    self, driver_bus_id, AccountMode, PaymentConfirmation, PaymentDetails, ShutDown,
+    self, driver_bus_id, AccountMode, GasDetails, PaymentConfirmation, PaymentDetails, ShutDown,
     ValidateAllocation,
 };
 use ya_core_model::payment::local::{
@@ -74,8 +76,10 @@ struct AccountDetails {
 
 #[derive(Clone, Default)]
 struct DriverRegistry {
-    accounts: HashMap<(String, String), AccountDetails>, // (platform, address) -> details
-    drivers: HashMap<String, DriverDetails>,             // driver_name -> details
+    accounts: HashMap<(String, String), AccountDetails>,
+    // (platform, address) -> details
+    drivers: HashMap<String, DriverDetails>,
+    // driver_name -> details
     platforms: HashMap<String, HashMap<String, bool>>, // platform -> (driver_name -> recv_init_required)
 }
 
@@ -141,7 +145,7 @@ impl DriverRegistry {
                 return Err(RegisterAccountError::UnsupportedNetwork(
                     msg.network,
                     msg.driver,
-                ))
+                ));
             }
             Some(network) => network,
         };
@@ -151,7 +155,7 @@ impl DriverRegistry {
                     msg.token,
                     msg.network,
                     msg.driver,
-                ))
+                ));
             }
             Some(platform) => platform.clone(),
         };
@@ -418,7 +422,7 @@ impl PaymentProcessor {
             .await??;
 
         counter!("payment.amount.sent", ya_metrics::utils::cryptocurrency_to_u64(&msg.amount), "platform" => payment_platform);
-        let msg = SendPayment::new(payment, Some(signature));
+        let msg = SendPayment::new(payment, signature);
 
         // Spawning to avoid deadlock in a case that payee is the same node as payer
         tokio::task::spawn_local(
@@ -466,7 +470,7 @@ impl PaymentProcessor {
     pub async fn verify_payment(
         &self,
         payment: Payment,
-        signature: Option<Vec<u8>>,
+        signature: Vec<u8>,
     ) -> Result<(), VerifyPaymentError> {
         // TODO: Split this into smaller functions
         let platform = payment.payment_platform.clone();
@@ -476,13 +480,11 @@ impl PaymentProcessor {
             AccountMode::RECV,
         )?;
 
-        if let Some(signature) = signature {
-            if !driver_endpoint(&driver)
-                .send(driver::VerifySignature::new(payment.clone(), signature))
-                .await??
-            {
-                return Err(VerifyPaymentError::InvalidSignature);
-            }
+        if !driver_endpoint(&driver)
+            .send(driver::VerifySignature::new(payment.clone(), signature))
+            .await??
+        {
+            return Err(VerifyPaymentError::InvalidSignature);
         }
 
         let confirmation = match base64::decode(&payment.details) {
@@ -526,16 +528,16 @@ impl PaymentProcessor {
             match agreement {
                 None => return VerifyPaymentError::agreement_not_found(agreement_id),
                 Some(agreement) if &agreement.payee_addr != payee_addr => {
-                    return VerifyPaymentError::agreement_payee(&agreement, payee_addr)
+                    return VerifyPaymentError::agreement_payee(&agreement, payee_addr);
                 }
                 Some(agreement) if &agreement.payer_addr != payer_addr => {
-                    return VerifyPaymentError::agreement_payer(&agreement, payer_addr)
+                    return VerifyPaymentError::agreement_payer(&agreement, payer_addr);
                 }
                 Some(agreement) if &agreement.payment_platform != &payment.payment_platform => {
                     return VerifyPaymentError::agreement_platform(
                         &agreement,
                         &payment.payment_platform,
-                    )
+                    );
                 }
                 _ => (),
             }
@@ -549,10 +551,10 @@ impl PaymentProcessor {
             match activity {
                 None => return VerifyPaymentError::activity_not_found(activity_id),
                 Some(activity) if &activity.payee_addr != payee_addr => {
-                    return VerifyPaymentError::activity_payee(&activity, payee_addr)
+                    return VerifyPaymentError::activity_payee(&activity, payee_addr);
                 }
                 Some(activity) if &activity.payer_addr != payer_addr => {
-                    return VerifyPaymentError::activity_payer(&activity, payer_addr)
+                    return VerifyPaymentError::activity_payer(&activity, payer_addr);
                 }
                 _ => (),
             }
@@ -575,6 +577,21 @@ impl PaymentProcessor {
         let amount = driver_endpoint(&driver)
             .send(driver::GetAccountBalance::new(address, platform))
             .await??;
+        Ok(amount)
+    }
+
+    pub async fn get_gas_balance(
+        &self,
+        platform: String,
+        address: String,
+    ) -> Result<Option<GasDetails>, GetStatusError> {
+        let driver = self
+            .registry
+            .driver(&platform, &address, AccountMode::empty())?;
+        let amount = driver_endpoint(&driver)
+            .send(driver::GetAccountGasBalance::new(address, platform))
+            .await??;
+
         Ok(amount)
     }
 
@@ -603,6 +620,46 @@ impl PaymentProcessor {
         };
         let result = driver_endpoint(&driver).send(msg).await??;
         Ok(result)
+    }
+
+    /// This function releases allocations.
+    /// When `bool` is `true` all existing allocations are released immediately.
+    /// For `false` each allocation timestamp is respected.
+    pub async fn release_allocations(&self, force: bool) {
+        let db = Data::new(self.db_executor.clone());
+        let existing_allocations = db
+            .clone()
+            .as_dao::<AllocationDao>()
+            .get_filtered(None, None, None, None, None)
+            .await;
+
+        log::info!("Checking for allocations to be released...");
+
+        match existing_allocations {
+            Ok(allocations) => {
+                if !allocations.is_empty() {
+                    for allocation in allocations {
+                        if force {
+                            forced_release_allocation(db.clone(), allocation.allocation_id, None)
+                                .await
+                        } else {
+                            release_allocation_after(
+                                db.clone(),
+                                allocation.allocation_id,
+                                allocation.timeout,
+                                None,
+                            )
+                            .await
+                        }
+                    }
+                } else {
+                    log::info!("No allocations to be released.")
+                }
+            }
+            Err(e) => {
+                log::error!("Allocations release failed. Restart yagna to retry allocations release. Db error occurred: {}.", e);
+            }
+        }
     }
 
     pub fn shut_down(&mut self, timeout: Duration) -> impl futures::Future<Output = ()> + 'static {

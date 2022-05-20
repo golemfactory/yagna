@@ -1,15 +1,17 @@
-use managed::ManagedSlice;
-use smoltcp::socket::*;
-use smoltcp::wire::{IpProtocol, IpVersion};
 use std::time::Duration;
-use ya_utils_networking::vpn::MAX_FRAME_SIZE;
 
-pub const TCP_CONN_TIMEOUT: Duration = Duration::from_secs(3);
+use smoltcp::socket::*;
+use smoltcp::storage::PacketMetadata;
+use smoltcp::wire::{IpProtocol, IpVersion};
+
+use ya_utils_networking::vpn::common::DEFAULT_MAX_FRAME_SIZE;
+
+pub const TCP_CONN_TIMEOUT: Duration = Duration::from_secs(5);
 const TCP_KEEP_ALIVE: Duration = Duration::from_secs(60);
 
 pub fn tcp_socket<'a>() -> TcpSocket<'a> {
-    let rx_buf = TcpSocketBuffer::new(vec![0; MAX_FRAME_SIZE * 4]);
-    let tx_buf = TcpSocketBuffer::new(vec![0; MAX_FRAME_SIZE * 4]);
+    let rx_buf = TcpSocketBuffer::new(vec![0; DEFAULT_MAX_FRAME_SIZE * 4]);
+    let tx_buf = TcpSocketBuffer::new(vec![0; DEFAULT_MAX_FRAME_SIZE * 4]);
     let mut socket = TcpSocket::new(rx_buf, tx_buf);
     socket.set_keep_alive(Some(TCP_KEEP_ALIVE.into()));
     socket
@@ -33,10 +35,10 @@ pub fn raw_socket<'a>(ip_version: IpVersion, ip_protocol: IpProtocol) -> RawSock
     RawSocket::new(ip_version, ip_protocol, rx_buf, tx_buf)
 }
 
-fn meta_storage<'a, T: Clone>() -> ManagedSlice<'a, T> {
-    ManagedSlice::Owned(Vec::new())
+fn meta_storage<T: Clone>() -> Vec<PacketMetadata<T>> {
+    vec![PacketMetadata::EMPTY; 4 * DEFAULT_MAX_FRAME_SIZE]
 }
 
 fn payload_storage<T: Default + Clone>() -> Vec<T> {
-    vec![Default::default(); MAX_FRAME_SIZE]
+    vec![Default::default(); 4 * DEFAULT_MAX_FRAME_SIZE]
 }

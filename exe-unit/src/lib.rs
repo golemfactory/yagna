@@ -1,16 +1,17 @@
 #[macro_use]
 extern crate derive_more;
 
+use std::path::PathBuf;
+use std::time::Duration;
+
 use actix::prelude::*;
 use chrono::Utc;
 use futures::channel::{mpsc, oneshot};
 use futures::{FutureExt, SinkExt};
-use std::path::PathBuf;
-use std::time::Duration;
 
 use ya_agreement_utils::agreement::OfferTemplate;
 use ya_client_model::activity::{
-    activity_state::StatePair, ActivityUsage, CommandOutput, ExeScriptCommand, RuntimeEvent, State,
+    activity_state::StatePair, ActivityUsage, CommandOutput, ExeScriptCommand, State,
 };
 use ya_core_model::activity;
 use ya_core_model::activity::local::Credentials;
@@ -33,6 +34,8 @@ pub mod agreement;
 pub mod crypto;
 pub mod error;
 mod handlers;
+pub mod logger;
+pub mod manifest;
 pub mod message;
 pub mod metrics;
 mod network;
@@ -58,12 +61,10 @@ pub struct ExeUnit<R: Runtime> {
     metrics: Addr<MetricsService>,
     transfers: Addr<TransferService>,
     services: Vec<Box<dyn ServiceControl>>,
-    shutdown_tx: Option<oneshot::Sender<Result<()>>>,
 }
 
 impl<R: Runtime> ExeUnit<R> {
     pub fn new(
-        shutdown_tx: oneshot::Sender<Result<()>>,
         ctx: ExeUnitContext,
         metrics: Addr<MetricsService>,
         transfers: Addr<TransferService>,
@@ -81,14 +82,13 @@ impl<R: Runtime> ExeUnit<R> {
                 Box::new(ServiceAddr::new(transfers)),
                 Box::new(ServiceAddr::new(runtime)),
             ],
-            shutdown_tx: Some(shutdown_tx),
         }
     }
 
-    pub fn offer_template(binary: PathBuf) -> Result<OfferTemplate> {
+    pub fn offer_template(binary: PathBuf, args: Vec<String>) -> Result<OfferTemplate> {
         use crate::runtime::process::RuntimeProcess;
 
-        let runtime_template = RuntimeProcess::offer_template(binary)?;
+        let runtime_template = RuntimeProcess::offer_template(binary, args)?;
         let supervisor_template = OfferTemplate::new(serde_json::json!({
             "golem.com.usage.vector": MetricsService::usage_vector(),
             "golem.activity.caps.transfer.protocol": TransferService::schemes(),
@@ -186,7 +186,7 @@ impl<R: Runtime> RuntimeRef<R> {
             }
 
             if return_code != 0 {
-                let message = message.unwrap_or("reason unspecified".into());
+                let message = message.unwrap_or_else(|| "reason unspecified".into());
                 log::warn!("Batch {} execution interrupted: {}", batch_id, message);
                 break;
             }
@@ -257,7 +257,7 @@ impl<R: Runtime> RuntimeRef<R> {
 
         log::info!("Executing command: {:?}", runtime_cmd.command);
 
-        self.pre_runtime(&runtime_cmd, &runtime, &transfer_service)
+        self.pre_runtime(&runtime_cmd, runtime, transfer_service)
             .await?;
 
         let exit_code = runtime.send(runtime_cmd.clone()).await??;
@@ -265,7 +265,7 @@ impl<R: Runtime> RuntimeRef<R> {
             return Err(Error::CommandExitCodeError(exit_code));
         }
 
-        self.post_runtime(&runtime_cmd, &runtime, &transfer_service)
+        self.post_runtime(&runtime_cmd, runtime, transfer_service)
             .await?;
 
         let state_cur = self.send(GetState {}).await?.0;
@@ -300,7 +300,7 @@ impl<R: Runtime> RuntimeRef<R> {
                 let task_package = transfer_service.send(DeployImage {}).await??;
                 runtime
                     .send(UpdateDeployment {
-                        task_package: task_package,
+                        task_package,
                         networks: Some(net.clone()),
                         hosts: Some(hosts.clone()),
                         ..Default::default()
@@ -384,8 +384,27 @@ impl<R: Runtime> Actor for ExeUnit<R> {
             .finish()
             .spawn(ctx);
 
+        log::info!("Initializing manifests");
+        self.ctx
+            .supervise
+            .manifest
+            .build_validators()
+            .into_actor(self)
+            .map(|result, this, ctx| match result {
+                Ok(validators) => {
+                    this.ctx.supervise.manifest.add_validators(validators);
+                    log::info!("Manifest initialization complete");
+                }
+                Err(e) => {
+                    let err = Error::Other(format!("manifest initialization error: {}", e));
+                    log::error!("Supervisor is shutting down due to {}", err);
+                    let _ = ctx.address().do_send(Shutdown(ShutdownReason::Error(err)));
+                }
+            })
+            .wait(ctx);
+
         let addr_ = addr.clone();
-        let fut = async move {
+        async move {
             addr.send(Initialize).await?.map_err(Error::from)?;
             addr.send(SetState::from(State::Initialized)).await?;
             Ok::<_, Error>(())
@@ -399,9 +418,9 @@ impl<R: Runtime> Actor for ExeUnit<R> {
                     let _ = addr_.send(Shutdown(ShutdownReason::Error(err))).await;
                 }
             }
-        });
-
-        ctx.spawn(fut.into_actor(self));
+        })
+        .into_actor(self)
+        .spawn(ctx);
     }
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
@@ -410,17 +429,10 @@ impl<R: Runtime> Actor for ExeUnit<R> {
         }
         Running::Continue
     }
-
-    fn stopped(&mut self, _: &mut Self::Context) {
-        if let Some(tx) = self.shutdown_tx.take() {
-            let _ = tx.send(Ok(()));
-        }
-    }
 }
 
 #[derive(derivative::Derivative)]
 #[derivative(Debug)]
-#[derive(Clone)]
 pub struct ExeUnitContext {
     pub supervise: Supervision,
     pub activity_id: Option<String>,
@@ -428,11 +440,12 @@ pub struct ExeUnitContext {
     pub agreement: Agreement,
     pub work_dir: PathBuf,
     pub cache_dir: PathBuf,
+    pub runtime_args: Vec<String>,
     pub acl: Acl,
     pub credentials: Option<Credentials>,
     #[cfg(feature = "sgx")]
     #[derivative(Debug = "ignore")]
-    pub crypto: crate::crypto::Crypto,
+    pub crypto: crypto::Crypto,
 }
 
 impl ExeUnitContext {
@@ -462,8 +475,13 @@ impl<T> Default for Channel<T> {
     }
 }
 
-pub(crate) async fn report<M: RpcMessage + Unpin + 'static>(url: String, msg: M) -> bool {
-    match ya_service_bus::typed::service(&url).send(msg).await {
+pub(crate) async fn report<S, M>(url: S, msg: M) -> bool
+where
+    M: RpcMessage + Unpin + 'static,
+    S: AsRef<str>,
+{
+    let url = url.as_ref();
+    match ya_service_bus::typed::service(url).send(msg).await {
         Err(ya_service_bus::Error::Timeout(msg)) => {
             log::warn!("Timed out reporting to {}: {}", url, msg);
             true
@@ -497,9 +515,9 @@ async fn report_usage<R: Runtime>(
                     },
                     timeout: None,
                 };
-                if !report(report_url, msg).await {
-                    exe_unit.do_send(Shutdown(ShutdownReason::Error(error::Error::RuntimeError(
-                        "Reporting endpoint is not available".to_string(),
+                if !report(&report_url, msg).await {
+                    exe_unit.do_send(Shutdown(ShutdownReason::Error(Error::RuntimeError(
+                        format!("Reporting endpoint '{}' is not available", report_url),
                     ))));
                 }
             }

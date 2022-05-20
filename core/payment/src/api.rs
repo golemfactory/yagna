@@ -4,7 +4,7 @@ use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::scope::ExtendableScope;
 
 mod accounts;
-mod allocations;
+pub mod allocations;
 mod debit_notes;
 mod invoices;
 mod payments;

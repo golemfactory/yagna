@@ -337,9 +337,11 @@ async fn main() -> anyhow::Result<()> {
 
     let provider_id = provider_id.parse()?;
     let requestor_id = requestor_id.parse()?;
-    let client_info = ClientInfo::new("payment");
     log::info!("bind remote...");
-    let _ = ya_net::bind_remote(client_info, provider_id, vec![provider_id, requestor_id]).await?;
+
+    let client_info = ClientInfo::new("payment");
+    let _ = ya_net::hybrid::bind_remote(client_info, provider_id, vec![provider_id, requestor_id])
+        .await?;
 
     log::info!("get_rest_addr...");
     let rest_addr = rest_api_addr();

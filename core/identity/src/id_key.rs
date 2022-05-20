@@ -1,13 +1,15 @@
 #![allow(unused)]
 
-use crate::dao::identity::Identity;
-use crate::dao::Error;
+use std::convert::TryFrom;
+
 use anyhow::Context;
 use ethsign::keyfile::Bytes;
-use ethsign::{KeyFile, Protected, SecretKey};
+use ethsign::{KeyFile, Protected, PublicKey, SecretKey};
 use rand::Rng;
-use std::convert::TryFrom;
 use ya_client_model::NodeId;
+
+use crate::dao::identity::Identity;
+use crate::dao::Error;
 
 pub struct IdentityKey {
     id: NodeId,
@@ -29,6 +31,13 @@ impl IdentityKey {
 
     pub fn replace_alias(&mut self, new_alias: Option<String>) -> Option<String> {
         std::mem::replace(&mut self.alias, new_alias)
+    }
+
+    pub fn to_pub_key(&self) -> Result<PublicKey, Error> {
+        match &self.secret {
+            Some(secret) => Ok(secret.public()),
+            None => Err(Error::internal("key locked")),
+        }
     }
 
     pub fn to_key_file(&self) -> Result<String, serde_json::Error> {
@@ -79,6 +88,17 @@ impl IdentityKey {
         }
         Ok(())
     }
+
+    pub fn from_secret(alias: Option<String>, secret: SecretKey, password: Protected) -> Self {
+        let key_file = key_file_from_secret(&secret, password);
+        let id = NodeId::from(secret.public().address().as_ref());
+        IdentityKey {
+            id,
+            alias,
+            key_file,
+            secret: Some(secret),
+        }
+    }
 }
 
 impl TryFrom<Identity> for IdentityKey {
@@ -101,6 +121,10 @@ impl TryFrom<Identity> for IdentityKey {
 const KEY_ITERATIONS: u32 = 10240;
 const KEYSTORE_VERSION: u64 = 3;
 
+pub fn default_password() -> Protected {
+    Protected::new(Vec::default())
+}
+
 pub fn generate_new(alias: Option<String>, password: Protected) -> IdentityKey {
     let (key_file, secret) = generate_new_secret(password);
     let id = NodeId::from(secret.public().address().as_ref());
@@ -115,17 +139,39 @@ pub fn generate_new(alias: Option<String>, password: Protected) -> IdentityKey {
 fn generate_new_secret(password: Protected) -> (KeyFile, SecretKey) {
     let random_bytes: [u8; 32] = rand::thread_rng().gen();
     let secret = SecretKey::from_raw(random_bytes.as_ref()).unwrap();
-    let key_file = KeyFile {
+    let key_file = key_file_from_secret(&secret, password);
+    (key_file, secret)
+}
+
+fn key_file_from_secret(secret: &SecretKey, password: Protected) -> KeyFile {
+    KeyFile {
         id: format!("{}", uuid::Uuid::new_v4()),
         version: KEYSTORE_VERSION,
         crypto: secret.to_crypto(&password, KEY_ITERATIONS).unwrap(),
         address: Some(Bytes(secret.public().address().to_vec())),
-    };
-    (key_file, secret)
+    }
 }
 
 pub fn generate_new_keyfile(password: Protected) -> anyhow::Result<String> {
     let (key_file, _) = generate_new_secret(password);
 
     Ok(serde_json::to_string(&key_file).context("serialize keyfile")?)
+}
+
+#[cfg(test)]
+mod test {
+    use rustc_hex::FromHex;
+
+    use super::*;
+
+    #[test]
+    fn test_import_raw_key() -> anyhow::Result<()> {
+        let pk = "c19a9a827c9efb910e3e4efb955b57d072775c5ebb93dbdd4d6856d97e555eca";
+        let pk_bytes: Vec<u8> = pk.from_hex()?;
+        println!("{}", pk.len());
+        let secret: SecretKey = SecretKey::from_raw(&pk_bytes)?;
+        let key_file = key_file_from_secret(&secret, Protected::new(""));
+        println!("{}", serde_json::to_string_pretty(&key_file)?);
+        Ok(())
+    }
 }

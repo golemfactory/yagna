@@ -128,6 +128,7 @@ impl<'c> DebitNoteDao<'c> {
                 .optional()?;
             let debit_note = WriteObj::issued(debit_note, previous_debit_note_id, issuer_id);
             let debit_note_id = debit_note.id.clone();
+            let owner_id = debit_note.owner_id.clone();
             activity::set_amount_due(
                 &debit_note.activity_id,
                 &debit_note.owner_id,
@@ -137,6 +138,13 @@ impl<'c> DebitNoteDao<'c> {
             diesel::insert_into(dsl::pay_debit_note)
                 .values(debit_note)
                 .execute(conn)?;
+            debit_note_event::create::<()>(
+                debit_note_id.clone(),
+                owner_id,
+                DebitNoteEventType::DebitNoteReceivedEvent,
+                None,
+                conn,
+            )?;
             Ok(debit_note_id)
         })
         .await
@@ -195,7 +203,7 @@ impl<'c> DebitNoteDao<'c> {
 
     pub async fn get_all(&self) -> DbResult<Vec<DebitNote>> {
         readonly_transaction(self.pool, move |conn| {
-            let debit_notes: Vec<ReadObj> = query!().load(conn)?;
+            let debit_notes: Vec<ReadObj> = query!().order_by(dsl::timestamp.desc()).load(conn)?;
             debit_notes.into_iter().map(TryInto::try_into).collect()
         })
         .await
@@ -212,6 +220,7 @@ impl<'c> DebitNoteDao<'c> {
             if let Some(date) = after_timestamp {
                 query = query.filter(dsl::timestamp.gt(date))
             }
+            query = query.order_by(dsl::timestamp.desc());
             if let Some(items) = max_items {
                 query = query.limit(items.into())
             }
@@ -249,16 +258,8 @@ impl<'c> DebitNoteDao<'c> {
 
             update_status(&vec![debit_note_id.clone()], &owner_id, &status, conn)?;
             activity::set_amount_accepted(&activity_id, &owner_id, &amount, conn)?;
-            if let Role::Provider = role {
-                for event in events {
-                    debit_note_event::create::<()>(
-                        debit_note_id.clone(),
-                        owner_id,
-                        event,
-                        None,
-                        conn,
-                    )?;
-                }
+            for event in events {
+                debit_note_event::create::<()>(debit_note_id.clone(), owner_id, event, None, conn)?;
             }
 
             Ok(())

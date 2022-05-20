@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.7.2"
+version = "0.10.0"
 description = "Open platform and marketplace for distributed computations"
 readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
@@ -16,6 +16,8 @@ dummy-driver = ['ya-dummy-driver']
 erc20-driver = ['ya-erc20-driver']
 zksync-driver = ['ya-zksync-driver']
 tos = []
+# Temporary to make goth integration tests work
+hybrid-net = ['ya-net/hybrid-net']
 
 [[bin]]
 name = "yagna"
@@ -24,7 +26,7 @@ path = "core/serv/src/main.rs"
 [dependencies]
 ya-activity = "0.3"
 ya-compile-time-utils = "0.2"
-ya-core-model = { version = "^0.4"}
+ya-core-model = { version = "^0.6" }
 ya-dummy-driver = { version = "0.2", optional = true }
 ya-file-logging = "0.1"
 ya-erc20-driver = { version = "0.3", optional = true }
@@ -49,6 +51,8 @@ ya-utils-process = { version = "0.1", features = ["lock"] }
 ya-utils-networking = "0.1"
 ya-version = "0.1"
 ya-vpn = "0.1"
+ya-client = "0.6"
+ya-client-model = "0.4"
 
 gftp = { version = "^0.2", optional = true } # just to enable gftp build for cargo-deb
 ya-provider = { version = "0.2", optional = true } # just to enable conditionally running some tests
@@ -65,8 +69,12 @@ lazy_static = "1.4"
 log = "0.4"
 openssl = "0.10"
 openssl-probe = { version = "0.1", optional = true }
+serde = "1.0"
+serde_json = "1.0"
 structopt = "0.3"
-tokio = {version = "1", features=["net"]}
+tokio = { version = "1", features = ["net"] }
+tokio-util = { version = "0.3", features = ["codec"] }
+tokio-stream = { version = "0.1.8", features = ["io-util"] }
 url = "2.1.1"
 
 [package.metadata.deb]
@@ -90,7 +98,7 @@ An open platform and marketplace for distributed computations.
 [package.metadata.deb.variants.provider]
 name="golem-provider"
 replaces="golem-requestor"
-maintainer-scripts="debian/core"
+maintainer-scripts="debian/provider"
 features=["static-openssl"]
 depends="libgcc1, libc6 (>= 2.23)"
 assets = [
@@ -136,6 +144,7 @@ members = [
     "utils/agreement-utils",
     "utils/compile-time-utils",
     "utils/futures",
+    "utils/manifest-utils",
     "utils/networking",
     "utils/path",
     "utils/process",
@@ -172,17 +181,10 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## SERVICE BUS
-ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "991ba4c76aac9e63b0ecb7aedeecef4ba37a6db7"}
-ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "991ba4c76aac9e63b0ecb7aedeecef4ba37a6db7"}
-ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "991ba4c76aac9e63b0ecb7aedeecef4ba37a6db7"}
-ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "991ba4c76aac9e63b0ecb7aedeecef4ba37a6db7"}
-
-## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "9273620f94f171ee11716cf014bb8cabf45255fa" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "9273620f94f171ee11716cf014bb8cabf45255fa" }
-
-# ya-client = { path = "../ya-client" }
-# ya-client-model = { path = "../ya-client/model" }
+ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "f51c01ef5bb1a6d5c905722b7c3a4bbde3fbfa0c"}
+ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "f51c01ef5bb1a6d5c905722b7c3a4bbde3fbfa0c"}
+ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "f51c01ef5bb1a6d5c905722b7c3a4bbde3fbfa0c"}
+ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "f51c01ef5bb1a6d5c905722b7c3a4bbde3fbfa0c"}
 
 ## OTHERS
 gftp = { path = "core/gftp" }
@@ -192,6 +194,7 @@ ya-std-utils = { path = "utils/std-utils" }
 ya-compile-time-utils = { path = "utils/compile-time-utils" }
 ya-exe-unit = { path = "exe-unit" }
 ya-file-logging = { path = "utils/file-logging" }
+ya-manifest-utils = { path = "utils/manifest-utils" }
 ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
 ya-utils-futures = { path = "utils/futures" }
@@ -204,7 +207,7 @@ ya-provider = { path = "agent/provider"}
 
 ethereum-tx-sign = { git = "https://github.com/mfranciszkiewicz/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
 graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "3619f63a0c1ff44962ab604e55cd5dfb62177c56" }
-web3 = { git = "https://github.com/mfranciszkiewicz/rust-web3.git", rev = "4426e53383fae7f7e32928489ea59302e7f2c3c4" }
+web3 = { git = "https://github.com/golemfactory/rust-web3", branch = "update_ethabi" }
 
 # Speed up builds on macOS (will be default in next rust version probably)
 # https://jakedeichert.com/blog/reducing-rust-incremental-compilation-times-on-macos-by-70-percent/

@@ -209,9 +209,10 @@ impl ResponseError for AgreementError {
         match self {
             AgreementError::NotFound(_) => HttpResponse::NotFound().json(msg).into(),
             AgreementError::Expired(_) => HttpResponse::Gone().json(msg).into(),
-            AgreementError::AlreadyExists(_, _) => HttpResponse::Conflict().json(msg).into(),
+            AgreementError::ProposalAlreadyAccepted(..) => HttpResponse::Conflict().json(msg).into(),
             AgreementError::UpdateState(_, e) => e.error_response(),
             AgreementError::NoNegotiations(_)
+            | AgreementError::ProposalRejected(..)
             | AgreementError::OwnProposal(..)
             | AgreementError::ProposalNotFound(..)
             | AgreementError::ProposalCountered(..)

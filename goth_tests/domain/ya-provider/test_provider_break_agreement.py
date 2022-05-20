@@ -200,7 +200,7 @@ async def test_provider_timeout_unresponsive_requestor(
     # Stopping container takes a little bit more time, so we must send
     # DebitNote later, otherwise Agreement will be terminated due to
     # not accepting DebitNotes by Requestor.
-    config.containers[1].environment["DEBIT_NOTE_INTERVAL"] = "15"
+    config.containers[1].environment["DEBIT_NOTE_INTERVAL"] = "15s"
 
     async with runner(config.containers):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
@@ -227,7 +227,7 @@ async def test_provider_timeout_unresponsive_requestor(
         # First DebitNote will be sent after 15s. Let's wait with some margin.
         await providers[0].wait_for_agreement_broken(
             "Requestor is unreachable more than",
-            timeout=18,
+            timeout=60,
         )
 
         # Note that Agreement will be broken, but Provider won't be

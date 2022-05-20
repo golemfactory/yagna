@@ -8,5 +8,15 @@ fn main() {
             env::var("OUT_DIR").unwrap()
         );
     }
-    prost_build::compile_protos(&["src/runtime.proto"], &["src/"]).unwrap();
+
+    let mut config = prost_build::Config::default();
+
+    config.type_attribute(
+        "Endpoint",
+        "#[derive(serde::Serialize, serde::Deserialize)]",
+    );
+
+    config
+        .compile_protos(&["src/runtime.proto"], &["src/"])
+        .unwrap();
 }

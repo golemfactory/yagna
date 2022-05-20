@@ -21,10 +21,10 @@ use ya_market::MarketService;
 use ya_metrics::{MetricsPusherOpts, MetricsService};
 use ya_net::Net as NetService;
 use ya_payment::{accounts as payment_accounts, PaymentService};
-use ya_persistence::executor::DbExecutor;
+use ya_persistence::executor::{DbExecutor, DbMixedExecutor};
 use ya_persistence::service::Persistence as PersistenceService;
 use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
-use ya_service_api::{CliCtx, CommandOutput};
+use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_api_interfaces::Provider;
 use ya_service_api_web::{
     middleware::{auth, Identity},
@@ -37,6 +37,9 @@ use ya_version::VersionService;
 use ya_vpn::VpnService;
 
 mod autocomplete;
+mod extension;
+
+use crate::extension::Extension;
 use autocomplete::CompleteCommand;
 
 lazy_static::lazy_static! {
@@ -88,6 +91,10 @@ struct CliArgs {
     #[structopt(long, set = clap::ArgSettings::Global)]
     json: bool,
 
+    #[structopt(hidden = true)]
+    #[structopt(long, set = clap::ArgSettings::Global)]
+    quiet: bool,
+
     #[structopt(subcommand)]
     command: CliCommand,
 }
@@ -115,6 +122,7 @@ impl TryFrom<&CliArgs> for CliCtx {
             data_dir,
             gsb_url: Some(args.gsb_url.clone()),
             json_output: args.json,
+            quiet: args.quiet,
             accept_terms: if cfg!(feature = "tos") {
                 args.accept_terms
             } else {
@@ -129,7 +137,9 @@ impl TryFrom<&CliArgs> for CliCtx {
 struct ServiceContext {
     ctx: CliCtx,
     dbs: HashMap<TypeId, DbExecutor>,
+    mixed_dbs: HashMap<TypeId, DbMixedExecutor>,
     default_db: DbExecutor,
+    default_mixed: DbMixedExecutor,
 }
 
 impl<S: 'static> Provider<S, DbExecutor> for ServiceContext {
@@ -137,6 +147,15 @@ impl<S: 'static> Provider<S, DbExecutor> for ServiceContext {
         match self.dbs.get(&TypeId::of::<S>()) {
             Some(db) => db.clone(),
             None => self.default_db.clone(),
+        }
+    }
+}
+
+impl<S: 'static> Provider<S, DbMixedExecutor> for ServiceContext {
+    fn component(&self) -> DbMixedExecutor {
+        match self.mixed_dbs.get(&TypeId::of::<S>()) {
+            Some(db) => db.clone(),
+            None => self.default_mixed.clone(),
         }
     }
 }
@@ -158,6 +177,16 @@ impl ServiceContext {
         Ok((TypeId::of::<S>(), DbExecutor::from_data_dir(path, name)?))
     }
 
+    fn make_mixed_entry<S: 'static>(
+        path: &PathBuf,
+        name: &str,
+    ) -> Result<(TypeId, DbMixedExecutor)> {
+        let disk_db = DbExecutor::from_data_dir(path, name)?;
+        let ram_db = DbExecutor::in_memory(name)?;
+
+        Ok((TypeId::of::<S>(), DbMixedExecutor::new(disk_db, ram_db)))
+    }
+
     fn set_metrics_ctx(&mut self, metrics_opts: &MetricsPusherOpts) {
         self.ctx.metrics_ctx = Some(metrics_opts.into())
     }
@@ -170,7 +199,6 @@ impl TryFrom<CliCtx> for ServiceContext {
         let default_name = clap::crate_name!();
         let default_db = DbExecutor::from_data_dir(&ctx.data_dir, default_name)?;
         let dbs = [
-            Self::make_entry::<MarketService>(&ctx.data_dir, "market")?,
             Self::make_entry::<ActivityService>(&ctx.data_dir, "activity")?,
             Self::make_entry::<PaymentService>(&ctx.data_dir, "payment")?,
         ]
@@ -178,10 +206,15 @@ impl TryFrom<CliCtx> for ServiceContext {
         .cloned()
         .collect();
 
+        let market_db = Self::make_mixed_entry::<MarketService>(&ctx.data_dir, "market")?;
+        let mixed_dbs = [market_db.clone()].iter().cloned().collect();
+
         Ok(ServiceContext {
             ctx,
             dbs,
+            mixed_dbs,
             default_db,
+            default_mixed: market_db.1,
         })
     }
 }
@@ -199,7 +232,7 @@ enum Services {
     Metrics(MetricsService),
     #[enable(gsb, rest, cli)]
     Version(VersionService),
-    #[enable(gsb)]
+    #[enable(gsb, cli)]
     Net(NetService),
     #[enable(rest)]
     Vpn(VpnService),
@@ -259,6 +292,14 @@ enum CliCommand {
     /// Core service usage
     #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
     Service(ServiceCommand),
+
+    /// Extension management
+    #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
+    Extension(ExtensionCommand),
+
+    #[structopt(external_subcommand)]
+    #[structopt(setting = structopt::clap::AppSettings::Hidden)]
+    Other(Vec<String>),
 }
 
 impl CliCommand {
@@ -270,7 +311,85 @@ impl CliCommand {
             }
             CliCommand::Complete(complete) => complete.run_command(ctx),
             CliCommand::Service(service) => service.run_command(ctx).await,
+            CliCommand::Extension(ext) => ext.run_command(ctx).await,
+            CliCommand::Other(args) => extension::run::<CliArgs>(ctx, args).await,
         }
+    }
+}
+
+#[derive(StructOpt, Debug)]
+enum ExtensionCommand {
+    /// List available extensions
+    List {},
+    /// Autostart extension
+    Register { args: Vec<String> },
+    /// Remove extension from autostart
+    Unregister { name: String },
+}
+
+impl ExtensionCommand {
+    pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
+        match self {
+            ExtensionCommand::List {} => {
+                let extensions = Extension::list();
+
+                if ctx.json_output {
+                    Self::map(extensions.into_iter())
+                } else {
+                    Self::table(extensions.into_iter())
+                }
+            }
+            ExtensionCommand::Register { mut args } => {
+                let mut ext = Extension::find(args.clone())?;
+                args.remove(0);
+
+                ext.conf.args = args;
+                ext.conf.autostart = true;
+                ext.write_conf().await?;
+
+                Ok(CommandOutput::NoOutput)
+            }
+            ExtensionCommand::Unregister { name } => {
+                let mut ext = Extension::find(vec![name])?;
+                ext.conf.autostart = false;
+                ext.write_conf().await?;
+
+                Ok(CommandOutput::NoOutput)
+            }
+        }
+    }
+
+    fn map<I: Iterator<Item = Extension>>(extensions: I) -> Result<CommandOutput> {
+        Ok(CommandOutput::object(
+            extensions
+                .map(|mut ext| {
+                    let name = std::mem::take(&mut ext.name);
+                    (name, ext)
+                })
+                .collect::<HashMap<_, _>>(),
+        )?)
+    }
+
+    fn table<I: Iterator<Item = Extension>>(extensions: I) -> Result<CommandOutput> {
+        Ok(ResponseTable {
+            columns: vec![
+                "name".into(),
+                "autostart".into(),
+                "path".into(),
+                "args".into(),
+            ],
+            values: extensions
+                .map(|ext| {
+                    serde_json::json! {[
+                        ext.name,
+                        if ext.conf.autostart { 'x' } else { ' ' },
+                        ext.path,
+                        ext.conf.args.join(" "),
+                    ]}
+                })
+                .collect(),
+        }
+        .into())
     }
 }
 
@@ -365,12 +484,16 @@ impl ServiceCommand {
                     }),
                     &vec![
                         ("actix_http::response", log::LevelFilter::Off),
+                        ("h2", log::LevelFilter::Off),
+                        ("hyper", log::LevelFilter::Info),
+                        ("reqwest", log::LevelFilter::Info),
                         ("tokio_core", log::LevelFilter::Info),
                         ("tokio_reactor", log::LevelFilter::Info),
-                        ("reqwest", log::LevelFilter::Info),
-                        ("hyper", log::LevelFilter::Info),
+                        ("trust_dns_resolver", log::LevelFilter::Info),
+                        ("trust_dns_proto", log::LevelFilter::Info),
                         ("web3", log::LevelFilter::Info),
-                        ("h2", log::LevelFilter::Info),
+                        ("tokio_util", log::LevelFilter::Off),
+                        ("mio", log::LevelFilter::Off),
                     ],
                     force_debug,
                 )?;
@@ -420,11 +543,20 @@ impl ServiceCommand {
                 .bind(api_host_port.clone())
                 .context(format!("Failed to bind http server on {:?}", api_host_port))?;
 
+                let _ = extension::autostart(&ctx.data_dir, &api_url, &ctx.gsb_url)
+                    .await
+                    .map_err(|e| log::warn!("Failed to autostart extensions: {e}"));
+
                 future::try_join(server.run(), sd_notify(false, "READY=1")).await?;
 
                 log::info!("{} service successfully finished!", app_name);
 
                 PaymentService::shut_down().await;
+                NetService::shutdown()
+                    .await
+                    .map_err(|e| log::error!("Error shutting down NET: {}", e))
+                    .ok();
+
                 logger_handle.shutdown();
                 Ok(CommandOutput::NoOutput)
             }

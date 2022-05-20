@@ -1,21 +1,24 @@
-use chrono::Utc;
-use ethsign::{KeyFile, Protected};
-use futures::lock::Mutex;
+use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
+use std::rc::Rc;
 use std::sync::Arc;
 
+use chrono::Utc;
+use ethsign::{KeyFile, Protected, PublicKey};
+use futures::lock::Mutex;
+use futures::prelude::*;
+
 use ya_client_model::NodeId;
+use ya_service_bus::typed as bus;
+
 use ya_core_model::identity as model;
 use ya_persistence::executor::DbExecutor;
-use ya_service_bus::typed as bus;
 
 use crate::dao::identity::Identity;
 use crate::dao::{Error as DaoError, IdentityDao};
-use crate::id_key::{generate_new, IdentityKey};
-use futures::prelude::*;
-use std::cell::{Ref, RefCell};
-use std::rc::Rc;
+use crate::id_key::{default_password, generate_new, IdentityKey};
+
 
 #[derive(Default)]
 struct Subscription {
@@ -82,25 +85,39 @@ impl IdentityService {
             });
         }
 
-        let default_key = db
-            .as_dao::<IdentityDao>()
-            .init_default_key(|| {
-                log::info!("generating new default identity");
-                let key: IdentityKey = generate_new(None, "".into()).into();
-                let new_identity = Identity {
-                    identity_id: key.id(),
-                    key_file_json: key.to_key_file().map_err(|e| DaoError::internal(e))?,
-                    is_default: true,
-                    is_deleted: false,
-                    alias: None,
-                    note: None,
-                    created_date: Utc::now().naive_utc(),
-                };
+        let default_key =
+            if let Some(key) = crate::autoconf::preconfigured_identity(default_password())? {
+                db.as_dao::<IdentityDao>()
+                    .init_preconfigured(Identity {
+                        identity_id: key.id(),
+                        key_file_json: key.to_key_file()?,
+                        is_default: true,
+                        is_deleted: false,
+                        alias: None,
+                        note: None,
+                        created_date: Utc::now().naive_utc(),
+                    })
+                    .await?
+                    .identity_id
+            } else {
+                db.as_dao::<IdentityDao>()
+                    .init_default_key(|| {
+                        log::info!("generating new default identity");
+                        let key: IdentityKey = generate_new(None, "".into()).into();
 
-                Ok(new_identity)
-            })
-            .await?
-            .identity_id;
+                        Ok(Identity {
+                            identity_id: key.id(),
+                            key_file_json: key.to_key_file().map_err(|e| DaoError::internal(e))?,
+                            is_default: true,
+                            is_deleted: false,
+                            alias: None,
+                            note: None,
+                            created_date: Utc::now().naive_utc(),
+                        })
+                    })
+                    .await?
+                    .identity_id
+            };
 
         log::info!("using default identity: {:?}", default_key);
 
@@ -351,6 +368,14 @@ impl IdentityService {
         Ok(model::Ack {})
     }
 
+    pub async fn get_pub_key(
+        &mut self,
+        key_id: model::GetPubKey,
+    ) -> Result<PublicKey, model::Error> {
+        let key = self.get_key_by_id(&key_id.0)?;
+        key.to_pub_key().map_err(|e| model::Error::new_err_msg(e))
+    }
+
     pub async fn get_key_file(
         &mut self,
         key_id: model::GetKeyFile,
@@ -461,6 +486,17 @@ impl IdentityService {
         let _ = bus::bind(model::BUS_ID, move |subscribe: model::Subscribe| {
             let this = this.clone();
             async move { this.lock().await.subscribe(subscribe).await }
+        });
+        let this = me.clone();
+        let _ = bus::bind(model::BUS_ID, move |node_id: model::GetPubKey| {
+            let this = this.clone();
+            async move {
+                this.lock()
+                    .await
+                    .get_pub_key(node_id)
+                    .await
+                    .map(|key| key.bytes().to_vec())
+            }
         });
         let this = me.clone();
         let _ = bus::bind(model::BUS_ID, move |node_id: model::GetKeyFile| {

@@ -1,21 +1,21 @@
 use actix::prelude::*;
 use anyhow::{anyhow, Error};
 use futures::{future, FutureExt, StreamExt, TryFutureExt};
-use serde::{Deserialize, Deserializer, Serialize};
+
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
-use std::{fs, io};
 use tokio_stream::wrappers::WatchStream;
 
 use ya_agreement_utils::agreement::TypedArrayPointer;
 use ya_agreement_utils::*;
 use ya_client::cli::ProviderApi;
-use ya_core_model::{payment::local::NetworkName, NodeId};
+use ya_core_model::payment::local::NetworkName;
 use ya_file_logging::{start_logger, LoggerHandle};
-use ya_utils_path::SwapSave;
+use ya_manifest_utils::Keystore;
 
+use crate::config::globals::GlobalsState;
 use crate::dir::clean_provider_dir;
 use crate::events::Event;
 use crate::execution::{
@@ -25,20 +25,10 @@ use crate::hardware;
 use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{AccountView, LinearPricingOffer, Payments, PricingOffer};
-use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RunConfig};
+use crate::startup_config::{
+    FileMonitor, FileMonitorConfig, NodeConfig, ProviderConfig, RunConfig,
+};
 use crate::tasks::task_manager::{InitializeTaskManager, TaskManager};
-
-pub struct ProviderAgent {
-    globals: GlobalsManager,
-    market: Addr<ProviderMarket>,
-    runner: Addr<TaskRunner>,
-    task_manager: Addr<TaskManager>,
-    presets: PresetManager,
-    hardware: hardware::Manager,
-    accounts: Vec<AccountView>,
-    log_handler: LoggerHandle,
-    network: NetworkName,
-}
 
 struct GlobalsManager {
     state: Arc<Mutex<GlobalsState>>,
@@ -74,100 +64,17 @@ impl GlobalsManager {
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize, derive_more::Display)]
-#[display(
-    fmt = "{}{}{}",
-    "node_name.as_ref().map(|nn| format!(\"Node name: {}\", nn)).unwrap_or(\"\".into())",
-    "subnet.as_ref().map(|s| format!(\"\nSubnet: {}\", s)).unwrap_or(\"\".into())",
-    "account.as_ref().map(|a| format!(\"\nAccount: {}\", a)).unwrap_or(\"\".into())"
-)]
-pub struct GlobalsState {
-    pub node_name: Option<String>,
-    pub subnet: Option<String>,
-    pub account: Option<NodeId>,
-}
-
-impl<'de> Deserialize<'de> for GlobalsState {
-    fn deserialize<D: Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<Self, <D as Deserializer<'de>>::Error> {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        pub enum Account {
-            NodeId(NodeId),
-            Deprecated {
-                platform: Option<String>,
-                address: NodeId,
-            },
-        }
-
-        impl Account {
-            pub fn address(self) -> NodeId {
-                match self {
-                    Account::NodeId(address) => address,
-                    Account::Deprecated { address, .. } => address,
-                }
-            }
-        }
-
-        #[derive(Deserialize)]
-        pub struct GenericGlobalsState {
-            pub node_name: Option<String>,
-            pub subnet: Option<String>,
-            pub account: Option<Account>,
-        }
-
-        let s = GenericGlobalsState::deserialize(deserializer)?;
-        Ok(GlobalsState {
-            node_name: s.node_name,
-            subnet: s.subnet,
-            account: s.account.map(|a| a.address()),
-        })
-    }
-}
-
-impl GlobalsState {
-    pub fn load(path: &Path) -> anyhow::Result<Self> {
-        if path.exists() {
-            log::debug!("Loading global state from: {}", path.display());
-            Ok(serde_json::from_reader(io::BufReader::new(
-                fs::OpenOptions::new().read(true).open(path)?,
-            ))?)
-        } else {
-            Ok(Self::default())
-        }
-    }
-
-    pub fn load_or_create(path: &Path) -> anyhow::Result<Self> {
-        if path.exists() {
-            Self::load(path)
-        } else {
-            if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            std::fs::File::create(&path)?;
-            let state = Self::default();
-            state.save(path)?;
-            Ok(state)
-        }
-    }
-
-    pub fn update_and_save(&mut self, node_config: NodeConfig, path: &Path) -> anyhow::Result<()> {
-        if node_config.node_name.is_some() {
-            self.node_name = node_config.node_name;
-        }
-        if node_config.subnet.is_some() {
-            self.subnet = node_config.subnet;
-        }
-        if node_config.account.account.is_some() {
-            self.account = node_config.account.account;
-        }
-        self.save(path)
-    }
-
-    pub fn save(&self, path: &Path) -> anyhow::Result<()> {
-        Ok(path.swap_save(serde_json::to_string_pretty(self)?)?)
-    }
+pub struct ProviderAgent {
+    globals: GlobalsManager,
+    market: Addr<ProviderMarket>,
+    runner: Addr<TaskRunner>,
+    task_manager: Addr<TaskManager>,
+    presets: PresetManager,
+    hardware: hardware::Manager,
+    accounts: Vec<AccountView>,
+    log_handler: LoggerHandle,
+    networks: Vec<NetworkName>,
+    keystore_monitor: FileMonitor,
 }
 
 impl ProviderAgent {
@@ -183,7 +90,7 @@ impl ProviderAgent {
 
         //start_logger is using env var RUST_LOG internally.
         //args.debug options sets default logger to debug
-        let log_handler = start_logger("info", Some(&log_dir), &vec![], args.debug)?;
+        let log_handler = start_logger("info", Some(&log_dir), &[], args.debug)?;
 
         let app_name = structopt::clap::crate_name!();
         log::info!(
@@ -217,24 +124,52 @@ impl ProviderAgent {
         registry.test_runtimes()?;
 
         // Generate session id from node name and process id to make sure it's unique.
-        let name = args.node.node_name.clone().unwrap_or(app_name.to_string());
+        let name = args
+            .node
+            .node_name
+            .clone()
+            .unwrap_or_else(|| app_name.to_string());
+
+        let keystore_path = data_dir.join(&config.trusted_keys_file);
+        let keystore = match Keystore::load(&keystore_path) {
+            Ok(store) => {
+                log::info!("Trusted key store loaded from {}", keystore_path.display());
+                store
+            }
+            Err(err) => {
+                log::info!("Using a new keystore: {}", err);
+                Default::default()
+            }
+        };
+
         args.market.session_id = format!("{}-{}", name, std::process::id());
         args.runner.session_id = args.market.session_id.clone();
         args.payment.session_id = args.market.session_id.clone();
+        args.market
+            .negotiator_config
+            .composite_config
+            .policy_config
+            .trusted_keys = Some(keystore.clone());
 
-        let network = args.node.account.network.clone();
-        let net_color = match network {
-            NetworkName::Mainnet => yansi::Color::Magenta,
-            NetworkName::Rinkeby => yansi::Color::Cyan,
-            _ => yansi::Color::Red,
-        };
-        log::info!("Using payment network: {}", net_color.paint(&network));
+        let networks = args.node.account.networks.clone();
+        for n in networks.iter() {
+            let net_color = match n {
+                NetworkName::Mainnet => yansi::Color::Magenta,
+                NetworkName::Polygon => yansi::Color::Magenta,
+                NetworkName::Rinkeby => yansi::Color::Cyan,
+                NetworkName::Mumbai => yansi::Color::Cyan,
+                NetworkName::Goerli => yansi::Color::Cyan,
+                _ => yansi::Color::Red,
+            };
+            log::info!("Using payment network: {}", net_color.paint(&n));
+        }
         let mut globals = GlobalsManager::try_new(&config.globals_file, args.node)?;
         globals.spawn_monitor(&config.globals_file)?;
         let mut presets = PresetManager::load_or_create(&config.presets_file)?;
         presets.spawn_monitor(&config.presets_file)?;
         let mut hardware = hardware::Manager::try_new(&config)?;
         hardware.spawn_monitor(&config.hardware_file)?;
+        let keystore_monitor = spawn_keystore_monitor(&config.trusted_keys_file, keystore)?;
 
         let market = ProviderMarket::new(api.market, args.market).start();
         let payments = Payments::new(api.activity.clone(), api.payment, args.payment).start();
@@ -251,7 +186,8 @@ impl ProviderAgent {
             hardware,
             accounts,
             log_handler,
-            network,
+            networks,
+            keystore_monitor,
         })
     }
 
@@ -274,10 +210,7 @@ impl ProviderAgent {
 
         for preset in presets {
             let pricing_model: Box<dyn PricingOffer> = match preset.pricing_model.as_str() {
-                "linear" => match std::env::var("DEBIT_NOTE_INTERVAL") {
-                    Ok(val) => Box::new(LinearPricingOffer::default().interval(val.parse()?)),
-                    Err(_) => Box::new(LinearPricingOffer::default()),
-                },
+                "linear" => Box::new(LinearPricingOffer::default()),
                 other => return Err(anyhow!("Unsupported pricing model: {}", other)),
             };
             let mut offer: OfferTemplate = offer_templates
@@ -285,7 +218,7 @@ impl ProviderAgent {
                 .ok_or_else(|| anyhow!("Offer template not found for preset [{}]", preset.name))?
                 .clone();
 
-            let (initial_price, prices) = get_prices(&pricing_model, &preset, &offer)?;
+            let (initial_price, prices) = get_prices(pricing_model.as_ref(), &preset, &offer)?;
             offer.set_property("golem.com.usage.vector", get_usage_vector_value(&prices));
             offer.add_constraints(Self::build_constraints(subnet.clone())?);
 
@@ -341,18 +274,18 @@ impl ProviderAgent {
         }
     }
 
-    fn accounts(&self, network: &NetworkName) -> anyhow::Result<Vec<AccountView>> {
+    fn accounts(&self, networks: &Vec<NetworkName>) -> anyhow::Result<Vec<AccountView>> {
         let globals = self.globals.get_state();
         if let Some(address) = &globals.account {
             log::info!(
-                "Filtering payment accounts by address={} and network={}",
+                "Filtering payment accounts by address={} and networks={:?}",
                 address,
-                network
+                networks,
             );
             let accounts: Vec<AccountView> = self
                 .accounts
                 .iter()
-                .filter(|acc| &acc.address == address && &acc.network == network)
+                .filter(|acc| &acc.address == address && networks.contains(&acc.network))
                 .cloned()
                 .collect();
 
@@ -362,21 +295,21 @@ impl ProviderAgent {
                     \t`yagna payment init --receiver --network {} --account {}`\n\
                     for all drivers you want to use.",
                     address,
-                    network,
+                    networks[0],
                     address,
                 )
             }
 
             Ok(accounts)
         } else {
-            log::debug!("Filtering payment accounts by network={}", network);
+            log::debug!("Filtering payment accounts by networks={:?}", networks);
             let accounts: Vec<AccountView> = self
                 .accounts
                 .iter()
                 // FIXME: this is dirty fix -- we can get more that one address from this filter
                 // FIXME: use /me endpoint and filter out only accounts bound to given app-key
                 // FIXME: or introduce param to getProviderAccounts to filter out external account above
-                .filter(|acc| &acc.network == network)
+                .filter(|acc| networks.contains(&acc.network))
                 .cloned()
                 .collect();
 
@@ -385,7 +318,7 @@ impl ProviderAgent {
                     "Default payment account not initialized. Please run\n\
                     \t`yagna payment init --receiver --network {}`\n\
                     for all drivers you want to use.",
-                    network,
+                    networks[0],
                 )
             }
 
@@ -395,7 +328,7 @@ impl ProviderAgent {
 }
 
 fn get_prices(
-    pricing_model: &Box<dyn PricingOffer>,
+    pricing_model: &dyn PricingOffer,
     preset: &Preset,
     offer: &OfferTemplate,
 ) -> Result<(f64, Vec<(String, f64)>), Error> {
@@ -410,12 +343,9 @@ fn get_prices(
     let prices = pricing_model
         .prices(&preset)
         .into_iter()
-        .filter_map(|(c, v)| match c.to_property() {
-            Some(prop) => match offer_usage_vec.contains(&prop) {
-                true => Some((prop.to_string(), v)),
-                false => None,
-            },
-            _ => None,
+        .filter_map(|(prop, v)| match offer_usage_vec.contains(&prop.as_str()) {
+            true => Some((prop, v)),
+            false => None,
         })
         .collect::<Vec<_>>();
 
@@ -431,7 +361,7 @@ fn get_prices(
     Ok((initial_price, prices))
 }
 
-fn get_usage_vector_value(prices: &Vec<(String, f64)>) -> serde_json::Value {
+fn get_usage_vector_value(prices: &[(String, f64)]) -> serde_json::Value {
     let vec = prices
         .iter()
         .map(|(p, _)| serde_json::Value::String(p.clone()))
@@ -454,6 +384,25 @@ async fn process_activity_events(runner: Addr<TaskRunner>) {
     }
 }
 
+fn spawn_keystore_monitor<P: AsRef<Path>>(
+    path: P,
+    keystore: Keystore,
+) -> Result<FileMonitor, Error> {
+    let handler = move |p: PathBuf| match Keystore::load(&p) {
+        Ok(new_keystore) => {
+            keystore.replace(new_keystore);
+            log::info!("Trusted keystore updated from {}", p.display());
+        }
+        Err(e) => log::warn!("Error updating trusted keystore from {:?}: {:?}", p, e),
+    };
+    let monitor = FileMonitor::spawn_with(
+        path,
+        FileMonitor::on_modified(handler),
+        FileMonitorConfig::silent(),
+    )?;
+    Ok(monitor)
+}
+
 impl Actor for ProviderAgent {
     type Context = Context<Self>;
 
@@ -468,7 +417,7 @@ impl Handler<Initialize> for ProviderAgent {
 
     fn handle(&mut self, _: Initialize, ctx: &mut Context<Self>) -> Self::Result {
         let market = self.market.clone();
-        let agent = ctx.address().clone();
+        let agent = ctx.address();
         let preset_state = self.presets.state.clone();
 
         let rx = futures::stream::select_all(vec![
@@ -548,6 +497,7 @@ impl Handler<Shutdown> for ProviderAgent {
         let market = self.market.clone();
         let runner = self.runner.clone();
         let log_handler = self.log_handler.clone();
+        self.keystore_monitor.stop();
 
         async move {
             market.send(MarketShutdown).await??;
@@ -567,7 +517,7 @@ impl Handler<CreateOffers> for ProviderAgent {
         let runner = self.runner.clone();
         let market = self.market.clone();
         let node_info = self.create_node_info();
-        let accounts = match self.accounts(&self.network) {
+        let accounts = match self.accounts(&self.networks) {
             Ok(acc) => acc,
             Err(e) => return future::err(e).boxed_local(),
         };
@@ -600,81 +550,3 @@ pub struct Shutdown;
 #[derive(Message)]
 #[rtype(result = "Result<(), Error>")]
 struct CreateOffers(pub OfferKind);
-
-#[cfg(test)]
-mod test {
-    use crate::GlobalsState;
-
-    const GLOBALS_JSON_ALPHA_3: &str = r#"
-{
-  "node_name": "amusing-crate",
-  "subnet": "community.3",
-  "account": {
-    "platform": null,
-    "address": "0x979db95461652299c34e15df09441b8dfc4edf7a"
-  }
-}
-"#;
-
-    const GLOBALS_JSON_ALPHA_4: &str = r#"
-{
-  "node_name": "amusing-crate",
-  "subnet": "community.4",
-  "account": "0x979db95461652299c34e15df09441b8dfc4edf7a"
-}
-"#;
-
-    #[test]
-    fn deserialize_globals() {
-        let mut g3: GlobalsState = serde_json::from_str(GLOBALS_JSON_ALPHA_3).unwrap();
-        let g4: GlobalsState = serde_json::from_str(GLOBALS_JSON_ALPHA_4).unwrap();
-        assert_eq!(g3.node_name, Some("amusing-crate".into()));
-        assert_eq!(g3.node_name, g4.node_name);
-        assert_eq!(g3.subnet, Some("community.3".into()));
-        assert_eq!(g4.subnet, Some("community.4".into()));
-        g3.subnet = Some("community.4".into());
-        assert_eq!(
-            serde_json::to_string(&g3).unwrap(),
-            serde_json::to_string(&g4).unwrap()
-        );
-        assert_eq!(
-            g3.account.unwrap().to_string(),
-            g4.account.unwrap().to_string()
-        );
-    }
-
-    #[test]
-    fn deserialize_no_account() {
-        let g: GlobalsState = serde_json::from_str(
-            r#"
-    {
-      "node_name": "amusing-crate",
-      "subnet": "community.3"
-    }
-    "#,
-        )
-        .unwrap();
-
-        assert_eq!(g.node_name, Some("amusing-crate".into()));
-        assert_eq!(g.subnet, Some("community.3".into()));
-        assert!(g.account.is_none())
-    }
-
-    #[test]
-    fn deserialize_null_account() {
-        let g: GlobalsState = serde_json::from_str(
-            r#"
-    {
-      "node_name": "amusing-crate",
-      "subnet": "community.4",
-      "account": null
-    }
-    "#,
-        )
-        .unwrap();
-
-        assert_eq!(g.node_name, Some("amusing-crate".into()));
-        assert_eq!(g.subnet, Some("community.4".into()));
-        assert!(g.account.is_none())
-    }
-}

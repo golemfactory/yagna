@@ -5,12 +5,17 @@ import os
 from pathlib import Path
 
 from goth.runner import Runner
-from goth.runner.probe import RequestorProbe, ProviderProbe
+from goth.runner.probe import ProviderProbe, RequestorProbe
 
 
 wasi_task_package: str = (
     "hash://sha3:d5e31b2eed628572a5898bf8c34447644bfc4b5130cfc1e4f10aeaa1:"
     "http://yacn2.dev.golem.network:8000/rust-wasi-tutorial.zip"
+)
+
+wasi_sleeper_task_package: str = (
+    "hash://sha3:eef139fcbc7691b446e43dd0575dfed052eb751c7862eea69c764544:"
+    "http://yacn2.dev.golem.network:8000/rust-wasi-sleeper.zip"
 )
 
 vm_task_package: str = (
@@ -103,4 +108,20 @@ def wasi_exe_script(runner: Runner, output_file: str = "upload_file"):
                 "to": f"{web_server_addr}/upload/{output_file}",
             }
         },
+    ]
+
+
+def wasi_sleeper_exe_script(duration: float = 10.):
+    """WASI exe script builder."""
+    """Create a WASI exe script for running a WASI sleeper task."""
+
+    return [
+        {"deploy": {}},
+        {"start": {"args": []}},
+        {
+            "run": {
+                "entry_point": "rust-wasi-sleeper",
+                "args": [f"{duration}"],
+            }
+        }
     ]

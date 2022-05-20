@@ -10,15 +10,16 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::str::FromStr;
 use std::sync::Arc;
+use tokio::time::timeout;
 
 use ya_agreement_utils::{AgreementView, OfferDefinition};
 use ya_client::market::MarketProviderApi;
-use ya_client_model::market::agreement_event::AgreementEventType;
-use ya_client_model::market::proposal::State;
-use ya_client_model::market::{
+use ya_client::model::market::agreement_event::AgreementEventType;
+use ya_client::model::market::proposal::State;
+use ya_client::model::market::{
     agreement_event::AgreementTerminator, Agreement, NewOffer, Proposal, ProviderEvent, Reason,
 };
-use ya_client_model::NodeId;
+use ya_client::model::NodeId;
 use ya_std_utils::LogErr;
 use ya_utils_actix::{
     actix_handler::ResultTypeGetter, actix_signal::SignalSlot, actix_signal_handler,
@@ -229,7 +230,17 @@ async fn dispatch_events(ctx: AsyncCtx, events: Vec<ProviderEvent>, subscription
         })
         .collect::<Vec<_>>();
 
-    let _ = future::join_all(dispatch_futures).await;
+    let _ = timeout(
+        ctx.config.process_market_events_timeout,
+        future::join_all(dispatch_futures),
+    )
+    .await
+    .map_err(|_| {
+        log::warn!(
+            "Timeout while dispatching events for subscription [{}]",
+            subscription.preset.name
+        )
+    });
 }
 
 async fn dispatch_event(
