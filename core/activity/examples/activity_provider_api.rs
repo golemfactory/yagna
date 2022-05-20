@@ -1,6 +1,7 @@
 use actix_web::{middleware, App, HttpServer};
 
 use ya_activity::{db::migrations, service};
+use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::Provider;
 use ya_service_api_web::rest_api_addr;
 
