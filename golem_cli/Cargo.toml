@@ -13,7 +13,7 @@ ya-provider = "0.2"
 ya-utils-path = "0.1.0"
 ya-utils-process = { version = "0.1.0", features = ["lock"] }
 
-actix-rt="1.1"
+actix-rt="2.7"
 ansi_term="0.12.1"
 anyhow = "1.0"
 bigdecimal = "0.2"

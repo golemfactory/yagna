@@ -22,7 +22,7 @@ type WsResult<T> = std::result::Result<T, ws::ProtocolError>;
 
 pub fn web_scope(vpn_sup: Arc<Mutex<VpnSupervisor>>) -> actix_web::Scope {
     actix_web::web::scope(NET_API_PATH)
-        .data(vpn_sup)
+        .app_data(vpn_sup)
         .service(get_networks)
         .service(create_network)
         .service(get_network)

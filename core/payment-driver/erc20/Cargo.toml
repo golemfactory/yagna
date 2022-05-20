@@ -10,7 +10,7 @@ default = []
 [dependencies]
 async-trait = "0.1"
 anyhow = "1.0"
-awc = { version = "=3.0.0-beta.4", features = ["openssl"] }
+awc = { version = "3", features = ["openssl"] }
 bigdecimal = { version = "0.2" }
 chrono = { version = "0.4", features = ["serde"] }
 derive_more = "0.99"
@@ -42,7 +42,7 @@ ya-utils-futures = "0.1"
 ya-utils-networking = "0.1"
 
 [dev-dependencies]
-actix-rt = "2.2"
+actix-rt = "2.7"
 dotenv = "0.15.0"
 env_logger = "0.7.1"
 structopt = "0.3"

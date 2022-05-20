@@ -31,10 +31,10 @@ prost = { version = "0.10", optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1" , optional = true, features = ["io-std", "rt", "process", "sync"] }
-tokio-util = { version = "0.6.7", optional = true, features = ["codec"] }
+tokio-util = { version = "0.7", optional = true, features = ["codec"] }
 
 [build-dependencies]
-prost-build = "0.6.1"
+prost-build = "0.10"
 
 [dev-dependencies]
 tokio = { version = "1" , features = ["macros", "time"] }

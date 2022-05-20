@@ -46,7 +46,7 @@ async fn main() -> anyhow::Result<()> {
     HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
-            .data(root_dir.clone())
+            .app_data(root_dir.clone())
             .service(web::resource("/upload/{name}").route(web::put().to(upload)))
             .service(actix_files::Files::new("/", root_dir.clone()))
     })

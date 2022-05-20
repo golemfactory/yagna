@@ -4,7 +4,7 @@ use ya_service_api_web::scope::ExtendableScope;
 
 pub fn web_scope(db: &DbExecutor) -> Scope {
     actix_web::web::scope(crate::ACTIVITY_API_PATH)
-        .data(db.clone())
+        .app_data(db.clone())
         .extend(common::extend_web_scope)
         .extend(crate::provider::extend_web_scope)
         .extend(crate::requestor::control::extend_web_scope)

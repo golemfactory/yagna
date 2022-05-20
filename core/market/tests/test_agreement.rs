@@ -1,4 +1,4 @@
-use actix_web::{http::StatusCode, test, web::Bytes};
+use actix_web::{http::StatusCode, web::Bytes};
 use chrono::{Duration, Utc};
 
 use ya_core_model::{market, Role};
@@ -1197,20 +1197,20 @@ async fn test_terminate_invalid_reason() {
     );
 
     let reason = "Unstructured message. Should be json.".to_string();
-    let req = test::TestRequest::post()
+    let req = actix_web::test::TestRequest::post()
         .uri(&url)
         .set_payload(Bytes::copy_from_slice(reason.as_bytes()))
         .to_request();
 
-    let resp = test::call_service(&mut app, req).await;
+    let resp = actix_web::test::call_service(&mut app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 
     let reason = "{'no_message_field': 'Reason expects message field'}".to_string();
-    let req = test::TestRequest::post()
+    let req = actix_web::test::TestRequest::post()
         .uri(&url)
         .set_payload(Bytes::copy_from_slice(reason.as_bytes()))
         .to_request();
 
-    let resp = test::call_service(&mut app, req).await;
+    let resp = actix_web::test::call_service(&mut app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 }

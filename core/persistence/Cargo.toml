@@ -17,7 +17,7 @@ ya-utils-process = { version = "0.1", features = ["lock"], optional = true }
 
 anyhow = "1.0.26"
 bigdecimal = "0.2"
-chrono = { version = "0.4.6", features = ["serde"] }
+chrono = { version = "0.4", features = ["serde"] }
 diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
 dotenv = "0.15.0"
 libsqlite3-sys = { version = "0.9.1", features = ["bundled"] }

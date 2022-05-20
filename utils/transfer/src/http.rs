@@ -1,8 +1,5 @@
-use crate::error::{Error, HttpError};
-use crate::{abortable_sink, abortable_stream, TransferState};
-use crate::{TransferContext, TransferData, TransferProvider, TransferSink, TransferStream};
 use actix_http::encoding::Decoder;
-use actix_http::http::header;
+use actix_http::header;
 use actix_http::Payload;
 use awc::http::Method;
 use awc::SendClientRequest;
@@ -12,6 +9,10 @@ use futures::{FutureExt, SinkExt, StreamExt, TryStreamExt};
 use std::str::FromStr;
 use tokio::task::spawn_local;
 use url::Url;
+
+use crate::error::{Error, HttpError};
+use crate::{abortable_sink, abortable_stream, TransferState};
+use crate::{TransferContext, TransferData, TransferProvider, TransferSink, TransferStream};
 
 enum HttpAuth<'s> {
     None,
@@ -198,7 +199,7 @@ impl DownloadRequest {
             };
 
             if let Some(ref range) = range {
-                builder = builder.header(header::RANGE, range.clone());
+                builder = builder.add_default_header((header::RANGE, range.clone()));
             }
 
             let resp = builder

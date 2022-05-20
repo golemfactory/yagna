@@ -14,7 +14,7 @@ ya-service-api = "0.1"
 ya-service-api-interfaces = "0.1"
 ya-service-bus = "0.4"
 
-actix-web = "=4.0.0-beta.5"
+actix-web = "4"
 anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 diesel = { version = "1.4", features = ["chrono", "sqlite", "r2d2"] }

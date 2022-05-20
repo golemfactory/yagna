@@ -56,26 +56,28 @@ async fn upload(
     Ok(HttpResponse::Ok().finish())
 }
 
-fn start_http(path: PathBuf) -> anyhow::Result<()> {
+async fn start_http(path: PathBuf) -> anyhow::Result<()> {
     let inner = path.clone();
     HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
-            .data(inner.clone())
+            .app_data(inner.clone())
             .service(actix_files::Files::new("/", inner.clone()))
     })
     .bind("127.0.0.1:8001")?
-    .run();
+    .run()
+    .await?;
 
     let inner = path.clone();
     HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
-            .data(inner.clone())
+            .app_data(inner.clone())
             .service(web::resource("/{name}").route(web::put().to(upload)))
     })
     .bind("127.0.0.1:8002")?
-    .run();
+    .run()
+    .await?;
 
     Ok(())
 }
@@ -139,9 +141,11 @@ async fn main() -> anyhow::Result<()> {
     log::debug!("Starting HTTP");
 
     let path = temp_dir.path().to_path_buf();
-    std::thread::spawn(move || {
+    tokio::task::spawn_local(async move {
         let sys = System::new();
-        start_http(path).expect("unable to start http servers");
+        start_http(path)
+            .await
+            .expect("unable to start http servers");
         sys.run().expect("sys.run");
     });
 

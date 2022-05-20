@@ -14,7 +14,7 @@ hybrid-net = []
 ya-core-model = { version = "^0.6", features=["net", "identity"] }
 
 # ya-relay-client = "0.2"
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "5c544834925d6b1e0aa84d40e5bfa7ee32757947" }
+ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "3a3b7dfab96eb2190091f4ffadeb9440c3f6f5f6" }
 
 ya-sb-proto = { version = "0.4" }
 ya-service-api = "0.1"
@@ -35,9 +35,9 @@ thiserror = "1.0"
 tokio = { version = "1", features = ["time"] }
 tokio-stream = "0.1.8"
 
-bytes = { version = "0.5" }
+bytes = { version = "1" }
 ethsign = { version = "0.8" }
-tokio-util = { version = "0.3" }
+tokio-util = { version = "0.7" }
 url = { version = "2.2" }
 prost = { version = "0.10" }
 rand = { version = "0.7"}

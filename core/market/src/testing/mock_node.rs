@@ -1,4 +1,5 @@
-use actix_http::{body::Body, Request};
+use actix_http::body::BoxBody;
+use actix_http::Request;
 use actix_service::Service as ActixService;
 use actix_web::{dev::ServiceResponse, test, App};
 use anyhow::{anyhow, bail, Context, Result};
@@ -447,7 +448,7 @@ impl MarketsNetwork {
     pub async fn get_rest_app(
         &self,
         node_name: &str,
-    ) -> impl ActixService<Request, Response = ServiceResponse<Body>, Error = actix_http::error::Error>
+    ) -> impl ActixService<Request, Response = ServiceResponse<BoxBody>, Error = actix_web::Error>
     {
         let market = self.get_market(node_name);
         let identity = self.get_default_id(node_name);

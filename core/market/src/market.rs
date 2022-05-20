@@ -156,7 +156,7 @@ impl MarketService {
 
     pub fn bind_rest(myself: Arc<MarketService>) -> actix_web::Scope {
         actix_web::web::scope(ya_client::model::market::MARKET_API_PATH)
-            .data(myself)
+            .app_data(myself)
             .app_data(rest_api::path_config())
             .app_data(rest_api::json_config())
             .extend(rest_api::common::register_endpoints)

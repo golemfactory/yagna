@@ -1,5 +1,5 @@
 use actix_web::http::header;
-use actix_web::{middleware, web, App, HttpRequest, HttpResponse, HttpServer};
+use actix_web::{middleware, web, App, HttpResponse, HttpServer};
 
 use awc::Client;
 use futures::TryFutureExt;
@@ -18,6 +18,11 @@ enum Service {
     Identity(ya_identity::service::Identity),
 }
 
+async fn response() -> HttpResponse {
+    let body = "Works fine".to_string();
+    HttpResponse::Ok().body(body)
+}
+
 async fn server() -> anyhow::Result<()> {
     let db = DbExecutor::new(":memory:")?;
     ya_sb_router::bind_gsb_router(None).await?;
@@ -27,10 +32,7 @@ async fn server() -> anyhow::Result<()> {
         App::new()
             .wrap(middleware::Logger::default())
             .wrap(auth::Auth::default())
-            .service(web::resource("/").route(web::get().to(|req: HttpRequest| {
-                let body = format!("{:?}", req);
-                HttpResponse::Ok().body(body)
-            })))
+            .service(web::resource("/").route(web::get().to(response)))
     })
     .bind(rest_api_addr())?
     .run()

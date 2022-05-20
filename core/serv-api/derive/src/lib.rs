@@ -193,7 +193,7 @@ fn define_rest_services(
     }
 
     quote! {
-        pub fn rest<T, B>(mut app: actix_web::App<T, B>, context: &#context_path) -> actix_web::App<T, B>
+        pub fn rest<T, B>(mut app: actix_web::App<T>, context: &#context_path) -> actix_web::App<T>
         where
             B : actix_web::body::MessageBody,
             T : actix_service::ServiceFactory<

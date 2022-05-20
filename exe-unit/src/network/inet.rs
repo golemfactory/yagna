@@ -7,7 +7,6 @@ use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::task::Poll;
-use std::time::Duration;
 
 use actix::prelude::*;
 use bytes::{Bytes, BytesMut};

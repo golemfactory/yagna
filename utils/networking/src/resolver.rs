@@ -1,9 +1,9 @@
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
-use tokio_compat_02::FutureExt;
 use std::iter::FromIterator;
 use std::net::IpAddr;
+use tokio_compat_02::FutureExt;
 
 use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::TokioAsyncResolver;

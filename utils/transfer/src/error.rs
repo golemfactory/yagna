@@ -1,6 +1,6 @@
-use actix_http::client::{ConnectError, SendRequestError};
 use actix_http::error::{ParseError, PayloadError};
-use actix_http::ResponseError;
+use actix_web::ResponseError;
+use awc::error::{ConnectError, SendRequestError};
 use futures::channel::mpsc::SendError;
 use futures::channel::oneshot::Canceled;
 use futures::future::Aborted;
@@ -49,7 +49,7 @@ impl From<SendRequestError> for HttpError {
                 e => HttpError::Server(e.to_string()),
             },
             SendRequestError::Body(e) => {
-                if e.as_response_error().status_code().is_server_error() {
+                if e.status_code().is_server_error() {
                     HttpError::Server(e.to_string())
                 } else {
                     HttpError::Client(e.to_string())

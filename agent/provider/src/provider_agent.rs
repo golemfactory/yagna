@@ -1,6 +1,6 @@
 use actix::prelude::*;
 use anyhow::{anyhow, Error};
-use futures::{future, FutureExt, StreamExt, TryFutureExt};
+use futures::{FutureExt, StreamExt, TryFutureExt};
 
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
@@ -519,7 +519,7 @@ impl Handler<CreateOffers> for ProviderAgent {
         let node_info = self.create_node_info();
         let accounts = match self.accounts(&self.networks) {
             Ok(acc) => acc,
-            Err(e) => return future::err(e).boxed_local(),
+            Err(e) => return Box::pin(async { Err(e) }),
         };
         let inf_node_info = InfNodeInfo::from(self.hardware.capped());
         let preset_names = match msg.0 {

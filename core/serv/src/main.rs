@@ -415,7 +415,7 @@ struct ServiceCommandOpts {
     metrics_opts: MetricsPusherOpts,
 
     #[structopt(long, env, default_value = "60")]
-    max_rest_timeout: usize,
+    max_rest_timeout: u64,
 
     ///changes log level from info to debug
     #[structopt(long)]
@@ -539,7 +539,7 @@ impl ServiceCommand {
                     Services::rest(app, &context)
                 })
                 // this is maximum supported timeout for our REST API
-                .keep_alive(max_rest_timeout.clone())
+                .keep_alive(std::time::Duration::from_secs(*max_rest_timeout))
                 .bind(api_host_port.clone())
                 .context(format!("Failed to bind http server on {:?}", api_host_port))?;
 

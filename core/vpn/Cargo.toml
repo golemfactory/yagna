@@ -15,9 +15,9 @@ ya-service-api-web = "0.1"
 ya-service-bus = "0.4"
 ya-utils-networking = { version = "0.1", default-features = false, features = ["vpn"]}
 
-actix = "0.11"
-actix-web = "=4.0.0-beta.5"
-actix-web-actors = "4.0.0-beta.3"
+actix = "0.13"
+actix-web = "4"
+actix-web-actors = "4"
 anyhow = "1.0"
 bytes = "1"
 env_logger = "0.7"
@@ -39,7 +39,7 @@ uuid = { version = "0.8", features = ["v4"] }
 [dev-dependencies]
 ya-client = "0.6"
 
-actix-rt = "2.2"
+actix-rt = "2.7"
 sha3 = "0.8.2"
 structopt = "0.3"
 tokio = { version = "1", features = ["time", "fs"] }

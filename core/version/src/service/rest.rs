@@ -9,7 +9,7 @@ pub const VERSION_API_PATH: &str = "/version";
 
 pub fn web_scope(db: DbExecutor) -> actix_web::Scope {
     actix_web::web::scope(VERSION_API_PATH)
-        .data(db)
+        .app_data(db)
         .service(get_version)
 }
 

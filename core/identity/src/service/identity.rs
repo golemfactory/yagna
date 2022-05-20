@@ -19,7 +19,6 @@ use crate::dao::identity::Identity;
 use crate::dao::{Error as DaoError, IdentityDao};
 use crate::id_key::{default_password, generate_new, IdentityKey};
 
-
 #[derive(Default)]
 struct Subscription {
     subscriptions: Vec<String>,

@@ -1,5 +1,3 @@
-use actix_http::Response;
-use actix_web::body::Body;
 use actix_web::{error::ResponseError, HttpResponse};
 
 use ya_client_model::ErrorMessage;
@@ -103,7 +101,7 @@ impl From<Error> for RpcMessageError {
 }
 
 impl ResponseError for Error {
-    fn error_response(&self) -> Response<Body> {
+    fn error_response(&self) -> HttpResponse {
         match self {
             Error::BadRequest(_) => {
                 HttpResponse::BadRequest().json(ErrorMessage::new(self.to_string()))
@@ -123,6 +121,5 @@ impl ResponseError for Error {
                 HttpResponse::InternalServerError().json(ErrorMessage::new(e))
             }
         }
-        .into()
     }
 }

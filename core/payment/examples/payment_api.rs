@@ -360,11 +360,11 @@ async fn main() -> anyhow::Result<()> {
         };
 
         let provider_api_scope = Scope::new(&format!("provider/{}", PAYMENT_API_PATH))
-            .data(db.clone())
+            .app_data(db.clone())
             .extend(ya_payment::api::api_scope)
             .wrap(DummyAuth::new(provider_identity));
         let requestor_api_scope = Scope::new(&format!("requestor/{}", PAYMENT_API_PATH))
-            .data(db.clone())
+            .app_data(db.clone())
             .extend(ya_payment::api::api_scope)
             .wrap(DummyAuth::new(requestor_identity));
         App::new()

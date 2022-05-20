@@ -1,11 +1,12 @@
 use actix_web::dev::{Extensions, Payload, ServiceRequest};
 use actix_web::error::PayloadError;
 use actix_web::web::Bytes;
-use actix_web::{FromRequest, HttpMessage, HttpRequest};
+use actix_web::{FromRequest, HttpMessage, HttpRequest, ResponseError};
 use futures::prelude::*;
 use serde::Serialize;
 use std::cell::Ref;
 use std::convert::TryFrom;
+use std::fmt::{Display, Formatter};
 use std::pin::Pin;
 use ya_client::model::NodeId;
 use ya_core_model::appkey::AppKey;
@@ -55,9 +56,8 @@ macro_rules! impl_try_from {
 }
 
 impl FromRequest for Identity {
-    type Error = ();
+    type Error = EmptyError;
     type Future = future::Ready<Result<Self, Self::Error>>;
-    type Config = ();
 
     fn from_request(
         req: &HttpRequest,
@@ -66,10 +66,21 @@ impl FromRequest for Identity {
         if let Some(v) = req.extensions().get::<Identity>() {
             future::ok(v.clone())
         } else {
-            future::err(())
+            future::err(EmptyError {})
         }
     }
 }
+
+#[derive(Debug)]
+pub struct EmptyError;
+
+impl Display for EmptyError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "()")
+    }
+}
+
+impl ResponseError for EmptyError {}
 
 impl_try_from!(ServiceRequest);
 impl_try_from!(&ServiceRequest);
