@@ -11,11 +11,3 @@ impl<Service, Component: Clone> Provider<Service, Component> for Component {
         self.clone()
     }
 }
-
-pub trait Singleton {
-    type Ref;
-
-    fn create() -> Self;
-
-    fn reference(&self) -> Self::Ref;
-}

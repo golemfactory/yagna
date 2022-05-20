@@ -1,20 +1,12 @@
-use anyhow::Context;
-use bigdecimal::{BigDecimal, ToPrimitive, Zero};
-use chrono::{Duration, Utc};
-use num_bigint::ToBigInt;
-use std::borrow::BorrowMut;
-use std::collections::{btree_map, hash_map};
-use std::collections::{BTreeMap, HashMap};
+//use bigdecimal::BigDecimal;
+//use std::collections::HashMap;
 use structopt::StructOpt;
-use uuid::Uuid;
-use ya_client::model::payment as mpay;
-use ya_client_model::payment::DocumentStatus;
+//use ya_client::model::payment as mpay;
 use ya_core_model::driver::{driver_bus_id, SchedulePayment};
-use ya_core_model::net::NetApiError::NodeIdParseError;
-use ya_core_model::payment::local as pay;
-use ya_core_model::payment::public as ppay;
+//use ya_core_model::payment::local as pay;
+//use ya_core_model::payment::public as ppay;
 use ya_core_model::NodeId;
-use ya_payment::dao::{AgreementDao, BatchDao, InvoiceDao, OrderDao};
+use ya_payment::dao::BatchDao;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed as bus;
 
@@ -67,15 +59,13 @@ async fn main() -> anyhow::Result<()> {
 
     log::info!("test1");
 
-    let db = {
-        let database_url = args.payment_db_location.unwrap_or(format!(
-            "file:{}/.local/share/yagna/payment.db",
-            std::env::home_dir().unwrap().display()
-        ));
-        let db = DbExecutor::new(database_url)?;
-        db.apply_migration(ya_payment::migrations::run_with_output)?;
-        db
-    };
+    let user_dirs = directories::UserDirs::new().ok_or(anyhow::anyhow!("no user dirs?"))?;
+    let database_url = args.payment_db_location.unwrap_or(format!(
+        "file:{}/.local/share/yagna/payment.db",
+        user_dirs.home_dir().display()
+    ));
+    let db = DbExecutor::new(database_url)?;
+    db.apply_migration(ya_payment::migrations::run_with_output)?;
 
     match args.command {
         Command::Generate {
@@ -125,7 +115,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn list_dn(db: DbExecutor) -> anyhow::Result<()> {
+async fn _list_dn(db: DbExecutor) -> anyhow::Result<()> {
     for (id, amount, prev_id) in db
         .as_dao::<BatchDao>()
         .list_debit_notes(
@@ -140,11 +130,14 @@ async fn list_dn(db: DbExecutor) -> anyhow::Result<()> {
     Ok(())
 }
 
+/*
 struct Payment {
     amount: BigDecimal,
     delivers: HashMap<NodeId, Vec<Obligation>>,
 }
+ */
 
+/*
 #[derive(Debug, Clone)]
 enum Obligation {
     Invoice {
@@ -152,8 +145,8 @@ enum Obligation {
         amount: BigDecimal,
         agreement_id: String,
     },
-}
-
+}*/
+/*
 impl Payment {
     fn new() -> Self {
         Payment {
@@ -161,8 +154,9 @@ impl Payment {
             delivers: Default::default(),
         }
     }
-}
+}*/
 
+/*
 #[derive(Debug)]
 struct Order {
     payer_addr: NodeId,
@@ -172,13 +166,13 @@ struct Order {
     payments: Vec<mpay::Payment>,
     obligations: Vec<Obligation>,
 }
-
+*/
 async fn generate(
     db: DbExecutor,
     owner_id: NodeId,
     payment_platform: String,
-    dry_run: bool,
-    incremental: bool,
+    _dry_run: bool,
+    _incremental: bool,
     resolve_debit_notes: bool,
 ) -> anyhow::Result<()> {
     let ts = chrono::Utc::now() + chrono::Duration::days(-7);

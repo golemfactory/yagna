@@ -35,7 +35,7 @@ bytesize = "1.0.1"
 chrono = { version = "0.4.10", features = ["serde"] }
 derive_more = "0.99.5"
 dialoguer = "0.5.0"
-directories = "2.0.2"
+directories = "4.0"
 dotenv = "0.15.0"
 futures = "0.3"
 futures-util = "0.3.4"

@@ -43,7 +43,8 @@ structopt = "0.3"
 thiserror = "1.0"
 tokio = { version = "0.2", features = ["fs"] }
 uuid = { version = "0.8", features = ["v4"] }
-humantime="2.0.1"
+humantime = "2.0.1"
+directories = "4.0"
 
 [dev-dependencies]
 ya-client = "0.6"
