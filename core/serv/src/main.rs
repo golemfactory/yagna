@@ -3,6 +3,7 @@ use anyhow::{Context, Result};
 use futures::prelude::*;
 #[cfg(feature = "static-openssl")]
 extern crate openssl_probe;
+
 use std::{
     any::TypeId,
     collections::HashMap,
@@ -13,7 +14,6 @@ use std::{
 };
 use structopt::{clap, StructOpt};
 use url::Url;
-
 use ya_activity::service::Activity as ActivityService;
 use ya_file_logging::start_logger;
 use ya_identity::service::Identity as IdentityService;
@@ -36,11 +36,16 @@ use ya_utils_process::lock::ProcLock;
 use ya_version::VersionService;
 use ya_vpn::VpnService;
 
+use ya_service_bus::typed as gsb;
+
 mod autocomplete;
 mod extension;
+mod model;
 
 use crate::extension::Extension;
 use autocomplete::CompleteCommand;
+
+use ya_activity::TrackerRef;
 
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
@@ -140,6 +145,7 @@ struct ServiceContext {
     mixed_dbs: HashMap<TypeId, DbMixedExecutor>,
     default_db: DbExecutor,
     default_mixed: DbMixedExecutor,
+    activity_tracker: ya_activity::TrackerRef,
 }
 
 impl<S: 'static> Provider<S, DbExecutor> for ServiceContext {
@@ -157,6 +163,12 @@ impl<S: 'static> Provider<S, DbMixedExecutor> for ServiceContext {
             Some(db) => db.clone(),
             None => self.default_mixed.clone(),
         }
+    }
+}
+
+impl<S: 'static> Provider<S, ya_activity::TrackerRef> for ServiceContext {
+    fn component(&self) -> ya_activity::TrackerRef {
+        self.activity_tracker.clone()
     }
 }
 
@@ -208,6 +220,7 @@ impl TryFrom<CliCtx> for ServiceContext {
 
         let market_db = Self::make_mixed_entry::<MarketService>(&ctx.data_dir, "market")?;
         let mixed_dbs = [market_db.clone()].iter().cloned().collect();
+        let activity_tracker = TrackerRef::create();
 
         Ok(ServiceContext {
             ctx,
@@ -215,6 +228,7 @@ impl TryFrom<CliCtx> for ServiceContext {
             mixed_dbs,
             default_db,
             default_mixed: market_db.1,
+            activity_tracker,
         })
     }
 }
@@ -249,7 +263,7 @@ enum Services {
 #[cfg(not(any(
     feature = "dummy-driver",
     feature = "erc20-driver",
-    feature = "zksync-driver"
+    feature = "zksync-driver",
 )))]
 compile_error!("At least one payment driver needs to be enabled in order to make payments.");
 
@@ -397,6 +411,7 @@ impl ExtensionCommand {
 enum ServiceCommand {
     /// Runs server in foreground
     Run(ServiceCommandOpts),
+    Shutdown(ShutdownOpts),
 }
 
 #[derive(StructOpt, Debug)]
@@ -442,6 +457,12 @@ async fn sd_notify(unset_environment: bool, state: &str) -> std::io::Result<()> 
     let mut socket = tokio::net::UnixDatagram::unbound()?;
     socket.send_to(state.as_ref(), addr).await?;
     Ok(())
+}
+
+#[derive(StructOpt, Debug)]
+struct ShutdownOpts {
+    #[structopt(long)]
+    gracefully: bool,
 }
 
 #[cfg(not(unix))]
@@ -534,7 +555,8 @@ impl ServiceCommand {
                     let app = App::new()
                         .wrap(middleware::Logger::default())
                         .wrap(auth::Auth::default())
-                        .route("/me", web::get().to(me));
+                        .route("/me", web::get().to(me))
+                        .service(forward_gsb);
 
                     Services::rest(app, &context)
                 })
@@ -546,8 +568,21 @@ impl ServiceCommand {
                 let _ = extension::autostart(&ctx.data_dir, &api_url, &ctx.gsb_url)
                     .await
                     .map_err(|e| log::warn!("Failed to autostart extensions: {e}"));
+                let server_fut = server.run();
+                {
+                    let server = server_fut.clone();
+                    gsb::bind(model::BUS_ID, move |request: model::ShutdownRequest| {
+                        let server = server.clone();
+                        actix_rt::spawn(async move {
+                            actix_rt::time::delay_for(std::time::Duration::from_secs(1)).await;
+                            server.stop(request.graceful).await;
+                        });
 
-                future::try_join(server.run(), sd_notify(false, "READY=1")).await?;
+                        async move { Ok(()) }
+                    });
+                }
+
+                future::try_join(server_fut, sd_notify(false, "READY=1")).await?;
 
                 log::info!("{} service successfully finished!", app_name);
 
@@ -559,6 +594,14 @@ impl ServiceCommand {
 
                 logger_handle.shutdown();
                 Ok(CommandOutput::NoOutput)
+            }
+            Self::Shutdown(opts) => {
+                let result = gsb::service(model::BUS_ID)
+                    .call(model::ShutdownRequest {
+                        graceful: opts.gracefully,
+                    })
+                    .await?;
+                CommandOutput::object(&result)
             }
         }
     }
@@ -596,6 +639,27 @@ https://handbook.golem.network/see-also/terms
 
 async fn me(id: Identity) -> impl Responder {
     web::Json(id)
+}
+
+#[actix_web::post("/_gsb/{service:.*}")]
+async fn forward_gsb(
+    id: Identity,
+    web::Path(service): web::Path<String>,
+    data: web::Json<serde_json::Value>,
+) -> impl Responder {
+    use ya_service_bus::untyped as bus;
+    log::debug!(target: "gsb-bridge", "called: {}", service);
+    let data = flexbuffers::to_vec(data.into_inner()).map_err(actix_web::error::ErrorBadRequest)?;
+    let r = bus::send(
+        &format!("/{}", service),
+        &format!("/local/{}", id.identity),
+        &data,
+    )
+    .await
+    .map_err(actix_web::error::ErrorInternalServerError)?;
+    let json_resp: serde_json::Value =
+        flexbuffers::from_slice(&r).map_err(actix_web::error::ErrorInternalServerError)?;
+    Ok::<_, actix_web::Error>(web::Json(json_resp))
 }
 
 #[actix_rt::main]

@@ -1966,6 +1966,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "flexbuffers"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15d14128f06405808ce75bfebe11e9b0f9da18719ede6d7bdb1702d6bfe0f7e8"
+dependencies = [
+ "bitflags",
+ "byteorder",
+ "num_enum",
+ "serde",
+ "serde_derive",
+]
+
+[[package]]
 name = "flexi_logger"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7676,7 +7689,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75b587455c11a7bbd9ec2a69d196c1d199d6e54696a923dba48a690e90a74c84"
 dependencies = [
  "actix",
- "flexbuffers",
+ "flexbuffers 0.2.2",
  "futures 0.3.13",
  "lazy_static",
  "log",
@@ -7933,6 +7946,7 @@ dependencies = [
  "chrono",
  "directories",
  "dotenv",
+ "flexbuffers 2.0.0",
  "futures 0.3.13",
  "gftp",
  "lazy_static",
