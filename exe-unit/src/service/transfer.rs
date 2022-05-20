@@ -7,10 +7,6 @@ use std::rc::Rc;
 use actix::prelude::*;
 use futures::future::Abortable;
 use url::Url;
-use ya_client_model::activity::TransferArgs;
-
-use ya_transfer::error::Error as TransferError;
-use ya_transfer::*;
 
 use crate::deploy::ContainerVolume;
 use crate::error::Error;
@@ -18,6 +14,10 @@ use crate::message::Shutdown;
 use crate::util::cache::Cache;
 use crate::util::Abort;
 use crate::{ExeUnitContext, Result};
+
+use ya_client_model::activity::TransferArgs;
+use ya_transfer::error::Error as TransferError;
+use ya_transfer::*;
 
 #[derive(Clone, Debug, Message)]
 #[rtype(result = "Result<()>")]
@@ -433,9 +433,8 @@ async fn move_file(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Res
 
 #[cfg(test)]
 mod test {
-    use std::path::Path;
-
     use super::*;
+    use std::path::Path;
 
     #[test]
     fn test_resolve_1() {
