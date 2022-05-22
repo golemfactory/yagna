@@ -628,6 +628,12 @@ async fn process_agreement_decision(
                     id,
                     error
                 ));
+            } else {
+                ctx.negotiator
+                    .agreement_signed(&agreement)
+                    .await
+                    .log_warn_msg("Failed to send AgreementSigned message to negotiators.")
+                    .ok();
             }
 
             // We negotiated agreement and here responsibility of ProviderMarket ends.
