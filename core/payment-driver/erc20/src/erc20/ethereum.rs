@@ -14,6 +14,7 @@ use web3::{
     types::{Bytes, Transaction, TransactionId, TransactionReceipt, H160, H256, U256, U64},
     Web3,
 };
+
 use ya_client_model::NodeId;
 use ya_payment_driver::db::models::{Network, TransactionEntity, TransactionStatus, TxType};
 use ya_payment_driver::utils::big_dec_to_u256;
@@ -524,7 +525,10 @@ fn get_rpc_addr_from_env(network: Network) -> Vec<String> {
         Network::Goerli => {
             collect_rpc_addr_from("GOERLI_GETH_ADDR", "https://rpc.goerli.mudit.blog")
         }
-        Network::Polygon => collect_rpc_addr_from("POLYGON_GETH_ADDR", "https://bor.golem.network"),
+        Network::Polygon => collect_rpc_addr_from(
+            "POLYGON_GETH_ADDR",
+            "https://bor.golem.network,https://polygon-rpc.com",
+        ),
         Network::Mumbai => collect_rpc_addr_from(
             "MUMBAI_GETH_ADDR",
             "https://matic-mumbai.chainstacklabs.com",
