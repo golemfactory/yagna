@@ -181,8 +181,5 @@ mod common {
                 futures::stream::once(futures::future::ok(web::Bytes::from(line)))
                     .chain(event_stream(stream, id.identity)),
             ))
-
-        //let value = stream.recv().await.map_err(actix_web::error::ErrorInternalServerError)?;
-        //Ok::<_, actix_web::Error>(web::Json(value))
     }
 }

@@ -649,7 +649,9 @@ async fn forward_gsb(
 ) -> impl Responder {
     use ya_service_bus::untyped as bus;
     log::debug!(target: "gsb-bridge", "called: {}", service);
-    let data = flexbuffers::to_vec(data.into_inner()).map_err(actix_web::error::ErrorBadRequest)?;
+    let inner_data = data.into_inner();
+    let data = ya_service_bus::serialization::to_vec(&inner_data)
+        .map_err(actix_web::error::ErrorBadRequest)?;
     let r = bus::send(
         &format!("/{}", service),
         &format!("/local/{}", id.identity),
@@ -657,8 +659,8 @@ async fn forward_gsb(
     )
     .await
     .map_err(actix_web::error::ErrorInternalServerError)?;
-    let json_resp: serde_json::Value =
-        flexbuffers::from_slice(&r).map_err(actix_web::error::ErrorInternalServerError)?;
+    let json_resp: serde_json::Value = ya_service_bus::serialization::from_slice(&r)
+        .map_err(actix_web::error::ErrorInternalServerError)?;
     Ok::<_, actix_web::Error>(web::Json(json_resp))
 }
 

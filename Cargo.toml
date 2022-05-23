@@ -75,7 +75,6 @@ structopt = "0.3"
 tokio = { version = "0.2.22", features = ["uds"] }
 tokio-util = { version = "0.3", features = ["codec"] }
 url = "2.1.1"
-flexbuffers = "2.0"
 
 [package.metadata.deb]
 name="golem-requestor"
