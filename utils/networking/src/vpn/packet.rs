@@ -47,11 +47,11 @@ impl EtherFrame {
 
         let proto = &data[EtherField::ETHER_TYPE];
         match proto {
-            &[0x08, 0x00] => {
+            [0x08, 0x00] => {
                 IpPacket::peek(&data[ETHERNET_HDR_SIZE..])?;
                 Ok(EtherType::Ip)
             }
-            &[0x08, 0x06] => {
+            [0x08, 0x06] => {
                 ArpPacket::peek(&data[ETHERNET_HDR_SIZE..])?;
                 Ok(EtherType::Arp)
             }
@@ -100,17 +100,17 @@ impl TryFrom<Vec<u8>> for EtherFrame {
     }
 }
 
-impl Into<Box<[u8]>> for EtherFrame {
-    fn into(self) -> Box<[u8]> {
-        match self {
-            Self::Ip(b) | Self::Arp(b) => b,
+impl From<EtherFrame> for Box<[u8]> {
+    fn from(frame: EtherFrame) -> Self {
+        match frame {
+            EtherFrame::Ip(b) | EtherFrame::Arp(b) => b,
         }
     }
 }
 
-impl Into<Vec<u8>> for EtherFrame {
-    fn into(self) -> Vec<u8> {
-        Into::<Box<[u8]>>::into(self).into()
+impl From<EtherFrame> for Vec<u8> {
+    fn from(frame: EtherFrame) -> Self {
+        Into::<Box<[u8]>>::into(frame).into()
     }
 }
 
@@ -179,7 +179,7 @@ impl<'a> IpPacket<'a> {
 
     pub fn is_broadcast(&self) -> bool {
         match self {
-            Self::V4(ip) => &ip.dst_address[0..4] == &[255, 255, 255, 255],
+            Self::V4(ip) => ip.dst_address[0..4] == [255, 255, 255, 255],
             Self::V6(_) => false,
         }
     }
@@ -221,6 +221,15 @@ pub struct IpV4Packet<'a> {
 
 impl<'a> IpV4Packet<'a> {
     pub const MIN_HEADER_LEN: usize = 20;
+
+    fn read_header_len(data: &'a [u8]) -> usize {
+        let ihl = get_bit_field(data, Ipv4Field::IHL) as usize;
+        if ihl >= 5 {
+            4 * ihl
+        } else {
+            Self::MIN_HEADER_LEN
+        }
+    }
 }
 
 impl<'a> PeekPacket<'a> for IpV4Packet<'a> {
@@ -231,7 +240,8 @@ impl<'a> PeekPacket<'a> for IpV4Packet<'a> {
         }
 
         let len = ntoh_u16(&data[Ipv4Field::TOTAL_LEN]).unwrap() as usize;
-        let payload_off = Self::MIN_HEADER_LEN + 4 * get_bit_field(data, Ipv4Field::IHL) as usize;
+        let payload_off = Self::read_header_len(data);
+
         if data_len < len || len < payload_off {
             return Err(Error::PacketMalformed("IPv4: payload too short".into()));
         }
@@ -239,7 +249,8 @@ impl<'a> PeekPacket<'a> for IpV4Packet<'a> {
     }
 
     fn packet(data: &'a [u8]) -> Self {
-        let payload_off = get_bit_field(data, Ipv4Field::IHL) as usize * 4 + 20;
+        let payload_off = Self::read_header_len(data);
+
         Self {
             src_address: &data[Ipv4Field::SRC_ADDR],
             dst_address: &data[Ipv4Field::DST_ADDR],
@@ -341,10 +352,10 @@ impl<'a> ArpPacket<'a> {
     fn mirror_op(&self) -> [u8; 2] {
         let op = self.get_field(ArpField::OP);
         // request
-        if op == &[0x00, 0x01] {
+        if op == [0x00, 0x01] {
             // reply
             [0x00, 0x02]
-        } else if op == &[0x00, 0x02] {
+        } else if op == [0x00, 0x02] {
             [0x00, 0x01]
         } else {
             let mut ret = [0u8; 2];
@@ -396,11 +407,11 @@ pub struct TcpPacket<'a> {
 
 impl<'a> TcpPacket<'a> {
     pub fn src_port(&self) -> u16 {
-        ntoh_u16(&self.src_port).unwrap()
+        ntoh_u16(self.src_port).unwrap()
     }
 
     pub fn dst_port(&self) -> u16 {
-        ntoh_u16(&self.dst_port).unwrap()
+        ntoh_u16(self.dst_port).unwrap()
     }
 }
 
@@ -410,8 +421,8 @@ impl<'a> PeekPacket<'a> for TcpPacket<'a> {
             return Err(Error::PacketMalformed("TCP: packet too short".into()));
         }
 
-        let off = get_bit_field(data, TcpField::DATA_OFF) as usize;
-        if data.len() < off {
+        let payload_off = get_bit_field(data, TcpField::DATA_OFF) as usize;
+        if data.len() < payload_off {
             return Err(Error::PacketMalformed("TCP: packet too short".into()));
         }
 
@@ -428,7 +439,7 @@ impl<'a> PeekPacket<'a> for TcpPacket<'a> {
 
 #[inline(always)]
 fn get_bit_field(data: &[u8], bit_field: BitField) -> u8 {
-    (data[bit_field.0] << bit_field.1.start) >> (bit_field.1.start + (8 - bit_field.1.end))
+    (data[bit_field.0] << bit_field.1.start) >> (8 - bit_field.1.len())
 }
 
 macro_rules! impl_ntoh_n {
