@@ -5445,16 +5445,15 @@ dependencies = [
 
 [[package]]
 name = "smoltcp"
-version = "0.8.0"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2308a1657c8db1f5b4993bab4e620bdbe5623bd81f254cf60326767bb243237"
+checksum = "72165c4af59f5f19c7fb774b88b95660591b612380305b5f4503157341a9f7ee"
 dependencies = [
  "bitflags",
  "byteorder",
  "libc",
  "log",
  "managed 0.8.0",
- "rand_core 0.6.3",
 ]
 
 [[package]]
@@ -7233,6 +7232,7 @@ dependencies = [
 name = "ya-net"
 version = "0.2.0"
 dependencies = [
+ "actix",
  "actix-rt",
  "anyhow",
  "bytes 0.5.6",
@@ -7421,7 +7421,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=56b02e83202faddf3d84ada836d0bd7e7b0be3ee#56b02e83202faddf3d84ada836d0bd7e7b0be3ee"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=86e7d08f4ca4ef8908b3be386855949ac73514aa#86e7d08f4ca4ef8908b3be386855949ac73514aa"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7440,7 +7440,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-core"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=56b02e83202faddf3d84ada836d0bd7e7b0be3ee#56b02e83202faddf3d84ada836d0bd7e7b0be3ee"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=86e7d08f4ca4ef8908b3be386855949ac73514aa#86e7d08f4ca4ef8908b3be386855949ac73514aa"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7468,7 +7468,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-proto"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=56b02e83202faddf3d84ada836d0bd7e7b0be3ee#56b02e83202faddf3d84ada836d0bd7e7b0be3ee"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=86e7d08f4ca4ef8908b3be386855949ac73514aa#86e7d08f4ca4ef8908b3be386855949ac73514aa"
 dependencies = [
  "anyhow",
  "bytes 0.5.6",
@@ -7485,7 +7485,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=56b02e83202faddf3d84ada836d0bd7e7b0be3ee#56b02e83202faddf3d84ada836d0bd7e7b0be3ee"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=86e7d08f4ca4ef8908b3be386855949ac73514aa#86e7d08f4ca4ef8908b3be386855949ac73514aa"
 dependencies = [
  "derive_more",
  "futures 0.3.13",
@@ -7494,7 +7494,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "rand 0.8.4",
- "smoltcp 0.8.0",
+ "smoltcp 0.8.1",
  "thiserror",
  "tokio 0.2.25",
 ]
