@@ -34,7 +34,7 @@ use crate::hybrid::client::{ClientActor, ClientProxy};
 use crate::hybrid::codec;
 use crate::hybrid::crypto::IdentityCryptoProvider;
 
-const DEFAULT_NET_RELAY_HOST: &str = "52.17.188.4:7464";
+const DEFAULT_NET_RELAY_HOST: &str = "127.0.0.1:7464";
 
 pub type BCastHandler = Box<dyn FnMut(String, &[u8]) + Send>;
 
