@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
-use std::net::SocketAddr;
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
@@ -200,6 +200,7 @@ async fn relay_addr(config: &Config) -> anyhow::Result<SocketAddr> {
         Some(val) => val.to_string(),
         None => resolver::resolve_yagna_srv_record("_net_relay._udp")
             .await
+            // FIXME: remove
             .unwrap_or_else(|_| DEFAULT_NET_RELAY_HOST.to_string()),
     };
     log::trace!("resolving host_port: {}", host_port);
@@ -208,8 +209,9 @@ async fn relay_addr(config: &Config) -> anyhow::Result<SocketAddr> {
         .context("Please use host:port format")?;
     let ip = resolver::try_resolve_dns_record(host).await;
     let socket = format!("{}:{}", ip, port)
-        .parse()
-        .context("Invalid relay address")?;
+        .to_socket_addrs()?
+        .next()
+        .ok_or_else(|| anyhow!("Invalid relay address: {ip}:{port}"))?;
     Ok(socket)
 }
 
