@@ -14,6 +14,7 @@ use futures::prelude::stream::{SplitSink, SplitStream};
 use futures::{FutureExt, Sink, SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio::sync::RwLock;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::codec::{BytesCodec, Framed};
 use tokio_util::udp::UdpFramed;
 
@@ -23,6 +24,7 @@ use net::smoltcp::wire::{IpAddress, IpCidr, IpEndpoint};
 use net::socket::SocketDesc;
 use net::{EgressReceiver, IngressEvent, IngressReceiver};
 use net::{Error as NetError, Protocol};
+
 use ya_runtime_api::server::{CreateNetwork, NetworkInterface, RuntimeService};
 use ya_utils_networking::vpn::common::{ntoh, DEFAULT_MAX_FRAME_SIZE};
 use ya_utils_networking::vpn::stack as net;
@@ -226,7 +228,8 @@ async fn inet_endpoint_egress_handler(
     }
 }
 
-async fn inet_ingress_handler(mut rx: IngressReceiver, proxy: Proxy) {
+async fn inet_ingress_handler(rx: IngressReceiver, proxy: Proxy) {
+    let mut rx = UnboundedReceiverStream::new(rx);
     while let Some(event) = rx.next().await {
         match event {
             IngressEvent::InboundConnection { desc } => log::debug!(
@@ -264,9 +267,10 @@ async fn inet_ingress_handler(mut rx: IngressReceiver, proxy: Proxy) {
 }
 
 async fn inet_egress_handler<E: std::fmt::Display>(
-    mut rx: EgressReceiver,
+    rx: EgressReceiver,
     mut fwd: impl Sink<Result<Vec<u8>>, Error = E> + Unpin + 'static,
 ) {
+    let mut rx = UnboundedReceiverStream::new(rx);
     while let Some(event) = rx.next().await {
         let mut frame = event.payload.into_vec();
         log::debug!("[inet] egress -> runtime packet {} B", frame.len());
