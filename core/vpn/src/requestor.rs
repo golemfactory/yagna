@@ -1,6 +1,7 @@
 use crate::message::*;
 use crate::network::VpnSupervisor;
 use actix::prelude::*;
+use actix_web::web::Data;
 use actix_web::{web, HttpRequest, HttpResponse, Responder, ResponseError};
 use actix_web_actors::ws;
 use futures::channel::mpsc;
@@ -13,7 +14,6 @@ use ya_client_model::ErrorMessage;
 use ya_service_api_web::middleware::Identity;
 use ya_utils_networking::vpn::{Error as VpnError, Protocol};
 
-pub const NET_API_PATH: &str = "/net-api/v1/";
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -22,7 +22,7 @@ type WsResult<T> = std::result::Result<T, ws::ProtocolError>;
 
 pub fn web_scope(vpn_sup: Arc<Mutex<VpnSupervisor>>) -> actix_web::Scope {
     actix_web::web::scope(NET_API_PATH)
-        .app_data(vpn_sup)
+        .app_data(Data::new(vpn_sup))
         .service(get_networks)
         .service(create_network)
         .service(get_network)

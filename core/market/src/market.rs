@@ -1,3 +1,4 @@
+use actix_web::web::Data;
 use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
 use metrics::counter;
@@ -156,9 +157,9 @@ impl MarketService {
 
     pub fn bind_rest(myself: Arc<MarketService>) -> actix_web::Scope {
         actix_web::web::scope(ya_client::model::market::MARKET_API_PATH)
-            .app_data(myself)
-            .app_data(rest_api::path_config())
-            .app_data(rest_api::json_config())
+            .app_data(Data::new(myself))
+            .app_data(Data::new(rest_api::path_config()))
+            .app_data(Data::new(rest_api::json_config()))
             .extend(rest_api::common::register_endpoints)
             .extend(rest_api::provider::register_endpoints)
             .extend(rest_api::requestor::register_endpoints)

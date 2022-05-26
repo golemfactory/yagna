@@ -206,8 +206,8 @@ ya-metrics = { path = "core/metrics" }
 ya-provider = { path = "agent/provider"}
 
 
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "f8b66b98d533db9d766b70a24a3e40d338f23952" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "f8b66b98d533db9d766b70a24a3e40d338f23952" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "18fe0bec2851b4928aae0af70c405b5b8125f519" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "18fe0bec2851b4928aae0af70c405b5b8125f519" }
 
 ethereum-tx-sign = { git = "https://github.com/mfranciszkiewicz/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
 graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "3619f63a0c1ff44962ab604e55cd5dfb62177c56" }
