@@ -529,6 +529,7 @@ impl ServiceCommand {
                     .unwrap_or_else(|e| log::error!("Initializing payment accounts failed: {}", e));
 
                 let api_host_port = rest_api_host_port(api_url.clone());
+                let rest_address = api_host_port.clone();
 
                 let server = HttpServer::new(move || {
                     let app = App::new()
@@ -536,7 +537,9 @@ impl ServiceCommand {
                         .wrap(auth::Auth::default())
                         .route("/me", web::get().to(me));
 
-                    Services::rest(app, &context)
+                    let rest = Services::rest(app, &context);
+                    log::info!("Http server thread started on: {}", rest_address);
+                    rest
                 })
                 // this is maximum supported timeout for our REST API
                 .keep_alive(std::time::Duration::from_secs(*max_rest_timeout))
