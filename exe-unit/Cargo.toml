@@ -65,6 +65,7 @@ serde_json = "1.0"
 serde_yaml = "0.8"
 sha3 = "0.8.2"
 signal-hook = "0.3"
+socket2 = "0.4"
 structopt = "0.3"
 thiserror = "1.0"
 tokio = { version = "1", features = ["process", "signal", "time", "net"] }

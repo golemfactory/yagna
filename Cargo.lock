@@ -7195,6 +7195,7 @@ dependencies = [
  "sha3 0.8.2",
  "shell-words",
  "signal-hook",
+ "socket2 0.4.4",
  "structopt",
  "tempdir",
  "thiserror",

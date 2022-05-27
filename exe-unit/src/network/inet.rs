@@ -2,17 +2,19 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::future::Future;
 use std::iter::FromIterator;
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::task::Poll;
+use std::time::Duration;
 
 use actix::prelude::*;
+use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
 use futures::prelude::stream::{SplitSink, SplitStream};
 use futures::{FutureExt, Sink, SinkExt, StreamExt};
-use tokio::net::TcpStream;
+use tokio::net::{TcpSocket, TcpStream};
 use tokio::sync::RwLock;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::codec::{BytesCodec, Framed};
@@ -42,6 +44,7 @@ use crate::{Error, Result};
 
 const IP4_ADDRESS: std::net::Ipv4Addr = std::net::Ipv4Addr::new(9, 0, 0x0d, 0x01);
 const IP6_ADDRESS: std::net::Ipv6Addr = IP4_ADDRESS.to_ipv6_mapped();
+const TCP_KEEP_ALIVE: Duration = Duration::from_secs(30);
 const DEFAULT_PREFIX_LEN: u8 = 24;
 
 type TcpSender = Arc<Mutex<SplitSink<Framed<TcpStream, BytesCodec>, Bytes>>>;
@@ -517,7 +520,10 @@ impl Proxy {
 async fn inet_tcp_proxy<'a>(ip: IpAddr, port: u16) -> Result<(TransportSender, TransportReceiver)> {
     log::debug!("[inet] connecting TCP to {}:{}", ip, port);
 
-    let tcp_stream = TcpStream::connect((ip, port)).await?;
+    let tcp_stream = tcp_connect(&SocketAddr::new(ip, port), None)
+        .map_err(|e| Error::Other(e.to_string()))?
+        .await
+        .map_err(|e| Error::Other(e.to_string()))?;
     let _ = tcp_stream.set_nodelay(true);
 
     let stream = Framed::with_capacity(tcp_stream, BytesCodec::new(), DEFAULT_MAX_FRAME_SIZE);
@@ -526,6 +532,95 @@ async fn inet_tcp_proxy<'a>(ip: IpAddr, port: u16) -> Result<(TransportSender, T
         TransportSender::Tcp(Arc::new(Mutex::new(tx))),
         TransportReceiver::Tcp(rx),
     ))
+}
+
+// Copied from: https://github.com/hyperium/hyper/blob/055b4e7ea6bd22859c20d60776b0c8f20d27498e/src/client/connect/http.rs#L588-L673
+fn tcp_connect(
+    addr: &SocketAddr,
+    connect_timeout: Option<Duration>,
+) -> anyhow::Result<impl Future<Output = anyhow::Result<TcpStream>>> {
+    // TODO(eliza): if Tokio's `TcpSocket` gains support for setting the
+    // keepalive timeout, it would be nice to use that instead of socket2,
+    // and avoid the unsafe `into_raw_fd`/`from_raw_fd` dance...
+    use socket2::{Domain, Protocol, Socket, TcpKeepalive, Type};
+
+    let domain = Domain::for_address(*addr);
+    let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))
+        .map_err(|e| anyhow!("tcp open error: {}", e))?;
+
+    // When constructing a Tokio `TcpSocket` from a raw fd/socket, the user is
+    // responsible for ensuring O_NONBLOCK is set.
+    socket
+        .set_nonblocking(true)
+        .map_err(|e| anyhow!("tcp set_nonblocking error: {}", e))?;
+
+    let conf = TcpKeepalive::new().with_time(TCP_KEEP_ALIVE);
+    if let Err(e) = socket.set_tcp_keepalive(&conf) {
+        log::warn!("tcp set_keepalive error: {}", e);
+    }
+
+    bind_local_address(&socket, addr, &None, &None)
+        .map_err(|e| anyhow!("tcp bind local error: {}", e))?;
+
+    #[cfg(unix)]
+    let socket = unsafe {
+        // Safety: `from_raw_fd` is only safe to call if ownership of the raw
+        // file descriptor is transferred. Since we call `into_raw_fd` on the
+        // socket2 socket, it gives up ownership of the fd and will not close
+        // it, so this is safe.
+        use std::os::unix::io::{FromRawFd, IntoRawFd};
+        TcpSocket::from_raw_fd(socket.into_raw_fd())
+    };
+    #[cfg(windows)]
+    let socket = unsafe {
+        // Safety: `from_raw_socket` is only safe to call if ownership of the raw
+        // Windows SOCKET is transferred. Since we call `into_raw_socket` on the
+        // socket2 socket, it gives up ownership of the SOCKET and will not close
+        // it, so this is safe.
+        use std::os::windows::io::{FromRawSocket, IntoRawSocket};
+        TcpSocket::from_raw_socket(socket.into_raw_socket())
+    };
+
+    let connect = socket.connect(*addr);
+    Ok(async move {
+        match connect_timeout {
+            Some(dur) => match tokio::time::timeout(dur, connect).await {
+                Ok(Ok(s)) => Ok(s),
+                Ok(Err(e)) => Err(e.into()),
+                Err(_elapsed) => Err(anyhow!("connection timeout")),
+            },
+            None => Ok(connect.await?),
+        }
+        .map_err(|e| anyhow!("tcp connect error: {}", e))
+    })
+}
+
+fn bind_local_address(
+    socket: &socket2::Socket,
+    dst_addr: &SocketAddr,
+    local_addr_ipv4: &Option<Ipv4Addr>,
+    local_addr_ipv6: &Option<Ipv6Addr>,
+) -> anyhow::Result<()> {
+    match (*dst_addr, local_addr_ipv4, local_addr_ipv6) {
+        (SocketAddr::V4(_), Some(addr), _) => {
+            socket.bind(&SocketAddr::new(addr.clone().into(), 0).into())?;
+        }
+        (SocketAddr::V6(_), _, Some(addr)) => {
+            socket.bind(&SocketAddr::new(addr.clone().into(), 0).into())?;
+        }
+        _ => {
+            if cfg!(windows) {
+                // Windows requires a socket be bound before calling connect
+                let any: SocketAddr = match *dst_addr {
+                    SocketAddr::V4(_) => ([0, 0, 0, 0], 0).into(),
+                    SocketAddr::V6(_) => ([0, 0, 0, 0, 0, 0, 0, 0], 0).into(),
+                };
+                socket.bind(&any.into())?;
+            }
+        }
+    }
+
+    Ok(())
 }
 
 async fn inet_udp_proxy<'a>(ip: IpAddr, port: u16) -> Result<(TransportSender, TransportReceiver)> {
