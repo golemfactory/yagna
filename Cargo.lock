@@ -6732,7 +6732,6 @@ dependencies = [
  "soketto",
  "tiny-keccak 2.0.2",
  "tokio 1.18.2",
- "tokio-stream",
  "tokio-util 0.6.10",
  "url",
  "web3-async-native-tls",
