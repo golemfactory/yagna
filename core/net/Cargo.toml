@@ -14,7 +14,7 @@ hybrid-net = []
 ya-core-model = { version = "^0.6", features=["net", "identity"] }
 
 # ya-relay-client = "0.2"
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "9d694b4c82e95b21f6756370772a751b9e9502f2" }
+ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "28b1a8f5c95020e0dae834325505f96e45c25d03" }
 
 ya-sb-proto = { version = "0.4" }
 ya-service-api = "0.1"
@@ -22,6 +22,7 @@ ya-service-api-interfaces = "0.1"
 ya-service-bus = "0.4"
 ya-utils-networking = "0.1"
 
+actix = "0.10"
 actix-rt = "1.0"
 anyhow = "1.0"
 futures = "0.3"
