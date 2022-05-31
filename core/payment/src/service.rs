@@ -41,6 +41,7 @@ mod local {
             .bind_with_processor(get_invoice_stats)
             .bind_with_processor(get_accounts)
             .bind_with_processor(validate_allocation)
+            .bind_with_processor(release_allocations)
             .bind_with_processor(get_drivers)
             .bind_with_processor(shut_down);
 
@@ -181,7 +182,7 @@ mod local {
                 return Err(GenericError::new(format!(
                     "Unsupported token. driver={} network={} token={}",
                     driver, network, token
-                )))
+                )));
             }
         };
 
@@ -227,8 +228,23 @@ mod local {
         }
         .map_err(GenericError::new);
 
-        let (incoming, outgoing, amount, reserved) =
-            future::try_join4(incoming_fut, outgoing_fut, amount_fut, reserved_fut).await?;
+        let gas_amount_fut = async {
+            processor
+                .lock()
+                .await
+                .get_gas_balance(platform.clone(), address.clone())
+                .await
+        }
+        .map_err(GenericError::new);
+
+        let (incoming, outgoing, amount, gas, reserved) = future::try_join5(
+            incoming_fut,
+            outgoing_fut,
+            amount_fut,
+            gas_amount_fut,
+            reserved_fut,
+        )
+        .await?;
 
         Ok(StatusResult {
             amount,
@@ -238,6 +254,7 @@ mod local {
             driver,
             network,
             token,
+            gas,
         })
     }
 
@@ -304,6 +321,15 @@ mod local {
             .await
             .validate_allocation(msg.platform, msg.address, msg.amount)
             .await?)
+    }
+
+    async fn release_allocations(
+        db: DbExecutor,
+        processor: Arc<Mutex<PaymentProcessor>>,
+        _caller: String,
+        msg: ReleaseAllocations,
+    ) -> Result<(), GenericError> {
+        Ok(processor.lock().await.release_allocations(true).await)
     }
 
     async fn get_drivers(
@@ -464,7 +490,7 @@ mod public {
             DocumentStatus::Cancelled => {
                 return Err(AcceptRejectError::BadRequest(
                     "Cannot accept cancelled debit note".to_owned(),
-                ))
+                ));
             }
             _ => (),
         }
@@ -540,7 +566,7 @@ mod public {
                     return Err(SendError::BadRequest(format!(
                         "Activity not found: {}",
                         activity_id
-                    )))
+                    )));
                 }
                 Err(e) => return Err(SendError::ServiceError(e.to_string())),
                 _ => (),
@@ -625,7 +651,7 @@ mod public {
             DocumentStatus::Cancelled => {
                 return Err(AcceptRejectError::BadRequest(
                     "Cannot accept cancelled invoice".to_owned(),
-                ))
+                ));
             }
             _ => (),
         }
@@ -680,7 +706,7 @@ mod public {
             DocumentStatus::Rejected => (),
             DocumentStatus::Cancelled => return Ok(Ack {}),
             DocumentStatus::Accepted | DocumentStatus::Settled | DocumentStatus::Failed => {
-                return Err(CancelError::Conflict)
+                return Err(CancelError::Conflict);
             }
         }
 

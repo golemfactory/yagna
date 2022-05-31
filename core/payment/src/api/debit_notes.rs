@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 // Extrnal crates
 use actix_web::web::{get, post, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
@@ -99,8 +100,29 @@ async fn get_debit_note_payments(
 async fn get_debit_note_events(
     db: Data<DbExecutor>,
     query: Query<params::EventParams>,
+    req: actix_web::web::HttpRequest,
     id: Identity,
 ) -> HttpResponse {
+    let requestor_events: Vec<Cow<'static, str>> = req
+        .headers()
+        .get("X-Requestor-Events")
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.split(",").map(|s| Cow::Owned(s.to_owned())).collect())
+        .unwrap_or_else(|| vec!["RECEIVED".into(), "CANCELLED".into()]);
+
+    let provider_events: Vec<Cow<'static, str>> = req
+        .headers()
+        .get("X-Provider-Events")
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.split(",").map(|s| Cow::Owned(s.to_owned())).collect())
+        .unwrap_or_else(|| {
+            vec![
+                "ACCEPTED".into(),
+                "REJECTED".into(),
+                "SETTLED".into(),
+                "CANCELLED".into(),
+            ]
+        });
     let node_id = id.identity;
     let timeout_secs = query.timeout.unwrap_or(params::DEFAULT_EVENT_TIMEOUT);
     let after_timestamp = query.after_timestamp.map(|d| d.naive_utc());
@@ -114,6 +136,8 @@ async fn get_debit_note_events(
             after_timestamp.clone(),
             max_events.clone(),
             app_session_id.clone(),
+            requestor_events.clone(),
+            provider_events.clone(),
         )
         .await
     };
@@ -319,8 +343,14 @@ async fn accept_debit_note(
         .get(allocation_id.clone(), node_id)
         .await
     {
-        Ok(Some(allocation)) => allocation,
-        Ok(None) => {
+        Ok(AllocationStatus::Active(allocation)) => allocation,
+        Ok(AllocationStatus::Gone) => {
+            return response::gone(&format!(
+                "Allocation {} has been already released",
+                allocation_id
+            ))
+        }
+        Ok(AllocationStatus::NotFound) => {
             return response::bad_request(&format!("Allocation {} not found", allocation_id))
         }
         Err(e) => return response::server_error(&e),

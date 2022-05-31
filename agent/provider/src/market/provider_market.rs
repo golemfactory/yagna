@@ -14,6 +14,7 @@ use std::io::{BufReader, Write};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use tokio::time::timeout;
 
 use ya_agreement_utils::{AgreementView, OfferDefinition};
 use ya_client::market::MarketProviderApi;
@@ -37,6 +38,7 @@ use ya_utils_actix::{
 use super::Preset;
 use crate::display::EnableDisplay;
 use crate::market::config::MarketConfig;
+use crate::market::negotiator::builtin::manifest::policy_from_env;
 use crate::market::negotiator::builtin::*;
 use crate::market::termination_reason::{GolemReason, ProviderAgreementResult};
 use crate::payments::{InvoiceNotification, ProviderInvoiceEvent};
@@ -169,6 +171,7 @@ fn load_negotiators_config(data_dir: &Path) -> Result<NegotiatorsConfig> {
             negotiator_config
                 .negotiators
                 .push(note_interval::Config::from_env()?);
+            negotiator_config.negotiators.push(policy_from_env()?);
 
             let content = serde_yaml::to_string(&negotiator_config)?;
             File::create(&path)
@@ -299,7 +302,17 @@ async fn dispatch_events(ctx: AsyncCtx, events: Vec<ProviderEvent>, subscription
         })
         .collect::<Vec<_>>();
 
-    let _ = future::join_all(dispatch_futures).await;
+    let _ = timeout(
+        ctx.config.process_market_events_timeout,
+        future::join_all(dispatch_futures),
+    )
+    .await
+    .map_err(|_| {
+        log::warn!(
+            "Timeout while dispatching events for subscription [{}]",
+            subscription.preset.name
+        )
+    });
 }
 
 async fn dispatch_event(
@@ -1061,6 +1074,20 @@ impl Handler<InvoiceNotification> for ProviderMarket {
                 .post_agreement_event(&msg.agreement_id, event)
                 .await
                 .log_err_msg("Negotiators failed to handle Post Agreement event.")
+        }
+        .boxed_local()
+    }
+}
+
+impl Handler<UpdateKeystore> for ProviderMarket {
+    type Result = ResponseFuture<Result<serde_json::Value, Error>>;
+
+    fn handle(&mut self, msg: UpdateKeystore, _ctx: &mut Context<Self>) -> Self::Result {
+        let negotiator = self.negotiator.clone();
+        async move {
+            negotiator
+                .control_event("ManifestSignature", serde_json::to_value(msg)?)
+                .await
         }
         .boxed_local()
     }

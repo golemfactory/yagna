@@ -1,5 +1,7 @@
-use serde::{Deserialize, Serialize};
 use std::io::Cursor;
+use std::path::PathBuf;
+
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -16,6 +18,28 @@ pub struct DeployResult {
 pub struct ContainerVolume {
     pub name: String,
     pub path: String,
+}
+
+#[non_exhaustive]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum ContainerEndpoint {
+    Socket(PathBuf),
+}
+
+impl From<ContainerEndpoint> for PathBuf {
+    fn from(e: ContainerEndpoint) -> Self {
+        match e {
+            ContainerEndpoint::Socket(p) => p,
+        }
+    }
+}
+
+impl From<crate::server::NetworkEndpoint> for ContainerEndpoint {
+    fn from(endpoint: crate::server::NetworkEndpoint) -> Self {
+        match endpoint {
+            crate::server::NetworkEndpoint::Socket(s) => Self::Socket(PathBuf::from(s)),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]

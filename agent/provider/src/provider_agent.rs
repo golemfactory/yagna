@@ -12,6 +12,7 @@ use ya_agreement_utils::*;
 use ya_client::cli::ProviderApi;
 use ya_core_model::payment::local::NetworkName;
 use ya_file_logging::{start_logger, LoggerHandle};
+use ya_manifest_utils::Keystore;
 
 use crate::config::globals::GlobalsState;
 use crate::dir::clean_provider_dir;
@@ -21,9 +22,11 @@ use crate::execution::{
 };
 use crate::hardware;
 use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
-use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
+use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket, UpdateKeystore};
 use crate::payments::{AccountView, LinearPricingOffer, Payments, PricingOffer};
-use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RunConfig};
+use crate::startup_config::{
+    FileMonitor, FileMonitorConfig, NodeConfig, ProviderConfig, RunConfig,
+};
 use crate::tasks::task_manager::{InitializeTaskManager, TaskManager};
 
 struct GlobalsManager {
@@ -70,6 +73,7 @@ pub struct ProviderAgent {
     accounts: Vec<AccountView>,
     log_handler: LoggerHandle,
     networks: Vec<NetworkName>,
+    keystore_monitor: FileMonitor,
 }
 
 impl ProviderAgent {
@@ -124,6 +128,7 @@ impl ProviderAgent {
             .node_name
             .clone()
             .unwrap_or_else(|| app_name.to_string());
+
         args.market.session_id = format!("{}-{}", name, std::process::id());
         args.runner.session_id = args.market.session_id.clone();
         args.payment.session_id = args.market.session_id.clone();
@@ -149,9 +154,13 @@ impl ProviderAgent {
 
         let market = ProviderMarket::new(api.market, &data_dir, args.market)?.start();
         let payments = Payments::new(api.activity.clone(), api.payment, args.payment).start();
-        let runner = TaskRunner::new(api.activity, args.runner, registry, data_dir)?.start();
+        let runner =
+            TaskRunner::new(api.activity, args.runner, registry, data_dir.clone())?.start();
         let task_manager =
             TaskManager::new(market.clone(), runner.clone(), payments, args.tasks)?.start();
+
+        let keystore_path = data_dir.join(&config.trusted_keys_file);
+        let keystore_monitor = spawn_keystore_monitor(market.clone(), &keystore_path)?;
 
         Ok(ProviderAgent {
             globals,
@@ -163,6 +172,7 @@ impl ProviderAgent {
             accounts,
             log_handler,
             networks,
+            keystore_monitor,
         })
     }
 
@@ -359,6 +369,42 @@ async fn process_activity_events(runner: Addr<TaskRunner>) {
     }
 }
 
+fn spawn_keystore_monitor<P: AsRef<Path>>(
+    market: Addr<ProviderMarket>,
+    path: P,
+) -> Result<FileMonitor, Error> {
+    let _keystore = match Keystore::load(&path.as_ref()) {
+        Ok(store) => {
+            market.do_send(UpdateKeystore {
+                keystore_path: path.as_ref().to_path_buf(),
+            });
+            log::info!("Trusted key store loaded from {}", path.as_ref().display());
+            store
+        }
+        Err(err) => {
+            log::info!("Using a new keystore: {}", err);
+            Default::default()
+        }
+    };
+
+    // Validate if keystore file is valid before sending update message.
+    let handler = move |p: PathBuf| match Keystore::load(&p) {
+        Ok(_new_keystore) => {
+            market.do_send(UpdateKeystore {
+                keystore_path: p.clone(),
+            });
+            log::info!("Trusted keystore updated from {}", p.display());
+        }
+        Err(e) => log::warn!("Error updating trusted keystore from {:?}: {:?}", p, e),
+    };
+    let monitor = FileMonitor::spawn_with(
+        path,
+        FileMonitor::on_modified(handler),
+        FileMonitorConfig::silent(),
+    )?;
+    Ok(monitor)
+}
+
 impl Actor for ProviderAgent {
     type Context = Context<Self>;
 
@@ -452,6 +498,7 @@ impl Handler<Shutdown> for ProviderAgent {
         let market = self.market.clone();
         let runner = self.runner.clone();
         let log_handler = self.log_handler.clone();
+        self.keystore_monitor.stop();
 
         async move {
             market.send(MarketShutdown).await??;
@@ -490,6 +537,15 @@ impl Handler<CreateOffers> for ProviderAgent {
             Self::create_offers(presets?, node_info, inf_node_info, runner, market, accounts).await
         }
         .boxed_local()
+    }
+}
+
+impl Handler<UpdateKeystore> for ProviderAgent {
+    type Result = Result<serde_json::Value, Error>;
+
+    fn handle(&mut self, msg: UpdateKeystore, _: &mut Context<Self>) -> Self::Result {
+        self.market.do_send(msg);
+        Ok(serde_json::Value::Null)
     }
 }
 

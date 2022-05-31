@@ -61,6 +61,9 @@ pub struct AgreementPayment {
     // If we are unable to send DebitNotes, we should break Agreement the same
     // way as in case, when Requestor doesn't accept them.
     pub last_send_debit_note: DateTime<Utc>,
+    // Keep track of the last payable debit note so we can send a payable
+    // debit note each payment_timeout
+    pub last_payable_debit_note: DateTime<Utc>,
 
     // Watches for waiting for activities. You can await on receiver
     // to observe changes in number of active activities.
@@ -110,6 +113,7 @@ impl AgreementPayment {
             payment_timeout,
             deadline_elapsed: false,
             last_send_debit_note: approved_ts,
+            last_payable_debit_note: approved_ts,
             watch_sender: sender,
             activities_watch: ActivitiesWaiter {
                 watch_receiver: receiver,

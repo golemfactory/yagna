@@ -13,10 +13,11 @@ name = "ya-provider"
 path = "src/main.rs"
 
 [dependencies]
-ya-client = { version = "0.5", features = ['cli'] }
-ya-client-model = "0.3"
+ya-manifest-utils = { version = "^0.1" }
+ya-client = { version = "0.6", features = ['cli'] }
+ya-client-model = "0.4"
 ya-compile-time-utils = "0.2"
-ya-core-model = { version = "^0.5", features = ['activity', 'payment'] }
+ya-core-model = { version = "^0.6", features = ['activity', 'payment'] }
 ya-file-logging = "0.1"
 ya-utils-actix = "0.1"
 ya-utils-path = "0.1"
@@ -32,13 +33,14 @@ anyhow = "1.0"
 backoff = "0.2.1"
 bigdecimal = "0.2"
 bytesize = "1.0.1"
-chrono = "0.4.10"
+chrono = { version = "0.4.10", features = ["serde"] }
 derive_more = "0.99.5"
 dialoguer = "0.5.0"
 directories = "2.0.2"
 dotenv = "0.15.0"
 futures = "0.3"
 futures-util = "0.3.4"
+hex = "0.4"
 humantime = "2"
 humantime-serde = "1"
 lazy_static = "1.4.0"
@@ -47,13 +49,15 @@ log = "0.4.8"
 log-derive = "0.4"
 notify = "4.0.15"
 num_cpus = "1.13.0"
+num-traits = "0.2.14"
 path-clean = "0.1.0"
+regex = "1.5"
 semver = { version = "0.11", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.8"
 shared_child = "0.3.4"
-signal-hook = "0.1.13"
+signal-hook = "0.3"
 structopt = "0.3.20"
 strum = "0.20"
 strum_macros = "0.20"
@@ -72,3 +76,4 @@ winapi = { version = "0.3.8", features = ["fileapi"] }
 
 [dev-dependencies]
 chrono = "0.4"
+shlex = "1.1.0"

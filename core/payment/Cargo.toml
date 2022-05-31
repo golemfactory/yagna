@@ -8,9 +8,9 @@ edition = "2018"
 default = []
 
 [dependencies]
-ya-agreement-utils = { version = "^0.2"}
-ya-client-model = { version = "0.3", features = ["with-diesel"] }
-ya-core-model = { version = "^0.5", features = [ "activity", "driver", "identity", "market", "payment" ] }
+ya-agreement-utils = { version = "^0.3" }
+ya-client-model = { version = "0.4", features = ["with-diesel"] }
+ya-core-model = { version = "^0.6", features = [ "activity", "driver", "identity", "market", "payment" ] }
 ya-net = "0.2"
 ya-metrics = "0.1.0"
 ya-persistence = "0.2"
@@ -46,7 +46,7 @@ uuid = { version = "0.8", features = ["v4"] }
 humantime="2.0.1"
 
 [dev-dependencies]
-ya-client = "0.5"
+ya-client = "0.6"
 ya-dummy-driver = "0.2"
 ya-erc20-driver = "0.3"
 ya-zksync-driver = "0.2"

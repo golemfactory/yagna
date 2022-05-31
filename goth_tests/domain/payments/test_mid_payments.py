@@ -22,13 +22,16 @@ DEBIT_NOTE_INTERVAL_SEC = 2
 PAYMENT_TIMEOUT_SEC = 5
 ITERATION_COUNT = 4
 
+
 def build_demand(
     requestor: RequestorProbe,
 ):
     return (
         DemandBuilder(requestor)
         .props_from_template(None)
-        .property("golem.com.scheme.payu.debit-note.interval-sec?", DEBIT_NOTE_INTERVAL_SEC)
+        .property(
+            "golem.com.scheme.payu.debit-note.interval-sec?", DEBIT_NOTE_INTERVAL_SEC
+        )
         .property("golem.com.scheme.payu.payment-timeout-sec?", PAYMENT_TIMEOUT_SEC)
         .constraints(
             "(&(golem.com.pricing.model=linear)\
@@ -36,7 +39,6 @@ def build_demand(
         )
         .build()
     )
-
 
 
 def _create_runner(
@@ -65,7 +67,7 @@ async def test_mid_agreement_payments(
     """Test mid-agreement payments"""
     runner, config = _create_runner(common_assets, config_overrides, log_dir)
     ts = datetime.now(timezone.utc)
-    amount = 0.
+    amount = 0.0
 
     async with runner(config.containers):
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
@@ -96,4 +98,4 @@ async def test_mid_agreement_payments(
                 await requestor.destroy_activity(activity_id)
                 await provider.wait_for_exeunit_finished()
 
-        assert round(stats.amount, 12) == round(amount, 12)
+        assert round(stats.amount, 9) == round(amount, 9)

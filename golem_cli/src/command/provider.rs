@@ -58,9 +58,6 @@ impl YaProviderCommand {
         if let Some(node_name) = &config.node_name {
             cmd.arg("--node-name").arg(&node_name);
         }
-        if let Some(subnet) = &config.subnet {
-            cmd.arg("--subnet").arg(subnet);
-        }
 
         if let Some(account) = &config.account {
             cmd.args(&["--account", &account.to_string()]);
@@ -266,6 +263,23 @@ impl YaProviderCommand {
                 String::from_utf8_lossy(&output.stderr)
             ))
             .with_context(|| format!("activating profile {:?}", profile_name))?
+        }
+    }
+
+    pub async fn forward(self, args: Vec<String>) -> anyhow::Result<i32> {
+        let mut cmd = self.cmd;
+        let output = cmd
+            .args(args)
+            .stderr(Stdio::piped())
+            .stdout(Stdio::inherit())
+            .stdin(Stdio::null())
+            .output()
+            .await?;
+        if output.status.success() {
+            println!("{}", String::from_utf8_lossy(&output.stdout));
+            Ok(output.status.code().unwrap_or(0))
+        } else {
+            anyhow::bail!("{}", String::from_utf8_lossy(&output.stderr))
         }
     }
 

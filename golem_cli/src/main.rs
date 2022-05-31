@@ -3,6 +3,7 @@
 use anyhow::Result;
 
 use std::env;
+use std::io::Write;
 use structopt::{clap, StructOpt};
 
 mod appkey;
@@ -39,11 +40,23 @@ enum Commands {
     /// Manage settings
     Settings(SettingsCommand),
 
+    /// Manage trusted keys
+    Keystore(ProviderCommand),
+
     /// Show provider status
     Status,
 
     #[structopt(setting = structopt::clap::AppSettings::Hidden)]
     Complete(CompleteCommand),
+
+    #[structopt(external_subcommand)]
+    #[structopt(setting = structopt::clap::AppSettings::Hidden)]
+    Other(Vec<String>),
+}
+
+#[derive(StructOpt)]
+pub struct ProviderCommand {
+    args: Vec<String>,
 }
 
 #[derive(StructOpt)]
@@ -71,13 +84,10 @@ struct StartupConfig {
 
 async fn my_main() -> Result</*exit code*/ i32> {
     dotenv::dotenv().ok();
-    let config_file = setup::init()?;
-
     if env::var_os(env_logger::DEFAULT_FILTER_ENV).is_none() {
         env::set_var(env_logger::DEFAULT_FILTER_ENV, "info");
     }
     env_logger::init();
-    log::debug!("Using config file: {}", config_file.display());
 
     let cli_args: StartupConfig = StartupConfig::from_args();
 
@@ -90,6 +100,13 @@ async fn my_main() -> Result</*exit code*/ i32> {
             SettingsCommand::Show => settings_show::run().await,
         },
         Commands::Status => status::run().await,
+        Commands::Keystore(mut command) => {
+            command.args.insert(0, "keystore".to_string());
+            Ok(command::YaCommand::new()?
+                .ya_provider()?
+                .forward(command.args)
+                .await?)
+        }
         Commands::Complete(complete) => {
             let binary_name = clap::crate_name!();
             println!(
@@ -102,6 +119,18 @@ async fn my_main() -> Result</*exit code*/ i32> {
                 &mut std::io::stdout(),
             );
             Ok(0)
+        }
+        Commands::Other(args) => {
+            let cmd = crate::command::YaCommand::new()?;
+            match cmd.yagna()?.forward(args).await? {
+                1 => {
+                    let mut clap = Commands::clap();
+                    let _ = clap.print_help();
+                    let _ = std::io::stdout().write_all(b"\r\n");
+                    std::process::exit(101);
+                }
+                code => Ok(code),
+            }
         }
     }
 }

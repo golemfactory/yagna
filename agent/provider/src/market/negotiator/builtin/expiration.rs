@@ -107,7 +107,7 @@ impl NegotiatorComponent for LimitExpiration {
         their: &ProposalView,
         mut ours: ProposalView,
         score: Score,
-    ) -> anyhow::Result<NegotiationResult> {
+    ) -> Result<NegotiationResult> {
         let req_deadline = debit_deadline_from(their)?;
         let our_deadline = debit_deadline_from(&ours)?;
         let req_expiration = proposal_expiration_from(&their)?;
@@ -204,7 +204,7 @@ impl NegotiatorComponent for LimitExpiration {
         })
     }
 
-    fn fill_template(&mut self, mut template: OfferTemplate) -> anyhow::Result<OfferTemplate> {
+    fn fill_template(&mut self, mut template: OfferTemplate) -> Result<OfferTemplate> {
         template.set_property(
             DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY_FLAT,
             serde_json::Value::Number(self.accept_timeout.num_seconds().into()),
@@ -214,7 +214,7 @@ impl NegotiatorComponent for LimitExpiration {
 }
 
 impl Config {
-    pub fn from_env() -> anyhow::Result<NegotiatorConfig> {
+    pub fn from_env() -> Result<NegotiatorConfig> {
         // Empty command line arguments, because we want to use ENV fallback
         // or default values if ENV variables are not set.
         let config = Config::from_iter_safe(&[""])?;

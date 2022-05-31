@@ -19,7 +19,7 @@ pub enum RpcMessageError {
 
 pub mod local {
     use super::*;
-    use crate::driver::{AccountMode, PaymentConfirmation};
+    use crate::driver::{AccountMode, GasDetails, PaymentConfirmation};
     use bigdecimal::{BigDecimal, Zero};
     use chrono::{DateTime, Utc};
     use std::fmt::Display;
@@ -257,6 +257,7 @@ pub mod local {
         pub driver: String,
         pub network: String,
         pub token: String,
+        pub gas: Option<GasDetails>,
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize, Default)]
@@ -392,6 +393,15 @@ pub mod local {
         AccountNotRegistered,
         #[error("Error while validating allocation: {0}")]
         Other(String),
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct ReleaseAllocations {}
+
+    impl RpcMessage for ReleaseAllocations {
+        const ID: &'static str = "ReleaseAllocations";
+        type Item = ();
+        type Error = GenericError;
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -1,9 +1,11 @@
 pub mod expiration;
+pub mod manifest;
 pub mod max_agreements;
 pub mod note_interval;
 pub mod payment_timeout;
 
 pub use expiration::LimitExpiration;
+pub use manifest::{ManifestSignature, UpdateKeystore};
 pub use max_agreements::MaxAgreements;
 pub use note_interval::DebitNoteInterval;
 pub use payment_timeout::PaymentTimeout;
@@ -38,6 +40,13 @@ pub fn register_negotiators() {
         "DebitNoteInterval",
         Box::new(|config, _| {
             Ok(Box::new(DebitNoteInterval::new(config)?) as Box<dyn NegotiatorComponent>)
+        }),
+    );
+    register_negotiator(
+        "ya-provider",
+        "ManifestSignature",
+        Box::new(|config, _| {
+            Ok(Box::new(ManifestSignature::new(config)?) as Box<dyn NegotiatorComponent>)
         }),
     );
 }
