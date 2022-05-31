@@ -46,11 +46,12 @@ impl<R: Runtime> Handler<GetState> for ExeUnit<R> {
 }
 
 impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
-    type Result = <SetState as Message>::Result;
+    //type Result = <SetState as Message>::Result;
+    type Result = ActorResponse<Self, ()>;
 
-    fn handle(&mut self, update: SetState, ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, update: SetState, _ctx: &mut Context<Self>) -> Self::Result {
         if self.state.inner == update.state {
-            return;
+            return ActorResponse::reply(());
         }
 
         log::debug!("Entering state: {:?}", update.state);
@@ -58,7 +59,7 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
         self.state.inner = update.state.clone();
 
         if self.ctx.activity_id.is_none() || self.ctx.report_url.is_none() {
-            return;
+            return ActorResponse::reply(());
         }
 
         let credentials = match &update.state {
@@ -77,7 +78,8 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
                 credentials,
             ),
         );
-        ctx.spawn(
+
+        return ActorResponse::r#async(
             async move {
                 fut.await;
             }
