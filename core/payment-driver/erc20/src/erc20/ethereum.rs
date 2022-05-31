@@ -537,16 +537,12 @@ fn get_rpc_addr_from_env(network: Network) -> Vec<String> {
 }
 
 fn collect_rpc_addr_from(env: &str, default: &str) -> Vec<String> {
-    let mut vec: Vec<String> = Default::default();
-    let env = std::env::var(env).ok();
-    if let Some(env) = env {
-        env.split(',')
-            .collect::<Vec<_>>()
-            .iter()
-            .for_each(|env| vec.push(env.to_string()))
-    };
-    vec.push(default.to_string());
-    vec
+    std::env::var(env)
+        .ok()
+        .unwrap_or(default.to_string())
+        .split(',')
+        .map(|path| path.to_string())
+        .collect()
 }
 
 async fn get_clients(network: Network) -> Result<Vec<Web3<Http>>, GenericError> {
