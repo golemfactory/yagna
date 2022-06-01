@@ -19,7 +19,7 @@ dependencies = [
  "futures-util",
  "log",
  "once_cell",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "pin-project-lite 0.2.9",
  "smallvec",
  "tokio 1.18.2",
@@ -1277,7 +1277,7 @@ dependencies = [
  "crossterm_winapi",
  "libc",
  "mio 0.8.3",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "signal-hook",
  "signal-hook-mio",
  "winapi 0.3.9",
@@ -1911,13 +1911,11 @@ checksum = "279fb028e20b3c4c320317955b77c5e0c9701f05a1d309905d6fc702cdc5053e"
 
 [[package]]
 name = "flate2"
-version = "1.0.23"
+version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b39522e96686d38f4bc984b9198e3a0613264abaebaff2c5c918bfa6b6da09af"
+checksum = "f82b0f4c27ad9f8bfd1f3208d882da2b09c301bc1c828fd3a00d0216d2fbbff6"
 dependencies = [
- "cfg-if 1.0.0",
  "crc32fast",
- "libc",
  "miniz_oxide",
 ]
 
@@ -2367,7 +2365,7 @@ dependencies = [
  "field-offset",
  "hex",
  "http",
- "hyper 0.14.18",
+ "hyper 0.14.19",
  "hyper-tls 0.5.0",
  "openssl",
  "serde",
@@ -2623,9 +2621,9 @@ dependencies = [
 
 [[package]]
 name = "hyper"
-version = "0.14.18"
+version = "0.14.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b26ae0a80afebe130861d90abf98e3814a4f28a4c6ffeb5ab8ebb2be311e0ef2"
+checksum = "42dc3c131584288d375f2d07f822b0cb012d8c6fb899a5b9fdb3cb7eb9b6004f"
 dependencies = [
  "bytes 1.1.0",
  "futures-channel",
@@ -2683,7 +2681,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6183ddfa99b85da61a140bea0efc93fdf56ceaa041b37d553518030827f9905"
 dependencies = [
  "bytes 1.1.0",
- "hyper 0.14.18",
+ "hyper 0.14.19",
  "native-tls",
  "tokio 1.18.2",
  "tokio-native-tls",
@@ -2769,9 +2767,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "1.7.0"
+version = "1.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc633605454125dec4b66843673f01c7df2b89479b32e0ed634e43a91cff62a5"
+checksum = "e6012d540c5baa3589337a98ce73408de9b5a25ec9fc2c6fd6be8f0d39e0ca5a"
 dependencies = [
  "autocfg 1.1.0",
  "hashbrown 0.11.2",
@@ -2936,9 +2934,9 @@ dependencies = [
 
 [[package]]
 name = "keccak"
-version = "0.1.0"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67c21572b4949434e4fc1e1978b99c5f77064153c59d998bf13ecd96fb5ecba7"
+checksum = "f9b7d56ba4a8344d6be9729995e6b06f928af29998cdf79fe390cbf6b1fee838"
 
 [[package]]
 name = "kernel32-sys"
@@ -3356,9 +3354,9 @@ dependencies = [
 
 [[package]]
 name = "miniz_oxide"
-version = "0.5.1"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2b29bd4bc3f33391105ebee3589c19197c4271e3e5a9ec9bfe8127eeff8f082"
+checksum = "6f5c75688da582b8ffc1f1799e9db273f32133c49e048f614d22ec3256773ccc"
 dependencies = [
  "adler",
 ]
@@ -3934,9 +3932,9 @@ dependencies = [
 
 [[package]]
 name = "parking_lot"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87f5ec2493a61ac0506c0f4199f99070cbe83857b0337006a30f3e6719b8ef58"
+checksum = "3742b2c103b9f06bc9fff0a37ff4912935851bee6d36f3c02bcc755bcfec228f"
 dependencies = [
  "lock_api 0.4.7",
  "parking_lot_core 0.9.3",
@@ -4037,9 +4035,9 @@ dependencies = [
 
 [[package]]
 name = "petgraph"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51b305cc4569dd4e8765bab46261f67ef5d4d11a4b6e745100ee5dad8948b46c"
+checksum = "e6d5014253a1331579ce62aa67443b4a658c5e7dd03d4bc6d302b94474888143"
 dependencies = [
  "fixedbitset 0.4.1",
  "indexmap",
@@ -4255,9 +4253,9 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.10.3"
+version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc03e116981ff7d8da8e5c220e374587b98d294af7ba7dd7fda761158f00086f"
+checksum = "71adf41db68aa0daaefc69bb30bcd68ded9b9abaad5d1fbb6304c4fb390e083e"
 dependencies = [
  "bytes 1.1.0",
  "prost-derive 0.10.1",
@@ -4283,9 +4281,9 @@ dependencies = [
 
 [[package]]
 name = "prost-build"
-version = "0.10.3"
+version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65a1118354442de7feb8a2a76f3d80ef01426bd45542c8c1fdffca41a758f846"
+checksum = "8ae5a4388762d5815a9fc0dea33c56b021cdc8dde0c55e0c9ca57197254b0cab"
 dependencies = [
  "bytes 1.1.0",
  "cfg-if 1.0.0",
@@ -4295,8 +4293,8 @@ dependencies = [
  "lazy_static",
  "log",
  "multimap",
- "petgraph 0.6.1",
- "prost 0.10.3",
+ "petgraph 0.6.2",
+ "prost 0.10.4",
  "prost-types 0.10.1",
  "regex",
  "tempfile",
@@ -4346,7 +4344,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d0a014229361011dc8e69c8a1ec6c2e8d0f2af7c91e3ea3f5b2170298461e68"
 dependencies = [
  "bytes 1.1.0",
- "prost 0.10.3",
+ "prost 0.10.4",
 ]
 
 [[package]]
@@ -4793,7 +4791,7 @@ dependencies = [
  "h2 0.3.13",
  "http",
  "http-body 0.4.5",
- "hyper 0.14.18",
+ "hyper 0.14.19",
  "hyper-tls 0.5.0",
  "ipnet",
  "js-sys",
@@ -5012,11 +5010,11 @@ dependencies = [
 
 [[package]]
 name = "scheduled-thread-pool"
-version = "0.2.5"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc6f74fd1204073fa02d5d5d68bec8021be4c38690b61264b2fdb48083d0e7d7"
+checksum = "977a7519bff143a44f842fd07e80ad1329295bd71686457f18e496736f4bf9bf"
 dependencies = [
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
 ]
 
 [[package]]
@@ -5109,7 +5107,7 @@ version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "502f26626811e30581f6cb80ee588ccc709f8e490d14a4363f4b16f5d24cd7e2"
 dependencies = [
- "hyper 0.14.18",
+ "hyper 0.14.19",
  "indicatif",
  "log",
  "quick-xml",
@@ -5308,11 +5306,10 @@ dependencies = [
 
 [[package]]
 name = "serde_with"
-version = "1.13.0"
+version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b827f2113224f3f19a665136f006709194bdfdcb1fdc1e4b2b5cbac8e0cced54"
+checksum = "678b5a069e50bf00ecd22d0cd8ddf7c236f68581b03db652061ed5eb13a312ff"
 dependencies = [
- "rustversion",
  "serde",
  "serde_with_macros",
 ]
@@ -5988,7 +5985,7 @@ dependencies = [
  "mio 0.8.3",
  "num_cpus",
  "once_cell",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "pin-project-lite 0.2.9",
  "signal-hook-registry",
  "socket2 0.4.4",
@@ -6996,7 +6993,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.6.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=66c33dd28566613d0c8de65a62d7b1a173c6c6b0#66c33dd28566613d0c8de65a62d7b1a173c6c6b0"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=e1d4e843bba2d7b9e48299c9ec976ce307aa78e1#e1d4e843bba2d7b9e48299c9ec976ce307aa78e1"
 dependencies = [
  "actix-codec",
  "awc",
@@ -7038,7 +7035,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-client.git?rev=66c33dd28566613d0c8de65a62d7b1a173c6c6b0#66c33dd28566613d0c8de65a62d7b1a173c6c6b0"
+source = "git+https://github.com/golemfactory/ya-client.git?rev=e1d4e843bba2d7b9e48299c9ec976ce307aa78e1#e1d4e843bba2d7b9e48299c9ec976ce307aa78e1"
 dependencies = [
  "bigdecimal 0.2.2",
  "chrono",
@@ -7403,7 +7400,7 @@ dependencies = [
  "lazy_static",
  "log",
  "metrics 0.12.1",
- "prost 0.10.3",
+ "prost 0.10.4",
  "rand 0.7.3",
  "serde",
  "serde_json",
@@ -7589,7 +7586,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=3a3b7dfab96eb2190091f4ffadeb9440c3f6f5f6#3a3b7dfab96eb2190091f4ffadeb9440c3f6f5f6"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=0e6863c24767a246531d038455921f12c9e75e94#0e6863c24767a246531d038455921f12c9e75e94"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7609,7 +7606,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-core"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=3a3b7dfab96eb2190091f4ffadeb9440c3f6f5f6#3a3b7dfab96eb2190091f4ffadeb9440c3f6f5f6"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=0e6863c24767a246531d038455921f12c9e75e94#0e6863c24767a246531d038455921f12c9e75e94"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7637,14 +7634,14 @@ dependencies = [
 [[package]]
 name = "ya-relay-proto"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=3a3b7dfab96eb2190091f4ffadeb9440c3f6f5f6#3a3b7dfab96eb2190091f4ffadeb9440c3f6f5f6"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=0e6863c24767a246531d038455921f12c9e75e94#0e6863c24767a246531d038455921f12c9e75e94"
 dependencies = [
  "anyhow",
  "bytes 1.1.0",
  "derive_more",
  "futures 0.3.21",
- "prost 0.10.3",
- "prost-build 0.10.3",
+ "prost 0.10.4",
+ "prost-build 0.10.4",
  "rand 0.8.5",
  "thiserror",
  "tokio 1.18.2",
@@ -7654,7 +7651,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=3a3b7dfab96eb2190091f4ffadeb9440c3f6f5f6#3a3b7dfab96eb2190091f4ffadeb9440c3f6f5f6"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=0e6863c24767a246531d038455921f12c9e75e94#0e6863c24767a246531d038455921f12c9e75e94"
 dependencies = [
  "derive_more",
  "futures 0.3.21",
@@ -7678,8 +7675,8 @@ dependencies = [
  "env_logger 0.7.1",
  "futures 0.3.21",
  "log",
- "prost 0.10.3",
- "prost-build 0.10.3",
+ "prost 0.10.4",
+ "prost-build 0.10.4",
  "serde",
  "serde_json",
  "tokio 1.18.2",
@@ -7689,10 +7686,10 @@ dependencies = [
 [[package]]
 name = "ya-sb-proto"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=9532fa85a768ccdb73ab81780057cae06ce5c782#9532fa85a768ccdb73ab81780057cae06ce5c782"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=a60f7476c39a18fd3a369b3045b878544ae25598#a60f7476c39a18fd3a369b3045b878544ae25598"
 dependencies = [
  "bytes 1.1.0",
- "prost 0.10.3",
+ "prost 0.10.4",
  "prost-build 0.7.0",
  "thiserror",
  "tokio 1.18.2",
@@ -7703,7 +7700,7 @@ dependencies = [
 [[package]]
 name = "ya-sb-router"
 version = "0.4.5"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=9532fa85a768ccdb73ab81780057cae06ce5c782#9532fa85a768ccdb73ab81780057cae06ce5c782"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=a60f7476c39a18fd3a369b3045b878544ae25598#a60f7476c39a18fd3a369b3045b878544ae25598"
 dependencies = [
  "actix",
  "actix-rt",
@@ -7717,7 +7714,7 @@ dependencies = [
  "log",
  "parking_lot 0.11.2",
  "pin-project 1.0.10",
- "prost 0.10.3",
+ "prost 0.10.4",
  "structopt",
  "tokio 1.18.2",
  "tokio-stream",
@@ -7731,7 +7728,7 @@ dependencies = [
 [[package]]
 name = "ya-sb-util"
 version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=9532fa85a768ccdb73ab81780057cae06ce5c782#9532fa85a768ccdb73ab81780057cae06ce5c782"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=a60f7476c39a18fd3a369b3045b878544ae25598#a60f7476c39a18fd3a369b3045b878544ae25598"
 dependencies = [
  "actix",
  "bitflags",
@@ -7821,7 +7818,7 @@ dependencies = [
 [[package]]
 name = "ya-service-bus"
 version = "0.4.10"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=9532fa85a768ccdb73ab81780057cae06ce5c782#9532fa85a768ccdb73ab81780057cae06ce5c782"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=a60f7476c39a18fd3a369b3045b878544ae25598#a60f7476c39a18fd3a369b3045b878544ae25598"
 dependencies = [
  "actix",
  "flexbuffers",
