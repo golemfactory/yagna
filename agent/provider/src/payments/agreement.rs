@@ -262,7 +262,12 @@ pub async fn compute_cost(
 
 impl ActivitiesWaiter {
     pub async fn wait_for_finish(mut self) {
+        if *self.watch_receiver.borrow_and_update() == 0 {
+            return;
+        }
+
         log::debug!("Waiting for all activities to finish.");
+
         while let Some(value) = self
             .watch_receiver
             .changed()
