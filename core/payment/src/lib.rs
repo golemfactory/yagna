@@ -68,15 +68,17 @@ impl PaymentService {
 
     pub async fn shut_down() {
         log::info!("Stopping payment service... It may take up to 10 seconds to send out all transactions. Hit Ctrl+C again to interrupt and shut down immediately.");
-        futures::future::select(
-            tokio::time::timeout(
-                *PAYMENT_SHUTDOWN_TIMEOUT,
-                bus::service(pay_local::BUS_ID)
-                    .call(pay_local::ShutDown::new(*PAYMENT_SHUTDOWN_TIMEOUT)),
-            ),
-            actix_rt::signal::ctrl_c().boxed(),
-        )
-        .await;
+
+        let timeout = tokio::time::timeout(
+            *PAYMENT_SHUTDOWN_TIMEOUT,
+            bus::service(pay_local::BUS_ID)
+                .call(pay_local::ShutDown::new(*PAYMENT_SHUTDOWN_TIMEOUT)),
+        );
+
+        tokio::select! {
+            _ = timeout => {},
+            _ = tokio::signal::ctrl_c().boxed() => {},
+        }
         log::info!("Payment service stopped.");
     }
 }

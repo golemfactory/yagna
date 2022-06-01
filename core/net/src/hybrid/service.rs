@@ -16,6 +16,7 @@ use futures::stream::LocalBoxStream;
 use futures::{FutureExt, SinkExt, Stream, StreamExt, TryStreamExt};
 use metrics::counter;
 use tokio::sync::RwLock;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use url::Url;
 
 use ya_core_model::{identity, net, NodeId};
@@ -451,7 +452,7 @@ fn forward_handler(
     receiver: ForwardReceiver,
     state: State,
 ) -> impl Future<Output = ()> + Unpin + 'static {
-    receiver
+    UnboundedReceiverStream::new(receiver)
         .for_each(move |fwd| {
             let state = state.clone();
             async move {

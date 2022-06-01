@@ -10,16 +10,17 @@ default = []
 [dependencies]
 async-trait = "0.1"
 anyhow = "1.0"
-awc = { version = "2.0", features = ["openssl"] }
+awc = { version = "3", features = ["openssl"] }
 bigdecimal = { version = "0.2" }
 chrono = { version = "0.4", features = ["serde"] }
 derive_more = "0.99"
 ethabi = "14.1"
 ethereum-types = "0.11"
+ethereum-tx-sign = "3.1"
 futures = "0.3"
 hex = "0.4"
 lazy_static = "1.4"
-log = "0.4.8"
+log = "0.4"
 maplit = "1.0"
 num-bigint = { version = "0.3", features = ["serde"] }
 num-traits = "0.2"
@@ -29,9 +30,9 @@ serde_json = "^1.0"
 sha3 = "0.8"
 thiserror = "1.0"
 tiny-keccak = { version = "2.0", features = ["keccak"] }
-tokio = { version = "0.2", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 uuid = { version = "0.8", features = ["v4"] }
-web3 = "0.15"
+web3 = { version = "0.16", default-features = false, features = [ "http-tls", "signing", "ws-tls-tokio" ] }
 
 ## yagna dependencies
 ya-payment-driver = "0.2"
@@ -41,7 +42,7 @@ ya-utils-futures = "0.1"
 ya-utils-networking = "0.1"
 
 [dev-dependencies]
-actix-rt = "1.0"
+actix-rt = "2.7"
 dotenv = "0.15.0"
 env_logger = "0.7.1"
 structopt = "0.3"

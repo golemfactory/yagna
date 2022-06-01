@@ -1,12 +1,11 @@
 //! Discovery protocol interface
-use actix_rt::Arbiter;
 use futures::TryFutureExt;
 use metrics::{counter, timing, value};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::Mutex;
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 use ya_client::model::NodeId;
 use ya_core_model::market::BUS_ID;
@@ -90,9 +89,9 @@ impl Discovery {
 
         if must_schedule {
             let myself = self.clone();
-            let _ = Arbiter::spawn(async move {
+            let _ = tokio::task::spawn_local(async move {
                 // Sleep to collect multiple offers to send
-                delay_for(myself.inner.config.offer_broadcast_delay).await;
+                sleep(myself.inner.config.offer_broadcast_delay).await;
                 myself.send_bcast_offers().await;
             });
         }
@@ -191,9 +190,9 @@ impl Discovery {
 
         if must_schedule {
             let myself = self.clone();
-            let _ = Arbiter::spawn(async move {
+            let _ = tokio::task::spawn_local(async move {
                 // Sleep to collect multiple unsubscribes to send
-                delay_for(myself.inner.config.unsub_broadcast_delay).await;
+                sleep(myself.inner.config.unsub_broadcast_delay).await;
                 myself.send_bcast_unsubscribes().await;
             });
         }

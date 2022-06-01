@@ -1,4 +1,5 @@
-use actix_web::client::{Client, ConnectError, SendRequestError};
+use awc::error::{ConnectError, SendRequestError};
+use awc::Client;
 use tokio::time::{self, Duration, Instant};
 
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};

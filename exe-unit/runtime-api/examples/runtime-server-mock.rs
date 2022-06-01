@@ -27,9 +27,9 @@ impl<H: RuntimeHandler> RuntimeService for RuntimeMock<H> {
         async move {
             let mut resp: RunProcessResp = Default::default();
             resp.pid = 100;
-            log::debug!("before delay_for");
-            tokio::time::delay_for(Duration::from_secs(3)).await;
-            log::debug!("after delay_for");
+            log::debug!("before sleep");
+            tokio::time::sleep(Duration::from_secs(3)).await;
+            log::debug!("after sleep");
             self.handler
                 .on_process_status(ProcessStatus {
                     pid: resp.pid,

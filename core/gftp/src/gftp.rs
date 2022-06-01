@@ -172,6 +172,7 @@ pub async fn download_file(node_id: NodeId, hash: &str, dst_path: &Path) -> Resu
 pub async fn open_for_upload(filepath: &Path) -> Result<Url> {
     let hash_name = rand::thread_rng()
         .sample_iter(&Alphanumeric)
+        .map(char::from)
         .take(65)
         .collect::<String>();
 

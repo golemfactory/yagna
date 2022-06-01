@@ -183,7 +183,7 @@ async fn test_agreement_cancelled_wait_for_approval() {
     let agr_id = agreement_id.clone();
     let market = req_market.clone();
     let reject_handle = tokio::task::spawn_local(async move {
-        tokio::time::delay_for(std::time::Duration::from_millis(50)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         market
             .requestor_engine
             .cancel_agreement(
@@ -258,7 +258,7 @@ async fn test_agreement_simultaneous_reject_cancel() {
     let agr_id = agreement_id.clone().translate(Owner::Provider);
     let market = prov_market.clone();
     let reject_handle = tokio::task::spawn_local(async move {
-        tokio::time::delay_for(std::time::Duration::from_millis(50)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         market
             .provider_engine
             .reject_agreement(
@@ -274,7 +274,7 @@ async fn test_agreement_simultaneous_reject_cancel() {
     let market = prov_market.clone();
     let id = req_id.clone();
     let cancel_handle = tokio::task::spawn_local(async move {
-        tokio::time::delay_for(std::time::Duration::from_millis(50)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         market
             .requestor_engine
             .cancel_agreement(&id, &agr_id, Some(gen_reason("Changed my mind")))
@@ -381,7 +381,7 @@ async fn test_agreement_simultaneous_approve_cancel() {
     let agr_id = agreement_id.clone().translate(Owner::Provider);
     let market = prov_market.clone();
     let reject_handle = tokio::task::spawn_local(async move {
-        tokio::time::delay_for(std::time::Duration::from_millis(50)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         market
             .provider_engine
             .approve_agreement(
@@ -398,7 +398,7 @@ async fn test_agreement_simultaneous_approve_cancel() {
     let market = prov_market.clone();
     let id = req_id.clone();
     let cancel_handle = tokio::task::spawn_local(async move {
-        tokio::time::delay_for(std::time::Duration::from_millis(50)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         market
             .requestor_engine
             .cancel_agreement(&id, &agr_id, Some(gen_reason("Changed my mind")))

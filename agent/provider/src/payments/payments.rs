@@ -327,7 +327,7 @@ async fn check_invoice_events(provider_ctx: Arc<ProviderCtx>, payments_addr: Add
             Ok(events) => events,
             Err(e) => {
                 log::error!("Can't query invoice events: {}", e);
-                tokio::time::delay_for(error_timeout).await;
+                tokio::time::sleep(error_timeout).await;
                 vec![]
             }
         };
@@ -383,7 +383,7 @@ async fn check_debit_notes_events(
             }
             Err(e) => {
                 log::error!("Can't query debit note events: {}", e);
-                tokio::time::delay_for(error_timeout).await;
+                tokio::time::sleep(error_timeout).await;
             }
         };
     }
@@ -545,7 +545,7 @@ impl Handler<CreateActivity> for Payments {
 }
 
 impl Handler<ActivityDestroyed> for Payments {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: ActivityDestroyed, ctx: &mut Context<Self>) -> Self::Result {
         let agreement = match self
@@ -601,7 +601,7 @@ impl Handler<ActivityDestroyed> for Payments {
                     Err(e) => {
                         let delay = repeats.next_backoff().unwrap_or(repeats.current_interval);
                         log::warn!("Error sending debit note: {} Retry in {:#?}.", e, delay);
-                        tokio::time::delay_for(delay).await
+                        tokio::time::sleep(delay).await
                     }
                 }
             };
@@ -626,7 +626,7 @@ impl Handler<ActivityDestroyed> for Payments {
 }
 
 impl Handler<UpdateCost> for Payments {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, mut msg: UpdateCost, _ctx: &mut Context<Self>) -> Self::Result {
         let agreement = match self
@@ -749,7 +749,7 @@ impl Handler<FinalizeActivity> for Payments {
 
 /// Computes costs for all activities and sends invoice to Requestor.
 impl Handler<AgreementClosed> for Payments {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: AgreementClosed, ctx: &mut Context<Self>) -> Self::Result {
         if let Some(agreement) = self.agreements.get_mut(&msg.agreement_id) {
@@ -834,7 +834,7 @@ impl Handler<IssueInvoice> for Payments {
                     Err(e) => {
                         let interval = provider_ctx.config.invoice_reissue_interval;
                         log::error!("Error issuing invoice: {} Retry in {:#?}.", e, interval);
-                        tokio::time::delay_for(interval).await
+                        tokio::time::sleep(interval).await
                     }
                 }
             }
@@ -861,7 +861,7 @@ impl Handler<SendInvoice> for Payments {
                     Err(e) => {
                         let delay = repeats.next_backoff().unwrap_or(repeats.current_interval);
                         log::warn!("Error sending invoice: {} Retry in {:#?}.", e, delay);
-                        tokio::time::delay_for(delay).await
+                        tokio::time::sleep(delay).await
                     }
                 }
             }
@@ -872,7 +872,7 @@ impl Handler<SendInvoice> for Payments {
 
 /// If Agreement was broken, we should behave like it was closed.
 impl Handler<AgreementBroken> for Payments {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: AgreementBroken, ctx: &mut Context<Self>) -> Self::Result {
         if !self.agreements.contains_key(&msg.agreement_id) {
@@ -897,7 +897,7 @@ impl Handler<AgreementBroken> for Payments {
 }
 
 impl Handler<InvoiceAccepted> for Payments {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: InvoiceAccepted, _ctx: &mut Context<Self>) -> Self::Result {
         let provider_ctx = self.context.clone();
@@ -917,7 +917,7 @@ impl Handler<InvoiceAccepted> for Payments {
 }
 
 impl Handler<InvoiceSettled> for Payments {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: InvoiceSettled, _ctx: &mut Context<Self>) -> Self::Result {
         let provider_ctx = self.context.clone();
@@ -1046,11 +1046,11 @@ impl Actor for Payments {
         let provider_ctx = self.context.clone();
         let payment_addr = ctx.address();
 
-        Arbiter::spawn(check_invoice_events(
+        tokio::task::spawn_local(check_invoice_events(
             provider_ctx.clone(),
             payment_addr.clone(),
         ));
-        Arbiter::spawn(async move {
+        tokio::task::spawn_local(async move {
             for checker in vec![&provider_ctx.debit_checker, &provider_ctx.payment_checker] {
                 let _ = checker
                     .send(Subscribe(payment_addr.clone().recipient()))

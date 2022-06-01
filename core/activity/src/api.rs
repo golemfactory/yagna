@@ -1,13 +1,15 @@
-use crate::TrackerRef;
+use actix_web::web::Data;
 use actix_web::Scope;
+
+use crate::TrackerRef;
 
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::scope::ExtendableScope;
 
 pub fn web_scope(db: &DbExecutor, tracker: TrackerRef) -> Scope {
     actix_web::web::scope(crate::ACTIVITY_API_PATH)
-        .data(db.clone())
-        .data(tracker.clone())
+        .app_data(Data::new(db.clone()))
+        .app_data(Data::new(tracker.clone()))
         .extend(common::extend_web_scope)
         .extend(crate::provider::extend_web_scope)
         .extend(crate::requestor::control::extend_web_scope)
@@ -175,8 +177,8 @@ mod common {
         let line = format!("data: {}\r\n\r\n", item_str);
 
         HttpResponse::Ok()
-            .header(header::CONTENT_TYPE, "text/event-stream")
-            .header(header::CACHE_CONTROL, "no-cache")
+            .append_header((header::CONTENT_TYPE, "text/event-stream"))
+            .append_header((header::CACHE_CONTROL, "no-cache"))
             .streaming(Box::pin(
                 futures::stream::once(futures::future::ok(web::Bytes::from(line)))
                     .chain(event_stream(stream, id.identity)),

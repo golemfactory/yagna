@@ -3,7 +3,7 @@ use anyhow::{anyhow, bail, Error, Result};
 use chrono::{DateTime, Utc};
 use derive_more::Display;
 use futures::future::{join_all, select, Either};
-use futures::{FutureExt, TryFutureExt};
+use futures::{Future, FutureExt, TryFutureExt};
 use humantime;
 use log_derive::{logfn, logfn_inputs};
 use std::collections::HashMap;
@@ -286,7 +286,7 @@ impl TaskRunner {
         let api = self.api.clone();
         let proc = process.clone();
 
-        Arbiter::spawn(async move {
+        tokio::task::spawn_local(async move {
             let mut finished = Box::pin(proc.wait_until_finished());
             let mut monitor = StateMonitor::default();
 
@@ -313,7 +313,7 @@ impl TaskRunner {
         let state_retry_interval = self.config.exeunit_state_retry_interval;
         let api = self.api.clone();
 
-        Arbiter::spawn(async move {
+        tokio::task::spawn_local(async move {
             let status = process.wait_until_finished().await;
 
             // If it was brutal termination than ExeUnit probably didn't set state.
@@ -534,7 +534,7 @@ async fn set_activity_terminated(
             error,
             retry_interval
         );
-        tokio::time::delay_for(retry_interval).await;
+        tokio::time::sleep(retry_interval).await;
     }
 }
 
@@ -634,7 +634,7 @@ impl Handler<GetOfferTemplates> for TaskRunner {
 }
 
 impl Handler<UpdateActivity> for TaskRunner {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, _: UpdateActivity, ctx: &mut Context<Self>) -> Self::Result {
         let addr = ctx.address();
@@ -698,7 +698,7 @@ impl Handler<TerminateActivity> for TaskRunner {
 }
 
 impl Handler<CreateActivity> for TaskRunner {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: CreateActivity, ctx: &mut Context<Self>) -> Self::Result {
         let api = self.api.clone();
@@ -727,7 +727,7 @@ impl Handler<CreateActivity> for TaskRunner {
 }
 
 impl Handler<DestroyActivity> for TaskRunner {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: DestroyActivity, _ctx: &mut Context<Self>) -> Self::Result {
         log::info!("Destroying activity [{}].", msg.activity_id);
@@ -767,7 +767,7 @@ impl Handler<DestroyActivity> for TaskRunner {
 }
 
 impl Handler<AgreementClosed> for TaskRunner {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: AgreementClosed, ctx: &mut Context<Self>) -> Self::Result {
         let agreement_id = msg.agreement_id.to_string();
@@ -787,7 +787,7 @@ impl Handler<AgreementClosed> for TaskRunner {
 }
 
 impl Handler<AgreementBroken> for TaskRunner {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: AgreementBroken, ctx: &mut Context<Self>) -> Self::Result {
         let agreement_id = msg.agreement_id.to_string();
@@ -806,7 +806,7 @@ impl Handler<AgreementBroken> for TaskRunner {
 }
 
 impl Handler<Shutdown> for TaskRunner {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, _: Shutdown, ctx: &mut Context<Self>) -> Self::Result {
         let ids = self
@@ -881,6 +881,6 @@ impl StateMonitor {
     }
 
     fn sleep(&self) -> impl Future<Output = ()> {
-        tokio::time::delay_for(self.interval)
+        tokio::time::sleep(self.interval)
     }
 }

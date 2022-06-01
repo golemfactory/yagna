@@ -5,4 +5,4 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-chrono = "0.4.10"
+chrono = "0.4"
