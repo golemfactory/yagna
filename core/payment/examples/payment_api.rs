@@ -19,6 +19,7 @@ use ya_core_model::driver::{driver_bus_id, AccountMode, Fund, Init};
 use ya_core_model::identity;
 use ya_dummy_driver as dummy;
 use ya_erc20_driver as erc20;
+use ya_net::Config;
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::{migrations, utils, PaymentService};
 use ya_persistence::executor::DbExecutor;
@@ -26,7 +27,6 @@ use ya_service_api_web::middleware::auth::dummy::DummyAuth;
 use ya_service_api_web::middleware::Identity;
 use ya_service_api_web::rest_api_addr;
 use ya_service_api_web::scope::ExtendableScope;
-use ya_service_bus::connection::ClientInfo;
 use ya_service_bus::typed as bus;
 use ya_zksync_driver as zksync;
 
@@ -340,9 +340,12 @@ async fn main() -> anyhow::Result<()> {
     let requestor_id = requestor_id.parse()?;
     log::info!("bind remote...");
 
-    let client_info = ClientInfo::new("payment");
-    let _ = ya_net::hybrid::bind_remote(client_info, provider_id, vec![provider_id, requestor_id])
-        .await?;
+    let _ = ya_net::hybrid::start_network(
+        Arc::new(Config::from_env()?),
+        provider_id,
+        vec![provider_id, requestor_id],
+    )
+    .await?;
 
     log::info!("get_rest_addr...");
     let rest_addr = rest_api_addr();
