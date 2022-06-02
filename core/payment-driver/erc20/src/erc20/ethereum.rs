@@ -30,7 +30,6 @@ use crate::erc20::transaction::YagnaRawTransaction;
 use crate::erc20::wallet::get_next_nonce_info;
 use crate::erc20::{config, eth_utils};
 use num_traits::ToPrimitive;
-use tokio::time::delay_for;
 
 pub const FUND_WALLET_WAIT_TIME: u32 = 120;
 
@@ -193,7 +192,7 @@ pub async fn approve_multi_payment_contract(
 
                 let gas_price = client.eth().gas_price().await.map_err(GenericError::new)?;
                 //increase gas price by 100% to make sure transaction will proceed without issues
-                let gas_price = gas_price * U256::from(15) / U256::from(10);
+                let gas_price = gas_price * U256::from(15_i32) / U256::from(10_i32);
                 let nonce_info = get_next_nonce_info(dao, address, network).await?;
 
                 let tx = YagnaRawTransaction {
@@ -221,7 +220,7 @@ pub async fn approve_multi_payment_contract(
                     .map_err(GenericError::new)?;
                 let start_time = SystemTime::now();
                 log::info!("Wait until transaction is proceeded 30s...");
-                delay_for(Duration::from_secs(30)).await;
+                tokio::time::sleep(Duration::from_secs(30)).await;
                 loop {
                     log::info!("Checking allowance ...");
                     let allowance: U256 = glm_contract
@@ -243,7 +242,7 @@ pub async fn approve_multi_payment_contract(
                         break;
                     }
                     log::info!("Wait until transaction is proceeded 10s...");
-                    delay_for(Duration::from_secs(10)).await;
+                    tokio::time::sleep(Duration::from_secs(10)).await;
                 }
             } else {
                 log::debug!(

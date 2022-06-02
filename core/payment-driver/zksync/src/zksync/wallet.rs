@@ -7,6 +7,7 @@ use bigdecimal::{BigDecimal, Zero};
 use num_bigint::BigUint;
 use std::env;
 use std::str::FromStr;
+use tokio_compat_02::FutureExt;
 use zksync::operations::SyncTransactionHandle;
 use zksync::types::BlockStatus;
 use zksync::zksync_types::{
@@ -40,6 +41,7 @@ pub async fn account_balance(address: &str, network: Network) -> Result<BigDecim
     let pub_address = Address::from_str(&address[2..]).map_err(GenericError::new)?;
     let acc_info = get_provider(network)
         .account_info(pub_address)
+        .compat()
         .await
         .map_err(GenericError::new)?;
     // TODO: implement tokens, replace None
@@ -136,6 +138,7 @@ pub async fn exit(msg: &Exit) -> Result<String, GenericError> {
     let tx_handle = withdraw(wallet, network, msg.amount(), msg.to()).await?;
     let tx_info = tx_handle
         .wait_for_commit()
+        .compat()
         .await
         .map_err(GenericError::new)?;
 
@@ -189,7 +192,7 @@ pub async fn get_nonce(address: &str, network: Network) -> u32 {
         }
     };
     let provider = get_provider(network);
-    let account_info = match provider.account_info(addr).await {
+    let account_info = match provider.account_info(addr).compat().await {
         Ok(i) => i,
         Err(e) => {
             log::error!("Unable to get account info, failed to get nonce. {:?}", e);
@@ -231,7 +234,11 @@ pub async fn make_transfer(
         token,
         amount
     );
-    let transfer = transfer_builder.send().await.map_err(GenericError::new)?;
+    let transfer = transfer_builder
+        .send()
+        .compat()
+        .await
+        .map_err(GenericError::new)?;
 
     let tx_hash = hex::encode(transfer.hash());
     log::info!("Created zksync transaction with hash={}", tx_hash);
@@ -242,7 +249,7 @@ pub async fn check_tx(tx_hash: &str, network: Network) -> Option<Result<(), Stri
     let provider = get_provider(network);
     let tx_hash = format!("sync-tx:{}", tx_hash);
     let tx_hash = TxHash::from_str(&tx_hash).unwrap();
-    let tx_info = provider.tx_info(tx_hash).await.unwrap();
+    let tx_info = provider.tx_info(tx_hash).compat().await.unwrap();
     log::trace!("tx_info: {:?}", tx_info);
     match tx_info.success {
         None => None,
@@ -351,9 +358,11 @@ async fn get_wallet(
     let provider = get_provider(network);
     let signer = YagnaEthSigner::new(addr);
     let credentials = WalletCredentials::from_eth_signer(addr, signer, get_zk_network(network))
+        .compat()
         .await
         .map_err(GenericError::new)?;
     let wallet = Wallet::new(provider, credentials)
+        .compat()
         .await
         .map_err(GenericError::new)?;
     Ok(wallet)
@@ -370,6 +379,7 @@ async fn unlock_wallet<S: EthereumSigner + Clone, P: Provider + Clone>(
     log::debug!("unlock_wallet");
     if !wallet
         .is_signing_key_set()
+        .compat()
         .await
         .map_err(GenericError::new)?
     {
@@ -389,13 +399,18 @@ async fn unlock_wallet<S: EthereumSigner + Clone, P: Provider + Clone>(
                 GenericError::new(format!("Failed to create change_pubkey request: {}", e))
             })?
             .send()
+            .compat()
             .await
             .map_err(|e| {
                 GenericError::new(format!("Failed to send change_pubkey request: {}", e))
             })?;
         log::info!("Unlock send. tx_hash= {}", unlock.hash().to_string());
 
-        let tx_info = unlock.wait_for_commit().await.map_err(GenericError::new)?;
+        let tx_info = unlock
+            .wait_for_commit()
+            .compat()
+            .await
+            .map_err(GenericError::new)?;
         log::debug!("tx_info = {:?}", tx_info);
         match tx_info.success {
             Some(true) => log::info!("Wallet successfully unlocked. address = {}", wallet.signer.address),
@@ -460,7 +475,11 @@ pub async fn withdraw<S: EthereumSigner + Clone, P: Provider + Clone>(
         withdraw_amount,
         recipient_address
     );
-    let withdraw_handle = withdraw_builder.send().await.map_err(GenericError::new)?;
+    let withdraw_handle = withdraw_builder
+        .send()
+        .compat()
+        .await
+        .map_err(GenericError::new)?;
 
     Ok(withdraw_handle)
 }
@@ -471,6 +490,7 @@ async fn get_balance<S: EthereumSigner + Clone, P: Provider + Clone>(
 ) -> Result<BigUint, GenericError> {
     let balance = wallet
         .get_balance(BlockStatus::Committed, token)
+        .compat()
         .await
         .map_err(GenericError::new)?;
     Ok(balance)
@@ -483,6 +503,7 @@ async fn get_withdraw_fee<S: EthereumSigner + Clone, P: Provider + Clone>(
     let withdraw_fee = wallet
         .provider
         .get_tx_fee(TxFeeTypes::Withdraw, wallet.address(), token)
+        .compat()
         .await
         .map_err(GenericError::new)?
         .total_fee;
@@ -495,6 +516,7 @@ async fn get_unlock_fee<S: EthereumSigner + Clone, P: Provider + Clone>(
 ) -> Result<BigUint, GenericError> {
     if wallet
         .is_signing_key_set()
+        .compat()
         .await
         .map_err(GenericError::new)?
     {
@@ -509,6 +531,7 @@ async fn get_unlock_fee<S: EthereumSigner + Clone, P: Provider + Clone>(
             wallet.address(),
             token,
         )
+        .compat()
         .await
         .map_err(GenericError::new)?
         .total_fee;

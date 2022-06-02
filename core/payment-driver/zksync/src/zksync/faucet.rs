@@ -7,8 +7,8 @@ use bigdecimal::BigDecimal;
 use chrono::{Duration, Utc};
 use lazy_static::lazy_static;
 use std::{env, time};
-use tokio::time::delay_for;
-use ya_service_api::awc;
+use tokio::time::sleep;
+use ya_service_api::awc::client_builder;
 
 // Workspace uses
 use ya_payment_driver::{db::models::Network, model::GenericError};
@@ -56,7 +56,7 @@ pub async fn request_tglm(address: &str, network: Network) -> Result<(), Generic
                         MAX_FAUCET_REQUESTS,
                         e
                     );
-                    delay_for(time::Duration::from_secs(10)).await;
+                    sleep(time::Duration::from_secs(10)).await;
                 }
             }
         }
@@ -73,7 +73,7 @@ async fn wait_for_tglm(address: &str, network: Network) -> Result<(), GenericErr
             log::info!("Received tGLM from faucet.");
             return Ok(());
         }
-        delay_for(time::Duration::from_secs(3)).await;
+        sleep(time::Duration::from_secs(3)).await;
     }
     let msg = "Waiting for tGLM timed out.";
     log::error!("{}", msg);
@@ -82,7 +82,7 @@ async fn wait_for_tglm(address: &str, network: Network) -> Result<(), GenericErr
 
 async fn faucet_donate(address: &str, _network: Network) -> Result<(), GenericError> {
     // TODO: Reduce timeout to 20-30 seconds when transfer is used.
-    let client = awc::client_builder()
+    let client = client_builder()
         .await
         .map_err(GenericError::new)?
         .timeout(std::time::Duration::from_secs(60))

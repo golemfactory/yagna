@@ -29,7 +29,7 @@ pub enum EventError {
 #[derive(
     DbTextField,
     strum_macros::EnumString,
-    strum_macros::ToString,
+    strum_macros::Display,
     AsExpression,
     FromSqlRow,
     PartialEq,

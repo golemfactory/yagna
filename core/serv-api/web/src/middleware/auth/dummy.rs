@@ -17,13 +17,12 @@ impl DummyAuth {
     }
 }
 
-impl<'s, S, B> Transform<S> for DummyAuth
+impl<'s, S, B> Transform<S, ServiceRequest> for DummyAuth
 where
-    S: Service<Request = ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
     S::Future: 'static,
     B: 'static,
 {
-    type Request = ServiceRequest;
     type Response = ServiceResponse<B>;
     type Error = Error;
     type Transform = DummyAuthMiddleware<S>;
@@ -43,21 +42,20 @@ pub struct DummyAuthMiddleware<S> {
     identity: Identity,
 }
 
-impl<S, B> Service for DummyAuthMiddleware<S>
+impl<S, B> Service<ServiceRequest> for DummyAuthMiddleware<S>
 where
-    S: Service<Request = ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
     S::Future: 'static,
 {
-    type Request = ServiceRequest;
     type Response = ServiceResponse<B>;
     type Error = Error;
     type Future = S::Future;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.service.poll_ready(cx)
     }
 
-    fn call(&mut self, req: ServiceRequest) -> Self::Future {
+    fn call(&self, req: ServiceRequest) -> Self::Future {
         req.extensions_mut().insert(self.identity.clone());
         self.service.call(req)
     }

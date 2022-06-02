@@ -86,7 +86,7 @@ async fn get_invoice_payments(db: Data<DbExecutor>, path: Path<params::InvoiceId
 async fn get_invoice_events(
     db: Data<DbExecutor>,
     query: Query<params::EventParams>,
-    req: actix_web::web::HttpRequest,
+    req: actix_web::HttpRequest,
     id: Identity,
 ) -> HttpResponse {
     let requestor_events: Vec<Cow<'static, str>> = req

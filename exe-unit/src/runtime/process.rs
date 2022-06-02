@@ -158,7 +158,7 @@ impl RuntimeProcess {
     ) -> LocalBoxFuture<'f, Result<i32, Error>> {
         let mut rt_args = match self.args() {
             Ok(args) => args,
-            Err(err) => return future::err(err).boxed_local(),
+            Err(err) => return Box::pin(future::err(err)),
         };
 
         let (cmd, ctx) = cmd.split();
@@ -172,7 +172,7 @@ impl RuntimeProcess {
                 .arg(entry_point)
                 .arg("--")
                 .args(args),
-            _ => return future::ok(0).boxed_local(),
+            _ => return Box::pin(future::ok(0)),
         };
 
         let binary = self.binary.clone();
@@ -202,15 +202,18 @@ impl RuntimeProcess {
                 RuntimeEvent::stderr(id.clone(), idx, CommandOutput::Bin(out))
             });
 
+            let pid = child
+                .id()
+                .ok_or_else(|| Error::runtime("Missing process id"))?;
             let proc = if cfg!(feature = "sgx") {
-                ChildProcess::from(child.id())
+                ChildProcess::from(pid)
             } else {
-                let tree = ProcessTree::try_new(child.id()).map_err(Error::runtime)?;
+                let tree = ProcessTree::try_new(pid).map_err(Error::runtime)?;
                 ChildProcess::from(tree)
             };
             let _guard = ChildProcessGuard::new(proc, address.clone());
 
-            let result = future::join3(child, stdout, stderr).await;
+            let result = future::join3(child.wait(), stdout, stderr).await;
             Ok(result.0?.code().unwrap_or(-1))
         }
         .boxed_local()
@@ -227,7 +230,7 @@ impl RuntimeProcess {
             ExeScriptCommand::Run {
                 entry_point, args, ..
             } => self.handle_service_run(ctx, entry_point, args),
-            _ => future::ok(0).boxed_local(),
+            _ => Box::pin(future::ok(0)),
         }
     }
 
@@ -239,7 +242,7 @@ impl RuntimeProcess {
     ) -> LocalBoxFuture<'f, Result<i32, Error>> {
         let mut rt_args = match self.args() {
             Ok(rt_args) => rt_args,
-            Err(err) => return future::err(err).boxed_local(),
+            Err(err) => return Box::pin(future::err(err)),
         };
         rt_args.arg("start").args(args);
 
@@ -310,7 +313,7 @@ impl RuntimeProcess {
     ) -> LocalBoxFuture<'f, Result<i32, Error>> {
         let (service, ctrl) = match self.service.as_ref() {
             Some(svc) => (svc.service.clone(), svc.control.clone()),
-            None => return future::err(Error::runtime("START command not run")).boxed_local(),
+            None => return Box::pin(future::err(Error::runtime("START command not run"))),
         };
 
         log::info!(

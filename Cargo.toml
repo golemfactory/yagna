@@ -57,9 +57,9 @@ ya-client-model = "0.4"
 gftp = { version = "^0.2", optional = true } # just to enable gftp build for cargo-deb
 ya-provider = { version = "0.2", optional = true } # just to enable conditionally running some tests
 
-actix-rt = "1.0"
-actix-service = "1.0"
-actix-web = "3.2"
+actix-rt = "2.7"
+actix-service = "2"
+actix-web = "4"
 anyhow = "1.0"
 chrono = "0.4"
 directories = "4.0"
@@ -72,8 +72,9 @@ openssl-probe = { version = "0.1", optional = true }
 serde = "1.0"
 serde_json = "1.0"
 structopt = "0.3"
-tokio = { version = "0.2.22", features = ["uds"] }
-tokio-util = { version = "0.3", features = ["codec"] }
+tokio = { version = "1", features = ["net"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+tokio-stream = { version = "0.1.8", features = ["io-util"] }
 url = "2.1.1"
 flexbuffers = "2.0"
 
@@ -181,10 +182,10 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## SERVICE BUS
-#ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "c4f16a69be383d9534f99928fccb64a558c47ff2"}
-#ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "c4f16a69be383d9534f99928fccb64a558c47ff2"}
-#ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "c4f16a69be383d9534f99928fccb64a558c47ff2"}
-#ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "c4f16a69be383d9534f99928fccb64a558c47ff2"}
+ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "a60f7476c39a18fd3a369b3045b878544ae25598"}
+ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "a60f7476c39a18fd3a369b3045b878544ae25598"}
+ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "a60f7476c39a18fd3a369b3045b878544ae25598"}
+ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "a60f7476c39a18fd3a369b3045b878544ae25598"}
 
 ## OTHERS
 gftp = { path = "core/gftp" }
@@ -205,6 +206,12 @@ ya-diesel-utils = { path = "utils/diesel-utils"}
 ya-metrics = { path = "core/metrics" }
 ya-provider = { path = "agent/provider"}
 
+
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "e1d4e843bba2d7b9e48299c9ec976ce307aa78e1" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "e1d4e843bba2d7b9e48299c9ec976ce307aa78e1" }
+
+ethereum-tx-sign = { git = "https://github.com/mfranciszkiewicz/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
+graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "3619f63a0c1ff44962ab604e55cd5dfb62177c56" }
 web3 = { git = "https://github.com/golemfactory/rust-web3", branch = "update_ethabi" }
 
 # Speed up builds on macOS (will be default in next rust version probably)

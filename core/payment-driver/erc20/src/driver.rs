@@ -176,7 +176,7 @@ impl PaymentDriver for Erc20Driver {
         self.is_account_active(&msg.sender)?;
         let res = cli::transfer(&self.dao, msg).await;
         if res.is_ok() {
-            self.notify.notify();
+            self.notify.notify_waiters();
         }
         res
     }
@@ -234,7 +234,7 @@ impl PaymentDriver for Erc20Driver {
             //self.confirm_payments().await; // Run it at least once
             Utc::now() < deadline && self.dao.has_unconfirmed_txs().await? // Stop if deadline passes or there are no more transactions to confirm
         } {
-            tokio::time::delay_for(std::time::Duration::from_secs(1)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }*/
         Ok(())
     }
@@ -285,13 +285,13 @@ impl PaymentDriverCron for Erc20Driver {
                 val = driver.notify.notified() => {
                     log::debug!("Received notification {:?}", val);
                 }
-                val = tokio::time::delay_for(*TX_SENDOUT_INTERVAL) => {
+                val = tokio::time::sleep(*TX_SENDOUT_INTERVAL) => {
                     log::debug!("Start payment driver cron loop {:?}", val);
                 }
             }
             self.send_out_payments().await;
             loop {
-                tokio::time::delay_for(*TX_CONFIRMATION_INTERVAL).await;
+                tokio::time::sleep(*TX_CONFIRMATION_INTERVAL).await;
                 let res = self.confirm_payments().await.unwrap_or_else(|err| {
                     log::error!("Error when trying to confirm payments {}", err);
                     false

@@ -9,7 +9,7 @@ use futures::{FutureExt, SinkExt, StreamExt, TryFutureExt};
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
 use tokio::fs::{File, OpenOptions};
-use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader, SeekFrom};
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, SeekFrom};
 use tokio::task::spawn_local;
 use url::Url;
 

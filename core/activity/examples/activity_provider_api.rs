@@ -8,7 +8,7 @@ use ya_service_api_web::rest_api_addr;
 #[derive(Clone)]
 struct ServiceContext {
     db: DbExecutor,
-    tx: TrackerRef
+    tx: TrackerRef,
 }
 
 impl<Service> Provider<Service, DbExecutor> for ServiceContext {
@@ -32,7 +32,10 @@ async fn main() -> anyhow::Result<()> {
     db.apply_migration(migrations::run_with_output)?;
     ya_sb_router::bind_gsb_router(None).await?;
 
-    let context = ServiceContext { db: db.clone(), tx: TrackerRef::create() };
+    let context = ServiceContext {
+        db: db.clone(),
+        tx: TrackerRef::create(),
+    };
     ya_activity::service::Activity::gsb(&context).await?;
 
     HttpServer::new(move || {

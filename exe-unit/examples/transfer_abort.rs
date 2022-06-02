@@ -10,9 +10,8 @@ use actix_web::{middleware, web, App, HttpResponse, HttpServer};
 use futures::StreamExt;
 use rand::Rng;
 use tempdir::TempDir;
-use tokio::time::delay_for;
-use ya_client_model::activity::TransferArgs;
-
+use tokio::io::AsyncWriteExt;
+use tokio::time::sleep;
 use ya_agreement_utils::AgreementView;
 use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::message::{Shutdown, ShutdownReason};
@@ -48,38 +47,37 @@ async fn upload(
     let mut dst_path = path.as_ref().clone();
     dst_path.push(name.as_ref());
 
-    let mut dst = web::block(|| std::fs::File::create(dst_path))
-        .await
-        .unwrap();
-
+    let mut dst = tokio::fs::File::create(dst_path).await?;
     while let Some(chunk) = payload.next().await {
         let data = chunk.unwrap();
-        dst = web::block(move || dst.write_all(&data).map(|_| dst)).await?;
+        dst.write_all(&data).await?;
     }
 
     Ok(HttpResponse::Ok().finish())
 }
 
-fn start_http(path: PathBuf) -> anyhow::Result<()> {
+async fn start_http(path: PathBuf) -> anyhow::Result<()> {
     let inner = path.clone();
     HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
-            .data(inner.clone())
+            .app_data(inner.clone())
             .service(actix_files::Files::new("/", inner.clone()))
     })
     .bind("127.0.0.1:8001")?
-    .run();
+    .run()
+    .await?;
 
     let inner = path.clone();
     HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
-            .data(inner.clone())
+            .app_data(inner.clone())
             .service(web::resource("/{name}").route(web::put().to(upload)))
     })
     .bind("127.0.0.1:8002")?
-    .run();
+    .run()
+    .await?;
 
     Ok(())
 }
@@ -104,8 +102,8 @@ async fn interrupted_transfer(
     let addr_thread = addr.clone();
 
     std::thread::spawn(move || {
-        System::new("transfer").block_on(async move {
-            delay_for(Duration::from_millis(10)).await;
+        System::new().block_on(async move {
+            sleep(Duration::from_millis(10)).await;
             let _ = addr_thread.send(AbortTransfers {}).await;
         })
     });
@@ -143,9 +141,11 @@ async fn main() -> anyhow::Result<()> {
     log::debug!("Starting HTTP");
 
     let path = temp_dir.path().to_path_buf();
-    std::thread::spawn(move || {
-        let sys = System::new("http");
-        start_http(path).expect("unable to start http servers");
+    tokio::task::spawn_local(async move {
+        let sys = System::new();
+        start_http(path)
+            .await
+            .expect("unable to start http servers");
         sys.run().expect("sys.run");
     });
 

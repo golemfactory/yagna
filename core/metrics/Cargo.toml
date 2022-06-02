@@ -15,16 +15,17 @@ ya-service-api = "0.1"
 ya-service-api-interfaces = "0.1"
 ya-service-bus = "0.4"
 
-actix-web = { version = "3", features = ["openssl"] }
+awc = "3"
+actix-web = { version = "4", features = ["openssl"] }
 anyhow = "1.0.32"
 bigdecimal = "0.2"
 futures = "0.3"
 lazy_static = "1.4"
 log = "0.4"
-metrics = "0.12"
+metrics = "0.16"
 metrics-core = "0.5.2"
 metrics-runtime = "0.13.1"
 percent-encoding = "2.1.0"
 structopt = "0.3"
-tokio = { version = "0.2", features = ["time", "sync"] }
+tokio = { version = "1", features = ["time", "sync"] }
 url = "2.1.1"

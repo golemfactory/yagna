@@ -32,7 +32,6 @@ impl Endpoint {
 
     #[cfg(unix)]
     async fn connect_to_socket<P: AsRef<Path>>(path: P) -> Result<Self> {
-        use actix::prelude::*;
         use bytes::Bytes;
         use futures::{future, SinkExt, StreamExt, TryStreamExt};
         use tokio::io;
@@ -48,7 +47,7 @@ impl Endpoint {
             .map_err(Error::from);
 
         let (tx_si, rx_si) = mpsc::channel(1);
-        Arbiter::spawn(async move {
+        tokio::task::spawn_local(async move {
             if let Err(e) = rx_si.forward(sink).await {
                 log::error!("Socket endpoint error: {}", e);
             }

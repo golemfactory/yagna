@@ -2,7 +2,6 @@ use std::cell::RefCell;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::rc::Rc;
 
-use actix_rt::Arbiter;
 use futures::channel::oneshot;
 use futures::prelude::*;
 use tokio::time::{Duration, Instant};
@@ -81,7 +80,7 @@ pub async fn bind_remote(
             let msg: Rc<[u8]> = msg.into();
             let bcast = bcast.clone();
 
-            Arbiter::spawn(async move {
+            tokio::task::spawn_local(async move {
                 let endpoints = bcast.resolve(&topic).await;
                 log::trace!("Received broadcast to topic {} from [{}].", &topic, &caller);
                 for endpoint in endpoints {
@@ -89,7 +88,7 @@ pub async fn bind_remote(
                     log::trace!("Broadcast addr {}", addr);
                     let _ = local_bus::send(addr.as_ref(), &caller, msg.as_ref()).await;
                 }
-            })
+            });
         }
     };
 
@@ -371,7 +370,7 @@ where
                 metrics::counter!("net.connect", 1);
 
                 let reconnect_clone = reconnect.clone();
-                Arbiter::spawn(async move {
+                tokio::task::spawn_local(async move {
                     if let Ok(_) = dc_rx.await {
                         metrics::counter!("net.disconnect", 1);
                         reconnect_clone.borrow_mut().last_disconnect = Some(Instant::now());
@@ -393,13 +392,13 @@ where
                     _ = tokio::signal::ctrl_c() => {
                         return Err(anyhow::anyhow!("Net initialization interrupted"));
                     },
-                    _ = tokio::time::delay_for(delay) => {},
+                    _ = tokio::time::sleep(delay) => {},
                 }
             }
         }
     }
 
-    Arbiter::spawn(
+    tokio::task::spawn_local(
         rx.then(move |_| rebind(reconnect, bind, unbind).then(|_| futures::future::ready(()))),
     );
     Ok(())

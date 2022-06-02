@@ -26,7 +26,7 @@ pub(crate) async fn worker(db: DbExecutor) {
     // TODO: make interval configurable
     let interval = Duration::from_secs(3600 * 24);
     loop {
-        tokio::time::delay_for(interval).await;
+        tokio::time::sleep(interval).await;
         if let Err(e) = github::check_latest_release(&db).await {
             log::error!("Failed to check for new Yagna release: {}", e);
         };
@@ -38,7 +38,7 @@ pub(crate) async fn pinger(db: DbExecutor) -> ! {
     let interval = Duration::from_secs(30 * 60);
     loop {
         let release_dao = db.as_dao::<ReleaseDAO>();
-        tokio::time::delay_for(interval).await;
+        tokio::time::sleep(interval).await;
         match release_dao.pending_release().await {
             Ok(Some(release)) => {
                 if !release.seen {

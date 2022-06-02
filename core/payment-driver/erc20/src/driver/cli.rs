@@ -278,7 +278,7 @@ pub async fn transfer(dao: &Erc20Dao, msg: Transfer) -> Result<String, GenericEr
         if msg.wait_for_tx {
             let tx_hash = loop {
                 log::info!("Waiting for confirmation 10s.");
-                tokio::time::delay_for(Duration::from_secs(10)).await;
+                tokio::time::sleep(Duration::from_secs(10)).await;
                 let transaction_entity = dao.get_transaction_from_tx(&tx_id).await?;
                 match TransactionStatus::try_from(transaction_entity.status)
                     .map_err(GenericError::new)?

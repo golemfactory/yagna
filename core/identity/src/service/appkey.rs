@@ -2,7 +2,6 @@ use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use actix_rt::Arbiter;
 use chrono::Utc;
 use futures::prelude::*;
 use uuid::Uuid;
@@ -53,11 +52,11 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
 
     {
         let subscription = subscription.clone();
-        Arbiter::spawn(async move {
+        tokio::task::spawn_local(async move {
             let _ = rx
                 .for_each(|event| send_events(subscription.borrow(), event))
                 .await;
-        })
+        });
     }
 
     let _ = bus::bind(&model::BUS_ID, move |s: model::Subscribe| {

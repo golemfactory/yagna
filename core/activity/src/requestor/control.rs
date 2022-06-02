@@ -1,11 +1,12 @@
 use actix_web::http::header;
+use actix_web::web::{BufMut, Bytes, BytesMut};
 use actix_web::{web, Either, HttpRequest, HttpResponse, Responder};
-use bytes::{BufMut, Bytes, BytesMut};
 use futures::StreamExt;
 use metrics::counter;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
+use tokio_stream::wrappers::IntervalStream;
 
 use ya_client_model::activity::{
     ActivityState, CreateActivityRequest, CreateActivityResult, Credentials, ExeScriptCommand,
@@ -210,10 +211,12 @@ async fn get_batch_results(
 
     if let Some(value) = request.headers().get(header::ACCEPT) {
         if value.eq(mime::TEXT_EVENT_STREAM.essence_str()) {
-            return Ok(Either::A(stream_results(agreement, path, id)?));
+            return Ok(Either::Left(stream_results(agreement, path, id)?));
         }
     }
-    Ok(Either::B(await_results(agreement, path, query, id).await?))
+    Ok(Either::Right(
+        await_results(agreement, path, query, id).await?,
+    ))
 }
 
 async fn await_results(
@@ -258,11 +261,14 @@ fn stream_results(
             Ok(result) => result.map_err(Error::from),
             Err(e) => Err(Error::from(e)),
         })
-        .map(Either::A)
-        .chain(tokio::time::interval(Duration::from_secs(15)).map(Either::B))
+        .map(Either::Left)
+        .chain({
+            let interval = tokio::time::interval(Duration::from_secs(15));
+            IntervalStream::new(interval).map(Either::Right)
+        })
         .map(move |e| match e {
-            Either::A(r) => map_event_result(r, seq.fetch_add(1, Ordering::Relaxed)),
-            Either::B(_) => Ok(Bytes::from_static(":ping\n".as_bytes())),
+            Either::Left(r) => map_event_result(r, seq.fetch_add(1, Ordering::Relaxed)),
+            Either::Right(_) => Ok(Bytes::from_static(":ping\n".as_bytes())),
         });
 
     Ok(HttpResponse::Ok()

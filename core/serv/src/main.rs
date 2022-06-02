@@ -430,7 +430,7 @@ struct ServiceCommandOpts {
     metrics_opts: MetricsPusherOpts,
 
     #[structopt(long, env, default_value = "60")]
-    max_rest_timeout: usize,
+    max_rest_timeout: u64,
 
     ///changes log level from info to debug
     #[structopt(long)]
@@ -454,7 +454,7 @@ async fn sd_notify(unset_environment: bool, state: &str) -> std::io::Result<()> 
     if unset_environment {
         env::remove_var("NOTIFY_SOCKET");
     }
-    let mut socket = tokio::net::UnixDatagram::unbound()?;
+    let socket = tokio::net::UnixDatagram::unbound()?;
     socket.send_to(state.as_ref(), addr).await?;
     Ok(())
 }
@@ -550,6 +550,7 @@ impl ServiceCommand {
                     .unwrap_or_else(|e| log::error!("Initializing payment accounts failed: {}", e));
 
                 let api_host_port = rest_api_host_port(api_url.clone());
+                let rest_address = api_host_port.clone();
 
                 let server = HttpServer::new(move || {
                     let app = App::new()
@@ -558,31 +559,30 @@ impl ServiceCommand {
                         .route("/me", web::get().to(me))
                         .service(forward_gsb);
 
-                    Services::rest(app, &context)
+                    let rest = Services::rest(app, &context);
+                    log::info!("Http server thread started on: {}", rest_address);
+                    rest
                 })
                 // this is maximum supported timeout for our REST API
-                .keep_alive(max_rest_timeout.clone())
+                .keep_alive(std::time::Duration::from_secs(*max_rest_timeout))
                 .bind(api_host_port.clone())
                 .context(format!("Failed to bind http server on {:?}", api_host_port))?;
 
                 let _ = extension::autostart(&ctx.data_dir, &api_url, &ctx.gsb_url)
                     .await
                     .map_err(|e| log::warn!("Failed to autostart extensions: {e}"));
-                let server_fut = server.run();
-                {
-                    let server = server_fut.clone();
-                    gsb::bind(model::BUS_ID, move |request: model::ShutdownRequest| {
-                        let server = server.clone();
-                        actix_rt::spawn(async move {
-                            actix_rt::time::delay_for(std::time::Duration::from_secs(1)).await;
-                            server.stop(request.graceful).await;
-                        });
 
-                        async move { Ok(()) }
-                    });
-                }
+                gsb::bind(model::BUS_ID, move |_request: model::ShutdownRequest| {
+                    log::warn!("ShutdownRequest not supported after migrating to new actix.");
+                    // actix_rt::spawn(async move {
+                    //     actix_rt::time::sleep(std::time::Duration::from_secs(1)).await;
+                    //     actix_rt::System::current().stop()
+                    // });
 
-                future::try_join(server_fut, sd_notify(false, "READY=1")).await?;
+                    async move { Ok(()) }
+                });
+
+                future::try_join(server.run(), sd_notify(false, "READY=1")).await?;
 
                 log::info!("{} service successfully finished!", app_name);
 
@@ -644,12 +644,17 @@ async fn me(id: Identity) -> impl Responder {
 #[actix_web::post("/_gsb/{service:.*}")]
 async fn forward_gsb(
     id: Identity,
-    web::Path(service): web::Path<String>,
+    service: web::Path<String>,
     data: web::Json<serde_json::Value>,
 ) -> impl Responder {
     use ya_service_bus::untyped as bus;
+    let service = service.into_inner();
+
     log::debug!(target: "gsb-bridge", "called: {}", service);
-    let data = flexbuffers::to_vec(data.into_inner()).map_err(actix_web::error::ErrorBadRequest)?;
+
+    let inner_data = data.into_inner();
+    let data = ya_service_bus::serialization::to_vec(&inner_data)
+        .map_err(actix_web::error::ErrorBadRequest)?;
     let r = bus::send(
         &format!("/{}", service),
         &format!("/local/{}", id.identity),
@@ -657,8 +662,9 @@ async fn forward_gsb(
     )
     .await
     .map_err(actix_web::error::ErrorInternalServerError)?;
-    let json_resp: serde_json::Value =
-        flexbuffers::from_slice(&r).map_err(actix_web::error::ErrorInternalServerError)?;
+
+    let json_resp: serde_json::Value = ya_service_bus::serialization::from_slice(&r)
+        .map_err(actix_web::error::ErrorInternalServerError)?;
     Ok::<_, actix_web::Error>(web::Json(json_resp))
 }
 
