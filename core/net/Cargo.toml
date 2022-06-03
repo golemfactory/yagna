@@ -22,6 +22,7 @@ ya-service-api-interfaces = "0.1"
 ya-service-bus = "0.4"
 ya-utils-networking = "0.1"
 
+actix = "0.13"
 anyhow = "1.0"
 futures = "0.3"
 humantime = "2.1"
