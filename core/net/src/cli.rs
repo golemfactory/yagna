@@ -129,7 +129,7 @@ impl NetCommand {
 
                 Ok(ResponseTable {
                     columns: vec![
-                        "node".into(),
+                        "nodeId".into(),
                         "alias".into(),
                         "p2p".into(),
                         "ping (tcp)".into(),

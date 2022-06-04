@@ -48,7 +48,7 @@ pub(crate) fn bind_service() {
                         let is_p2p = client.is_p2p(id).await?;
                         is_p2p.then(|| "p2p").unwrap_or("relay")
                     }
-                    None => "",
+                    None => "server",
                 };
 
                 responses.push(model::SessionResponse {

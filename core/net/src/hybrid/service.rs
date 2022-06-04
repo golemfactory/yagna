@@ -73,7 +73,7 @@ impl Net {
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
 
         log::info!(
-            "HYBRID_NET - Using default identity as network id: {:?}",
+            "Hybrid NET - Using default identity as network id: {:?}",
             default_id
         );
 
@@ -184,8 +184,6 @@ async fn build_client(
         .map_err(|e| anyhow!("Resolving hybrid NET relay server failed. Error: {}", e))?;
     let url = Url::parse(&format!("udp://{addr}"))?;
 
-    log::debug!("Setting up hybrid net with url: {url}");
-
     ClientBuilder::from_url(url)
         .crypto(crypto)
         .listen(config.bind_url.clone())
@@ -204,7 +202,9 @@ async fn relay_addr(config: &Config) -> anyhow::Result<SocketAddr> {
             // FIXME: remove
             .unwrap_or_else(|_| DEFAULT_NET_RELAY_HOST.to_string()),
     };
-    log::trace!("resolving host_port: {}", host_port);
+
+    log::info!("Hybrid NET relay server configured on url: udp://{host_port}");
+
     let (host, port) = &host_port
         .split_once(':')
         .context("Please use host:port format")?;
