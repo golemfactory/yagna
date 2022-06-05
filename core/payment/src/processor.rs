@@ -5,7 +5,7 @@ use crate::error::processor::{
     SchedulePaymentError, ValidateAllocationError, VerifyPaymentError,
 };
 use crate::models::order::ReadObj as DbOrder;
-use actix_web::{rt::Arbiter, web::Data};
+use actix_web::web::Data;
 use bigdecimal::{BigDecimal, Zero};
 use futures::FutureExt;
 use metrics::counter;
@@ -425,7 +425,7 @@ impl PaymentProcessor {
         let msg = SendPayment::new(payment, signature);
 
         // Spawning to avoid deadlock in a case that payee is the same node as payer
-        Arbiter::spawn(
+        tokio::task::spawn_local(
             ya_net::from(payer_id)
                 .to(payee_id)
                 .service(BUS_ID)

@@ -34,6 +34,8 @@ pub struct MarketConfig {
         required = false,
     )]
     pub negotiators_plugins: PathBuf,
+    #[structopt(long, env)]
+    pub create_negotiators_config: bool,
 }
 
 fn default_negotiators_plugins() -> PathBuf {

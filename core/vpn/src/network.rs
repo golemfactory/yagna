@@ -6,11 +6,9 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use actix::prelude::*;
-use actix_web::error::Canceled;
+use futures::channel::oneshot::Canceled;
 use futures::channel::{mpsc, oneshot};
-use futures::future::BoxFuture;
-use futures::{future, TryFutureExt};
-use futures::{FutureExt, SinkExt};
+use futures::{future, future::BoxFuture, Future, FutureExt, SinkExt, TryFutureExt};
 use smoltcp::iface::Route;
 use smoltcp::socket::{Socket, SocketHandle};
 use smoltcp::wire::{IpAddress, IpCidr, IpEndpoint};
@@ -30,12 +28,22 @@ use ya_utils_networking::vpn::*;
 
 const STACK_POLL_INTERVAL: Duration = Duration::from_millis(2500);
 
-#[derive(Default)]
 pub struct VpnSupervisor {
     networks: HashMap<String, Addr<Vpn>>,
     blueprints: HashMap<String, ya_client_model::net::Network>,
     ownership: HashMap<NodeId, BTreeSet<String>>,
     arbiter: Arbiter,
+}
+
+impl Default for VpnSupervisor {
+    fn default() -> Self {
+        Self {
+            networks: Default::default(),
+            blueprints: Default::default(),
+            ownership: Default::default(),
+            arbiter: Arbiter::new(),
+        }
+    }
 }
 
 impl VpnSupervisor {
@@ -93,7 +101,6 @@ impl VpnSupervisor {
         let vpn_net = Network::new(&net_id, net);
         let actor = self
             .arbiter
-            .clone()
             .spawn_ext(async move {
                 let stack = Stack::new(net_ip, net_route(net_gw.clone())?);
                 let vpn = Vpn::new(stack, vpn_net);
@@ -488,7 +495,7 @@ impl Handler<GetConnections> for Vpn {
 }
 
 impl Handler<Connect> for Vpn {
-    type Result = ActorResponse<Self, UserConnection, Error>;
+    type Result = ActorResponse<Self, Result<UserConnection>>;
 
     fn handle(&mut self, msg: Connect, ctx: &mut Self::Context) -> Self::Result {
         let remote = match to_ip(&msg.address) {
@@ -563,7 +570,7 @@ impl Handler<Disconnect> for Vpn {
 
 /// Handle egress packet from the user
 impl Handler<Packet> for Vpn {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<()>>;
 
     fn handle(&mut self, pkt: Packet, ctx: &mut Self::Context) -> Self::Result {
         if !self.connections.contains_key(&pkt.meta.handle) {
@@ -724,7 +731,7 @@ fn gsb_remote_url(node_id: &str, net_id: &str) -> network::DuoEndpoint<Endpoint>
 }
 
 trait ArbiterExt {
-    fn spawn_ext<'a, F, T, E>(self, f: F) -> BoxFuture<'a, std::result::Result<T, E>>
+    fn spawn_ext<'a, F, T, E>(&self, f: F) -> BoxFuture<'a, std::result::Result<T, E>>
     where
         F: Future<Output = std::result::Result<T, E>> + Send + 'static,
         T: Send + 'static,
@@ -732,7 +739,7 @@ trait ArbiterExt {
 }
 
 impl ArbiterExt for Arbiter {
-    fn spawn_ext<'a, F, T, E>(self, f: F) -> BoxFuture<'a, std::result::Result<T, E>>
+    fn spawn_ext<'a, F, T, E>(&self, f: F) -> BoxFuture<'a, std::result::Result<T, E>>
     where
         F: Future<Output = std::result::Result<T, E>> + Send + 'static,
         T: Send + 'static,
@@ -750,7 +757,7 @@ impl ArbiterExt for Arbiter {
             }
         });
 
-        self.send(Box::pin(tx_fut));
+        self.spawn(tx_fut);
         Box::pin(rx_fut)
     }
 }

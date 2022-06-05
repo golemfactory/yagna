@@ -3,13 +3,14 @@ use crate::db::dao::ReleaseDAO;
 use ya_client::model::ErrorMessage;
 use ya_persistence::executor::DbExecutor;
 
+use actix_web::web::Data;
 use actix_web::{web, HttpResponse, Responder};
 
 pub const VERSION_API_PATH: &str = "/version";
 
 pub fn web_scope(db: DbExecutor) -> actix_web::Scope {
     actix_web::web::scope(VERSION_API_PATH)
-        .data(db)
+        .app_data(Data::new(db))
         .service(get_version)
 }
 

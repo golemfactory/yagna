@@ -32,12 +32,12 @@ impl From<ya_persistence::executor::Error> for Error {
 
 impl From<Error> for actix_web::HttpResponse {
     fn from(err: Error) -> Self {
-        err.error_response()
+        err.error_response().into()
     }
 }
 
-impl From<tokio::time::Elapsed> for Error {
-    fn from(_: tokio::time::Elapsed) -> Self {
+impl From<tokio::time::error::Elapsed> for Error {
+    fn from(_: tokio::time::error::Elapsed) -> Self {
         Error::Timeout
     }
 }

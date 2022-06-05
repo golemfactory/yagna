@@ -18,8 +18,10 @@ macro_rules! forward_actix_handler {
         impl Handler<$MessageType> for $ActorType {
             type Result = ActorResponse<
                 Self,
-                <<$MessageType as Message>::Result as ResultTypeGetter>::OkType,
-                <<$MessageType as Message>::Result as ResultTypeGetter>::ErrorType,
+                Result<
+                    <<$MessageType as Message>::Result as ResultTypeGetter>::OkType,
+                    <<$MessageType as Message>::Result as ResultTypeGetter>::ErrorType,
+                >,
             >;
 
             fn handle(

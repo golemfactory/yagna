@@ -7,7 +7,7 @@ use bigdecimal::{BigDecimal, FromPrimitive};
 use chrono::{Duration, Utc};
 use lazy_static::lazy_static;
 use std::{env, time};
-use tokio::time::delay_for;
+use tokio::time::sleep;
 use web3::types::{H160, U256};
 
 // Workspace uses
@@ -64,7 +64,7 @@ pub async fn request_glm(
                             MAX_FAUCET_REQUESTS,
                             e
                         );
-                        delay_for(time::Duration::from_secs(10)).await;
+                        sleep(time::Duration::from_secs(10)).await;
                     }
                 }
             }
@@ -95,7 +95,7 @@ pub async fn request_glm(
     // Wait for tx to get mined:
     // - send_payments job runs every 10 seconds
     // - blocks are mined every 15 seconds
-    delay_for(time::Duration::from_secs(10)).await;
+    sleep(time::Duration::from_secs(10)).await;
 
     wait_for_glm(address, network).await?;
 
@@ -110,7 +110,7 @@ async fn wait_for_eth(address: H160, network: Network) -> Result<(), GenericErro
             log::info!("Received tETH from faucet.");
             return Ok(());
         }
-        delay_for(time::Duration::from_secs(3)).await;
+        sleep(time::Duration::from_secs(3)).await;
     }
     let msg = "Waiting for tETH timed out.";
     log::error!("{}", msg);
@@ -125,7 +125,7 @@ async fn wait_for_glm(address: H160, network: Network) -> Result<(), GenericErro
             log::info!("Received tGLM from faucet.");
             return Ok(());
         }
-        delay_for(time::Duration::from_secs(3)).await;
+        sleep(time::Duration::from_secs(3)).await;
     }
     let msg = "Waiting for tGLM timed out.";
     log::error!("{}", msg);

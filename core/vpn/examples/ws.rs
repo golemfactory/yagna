@@ -146,7 +146,7 @@ async fn main() -> anyhow::Result<()> {
     let connection = api.connect_tcp(&net_id, &cli.host, cli.port).await?;
     let (mut sink, mut stream) = connection.split();
 
-    Arbiter::spawn(async move {
+    tokio::task::spawn_local(async move {
         const CHUNK_SIZE: usize = 65535;
         let mut buf = [0u8; CHUNK_SIZE];
         let mut remaining = input_sz as u64;
@@ -173,7 +173,8 @@ async fn main() -> anyhow::Result<()> {
             println!("Tx {} bytes", vec.len());
             if let Err(e) = sink.send(ws::Message::Binary(Bytes::from(vec))).await {
                 eprintln!("Error sending data: {}", e);
-                break Arbiter::current().stop();
+                Arbiter::current().stop();
+                break;
             }
         }
     });

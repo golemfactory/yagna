@@ -145,7 +145,10 @@ struct AsyncCtx {
     negotiator: Arc<NegotiatorAddr>,
 }
 
-fn load_negotiators_config(data_dir: &Path) -> Result<NegotiatorsConfig> {
+fn load_negotiators_config(
+    data_dir: &Path,
+    create_not_existing: bool,
+) -> Result<NegotiatorsConfig> {
     // Register ya-provider built-in negotiators
     register_negotiators();
 
@@ -156,6 +159,8 @@ fn load_negotiators_config(data_dir: &Path) -> Result<NegotiatorsConfig> {
     Ok(match File::open(&path) {
         Ok(file) => serde_yaml::from_reader(BufReader::new(file))?,
         Err(_) => {
+            log::info!("Negotiators config not found. Using env or defaults.");
+
             let mut negotiator_config = NegotiatorsConfig::default();
 
             // Add default negotiators.
@@ -173,10 +178,14 @@ fn load_negotiators_config(data_dir: &Path) -> Result<NegotiatorsConfig> {
                 .push(note_interval::Config::from_env()?);
             negotiator_config.negotiators.push(policy_from_env()?);
 
-            let content = serde_yaml::to_string(&negotiator_config)?;
-            File::create(&path)
-                .map_err(|e| anyhow!("Can't create file: {:?}. Error: {}", path, e))?
-                .write_all(content.as_bytes())?;
+            if create_not_existing {
+                log::info!("Creating negotiators config at: {:?}", path);
+
+                let content = serde_yaml::to_string(&negotiator_config)?;
+                File::create(&path)
+                    .map_err(|e| anyhow!("Can't create file: {:?}. Error: {e}", path))?
+                    .write_all(content.as_bytes())?;
+            }
             negotiator_config
         }
     })
@@ -192,13 +201,13 @@ impl ProviderMarket {
         data_dir: &Path,
         config: MarketConfig,
     ) -> Result<ProviderMarket> {
-        let negotiator_config = load_negotiators_config(data_dir).map_err(|e| {
-            anyhow!(
-                "Failed to load negotiators config from {}. Error: {}",
-                data_dir.display(),
-                e
-            )
-        })?;
+        let negotiator_config = load_negotiators_config(data_dir, config.create_negotiators_config)
+            .map_err(|e| {
+                anyhow!(
+                    "Failed to load negotiators config from {}. Error: {e}",
+                    data_dir.display(),
+                )
+            })?;
 
         let negotiators_workdir = data_dir.join(&config.negotiators_workdir);
         std::fs::create_dir_all(&negotiators_workdir)?;
@@ -447,7 +456,7 @@ async fn collect_agreement_events(ctx: AsyncCtx) {
 
                 // We need to wait after failure, because in most cases it happens immediately
                 // and we are spammed with error logs.
-                tokio::time::delay_for(std::time::Duration::from_secs_f32(timeout)).await;
+                tokio::time::sleep(std::time::Duration::from_secs_f32(timeout)).await;
                 continue;
             }
             Ok(events) => events,
@@ -501,7 +510,7 @@ async fn collect_negotiation_events(ctx: AsyncCtx, subscription: Subscription) {
                     _ => {
                         // We need to wait after failure, because in most cases it happens immediately
                         // and we are spammed with error logs.
-                        tokio::time::delay_for(std::time::Duration::from_secs_f32(timeout)).await;
+                        tokio::time::sleep(std::time::Duration::from_secs_f32(timeout)).await;
                     }
                 }
             }
@@ -637,9 +646,7 @@ async fn process_agreement_decision(
                 };
                 let _ = ctx.market.send(msg).await;
                 return Err(anyhow!(
-                    "Failed to approve agreement [{}]. Error: {}",
-                    id,
-                    error
+                    "Failed to approve agreement [{id}]. Error: {error}",
                 ));
             } else {
                 ctx.negotiator
@@ -664,7 +671,7 @@ async fn process_agreement_decision(
 struct ReSubscribe(String);
 
 impl Handler<ReSubscribe> for ProviderMarket {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: ReSubscribe, ctx: &mut Self::Context) -> Self::Result {
         let to_resubscribe = self
@@ -691,7 +698,7 @@ impl Handler<ReSubscribe> for ProviderMarket {
 struct PostponeDemand(SubscriptionProposal);
 
 impl Handler<PostponeDemand> for ProviderMarket {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: PostponeDemand, _ctx: &mut Self::Context) -> Self::Result {
         self.postponed_demands.push(msg.0);
@@ -867,7 +874,7 @@ async fn terminate_agreement(api: Arc<MarketProviderApi>, msg: AgreementFinalize
             e,
             &delay,
         );
-        tokio::time::delay_for(delay).await;
+        tokio::time::sleep(delay).await;
     }
 
     log::info!("Agreement [{}] terminated by Provider.", &id);

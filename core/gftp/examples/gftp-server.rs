@@ -54,7 +54,7 @@ impl WriteRpcMessage for ChildStdin {
             let ser = format!("{}\r\n", serde_json::to_string(&msg)?);
             log::info!("[Tx] {}", ser.trim());
             self.write_all(ser.as_bytes()).await?;
-            self.flush();
+            self.flush().await?;
             Ok(())
         }
         .boxed_local()
@@ -225,6 +225,6 @@ async fn main() -> Result<()> {
     let req = RpcRequest::Shutdown {};
     send(&mut stdin, &mut reader, req).await?;
 
-    child.await?;
+    child.wait().await?;
     Ok(())
 }

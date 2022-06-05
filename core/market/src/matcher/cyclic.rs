@@ -130,7 +130,7 @@ fn randomize_interval(mean_interval: std::time::Duration) -> std::time::Duration
 
 async fn wait_random_interval(mean_interval: std::time::Duration) {
     let random_interval = randomize_interval(mean_interval);
-    tokio::time::delay_for(random_interval).await;
+    tokio::time::sleep(random_interval).await;
 }
 
 #[cfg(test)]

@@ -9,14 +9,14 @@ default = []
 lock = ["fs2"]
 
 [dependencies]
-actix = { version = "0.10", default-features = false }
+actix = { version = "0.13", default-features = false }
 anyhow = "1.0"
 derive_more = "0.99.5"
 futures = "0.3"
 futures-util = "0.3.4"
 libc = "0.2"
 shared_child = "0.3.4"
-tokio = { version = "0.2.10", features = ["process", "signal"] }
+tokio = { version = "1", features = ["process", "signal"] }
 
 fs2 = { version = "0.4.3", optional = true }
 

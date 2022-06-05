@@ -68,7 +68,7 @@ impl PresetManager {
                     updated,
                     removed,
                 };
-                tx.broadcast(evt).unwrap_or_default();
+                tx.send(evt).unwrap_or_default();
             }
             Err(e) => log::warn!("Error reading presets from {:?}: {:?}", p, e),
         };
