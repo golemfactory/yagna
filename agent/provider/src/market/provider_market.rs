@@ -154,7 +154,7 @@ fn load_negotiators_config(
 
     let path = data_dir.join("negotiators-config.yaml");
 
-    log::debug!("Loading negotiators config: {:?}", path);
+    log::info!("Loading negotiators config: {:?}", path);
 
     Ok(match File::open(&path) {
         Ok(file) => serde_yaml::from_reader(BufReader::new(file))?,
