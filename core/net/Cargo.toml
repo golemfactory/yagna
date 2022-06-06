@@ -14,8 +14,7 @@ hybrid-net = []
 ya-core-model = { version = "^0.6", features=["net", "identity"] }
 
 # ya-relay-client = "0.2"
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "8bbb42abc878f94cd663677b0d47ddfa4ccf24c0" }
-ya-relay-core = { git = "https://github.com/golemfactory/ya-relay.git", rev = "8bbb42abc878f94cd663677b0d47ddfa4ccf24c0" }
+ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "0e6863c24767a246531d038455921f12c9e75e94" }
 
 ya-sb-proto = { version = "0.4" }
 ya-service-api = "0.1"
@@ -23,7 +22,7 @@ ya-service-api-interfaces = "0.1"
 ya-service-bus = "0.4"
 ya-utils-networking = "0.1"
 
-actix-rt = "1.0"
+actix = "0.13"
 anyhow = "1.0"
 futures = "0.3"
 humantime = "2.1"
@@ -34,13 +33,14 @@ serde_json = "1.0"
 structopt = "0.3"
 strum = { version = "0.22", features = ["derive"] }
 thiserror = "1.0"
-tokio = { version = "0.2", features = ["time"] }
+tokio = { version = "1", features = ["time"] }
+tokio-stream = "0.1.8"
 
-bytes = { version = "0.5" }
+bytes = { version = "1" }
 ethsign = { version = "0.8" }
-tokio-util = { version = "0.3" }
+tokio-util = { version = "0.7" }
 url = { version = "2.2" }
-prost = { version = "0.6" }
+prost = { version = "0.10" }
 rand = { version = "0.7"}
 
 [dev-dependencies]

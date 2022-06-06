@@ -100,7 +100,7 @@ async fn get_debit_note_payments(
 async fn get_debit_note_events(
     db: Data<DbExecutor>,
     query: Query<params::EventParams>,
-    req: actix_web::web::HttpRequest,
+    req: actix_web::HttpRequest,
     id: Identity,
 ) -> HttpResponse {
     let requestor_events: Vec<Cow<'static, str>> = req

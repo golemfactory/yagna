@@ -7,7 +7,7 @@ use bigdecimal::BigDecimal;
 use chrono::{Duration, Utc};
 use lazy_static::lazy_static;
 use std::{env, time};
-use tokio::time::delay_for;
+use tokio::time::sleep;
 
 // Workspace uses
 use ya_payment_driver::{db::models::Network, model::GenericError};
@@ -55,7 +55,7 @@ pub async fn request_tglm(address: &str, network: Network) -> Result<(), Generic
                         MAX_FAUCET_REQUESTS,
                         e
                     );
-                    delay_for(time::Duration::from_secs(10)).await;
+                    sleep(time::Duration::from_secs(10)).await;
                 }
             }
         }
@@ -72,7 +72,7 @@ async fn wait_for_tglm(address: &str, network: Network) -> Result<(), GenericErr
             log::info!("Received tGLM from faucet.");
             return Ok(());
         }
-        delay_for(time::Duration::from_secs(3)).await;
+        sleep(time::Duration::from_secs(3)).await;
     }
     let msg = "Waiting for tGLM timed out.";
     log::error!("{}", msg);

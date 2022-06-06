@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
-graphene-sgx = { version = "0.3", features = [ "ias" ] }
+graphene-sgx = { version = "0.4", features = [ "ias" ] }
 ya-client-model = "0.4"
 ya-core-model = { version = "^0.6", features = ["sgx"] }
 ya-service-bus = "0.4"

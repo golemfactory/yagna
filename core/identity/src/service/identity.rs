@@ -4,11 +4,11 @@ use std::convert::{TryFrom, TryInto};
 use std::rc::Rc;
 use std::sync::Arc;
 
-use actix_rt::Arbiter;
 use chrono::Utc;
 use ethsign::{KeyFile, Protected, PublicKey};
 use futures::lock::Mutex;
 use futures::prelude::*;
+
 use ya_client_model::NodeId;
 use ya_service_bus::typed as bus;
 
@@ -57,7 +57,7 @@ fn send_event(s: Ref<Subscription>, event: model::event::Event) -> impl Future<O
     async move {
         for endpoint in subscriptions {
             let msg = event.clone();
-            Arbiter::spawn(async move {
+            tokio::task::spawn_local(async move {
                 log::debug!("Sending event: {:?}", msg);
                 match bus::service(&endpoint).call(msg).await {
                     Err(e) => log::error!("Failed to send event: {:?}", e),
@@ -77,11 +77,11 @@ impl IdentityService {
         let subscription = Rc::new(RefCell::new(Subscription::default()));
         {
             let subscription = subscription.clone();
-            Arbiter::spawn(async move {
+            tokio::task::spawn_local(async move {
                 let _ = receiver
                     .for_each(|event| send_event(subscription.borrow(), event))
                     .await;
-            })
+            });
         }
 
         let default_key =

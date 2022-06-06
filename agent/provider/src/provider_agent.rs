@@ -1,11 +1,12 @@
 use actix::prelude::*;
 use anyhow::{anyhow, Error};
-use futures::{future, FutureExt, StreamExt, TryFutureExt};
+use futures::{FutureExt, StreamExt, TryFutureExt};
 
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
+use tokio_stream::wrappers::WatchStream;
 
 use ya_agreement_utils::agreement::TypedArrayPointer;
 use ya_agreement_utils::*;
@@ -379,7 +380,7 @@ async fn process_activity_events(runner: Addr<TaskRunner>) {
         }
         let elapsed = SystemTime::now().duration_since(started).unwrap_or(ZERO);
         let delay = DEFAULT.checked_sub(elapsed).unwrap_or(ZERO);
-        tokio::time::delay_for(delay).await;
+        tokio::time::sleep(delay).await;
     }
 }
 
@@ -418,13 +419,14 @@ impl Handler<Initialize> for ProviderAgent {
         let market = self.market.clone();
         let agent = ctx.address();
         let preset_state = self.presets.state.clone();
+
         let rx = futures::stream::select_all(vec![
-            self.hardware.event_receiver(),
-            self.presets.event_receiver(),
+            WatchStream::new(self.hardware.event_receiver()),
+            WatchStream::new(self.presets.event_receiver()),
         ]);
 
-        Arbiter::spawn(async move {
-            rx.for_each_concurrent(1, |e| async {
+        tokio::task::spawn_local(async move {
+            rx.for_each(|e| async {
                 match e {
                     Event::HardwareChanged => {
                         let _ = market
@@ -517,7 +519,7 @@ impl Handler<CreateOffers> for ProviderAgent {
         let node_info = self.create_node_info();
         let accounts = match self.accounts(&self.networks) {
             Ok(acc) => acc,
-            Err(e) => return future::err(e).boxed_local(),
+            Err(e) => return Box::pin(async { Err(e) }),
         };
         let inf_node_info = InfNodeInfo::from(self.hardware.capped());
         let preset_names = match msg.0 {

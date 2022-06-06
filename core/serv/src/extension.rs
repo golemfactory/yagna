@@ -12,8 +12,9 @@ use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
-use ya_client_model::NodeId;
+use tokio_stream::wrappers::LinesStream;
 
+use ya_client_model::NodeId;
 use ya_core_model as model;
 use ya_core_model::appkey::AppKey;
 use ya_service_api::{CliCtx, CommandOutput};
@@ -122,7 +123,7 @@ async fn monitor(extension: Extension, ctx: ExtensionCtx) {
                 Err(e) => log::warn!("Extension '{name}' failed with error: {e}"),
             }
 
-            tokio::time::delay_for(Duration::from_secs(3)).await;
+            tokio::time::sleep(Duration::from_secs(3)).await;
         }
     };
 
@@ -374,27 +375,31 @@ impl Extension {
                     .ok_or_else(|| anyhow!("unable to capture stdout"))?;
 
                 let name_ = name.clone();
-                tokio::task::spawn_local(BufReader::new(stdout).lines().for_each(move |s| {
-                    let name_ = name_.clone();
-                    async move {
-                        let _ = s.map(|s| log::info!("{name_}: {s}"));
-                    }
-                }));
+                tokio::task::spawn_local(
+                    LinesStream::new(BufReader::new(stdout).lines()).for_each(move |s| {
+                        let name_ = name_.clone();
+                        async move {
+                            let _ = s.map(|s| log::info!("{name_}: {s}"));
+                        }
+                    }),
+                );
 
                 let stderr = child
                     .stderr
                     .take()
                     .ok_or_else(|| anyhow!("unable to capture stderr"))?;
 
-                tokio::task::spawn_local(BufReader::new(stderr).lines().for_each(move |s| {
-                    let name_ = name.clone();
-                    async move {
-                        let _ = s.map(|s| log::info!("{name_}: {s}"));
-                    }
-                }));
+                tokio::task::spawn_local(
+                    LinesStream::new(BufReader::new(stderr).lines()).for_each(move |s| {
+                        let name_ = name.clone();
+                        async move {
+                            let _ = s.map(|s| log::info!("{name_}: {s}"));
+                        }
+                    }),
+                );
 
                 child.stdin.take();
-                child.await.map_err(anyhow::Error::new)
+                child.wait().await.map_err(anyhow::Error::new)
             }
             .boxed()
         } else {

@@ -12,7 +12,6 @@ use std::pin::Pin;
 use std::rc::Rc;
 use std::time::Duration;
 
-use actix_rt::Arbiter;
 use bytes::Bytes;
 use futures::channel::mpsc::{channel, Receiver, Sender};
 use futures::channel::oneshot;
@@ -79,7 +78,7 @@ where
             Err(err) => match ctx.state.delay(&err) {
                 Some(delay) => {
                     log::warn!("Retrying in {}s because: {}", delay.as_secs_f32(), err);
-                    tokio::time::delay_for(delay).await;
+                    tokio::time::sleep(delay).await;
                 }
                 None => return Err(err),
             },
@@ -163,7 +162,7 @@ where
 
     pub fn err(e: E) -> Self {
         let (this, mut sender, _) = Self::create(1);
-        Arbiter::spawn(async move {
+        tokio::task::spawn_local(async move {
             if let Err(e) = sender.send(Err(e)).await {
                 log::warn!("send error: {}", e);
             }

@@ -1,7 +1,6 @@
 use anyhow::anyhow;
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
-use futures::prelude::*;
 use lazy_static::lazy_static;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -332,26 +331,20 @@ impl YagnaCommand {
         }
 
         let mut tracker = tracker::Tracker::new(&mut cmd)?;
-        cmd.kill_on_drop(true);
-        let child = cmd.spawn()?;
-        let wait_for = tracker.wait_for_start();
-        futures::pin_mut!(wait_for);
-        match future::try_select(child, wait_for).await {
-            Ok(future::Either::Right((_wait_ends, child))) => Ok(child),
-            Ok(future::Either::Left((child_ends, _wait))) => {
-                anyhow::bail!(
-                    "Golem Service exited prematurely with status: {}",
-                    child_ends
-                );
-            }
-            Err(future::Either::Left((child_err, _wait))) => {
-                anyhow::bail!("Failed to start Golem Service: {}", child_err);
-            }
-            Err(future::Either::Right((wait_err, mut child))) => {
-                log::error!("Killing Golem Service, since wait failed: {}", wait_err);
-                child.kill()?;
-                let _ = child.await?;
-                Err(wait_err)
+        let mut child = cmd.kill_on_drop(true).spawn()?;
+
+        tokio::select! {
+            r = child.wait() => match r {
+                Ok(s) => anyhow::bail!("Golem Service exited prematurely with status: {}", s),
+                Err(e) => anyhow::bail!("Failed to start Golem Service: {}", e),
+            },
+            r = tracker.wait_for_start() => match r {
+                Ok(_) => Ok(child),
+                Err(e) => {
+                    log::error!("Killing Golem Service, since wait failed: {}", e);
+                    let _ = child.kill().await?;
+                    Err(e)
+                }
             }
         }
     }

@@ -109,7 +109,7 @@ async fn test_agreement_rejected_wait_for_approval() {
 
     let agr_id = agreement_id.clone().translate(Owner::Provider);
     let reject_handle = tokio::task::spawn_local(async move {
-        tokio::time::delay_for(std::time::Duration::from_millis(50)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         prov_market
             .provider_engine
             .reject_agreement(

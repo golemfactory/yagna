@@ -1,4 +1,4 @@
-use actix_web::{http::StatusCode, test, web::Bytes};
+use actix_web::{http::StatusCode, web::Bytes};
 use chrono::{Duration, Utc};
 
 use ya_core_model::{market, Role};
@@ -319,7 +319,7 @@ async fn agreement_expired_before_confirmation() {
         .unwrap();
 
     // try to wait a bit, because CI on Windows is failing here...
-    tokio::time::delay_for(Duration::milliseconds(50).to_std().unwrap()).await;
+    tokio::time::sleep(Duration::milliseconds(50).to_std().unwrap()).await;
 
     // than: a try to confirm agreement...
     let result = req_engine
@@ -373,7 +373,7 @@ async fn agreement_expired_before_approval() {
         .await
         .unwrap();
 
-    tokio::time::delay_for(Duration::milliseconds(50).to_std().unwrap()).await;
+    tokio::time::sleep(Duration::milliseconds(50).to_std().unwrap()).await;
 
     // waiting for approval results with Expired error
     // bc Provider does not approve the Agreement
@@ -1197,20 +1197,20 @@ async fn test_terminate_invalid_reason() {
     );
 
     let reason = "Unstructured message. Should be json.".to_string();
-    let req = test::TestRequest::post()
+    let req = actix_web::test::TestRequest::post()
         .uri(&url)
         .set_payload(Bytes::copy_from_slice(reason.as_bytes()))
         .to_request();
 
-    let resp = test::call_service(&mut app, req).await;
+    let resp = actix_web::test::call_service(&mut app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 
     let reason = "{'no_message_field': 'Reason expects message field'}".to_string();
-    let req = test::TestRequest::post()
+    let req = actix_web::test::TestRequest::post()
         .uri(&url)
         .set_payload(Bytes::copy_from_slice(reason.as_bytes()))
         .to_request();
 
-    let resp = test::call_service(&mut app, req).await;
+    let resp = actix_web::test::call_service(&mut app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 }

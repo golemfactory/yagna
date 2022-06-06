@@ -1,5 +1,6 @@
 use chrono::{DateTime, Local};
 use flexi_logger::{DeferredNow, Record};
+use std::time::SystemTime;
 
 const ENV_VAR_LOG_DIR: &'static str = "EXE_UNIT_LOG_DIR";
 const ENV_VAR_FILE_LOG_LEVEL: &'static str = "EXE_UNIT_FILE_LOG_LEVEL";
@@ -62,7 +63,8 @@ fn log_format(
     record: &Record,
 ) -> Result<(), std::io::Error> {
     //use DateTime::<Local> instead of DateTime::<UTC> to obtain local date
-    let local_date = DateTime::<Local>::from(*now.now());
+    let now = SystemTime::from(*now.now());
+    let local_date = DateTime::<Local>::from(now);
     //format date as following: 2020-08-27T07:56:22.348+02:00 (local date + time zone with milliseconds precision)
     let date_format = local_date.format(DEFAULT_LOG_FORMAT);
 
