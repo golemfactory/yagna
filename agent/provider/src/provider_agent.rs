@@ -1,17 +1,19 @@
 use actix::prelude::*;
 use anyhow::{anyhow, Error};
-use futures::{future, FutureExt, StreamExt, TryFutureExt};
+use futures::{FutureExt, StreamExt, TryFutureExt};
 
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
+use tokio_stream::wrappers::WatchStream;
 
 use ya_agreement_utils::agreement::TypedArrayPointer;
 use ya_agreement_utils::*;
 use ya_client::cli::ProviderApi;
 use ya_core_model::payment::local::NetworkName;
 use ya_file_logging::{start_logger, LoggerHandle};
+use ya_manifest_utils::Keystore;
 
 use crate::config::globals::GlobalsState;
 use crate::dir::clean_provider_dir;
@@ -23,7 +25,9 @@ use crate::hardware;
 use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{AccountView, LinearPricingOffer, Payments, PricingOffer};
-use crate::startup_config::{FileMonitor, NodeConfig, ProviderConfig, RunConfig};
+use crate::startup_config::{
+    FileMonitor, FileMonitorConfig, NodeConfig, ProviderConfig, RunConfig,
+};
 use crate::tasks::task_manager::{InitializeTaskManager, TaskManager};
 
 struct GlobalsManager {
@@ -70,6 +74,7 @@ pub struct ProviderAgent {
     accounts: Vec<AccountView>,
     log_handler: LoggerHandle,
     networks: Vec<NetworkName>,
+    keystore_monitor: FileMonitor,
 }
 
 impl ProviderAgent {
@@ -124,9 +129,27 @@ impl ProviderAgent {
             .node_name
             .clone()
             .unwrap_or_else(|| app_name.to_string());
+
+        let keystore_path = data_dir.join(&config.trusted_keys_file);
+        let keystore = match Keystore::load(&keystore_path) {
+            Ok(store) => {
+                log::info!("Trusted key store loaded from {}", keystore_path.display());
+                store
+            }
+            Err(err) => {
+                log::info!("Using a new keystore: {}", err);
+                Default::default()
+            }
+        };
+
         args.market.session_id = format!("{}-{}", name, std::process::id());
         args.runner.session_id = args.market.session_id.clone();
         args.payment.session_id = args.market.session_id.clone();
+        args.market
+            .negotiator_config
+            .composite_config
+            .policy_config
+            .trusted_keys = Some(keystore.clone());
 
         let networks = args.node.account.networks.clone();
         for n in networks.iter() {
@@ -146,6 +169,7 @@ impl ProviderAgent {
         presets.spawn_monitor(&config.presets_file)?;
         let mut hardware = hardware::Manager::try_new(&config)?;
         hardware.spawn_monitor(&config.hardware_file)?;
+        let keystore_monitor = spawn_keystore_monitor(&config.trusted_keys_file, keystore)?;
 
         let market = ProviderMarket::new(api.market, args.market).start();
         let payments = Payments::new(api.activity.clone(), api.payment, args.payment).start();
@@ -163,6 +187,7 @@ impl ProviderAgent {
             accounts,
             log_handler,
             networks,
+            keystore_monitor,
         })
     }
 
@@ -355,8 +380,27 @@ async fn process_activity_events(runner: Addr<TaskRunner>) {
         }
         let elapsed = SystemTime::now().duration_since(started).unwrap_or(ZERO);
         let delay = DEFAULT.checked_sub(elapsed).unwrap_or(ZERO);
-        tokio::time::delay_for(delay).await;
+        tokio::time::sleep(delay).await;
     }
+}
+
+fn spawn_keystore_monitor<P: AsRef<Path>>(
+    path: P,
+    keystore: Keystore,
+) -> Result<FileMonitor, Error> {
+    let handler = move |p: PathBuf| match Keystore::load(&p) {
+        Ok(new_keystore) => {
+            keystore.replace(new_keystore);
+            log::info!("Trusted keystore updated from {}", p.display());
+        }
+        Err(e) => log::warn!("Error updating trusted keystore from {:?}: {:?}", p, e),
+    };
+    let monitor = FileMonitor::spawn_with(
+        path,
+        FileMonitor::on_modified(handler),
+        FileMonitorConfig::silent(),
+    )?;
+    Ok(monitor)
 }
 
 impl Actor for ProviderAgent {
@@ -375,13 +419,14 @@ impl Handler<Initialize> for ProviderAgent {
         let market = self.market.clone();
         let agent = ctx.address();
         let preset_state = self.presets.state.clone();
+
         let rx = futures::stream::select_all(vec![
-            self.hardware.event_receiver(),
-            self.presets.event_receiver(),
+            WatchStream::new(self.hardware.event_receiver()),
+            WatchStream::new(self.presets.event_receiver()),
         ]);
 
-        Arbiter::spawn(async move {
-            rx.for_each_concurrent(1, |e| async {
+        tokio::task::spawn_local(async move {
+            rx.for_each(|e| async {
                 match e {
                     Event::HardwareChanged => {
                         let _ = market
@@ -452,6 +497,7 @@ impl Handler<Shutdown> for ProviderAgent {
         let market = self.market.clone();
         let runner = self.runner.clone();
         let log_handler = self.log_handler.clone();
+        self.keystore_monitor.stop();
 
         async move {
             market.send(MarketShutdown).await??;
@@ -473,7 +519,7 @@ impl Handler<CreateOffers> for ProviderAgent {
         let node_info = self.create_node_info();
         let accounts = match self.accounts(&self.networks) {
             Ok(acc) => acc,
-            Err(e) => return future::err(e).boxed_local(),
+            Err(e) => return Box::pin(async { Err(e) }),
         };
         let inf_node_info = InfNodeInfo::from(self.hardware.capped());
         let preset_names = match msg.0 {

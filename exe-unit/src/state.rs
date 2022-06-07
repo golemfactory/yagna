@@ -1,29 +1,28 @@
-use crate::error::Error;
-use crate::notify::Notify;
-use crate::output::CapturedOutput;
-use crate::runtime::RuntimeMode;
-use actix::Arbiter;
+use std::collections::HashMap;
+use std::net::IpAddr;
+use std::path::PathBuf;
+use std::str::FromStr;
+
 use chrono::{DateTime, Utc};
 use futures::channel::{mpsc, oneshot};
 use futures::{SinkExt, StreamExt, TryStreamExt};
 use ipnet::IpNet;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::net::IpAddr;
-use std::path::PathBuf;
 use thiserror::Error;
 use tokio::sync::broadcast;
+
+pub use ya_client_model::activity::activity_state::{State, StatePair};
 use ya_client_model::activity::exe_script_command::Network;
-use ya_client_model::activity::{
-    Capture, CommandOutput, CommandResult, ExeScriptCommand, ExeScriptCommandResult,
-    ExeScriptCommandState, RuntimeEvent, RuntimeEventKind,
-};
+use ya_client_model::activity::*;
 use ya_core_model::activity::Exec;
 use ya_utils_networking::vpn::common::{to_ip, to_net};
-use ya_utils_networking::vpn::error::Error as VpnError;
+use ya_utils_networking::vpn::Error as NetError;
 
-use std::str::FromStr;
-pub use ya_client_model::activity::activity_state::{State, StatePair};
+use crate::error::Error;
+use crate::manifest::ManifestContext;
+use crate::notify::Notify;
+use crate::output::CapturedOutput;
+use crate::runtime::RuntimeMode;
 
 fn invalid_state_err_msg(state_pair: &StatePair) -> String {
     match state_pair {
@@ -54,19 +53,11 @@ pub enum StateError {
     },
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug, Default)]
 pub struct Supervision {
     pub hardware: bool,
     pub image: bool,
-}
-
-impl Default for Supervision {
-    fn default() -> Self {
-        Supervision {
-            hardware: true,
-            image: true,
-        }
-    }
+    pub manifest: ManifestContext,
 }
 
 pub(crate) struct ExeUnitState {
@@ -262,7 +253,7 @@ pub(crate) struct Broadcast<T: Clone> {
     sender: Option<broadcast::Sender<T>>,
 }
 
-impl<T: Clone + 'static> Broadcast<T> {
+impl<T: Clone + Send + 'static> Broadcast<T> {
     pub fn initialized(&self) -> bool {
         self.sender.is_some()
     }
@@ -278,8 +269,8 @@ impl<T: Clone + 'static> Broadcast<T> {
         let (tx, rx) = mpsc::unbounded::<Result<T, _>>();
         let mut txc = tx.clone();
         let receiver = self.sender().subscribe();
-        Arbiter::spawn(async move {
-            if let Err(e) = receiver
+        tokio::task::spawn_local(async move {
+            if let Err(e) = tokio_stream::wrappers::BroadcastStream::new(receiver)
                 .map_err(Error::runtime)
                 .forward(
                     tx.sink_map_err(Error::runtime)
@@ -297,7 +288,8 @@ impl<T: Clone + 'static> Broadcast<T> {
 
     fn initialize(&mut self) {
         let (tx, rx) = broadcast::channel(16);
-        Arbiter::spawn(rx.for_each(|_| async { () }));
+        let receiver = tokio_stream::wrappers::BroadcastStream::new(rx);
+        tokio::task::spawn_local(receiver.for_each(|_| async { () }));
         self.sender = Some(tx);
     }
 }
@@ -433,12 +425,12 @@ impl Deployment {
                     },
                 ))
             })
-            .collect::<Result<Vec<_>, VpnError>>()?;
+            .collect::<Result<Vec<_>, NetError>>()?;
         self.networks.extend(networks.into_iter());
         Ok(())
     }
 
-    pub fn map_nodes(nodes: HashMap<String, String>) -> Result<HashMap<IpAddr, String>, VpnError> {
+    pub fn map_nodes(nodes: HashMap<String, String>) -> Result<HashMap<IpAddr, String>, NetError> {
         nodes
             .into_iter()
             .map(|(ip, id)| to_ip(ip.as_ref()).map(|ip| (ip, id)))

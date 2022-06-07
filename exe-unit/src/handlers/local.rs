@@ -46,11 +46,12 @@ impl<R: Runtime> Handler<GetState> for ExeUnit<R> {
 }
 
 impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
-    type Result = <SetState as Message>::Result;
+    //type Result = <SetState as Message>::Result;
+    type Result = ActorResponse<Self, ()>;
 
-    fn handle(&mut self, update: SetState, ctx: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, update: SetState, _ctx: &mut Context<Self>) -> Self::Result {
         if self.state.inner == update.state {
-            return;
+            return ActorResponse::reply(());
         }
 
         log::debug!("Entering state: {:?}", update.state);
@@ -58,7 +59,7 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
         self.state.inner = update.state.clone();
 
         if self.ctx.activity_id.is_none() || self.ctx.report_url.is_none() {
-            return;
+            return ActorResponse::reply(());
         }
 
         let credentials = match &update.state {
@@ -77,7 +78,8 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
                 credentials,
             ),
         );
-        ctx.spawn(
+
+        return ActorResponse::r#async(
             async move {
                 fut.await;
             }
@@ -251,7 +253,7 @@ impl<R: Runtime> Handler<SignExeScript> for ExeUnit<R> {
 }
 
 impl<R: Runtime> Handler<Stop> for ExeUnit<R> {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: Stop, _: &mut Context<Self>) -> Self::Result {
         self.state.batches.iter_mut().for_each(|(id, batch)| {
@@ -270,7 +272,7 @@ impl<R: Runtime> Handler<Stop> for ExeUnit<R> {
 }
 
 impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: Shutdown, ctx: &mut Context<Self>) -> Self::Result {
         if !self.state.inner.alive() {
@@ -294,12 +296,13 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
             let set_state = SetState::new(State::Terminated.into(), reason);
             let _ = address.send(set_state).await;
 
-            System::current().stop();
-
             log::info!("Shutdown process complete");
             Ok(())
         };
 
-        ActorResponse::r#async(fut.into_actor(self))
+        ActorResponse::r#async(fut.into_actor(self).map(|result, _, ctx| {
+            ctx.stop();
+            result
+        }))
     }
 }

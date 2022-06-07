@@ -1,13 +1,17 @@
-use actix::{Actor, Addr, Arbiter, System};
-use anyhow::bail;
+use actix::{Actor, Addr};
+use anyhow::{bail, Context};
+use futures::channel::oneshot;
 use std::convert::TryFrom;
 use std::path::PathBuf;
 use structopt::{clap, StructOpt};
 
 use ya_client_model::activity::ExeScriptCommand;
+use ya_service_bus::RpcEnvelope;
+
 use ya_core_model::activity;
 use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::logger::*;
+use ya_exe_unit::manifest::ManifestContext;
 use ya_exe_unit::message::{GetState, GetStateResponse, Register};
 use ya_exe_unit::runtime::process::RuntimeProcess;
 use ya_exe_unit::service::metrics::MetricsService;
@@ -15,7 +19,6 @@ use ya_exe_unit::service::signal::SignalMonitor;
 use ya_exe_unit::service::transfer::TransferService;
 use ya_exe_unit::state::Supervision;
 use ya_exe_unit::{ExeUnit, ExeUnitContext};
-use ya_service_bus::RpcEnvelope;
 use ya_utils_path::normalize_path;
 
 #[derive(structopt::StructOpt, Debug)]
@@ -162,14 +165,14 @@ async fn send_script(
             | Err(_) => {
                 return log::error!("ExeUnit has terminated");
             }
-            _ => tokio::time::delay_for(delay).await,
+            _ => tokio::time::sleep(delay).await,
         }
     }
 
     log::debug!("Executing commands: {:?}", exe_script);
 
     let msg = activity::Exec {
-        activity_id: activity_id.unwrap_or_else(Default::default),
+        activity_id: activity_id.unwrap_or_default(),
         batch_id: hex::encode(&rand::random::<[u8; 16]>()),
         exe_script,
         timeout: None,
@@ -182,11 +185,11 @@ async fn send_script(
     }
 }
 
-fn run() -> anyhow::Result<()> {
+async fn run() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
+
     #[allow(unused_mut)]
     let mut cli: Cli = Cli::from_args();
-
     if !cli.binary.exists() {
         bail!("Runtime binary does not exist: {}", cli.binary.display());
     }
@@ -203,13 +206,12 @@ fn run() -> anyhow::Result<()> {
             input,
         } => {
             let contents = std::fs::read_to_string(input).map_err(|e| {
-                anyhow::anyhow!("Cannot read commands from file {}: {}", input.display(), e)
+                anyhow::anyhow!("Cannot read commands from file {}: {e}", input.display())
             })?;
             let contents = serde_json::from_str(&contents).map_err(|e| {
                 anyhow::anyhow!(
-                    "Cannot deserialize commands from file {}: {}",
+                    "Cannot deserialize commands from file {}: {e}",
                     input.display(),
-                    e
                 )
             })?;
             ctx_activity_id = service_id.clone();
@@ -242,30 +244,37 @@ fn run() -> anyhow::Result<()> {
     }
     let work_dir = create_path(&args.work_dir).map_err(|e| {
         anyhow::anyhow!(
-            "Cannot create the working directory {}: {}",
+            "Cannot create the working directory {}: {e}",
             args.work_dir.display(),
-            e
         )
     })?;
     let cache_dir = create_path(&args.cache_dir).map_err(|e| {
         anyhow::anyhow!(
-            "Cannot create the cache directory {}: {}",
+            "Cannot create the cache directory {}: {e}",
             args.work_dir.display(),
-            e
         )
     })?;
-    let agreement = Agreement::try_from(&args.agreement).map_err(|e| {
+    let mut agreement = Agreement::try_from(&args.agreement).map_err(|e| {
         anyhow::anyhow!(
-            "Error parsing the agreement from {}: {}",
+            "Error parsing the agreement from {}: {e}",
             args.agreement.display(),
-            e
         )
     })?;
+
+    log::info!("Attempting to read app manifest ..");
+
+    let manifest_ctx =
+        ManifestContext::try_new(&agreement.inner).context("Invalid app manifest")?;
+    agreement.task_package = manifest_ctx.payload().or(agreement.task_package.take());
+
+    log::info!("Manifest-enabled features: {:?}", manifest_ctx.features());
+    log::info!("User-provided payload: {:?}", agreement.task_package);
 
     let ctx = ExeUnitContext {
         supervise: Supervision {
             hardware: cli.supervise.hardware,
             image: cli.supervise.image,
+            manifest: manifest_ctx,
         },
         activity_id: ctx_activity_id.clone(),
         report_url: ctx_report_url,
@@ -285,30 +294,31 @@ fn run() -> anyhow::Result<()> {
     log::debug!("CLI args: {:?}", cli);
     log::debug!("ExeUnitContext args: {:?}", ctx);
 
-    let sys = System::new("exe-unit");
+    let (tx, rx) = oneshot::channel();
 
     let metrics = MetricsService::try_new(&ctx, Some(10000), ctx.supervise.hardware)?.start();
     let transfers = TransferService::new(&ctx).start();
     let runtime = RuntimeProcess::new(&ctx, cli.binary).start();
-    let exe_unit = ExeUnit::new(ctx, metrics, transfers, runtime).start();
+    let exe_unit = ExeUnit::new(tx, ctx, metrics, transfers, runtime).start();
     let signals = SignalMonitor::new(exe_unit.clone()).start();
-    exe_unit.do_send(Register(signals));
+    exe_unit.send(Register(signals)).await?;
 
     if let Some(exe_script) = commands {
-        Arbiter::spawn(send_script(exe_unit, ctx_activity_id, exe_script));
+        tokio::task::spawn(send_script(exe_unit, ctx_activity_id, exe_script));
     }
 
-    sys.run()?;
+    rx.await??;
     Ok(())
 }
 
-fn main() {
+#[actix_rt::main]
+async fn main() {
     if let Err(error) = start_file_logger() {
         start_logger().expect("Failed to start logging");
         log::warn!("Using fallback logging due to an error: {:?}", error);
     };
 
-    std::process::exit(match run() {
+    std::process::exit(match run().await {
         Ok(_) => 0,
         Err(error) => {
             log::error!("{}", error);

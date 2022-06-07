@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use actix::prelude::*;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 /// Actor that provides signal subscriptions
 #[derive(Clone)]
@@ -44,29 +44,10 @@ where
     /// Send signal to all subscribers
     pub fn send_signal(&self, message: MessageType) -> Result<()> {
         let subscribers = self.subscribers.lock().unwrap();
-        let errors = subscribers
+        subscribers
             .iter()
-            .map(|subscriber| subscriber.do_send(message.clone()))
-            .filter_map(|result| {
-                match result {
-                    Err(error) => {
-                        //TODO: It would be useful to have better error message, that suggest which signal failed.
-                        log::error!(
-                            "Sending signal to subscriber failed in SignalSlot::send_signal. {}",
-                            error
-                        );
-                        Some(error)
-                    }
-                    Ok(_) => None,
-                }
-            })
-            .collect::<Vec<SendError<MessageType>>>();
-
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            Err(anyhow!("Errors while sending signal: {:?}", errors))
-        }
+            .for_each(|subscriber| subscriber.do_send(message.clone()));
+        Ok(())
     }
 
     pub fn subscribe(&mut self, subscriber: Recipient<MessageType>) {

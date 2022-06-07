@@ -95,6 +95,35 @@ impl RpcMessage for GetAccountBalance {
     type Error = GenericError;
 }
 
+// ************************** GET ACCOUNT GAS BALANCE **************************
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GetAccountGasBalance {
+    address: String,
+    platform: String,
+}
+
+impl GetAccountGasBalance {
+    pub fn new(address: String, platform: String) -> Self {
+        Self { address, platform }
+    }
+}
+
+impl GetAccountGasBalance {
+    pub fn address(&self) -> String {
+        self.address.clone()
+    }
+    pub fn platform(&self) -> String {
+        self.platform.clone()
+    }
+}
+
+impl RpcMessage for GetAccountGasBalance {
+    const ID: &'static str = "GetAccountGasBalance";
+    type Item = Option<GasDetails>;
+    type Error = GenericError;
+}
+
 // ************************** GET TRANSACTION BALANCE **************************
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -420,6 +449,7 @@ pub struct Transfer {
     pub gas_price: Option<BigDecimal>,
     pub max_gas_price: Option<BigDecimal>,
     pub gas_limit: Option<u32>,
+    pub gasless: bool,
 }
 
 impl Transfer {
@@ -432,6 +462,7 @@ impl Transfer {
         gas_price: Option<BigDecimal>,
         max_gas_price: Option<BigDecimal>,
         gas_limit: Option<u32>,
+        gasless: bool,
     ) -> Transfer {
         Transfer {
             sender,
@@ -442,6 +473,7 @@ impl Transfer {
             gas_price,
             max_gas_price,
             gas_limit,
+            gasless,
         }
     }
 }
@@ -506,4 +538,13 @@ impl RpcMessage for ShutDown {
     const ID: &'static str = "ShutDown";
     type Item = ();
     type Error = GenericError;
+}
+
+// ************************* GAS DETAILS *************************
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct GasDetails {
+    pub currency_short_name: String,
+    pub currency_long_name: String,
+    pub balance: BigDecimal,
 }

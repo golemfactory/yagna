@@ -221,6 +221,17 @@ impl PaymentDriver for ZksyncDriver {
         Ok(balance)
     }
 
+    async fn get_account_gas_balance(
+        &self,
+        _db: DbExecutor,
+        _caller: String,
+        _msg: GetAccountGasBalance,
+    ) -> Result<Option<GasDetails>, GenericError> {
+        log::debug!("get_account_gas_balance:  unsupported");
+
+        Ok(None)
+    }
+
     fn get_name(&self) -> String {
         DRIVER_NAME.to_string()
     }
@@ -300,7 +311,7 @@ impl PaymentDriver for ZksyncDriver {
             DbNetwork::Polygon => Ok(format!("Polygon network is not supported by this driver.")),
             DbNetwork::Mainnet => Ok(format!(
                 r#"Using this driver is not recommended. Consider using the Polygon driver instead.
-                
+
 Your mainnet zkSync address is {}.
 To be able to use zkSync driver please send some GLM tokens and optionally ETH for gas to this address.
 "#,
@@ -404,7 +415,7 @@ To be able to use zkSync driver please send some GLM tokens and optionally ETH f
             self.confirm_payments().await; // Run it at least once
             Utc::now() < deadline && self.dao.has_unconfirmed_txs().await? // Stop if deadline passes or there are no more transactions to confirm
         } {
-            tokio::time::delay_for(std::time::Duration::from_secs(1)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
         Ok(())
     }

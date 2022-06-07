@@ -213,7 +213,7 @@ pub async fn release_allocation_after(
                 }
 
                 let timeout = time_diff.min(max_duration) as u64;
-                tokio::time::delay_for(Duration::from_millis(timeout)).await;
+                tokio::time::sleep(Duration::from_millis(timeout)).await;
             }
 
             forced_release_allocation(db, allocation_id, node_id).await;
