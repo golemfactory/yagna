@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.10.0"
+version = "0.10.1"
 description = "Open platform and marketplace for distributed computations"
 readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
@@ -26,7 +26,7 @@ path = "core/serv/src/main.rs"
 [dependencies]
 ya-activity = "0.3"
 ya-compile-time-utils = "0.2"
-ya-core-model = { version = "^0.6" }
+ya-core-model = { version = "^0.7" }
 ya-dummy-driver = { version = "0.2", optional = true }
 ya-file-logging = "0.1"
 ya-erc20-driver = { version = "0.3", optional = true }
