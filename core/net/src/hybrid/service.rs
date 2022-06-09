@@ -395,23 +395,27 @@ fn forward_bus_to_net(
     let state = state.clone();
     let request_id = gen_id().to_string();
 
-    log::trace!("forward net {}", address);
+    log::trace!("Forward bus -> net ({caller_id} -> {remote_id}), address: {address}");
 
     let (tx, rx) = mpsc::channel(1);
-    let msg =
-        match codec::encode_request(caller_id, address.clone(), request_id.clone(), msg.to_vec()) {
-            Ok(vec) => vec,
-            Err(err) => {
-                log::debug!("forward net: invalid request: {}", err);
-                handler_reply_bad_request(request_id, format!("invalid request: {}", err), tx);
-                return rx;
-            }
-        };
+    let msg = match codec::encode_request(
+        caller_id,
+        address.clone(),
+        request_id.clone(),
+        msg.to_vec(),
+    ) {
+        Ok(vec) => vec,
+        Err(err) => {
+            log::debug!("Forward bus->net ({caller_id} -> {remote_id}), address: {address}: invalid request: {err}");
+            handler_reply_bad_request(request_id, format!("Invalid request: {err}"), tx);
+            return rx;
+        }
+    };
 
     let request = Request {
         caller_id,
         remote_id,
-        address,
+        address: address.clone(),
         tx: tx.clone(),
     };
     {
@@ -420,8 +424,8 @@ fn forward_bus_to_net(
     }
 
     tokio::task::spawn_local(async move {
-        log::trace!(
-            "local bus handler -> send message to remote ({} B)",
+        log::debug!(
+            "Local bus handler ({caller_id} -> {remote_id}), address: {address} -> send message to remote ({} B)",
             msg.len()
         );
 
@@ -579,12 +583,7 @@ fn handle_request(
     let request_id_chain = request_id.clone();
     let request_id_filter = request_id.clone();
 
-    log::trace!(
-        "handle request {} to {} from {}",
-        request_id,
-        address,
-        remote_id
-    );
+    log::debug!("Handle request {request_id} to {address} from {remote_id}");
 
     let eos = Rc::new(AtomicBool::new(false));
     let eos_map = eos.clone();
@@ -675,9 +674,7 @@ fn handle_reply(
     let full = reply.reply_type == ya_sb_proto::CallReplyType::Full as i32;
 
     log::debug!(
-        "handle reply from node {} (full: {}, code: {}, id: {}) {} B",
-        remote_id,
-        full,
+        "handle reply from node {remote_id} (full: {full}, code: {}, id: {}) {} B",
         reply.code,
         reply.request_id,
         reply.data.len(),
