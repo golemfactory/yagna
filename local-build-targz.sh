@@ -38,6 +38,11 @@ echo "Binaries generated in: ${RELEASE_DIR}"
 echo ""
 echo "To update devnet ${SUBNET} run following command from yagna-testnet-scripts/ansible:"
 
-echo "ansible-playbook -i envs/production/${SUBNET} --extra-vars=\"{ya_provider_yagna_url: ${BINARY_PATH}, ya_provider_yagna_version: ${YAGNA_VERSION}}\" play_ya_provider.yml"
-
-
+echo "ansible-playbook -i envs/production/${SUBNET} \
+--extra-vars=\"{\
+ya_provider_yagna_url: ${BINARY_PATH}, \
+ya_provider_yagna_version: ${YAGNA_VERSION}, \
+checker_yagna_url: ${BINARY_PATH}, \
+checker_yagna_version: ${YAGNA_VERSION}\
+}\" \
+play_ya_provider.yml"
