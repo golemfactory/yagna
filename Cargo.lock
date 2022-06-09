@@ -7587,6 +7587,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.3.0"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=b8327413f1b28a50a4c04641a57e0e5dcdb109b6#b8327413f1b28a50a4c04641a57e0e5dcdb109b6"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7601,12 +7602,13 @@ dependencies = [
  "url",
  "ya-relay-core",
  "ya-relay-proto",
- "ya-relay-stack 0.4.0",
+ "ya-relay-stack 0.4.0 (git+https://github.com/golemfactory/ya-relay.git?rev=b8327413f1b28a50a4c04641a57e0e5dcdb109b6)",
 ]
 
 [[package]]
 name = "ya-relay-core"
 version = "0.3.0"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=b8327413f1b28a50a4c04641a57e0e5dcdb109b6#b8327413f1b28a50a4c04641a57e0e5dcdb109b6"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7628,12 +7630,13 @@ dependencies = [
  "uuid",
  "ya-client-model 0.4.0",
  "ya-relay-proto",
- "ya-relay-stack 0.4.0",
+ "ya-relay-stack 0.4.0 (git+https://github.com/golemfactory/ya-relay.git?rev=b8327413f1b28a50a4c04641a57e0e5dcdb109b6)",
 ]
 
 [[package]]
 name = "ya-relay-proto"
 version = "0.3.0"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=b8327413f1b28a50a4c04641a57e0e5dcdb109b6#b8327413f1b28a50a4c04641a57e0e5dcdb109b6"
 dependencies = [
  "anyhow",
  "bytes 1.1.0",
@@ -7650,6 +7653,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.4.0"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=0e6863c24767a246531d038455921f12c9e75e94#0e6863c24767a246531d038455921f12c9e75e94"
 dependencies = [
  "derive_more",
  "futures 0.3.21",
@@ -7660,14 +7664,14 @@ dependencies = [
  "rand 0.8.5",
  "smoltcp 0.8.1",
  "thiserror",
- "tokio 1.18.2",
+ "tokio 1.19.2",
  "tokio-stream",
 ]
 
 [[package]]
 name = "ya-relay-stack"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=0e6863c24767a246531d038455921f12c9e75e94#0e6863c24767a246531d038455921f12c9e75e94"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=b8327413f1b28a50a4c04641a57e0e5dcdb109b6#b8327413f1b28a50a4c04641a57e0e5dcdb109b6"
 dependencies = [
  "derive_more",
  "futures 0.3.21",
