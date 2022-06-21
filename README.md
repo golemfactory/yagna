@@ -43,6 +43,11 @@ Builds applications to run for requestors on the network. Golem's potential goes
 ## Documentation
 For a more in-depth look at how Golem works, head over to our [documentation.](https://handbook.golem.network/)
 
+## Development setup
+
+* [Local provider (central network)](agent/provider/readme.md)
+* [Local provider and local requestor (hybrid network)](docs/local_hybrid.md)
+
 ## Project Layout
 
 * [agent/provider](agent/provider) - provider agent implementation based on core services.

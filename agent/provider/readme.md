@@ -11,6 +11,7 @@
 This is a reference Yagna Provider Agent implementation.
 Provider Agent is a module which effectively controls the behaviour of
 the Provider Node in the Yagna Network. It includes rules and logic for:
+
 * Offer formulation
 * Demand validation and evaluation
 * Agreement negotiation
@@ -22,24 +23,25 @@ the Provider Node in the Yagna Network. It includes rules and logic for:
 
 # Handbook
 
-Please refer https://handbook.golem.network/ for instruction how to use Provider.
-
+Please refer <https://handbook.golem.network/> for instruction how to use Provider.
 
 ### Offer formulation
 
-It is rather straightforward and minimal: 
+It is rather straightforward and minimal:
+
 * at most two constrains:
   * requires `golem.srv.comp.expiration` to be set
   * if provided (via env or CLI) sets also `golem.node.debug.subnet`
-*  properties:
-  * linear pricing (see sample below: 0.01 GLM/sec + 1.2 GLM/CPUsec + 1.5 GLM const)
-  * hardware: memory and storage (sample below: 1 gib RAM and 10 gib disk)
-  * node name set via env or CLI
-  * runtime (sample below: wasmtime)
+* properties:
+* linear pricing (see sample below: 0.01 GLM/sec + 1.2 GLM/CPUsec + 1.5 GLM const)
+* hardware: memory and storage (sample below: 1 gib RAM and 10 gib disk)
+* node name set via env or CLI
+* runtime (sample below: wasmtime)
   
-Provider subscribes to the network as many Offers as presets enumerated from CLI. 
+Provider subscribes to the network as many Offers as presets enumerated from CLI.
 
-#### Sample Offer 
+#### Sample Offer
+
 ```json
       "properties": {
         "golem": {
@@ -90,23 +92,26 @@ Provider subscribes to the network as many Offers as presets enumerated from CLI
 ```
 
 ### Market Strategy
+
 Current implementation has two naive market strategies:
- * accepting all proposals and agreements
- * accepting limited number of agreements; will reject proposals and agreements above the limit
- 
+
+* accepting all proposals and agreements
+* accepting limited number of agreements; will reject proposals and agreements above the limit
+
 Provider Agent uses (hardcode) the second with limit of 1 agreement.
 It will accept all Proposals until first agreement approval.
- 
+
 Upon agreement termination (in case of failure, expiration or successful finish)
 Provider Agent will start accepting Proposals again until agreement confirmation; and so on.
 
-
 ### Activity
+
 Provider agent allow just one activity per agreement.
 On activity finish Provider Agent will initiate Agreement termination.
 This is workaround because `terminate_agreement` operation is not supported yet in Market API.
 
 ### Payments
+
 Provider agent issues Debit Notes every `scheme.payu.debit-note.interval-sec?` (120s by default).
 The property is a subject of negotiations.
 
@@ -131,24 +136,26 @@ is list of additional environment variables that can be set.
 Create separate working dir for the Provider Agent (please create `ya-prov` in the main yagna source code directory),
 and create `.env` file there by copying
 [`.env-template`](https://github.com/golemfactory/yagna/blob/master/.env-template) from yagna repo main directory:
+
 ```bash
 mkdir ya-prov && cd ya-prov && cp ../.env-template .env
 ```
+
 and change `NODE_NAME` there.
 
 ### Command line parameters
 
 This can be displayed using `cargo run -p ya-provider -- run --help`
 
-| Parameter      | Description | Env var | 
+| Parameter      | Description | Env var |
 | -------------- | ----------- | ------- |
 | app-key        | Authorization token. |`YAGNA_APPKEY`|
 | market-url     | Market api address. |`YAGNA_MARKET_URL`|
 | activity-url   | Activity api address. |`YAGNA_ACTIVITY_URL`|
 | payment-url    | Payment api address. |`YAGNA_PAYMENT_URL`|
-| data-dir       | Path to a directory where configuration files are stored. |`DATA_DIR`| 
-| node-name      | Node name to use in agreements. |`NODE_NAME`| 
-| subnet         | You can set this value to filter nodes with other identifiers than selected. Useful for test purposes. |`SUBNET`| 
+| data-dir       | Path to a directory where configuration files are stored. |`DATA_DIR`|
+| node-name      | Node name to use in agreements. |`NODE_NAME`|
+| subnet         | You can set this value to filter nodes with other identifiers than selected. Useful for test purposes. |`SUBNET`|
 | exe-unit-path  | Path to JSON descriptor file for ExeUnits. |`EXE_UNIT_PATH`|
 
 ### Creating app-key authentication token
@@ -156,10 +163,12 @@ This can be displayed using `cargo run -p ya-provider -- run --help`
 To obtain `YAGNA_APPKEY` we need to be in this newly created workdir `cd ya-prov`:
 
 1. Run [yagna service](https://github.com/golemfactory/yagna/blob/master/core/serv/README.md):
+
     ```bash
     cargo run service run
     ```
     If you want to set `debug` log level or higher its good to filter out core crates to `info`:
+
     ```bash
     RUST_LOG=debug,tokio_core=info,tokio_reactor=info,hyper=info,web3=info cargo run service run
     ```
@@ -168,11 +177,11 @@ To obtain `YAGNA_APPKEY` we need to be in this newly created workdir `cd ya-prov
 
     In another console, go to the same directory and run:\
     (it will change your `.env` file with newly created app-key)
+
     ```bash
     APP_KEY=`cargo run app-key create 'provider-agent'`
     sed -e "s/__GENERATED_APP_KEY__/$APP_KEY/" -i.bckp .env
     ```
-
 
 ## ExeUnits
 
@@ -185,6 +194,7 @@ To obtain `YAGNA_APPKEY` we need to be in this newly created workdir `cd ya-prov
 This is the first ExeUnit we've prepared for you.
 You need to clone its repository and build.
 In following sections we assume you've cloned it to the same directory where `yagna` is cloned.
+
 ```
 cd ../..  # assuming you are in ./yagna/ya-prov
 git clone git@github.com:golemfactory/ya-runtime-wasi.git
@@ -194,6 +204,7 @@ cd ../yagna/ya-prov
 ```
 
 You also need to build ExeUnit supervisor.
+
 ```bash
 cargo build -p ya-exe-unit
 ```
@@ -221,7 +232,8 @@ Afterwards you'll need to update your `exeunits-descriptor.json` (defined as `EX
 in `.env` or os env).
 
 Sample descriptor entry:
-```
+
+```json
   {
     "name": "vm",
     "version": "0.2.0",
@@ -234,13 +246,14 @@ Sample descriptor entry:
 
 ## Presets
 
-Provider uses presets to create market offers. On the first run, the Provider Agent will create 
+Provider uses presets to create market offers. On the first run, the Provider Agent will create
 a `default` preset. Presets are saved in a `presets.json` file, located in application's data directory.
 
 You can list presets by running command:
 `cargo run -p ya-provider -- preset list`
 
 The result will be something like this:
+
 ```
 Available Presets:
 
@@ -258,7 +271,7 @@ Coefficients describe unit price of ExeUnit metrics:
 
 * Duration - `golem.usage.duration_sec`
 * CPU - `golem.usage.cpu_sec`
-* Init price - constant price per created activity 
+* Init price - constant price per created activity
 
 In order to publish an offer based on a preset, that preset needs to be activated first.
 
@@ -291,10 +304,9 @@ cargo run -p ya-provider -- preset create \
 
 If you don't specify any of price values, it will be defaulted to `0.0`.  
 
-
 ### Updating presets
 
-Note: updating a preset will cancel (unsubscribe) all related offer subscriptions. 
+Note: updating a preset will cancel (unsubscribe) all related offer subscriptions.
 
 Updating in interactive mode:
 
@@ -346,13 +358,14 @@ $ cargo run -p ya-provider -- preset list-metrics
 Duration       golem.usage.duration_sec
 CPU            golem.usage.cpu_sec
 ```
+
 Left column is name of preset that should be used in commands. On the right side
 you can see agreement property, that will be set in usage vector.
 
 ## Hardware profiles
 
 Hardware profiles control the maximum amount of hardware resources assigned to computations.
-Provider Agent **does not allow you to allocate all of your system resources**. The remaining 
+Provider Agent **does not allow you to allocate all of your system resources**. The remaining
 logical CPU cores, memory and storage will be utilized by the background applications,
 the operating system and Provider Agent itself.
 
@@ -402,8 +415,9 @@ will print:
 ### Creating a profile
 
 Usage:
+
 ```bash
-ya-provider profile create \
+cargo run -p ya-provider -- profile create \
     <name> \
     --cpu-threads <cpu-threads> \
     --mem-gib <mem-gib> \
@@ -411,28 +425,31 @@ ya-provider profile create \
 ```
 
 E.g.:
+
 ```bash
-ya-provider profile create half --cpu-threads 2  --mem-gib 8. --storage-gib 256.
+cargo run -p ya-provider -- profile create half --cpu-threads 2  --mem-gib 8. --storage-gib 256.
 ```
 
 ### Updating a profile
 
-Note: updating a profile will cancel all current offer subscriptions. 
+Note: updating a profile will cancel all current offer subscriptions.
 
 Usage is similar to profile creation.
 
 E.g.:
+
 ```bash
-ya-provider profile update --name half --cpu-threads 3  --mem-gib 5. --storage-gib 128.
+cargo run -p ya-provider -- profile update --name half --cpu-threads 3  --mem-gib 5. --storage-gib 128.
 ```
 
 ### Removing a profile
 
-Note: removing an active profile will cancel all current offer subscriptions. 
+Note: removing an active profile will cancel all current offer subscriptions.
 
 E.g.:
+
 ```bash
-ya-provider profile remove half
+cargo run -p ya-provider -- profile remove half
 ```
 
 ### Activating a profile
@@ -440,8 +457,9 @@ ya-provider profile remove half
 Note: activating a different profile will cancel all current offer subscriptions.
 
 E.g.:
+
 ```bash
-ya-provider profile activate some_other_profile
+cargo run -p ya-provider -- profile activate some_other_profile
 ```
 
 ## Running the Provider Agent
@@ -454,12 +472,14 @@ cargo run -p ya-provider -- run
 ```
 
 ## Central setup
+
 We have centrally deployed (@ yacn2.dev.golem.network) three independent standalone modules/apps:
- - [net Mk1](https://github.com/golemfactory/yagna/blob/master/docs/net-api/net-mk1-hub.md) @ yacn2.dev.golem.network:7464 \
-   (can be run locally with `cargo run --release -p ya-sb-router --example ya_sb_router -- -l tcp://0.0.0.0:7464` 
+
+* [net Mk1](https://github.com/golemfactory/yagna/blob/master/docs/net-api/net-mk1-hub.md) @ yacn2.dev.golem.network:7464 \
+   (can be run locally with `cargo run --release -p ya-sb-router --example ya_sb_router -- -l tcp://0.0.0.0:7464`
    from the [ya-service-bus](http://github.com/golemfactory/ya-service-bus) repository)
- - simple "images store" @ yacn2.dev.golem.network:8000 \
+* simple "images store" @ yacn2.dev.golem.network:8000 \
    this is a http server that has two purposes: to serve binary `.zip`/`.yimg` packages (GET) and receive computation results (PUT)
    (can be run locally with `cargo run --release -p ya-exe-unit --example http-get-put -- --root-dir <DIR-WITH-WASM-BINARY-IMAGES>`)
- - ya-zksync-faucet @ yacn2.dev.golem.network:5778
+* ya-zksync-faucet @ yacn2.dev.golem.network:5778
     eg. `curl http://yacn2.dev.golem.network:5778/zk/donatex/0xf63579d46eedee31d9db380a38addd58fdf414fd`
