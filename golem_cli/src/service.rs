@@ -162,11 +162,11 @@ pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
 
     if let Err(e) = provider.abort().await {
         log::warn!("provider exited with: {:?}", e);
-        return Ok(130);
+        return Ok(11);
     }
     if let Err(e) = service.abort().await {
         log::warn!("service exited with: {:?}", e);
-        return Ok(131);
+        return Ok(12);
     }
     Ok(0)
 }
