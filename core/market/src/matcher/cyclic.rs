@@ -29,7 +29,7 @@ pub(super) async fn bcast_offers(matcher: Matcher) {
             let num_to_bcast = matcher.config.discovery.max_bcasted_offers;
 
             let offers_to_broadcast = if matcher.discovery.is_hybrid_net() {
-                let all_ids = matcher.store.get_unsubscribed_offer_ids(None).await?;
+                let all_ids = matcher.store.get_active_offer_ids(None).await?;
                 randomize_ids(our_ids, all_ids, num_to_bcast as usize)
             } else {
                 our_ids
