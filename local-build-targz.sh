@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Example usage `./local-build-targz.sh ubuntu v0.10-rc3` from yagna directory
+# Example usage `./local-build-targz.sh ubuntu v0.11.0-rc14` from yagna directory
 # Result build will be named the same as CI build with tag `pre-rel-local-v0.10-rc3`
 # You need sudo to install musl and rust musl target.
 
@@ -31,7 +31,8 @@ CURRENT_DIR=`pwd`
 SUBNET="hybrid"
 YAGNA_VERSION=${GITHUB_REF}
 RELEASE_DIR="${CURRENT_DIR}/releases"
-BINARY_PATH="${RELEASE_DIR}/golem-provider-linux-${YAGNA_VERSION}.tar.gz"
+PROVIDER_BINARY_PATH="${RELEASE_DIR}/golem-provider-linux-${YAGNA_VERSION}.tar.gz"
+REQUESTOR_BINARY_PATH="${RELEASE_DIR}/golem-requestor-linux-${YAGNA_VERSION}.tar.gz"
 
 echo ""
 echo "Binaries generated in: ${RELEASE_DIR}"
@@ -40,9 +41,9 @@ echo "To update devnet ${SUBNET} run following command from yagna-testnet-script
 
 echo "ansible-playbook -i envs/production/${SUBNET} \
 --extra-vars=\"{\
-ya_provider_yagna_url: ${BINARY_PATH}, \
+ya_provider_yagna_url: ${PROVIDER_BINARY_PATH}, \
 ya_provider_yagna_version: ${YAGNA_VERSION}, \
-checker_yagna_url: ${BINARY_PATH}, \
+checker_yagna_url: ${REQUESTOR_BINARY_PATH}, \
 checker_yagna_version: ${YAGNA_VERSION}\
 }\" \
 play_ya_provider.yml"
