@@ -2,7 +2,7 @@ use std::sync::{Arc, RwLock};
 
 use ya_core_model::net::local::{BindBroadcastError, BroadcastMessage, SendBroadcastMessage};
 use ya_core_model::{identity, NodeId};
-use ya_service_api_interfaces::Service;
+use ya_service_api_interfaces::{Provider, Service};
 use ya_service_bus::{Error, RpcEndpoint, RpcMessage};
 
 use crate::config::{Config, NetType};
@@ -57,6 +57,14 @@ impl Net {
                 crate::hybrid::cli::bind_service();
                 crate::hybrid::Net::gsb(ctx, config).await
             }
+        }
+    }
+
+    pub fn rest<CONTEXT: Provider<Self, ()>>(_: &CONTEXT) -> actix_web::Scope {
+        let net_type = { *NET_TYPE.read().unwrap() };
+        match net_type {
+            NetType::Central => crate::hybrid::web_scope(),
+            NetType::Hybrid => crate::hybrid::web_scope(),
         }
     }
 

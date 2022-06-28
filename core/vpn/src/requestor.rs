@@ -20,8 +20,8 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 type Result<T> = std::result::Result<T, ApiError>;
 type WsResult<T> = std::result::Result<T, ws::ProtocolError>;
 
-pub fn web_scope(vpn_sup: Arc<Mutex<VpnSupervisor>>) -> actix_web::Scope {
-    actix_web::web::scope(NET_API_PATH)
+pub fn web_scope(vpn_sup: Arc<Mutex<VpnSupervisor>>, path: &str) -> actix_web::Scope {
+    actix_web::web::scope(path)
         .app_data(Data::new(vpn_sup))
         .service(get_networks)
         .service(create_network)

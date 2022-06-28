@@ -246,8 +246,9 @@ enum Services {
     Metrics(MetricsService),
     #[enable(gsb, rest, cli)]
     Version(VersionService),
-    #[enable(gsb, cli)]
+    #[enable(gsb, rest, cli)]
     Net(NetService),
+    //TODO enable VpnService::rest for v2 / or create common scope for v1 and v2
     #[enable(rest)]
     Vpn(VpnService),
     #[enable(gsb, rest)]

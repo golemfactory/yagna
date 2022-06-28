@@ -11,6 +11,8 @@ service = []
 hybrid-net = []
 
 [dependencies]
+ya-client = "0.6"
+ya-client-model = "0.4"
 ya-core-model = { version = "^0.7", features=["net", "identity"] }
 
 # ya-relay-client = "0.2"
@@ -23,6 +25,7 @@ ya-service-bus = "0.4"
 ya-utils-networking = "0.1"
 
 actix = "0.13"
+actix-web = "4"
 anyhow = "1.0"
 futures = "0.3"
 humantime = "2.1"

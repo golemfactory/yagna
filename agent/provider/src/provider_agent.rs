@@ -1,6 +1,7 @@
 use actix::prelude::*;
 use anyhow::{anyhow, Error};
 use futures::{FutureExt, StreamExt, TryFutureExt};
+use ya_client::net::NetApi;
 
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
@@ -75,6 +76,7 @@ pub struct ProviderAgent {
     log_handler: LoggerHandle,
     networks: Vec<NetworkName>,
     keystore_monitor: FileMonitor,
+    net_api: NetApi,
 }
 
 impl ProviderAgent {
@@ -176,6 +178,7 @@ impl ProviderAgent {
         let runner = TaskRunner::new(api.activity, args.runner, registry, data_dir)?.start();
         let task_manager =
             TaskManager::new(market.clone(), runner.clone(), payments, args.tasks)?.start();
+        let net_api = api.net;
 
         Ok(ProviderAgent {
             globals,
@@ -188,6 +191,7 @@ impl ProviderAgent {
             log_handler,
             networks,
             keystore_monitor,
+            net_api,
         })
     }
 
@@ -260,18 +264,18 @@ impl ProviderAgent {
         Ok(cnts.to_string())
     }
 
-    fn create_node_info(&self) -> NodeInfo {
-        let globals = self.globals.get_state();
-
+    async fn create_node_info(globals: GlobalsState, net_api: NetApi) -> anyhow::Result<NodeInfo> {
         if let Some(subnet) = &globals.subnet {
             log::info!("Using subnet: {}", yansi::Color::Fixed(184).paint(subnet));
         }
+        let info = net_api.get_info().await?;
 
-        NodeInfo {
+        Ok(NodeInfo {
             name: globals.node_name,
             subnet: globals.subnet,
             geo_country_code: None,
-        }
+            is_public: info.public_ip.is_some(),
+        })
     }
 
     fn accounts(&self, networks: &Vec<NetworkName>) -> anyhow::Result<Vec<AccountView>> {
@@ -516,7 +520,6 @@ impl Handler<CreateOffers> for ProviderAgent {
     fn handle(&mut self, msg: CreateOffers, _: &mut Context<Self>) -> Self::Result {
         let runner = self.runner.clone();
         let market = self.market.clone();
-        let node_info = self.create_node_info();
         let accounts = match self.accounts(&self.networks) {
             Ok(acc) => acc,
             Err(e) => return Box::pin(async { Err(e) }),
@@ -530,9 +533,12 @@ impl Handler<CreateOffers> for ProviderAgent {
                 vec![]
             }
         };
-
         let presets = self.presets.list_matching(&preset_names);
+        let globals = self.globals.get_state();
+        let net_api = self.net_api.clone();
+
         async move {
+            let node_info = Self::create_node_info(globals, net_api).await?;
             Self::create_offers(presets?, node_info, inf_node_info, runner, market, accounts).await
         }
         .boxed_local()
