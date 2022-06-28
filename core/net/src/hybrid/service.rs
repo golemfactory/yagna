@@ -64,7 +64,7 @@ pub struct Net;
 impl Net {
     #[inline]
     pub async fn client() -> anyhow::Result<ClientProxy> {
-        ClientProxy::new().await
+        ClientProxy::new()
     }
 
     pub async fn gsb<Context>(_: Context, config: Config) -> anyhow::Result<()> {

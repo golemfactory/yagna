@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use actix::prelude::*;
 use anyhow::{anyhow, bail};
-use tokio::sync::RwLock;
+use std::sync::RwLock;
 
 use ya_core_model::NodeId;
 use ya_relay_client::{ChannelMetrics, Client, SessionDesc, SocketDesc, SocketState};
@@ -16,8 +16,8 @@ lazy_static::lazy_static! {
 pub struct ClientProxy(Addr<ClientActor>);
 
 impl ClientProxy {
-    pub async fn new() -> anyhow::Result<Self> {
-        let addr = match ADDRESS.read().await.clone() {
+    pub fn new() -> anyhow::Result<Self> {
+        let addr = match ADDRESS.read().unwrap().clone() {
             Some(addr) => addr,
             None => bail!("network not initialized"),
         };
@@ -57,7 +57,7 @@ impl Actor for ClientActor {
         let addr = ctx.address();
         ctx.wait(
             async move {
-                ADDRESS.write().await.replace(addr);
+                ADDRESS.write().unwrap().replace(addr);
             }
             .into_actor(self),
         );
