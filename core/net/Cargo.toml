@@ -11,7 +11,6 @@ service = []
 hybrid-net = []
 
 [dependencies]
-ya-client = "0.6"
 ya-client-model = "0.4"
 ya-core-model = { version = "^0.7", features=["net", "identity"] }
 

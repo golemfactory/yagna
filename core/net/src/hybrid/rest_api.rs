@@ -1,5 +1,5 @@
 use actix_web::{web::Data, HttpResponse, Responder, Scope};
-use ya_client_model::net::{Info, NET_API_V2_NET_PATH};
+use ya_client_model::net::{Status, NET_API_V2_NET_PATH};
 
 use crate::error::Result;
 
@@ -11,10 +11,13 @@ pub fn web_scope() -> Scope {
         .service(get_info)
 }
 
-#[actix_web::get("/info")]
+#[actix_web::get("/status")]
 async fn get_info(client: Data<ClientProxy>) -> Result<impl Responder> {
-    let public_ip = client.public_addr().await?
-        .map(|addr| addr.to_string());
-    let info = Info { public_ip };
-    Ok(HttpResponse::Ok().json(info))
+    let status = Status {
+        node_id: client.node_id().await?,
+        listen_ip: client.bind_addr().await?.map(|addr| addr.to_string()),
+        public_ip: client.public_addr().await?.map(|addr| addr.to_string()),
+        sessions: client.sessions().await?.len(),
+    };
+    Ok(HttpResponse::Ok().json(status))
 }
