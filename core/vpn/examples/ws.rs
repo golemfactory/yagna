@@ -10,7 +10,7 @@ use structopt::StructOpt;
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use url::Url;
-use ya_client::net::NetRequestorApi;
+use ya_client::net::NetVpnApi;
 use ya_client::web::WebClient;
 use ya_client_model::net::{Address, NewNetwork, Node};
 
@@ -108,7 +108,7 @@ async fn main() -> anyhow::Result<()> {
         .api_url(Url::parse(&api_url)?)
         .auth_token(&app_key)
         .build();
-    let api: NetRequestorApi = client.interface()?;
+    let api: NetVpnApi = client.interface()?;
 
     if cli.skip_create {
         println!("Re-using network: {}", net_id);

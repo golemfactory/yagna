@@ -64,7 +64,10 @@ impl NodeInfo {
         if let Some(subnet) = self.subnet {
             let _ = node.insert("debug".into(), serde_json::json!({ "subnet": subnet }));
         }
-        let _ = node.insert("is_public".into(), serde_json::json!({"is_public": self.is_public}));
+        let _ = node.insert(
+            "net".into(),
+            serde_json::json!({"is_public": self.is_public}),
+        );
         map.insert("node".into(), node.into());
     }
 }

@@ -268,13 +268,13 @@ impl ProviderAgent {
         if let Some(subnet) = &globals.subnet {
             log::info!("Using subnet: {}", yansi::Color::Fixed(184).paint(subnet));
         }
-        let info = net_api.get_info().await?;
+        let status = net_api.get_status().await?;
 
         Ok(NodeInfo {
             name: globals.node_name,
             subnet: globals.subnet,
             geo_country_code: None,
-            is_public: info.public_ip.is_some(),
+            is_public: status.public_ip.is_some(),
         })
     }
 

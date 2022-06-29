@@ -7183,7 +7183,7 @@ dependencies = [
 [[package]]
 name = "ya-client"
 version = "0.6.0"
-source = "git+https://github.com/pwalski/ya-client.git?branch=feature/net-api-v2#7fcfbdbe9477af55fff08efe50ecd45513a17d00"
+source = "git+https://github.com/pwalski/ya-client.git?rev=8e5648522af0d8ebb158e360cb7a10469ba07eca#8e5648522af0d8ebb158e360cb7a10469ba07eca"
 dependencies = [
  "actix-codec",
  "awc",
@@ -7225,7 +7225,7 @@ dependencies = [
 [[package]]
 name = "ya-client-model"
 version = "0.4.0"
-source = "git+https://github.com/pwalski/ya-client.git?branch=feature/net-api-v2#7fcfbdbe9477af55fff08efe50ecd45513a17d00"
+source = "git+https://github.com/pwalski/ya-client.git?rev=8e5648522af0d8ebb158e360cb7a10469ba07eca#8e5648522af0d8ebb158e360cb7a10469ba07eca"
 dependencies = [
  "bigdecimal 0.2.2",
  "chrono",
@@ -7603,7 +7603,6 @@ dependencies = [
  "tokio-stream",
  "tokio-util 0.7.3",
  "url",
- "ya-client",
  "ya-client-model 0.4.0",
  "ya-core-model",
  "ya-relay-client",

@@ -186,6 +186,10 @@ ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev 
 ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "a60f7476c39a18fd3a369b3045b878544ae25598"}
 ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "a60f7476c39a18fd3a369b3045b878544ae25598"}
 
+## CLIENT
+ya-client = { git = "https://github.com/pwalski/ya-client.git", rev = "8e5648522af0d8ebb158e360cb7a10469ba07eca" }
+ya-client-model = { git = "https://github.com/pwalski/ya-client.git", rev = "8e5648522af0d8ebb158e360cb7a10469ba07eca" }
+
 ## OTHERS
 gftp = { path = "core/gftp" }
 tokio-process-ns = { path = "exe-unit/tokio-process-ns" }
@@ -204,12 +208,6 @@ ya-utils-process = { path = "utils/process"}
 ya-diesel-utils = { path = "utils/diesel-utils"}
 ya-metrics = { path = "core/metrics" }
 ya-provider = { path = "agent/provider"}
-
-
-ya-client = { git = "https://github.com/pwalski/ya-client.git", branch = "feature/net-api-v2" }
-# ya-client = { path = "../ya-client" }
-ya-client-model = { git = "https://github.com/pwalski/ya-client.git", branch = "feature/net-api-v2" }
-# ya-client-model = { path = "../ya-client/model" }
 
 ethereum-tx-sign = { git = "https://github.com/mfranciszkiewicz/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
 graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "3619f63a0c1ff44962ab604e55cd5dfb62177c56" }
