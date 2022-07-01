@@ -141,6 +141,7 @@ mod test {
                 is_locked: false,
                 is_default: false,
             },
+            "community.1",
         )
         .unwrap();
         assert_eq!("http://a/metrics/job/community.1/instance/0x0000000000000000000000000000000000000000/hostname/ala%2Fma%2Fkota", url);
@@ -156,6 +157,7 @@ mod test {
                 is_locked: false,
                 is_default: false,
             },
+            "community.1",
         )
         .unwrap();
         assert_eq!("http://a/metrics/job/community.1/instance/0x0000000000000000000000000000000000000000/hostname/za%C5%BC%C3%B3%C5%82%C4%87%3Fg%C4%99%C5%9Bl%C4%85%21ja%C5%BA%C5%84%3D", url);
