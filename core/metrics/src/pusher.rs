@@ -15,12 +15,12 @@ pub fn spawn(ctx: MetricsCtx) {
 
     log::debug!("Starting metrics pusher");
     tokio::task::spawn_local(async move {
-        push_forever(ctx.push_host_url.unwrap().as_str()).await;
+        push_forever(ctx.push_host_url.unwrap().as_str(), &ctx.job).await;
     });
     log::info!("Metrics pusher started");
 }
 
-pub async fn push_forever(host_url: &str) {
+pub async fn push_forever(host_url: &str, job: &str) {
     let node_identity = match try_get_default_id().await {
         Ok(default_id) => default_id,
         Err(e) => {
@@ -31,7 +31,7 @@ pub async fn push_forever(host_url: &str) {
             return;
         }
     };
-    let push_url = match get_push_url(host_url, &node_identity) {
+    let push_url = match get_push_url(host_url, &node_identity, job) {
         Ok(url) => url,
         Err(e) => {
             log::warn!(
@@ -111,10 +111,10 @@ async fn try_get_default_id() -> anyhow::Result<IdentityInfo> {
     Err(last_error.unwrap_or(anyhow::anyhow!("Undefined error")))
 }
 
-fn get_push_url(host_url: &str, id: &IdentityInfo) -> anyhow::Result<String> {
+fn get_push_url(host_url: &str, id: &IdentityInfo, job: &str) -> anyhow::Result<String> {
     let base = url::Url::parse(host_url)?;
     let url = base
-        .join("/metrics/job/community.1/")?
+        .join(&format!("/metrics/job/{job}/"))?
         .join(&format!("instance/{}/", &id.node_id))?
         .join(&format!(
             "hostname/{}",
