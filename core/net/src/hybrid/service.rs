@@ -9,7 +9,6 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::sync::Arc;
 use std::task::Poll;
 
-use actix::Actor;
 use anyhow::{anyhow, Context as AnyhowContext};
 use futures::channel::{mpsc, oneshot};
 use futures::lock::Mutex;
@@ -122,7 +121,7 @@ pub async fn start_network(
         inner.borrow_mut().replace(client.clone());
     });
 
-    ClientActor::new(client.clone()).start();
+    ClientActor::init(client.clone());
 
     let (btx, brx) = mpsc::channel(1);
     BCAST_SENDER.write().await.replace(btx);

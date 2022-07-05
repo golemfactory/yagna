@@ -63,7 +63,7 @@ impl Net {
     pub fn rest<CONTEXT: Provider<Self, ()>>(_: &CONTEXT) -> actix_web::Scope {
         let net_type = { *NET_TYPE.read().unwrap() };
         match net_type {
-            NetType::Central => crate::hybrid::web_scope(),
+            NetType::Central => crate::central::web_scope(),
             NetType::Hybrid => crate::hybrid::web_scope(),
         }
     }

@@ -3,6 +3,7 @@ use ya_client_model::ErrorMessage;
 
 pub type Result<T> = std::result::Result<T, NetError>;
 
+#[allow(dead_code)]
 #[derive(thiserror::Error, Debug)]
 pub enum NetError {
     //TODO handle more specific cases

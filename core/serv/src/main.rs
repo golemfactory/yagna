@@ -559,7 +559,6 @@ impl ServiceCommand {
                         .wrap(auth::Auth::default())
                         .route("/me", web::get().to(me))
                         .service(forward_gsb);
-
                     let rest = Services::rest(app, &context);
                     log::info!("Http server thread started on: {}", rest_address);
                     rest
