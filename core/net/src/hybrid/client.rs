@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use actix::prelude::*;
 use anyhow::{anyhow, bail};
-use tokio::sync::RwLock;
+use std::sync::RwLock;
 
 use ya_core_model::NodeId;
 use ya_relay_client::{ChannelMetrics, Client, SessionDesc, SocketDesc, SocketState};
@@ -16,10 +16,10 @@ lazy_static::lazy_static! {
 pub struct ClientProxy(Addr<ClientActor>);
 
 impl ClientProxy {
-    pub async fn new() -> anyhow::Result<Self> {
-        let addr = match ADDRESS.read().await.clone() {
+    pub fn new() -> anyhow::Result<Self> {
+        let addr = match ADDRESS.read().unwrap().clone() {
             Some(addr) => addr,
-            None => bail!("network not initialized"),
+            None => bail!("Net client not initialized. ClientProxy has no address of ClientActor"),
         };
 
         Ok(Self(addr))
@@ -45,23 +45,16 @@ pub(crate) struct ClientActor {
 }
 
 impl ClientActor {
-    pub fn new(client: Client) -> Self {
-        Self { client }
+    /// Creates and starts `ClientActor`, and then shares its address with `ClientProxy`.
+    pub fn init(client: Client) {
+        let client = Self { client };
+        let addr = client.start();
+        ADDRESS.write().unwrap().replace(addr);
     }
 }
 
 impl Actor for ClientActor {
     type Context = Context<Self>;
-
-    fn started(&mut self, ctx: &mut Self::Context) {
-        let addr = ctx.address();
-        ctx.wait(
-            async move {
-                ADDRESS.write().await.replace(addr);
-            }
-            .into_actor(self),
-        );
-    }
 }
 
 macro_rules! proxy {

@@ -35,6 +35,7 @@ pub struct NodeInfo {
     pub name: Option<String>,
     pub subnet: Option<String>,
     pub geo_country_code: Option<String>,
+    pub is_public: bool,
 }
 
 impl NodeInfo {
@@ -43,6 +44,7 @@ impl NodeInfo {
             name: Some(name.into()),
             geo_country_code: None,
             subnet: None,
+            is_public: false,
         }
     }
 
@@ -62,6 +64,10 @@ impl NodeInfo {
         if let Some(subnet) = self.subnet {
             let _ = node.insert("debug".into(), serde_json::json!({ "subnet": subnet }));
         }
+        let _ = node.insert(
+            "net".into(),
+            serde_json::json!({"is_public": self.is_public}),
+        );
         map.insert("node".into(), node.into());
     }
 }
