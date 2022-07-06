@@ -3265,6 +3265,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "metrics"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "142c53885123b68d94108295a09d4afe1a1388ed95b54d5dacd9a454753030f2"
+dependencies = [
+ "ahash 0.7.6",
+ "metrics-macros 0.5.1",
+]
+
+[[package]]
 name = "metrics-core"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3316,6 +3326,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "regex",
+ "syn",
+]
+
+[[package]]
+name = "metrics-macros"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49e30813093f757be5cf21e50389a24dc7dbb22c49f23b7e8f51d69b508a5ffa"
+dependencies = [
+ "proc-macro2",
+ "quote",
  "syn",
 ]
 
@@ -7777,7 +7798,6 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=907ebaeae7176a6e6b8c17443dbb3a6a3050a798#907ebaeae7176a6e6b8c17443dbb3a6a3050a798"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7792,13 +7812,12 @@ dependencies = [
  "url",
  "ya-relay-core",
  "ya-relay-proto",
- "ya-relay-stack 0.4.0 (git+https://github.com/golemfactory/ya-relay.git?rev=907ebaeae7176a6e6b8c17443dbb3a6a3050a798)",
+ "ya-relay-stack 0.4.0",
 ]
 
 [[package]]
 name = "ya-relay-core"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=907ebaeae7176a6e6b8c17443dbb3a6a3050a798#907ebaeae7176a6e6b8c17443dbb3a6a3050a798"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7809,6 +7828,7 @@ dependencies = [
  "hex",
  "lazy_static",
  "log",
+ "metrics 0.19.0",
  "rand 0.8.5",
  "serde_json",
  "sha2 0.9.9",
@@ -7820,13 +7840,12 @@ dependencies = [
  "uuid",
  "ya-client-model 0.4.0",
  "ya-relay-proto",
- "ya-relay-stack 0.4.0 (git+https://github.com/golemfactory/ya-relay.git?rev=907ebaeae7176a6e6b8c17443dbb3a6a3050a798)",
+ "ya-relay-stack 0.4.0",
 ]
 
 [[package]]
 name = "ya-relay-proto"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=907ebaeae7176a6e6b8c17443dbb3a6a3050a798#907ebaeae7176a6e6b8c17443dbb3a6a3050a798"
 dependencies = [
  "anyhow",
  "bytes 1.1.0",
@@ -7843,10 +7862,10 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=0e6863c24767a246531d038455921f12c9e75e94#0e6863c24767a246531d038455921f12c9e75e94"
 dependencies = [
  "derive_more",
  "futures 0.3.21",
+ "lazy_static",
  "log",
  "managed 0.8.0",
  "num-derive",
@@ -7861,7 +7880,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=907ebaeae7176a6e6b8c17443dbb3a6a3050a798#907ebaeae7176a6e6b8c17443dbb3a6a3050a798"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=0e6863c24767a246531d038455921f12c9e75e94#0e6863c24767a246531d038455921f12c9e75e94"
 dependencies = [
  "derive_more",
  "futures 0.3.21",

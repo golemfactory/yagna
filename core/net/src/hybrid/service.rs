@@ -184,14 +184,20 @@ async fn build_client(
         .map_err(|e| anyhow!("Resolving hybrid NET relay server failed. Error: {}", e))?;
     let url = Url::parse(&format!("udp://{addr}"))?;
 
-    ClientBuilder::from_url(url)
+    let mut builder = ClientBuilder::from_url(url)
         .crypto(crypto)
         .listen(config.bind_url.clone())
         .expire_session_after(config.session_expiration)
-        .virtual_tcp_buffer_size_multiplier(config.vtcp_buffer_size_multiplier)
-        .connect()
-        .build()
-        .await
+        .connect();
+
+    if let Some(max) = config.tcp_max_recv_buf_size {
+        builder = builder.tcp_max_recv_buffer_size(max)?;
+    }
+    if let Some(max) = config.tcp_max_send_buf_size {
+        builder = builder.tcp_max_send_buffer_size(max)?;
+    }
+
+    builder.build().await
 }
 
 async fn relay_addr(config: &Config) -> anyhow::Result<SocketAddr> {
