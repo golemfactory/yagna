@@ -424,7 +424,7 @@ fn forward_bus_to_net(
 
     tokio::task::spawn_local(async move {
         log::debug!(
-            "Local bus handler ({caller_id} -> {remote_id}), address: {address} -> send message to remote ({} B)",
+            "Local bus handler ({caller_id} -> {remote_id}), address: {address}, id: {request_id} -> send message to remote ({} B)",
             msg.len()
         );
 
@@ -462,7 +462,7 @@ fn broadcast_handler(
         }
         .then(|result: anyhow::Result<()>| async move {
             if let Err(e) = result {
-                log::debug!("unable to broadcast message: {}", e)
+                log::debug!("Unable to broadcast message: {}", e)
             }
         })
     })
@@ -474,6 +474,8 @@ fn forward_handler(
     receiver: ForwardReceiver,
     state: State,
 ) -> impl Future<Output = ()> + Unpin + 'static {
+    // Takes stream of generic packets, reads sender NodeId and translates
+    // into stream designated to handle this specific Node.
     UnboundedReceiverStream::new(receiver)
         .for_each(move |fwd| {
             let state = state.clone();
@@ -633,8 +635,8 @@ fn handle_request(
     .filter_map(move |reply| {
         let filtered = match codec::encode_message(reply) {
             Ok(vec) => {
-                log::trace!(
-                    "handle request {}: reply chunk ({} B)",
+                log::debug!(
+                    "Handle request {}: reply chunk ({} B)",
                     request_id_filter,
                     vec.len()
                 );
@@ -673,7 +675,7 @@ fn handle_reply(
     let full = reply.reply_type == ya_sb_proto::CallReplyType::Full as i32;
 
     log::debug!(
-        "handle reply from node {remote_id} (full: {full}, code: {}, id: {}) {} B",
+        "Handle reply from node {remote_id} (full: {full}, code: {}, id: {}) {} B",
         reply.code,
         reply.request_id,
         reply.data.len(),

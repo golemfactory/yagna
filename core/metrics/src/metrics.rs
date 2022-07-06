@@ -16,7 +16,12 @@ impl Metrics {
             .build()
             .expect("Metrics initialization failure");
         let root_sink = receiver.sink();
-        let exporter = StringExporter::new(receiver.controller(), PrometheusBuilder::new());
+        let exporter = StringExporter::new(
+            receiver.controller(),
+            PrometheusBuilder::new().set_quantiles(&[
+                0.0, 0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99, 0.999,
+            ]),
+        );
         receiver.install();
 
         Arc::new(Mutex::new(Self {
