@@ -1,7 +1,6 @@
 use crate::message::*;
 use crate::network::VpnSupervisor;
 use actix::prelude::*;
-use actix_web::web::Data;
 use actix_web::{web, HttpRequest, HttpResponse, Responder, ResponseError};
 use actix_web_actors::ws;
 use futures::channel::mpsc;
@@ -20,9 +19,24 @@ const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 type Result<T> = std::result::Result<T, ApiError>;
 type WsResult<T> = std::result::Result<T, ws::ProtocolError>;
 
+const API_ROOT_PATH: &str = "/net-api";
+
 pub fn web_scope(vpn_sup: Arc<Mutex<VpnSupervisor>>) -> actix_web::Scope {
-    actix_web::web::scope(NET_API_PATH)
-        .app_data(Data::new(vpn_sup))
+    let api_v1_subpath = api_subpath(NET_API_V1_VPN_PATH);
+    let api_v2_subpath = api_subpath(NET_API_V2_VPN_PATH);
+
+    web::scope(API_ROOT_PATH)
+        .app_data(web::Data::new(vpn_sup))
+        .service(vpn_web_scope(api_v1_subpath))
+        .service(vpn_web_scope(api_v2_subpath))
+}
+
+fn api_subpath(path: &str) -> &str {
+    path.trim_start_matches(API_ROOT_PATH)
+}
+
+fn vpn_web_scope(path: &str) -> actix_web::Scope {
+    web::scope(path)
         .service(get_networks)
         .service(create_network)
         .service(get_network)
@@ -364,4 +378,16 @@ struct PathConnect {
     net_id: String,
     ip: String,
     port: u16,
+}
+
+#[test]
+fn test_to_detect_breaking_ya_client_const_changes() {
+    assert!(
+        api_subpath(NET_API_V1_VPN_PATH).len() < NET_API_V1_VPN_PATH.len(),
+        "ya-client const NET_API_V1_VPN_PATH changed"
+    );
+    assert!(
+        api_subpath(NET_API_V2_VPN_PATH).len() < NET_API_V2_VPN_PATH.len(),
+        "ya-client const NET_API_V2_VPN_PATH changed"
+    )
 }
