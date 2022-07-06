@@ -187,7 +187,6 @@ async fn build_client(
         .crypto(crypto)
         .listen(config.bind_url.clone())
         .expire_session_after(config.session_expiration)
-        .virtual_tcp_buffer_size_multiplier(config.vtcp_buffer_size_multiplier)
         .connect()
         .build()
         .await
