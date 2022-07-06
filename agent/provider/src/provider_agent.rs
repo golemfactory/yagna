@@ -235,8 +235,8 @@ impl ProviderAgent {
                     error
                 )
             })?;
-
             let srv_info = ServiceInfo::new(inf_node_info.clone(), exeunit_desc.build())
+                .support_payload_manifest(true)
                 .support_multi_activity(true);
 
             // Create simple offer on market.
