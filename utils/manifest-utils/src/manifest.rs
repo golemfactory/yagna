@@ -79,6 +79,8 @@ pub enum Feature {
     Inet,
     Vpn,
     ManifestSupport,
+    #[serde(other)]
+    Other,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
