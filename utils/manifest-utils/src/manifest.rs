@@ -1,11 +1,14 @@
 use std::collections::HashSet;
 use std::ops::Not;
+use std::string::ToString;
 
 use chrono::{DateTime, Utc};
 use semver::Version;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
+use strum;
+use strum::Display;
 use url::Url;
 
 use ya_agreement_utils::AgreementView;
@@ -71,20 +74,13 @@ fn decode_escaped_json<S: AsRef<str>>(input: S) -> Result<AppManifest, Error> {
 }
 
 #[non_exhaustive]
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Display)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum Feature {
     Inet,
     Vpn,
-}
-
-impl ToString for Feature {
-    fn to_string(&self) -> String {
-        match self {
-            Self::Inet => "inet",
-            Self::Vpn => "vpn",
-        }
-        .to_string()
-    }
+    ManifestSupport,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -14,13 +14,14 @@ use ya_agreement_utils::*;
 use ya_client::cli::ProviderApi;
 use ya_core_model::payment::local::NetworkName;
 use ya_file_logging::{start_logger, LoggerHandle};
-use ya_manifest_utils::Keystore;
+use ya_manifest_utils::{manifest, Feature, Keystore};
 
 use crate::config::globals::GlobalsState;
 use crate::dir::clean_provider_dir;
 use crate::events::Event;
 use crate::execution::{
-    GetExeUnit, GetOfferTemplates, Shutdown as ShutdownExecution, TaskRunner, UpdateActivity,
+    ExeUnitDesc, GetExeUnit, GetOfferTemplates, Shutdown as ShutdownExecution, TaskRunner,
+    UpdateActivity,
 };
 use crate::hardware;
 use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
@@ -235,9 +236,8 @@ impl ProviderAgent {
                     error
                 )
             })?;
-            let srv_info = ServiceInfo::new(inf_node_info.clone(), exeunit_desc.build())
-                .support_payload_manifest(true)
-                .support_multi_activity(true);
+
+            let srv_info = Self::create_service_info(inf_node_info.clone(), exeunit_desc, &offer)?;
 
             // Create simple offer on market.
             let create_offer_message = CreateOffer {
@@ -269,13 +269,31 @@ impl ProviderAgent {
             log::info!("Using subnet: {}", yansi::Color::Fixed(184).paint(subnet));
         }
         let status = net_api.get_status().await?;
-
         Ok(NodeInfo {
             name: globals.node_name,
             subnet: globals.subnet,
             geo_country_code: None,
             is_public: status.public_ip.is_some(),
         })
+    }
+
+    fn create_service_info(
+        inf_node_info: InfNodeInfo,
+        exeunit_desc: ExeUnitDesc,
+        offer: &OfferTemplate,
+    ) -> anyhow::Result<ServiceInfo> {
+        let exeunit_desc = exeunit_desc.build();
+        let support_payload_manifest = match offer.property(manifest::CAPABILITIES_PROPERTY) {
+            Some(value) => {
+                serde_json::from_value(value.clone()).map(|capabilities: Vec<Feature>| {
+                    capabilities.contains(&Feature::ManifestSupport)
+                })?
+            }
+            None => false,
+        };
+        Ok(ServiceInfo::new(inf_node_info, exeunit_desc)
+            .support_payload_manifest(support_payload_manifest)
+            .support_multi_activity(true))
     }
 
     fn accounts(&self, networks: &Vec<NetworkName>) -> anyhow::Result<Vec<AccountView>> {
