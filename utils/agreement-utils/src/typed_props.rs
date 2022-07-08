@@ -66,7 +66,7 @@ impl NodeInfo {
         }
         let _ = node.insert(
             "net".into(),
-            serde_json::json!({"is_public": self.is_public}),
+            serde_json::json!({"is-public": self.is_public}),
         );
         map.insert("node".into(), node.into());
     }
@@ -246,7 +246,7 @@ mod test {
   "golem.inf.mem.gib": 5.0,
   "golem.inf.storage.gib": 50.0,
   "golem.node.id.name": "dany",
-  "golem.node.net.is_public": false,
+  "golem.node.net.is-public": false,
   "golem.runtime.wasm.wasi.version@v": "0.9.0",
   "golem.srv.caps.multi-activity": false,
   "golem.srv.caps.payload-manifest": true

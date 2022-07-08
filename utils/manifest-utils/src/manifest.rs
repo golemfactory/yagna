@@ -73,8 +73,8 @@ fn decode_escaped_json<S: AsRef<str>>(input: S) -> Result<AppManifest, Error> {
 
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Display)]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum Feature {
     Inet,
     Vpn,
