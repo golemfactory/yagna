@@ -2383,8 +2383,8 @@ dependencies = [
  "serde_json",
  "strip-ansi-escapes",
  "structopt",
- "strum 0.20.0",
- "strum_macros 0.20.1",
+ "strum 0.24.0",
+ "strum_macros 0.24.0",
  "tokio 1.19.2",
  "url",
  "ya-client",
@@ -5506,7 +5506,7 @@ version = "0.5.1"
 source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6a9176a54cab7e3682a05dbac3741812b221a8c5"
 dependencies = [
  "lazy_static",
- "parking_lot 0.11.2",
+ "parking_lot 0.10.2",
  "serial_test_derive",
 ]
 
@@ -5842,54 +5842,18 @@ checksum = "b89a286a7e3b5720b9a477b23253bc50debac207c8d21505f8e70b36792f11b5"
 
 [[package]]
 name = "strum"
-version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7318c509b5ba57f18533982607f24070a55d353e90d4cae30c467cdb2ad5ac5c"
-
-[[package]]
-name = "strum"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7ac893c7d471c8a21f31cfe213ec4f6d9afeed25537c772e08ef3f005f8729e"
-dependencies = [
- "strum_macros 0.22.0",
-]
-
-[[package]]
-name = "strum"
 version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e96acfc1b70604b8b2f1ffa4c57e59176c7dbb05d556c71ecd2f5498a1dee7f8"
+dependencies = [
+ "strum_macros 0.24.0",
+]
 
 [[package]]
 name = "strum_macros"
 version = "0.19.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e61bb0be289045cb80bfce000512e32d09f8337e54c186725da381377ad1f8d5"
-dependencies = [
- "heck 0.3.3",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "strum_macros"
-version = "0.20.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee8bc6b87a5112aeeab1f4a9f7ab634fe6cbefc4850006df31267f4cfb9e3149"
-dependencies = [
- "heck 0.3.3",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "strum_macros"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "339f799d8b549e3744c7ac7feb216383e4005d94bdb22561b3ab8f3b808ae9fb"
 dependencies = [
  "heck 0.3.3",
  "proc-macro2",
@@ -6678,7 +6642,7 @@ checksum = "e7141e445af09c8919f1d5f8a20dae0b20c3b57a45dee0d5823c6ed5d237f15a"
 dependencies = [
  "bitflags",
  "chrono",
- "rustc_version 0.4.0",
+ "rustc_version 0.2.3",
 ]
 
 [[package]]
@@ -7286,8 +7250,8 @@ dependencies = [
  "serde",
  "serde_bytes",
  "structopt",
- "strum 0.20.0",
- "strum_macros 0.20.1",
+ "strum 0.24.0",
+ "strum_macros 0.24.0",
  "thiserror",
  "ya-client-model 0.4.0",
  "ya-service-bus",
@@ -7494,8 +7458,7 @@ dependencies = [
  "shlex 1.1.0",
  "snailquote",
  "structopt",
- "strum 0.22.0",
- "strum_macros 0.22.0",
+ "strum 0.24.0",
  "tempdir",
  "thiserror",
  "url",
@@ -7618,7 +7581,7 @@ dependencies = [
  "serde",
  "serde_json",
  "structopt",
- "strum 0.22.0",
+ "strum 0.24.0",
  "thiserror",
  "tokio 1.19.2",
  "tokio-stream",
@@ -7774,8 +7737,8 @@ dependencies = [
  "shlex 1.1.0",
  "signal-hook",
  "structopt",
- "strum 0.20.0",
- "strum_macros 0.20.1",
+ "strum 0.24.0",
+ "strum_macros 0.24.0",
  "sys-info",
  "thiserror",
  "tokio 1.19.2",
@@ -8007,8 +7970,8 @@ dependencies = [
  "proc-macro2",
  "quote",
  "structopt",
- "strum 0.19.5",
- "strum_macros 0.19.4",
+ "strum 0.24.0",
+ "strum_macros 0.24.0",
  "syn",
  "ya-service-api-interfaces",
 ]
