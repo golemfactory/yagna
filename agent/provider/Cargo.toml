@@ -75,3 +75,4 @@ winapi = { version = "0.3.8", features = ["fileapi"] }
 [dev-dependencies]
 chrono = "0.4"
 shlex = "1.1.0"
+test-case = "2.1"

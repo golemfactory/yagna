@@ -596,6 +596,7 @@ struct CreateOffers(pub OfferKind);
 
 #[cfg(test)]
 mod tests {
+    use test_case::test_case;
     use ya_agreement_utils::{InfNodeInfo, NodeInfo, OfferTemplate};
     use ya_manifest_utils::manifest;
 
@@ -604,8 +605,12 @@ mod tests {
         provider_agent::ProviderAgent,
     };
 
-    #[test]
-    fn payload_manifest_test() {
+    #[test_case(true,  r#"["inet", "vpn", "manifest-support"]"#  ; "Supported with 'inet', 'vpn', and 'manifest-support'")]
+    #[test_case(true,  r#"["manifest-support"]"#  ; "Supported with 'manifest-support' only")]
+    #[test_case(false,  r#"["inet"]"#  ; "Not supported with 'inet' only")]
+    #[test_case(false,  r#"["no_such_capability"]"#  ; "Not supported with unknown 'no_such_capability' capability")]
+    #[test_case(false,  r#"[]"#  ; "Not supported with empty capabilities")]
+    fn payload_manifest_support_test(expected_manifest_suport: bool, runtime_capabilities: &str) {
         let mut fake = fake_data();
         fake.offer_template
             .properties
@@ -613,7 +618,7 @@ mod tests {
             .expect("Template properties are object")
             .insert(
                 manifest::CAPABILITIES_PROPERTY.to_string(),
-                serde_json::json!(["inet", "vpn", "manifest-support"]),
+                serde_json::from_str(runtime_capabilities).expect("Failed to serialize property"),
             );
 
         let offer = ProviderAgent::build_offer(
@@ -632,10 +637,7 @@ mod tests {
             .expect("Offer property golem.srv.caps.payload-manifest does not exist")
             .as_bool()
             .expect("Offer property golem.srv.caps.payload-manifest is not bool");
-        assert!(
-            payload_manifest_prop,
-            "Offer property golem.srv.caps.payload-manifest should be `true`"
-        );
+        assert_eq!(payload_manifest_prop, expected_manifest_suport);
     }
 
     /// Test utilities
