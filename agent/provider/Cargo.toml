@@ -56,8 +56,8 @@ serde_json = "1.0"
 shared_child = "0.3.4"
 signal-hook = "0.3"
 structopt = "0.3.20"
-strum = "0.20"
-strum_macros = "0.20"
+strum ="0.24"
+strum_macros = "0.24"
 sys-info = "0.7.0"
 thiserror = "1.0.14"
 tokio = { version = "1", features = ["process", "signal"] }
@@ -75,3 +75,4 @@ winapi = { version = "0.3.8", features = ["fileapi"] }
 [dev-dependencies]
 chrono = "0.4"
 shlex = "1.1.0"
+test-case = "2.1"

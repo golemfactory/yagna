@@ -14,13 +14,14 @@ use ya_agreement_utils::*;
 use ya_client::cli::ProviderApi;
 use ya_core_model::payment::local::NetworkName;
 use ya_file_logging::{start_logger, LoggerHandle};
-use ya_manifest_utils::Keystore;
+use ya_manifest_utils::{manifest, Feature, Keystore};
 
 use crate::config::globals::GlobalsState;
 use crate::dir::clean_provider_dir;
 use crate::events::Event;
 use crate::execution::{
-    GetExeUnit, GetOfferTemplates, Shutdown as ShutdownExecution, TaskRunner, UpdateActivity,
+    ExeUnitDesc, GetExeUnit, GetOfferTemplates, Shutdown as ShutdownExecution, TaskRunner,
+    UpdateActivity,
 };
 use crate::hardware;
 use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
@@ -210,49 +211,65 @@ impl ProviderAgent {
         let preset_names = presets.iter().map(|p| &p.name).collect::<Vec<_>>();
         log::debug!("Preset names: {:?}", preset_names);
         let offer_templates = runner.send(GetOfferTemplates(presets.clone())).await??;
-        let subnet = &node_info.subnet;
 
         for preset in presets {
-            let pricing_model: Box<dyn PricingOffer> = match preset.pricing_model.as_str() {
-                "linear" => Box::new(LinearPricingOffer::default()),
-                other => return Err(anyhow!("Unsupported pricing model: {}", other)),
-            };
-            let mut offer: OfferTemplate = offer_templates
+            let offer: OfferTemplate = offer_templates
                 .get(&preset.name)
                 .ok_or_else(|| anyhow!("Offer template not found for preset [{}]", preset.name))?
                 .clone();
+            let exeunit_name = preset.exeunit_name.clone();
+            let exeunit_desc = runner
+                .send(GetExeUnit { name: exeunit_name })
+                .await?
+                .map_err(|error| {
+                    anyhow!(
+                        "Failed to create offer for preset [{}]. Error: {}",
+                        preset.name,
+                        error
+                    )
+                })?;
 
-            let (initial_price, prices) = get_prices(pricing_model.as_ref(), &preset, &offer)?;
-            offer.set_property("golem.com.usage.vector", get_usage_vector_value(&prices));
-            offer.add_constraints(Self::build_constraints(subnet.clone())?);
-
-            let com_info = pricing_model.build(&accounts, initial_price, prices)?;
-            let name = preset.exeunit_name.clone();
-            let exeunit_desc = runner.send(GetExeUnit { name }).await?.map_err(|error| {
-                anyhow!(
-                    "Failed to create offer for preset [{}]. Error: {}",
-                    preset.name,
-                    error
-                )
-            })?;
-
-            let srv_info = ServiceInfo::new(inf_node_info.clone(), exeunit_desc.build())
-                .support_multi_activity(true);
-
-            // Create simple offer on market.
-            let create_offer_message = CreateOffer {
+            let offer = Self::build_offer(
+                node_info.clone(),
+                inf_node_info.clone(),
+                &accounts,
                 preset,
-                offer_definition: OfferDefinition {
-                    node_info: node_info.clone(),
-                    srv_info,
-                    com_info,
-                    offer,
-                },
-            };
+                offer,
+                exeunit_desc,
+            )?;
 
-            market.send(create_offer_message).await??;
+            market.send(offer).await??;
         }
         Ok(())
+    }
+
+    fn build_offer(
+        node_info: NodeInfo,
+        inf_node_info: InfNodeInfo,
+        accounts: &Vec<AccountView>,
+        preset: Preset,
+        mut offer: OfferTemplate,
+        exeunit_desc: ExeUnitDesc,
+    ) -> anyhow::Result<CreateOffer> {
+        let pricing_model: Box<dyn PricingOffer> = match preset.pricing_model.as_str() {
+            "linear" => Box::new(LinearPricingOffer::default()),
+            other => return Err(anyhow!("Unsupported pricing model: {}", other)),
+        };
+        let (initial_price, prices) = get_prices(pricing_model.as_ref(), &preset, &offer)?;
+        offer.set_property("golem.com.usage.vector", get_usage_vector_value(&prices));
+        offer.add_constraints(Self::build_constraints(node_info.subnet.clone())?);
+        let com_info = pricing_model.build(accounts, initial_price, prices)?;
+        let srv_info = Self::build_service_info(inf_node_info, exeunit_desc, &offer)?;
+        let offer_definition = OfferDefinition {
+            node_info,
+            srv_info,
+            com_info,
+            offer,
+        };
+        Ok(CreateOffer {
+            preset,
+            offer_definition,
+        })
     }
 
     fn build_constraints(subnet: Option<String>) -> anyhow::Result<String> {
@@ -264,18 +281,36 @@ impl ProviderAgent {
         Ok(cnts.to_string())
     }
 
-    async fn create_node_info(globals: GlobalsState, net_api: NetApi) -> anyhow::Result<NodeInfo> {
+    async fn build_node_info(globals: GlobalsState, net_api: NetApi) -> anyhow::Result<NodeInfo> {
         if let Some(subnet) = &globals.subnet {
             log::info!("Using subnet: {}", yansi::Color::Fixed(184).paint(subnet));
         }
         let status = net_api.get_status().await?;
-
         Ok(NodeInfo {
             name: globals.node_name,
             subnet: globals.subnet,
             geo_country_code: None,
             is_public: status.public_ip.is_some(),
         })
+    }
+
+    fn build_service_info(
+        inf_node_info: InfNodeInfo,
+        exeunit_desc: ExeUnitDesc,
+        offer: &OfferTemplate,
+    ) -> anyhow::Result<ServiceInfo> {
+        let exeunit_desc = exeunit_desc.build();
+        let support_payload_manifest = match offer.property(manifest::CAPABILITIES_PROPERTY) {
+            Some(value) => {
+                serde_json::from_value(value.clone()).map(|capabilities: Vec<Feature>| {
+                    capabilities.contains(&Feature::ManifestSupport)
+                })?
+            }
+            None => false,
+        };
+        Ok(ServiceInfo::new(inf_node_info, exeunit_desc)
+            .support_payload_manifest(support_payload_manifest)
+            .support_multi_activity(true))
     }
 
     fn accounts(&self, networks: &Vec<NetworkName>) -> anyhow::Result<Vec<AccountView>> {
@@ -538,7 +573,7 @@ impl Handler<CreateOffers> for ProviderAgent {
         let net_api = self.net_api.clone();
 
         async move {
-            let node_info = Self::create_node_info(globals, net_api).await?;
+            let node_info = Self::build_node_info(globals, net_api).await?;
             Self::create_offers(presets?, node_info, inf_node_info, runner, market, accounts).await
         }
         .boxed_local()
@@ -556,3 +591,104 @@ pub struct Shutdown;
 #[derive(Message)]
 #[rtype(result = "Result<(), Error>")]
 struct CreateOffers(pub OfferKind);
+
+/// Tests
+
+#[cfg(test)]
+mod tests {
+    use test_case::test_case;
+    use ya_agreement_utils::{InfNodeInfo, NodeInfo, OfferTemplate};
+    use ya_manifest_utils::manifest;
+
+    use crate::{
+        execution::ExeUnitDesc, market::Preset, payments::AccountView,
+        provider_agent::ProviderAgent,
+    };
+
+    #[test_case(true,  r#"["inet", "vpn", "manifest-support"]"#  ; "Supported with 'inet', 'vpn', and 'manifest-support'")]
+    #[test_case(true,  r#"["manifest-support"]"#  ; "Supported with 'manifest-support' only")]
+    #[test_case(false,  r#"["inet"]"#  ; "Not supported with 'inet' only")]
+    #[test_case(false,  r#"["no_such_capability"]"#  ; "Not supported with unknown 'no_such_capability' capability")]
+    #[test_case(false,  r#"[]"#  ; "Not supported with empty capabilities")]
+    fn payload_manifest_support_test(expected_manifest_suport: bool, runtime_capabilities: &str) {
+        let mut fake = fake_data();
+        fake.offer_template
+            .properties
+            .as_object_mut()
+            .expect("Template properties are object")
+            .insert(
+                manifest::CAPABILITIES_PROPERTY.to_string(),
+                serde_json::from_str(runtime_capabilities).expect("Failed to serialize property"),
+            );
+
+        let offer = ProviderAgent::build_offer(
+            fake.node_info,
+            fake.inf_node_info,
+            &fake.accounts,
+            fake.preset,
+            fake.offer_template,
+            fake.exeunit_desc,
+        )
+        .expect("Failed to build offer");
+
+        let offer_definition = offer.offer_definition.into_json();
+        let payload_manifest_prop = offer_definition
+            .get("golem.srv.caps.payload-manifest")
+            .expect("Offer property golem.srv.caps.payload-manifest does not exist")
+            .as_bool()
+            .expect("Offer property golem.srv.caps.payload-manifest is not bool");
+        assert_eq!(payload_manifest_prop, expected_manifest_suport);
+    }
+
+    /// Test utilities
+
+    struct FakeData {
+        node_info: NodeInfo,
+        inf_node_info: InfNodeInfo,
+        accounts: Vec<AccountView>,
+        preset: Preset,
+        offer_template: OfferTemplate,
+        exeunit_desc: ExeUnitDesc,
+    }
+
+    fn fake_data() -> FakeData {
+        let node_info = NodeInfo {
+            name: Some("node_name".to_string()),
+            subnet: Some("subnet".to_string()),
+            geo_country_code: None,
+            is_public: true,
+        };
+        let inf_node_info = InfNodeInfo::default();
+        let accounts = Vec::new();
+
+        let mut preset: Preset = Default::default();
+        preset.pricing_model = "linear".to_string();
+        preset.usage_coeffs =
+            std::collections::HashMap::from([("test_coefficient".to_string(), 1.0)]);
+
+        let mut offer_template: OfferTemplate = Default::default();
+        offer_template.properties = serde_json::json!({
+            "golem.com.usage.vector": ["test_coefficient"]
+        });
+
+        let exeunit_desc = ExeUnitDesc {
+            name: Default::default(),
+            version: semver::Version::new(0, 0, 1),
+            description: None,
+            supervisor_path: Default::default(),
+            extra_args: Default::default(),
+            runtime_path: None,
+            properties: Default::default(),
+            config: None,
+        };
+
+        FakeData {
+            node_info,
+            inf_node_info,
+            accounts,
+            preset,
+            offer_template,
+            exeunit_desc,
+        }
+    }
+}

@@ -8,8 +8,7 @@ use std::sync::{Arc, RwLock};
 
 use ethsign::PublicKey;
 use structopt::StructOpt;
-use strum::{IntoEnumIterator, VariantNames};
-use strum_macros::{Display, EnumIter, EnumString, EnumVariantNames};
+use strum::{Display, EnumIter, EnumString, EnumVariantNames, IntoEnumIterator, VariantNames};
 
 const SCHEME_SECP256K1: &str = "secp256k1";
 
