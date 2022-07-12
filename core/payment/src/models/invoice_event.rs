@@ -16,6 +16,7 @@ pub struct WriteObj {
     pub owner_id: NodeId,
     pub event_type: String,
     pub details: Option<String>,
+    pub timestamp: NaiveDateTime,
 }
 
 impl WriteObj {
@@ -34,6 +35,7 @@ impl WriteObj {
             owner_id,
             event_type: event_type.to_string(),
             details,
+            timestamp: Utc::now().naive_utc(),
         })
     }
 }
