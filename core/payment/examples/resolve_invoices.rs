@@ -94,7 +94,7 @@ async fn main() -> anyhow::Result<()> {
         } => {
             if let Some(duration) = interval {
                 loop {
-                    tokio::time::delay_for(duration.into()).await;
+                    tokio::time::sleep(duration.into()).await;
                     log::info!("sending payments for {} {}", owner, payment_platform);
                     if let Err(e) = run(
                         db.clone(),
