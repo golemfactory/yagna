@@ -4,11 +4,12 @@ use std::ops::Not;
 use actix::prelude::*;
 use futures::{future, FutureExt, SinkExt, TryFutureExt};
 
-use ya_core_model::activity;
-use ya_core_model::activity::{RpcMessageError, VpnControl, VpnPacket};
+use ya_client_model::NodeId;
+use ya_core_model::activity::{self, RpcMessageError, VpnControl, VpnPacket};
+use ya_core_model::identity;
 use ya_runtime_api::server::{CreateNetwork, NetworkInterface, RuntimeService};
 use ya_service_bus::typed::Endpoint as GsbEndpoint;
-use ya_service_bus::{actix_rpc, typed, RpcEnvelope};
+use ya_service_bus::{actix_rpc, typed, RpcEndpoint, RpcEnvelope, RpcRawCall};
 use ya_utils_networking::vpn::network::DuoEndpoint;
 use ya_utils_networking::vpn::{common::ntoh, Error as NetError, PeekPacket};
 use ya_utils_networking::vpn::{ArpField, ArpPacket, EtherFrame, EtherType, IpPacket, Networks};
@@ -31,6 +32,13 @@ pub(crate) async fn start_vpn<R: RuntimeService>(
 
     log::info!("Starting VPN service...");
 
+    let node_id = typed::service(identity::BUS_ID)
+        .send(identity::Get::ByDefault)
+        .await?
+        .map_err(|e| Error::Other(format!("failed to retrieve default identity: {e}")))?
+        .ok_or_else(|| Error::Other("no default identity set".to_string()))?
+        .node_id;
+
     let networks = deployment
         .networks
         .values()
@@ -44,18 +52,19 @@ pub(crate) async fn start_vpn<R: RuntimeService>(
             interface: NetworkInterface::Vpn as i32,
         })
         .await
-        .map_err(|e| Error::Other(format!("[vpn] initialization error: {:?}", e)))?;
+        .map_err(|e| Error::Other(format!("initialization error: {:?}", e)))?;
 
     let endpoint = match response.endpoint {
         Some(endpoint) => Endpoint::connect(endpoint).await?,
-        None => return Err(Error::Other("[vpn] endpoint already connected".into())),
+        None => return Err(Error::Other("endpoint already connected".into())),
     };
 
-    let vpn = Vpn::try_new(acl, endpoint, deployment.clone())?;
+    let vpn = Vpn::try_new(node_id, acl, endpoint, deployment.clone())?;
     Ok(Some(vpn.start()))
 }
 
 pub(crate) struct Vpn {
+    default_id: String,
     // TODO: Populate & use ACL
     #[allow(unused)]
     acl: Acl,
@@ -65,7 +74,12 @@ pub(crate) struct Vpn {
 }
 
 impl Vpn {
-    fn try_new(acl: Acl, endpoint: Endpoint, deployment: Deployment) -> crate::Result<Self> {
+    fn try_new(
+        node_id: NodeId,
+        acl: Acl,
+        endpoint: Endpoint,
+        deployment: Deployment,
+    ) -> crate::Result<Self> {
         let mut networks = Networks::default();
 
         deployment
@@ -82,6 +96,7 @@ impl Vpn {
         })?;
 
         Ok(Self {
+            default_id: node_id.to_string(),
             acl,
             networks,
             endpoint,
@@ -98,7 +113,7 @@ impl Vpn {
                 .networks
                 .endpoints()
                 .into_iter()
-                .map(|e| e.udp.call(VpnPacket(frame.as_ref().to_vec())))
+                .map(|e| e.udp.call_raw_as(&self.default_id, frame.as_ref().to_vec()))
                 .collect::<Vec<_>>();
             futs.is_empty().not().then(|| {
                 let fut = future::join_all(futs).then(|_| future::ready(()));
@@ -133,12 +148,12 @@ impl Vpn {
         frame: EtherFrame,
         ctx: &mut Context<Self>,
     ) {
-        let pkt: Vec<_> = frame.into();
-        log::trace!("[vpn] egress {} b", pkt.len());
+        let data: Vec<_> = frame.into();
+        log::trace!("[vpn] egress {} b", data.len());
 
         endpoint
             .udp
-            .call(VpnPacket(pkt))
+            .call_raw_as(&self.default_id, data)
             .map_err(|err| log::debug!("[vpn] call error: {err}"))
             .then(|_| future::ready(()))
             .into_actor(self)
@@ -156,6 +171,8 @@ impl Actor for Vpn {
             let vpn_id = activity::exeunit::network_id(&net_id);
 
             actix_rpc::bind::<VpnControl>(&vpn_id, ctx.address().recipient());
+            actix_rpc::bind_raw(&format!("{vpn_id}/raw"), ctx.address().recipient());
+
             typed::bind_with_caller::<VpnPacket, _, _>(&vpn_id, move |caller, pkt| {
                 actor
                     .send(Packet {
@@ -233,12 +250,35 @@ impl StreamHandler<crate::Result<Vec<u8>>> for Vpn {
 }
 
 /// Ingress traffic handler (VPN -> Runtime)
+impl Handler<RpcRawCall> for Vpn {
+    type Result = Result<Vec<u8>, ya_service_bus::Error>;
+
+    fn handle(&mut self, msg: RpcRawCall, ctx: &mut Self::Context) -> Self::Result {
+        let network_id = {
+            let mut split = msg.addr.rsplit('/').skip(1);
+            match split.next() {
+                Some(network_id) => network_id.to_string(),
+                None => {
+                    return Err(ya_service_bus::Error::GsbBadRequest(
+                        "Missing network id".to_string(),
+                    ))
+                }
+            }
+        };
+
+        ctx.address().do_send(Packet {
+            network_id,
+            caller: msg.caller.to_string(),
+            data: msg.body,
+        });
+        Ok(Vec::new())
+    }
+}
+
 impl Handler<Packet> for Vpn {
     type Result = <Packet as Message>::Result;
 
     fn handle(&mut self, packet: Packet, ctx: &mut Context<Self>) -> Self::Result {
-        log::trace!("[vpn] ingress {} b", packet.data.len());
-
         let network_id = packet.network_id;
         let node_id = packet.caller;
         let data = packet.data.into_boxed_slice();
