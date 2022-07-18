@@ -73,7 +73,7 @@ async fn create_network(
     let network = model.into_inner();
     let mut supervisor = vpn_sup.lock().await;
     let network = supervisor
-        .create_network(&identity.identity, network)
+        .create_network(identity.identity, network)
         .await?;
     Ok::<_, ApiError>(web::Json(network))
 }

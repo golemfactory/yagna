@@ -67,6 +67,8 @@ impl Net {
     }
 
     pub async fn gsb<Context>(_: Context, config: Config) -> anyhow::Result<()> {
+        ya_service_bus::serialization::CONFIG.set_compress(true);
+
         let (default_id, ids) = crate::service::identities().await?;
         let (started_tx, started_rx) = oneshot::channel();
         let (shutdown_tx, shutdown_rx) = oneshot::channel();

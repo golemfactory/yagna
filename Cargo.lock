@@ -7786,7 +7786,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=79611124e2ef908505c7ff79ff1719cfb1a2b6fb#79611124e2ef908505c7ff79ff1719cfb1a2b6fb"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=fd3a22bfa2ae173dce3d3d1bd70ea846b4454c7a#fd3a22bfa2ae173dce3d3d1bd70ea846b4454c7a"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7801,13 +7801,13 @@ dependencies = [
  "url",
  "ya-relay-core",
  "ya-relay-proto",
- "ya-relay-stack 0.4.0 (git+https://github.com/golemfactory/ya-relay.git?rev=79611124e2ef908505c7ff79ff1719cfb1a2b6fb)",
+ "ya-relay-stack 0.4.0 (git+https://github.com/golemfactory/ya-relay.git?rev=fd3a22bfa2ae173dce3d3d1bd70ea846b4454c7a)",
 ]
 
 [[package]]
 name = "ya-relay-core"
-version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=79611124e2ef908505c7ff79ff1719cfb1a2b6fb#79611124e2ef908505c7ff79ff1719cfb1a2b6fb"
+version = "0.3.1"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=fd3a22bfa2ae173dce3d3d1bd70ea846b4454c7a#fd3a22bfa2ae173dce3d3d1bd70ea846b4454c7a"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7830,13 +7830,13 @@ dependencies = [
  "uuid",
  "ya-client-model 0.4.0",
  "ya-relay-proto",
- "ya-relay-stack 0.4.0 (git+https://github.com/golemfactory/ya-relay.git?rev=79611124e2ef908505c7ff79ff1719cfb1a2b6fb)",
+ "ya-relay-stack 0.4.0 (git+https://github.com/golemfactory/ya-relay.git?rev=fd3a22bfa2ae173dce3d3d1bd70ea846b4454c7a)",
 ]
 
 [[package]]
 name = "ya-relay-proto"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=79611124e2ef908505c7ff79ff1719cfb1a2b6fb#79611124e2ef908505c7ff79ff1719cfb1a2b6fb"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=fd3a22bfa2ae173dce3d3d1bd70ea846b4454c7a#fd3a22bfa2ae173dce3d3d1bd70ea846b4454c7a"
 dependencies = [
  "anyhow",
  "bytes 1.1.0",
@@ -7871,7 +7871,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=79611124e2ef908505c7ff79ff1719cfb1a2b6fb#79611124e2ef908505c7ff79ff1719cfb1a2b6fb"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=fd3a22bfa2ae173dce3d3d1bd70ea846b4454c7a#fd3a22bfa2ae173dce3d3d1bd70ea846b4454c7a"
 dependencies = [
  "derive_more",
  "futures 0.3.21",
@@ -7907,7 +7907,7 @@ dependencies = [
 [[package]]
 name = "ya-sb-proto"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=a60f7476c39a18fd3a369b3045b878544ae25598#a60f7476c39a18fd3a369b3045b878544ae25598"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=dffa797a27533fa3c9b9566a3527601fc33bb5b4#dffa797a27533fa3c9b9566a3527601fc33bb5b4"
 dependencies = [
  "bytes 1.1.0",
  "prost 0.10.4",
@@ -7921,7 +7921,7 @@ dependencies = [
 [[package]]
 name = "ya-sb-router"
 version = "0.4.5"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=a60f7476c39a18fd3a369b3045b878544ae25598#a60f7476c39a18fd3a369b3045b878544ae25598"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=dffa797a27533fa3c9b9566a3527601fc33bb5b4#dffa797a27533fa3c9b9566a3527601fc33bb5b4"
 dependencies = [
  "actix",
  "actix-rt",
@@ -7949,7 +7949,7 @@ dependencies = [
 [[package]]
 name = "ya-sb-util"
 version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=a60f7476c39a18fd3a369b3045b878544ae25598#a60f7476c39a18fd3a369b3045b878544ae25598"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=dffa797a27533fa3c9b9566a3527601fc33bb5b4#dffa797a27533fa3c9b9566a3527601fc33bb5b4"
 dependencies = [
  "actix",
  "bitflags",
@@ -8038,14 +8038,15 @@ dependencies = [
 
 [[package]]
 name = "ya-service-bus"
-version = "0.4.10"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=a60f7476c39a18fd3a369b3045b878544ae25598#a60f7476c39a18fd3a369b3045b878544ae25598"
+version = "0.4.11"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=dffa797a27533fa3c9b9566a3527601fc33bb5b4#dffa797a27533fa3c9b9566a3527601fc33bb5b4"
 dependencies = [
  "actix",
  "flexbuffers",
  "futures 0.3.21",
  "lazy_static",
  "log",
+ "miniz_oxide",
  "rand 0.8.5",
  "semver 0.11.0",
  "serde",
