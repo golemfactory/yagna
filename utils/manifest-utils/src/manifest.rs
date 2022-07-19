@@ -6,7 +6,6 @@ use chrono::{DateTime, Utc};
 use semver::Version;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 use strum;
 use strum::Display;
 use url::Url;
@@ -19,16 +18,16 @@ pub const AGREEMENT_MANIFEST_SIG_PROPERTY: &str = "demand.properties.golem.srv.c
 
 pub const CAPABILITIES_PROPERTY: &str = "golem.runtime.capabilities";
 pub const DEMAND_MANIFEST_PROPERTY: &str = "golem.srv.comp.payload.@tag";
-pub const DEMAND_MANIFEST_SIG_PROPERTY: &str = "golem.srv.comp.payload.sig";
+pub const DEMAND_MANIFEST_SIG_PROPERTY: &str = "golem.srv.comp.payload.sig.@tag";
+pub const DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY: &str = "golem.srv.comp.payload.sig.algorithm";
+pub const DEMAND_MANIFEST_CERT_PROPERTY: &str = "golem.srv.comp.payload.cert";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("agreement error: {0}")]
     AgreementError(#[from] AgreementError),
-    #[error("invalid input base64: {0}")]
-    BlobBase64(#[from] base64::DecodeError),
-    #[error("invalid escaped json string: {0}")]
-    BlobJsonString(#[from] snailquote::UnescapeError),
+    #[error(transparent)]
+    DecodingError(#[from] crate::DecodingError),
     #[error("invalid input json encoding: {0}")]
     BlobJsonEncoding(#[from] snailquote::ParseUnicodeError),
     #[error("invalid hash format: '{0}'")]
@@ -37,8 +36,6 @@ pub enum Error {
     HashHexValue(#[from] hex::FromHexError),
     #[error("invalid manifest format: {0}")]
     ManifestFormat(#[from] serde_json::Error),
-    #[error("ECDSA error: {0}")]
-    SignatureEcdsa(#[from] ethsign::Error),
     #[error("invalid signature format: {0}")]
     SignatureFormat(String),
     #[error("unsupported signature algorithm")]
@@ -51,24 +48,13 @@ pub fn read_manifest(view: &AgreementView) -> Result<Option<AppManifest>, Error>
         Err(AgreementError::NoKey(_)) => return Ok(None),
         Err(err) => return Err(err.into()),
     };
-    Ok(Some(decode_manifest(manifest)?))
+    let data = crate::decode_data(manifest)?;
+    Ok(Some(decode_manifest(&data)?))
 }
 
-pub fn decode_manifest<S: AsRef<str>>(input: S) -> Result<AppManifest, Error> {
-    match decode_base64(&input) {
-        Ok(manifest) => Ok(manifest),
-        Err(_) => decode_escaped_json(input),
-    }
-}
-
-fn decode_base64<S: AsRef<str>>(input: S) -> Result<AppManifest, Error> {
-    let decoded = base64::decode(input.as_ref())?;
-    Ok(serde_json::de::from_slice(&decoded)?)
-}
-
-fn decode_escaped_json<S: AsRef<str>>(input: S) -> Result<AppManifest, Error> {
-    let decoded = snailquote::unescape(input.as_ref())?;
-    Ok(serde_json::de::from_str(&decoded)?)
+/// Decodes serialized struct.
+pub fn decode_manifest(data: &[u8]) -> Result<AppManifest, Error> {
+    Ok(serde_json::de::from_slice(data)?)
 }
 
 #[non_exhaustive]
@@ -277,66 +263,11 @@ pub struct InetOut {
     pub urls: Option<Vec<Url>>,
 }
 
-#[non_exhaustive]
-#[derive(Clone, Eq, PartialEq, Hash)]
-pub enum Signature {
-    Secp256k1(Vec<u8>),
-    Secp256k1Hex(String),
-}
-
-impl Signature {
-    pub fn verify(&self, input: &[u8]) -> Result<Vec<u8>, Error> {
-        match self {
-            Signature::Secp256k1(vec) => verify_secp256k1(input, vec),
-            Signature::Secp256k1Hex(string) => {
-                let sig = hex::decode(normalize_hex_string(string))?;
-                verify_secp256k1(input, &sig)
-            }
-        }
-    }
-
-    #[inline]
-    pub fn verify_str<S: AsRef<str>>(&self, input: S) -> Result<Vec<u8>, Error> {
-        self.verify(input.as_ref().as_bytes())
-    }
-}
-
-fn verify_secp256k1(input: &[u8], sig: &[u8]) -> Result<Vec<u8>, Error> {
-    if sig.len() < 65 {
-        return Err(Error::SignatureFormat(
-            "invalid signature length".to_string(),
-        ));
-    }
-
-    let v = sig[0];
-    let mut r = [0; 32];
-    let mut s = [0; 32];
-
-    r.copy_from_slice(&sig[1..33]);
-    s.copy_from_slice(&sig[33..65]);
-
-    let hash = Sha256::digest(input);
-    let key = ethsign::Signature { v, r, s }
-        .recover(hash.as_slice())
-        .map_err(ethsign::Error::Secp256k1)?;
-
-    Ok(key.bytes().to_vec())
-}
-
 pub fn default_protocols() -> Vec<String> {
     ["http", "https", "ws", "wss"]
         .iter()
         .map(|s| s.to_string())
         .collect()
-}
-
-fn normalize_hex_string<S: AsRef<str>>(input: S) -> String {
-    let input = input.as_ref();
-    if input.starts_with("0x") || input.starts_with("0X") {
-        input[2..].to_string()
-    } else {
-        input.to_string()
-    }
 }
 
 #[cfg(test)]

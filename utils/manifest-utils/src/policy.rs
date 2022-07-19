@@ -1,16 +1,18 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fs::OpenOptions;
-use std::io::Write;
+use std::collections::{HashMap, HashSet};
+use std::fs::File;
+use std::io::prelude::*;
 use std::ops::Not;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 
-use ethsign::PublicKey;
+use openssl::hash::MessageDigest;
+use openssl::pkey::{PKey, Public};
+use openssl::sign::Verifier;
+use openssl::x509::store::{X509Store, X509StoreBuilder};
+use openssl::x509::{X509StoreContext, X509};
 use structopt::StructOpt;
 use strum::{Display, EnumIter, EnumString, EnumVariantNames, IntoEnumIterator, VariantNames};
-
-const SCHEME_SECP256K1: &str = "secp256k1";
 
 /// Policy configuration
 #[derive(StructOpt, Clone, Debug, Default)]
@@ -90,119 +92,83 @@ impl FromStr for Match {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Keystore {
-    inner: Arc<RwLock<BTreeMap<Box<[u8]>, KeyMeta>>>,
+    inner: Arc<RwLock<X509Store>>,
 }
 
-#[derive(Clone, Debug)]
-pub struct KeyMeta {
-    pub scheme: String,
-    pub name: String,
-}
-
-impl Default for KeyMeta {
+impl Default for Keystore {
     fn default() -> Self {
-        KeyMeta::new(None, None)
-    }
-}
-
-impl KeyMeta {
-    pub fn new(scheme: Option<String>, name: Option<String>) -> Self {
-        KeyMeta {
-            scheme: scheme.unwrap_or_else(|| SCHEME_SECP256K1.to_string()),
-            name: name.unwrap_or_else(|| petname::petname(3, "-")),
+        let store = X509StoreBuilder::new().expect("SSL works").build();
+        Self {
+            inner: Arc::new(RwLock::new(store)),
         }
     }
 }
 
 impl Keystore {
-    pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let path = path.as_ref();
-        let contents = std::fs::read_to_string(path)
-            .map_err(|e| anyhow::anyhow!("cannot read the keystore file: {}", e))?;
-
-        let map = contents
-            .lines()
-            .map(|s| s.trim())
-            .filter(|s| !s.is_empty() && !s.starts_with('#'))
-            .map(parse_key_entry)
-            .collect::<Result<_, _>>()?;
-
+    /// Reads PEM certificates (or certificate stacks) from `cert_dir` and creates new `X509Store`.
+    pub fn load(cert_dir: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let mut store = X509StoreBuilder::new()?;
+        let cert_dir = std::fs::read_dir(cert_dir)?;
+        for dir_entry in cert_dir {
+            let cert_file = dir_entry?;
+            let cert_file = cert_file.path();
+            let mut cert_file = File::open(cert_file)?;
+            let mut cert_buffer = Vec::new();
+            cert_file.read_to_end(&mut cert_buffer)?;
+            for cert in X509::stack_from_pem(&cert_buffer)? {
+                store.add_cert(cert)?;
+            }
+        }
+        let store = store.build();
         Ok(Keystore {
-            inner: Arc::new(RwLock::new(map)),
+            inner: Arc::new(RwLock::new(store)),
         })
     }
 
-    pub fn save(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
-        let lines: Vec<String> = {
-            let inner = self.inner.read().unwrap();
-            inner.iter().map(key_entry_to_string).collect()
-        };
-
-        let mut file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(path)?;
-        lines
-            .into_iter()
-            .try_for_each(|line| file.write_all(line.as_bytes()))?;
-
-        file.flush()?;
-        file.sync_all()?;
-
-        Ok(())
-    }
-
     pub fn replace(&self, other: Keystore) {
-        let map = {
+        let store = {
             let mut inner = other.inner.write().unwrap();
-            std::mem::take(&mut (*inner))
+            std::mem::replace(&mut (*inner), X509StoreBuilder::new().unwrap().build())
         };
         let mut inner = self.inner.write().unwrap();
-        *inner = map;
-    }
-}
-
-impl Keystore {
-    pub fn contains(&self, key: &[u8]) -> bool {
-        let inner = self.inner.read().unwrap();
-        inner.contains_key(key)
+        *inner = store;
     }
 
-    pub fn insert(
+    pub fn verify_signature(
         &self,
-        key: impl Into<Box<[u8]>>,
-        scheme: Option<String>,
-        name: Option<String>,
+        cert: String,
+        sig: String,
+        sig_alg: String,
+        data: &[u8],
     ) -> anyhow::Result<()> {
-        let mut inner = self.inner.write().unwrap();
-        let meta = KeyMeta::new(scheme, name);
-        let boxed_key = key.into();
-        let verification_key = boxed_key.clone();
-        // Verify key
-        PublicKey::from_slice(&*verification_key)
-            .map_err(|e| anyhow::anyhow!(format!("invalid key provided: {:?}", e)))?;
+        let sig = crate::decode_data(sig)?;
 
-        inner.insert(boxed_key, meta);
+        let pkey = self.verify_cert(cert)?;
+
+        let msg_digest = MessageDigest::from_name(&sig_alg)
+            .ok_or(anyhow::anyhow!("Unknown signature algorithm: {}", sig_alg))?;
+        let mut verifier = Verifier::new(msg_digest, &pkey)?;
+        if false == verifier.verify_oneshot(&sig, data)? {
+            return Err(anyhow::anyhow!("Invalid signature"));
+        }
         Ok(())
     }
 
-    pub fn remove_by_name(&self, name: impl AsRef<str>) -> Option<Box<[u8]>> {
-        let name = name.as_ref();
-        let mut inner = self.inner.write().unwrap();
-        let key = inner
-            .iter()
-            .find(|(_, meta)| meta.name.as_str() == name)
-            .map(|(key, _)| key.clone())?;
-        inner.remove(&key);
-        Some(key)
-    }
-
-    pub fn keys(&self) -> BTreeMap<Box<[u8]>, KeyMeta> {
-        let inner = self.inner.read().unwrap();
-        (*inner).clone()
+    fn verify_cert(&self, cert: String) -> anyhow::Result<PKey<Public>> {
+        let cert = crate::decode_data(cert)?;
+        let cert = X509::from_pem(&cert)?;
+        let store = self
+            .inner
+            .read()
+            .map_err(|err| anyhow::anyhow!("Err: {}", err.to_string()))?;
+        let cert_chain = openssl::stack::Stack::new()?;
+        let mut ctx = X509StoreContext::new()?;
+        if false == ctx.init(&store, &cert, &cert_chain, |ctx| ctx.verify_cert())? {
+            return Err(anyhow::anyhow!("Invalid certificate"));
+        }
+        Ok(cert.public_key()?)
     }
 }
 
@@ -223,37 +189,6 @@ fn parse_property_match(input: &str) -> anyhow::Result<(String, Match)> {
         None => Match::All,
     };
     Ok((property, values))
-}
-
-fn parse_key(scheme: &str, key: &str) -> anyhow::Result<Box<[u8]>> {
-    match scheme.to_lowercase().as_str() {
-        SCHEME_SECP256K1 => {
-            let key_bytes = hex::decode(key)?;
-            let key = PublicKey::from_slice(key_bytes.as_slice())
-                .map_err(|_| anyhow::anyhow!("invalid key"))?;
-            Ok(key.bytes().to_vec().into())
-        }
-        _ => anyhow::bail!("invalid scheme: {}", scheme),
-    }
-}
-
-fn parse_key_entry(line: &str) -> anyhow::Result<(Box<[u8]>, KeyMeta)> {
-    let mut split = line.trim().split_whitespace();
-    let scheme = match split.next() {
-        Some(scheme) => scheme.to_string(),
-        None => anyhow::bail!("scheme missing"),
-    };
-    let key = match split.next() {
-        Some(key_hex) => parse_key(scheme.as_str(), key_hex)?,
-        None => anyhow::bail!("key missing"),
-    };
-    let name = split.next().map(|s| s.to_string());
-
-    Ok((key, KeyMeta::new(Some(scheme), name)))
-}
-
-fn key_entry_to_string((key, meta): (&Box<[u8]>, &KeyMeta)) -> String {
-    format!("{}\t{}\t{}\n", meta.scheme, hex::encode(key), meta.name)
 }
 
 #[cfg(test)]

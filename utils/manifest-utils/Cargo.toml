@@ -20,15 +20,14 @@ thiserror = "1.0"
 anyhow = { version = "1.0" }
 base64 = { version = "0.13" }
 chrono = { version = "0.4", features = ["serde"] }
-ethsign = { version = "0.8.0" }
 hex = { version = "0.4" }
-petname = { version = "1.1.2" }
 semver = { version = "1.0", features = ["serde"] }
 sha2 = { version = "0.9" }
 snailquote = { version = "0.3" }
 structopt = { version =  "0.3" }
 strum = { version = "0.24", features = ["derive"] }
 url = {version = "2.2", features = ["serde"] }
+openssl = { version = "0.10", features = ["vendored"] }
 
 [dev-dependencies]
 anyhow = "1.0.31"

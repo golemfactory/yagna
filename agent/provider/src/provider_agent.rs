@@ -133,10 +133,10 @@ impl ProviderAgent {
             .clone()
             .unwrap_or_else(|| app_name.to_string());
 
-        let keystore_path = data_dir.join(&config.trusted_keys_file);
-        let keystore = match Keystore::load(&keystore_path) {
+        let cert_dir = &config.cert_dir.get_or_create()?;
+        let keystore = match Keystore::load(cert_dir) {
             Ok(store) => {
-                log::info!("Trusted key store loaded from {}", keystore_path.display());
+                log::info!("Trusted key store loaded from {}", cert_dir.display());
                 store
             }
             Err(err) => {
@@ -172,7 +172,7 @@ impl ProviderAgent {
         presets.spawn_monitor(&config.presets_file)?;
         let mut hardware = hardware::Manager::try_new(&config)?;
         hardware.spawn_monitor(&config.hardware_file)?;
-        let keystore_monitor = spawn_keystore_monitor(&config.trusted_keys_file, keystore)?;
+        let keystore_monitor = spawn_keystore_monitor(cert_dir, keystore)?;
 
         let market = ProviderMarket::new(api.market, args.market).start();
         let payments = Payments::new(api.activity.clone(), api.payment, args.payment).start();
