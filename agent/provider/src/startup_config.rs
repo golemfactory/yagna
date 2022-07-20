@@ -273,7 +273,7 @@ impl FileMonitor {
             let mut active = false;
             loop {
                 if !active {
-                    match watcher.watch(&path_th, RecursiveMode::NonRecursive) {
+                    match watcher.watch(&path_th, RecursiveMode::Recursive) {
                         Ok(_) => active = true,
                         Err(e) => {
                             if config.verbose {
