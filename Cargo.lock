@@ -5506,7 +5506,7 @@ version = "0.5.1"
 source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6a9176a54cab7e3682a05dbac3741812b221a8c5"
 dependencies = [
  "lazy_static",
- "parking_lot 0.11.2",
+ "parking_lot 0.10.2",
  "serial_test_derive",
 ]
 
@@ -7786,7 +7786,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=fd3a22bfa2ae173dce3d3d1bd70ea846b4454c7a#fd3a22bfa2ae173dce3d3d1bd70ea846b4454c7a"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=11e4f7116856cad0ba66b0ec12cba753f804d439#11e4f7116856cad0ba66b0ec12cba753f804d439"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7801,13 +7801,13 @@ dependencies = [
  "url",
  "ya-relay-core",
  "ya-relay-proto",
- "ya-relay-stack 0.4.0 (git+https://github.com/golemfactory/ya-relay.git?rev=fd3a22bfa2ae173dce3d3d1bd70ea846b4454c7a)",
+ "ya-relay-stack 0.4.0 (git+https://github.com/golemfactory/ya-relay.git?rev=11e4f7116856cad0ba66b0ec12cba753f804d439)",
 ]
 
 [[package]]
 name = "ya-relay-core"
 version = "0.3.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=fd3a22bfa2ae173dce3d3d1bd70ea846b4454c7a#fd3a22bfa2ae173dce3d3d1bd70ea846b4454c7a"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=11e4f7116856cad0ba66b0ec12cba753f804d439#11e4f7116856cad0ba66b0ec12cba753f804d439"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7830,13 +7830,13 @@ dependencies = [
  "uuid",
  "ya-client-model 0.4.0",
  "ya-relay-proto",
- "ya-relay-stack 0.4.0 (git+https://github.com/golemfactory/ya-relay.git?rev=fd3a22bfa2ae173dce3d3d1bd70ea846b4454c7a)",
+ "ya-relay-stack 0.4.0 (git+https://github.com/golemfactory/ya-relay.git?rev=11e4f7116856cad0ba66b0ec12cba753f804d439)",
 ]
 
 [[package]]
 name = "ya-relay-proto"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=fd3a22bfa2ae173dce3d3d1bd70ea846b4454c7a#fd3a22bfa2ae173dce3d3d1bd70ea846b4454c7a"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=11e4f7116856cad0ba66b0ec12cba753f804d439#11e4f7116856cad0ba66b0ec12cba753f804d439"
 dependencies = [
  "anyhow",
  "bytes 1.1.0",
@@ -7871,7 +7871,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=fd3a22bfa2ae173dce3d3d1bd70ea846b4454c7a#fd3a22bfa2ae173dce3d3d1bd70ea846b4454c7a"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=11e4f7116856cad0ba66b0ec12cba753f804d439#11e4f7116856cad0ba66b0ec12cba753f804d439"
 dependencies = [
  "derive_more",
  "futures 0.3.21",
@@ -7907,7 +7907,7 @@ dependencies = [
 [[package]]
 name = "ya-sb-proto"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=dffa797a27533fa3c9b9566a3527601fc33bb5b4#dffa797a27533fa3c9b9566a3527601fc33bb5b4"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=f61744d5bedd12b136ad9523f918ac6f872012ad#f61744d5bedd12b136ad9523f918ac6f872012ad"
 dependencies = [
  "bytes 1.1.0",
  "prost 0.10.4",
@@ -7921,7 +7921,7 @@ dependencies = [
 [[package]]
 name = "ya-sb-router"
 version = "0.4.5"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=dffa797a27533fa3c9b9566a3527601fc33bb5b4#dffa797a27533fa3c9b9566a3527601fc33bb5b4"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=f61744d5bedd12b136ad9523f918ac6f872012ad#f61744d5bedd12b136ad9523f918ac6f872012ad"
 dependencies = [
  "actix",
  "actix-rt",
@@ -7949,7 +7949,7 @@ dependencies = [
 [[package]]
 name = "ya-sb-util"
 version = "0.2.0"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=dffa797a27533fa3c9b9566a3527601fc33bb5b4#dffa797a27533fa3c9b9566a3527601fc33bb5b4"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=f61744d5bedd12b136ad9523f918ac6f872012ad#f61744d5bedd12b136ad9523f918ac6f872012ad"
 dependencies = [
  "actix",
  "bitflags",
@@ -8039,7 +8039,7 @@ dependencies = [
 [[package]]
 name = "ya-service-bus"
 version = "0.4.11"
-source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=dffa797a27533fa3c9b9566a3527601fc33bb5b4#dffa797a27533fa3c9b9566a3527601fc33bb5b4"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=f61744d5bedd12b136ad9523f918ac6f872012ad#f61744d5bedd12b136ad9523f918ac6f872012ad"
 dependencies = [
  "actix",
  "flexbuffers",
