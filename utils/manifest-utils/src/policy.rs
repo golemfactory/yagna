@@ -1,8 +1,9 @@
 use std::collections::{HashMap, HashSet};
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io::prelude::*;
 use std::ops::Not;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 
@@ -107,24 +108,18 @@ impl Default for Keystore {
 }
 
 impl Keystore {
-    /// Reads PEM certificates (or certificate stacks) from `cert_dir` and creates new `X509Store`.
+    /// Reads DER or PEM certificates (or PEM certificate stacks) from `cert_dir` and creates new `X509Store`.
     pub fn load(cert_dir: impl AsRef<Path>) -> anyhow::Result<Self> {
         let mut store = X509StoreBuilder::new()?;
         let cert_dir = std::fs::read_dir(cert_dir)?;
         for dir_entry in cert_dir {
-            let cert_file = dir_entry?;
-            let cert_file = cert_file.path();
-            let mut cert_file = File::open(cert_file)?;
-            let mut cert_buffer = Vec::new();
-            cert_file.read_to_end(&mut cert_buffer)?;
-            for cert in X509::stack_from_pem(&cert_buffer)? {
-                store.add_cert(cert)?;
-            }
+            let cert = dir_entry?;
+            let cert = cert.path();
+            Self::load_cert(&mut store, cert)?;
         }
         let store = store.build();
-        Ok(Keystore {
-            inner: Arc::new(RwLock::new(store)),
-        })
+        let inner = Arc::new(RwLock::new(store));
+        Ok(Keystore { inner })
     }
 
     pub fn replace(&self, other: Keystore) {
@@ -136,6 +131,8 @@ impl Keystore {
         *inner = store;
     }
 
+    /// Decodes byte64 `sig`, verifies `cert`and reads its pub key,
+    /// prepares digest using `sig_alg`, verifies `data` using `sig` and pub key.
     pub fn verify_signature(
         &self,
         cert: String,
@@ -156,9 +153,35 @@ impl Keystore {
         Ok(())
     }
 
+    fn load_cert(store: &mut X509StoreBuilder, cert: PathBuf) -> anyhow::Result<()> {
+        let extension = Self::get_file_extension(&cert);
+        let mut cert = File::open(cert)?;
+        let mut cert_buffer = Vec::new();
+        cert.read_to_end(&mut cert_buffer)?;
+        match extension {
+            Some(ref der) if der == "der" => {
+                let cert = X509::from_der(&cert_buffer)?;
+                store.add_cert(cert)?;
+            }
+            Some(ref pem) if pem == "pem" => {
+                for cert in X509::stack_from_pem(&cert_buffer)? {
+                    store.add_cert(cert)?;
+                }
+            }
+            _ => return Err(anyhow::anyhow!("Unknown certificate file extension")),
+        };
+        Ok(())
+    }
+
+    fn get_file_extension(path: &PathBuf) -> Option<String> {
+        path.extension()
+            .map(OsStr::to_ascii_lowercase)
+            .and_then(|ex| ex.to_str().map(ToString::to_string))
+    }
+
     fn verify_cert(&self, cert: String) -> anyhow::Result<PKey<Public>> {
         let cert = crate::decode_data(cert)?;
-        let cert = X509::from_pem(&cert)?;
+        let cert = X509::from_der(&cert)?;
         let store = self
             .inner
             .read()
