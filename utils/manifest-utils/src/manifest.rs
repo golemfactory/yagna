@@ -13,6 +13,8 @@ use url::Url;
 use ya_agreement_utils::AgreementView;
 use ya_agreement_utils::Error as AgreementError;
 
+use crate::decode_data;
+
 pub const AGREEMENT_MANIFEST_PROPERTY: &str = "demand.properties.golem.srv.comp.payload.@tag";
 pub const AGREEMENT_MANIFEST_SIG_PROPERTY: &str = "demand.properties.golem.srv.comp.payload.sig";
 
@@ -48,13 +50,12 @@ pub fn read_manifest(view: &AgreementView) -> Result<Option<AppManifest>, Error>
         Err(AgreementError::NoKey(_)) => return Ok(None),
         Err(err) => return Err(err.into()),
     };
-    let data = crate::decode_data(manifest)?;
-    Ok(Some(decode_manifest(&data)?))
+    Ok(Some(decode_manifest(manifest)?))
 }
 
-/// Decodes serialized struct.
-pub fn decode_manifest(data: &[u8]) -> Result<AppManifest, Error> {
-    Ok(serde_json::de::from_slice(data)?)
+pub fn decode_manifest<S: AsRef<str>>(data: S) -> Result<AppManifest, Error> {
+    let data = decode_data(data)?;
+    Ok(serde_json::de::from_slice(&data)?)
 }
 
 #[non_exhaustive]

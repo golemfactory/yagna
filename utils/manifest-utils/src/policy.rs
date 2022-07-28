@@ -135,19 +135,21 @@ impl Keystore {
     /// prepares digest using `sig_alg`, verifies `data` using `sig` and pub key.
     pub fn verify_signature(
         &self,
-        cert: String,
-        sig: String,
-        sig_alg: String,
-        data: &[u8],
+        cert: impl AsRef<str>,
+        sig: impl AsRef<str>,
+        sig_alg: impl AsRef<str>,
+        data: impl AsRef<str>,
     ) -> anyhow::Result<()> {
         let sig = crate::decode_data(sig)?;
 
         let pkey = self.verify_cert(cert)?;
 
-        let msg_digest = MessageDigest::from_name(&sig_alg)
-            .ok_or(anyhow::anyhow!("Unknown signature algorithm: {}", sig_alg))?;
-        let mut verifier = Verifier::new(msg_digest, &pkey)?;
-        if false == verifier.verify_oneshot(&sig, data)? {
+        let msg_digest = MessageDigest::from_name(sig_alg.as_ref()).ok_or(anyhow::anyhow!(
+            "Unknown signature algorithm: {}",
+            sig_alg.as_ref()
+        ))?;
+        let mut verifier = Verifier::new(msg_digest, pkey.as_ref())?;
+        if false == verifier.verify_oneshot(&sig, data.as_ref().as_bytes())? {
             return Err(anyhow::anyhow!("Invalid signature"));
         }
         Ok(())
@@ -179,9 +181,12 @@ impl Keystore {
             .and_then(|ex| ex.to_str().map(ToString::to_string))
     }
 
-    fn verify_cert(&self, cert: String) -> anyhow::Result<PKey<Public>> {
+    fn verify_cert<S: AsRef<str>>(&self, cert: S) -> anyhow::Result<PKey<Public>> {
         let cert = crate::decode_data(cert)?;
-        let cert = X509::from_der(&cert)?;
+        let cert = match X509::from_der(&cert) {
+            Ok(cert) => cert,
+            Err(_) => X509::from_pem(&cert)?,
+        };
         let store = self
             .inner
             .read()

@@ -3,7 +3,7 @@ use std::ops::Not;
 use ya_agreement_utils::{Error, OfferDefinition};
 use ya_manifest_utils::policy::{Keystore, Match, Policy, PolicyConfig};
 use ya_manifest_utils::{
-    decode_data, decode_manifest, Feature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
+    decode_manifest, Feature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
     DEMAND_MANIFEST_PROPERTY, DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY, DEMAND_MANIFEST_SIG_PROPERTY,
 };
 
@@ -25,26 +25,22 @@ impl NegotiatorComponent for ManifestSignature {
             return Ok(NegotiationResult::Ready { offer });
         }
 
-        let data = match demand.get_property::<String>(DEMAND_MANIFEST_PROPERTY) {
-            Err(Error::NoKey(_)) => return Ok(NegotiationResult::Ready { offer }),
-            Err(e) => return rejection(format!("invalid manifest type: {:?}", e)),
-            Ok(s) => match decode_data(s) {
-                Ok(manifest) => manifest,
-                Err(e) => return rejection(format!("invalid manifest encoding: {:?}", e)),
-            },
-        };
-
-        let manifest = decode_manifest(&data)?;
+        let (manifest, manifest_encoded) =
+            match demand.get_property::<String>(DEMAND_MANIFEST_PROPERTY) {
+                Err(Error::NoKey(_)) => return Ok(NegotiationResult::Ready { offer }),
+                Err(e) => return rejection(format!("invalid manifest type: {:?}", e)),
+                Ok(manifest_encoded) => match decode_manifest(&manifest_encoded) {
+                    Ok(manifest) => (manifest, manifest_encoded),
+                    Err(e) => return rejection(format!("invalid manifest: {:?}", e)),
+                },
+            };
 
         if manifest.features().is_empty() {
             return Ok(NegotiationResult::Ready { offer });
         }
 
-        match self.verify_signature(demand, &data) {
-            Err(err) => {
-                log::debug!("Failed to verify manifest signature: {}", err);
-                rejection("failed to verify manifest signature".to_string())
-            }
+        match self.verify_signature(demand, manifest_encoded) {
+            Err(err) => rejection(format!("failed to verify manifest signature: {}", err)),
             Ok(()) => Ok(NegotiationResult::Ready { offer }),
         }
     }
@@ -96,14 +92,19 @@ impl From<PolicyConfig> for ManifestSignature {
 
 impl ManifestSignature {
     /// Verifies fields base64 encoding, then validates certificate, then validates signature, then verifies manifest content and returns it
-    fn verify_signature(&self, demand: &ProposalView, data: &[u8]) -> anyhow::Result<()> {
+    fn verify_signature<S: AsRef<str>>(
+        &self,
+        demand: &ProposalView,
+        manifest: S,
+    ) -> anyhow::Result<()> {
         let sig: String = demand.get_property(DEMAND_MANIFEST_SIG_PROPERTY)?;
-        log::debug!("sig_hex: {}", sig);
+        log::trace!("sig_hex: {}", sig);
         let sig_alg: String = demand.get_property(DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY)?;
-        log::debug!("sig_alg: {}", sig_alg);
+        log::trace!("sig_alg: {}", sig_alg);
         let cert: String = demand.get_property(DEMAND_MANIFEST_CERT_PROPERTY)?;
-        log::debug!("cert: {}", cert);
-        self.keystore.verify_signature(cert, sig, sig_alg, data)
+        log::trace!("cert: {}", cert);
+        log::trace!("manifest: {}", manifest.as_ref());
+        self.keystore.verify_signature(cert, sig, sig_alg, manifest)
     }
 }
 
