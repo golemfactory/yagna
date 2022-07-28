@@ -25,6 +25,9 @@ pub struct MetricsPusherOpts {
         default_value = DEFAULT_YAGNA_METRICS_URL,
     )]
     pub metrics_push_url: Url,
+    /// Metrics job name, which allows to distinguish different groups of Nodes.
+    #[structopt(long, env = "YAGNA_METRICS_JOB_NAME", default_value = "community.1")]
+    pub metrics_job_name: String,
 }
 
 impl From<&MetricsPusherOpts> for MetricsCtx {
@@ -32,6 +35,7 @@ impl From<&MetricsPusherOpts> for MetricsCtx {
         MetricsCtx {
             push_enabled: !opts.disable_metrics_push,
             push_host_url: Some(opts.metrics_push_url.clone()),
+            job: opts.metrics_job_name.clone(),
         }
     }
 }

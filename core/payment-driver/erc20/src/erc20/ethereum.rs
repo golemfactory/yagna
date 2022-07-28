@@ -14,6 +14,7 @@ use web3::{
     types::{Bytes, Transaction, TransactionId, TransactionReceipt, H160, H256, U256, U64},
     Web3,
 };
+
 use ya_client_model::NodeId;
 use ya_payment_driver::db::models::{Network, TransactionEntity, TransactionStatus, TxType};
 use ya_payment_driver::utils::big_dec_to_u256;
@@ -359,6 +360,7 @@ async fn prepare_raw_transaction_with(
 
     let gas_limit = match network {
         Network::Polygon => gas_limit_override.map_or(*GLM_POLYGON_GAS_LIMIT, |v| U256::from(v)),
+        Network::Mumbai => gas_limit_override.map_or(*GLM_POLYGON_GAS_LIMIT, |v| U256::from(v)),
         _ => gas_limit_override.map_or(*GLM_TRANSFER_GAS, |v| U256::from(v)),
     };
 
@@ -534,7 +536,10 @@ fn get_rpc_addr_from_env(network: Network) -> Vec<String> {
         Network::Goerli => {
             collect_rpc_addr_from("GOERLI_GETH_ADDR", "https://rpc.goerli.mudit.blog")
         }
-        Network::Polygon => collect_rpc_addr_from("POLYGON_GETH_ADDR", "https://bor.golem.network"),
+        Network::Polygon => collect_rpc_addr_from(
+            "POLYGON_GETH_ADDR",
+            "https://bor.golem.network,https://polygon-rpc.com",
+        ),
         Network::Mumbai => collect_rpc_addr_from(
             "MUMBAI_GETH_ADDR",
             "https://matic-mumbai.chainstacklabs.com",
@@ -543,16 +548,12 @@ fn get_rpc_addr_from_env(network: Network) -> Vec<String> {
 }
 
 fn collect_rpc_addr_from(env: &str, default: &str) -> Vec<String> {
-    let mut vec: Vec<String> = Default::default();
-    let env = std::env::var(env).ok();
-    if let Some(env) = env {
-        env.split(',')
-            .collect::<Vec<_>>()
-            .iter()
-            .for_each(|env| vec.push(env.to_string()))
-    };
-    vec.push(default.to_string());
-    vec
+    std::env::var(env)
+        .ok()
+        .unwrap_or(default.to_string())
+        .split(',')
+        .map(|path| path.to_string())
+        .collect()
 }
 
 async fn get_clients(network: Network) -> Result<Vec<Web3<Http>>, GenericError> {

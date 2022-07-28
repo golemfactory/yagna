@@ -19,23 +19,23 @@ required-features=['bin']
 
 [dependencies]
 ya-compile-time-utils = "0.2"
-ya-core-model = { version = "^0.6", features = ["gftp", "identity", "net"] }
+ya-core-model = { version = "^0.7", features = ["gftp", "identity", "net"] }
 ya-service-bus = "0.4"
 
-actix-rt = "1.0"
+actix-rt = "2.7"
 anyhow = "1.0"
 digest = "0.8.1"
 dotenv = { version = "0.15.0", optional = true }
 env_logger = { version = "0.7.1", optional = true }
 futures = "0.3"
-log = "0.4.8"
-rand = "0.7.3"
+log = "0.4"
+rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha3 = "0.8.2"
 structopt = "0.3.9"
 thiserror = "1.0.20"
-tokio = { version = "0.2", features = ["io-std", "time"] }
+tokio = { version = "1", features = ["io-std", "time"] }
 url = { version = "2.1.1", features = ["serde"] }
 
 [dev-dependencies]
@@ -43,6 +43,6 @@ dotenv = { version = "0.15.0" }
 env_logger = { version = "0.7.1" }
 sha3 = "0.8.2"
 tempdir = "0.3.7"
-tokio = { version = "0.2", features = ["process"] }
+tokio = { version = "1", features = ["process"] }
 
 [build-dependencies]

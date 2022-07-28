@@ -1,24 +1,25 @@
 use std::collections::HashSet;
 use std::ops::Not;
+use std::string::ToString;
 
 use chrono::{DateTime, Utc};
 use semver::Version;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
+use strum;
+use strum::Display;
 use url::Url;
 
 use ya_agreement_utils::AgreementView;
 use ya_agreement_utils::Error as AgreementError;
 
-pub const AGREEMENT_MANIFEST_PROPERTY: &str =
-    "demand.properties.golem.experimental.srv.comp.payload.@tag";
-pub const AGREEMENT_MANIFEST_SIG_PROPERTY: &str =
-    "demand.properties.golem.experimental.srv.comp.payload.sig";
+pub const AGREEMENT_MANIFEST_PROPERTY: &str = "demand.properties.golem.srv.comp.payload.@tag";
+pub const AGREEMENT_MANIFEST_SIG_PROPERTY: &str = "demand.properties.golem.srv.comp.payload.sig";
 
 pub const CAPABILITIES_PROPERTY: &str = "golem.runtime.capabilities";
-pub const DEMAND_MANIFEST_PROPERTY: &str = "golem.experimental.srv.comp.payload.@tag";
-pub const DEMAND_MANIFEST_SIG_PROPERTY: &str = "golem.experimental.srv.comp.payload.sig";
+pub const DEMAND_MANIFEST_PROPERTY: &str = "golem.srv.comp.payload.@tag";
+pub const DEMAND_MANIFEST_SIG_PROPERTY: &str = "golem.srv.comp.payload.sig";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -71,20 +72,15 @@ fn decode_escaped_json<S: AsRef<str>>(input: S) -> Result<AppManifest, Error> {
 }
 
 #[non_exhaustive]
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Display)]
+#[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum Feature {
     Inet,
     Vpn,
-}
-
-impl ToString for Feature {
-    fn to_string(&self) -> String {
-        match self {
-            Self::Inet => "inet",
-            Self::Vpn => "vpn",
-        }
-        .to_string()
-    }
+    ManifestSupport,
+    #[serde(other)]
+    Other,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

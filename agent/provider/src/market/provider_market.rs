@@ -473,7 +473,7 @@ async fn collect_agreement_events(ctx: AsyncCtx) {
 
                 // We need to wait after failure, because in most cases it happens immediately
                 // and we are spammed with error logs.
-                tokio::time::delay_for(std::time::Duration::from_secs_f32(timeout)).await;
+                tokio::time::sleep(std::time::Duration::from_secs_f32(timeout)).await;
                 continue;
             }
             Ok(events) => events,
@@ -527,7 +527,7 @@ async fn collect_negotiation_events(ctx: AsyncCtx, subscription: Subscription) {
                     _ => {
                         // We need to wait after failure, because in most cases it happens immediately
                         // and we are spammed with error logs.
-                        tokio::time::delay_for(std::time::Duration::from_secs_f32(timeout)).await;
+                        tokio::time::sleep(std::time::Duration::from_secs_f32(timeout)).await;
                     }
                 }
             }
@@ -541,7 +541,7 @@ async fn collect_negotiation_events(ctx: AsyncCtx, subscription: Subscription) {
 struct ReSubscribe(String);
 
 impl Handler<ReSubscribe> for ProviderMarket {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: ReSubscribe, ctx: &mut Self::Context) -> Self::Result {
         let to_resubscribe = self
@@ -568,7 +568,7 @@ impl Handler<ReSubscribe> for ProviderMarket {
 struct PostponeDemand(SubscriptionProposal);
 
 impl Handler<PostponeDemand> for ProviderMarket {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: PostponeDemand, _ctx: &mut Self::Context) -> Self::Result {
         self.postponed_demands.push(msg.0);
@@ -726,7 +726,7 @@ async fn terminate_agreement(api: Arc<MarketProviderApi>, msg: AgreementFinalize
             e,
             &delay,
         );
-        tokio::time::delay_for(delay).await;
+        tokio::time::sleep(delay).await;
     }
 
     log::info!("Agreement [{}] terminated by Provider.", &id);

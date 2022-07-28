@@ -35,6 +35,7 @@ pub struct NodeInfo {
     pub name: Option<String>,
     pub subnet: Option<String>,
     pub geo_country_code: Option<String>,
+    pub is_public: bool,
 }
 
 impl NodeInfo {
@@ -43,6 +44,7 @@ impl NodeInfo {
             name: Some(name.into()),
             geo_country_code: None,
             subnet: None,
+            is_public: false,
         }
     }
 
@@ -62,6 +64,10 @@ impl NodeInfo {
         if let Some(subnet) = self.subnet {
             let _ = node.insert("debug".into(), serde_json::json!({ "subnet": subnet }));
         }
+        let _ = node.insert(
+            "net".into(),
+            serde_json::json!({"is-public": self.is_public}),
+        );
         map.insert("node".into(), node.into());
     }
 }
@@ -71,6 +77,7 @@ pub struct ServiceInfo {
     inf: InfNodeInfo,
     exeunit_info: Value,
     multi_activity: bool,
+    payload_manifest: bool,
 }
 
 impl ServiceInfo {
@@ -79,6 +86,7 @@ impl ServiceInfo {
             inf,
             exeunit_info,
             multi_activity: true,
+            payload_manifest: true,
         }
     }
 
@@ -89,11 +97,23 @@ impl ServiceInfo {
         }
     }
 
+    pub fn support_payload_manifest(self, payload_manifest: bool) -> Self {
+        Self {
+            payload_manifest,
+            ..self
+        }
+    }
+
     fn write_json(self, map: &mut serde_json::Map<String, Value>) {
         self.inf.write_json(map);
         let _ = map.insert("runtime".into(), self.exeunit_info);
 
-        let srv_map = serde_json::json!({ "caps": {"multi-activity": self.multi_activity}});
+        let srv_map = serde_json::json!({
+            "caps": {
+                "multi-activity": self.multi_activity,
+                "payload-manifest": self.payload_manifest
+            },
+        });
         let _ = map.insert("srv".into(), srv_map);
     }
 }
@@ -205,21 +225,34 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_wasm_1() {
+    fn offer_json_test() {
         let offer = OfferDefinition {
             node_info: NodeInfo::with_name("dany"),
             srv_info: ServiceInfo {
                 inf: InfNodeInfo::default().with_mem(5.0).with_storage(50.0),
                 exeunit_info: serde_json::json!({"wasm.wasi.version@v".to_string(): "0.9.0".to_string()}),
                 multi_activity: false,
+                payload_manifest: true,
             },
             com_info: Default::default(),
             offer: OfferTemplate::default(),
         };
 
-        eprintln!(
-            "j={}",
-            serde_json::to_string_pretty(&offer.into_json()).unwrap()
-        );
+        let offer = serde_json::to_string_pretty(&offer.into_json()).unwrap();
+
+        let expected_offer = r#"
+{
+  "golem.com": null,
+  "golem.inf.mem.gib": 5.0,
+  "golem.inf.storage.gib": 50.0,
+  "golem.node.id.name": "dany",
+  "golem.node.net.is-public": false,
+  "golem.runtime.wasm.wasi.version@v": "0.9.0",
+  "golem.srv.caps.multi-activity": false,
+  "golem.srv.caps.payload-manifest": true
+}
+"#;
+
+        assert_eq!(expected_offer.trim(), offer)
     }
 }

@@ -1,7 +1,6 @@
 use bytes::BytesMut;
 use futures::{Sink, Stream};
 use prost::Message;
-
 use std::marker::PhantomData;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Decoder, Encoder};

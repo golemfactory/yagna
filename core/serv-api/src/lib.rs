@@ -8,6 +8,7 @@ use std::path::PathBuf;
 pub struct MetricsCtx {
     pub push_enabled: bool,
     pub push_host_url: Option<url::Url>,
+    pub job: String,
 }
 
 #[derive(Clone, Debug, Default)]

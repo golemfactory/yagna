@@ -13,16 +13,30 @@ use ya_client_model::ErrorMessage;
 use ya_service_api_web::middleware::Identity;
 use ya_utils_networking::vpn::{Error as VpnError, Protocol};
 
-pub const NET_API_PATH: &str = "/net-api/v1/";
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(10);
 
 type Result<T> = std::result::Result<T, ApiError>;
 type WsResult<T> = std::result::Result<T, ws::ProtocolError>;
 
+const API_ROOT_PATH: &str = "/net-api";
+
 pub fn web_scope(vpn_sup: Arc<Mutex<VpnSupervisor>>) -> actix_web::Scope {
-    actix_web::web::scope(NET_API_PATH)
-        .data(vpn_sup)
+    let api_v1_subpath = api_subpath(NET_API_V1_VPN_PATH);
+    let api_v2_subpath = api_subpath(NET_API_V2_VPN_PATH);
+
+    web::scope(API_ROOT_PATH)
+        .app_data(web::Data::new(vpn_sup))
+        .service(vpn_web_scope(api_v1_subpath))
+        .service(vpn_web_scope(api_v2_subpath))
+}
+
+fn api_subpath(path: &str) -> &str {
+    path.trim_start_matches(API_ROOT_PATH)
+}
+
+fn vpn_web_scope(path: &str) -> actix_web::Scope {
+    web::scope(path)
         .service(get_networks)
         .service(create_network)
         .service(get_network)
@@ -59,7 +73,7 @@ async fn create_network(
     let network = model.into_inner();
     let mut supervisor = vpn_sup.lock().await;
     let network = supervisor
-        .create_network(&identity.identity, network)
+        .create_network(identity.identity, network)
         .await?;
     Ok::<_, ApiError>(web::Json(network))
 }
@@ -291,7 +305,7 @@ impl StreamHandler<WsResult<ws::Message>> for VpnWebSocket {
     fn handle(&mut self, msg: WsResult<ws::Message>, ctx: &mut Self::Context) {
         self.heartbeat = Instant::now();
         match msg {
-            Ok(ws::Message::Text(text)) => self.forward(text.into_bytes(), ctx),
+            Ok(ws::Message::Text(text)) => self.forward(text.into_bytes().to_vec(), ctx),
             Ok(ws::Message::Binary(bytes)) => self.forward(bytes.to_vec(), ctx),
             Ok(ws::Message::Ping(msg)) => {
                 ctx.pong(&msg);
@@ -364,4 +378,16 @@ struct PathConnect {
     net_id: String,
     ip: String,
     port: u16,
+}
+
+#[test]
+fn test_to_detect_breaking_ya_client_const_changes() {
+    assert!(
+        api_subpath(NET_API_V1_VPN_PATH).len() < NET_API_V1_VPN_PATH.len(),
+        "ya-client const NET_API_V1_VPN_PATH changed"
+    );
+    assert!(
+        api_subpath(NET_API_V2_VPN_PATH).len() < NET_API_V2_VPN_PATH.len(),
+        "ya-client const NET_API_V2_VPN_PATH changed"
+    )
 }

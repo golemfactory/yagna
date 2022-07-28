@@ -21,7 +21,7 @@ use crate::{
 
 impl From<MarketError> for actix_web::HttpResponse {
     fn from(e: MarketError) -> Self {
-        e.error_response()
+        e.error_response().into()
     }
 }
 
@@ -57,6 +57,7 @@ impl ResponseError for ResolverError {
         match self {
             _ => HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string())),
         }
+        .into()
     }
 }
 
@@ -68,18 +69,23 @@ impl ResponseError for DemandError {
             }
             _ => HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string())),
         }
+        .into()
     }
 }
 
 impl ResponseError for QueryDemandsError {
     fn error_response(&self) -> HttpResponse {
-        HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string()))
+        HttpResponse::InternalServerError()
+            .json(ErrorMessage::new(self.to_string()))
+            .into()
     }
 }
 
 impl ResponseError for QueryOffersError {
     fn error_response(&self) -> HttpResponse {
-        HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string()))
+        HttpResponse::InternalServerError()
+            .json(ErrorMessage::new(self.to_string()))
+            .into()
     }
 }
 
@@ -90,6 +96,7 @@ impl ResponseError for QueryOfferError {
             QueryOfferError::NotFound(_) => HttpResponse::NotFound().json(msg),
             _ => HttpResponse::InternalServerError().json(msg),
         }
+        .into()
     }
 }
 
@@ -102,6 +109,7 @@ impl ResponseError for SaveOfferError {
             }
             _ => HttpResponse::InternalServerError().json(msg),
         }
+        .into()
     }
 }
 
@@ -115,6 +123,7 @@ impl ResponseError for ModifyOfferError {
             }
             _ => HttpResponse::InternalServerError().json(msg),
         }
+        .into()
     }
 }
 
@@ -131,6 +140,7 @@ impl ResponseError for QueryEventsError {
             }
             _ => HttpResponse::InternalServerError().json(msg),
         }
+        .into()
     }
 }
 
@@ -140,12 +150,12 @@ impl ResponseError for ProposalError {
         match self {
             ProposalError::Validation(e) => e.error_response(),
             ProposalError::Save(SaveProposalError::AlreadyCountered(..)) => {
-                HttpResponse::Gone().json(msg)
+                HttpResponse::Gone().json(msg).into()
             }
             ProposalError::Get(e) => e.error_response(),
             ProposalError::Reject(e) => e.error_response(),
             // TODO: get rid of those `_` patterns as they do not break when error is extended
-            _ => HttpResponse::InternalServerError().json(msg),
+            _ => HttpResponse::InternalServerError().json(msg).into(),
         }
     }
 }
@@ -160,6 +170,7 @@ impl ResponseError for RejectProposalError {
             | RejectProposalError::ChangeState(_)
             | RejectProposalError::CallerParse(_) => HttpResponse::InternalServerError().json(msg),
         }
+        .into()
     }
 }
 
@@ -175,6 +186,7 @@ impl ResponseError for ProposalValidationError {
             ProposalValidationError::Unauthorized(_, _) => HttpResponse::Unauthorized().json(msg),
             ProposalValidationError::Internal(_) => HttpResponse::InternalServerError().json(msg),
         }
+        .into()
     }
 }
 
@@ -185,6 +197,7 @@ impl ResponseError for GetProposalError {
             GetProposalError::NotFound(..) => HttpResponse::NotFound().json(msg),
             _ => HttpResponse::InternalServerError().json(msg),
         }
+        .into()
     }
 }
 
@@ -192,16 +205,18 @@ impl ResponseError for AgreementError {
     fn error_response(&self) -> HttpResponse {
         let msg = ErrorMessage::new(self.to_string());
         match self {
-            AgreementError::NotFound(_) => HttpResponse::NotFound().json(msg),
-            AgreementError::Expired(_) => HttpResponse::Gone().json(msg),
-            AgreementError::ProposalAlreadyAccepted(..) => HttpResponse::Conflict().json(msg),
+            AgreementError::NotFound(_) => HttpResponse::NotFound().json(msg).into(),
+            AgreementError::Expired(_) => HttpResponse::Gone().json(msg).into(),
+            AgreementError::ProposalAlreadyAccepted(..) => {
+                HttpResponse::Conflict().json(msg).into()
+            }
             AgreementError::UpdateState(_, e) => e.error_response(),
             AgreementError::NoNegotiations(_)
             | AgreementError::ProposalRejected(..)
             | AgreementError::OwnProposal(..)
             | AgreementError::ProposalNotFound(..)
             | AgreementError::ProposalCountered(..)
-            | AgreementError::InvalidId(..) => HttpResponse::BadRequest().json(msg),
+            | AgreementError::InvalidId(..) => HttpResponse::BadRequest().json(msg).into(),
             AgreementError::GetProposal(..)
             | AgreementError::Save(..)
             | AgreementError::Get(..)
@@ -210,7 +225,7 @@ impl ResponseError for AgreementError {
             | AgreementError::Protocol(_)
             | AgreementError::ProtocolTerminate(_)
             | AgreementError::ProtocolCommit(_)
-            | AgreementError::Internal(_) => HttpResponse::InternalServerError().json(msg),
+            | AgreementError::Internal(_) => HttpResponse::InternalServerError().json(msg).into(),
         }
     }
 }
@@ -234,6 +249,7 @@ impl ResponseError for AgreementDaoError {
             | AgreementDaoError::SessionId(_)
             | AgreementDaoError::EventError(_) => HttpResponse::InternalServerError().json(msg),
         }
+        .into()
     }
 }
 
@@ -251,6 +267,7 @@ impl ResponseError for WaitForApprovalError {
                 HttpResponse::InternalServerError().json(msg)
             }
         }
+        .into()
     }
 }
 
@@ -261,5 +278,6 @@ impl ResponseError for AgreementEventsError {
             AgreementEventsError::InvalidMaxEvents(..) => HttpResponse::BadRequest().json(msg),
             AgreementEventsError::Internal(_) => HttpResponse::InternalServerError().json(msg),
         }
+        .into()
     }
 }

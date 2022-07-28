@@ -7,7 +7,6 @@ use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum::EnumMessage;
-use strum_macros::*;
 
 use crate::display::EnableDisplay;
 

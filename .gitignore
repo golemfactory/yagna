@@ -25,9 +25,11 @@ releases/
 
 # Provider dir
 **/ya-prov
+**/ya-prov_hybrid
 
 # Requestor dir
 **/ya-req
+**/ya-req_hybrid
 
 # Keys
 **/*.key

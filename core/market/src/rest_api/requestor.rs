@@ -48,6 +48,7 @@ async fn subscribe(
 
 #[actix_web::get("/demands")]
 async fn get_demands(market: Data<Arc<MarketService>>, id: Identity) -> impl Responder {
+    log::info!("get_demands");
     market
         .get_demands(Some(id))
         .await

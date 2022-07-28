@@ -6,11 +6,9 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use actix::prelude::*;
-use actix_web::error::Canceled;
+use futures::channel::oneshot::Canceled;
 use futures::channel::{mpsc, oneshot};
-use futures::future::BoxFuture;
-use futures::{future, TryFutureExt};
-use futures::{FutureExt, SinkExt};
+use futures::{future, future::BoxFuture, Future, FutureExt, SinkExt, TryFutureExt};
 use smoltcp::iface::Route;
 use smoltcp::socket::{Socket, SocketHandle};
 use smoltcp::wire::{IpAddress, IpCidr, IpEndpoint};
@@ -24,18 +22,28 @@ use crate::Result;
 use ya_core_model::activity::{VpnControl, VpnPacket};
 use ya_core_model::NodeId;
 use ya_service_bus::typed::{self, Endpoint};
-use ya_service_bus::{actix_rpc, RpcEndpoint, RpcEnvelope};
+use ya_service_bus::{actix_rpc, RpcEndpoint, RpcEnvelope, RpcRawCall};
 use ya_utils_networking::vpn::common::{to_ip, to_net};
 use ya_utils_networking::vpn::*;
 
 const STACK_POLL_INTERVAL: Duration = Duration::from_millis(2500);
 
-#[derive(Default)]
 pub struct VpnSupervisor {
     networks: HashMap<String, Addr<Vpn>>,
     blueprints: HashMap<String, ya_client_model::net::Network>,
     ownership: HashMap<NodeId, BTreeSet<String>>,
     arbiter: Arbiter,
+}
+
+impl Default for VpnSupervisor {
+    fn default() -> Self {
+        Self {
+            networks: Default::default(),
+            blueprints: Default::default(),
+            ownership: Default::default(),
+            arbiter: Arbiter::new(),
+        }
+    }
 }
 
 impl VpnSupervisor {
@@ -71,7 +79,7 @@ impl VpnSupervisor {
 
     pub async fn create_network(
         &mut self,
-        node_id: &NodeId,
+        node_id: NodeId,
         network: ya_client_model::net::NewNetwork,
     ) -> Result<ya_client_model::net::Network> {
         let net = to_net(&network.ip, network.mask.as_ref())?;
@@ -93,10 +101,9 @@ impl VpnSupervisor {
         let vpn_net = Network::new(&net_id, net);
         let actor = self
             .arbiter
-            .clone()
             .spawn_ext(async move {
                 let stack = Stack::new(net_ip, net_route(net_gw.clone())?);
-                let vpn = Vpn::new(stack, vpn_net);
+                let vpn = Vpn::new(node_id, stack, vpn_net);
                 Ok::<_, Error>(vpn.start())
             })
             .await?;
@@ -181,14 +188,20 @@ impl VpnSupervisor {
 }
 
 pub struct Vpn {
+    node_id: String,
     vpn: Network<network::DuoEndpoint<Endpoint>>,
     stack: Stack<'static>,
     connections: HashMap<SocketHandle, Connection>,
 }
 
 impl Vpn {
-    pub fn new(stack: Stack<'static>, vpn: Network<network::DuoEndpoint<Endpoint>>) -> Self {
+    pub fn new(
+        node_id: NodeId,
+        stack: Stack<'static>,
+        vpn: Network<network::DuoEndpoint<Endpoint>>,
+    ) -> Self {
         Self {
+            node_id: node_id.to_string(),
             vpn,
             stack,
             connections: Default::default(),
@@ -305,8 +318,10 @@ impl Vpn {
             };
 
             let id = vpn_id.clone();
+            let fut = endpoint.udp.call_raw_as(&self.node_id, frame.into());
+
             tokio::task::spawn_local(async move {
-                if let Err(err) = endpoint.udp.send(VpnPacket(frame.into())).await {
+                if let Err(err) = fut.await {
                     let addr = endpoint.tcp.addr();
                     log::warn!("VPN {}: send error to endpoint '{}': {}", id, addr, err);
                 }
@@ -323,7 +338,10 @@ impl Actor for Vpn {
     fn started(&mut self, ctx: &mut Self::Context) {
         let id = self.vpn.id();
         let vpn_url = gsb_local_url(&id);
-        actix_rpc::bind::<VpnPacket>(&vpn_url, ctx.address().recipient());
+        let addr = ctx.address();
+
+        actix_rpc::bind(&vpn_url, addr.clone().recipient());
+        actix_rpc::bind_raw(&format!("{vpn_url}/raw"), addr.recipient());
 
         ctx.run_interval(STACK_POLL_INTERVAL, |this, ctx| {
             this.poll(ctx.address());
@@ -343,6 +361,7 @@ impl Actor for Vpn {
 
         async move {
             let _ = typed::unbind(&vpn_url).await;
+            let _ = typed::unbind(&format!("{vpn_url}/raw")).await;
             log::info!("VPN {} stopped", id);
         }
         .into_actor(self)
@@ -488,7 +507,7 @@ impl Handler<GetConnections> for Vpn {
 }
 
 impl Handler<Connect> for Vpn {
-    type Result = ActorResponse<Self, UserConnection, Error>;
+    type Result = ActorResponse<Self, Result<UserConnection>>;
 
     fn handle(&mut self, msg: Connect, ctx: &mut Self::Context) -> Self::Result {
         let remote = match to_ip(&msg.address) {
@@ -563,7 +582,7 @@ impl Handler<Disconnect> for Vpn {
 
 /// Handle egress packet from the user
 impl Handler<Packet> for Vpn {
-    type Result = ActorResponse<Self, (), Error>;
+    type Result = ActorResponse<Self, Result<()>>;
 
     fn handle(&mut self, pkt: Packet, ctx: &mut Self::Context) -> Self::Result {
         if !self.connections.contains_key(&pkt.meta.handle) {
@@ -586,6 +605,16 @@ impl Handler<RpcEnvelope<VpnPacket>> for Vpn {
         self.stack.receive_phy(msg.into_inner().0);
         self.poll(ctx.address());
         Ok(())
+    }
+}
+
+impl Handler<RpcRawCall> for Vpn {
+    type Result = std::result::Result<Vec<u8>, ya_service_bus::Error>;
+
+    fn handle(&mut self, msg: RpcRawCall, ctx: &mut Self::Context) -> Self::Result {
+        self.stack.receive_phy(msg.body);
+        self.poll(ctx.address());
+        Ok(Vec::new())
     }
 }
 
@@ -719,12 +748,12 @@ fn gsb_local_url(net_id: &str) -> String {
 fn gsb_remote_url(node_id: &str, net_id: &str) -> network::DuoEndpoint<Endpoint> {
     network::DuoEndpoint {
         tcp: typed::service(format!("/net/{}/vpn/{}", node_id, net_id)),
-        udp: typed::service(format!("/udp/net/{}/vpn/{}", node_id, net_id)),
+        udp: typed::service(format!("/udp/net/{}/vpn/{}/raw", node_id, net_id)),
     }
 }
 
 trait ArbiterExt {
-    fn spawn_ext<'a, F, T, E>(self, f: F) -> BoxFuture<'a, std::result::Result<T, E>>
+    fn spawn_ext<'a, F, T, E>(&self, f: F) -> BoxFuture<'a, std::result::Result<T, E>>
     where
         F: Future<Output = std::result::Result<T, E>> + Send + 'static,
         T: Send + 'static,
@@ -732,7 +761,7 @@ trait ArbiterExt {
 }
 
 impl ArbiterExt for Arbiter {
-    fn spawn_ext<'a, F, T, E>(self, f: F) -> BoxFuture<'a, std::result::Result<T, E>>
+    fn spawn_ext<'a, F, T, E>(&self, f: F) -> BoxFuture<'a, std::result::Result<T, E>>
     where
         F: Future<Output = std::result::Result<T, E>> + Send + 'static,
         T: Send + 'static,
@@ -750,7 +779,7 @@ impl ArbiterExt for Arbiter {
             }
         });
 
-        self.send(Box::pin(tx_fut));
+        self.spawn(tx_fut);
         Box::pin(rx_fut)
     }
 }
@@ -768,7 +797,7 @@ mod tests {
         let mut supervisor = VpnSupervisor::default();
         let network = supervisor
             .create_network(
-                &node_id,
+                node_id,
                 NewNetwork {
                     ip: "10.0.0.0".to_string(),
                     mask: None,
