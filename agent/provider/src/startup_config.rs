@@ -67,7 +67,7 @@ pub struct ProviderConfig {
     #[structopt(
         long,
         set = clap::ArgSettings::Global,
-        env = "CERT_DIR",
+        env = "PROVIDER_CERT_DIR",
         default_value = &*DEFAULT_CERT_DIR,
     )]
     pub cert_dir: DataDir,
