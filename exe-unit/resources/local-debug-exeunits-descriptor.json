@@ -1,12 +1,19 @@
 [
     {
         "name": "wasmtime",
-        "version": "0.1.0",
+        "version": "0.3.0",
         "supervisor-path": "../../target/debug/exe-unit",
         "runtime-path": "../../../ya-runtime-wasi/target/debug/ya-runtime-wasi",
         "description": "This is just a sample descriptor for wasmtime exeunit used by ya-provider",
         "properties": {
             "wasm.wasi.version@v": "0.9.0"
         }
+    },
+    {
+        "name": "vm",
+        "version": "0.2.12",
+        "supervisor-path": "../../target/debug/exe-unit",
+        "runtime-path": "../../../ya-runtime-vm/target/debug/ya-runtime-vm",
+        "description": "This is just a sample descriptor for VM exeunit used by ya-provider"
     }
 ]
