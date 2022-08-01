@@ -204,6 +204,28 @@ pub mod local {
         pub metrics: StatusMetrics,
     }
 
+    #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+    #[serde(rename_all = "camelCase")]
+    pub struct FindNode {
+        pub node_id: String,
+    }
+
+    impl RpcMessage for FindNode {
+        const ID: &'static str = "FindNode";
+        type Item = FindNodeResponse;
+        type Error = StatusError;
+    }
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct FindNodeResponse {
+        pub identities: Vec<NodeId>,
+        pub endpoints: Vec<SocketAddr>,
+        pub seen: u32,
+        pub slot: u32,
+        pub encryption: Vec<String>,
+    }
+
     /// Measures time between sending GSB message and getting response.
     /// This is different from session ping, because it takes into account
     /// Virtual TCP overhead. Moreover we can measure ping between Nodes
