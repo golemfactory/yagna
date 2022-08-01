@@ -11,9 +11,9 @@
     },
     {
         "name": "vm",
-        "version": "0.2.12",
+        "version": "0.2",
         "supervisor-path": "../../target/debug/exe-unit",
-        "runtime-path": "../../../ya-runtime-vm/target/debug/ya-runtime-vm",
+        "runtime-path": "../../../ya-runtime-vm_bin/ya-runtime-vm/ya-runtime-vm",
         "description": "This is just a sample descriptor for VM exeunit used by ya-provider"
     }
 ]
