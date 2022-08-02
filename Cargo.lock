@@ -7591,6 +7591,7 @@ dependencies = [
  "actix-web",
  "anyhow",
  "bytes 1.1.0",
+ "chrono",
  "env_logger 0.7.1",
  "ethsign",
  "futures 0.3.21",
@@ -7786,7 +7787,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=11e4f7116856cad0ba66b0ec12cba753f804d439#11e4f7116856cad0ba66b0ec12cba753f804d439"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=c4f9c3c13badf605edd43f38bfd2136a4d5928cf#c4f9c3c13badf605edd43f38bfd2136a4d5928cf"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7801,13 +7802,13 @@ dependencies = [
  "url",
  "ya-relay-core",
  "ya-relay-proto",
- "ya-relay-stack 0.4.0 (git+https://github.com/golemfactory/ya-relay.git?rev=11e4f7116856cad0ba66b0ec12cba753f804d439)",
+ "ya-relay-stack 0.4.0 (git+https://github.com/golemfactory/ya-relay.git?rev=c4f9c3c13badf605edd43f38bfd2136a4d5928cf)",
 ]
 
 [[package]]
 name = "ya-relay-core"
 version = "0.3.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=11e4f7116856cad0ba66b0ec12cba753f804d439#11e4f7116856cad0ba66b0ec12cba753f804d439"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=c4f9c3c13badf605edd43f38bfd2136a4d5928cf#c4f9c3c13badf605edd43f38bfd2136a4d5928cf"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7830,13 +7831,13 @@ dependencies = [
  "uuid",
  "ya-client-model 0.4.0",
  "ya-relay-proto",
- "ya-relay-stack 0.4.0 (git+https://github.com/golemfactory/ya-relay.git?rev=11e4f7116856cad0ba66b0ec12cba753f804d439)",
+ "ya-relay-stack 0.4.0 (git+https://github.com/golemfactory/ya-relay.git?rev=c4f9c3c13badf605edd43f38bfd2136a4d5928cf)",
 ]
 
 [[package]]
 name = "ya-relay-proto"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=11e4f7116856cad0ba66b0ec12cba753f804d439#11e4f7116856cad0ba66b0ec12cba753f804d439"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=c4f9c3c13badf605edd43f38bfd2136a4d5928cf#c4f9c3c13badf605edd43f38bfd2136a4d5928cf"
 dependencies = [
  "anyhow",
  "bytes 1.1.0",
@@ -7871,7 +7872,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=11e4f7116856cad0ba66b0ec12cba753f804d439#11e4f7116856cad0ba66b0ec12cba753f804d439"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=c4f9c3c13badf605edd43f38bfd2136a4d5928cf#c4f9c3c13badf605edd43f38bfd2136a4d5928cf"
 dependencies = [
  "derive_more",
  "futures 0.3.21",

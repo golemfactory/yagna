@@ -2,6 +2,7 @@ use anyhow::anyhow;
 use futures::future::join_all;
 use futures::TryFutureExt;
 use std::time::{Duration, Instant};
+use ya_client_model::NodeId;
 
 use ya_core_model::net as ya_net;
 use ya_core_model::net::local::{GsbPingResponse, StatusError};
@@ -88,6 +89,14 @@ pub(crate) fn bind_service() {
         }
         .map_err(status_err)
     });
+    let _ = bus::bind(model::BUS_ID, move |find: model::FindNode| {
+        async move {
+            let client = Net::client().await?;
+            let node_id: NodeId = find.node_id.parse()?;
+            client.find_node(node_id).await?
+        }
+        .map_err(status_err)
+    });
 }
 
 fn to_status_metrics(metrics: &mut ChannelMetrics) -> model::StatusMetrics {
@@ -149,7 +158,7 @@ pub async fn cli_ping() -> anyhow::Result<Vec<GsbPingResponse>> {
 
                         anyhow::Ok(GsbPingResponse {
                             node_id: target_id,
-                            node_alias: alias.clone(),
+                            node_alias: *alias,
                             tcp_ping,
                             udp_ping,
                             is_p2p: false, // Updated later
