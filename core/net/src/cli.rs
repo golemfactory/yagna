@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 use std::fmt::Display;
 use std::time::Duration;
 
+use chrono::{DateTime, NaiveDateTime, Utc};
 use humantime::format_duration;
 use structopt::*;
 
@@ -19,6 +20,11 @@ pub enum NetCommand {
     Sessions {},
     /// List virtual sockets
     Sockets {},
+    /// Find node
+    Find {
+        /// Node information to query for
+        node_id: String,
+    },
     /// Ping connected nodes
     Ping {},
 }
@@ -120,6 +126,23 @@ impl NetCommand {
                         .collect(),
                 }
                 .into())
+            }
+            NetCommand::Find { node_id } => {
+                let node: model::FindNodeResponse = bus::service(model::BUS_ID)
+                    .send(model::FindNode { node_id })
+                    .await
+                    .map_err(|e| anyhow::Error::msg(e))??;
+
+                let naive = NaiveDateTime::from_timestamp(node.seen.into(), 0);
+                let seen: DateTime<Utc> = DateTime::from_utc(naive, Utc);
+
+                CommandOutput::object(serde_json::json!({
+                    "identities": node.identities.into_iter().map(|n| n.to_string()).collect::<Vec<_>>(),
+                    "endpoints": node.endpoints.into_iter().map(|n| n.to_string()).collect::<Vec<_>>(),
+                    "seen": seen.to_string(),
+                    "slot": node.slot,
+                    "encryption": node.encryption,
+                }))
             }
             NetCommand::Ping { .. } => {
                 let pings = bus::service(model::BUS_ID)

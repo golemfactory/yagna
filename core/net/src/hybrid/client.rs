@@ -1,10 +1,12 @@
-use std::net::SocketAddr;
+use std::convert::TryFrom;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
+use std::sync::RwLock;
 
 use actix::prelude::*;
 use anyhow::{anyhow, bail};
-use std::sync::RwLock;
 
+use ya_core_model::net::local::FindNodeResponse;
 use ya_core_model::NodeId;
 use ya_relay_client::{ChannelMetrics, Client, SessionDesc, SocketDesc, SocketState};
 
@@ -133,6 +135,29 @@ proxy!(
     GetSockets -> Vec<(SocketDesc, SocketState<ChannelMetrics>)>,
     sockets,
     |client: Client| { futures::future::ready(client.sockets()) }
+);
+proxy!(
+    FindNode(NodeId) -> anyhow::Result<FindNodeResponse>,
+    find_node,
+    |client: Client, msg: FindNode| async move {
+        let res = client.find_node(msg.0).await?;
+        let identities = res.identities.into_iter()
+            .map(|i| NodeId::try_from(&i.node_id.to_vec()))
+            .collect::<Result<Vec<NodeId>, _>>()?;
+        let endpoints = res.endpoints.into_iter()
+            .map(|e| {
+                e.address.parse().map(|ip: IpAddr| SocketAddr::new(ip, e.port as u16))
+            })
+            .collect::<Result<Vec<SocketAddr>, _>>()?;
+
+        Ok(FindNodeResponse {
+            identities,
+            endpoints,
+            seen: res.seen_ts,
+            slot: res.slot,
+            encryption: res.supported_encryptions,
+        })
+    }
 );
 proxy!(
     GetSessions -> Vec<SessionDesc>,
