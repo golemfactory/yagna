@@ -1,18 +1,18 @@
 use std::ops::Not;
 
 use ya_agreement_utils::{Error, OfferDefinition};
-use ya_manifest_utils::manifest::{
-    decode_manifest, Feature, Signature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_PROPERTY,
-    DEMAND_MANIFEST_SIG_PROPERTY,
-};
 use ya_manifest_utils::policy::{Keystore, Match, Policy, PolicyConfig};
+use ya_manifest_utils::{
+    decode_manifest, Feature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
+    DEMAND_MANIFEST_PROPERTY, DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY, DEMAND_MANIFEST_SIG_PROPERTY,
+};
 
 use crate::market::negotiator::*;
 
 #[derive(Default)]
 pub struct ManifestSignature {
     enabled: bool,
-    trusted_keys: Keystore,
+    keystore: Keystore,
 }
 
 impl NegotiatorComponent for ManifestSignature {
@@ -25,28 +25,23 @@ impl NegotiatorComponent for ManifestSignature {
             return Ok(NegotiationResult::Ready { offer });
         }
 
-        let manifest = match demand.get_property::<String>(DEMAND_MANIFEST_PROPERTY) {
-            Err(Error::NoKey(_)) => return Ok(NegotiationResult::Ready { offer }),
-            Err(e) => return rejection(format!("invalid manifest type: {:?}", e)),
-            Ok(s) => match decode_manifest(s) {
-                Ok(manifest) => manifest,
-                Err(e) => return rejection(format!("invalid manifest: {:?}", e)),
-            },
-        };
+        let (manifest, manifest_encoded) =
+            match demand.get_property::<String>(DEMAND_MANIFEST_PROPERTY) {
+                Err(Error::NoKey(_)) => return Ok(NegotiationResult::Ready { offer }),
+                Err(e) => return rejection(format!("invalid manifest type: {:?}", e)),
+                Ok(manifest_encoded) => match decode_manifest(&manifest_encoded) {
+                    Ok(manifest) => (manifest, manifest_encoded),
+                    Err(e) => return rejection(format!("invalid manifest: {:?}", e)),
+                },
+            };
 
         if manifest.features().is_empty() {
             return Ok(NegotiationResult::Ready { offer });
         }
 
-        let pub_key = match verify_signature(demand) {
-            Ok(pub_key) => pub_key,
-            Err(e) => return rejection(format!("invalid manifest signature: {:?}", e)),
-        };
-
-        if self.trusted_keys.contains(pub_key.as_slice()) {
-            Ok(NegotiationResult::Ready { offer })
-        } else {
-            rejection("manifest not signed by a trusted authority".to_string())
+        match self.verify_signature(demand, manifest_encoded) {
+            Err(err) => rejection(format!("failed to verify manifest signature: {}", err)),
+            Ok(()) => Ok(NegotiationResult::Ready { offer }),
         }
     }
 
@@ -90,8 +85,26 @@ impl From<PolicyConfig> for ManifestSignature {
 
         ManifestSignature {
             enabled,
-            trusted_keys: config.trusted_keys.unwrap_or_default(),
+            keystore: config.trusted_keys.unwrap_or_default(),
         }
+    }
+}
+
+impl ManifestSignature {
+    /// Verifies fields base64 encoding, then validates certificate, then validates signature, then verifies manifest content and returns it
+    fn verify_signature<S: AsRef<str>>(
+        &self,
+        demand: &ProposalView,
+        manifest: S,
+    ) -> anyhow::Result<()> {
+        let sig: String = demand.get_property(DEMAND_MANIFEST_SIG_PROPERTY)?;
+        log::trace!("sig_hex: {}", sig);
+        let sig_alg: String = demand.get_property(DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY)?;
+        log::trace!("sig_alg: {}", sig_alg);
+        let cert: String = demand.get_property(DEMAND_MANIFEST_CERT_PROPERTY)?;
+        log::trace!("cert: {}", cert);
+        log::trace!("manifest: {}", manifest.as_ref());
+        self.keystore.verify_signature(cert, sig, sig_alg, manifest)
     }
 }
 
@@ -100,15 +113,6 @@ fn rejection(message: String) -> anyhow::Result<NegotiationResult> {
         message,
         is_final: true,
     })
-}
-
-fn verify_signature(demand: &ProposalView) -> anyhow::Result<Vec<u8>> {
-    let manifest: String = demand.get_property(DEMAND_MANIFEST_PROPERTY)?;
-    log::debug!("manifest: {}", manifest);
-    let sig_hex: String = demand.get_property(DEMAND_MANIFEST_SIG_PROPERTY)?;
-    log::debug!("sig_hex: {}", sig_hex);
-    let sig = Signature::Secp256k1Hex(sig_hex);
-    Ok(sig.verify_str(manifest)?)
 }
 
 #[cfg(test)]
