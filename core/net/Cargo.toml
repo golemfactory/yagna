@@ -15,7 +15,7 @@ ya-client-model = "0.4"
 ya-core-model = { version = "^0.7", features=["net", "identity"] }
 
 # ya-relay-client = "0.2"
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "fd3a22bfa2ae173dce3d3d1bd70ea846b4454c7a" }
+ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c4f9c3c13badf605edd43f38bfd2136a4d5928cf" }
 
 ya-sb-proto = { version = "0.4" }
 ya-service-api = "0.1"
@@ -26,6 +26,7 @@ ya-utils-networking = "0.1"
 actix = "0.13"
 actix-web = "4"
 anyhow = "1.0"
+chrono = "0.4"
 futures = "0.3"
 humantime = "2.1"
 lazy_static = "1.4"
