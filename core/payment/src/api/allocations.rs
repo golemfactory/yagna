@@ -57,7 +57,7 @@ async fn create_allocation(
     };
     match async move { Ok(bus::service(LOCAL_SERVICE).send(validate_msg).await??) }.await {
         Ok(true) => {}
-        Ok(false) => return response::bad_request(&"Insufficient funds to make allocation. Release all existing allocations to unlock the funds via `yagna payment release-allocations`"),
+        Ok(false) => return response::bad_request(&"Insufficient funds to make allocation. Top up your account or release all existing allocations to unlock the funds via `yagna payment release-allocations`"),
         Err(Error::Rpc(RpcMessageError::ValidateAllocation(
                            ValidateAllocationError::AccountNotRegistered,
                        ))) => return response::bad_request(&"Account not registered"),
