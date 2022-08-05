@@ -51,14 +51,14 @@ async def test_payment_validate_allocations(
 
         # Allocation bigger than total amount should not be possible
         with pytest.raises(ApiException):
-            await requestor.create_allocation(total_amount=2000)
+            await requestor.create_allocation(None, 2000)
 
         # Allocate 600 GLM
-        allocation = await requestor.create_allocation(total_amount=600)
+        allocation = await requestor.create_allocation(None, 600)
 
         # Confirming that allocation exists
         assert await requestor.get_allocation(allocation.allocation_id)
 
         # Allocation bigger than reserved amount should not be possible
         with pytest.raises(ApiException):
-            await requestor.create_allocation(total_amount=600)
+            await requestor.create_allocation(None, 600)
