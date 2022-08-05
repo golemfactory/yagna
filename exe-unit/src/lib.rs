@@ -256,20 +256,25 @@ impl<R: Runtime> RuntimeRef<R> {
                 _ => StatePair(*s, Some(*s)),
             },
         };
-        self.send(SetState::from(state_pre.clone())).await?;
+        self.send(SetState::from(state_pre)).await?;
 
         log::info!("Executing command: {:?}", runtime_cmd.command);
 
-        self.pre_runtime(&runtime_cmd, runtime, transfer_service)
-            .await?;
+        let result = async {
+            self.pre_runtime(&runtime_cmd, runtime, transfer_service)
+                .await?;
 
-        let exit_code = runtime.send(runtime_cmd.clone()).await??;
-        if exit_code != 0 {
-            return Err(Error::CommandExitCodeError(exit_code));
+            let exit_code = runtime.send(runtime_cmd.clone()).await??;
+            if exit_code != 0 {
+                return Err(Error::CommandExitCodeError(exit_code));
+            }
+
+            self.post_runtime(&runtime_cmd, runtime, transfer_service)
+                .await?;
+
+            Ok(())
         }
-
-        self.post_runtime(&runtime_cmd, runtime, transfer_service)
-            .await?;
+        .await;
 
         let state_cur = self.send(GetState {}).await?.0;
         if state_cur != state_pre {
@@ -281,7 +286,7 @@ impl<R: Runtime> RuntimeRef<R> {
         }
 
         self.send(SetState::from(state_pre.1.unwrap())).await?;
-        Ok(())
+        result
     }
 
     async fn pre_runtime(
@@ -401,7 +406,7 @@ impl<R: Runtime> Actor for ExeUnit<R> {
                 Err(e) => {
                     let err = Error::Other(format!("manifest initialization error: {}", e));
                     log::error!("Supervisor is shutting down due to {}", err);
-                    let _ = ctx.address().do_send(Shutdown(ShutdownReason::Error(err)));
+                    ctx.address().do_send(Shutdown(ShutdownReason::Error(err)));
                 }
             })
             .wait(ctx);
