@@ -53,7 +53,6 @@ async def test_payment_validate_allocations(
         with pytest.raises(ApiException):
             await requestor.create_allocation(total_amount=2000)
 
-
         # Allocate 600 GLM
         allocation = await requestor.create_allocation(total_amount=600)
 
