@@ -13,7 +13,7 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 pub enum AppKeyCommand {
     Create {
         name: String,
-        #[structopt(default_value = model::DEFAULT_ROLE, long)]
+        #[structopt(skip = model::DEFAULT_ROLE)]
         role: String,
         #[structopt(long)]
         id: Option<String>,
@@ -66,8 +66,8 @@ impl AppKeyCommand {
                 let key = bus::service(model::BUS_ID)
                     .send(create)
                     .await
-                    .map_err(anyhow::Error::msg)?
-                    .unwrap();
+                    .map_err(anyhow::Error::msg)??;
+
                 Ok(CommandOutput::Object(serde_json::to_value(key)?))
             }
             AppKeyCommand::Drop { name, id } => {
