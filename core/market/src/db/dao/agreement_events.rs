@@ -5,6 +5,7 @@ use ya_client::model::market::Reason;
 use ya_client::model::NodeId;
 use ya_persistence::executor::PoolType;
 use ya_persistence::executor::{readonly_transaction, ConnType};
+use ya_persistence::types::AdaptTimestamp;
 
 use crate::db::dao::AgreementDaoError;
 use crate::db::model::{Agreement, AgreementEvent, AgreementId, NewAgreementEvent};
@@ -56,7 +57,7 @@ impl<'c> AgreementEventsDao<'c> {
 
             Ok(market_agreement_event
                 .filter(event::agreement_id.eq_any(select_corresponding_agreement))
-                .filter(event::timestamp.gt(after_timestamp))
+                .filter(event::timestamp.gt(after_timestamp.adapt()))
                 .order_by(event::timestamp.asc())
                 .limit(max_events as i64)
                 .load::<AgreementEvent>(conn)?)
