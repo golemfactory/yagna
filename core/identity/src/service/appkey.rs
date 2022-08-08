@@ -78,24 +78,19 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                 .await
             {
                 Ok((app_key, _)) => Ok(app_key.key),
-                Err(crate::dao::Error::Dao(diesel::result::Error::NotFound)) => {
-                    log::error!("RAFAŁ: not found in DB");
-                    db.as_dao::<AppKeyDao>()
-                        .create(key.clone(), create.name, create.role, create.identity)
-                        .await
-                        .map_err(|e| model::Error::internal(e))
-                        .map(|_| key)
-                }
-                Err(e) => {
-                    log::error!("RAFAŁ: Other error");
-                    Err(model::Error::internal(e.to_string()))
-                }
-            }?;
+                Err(crate::dao::Error::Dao(diesel::result::Error::NotFound)) => db
+                    .as_dao::<AppKeyDao>()
+                    .create(key.clone(), create.name, create.role, create.identity)
+                    .await
+                    .map(|_| key),
+                Err(e) => Err(e),
+            };
 
             let _ = create_tx
                 .send(model::event::Event::NewKey { identity })
                 .await;
-            Ok(result)
+
+            result.map_err(|e| model::Error::internal(e))
         }
     });
 
