@@ -58,41 +58,25 @@ impl AdaptTimestamp for DateTime<Utc> {
 mod tests {
     use crate::types::AdaptTimestamp;
     use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+    use test_case::test_case;
 
-    #[test]
-    fn test_timestamp_adapter_formatting() {
-        let timestamp = NaiveDateTime::new(
-            NaiveDate::from_ymd(2022, 07, 29),
-            NaiveTime::from_hms_micro(12, 33, 14, 0),
-        );
-
-        assert_eq!(
-            timestamp.format("%F %T.%3f").to_string(),
-            "2022-07-29 12:33:14.000"
-        );
-        assert_eq!(timestamp.adapt().format(), "2022-07-29 12:33:14.000000");
-
-        let timestamp = NaiveDateTime::new(
-            NaiveDate::from_ymd(2022, 07, 29),
-            NaiveTime::from_hms(12, 33, 14),
-        );
-
-        assert_eq!(
-            timestamp.format("%F %T.%3f").to_string(),
-            "2022-07-29 12:33:14.000"
-        );
-        assert_eq!(timestamp.adapt().format(), "2022-07-29 12:33:14.000000");
-
-        let timestamp = NaiveDateTime::new(
-            NaiveDate::from_ymd(2022, 07, 29),
-            NaiveTime::from_hms_micro(12, 33, 14, 123456),
-        );
-        assert_eq!(timestamp.adapt().format(), "2022-07-29 12:33:14.123456");
-
-        let timestamp = NaiveDateTime::new(
-            NaiveDate::from_ymd(2022, 07, 29),
-            NaiveTime::from_hms_nano(12, 33, 14, 123456789),
-        );
-        assert_eq!(timestamp.adapt().format(), "2022-07-29 12:33:14.123456");
+    #[test_case(NaiveDateTime::new(
+        NaiveDate::from_ymd(2022, 07, 29),
+        NaiveTime::from_hms_micro(12, 33, 14, 0),
+    ) => "2022-07-29 12:33:14.000000".to_string(); "0 microseconds should be always printed")]
+    #[test_case(NaiveDateTime::new(
+        NaiveDate::from_ymd(2022, 07, 29),
+        NaiveTime::from_hms(12, 33, 14),
+    ) => "2022-07-29 12:33:14.000000".to_string(); "0 microseconds should be always printed even if creating with from_hms")]
+    #[test_case(NaiveDateTime::new(
+        NaiveDate::from_ymd(2022, 07, 29),
+        NaiveTime::from_hms_micro(12, 33, 14, 123456),
+    ) => "2022-07-29 12:33:14.123456".to_string(); "non zero microseconds should be printed")]
+    #[test_case(NaiveDateTime::new(
+        NaiveDate::from_ymd(2022, 07, 29),
+        NaiveTime::from_hms_nano(12, 33, 14, 123456789),
+    ) => "2022-07-29 12:33:14.123456".to_string(); "nanoseconds should be truncated")]
+    fn test_timestamp_adapter_formatting(timestamp: NaiveDateTime) -> String {
+        timestamp.adapt().format()
     }
 }
