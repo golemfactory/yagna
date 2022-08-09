@@ -138,10 +138,10 @@ impl<'c> AllocationDao<'c> {
                 query = query.filter(dsl::timestamp.gt(after_timestamp))
             }
             if let Some(payment_platform) = payment_platform {
-                query = query.filter(dsl::timestamp.gt(payment_platform))
+                query = query.filter(dsl::payment_platform.eq(payment_platform))
             }
             if let Some(address) = address {
-                query = query.filter(dsl::timestamp.gt(address))
+                query = query.filter(dsl::address.eq(address))
             }
             if let Some(max_items) = max_items {
                 query = query.limit(max_items.into())
