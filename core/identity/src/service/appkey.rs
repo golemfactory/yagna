@@ -79,7 +79,10 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                     if app_key.identity_id == create.identity {
                         Ok(app_key.key)
                     } else {
-                        Err(model::Error::client("Identities don't match"))
+                        Err(model::Error::client(format!(
+                            "app-key with name {} already defined with identity {}",
+                            app_key.name, app_key.identity_id
+                        )))
                     }
                 }
                 Err(crate::dao::Error::Dao(diesel::result::Error::NotFound)) => dao
