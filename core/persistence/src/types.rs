@@ -8,6 +8,8 @@ use std::io::Write;
 use std::ops::{Add, Sub};
 use std::str::FromStr;
 
+pub use crate::timestamp::{AdaptTimestamp, TimestampAdapter};
+
 #[derive(Debug, Clone, AsExpression, FromSqlRow, Default, PartialEq, PartialOrd, Eq, Ord)]
 #[sql_type = "Text"]
 pub struct BigDecimalField(pub BigDecimal);
