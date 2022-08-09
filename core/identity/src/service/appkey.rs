@@ -93,7 +93,6 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
             let _ = create_tx
                 .send(model::event::Event::NewKey { identity })
                 .await;
-
             Ok(result)
         }
     });
