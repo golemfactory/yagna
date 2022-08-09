@@ -11,7 +11,7 @@ use ya_core_model::appkey as model;
 use ya_core_model::identity as idm;
 use ya_persistence::executor::DbExecutor;
 
-use crate::dao::{AppKeyDao, Error};
+use crate::dao::AppKeyDao;
 
 #[derive(Default)]
 struct Subscription {
@@ -75,19 +75,26 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
             let dao = db.as_dao::<AppKeyDao>();
 
             let result = match dao.get_for_name(create.name.clone()).await {
-                Ok((app_key, _)) => Ok(app_key.key),
-                Err(Error::Dao(diesel::result::Error::NotFound)) => dao
+                Ok((app_key, _)) => {
+                    if app_key.identity_id == create.identity {
+                        Ok(app_key.key)
+                    } else {
+                        Err(model::Error::client("Identities don't match"))
+                    }
+                }
+                Err(crate::dao::Error::Dao(diesel::result::Error::NotFound)) => dao
                     .create(key.clone(), create.name, create.role, create.identity)
                     .await
+                    .map_err(model::Error::internal)
                     .map(|_| key),
-                Err(e) => Err(e),
+                Err(e) => Err(model::Error::internal(e)),
             };
 
             let _ = create_tx
                 .send(model::event::Event::NewKey { identity })
                 .await;
 
-            result.map_err(|e| model::Error::internal(e))
+            result
         }
     });
 
