@@ -11,7 +11,7 @@ use ya_core_model::appkey as model;
 use ya_core_model::identity as idm;
 use ya_persistence::executor::DbExecutor;
 
-use crate::dao::AppKeyDao;
+use crate::dao::{AppKeyDao, Error};
 
 #[derive(Default)]
 struct Subscription {
@@ -72,14 +72,11 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
         let mut create_tx = create_tx.clone();
         let identity = create.identity.clone();
         async move {
-            let result = match db
-                .as_dao::<AppKeyDao>()
-                .get_for_name(create.name.clone())
-                .await
-            {
+            let dao = db.as_dao::<AppKeyDao>();
+
+            let result = match dao.get_for_name(create.name.clone()).await {
                 Ok((app_key, _)) => Ok(app_key.key),
-                Err(crate::dao::Error::Dao(diesel::result::Error::NotFound)) => db
-                    .as_dao::<AppKeyDao>()
+                Err(Error::Dao(diesel::result::Error::NotFound)) => dao
                     .create(key.clone(), create.name, create.role, create.identity)
                     .await
                     .map(|_| key),
