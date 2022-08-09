@@ -72,7 +72,7 @@ impl<'c> EventDao<'c> {
         let identity_id = identity_id.to_owned();
 
         do_with_transaction(self.pool, move |conn| {
-            let now = Utc::now().naive_utc();
+            let now = Utc::now().adapt();
             diesel::insert_into(dsl_event::activity_event)
                 .values(
                     dsl::activity
