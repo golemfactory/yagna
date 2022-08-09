@@ -88,13 +88,13 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                     .map_err(model::Error::internal)
                     .map(|_| key),
                 Err(e) => Err(model::Error::internal(e)),
-            };
+            }?;
 
             let _ = create_tx
                 .send(model::event::Event::NewKey { identity })
                 .await;
 
-            result
+            Ok(result)
         }
     });
 
