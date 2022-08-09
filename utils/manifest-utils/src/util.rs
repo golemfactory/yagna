@@ -70,10 +70,7 @@ pub fn print_cert_list(certs: &Vec<X509>) -> anyhow::Result<()> {
 
 pub fn print_cert_list_header() {
     println!("{0: <32} {1: <24} {2}", "ID", "Not After", "Subject");
-    println!(
-        "{0: <32} {1: <24} {2}",
-        "-----------", "-------", "---------"
-    );
+    println!("{0: <32} {1: <24} {2}", "--", "---------", "-------");
 }
 
 pub fn print_cert_list_row(cert: &X509Ref) -> anyhow::Result<()> {
@@ -87,7 +84,7 @@ pub fn print_cert_list_row(cert: &X509Ref) -> anyhow::Result<()> {
     add_cert_subject_entries(&mut subject, cert, Nid::COUNTRYNAME, "C");
     add_cert_subject_entries(&mut subject, cert, Nid::STATEORPROVINCENAME, "ST");
 
-    println!("{0: <32} {1: <24} {2}", id, not_after, subject);
+    println!("{id:<32} {not_after:<24} {subject}");
     Ok(())
 }
 
@@ -99,7 +96,7 @@ fn add_cert_subject_entries(
     entry_short_name: &str,
 ) {
     if let Some(entries) = cert_subject_entries(cert, nid) {
-        subject.push_str(&format!("{}: {} ", entry_short_name, entries));
+        subject.push_str(&format!("{entry_short_name}: {entries} "));
     }
 }
 
@@ -125,7 +122,7 @@ fn cert_subject_entries(cert: &X509Ref, nid: Nid) -> Option<String> {
 pub fn cert_to_id(cert: &X509Ref) -> anyhow::Result<String> {
     let txt = cert.to_text()?;
     let digest = Md5::digest(&txt);
-    Ok(format!("{:x}", digest))
+    Ok(format!("{digest:x}"))
 }
 
 pub struct KeystoreManager {
@@ -210,11 +207,11 @@ impl KeystoreManager {
             if split_and_skip {
                 let file_stem = get_file_stem(&cert_file).expect("Cannot get file name stem");
                 let dot_extension = get_file_extension(&cert_file)
-                    .map_or_else(|| String::from(""), |ex| format!(".{}", ex));
+                    .map_or_else(|| String::from(""), |ex| format!(".{ex}"));
                 for (id, cert) in ids_cert {
                     let cert = cert.to_pem()?;
                     let mut file_path = self.cert_dir.clone();
-                    let filename = format!("{}.{}{}", file_stem, id, dot_extension);
+                    let filename = format!("{file_stem}.{id}{dot_extension}");
                     file_path.push(filename);
                     fs::write(file_path, cert)?;
                 }
@@ -229,17 +226,16 @@ impl KeystoreManager {
     /// Loads keychain file to `cert_dir`
     fn load_as_keychain_file(&self, cert_path: &PathBuf) -> anyhow::Result<()> {
         let file_name = get_file_name(cert_path)
-            .ok_or_else(|| format!("Cannot get filename of {:?}", cert_path))
-            .map_err(|err| anyhow::anyhow!(err))?;
+            .ok_or_else(|| anyhow::anyhow!(format!("Cannot get filename of {cert_path:?}")))?;
         let mut new_cert_path = self.cert_dir.clone();
         new_cert_path.push(file_name);
         if new_cert_path.exists() {
             let file_stem = get_file_stem(&new_cert_path).expect("Has to have stem");
             let dot_extension = get_file_extension(&new_cert_path)
-                .map(|ex| format!(".{}", ex))
+                .map(|ex| format!(".{ex}"))
                 .unwrap_or(String::from(""));
             for i in 0..u32::MAX {
-                let numbered_filename = format!("{0}.{1}{2}", file_stem, i, dot_extension);
+                let numbered_filename = format!("{file_stem}.{i}{dot_extension}");
                 new_cert_path = self.cert_dir.clone();
                 new_cert_path.push(numbered_filename);
                 if !new_cert_path.exists() {
@@ -261,15 +257,14 @@ impl KeystoreManager {
         certs: Vec<X509>,
     ) -> anyhow::Result<()> {
         let file_stem = get_file_stem(&cert_path)
-            .ok_or_else(|| "Cannot get file name stem")
-            .map_err(|err| anyhow::anyhow!(err))?;
+            .ok_or_else(|| anyhow::anyhow!("Cannot get file name stem."))?;
         let dot_extension = get_file_extension(&cert_path)
-            .map(|ex| format!(".{}", ex))
+            .map(|ex| format!(".{ex}"))
             .unwrap_or(String::from(""));
         for cert in certs.into_iter() {
             let id = cert_to_id(&cert)?;
             let mut new_cert_path = self.cert_dir.clone();
-            new_cert_path.push(format!("{}.{}{}", file_stem, id, dot_extension));
+            new_cert_path.push(format!("{file_stem}.{id}{dot_extension}"));
             let cert = cert.to_pem()?;
             fs::write(new_cert_path, cert)?;
         }
