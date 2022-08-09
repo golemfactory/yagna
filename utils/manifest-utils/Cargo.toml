@@ -28,6 +28,7 @@ structopt = { version =  "0.3" }
 strum = { version = "0.24", features = ["derive"] }
 url = {version = "2.2", features = ["serde"] }
 openssl = { version = "0.10", features = ["vendored"] }
+md-5 = "0.10"
 
 [dev-dependencies]
 anyhow = "1.0.31"

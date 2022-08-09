@@ -18,6 +18,7 @@ use ya_utils_path::data_dir::DataDir;
 use crate::cli::clean::CleanConfig;
 use crate::cli::config::ConfigConfig;
 use crate::cli::exe_unit::ExeUnitsConfig;
+use crate::cli::keystore::KeystoreConfig;
 pub use crate::cli::preset::PresetsConfig;
 use crate::cli::profile::ProfileConfig;
 pub(crate) use crate::config::globals::GLOBALS_JSON;
@@ -207,6 +208,8 @@ pub enum Commands {
     Profile(ProfileConfig),
     /// Manage ExeUnits
     ExeUnit(ExeUnitsConfig),
+    /// Manage trusted keys
+    Keystore(KeystoreConfig),
     /// Clean up disk space
     Clean(CleanConfig),
 }
