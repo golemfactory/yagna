@@ -68,7 +68,6 @@ impl AppKeyCommand {
                     .await
                     .map_err(anyhow::Error::msg)?
                     .unwrap();
-
                 Ok(CommandOutput::Object(serde_json::to_value(key)?))
             }
             AppKeyCommand::Drop { name, id } => {
