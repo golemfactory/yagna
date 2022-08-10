@@ -24,6 +24,13 @@ impl Error {
             message: e.to_string(),
         }
     }
+
+    pub fn bad_request(e: impl std::fmt::Display) -> Self {
+        Self {
+            code: 400,
+            message: e.to_string(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
