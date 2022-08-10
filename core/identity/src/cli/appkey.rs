@@ -63,10 +63,7 @@ impl AppKeyCommand {
                     role: role.clone(),
                     identity,
                 };
-                let key = bus::service(model::BUS_ID)
-                    .send(create)
-                    .await
-                    .map_err(anyhow::Error::msg)??;
+                let key = bus::service(model::BUS_ID).send(create).await??;
                 Ok(CommandOutput::Object(serde_json::to_value(key)?))
             }
             AppKeyCommand::Drop { name, id } => {
