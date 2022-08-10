@@ -25,7 +25,7 @@ impl Error {
         }
     }
 
-    pub fn client(e: impl std::fmt::Display) -> Self {
+    pub fn bad_request(e: impl std::fmt::Display) -> Self {
         Self {
             code: 400,
             message: e.to_string(),

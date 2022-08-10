@@ -79,7 +79,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                     if app_key.identity_id == create.identity {
                         Ok(app_key.key)
                     } else {
-                        Err(model::Error::client(format!(
+                        Err(model::Error::bad_request(format!(
                             "app-key with name {} already defined with identity {}",
                             app_key.name, app_key.identity_id
                         )))
