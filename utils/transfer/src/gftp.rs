@@ -12,7 +12,7 @@ use url::Url;
 use ya_core_model::gftp as model;
 use ya_core_model::gftp::Error as GftpError;
 use ya_core_model::gftp::GftpChunk;
-use ya_core_model::net::TryRemoteEndpoint;
+use ya_core_model::net::RemoteEndpoint;
 use ya_service_bus::RpcEndpoint;
 
 pub struct GftpTransferProvider {
@@ -43,7 +43,7 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
                 let (node_id, hash) = gftp::extract_url(&url)
                     .map_err(|_| Error::InvalidUrlError("Invalid gftp URL".to_owned()))?;
 
-                let remote = node_id.try_service(&model::file_bus_id(&hash))?;
+                let remote = node_id.service_transfer(&model::file_bus_id(&hash));
                 let meta = remote.send(model::GetMetadata {}).await??;
                 let n = (meta.file_size + chunk_size - 1) / chunk_size;
 
@@ -89,7 +89,7 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
             let fut = async move {
                 let (node_id, random_filename) = gftp::extract_url(&url)
                     .map_err(|_| Error::InvalidUrlError("invalid gftp URL".into()))?;
-                let remote = node_id.try_service(&model::file_bus_id(&random_filename))?;
+                let remote = node_id.service_transfer(&model::file_bus_id(&random_filename));
 
                 let digest_fut = async move {
                     let mut digest = Sha3_256::default();
