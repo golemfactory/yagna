@@ -118,15 +118,23 @@ pub enum InvoiceCommand {
 impl PaymentCli {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
-            PaymentCli::Fund { account } => CommandOutput::object(
-                wallet::fund(
-                    resolve_address(account.address()).await?,
-                    account.driver(),
-                    Some(account.network()),
-                    None,
+            PaymentCli::Fund { account } => {
+                let address = resolve_address(account.address()).await?;
+
+                init_account(Account {
+                    driver: account.driver(),
+                    address: address.clone(),
+                    network: Some(account.network()),
+                    token: None, // Use default -- we don't yet support other tokens than GLM
+                    send: true,
+                    receive: false,
+                })
+                .await?;
+
+                CommandOutput::object(
+                    wallet::fund(address, account.driver(), Some(account.network()), None).await?,
                 )
-                .await?,
-            ),
+            }
             PaymentCli::Init {
                 account,
                 sender,
