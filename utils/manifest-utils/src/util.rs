@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::convert::TryFrom;
 use std::ffi::OsStr;
 use std::fs::{self, DirEntry};
 use std::{fs::File, path::PathBuf};
@@ -60,43 +61,24 @@ fn os_str_to_string(os_str: &OsStr) -> String {
     os_str.to_string_lossy().to_string()
 }
 
-pub fn print_cert_list(certs: &Vec<X509>) -> anyhow::Result<()> {
-    print_cert_list_header();
+pub fn to_cert_data(certs: &Vec<X509>) -> anyhow::Result<Vec<CertBasicData>> {
+    let mut certs_data = Vec::new();
     for cert in certs {
-        print_cert_list_row(cert)?;
+        let data = CertBasicData::try_from(cert.as_ref())?;
+        certs_data.push(data);
     }
-    Ok(())
-}
-
-pub fn print_cert_list_header() {
-    println!("{0: <32} {1: <24} {2}", "ID", "Not After", "Subject");
-    println!("{0: <32} {1: <24} {2}", "--", "---------", "-------");
-}
-
-pub fn print_cert_list_row(cert: &X509Ref) -> anyhow::Result<()> {
-    let id = cert_to_id(&cert)?;
-    let not_after = cert.not_after().to_string();
-    let mut subject = String::new();
-    add_cert_subject_entries(&mut subject, cert, Nid::COMMONNAME, "CN");
-    add_cert_subject_entries(&mut subject, cert, Nid::PKCS9_EMAILADDRESS, "E");
-    add_cert_subject_entries(&mut subject, cert, Nid::ORGANIZATIONNAME, "O");
-    add_cert_subject_entries(&mut subject, cert, Nid::ORGANIZATIONALUNITNAME, "OU");
-    add_cert_subject_entries(&mut subject, cert, Nid::COUNTRYNAME, "C");
-    add_cert_subject_entries(&mut subject, cert, Nid::STATEORPROVINCENAME, "ST");
-
-    println!("{id:<32} {not_after:<24} {subject}");
-    Ok(())
+    Ok(certs_data)
 }
 
 /// Adds entries with given `nid` to given `subject` String.
 fn add_cert_subject_entries(
-    subject: &mut String,
+    subject: &mut HashMap<String, String>,
     cert: &X509Ref,
     nid: Nid,
     entry_short_name: &str,
 ) {
     if let Some(entries) = cert_subject_entries(cert, nid) {
-        subject.push_str(&format!("{entry_short_name}: {entries} "));
+        subject.insert(entry_short_name.to_string(), entries);
     }
 }
 
@@ -123,6 +105,60 @@ pub fn cert_to_id(cert: &X509Ref) -> anyhow::Result<String> {
     let txt = cert.to_text()?;
     let digest = Md5::digest(&txt);
     Ok(format!("{digest:x}"))
+}
+
+pub fn visit_certificates<T: CertBasicDataVisitor>(
+    cert_dir: &PathBuf,
+    visitor: T,
+) -> anyhow::Result<T> {
+    let keystore = Keystore::load(cert_dir)?;
+    let mut visitor = X509Visitor { visitor };
+    keystore.visit_certs(&mut visitor)?;
+    Ok(visitor.visitor)
+}
+
+pub struct CertBasicData {
+    pub id: String,
+    pub not_after: String,
+    pub subject: HashMap<String, String>,
+}
+
+impl TryFrom<&X509Ref> for CertBasicData {
+    type Error = anyhow::Error;
+
+    fn try_from(cert: &X509Ref) -> Result<Self, Self::Error> {
+        let id = cert_to_id(&cert)?;
+        let not_after = cert.not_after().to_string();
+        let mut subject = HashMap::new();
+        add_cert_subject_entries(&mut subject, cert, Nid::COMMONNAME, "CN");
+        add_cert_subject_entries(&mut subject, cert, Nid::PKCS9_EMAILADDRESS, "E");
+        add_cert_subject_entries(&mut subject, cert, Nid::ORGANIZATIONNAME, "O");
+        add_cert_subject_entries(&mut subject, cert, Nid::ORGANIZATIONALUNITNAME, "OU");
+        add_cert_subject_entries(&mut subject, cert, Nid::COUNTRYNAME, "C");
+        add_cert_subject_entries(&mut subject, cert, Nid::STATEORPROVINCENAME, "ST");
+
+        Ok(CertBasicData {
+            id,
+            not_after,
+            subject,
+        })
+    }
+}
+
+pub trait CertBasicDataVisitor {
+    fn accept(&mut self, cert_data: CertBasicData);
+}
+
+pub(crate) struct X509Visitor<T: CertBasicDataVisitor> {
+    visitor: T,
+}
+
+impl<T: CertBasicDataVisitor> X509Visitor<T> {
+    pub(crate) fn accept(&mut self, cert: &X509Ref) -> anyhow::Result<()> {
+        let cert_data = CertBasicData::try_from(cert)?;
+        self.visitor.accept(cert_data);
+        Ok(())
+    }
 }
 
 pub struct KeystoreManager {

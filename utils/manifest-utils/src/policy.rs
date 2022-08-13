@@ -9,9 +9,11 @@ use openssl::hash::MessageDigest;
 use openssl::pkey::{PKey, Public};
 use openssl::sign::Verifier;
 use openssl::x509::store::{X509Store, X509StoreBuilder};
-use openssl::x509::{X509ObjectRef, X509Ref, X509StoreContext, X509};
+use openssl::x509::{X509ObjectRef, X509StoreContext, X509};
 use structopt::StructOpt;
 use strum::{Display, EnumIter, EnumString, EnumVariantNames, IntoEnumIterator, VariantNames};
+
+use crate::util::{CertBasicDataVisitor, X509Visitor};
 
 /// Policy configuration
 #[derive(StructOpt, Clone, Debug, Default)]
@@ -165,19 +167,19 @@ impl Keystore {
         Ok(ids)
     }
 
-    pub fn visit_certs(
+    pub(crate) fn visit_certs<T: CertBasicDataVisitor>(
         &self,
-        visit_fn: impl Fn(&X509Ref) -> anyhow::Result<()>,
+        visitor: &mut X509Visitor<T>,
     ) -> anyhow::Result<()> {
         let inner = self.inner.read().unwrap();
         for cert in inner.objects().iter().flat_map(X509ObjectRef::x509) {
-            visit_fn(cert)?;
+            visitor.accept(cert)?;
         }
         Ok(())
     }
 
     fn load_file(store: &mut X509StoreBuilder, cert: &PathBuf) -> anyhow::Result<()> {
-        for cert in crate::parse_cert_file(cert)? {
+        for cert in crate::util::parse_cert_file(cert)? {
             store.add_cert(cert)?
         }
         Ok(())
