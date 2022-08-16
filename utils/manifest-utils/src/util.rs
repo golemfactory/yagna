@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::TryFrom;
 use std::ffi::OsStr;
 use std::fs::{self, DirEntry};
@@ -72,7 +72,7 @@ pub fn to_cert_data(certs: &Vec<X509>) -> anyhow::Result<Vec<CertBasicData>> {
 
 /// Adds entries with given `nid` to given `subject` String.
 fn add_cert_subject_entries(
-    subject: &mut HashMap<String, String>,
+    subject: &mut BTreeMap<String, String>,
     cert: &X509Ref,
     nid: Nid,
     entry_short_name: &str,
@@ -120,7 +120,7 @@ pub fn visit_certificates<T: CertBasicDataVisitor>(
 pub struct CertBasicData {
     pub id: String,
     pub not_after: String,
-    pub subject: HashMap<String, String>,
+    pub subject: BTreeMap<String, String>,
 }
 
 impl TryFrom<&X509Ref> for CertBasicData {
@@ -129,7 +129,7 @@ impl TryFrom<&X509Ref> for CertBasicData {
     fn try_from(cert: &X509Ref) -> Result<Self, Self::Error> {
         let id = cert_to_id(&cert)?;
         let not_after = cert.not_after().to_string();
-        let mut subject = HashMap::new();
+        let mut subject = BTreeMap::new();
         add_cert_subject_entries(&mut subject, cert, Nid::COMMONNAME, "CN");
         add_cert_subject_entries(&mut subject, cert, Nid::PKCS9_EMAILADDRESS, "E");
         add_cert_subject_entries(&mut subject, cert, Nid::ORGANIZATIONNAME, "O");

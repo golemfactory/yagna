@@ -4,10 +4,8 @@ use std::path::PathBuf;
 use serde_json::Value;
 use structopt::StructOpt;
 
-use ya_manifest_utils::{
-    util::{self, CertBasicData, CertBasicDataVisitor},
-    KeystoreLoadResult,
-};
+use ya_manifest_utils::util::{self, CertBasicData, CertBasicDataVisitor};
+use ya_manifest_utils::KeystoreLoadResult;
 use ya_utils_cli::{CommandOutput, ResponseTable};
 
 use crate::startup_config::ProviderConfig;
@@ -101,7 +99,7 @@ fn cert_dir_path(config: &ProviderConfig) -> anyhow::Result<PathBuf> {
     Ok(config.cert_dir.get_or_create()?)
 }
 
-fn print_cert_list(certs_data: Vec<CertBasicData>) {
+fn print_cert_list(certs_data: Vec<util::CertBasicData>) {
     let mut table_builder = CertTableBuilder::new();
     for data in certs_data {
         table_builder.with_row(data);
