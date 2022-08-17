@@ -6005,6 +6005,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
+name = "tar"
+version = "0.4.38"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4b55807c0344e1e6c04d7c965f5289c39a8d94ae23ed5c0b57aabac549f871c6"
+dependencies = [
+ "filetime",
+ "libc",
+ "xattr",
+]
+
+[[package]]
 name = "tempdir"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7577,14 +7588,13 @@ dependencies = [
  "semver 1.0.10",
  "serde",
  "serde_json",
- "serde_yaml 0.8.24",
+ "serde_yaml 0.9.4",
  "serial_test 0.9.0",
- "sha2 0.9.9",
  "shlex 1.1.0",
  "snailquote",
  "structopt",
  "strum 0.24.0",
- "tempdir",
+ "tar",
  "test-case",
  "thiserror",
  "url",

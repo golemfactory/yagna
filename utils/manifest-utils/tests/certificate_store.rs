@@ -13,7 +13,7 @@ extern crate serial_test;
     &[],
     &[],
     &[],
-    &[]; 
+    &[];
     "Load empty"
 )]
 #[test_case(
@@ -62,8 +62,7 @@ fn certificate_store_test(
     load_certificates(&resource_cert_dir, &test_cert_dir, certs_to_add);
     remove_certificates(&test_cert_dir, ids_to_remove);
     let mut visitor = TestCertDataVisitor::new(expected_ids);
-    visitor = visit_certificates(&test_cert_dir, visitor)
-        .expect("Can visit loaded certificates");
+    visitor = visit_certificates(&test_cert_dir, visitor).expect("Can visit loaded certificates");
     visitor.test();
     let certs = loaded_cert_files();
     assert_eq!(certs, to_set(expected_files));
