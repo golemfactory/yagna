@@ -127,7 +127,7 @@ impl TryFrom<&X509Ref> for CertBasicData {
     type Error = anyhow::Error;
 
     fn try_from(cert: &X509Ref) -> Result<Self, Self::Error> {
-        let id = cert_to_id(&cert)?;
+        let id = cert_to_id(cert)?;
         let not_after = cert.not_after().to_string();
         let mut subject = BTreeMap::new();
         add_cert_subject_entries(&mut subject, cert, Nid::COMMONNAME, "CN");
@@ -182,7 +182,7 @@ impl KeystoreManager {
 
         for cert_path in cert_paths {
             let mut new_certs = Vec::new();
-            let file_certs = parse_cert_file(&cert_path)?;
+            let file_certs = parse_cert_file(cert_path)?;
             if file_certs.is_empty() {
                 continue;
             }
@@ -208,7 +208,7 @@ impl KeystoreManager {
         if loaded.is_empty() {
             return Ok(KeystoreLoadResult::NothingNewToLoad { skipped });
         }
-        return Ok(KeystoreLoadResult::Loaded { loaded, skipped });
+        Ok(KeystoreLoadResult::Loaded { loaded, skipped })
     }
 
     pub fn remove_certs(self, ids: &HashSet<String>) -> anyhow::Result<KeystoreRemoveResult> {
@@ -292,9 +292,9 @@ impl KeystoreManager {
         cert_path: &PathBuf,
         certs: Vec<X509>,
     ) -> anyhow::Result<()> {
-        let file_stem = get_file_stem(&cert_path)
+        let file_stem = get_file_stem(cert_path)
             .ok_or_else(|| anyhow::anyhow!("Cannot get file name stem."))?;
-        let dot_extension = get_file_extension(&cert_path)
+        let dot_extension = get_file_extension(cert_path)
             .map(|ex| format!(".{ex}"))
             .unwrap_or(String::from(""));
         for cert in certs.into_iter() {

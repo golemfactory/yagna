@@ -1,70 +1,48 @@
-use ya_manifest_utils::util;
 
-#[cfg(test)]
-mod tests {
-    use std::{
-        collections::{BTreeSet, HashSet},
-        fs,
-        path::PathBuf,
-    };
+
+    use std::{collections::HashSet, fs, path::PathBuf};
 
     use ya_manifest_utils::{
         util::{self, CertBasicData, CertBasicDataVisitor},
-        Keystore,
+        KeystoreLoadResult, KeystoreRemoveResult,
     };
-
-    #[test]
-    fn load_empty_cert_dir_test() {
-        let (_, cert_dir) = init_cert_dirs();
-        let mut visitor = TestCertDataVisitor::default();
-        visitor =
-            util::visit_certificates(&cert_dir, visitor).expect("Visiting certificates works.");
-        visitor.test();
-        let certs = loaded_cert_files();
-        assert!(certs.is_empty(), "Cert dir is not empty");
-    }
-
-    #[test]
-    fn load_one_certificate() {
-        let (resource_cert_dir, test_cert_dir) = init_cert_dirs();
-        load_certificates(&resource_cert_dir, &test_cert_dir, vec!["foo_ca.cert.pem"]);
-        Keystore::load(&test_cert_dir).expect("Certificates can be loadeded from Keystore");
-        let mut visitor = TestCertDataVisitor::new(vec!["c128af8c6d0ba34d940582c01443911d"]);
-        visitor = util::visit_certificates(&test_cert_dir, visitor)
-            .expect("Can visit loaded certificates");
-        visitor.test();
-        let certs = loaded_cert_files();
-        assert_eq!(certs, vec_to_set(vec!["foo_ca.cert.pem"]));
-    }
-
-    fn load_certificates(
+    
+    pub fn load_certificates(
         resource_cert_dir: &PathBuf,
         test_cert_dir: &PathBuf,
-        certfile_names: Vec<&str>,
-    ) {
+        certfile_names: &[&str],
+    ) -> KeystoreLoadResult {
         let cert_paths: Vec<PathBuf> = certfile_names
             .iter()
             .map(|certfile_name| {
                 let mut cert_path = resource_cert_dir.clone();
                 cert_path.push(certfile_name);
-                return cert_path;
+                cert_path
             })
             .collect();
         let keystore_manager =
-            util::KeystoreManager::try_new(&test_cert_dir).expect("Can createt keystore manager");
+            util::KeystoreManager::try_new(test_cert_dir).expect("Can create keystore manager");
         keystore_manager
             .load_certs(&cert_paths)
-            .expect("Can load certificates");
+            .expect("Can load certificates")
+    }
+
+    pub fn remove_certificates(test_cert_dir: &PathBuf, cert_ids: &[&str]) -> KeystoreRemoveResult {
+        let keystore_manager =
+            util::KeystoreManager::try_new(test_cert_dir).expect("Can create keystore manager");
+        keystore_manager
+            .remove_certs(&to_set(cert_ids))
+            .expect("Can load certificates")
     }
 
     #[derive(Default)]
-    struct TestCertDataVisitor {
+    pub struct TestCertDataVisitor {
         expected: Vec<String>,
         actual: Vec<String>,
     }
 
     impl TestCertDataVisitor {
-        pub fn new(expected: Vec<&str>) -> Self {
+        pub fn new(expected: &[&str]) -> Self {
             let mut visitor = Self::default();
             visitor.expected = expected.iter().map(|s| s.to_string()).collect();
             visitor
@@ -77,13 +55,13 @@ mod tests {
 
     impl CertBasicDataVisitor for TestCertDataVisitor {
         fn accept(&mut self, cert_data: CertBasicData) {
-            self.actual.push(cert_data.id.clone());
+            self.actual.push(cert_data.id);
         }
     }
 
-    fn init_cert_dirs() -> (PathBuf, PathBuf) {
-        let mut resource_cert_dir = resource_cert_dir_path();
-        let mut store_cert_dir = store_cert_dir_path();
+    pub fn init_cert_dirs() -> (PathBuf, PathBuf) {
+        let resource_cert_dir = resource_cert_dir_path();
+        let store_cert_dir = store_cert_dir_path();
         if store_cert_dir.exists() {
             fs::remove_dir_all(&store_cert_dir).expect("Can delete test temp dir");
         }
@@ -91,7 +69,7 @@ mod tests {
         (resource_cert_dir, store_cert_dir)
     }
 
-    fn loaded_cert_files() -> HashSet<String> {
+    pub fn loaded_cert_files() -> HashSet<String> {
         let store_cert_dir = store_cert_dir_path();
         let cert_dir = fs::read_dir(store_cert_dir).expect("Can read cert dir");
         cert_dir
@@ -99,6 +77,12 @@ mod tests {
             .map(|file| file.expect("Can list cert files"))
             .map(|x| x.file_name().to_string_lossy().to_string())
             .collect()
+    }
+
+    pub fn to_set<T: AsRef<str>>(v: &[T]) -> HashSet<String> {
+        v.iter()
+            .map(|s| s.as_ref().to_string())
+            .collect::<HashSet<String>>()
     }
 
     fn resource_cert_dir_path() -> PathBuf {
@@ -112,8 +96,3 @@ mod tests {
         cert_dir.push("cert_dir");
         cert_dir
     }
-
-    fn vec_to_set(v: Vec<&str>) -> HashSet<String> {
-        v.iter().map(|s| s.to_string()).collect::<HashSet<String>>()
-    }
-}

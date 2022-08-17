@@ -31,6 +31,8 @@ openssl = { version = "0.10", features = ["vendored"] }
 md-5 = "0.10"
 
 [dev-dependencies]
-anyhow = "1.0.31"
-tempdir = "0.3.7"
-shlex = "1.1.0"
+anyhow = "1.0"
+serial_test = "0.9"
+shlex = "1.1"
+tempdir = "0.3"
+test-case = "2.2"

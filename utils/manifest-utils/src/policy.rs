@@ -149,7 +149,7 @@ impl Keystore {
             sig_alg.as_ref()
         ))?;
         let mut verifier = Verifier::new(msg_digest, pkey.as_ref())?;
-        if false == verifier.verify_oneshot(&sig, data.as_ref().as_bytes())? {
+        if !(verifier.verify_oneshot(&sig, data.as_ref().as_bytes())?) {
             return Err(anyhow::anyhow!("Invalid signature"));
         }
         Ok(())
@@ -197,7 +197,7 @@ impl Keystore {
             .map_err(|err| anyhow::anyhow!("Err: {}", err.to_string()))?;
         let cert_chain = openssl::stack::Stack::new()?;
         let mut ctx = X509StoreContext::new()?;
-        if false == ctx.init(&store, &cert, &cert_chain, |ctx| ctx.verify_cert())? {
+        if !(ctx.init(&store, &cert, &cert_chain, |ctx| ctx.verify_cert())?) {
             return Err(anyhow::anyhow!("Invalid certificate"));
         }
         Ok(cert.public_key()?)
