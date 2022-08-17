@@ -11,6 +11,7 @@ use ya_manifest_utils::{
 
 static INIT: Once = Once::new();
 
+#[allow(dead_code)]
 pub fn load_certificates(
     resource_cert_dir: &PathBuf,
     test_cert_dir: &PathBuf,
@@ -31,6 +32,7 @@ pub fn load_certificates(
         .expect("Can load certificates")
 }
 
+#[allow(dead_code)]
 pub fn remove_certificates(test_cert_dir: &PathBuf, cert_ids: &[&str]) -> KeystoreRemoveResult {
     let keystore_manager =
         util::KeystoreManager::try_new(test_cert_dir).expect("Can create keystore manager");
@@ -46,12 +48,14 @@ pub struct TestCertDataVisitor {
 }
 
 impl TestCertDataVisitor {
+    #[allow(dead_code)]
     pub fn new(expected: &[&str]) -> Self {
         let mut visitor = Self::default();
         visitor.expected = expected.iter().map(|s| s.to_string()).collect();
         visitor
     }
 
+    #[allow(dead_code)]
     pub fn test(&self) {
         assert_eq!(self.expected, self.actual)
     }
@@ -63,6 +67,7 @@ impl CertBasicDataVisitor for TestCertDataVisitor {
     }
 }
 
+#[allow(dead_code)]
 pub fn init_cert_dirs() -> (PathBuf, PathBuf) {
     let resource_cert_dir = resource_cert_dir_path();
     INIT.call_once(|| {
@@ -81,6 +86,7 @@ pub fn init_cert_dirs() -> (PathBuf, PathBuf) {
     (resource_cert_dir, store_cert_dir)
 }
 
+#[allow(dead_code)]
 pub fn loaded_cert_files() -> HashSet<String> {
     let store_cert_dir = store_cert_dir_path();
     let cert_dir = fs::read_dir(store_cert_dir).expect("Can read cert dir");
