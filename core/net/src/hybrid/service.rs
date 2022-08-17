@@ -4,8 +4,8 @@ use std::future::Future;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::rc::Rc;
 use std::str::FromStr;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::task::Poll;
 
@@ -22,7 +22,7 @@ use url::Url;
 use ya_core_model::{identity, net, NodeId};
 use ya_relay_client::codec::forward::{PrefixedSink, PrefixedStream, SinkKind};
 use ya_relay_client::crypto::CryptoProvider;
-use ya_relay_client::{Client, ClientBuilder, ForwardReceiver};
+use ya_relay_client::{Client, ClientBuilder, ForwardReceiver, TransportType};
 use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::CallReplyCode;
 use ya_service_bus::{typed, untyped as local_bus, Error, ResponseChunk, RpcEndpoint};
@@ -43,16 +43,9 @@ type BusReceiver = mpsc::Receiver<ResponseChunk>;
 type NetSender = mpsc::Sender<Vec<u8>>;
 type NetReceiver = mpsc::Receiver<Vec<u8>>;
 type NetSinkKind = SinkKind<NetSender, mpsc::SendError>;
-type NetSinkKey = (NodeId, bool);
+type NetSinkKey = (NodeId, TransportType);
 
 type ArcMap<K, V> = Arc<RwLock<HashMap<K, V>>>;
-
-#[derive(Clone, Copy)]
-enum TransportType {
-    Unreliable,
-    Reliable,
-    Transfer,
-}
 
 lazy_static::lazy_static! {
     pub(crate) static ref BCAST: BCastService = Default::default();
@@ -407,7 +400,7 @@ fn forward_bus_to_local(caller: &str, addr: &str, data: &[u8], state: &State, tx
     } {
         Some(address) => address,
         None => {
-            let err = format!("unknown address: {}", addr);
+            let err = format!("Net: unknown address: {}", addr);
             handler_reply_bad_request("unknown", err, tx);
             return;
         }
@@ -448,7 +441,7 @@ fn forward_bus_to_net(
         Ok(vec) => vec,
         Err(err) => {
             log::debug!("Forward bus->net ({caller_id} -> {remote_id}), address: {address}: invalid request: {err}");
-            handler_reply_bad_request(request_id, format!("Invalid request: {err}"), tx);
+            handler_reply_bad_request(request_id, format!("Net: invalid request: {err}"), tx);
             return rx;
         }
     };
@@ -473,12 +466,12 @@ fn forward_bus_to_net(
         match state.forward_sink(remote_id, transport).await {
             Ok(mut sink) => {
                 let _ = sink.send(msg).await.map_err(|_| {
-                    let err = "error sending message: session closed".to_string();
+                    let err = "Net: error sending message: session closed".to_string();
                     handler_reply_service_err(request_id, err, tx);
                 });
             }
             Err(error) => {
-                let err = format!("error forwarding message: {}", error);
+                let err = format!("Net: error forwarding message: {}", error);
                 handler_reply_service_err(request_id, err, tx);
             }
         };
@@ -545,10 +538,15 @@ fn forward_handler(
                     }
                 };
 
-                log::trace!("received forward packet ({} B)", fwd.payload.len());
+                log::trace!(
+                    "Net: received forward ({}) packet ({} B) from [{}]",
+                    fwd.reliable,
+                    fwd.payload.len(),
+                    fwd.node_id
+                );
 
                 if tx.send(fwd.payload).await.is_err() {
-                    log::debug!("net routing error: channel closed");
+                    log::debug!("Net routing error: channel closed for [{}]", fwd.node_id);
                     state.remove(&key);
                 }
             }
@@ -556,11 +554,13 @@ fn forward_handler(
         .boxed_local()
 }
 
-fn forward_channel<'a>(reliable: bool) -> (mpsc::Sender<Vec<u8>>, LocalBoxStream<'a, Vec<u8>>) {
+fn forward_channel<'a>(
+    reliable: TransportType,
+) -> (mpsc::Sender<Vec<u8>>, LocalBoxStream<'a, Vec<u8>>) {
     let (tx, rx) = mpsc::channel(1);
-    let rx = if reliable {
+    let rx = if reliable == TransportType::Reliable || reliable == TransportType::Transfer {
         PrefixedStream::new(rx)
-            .inspect_err(|e| log::debug!("prefixed stream error: {}", e))
+            .inspect_err(|e| log::debug!("Prefixed stream error: {e}"))
             .filter_map(|r| async move { r.ok().map(|b| b.to_vec()) })
             .boxed_local()
     } else {
@@ -573,12 +573,15 @@ fn forward_channel<'a>(reliable: bool) -> (mpsc::Sender<Vec<u8>>, LocalBoxStream
 fn inbound_handler(
     rx: impl Stream<Item = Vec<u8>> + 'static,
     remote_id: NodeId,
-    reliable: bool,
+    reliable: TransportType,
     state: State,
 ) -> impl Future<Output = ()> + Unpin + 'static {
     StreamExt::for_each(rx, move |payload| {
         let state = state.clone();
-        log::trace!("local bus handler -> inbound message");
+        log::trace!(
+            "local bus handler -> inbound message ({} B) from [{remote_id}]",
+            payload.len()
+        );
 
         async move {
             match codec::decode_message(payload.as_slice()) {
@@ -592,10 +595,10 @@ fn inbound_handler(
                     request @ ya_sb_proto::BroadcastRequest { .. },
                 ))) => handle_broadcast(request, remote_id),
                 Ok(None) => {
-                    log::trace!("received a partial message");
+                    log::trace!("Received a partial message from {remote_id}");
                     Ok(())
                 }
-                Err(err) => anyhow::bail!("received message error: {}", err),
+                Err(err) => anyhow::bail!("Received message error: {}", err),
                 _ => anyhow::bail!("unexpected message type"),
             }
         }
@@ -613,7 +616,7 @@ fn handle_request(
     request: ya_sb_proto::CallRequest,
     remote_id: NodeId,
     state: State,
-    reliable: bool,
+    transport: TransportType,
 ) -> anyhow::Result<()> {
     let caller_id = NodeId::from_str(&request.caller).ok();
     if !caller_id.map(|id| id == remote_id).unwrap_or(false) {
@@ -630,9 +633,6 @@ fn handle_request(
 
     log::debug!("Handle request {request_id} to {address} from {remote_id}");
 
-    let transfer_channel = Arc::new(AtomicBool::new(false));
-    let transfer_channel_ = transfer_channel.clone();
-
     let eos = Rc::new(AtomicBool::new(false));
     let eos_map = eos.clone();
 
@@ -643,12 +643,7 @@ fn handle_request(
             .iter()
             .find(|&id| address.starts_with(id))
             // replaces  /net/<dest_node_id>/test/1 --> /public/test/1
-            .map(|s| {
-                if s.starts_with("/transfer/") {
-                    transfer_channel_.store(true, Ordering::SeqCst);
-                }
-                address.replacen(s, net::PUBLIC_PREFIX, 1)
-            })
+            .map(|s| address.replacen(s, net::PUBLIC_PREFIX, 1))
     } {
         Some(address) => {
             log::trace!("Handle request: calling: {address}");
@@ -703,8 +698,6 @@ fn handle_request(
 
     tokio::task::spawn_local(
         async move {
-            let transport =
-                TransportType::from_spec(reliable, transfer_channel.load(Ordering::SeqCst));
             let mut sink = state.forward_sink(caller_id, transport).await?;
             let mut stream = Box::pin(stream);
 
@@ -949,21 +942,6 @@ fn gen_id() -> u64 {
     use rand::Rng;
     let mut rng = rand::thread_rng();
     rng.gen::<u64>() & 0x001f_ffff_ffff_ffff_u64
-}
-
-impl TransportType {
-    pub fn from_spec(reliable: bool, transfer: bool) -> TransportType {
-        match reliable {
-            true => {
-                if transfer {
-                    TransportType::Transfer
-                } else {
-                    TransportType::Reliable
-                }
-            }
-            false => TransportType::Unreliable,
-        }
-    }
 }
 
 #[cfg(test)]
