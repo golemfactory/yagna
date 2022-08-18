@@ -104,13 +104,20 @@ pub fn to_set<T: AsRef<str>>(v: &[T]) -> HashSet<String> {
 }
 
 fn unpack_cert_resources(cert_resources_dir: &PathBuf) {
-    let mut cert_archive = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    cert_archive.push("resources/test/certificates.tar");
+    let mut cert_archive = test_resources_dir_path();
+    cert_archive.push("certificates.tar");
     let cert_archive = File::open(cert_archive).expect("Can open cert archive file");
     let mut cert_archive = Archive::new(cert_archive);
     cert_archive
         .unpack(cert_resources_dir)
         .expect("Can unack cert archive");
+}
+
+#[allow(dead_code)]
+pub fn test_resources_dir_path() -> PathBuf {
+    let mut test_resources = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    test_resources.push("resources/test");
+    test_resources
 }
 
 fn resource_cert_dir_path() -> PathBuf {
