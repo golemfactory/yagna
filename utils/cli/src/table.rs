@@ -8,7 +8,6 @@ pub fn print_table(
     summary: &Vec<serde_json::Value>,
 ) {
     let mut table = Table::new();
-    //table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
     table.set_format(*FORMAT_BASIC);
 
     table.set_titles(Row::new(

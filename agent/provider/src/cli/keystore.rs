@@ -51,7 +51,7 @@ fn list(config: ProviderConfig) -> anyhow::Result<()> {
     let table_builder = util::visit_certificates(&cert_dir, table_builder)?;
     let table = table_builder.build();
     let output = CommandOutput::from(table);
-    output.print(false);
+    output.print(config.json);
     Ok(())
 }
 
@@ -60,19 +60,19 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
     let keystore_manager = util::KeystoreManager::try_new(&cert_dir)?;
     match keystore_manager.load_certs(&add.certs)? {
         KeystoreLoadResult::Loaded { loaded, skipped } => {
-            println!("Added certificates:");
+            println_conditional(config.json, "Added certificates:");
             let certs_data = util::to_cert_data(&loaded)?;
-            print_cert_list(certs_data);
-            if !skipped.is_empty() {
+            print_cert_list(config.json, certs_data);
+            if !skipped.is_empty() && !config.json {
                 println!("Certificates already loaded to keystore:");
                 let certs_data = util::to_cert_data(&skipped)?;
-                print_cert_list(certs_data);
+                print_cert_list(config.json, certs_data);
             }
         }
         KeystoreLoadResult::NothingNewToLoad { skipped } => {
-            println!("No new certificate to add. Skipped:");
+            println_conditional(config.json, "No new certificate to add. Skipped:");
             let certs_data = util::to_cert_data(&skipped)?;
-            print_cert_list(certs_data);
+            print_cert_list(config.json, certs_data);
         }
     }
     Ok(())
@@ -84,12 +84,12 @@ fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
     let ids: HashSet<String> = remove.ids.into_iter().collect();
     match keystore_manager.remove_certs(&ids)? {
         util::KeystoreRemoveResult::NothingToRemove => {
-            println!("No matching certificates to remove.");
+            println_conditional(config.json, "No matching certificates to remove.");
         }
         util::KeystoreRemoveResult::Removed { removed } => {
             println!("Removed certificates:");
             let certs_data = util::to_cert_data(&removed)?;
-            print_cert_list(certs_data);
+            print_cert_list(config.json, certs_data);
         }
     };
     Ok(())
@@ -99,14 +99,14 @@ fn cert_dir_path(config: &ProviderConfig) -> anyhow::Result<PathBuf> {
     Ok(config.cert_dir.get_or_create()?)
 }
 
-fn print_cert_list(certs_data: Vec<util::CertBasicData>) {
+fn print_cert_list(json_output: bool, certs_data: Vec<util::CertBasicData>) {
     let mut table_builder = CertTableBuilder::new();
     for data in certs_data {
         table_builder.with_row(data);
     }
     let table = table_builder.build();
     let output = CommandOutput::from(table);
-    output.print(false);
+    output.print(json_output);
 }
 
 struct CertTableBuilder {
@@ -140,5 +140,11 @@ impl CertTableBuilder {
 impl CertBasicDataVisitor for CertTableBuilder {
     fn accept(&mut self, data: CertBasicData) {
         self.with_row(data)
+    }
+}
+
+fn println_conditional(skip: bool, txt: &str) {
+    if !skip {
+        println!("{txt}");
     }
 }
