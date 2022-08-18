@@ -95,10 +95,10 @@ async def test_e2e_outbound(
 
         # Payment
         # Todo probably unnecessary
-        for agreement_id, provider in agreement_providers:
-            await provider.wait_for_invoice_sent()
-            invoices = await requestor.gather_invoices(agreement_id)
-            assert all(inv.agreement_id == agreement_id for inv in invoices)
-            # TODO:
-            await requestor.pay_invoices(invoices)
-            await provider.wait_for_invoice_paid()
+        
+        await provider.wait_for_invoice_sent()
+        invoices = await requestor.gather_invoices(agreement_id)
+        assert all(inv.agreement_id == agreement_id for inv in invoices)
+        # TODO:
+        await requestor.pay_invoices(invoices)
+        await provider.wait_for_invoice_paid()
