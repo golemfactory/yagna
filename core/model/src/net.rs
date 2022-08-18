@@ -182,6 +182,7 @@ pub mod local {
         pub seen: Duration,
         pub duration: Duration,
         pub ping: Duration,
+        pub metrics: StatusMetrics,
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]

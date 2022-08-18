@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
@@ -188,4 +189,9 @@ proxy!(
     Shutdown -> anyhow::Result<()>,
     shutdown,
     |mut client: Client| async move { client.shutdown().await }
+);
+proxy!(
+    GetSessionMetrics -> HashMap<NodeId, ChannelMetrics>,
+    session_metrics,
+    |client: Client| async move { client.session_metrics().await }
 );

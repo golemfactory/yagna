@@ -42,6 +42,8 @@ pub(crate) fn bind_service() {
             let mut responses = Vec::new();
             let now = Instant::now();
 
+            let mut metrics = client.session_metrics().await?;
+
             for session in client.sessions().await? {
                 let node_id = client.remote_id(session.remote).await?;
                 let kind = match node_id {
@@ -52,6 +54,10 @@ pub(crate) fn bind_service() {
                     None => "server",
                 };
 
+                let mut metric = node_id
+                    .and_then(|node_id| metrics.remove(&node_id))
+                    .unwrap_or(ChannelMetrics::default());
+
                 responses.push(model::SessionResponse {
                     node_id,
                     id: session.id.to_string(),
@@ -60,6 +66,7 @@ pub(crate) fn bind_service() {
                     seen: now - session.last_seen,
                     duration: now - session.created,
                     ping: session.last_ping,
+                    metrics: to_status_metrics(&mut metric),
                 });
             }
 
