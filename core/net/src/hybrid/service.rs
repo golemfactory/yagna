@@ -515,7 +515,7 @@ fn forward_handler(
         .for_each(move |fwd| {
             let state = state.clone();
             async move {
-                let key = (fwd.node_id, fwd.reliable);
+                let key = (fwd.node_id, fwd.transport);
                 let mut tx = match {
                     let inner = state.inner.borrow();
                     inner.routes.get(&key).cloned()
@@ -523,7 +523,7 @@ fn forward_handler(
                     Some(cached) => cached,
                     None => {
                         let state = state.clone();
-                        let (tx, rx) = forward_channel(fwd.reliable);
+                        let (tx, rx) = forward_channel(fwd.transport);
                         {
                             let mut inner = state.inner.borrow_mut();
                             inner.routes.insert(key, tx.clone());
@@ -531,7 +531,7 @@ fn forward_handler(
                         tokio::task::spawn_local(inbound_handler(
                             rx,
                             fwd.node_id,
-                            fwd.reliable,
+                            fwd.transport,
                             state,
                         ));
                         tx
@@ -540,7 +540,7 @@ fn forward_handler(
 
                 log::trace!(
                     "Net: received forward ({}) packet ({} B) from [{}]",
-                    fwd.reliable,
+                    fwd.transport,
                     fwd.payload.len(),
                     fwd.node_id
                 );
@@ -555,10 +555,10 @@ fn forward_handler(
 }
 
 fn forward_channel<'a>(
-    reliable: TransportType,
+    transport: TransportType,
 ) -> (mpsc::Sender<Vec<u8>>, LocalBoxStream<'a, Vec<u8>>) {
     let (tx, rx) = mpsc::channel(1);
-    let rx = if reliable == TransportType::Reliable || reliable == TransportType::Transfer {
+    let rx = if transport == TransportType::Reliable || transport == TransportType::Transfer {
         PrefixedStream::new(rx)
             .inspect_err(|e| log::debug!("Prefixed stream error: {e}"))
             .filter_map(|r| async move { r.ok().map(|b| b.to_vec()) })
@@ -573,7 +573,7 @@ fn forward_channel<'a>(
 fn inbound_handler(
     rx: impl Stream<Item = Vec<u8>> + 'static,
     remote_id: NodeId,
-    reliable: TransportType,
+    transport: TransportType,
     state: State,
 ) -> impl Future<Output = ()> + Unpin + 'static {
     StreamExt::for_each(rx, move |payload| {
@@ -586,7 +586,7 @@ fn inbound_handler(
         async move {
             match codec::decode_message(payload.as_slice()) {
                 Ok(Some(GsbMessage::CallRequest(request @ ya_sb_proto::CallRequest { .. }))) => {
-                    handle_request(request, remote_id, state, reliable)
+                    handle_request(request, remote_id, state, transport)
                 }
                 Ok(Some(GsbMessage::CallReply(reply @ ya_sb_proto::CallReply { .. }))) => {
                     handle_reply(reply, remote_id, state)
@@ -749,10 +749,11 @@ fn handle_reply(
         None => anyhow::bail!("invalid reply request id: {}", reply.request_id),
     };
 
+    let request_id = reply.request_id.clone();
     let data = if reply.code == CallReplyCode::CallReplyOk as i32 {
         reply.data
     } else {
-        codec::encode_reply(reply).context("unable to encode reply")?
+        codec::encode_reply(reply).context("Unable to encode reply {request_id}")?
     };
 
     tokio::task::spawn_local(async move {
@@ -762,7 +763,7 @@ fn handle_reply(
             ResponseChunk::Part(data)
         };
         if request.tx.send(chunk).await.is_err() {
-            log::debug!("failed to forward reply: channel closed");
+            log::debug!("Failed to forward reply {request_id}: channel closed");
         }
     });
 

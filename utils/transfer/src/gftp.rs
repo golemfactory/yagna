@@ -116,6 +116,11 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
                 };
 
                 let send_fut = chunk_rx.try_for_each_concurrent(concurrency, |chunk| async {
+                    log::trace!(
+                        "Sending chunk ({} B) at offset: {}",
+                        chunk.content.len(),
+                        chunk.offset
+                    );
                     remote.call(model::UploadChunk { chunk }).await??;
                     Ok(())
                 });
@@ -130,8 +135,12 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
                     Err(either) => return Err(either.factor_first().0),
                 };
 
-                let hash = Some(format!("{:x}", digest));
-                remote.call(model::UploadFinished { hash }).await??;
+                let hash = format!("{:x}", digest);
+                log::debug!("Finishing transfer of {url}. Hash: {hash}. Sending UploadFinished..");
+
+                remote
+                    .call(model::UploadFinished { hash: Some(hash) })
+                    .await??;
                 Result::<(), Error>::Ok(())
             }
             .map_err(Error::from);
