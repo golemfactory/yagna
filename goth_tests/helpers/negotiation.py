@@ -14,6 +14,11 @@ logger = logging.getLogger("goth.tests.helpers.negotiation")
 
 MAX_PROPOSAL_EXCHANGES = 10
 
+class PayloadManifest:
+    payload: str
+    payload_sig: str
+    payload_sig_alg: str
+    cert: str
 
 class DemandBuilder:
     """Helper for building custom Demands.
@@ -28,7 +33,7 @@ class DemandBuilder:
         self._constraints = "()"
         self._properties["golem.node.debug.subnet"] = DEFAULT_SUBNET
 
-    def props_from_template(self, task_package: Optional[str]) -> "DemandBuilder":
+    def props_from_template(self, task_package: Optional[str], payload_manifest: Optional[PayloadManifest]) -> "DemandBuilder":
         """Build default properties."""
 
         new_props = {
@@ -40,6 +45,11 @@ class DemandBuilder:
 
         if task_package is not None:
             new_props["golem.srv.comp.task_package"] = task_package
+        if payload_manifest is not None:
+            new_props["golem.srv.comp.payload"] = payload_manifest.payload
+            new_props["golem.srv.comp.payload.sig"] = payload_manifest.payload_sig
+            new_props["golem.srv.comp.payload.sig.algorithm"] = payload_manifest.payload_sig_alg
+            new_props["golem.srv.comp.payload.cert"] = payload_manifest.cert
 
         self._properties.update(new_props)
         return self
