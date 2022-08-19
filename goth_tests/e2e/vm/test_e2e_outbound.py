@@ -80,7 +80,9 @@ async def test_e2e_outbound(
 
         # Activity
 
-        #TODO make outbound script
+        output_file = "out.txt"
+        output_path = Path(runner.web_root_path) / "upload" / output_file
+
         exe_script = vm_exe_script_outbound(runner, output_file)
         num_commands = len(exe_script)
 

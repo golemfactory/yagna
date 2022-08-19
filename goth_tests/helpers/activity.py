@@ -110,7 +110,7 @@ def wasi_exe_script(runner: Runner, output_file: str = "upload_file"):
         },
     ]
 
-def vm_exe_script_outbound(runner: Runner, output_file: str = "output.png"):
+def vm_exe_script_outbound(runner: Runner, output_file: str = "out.txt"):
     """VM exe script builder."""
     """Create a VM exe script for running a outbound task."""
 
