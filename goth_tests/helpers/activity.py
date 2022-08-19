@@ -122,7 +122,7 @@ def vm_exe_script_outbound(runner: Runner, output_file: str = "out.txt"):
     return [
         {"deploy": {}},
         {"start": {}},
-        {"run": {"entry_point": "curl -X 'GET' 'mkdir /golem/output && https://api.coingecko.com/api/v3/simple/price?ids=golem&vs_currencies=usd'  -H 'accept: application/json' | jq .golem.usd > /golem/output/output.json", "args": []}},
+        {"run": {"entry_point": "curl -X 'GET' 'mkdir /golem/output && https://api.coingecko.com/api/v3/simple/price?ids=golem&vs_currencies=usd'  -H 'accept: application/json' | jq .golem.usd > /golem/output/output.txt", "args": []}},
         {
             "transfer": {
                 "from": f"container:/golem/output/{output_file}",
