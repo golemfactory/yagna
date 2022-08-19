@@ -109,7 +109,7 @@ def wasi_exe_script(runner: Runner, output_file: str = "upload_file"):
             }
         },
     ]
-def vm_exe_script_outbound(runner: Runner, output_file: str = "out.txt"):
+def vm_exe_script_outbound(runner: Runner, output_file: str = "output.txt"):
     """VM exe script builder."""
     """Create a VM exe script for running a outbound task."""
 
@@ -122,10 +122,10 @@ def vm_exe_script_outbound(runner: Runner, output_file: str = "out.txt"):
     return [
         {"deploy": {}},
         {"start": {}},
-        {"run": {"entry_point": "mkdir /golem/output && curl -X 'GET' 'https://api.coingecko.com/api/v3/simple/price?ids=golem&vs_currencies=usd'  -H 'accept: application/json' | jq .golem.usd > /golem/output/output.txt", "args": []}},
+        {"run": {"entry_point": "/golem/entrypoints/request.sh", "args": []}},
         {
             "transfer": {
-                "from": f"container:/golem/output/{output_file}",
+                "from": f"container:/golem/output/output.txt",
                 "to": f"{web_server_addr}/upload/{output_file}",
             }
         },
