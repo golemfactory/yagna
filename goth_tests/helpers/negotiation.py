@@ -15,10 +15,12 @@ logger = logging.getLogger("goth.tests.helpers.negotiation")
 MAX_PROPOSAL_EXCHANGES = 10
 
 class PayloadManifest:
-    payload: str
-    payload_sig: str
-    payload_sig_alg: str
-    cert: str
+    def __init__(self, payload: str, payload_sig: str, payload_sig_alg: str, cert: str):
+        self.payload = payload
+        self.payload_sig = payload_sig
+        self.payload_sig_alg = payload_sig_alg
+        self.cert = cert
+
 
 class DemandBuilder:
     """Helper for building custom Demands.
