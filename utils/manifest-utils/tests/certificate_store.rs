@@ -91,15 +91,18 @@ mod tests {
         // Having
         let (resource_cert_dir, test_cert_dir) = init_cert_dirs();
         let colliding_name = "foo_inter.cert.pem";
-        let mut duplicated_name_1 = resource_cert_dir.clone();
-        duplicated_name_1.push(colliding_name);
-        let mut duplicated_name_2 = resource_cert_dir.clone();
-        duplicated_name_2.push("copy");
-        fs::create_dir_all(&duplicated_name_2).expect("Can create dir");
-        duplicated_name_2.push(colliding_name);
+
+        let mut colliding_file_1 = resource_cert_dir.clone();
+        colliding_file_1.push(colliding_name);
+
+        let mut colliding_file_2 = resource_cert_dir.clone();
+        colliding_file_2.push("copy");
+        fs::create_dir_all(&colliding_file_2).expect("Can create dir");
+        colliding_file_2.push(colliding_name);
         let mut other = resource_cert_dir.clone();
         other.push("foo_req.cert.pem");
-        fs::copy(other, duplicated_name_2).expect("Can copy file");
+        fs::copy(other, colliding_file_2).expect("Can copy file");
+
         load_certificates(
             &resource_cert_dir,
             &test_cert_dir,

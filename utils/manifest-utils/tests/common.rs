@@ -43,8 +43,8 @@ pub fn remove_certificates(test_cert_dir: &PathBuf, cert_ids: &[&str]) -> Keysto
 
 #[derive(Default)]
 pub struct TestCertDataVisitor {
-    expected: Vec<String>,
-    actual: Vec<String>,
+    expected: HashSet<String>,
+    actual: HashSet<String>,
 }
 
 impl TestCertDataVisitor {
@@ -63,7 +63,7 @@ impl TestCertDataVisitor {
 
 impl CertBasicDataVisitor for TestCertDataVisitor {
     fn accept(&mut self, cert_data: CertBasicData) {
-        self.actual.push(cert_data.id);
+        self.actual.insert(cert_data.id);
     }
 }
 
