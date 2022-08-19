@@ -19,7 +19,7 @@ from goth.runner.container.payment import PaymentIdPool
 from goth.runner.container.yagna import YagnaContainerConfig
 from goth.runner.probe import RequestorProbe
 
-from goth_tests.helpers.activity import vm_exe_script
+from goth_tests.helpers.activity import vm_exe_script_outbound
 from goth_tests.helpers.negotiation import DemandBuilder, PayloadManifest, negotiate_agreements
 from goth_tests.helpers.probe import ProviderProbe
 
@@ -54,12 +54,7 @@ async def test_e2e_outbound(
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         provider = runner.get_probes(probe_type=ProviderProbe)[0] #TODO probably change to one provider
 
-
-        # Setup trusted certs in provider
-        #TODO
-
         # Market
-        
         payload_manifest = PayloadManifest(
             payload="ewogICJ2ZXJzaW9uIjogIjAuMS4wIiwKICAiY3JlYXRlZEF0IjogIjIwMjItMDctMjZUMTI6NTE6MDAuMDAwMDAwWiIsCiAgImV4cGlyZXNBdCI6ICIyMTAwLTAxLTAxVDAwOjAxOjAwLjAwMDAwMFoiLAogICJtZXRhZGF0YSI6IHsKICAgICJuYW1lIjogIkV4dGVybmFsIEFQSSBjYWxsIGV4YW1wbGUiLAogICAgImRlc2NyaXB0aW9uIjogIkV4YW1wbGUgbWFuaWZlc3Qgb2YgYSBzZXJ2aWNlIG1ha2luZyBhbiBvdXRib3VuZCBjYWxsIHRvIHRoZSBleHRlcm5hbCBBUEkiLAogICAgInZlcnNpb24iOiAiMC4xLjAiCiAgfSwKICAicGF5bG9hZCI6IFsKICAgIHsKICAgICAgInBsYXRmb3JtIjogewogICAgICAgICJhcmNoIjogIng4Nl82NCIsCiAgICAgICAgIm9zIjogImxpbnV4IgogICAgICB9LAogICAgICAidXJscyI6IFsKICAgICAgICAiaHR0cDovL3lhY24yLmRldi5nb2xlbS5uZXR3b3JrOjgwMDAvZG9ja2VyLWdvbGVtLWN1cmwtanEtbGF0ZXN0LTU4ZWI1YjQzMTYuZ3ZtaSIKICAgICAgXSwKICAgICAgImhhc2giOiAic2hhMzo4NDY3NmI5ZDI5Y2M4NmVjNDg2MmRkOGVlOTkxYTNmNjRlOWYxNWJiYzAwZWUzZmRmYTc4MTA1ZiIKICAgIH0KICBdLAogICJjb21wTWFuaWZlc3QiOiB7CiAgICAidmVyc2lvbiI6ICIwLjEuMCIsCiAgICAic2NyaXB0IjogewogICAgICAiY29tbWFuZHMiOiBbCiAgICAgICAgInJ1biAuKmN1cmwuKiIKICAgICAgXSwKICAgICAgIm1hdGNoIjogInJlZ2V4IgogICAgfSwKICAgICJuZXQiOiB7CiAgICAgICJpbmV0IjogewogICAgICAgICJvdXQiOiB7CiAgICAgICAgICAicHJvdG9jb2xzIjogWwogICAgICAgICAgICAiaHR0cHMiCiAgICAgICAgICBdLAogICAgICAgICAgInVybHMiOiBbCiAgICAgICAgICAgICJodHRwczovL2FwaS5jb2luZ2Vja28uY29tIgogICAgICAgICAgXQogICAgICAgIH0KICAgICAgfQogICAgfQogIH0KfQo=",
             payload_sig="YKilgw5kCRKXqcb6SdZB5d79kj1s3kvCuQmSW9Tg37062d7yPcPo1ZjuB2qIAvcd+XAdZ+Oy8THSPZikrHKyyU/1sTaMWU7J30RhWxkVVazfnrN8f9NMPstSNXB7TxMXug9Vfg4K6hjZerrMT34wlUzHyhHCdPHmD78tHp5RyqU0nCVWwHWZT3XaqI+/f41h046dijIqPSe7Tfbo3a8hGwwmoq1DZomMea+nu+cWV8Bpr1nMvBu+ksUNrF89bcSvm6l5RVDu1YJHdICzpw9uWJ5kmVpiYg1GYknGzy/FoVmBymOcB8m+O46zxumu4L4R9xwolS54Bieve/+DJuHpQg==",
@@ -77,7 +72,7 @@ async def test_e2e_outbound(
         agreement_providers = await negotiate_agreements(
             requestor,
             demand,
-            [provider], #TODO is it valid list?
+            [provider],
             lambda proposal: proposal.properties.get("golem.runtime.name") == "vm",
         )
 
@@ -86,7 +81,7 @@ async def test_e2e_outbound(
         # Activity
 
         #TODO make outbound script
-        exe_script = vm_exe_script(runner, output_file)
+        exe_script = vm_exe_script_outbound(runner, output_file)
         num_commands = len(exe_script)
 
         logger.info("Running activity on %s", provider.name)
