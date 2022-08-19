@@ -107,9 +107,11 @@ pub async fn bind_remote(
 
     bind_net_handler(net::BUS_ID, central_bus.clone(), default_node_id);
     bind_net_handler(net::BUS_ID_UDP, central_bus.clone(), default_node_id);
+    bind_net_handler(net::BUS_ID_TRANSFER, central_bus.clone(), default_node_id);
 
     bind_from_handler("/from", central_bus.clone(), nodes.clone());
     bind_from_handler("/udp/from", central_bus.clone(), nodes.clone());
+    bind_from_handler("/transfer/from", central_bus.clone(), nodes.clone());
 
     // Subscribe broadcast on remote
     {
