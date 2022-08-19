@@ -179,10 +179,17 @@ pub async fn bind_remote(
     Ok(done_rx)
 }
 
-fn strip_udp(addr: &str) -> &str {
+fn strip_prefixes_for_compatibility(addr: &str) -> &str {
     // Central NET doesn't support unreliable transport, so we just remove prefix
     // and use reliable protocol.
-    match addr.strip_prefix("/udp") {
+    let addr = match addr.strip_prefix("/udp") {
+        None => addr,
+        Some(wo_prefix) => wo_prefix,
+    };
+
+    // Central NET doesn't support transfer transport, so we just remove prefix
+    // and use tcp protocol.
+    match addr.strip_prefix("/transfer") {
         None => addr,
         Some(wo_prefix) => wo_prefix,
     }
@@ -214,7 +221,7 @@ fn bind_net_handler<Transport, H>(
     let default_caller_rpc = default_node_id.to_string();
     let rpc = move |_caller: &str, addr: &str, msg: &[u8]| {
         let caller = default_caller_rpc.clone();
-        let addr = strip_udp(addr);
+        let addr = strip_prefixes_for_compatibility(addr);
 
         log_message("rpc", &caller, addr);
         let addr = addr.to_string();
@@ -227,7 +234,7 @@ fn bind_net_handler<Transport, H>(
     let default_caller_stream = default_node_id.to_string();
     let stream = move |_caller: &str, addr: &str, msg: &[u8]| {
         let caller = default_caller_stream.clone();
-        let addr = strip_udp(addr);
+        let addr = strip_prefixes_for_compatibility(addr);
 
         log_message("stream", &caller, addr);
         let addr = addr.to_string();
@@ -254,7 +261,7 @@ fn bind_from_handler<Transport, H>(
     let nodes_rpc = nodes.clone();
     let central_bus_rpc = central_bus.clone();
     let rpc = move |_caller: &str, addr: &str, msg: &[u8]| {
-        let addr = strip_udp(addr);
+        let addr = strip_prefixes_for_compatibility(addr);
 
         let (from_node, to_addr) = match parse_from_addr(addr) {
             Ok(v) => v,
@@ -278,7 +285,7 @@ fn bind_from_handler<Transport, H>(
     let nodes_stream = nodes.clone();
     let central_bus_stream = central_bus.clone();
     let stream = move |_caller: &str, addr: &str, msg: &[u8]| {
-        let addr = strip_udp(addr);
+        let addr = strip_prefixes_for_compatibility(addr);
 
         let (from_node, to_addr) = match parse_from_addr(addr) {
             Ok(v) => v,
