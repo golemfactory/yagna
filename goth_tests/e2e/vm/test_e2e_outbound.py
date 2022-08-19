@@ -84,6 +84,7 @@ async def test_e2e_outbound(
         output_path = Path(runner.web_root_path) / "upload" / output_file
 
         exe_script = vm_exe_script_outbound(runner, output_file)
+
         num_commands = len(exe_script)
 
         logger.info("Running activity on %s", provider.name)
