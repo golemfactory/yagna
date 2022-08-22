@@ -39,6 +39,8 @@ pub struct PolicyConfig {
     pub policy_trust_property: Vec<(String, Match)>,
     #[structopt(skip)]
     pub trusted_keys: Option<Keystore>,
+    #[structopt(skip)]
+    pub domain_whitelist: HashSet<String>,
 }
 
 impl PolicyConfig {

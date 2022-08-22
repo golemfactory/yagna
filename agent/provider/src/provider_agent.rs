@@ -148,11 +148,9 @@ impl ProviderAgent {
         args.market.session_id = format!("{}-{}", name, std::process::id());
         args.runner.session_id = args.market.session_id.clone();
         args.payment.session_id = args.market.session_id.clone();
-        args.market
-            .negotiator_config
-            .composite_config
-            .policy_config
-            .trusted_keys = Some(keystore.clone());
+        let policy_config = &mut args.market.negotiator_config.composite_config.policy_config;
+        policy_config.trusted_keys = Some(keystore.clone());
+        policy_config.domain_whitelist = config.domain_whitelist.clone().into_iter().collect();
 
         let networks = args.node.account.networks.clone();
         for n in networks.iter() {

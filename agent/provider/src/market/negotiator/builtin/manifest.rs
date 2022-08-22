@@ -1,9 +1,10 @@
+use std::collections::HashSet;
 use std::ops::Not;
 
 use ya_agreement_utils::{Error, OfferDefinition};
 use ya_manifest_utils::policy::{Keystore, Match, Policy, PolicyConfig};
 use ya_manifest_utils::{
-    decode_manifest, Feature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
+    decode_manifest, AppManifest, Feature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
     DEMAND_MANIFEST_PROPERTY, DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY, DEMAND_MANIFEST_SIG_PROPERTY,
 };
 
@@ -13,6 +14,7 @@ use crate::market::negotiator::*;
 pub struct ManifestSignature {
     enabled: bool,
     keystore: Keystore,
+    domain_whitelist: HashSet<String>,
 }
 
 impl NegotiatorComponent for ManifestSignature {
@@ -39,7 +41,7 @@ impl NegotiatorComponent for ManifestSignature {
             return Ok(NegotiationResult::Ready { offer });
         }
 
-        match self.verify_signature(demand, manifest_encoded) {
+        match self.verify_manifest(demand, manifest_encoded, manifest) {
             Err(err) => rejection(format!("failed to verify manifest signature: {}", err)),
             Ok(()) => Ok(NegotiationResult::Ready { offer }),
         }
@@ -86,25 +88,56 @@ impl From<PolicyConfig> for ManifestSignature {
         ManifestSignature {
             enabled,
             keystore: config.trusted_keys.unwrap_or_default(),
+            domain_whitelist: config.domain_whitelist,
         }
     }
 }
 
 impl ManifestSignature {
     /// Verifies fields base64 encoding, then validates certificate, then validates signature, then verifies manifest content and returns it
-    fn verify_signature<S: AsRef<str>>(
+    fn verify_manifest<S: AsRef<str>>(
         &self,
         demand: &ProposalView,
-        manifest: S,
+        manifest_encoded: S,
+        manifest: AppManifest,
     ) -> anyhow::Result<()> {
-        let sig: String = demand.get_property(DEMAND_MANIFEST_SIG_PROPERTY)?;
+        let sig = match demand.get_property::<String>(DEMAND_MANIFEST_SIG_PROPERTY) {
+            Ok(sig) => sig,
+            Err(Error::NoKey(_)) => return self.verify_if_inet_out_urls_whitelisted(manifest),
+            Err(e) => anyhow::bail!(format!("invalid manifest signature type: {:?}", e)),
+        };
         log::trace!("sig_hex: {}", sig);
         let sig_alg: String = demand.get_property(DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY)?;
         log::trace!("sig_alg: {}", sig_alg);
         let cert: String = demand.get_property(DEMAND_MANIFEST_CERT_PROPERTY)?;
         log::trace!("cert: {}", cert);
-        log::trace!("manifest: {}", manifest.as_ref());
-        self.keystore.verify_signature(cert, sig, sig_alg, manifest)
+        log::trace!("manifest: {}", manifest_encoded.as_ref());
+        self.keystore
+            .verify_signature(cert, sig, sig_alg, manifest_encoded)
+    }
+
+    fn verify_if_inet_out_urls_whitelisted(&self, manifest: AppManifest) -> anyhow::Result<()> {
+        if let Some(urls) = manifest
+            .comp_manifest
+            .and_then(|comp_manifest| comp_manifest.net)
+            .and_then(|net| net.inet)
+            .and_then(|inet| inet.out)
+            .and_then(|inet_out| inet_out.urls)
+        {
+            let non_whitelisted_urls: HashSet<String> = urls
+                .iter()
+                .flat_map(url::Url::domain)
+                .map(str::to_string)
+                .filter(|domain| self.domain_whitelist.contains(domain).not())
+                .collect();
+            if non_whitelisted_urls.is_empty() {
+                return Ok(());
+            }
+            anyhow::bail!(
+                "no signed manifest with non whitelisted domains: {non_whitelisted_urls:?}"
+            )
+        }
+        anyhow::bail!("no manifest signature")
     }
 }
 
