@@ -98,7 +98,7 @@ async def test_e2e_outbound(
         await provider.wait_for_exeunit_finished()
 
         assert output_path.is_file()
-        # assert output_path.stat().st_size > 0
+        assert output_path.read_text() > 0
 
         # Payment
         # Todo probably unnecessary
