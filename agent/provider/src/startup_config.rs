@@ -72,6 +72,14 @@ pub struct ProviderConfig {
         default_value = &*DEFAULT_CERT_DIR,
     )]
     pub cert_dir: DataDir,
+    /// Whitelist of allowed domains
+    #[structopt(
+        long,
+        set = clap::ArgSettings::Global,
+        env = "PROVIDER_DOMAIN_WHITELIST",
+        required = false
+    )]
+    pub domain_whitelist: Vec<String>,
 
     #[structopt(skip = GLOBALS_JSON)]
     pub globals_file: PathBuf,
@@ -83,22 +91,22 @@ pub struct ProviderConfig {
     #[structopt(
         long,
         set = clap::ArgSettings::Global,
-        env = "YA_RT_CORES")
-    ]
+        env = "YA_RT_CORES"
+    )]
     pub rt_cores: Option<usize>,
     /// Max amount of available RAM (GiB)
     #[structopt(
         long,
         set = clap::ArgSettings::Global,
-        env = "YA_RT_MEM")
-    ]
+        env = "YA_RT_MEM"
+    )]
     pub rt_mem: Option<f64>,
     /// Max amount of available storage (GiB)
     #[structopt(
         long,
         set = clap::ArgSettings::Global,
-        env = "YA_RT_STORAGE")
-    ]
+        env = "YA_RT_STORAGE"
+    )]
     pub rt_storage: Option<f64>,
 
     #[structopt(long, set = clap::ArgSettings::Global)]
