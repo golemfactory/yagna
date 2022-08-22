@@ -51,7 +51,7 @@ async def test_e2e_vm(
         # Market
         demand = (
             DemandBuilder(requestor)
-            .props_from_template(vm_task_package)
+            .props_from_template(vm_task_package, payload_manifest=None)
             .constraints("(&(golem.runtime.name=vm))")
             .build()
         )
