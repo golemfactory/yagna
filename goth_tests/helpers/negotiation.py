@@ -35,7 +35,7 @@ class DemandBuilder:
         self._constraints = "()"
         self._properties["golem.node.debug.subnet"] = DEFAULT_SUBNET
 
-    def props_from_template(self, task_package: Optional[str], payload_manifest: Optional[PayloadManifest]) -> "DemandBuilder":
+    def props_from_template(self, task_package: Optional[str], payload_manifest: Optional[PayloadManifest] = None) -> "DemandBuilder":
         """Build default properties."""
 
         new_props = {
