@@ -55,14 +55,10 @@ async def test_e2e_outbound(
         requestor = runner.get_probes(probe_type=RequestorProbe)[0]
         provider = runner.get_probes(probe_type=ProviderProbe)[0]
 
-        with open(f"{runner.web_root_path}/outbound_manifest.json") as f:
-            manifest = f.read()
-        with open(f"{runner.web_root_path}/outbound_signature.sha256.base64") as f:
-            signature = f.read()
-        with open(f"{runner.web_root_path}/outbound_certificate.cert") as f:
-            certificate = f.read()
-
-
+        manifest = open(f"{runner.web_root_path}/outbound_manifest.json").read()
+        signature = open(f"{runner.web_root_path}/outbound_signature.sha256.base64").read()
+        certificate = open(f"{runner.web_root_path}/outbound_certificate.cert").read()
+            
         # Market
         payload_manifest = PayloadManifest(
             payload=base64.b64encode(manifest.encode('utf-8')).decode("utf-8"),
