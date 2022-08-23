@@ -61,10 +61,10 @@ async def test_e2e_outbound(
             
         # Market
         payload_manifest = PayloadManifest(
-            payload=base64.b64encode(manifest.encode('utf-8')).decode("utf-8"),
+            payload=base64.b64encode(manifest.encode()).decode(),
             payload_sig=signature,
             payload_sig_alg="sha256",
-            cert=base64.b64encode(certificate.encode('utf-8')).decode("utf-8"),
+            cert=base64.b64encode(certificate.encode()).decode(),
         )
 
         demand = (
