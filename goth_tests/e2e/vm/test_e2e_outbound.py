@@ -65,10 +65,10 @@ async def test_e2e_outbound(
 
         # Market
         payload_manifest = PayloadManifest(
-            payload=base64.b64encode(manifest.encode('ascii')).decode("utf-8"),
+            payload=base64.b64encode(manifest.encode('utf-8')).decode("utf-8"),
             payload_sig=signature,
             payload_sig_alg="sha256",
-            cert=base64.b64encode(certificate.encode('ascii')).decode("utf-8"),
+            cert=base64.b64encode(certificate.encode('utf-8')).decode("utf-8"),
         )
 
         demand = (
@@ -110,11 +110,9 @@ async def test_e2e_outbound(
         assert len(output_path.read_text()) > 0
 
         # Payment
-        # Todo probably unnecessary
 
         await provider.wait_for_invoice_sent()
         invoices = await requestor.gather_invoices(agreement_id)
         assert all(inv.agreement_id == agreement_id for inv in invoices)
-        # TODO:
         await requestor.pay_invoices(invoices)
         await provider.wait_for_invoice_paid()
