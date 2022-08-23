@@ -58,18 +58,15 @@ async def test_e2e_outbound(
         manifest = open(f"{runner.web_root_path}/outbound_manifest.json").read()
         signature = open(f"{runner.web_root_path}/outbound_signature.sha256.base64").read()
         certificate = open(f"{runner.web_root_path}/outbound_certificate.cert").read()
-            
-        # Market
-        payload_manifest = PayloadManifest(
-            payload=base64.b64encode(manifest.encode()).decode(),
-            payload_sig=signature,
-            payload_sig_alg="sha256",
-            cert=base64.b64encode(certificate.encode()).decode(),
-        )
 
+        # Market
         demand = (
             DemandBuilder(requestor)
-            .props_from_template(task_package=None, payload_manifest=payload_manifest)
+            .props_from_template(task_package = None)
+            .property("golem.srv.comp.payload", base64.b64encode(manifest.encode()).decode())
+            .property("golem.srv.comp.payload.sig", signature)
+            .property("golem.srv.comp.payload.sig.algorithm", "sha256")
+            .property("golem.srv.comp.payload.cert", base64.b64encode(certificate.encode()).decode())
             .constraints("(&(golem.runtime.name=vm))")
             .build()
         )
