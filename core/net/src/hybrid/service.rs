@@ -11,7 +11,6 @@ use std::task::Poll;
 
 use anyhow::{anyhow, Context as AnyhowContext};
 use futures::channel::{mpsc, oneshot};
-use futures::lock::Mutex;
 use futures::stream::LocalBoxStream;
 use futures::{FutureExt, SinkExt, Stream, StreamExt, TryStreamExt};
 use metrics::counter;
@@ -19,38 +18,35 @@ use tokio::sync::RwLock;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use url::Url;
 
+use ya_core_model::net::local::{SendBroadcastMessage, SendBroadcastStub};
 use ya_core_model::{identity, net, NodeId};
 use ya_relay_client::codec::forward::{PrefixedSink, PrefixedStream, SinkKind};
 use ya_relay_client::crypto::CryptoProvider;
 use ya_relay_client::{Client, ClientBuilder, ForwardReceiver, TransportType};
 use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::CallReplyCode;
-use ya_service_bus::{typed, untyped as local_bus, Error, ResponseChunk, RpcEndpoint};
+use ya_service_bus::{
+    serialization, typed, untyped as local_bus, Error, ResponseChunk, RpcEndpoint, RpcMessage,
+};
 use ya_utils_networking::resolver;
 
 use crate::bcast::BCastService;
 use crate::config::Config;
 use crate::hybrid::client::{ClientActor, ClientProxy};
 use crate::hybrid::codec;
+use crate::hybrid::codec::encode_message;
 use crate::hybrid::crypto::IdentityCryptoProvider;
 
 const DEFAULT_NET_RELAY_HOST: &str = "127.0.0.1:7464";
 
-pub type BCastHandler = Box<dyn FnMut(String, &[u8]) + Send>;
-
 type BusSender = mpsc::Sender<ResponseChunk>;
 type BusReceiver = mpsc::Receiver<ResponseChunk>;
 type NetSender = mpsc::Sender<Vec<u8>>;
-type NetReceiver = mpsc::Receiver<Vec<u8>>;
 type NetSinkKind = SinkKind<NetSender, mpsc::SendError>;
 type NetSinkKey = (NodeId, TransportType);
 
-type ArcMap<K, V> = Arc<RwLock<HashMap<K, V>>>;
-
 lazy_static::lazy_static! {
     pub(crate) static ref BCAST: BCastService = Default::default();
-    pub(crate) static ref BCAST_HANDLERS: ArcMap<String, Arc<Mutex<BCastHandler>>> = Default::default();
-    pub(crate) static ref BCAST_SENDER: Arc<RwLock<Option<NetSender>>> = Default::default();
     pub(crate) static ref SHUTDOWN_TX: Arc<RwLock<Option<oneshot::Sender<()>>>> = Default::default();
 }
 
@@ -125,9 +121,6 @@ pub async fn start_network(
 
     ClientActor::init(client.clone());
 
-    let (btx, brx) = mpsc::channel(1);
-    BCAST_SENDER.write().await.replace(btx);
-
     let receiver = client.clone().forward_receiver().await.unwrap();
     let mut services: HashSet<_> = Default::default();
     ids.iter().for_each(|id| {
@@ -195,9 +188,9 @@ pub async fn start_network(
         from_handler(),
     );
 
-    tokio::task::spawn_local(broadcast_handler(brx, broadcast_size));
     tokio::task::spawn_local(forward_handler(receiver, state.clone()));
 
+    bind_broadcast_handlers(broadcast_size);
     bind_identity_event_handler(crypto).await;
 
     if let Some(address) = client.public_addr().await {
@@ -480,28 +473,71 @@ fn forward_bus_to_net(
     rx
 }
 
-/// Forward broadcast messages from the network to the local bus
+/// Forward broadcast messages from the local bus to the network
 fn broadcast_handler(
-    rx: NetReceiver,
+    caller: &str,
+    _addr: &str,
+    msg: &[u8],
     broadcast_size: u32,
-) -> impl Future<Output = ()> + Unpin + 'static {
-    StreamExt::for_each(rx, move |payload| {
-        async move {
-            let client = CLIENT
-                .with(|c| c.borrow().clone())
-                .ok_or_else(|| anyhow::anyhow!("network not initialized"))?;
-            client
-                .broadcast(payload, broadcast_size)
-                .await
-                .map_err(|e| anyhow!("Broadcast failed: {}", e))
+) -> impl Future<Output = Result<Vec<u8>, Error>> {
+    let message = msg.to_vec();
+    let caller = caller.to_string();
+
+    async move {
+        let stub: SendBroadcastStub = serialization::from_slice(&message)
+            .map_err(|e| Error::GsbFailure(format!("Invalid broadcast message: {e}")))?;
+
+        let request = GsbMessage::BroadcastRequest(ya_sb_proto::BroadcastRequest {
+            //data: serialization::to_vec(&message)?,
+            data: message,
+            caller,
+            topic: stub.topic,
+        });
+
+        let payload = encode_message(request).map_err(|e| Error::EncodingProblem(e.to_string()))?;
+
+        let client = CLIENT
+            .with(|c| c.borrow().clone())
+            .ok_or_else(|| Error::GsbFailure(format!("Network not initialized")))?;
+        client
+            .broadcast(payload, broadcast_size)
+            .await
+            .map_err(|e| Error::GsbFailure(format!("Broadcast failed: {e}")))?;
+
+        Ok(Vec::from(serialization::to_vec(&Ok::<(), ()>(())).unwrap()))
+    }
+    .then(|result| async move {
+        if let Err(e) = &result {
+            log::debug!("Unable to broadcast message: {e}")
         }
-        .then(|result: anyhow::Result<()>| async move {
-            if let Err(e) = result {
-                log::debug!("Unable to broadcast message: {}", e)
-            }
-        })
+        result
     })
-    .boxed_local()
+}
+
+fn bind_broadcast_handlers(broadcast_size: u32) {
+    let _ = typed::bind(
+        net::local::BUS_ID,
+        move |subscribe: net::local::Subscribe| {
+            let topic = subscribe.topic().to_owned();
+            let bcast = BCAST.clone();
+
+            async move {
+                log::debug!("NET: Subscribe topic {}", topic);
+                let (_is_new, id) = bcast.add(subscribe).await;
+                log::debug!("NET: Created new topic: {}", topic);
+                Ok(id)
+            }
+        },
+    );
+
+    let bcast_service_id = <SendBroadcastMessage<()> as RpcMessage>::ID;
+    let _ = local_bus::subscribe(
+        &format!("{}/{}", net::local::BUS_ID, bcast_service_id),
+        move |caller: &str, addr: &str, msg: &[u8]| {
+            broadcast_handler(caller, addr, msg, broadcast_size)
+        },
+        (),
+    );
 }
 
 /// Handle incoming forward messages
@@ -777,7 +813,7 @@ fn handle_broadcast(
 ) -> anyhow::Result<()> {
     let caller_id = NodeId::from_str(&request.caller).ok();
     if !caller_id.map(|id| id == remote_id).unwrap_or(false) {
-        anyhow::bail!("invalid broadcast caller id: {}", request.caller);
+        anyhow::bail!("Invalid broadcast caller id: {}", request.caller);
     }
 
     log::trace!(
@@ -789,18 +825,24 @@ fn handle_broadcast(
     let caller = caller_id.unwrap().to_string();
 
     tokio::task::spawn_local(async move {
-        let data: Rc<[u8]> = request.data.into();
+        let data = request.data;
         let topic = request.topic;
 
-        let handlers = BCAST_HANDLERS.read().await;
-        for handler in BCAST
+        for endpoint in BCAST
             .resolve(&topic)
             .await
             .into_iter()
-            .filter_map(|e| handlers.get(e.as_ref()))
+            .map(|endpoint| endpoint.as_ref().to_string())
         {
-            let mut h = handler.lock().await;
-            (*(h))(caller.clone(), data.as_ref());
+            let bcast_service_id = <SendBroadcastMessage<()> as RpcMessage>::ID;
+            let addr = format!("{}/{}", endpoint, bcast_service_id);
+
+            log::trace!(
+                "Forwarding broadcast from [{caller}] (topic: {topic}) to endpoint: {addr})"
+            );
+            if let Err(e) = local_bus::send(&addr, &caller, &data).await {
+                log::debug!("Forwarding broadcast from [{caller}] to local endpoint error: {e}");
+            }
         }
     });
 
