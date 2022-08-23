@@ -1,0 +1,45 @@
+{
+  "version": "0.1.0",
+  "createdAt": "2022-07-26T12:51:00.000000Z",
+  "expiresAt": "2100-01-01T00:01:00.000000Z",
+  "metadata": {
+    "name": "External API call example",
+    "description": "Example manifest of a service making an outbound call to the external API",
+    "version": "0.1.0"
+  },
+  "payload": [
+    {
+      "platform": {
+        "arch": "x86_64",
+        "os": "linux"
+      },
+      "urls": [
+        "http://yacn2.dev.golem.network:8000/docker-golem-curl-jq-script-latest-921958ea62.gvmi"
+      ],
+      "hash": "sha3:f5dd0f6afdffd94a5c8b9eb43ec4ae3bd92f5be31e46aa0b9c421a71"
+    }
+  ],
+  "compManifest": {
+    "version": "0.1.0",
+    "script": {
+      "commands": [
+        "run .*curl.*",
+        "run .*request.sh.*",
+        "transfer .*output.txt"
+      ],
+      "match": "regex"
+    },
+    "net": {
+      "inet": {
+        "out": {
+          "protocols": [
+            "https"
+          ],
+          "urls": [
+            "https://api.coingecko.com"
+          ]
+        }
+      }
+    }
+  }
+}
