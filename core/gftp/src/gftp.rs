@@ -14,7 +14,7 @@ use url::{quirks::hostname, Position, Url};
 
 use ya_core_model::gftp as model;
 use ya_core_model::identity;
-use ya_core_model::net::TryRemoteEndpoint;
+use ya_core_model::net::{RemoteEndpoint, TryRemoteEndpoint};
 use ya_core_model::NodeId;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
@@ -129,7 +129,7 @@ pub async fn download_from_url(url: &Url, dst_path: &Path) -> Result<()> {
 }
 
 pub async fn download_file(node_id: NodeId, hash: &str, dst_path: &Path) -> Result<()> {
-    let remote = node_id.try_service(&model::file_bus_id(hash))?;
+    let remote = node_id.service_transfer(&model::file_bus_id(hash));
     log::debug!("Creating target file {}", dst_path.display());
 
     let mut file = create_dest_file(dst_path)?;

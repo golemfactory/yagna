@@ -68,6 +68,8 @@ impl NetCommand {
                         "seen".into(),
                         "time".into(),
                         "ping".into(),
+                        "in [MiB]".into(),
+                        "out [MiB]".into(),
                     ],
                     values: sessions
                         .into_iter()
@@ -83,6 +85,8 @@ impl NetCommand {
                                 format_duration(seen).to_string(),
                                 format_duration(duration).to_string(),
                                 format_duration(ping).to_string(),
+                                to_mib(s.metrics.tx_total, is_json),
+                                to_mib(s.metrics.rx_total, is_json),
                             ]}
                         })
                         .collect(),

@@ -7,6 +7,7 @@ use ya_service_bus::typed::Endpoint;
 
 pub const BUS_ID: &str = "/net";
 pub const BUS_ID_UDP: &str = "/udp/net";
+pub const BUS_ID_TRANSFER: &str = "/transfer/net";
 
 // TODO: replace with dedicated endpoint/service descriptor with enum for visibility
 pub const PUBLIC_PREFIX: &str = "/public";
@@ -181,6 +182,7 @@ pub mod local {
         pub seen: Duration,
         pub duration: Duration,
         pub ping: Duration,
+        pub metrics: StatusMetrics,
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
@@ -324,6 +326,11 @@ pub fn net_service_udp(service: impl ToString) -> String {
     format!("{}/{}", BUS_ID_UDP, service.to_string())
 }
 
+#[inline]
+pub fn net_transfer_service(service: impl ToString) -> String {
+    format!("{}/{}", BUS_ID_TRANSFER, service.to_string())
+}
+
 fn extract_exported_part(local_service_addr: &str) -> &str {
     assert!(local_service_addr.starts_with(PUBLIC_PREFIX));
     &local_service_addr[PUBLIC_PREFIX.len()..]
@@ -332,6 +339,7 @@ fn extract_exported_part(local_service_addr: &str) -> &str {
 pub trait RemoteEndpoint {
     fn service(&self, bus_addr: &str) -> bus::Endpoint;
     fn service_udp(&self, bus_addr: &str) -> bus::Endpoint;
+    fn service_transfer(&self, bus_addr: &str) -> bus::Endpoint;
 }
 
 impl RemoteEndpoint for NodeId {
@@ -350,6 +358,14 @@ impl RemoteEndpoint for NodeId {
             extract_exported_part(bus_addr)
         ))
     }
+
+    fn service_transfer(&self, bus_addr: &str) -> Endpoint {
+        bus::service(format!(
+            "{}{}",
+            net_transfer_service(self),
+            extract_exported_part(bus_addr)
+        ))
+    }
 }
 
 impl RemoteEndpoint for NetDst {
@@ -365,6 +381,15 @@ impl RemoteEndpoint for NetDst {
     fn service_udp(&self, bus_addr: &str) -> Endpoint {
         bus::service(format!(
             "/udp/from/{}/to/{}{}",
+            self.src,
+            self.dst,
+            extract_exported_part(bus_addr)
+        ))
+    }
+
+    fn service_transfer(&self, bus_addr: &str) -> Endpoint {
+        bus::service(format!(
+            "/transfer/from/{}/to/{}{}",
             self.src,
             self.dst,
             extract_exported_part(bus_addr)
@@ -422,6 +447,17 @@ mod tests {
         assert_eq!(
             net_service(&node_id),
             "/net/0xbabe000000000000000000000000000000000000".to_string()
+        );
+    }
+
+    #[test]
+    fn test_transfer_service() {
+        let node_id: NodeId = "0xbabe000000000000000000000000000000000000"
+            .parse()
+            .unwrap();
+        assert_eq!(
+            node_id.service_transfer("/public/zima/x").addr(),
+            "/transfer/net/0xbabe000000000000000000000000000000000000/zima/x"
         );
     }
 }

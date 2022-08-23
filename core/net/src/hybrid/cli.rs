@@ -42,6 +42,8 @@ pub(crate) fn bind_service() {
             let mut responses = Vec::new();
             let now = Instant::now();
 
+            let mut metrics = client.session_metrics().await?;
+
             for session in client.sessions().await? {
                 let node_id = client.remote_id(session.remote).await?;
                 let kind = match node_id {
@@ -52,6 +54,10 @@ pub(crate) fn bind_service() {
                     None => "server",
                 };
 
+                let mut metric = node_id
+                    .and_then(|node_id| metrics.remove(&node_id))
+                    .unwrap_or(ChannelMetrics::default());
+
                 responses.push(model::SessionResponse {
                     node_id,
                     id: session.id.to_string(),
@@ -60,6 +66,7 @@ pub(crate) fn bind_service() {
                     seen: now - session.last_seen,
                     duration: now - session.created,
                     ping: session.last_ping,
+                    metrics: to_status_metrics(&mut metric),
                 });
             }
 
@@ -127,10 +134,10 @@ pub async fn cli_ping() -> anyhow::Result<Vec<GsbPingResponse>> {
     let mut results = join_all(
         nodes
             .iter()
-            .map(|(id, alias)| {
+            .map(|(id, _)| {
                 let target_id = *id;
 
-                async move {
+                let udp_future = async move {
                     let udp_before = Instant::now();
 
                     ya_net::from(our_node_id)
@@ -142,47 +149,46 @@ pub async fn cli_ping() -> anyhow::Result<Vec<GsbPingResponse>> {
 
                     anyhow::Ok(udp_before.elapsed())
                 }
-                .map_err(|e| anyhow!("(Udp ping). {}", e))
-                .and_then(move |udp_ping| {
-                    async move {
-                        let tcp_before = Instant::now();
+                .map_err(|e| anyhow!("(Udp ping). {}", e));
 
-                        ya_net::from(our_node_id)
-                            .to(target_id)
-                            .service(ya_net::DIAGNOSTIC)
-                            .send(GsbRemotePing {})
-                            .timeout(Some(ping_timeout))
-                            .await???;
+                let tcp_future = async move {
+                    let tcp_before = Instant::now();
 
-                        let tcp_ping = tcp_before.elapsed();
+                    ya_net::from(our_node_id)
+                        .to(target_id)
+                        .service(ya_net::DIAGNOSTIC)
+                        .send(GsbRemotePing {})
+                        .timeout(Some(ping_timeout))
+                        .await???;
 
-                        anyhow::Ok(GsbPingResponse {
-                            node_id: target_id,
-                            node_alias: *alias,
-                            tcp_ping,
-                            udp_ping,
-                            is_p2p: false, // Updated later
-                        })
-                    }
-                    .map_err(|e| anyhow!("(Tcp ping). {}", e))
-                })
+                    anyhow::Ok(tcp_before.elapsed())
+                }
+                .map_err(|e| anyhow!("(Tcp ping). {}", e));
+
+                futures::future::join(udp_future, tcp_future)
             })
             .collect::<Vec<_>>(),
     )
     .await
     .into_iter()
     .enumerate()
-    .map(|(idx, result)| match result {
-        Ok(ping) => ping,
-        Err(e) => {
+    .map(|(idx, results)| {
+        if let Err(e) = &results.0 {
             log::warn!("Failed to ping node: {} {}", nodes[idx].0, e);
-            GsbPingResponse {
-                node_id: nodes[idx].0,
-                node_alias: nodes[idx].1,
-                tcp_ping: ping_timeout,
-                udp_ping: ping_timeout,
-                is_p2p: false, // Updated later
-            }
+        }
+        if let Err(e) = &results.1 {
+            log::warn!("Failed to ping node: {} {}", nodes[idx].0, e);
+        }
+
+        let udp_ping = results.0.unwrap_or(ping_timeout.clone());
+        let tcp_ping = results.1.unwrap_or(ping_timeout.clone());
+
+        GsbPingResponse {
+            node_id: nodes[idx].0,
+            node_alias: nodes[idx].1,
+            tcp_ping,
+            udp_ping,
+            is_p2p: false, // Updated later
         }
     })
     .collect::<Vec<_>>();
