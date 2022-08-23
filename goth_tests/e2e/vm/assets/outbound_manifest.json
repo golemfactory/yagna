@@ -32,12 +32,8 @@
     "net": {
       "inet": {
         "out": {
-          "protocols": [
-            "https"
-          ],
-          "urls": [
-            "https://api.coingecko.com"
-          ]
+          "protocols": ["https"],
+          "urls": ["https://api.coingecko.com"]
         }
       }
     }
