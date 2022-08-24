@@ -11,7 +11,6 @@ use ya_manifest_utils::{
 
 static INIT: Once = Once::new();
 
-#[allow(dead_code)]
 pub fn load_certificates(
     resource_cert_dir: &PathBuf,
     test_cert_dir: &PathBuf,
@@ -32,7 +31,6 @@ pub fn load_certificates(
         .expect("Can load certificates")
 }
 
-#[allow(dead_code)]
 pub fn remove_certificates(test_cert_dir: &PathBuf, cert_ids: &[&str]) -> KeystoreRemoveResult {
     let keystore_manager =
         util::KeystoreManager::try_new(test_cert_dir).expect("Can create keystore manager");
@@ -67,7 +65,6 @@ impl CertBasicDataVisitor for TestCertDataVisitor {
     }
 }
 
-#[allow(dead_code)]
 pub fn init_cert_dirs() -> (PathBuf, PathBuf) {
     let resource_cert_dir = resource_cert_dir_path();
     INIT.call_once(|| {
@@ -86,7 +83,6 @@ pub fn init_cert_dirs() -> (PathBuf, PathBuf) {
     (resource_cert_dir, store_cert_dir)
 }
 
-#[allow(dead_code)]
 pub fn loaded_cert_files() -> HashSet<String> {
     let store_cert_dir = store_cert_dir_path();
     let cert_dir = fs::read_dir(store_cert_dir).expect("Can read cert dir");
@@ -113,7 +109,6 @@ fn unpack_cert_resources(cert_resources_dir: &PathBuf) {
         .expect("Can unack cert archive");
 }
 
-#[allow(dead_code)]
 pub fn test_resources_dir_path() -> PathBuf {
     let mut test_resources = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     test_resources.push("resources/test");

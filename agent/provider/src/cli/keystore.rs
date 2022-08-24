@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use serde_json::Value;
 use structopt::StructOpt;
 
 use ya_manifest_utils::util::{self, CertBasicData, CertBasicDataVisitor};
@@ -47,11 +46,9 @@ impl KeystoreConfig {
 
 fn list(config: ProviderConfig) -> anyhow::Result<()> {
     let cert_dir = cert_dir_path(&config)?;
-    let table_builder = CertTableBuilder::new();
-    let table_builder = util::visit_certificates(&cert_dir, table_builder)?;
-    let table = table_builder.build();
-    let output = CommandOutput::from(table);
-    output.print(config.json);
+    let table = CertTable::new();
+    let table = util::visit_certificates(&cert_dir, table)?;
+    table.print(&config);
     Ok(())
 }
 
@@ -60,19 +57,19 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
     let keystore_manager = util::KeystoreManager::try_new(&cert_dir)?;
     match keystore_manager.load_certs(&add.certs)? {
         KeystoreLoadResult::Loaded { loaded, skipped } => {
-            println_conditional(config.json, "Added certificates:");
+            println_conditional(&config, "Added certificates:");
             let certs_data = util::to_cert_data(&loaded)?;
-            print_cert_list(config.json, certs_data);
+            print_cert_list(&config, certs_data);
             if !skipped.is_empty() && !config.json {
                 println!("Certificates already loaded to keystore:");
                 let certs_data = util::to_cert_data(&skipped)?;
-                print_cert_list(config.json, certs_data);
+                print_cert_list(&config, certs_data);
             }
         }
         KeystoreLoadResult::NothingNewToLoad { skipped } => {
-            println_conditional(config.json, "No new certificate to add. Skipped:");
+            println_conditional(&config, "No new certificate to add. Skipped:");
             let certs_data = util::to_cert_data(&skipped)?;
-            print_cert_list(config.json, certs_data);
+            print_cert_list(&config, certs_data);
         }
     }
     Ok(())
@@ -84,12 +81,12 @@ fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
     let ids: HashSet<String> = remove.ids.into_iter().collect();
     match keystore_manager.remove_certs(&ids)? {
         util::KeystoreRemoveResult::NothingToRemove => {
-            println_conditional(config.json, "No matching certificates to remove.");
+            println_conditional(&config, "No matching certificates to remove.");
         }
         util::KeystoreRemoveResult::Removed { removed } => {
             println!("Removed certificates:");
             let certs_data = util::to_cert_data(&removed)?;
-            print_cert_list(config.json, certs_data);
+            print_cert_list(&config, certs_data);
         }
     };
     Ok(())
@@ -99,22 +96,19 @@ fn cert_dir_path(config: &ProviderConfig) -> anyhow::Result<PathBuf> {
     Ok(config.cert_dir.get_or_create()?)
 }
 
-fn print_cert_list(json_output: bool, certs_data: Vec<util::CertBasicData>) {
-    let mut table_builder = CertTableBuilder::new();
+fn print_cert_list(config: &ProviderConfig, certs_data: Vec<util::CertBasicData>) {
+    let mut table = CertTable::new();
     for data in certs_data {
-        table_builder.with_row(data);
+        table.add(data);
     }
-    let table = table_builder.build();
-    let output = CommandOutput::from(table);
-    output.print(json_output);
+    table.print(&config);
 }
 
-struct CertTableBuilder {
-    columns: Vec<String>,
-    values: Vec<Value>,
+struct CertTable {
+    table: ResponseTable,
 }
 
-impl CertTableBuilder {
+impl CertTable {
     pub fn new() -> Self {
         let columns = vec![
             "ID".to_string(),
@@ -122,29 +116,29 @@ impl CertTableBuilder {
             "Subject".to_string(),
         ];
         let values = vec![];
-        Self { columns, values }
+        let table = ResponseTable { columns, values };
+        Self { table }
     }
 
-    pub fn with_row(&mut self, data: CertBasicData) {
-        let row = serde_json::json! {[ data.id, data.not_after, data.subject ]};
-        self.values.push(row);
+    pub fn print(self, config: &ProviderConfig) {
+        let output = CommandOutput::from(self.table);
+        output.print(config.json);
     }
 
-    pub fn build(self) -> ResponseTable {
-        let columns = self.columns;
-        let values = self.values;
-        ResponseTable { columns, values }
+    pub fn add(&mut self, data: CertBasicData) {
+        self.accept(data)
     }
 }
 
-impl CertBasicDataVisitor for CertTableBuilder {
+impl CertBasicDataVisitor for CertTable {
     fn accept(&mut self, data: CertBasicData) {
-        self.with_row(data)
+        let row = serde_json::json! {[ data.id, data.not_after, data.subject ]};
+        self.table.values.push(row);
     }
 }
 
-fn println_conditional(skip: bool, txt: &str) {
-    if !skip {
+fn println_conditional(config: &ProviderConfig, txt: &str) {
+    if !config.json {
         println!("{txt}");
     }
 }
