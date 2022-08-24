@@ -21,7 +21,7 @@ from goth.runner.container.yagna import YagnaContainerConfig
 from goth.runner.probe import RequestorProbe
 
 from goth_tests.helpers.activity import vm_exe_script_outbound
-from goth_tests.helpers.negotiation import DemandBuilder, PayloadManifest, negotiate_agreements
+from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
 from goth_tests.helpers.probe import ProviderProbe
 
 logger = logging.getLogger("goth.test.e2e_outbound")
