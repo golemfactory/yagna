@@ -17,7 +17,7 @@ impl CommandOutput {
         Ok(CommandOutput::Object(serde_json::to_value(value)?))
     }
 
-    pub fn print(&self, json_output: bool) {
+    pub fn print(&self, json_output: bool) -> Result<()> {
         match self {
             CommandOutput::NoOutput => {
                 if json_output {
@@ -31,7 +31,7 @@ impl CommandOutput {
                 header,
             } => {
                 if json_output {
-                    crate::table::print_json_table(columns, values)
+                    crate::table::print_json_table(columns, values)?
                 } else {
                     if let Some(txt) = header {
                         println!("{}", txt);
@@ -41,17 +41,18 @@ impl CommandOutput {
             }
             CommandOutput::Object(v) => {
                 if json_output {
-                    println!("{}", serde_json::to_string_pretty(&v).unwrap())
+                    println!("{}", serde_json::to_string_pretty(&v)?)
                 } else {
                     match v {
                         serde_json::Value::String(s) => {
                             println!("{}", s);
                         }
-                        v => println!("{}", serde_yaml::to_string(&v).unwrap()),
+                        v => println!("{}", serde_yaml::to_string(&v)?),
                     }
                 }
             }
         }
+        Ok(())
     }
 }
 

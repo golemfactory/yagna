@@ -112,7 +112,7 @@ impl CliArgs {
     pub async fn run_command(self) -> Result<()> {
         let ctx: CliCtx = (&self).try_into()?;
 
-        ctx.output(self.command.run_command(&ctx).await?);
+        ctx.output(self.command.run_command(&ctx).await?)?;
         Ok(())
     }
 }

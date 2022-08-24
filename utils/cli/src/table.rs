@@ -74,7 +74,7 @@ pub fn print_table(
 pub fn print_json_table(
     columns: &Vec<String>,
     values: &Vec<serde_json::Value>,
-) {
+) -> Result<(), anyhow::Error> {
     let columns_size_eq_values_size = values.iter().all(|row| match row {
         serde_json::Value::Array(values) => values.len() == columns.len(),
         _ => false,
@@ -97,7 +97,7 @@ pub fn print_json_table(
             .collect();
         println!(
             "{}",
-            serde_json::to_string_pretty(&serde_json::json!(kvs)).unwrap()
+            serde_json::to_string_pretty(&serde_json::json!(kvs))?
         )
     } else {
         println!(
@@ -105,10 +105,10 @@ pub fn print_json_table(
             serde_json::to_string_pretty(&serde_json::json!({
                 "headers": columns,
                 "values": values
-            }))
-            .unwrap()
+            }))?
         )
     }
+    Ok(())
 }
 
 pub struct ResponseTable {

@@ -48,7 +48,7 @@ fn list(config: ProviderConfig) -> anyhow::Result<()> {
     let cert_dir = cert_dir_path(&config)?;
     let table = CertTable::new();
     let table = util::visit_certificates(&cert_dir, table)?;
-    table.print(&config);
+    table.print(&config)?;
     Ok(())
 }
 
@@ -59,17 +59,17 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
         KeystoreLoadResult::Loaded { loaded, skipped } => {
             println_conditional(&config, "Added certificates:");
             let certs_data = util::to_cert_data(&loaded)?;
-            print_cert_list(&config, certs_data);
+            print_cert_list(&config, certs_data)?;
             if !skipped.is_empty() && !config.json {
                 println!("Certificates already loaded to keystore:");
                 let certs_data = util::to_cert_data(&skipped)?;
-                print_cert_list(&config, certs_data);
+                print_cert_list(&config, certs_data)?;
             }
         }
         KeystoreLoadResult::NothingNewToLoad { skipped } => {
             println_conditional(&config, "No new certificate to add. Skipped:");
             let certs_data = util::to_cert_data(&skipped)?;
-            print_cert_list(&config, certs_data);
+            print_cert_list(&config, certs_data)?;
         }
     }
     Ok(())
@@ -86,7 +86,7 @@ fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
         util::KeystoreRemoveResult::Removed { removed } => {
             println!("Removed certificates:");
             let certs_data = util::to_cert_data(&removed)?;
-            print_cert_list(&config, certs_data);
+            print_cert_list(&config, certs_data)?;
         }
     };
     Ok(())
@@ -96,12 +96,16 @@ fn cert_dir_path(config: &ProviderConfig) -> anyhow::Result<PathBuf> {
     Ok(config.cert_dir.get_or_create()?)
 }
 
-fn print_cert_list(config: &ProviderConfig, certs_data: Vec<util::CertBasicData>) {
+fn print_cert_list(
+    config: &ProviderConfig,
+    certs_data: Vec<util::CertBasicData>,
+) -> anyhow::Result<()> {
     let mut table = CertTable::new();
     for data in certs_data {
         table.add(data);
     }
-    table.print(&config);
+    table.print(&config)?;
+    Ok(())
 }
 
 struct CertTable {
@@ -120,9 +124,10 @@ impl CertTable {
         Self { table }
     }
 
-    pub fn print(self, config: &ProviderConfig) {
+    pub fn print(self, config: &ProviderConfig) -> anyhow::Result<()> {
         let output = CommandOutput::from(self.table);
-        output.print(config.json);
+        output.print(config.json)?;
+        Ok(())
     }
 
     pub fn add(&mut self, data: CertBasicData) {
