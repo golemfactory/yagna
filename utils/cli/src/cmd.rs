@@ -9,8 +9,7 @@ pub enum CommandOutput {
         values: Vec<serde_json::Value>,
         summary: Vec<serde_json::Value>,
         header: Option<String>,
-    },
-    FormattedObject(Box<dyn FormattedObject>),
+    }
 }
 
 impl CommandOutput {
@@ -52,16 +51,6 @@ impl CommandOutput {
                     }
                 }
             }
-            CommandOutput::FormattedObject(formatted_object) => {
-                if json_output {
-                    println!(
-                        "{}",
-                        serde_json::to_string_pretty(&formatted_object.to_json().unwrap()).unwrap()
-                    )
-                } else {
-                    formatted_object.print().unwrap()
-                }
-            }
         }
     }
 }
@@ -70,10 +59,4 @@ impl From<()> for CommandOutput {
     fn from(_: ()) -> Self {
         CommandOutput::NoOutput
     }
-}
-
-pub trait FormattedObject {
-    fn to_json(&self) -> Result<serde_json::Value>;
-
-    fn print(&self) -> Result<()>;
 }
