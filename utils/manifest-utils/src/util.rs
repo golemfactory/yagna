@@ -323,19 +323,24 @@ pub enum KeystoreRemoveResult {
     Removed { removed: Vec<X509> },
 }
 
-#[test]
-fn base64_wrapped_lines_test() {
-    let wrapped_base64 = "
-    VGhlIHF1aWNrIGJyb3du
-    IGZveCBqdW1wcyBvdmVy
-    IHRoZSBsYXp5IGRvZw==";
-    let phrase = decode_data(wrapped_base64).expect("failed to decode base64 wrapped content");
-    let phrase = String::from_utf8_lossy(&phrase).to_string();
-    let expected = "The quick brown fox jumps over the lazy dog";
-    assert_eq!(
-        &phrase, expected,
-        "Manifest related base64 payload may be encoded by the user, 
-        and many tools wrap base64 output by default, 
-        so we should try to filter out whitespace"
-    )
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    #[test]
+    pub fn base64_wrapped_lines_test() {
+        let wrapped_base64 = "
+        VGhlIHF1aWNrIGJyb3du
+        IGZveCBqdW1wcyBvdmVy
+        IHRoZSBsYXp5IGRvZw==";
+        let phrase = decode_data(wrapped_base64).expect("failed to decode base64 wrapped content");
+        let phrase = String::from_utf8_lossy(&phrase).to_string();
+        let expected = "The quick brown fox jumps over the lazy dog";
+        assert_eq!(
+            &phrase, expected,
+            "Manifest related base64 payload may be encoded by the user, 
+            and many tools wrap base64 output by default, 
+            so we should try to filter out whitespace"
+        )
+    }
 }
