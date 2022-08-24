@@ -321,7 +321,7 @@ impl MarketService {
 }
 
 impl Service for MarketService {
-    type Cli = ();
+    type Cli = crate::cli::Command;
 }
 
 // =========================================== //
