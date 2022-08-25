@@ -14,9 +14,9 @@
         "os": "linux"
       },
       "urls": [
-        "http://yacn2.dev.golem.network:8000/docker-golem-curl-jq-script-latest-921958ea62.gvmi"
+        "http://yacn2.dev.golem.network:8000/docker-golem-script-curl-latest-e4dbd6e0cb.gvmi"
       ],
-      "hash": "sha3:f5dd0f6afdffd94a5c8b9eb43ec4ae3bd92f5be31e46aa0b9c421a71"
+      "hash": "sha3:05e2d43a020e854949d5053d78b571a5cedae0315fb154338d353956"
     }
   ],
   "compManifest": {
@@ -32,8 +32,13 @@
     "net": {
       "inet": {
         "out": {
-          "protocols": ["https"],
-          "urls": ["https://api.coingecko.com"]
+          "protocols": [
+            "https"
+          ],
+          "urls": [
+            "https://api.coingecko.com",
+            "https://google.com"
+          ]
         }
       }
     }
