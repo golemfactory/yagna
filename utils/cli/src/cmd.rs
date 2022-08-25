@@ -1,6 +1,5 @@
 use anyhow::Result;
 use serde::Serialize;
-use serde_json::Value;
 
 pub enum CommandOutput {
     NoOutput,
@@ -10,7 +9,7 @@ pub enum CommandOutput {
         values: Vec<serde_json::Value>,
         summary: Vec<serde_json::Value>,
         header: Option<String>,
-    }
+    },
 }
 
 impl CommandOutput {
@@ -19,29 +18,48 @@ impl CommandOutput {
     }
 
     pub fn print(&self, json_output: bool) -> Result<()> {
+        if json_output {
+            self.print_json()?;
+        } else {
+            self.print_plain()?;
+        }
+        Ok(())
+    }
+
+    fn print_json(&self) -> anyhow::Result<()> {
         match self {
-            CommandOutput::NoOutput => {
-                if json_output {
-                    print_json_null();
-                }
-            }
+            CommandOutput::NoOutput => println!("null"),
+            CommandOutput::Table {
+                columns,
+                values,
+                summary: _,
+                header: _,
+            } => crate::table::print_json_table(columns, values)?,
+            CommandOutput::Object(value) => println!("{}", serde_json::to_string_pretty(&value)?),
+        }
+        Ok(())
+    }
+
+    fn print_plain(&self) -> anyhow::Result<()> {
+        match self {
+            CommandOutput::NoOutput => {},
             CommandOutput::Table {
                 columns,
                 values,
                 summary,
                 header,
             } => {
-                if json_output {
-                    print_json_table(columns, values)?;
-                } else {
-                    print_plain_table(columns, values, summary, header)?;
+                if let Some(txt) = header {
+                    println!("{}", txt);
                 }
-            }
+                crate::table::print_table(columns, values, summary)
+            },
             CommandOutput::Object(value) => {
-                if json_output {
-                    print_json_output(value)?;
-                } else {
-                    print_plain_output(value)?;
+                match value {
+                    serde_json::Value::String(s) => {
+                        println!("{}", s);
+                    }
+                    value => println!("{}", serde_yaml::to_string(&value)?),
                 }
             }
         }
@@ -53,40 +71,4 @@ impl From<()> for CommandOutput {
     fn from(_: ()) -> Self {
         CommandOutput::NoOutput
     }
-}
-
-fn print_json_null() {
-    println!("null");
-}
-
-fn print_json_table(
-    columns: &Vec<String>,
-    values: &Vec<Value>,) -> Result<()> {
-    Ok(crate::table::print_json_table(columns, values)?)
-}
-
-fn print_plain_table(
-    columns: &Vec<String>,
-    values: &Vec<Value>,
-    summary: &Vec<Value>,
-    header: &Option<String>,
-) -> Result<()> {
-    if let Some(txt) = header {
-        println!("{}", txt);
-    }
-    Ok(crate::table::print_table(columns, values, summary))
-}
-
-fn print_json_output(value: &Value) -> Result<()> {
-    Ok(println!("{}", serde_json::to_string_pretty(&value)?))
-}
-
-fn print_plain_output(value: &Value) -> Result<()> {
-    match value {
-        serde_json::Value::String(s) => {
-            println!("{}", s);
-        }
-        value => println!("{}", serde_yaml::to_string(&value)?),
-    }
-    Ok(())
 }
