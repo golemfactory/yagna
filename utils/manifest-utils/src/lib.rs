@@ -4,4 +4,6 @@ pub mod util;
 
 pub use manifest::*;
 pub use policy::{Keystore, Policy, PolicyConfig};
-pub use util::*;
+pub use util::{
+    decode_data, DecodingError, KeystoreLoadResult, KeystoreManager, KeystoreRemoveResult,
+};
