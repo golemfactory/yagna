@@ -34,7 +34,7 @@ async def test_e2e_outbound(
     config_overrides: List[Override],
     log_dir: Path,
 ):
-    """Test successful flow requesting a Blender task with goth REST API client."""
+    """Test successful flow requesting a outbound curl task with goth REST API client."""
 
     # Test external api request just one Requestor and one Provider
     nodes = [
