@@ -10,7 +10,7 @@ use futures::lock::Mutex;
 use futures::prelude::*;
 
 use ya_client_model::NodeId;
-use ya_service_bus::typed as bus;
+use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
 use ya_core_model::identity as model;
 use ya_persistence::executor::DbExecutor;
@@ -27,6 +27,10 @@ struct Subscription {
 impl Subscription {
     fn subscribe(&mut self, endpoint: String) {
         self.subscriptions.push(endpoint);
+    }
+
+    fn unsubscribe(&mut self, endpoint: String) {
+        self.subscriptions.retain(|s| s != &endpoint);
     }
 }
 
@@ -367,6 +371,16 @@ impl IdentityService {
         Ok(model::Ack {})
     }
 
+    pub async fn unsubscribe(
+        &mut self,
+        unsubscribe: model::Unsubscribe,
+    ) -> Result<model::Ack, model::Error> {
+        self.subscription
+            .borrow_mut()
+            .unsubscribe(unsubscribe.endpoint);
+        Ok(model::Ack {})
+    }
+
     pub async fn get_pub_key(
         &mut self,
         key_id: model::GetPubKey,
@@ -459,6 +473,7 @@ impl IdentityService {
         let this = me.clone();
         let _ = bus::bind(model::BUS_ID, move |unlock: model::Unlock| {
             let this = this.clone();
+            log::error!("Got model:unlock!");
             async move {
                 let mut unlock_sender = this.lock().await.sender().clone();
                 let result = this
@@ -467,6 +482,7 @@ impl IdentityService {
                     .unlock(unlock.node_id, unlock.password.into())
                     .await;
                 if result.is_ok() {
+                    log::error!("Sendind event AccountUnlocked");
                     let _ = unlock_sender
                         .send(model::event::Event::AccountUnlocked {
                             identity: unlock.node_id,
@@ -487,6 +503,11 @@ impl IdentityService {
             async move { this.lock().await.subscribe(subscribe).await }
         });
         let this = me.clone();
+        let _ = bus::bind(model::BUS_ID, move |unsubscribe: model::Unsubscribe| {
+            let this = this.clone();
+            async move { this.lock().await.unsubscribe(unsubscribe).await }
+        });
+        let this = me.clone();
         let _ = bus::bind(model::BUS_ID, move |node_id: model::GetPubKey| {
             let this = this.clone();
             async move {
@@ -504,3 +525,74 @@ impl IdentityService {
         });
     }
 }
+
+pub async fn unlock_default_key(db: &DbExecutor) -> anyhow::Result<()> {
+    //TODO split functions
+    //TODO is clone necessary?
+    //TODO check if here or in identity.rs
+    //TODO what if we don't have default identity or there are multiple?
+    //TODO check if unlock was to the same identity
+
+    let identity = db.as_dao::<IdentityDao>().get_default_identity().await?;
+
+    let identity_key: IdentityKey = identity.try_into()?;
+
+    if identity_key.is_locked() {
+        log::error!("DEFAULT ACCOUNT LOCKED- waiting!");
+
+        let (tx, mut rx) = futures::channel::mpsc::unbounded();
+
+        let endpoint = format!("{}/await_unlock", model::BUS_ID);
+        let _ = bus::bind(&endpoint, move |e: model::event::Event| {
+            let mut tx_clone = tx.clone();
+
+            async move {
+                match e {
+                    model::event::Event::AccountLocked { .. } => {
+                        log::error!("Got LOCKED!");
+                    }
+                    model::event::Event::AccountUnlocked { identity } => {
+                        log::error!("Got UNLOCKED!");
+                        tx_clone.send(()).await.unwrap(); //TODO unwrap
+                    }
+                };
+                Ok(())
+            }
+        });
+
+        match bus::service(model::BUS_ID)
+            .send(model::Subscribe {
+                endpoint: endpoint.clone(),
+            })
+            .await
+        {
+            Err(e) => log::warn!("Identity event subscription failed: {}", e),
+            Ok(Err(e)) => log::warn!("Identity event subscription failed: {}", e),
+            Ok(_) => log::debug!("Successfully subscribed to identity events"),
+        }
+
+        let x = rx.next().await;
+
+        bus::unbind(&format!("{}/{}", endpoint.clone(), model::event::Event::ID))
+            .await
+            .ok();
+
+        bus::service(model::BUS_ID)
+            .send(model::Unsubscribe { endpoint })
+            .await
+            .ok(); //TODO handle errors
+
+        log::error!("DEFAULT ACCOUNT UNLOCKED!");
+    }
+
+    log::error!("Returning");
+    Ok(())
+}
+
+// async fn is_default_account_locked(db: DbExecutor) -> anyhow::Result<bool> {
+//     todo!()
+// }
+
+// async fn wait_for_default_account_unlock() {
+//     todo!()
+// }

@@ -213,6 +213,18 @@ impl RpcMessage for Subscribe {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct Unsubscribe {
+    pub endpoint: String,
+}
+
+impl RpcMessage for Unsubscribe {
+    const ID: &'static str = "Unsubscribe";
+    type Item = Ack;
+    type Error = Error;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetPubKey(pub NodeId);
 
 impl RpcMessage for GetPubKey {
