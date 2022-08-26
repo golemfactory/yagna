@@ -553,7 +553,7 @@ pub async fn unlock_default_key(db: &DbExecutor) -> anyhow::Result<()> {
                     }
                     model::event::Event::AccountUnlocked { identity } => {
                         log::error!("Got UNLOCKED!");
-                        tx_clone.send(()).await.unwrap(); //TODO unwrap
+                        tx_clone.send(()).await.ok();
                     }
                 };
                 Ok(())
