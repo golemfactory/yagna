@@ -1,6 +1,6 @@
 use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
-use std::convert::{TryFrom, TryInto};
+use std::convert::{identity, TryFrom, TryInto};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -532,14 +532,17 @@ pub async fn unlock_default_key(db: &DbExecutor) -> anyhow::Result<()> {
     //TODO is clone necessary?
     //TODO check if here or in identity.rs
     //TODO what if we don't have default identity or there are multiple?
-    //TODO check if unlock was to the same identity
 
-    let identity = db.as_dao::<IdentityDao>().get_default_identity().await?;
-
-    let identity_key: IdentityKey = identity.try_into()?;
+    let identity_key: IdentityKey = db
+        .as_dao::<IdentityDao>()
+        .get_default_identity()
+        .await?
+        .try_into()?;
 
     if identity_key.is_locked() {
         log::error!("DEFAULT ACCOUNT LOCKED- waiting!");
+
+        let locked_identity = identity_key.id();
 
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
 
@@ -554,7 +557,9 @@ pub async fn unlock_default_key(db: &DbExecutor) -> anyhow::Result<()> {
                     }
                     model::event::Event::AccountUnlocked { identity } => {
                         log::error!("Got UNLOCKED!");
-                        tx_clone.send(()).await.ok();
+                        if locked_identity == identity {
+                            tx_clone.send(()).await.ok();
+                        }
                     }
                 };
                 Ok(())
