@@ -1,5 +1,6 @@
 use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::rc::Rc;
 
 use chrono::Utc;
@@ -12,6 +13,8 @@ use ya_core_model::identity as idm;
 use ya_persistence::executor::DbExecutor;
 
 use crate::dao::AppKeyDao;
+use crate::dao::IdentityDao;
+use crate::id_key::IdentityKey;
 
 #[derive(Default)]
 struct Subscription {
@@ -48,7 +51,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     let dbx = db.clone();
     let (tx, rx) = futures::channel::mpsc::unbounded();
 
-    if is_default_account_locked(dbx.clone()).await {
+    if is_default_account_locked(dbx.clone()).await? {
         wait_for_default_account_unlock().await;
     }
 
@@ -178,8 +181,14 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn is_default_account_locked(db: DbExecutor) -> bool {
-    todo!()
+async fn is_default_account_locked(db: DbExecutor) -> anyhow::Result<bool> {
+    //TODO check if here or in identity.rs
+    //TODO what if we don't have default identity or there are multiple?
+    let identity = db.as_dao::<IdentityDao>().get_default_identity().await?;
+
+    let identity_key: IdentityKey = identity.try_into()?;
+
+    Ok(identity_key.is_locked())
 }
 
 async fn wait_for_default_account_unlock() {
