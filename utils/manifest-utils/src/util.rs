@@ -1,4 +1,5 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::convert::TryFrom;
 use std::ffi::OsStr;
 use std::fs::{self, DirEntry};
 use std::{fs::File, path::PathBuf};
@@ -60,46 +61,24 @@ fn os_str_to_string(os_str: &OsStr) -> String {
     os_str.to_string_lossy().to_string()
 }
 
-pub fn print_cert_list(certs: &Vec<X509>) -> anyhow::Result<()> {
-    print_cert_list_header();
+pub fn to_cert_data(certs: &Vec<X509>) -> anyhow::Result<Vec<CertBasicData>> {
+    let mut certs_data = Vec::new();
     for cert in certs {
-        print_cert_list_row(cert)?;
+        let data = CertBasicData::try_from(cert.as_ref())?;
+        certs_data.push(data);
     }
-    Ok(())
-}
-
-pub fn print_cert_list_header() {
-    println!("{0: <32} {1: <24} {2}", "ID", "Not After", "Subject");
-    println!(
-        "{0: <32} {1: <24} {2}",
-        "-----------", "-------", "---------"
-    );
-}
-
-pub fn print_cert_list_row(cert: &X509Ref) -> anyhow::Result<()> {
-    let id = cert_to_id(&cert)?;
-    let not_after = cert.not_after().to_string();
-    let mut subject = String::new();
-    add_cert_subject_entries(&mut subject, cert, Nid::COMMONNAME, "CN");
-    add_cert_subject_entries(&mut subject, cert, Nid::PKCS9_EMAILADDRESS, "E");
-    add_cert_subject_entries(&mut subject, cert, Nid::ORGANIZATIONNAME, "O");
-    add_cert_subject_entries(&mut subject, cert, Nid::ORGANIZATIONALUNITNAME, "OU");
-    add_cert_subject_entries(&mut subject, cert, Nid::COUNTRYNAME, "C");
-    add_cert_subject_entries(&mut subject, cert, Nid::STATEORPROVINCENAME, "ST");
-
-    println!("{0: <32} {1: <24} {2}", id, not_after, subject);
-    Ok(())
+    Ok(certs_data)
 }
 
 /// Adds entries with given `nid` to given `subject` String.
 fn add_cert_subject_entries(
-    subject: &mut String,
+    subject: &mut BTreeMap<String, String>,
     cert: &X509Ref,
     nid: Nid,
     entry_short_name: &str,
 ) {
     if let Some(entries) = cert_subject_entries(cert, nid) {
-        subject.push_str(&format!("{}: {} ", entry_short_name, entries));
+        subject.insert(entry_short_name.to_string(), entries);
     }
 }
 
@@ -125,7 +104,61 @@ fn cert_subject_entries(cert: &X509Ref, nid: Nid) -> Option<String> {
 pub fn cert_to_id(cert: &X509Ref) -> anyhow::Result<String> {
     let txt = cert.to_text()?;
     let digest = Md5::digest(&txt);
-    Ok(format!("{:x}", digest))
+    Ok(format!("{digest:x}"))
+}
+
+pub fn visit_certificates<T: CertBasicDataVisitor>(
+    cert_dir: &PathBuf,
+    visitor: T,
+) -> anyhow::Result<T> {
+    let keystore = Keystore::load(cert_dir)?;
+    let mut visitor = X509Visitor { visitor };
+    keystore.visit_certs(&mut visitor)?;
+    Ok(visitor.visitor)
+}
+
+pub struct CertBasicData {
+    pub id: String,
+    pub not_after: String,
+    pub subject: BTreeMap<String, String>,
+}
+
+impl TryFrom<&X509Ref> for CertBasicData {
+    type Error = anyhow::Error;
+
+    fn try_from(cert: &X509Ref) -> Result<Self, Self::Error> {
+        let id = cert_to_id(cert)?;
+        let not_after = cert.not_after().to_string();
+        let mut subject = BTreeMap::new();
+        add_cert_subject_entries(&mut subject, cert, Nid::COMMONNAME, "CN");
+        add_cert_subject_entries(&mut subject, cert, Nid::PKCS9_EMAILADDRESS, "E");
+        add_cert_subject_entries(&mut subject, cert, Nid::ORGANIZATIONNAME, "O");
+        add_cert_subject_entries(&mut subject, cert, Nid::ORGANIZATIONALUNITNAME, "OU");
+        add_cert_subject_entries(&mut subject, cert, Nid::COUNTRYNAME, "C");
+        add_cert_subject_entries(&mut subject, cert, Nid::STATEORPROVINCENAME, "ST");
+
+        Ok(CertBasicData {
+            id,
+            not_after,
+            subject,
+        })
+    }
+}
+
+pub trait CertBasicDataVisitor {
+    fn accept(&mut self, cert_data: CertBasicData);
+}
+
+pub(crate) struct X509Visitor<T: CertBasicDataVisitor> {
+    visitor: T,
+}
+
+impl<T: CertBasicDataVisitor> X509Visitor<T> {
+    pub(crate) fn accept(&mut self, cert: &X509Ref) -> anyhow::Result<()> {
+        let cert_data = CertBasicData::try_from(cert)?;
+        self.visitor.accept(cert_data);
+        Ok(())
+    }
 }
 
 pub struct KeystoreManager {
@@ -149,7 +182,7 @@ impl KeystoreManager {
 
         for cert_path in cert_paths {
             let mut new_certs = Vec::new();
-            let file_certs = parse_cert_file(&cert_path)?;
+            let file_certs = parse_cert_file(cert_path)?;
             if file_certs.is_empty() {
                 continue;
             }
@@ -175,7 +208,7 @@ impl KeystoreManager {
         if loaded.is_empty() {
             return Ok(KeystoreLoadResult::NothingNewToLoad { skipped });
         }
-        return Ok(KeystoreLoadResult::Loaded { loaded, skipped });
+        Ok(KeystoreLoadResult::Loaded { loaded, skipped })
     }
 
     pub fn remove_certs(self, ids: &HashSet<String>) -> anyhow::Result<KeystoreRemoveResult> {
@@ -210,11 +243,11 @@ impl KeystoreManager {
             if split_and_skip {
                 let file_stem = get_file_stem(&cert_file).expect("Cannot get file name stem");
                 let dot_extension = get_file_extension(&cert_file)
-                    .map_or_else(|| String::from(""), |ex| format!(".{}", ex));
+                    .map_or_else(|| String::from(""), |ex| format!(".{ex}"));
                 for (id, cert) in ids_cert {
                     let cert = cert.to_pem()?;
                     let mut file_path = self.cert_dir.clone();
-                    let filename = format!("{}.{}{}", file_stem, id, dot_extension);
+                    let filename = format!("{file_stem}.{id}{dot_extension}");
                     file_path.push(filename);
                     fs::write(file_path, cert)?;
                 }
@@ -229,17 +262,16 @@ impl KeystoreManager {
     /// Loads keychain file to `cert_dir`
     fn load_as_keychain_file(&self, cert_path: &PathBuf) -> anyhow::Result<()> {
         let file_name = get_file_name(cert_path)
-            .ok_or_else(|| format!("Cannot get filename of {:?}", cert_path))
-            .map_err(|err| anyhow::anyhow!(err))?;
+            .ok_or_else(|| anyhow::anyhow!(format!("Cannot get filename of {cert_path:?}")))?;
         let mut new_cert_path = self.cert_dir.clone();
         new_cert_path.push(file_name);
         if new_cert_path.exists() {
             let file_stem = get_file_stem(&new_cert_path).expect("Has to have stem");
             let dot_extension = get_file_extension(&new_cert_path)
-                .map(|ex| format!(".{}", ex))
+                .map(|ex| format!(".{ex}"))
                 .unwrap_or(String::from(""));
             for i in 0..u32::MAX {
-                let numbered_filename = format!("{0}.{1}{2}", file_stem, i, dot_extension);
+                let numbered_filename = format!("{file_stem}.{i}{dot_extension}");
                 new_cert_path = self.cert_dir.clone();
                 new_cert_path.push(numbered_filename);
                 if !new_cert_path.exists() {
@@ -260,16 +292,15 @@ impl KeystoreManager {
         cert_path: &PathBuf,
         certs: Vec<X509>,
     ) -> anyhow::Result<()> {
-        let file_stem = get_file_stem(&cert_path)
-            .ok_or_else(|| "Cannot get file name stem")
-            .map_err(|err| anyhow::anyhow!(err))?;
-        let dot_extension = get_file_extension(&cert_path)
-            .map(|ex| format!(".{}", ex))
+        let file_stem = get_file_stem(cert_path)
+            .ok_or_else(|| anyhow::anyhow!("Cannot get file name stem."))?;
+        let dot_extension = get_file_extension(cert_path)
+            .map(|ex| format!(".{ex}"))
             .unwrap_or(String::from(""));
         for cert in certs.into_iter() {
             let id = cert_to_id(&cert)?;
             let mut new_cert_path = self.cert_dir.clone();
-            new_cert_path.push(format!("{}.{}{}", file_stem, id, dot_extension));
+            new_cert_path.push(format!("{file_stem}.{id}{dot_extension}"));
             let cert = cert.to_pem()?;
             fs::write(new_cert_path, cert)?;
         }
@@ -292,19 +323,24 @@ pub enum KeystoreRemoveResult {
     Removed { removed: Vec<X509> },
 }
 
-#[test]
-fn base64_wrapped_lines_test() {
-    let wrapped_base64 = "
-    VGhlIHF1aWNrIGJyb3du
-    IGZveCBqdW1wcyBvdmVy
-    IHRoZSBsYXp5IGRvZw==";
-    let phrase = decode_data(wrapped_base64).expect("failed to decode base64 wrapped content");
-    let phrase = String::from_utf8_lossy(&phrase).to_string();
-    let expected = "The quick brown fox jumps over the lazy dog";
-    assert_eq!(
-        &phrase, expected,
-        "Manifest related base64 payload may be encoded by the user, 
-        and many tools wrap base64 output by default, 
-        so we should try to filter out whitespace"
-    )
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    #[test]
+    pub fn base64_wrapped_lines_test() {
+        let wrapped_base64 = "
+        VGhlIHF1aWNrIGJyb3du
+        IGZveCBqdW1wcyBvdmVy
+        IHRoZSBsYXp5IGRvZw==";
+        let phrase = decode_data(wrapped_base64).expect("failed to decode base64 wrapped content");
+        let phrase = String::from_utf8_lossy(&phrase).to_string();
+        let expected = "The quick brown fox jumps over the lazy dog";
+        assert_eq!(
+            &phrase, expected,
+            "Manifest related base64 payload may be encoded by the user, 
+            and many tools wrap base64 output by default, 
+            so we should try to filter out whitespace"
+        )
+    }
 }
