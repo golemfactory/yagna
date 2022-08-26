@@ -48,6 +48,10 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     let dbx = db.clone();
     let (tx, rx) = futures::channel::mpsc::unbounded();
 
+    if is_default_account_locked(dbx.clone()).await {
+        wait_for_default_account_unlock().await;
+    }
+
     let subscription = Rc::new(RefCell::new(Subscription::default()));
 
     {
@@ -172,4 +176,12 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     });
 
     Ok(())
+}
+
+async fn is_default_account_locked(db: DbExecutor) -> bool {
+    todo!()
+}
+
+async fn wait_for_default_account_unlock() {
+    todo!()
 }
