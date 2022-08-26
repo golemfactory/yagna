@@ -528,6 +528,7 @@ impl IdentityService {
 
 pub async fn unlock_default_key(db: &DbExecutor) -> anyhow::Result<()> {
     //TODO split functions
+    //TODO handle shutdown signal while waiting
     //TODO is clone necessary?
     //TODO check if here or in identity.rs
     //TODO what if we don't have default identity or there are multiple?
