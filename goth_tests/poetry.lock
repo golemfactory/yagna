@@ -277,7 +277,7 @@ python-versions = ">=3"
 
 [[package]]
 name = "fastcore"
-version = "1.5.21"
+version = "1.5.22"
 description = "Python supercharged for fastai development"
 category = "main"
 optional = false
@@ -287,7 +287,7 @@ python-versions = ">=3.7"
 packaging = "*"
 
 [package.extras]
-dev = ["jupyterlab", "pandas", "torch", "pillow", "matplotlib", "nbdev (>=0.2.39)", "numpy"]
+dev = ["numpy", "nbdev (>=0.2.39)", "matplotlib", "pillow", "torch", "pandas", "jupyterlab"]
 
 [[package]]
 name = "flask"
@@ -359,8 +359,8 @@ ya-aioclient = "^0.6"
 [package.source]
 type = "git"
 url = "https://github.com/golemfactory/goth.git"
-reference = "6061a48342213c7a30e643ab0d86a58abdab460a"
-resolved_reference = "6061a48342213c7a30e643ab0d86a58abdab460a"
+reference = "5244075a4742cfdc848b8dfc4084f788be8b2adf"
+resolved_reference = "5244075a4742cfdc848b8dfc4084f788be8b2adf"
 
 [[package]]
 name = "h11"
@@ -1046,7 +1046,7 @@ python-versions = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8.0"
-content-hash = "61f9253da80ffff9254d448a5a1ad4bcefe1594d1825e2b1753f2ad4ac4fa010"
+content-hash = "7a29be65adf81e316ab7a4cc1d2b4a64af7a76b1290d37f1c0d892d3617f448d"
 
 [metadata.files]
 aiohttp = [
@@ -1328,8 +1328,8 @@ dpath = [
     {file = "dpath-2.0.6.tar.gz", hash = "sha256:5a1ddae52233fbc8ef81b15fb85073a81126bb43698d3f3a1b6aaf561a46cdc0"},
 ]
 fastcore = [
-    {file = "fastcore-1.5.21-py3-none-any.whl", hash = "sha256:882ca33c93734dc5025fa6b2c82f002725d7cc7564427e76a562ded3e66d44d8"},
-    {file = "fastcore-1.5.21.tar.gz", hash = "sha256:f6f6740beb40ed9dedee1e47ad27b9220648998780ad5cfba7d857f1bed6c9b3"},
+    {file = "fastcore-1.5.22-py3-none-any.whl", hash = "sha256:96ec9b23cd95f969a3bd0a118aed92a60c7da80d89716ac3585cacc9b26a708a"},
+    {file = "fastcore-1.5.22.tar.gz", hash = "sha256:73c3f268f882955038237bd7d134e5d872d116577ed586025641ecc08b2706c4"},
 ]
 flask = [
     {file = "Flask-1.1.4-py2.py3-none-any.whl", hash = "sha256:c34f04500f2cbbea882b1acb02002ad6fe6b7ffa64a6164577995657f50aed22"},
