@@ -25,7 +25,7 @@ impl Identity {
         ));
         identity::IdentityService::bind_service(service);
 
-        identity::wait_for_default_account_unlock(&db).await?;
+        identity::wait_for_default_account_unlock().await?;
 
         appkey::activate(&db).await?;
         Ok(())

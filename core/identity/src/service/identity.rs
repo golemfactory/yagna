@@ -527,11 +527,11 @@ impl IdentityService {
     }
 }
 
-pub async fn wait_for_default_account_unlock(db: &DbExecutor) -> anyhow::Result<()> {
-    let identity_key = get_default_identity_key(&db).await?;
+pub async fn wait_for_default_account_unlock() -> anyhow::Result<()> {
+    let identity_key = get_default_identity_key().await?;
 
-    if identity_key.is_locked() {
-        let locked_identity = identity_key.id();
+    if identity_key.is_locked {
+        let locked_identity = identity_key.node_id;
         let (tx, rx) = futures::channel::mpsc::unbounded();
         let endpoint = format!("{}/await_unlock", model::BUS_ID);
 
@@ -556,7 +556,7 @@ pub async fn wait_for_default_account_unlock(db: &DbExecutor) -> anyhow::Result<
             "Daemon cannot start because default account is locked. Unlock it by running 'yagna id unlock'"
         ));
 
-        wait_for_unlock(db, rx).await?;
+        wait_for_unlock(rx).await?;
 
         unsubscribe(endpoint.clone()).await?;
         unbind(endpoint).await?;
@@ -566,11 +566,10 @@ pub async fn wait_for_default_account_unlock(db: &DbExecutor) -> anyhow::Result<
 }
 
 async fn wait_for_unlock(
-    db: &DbExecutor,
     mut rx: futures::channel::mpsc::UnboundedReceiver<()>,
 ) -> anyhow::Result<()> {
     // Check lock second time because user could unlocked database before subscription
-    if get_default_identity_key(db).await?.is_locked() {
+    if get_default_identity_key().await?.is_locked {
         tokio::select! {
             _ = rx.next() => {
                 log::info!("Default account unlocked");
@@ -606,10 +605,9 @@ async fn unbind(endpoint: String) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn get_default_identity_key(db: &DbExecutor) -> anyhow::Result<IdentityKey> {
-    Ok(db
-        .as_dao::<IdentityDao>()
-        .get_default_identity()
-        .await?
-        .try_into()?)
+async fn get_default_identity_key() -> anyhow::Result<model::IdentityInfo> {
+    Ok(bus::service(model::BUS_ID)
+        .send(model::Get::ByDefault {})
+        .await??
+        .ok_or(anyhow::anyhow!("No default Identity found"))?)
 }
