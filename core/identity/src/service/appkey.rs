@@ -1,6 +1,5 @@
 use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
-use std::convert::TryInto;
 use std::rc::Rc;
 
 use chrono::Utc;
@@ -13,8 +12,6 @@ use ya_core_model::identity as idm;
 use ya_persistence::executor::DbExecutor;
 
 use crate::dao::AppKeyDao;
-use crate::dao::IdentityDao;
-use crate::id_key::IdentityKey;
 
 #[derive(Default)]
 struct Subscription {
