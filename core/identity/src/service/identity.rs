@@ -542,7 +542,7 @@ pub async fn wait_for_default_account_unlock(db: &DbExecutor) -> anyhow::Result<
                     model::event::Event::AccountLocked { .. } => {}
                     model::event::Event::AccountUnlocked { identity } => {
                         if locked_identity == identity {
-                            log::debug!("Got unlocked event for default locked account");
+                            log::debug!("Got unlocked event for default locked account with nodeId: {locked_identity}");
                             tx_clone.send(()).await.expect("Receiver is closed");
                         }
                     }
