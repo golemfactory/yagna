@@ -64,14 +64,6 @@ impl<'c> IdentityDao<'c> {
         .await
     }
 
-    pub async fn get_default_identity(&self) -> Result<Identity> {
-        use crate::db::schema::identity::dsl::*;
-        readonly_transaction(self.pool, |conn| {
-            Ok(identity.filter(is_default.eq(true)).first(conn)?)
-        })
-        .await
-    }
-
     pub async fn init_preconfigured(&self, preconfigured_identity: Identity) -> Result<Identity> {
         use crate::db::schema::identity::dsl as id_dsl;
         self.with_transaction(move |conn| {
