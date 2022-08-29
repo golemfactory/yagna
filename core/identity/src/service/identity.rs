@@ -297,7 +297,7 @@ impl IdentityService {
         if key.unlock(password).map_err(model::Error::new_err_msg)? {
             Ok(to_info(&default_key, key))
         } else {
-            Err(model::Error::bad_request("Invalid password"))
+            Err(model::Error::InvalidPassword)
         }
     }
 
