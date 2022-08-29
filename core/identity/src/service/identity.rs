@@ -533,11 +533,7 @@ pub async fn unlock_default_key(db: &DbExecutor) -> anyhow::Result<()> {
     //TODO check if here or in identity.rs
     //TODO what if we don't have default identity or there are multiple?
 
-    let identity_key: IdentityKey = db
-        .as_dao::<IdentityDao>()
-        .get_default_identity()
-        .await?
-        .try_into()?;
+    let identity_key = get_default_identity_key(&db).await?;
 
     if identity_key.is_locked() {
         log::error!("DEFAULT ACCOUNT LOCKED- waiting!");
@@ -595,9 +591,15 @@ pub async fn unlock_default_key(db: &DbExecutor) -> anyhow::Result<()> {
     Ok(())
 }
 
-// async fn is_default_account_locked(db: DbExecutor) -> anyhow::Result<bool> {
-//     todo!()
-// }
+async fn get_default_identity_key(db: &DbExecutor) -> anyhow::Result<IdentityKey> {
+    let x: IdentityKey = db
+        .as_dao::<IdentityDao>()
+        .get_default_identity()
+        .await?
+        .try_into()?;
+
+    Ok(x)
+}
 
 // async fn wait_for_default_account_unlock() {
 //     todo!()
