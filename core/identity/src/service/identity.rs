@@ -294,9 +294,10 @@ impl IdentityService {
     ) -> Result<model::IdentityInfo, model::Error> {
         let default_key = self.default_key;
         let key = self.get_key_by_id(&node_id)?;
-        match key.unlock(password).map_err(model::Error::new_err_msg)? {
-            true => Ok(to_info(&default_key, key)),
-            false => Err(model::Error::bad_request("Invalid password")),
+        if key.unlock(password).map_err(model::Error::new_err_msg)? {
+            Ok(to_info(&default_key, key))
+        } else {
+            Err(model::Error::bad_request("Invalid password"))
         }
     }
 
