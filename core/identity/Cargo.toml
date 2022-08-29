@@ -16,6 +16,7 @@ ya-service-bus = "0.4"
 anyhow = "1.0"
 appdirs = "0.2"
 chrono = { version = "0.4", features = ["serde"] }
+ctrlc = "3.2"
 diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
 diesel_migrations = "1.4"
 ethsign = "0.8"
@@ -32,6 +33,7 @@ thiserror = "1.0"
 tokio = { version = "1", features = ["fs"] }
 uuid = { version = "0.8", features = ["v4"] }
 rustc-hex = "2.1.0"
+yansi = "0.5.0"
 
 [dev-dependencies]
 ya-service-api-derive = "0.1"
