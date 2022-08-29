@@ -541,7 +541,7 @@ pub async fn wait_for_default_account_unlock(db: &DbExecutor) -> anyhow::Result<
 
         let endpoint = format!("{}/await_unlock", model::BUS_ID);
 
-        bind(endpoint.clone(), move |e: model::event::Event| {
+        let _ = bus::bind(&endpoint, move |e: model::event::Event| {
             let mut tx_clone = tx.clone();
             async move {
                 match e {
@@ -549,14 +549,13 @@ pub async fn wait_for_default_account_unlock(db: &DbExecutor) -> anyhow::Result<
                     model::event::Event::AccountUnlocked { identity } => {
                         if locked_identity == identity {
                             log::debug!("Got unlocked event for default locked account");
-                            tx_clone.send(()).await.ok();
+                            tx_clone.send(()).await.expect("Receiver closed");
                         }
                     }
                 };
                 Ok(())
             }
-        })
-        .await;
+        });
         subscribe(endpoint.clone()).await?;
 
         wait_for_unlock(rx).await?;
@@ -582,13 +581,6 @@ async fn wait_for_unlock(
     };
 
     Ok(())
-}
-
-async fn bind(
-    endpoint: String,
-    handler: impl ya_service_bus::RpcHandler<model::event::Event> + Unpin + 'static,
-) {
-    let _ = bus::bind(&endpoint, handler);
 }
 
 async fn subscribe(endpoint: String) -> anyhow::Result<()> {
