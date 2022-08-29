@@ -7434,6 +7434,7 @@ dependencies = [
  "ya-service-api-derive",
  "ya-service-api-interfaces",
  "ya-service-bus",
+ "yansi",
 ]
 
 [[package]]
