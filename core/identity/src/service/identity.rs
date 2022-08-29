@@ -474,7 +474,6 @@ impl IdentityService {
         let this = me.clone();
         let _ = bus::bind(model::BUS_ID, move |unlock: model::Unlock| {
             let this = this.clone();
-            log::error!("Got model:unlock!");
             async move {
                 let mut unlock_sender = this.lock().await.sender().clone();
                 let result = this
@@ -483,7 +482,6 @@ impl IdentityService {
                     .unlock(unlock.node_id, unlock.password.into())
                     .await;
                 if result.is_ok() {
-                    log::error!("Sendind event AccountUnlocked");
                     let _ = unlock_sender
                         .send(model::event::Event::AccountUnlocked {
                             identity: unlock.node_id,
