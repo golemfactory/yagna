@@ -558,8 +558,8 @@ pub async fn wait_for_default_account_unlock(db: &DbExecutor) -> anyhow::Result<
 
         wait_for_unlock(rx).await?;
 
-        unbind(endpoint.clone()).await?;
-        unsubscribe(endpoint).await?;
+        unsubscribe(endpoint.clone()).await?;
+        unbind(endpoint).await?;
     }
 
     Ok(())
