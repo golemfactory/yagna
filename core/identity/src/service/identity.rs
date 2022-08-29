@@ -529,7 +529,7 @@ pub async fn wait_for_default_account_unlock(db: &DbExecutor) -> anyhow::Result<
     let identity_key = get_default_identity_key(&db).await?;
 
     if identity_key.is_locked() {
-        log::info!("{}", yansi::Color::Magenta.paint(
+        log::info!("{}", yansi::Color::RGB(0xFF, 0xA5, 0x00).paint(
             "Daemon cannot start because default account is locked. Unlock it by running 'yagna id unlock'"
         ));
 
@@ -547,7 +547,7 @@ pub async fn wait_for_default_account_unlock(db: &DbExecutor) -> anyhow::Result<
                     model::event::Event::AccountUnlocked { identity } => {
                         if locked_identity == identity {
                             log::debug!("Got unlocked event for default locked account");
-                            tx_clone.send(()).await.expect("Receiver closed");
+                            tx_clone.send(()).await.expect("Receiver is closed");
                         }
                     }
                 };
