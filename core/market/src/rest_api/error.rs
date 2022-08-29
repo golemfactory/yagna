@@ -216,6 +216,8 @@ impl ResponseError for AgreementError {
             | AgreementError::OwnProposal(..)
             | AgreementError::ProposalNotFound(..)
             | AgreementError::ProposalCountered(..)
+            | AgreementError::InvalidDate(..)
+            | AgreementError::InvalidAgreementState(..)
             | AgreementError::InvalidId(..) => HttpResponse::BadRequest().json(msg).into(),
             AgreementError::GetProposal(..)
             | AgreementError::Save(..)
