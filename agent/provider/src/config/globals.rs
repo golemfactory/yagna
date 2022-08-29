@@ -7,7 +7,7 @@ use std::{fs, io};
 use ya_utils_path::SwapSave;
 
 pub(crate) const GLOBALS_JSON: &'static str = "globals.json";
-pub(crate) const DEFAULT_SUBNET: &'static str = "public-beta";
+pub(crate) const DEFAULT_SUBNET: &'static str = "hybrid-mainnet";
 
 fn default_subnet() -> Option<String> {
     Some(DEFAULT_SUBNET.into())
