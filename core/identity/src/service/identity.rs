@@ -529,7 +529,7 @@ pub async fn wait_for_default_account_unlock(db: &DbExecutor) -> anyhow::Result<
     let identity_key = get_default_identity_key(&db).await?;
 
     if identity_key.is_locked() {
-        log::info!("{}", yansi::Color::Red.paint(
+        log::info!("{}", yansi::Color::Magenta.paint(
             "Daemon cannot start because default account is locked. Unlock it by running 'yagna id unlock'"
         ));
 
@@ -572,8 +572,7 @@ async fn wait_for_unlock(
         _ = rx.next() => {
             log::info!("Default account unlocked");
         }
-        _ = actix_rt::signal::ctrl_c() => {
-            actix_rt::System::current().stop();
+        _ = tokio::signal::ctrl_c() => {
             bail!("Default account is locked");
         }
     };
