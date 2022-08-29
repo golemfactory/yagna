@@ -556,7 +556,7 @@ pub async fn wait_for_default_account_unlock(db: &DbExecutor) -> anyhow::Result<
             "Daemon cannot start because default account is locked. Unlock it by running 'yagna id unlock'"
         ));
 
-        wait_for_unlock(rx).await?;
+        wait_for_unlock(db, rx).await?;
 
         unsubscribe(endpoint.clone()).await?;
         unbind(endpoint).await?;
@@ -566,16 +566,20 @@ pub async fn wait_for_default_account_unlock(db: &DbExecutor) -> anyhow::Result<
 }
 
 async fn wait_for_unlock(
+    db: &DbExecutor,
     mut rx: futures::channel::mpsc::UnboundedReceiver<()>,
 ) -> anyhow::Result<()> {
-    tokio::select! {
-        _ = rx.next() => {
-            log::info!("Default account unlocked");
-        }
-        _ = tokio::signal::ctrl_c() => {
-            bail!("Default account is locked");
-        }
-    };
+    // Check lock second time because user could unlocked database before subscription
+    if get_default_identity_key(db).await?.is_locked() {
+        tokio::select! {
+            _ = rx.next() => {
+                log::info!("Default account unlocked");
+            }
+            _ = tokio::signal::ctrl_c() => {
+                bail!("Default account is locked");
+            }
+        };
+    }
 
     Ok(())
 }
