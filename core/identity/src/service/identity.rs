@@ -294,9 +294,10 @@ impl IdentityService {
     ) -> Result<model::IdentityInfo, model::Error> {
         let default_key = self.default_key;
         let key = self.get_key_by_id(&node_id)?;
-        key.unlock(password).map_err(model::Error::new_err_msg)?;
-        let output = to_info(&default_key, key);
-        Ok(output)
+        match key.unlock(password).map_err(model::Error::new_err_msg)? {
+            true => Ok(to_info(&default_key, key)),
+            false => Err(model::Error::bad_request("Invalid password")),
+        }
     }
 
     pub async fn sign(&mut self, node_id: NodeId, data: Vec<u8>) -> Result<Vec<u8>, model::Error> {

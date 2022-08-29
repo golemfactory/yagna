@@ -20,6 +20,8 @@ pub enum Error {
     InternalErr(String),
     #[error("bad keystore format: {0}")]
     BadKeyStoreFormat(String),
+    #[error("bad request: {0}")]
+    BadRequest(String),
 }
 
 impl Error {
@@ -33,6 +35,10 @@ impl Error {
 
     pub fn keystore_format(e: impl std::fmt::Display) -> Self {
         Error::BadKeyStoreFormat(e.to_string())
+    }
+
+    pub fn bad_request(e: impl std::fmt::Display) -> Self {
+        Error::BadRequest(e.to_string())
     }
 }
 
