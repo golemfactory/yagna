@@ -558,8 +558,8 @@ pub async fn wait_for_default_account_unlock(db: &DbExecutor) -> anyhow::Result<
 
         wait_for_unlock(rx).await?;
 
-        unbind(endpoint.clone()).await;
-        unsubscribe(endpoint).await;
+        unbind(endpoint.clone()).await?;
+        unsubscribe(endpoint).await?;
     }
 
     Ok(())
@@ -588,19 +588,18 @@ async fn subscribe(endpoint: String) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn unsubscribe(endpoint: String) {
+async fn unsubscribe(endpoint: String) -> anyhow::Result<()> {
     bus::service(model::BUS_ID)
         .send(model::Unsubscribe { endpoint })
-        .await
-        .ok();
+        .await??;
+
+    Ok(())
 }
 
-async fn unbind(endpoint: String) {
-    bus::unbind(&format!("{}/{}", endpoint.clone(), model::event::Event::ID))
-        .await
-        .ok();
+async fn unbind(endpoint: String) -> anyhow::Result<()> {
+    bus::unbind(&format!("{}/{}", endpoint.clone(), model::event::Event::ID)).await?;
 
-    //TODO handle errors
+    Ok(())
 }
 
 async fn get_default_identity_key(db: &DbExecutor) -> anyhow::Result<IdentityKey> {
