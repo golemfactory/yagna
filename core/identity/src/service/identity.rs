@@ -536,9 +536,7 @@ pub async fn wait_for_default_account_unlock(db: &DbExecutor) -> anyhow::Result<
         ));
 
         let locked_identity = identity_key.id();
-
         let (tx, rx) = futures::channel::mpsc::unbounded();
-
         let endpoint = format!("{}/await_unlock", model::BUS_ID);
 
         let _ = bus::bind(&endpoint, move |e: model::event::Event| {
