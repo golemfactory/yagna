@@ -4,6 +4,7 @@ use std::convert::{identity, TryFrom, TryInto};
 use std::rc::Rc;
 use std::sync::Arc;
 
+use anyhow::bail;
 use chrono::Utc;
 use ethsign::{KeyFile, Protected, PublicKey};
 use futures::lock::Mutex;
@@ -578,7 +579,9 @@ pub async fn unlock_default_key(db: &DbExecutor) -> anyhow::Result<()> {
                 log::error!("good!");
             }
             _ = actix_rt::signal::ctrl_c() => {
+                log::error!("shutting down");
                 actix_rt::System::current().stop();
+                bail!("KEY LOCKED");
             }
         };
 
