@@ -528,16 +528,10 @@ impl IdentityService {
 }
 
 pub async fn unlock_default_key(db: &DbExecutor) -> anyhow::Result<()> {
-    //TODO split functions
-    //TODO handle shutdown signal while waiting
-    //TODO is clone necessary?
-    //TODO check if here or in identity.rs
-    //TODO what if we don't have default identity or there are multiple?
-
     let identity_key = get_default_identity_key(&db).await?;
 
     if identity_key.is_locked() {
-        log::error!("DEFAULT ACCOUNT LOCKED- waiting!");
+        log::info!("Waiting for Default account to be unlocked, please do so by running 'yagna run id unlock'");
 
         let locked_identity = identity_key.id();
 
@@ -549,12 +543,10 @@ pub async fn unlock_default_key(db: &DbExecutor) -> anyhow::Result<()> {
 
             async move {
                 match e {
-                    model::event::Event::AccountLocked { .. } => {
-                        log::error!("Got LOCKED!");
-                    }
+                    model::event::Event::AccountLocked { .. } => {}
                     model::event::Event::AccountUnlocked { identity } => {
-                        log::error!("Got UNLOCKED!");
                         if locked_identity == identity {
+                            log::debug!("Got unlocked event for default locked account");
                             tx_clone.send(()).await.ok();
                         }
                     }
@@ -585,32 +577,29 @@ pub async fn unlock_default_key(db: &DbExecutor) -> anyhow::Result<()> {
             }
         };
 
-        bus::unbind(&format!("{}/{}", endpoint.clone(), model::event::Event::ID))
-            .await
-            .ok();
-
-        bus::service(model::BUS_ID)
-            .send(model::Unsubscribe { endpoint })
-            .await
-            .ok(); //TODO handle errors
+        clear_gsb_endpoint(endpoint).await;
 
         log::error!("DEFAULT ACCOUNT UNLOCKED!");
     }
 
-    log::error!("Returning");
     Ok(())
 }
 
+async fn clear_gsb_endpoint(endpoint: String) {
+    bus::unbind(&format!("{}/{}", endpoint.clone(), model::event::Event::ID))
+        .await
+        .ok();
+    bus::service(model::BUS_ID)
+        .send(model::Unsubscribe { endpoint })
+        .await
+        .ok();
+    //TODO handle errors
+}
+
 async fn get_default_identity_key(db: &DbExecutor) -> anyhow::Result<IdentityKey> {
-    let x: IdentityKey = db
+    Ok(db
         .as_dao::<IdentityDao>()
         .get_default_identity()
         .await?
-        .try_into()?;
-
-    Ok(x)
+        .try_into()?)
 }
-
-// async fn wait_for_default_account_unlock() {
-//     todo!()
-// }
