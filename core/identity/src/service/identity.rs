@@ -1,6 +1,6 @@
 use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
-use std::convert::{identity, TryFrom, TryInto};
+use std::convert::{TryFrom, TryInto};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -527,7 +527,7 @@ impl IdentityService {
     }
 }
 
-pub async fn unlock_default_key(db: &DbExecutor) -> anyhow::Result<()> {
+pub async fn wait_for_default_account_unlock(db: &DbExecutor) -> anyhow::Result<()> {
     let identity_key = get_default_identity_key(&db).await?;
 
     if identity_key.is_locked() {
@@ -538,9 +538,9 @@ pub async fn unlock_default_key(db: &DbExecutor) -> anyhow::Result<()> {
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
 
         let endpoint = format!("{}/await_unlock", model::BUS_ID);
-        let _ = bus::bind(&endpoint, move |e: model::event::Event| {
-            let mut tx_clone = tx.clone();
 
+        bind(endpoint.clone(), move |e: model::event::Event| {
+            let mut tx_clone = tx.clone();
             async move {
                 match e {
                     model::event::Event::AccountLocked { .. } => {}
@@ -553,46 +553,54 @@ pub async fn unlock_default_key(db: &DbExecutor) -> anyhow::Result<()> {
                 };
                 Ok(())
             }
-        });
-
-        match bus::service(model::BUS_ID)
-            .send(model::Subscribe {
-                endpoint: endpoint.clone(),
-            })
-            .await
-        {
-            Err(e) => log::warn!("Identity event subscription failed: {}", e),
-            Ok(Err(e)) => log::warn!("Identity event subscription failed: {}", e),
-            Ok(_) => log::debug!("Successfully subscribed to identity events"),
-        }
+        })
+        .await;
+        subscribe(endpoint.clone()).await?;
 
         tokio::select! {
             _ = rx.next() => {
-                log::error!("good!");
+                log::info!("Default account unlocked");
             }
             _ = actix_rt::signal::ctrl_c() => {
-                log::error!("shutting down");
                 actix_rt::System::current().stop();
-                bail!("KEY LOCKED");
+                bail!("Default account is locked");
             }
         };
 
-        clear_gsb_endpoint(endpoint).await;
-
-        log::error!("DEFAULT ACCOUNT UNLOCKED!");
+        unbind(endpoint.clone()).await;
+        unsubscribe(endpoint).await;
     }
 
     Ok(())
 }
 
-async fn clear_gsb_endpoint(endpoint: String) {
-    bus::unbind(&format!("{}/{}", endpoint.clone(), model::event::Event::ID))
-        .await
-        .ok();
+async fn bind(
+    endpoint: String,
+    handler: impl ya_service_bus::RpcHandler<model::event::Event> + Unpin + 'static,
+) {
+    let _ = bus::bind(&endpoint, handler);
+}
+
+async fn subscribe(endpoint: String) -> anyhow::Result<()> {
+    bus::service(model::BUS_ID)
+        .send(model::Subscribe { endpoint })
+        .await??;
+
+    Ok(())
+}
+
+async fn unsubscribe(endpoint: String) {
     bus::service(model::BUS_ID)
         .send(model::Unsubscribe { endpoint })
         .await
         .ok();
+}
+
+async fn unbind(endpoint: String) {
+    bus::unbind(&format!("{}/{}", endpoint.clone(), model::event::Event::ID))
+        .await
+        .ok();
+
     //TODO handle errors
 }
 
