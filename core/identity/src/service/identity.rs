@@ -531,10 +531,6 @@ pub async fn wait_for_default_account_unlock(db: &DbExecutor) -> anyhow::Result<
     let identity_key = get_default_identity_key(&db).await?;
 
     if identity_key.is_locked() {
-        log::info!("{}", yansi::Color::RGB(0xFF, 0xA5, 0x00).paint(
-            "Daemon cannot start because default account is locked. Unlock it by running 'yagna id unlock'"
-        ));
-
         let locked_identity = identity_key.id();
         let (tx, rx) = futures::channel::mpsc::unbounded();
         let endpoint = format!("{}/await_unlock", model::BUS_ID);
@@ -555,6 +551,10 @@ pub async fn wait_for_default_account_unlock(db: &DbExecutor) -> anyhow::Result<
             }
         });
         subscribe(endpoint.clone()).await?;
+
+        log::info!("{}", yansi::Color::RGB(0xFF, 0xA5, 0x00).paint(
+            "Daemon cannot start because default account is locked. Unlock it by running 'yagna id unlock'"
+        ));
 
         wait_for_unlock(rx).await?;
 
