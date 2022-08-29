@@ -573,7 +573,14 @@ pub async fn unlock_default_key(db: &DbExecutor) -> anyhow::Result<()> {
             Ok(_) => log::debug!("Successfully subscribed to identity events"),
         }
 
-        let x = rx.next().await;
+        tokio::select! {
+            _ = rx.next() => {
+                log::error!("good!");
+            }
+            _ = actix_rt::signal::ctrl_c() => {
+                actix_rt::System::current().stop();
+            }
+        };
 
         bus::unbind(&format!("{}/{}", endpoint.clone(), model::event::Event::ID))
             .await
