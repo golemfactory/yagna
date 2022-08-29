@@ -535,7 +535,7 @@ pub async fn wait_for_default_account_unlock(db: &DbExecutor) -> anyhow::Result<
 
         let locked_identity = identity_key.id();
 
-        let (tx, mut rx) = futures::channel::mpsc::unbounded();
+        let (tx, rx) = futures::channel::mpsc::unbounded();
 
         let endpoint = format!("{}/await_unlock", model::BUS_ID);
 
@@ -557,19 +557,27 @@ pub async fn wait_for_default_account_unlock(db: &DbExecutor) -> anyhow::Result<
         .await;
         subscribe(endpoint.clone()).await?;
 
-        tokio::select! {
-            _ = rx.next() => {
-                log::info!("Default account unlocked");
-            }
-            _ = actix_rt::signal::ctrl_c() => {
-                actix_rt::System::current().stop();
-                bail!("Default account is locked");
-            }
-        };
+        wait_for_unlock(rx).await?;
 
         unbind(endpoint.clone()).await;
         unsubscribe(endpoint).await;
     }
+
+    Ok(())
+}
+
+async fn wait_for_unlock(
+    mut rx: futures::channel::mpsc::UnboundedReceiver<()>,
+) -> anyhow::Result<()> {
+    tokio::select! {
+        _ = rx.next() => {
+            log::info!("Default account unlocked");
+        }
+        _ = actix_rt::signal::ctrl_c() => {
+            actix_rt::System::current().stop();
+            bail!("Default account is locked");
+        }
+    };
 
     Ok(())
 }
