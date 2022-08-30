@@ -13,6 +13,7 @@ use openssl::x509::{X509ObjectRef, X509StoreContext, X509};
 use structopt::StructOpt;
 use strum::{Display, EnumIter, EnumString, EnumVariantNames, IntoEnumIterator, VariantNames};
 
+use crate::matching::domain::DomainPatterns;
 use crate::util::{CertBasicDataVisitor, X509Visitor};
 
 /// Policy configuration
@@ -40,7 +41,7 @@ pub struct PolicyConfig {
     #[structopt(skip)]
     pub trusted_keys: Option<Keystore>,
     #[structopt(skip)]
-    pub domain_whitelist: HashSet<String>,
+    pub domain_whitelist: DomainPatterns,
 }
 
 impl PolicyConfig {

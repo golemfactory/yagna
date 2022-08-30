@@ -22,6 +22,7 @@ async fn main() -> anyhow::Result<()> {
     let mut config = cli_args.config;
     let data_dir = config.data_dir.get_or_create()?;
 
+    config.domain_whitelist_file = data_dir.join(config.domain_whitelist_file);
     config.globals_file = data_dir.join(config.globals_file);
     config.presets_file = data_dir.join(config.presets_file);
     config.hardware_file = data_dir.join(config.hardware_file);

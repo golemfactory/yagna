@@ -2,6 +2,7 @@ use actix::prelude::*;
 use anyhow::{anyhow, Error};
 use futures::{FutureExt, StreamExt, TryFutureExt};
 use ya_client::net::NetApi;
+use ya_manifest_utils::matching::domain::DomainPatterns;
 
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
@@ -134,23 +135,19 @@ impl ProviderAgent {
             .unwrap_or_else(|| app_name.to_string());
 
         let cert_dir = &config.cert_dir.get_or_create()?;
-        let keystore = match Keystore::load(cert_dir) {
-            Ok(store) => {
-                log::info!("Trusted key store loaded from {}", cert_dir.display());
-                store
-            }
-            Err(err) => {
-                log::info!("Using a new keystore: {}", err);
-                Default::default()
-            }
-        };
+        let keystore = load_keystore(cert_dir)?;
 
         args.market.session_id = format!("{}-{}", name, std::process::id());
         args.runner.session_id = args.market.session_id.clone();
         args.payment.session_id = args.market.session_id.clone();
         let policy_config = &mut args.market.negotiator_config.composite_config.policy_config;
         policy_config.trusted_keys = Some(keystore.clone());
-        policy_config.domain_whitelist = config.domain_whitelist.clone().into_iter().collect();
+        let whitelist = &config.domain_whitelist_file;
+        policy_config.domain_whitelist = DomainPatterns::try_from(&config.domain_whitelist_file)
+            .unwrap_or_else(|err| {
+                log::warn!("Failed to read whitelist file ({whitelist:?}): {err}");
+                Default::default()
+            });
 
         let networks = args.node.account.networks.clone();
         for n in networks.iter() {
@@ -362,6 +359,20 @@ impl ProviderAgent {
             Ok(accounts)
         }
     }
+}
+
+fn load_keystore(cert_dir: &PathBuf) -> anyhow::Result<Keystore> {
+    let keystore = match Keystore::load(cert_dir) {
+        Ok(keystore) => {
+            log::info!("Trusted key store loaded from {}", cert_dir.display());
+            keystore
+        }
+        Err(err) => {
+            log::info!("Using a new keystore: {}", err);
+            Default::default()
+        }
+    };
+    Ok(keystore)
 }
 
 fn get_prices(

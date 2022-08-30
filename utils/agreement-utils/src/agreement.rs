@@ -30,9 +30,7 @@ impl AgreementView {
     }
 
     pub fn pointer_typed<'a, T: Deserialize<'a>>(&self, pointer: &str) -> Result<T, Error> {
-        let value = self
-            .json
-            .pointer(pointer)
+        let value = self.pointer(pointer)
             .ok_or(Error::NoKey(pointer.to_string()))?
             .clone();
         Ok(<T as Deserialize>::deserialize(value)
@@ -63,8 +61,13 @@ impl AgreementView {
             .and_then(|s| parse_constraints(s, reg_expr, group))
     }
 
+    pub fn has_property(&self, property: &str) -> bool {
+        let pointer = property_to_pointer_path(property);
+        self.pointer(&pointer).is_some()
+    }
+
     pub fn get_property<'a, T: Deserialize<'a>>(&self, property: &str) -> Result<T, Error> {
-        let pointer = format!("/{}", property.replace(".", "/"));
+        let pointer = property_to_pointer_path(property);
         self.pointer_typed(pointer.as_str())
     }
 
@@ -78,6 +81,10 @@ impl AgreementView {
             })?,
         )
     }
+}
+
+fn property_to_pointer_path(property: &str) -> String {
+    format!("/{}", property.replace(".", "/"))
 }
 
 pub fn parse_constraints(input: &str, reg_expr: &str, group: usize) -> Option<HashSet<String>> {

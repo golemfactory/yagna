@@ -32,6 +32,7 @@ lazy_static::lazy_static! {
     static ref DEFAULT_CERT_DIR: String = PathBuf::from(DEFAULT_DATA_DIR.as_str()).join(CERT_DIR).to_string_lossy().to_string();
     static ref DEFAULT_PLUGINS_DIR : PathBuf = default_plugins();
 }
+pub(crate) const DOMAIN_WHITELIST_JSON: &'static str = "domain_whitelist.json";
 pub(crate) const PRESETS_JSON: &'static str = "presets.json";
 pub(crate) const HARDWARE_JSON: &'static str = "hardware.json";
 pub(crate) const CERT_DIR: &'static str = "cert_dir";
@@ -72,15 +73,8 @@ pub struct ProviderConfig {
         default_value = &*DEFAULT_CERT_DIR,
     )]
     pub cert_dir: DataDir,
-    /// Whitelist of allowed domains
-    #[structopt(
-        long,
-        set = clap::ArgSettings::Global,
-        env = "PROVIDER_DOMAIN_WHITELIST",
-        required = false
-    )]
-    pub domain_whitelist: Vec<String>,
-
+    #[structopt(skip = DOMAIN_WHITELIST_JSON)]
+    pub domain_whitelist_file: PathBuf,
     #[structopt(skip = GLOBALS_JSON)]
     pub globals_file: PathBuf,
     #[structopt(skip = PRESETS_JSON)]
