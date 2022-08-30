@@ -909,10 +909,11 @@ impl State {
 
 #[derive(Clone)]
 struct Request<S: Clone> {
-    #[allow(dead_code)]
+    #[allow(unused)]
     caller_id: NodeId,
+    #[allow(unused)]
     remote_id: NodeId,
-    #[allow(dead_code)]
+    #[allow(unused)]
     address: String,
     tx: S,
 }
