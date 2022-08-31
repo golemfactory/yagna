@@ -29,12 +29,12 @@ use crate::tasks::config::TaskConfig;
 
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
-
+    static ref DEFAULT_CERT_DIR: String = PathBuf::from(DEFAULT_DATA_DIR.as_str()).join(CERT_DIR).to_string_lossy().to_string();
     static ref DEFAULT_PLUGINS_DIR : PathBuf = default_plugins();
 }
 pub(crate) const PRESETS_JSON: &'static str = "presets.json";
 pub(crate) const HARDWARE_JSON: &'static str = "hardware.json";
-pub(crate) const TRUSTED_KEYS_FILE: &'static str = "trusted_keys";
+pub(crate) const CERT_DIR: &'static str = "cert_dir";
 
 /// Common configuration for all Provider commands.
 #[derive(StructOpt, Clone, Debug)]
@@ -64,6 +64,14 @@ pub struct ProviderConfig {
         env = "PROVIDER_LOG_DIR",
     )]
     pub log_dir: Option<DataDir>,
+    /// Certificates directory
+    #[structopt(
+        long,
+        set = clap::ArgSettings::Global,
+        env = "PROVIDER_CERT_DIR",
+        default_value = &*DEFAULT_CERT_DIR,
+    )]
+    pub cert_dir: DataDir,
 
     #[structopt(skip = GLOBALS_JSON)]
     pub globals_file: PathBuf,
@@ -71,8 +79,6 @@ pub struct ProviderConfig {
     pub presets_file: PathBuf,
     #[structopt(skip = HARDWARE_JSON)]
     pub hardware_file: PathBuf,
-    #[structopt(skip = TRUSTED_KEYS_FILE)]
-    pub trusted_keys_file: PathBuf,
     /// Max number of available CPU cores
     #[structopt(
         long,
@@ -270,7 +276,7 @@ impl FileMonitor {
             let mut active = false;
             loop {
                 if !active {
-                    match watcher.watch(&path_th, RecursiveMode::NonRecursive) {
+                    match watcher.watch(&path_th, RecursiveMode::Recursive) {
                         Ok(_) => active = true,
                         Err(e) => {
                             if config.verbose {

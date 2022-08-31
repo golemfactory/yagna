@@ -187,8 +187,8 @@ ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev
 ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "f61744d5bedd12b136ad9523f918ac6f872012ad"}
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "3883172196e29eea4665176d92ea91571305beb2" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "3883172196e29eea4665176d92ea91571305beb2" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "f2d33f947a4b4f3e873a796e7439a2e5522c2005" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "f2d33f947a4b4f3e873a796e7439a2e5522c2005" }
 
 ## OTHERS
 gftp = { path = "core/gftp" }
@@ -201,6 +201,7 @@ ya-file-logging = { path = "utils/file-logging" }
 ya-manifest-utils = { path = "utils/manifest-utils" }
 ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
+ya-utils-cli = { path = "utils/cli"}
 ya-utils-futures = { path = "utils/futures" }
 ya-utils-networking = { path = "utils/networking" }
 ya-utils-path = { path = "utils/path" }

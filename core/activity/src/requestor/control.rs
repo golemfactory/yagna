@@ -12,8 +12,8 @@ use ya_client_model::activity::{
     ActivityState, CreateActivityRequest, CreateActivityResult, Credentials, ExeScriptCommand,
     ExeScriptRequest, SgxCredentials, State,
 };
-use ya_client_model::market::Agreement;
-use ya_core_model::{activity, Role};
+use ya_client_model::market::{Agreement, Role};
+use ya_core_model::activity;
 use ya_net::{self as net, RemoteEndpoint};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;

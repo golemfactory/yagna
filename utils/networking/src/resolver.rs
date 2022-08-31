@@ -3,7 +3,6 @@ use regex::Regex;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use std::iter::FromIterator;
 use std::net::IpAddr;
-use tokio_compat_02::FutureExt;
 
 use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::TokioAsyncResolver;
@@ -25,10 +24,8 @@ pub async fn resolve_yagna_srv_record(prefix: &str) -> std::io::Result<String> {
 /// If successful responds in the format of `hostname:port`
 pub async fn resolve_srv_record(record: &str) -> std::io::Result<String> {
     let resolver: TokioAsyncResolver =
-        TokioAsyncResolver::tokio(ResolverConfig::google(), ResolverOpts::default())
-            .compat()
-            .await?;
-    let lookup = resolver.srv_lookup(record).compat().await?;
+        TokioAsyncResolver::tokio(ResolverConfig::google(), ResolverOpts::default())?;
+    let lookup = resolver.srv_lookup(record).await?;
     let srv = lookup
         .iter()
         .next()
@@ -57,11 +54,9 @@ pub async fn resolve_dns_record(request_url: &str) -> anyhow::Result<String> {
 }
 
 pub async fn resolve_dns_record_host(host: &str) -> anyhow::Result<String> {
-    let resolver = TokioAsyncResolver::tokio(ResolverConfig::google(), ResolverOpts::default())
-        .compat()
-        .await?;
+    let resolver = TokioAsyncResolver::tokio(ResolverConfig::google(), ResolverOpts::default())?;
 
-    let response = resolver.lookup_ip(host).compat().await?;
+    let response = resolver.lookup_ip(host).await?;
     let address = response
         .iter()
         .next()
@@ -97,8 +92,7 @@ pub async fn try_resolve_dns_record(request_url_or_host: &str) -> String {
 
 /// Resolve all known IP addresses of a given domain
 pub async fn resolve_domain_name<T: FromIterator<IpAddr>>(domain: &str) -> anyhow::Result<T> {
-    let resolver =
-        TokioAsyncResolver::tokio(ResolverConfig::google(), ResolverOpts::default()).await?;
+    let resolver = TokioAsyncResolver::tokio(ResolverConfig::google(), ResolverOpts::default())?;
     let response = resolver.lookup_ip(domain).await?;
     Ok(T::from_iter(response.iter()))
 }

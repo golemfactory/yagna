@@ -1,127 +1,149 @@
-use std::fs::OpenOptions;
-use std::path::{Path, PathBuf};
+use std::collections::HashSet;
+use std::path::PathBuf;
 
-use anyhow::Context;
-use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 
-use ya_manifest_utils::{KeyMeta, Keystore};
+use ya_manifest_utils::util::{self, CertBasicData, CertBasicDataVisitor};
+use ya_manifest_utils::KeystoreLoadResult;
+use ya_utils_cli::{CommandOutput, ResponseTable};
 
 use crate::startup_config::ProviderConfig;
 
 #[derive(StructOpt, Clone, Debug)]
 #[structopt(rename_all = "kebab-case")]
 pub enum KeystoreConfig {
-    /// List trusted keys
+    /// List trusted X.509 certificates
     List,
-    /// Add a new trusted key
+    /// Add new trusted X.509 certificates
     Add(Add),
-    /// Remove a trusted key
+    /// Remove trusted X.509 certificates
     Remove(Remove),
 }
 
 #[derive(StructOpt, Clone, Debug)]
-#[structopt(rename_all = "kebab-case")]
 pub struct Add {
-    key: String,
-    #[structopt(long, short)]
-    name: Option<String>,
-    #[structopt(long, short)]
-    scheme: Option<String>,
+    /// Paths to X.509 certificates (PEM or DER) or certificates chains
+    #[structopt(parse(from_os_str))]
+    certs: Vec<PathBuf>,
 }
 
 #[derive(StructOpt, Clone, Debug)]
 #[structopt(rename_all = "kebab-case")]
 pub struct Remove {
-    name: String,
+    /// Certificate ids
+    ids: Vec<String>,
 }
 
 impl KeystoreConfig {
     pub fn run(self, config: ProviderConfig) -> anyhow::Result<()> {
         match self {
             KeystoreConfig::List => list(config),
-            KeystoreConfig::Add(add_) => add(config, add_),
-            KeystoreConfig::Remove(remove_) => remove(config, remove_),
+            KeystoreConfig::Add(cmd) => add(config, cmd),
+            KeystoreConfig::Remove(cmd) => remove(config, cmd),
         }
     }
 }
 
 fn list(config: ProviderConfig) -> anyhow::Result<()> {
-    let path = keystore_path(&config)?;
-    let keystore = Keystore::load(path)?;
-    let keys: Vec<_> = keystore
-        .keys()
-        .into_iter()
-        .map(FormattedKey::from)
-        .collect();
-
-    if keys.is_empty() {
-        return Ok(());
-    }
-
-    if config.json {
-        println!("{}", serde_json::to_string_pretty(&keys)?);
-    } else {
-        println!("Name\tKey\tScheme");
-        for key in keys {
-            println!("\n{}\t{}\t{}", key.scheme, key.key, key.name);
-        }
-    }
-
+    let cert_dir = cert_dir_path(&config)?;
+    let table = CertTable::new();
+    let table = util::visit_certificates(&cert_dir, table)?;
+    table.print(&config)?;
     Ok(())
 }
 
 fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
-    let path = keystore_path(&config)?;
-    log::error!("key: {}", add.key);
-    let key = hex::decode(add.key).context("key is not a hex string")?;
-    log::error!("decoded: {:?}", key);
-    let keystore = Keystore::load(&path)?;
-    keystore.insert(key, add.scheme, add.name)?;
-    keystore.save(path)?;
+    let cert_dir = cert_dir_path(&config)?;
+    let keystore_manager = util::KeystoreManager::try_new(&cert_dir)?;
+    match keystore_manager.load_certs(&add.certs)? {
+        KeystoreLoadResult::Loaded { loaded, skipped } => {
+            println_conditional(&config, "Added certificates:");
+            let certs_data = util::to_cert_data(&loaded)?;
+            print_cert_list(&config, certs_data)?;
+            if !skipped.is_empty() && !config.json {
+                println!("Certificates already loaded to keystore:");
+                let certs_data = util::to_cert_data(&skipped)?;
+                print_cert_list(&config, certs_data)?;
+            }
+        }
+        KeystoreLoadResult::NothingNewToLoad { skipped } => {
+            println_conditional(&config, "No new certificate to add. Skipped:");
+            let certs_data = util::to_cert_data(&skipped)?;
+            print_cert_list(&config, certs_data)?;
+        }
+    }
     Ok(())
 }
 
 fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
-    let path = keystore_path(&config)?;
-    let keystore = Keystore::load(&path)?;
-    keystore
-        .remove_by_name(remove.name)
-        .ok_or_else(|| anyhow::anyhow!("key does not exist"))
-        .map(|_| ())?;
-    keystore.save(path)
-}
-
-fn touch(path: impl AsRef<Path>) -> anyhow::Result<()> {
-    let path = path.as_ref();
-    OpenOptions::new()
-        .create(true)
-        .write(true)
-        .open(path)
-        .map(|_| ())
-        .context(format!("unable to create file '{}'", path.display()))
-}
-
-fn keystore_path(config: &ProviderConfig) -> anyhow::Result<PathBuf> {
-    let data_dir = config.data_dir.get_or_create()?;
-    let path = data_dir.join(config.trusted_keys_file.as_path());
-    touch(path.as_path())?;
-    Ok(path)
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct FormattedKey {
-    name: String,
-    key: String,
-    scheme: String,
-}
-
-impl From<(Box<[u8]>, KeyMeta)> for FormattedKey {
-    fn from(tup: (Box<[u8]>, KeyMeta)) -> Self {
-        FormattedKey {
-            name: tup.1.name,
-            key: hex::encode(tup.0),
-            scheme: tup.1.scheme,
+    let cert_dir = cert_dir_path(&config)?;
+    let keystore_manager = util::KeystoreManager::try_new(&cert_dir)?;
+    let ids: HashSet<String> = remove.ids.into_iter().collect();
+    match keystore_manager.remove_certs(&ids)? {
+        util::KeystoreRemoveResult::NothingToRemove => {
+            println_conditional(&config, "No matching certificates to remove.");
         }
+        util::KeystoreRemoveResult::Removed { removed } => {
+            println!("Removed certificates:");
+            let certs_data = util::to_cert_data(&removed)?;
+            print_cert_list(&config, certs_data)?;
+        }
+    };
+    Ok(())
+}
+
+fn cert_dir_path(config: &ProviderConfig) -> anyhow::Result<PathBuf> {
+    Ok(config.cert_dir.get_or_create()?)
+}
+
+fn print_cert_list(
+    config: &ProviderConfig,
+    certs_data: Vec<util::CertBasicData>,
+) -> anyhow::Result<()> {
+    let mut table = CertTable::new();
+    for data in certs_data {
+        table.add(data);
+    }
+    table.print(&config)?;
+    Ok(())
+}
+
+struct CertTable {
+    table: ResponseTable,
+}
+
+impl CertTable {
+    pub fn new() -> Self {
+        let columns = vec![
+            "ID".to_string(),
+            "Not After".to_string(),
+            "Subject".to_string(),
+        ];
+        let values = vec![];
+        let table = ResponseTable { columns, values };
+        Self { table }
+    }
+
+    pub fn print(self, config: &ProviderConfig) -> anyhow::Result<()> {
+        let output = CommandOutput::from(self.table);
+        output.print(config.json)?;
+        Ok(())
+    }
+
+    pub fn add(&mut self, data: CertBasicData) {
+        self.accept(data)
+    }
+}
+
+impl CertBasicDataVisitor for CertTable {
+    fn accept(&mut self, data: CertBasicData) {
+        let row = serde_json::json! {[ data.id, data.not_after, data.subject ]};
+        self.table.values.push(row);
+    }
+}
+
+fn println_conditional(config: &ProviderConfig, txt: &str) {
+    if !config.json {
+        println!("{txt}");
     }
 }

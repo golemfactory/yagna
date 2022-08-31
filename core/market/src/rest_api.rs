@@ -9,7 +9,7 @@ use actix_web::{error::InternalError, http::StatusCode, web::PathConfig};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
-use ya_client::model::ErrorMessage;
+use ya_client::model::{market::agreement::State, ErrorMessage};
 
 use crate::db::model::{
     AgreementId, AppSessionId, Owner, ProposalId, ProposalIdParseError, SubscriptionId,
@@ -57,6 +57,15 @@ pub struct PathSubscription {
 pub struct PathSubscriptionProposal {
     pub subscription_id: SubscriptionId,
     pub proposal_id: ProposalId,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryAgreementList {
+    pub state: Option<State>,
+    pub before_date: Option<DateTime<Utc>>,
+    pub after_date: Option<DateTime<Utc>>,
+    pub app_session_id: Option<String>,
 }
 
 #[derive(Deserialize)]

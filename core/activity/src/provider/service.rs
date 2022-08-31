@@ -6,12 +6,11 @@ use std::convert::From;
 use std::time::Duration;
 
 use ya_client_model::activity::{ActivityState, ActivityUsage, State, StatePair};
-use ya_client_model::market::agreement::State as AgreementState;
+use ya_client_model::market::{agreement::State as AgreementState, Role};
 use ya_client_model::NodeId;
 use ya_core_model::activity;
 use ya_core_model::activity::local::Credentials;
 use ya_core_model::activity::RpcMessageError;
-use ya_core_model::Role;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{timeout::*, typed::ServiceBinder};
 

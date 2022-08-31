@@ -21,7 +21,8 @@ mod common {
     use actix_web::{web, HttpResponse, Responder};
     use futures::prelude::*;
 
-    use ya_core_model::{activity, NodeId, Role};
+    use ya_client_model::market::Role;
+    use ya_core_model::{activity, NodeId};
     use ya_persistence::executor::DbExecutor;
     use ya_service_api_web::middleware::Identity;
     use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
