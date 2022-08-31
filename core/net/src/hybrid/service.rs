@@ -655,13 +655,14 @@ fn handle_request(
     transport: TransportType,
 ) -> anyhow::Result<()> {
     let caller_id = NodeId::from_str(&request.caller).ok();
-    if !caller_id.map(|id| id == remote_id).unwrap_or(false) {
-        anyhow::bail!("Invalid caller id: {}", request.caller);
-    }
+
+    // FIXME: implement authorization with encryption
+    // if !caller_id.map(|id| id == remote_id).unwrap_or(false) {
+    //     anyhow::bail!("Invalid caller id: {}", request.caller);
+    // }
 
     let address = request.address;
     let caller_id = caller_id.unwrap();
-    let caller_id_ = caller_id.clone();
     let request_id = request.request_id;
     let request_id_chain = request_id.clone();
     let request_id_filter = request_id.clone();
@@ -747,7 +748,7 @@ fn handle_request(
         }
         .then(move |result| async move {
             if let Err(e) = result {
-                log::debug!("Replying to [{caller_id_}] - forward error: {e}");
+                log::debug!("Replying to [{caller_id}] - forward error: {e}");
             }
         }),
     );
@@ -774,14 +775,14 @@ fn handle_reply(
         let inner = state.inner.borrow();
         inner.requests.get(&reply.request_id).cloned()
     } {
-        Some(request) if request.remote_id == remote_id => {
+        // FIXME: implement authorization with encryption
+        Some(request) => {
             if full {
                 let mut inner = state.inner.borrow_mut();
                 inner.requests.remove(&reply.request_id);
             }
             request
         }
-        Some(_) => anyhow::bail!("invalid caller for request id: {}", reply.request_id),
         None => anyhow::bail!("invalid reply request id: {}", reply.request_id),
     };
 
@@ -908,10 +909,11 @@ impl State {
 
 #[derive(Clone)]
 struct Request<S: Clone> {
-    #[allow(dead_code)]
+    #[allow(unused)]
     caller_id: NodeId,
+    #[allow(unused)]
     remote_id: NodeId,
-    #[allow(dead_code)]
+    #[allow(unused)]
     address: String,
     tx: S,
 }
