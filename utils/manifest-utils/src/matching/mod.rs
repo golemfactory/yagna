@@ -1,6 +1,6 @@
 pub mod domain;
 
-use std::collections::HashSet;
+use std::{collections::HashSet, fmt::Debug};
 
 use regex::RegexSet;
 
@@ -11,10 +11,11 @@ trait MatchPattern {
     fn match_type(&self) -> ArgMatch;
 }
 
-pub trait Matcher {
+pub trait Matcher: Debug + Send + Sync {
     fn matches(&self, txt: &str) -> bool;
 }
 
+#[derive(Debug)]
 struct RegexMatcher {
     patterns: RegexSet,
 }
@@ -25,6 +26,7 @@ impl Matcher for RegexMatcher {
     }
 }
 
+#[derive(Debug)]
 struct StrictMatcher {
     values: HashSet<String>,
 }
@@ -35,7 +37,7 @@ impl Matcher for StrictMatcher {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct CompositeMatcher {
     matchers: Vec<Box<dyn Matcher>>,
 }

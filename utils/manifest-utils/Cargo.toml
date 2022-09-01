@@ -11,6 +11,7 @@ keywords = ["golem", "yagna"]
 
 [dependencies]
 ya-agreement-utils = "0.4"
+ya-utils-path = "0.1"
 
 regex = "1.5"
 serde = "1.0"

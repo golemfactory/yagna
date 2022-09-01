@@ -2,7 +2,7 @@ use actix::prelude::*;
 use anyhow::{anyhow, Error};
 use futures::{FutureExt, StreamExt, TryFutureExt};
 use ya_client::net::NetApi;
-use ya_manifest_utils::matching::domain::DomainPatterns;
+use ya_manifest_utils::matching::domain::{DomainPatterns, DomainsMatcher, DomainWhitelistState};
 
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
@@ -67,6 +67,46 @@ impl GlobalsManager {
     }
 }
 
+struct WhitelistManager {
+    state: DomainWhitelistState,
+    monitor: Option<FileMonitor>,
+}
+
+impl WhitelistManager {
+    fn try_new(whitelist_file: &Path) -> anyhow::Result<Self> {
+        let mut patterns = DomainPatterns::load_or_create(whitelist_file)?;
+        patterns.update_and_save(whitelist_file, patterns.clone())?; //TODO fix ownership issue
+        let state = DomainWhitelistState::try_from(patterns)?;
+        Ok(Self {
+            state,
+            monitor: None,
+        })
+    }
+
+    fn spawn_monitor(&mut self, globals_file: &Path) -> anyhow::Result<()> {
+        let state = self.state.clone();
+        let handler = move |p: PathBuf| match DomainPatterns::load(&p) {
+            Ok(patterns) => {
+                match DomainsMatcher::try_from(&patterns) {
+                    Ok(matcher) => {
+                        *state.matcher.write().unwrap() = matcher;
+                        *state.patterns.lock().unwrap() = patterns;
+                    },
+                    Err(err) => log::error!("Failed to update domain whitelist: {err}"),
+                };
+            }
+            Err(e) => log::warn!("Error updating whitelist configuration from {:?}: {:?}", p, e),
+        };
+        let monitor = FileMonitor::spawn(globals_file, FileMonitor::on_modified(handler))?;
+        self.monitor = Some(monitor);
+        Ok(())
+    }
+
+    fn get_state(&self) -> DomainPatterns {
+        self.state.patterns.lock().unwrap().clone()
+    }
+}
+
 pub struct ProviderAgent {
     globals: GlobalsManager,
     market: Addr<ProviderMarket>,
@@ -79,6 +119,7 @@ pub struct ProviderAgent {
     networks: Vec<NetworkName>,
     keystore_monitor: FileMonitor,
     net_api: NetApi,
+    domain_whitelist: WhitelistManager,
 }
 
 impl ProviderAgent {
@@ -142,12 +183,6 @@ impl ProviderAgent {
         args.payment.session_id = args.market.session_id.clone();
         let policy_config = &mut args.market.negotiator_config.composite_config.policy_config;
         policy_config.trusted_keys = Some(keystore.clone());
-        let whitelist = &config.domain_whitelist_file;
-        policy_config.domain_whitelist = DomainPatterns::try_from(&config.domain_whitelist_file)
-            .unwrap_or_else(|err| {
-                log::warn!("Failed to read whitelist file ({whitelist:?}): {err}");
-                Default::default()
-            });
 
         let networks = args.node.account.networks.clone();
         for n in networks.iter() {
@@ -161,6 +196,10 @@ impl ProviderAgent {
             };
             log::info!("Using payment network: {}", net_color.paint(&n));
         }
+        
+        let mut domain_whitelist = WhitelistManager::try_new(&config.domain_whitelist_file)?;
+        domain_whitelist.spawn_monitor(&config.domain_whitelist_file)?;
+        policy_config.domain_patterns = domain_whitelist.state.clone();
         let mut globals = GlobalsManager::try_new(&config.globals_file, args.node)?;
         globals.spawn_monitor(&config.globals_file)?;
         let mut presets = PresetManager::load_or_create(&config.presets_file)?;
@@ -188,6 +227,7 @@ impl ProviderAgent {
             networks,
             keystore_monitor,
             net_api,
+            domain_whitelist,
         })
     }
 

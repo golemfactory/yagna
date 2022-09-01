@@ -1,9 +1,8 @@
-use std::convert::TryFrom;
 use std::ops::Not;
 
 use url::Url;
 use ya_agreement_utils::{Error, OfferDefinition};
-use ya_manifest_utils::matching::domain::{DomainsMatcher};
+use ya_manifest_utils::matching::domain::SharedDomainsMatcher;
 use ya_manifest_utils::matching::Matcher;
 use ya_manifest_utils::policy::{Keystore, Match, Policy, PolicyConfig};
 use ya_manifest_utils::{
@@ -18,7 +17,7 @@ use crate::market::negotiator::*;
 pub struct ManifestSignature {
     enabled: bool,
     keystore: Keystore,
-    whitelist_matcher: DomainsMatcher,
+    whitelist_matcher: SharedDomainsMatcher,
 }
 
 impl NegotiatorComponent for ManifestSignature {
@@ -92,11 +91,7 @@ impl From<PolicyConfig> for ManifestSignature {
             }
         };
 
-        let whitelist_matcher =
-            DomainsMatcher::try_from(config.domain_whitelist).unwrap_or_else(|err| {
-                log::debug!("Failed to create whitelist matcher: {err}");
-                Default::default()
-            });
+        let whitelist_matcher = config.domain_patterns.matcher.clone();
         let keystore = config.trusted_keys.unwrap_or_default();
         ManifestSignature {
             enabled,
@@ -117,7 +112,7 @@ impl<'demand> DemandWithManifest<'demand> {
         self.demand.has_property(DEMAND_MANIFEST_SIG_PROPERTY)
     }
 
-    fn requires_signature(&self, whitelist_matcher: &DomainsMatcher) -> bool {
+    fn requires_signature(&self, whitelist_matcher: &SharedDomainsMatcher) -> bool {
         let features = self.manifest.features();
         if features.is_empty() {
             log::debug!("No features in demand. Signature not required.");
@@ -133,10 +128,11 @@ impl<'demand> DemandWithManifest<'demand> {
                 .and_then(|inet| inet.out.as_ref())
                 .and_then(|out| out.urls.as_ref())
             {
+                let matcher =  whitelist_matcher.read().unwrap();
                 let non_whitelisted_urls: Vec<&str> = urls
                     .iter()
                     .flat_map(Url::host_str)
-                    .filter(|domain| whitelist_matcher.matches(domain).not())
+                    .filter(|domain| matcher.matches(domain).not())
                     .collect();
                 if non_whitelisted_urls.is_empty() {
                     log::debug!("Demand does not require signature. Every URL on whitelist");

@@ -1,17 +1,36 @@
-use std::{collections::HashSet, convert::TryFrom, fs::File, io::BufReader, path::PathBuf};
+use std::{collections::HashSet, convert::TryFrom, fs::{File, self}, io::{BufReader, self}, path::{PathBuf, Path}, sync::{Arc, RwLock, Mutex}};
 
 use regex::RegexSetBuilder;
 use serde::{Deserialize, Serialize};
+use ya_utils_path::SwapSave;
 
 use crate::ArgMatch;
-
 use super::{CompositeMatcher, Matcher, RegexMatcher, StrictMatcher};
 
 pub type DomainsMatcher = CompositeMatcher;
+pub type SharedDomainPatterns = Arc<Mutex<DomainPatterns>>;
+pub type SharedDomainsMatcher = Arc<RwLock<DomainsMatcher>>;
+
+#[derive(Clone,Default, Debug)]
+pub struct DomainWhitelistState {
+    pub patterns: SharedDomainPatterns,
+    pub matcher: SharedDomainsMatcher,
+}
+
+impl TryFrom<DomainPatterns> for DomainWhitelistState {
+    type Error = anyhow::Error;
+    
+    fn try_from(patterns: DomainPatterns) -> Result<Self, Self::Error> {
+        let matcher = DomainsMatcher::try_from(&patterns)?;
+        let matcher = Arc::new(RwLock::new(matcher));
+        let patterns = Arc::new(Mutex::new(patterns));
+        Ok(Self { patterns, matcher })
+    }
+}
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct DomainPatterns {
-    pub domains: Vec<DomainPattern>,
+    pub patterns: Vec<DomainPattern>,
 }
 
 impl TryFrom<&PathBuf> for DomainPatterns {
@@ -24,7 +43,43 @@ impl TryFrom<&PathBuf> for DomainPatterns {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+impl DomainPatterns {
+    pub fn load(path: &Path) -> anyhow::Result<Self> {
+        if path.exists() {
+            log::debug!("Loading domain patterns from: {}", path.display());
+            Ok(serde_json::from_reader(io::BufReader::new(
+                fs::OpenOptions::new().read(true).open(path)?,
+            ))?)
+        } else {
+            Ok(Self::default())
+        }
+    }
+
+    pub fn load_or_create(path: &Path) -> anyhow::Result<Self> {
+        if path.exists() {
+            Self::load(path)
+        } else {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::File::create(&path)?;
+            let patterns = Self::default();
+            patterns.save(path)?;
+            Ok(patterns)
+        }
+    }
+
+    pub fn update_and_save(&mut self, path: &Path, patterns: DomainPatterns) -> anyhow::Result<()> {
+        self.patterns = patterns.patterns;
+        self.save(path)
+    }
+
+    pub fn save(&self, path: &Path) -> anyhow::Result<()> {
+        Ok(path.swap_save(serde_json::to_string_pretty(self)?)?)
+    }  
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DomainPattern {
     pub domain: String,
@@ -35,16 +90,16 @@ pub struct DomainPattern {
 impl DomainPattern {
     fn default_domain_match() -> ArgMatch {
         ArgMatch::Regex
-    }
+    }    
 }
 
-impl TryFrom<DomainPatterns> for DomainsMatcher {
+impl TryFrom<&DomainPatterns> for DomainsMatcher {
     type Error = anyhow::Error;
 
-    fn try_from(domain_patterns: DomainPatterns) -> Result<Self, Self::Error> {
+    fn try_from(domain_patterns: &DomainPatterns) -> Result<Self, Self::Error> {
         let mut strict_patterns = HashSet::new();
         let mut regex_patterns = HashSet::new();
-        for domain_pattern in domain_patterns.domains {
+        for domain_pattern in &domain_patterns.patterns {
             match domain_pattern.domain_match {
                 ArgMatch::Strict => strict_patterns.insert(domain_pattern.domain.to_lowercase()),
                 ArgMatch::Regex => regex_patterns.insert(domain_pattern.domain.to_lowercase()),
