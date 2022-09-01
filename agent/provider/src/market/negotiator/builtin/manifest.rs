@@ -27,7 +27,8 @@ impl NegotiatorComponent for ManifestSignature {
         offer: ProposalView,
     ) -> anyhow::Result<NegotiationResult> {
         if self.enabled.not() {
-            return Ok(NegotiationResult::Ready { offer });
+            log::trace!("Manifest signature verification disabled.");
+            return acceptance(offer);
         }
 
         let demand = match demand.get_property::<String>(DEMAND_MANIFEST_PROPERTY) {
@@ -39,17 +40,20 @@ impl NegotiatorComponent for ManifestSignature {
                 },
                 Err(e) => return rejection(format!("invalid manifest: {:?}", e)),
             },
-            Err(Error::NoKey(_)) => return Ok(NegotiationResult::Ready { offer }),
+            Err(Error::NoKey(_)) => return acceptance(offer),
             Err(e) => return rejection(format!("invalid manifest type: {:?}", e)),
         };
 
-        if demand.has_signature() || demand.requires_signature(&self.whitelist_matcher) {
+        if demand.has_signature() {
             match demand.verify_signature(&self.keystore) {
                 Ok(()) => acceptance(offer),
                 Err(err) => rejection(format!("failed to verify manifest signature: {}", err)),
             }
+        } else if demand.requires_signature(&self.whitelist_matcher) {
+            rejection(format!("manifest requires signature but it has none"))
         } else {
-           acceptance(offer)
+            log::trace!("No signature required. No signature provided.");
+            acceptance(offer)
         }
     }
 
