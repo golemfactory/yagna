@@ -37,14 +37,15 @@ lazy_static! {
                 token: "GLM",
             },
         );
-        zksync.insert(
-            NetworkName::Rinkeby.into(),
-            PaymentPlatform {
-                platform: "zksync-rinkeby-tglm",
-                driver: "zksync",
-                token: "tGLM",
-            },
-        );
+        // zksync.insert(
+        //     NetworkName::Rinkeby.into(),
+        //     PaymentPlatform {
+        //         platform: "zksync-rinkeby-tglm",
+        //         driver: "zksync",
+        //         token: "tGLM",
+        //     },
+        // );
+
         PaymentDriver {
             platforms: zksync,
             name: "zksync",
@@ -92,6 +93,7 @@ lazy_static! {
                 token: "GLM",
             },
         );
+
         PaymentDriver {
             platforms: erc20,
             name: "erc20",
