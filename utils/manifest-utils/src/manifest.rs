@@ -15,12 +15,12 @@ use ya_agreement_utils::Error as AgreementError;
 
 use crate::decode_data;
 
-pub const AGREEMENT_MANIFEST_PROPERTY: &str = "demand.properties.golem.srv.comp.payload.@tag";
+pub const AGREEMENT_MANIFEST_PROPERTY: &str = "demand.properties.golem.srv.comp.payload";
 pub const AGREEMENT_MANIFEST_SIG_PROPERTY: &str = "demand.properties.golem.srv.comp.payload.sig";
 
 pub const CAPABILITIES_PROPERTY: &str = "golem.runtime.capabilities";
-pub const DEMAND_MANIFEST_PROPERTY: &str = "golem.srv.comp.payload.@tag";
-pub const DEMAND_MANIFEST_SIG_PROPERTY: &str = "golem.srv.comp.payload.sig.@tag";
+pub const DEMAND_MANIFEST_PROPERTY: &str = "golem.srv.comp.payload";
+pub const DEMAND_MANIFEST_SIG_PROPERTY: &str = "golem.srv.comp.payload.sig";
 pub const DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY: &str = "golem.srv.comp.payload.sig.algorithm";
 pub const DEMAND_MANIFEST_CERT_PROPERTY: &str = "golem.srv.comp.payload.cert";
 

@@ -62,13 +62,19 @@ impl AgreementView {
     }
 
     pub fn has_property(&self, property: &str) -> bool {
-        let pointer = property_to_pointer_path(property);
-        self.pointer(&pointer).is_some()
+        let pointers = property_to_pointer_paths(property);
+        match self.pointer(&pointers.path_w_tag) {
+            None => self.pointer(&pointers.path).is_some(),
+            Some(_) => true,
+        }
     }
 
     pub fn get_property<'a, T: Deserialize<'a>>(&self, property: &str) -> Result<T, Error> {
-        let pointer = property_to_pointer_path(property);
-        self.pointer_typed(pointer.as_str())
+        let pointers = property_to_pointer_paths(property);
+        match self.pointer_typed(&pointers.path_w_tag) {
+            Err(Error::NoKey(_)) => self.pointer_typed(&pointers.path),
+            result => result,
+        }
     }
 
     pub fn remove_property(&mut self, pointer: &str) -> Result<(), Error> {
@@ -83,8 +89,17 @@ impl AgreementView {
     }
 }
 
-fn property_to_pointer_path(property: &str) -> String {
-    format!("/{}", property.replace(".", "/"))
+struct PointerPaths {
+    /// Pointer path
+    path: String,
+    /// Pointer path ending with `PROPERTY_TAG`
+    path_w_tag: String,
+}
+
+fn property_to_pointer_paths(property: &str) -> PointerPaths {
+    let path = format!("/{}", property.replace(".", "/"));
+    let path_w_tag = format!("{path}/{PROPERTY_TAG}");
+    PointerPaths { path, path_w_tag }
 }
 
 pub fn parse_constraints(input: &str, reg_expr: &str, group: usize) -> Option<HashSet<String>> {
