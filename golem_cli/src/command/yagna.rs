@@ -21,7 +21,10 @@ pub struct PaymentPlatform {
     pub token: &'static str,
 }
 
-pub struct PaymentDriver(pub HashMap<&'static str, PaymentPlatform>);
+pub struct PaymentDriver {
+    pub platforms: HashMap<&'static str, PaymentPlatform>,
+    pub name: &'static str,
+}
 
 lazy_static! {
     pub static ref ZKSYNC_DRIVER: PaymentDriver = {
@@ -42,7 +45,10 @@ lazy_static! {
                 token: "tGLM",
             },
         );
-        PaymentDriver(zksync)
+        PaymentDriver {
+            platforms: zksync,
+            name: "zksync",
+        }
     };
     pub static ref ERC20_DRIVER: PaymentDriver = {
         let mut erc20 = HashMap::new();
@@ -86,17 +92,33 @@ lazy_static! {
                 token: "GLM",
             },
         );
-        PaymentDriver(erc20)
+        PaymentDriver {
+            platforms: erc20,
+            name: "erc20",
+        }
     };
+    pub static ref DRIVERS: Vec<&'static PaymentDriver> = vec![&ZKSYNC_DRIVER, &ERC20_DRIVER];
 }
 
 impl PaymentDriver {
     pub fn platform(&self, network: &NetworkName) -> anyhow::Result<&PaymentPlatform> {
         let net: &str = network.into();
-        Ok(self.0.get(net).ok_or(anyhow!(
+        Ok(self.platforms.get(net).ok_or(anyhow!(
             "Payment driver config for network '{}' not found.",
             network
         ))?)
+    }
+
+    pub fn status_label(&self, network: &NetworkName) -> String {
+        if self.name == ZKSYNC_DRIVER.name {
+            return "zksync".to_string();
+        }
+
+        return if network == &NetworkName::Mainnet {
+            "on-chain".to_string()
+        } else {
+            network.to_string().to_lowercase()
+        };
     }
 }
 
