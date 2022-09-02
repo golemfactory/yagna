@@ -64,9 +64,9 @@ impl AgreementsCommand {
                     agreements_json.push(serde_json::to_value([
                         agreement.id,
                         agreement.role.to_string(),
-                        agreement.creation_ts.to_rfc3339(),
+                        agreement.timestamp.to_rfc3339(),
                         agreement
-                            .approve_ts
+                            .approved_date
                             .map(|ts| ts.to_rfc3339())
                             .unwrap_or("N/A".to_owned()),
                     ])?);
