@@ -7,6 +7,7 @@ use ya_manifest_utils::util::{self, CertBasicData, CertBasicDataVisitor};
 use ya_manifest_utils::KeystoreLoadResult;
 use ya_utils_cli::{CommandOutput, ResponseTable};
 
+use crate::cli::println_conditional;
 use crate::startup_config::ProviderConfig;
 
 #[derive(StructOpt, Clone, Debug)]
@@ -82,6 +83,9 @@ fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
     match keystore_manager.remove_certs(&ids)? {
         util::KeystoreRemoveResult::NothingToRemove => {
             println_conditional(&config, "No matching certificates to remove.");
+            if config.json {
+                print_cert_list(&config, Vec::new())?;
+            }
         }
         util::KeystoreRemoveResult::Removed { removed } => {
             println!("Removed certificates:");
@@ -139,11 +143,5 @@ impl CertTable {
 impl CertBasicDataVisitor for CertTable {
     fn accept(&mut self, data: CertBasicData) {
         self.add(data)
-    }
-}
-
-fn println_conditional(config: &ProviderConfig, txt: &str) {
-    if !config.json {
-        println!("{txt}");
     }
 }
