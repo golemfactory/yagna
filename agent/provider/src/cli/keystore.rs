@@ -131,14 +131,14 @@ impl CertTable {
     }
 
     pub fn add(&mut self, data: CertBasicData) {
-        self.accept(data)
+        let row = serde_json::json! {[ data.id, data.not_after, data.subject ]};
+        self.table.values.push(row)
     }
 }
 
 impl CertBasicDataVisitor for CertTable {
     fn accept(&mut self, data: CertBasicData) {
-        let row = serde_json::json! {[ data.id, data.not_after, data.subject ]};
-        self.table.values.push(row);
+        self.add(data)
     }
 }
 
