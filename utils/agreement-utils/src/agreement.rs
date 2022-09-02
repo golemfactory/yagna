@@ -30,7 +30,8 @@ impl AgreementView {
     }
 
     pub fn pointer_typed<'a, T: Deserialize<'a>>(&self, pointer: &str) -> Result<T, Error> {
-        let value = self.pointer(pointer)
+        let value = self
+            .pointer(pointer)
             .ok_or(Error::NoKey(pointer.to_string()))?
             .clone();
         Ok(<T as Deserialize>::deserialize(value)

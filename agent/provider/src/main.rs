@@ -44,6 +44,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::Profile(profile_cmd) => profile_cmd.run(config),
         Commands::ExeUnit(exe_unit_cmd) => exe_unit_cmd.run(config),
         Commands::Keystore(keystore_cmd) => keystore_cmd.run(config),
+        Commands::Whitelist(whitelist_cmd) => whitelist_cmd.run(config),
         Commands::Clean(clean_cmd) => clean_cmd.run(config),
     }
 }

@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::ops::Not;
+use std::str::FromStr;
 use std::string::ToString;
 
 use chrono::{DateTime, Utc};
@@ -7,7 +8,9 @@ use semver::Version;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use strum;
+use strum::AsRefStr;
 use strum::Display;
+use strum::EnumString;
 use url::Url;
 
 use ya_agreement_utils::AgreementView;
@@ -226,10 +229,12 @@ impl<'de> Deserialize<'de> for Command {
     }
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, EnumString, AsRefStr)]
 #[serde(rename_all = "camelCase")]
 pub enum ArgMatch {
+    #[strum(ascii_case_insensitive)]
     Strict,
+    #[strum(ascii_case_insensitive)]
     Regex,
 }
 

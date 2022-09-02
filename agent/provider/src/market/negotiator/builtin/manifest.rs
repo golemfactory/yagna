@@ -6,9 +6,8 @@ use ya_manifest_utils::matching::domain::SharedDomainsMatcher;
 use ya_manifest_utils::matching::Matcher;
 use ya_manifest_utils::policy::{Keystore, Match, Policy, PolicyConfig};
 use ya_manifest_utils::{
-    decode_manifest, AppManifest, Feature, CAPABILITIES_PROPERTY,
-    DEMAND_MANIFEST_CERT_PROPERTY, DEMAND_MANIFEST_PROPERTY,
-    DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY, DEMAND_MANIFEST_SIG_PROPERTY,
+    decode_manifest, AppManifest, Feature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
+    DEMAND_MANIFEST_PROPERTY, DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY, DEMAND_MANIFEST_SIG_PROPERTY,
 };
 
 use crate::market::negotiator::*;
@@ -132,7 +131,7 @@ impl<'demand> DemandWithManifest<'demand> {
                 .and_then(|inet| inet.out.as_ref())
                 .and_then(|out| out.urls.as_ref())
             {
-                let matcher =  whitelist_matcher.read().unwrap();
+                let matcher = whitelist_matcher.read().unwrap();
                 let non_whitelisted_urls: Vec<&str> = urls
                     .iter()
                     .flat_map(Url::host_str)

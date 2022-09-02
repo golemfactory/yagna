@@ -1,17 +1,25 @@
-use std::{collections::HashSet, convert::TryFrom, fs::{File, self}, io::{BufReader, self}, path::{PathBuf, Path}, sync::{Arc, RwLock, Mutex}};
+use std::{
+    collections::HashSet,
+    convert::TryFrom,
+    fs::{self, File},
+    io::{self, BufReader},
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex, RwLock},
+};
 
+use md5::{Digest, Md5};
 use regex::RegexSetBuilder;
 use serde::{Deserialize, Serialize};
 use ya_utils_path::SwapSave;
 
-use crate::ArgMatch;
 use super::{CompositeMatcher, Matcher, RegexMatcher, StrictMatcher};
+use crate::ArgMatch;
 
 pub type DomainsMatcher = CompositeMatcher;
 pub type SharedDomainPatterns = Arc<Mutex<DomainPatterns>>;
 pub type SharedDomainsMatcher = Arc<RwLock<DomainsMatcher>>;
 
-#[derive(Clone,Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct DomainWhitelistState {
     pub patterns: SharedDomainPatterns,
     pub matcher: SharedDomainsMatcher,
@@ -19,7 +27,7 @@ pub struct DomainWhitelistState {
 
 impl TryFrom<DomainPatterns> for DomainWhitelistState {
     type Error = anyhow::Error;
-    
+
     fn try_from(patterns: DomainPatterns) -> Result<Self, Self::Error> {
         let matcher = DomainsMatcher::try_from(&patterns)?;
         let matcher = Arc::new(RwLock::new(matcher));
@@ -76,7 +84,7 @@ impl DomainPatterns {
 
     pub fn save(&self, path: &Path) -> anyhow::Result<()> {
         Ok(path.swap_save(serde_json::to_string_pretty(self)?)?)
-    }  
+    }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -90,7 +98,7 @@ pub struct DomainPattern {
 impl DomainPattern {
     fn default_domain_match() -> ArgMatch {
         ArgMatch::Regex
-    }    
+    }
 }
 
 impl TryFrom<&DomainPatterns> for DomainsMatcher {
@@ -125,4 +133,12 @@ impl TryFrom<&DomainPatterns> for DomainsMatcher {
         }
         Ok(CompositeMatcher { matchers })
     }
+}
+
+pub fn pattern_to_id(pattern: &DomainPattern) -> String {
+    let pattern_type = pattern.domain_match.as_ref();
+    let pattern = &pattern.domain;
+    let id = format!("{pattern}:{pattern_type}");
+    let digest = Md5::digest(&id);
+    format!("{digest:x}")
 }

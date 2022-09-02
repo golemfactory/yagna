@@ -2,7 +2,7 @@ use actix::prelude::*;
 use anyhow::{anyhow, Error};
 use futures::{FutureExt, StreamExt, TryFutureExt};
 use ya_client::net::NetApi;
-use ya_manifest_utils::matching::domain::{DomainPatterns, DomainsMatcher, DomainWhitelistState};
+use ya_manifest_utils::matching::domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher};
 
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
@@ -83,7 +83,7 @@ impl WhitelistManager {
         })
     }
 
-    fn spawn_monitor(&mut self, globals_file: &Path) -> anyhow::Result<()> {
+    fn spawn_monitor(&mut self, whitelist_file: &Path) -> anyhow::Result<()> {
         let state = self.state.clone();
         let handler = move |p: PathBuf| match DomainPatterns::load(&p) {
             Ok(patterns) => {
@@ -91,13 +91,17 @@ impl WhitelistManager {
                     Ok(matcher) => {
                         *state.matcher.write().unwrap() = matcher;
                         *state.patterns.lock().unwrap() = patterns;
-                    },
+                    }
                     Err(err) => log::error!("Failed to update domain whitelist: {err}"),
                 };
             }
-            Err(e) => log::warn!("Error updating whitelist configuration from {:?}: {:?}", p, e),
+            Err(e) => log::warn!(
+                "Error updating whitelist configuration from {:?}: {:?}",
+                p,
+                e
+            ),
         };
-        let monitor = FileMonitor::spawn(globals_file, FileMonitor::on_modified(handler))?;
+        let monitor = FileMonitor::spawn(whitelist_file, FileMonitor::on_modified(handler))?;
         self.monitor = Some(monitor);
         Ok(())
     }
@@ -196,7 +200,7 @@ impl ProviderAgent {
             };
             log::info!("Using payment network: {}", net_color.paint(&n));
         }
-        
+
         let mut domain_whitelist = WhitelistManager::try_new(&config.domain_whitelist_file)?;
         domain_whitelist.spawn_monitor(&config.domain_whitelist_file)?;
         policy_config.domain_patterns = domain_whitelist.state.clone();

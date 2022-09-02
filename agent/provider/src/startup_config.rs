@@ -21,6 +21,7 @@ use crate::cli::exe_unit::ExeUnitsConfig;
 use crate::cli::keystore::KeystoreConfig;
 pub use crate::cli::preset::PresetsConfig;
 use crate::cli::profile::ProfileConfig;
+use crate::cli::whitelist::WhitelistConfig;
 pub(crate) use crate::config::globals::GLOBALS_JSON;
 use crate::execution::{ExeUnitsRegistry, TaskRunnerConfig};
 use crate::market::config::MarketConfig;
@@ -212,6 +213,8 @@ pub enum Commands {
     ExeUnit(ExeUnitsConfig),
     /// Manage trusted keys
     Keystore(KeystoreConfig),
+    /// Manage domain whitelist
+    Whitelist(WhitelistConfig),
     /// Clean up disk space
     Clean(CleanConfig),
 }
