@@ -30,7 +30,7 @@ pub struct Add {
     patterns: Vec<String>,
 
     /// Domain whitelist patterns type
-    #[structopt(long = "type", short = "t")]
+    #[structopt(long = "type", short = "t", default_value = "strict")]
     pattern_type: ArgMatch,
 }
 
