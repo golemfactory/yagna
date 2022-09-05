@@ -17,7 +17,7 @@ ya-persistence = "0.2"
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.1"
 ya-service-api-web = "0.1"
-ya-service-bus = "0.4"
+ya-service-bus = "0.6"
 
 actix-web = "4"
 anyhow = "1.0"
@@ -51,7 +51,7 @@ ya-dummy-driver = "0.2"
 ya-erc20-driver = "0.3"
 ya-zksync-driver = "0.2"
 ya-net = { version = "0.2", features = ["service"] }
-ya-sb-router = "0.4"
+ya-sb-router = "0.6"
 
 actix-rt = "2.7"
 rand = "0.8"

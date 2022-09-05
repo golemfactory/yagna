@@ -37,13 +37,13 @@ ya-metrics = "0.1"
 ya-net = { version = "0.2", features = ["service"] }
 ya-payment = "0.2"
 ya-persistence = { version = "0.2", features = ["service"] }
-ya-sb-proto = "0.4"
-ya-sb-router = "0.4"
+ya-sb-proto = "0.6"
+ya-sb-router = "0.6"
 ya-service-api = "0.1"
 ya-service-api-derive = "0.1"
 ya-service-api-interfaces = "0.1"
 ya-service-api-web = "0.1"
-ya-service-bus = "0.4"
+ya-service-bus = "0.6"
 ya-sgx = "0.1"
 ya-utils-path = "0.1"
 ya-utils-futures = "0.1"
@@ -181,10 +181,10 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## SERVICE BUS
-ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "498cab4a9c36e06677b436101d0e7e269f5ea90c"}
-ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "498cab4a9c36e06677b436101d0e7e269f5ea90c"}
-ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "498cab4a9c36e06677b436101d0e7e269f5ea90c"}
-ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "498cab4a9c36e06677b436101d0e7e269f5ea90c"}
+#ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "498cab4a9c36e06677b436101d0e7e269f5ea90c"}
+#ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "498cab4a9c36e06677b436101d0e7e269f5ea90c"}
+#ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "498cab4a9c36e06677b436101d0e7e269f5ea90c"}
+#ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "498cab4a9c36e06677b436101d0e7e269f5ea90c"}
 
 ## CLIENT
 ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "3883172196e29eea4665176d92ea91571305beb2" }
