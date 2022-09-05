@@ -69,7 +69,10 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
     } else if config.json {
         println_conditional(&config, "No new patterns to add.");
         // no new pattern to add, so empty list for json output
-        WhitelistTable::from(DomainPatterns { patterns: Vec::new() }).print(&config)?
+        WhitelistTable::from(DomainPatterns {
+            patterns: Vec::new(),
+        })
+        .print(&config)?
     }
     if !skipped.is_empty() && !config.json {
         println_conditional(&config, "Skipped duplicated domain whitelist patterns:");

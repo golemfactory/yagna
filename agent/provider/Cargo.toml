@@ -74,6 +74,9 @@ nix = "0.22.0"
 winapi = { version = "0.3.8", features = ["fileapi"] }
 
 [dev-dependencies]
+assert_cmd = "2.0"
 chrono = "0.4"
-shlex = "1.1.0"
 test-case = "2.1"
+predicates = "2.1"
+serial_test = "0.9"
+shlex = "1.1"
