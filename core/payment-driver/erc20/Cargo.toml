@@ -36,7 +36,7 @@ web3 = { version = "0.16", default-features = false, features = [ "http-tls", "s
 
 ## yagna dependencies
 ya-payment-driver = "0.2"
-ya-client-model = "0.4"
+ya-client-model = "0.5"
 ya-service-api-interfaces = "0.1"
 ya-utils-futures = "0.1"
 ya-utils-networking = "0.1"

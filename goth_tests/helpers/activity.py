@@ -111,7 +111,7 @@ def wasi_exe_script(runner: Runner, output_file: str = "upload_file"):
     ]
 
 
-def wasi_sleeper_exe_script(duration: float = 10.):
+def wasi_sleeper_exe_script(duration: float = 10.0):
     """WASI exe script builder."""
     """Create a WASI exe script for running a WASI sleeper task."""
 
@@ -123,5 +123,5 @@ def wasi_sleeper_exe_script(duration: float = 10.):
                 "entry_point": "rust-wasi-sleeper",
                 "args": [f"{duration}"],
             }
-        }
+        },
     ]
