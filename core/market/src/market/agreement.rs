@@ -44,8 +44,8 @@ async fn list_agreements(
 
         result.push(AgreementListEntry {
             id: agreement.id.into_client(),
-            creation_ts: naive_to_utc(agreement.creation_ts),
-            approve_ts: agreement.approved_ts.map(naive_to_utc),
+            timestamp: naive_to_utc(agreement.creation_ts),
+            approved_date: agreement.approved_ts.map(naive_to_utc),
             role,
         });
     }
