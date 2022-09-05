@@ -112,7 +112,9 @@ struct DemandWithManifest<'demand> {
 
 impl<'demand> DemandWithManifest<'demand> {
     fn has_signature(&self) -> bool {
-        self.demand.get_property::<String>(DEMAND_MANIFEST_SIG_PROPERTY).is_ok()
+        self.demand
+            .get_property::<String>(DEMAND_MANIFEST_SIG_PROPERTY)
+            .is_ok()
     }
 
     fn requires_signature(&self, whitelist_matcher: &SharedDomainsMatcher) -> bool {
