@@ -66,10 +66,16 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
     if !added.is_empty() {
         println_conditional(&config, "Added domain whitelist patterns:");
         WhitelistTable::from(DomainPatterns { patterns: added }).print(&config)?
+    } else if config.json {
+        println_conditional(&config, "No new patterns to add.");
+        // no new pattern to add, so empty list for json output
+        WhitelistTable::from(DomainPatterns { patterns: Vec::new() }).print(&config)?
     }
     if !skipped.is_empty() && !config.json {
         println_conditional(&config, "Skipped duplicated domain whitelist patterns:");
-        WhitelistTable::from(DomainPatterns { patterns: skipped }).print(&config)?
+        if !config.json {
+            WhitelistTable::from(DomainPatterns { patterns: skipped }).print(&config)?
+        }
     }
     Ok(())
 }
@@ -80,18 +86,19 @@ fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
     let (removed, _) = domain_patterns.remove(remove.ids);
     let domain_patterns: DomainPatterns = domain_patterns.into();
     domain_patterns.save(&config.domain_whitelist_file)?;
-    if removed.is_empty() {
+    if !removed.is_empty() {
+        let table = WhitelistTable::from(DomainPatterns { patterns: removed });
+        println_conditional(&config, "Removed domain whitelist patterns:");
+        table.print(&config)?;
+    } else {
         println_conditional(&config, "No matching domain whitelist pattern to remove.");
+        // no new pattern added, so empty list for json output
         if config.json {
             WhitelistTable::from(DomainPatterns {
                 patterns: Vec::new(),
             })
             .print(&config)?
         }
-    } else {
-        let table = WhitelistTable::from(DomainPatterns { patterns: removed });
-        println_conditional(&config, "Removed domain whitelist patterns:");
-        table.print(&config)?;
     };
     Ok(())
 }
