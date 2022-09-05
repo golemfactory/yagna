@@ -62,14 +62,6 @@ impl AgreementView {
             .and_then(|s| parse_constraints(s, reg_expr, group))
     }
 
-    pub fn has_property(&self, property: &str) -> bool {
-        let pointers = property_to_pointer_paths(property);
-        match self.pointer(&pointers.path_w_tag) {
-            None => self.pointer(&pointers.path).is_some(),
-            Some(_) => true,
-        }
-    }
-
     pub fn get_property<'a, T: Deserialize<'a>>(&self, property: &str) -> Result<T, Error> {
         let pointers = property_to_pointer_paths(property);
         match self.pointer_typed(&pointers.path_w_tag) {

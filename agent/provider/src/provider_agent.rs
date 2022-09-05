@@ -106,8 +106,14 @@ impl WhitelistManager {
         Ok(())
     }
 
-    fn get_state(&self) -> DomainPatterns {
-        self.state.patterns.lock().unwrap().clone()
+    fn get_state(&self) -> DomainWhitelistState {
+        self.state.clone()
+    }
+
+    fn stop(&mut self) {
+        if let Some(monitor) = &mut self.monitor {
+            monitor.stop();
+        }
     }
 }
 
@@ -201,9 +207,6 @@ impl ProviderAgent {
             log::info!("Using payment network: {}", net_color.paint(&n));
         }
 
-        let mut domain_whitelist = WhitelistManager::try_new(&config.domain_whitelist_file)?;
-        domain_whitelist.spawn_monitor(&config.domain_whitelist_file)?;
-        policy_config.domain_patterns = domain_whitelist.state.clone();
         let mut globals = GlobalsManager::try_new(&config.globals_file, args.node)?;
         globals.spawn_monitor(&config.globals_file)?;
         let mut presets = PresetManager::load_or_create(&config.presets_file)?;
@@ -211,6 +214,9 @@ impl ProviderAgent {
         let mut hardware = hardware::Manager::try_new(&config)?;
         hardware.spawn_monitor(&config.hardware_file)?;
         let keystore_monitor = spawn_keystore_monitor(cert_dir, keystore)?;
+        let mut domain_whitelist = WhitelistManager::try_new(&config.domain_whitelist_file)?;
+        domain_whitelist.spawn_monitor(&config.domain_whitelist_file)?;
+        policy_config.domain_patterns = domain_whitelist.get_state();
 
         let market = ProviderMarket::new(api.market, args.market).start();
         let payments = Payments::new(api.activity.clone(), api.payment, args.payment).start();
@@ -591,6 +597,7 @@ impl Handler<Shutdown> for ProviderAgent {
         let runner = self.runner.clone();
         let log_handler = self.log_handler.clone();
         self.keystore_monitor.stop();
+        self.domain_whitelist.stop();
 
         async move {
             market.send(MarketShutdown).await??;
