@@ -24,14 +24,14 @@ fn empty_whitelist_json() {
 }
 
 #[test_case(
-    &["domain.com"], 
+    &["domain.com"],  
     "strict",
     r#"[{ 
-        "ID": "1b19889385e3b34233d484b9305f9bc5", 
+        "ID": "5ce448a6", 
         "Pattern": "domain.com", 
         "Type": "strict" 
     }]"#;
-    "Single domain add"
+    "Add single domain pattern"
 )]
 #[serial]
 fn whitelist_add_test(add: &[&str], pattern_type: &str, expected_add_json_out: &str) {

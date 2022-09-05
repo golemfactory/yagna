@@ -7,13 +7,12 @@ use std::{
     sync::{Arc, Mutex, RwLock},
 };
 
-use md5::{Digest, Md5};
 use regex::RegexSetBuilder;
 use serde::{Deserialize, Serialize};
 use ya_utils_path::SwapSave;
 
 use super::{CompositeMatcher, Matcher, RegexMatcher, StrictMatcher};
-use crate::ArgMatch;
+use crate::{util::str_to_short_hash, ArgMatch};
 
 pub type DomainsMatcher = CompositeMatcher;
 pub type SharedDomainPatterns = Arc<Mutex<DomainPatterns>>;
@@ -136,9 +135,6 @@ impl TryFrom<&DomainPatterns> for DomainsMatcher {
 }
 
 pub fn pattern_to_id(pattern: &DomainPattern) -> String {
-    let pattern_type = pattern.domain_match.as_ref();
     let pattern = &pattern.domain;
-    let id = format!("{pattern}:{pattern_type}");
-    let digest = Md5::digest(&id);
-    format!("{digest:x}")
+    str_to_short_hash(pattern)
 }

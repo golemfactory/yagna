@@ -22,13 +22,13 @@ use ya_manifest_utils::util::visit_certificates;
 #[test_case(
     &["foo_ca.cert.pem"],
     &[],
-    &["c128af8c6d0ba34d940582c01443911d"],
+    &["c128af8c"],
     &["foo_ca.cert.pem"]; 
     "Can load one certificate"
 )]
 #[test_case(
     &["foo_ca.cert.pem", "foo_inter.cert.pem"],
-    &["c128af8c6d0ba34d940582c01443911d", "4e0df976b534cb73794a7613b31af51c"],
+    &["c128af8c", "4e0df976"],
     &[],
     &[];
     "Can remove all certificates"
@@ -36,28 +36,28 @@ use ya_manifest_utils::util::visit_certificates;
 #[test_case(
     &["foo_ca-chain.cert.pem"],
     &[],
-    &["4e0df976b534cb73794a7613b31af51c", "c128af8c6d0ba34d940582c01443911d"],
+    &["4e0df976", "c128af8c"],
     &["foo_ca-chain.cert.pem"]; 
     "Load keychain loads two certificates and stores them in received form (single keychain file)"
 )]
 #[test_case(
     &["foo_ca-chain.cert.pem"],
-    &["c128af8c6d0ba34d940582c01443911d"],
-    &["4e0df976b534cb73794a7613b31af51c"],
-    &["foo_ca-chain.cert.4e0df976b534cb73794a7613b31af51c.pem"]; 
+    &["c128af8c"],
+    &["4e0df976"],
+    &["foo_ca-chain.cert.4e0df976.pem"]; 
     "Load keychain and remove root CA results with intermediate cert and cert file with id in the name"
 )]
 #[test_case(
     &["foo_ca-chain.cert.pem"], 
-    &["4e0df976b534cb73794a7613b31af51c"], 
-    &["c128af8c6d0ba34d940582c01443911d"], 
-    &["foo_ca-chain.cert.c128af8c6d0ba34d940582c01443911d.pem"]; 
+    &["4e0df976"], 
+    &["c128af8c"], 
+    &["foo_ca-chain.cert.c128af8c.pem"]; 
     "Load keychain and remove intermediate cert results with root CA and cert file with id in the name"
 )]
 #[test_case(
     &["foo_ca.cert.pem", "foo_ca.cert.pem", "foo_ca.cert.pem"], 
     &[],
-    &["c128af8c6d0ba34d940582c01443911d"],
+    &["c128af8c"],
     &["foo_ca.cert.pem"]; 
     "Adding duplicates results in a single certificate in the store"
 )]
@@ -105,10 +105,7 @@ fn certificate_name_collision_test() {
         &test_cert_dir,
         &[colliding_name, &format!("copy/{colliding_name}")],
     );
-    let mut visitor = TestCertDataVisitor::new(&[
-        "4e0df976b534cb73794a7613b31af51c",
-        "0e136cb330db24e5630e64ad46489557",
-    ]);
+    let mut visitor = TestCertDataVisitor::new(&["4e0df976", "0e136cb3"]);
     // When
     visitor = visit_certificates(&test_cert_dir, visitor).expect("Can visit loaded certificates");
     // Then

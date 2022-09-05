@@ -103,8 +103,7 @@ fn cert_subject_entries(cert: &X509Ref, nid: Nid) -> Option<String> {
 
 pub fn cert_to_id(cert: &X509Ref) -> anyhow::Result<String> {
     let txt = cert.to_text()?;
-    let digest = Md5::digest(&txt);
-    Ok(format!("{digest:x}"))
+    Ok(str_to_short_hash(&txt))
 }
 
 pub fn visit_certificates<T: CertBasicDataVisitor>(
@@ -321,6 +320,14 @@ pub enum KeystoreLoadResult {
 pub enum KeystoreRemoveResult {
     NothingToRemove,
     Removed { removed: Vec<X509> },
+}
+
+/// Calculates Md5 of `txt` and returns first 8 characters.
+pub fn str_to_short_hash<STR: AsRef<[u8]>>(txt: STR) -> String {
+    let digest = Md5::digest(txt);
+    let digest = format!("{digest:x}");
+    let short_hash = &digest[..8]; // Md5 is 32 characters
+    short_hash.to_string()
 }
 
 #[cfg(test)]
