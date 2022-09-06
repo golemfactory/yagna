@@ -69,7 +69,7 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
         }
         KeystoreLoadResult::NothingNewToLoad { skipped } => {
             println_conditional(&config, "No new certificate to add.");
-            println_conditional(&config, "Skipped duplicated certificates:");
+            println_conditional(&config, "Dropped duplicated certificates:");
             let certs_data = util::to_cert_data(&skipped)?;
             if !config.json {
                 print_cert_list(&config, certs_data)?;
