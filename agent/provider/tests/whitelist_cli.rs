@@ -156,7 +156,9 @@ fn json_to_printed_output(out: &str) -> String {
 
 fn clean_data_dir() {
     let data_dir = data_dir_path();
-    fs::remove_dir_all(&data_dir).expect("Can delete data dir");
+    if data_dir.exists() {
+        fs::remove_dir_all(&data_dir).expect("Can delete data dir");
+    }
     // Without creating dir eprintln breaks tests https://github.com/golemfactory/yagna/blob/master/utils/path/src/data_dir.rs#L23
     fs::create_dir(data_dir).unwrap();
 }
