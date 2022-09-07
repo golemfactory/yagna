@@ -89,7 +89,7 @@ impl WhitelistManager {
             Ok(patterns) => {
                 match DomainsMatcher::try_from(&patterns) {
                     Ok(matcher) => {
-                        *state.matcher.write().unwrap() = matcher;
+                        *state.matchers.write().unwrap() = matcher;
                         *state.patterns.lock().unwrap() = patterns;
                     }
                     Err(err) => log::error!("Failed to update domain whitelist: {err}"),

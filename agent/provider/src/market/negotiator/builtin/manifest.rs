@@ -2,7 +2,7 @@ use std::ops::Not;
 
 use url::Url;
 use ya_agreement_utils::{Error, OfferDefinition};
-use ya_manifest_utils::matching::domain::SharedDomainsMatcher;
+use ya_manifest_utils::matching::domain::SharedDomainMatchers;
 use ya_manifest_utils::matching::Matcher;
 use ya_manifest_utils::policy::{Keystore, Match, Policy, PolicyConfig};
 use ya_manifest_utils::{
@@ -16,7 +16,7 @@ use crate::market::negotiator::*;
 pub struct ManifestSignature {
     enabled: bool,
     keystore: Keystore,
-    whitelist_matcher: SharedDomainsMatcher,
+    whitelist_matcher: SharedDomainMatchers,
 }
 
 impl NegotiatorComponent for ManifestSignature {
@@ -94,7 +94,7 @@ impl From<PolicyConfig> for ManifestSignature {
             }
         };
 
-        let whitelist_matcher = config.domain_patterns.matcher.clone();
+        let whitelist_matcher = config.domain_patterns.matchers.clone();
         let keystore = config.trusted_keys.unwrap_or_default();
         ManifestSignature {
             enabled,
@@ -117,7 +117,7 @@ impl<'demand> DemandWithManifest<'demand> {
             .is_ok()
     }
 
-    fn requires_signature(&self, whitelist_matcher: &SharedDomainsMatcher) -> bool {
+    fn requires_signature(&self, whitelist_matcher: &SharedDomainMatchers) -> bool {
         let features = self.manifest.features();
         if features.is_empty() {
             log::debug!("No features in demand. Signature not required.");

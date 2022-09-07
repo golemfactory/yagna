@@ -16,12 +16,12 @@ use crate::{util::str_to_short_hash, ArgMatch};
 
 pub type DomainsMatcher = CompositeMatcher;
 pub type SharedDomainPatterns = Arc<Mutex<DomainPatterns>>;
-pub type SharedDomainsMatcher = Arc<RwLock<DomainsMatcher>>;
+pub type SharedDomainMatchers = Arc<RwLock<DomainsMatcher>>;
 
 #[derive(Clone, Default, Debug)]
 pub struct DomainWhitelistState {
     pub patterns: SharedDomainPatterns,
-    pub matcher: SharedDomainsMatcher,
+    pub matchers: SharedDomainMatchers,
 }
 
 impl TryFrom<DomainPatterns> for DomainWhitelistState {
@@ -31,7 +31,10 @@ impl TryFrom<DomainPatterns> for DomainWhitelistState {
         let matcher = DomainsMatcher::try_from(&patterns)?;
         let matcher = Arc::new(RwLock::new(matcher));
         let patterns = Arc::new(Mutex::new(patterns));
-        Ok(Self { patterns, matcher })
+        Ok(Self {
+            patterns,
+            matchers: matcher,
+        })
     }
 }
 

@@ -4,8 +4,8 @@ extern crate serial_test;
 use std::fs;
 use std::path::PathBuf;
 
-use assert_cmd::{Command, assert::Assert};
-use serde_json::{json, Value};
+use assert_cmd::{assert::Assert, Command};
+use serde_json::Value;
 use test_case::test_case;
 
 #[serial]
@@ -89,7 +89,7 @@ fn whitelist_add_test(add: &[&str], pattern_type: &str, expected_add_json_out: &
     "Adding one pattern, removing not existing, one on the list."
 )]
 #[test_case(
-    &[],  
+    &[],
     "",
     &["no_such_id", "nope"],
     "[]",
@@ -97,25 +97,26 @@ fn whitelist_add_test(add: &[&str], pattern_type: &str, expected_add_json_out: &
     "Removing on empty list. List on empty produces empty list."
 )]
 #[serial]
-fn whitelist_remove_test(add: &[&str], pattern_type: &str, remove_ids: &[&str], remove_out: &str, list_out: &str) {
+fn whitelist_remove_test(
+    add: &[&str],
+    pattern_type: &str,
+    remove_ids: &[&str],
+    remove_out: &str,
+    list_out: &str,
+) {
     clean_data_dir();
     if !add.is_empty() {
-        whitelist_add(add, pattern_type)
-            .success();
+        whitelist_add(add, pattern_type).success();
     }
     let remove_out = json_to_printed_output(remove_out);
-    whitelist_remove(remove_ids)
-        .stdout(remove_out)
-        .success();
+    whitelist_remove(remove_ids).stdout(remove_out).success();
     let list_out = json_to_printed_output(list_out);
-    whitelist_list()
-        .stdout(list_out)
-        .success();
+    whitelist_list().stdout(list_out).success();
 }
 
 // Whitelist test utils
 
-fn whitelist_add(add: &[&str], pattern_type: &str) -> Assert {   
+fn whitelist_add(add: &[&str], pattern_type: &str) -> Assert {
     let mut cmd = Command::cargo_bin("ya-provider").unwrap();
     cmd.arg("whitelist")
         .arg("add")
@@ -128,7 +129,7 @@ fn whitelist_add(add: &[&str], pattern_type: &str) -> Assert {
         .assert()
 }
 
-fn whitelist_remove(ids: &[&str]) -> Assert {   
+fn whitelist_remove(ids: &[&str]) -> Assert {
     let mut cmd = Command::cargo_bin("ya-provider").unwrap();
     cmd.arg("whitelist")
         .arg("remove")
@@ -138,7 +139,7 @@ fn whitelist_remove(ids: &[&str]) -> Assert {
         .assert()
 }
 
-fn whitelist_list() -> Assert {   
+fn whitelist_list() -> Assert {
     let mut cmd = Command::cargo_bin("ya-provider").unwrap();
     cmd.arg("whitelist")
         .arg("list")
