@@ -33,7 +33,7 @@ use ya_provider::market::negotiator::*;
             }
         }
     }"#, 
-    r#"{  "any": "thing" }"#,
+    r#"{ "any": "thing" }"#,
     None;
     "Manifest without singature accepted because domain whitelisted"
 )]
@@ -58,9 +58,59 @@ use ya_provider::market::negotiator::*;
             }
         }
     }"#, 
-    r#"{  "any": "thing" }"#,
+    r#"{ "any": "thing" }"#,
     Some("manifest requires signature but it has none");
     "Manifest without singature rejected because domain NOT whitelisted"
+)]
+#[test_case(
+    r#"{ "patterns": [{ "domain": "domain.com", "type": "regex" }, { "domain": "another.whitelisted.com", "type": "strict" }] }"#, 
+    r#"{
+        "version": "0.1.0",
+        "createdAt": "2022-09-07T02:57:00.000000Z",
+        "expiresAt": "2100-01-01T00:01:00.000000Z",
+        "metadata": { "name": "App", "version": "0.1.0" },
+        "payload": [],
+        "compManifest": {
+            "version": "0.1.0",
+            "script": { "commands": [], "match": "regex" },
+            "net": {
+                "inet": {
+                    "out": {
+                        "protocols": ["https"],
+                        "urls": ["https://domain.com", "https://not.whitelisted.com"]
+                    }
+                }
+            }
+        }
+    }"#, 
+    r#"{ "any": "thing" }"#,
+    Some("manifest requires signature but it has none");
+    "Manifest without singature rejected because ONE of domains NOT whitelisted"
+)]
+#[test_case(
+    r#"{ "patterns": [{ "domain": "domain.com", "type": "regex" }] }"#, 
+    r#"{
+        "version": "0.1.0",
+        "createdAt": "2022-09-07T02:57:00.000000Z",
+        "expiresAt": "2100-01-01T00:01:00.000000Z",
+        "metadata": { "name": "App", "version": "0.1.0" },
+        "payload": [],
+        "compManifest": {
+            "version": "0.1.0",
+            "script": { "commands": [], "match": "regex" },
+            "net": {
+                "inet": {
+                    "out": {
+                        "protocols": ["https"],
+                        "urls": []
+                    }
+                }
+            }
+        }
+    }"#, 
+    r#"{ "any": "thing" }"#,
+    None;
+    "Manifest accepted because its urls list is empty"
 )]
 #[serial]
 fn manifest_negotiator_test(
