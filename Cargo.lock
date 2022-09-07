@@ -7694,6 +7694,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-manifest-test-utils"
+version = "0.1.0"
+dependencies = [
+ "tar",
+ "ya-agreement-utils 0.3.0",
+ "ya-manifest-utils",
+]
+
+[[package]]
 name = "ya-manifest-utils"
 version = "0.1.0"
 dependencies = [
@@ -7719,6 +7728,7 @@ dependencies = [
  "thiserror",
  "url",
  "ya-agreement-utils 0.4.0",
+ "ya-manifest-test-utils",
  "ya-utils-path",
 ]
 

@@ -1,15 +1,15 @@
-pub mod common;
 
 #[macro_use]
 extern crate serial_test;
 
 use std::fs;
 
-use common::*;
-
 use test_case::test_case;
 
 use ya_manifest_utils::util::visit_certificates;
+use ya_manifest_test_utils::*;
+
+static TEST_RESOURCES: TestResources = TestResources { temp_dir: env!("CARGO_TARGET_TMPDIR") };
 
 /// Test utilities
 #[test_case(
@@ -69,16 +69,16 @@ fn certificate_store_test(
     expected_files: &[&str],
 ) {
     // Having
-    let (resource_cert_dir, test_cert_dir) = init_cert_dirs();
-    load_certificates(&resource_cert_dir, &test_cert_dir, certs_to_add);
+    let (resource_cert_dir, test_cert_dir) = TEST_RESOURCES.init_cert_dirs();
+    load_certificates_from_dir(&resource_cert_dir, &test_cert_dir, certs_to_add);
     remove_certificates(&test_cert_dir, ids_to_remove);
     let mut visitor = TestCertDataVisitor::new(expected_ids);
     // When
     visitor = visit_certificates(&test_cert_dir, visitor).expect("Can visit loaded certificates");
     // Then
     visitor.test();
-    let certs = loaded_cert_files();
-    assert_eq!(certs, to_set(expected_files));
+    let certs = TEST_RESOURCES.loaded_cert_files();
+    assert_eq!(certs, slice_to_set(expected_files));
 }
 
 /// Name collision should be resolved
@@ -86,7 +86,7 @@ fn certificate_store_test(
 #[serial]
 fn certificate_name_collision_test() {
     // Having
-    let (resource_cert_dir, test_cert_dir) = init_cert_dirs();
+    let (resource_cert_dir, test_cert_dir) = TEST_RESOURCES.init_cert_dirs();
     let colliding_name = "foo_inter.cert.pem";
 
     let mut colliding_file_1 = resource_cert_dir.clone();
@@ -100,7 +100,7 @@ fn certificate_name_collision_test() {
     other.push("foo_req.cert.pem");
     fs::copy(other, colliding_file_2).expect("Can copy file");
 
-    load_certificates(
+    load_certificates_from_dir(
         &resource_cert_dir,
         &test_cert_dir,
         &[colliding_name, &format!("copy/{colliding_name}")],
@@ -110,9 +110,9 @@ fn certificate_name_collision_test() {
     visitor = visit_certificates(&test_cert_dir, visitor).expect("Can visit loaded certificates");
     // Then
     visitor.test();
-    let certs = loaded_cert_files();
+    let certs = TEST_RESOURCES.loaded_cert_files();
     assert_eq!(
         certs,
-        to_set(&["foo_inter.cert.pem", "foo_inter.cert.0.pem"])
+        slice_to_set(&["foo_inter.cert.pem", "foo_inter.cert.0.pem"])
     );
 }

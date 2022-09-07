@@ -145,6 +145,7 @@ members = [
     "utils/compile-time-utils",
     "utils/futures",
     "utils/manifest-utils",
+    "utils/manifest-utils/test-utils",
     "utils/networking",
     "utils/path",
     "utils/process",
