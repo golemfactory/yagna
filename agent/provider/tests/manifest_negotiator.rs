@@ -22,64 +22,92 @@ static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
     r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     r#"{ "any": "thing" }"#, // offer
-    None, // error msg
-    None, // sig
+    None, // private key file
     None, // sig alg
-    None; // cert
+    None, // cert
+    None; // error msg
     "Manifest without singature accepted because domain whitelisted"
+)]
+#[test_case(
+    r#"{ "patterns": [{ "domain": "do.*ain.com", "type": "regex" }, { "domain": "another.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    r#"{ "any": "thing" }"#, // offer
+    None, // private key file
+    None, // sig alg
+    None, // cert
+    None; // error msg
+    "Manifest without singature accepted because domain whitelisted (regex pattern)"
 )]
 #[test_case(
     r#"{ "patterns": [{ "domain": "different_domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     r#"{ "any": "thing" }"#, // offer
-    Some("manifest requires signature but it has none"), // error msg
-    None, // sig
+    None, // private key file
     None, // sig alg
-    None; // cert
+    None, // cert
+    Some("manifest requires signature but it has none"); // error msg
     "Manifest without singature rejected because domain NOT whitelisted"
 )]
 #[test_case(
     r#"{ "patterns": [{ "domain": "domain.com", "type": "regex" }, { "domain": "another.whitelisted.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com", "https://not.whitelisted.com"]"#, // compManifest.net.inet.out.urls
     r#"{ "any": "thing" }"#, // offer
-    Some("manifest requires signature but it has none"), // error msg
-    None, // sig
+    None, // private key file
     None, // sig alg
-    None; // cert
+    None, // cert
+    Some("manifest requires signature but it has none"); // error msg
     "Manifest without singature rejected because ONE of domains NOT whitelisted"
 )]
 #[test_case(
     r#"{ "patterns": [{ "domain": "domain.com", "type": "regex" }] }"#, // data_dir/domain_whitelist.json
     r#"[]"#, // compManifest.net.inet.out.urls
     r#"{ "any": "thing" }"#, // offer
-    None, // error msg
-    None, // sig
+    None, // private key file
     None, // sig alg
-    None; // cert
+    None, // cert
+    None; // error msg
     "Manifest accepted because its urls list is empty"
 )]
 #[test_case(
-    r#"{ "patterns": [] }"#, // data_dir/domain_whitelist.json
+    r#"{ "patterns": [{ "domain": "domain.com", "type": "regex" }] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     r#"{ "any": "thing" }"#, // offer
-    None, // error msg
-    Some("foo_req.key.pem"),
+    Some("foo_req.key.pem"), // private key file
     Some("sha256"), // sig alg
-    Some("foo_req.cert.pem"); // cert
-    "Accepted manifest with url NOT whitelisted because signature valid"
+    Some("foo_req.cert.pem"), // cert
+    None; // error msg
+    "Manifest accepted with url NOT whitelisted because signature valid"
+)]
+#[test_case(
+    r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    r#"{ "any": "thing" }"#, // offer
+    Some("foo_req.key.pem"), // private key file
+    Some("sha256"), // sig alg
+    Some("dummy_inter.cert.pem"), // untrusted cert
+    Some("failed to verify manifest signature: Invalid certificate"); // error msg
+    "Manifest rejected because of invalid certificate even when urls domains are whitelisted"
+)]
+#[test_case(
+    r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    r#"{ "any": "thing" }"#, // offer
+    Some("foo_inter.key.pem"), // private key file not matching certificate
+    Some("sha256"), // sig alg
+    Some("foo_req.cert.pem"), // certificate not matching private key
+    Some("failed to verify manifest signature: Invalid signature"); // error msg
+    "Manifest rejected because of invalid signature (signed using incorrect private key) even when urls domains are whitelisted"
 )]
 #[serial]
 fn manifest_negotiator_test(
     whitelist: &str,
     urls: &str,
     offer: &str,
-    error_msg: Option<&str>,
     signing_key: Option<&str>,
     signature_alg: Option<&str>,
     cert: Option<&str>,
+    error_msg: Option<&str>,
 ) {
-    let (resource_cert_dir, _) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
- 
     let comp_manifest_b64 = create_comp_manifest_b64(urls);
 
     let signature_b64 =  match signing_key {
@@ -87,40 +115,55 @@ fn manifest_negotiator_test(
         None => None,
     };
 
-    let cert_b64 = if let Some(cert) = cert {
-        let mut cert_path = resource_cert_dir;
-        cert_path.push(cert);
-        println!("{cert_path:?}");
-        let cert = fs::read(cert_path).expect("Can read cert from resources");
-        Some(base64::encode(cert))
-    } else {
-        None
+    let cert_b64 = match cert {
+        Some(cert) => Some(cert_file_to_cert_b64(cert)),
+        None => None
     };
 
-    manifest_negotiator_test_encoded_manifest_sign_and_cert(whitelist, comp_manifest_b64, offer, error_msg, signature_b64, signature_alg, cert_b64)
+    manifest_negotiator_test_encoded_manifest_sign_and_cert(whitelist, comp_manifest_b64, offer, signature_b64, signature_alg, cert_b64, error_msg)
 }
 
+#[test_case(
+    r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    r#"{ "any": "thing" }"#, // offer
+    Some("broken_signature"), // signature (broken)
+    Some("sha256"), // sig alg
+    Some("foo_req.cert.pem"), // cert
+    Some("failed to verify manifest signature: Invalid signature"); // error msg
+    "Manifest rejected because of invalid signature"
+)]
+#[serial]
 fn manifest_negotiator_test_encoded_sign_and_cert(
     whitelist: &str,
     urls: &str,
     offer: &str,
-    error_msg: Option<&str>,
-    signature_b64: Option<String>,
+    signature_b64: Option<&str>,
     signature_alg: Option<&str>,
-    cert_b64: Option<String>,
+    cert: Option<&str>,
+    error_msg: Option<&str>,
 ) {
     let comp_manifest_b64 = create_comp_manifest_b64(urls);
-    manifest_negotiator_test_encoded_manifest_sign_and_cert(whitelist, comp_manifest_b64, offer, error_msg, signature_b64, signature_alg, cert_b64)
+    let signature_b64 = match signature_b64 {
+        Some(signature) => Some(signature.to_string()),
+        None => None,
+    };
+
+    let cert_b64 = match cert {
+        Some(cert) => Some(cert_file_to_cert_b64(cert)),
+        None => None
+    };
+    manifest_negotiator_test_encoded_manifest_sign_and_cert(whitelist, comp_manifest_b64, offer, signature_b64, signature_alg, cert_b64, error_msg)
 }
 
 fn manifest_negotiator_test_encoded_manifest_sign_and_cert(
     whitelist: &str,
     comp_manifest_b64: String,
     offer: &str,
-    error_msg: Option<&str>,
     signature_b64: Option<String>,
     signature_alg: Option<&str>,
     cert_b64: Option<String>,
+    error_msg: Option<&str>,
 ) {
     // Having
     let whitelist_state = create_whitelist(whitelist);
@@ -168,6 +211,16 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert(
     } else {
         assert_eq!(negotiation_result, NegotiationResult::Ready { offer });
     }
+}
+
+
+fn cert_file_to_cert_b64(cert_file: &str) -> String {
+    let (resource_cert_dir, _) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
+    let mut cert_path = resource_cert_dir;
+    cert_path.push(cert_file);
+    println!("{cert_path:?}");
+    let cert = fs::read(cert_path).expect("Can read cert from resources");
+    base64::encode(cert)
 }
 
 fn create_comp_manifest_b64(urls: &str) -> String {
