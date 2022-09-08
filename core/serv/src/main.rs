@@ -179,8 +179,8 @@ impl<S: 'static> Provider<S, CliCtx> for ServiceContext {
 }
 
 impl<S: 'static> Provider<S, ()> for ServiceContext {
-    fn component(&self) -> () {
-        ()
+    fn component(&self) {
+        
     }
 }
 
@@ -321,7 +321,7 @@ impl CliCommand {
     pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
             CliCommand::Commands(command) => {
-                start_logger("warn", None, &vec![], false)?;
+                start_logger("warn", None, &[], false)?;
                 command.run_command(ctx).await
             }
             CliCommand::Complete(complete) => complete.run_command(ctx),
@@ -375,14 +375,14 @@ impl ExtensionCommand {
     }
 
     fn map<I: Iterator<Item = Extension>>(extensions: I) -> Result<CommandOutput> {
-        Ok(CommandOutput::object(
+        CommandOutput::object(
             extensions
                 .map(|mut ext| {
                     let name = std::mem::take(&mut ext.name);
                     (name, ext)
                 })
                 .collect::<HashMap<_, _>>(),
-        )?)
+        )
     }
 
     fn table<I: Iterator<Item = Extension>>(extensions: I) -> Result<CommandOutput> {
@@ -490,7 +490,7 @@ impl ServiceCommand {
                 env::set_var(
                     "RUST_LOG",
                     env::var("RUST_LOG")
-                        .unwrap_or(format!("info,actix_web::middleware::logger=warn",)),
+                        .unwrap_or("info,actix_web::middleware::logger=warn".to_string()),
                 );
 
                 //this force_debug flag sets default log level to debug
@@ -568,7 +568,7 @@ impl ServiceCommand {
                 .bind(api_host_port.clone())
                 .context(format!("Failed to bind http server on {:?}", api_host_port))?;
 
-                let _ = extension::autostart(&ctx.data_dir, &api_url, &ctx.gsb_url)
+                let _ = extension::autostart(&ctx.data_dir, api_url, &ctx.gsb_url)
                     .await
                     .map_err(|e| log::warn!("Failed to autostart extensions: {e}"));
 
