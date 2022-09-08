@@ -4,12 +4,7 @@ extern crate serial_test;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::{convert::TryFrom, fs};
-use std::str;
 
-use openssl::hash::MessageDigest;
-use openssl::pkey::PKey;
-use openssl::rsa::Rsa;
-use openssl::sign::Signer;
 use serde_json::{json, Value};
 use test_case::test_case;
 use ya_agreement_utils::AgreementView;
@@ -62,7 +57,7 @@ static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
     None, // sig alg
     None; // cert
     "Manifest accepted because its urls list is empty"
-)] 
+)]
 #[test_case(
     r#"{ "patterns": [] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
@@ -83,40 +78,15 @@ fn manifest_negotiator_test(
     signature_alg: Option<&str>,
     cert: Option<&str>,
 ) {
-    // Having
-    let comp_manifest_b64 = &create_comp_manifest_b64(urls);
+    let (resource_cert_dir, _) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
+ 
+    let comp_manifest_b64 = create_comp_manifest_b64(urls);
 
-    let whitelist_state = create_whitelist(whitelist);
-    let (resource_cert_dir, test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
-    
-    let signature_b64 = if let Some(signing_key) = signing_key {
-        let mut signing_key_path = resource_cert_dir.clone();
-        signing_key_path.push(signing_key);
-        let signing_key = fs::read(signing_key_path).expect("Can read signing key");
-        let mut password = resource_cert_dir.clone();
-        password.push("pass.txt");
-        let password = fs::read(password).expect("Can read password file");
-        let password = str::from_utf8(&password).unwrap().trim();
-        let keypair = Rsa::private_key_from_pem_passphrase(&signing_key, password.as_bytes()).expect("Can parse signing key");
-        let keypair = PKey::from_rsa(keypair).unwrap();
-        let mut signer = Signer::new(MessageDigest::sha256(), &keypair).unwrap();
-        signer.update(comp_manifest_b64.as_bytes()).unwrap();
-        let signature = signer.sign_to_vec().expect("Can sign manifest");
-        Some(base64::encode(signature))
-    } else {
-        None
+    let signature_b64 =  match signing_key {
+        Some(signing_key) => Some(MANIFEST_TEST_RESOURCES.sign_data(comp_manifest_b64.as_bytes(), signing_key)),
+        None => None,
     };
 
-    if signing_key.is_some() {
-        load_certificates_from_dir(
-            &resource_cert_dir,
-            &test_cert_dir,
-            &["foo_ca-chain.cert.pem"],
-        );
-    }
-    let keystore = Keystore::load(&test_cert_dir).expect("Can load test certificates");
-
-    // TODO clean it up
     let cert_b64 = if let Some(cert) = cert {
         let mut cert_path = resource_cert_dir;
         cert_path.push(cert);
@@ -126,6 +96,45 @@ fn manifest_negotiator_test(
     } else {
         None
     };
+
+    manifest_negotiator_test_encoded_manifest_sign_and_cert(whitelist, comp_manifest_b64, offer, error_msg, signature_b64, signature_alg, cert_b64)
+}
+
+fn manifest_negotiator_test_encoded_sign_and_cert(
+    whitelist: &str,
+    urls: &str,
+    offer: &str,
+    error_msg: Option<&str>,
+    signature_b64: Option<String>,
+    signature_alg: Option<&str>,
+    cert_b64: Option<String>,
+) {
+    let comp_manifest_b64 = create_comp_manifest_b64(urls);
+    manifest_negotiator_test_encoded_manifest_sign_and_cert(whitelist, comp_manifest_b64, offer, error_msg, signature_b64, signature_alg, cert_b64)
+}
+
+fn manifest_negotiator_test_encoded_manifest_sign_and_cert(
+    whitelist: &str,
+    comp_manifest_b64: String,
+    offer: &str,
+    error_msg: Option<&str>,
+    signature_b64: Option<String>,
+    signature_alg: Option<&str>,
+    cert_b64: Option<String>,
+) {
+    // Having
+    let whitelist_state = create_whitelist(whitelist);
+    let (resource_cert_dir, test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
+
+    if signature_b64.is_some() {
+        load_certificates_from_dir(
+            &resource_cert_dir,
+            &test_cert_dir,
+            &["foo_ca-chain.cert.pem"],
+        );
+    }
+    let keystore = Keystore::load(&test_cert_dir).expect("Can load test certificates");
+
     let mut config = create_manifest_signature_validating_policy_config();
     config.domain_patterns = whitelist_state;
     config.trusted_keys = Some(keystore);

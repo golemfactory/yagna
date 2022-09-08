@@ -1,7 +1,12 @@
 use std::fs::{self, File};
 use std::sync::Once;
 use std::{collections::HashSet, path::PathBuf};
+use std::str;
 
+use openssl::hash::MessageDigest;
+use openssl::pkey::PKey;
+use openssl::rsa::Rsa;
+use openssl::sign::Signer;
 use tar::Archive;
 
 use ya_manifest_utils::{
@@ -97,6 +102,23 @@ impl TestResources {
             .map(|file| file.expect("Can list cert files"))
             .map(|x| x.file_name().to_string_lossy().to_string())
             .collect()
+    }
+
+    // Signs given `data_b64` using `signing_key` (filename) and returns base64 encoded signature.
+    pub fn sign_data(&self, data_b64: &[u8], signing_key: &str) -> String {
+        let mut signing_key_path = self.resource_cert_dir_path();
+        signing_key_path.push(signing_key);
+        let signing_key = fs::read(signing_key_path).expect("Can read signing key");
+        let mut password = self.resource_cert_dir_path();
+        password.push("pass.txt");
+        let password = fs::read(password).expect("Can read password file");
+        let password = str::from_utf8(&password).unwrap().trim(); // just in case it got newline at the end
+        let keypair = Rsa::private_key_from_pem_passphrase(&signing_key, password.as_bytes()).expect("Can parse signing key");
+        let keypair = PKey::from_rsa(keypair).unwrap();
+        let mut signer = Signer::new(MessageDigest::sha256(), &keypair).unwrap();
+        signer.update(data_b64).unwrap();
+        let signature = signer.sign_to_vec().expect("Can sign manifest");
+        base64::encode(signature)
     }
 
     fn unpack_cert_resources(&self, cert_resources_dir: &PathBuf) {

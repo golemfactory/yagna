@@ -7697,6 +7697,8 @@ dependencies = [
 name = "ya-manifest-test-utils"
 version = "0.1.0"
 dependencies = [
+ "base64 0.13.0",
+ "openssl",
  "tar",
  "ya-agreement-utils 0.3.0",
  "ya-manifest-utils",
@@ -7999,7 +8001,6 @@ dependencies = [
  "notify",
  "num-traits",
  "num_cpus",
- "openssl",
  "path-clean",
  "predicates",
  "regex",

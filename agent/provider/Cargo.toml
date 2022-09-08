@@ -81,5 +81,5 @@ test-case = "2.1"
 predicates = "2.1"
 serial_test = "0.9"
 shlex = "1.1"
+
 ya-manifest-test-utils = { path = "../../utils/manifest-utils/test-utils" }
-openssl = "0.10"
