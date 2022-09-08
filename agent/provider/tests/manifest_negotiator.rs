@@ -4,7 +4,12 @@ extern crate serial_test;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::{convert::TryFrom, fs};
+use std::str;
 
+use openssl::hash::MessageDigest;
+use openssl::pkey::PKey;
+use openssl::rsa::Rsa;
+use openssl::sign::Signer;
 use serde_json::{json, Value};
 use test_case::test_case;
 use ya_agreement_utils::AgreementView;
@@ -57,34 +62,52 @@ static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
     None, // sig alg
     None; // cert
     "Manifest accepted because its urls list is empty"
-)]
-/* TODO fix me
+)] 
 #[test_case(
     r#"{ "patterns": [] }"#, // data_dir/domain_whitelist.json
     r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
     r#"{ "any": "thing" }"#, // offer
     None, // error msg
-    Some("HLx/iTQPxxcCHwHh2FAw0tpbnUF3+9Z4EqdCedswbPcx/NmT3YteBhCk7fcc3v6szjSwiMWyYQBHMN5WYp4psiimg6V5xB+I0iFCJAZtmf2iI5TJPVGR5/vaikgiuDGJewCaIWicR2qQ+bwv0IWrD4Zc1MhajU37e/9hn0yboR5k+FNgWfmtnAOErghD3t2SU+DVJ605EPULa7lAKYAlF6W6SxLOzr+zfCm2JYkWWXsCsQCBvDa+rovuAXBl/tlSsbSEAx8YFL7tcZh2Xb/7r/dBehyVGSwoY/eghDkicyEhgLhmAcSVNBH6Wdu9cQ6lSu3/ahF4hXMkB8uSgIHNeA=="), // sig
+    Some("foo_req.key.pem"),
     Some("sha256"), // sig alg
     Some("foo_req.cert.pem"); // cert
-    "Accepted with url NOT whitelisted because manifest signature valid"
+    "Accepted manifest with url NOT whitelisted because signature valid"
 )]
-*/
 #[serial]
 fn manifest_negotiator_test(
     whitelist: &str,
     urls: &str,
     offer: &str,
     error_msg: Option<&str>,
-    signature: Option<&str>,
+    signing_key: Option<&str>,
     signature_alg: Option<&str>,
     cert: Option<&str>,
 ) {
     // Having
-    let comp_manifest = &create_comp_manifest(urls);
+    let comp_manifest_b64 = &create_comp_manifest_b64(urls);
+
     let whitelist_state = create_whitelist(whitelist);
     let (resource_cert_dir, test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
-    if signature.is_some() {
+    
+    let signature_b64 = if let Some(signing_key) = signing_key {
+        let mut signing_key_path = resource_cert_dir.clone();
+        signing_key_path.push(signing_key);
+        let signing_key = fs::read(signing_key_path).expect("Can read signing key");
+        let mut password = resource_cert_dir.clone();
+        password.push("pass.txt");
+        let password = fs::read(password).expect("Can read password file");
+        let password = str::from_utf8(&password).unwrap().trim();
+        let keypair = Rsa::private_key_from_pem_passphrase(&signing_key, password.as_bytes()).expect("Can parse signing key");
+        let keypair = PKey::from_rsa(keypair).unwrap();
+        let mut signer = Signer::new(MessageDigest::sha256(), &keypair).unwrap();
+        signer.update(comp_manifest_b64.as_bytes()).unwrap();
+        let signature = signer.sign_to_vec().expect("Can sign manifest");
+        Some(base64::encode(signature))
+    } else {
+        None
+    };
+
+    if signing_key.is_some() {
         load_certificates_from_dir(
             &resource_cert_dir,
             &test_cert_dir,
@@ -94,7 +117,7 @@ fn manifest_negotiator_test(
     let keystore = Keystore::load(&test_cert_dir).expect("Can load test certificates");
 
     // TODO clean it up
-    let cert = if let Some(cert) = cert {
+    let cert_b64 = if let Some(cert) = cert {
         let mut cert_path = resource_cert_dir;
         cert_path.push(cert);
         println!("{cert_path:?}");
@@ -108,7 +131,7 @@ fn manifest_negotiator_test(
     config.trusted_keys = Some(keystore);
     let mut manifest_negotiator = ManifestSignature::from(config);
 
-    let demand = create_demand_json(comp_manifest, signature, signature_alg, cert);
+    let demand = create_demand_json(&comp_manifest_b64, signature_b64, signature_alg, cert_b64);
     let demand: Value = serde_json::from_str(&demand).unwrap();
     let demand = AgreementView {
         json: demand,
@@ -138,7 +161,7 @@ fn manifest_negotiator_test(
     }
 }
 
-fn create_comp_manifest(urls: &str) -> String {
+fn create_comp_manifest_b64(urls: &str) -> String {
     let manifest_template = r#"{
         "version": "0.1.0",
         "createdAt": "2022-09-07T02:57:00.000000Z",
@@ -158,18 +181,18 @@ fn create_comp_manifest(urls: &str) -> String {
             }
         }
     }"#;
-    manifest_template.replace("__URLS__", urls)
+    let manifest = manifest_template.replace("__URLS__", urls);
+    base64::encode(manifest)
 }
 
 fn create_demand_json(
-    comp_manifest: &str,
-    signature_b64: Option<&str>,
+    comp_manifest_b64: &str,
+    signature_b64: Option<String>,
     signature_alg_b64: Option<&str>,
     cert_b64: Option<String>,
 ) -> String {
-    let manifest_b64 = base64::encode(comp_manifest);
     let mut payload = HashMap::new();
-    payload.insert("@tag", json!(manifest_b64));
+    payload.insert("@tag", json!(comp_manifest_b64));
     if signature_b64.is_some() && signature_alg_b64.is_some() {
         payload.insert(
             "sig",
