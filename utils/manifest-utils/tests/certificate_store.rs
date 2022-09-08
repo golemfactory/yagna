@@ -1,4 +1,3 @@
-
 #[macro_use]
 extern crate serial_test;
 
@@ -6,10 +5,12 @@ use std::fs;
 
 use test_case::test_case;
 
-use ya_manifest_utils::util::visit_certificates;
 use ya_manifest_test_utils::*;
+use ya_manifest_utils::util::visit_certificates;
 
-static TEST_RESOURCES: TestResources = TestResources { temp_dir: env!("CARGO_TARGET_TMPDIR") };
+static TEST_RESOURCES: TestResources = TestResources {
+    temp_dir: env!("CARGO_TARGET_TMPDIR"),
+};
 
 /// Test utilities
 #[test_case(

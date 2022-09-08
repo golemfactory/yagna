@@ -3,10 +3,12 @@ extern crate serial_test;
 
 use std::{fs, path::PathBuf};
 
-use ya_manifest_utils::Keystore;
 use ya_manifest_test_utils::*;
+use ya_manifest_utils::Keystore;
 
-static TEST_RESOURCES: TestResources = TestResources { temp_dir: env!("CARGO_TARGET_TMPDIR") };
+static TEST_RESOURCES: TestResources = TestResources {
+    temp_dir: env!("CARGO_TARGET_TMPDIR"),
+};
 
 #[test]
 #[serial]

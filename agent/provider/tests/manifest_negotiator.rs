@@ -1,133 +1,114 @@
 #[macro_use]
 extern crate serial_test;
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::{convert::TryFrom, fs};
 
-use serde_json::Value;
+use serde_json::{json, Value};
 use test_case::test_case;
 use ya_agreement_utils::AgreementView;
+use ya_manifest_test_utils::{load_certificates_from_dir, TestResources};
 use ya_manifest_utils::matching::domain::{DomainPatterns, DomainWhitelistState};
 use ya_manifest_utils::{Keystore, Policy, PolicyConfig};
 use ya_provider::market::negotiator::builtin::ManifestSignature;
 use ya_provider::market::negotiator::*;
 
+static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
+    temp_dir: env!("CARGO_TARGET_TMPDIR"),
+};
+
 #[test_case(
-    r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#, 
-    r#"{
-        "version": "0.1.0",
-        "createdAt": "2022-09-07T02:57:00.000000Z",
-        "expiresAt": "2100-01-01T00:01:00.000000Z",
-        "metadata": { "name": "App", "version": "0.1.0" },
-        "payload": [],
-        "compManifest": {
-            "version": "0.1.0",
-            "script": { "commands": [], "match": "regex" },
-            "net": {
-                "inet": {
-                    "out": {
-                        "protocols": ["https"],
-                        "urls": ["https://domain.com"]
-                    }
-                }
-            }
-        }
-    }"#, 
-    r#"{ "any": "thing" }"#,
-    None;
+    r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    r#"{ "any": "thing" }"#, // offer
+    None, // error msg
+    None, // sig
+    None, // sig alg
+    None; // cert
     "Manifest without singature accepted because domain whitelisted"
 )]
 #[test_case(
-    r#"{ "patterns": [{ "domain": "different_domain.com", "type": "strict" }] }"#, 
-    r#"{
-        "version": "0.1.0",
-        "createdAt": "2022-09-07T02:57:00.000000Z",
-        "expiresAt": "2100-01-01T00:01:00.000000Z",
-        "metadata": { "name": "App", "version": "0.1.0" },
-        "payload": [],
-        "compManifest": {
-            "version": "0.1.0",
-            "script": { "commands": [], "match": "regex" },
-            "net": {
-                "inet": {
-                    "out": {
-                        "protocols": ["https"],
-                        "urls": ["https://domain.com"]
-                    }
-                }
-            }
-        }
-    }"#, 
-    r#"{ "any": "thing" }"#,
-    Some("manifest requires signature but it has none");
+    r#"{ "patterns": [{ "domain": "different_domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    r#"{ "any": "thing" }"#, // offer
+    Some("manifest requires signature but it has none"), // error msg
+    None, // sig
+    None, // sig alg
+    None; // cert
     "Manifest without singature rejected because domain NOT whitelisted"
 )]
 #[test_case(
-    r#"{ "patterns": [{ "domain": "domain.com", "type": "regex" }, { "domain": "another.whitelisted.com", "type": "strict" }] }"#, 
-    r#"{
-        "version": "0.1.0",
-        "createdAt": "2022-09-07T02:57:00.000000Z",
-        "expiresAt": "2100-01-01T00:01:00.000000Z",
-        "metadata": { "name": "App", "version": "0.1.0" },
-        "payload": [],
-        "compManifest": {
-            "version": "0.1.0",
-            "script": { "commands": [], "match": "regex" },
-            "net": {
-                "inet": {
-                    "out": {
-                        "protocols": ["https"],
-                        "urls": ["https://domain.com", "https://not.whitelisted.com"]
-                    }
-                }
-            }
-        }
-    }"#, 
-    r#"{ "any": "thing" }"#,
-    Some("manifest requires signature but it has none");
+    r#"{ "patterns": [{ "domain": "domain.com", "type": "regex" }, { "domain": "another.whitelisted.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
+    r#"["https://domain.com", "https://not.whitelisted.com"]"#, // compManifest.net.inet.out.urls
+    r#"{ "any": "thing" }"#, // offer
+    Some("manifest requires signature but it has none"), // error msg
+    None, // sig
+    None, // sig alg
+    None; // cert
     "Manifest without singature rejected because ONE of domains NOT whitelisted"
 )]
 #[test_case(
-    r#"{ "patterns": [{ "domain": "domain.com", "type": "regex" }] }"#, 
-    r#"{
-        "version": "0.1.0",
-        "createdAt": "2022-09-07T02:57:00.000000Z",
-        "expiresAt": "2100-01-01T00:01:00.000000Z",
-        "metadata": { "name": "App", "version": "0.1.0" },
-        "payload": [],
-        "compManifest": {
-            "version": "0.1.0",
-            "script": { "commands": [], "match": "regex" },
-            "net": {
-                "inet": {
-                    "out": {
-                        "protocols": ["https"],
-                        "urls": []
-                    }
-                }
-            }
-        }
-    }"#, 
-    r#"{ "any": "thing" }"#,
-    None;
+    r#"{ "patterns": [{ "domain": "domain.com", "type": "regex" }] }"#, // data_dir/domain_whitelist.json
+    r#"[]"#, // compManifest.net.inet.out.urls
+    r#"{ "any": "thing" }"#, // offer
+    None, // error msg
+    None, // sig
+    None, // sig alg
+    None; // cert
     "Manifest accepted because its urls list is empty"
 )]
+/* TODO fix me
+#[test_case(
+    r#"{ "patterns": [] }"#, // data_dir/domain_whitelist.json
+    r#"["https://domain.com"]"#, // compManifest.net.inet.out.urls
+    r#"{ "any": "thing" }"#, // offer
+    None, // error msg
+    Some("HLx/iTQPxxcCHwHh2FAw0tpbnUF3+9Z4EqdCedswbPcx/NmT3YteBhCk7fcc3v6szjSwiMWyYQBHMN5WYp4psiimg6V5xB+I0iFCJAZtmf2iI5TJPVGR5/vaikgiuDGJewCaIWicR2qQ+bwv0IWrD4Zc1MhajU37e/9hn0yboR5k+FNgWfmtnAOErghD3t2SU+DVJ605EPULa7lAKYAlF6W6SxLOzr+zfCm2JYkWWXsCsQCBvDa+rovuAXBl/tlSsbSEAx8YFL7tcZh2Xb/7r/dBehyVGSwoY/eghDkicyEhgLhmAcSVNBH6Wdu9cQ6lSu3/ahF4hXMkB8uSgIHNeA=="), // sig
+    Some("sha256"), // sig alg
+    Some("foo_req.cert.pem"); // cert
+    "Accepted with url NOT whitelisted because manifest signature valid"
+)]
+*/
 #[serial]
 fn manifest_negotiator_test(
     whitelist: &str,
-    comp_manifest: &str,
+    urls: &str,
     offer: &str,
     error_msg: Option<&str>,
+    signature: Option<&str>,
+    signature_alg: Option<&str>,
+    cert: Option<&str>,
 ) {
     // Having
+    let comp_manifest = &create_comp_manifest(urls);
     let whitelist_state = create_whitelist(whitelist);
-    let keystore = create_empty_keystore();
+    let (resource_cert_dir, test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
+    if signature.is_some() {
+        load_certificates_from_dir(
+            &resource_cert_dir,
+            &test_cert_dir,
+            &["foo_ca-chain.cert.pem"],
+        );
+    }
+    let keystore = Keystore::load(&test_cert_dir).expect("Can load test certificates");
+
+    // TODO clean it up
+    let cert = if let Some(cert) = cert {
+        let mut cert_path = resource_cert_dir;
+        cert_path.push(cert);
+        println!("{cert_path:?}");
+        let cert = fs::read(cert_path).expect("Can read cert from resources");
+        Some(base64::encode(cert))
+    } else {
+        None
+    };
     let mut config = create_manifest_signature_validating_policy_config();
     config.domain_patterns = whitelist_state;
     config.trusted_keys = Some(keystore);
     let mut manifest_negotiator = ManifestSignature::from(config);
 
-    let demand = create_demand_json(comp_manifest);
+    let demand = create_demand_json(comp_manifest, signature, signature_alg, cert);
     let demand: Value = serde_json::from_str(&demand).unwrap();
     let demand = AgreementView {
         json: demand,
@@ -157,11 +138,70 @@ fn manifest_negotiator_test(
     }
 }
 
-fn create_demand_json(manifest: &str) -> String {
-    let manifest_base64 = base64::encode(manifest);
-    format!(
-        "{{ \"golem\": {{ \"srv\" : {{ \"comp\": {{ \"payload\": \"{manifest_base64}\" }} }} }} }}"
-    )
+fn create_comp_manifest(urls: &str) -> String {
+    let manifest_template = r#"{
+        "version": "0.1.0",
+        "createdAt": "2022-09-07T02:57:00.000000Z",
+        "expiresAt": "2100-01-01T00:01:00.000000Z",
+        "metadata": { "name": "App", "version": "0.1.0" },
+        "payload": [],
+        "compManifest": {
+            "version": "0.1.0",
+            "script": { "commands": [], "match": "regex" },
+            "net": {
+                "inet": {
+                    "out": {
+                        "protocols": ["https"],
+                        "urls": __URLS__
+                    }
+                }
+            }
+        }
+    }"#;
+    manifest_template.replace("__URLS__", urls)
+}
+
+fn create_demand_json(
+    comp_manifest: &str,
+    signature_b64: Option<&str>,
+    signature_alg_b64: Option<&str>,
+    cert_b64: Option<String>,
+) -> String {
+    let manifest_b64 = base64::encode(comp_manifest);
+    let mut payload = HashMap::new();
+    payload.insert("@tag", json!(manifest_b64));
+    if signature_b64.is_some() && signature_alg_b64.is_some() {
+        payload.insert(
+            "sig",
+            json!({
+                "@tag": signature_b64.unwrap().to_string(),
+                "algorithm": signature_alg_b64.unwrap().to_string()
+            }),
+        );
+    } else if signature_b64.is_some() {
+        payload.insert("sig", json!(signature_b64.unwrap().to_string()));
+    } else if signature_alg_b64.is_some() {
+        payload.insert(
+            "sig",
+            json!({ "algorithm": signature_alg_b64.unwrap().to_string() }),
+        );
+    }
+    if let Some(cert_b64) = cert_b64 {
+        payload.insert("cert", json!(cert_b64.to_string()));
+    }
+    // let mut payload = manifest.to_string();
+    let manifest = json!({
+        "golem": {
+            "srv": {
+                "comp": {
+                    "payload": payload
+                }
+            }
+        },
+    });
+    let demand = serde_json::to_string_pretty(&manifest).unwrap();
+    println!("Tested demand:\n{demand}");
+    demand
 }
 
 fn create_manifest_signature_validating_policy_config() -> PolicyConfig {
@@ -197,19 +237,6 @@ fn create_whitelist_file(whitelist_json: &str) -> PathBuf {
 
 fn whitelist_file() -> PathBuf {
     tmp_resource("whitelist.json")
-}
-
-fn create_empty_keystore() -> Keystore {
-    let cert_dir = cert_dir();
-    if cert_dir.exists() {
-        fs::remove_dir_all(&cert_dir).expect("Can delete temp cert dir");
-    }
-    fs::create_dir(cert_dir.as_path()).expect("Can create temp cert dir");
-    Keystore::load(&cert_dir).expect("Can create empty keystore")
-}
-
-fn cert_dir() -> PathBuf {
-    tmp_resource("cert_dir")
 }
 
 fn tmp_resource(name: &str) -> PathBuf {
