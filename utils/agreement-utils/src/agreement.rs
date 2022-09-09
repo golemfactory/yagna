@@ -33,10 +33,10 @@ impl AgreementView {
         let value = self
             .json
             .pointer(pointer)
-            .ok_or(Error::NoKey(pointer.to_string()))?
+            .ok_or_else(|| Error::NoKey(pointer.to_string()))?
             .clone();
-        Ok(<T as Deserialize>::deserialize(value)
-            .map_err(|error| Error::UnexpectedType(pointer.to_string(), error))?)
+        <T as Deserialize>::deserialize(value)
+            .map_err(|error| Error::UnexpectedType(pointer.to_string(), error))
     }
 
     pub fn properties<'a, T: Deserialize<'a>>(
@@ -45,7 +45,7 @@ impl AgreementView {
     ) -> Result<HashMap<String, T>, Error> {
         let value = self
             .pointer(pointer)
-            .ok_or(Error::NoKey(pointer.to_string()))?;
+            .ok_or_else(|| Error::NoKey(pointer.to_string()))?;
 
         let map = flatten(value.clone())
             .into_iter()
@@ -64,19 +64,16 @@ impl AgreementView {
     }
 
     pub fn get_property<'a, T: Deserialize<'a>>(&self, property: &str) -> Result<T, Error> {
-        let pointer = format!("/{}", property.replace(".", "/"));
+        let pointer = format!("/{}", property.replace('.', "/"));
         self.pointer_typed(pointer.as_str())
     }
 
     pub fn remove_property(&mut self, pointer: &str) -> Result<(), Error> {
         let path: Vec<&str> = pointer.split('/').collect();
-        Ok(
-            // Path should start with '/', so we must omit first element, which will be empty.
-            remove_property_impl(&mut self.json, &path[1..]).map_err(|e| match e {
-                Error::NoKey(_) => Error::NoKey(pointer.to_string()),
-                _ => e,
-            })?,
-        )
+        remove_property_impl(&mut self.json, &path[1..]).map_err(|e| match e {
+            Error::NoKey(_) => Error::NoKey(pointer.to_string()),
+            _ => e,
+        })
     }
 }
 
@@ -86,7 +83,7 @@ pub fn parse_constraints(input: &str, reg_expr: &str, group: usize) -> Option<Ha
         .and_then(|cap| cap.get(group))
         .map(|mat| {
             mat.as_str()
-                .split(",")
+                .split(',')
                 .map(|s| s.trim().to_lowercase())
                 .collect::<HashSet<_>>()
         })
@@ -100,7 +97,7 @@ fn remove_property_impl(value: &mut serde_json::Value, path: &[&str]) -> Result<
     } else {
         let nested_value = value
             .pointer_mut(&["/", path[0]].concat())
-            .ok_or(Error::NoKey(path[0].to_string()))?;
+            .ok_or_else(|| Error::NoKey(path[0].to_string()))?;
         remove_property_impl(nested_value, &path[1..])?;
 
         // Check if nested_value contains anything else.
@@ -130,7 +127,7 @@ fn remove_value(value: &mut Value, name: &str) -> Result<Value, Error> {
         ),
         Value::Object(object) => object
             .remove(name)
-            .ok_or(Error::InvalidValue(name.to_string()))?,
+            .ok_or_else(|| Error::InvalidValue(name.to_string()))?,
         _ => Err(Error::InvalidValue(name.to_string()))?,
     })
 }
@@ -167,7 +164,7 @@ impl TryFrom<&Agreement> for AgreementView {
     }
 }
 
-impl<'a> std::fmt::Display for AgreementView {
+impl std::fmt::Display for AgreementView {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FormatError> {
         let mut agreement = self.json.clone();
 
@@ -201,7 +198,7 @@ impl Default for OfferTemplate {
     }
 }
 
-impl<'a> std::fmt::Display for OfferTemplate {
+impl std::fmt::Display for OfferTemplate {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FormatError> {
         let mut template = self.clone();
         template.properties = flatten_value(template.properties);
@@ -277,7 +274,7 @@ impl TypedPointer for Option<&Value> {
     {
         self.map(f)
             .flatten()
-            .ok_or(Error::InvalidValue(format!("{:?}", self)))
+            .ok_or_else(|| Error::InvalidValue(format!("{:?}", self)))
     }
 }
 
@@ -294,19 +291,17 @@ impl TypedArrayPointer for Option<&Value> {
     {
         let r: Option<Result<Vec<T>, Error>> = self.map(Value::as_array).flatten().map(|v| {
             v.iter()
-                .map(|i| f(i).ok_or(Error::InvalidValue(format!("{:?}", i))))
+                .map(|i| f(i).ok_or_else(|| Error::InvalidValue(format!("{:?}", i))))
                 .collect::<Result<Vec<T>, Error>>()
         });
 
-        r.ok_or(Error::InvalidValue(
-            "Unable to convert to an array".to_string(),
-        ))?
+        r.ok_or_else(|| Error::InvalidValue("Unable to convert to an array".to_string()))?
     }
 }
 
 pub fn try_from_path(path: &PathBuf) -> Result<Value, Error> {
     let contents = std::fs::read_to_string(&path).map_err(Error::from)?;
-    let ext = match path.extension().map(|e| e.to_str()).flatten() {
+    let ext = match path.extension().and_then(|e| e.to_str()) {
         Some(ext) => ext,
         None => DEFAULT_FORMAT,
     };
@@ -386,7 +381,7 @@ fn merge_obj(a: &mut Value, b: Value) {
             Value::Null => (),
             _ => {
                 let a = a.as_object_mut().unwrap();
-                a.insert(PROPERTY_TAG.to_string(), b.clone());
+                a.insert(PROPERTY_TAG.to_string(), b);
             }
         },
         (a, b) => *a = b,
@@ -517,12 +512,10 @@ constraints: |
 "#;
 
     fn check_values(o: &serde_json::Value) {
-        assert_eq!(
-            o.pointer("/properties/golem/srv/caps/multi-activity")
-                .as_typed(Value::as_bool)
-                .unwrap(),
-            true
-        );
+        assert!(o
+            .pointer("/properties/golem/srv/caps/multi-activity")
+            .as_typed(Value::as_bool)
+            .unwrap());
         assert_eq!(
             o.pointer("/properties/golem/inf/mem/gib")
                 .as_typed(Value::as_f64)
