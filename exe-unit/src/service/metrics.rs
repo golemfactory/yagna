@@ -29,7 +29,7 @@ impl MetricsService {
             _ => None,
         };
 
-        let mut metrics = Self::metrics(&ctx, backlog_limit, caps);
+        let mut metrics = Self::metrics(ctx, backlog_limit, caps);
         let mut custom_metrics = ctx
             .agreement
             .usage_vector

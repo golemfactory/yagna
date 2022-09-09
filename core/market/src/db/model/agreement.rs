@@ -25,7 +25,7 @@ pub type AppSessionId = Option<String>;
     derive_more::Display,
     AsExpression,
     FromSqlRow,
-    PartialEq,
+    PartialEq, Eq,
     Debug,
     Clone,
     Copy,

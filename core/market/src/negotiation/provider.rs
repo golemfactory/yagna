@@ -229,7 +229,7 @@ impl ProviderBroker {
         let dao = self.common.db.as_dao::<AgreementDao>();
 
         let agreement = {
-            let _hold = self.common.agreement_lock.lock(&agreement_id).await;
+            let _hold = self.common.agreement_lock.lock(agreement_id).await;
 
             let agreement = dao
                 .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
@@ -284,7 +284,7 @@ impl ProviderBroker {
                 AgreementState::Cancelled,
             ))) => return Ok(ApprovalResult::Cancelled),
             Err(e) => {
-                let _hold = self.common.agreement_lock.lock(&agreement_id).await;
+                let _hold = self.common.agreement_lock.lock(agreement_id).await;
 
                 log::warn!(
                     "Failed to send Approve Agreement [{}] to Requestor. {}. Reverting state to `Pending`.",
@@ -308,7 +308,7 @@ impl ProviderBroker {
         // is supposed to return after approval.
         match notifier.wait_for_event_until(stop_time).await {
             Err(NotifierError::Timeout(_)) => {
-                let _hold = self.common.agreement_lock.lock(&agreement_id).await;
+                let _hold = self.common.agreement_lock.lock(agreement_id).await;
                 dao.revert_approving(agreement_id).await.log_err().ok();
 
                 Err(AgreementProtocolError::Timeout(agreement.id.clone()).into())
@@ -322,7 +322,7 @@ impl ProviderBroker {
         .log_err()?;
 
         {
-            let _hold = self.common.agreement_lock.lock(&agreement_id).await;
+            let _hold = self.common.agreement_lock.lock(agreement_id).await;
 
             let agreement = dao
                 .select(agreement_id, None, Utc::now().naive_utc())
@@ -353,7 +353,7 @@ impl ProviderBroker {
     ) -> Result<(), AgreementError> {
         let dao = self.common.db.as_dao::<AgreementDao>();
         let agreement = {
-            let _hold = self.common.agreement_lock.lock(&agreement_id).await;
+            let _hold = self.common.agreement_lock.lock(agreement_id).await;
 
             let agreement = dao
                 .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
@@ -553,7 +553,7 @@ async fn agreement_received(
         .body
         .prev_proposal_id
         .clone()
-        .ok_or_else(|| RemoteProposeAgreementError::NoNegotiations(offer_proposal_id))?;
+        .ok_or(RemoteProposeAgreementError::NoNegotiations(offer_proposal_id))?;
     let demand_proposal = broker.get_proposal(None, &demand_proposal_id).await?;
 
     let mut agreement = Agreement::new_with_ts(
@@ -604,7 +604,7 @@ async fn agreement_received(
         })?;
 
     // Send channel message to wake all query_events waiting for proposals.
-    broker.negotiation_notifier.notify(&offer_id).await;
+    broker.negotiation_notifier.notify(offer_id).await;
 
     counter!("market.agreements.provider.proposed", 1);
     log::info!(
@@ -623,7 +623,7 @@ async fn on_agreement_cancelled(
     let caller: NodeId = CommonBroker::parse_caller(&caller)?;
     Ok(agreement_cancelled(broker, caller, msg)
         .await
-        .map_err(|e| AgreementProtocolError::Remote(e))?)
+        .map_err(AgreementProtocolError::Remote)?)
 }
 
 async fn agreement_cancelled(

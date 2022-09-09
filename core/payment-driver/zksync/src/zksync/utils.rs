@@ -34,7 +34,7 @@ pub fn big_uint_to_big_dec(v: BigUint) -> BigDecimal {
 
 /// Find the closest **bigger** packable amount
 pub fn pack_up(amount: &BigUint) -> BigUint {
-    let mut packable_amount = closest_packable_token_amount(&amount);
+    let mut packable_amount = closest_packable_token_amount(amount);
     while (&packable_amount < amount) || !is_token_amount_packable(&packable_amount) {
         packable_amount = increase_least_significant_digit(&packable_amount);
     }

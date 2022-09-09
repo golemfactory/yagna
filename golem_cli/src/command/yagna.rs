@@ -342,7 +342,7 @@ impl YagnaCommand {
                 Ok(_) => Ok(child),
                 Err(e) => {
                     log::error!("Killing Golem Service, since wait failed: {}", e);
-                    let _ = child.kill().await?;
+                    child.kill().await?;
                     Err(e)
                 }
             }

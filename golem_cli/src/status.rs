@@ -22,7 +22,7 @@ async fn payment_status(
     network: &NetworkName,
     account: &Option<NodeId>,
 ) -> anyhow::Result<BTreeMap<String, StatusResult>> {
-    let address = payment_account(&cmd, account).await?;
+    let address = payment_account(cmd, account).await?;
 
     let network_group = get_network_group(network);
 
@@ -31,7 +31,7 @@ async fn payment_status(
         let mut f = vec![];
         let mut l = vec![];
         for nn in NETWORK_GROUP_MAP[&network_group].iter() {
-            if let Ok(_) = ZKSYNC_DRIVER.platform(&nn) {
+            if ZKSYNC_DRIVER.platform(nn).is_ok() {
                 l.push("zksync".to_string());
                 f.push(cmd.yagna()?.payment_status(&address, nn, &ZKSYNC_DRIVER));
             }
@@ -68,7 +68,7 @@ fn get_network_group(network: &NetworkName) -> NetworkGroup {
 }
 
 pub async fn run() -> Result</*exit code*/ i32> {
-    let size = crossterm::terminal::size().ok().unwrap_or_else(|| (80, 50));
+    let size = crossterm::terminal::size().ok().unwrap_or((80, 50));
     let cmd = YaCommand::new()?;
     let kvm_status = crate::platform::kvm_status();
 

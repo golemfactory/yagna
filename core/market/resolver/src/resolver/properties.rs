@@ -434,13 +434,13 @@ impl<'a> PropertySet<'a> {
 // #endregion
 
 // Property reference (element of filter expression)
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PropertyRef {
     Value(String, PropertyRefType), // reference to property value (prop name)
     Aspect(String, String, PropertyRefType), // reference to property aspect (prop name, aspect name)
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PropertyRefType {
     Any,
     Decimal,

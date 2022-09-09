@@ -70,7 +70,7 @@ pub(crate) async fn start_inet<R: RuntimeService>(
     let ip4_net = ipnet::Ipv4Net::new(IP4_ADDRESS, DEFAULT_PREFIX_LEN).unwrap();
     // let ip6_net = ipnet::Ipv6Net::new(IP6_ADDRESS, 128 - DEFAULT_PREFIX_LEN).unwrap();
 
-    let ip4_addr = ip4_net.hosts().skip(1).next().unwrap();
+    let ip4_addr = ip4_net.hosts().nth(1).unwrap();
     // let ip6_addr = ip6_net.hosts().skip(1).next().unwrap();
 
     let networks = [
@@ -336,12 +336,12 @@ fn ip_packet_to_socket_desc(ip_packet: &IpPacket) -> Result<SocketDesc> {
 
     let (sender_port, listen_port) = match protocol {
         Protocol::Tcp => {
-            let _ = TcpPacket::peek(ip_packet.payload())?;
+            TcpPacket::peek(ip_packet.payload())?;
             let pkt = TcpPacket::packet(ip_packet.payload());
             (pkt.src_port(), pkt.dst_port())
         }
         Protocol::Udp => {
-            let _ = UdpPacket::peek(ip_packet.payload())?;
+            UdpPacket::peek(ip_packet.payload())?;
             let pkt = UdpPacket::packet(ip_packet.payload());
             (pkt.src_port(), pkt.dst_port())
         }
@@ -402,12 +402,12 @@ impl Proxy {
 
     async fn exists(&self, key: &TransportKey) -> bool {
         let state = self.state.read().await;
-        state.remotes.contains_key(&key)
+        state.remotes.contains_key(key)
     }
 
     async fn get(&self, key: &TransportKey) -> Option<TransportSender> {
         let state = self.state.read().await;
-        state.remotes.get(&key).cloned()
+        state.remotes.get(key).cloned()
     }
 
     async fn bind(&self, desc: SocketDesc) -> Result<impl Future<Output = ()> + 'static> {

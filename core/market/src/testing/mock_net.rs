@@ -55,7 +55,7 @@ impl MockNet {
         };
 
         let mut inner = self.inner.lock().unwrap();
-        if let Some(_) = inner.nodes.insert(node_id.clone(), prefix) {
+        if inner.nodes.insert(node_id.clone(), prefix).is_some() {
             panic!("[MockNet] Node [{}] already existed.", &node_id);
         }
     }
@@ -81,13 +81,13 @@ impl MockNet {
             _ => panic!("[MockNet] Invalid destination address {}", to_addr),
         };
 
-        let dest_node_id = NodeId::from_str(&dst_id)?;
+        let dest_node_id = NodeId::from_str(dst_id)?;
         let inner = self.inner.lock().unwrap();
         let local_prefix = inner.nodes.get(&dest_node_id);
 
         if let Some(local_prefix) = local_prefix {
             let net_prefix = format!("/net/{}", dst_id);
-            Ok((from_node, to_addr.replacen(&net_prefix, &local_prefix, 1)))
+            Ok((from_node, to_addr.replacen(&net_prefix, local_prefix, 1)))
         } else {
             Err(Error::GsbFailure(format!(
                 "[MockNet] Can't find destination address for endpoint [{}].",
@@ -141,7 +141,7 @@ impl MockNetInner {
                 let stub: SendBroadcastStub = serialization::from_slice(msg).unwrap();
                 let caller = caller.to_string();
 
-                let msg = msg.iter().copied().collect::<Vec<_>>();
+                let msg = msg.to_vec();
 
                 let topic = stub.topic;
                 let endpoints = bcast.resolve(&caller, &topic);
@@ -216,7 +216,7 @@ pub(crate) fn parse_from_addr(from_addr: &str) -> Result<(NodeId, String)> {
         to_node_id.parse::<NodeId>()?;
         let prefix = 10 + from_node_id.len();
         let service_id = &from_addr[prefix..];
-        if let Some(_) = it.next() {
+        if it.next().is_some() {
             return Ok((from_node_id.parse()?, net_service(service_id)));
         }
     }

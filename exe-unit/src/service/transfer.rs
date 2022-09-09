@@ -288,7 +288,7 @@ impl Handler<DeployImage> for TransferService {
 
                 Ok(Some(path))
             };
-            return ActorResponse::r#async(fut.into_actor(self));
+            ActorResponse::r#async(fut.into_actor(self))
         }
 
         #[cfg(feature = "sgx")]
@@ -363,7 +363,7 @@ impl Handler<AbortTransfers> for TransferService {
     fn handle(&mut self, _: AbortTransfers, _: &mut Self::Context) -> Self::Result {
         {
             let mut guard = self.abort_handles.borrow_mut();
-            std::mem::replace(&mut (*guard), Default::default())
+            std::mem::take(&mut (*guard))
         }
         .into_iter()
         .for_each(|h| h.abort());

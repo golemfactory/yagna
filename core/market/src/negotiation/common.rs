@@ -197,7 +197,7 @@ impl CommonBroker {
                 .take_events(subscription_id, max_events, owner)
                 .await?;
 
-            if events.len() > 0 {
+            if !events.is_empty() {
                 return Ok(events);
             }
 
@@ -255,7 +255,7 @@ impl CommonBroker {
                 .await
                 .map_err(|e| AgreementEventsError::Internal(e.to_string()))?;
 
-            if events.len() > 0 {
+            if !events.is_empty() {
                 counter!("market.agreements.events.queried", events.len() as u64);
                 return Ok(events);
             }
@@ -295,7 +295,7 @@ impl CommonBroker {
         Ok(self
             .db
             .as_dao::<ProposalDao>()
-            .get_proposal(&id)
+            .get_proposal(id)
             .await
             .map_err(|e| GetProposalError::Internal(id.clone(), subs_id.cloned(), e.to_string()))?
             .filter(|proposal| {
@@ -719,7 +719,7 @@ impl CommonBroker {
         let session_notifier = &self.session_notifier;
 
         // Notify everyone waiting on Agreement events endpoint.
-        if let Some(_) = &agreement.session_id {
+        if agreement.session_id.is_some() {
             session_notifier.notify(&agreement.session_id.clone()).await;
         }
         // Even if session_id was not None, we want to notify everyone else,
@@ -797,7 +797,7 @@ pub fn validate_match(
             demand_mismatch,
             offer_mismatch,
         } => {
-            return Err(MatchValidationError::NotMatching {
+            Err(MatchValidationError::NotMatching {
                 new: new_proposal.body.id.clone(),
                 prev: prev_proposal.body.id.clone(),
                 mismatches: format!(

@@ -123,14 +123,14 @@ pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
         payment_account(&cmd, &config.account.account.or(provider_config.account)).await?;
     for nn in NETWORK_GROUP_MAP[&config.account.network].iter() {
         cmd.yagna()?
-            .payment_init(&address, &nn, &ERC20_DRIVER)
+            .payment_init(&address, nn, &ERC20_DRIVER)
             .await?;
-        if ZKSYNC_DRIVER.platform(&nn).is_err() {
+        if ZKSYNC_DRIVER.platform(nn).is_err() {
             continue;
         }
         if let Err(e) = cmd
             .yagna()?
-            .payment_init(&address, &nn, &ZKSYNC_DRIVER)
+            .payment_init(&address, nn, &ZKSYNC_DRIVER)
             .await
         {
             log::debug!("Failed to initialize zkSync driver. e:{}", e);

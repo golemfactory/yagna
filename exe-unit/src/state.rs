@@ -206,7 +206,7 @@ impl Batch {
     }
 
     pub fn results(&self, cmd_idx: Option<usize>) -> Vec<ExeScriptCommandResult> {
-        let last_idx = cmd_idx.unwrap_or_else(|| self.exec.exe_script.len() - 1);
+        let last_idx = cmd_idx.unwrap_or(self.exec.exe_script.len() - 1);
         self.results
             .iter()
             .enumerate()
@@ -289,7 +289,7 @@ impl<T: Clone + Send + 'static> Broadcast<T> {
     fn initialize(&mut self) {
         let (tx, rx) = broadcast::channel(16);
         let receiver = tokio_stream::wrappers::BroadcastStream::new(rx);
-        tokio::task::spawn_local(receiver.for_each(|_| async { () }));
+        tokio::task::spawn_local(receiver.for_each(|_| async {  }));
         self.sender = Some(tx);
     }
 }

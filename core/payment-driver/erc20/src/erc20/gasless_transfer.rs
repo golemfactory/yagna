@@ -155,7 +155,7 @@ pub async fn send_gasless_transfer(
             Err(GenericError::new(err.message))
         }
 
-        status @ _ => {
+        status => {
             let resp_bytes = resp.body().await.map_err(GenericError::new)?;
 
             Err(GenericError::new(format!(

@@ -38,7 +38,7 @@ impl EventMonitor {
     pub fn next_process<'a>(&mut self, ctx: CommandContext) -> Handle<'a> {
         let mut inner = self.inner.lock().unwrap();
         let channel = Channel::new(ctx, Default::default());
-        let handle = Handle::process(&self, &channel);
+        let handle = Handle::process(self, &channel);
         inner.next_process.replace(channel);
 
         handle
@@ -48,7 +48,7 @@ impl EventMonitor {
     pub fn process<'a>(&mut self, ctx: CommandContext, pid: u64) -> Handle<'a> {
         let mut inner = self.inner.lock().unwrap();
         let channel = Channel::new(ctx, pid);
-        let handle = Handle::process(&self, &channel);
+        let handle = Handle::process(self, &channel);
         inner.processes.insert(pid, channel);
 
         handle

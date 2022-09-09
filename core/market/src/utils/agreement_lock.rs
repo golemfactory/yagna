@@ -23,8 +23,7 @@ impl AgreementLock {
             self.lock_map
                 .read()
                 .await
-                .get(agreement_id)
-                .map(|lock| lock.clone())
+                .get(agreement_id).cloned()
         };
         match potencial_lock {
             Some(mutex) => mutex,
