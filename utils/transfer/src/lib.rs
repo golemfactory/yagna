@@ -41,7 +41,7 @@ where
 {
     let rx = sink.res_rx.take().unwrap();
     stream.forward(sink).await?;
-    Ok(rx.await??)
+    rx.await?
 }
 
 /// Transfers data between `TransferProvider`s within current context
@@ -66,7 +66,7 @@ where
 
             log::debug!("Transferring from offset: {}", ctx.state.offset());
 
-            let stream = wrap_stream(src.source(&src_url.url, ctx), &src_url)?;
+            let stream = wrap_stream(src.source(&src_url.url, ctx), src_url)?;
             let sink = dst.destination(&dst_url.url, ctx);
 
             transfer(stream, sink).await?;
@@ -330,7 +330,7 @@ impl TransferState {
     }
 
     pub fn size(&self) -> Option<u64> {
-        self.inner.borrow().size.clone()
+        self.inner.borrow().size
     }
 
     pub fn set_size(&self, size: Option<u64>) {
@@ -351,8 +351,7 @@ impl TransferState {
         (*self.inner.borrow_mut())
             .retry
             .as_mut()
-            .map(|r| r.delay(&err))
-            .flatten()
+            .and_then(|r| r.delay(err))
     }
 }
 

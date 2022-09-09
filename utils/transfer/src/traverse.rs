@@ -223,7 +223,7 @@ mod tests {
 
         fn include_in<S: ToString>(set: &mut Option<SetEntry<String>>, glob: S) {
             let glob = glob.to_string();
-            let includes = match mem::replace(set, None) {
+            let includes = match set.take() {
                 Some(entry) => match entry {
                     SetEntry::Single(e) => Some(SetEntry::Multiple(vec![e, glob])),
                     SetEntry::Multiple(mut v) => {
@@ -345,7 +345,7 @@ mod tests {
             .build()
             .traverse(dir.path())?
             .collect::<Vec<_>>();
-        assert_eq!(entries.len(), 3 as usize);
+        assert_eq!(entries.len(), 3_usize);
 
         let entries = Builder::new()
             .include("**/*.txt")
@@ -353,7 +353,7 @@ mod tests {
             .build()
             .traverse(dir.path())?
             .collect::<Vec<_>>();
-        assert_eq!(entries.len(), 4 as usize);
+        assert_eq!(entries.len(), 4_usize);
 
         let entries = Builder::new()
             .include("**/*.txt")
@@ -361,7 +361,7 @@ mod tests {
             .build()
             .traverse(dir.path())?
             .collect::<Vec<_>>();
-        assert_eq!(entries.len(), 5 as usize);
+        assert_eq!(entries.len(), 5_usize);
 
         Ok(())
     }
