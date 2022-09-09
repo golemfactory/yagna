@@ -1,3 +1,5 @@
+#![allow(clippy::let_unit_value)]
+
 use crate::message::*;
 use crate::network::VpnSupervisor;
 use actix::prelude::*;
@@ -265,9 +267,9 @@ impl VpnWebSocket {
         vpn.send(Packet { data, meta })
             .into_actor(self)
             .map(move |result, this, ctx| {
-                if let Err(_) = result {
+                if result.is_err() {
                     log::error!("VPN WebSocket: VPN {} no longer exists", this.network_id);
-                    let _ = ctx.address().do_send(Shutdown {});
+                    ctx.address().do_send(Shutdown {});
                 }
             })
             .wait(ctx);
@@ -327,7 +329,8 @@ impl Handler<Shutdown> for VpnWebSocket {
 
     fn handle(&mut self, _: Shutdown, ctx: &mut Self::Context) -> Self::Result {
         log::warn!("VPN WebSocket: VPN {} is shutting down", self.network_id);
-        Ok(ctx.stop())
+        ctx.stop();
+        Ok(())
     }
 }
 

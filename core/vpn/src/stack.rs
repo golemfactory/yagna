@@ -113,7 +113,7 @@ impl<'a> Stack<'a> {
                 let socket = sockets.get::<UdpSocket>(handle);
                 socket.endpoint().port
             }
-            _ => 0 as u16,
+            _ => 0_u16,
         };
 
         sockets.remove(handle);
@@ -146,7 +146,7 @@ impl<'a> Stack<'a> {
             let iface = self.iface.borrow();
             iface.ip_addrs().iter().next().cloned()
         }
-        .ok_or_else(|| Error::NetEmpty)
+        .ok_or(Error::NetEmpty)
     }
 
     pub fn add_address(&self, address: IpCidr) {

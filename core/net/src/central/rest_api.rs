@@ -11,7 +11,7 @@ pub fn web_scope() -> Scope {
 async fn get_info() -> Result<impl Responder> {
     let (node_id, _) = crate::service::identities().await?;
     let status = Status {
-        node_id: node_id,
+        node_id,
         listen_ip: None,
         public_ip: None,
         sessions: 1,
