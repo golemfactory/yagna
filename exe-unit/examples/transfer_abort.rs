@@ -34,7 +34,7 @@ fn create_file(path: &PathBuf) {
         .collect();
 
     for _ in 0..CHUNK_COUNT {
-        file.write(&input).unwrap();
+        let _ = file.write(&input).unwrap();
     }
     file.flush().unwrap();
 }
@@ -132,6 +132,7 @@ async fn main() -> anyhow::Result<()> {
     log::debug!("Creating directories");
 
     let temp_dir = TempDir::new("transfer")?;
+    //TODO Rafał
     let work_dir = temp_dir.path().clone().join("work_dir");
     let cache_dir = temp_dir.path().clone().join("cache_dir");
 
