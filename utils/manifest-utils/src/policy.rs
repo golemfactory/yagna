@@ -144,10 +144,8 @@ impl Keystore {
 
         let pkey = self.verify_cert(cert)?;
 
-        let msg_digest = MessageDigest::from_name(sig_alg.as_ref()).ok_or(anyhow::anyhow!(
-            "Unknown signature algorithm: {}",
-            sig_alg.as_ref()
-        ))?;
+        let msg_digest = MessageDigest::from_name(sig_alg.as_ref())
+            .ok_or_else(|| anyhow::anyhow!("Unknown signature algorithm: {}", sig_alg.as_ref()))?;
         let mut verifier = Verifier::new(msg_digest, pkey.as_ref())?;
         if !(verifier.verify_oneshot(&sig, data.as_ref().as_bytes())?) {
             return Err(anyhow::anyhow!("Invalid signature"));

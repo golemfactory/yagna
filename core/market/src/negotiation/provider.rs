@@ -638,7 +638,7 @@ async fn agreement_cancelled(
             .await
             .log_err()
             .map_err(|_e| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
-            .ok_or(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
+            .ok_or_else(|| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
 
         if agreement.requestor_id != caller {
             // Don't reveal, that we know this Agreement id.

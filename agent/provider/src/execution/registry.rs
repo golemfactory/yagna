@@ -200,10 +200,12 @@ impl ExeUnitsRegistry {
         // by supervisor as subprocess.
         let mut extended_args = Vec::new();
         if let Some(runtime_path) = &exeunit_desc.runtime_path {
-            let runtime_path = runtime_path.to_str().ok_or(anyhow!(
-                "ExeUnit runtime path [{}] contains invalid characters.",
-                runtime_path.display()
-            ))?;
+            let runtime_path = runtime_path.to_str().ok_or_else(|| {
+                anyhow!(
+                    "ExeUnit runtime path [{}] contains invalid characters.",
+                    runtime_path.display()
+                )
+            })?;
             extended_args.push("-b".to_owned());
             extended_args.push(runtime_path.to_owned());
         }

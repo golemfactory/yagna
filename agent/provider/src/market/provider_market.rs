@@ -607,11 +607,11 @@ impl Handler<Shutdown> for ProviderMarket {
         let market = ctx.address();
         async move {
             market
-            .send(Unsubscribe(OfferKind::Any))
-            .await?
-            .map_err(|e| log::warn!("Failed to unsubscribe Offers. {}", e))
-            .ok()
-            .unwrap_or(());
+                .send(Unsubscribe(OfferKind::Any))
+                .await?
+                .map_err(|e| log::warn!("Failed to unsubscribe Offers. {}", e))
+                .ok()
+                .unwrap_or(());
             Ok(())
         }
         .boxed_local()
@@ -626,7 +626,7 @@ impl Handler<OnAgreementTerminated> for ProviderMarket {
         let reason = msg
             .reason
             .map(|msg| msg.message)
-            .unwrap_or("NotSpecified".to_string());
+            .unwrap_or_else(|| "NotSpecified".to_string());
 
         log::info!(
             "Agreement [{}] terminated by Requestor. Reason: {}",
@@ -694,9 +694,9 @@ async fn terminate_agreement(api: Arc<MarketProviderApi>, msg: AgreementFinalize
         AgreementResult::ClosedByUs => GolemReason::success(),
         AgreementResult::Broken { reason } => GolemReason::new(reason),
         // No need to terminate, because Requestor already did it.
-        AgreementResult::ClosedByRequestor => return ,
+        AgreementResult::ClosedByRequestor => return,
         // No need to terminate since we didn't have Agreement with Requestor.
-        AgreementResult::ApprovalFailed => return ,
+        AgreementResult::ApprovalFailed => return,
     };
 
     log::info!(
@@ -717,7 +717,7 @@ async fn terminate_agreement(api: Arc<MarketProviderApi>, msg: AgreementFinalize
                     e,
                     repeats.max_elapsed_time,
                 );
-                return ;
+                return;
             }
         };
 

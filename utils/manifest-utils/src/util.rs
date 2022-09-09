@@ -269,7 +269,7 @@ impl KeystoreManager {
             let file_stem = get_file_stem(&new_cert_path).expect("Has to have stem");
             let dot_extension = get_file_extension(&new_cert_path)
                 .map(|ex| format!(".{ex}"))
-                .unwrap_or(String::from(""));
+                .unwrap_or_else(|| String::from(""));
             for i in 0..u32::MAX {
                 let numbered_filename = format!("{file_stem}.{i}{dot_extension}");
                 new_cert_path = self.cert_dir.clone();
@@ -296,7 +296,7 @@ impl KeystoreManager {
             .ok_or_else(|| anyhow::anyhow!("Cannot get file name stem."))?;
         let dot_extension = get_file_extension(cert_path)
             .map(|ex| format!(".{ex}"))
-            .unwrap_or(String::from(""));
+            .unwrap_or_else(|| String::from(""));
         for cert in certs.into_iter() {
             let id = cert_to_id(&cert)?;
             let mut new_cert_path = self.cert_dir.clone();
