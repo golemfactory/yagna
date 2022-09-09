@@ -133,8 +133,8 @@ async fn main() -> anyhow::Result<()> {
 
     let temp_dir = TempDir::new("transfer")?;
     //TODO Rafał
-    let work_dir = temp_dir.path().clone().join("work_dir");
-    let cache_dir = temp_dir.path().clone().join("cache_dir");
+    let work_dir = temp_dir.path().to_owned().join("work_dir");
+    let cache_dir = temp_dir.path().to_owned().join("cache_dir");
 
     let src_file = temp_dir.path().join("rnd");
     let dest_file = temp_dir.path().join("rnd2");
