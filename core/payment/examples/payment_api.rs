@@ -216,7 +216,7 @@ async fn main() -> anyhow::Result<()> {
     let provider_id = format!("0x{}", hex::encode(provider_account.public().address()));
     let provider_addr = args
         .provider_addr
-        .unwrap_or_else(|_| provider_id.clone())
+        .unwrap_or_else(|| provider_id.clone())
         .to_lowercase();
 
     let requestor_pass: Protected = args.requestor_pass.clone().into();
