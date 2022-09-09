@@ -327,6 +327,8 @@ pub async fn prepare_raw_transaction(
     .await
 }
 
+//TODO Rafał
+#[allow(clippy::too_many_arguments)]
 async fn prepare_raw_transaction_with(
     client: Web3<Http>,
     _address: H160,
@@ -654,6 +656,8 @@ fn prepare_meta_transaction_contract(
     )
 }
 
+//TODO Rafał
+#[allow(clippy::too_many_arguments)]
 pub fn create_dao_entity(
     nonce: U256,
     sender: H160,

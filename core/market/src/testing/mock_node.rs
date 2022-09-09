@@ -106,10 +106,7 @@ impl MockNodeKind {
 fn testname_from_backtrace(bn: &str) -> String {
     log::info!("Test name to regex match: {}", &bn);
     // Extract test name
-    let captures = Regex::new(r"(.*)::(.*)::.*")
-        .unwrap()
-        .captures(bn)
-        .unwrap();
+    let captures = Regex::new(r"(.*)::(.*)::.*").unwrap().captures(bn).unwrap();
     let filename = captures.get(1).unwrap().as_str().to_string();
     let testname = captures.get(2).unwrap().as_str().to_string();
 
@@ -242,6 +239,8 @@ impl MarketsNetwork {
             .add_handler(empty_on_retrieve_offers)
     }
 
+    //TODO Rafał
+    #[allow(clippy::too_many_arguments)]
     pub async fn add_provider_negotiation_api(
         self,
         name: &str,
@@ -298,6 +297,8 @@ impl MarketsNetwork {
         .await
     }
 
+    //TODO Rafał
+    #[allow(clippy::too_many_arguments)]
     pub async fn add_negotiation_api(
         self,
         name: &str,
@@ -418,7 +419,6 @@ impl MarketsNetwork {
             .map(|node| node.mock_identity.clone())
             .unwrap()
             .get_default_id()
-            
     }
 
     pub fn create_identity(&self, node_name: &str, id_name: &str) -> Identity {

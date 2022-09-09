@@ -44,6 +44,8 @@ pub async fn exit(
     Ok(tx_id)
 }
 
+//TODO Rafał
+#[allow(clippy::too_many_arguments)]
 pub async fn transfer(
     sender: String,
     to: String,
