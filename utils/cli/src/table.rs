@@ -1,9 +1,9 @@
+use crate::cmd::CommandOutput;
 use prettytable::{color, format, format::TableFormat, Attr, Cell, Row, Table};
 use std::collections::HashMap;
-use crate::cmd::CommandOutput;
 
 pub fn print_table(
-    columns: &Vec<String>,
+    columns: &[String],
     values: &Vec<serde_json::Value>,
     summary: &Vec<serde_json::Value>,
 ) {
@@ -42,7 +42,7 @@ pub fn print_table(
         table.add_row(Row::empty());
         table.add_empty_row();
         let l = summary.len();
-        for (idx, row) in summary.into_iter().enumerate() {
+        for (idx, row) in summary.iter().enumerate() {
             if let Some(row_items) = row.as_array() {
                 use serde_json::Value;
 
@@ -83,11 +83,9 @@ pub fn print_json_table(
         let kvs: Vec<HashMap<&String, &serde_json::Value>> = values
             .iter()
             .map(|row| match row {
-                serde_json::Value::Array(row_values)
-                    if columns.len() == row_values.len() =>
-                {
+                serde_json::Value::Array(row_values) if columns.len() == row_values.len() => {
                     columns
-                        .into_iter()
+                        .iter()
                         .enumerate()
                         .map(|(idx, key)| (key, &row_values[idx]))
                         .collect()
@@ -95,10 +93,7 @@ pub fn print_json_table(
                 _ => unreachable!(),
             })
             .collect();
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&serde_json::json!(kvs))?
-        )
+        println!("{}", serde_json::to_string_pretty(&serde_json::json!(kvs))?)
     } else {
         println!(
             "{}",
