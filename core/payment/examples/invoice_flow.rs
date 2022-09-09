@@ -17,7 +17,8 @@ struct Args {
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
-    let log_level = std::env::var("RUST_LOG").unwrap_or("invoice_flow=debug,info".to_owned());
+    let log_level =
+        std::env::var("RUST_LOG").unwrap_or_else(|_| "invoice_flow=debug,info".to_owned());
     std::env::set_var("RUST_LOG", log_level);
     env_logger::init();
 
@@ -127,7 +128,7 @@ async fn main() -> anyhow::Result<()> {
         .await?;
     assert_eq!(payments.len(), 1);
     let payment = payments.pop().unwrap();
-    assert!(&payment.amount >= &invoice.amount);
+    assert!(payment.amount >= invoice.amount);
     log::info!("Payment verified correctly.");
 
     log::info!("Verifying invoice status...");

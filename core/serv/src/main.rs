@@ -406,6 +406,8 @@ impl ExtensionCommand {
     }
 }
 
+//TODO Rafał
+#[allow(clippy::large_enum_variant)]
 #[derive(StructOpt, Debug)]
 enum ServiceCommand {
     /// Runs server in foreground
@@ -488,7 +490,7 @@ impl ServiceCommand {
                 env::set_var(
                     "RUST_LOG",
                     env::var("RUST_LOG")
-                        .unwrap_or("info,actix_web::middleware::logger=warn".to_string()),
+                        .unwrap_or_else(|_| "info,actix_web::middleware::logger=warn".to_string()),
                 );
 
                 //this force_debug flag sets default log level to debug
