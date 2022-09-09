@@ -458,8 +458,7 @@ async fn handle_debit_note_event(
                 })
                 .log_err_msg(&format!(
                     "Failed to send BreakAgreement for [{}] with reason: {}",
-                    debit_note.agreement_id,
-                    reason
+                    debit_note.agreement_id, reason
                 ))
                 .ok()
         }
@@ -506,10 +505,7 @@ impl Handler<CreateActivity> for Payments {
         let agreement = self
             .agreements
             .get_mut(&msg.agreement_id)
-            .ok_or(anyhow!(
-                "Agreement [{}] wasn't registered.",
-                &msg.agreement_id
-            ))
+            .ok_or_else(|| anyhow!("Agreement [{}] wasn't registered.", &msg.agreement_id))
             .log_warn_msg("[ActivityCreated]")?;
 
         log::info!(
@@ -632,10 +628,12 @@ impl Handler<UpdateCost> for Payments {
         let agreement = match self
             .agreements
             .get(&msg.invoice_info.agreement_id)
-            .ok_or(anyhow!(
-                "Not my activity - agreement [{}].",
-                &msg.invoice_info.agreement_id
-            ))
+            .ok_or_else(|| {
+                anyhow!(
+                    "Not my activity - agreement [{}].",
+                    &msg.invoice_info.agreement_id
+                )
+            })
             .log_warn_msg("[UpdateCost]")
         {
             Ok(agreement) => agreement,
@@ -732,10 +730,12 @@ impl Handler<FinalizeActivity> for Payments {
         if let Ok(agreement) = self
             .agreements
             .get_mut(&msg.debit_info.agreement_id)
-            .ok_or(anyhow!(
-                "Not my activity - agreement [{}].",
-                &msg.debit_info.agreement_id
-            ))
+            .ok_or_else(|| {
+                anyhow!(
+                    "Not my activity - agreement [{}].",
+                    &msg.debit_info.agreement_id
+                )
+            })
             .log_warn_msg("[FinalizeActivity]")
         {
             agreement
@@ -1011,8 +1011,7 @@ impl Handler<DeadlineElapsed> for Payments {
             })
             .log_err_msg(&format!(
                 "Failed to send BreakAgreement for [{}] with reason: {}",
-                msg.category,
-                reason,
+                msg.category, reason,
             ))
             .ok();
     }

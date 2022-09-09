@@ -29,7 +29,7 @@ impl DBRelease {
                 ya_compile_time_utils::build_date(),
                 ya_compile_time_utils::build_number_str()
                     .map(|bn| format!(" build #{}", bn))
-                    .unwrap_or("".into())
+                    .unwrap_or_else(|| "".into())
             ),
             seen: true,
             release_ts: parse_release_ts(DEFAULT_RELEASE_TS)?,

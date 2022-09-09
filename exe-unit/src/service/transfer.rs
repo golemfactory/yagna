@@ -198,7 +198,7 @@ impl TransferService {
         Ok(self
             .providers
             .get(scheme)
-            .ok_or(TransferError::UnsupportedSchemeError(scheme.to_owned()))?
+            .ok_or_else(|| TransferError::UnsupportedSchemeError(scheme.to_owned()))?
             .clone())
     }
 }

@@ -116,7 +116,7 @@ impl ProviderConfig {
 #[derive(StructOpt, Clone, Debug, Serialize, Deserialize, derive_more::Display)]
 #[display(
     fmt = "{}Networks: {:?}",
-    "account.map(|a| format!(\"Address: {}\n\", a)).unwrap_or(\"\".into())",
+    "account.map(|a| format!(\"Address: {}\n\", a)).unwrap_or_else(||\"\".into())",
     networks
 )]
 pub struct ReceiverAccount {

@@ -167,5 +167,5 @@ pub async fn send_gasless_transfer(
 }
 
 fn resolve_gasless_url() -> String {
-    env::var(GASLESS_ADDR_ENVAR).unwrap_or(DEFAULT_GASLESS_HOST.to_string())
+    env::var(GASLESS_ADDR_ENVAR).unwrap_or_else(|_| DEFAULT_GASLESS_HOST.to_string())
 }
