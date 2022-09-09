@@ -30,7 +30,7 @@ struct Inner {
 impl EventMonitor {
     pub fn any_process<'a>(&mut self, ctx: CommandContext) -> Handle<'a> {
         let mut inner = self.inner.lock().unwrap();
-        inner.fallback.replace(Channel::fallback(ctx.clone()));
+        inner.fallback.replace(Channel::fallback(ctx));
 
         Handle::Fallback {}
     }
@@ -61,6 +61,8 @@ impl ya_runtime_api::server::RuntimeHandler for EventMonitor {
         let (mut ctx, done_tx) = {
             let mut inner = self.inner.lock().unwrap();
 
+            //TODO rafał
+            #[allow(clippy::map_entry)]
             if !inner.processes.contains_key(&status.pid) {
                 if let Some(channel) = inner.next_process.take() {
                     channel.waker.lock().unwrap().pid.replace(status.pid);
@@ -168,16 +170,11 @@ impl<'a> Handle<'a> {
 
 impl<'a> Drop for Handle<'a> {
     fn drop(&mut self) {
-        match self {
-            Handle::Process { monitor, waker, .. } => {
-                if let Some(pid) = { waker.lock().unwrap().pid } {
-                    let mut inner = monitor.inner.lock().unwrap();
-                    inner.processes.remove(&pid);
-                    inner.next_process.take();
-                }
-            }
-            _ => {
-                // ignore
+        if let Handle::Process { monitor, waker, .. } = self {
+            if let Some(pid) = { waker.lock().unwrap().pid } {
+                let mut inner = monitor.inner.lock().unwrap();
+                inner.processes.remove(&pid);
+                inner.next_process.take();
             }
         }
     }

@@ -330,9 +330,11 @@ impl RuntimeProcess {
                 .ok_or_else(|| Error::runtime("Invalid binary name"))?;
             args.insert(0, name.to_string_lossy().to_string());
 
-            let mut run_process = RunProcess::default();
-            run_process.bin = entry_point;
-            run_process.args = args;
+            let run_process = RunProcess {
+                bin: entry_point,
+                args,
+                ..Default::default()
+            };
 
             let handle = monitor.next_process(ctx);
             if let Err(error) = service.run_process(run_process).await {
@@ -535,10 +537,7 @@ struct ChildProcessGuard {
 impl ChildProcessGuard {
     fn new(inner: ChildProcess, addr: Addr<RuntimeProcess>) -> Self {
         addr.do_send(AddChildProcess(inner.clone()));
-        ChildProcessGuard {
-            inner,
-            addr: addr.clone(),
-        }
+        ChildProcessGuard { inner, addr }
     }
 }
 

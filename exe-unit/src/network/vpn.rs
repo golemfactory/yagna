@@ -131,6 +131,8 @@ impl Vpn {
     fn handle_arp(&mut self, frame: EtherFrame, ctx: &mut Context<Self>) {
         let arp = ArpPacket::packet(frame.payload());
         // forward only IP ARP packets
+        //TODO rafał
+        #[allow(clippy::zero_prefixed_literal)]
         if arp.get_field(ArpField::PTYPE) != [08, 00] {
             return;
         }

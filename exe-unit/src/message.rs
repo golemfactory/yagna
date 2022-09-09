@@ -91,10 +91,10 @@ pub struct ExecuteCommand {
 
 impl ExecuteCommand {
     pub fn stateless(&self) -> bool {
-        match &self.command {
-            ExeScriptCommand::Sign { .. } | ExeScriptCommand::Terminate { .. } => true,
-            _ => false,
-        }
+        matches!(
+            &self.command,
+            ExeScriptCommand::Sign { .. } | ExeScriptCommand::Terminate { .. }
+        )
     }
 
     pub fn split(self) -> (ExeScriptCommand, CommandContext) {

@@ -66,11 +66,10 @@ impl CapturedOutput {
     }
 
     pub fn output_string(&self) -> Option<String> {
-        self.output()
-            .and_then(|o| match o {
-                CommandOutput::Bin(b) => vec_to_string(b),
-                CommandOutput::Str(s) => Some(s),
-            })
+        self.output().and_then(|o| match o {
+            CommandOutput::Bin(b) => vec_to_string(b),
+            CommandOutput::Str(s) => Some(s),
+        })
     }
 
     pub fn write<B: AsRef<[u8]> + ?Sized>(&mut self, bytes: &B) -> Option<CommandOutput> {
@@ -230,7 +229,7 @@ pub(crate) fn vec_to_string(vec: Vec<u8>) -> Option<String> {
         return None;
     }
     let string = match String::from_utf8(vec) {
-        Ok(utf8) => utf8.to_owned(),
+        Ok(utf8) => utf8,
         Err(error) => error
             .as_bytes()
             .iter()

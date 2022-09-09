@@ -37,7 +37,7 @@ impl<T> From<std::sync::PoisonError<T>> for SystemError {
 
 impl From<io::Error> for SystemError {
     fn from(e: io::Error) -> Self {
-        SystemError::Error(format!("IO error: {}", e.to_string()))
+        SystemError::Error(format!("IO error: {e}"))
     }
 }
 
@@ -128,10 +128,13 @@ impl StatStub {
             .zip(stat.rfind(')'))
             .ok_or_else(|| SystemError::Error("proc stat: tcomm not found".into()))?;
 
-        let mut stub = StatStub::default();
-        stub.pid = next(&mut std::iter::once(&stat[..cmd_start - 1]))?;
-        stub.comm = stat[cmd_start + 1..cmd_end].to_string();
+        let mut stub = StatStub {
+            pid: next(&mut std::iter::once(&stat[..cmd_start - 1]))?,
+            comm: stat[cmd_start + 1..cmd_end].to_string(),
+            ..Default::default()
+        };
 
+        //TODO rafał wtf
         let mut it = stat[cmd_end + 2..].split(' ');
         stub.state = next(&mut it)?;
         stub.ppid = next(&mut it)?;
@@ -266,10 +269,10 @@ pub fn getrusage(resource: i32) -> Result<Usage, SystemError> {
 
 pub async fn kill(pid: i32, timeout: i64) -> Result<(), SystemError> {
     fn alive(pid: Pid) -> Result<bool, SystemError> {
-        Ok(match waitpid(pid, Some(WaitPidFlag::WNOHANG))? {
-            WaitStatus::Exited(_, _) | WaitStatus::Signaled(_, _, _) => false,
-            _ => true,
-        })
+        Ok(!matches!(
+            waitpid(pid, Some(WaitPidFlag::WNOHANG))?,
+            WaitStatus::Exited(_, _) | WaitStatus::Signaled(_, _, _)
+        ))
     }
 
     let pid = Pid::from_raw(pid);

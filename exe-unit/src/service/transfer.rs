@@ -64,7 +64,7 @@ impl ContainerTransferProvider {
 
     fn resolve_path(&self, container_path: &str) -> std::result::Result<PathBuf, TransferError> {
         fn is_prefix_of(base: &str, path: &str) -> usize {
-            if path.starts_with(base) && (path == base || path[base.len()..].starts_with("/")) {
+            if path.starts_with(base) && (path == base || path[base.len()..].starts_with('/')) {
                 base.len() + 1
             } else {
                 0
@@ -85,7 +85,7 @@ impl ContainerTransferProvider {
             }
 
             let path = &container_path[c.path.len() + 1..];
-            if path.starts_with("/") {
+            if path.starts_with('/') {
                 return Err(TransferError::IoError(io::Error::new(
                     io::ErrorKind::NotFound,
                     anyhow::anyhow!("invalid path format: [{}]", container_path),
