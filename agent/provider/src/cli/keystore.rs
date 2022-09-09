@@ -103,7 +103,7 @@ fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
 }
 
 fn cert_dir_path(config: &ProviderConfig) -> anyhow::Result<PathBuf> {
-    Ok(config.cert_dir.get_or_create()?)
+    config.cert_dir.get_or_create()
 }
 
 fn print_cert_list(
@@ -114,7 +114,7 @@ fn print_cert_list(
     for data in certs_data {
         table.add(data);
     }
-    table.print(&config)?;
+    table.print(config)?;
     Ok(())
 }
 

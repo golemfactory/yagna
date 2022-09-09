@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::TryFrom;
 use std::ffi::OsStr;
 use std::fs::{self, DirEntry};
+use std::path::Path;
 use std::{fs::File, path::PathBuf};
 
 use md5::{Digest, Md5};
@@ -45,15 +46,15 @@ pub fn parse_cert_file(cert: &PathBuf) -> anyhow::Result<Vec<X509>> {
     }
 }
 
-fn get_file_extension(path: &PathBuf) -> Option<String> {
+fn get_file_extension(path: &Path) -> Option<String> {
     path.extension().map(os_str_to_string)
 }
 
-fn get_file_name(path: &PathBuf) -> Option<String> {
+fn get_file_name(path: &Path) -> Option<String> {
     path.file_name().map(os_str_to_string)
 }
 
-fn get_file_stem(path: &PathBuf) -> Option<String> {
+fn get_file_stem(path: &Path) -> Option<String> {
     path.file_stem().map(os_str_to_string)
 }
 
@@ -268,7 +269,7 @@ impl KeystoreManager {
             let file_stem = get_file_stem(&new_cert_path).expect("Has to have stem");
             let dot_extension = get_file_extension(&new_cert_path)
                 .map(|ex| format!(".{ex}"))
-                .unwrap_or(String::from(""));
+                .unwrap_or_else(|| String::from(""));
             for i in 0..u32::MAX {
                 let numbered_filename = format!("{file_stem}.{i}{dot_extension}");
                 new_cert_path = self.cert_dir.clone();
@@ -286,16 +287,12 @@ impl KeystoreManager {
     }
 
     /// Loads certificates as individual files to `cert_dir`
-    fn load_as_certificate_files(
-        &self,
-        cert_path: &PathBuf,
-        certs: Vec<X509>,
-    ) -> anyhow::Result<()> {
+    fn load_as_certificate_files(&self, cert_path: &Path, certs: Vec<X509>) -> anyhow::Result<()> {
         let file_stem = get_file_stem(cert_path)
             .ok_or_else(|| anyhow::anyhow!("Cannot get file name stem."))?;
         let dot_extension = get_file_extension(cert_path)
             .map(|ex| format!(".{ex}"))
-            .unwrap_or(String::from(""));
+            .unwrap_or_else(|| String::from(""));
         for cert in certs.into_iter() {
             let id = cert_to_id(&cert)?;
             let mut new_cert_path = self.cert_dir.clone();

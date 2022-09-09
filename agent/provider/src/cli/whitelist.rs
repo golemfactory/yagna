@@ -157,9 +157,9 @@ impl From<DomainPatterns> for DomainPatternIds {
     }
 }
 
-impl Into<DomainPatterns> for DomainPatternIds {
-    fn into(self) -> DomainPatterns {
-        let patterns = self.pattern_ids.into_values().collect();
+impl From<DomainPatternIds> for DomainPatterns {
+    fn from(val: DomainPatternIds) -> Self {
+        let patterns = val.pattern_ids.into_values().collect();
         DomainPatterns { patterns }
     }
 }

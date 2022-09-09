@@ -49,7 +49,7 @@ impl NegotiatorComponent for ManifestSignature {
                 Err(err) => rejection(format!("failed to verify manifest signature: {}", err)),
             }
         } else if demand.requires_signature(&self.whitelist_matcher) {
-            rejection(format!("manifest requires signature but it has none"))
+            rejection("manifest requires signature but it has none".to_string())
         } else {
             log::trace!("No signature required. No signature provided.");
             acceptance(offer)
@@ -151,7 +151,7 @@ impl<'demand> DemandWithManifest<'demand> {
             }
         }
         log::debug!("Demand requires signature.");
-        return true;
+        true
     }
 
     fn verify_signature(&self, keystore: &Keystore) -> anyhow::Result<()> {
@@ -220,7 +220,7 @@ mod tests {
             --policy-disable-component manifest_signature_validation \
             --policy-trust-property {}={}",
             CAPABILITIES_PROPERTY,
-            Feature::Inet.to_string()
+            Feature::Inet
         ));
         assert!(!policy.enabled);
 
@@ -228,7 +228,7 @@ mod tests {
             "TEST \
             --policy-trust-property {}={}",
             CAPABILITIES_PROPERTY,
-            Feature::Inet.to_string()
+            Feature::Inet
         ));
         assert!(!policy.enabled);
 

@@ -16,6 +16,7 @@ use ya_manifest_utils::{
 
 static INIT: Once = Once::new();
 
+#[allow(clippy::ptr_arg)]
 pub fn load_certificates_from_dir(
     resource_cert_dir: &PathBuf,
     test_cert_dir: &PathBuf,
@@ -53,9 +54,10 @@ pub struct TestCertDataVisitor {
 impl TestCertDataVisitor {
     #[allow(dead_code)]
     pub fn new(expected: &[&str]) -> Self {
-        let mut visitor = Self::default();
-        visitor.expected = expected.iter().map(|s| s.to_string()).collect();
-        visitor
+        Self {
+            expected: expected.iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        }
     }
 
     #[allow(dead_code)]
@@ -151,7 +153,7 @@ impl TestResources {
     }
 
     fn temp_dir_path(&self) -> PathBuf {
-        PathBuf::from(self.temp_dir.clone())
+        PathBuf::from(self.temp_dir)
     }
 }
 
