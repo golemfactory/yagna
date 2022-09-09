@@ -224,7 +224,7 @@ pub fn create(config: ProviderConfig, params: PresetNoInteractive) -> anyhow::Re
         if is_initial_coefficient_name(name) {
             preset.initial_price = *price;
         } else {
-            let usage_coefficient = exe_unit_desc.resolve_coefficient(&name)?;
+            let usage_coefficient = exe_unit_desc.resolve_coefficient(name)?;
 
             preset.usage_coeffs.insert(usage_coefficient, *price);
         }
@@ -319,11 +319,11 @@ fn update_presets(
                 } else {
                     preset
                         .usage_coeffs
-                        .insert(exe_unit_desc.resolve_coefficient(&name)?, *price);
+                        .insert(exe_unit_desc.resolve_coefficient(name)?, *price);
                 }
             }
 
-            validate_preset(&config, &preset)?;
+            validate_preset(config, preset)?;
 
             Ok(())
         })?;
@@ -347,7 +347,7 @@ fn validate_preset(config: &ProviderConfig, preset: &Preset) -> anyhow::Result<(
     let registry = config.registry()?;
     registry.find_exeunit(&preset.exeunit_name)?;
 
-    if !(preset.pricing_model == "linear") {
+    if preset.pricing_model != "linear" {
         bail!("Not supported pricing model.")
     }
 

@@ -138,7 +138,7 @@ impl ProviderMarket {
     // =========================================== //
 
     pub fn new(api: MarketProviderApi, config: MarketConfig) -> ProviderMarket {
-        return ProviderMarket {
+        ProviderMarket {
             api: Arc::new(api),
             negotiator: Arc::new(NegotiatorAddr::default()),
             config: Arc::new(config),
@@ -147,7 +147,7 @@ impl ProviderMarket {
             agreement_signed_signal: SignalSlot::<NewAgreement>::new(),
             agreement_terminated_signal: SignalSlot::<CloseAgreement>::new(),
             handles: HashMap::new(),
-        };
+        }
     }
 
     fn async_context(&self, ctx: &mut Context<Self>) -> AsyncCtx {
@@ -201,13 +201,13 @@ async fn subscribe(
 async fn unsubscribe_all(api: Arc<MarketProviderApi>, subscriptions: Vec<String>) -> Result<()> {
     for subscription in subscriptions.iter() {
         log::info!("Unsubscribing: {}", subscription);
-        api.unsubscribe(&subscription).await?;
+        api.unsubscribe(subscription).await?;
     }
     Ok(())
 }
 
 async fn dispatch_events(ctx: AsyncCtx, events: Vec<ProviderEvent>, subscription: &Subscription) {
-    if events.len() == 0 {
+    if events.is_empty() {
         return;
     };
 
@@ -552,7 +552,7 @@ impl Handler<ReSubscribe> for ProviderMarket {
             .map(|sub| (sub.id.clone(), sub))
             .collect::<HashMap<String, Subscription>>();
 
-        if to_resubscribe.len() > 0 {
+        if !to_resubscribe.is_empty() {
             return ActorResponse::r#async(
                 resubscribe_offers(ctx.address(), self.api.clone(), to_resubscribe)
                     .into_actor(self)
@@ -600,18 +600,19 @@ impl Handler<Shutdown> for ProviderMarket {
     type Result = ResponseFuture<Result<(), Error>>;
 
     fn handle(&mut self, _msg: Shutdown, ctx: &mut Context<Self>) -> Self::Result {
-        for (_, handle) in self.handles.drain().into_iter() {
+        for (_, handle) in self.handles.drain() {
             ctx.cancel_future(handle);
         }
 
         let market = ctx.address();
         async move {
-            Ok(market
-                .send(Unsubscribe(OfferKind::Any))
-                .await?
-                .map_err(|e| log::warn!("Failed to unsubscribe Offers. {}", e))
-                .ok()
-                .unwrap_or(()))
+            market
+            .send(Unsubscribe(OfferKind::Any))
+            .await?
+            .map_err(|e| log::warn!("Failed to unsubscribe Offers. {}", e))
+            .ok()
+            .unwrap_or(());
+            Ok(())
         }
         .boxed_local()
     }
@@ -693,9 +694,9 @@ async fn terminate_agreement(api: Arc<MarketProviderApi>, msg: AgreementFinalize
         AgreementResult::ClosedByUs => GolemReason::success(),
         AgreementResult::Broken { reason } => GolemReason::new(reason),
         // No need to terminate, because Requestor already did it.
-        AgreementResult::ClosedByRequestor => return (),
+        AgreementResult::ClosedByRequestor => return ,
         // No need to terminate since we didn't have Agreement with Requestor.
-        AgreementResult::ApprovalFailed => return (),
+        AgreementResult::ApprovalFailed => return ,
     };
 
     log::info!(
@@ -716,7 +717,7 @@ async fn terminate_agreement(api: Arc<MarketProviderApi>, msg: AgreementFinalize
                     e,
                     repeats.max_elapsed_time,
                 );
-                return ();
+                return ;
             }
         };
 
@@ -827,7 +828,7 @@ impl Handler<AgreementFinalized> for ProviderMarket {
 
             log::info!("Re-negotiating all demands");
 
-            let demands = std::mem::replace(&mut myself.postponed_demands, Vec::new());
+            let demands = std::mem::take(&mut myself.postponed_demands);
             ctx.spawn(
                 renegotiate_demands(async_ctx, myself.subscriptions.clone(), demands)
                     .into_actor(myself),
@@ -843,7 +844,7 @@ impl Handler<AgreementClosed> for ProviderMarket {
 
     fn handle(&mut self, msg: AgreementClosed, ctx: &mut Context<Self>) -> Self::Result {
         let msg = AgreementFinalized::from(msg);
-        let myself = ctx.address().clone();
+        let myself = ctx.address();
 
         async move { myself.send(msg).await? }.boxed_local()
     }
@@ -854,7 +855,7 @@ impl Handler<AgreementBroken> for ProviderMarket {
 
     fn handle(&mut self, msg: AgreementBroken, ctx: &mut Context<Self>) -> Self::Result {
         let msg = AgreementFinalized::from(msg);
-        let myself = ctx.address().clone();
+        let myself = ctx.address();
 
         async move { myself.send(msg).await? }.boxed_local()
     }
@@ -867,7 +868,7 @@ impl Handler<Unsubscribe> for ProviderMarket {
         let subscriptions = match msg.0 {
             OfferKind::Any => {
                 log::info!("Unsubscribing all active offers");
-                std::mem::replace(&mut self.subscriptions, HashMap::new())
+                std::mem::take(&mut self.subscriptions)
                     .into_iter()
                     .map(|(k, _)| k)
                     .collect::<Vec<_>>()

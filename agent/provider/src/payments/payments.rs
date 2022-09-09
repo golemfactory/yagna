@@ -307,10 +307,10 @@ async fn send_debit_note(
     Ok(debit_note)
 }
 
-async fn check_invoice_events(provider_ctx: Arc<ProviderCtx>, payments_addr: Addr<Payments>) -> () {
+async fn check_invoice_events(provider_ctx: Arc<ProviderCtx>, payments_addr: Addr<Payments>) {
     let config = &provider_ctx.config;
-    let timeout = config.get_events_timeout.clone();
-    let error_timeout = config.get_events_error_timeout.clone();
+    let timeout = config.get_events_timeout;
+    let error_timeout = config.get_events_error_timeout;
     let mut after_timestamp = Utc::now();
 
     loop {
@@ -459,7 +459,7 @@ async fn handle_debit_note_event(
                 .log_err_msg(&format!(
                     "Failed to send BreakAgreement for [{}] with reason: {}",
                     debit_note.agreement_id,
-                    reason.to_string()
+                    reason
                 ))
                 .ok()
         }
@@ -621,7 +621,7 @@ impl Handler<ActivityDestroyed> for Payments {
         }
         .into_actor(self);
 
-        return ActorResponse::r#async(future.map(|_, _, _| Ok(())));
+        ActorResponse::r#async(future.map(|_, _, _| Ok(())))
     }
 }
 
@@ -761,7 +761,7 @@ impl Handler<AgreementClosed> for Payments {
             let activities_watch = agreement.activities_watch.clone();
             let agreement_id = msg.agreement_id.clone();
             let payment_timeout = agreement.payment_timeout;
-            let myself = ctx.address().clone();
+            let myself = ctx.address();
             let ctx = self.context.clone();
 
             let future = async move {
@@ -793,7 +793,7 @@ impl Handler<AgreementClosed> for Payments {
             return ActorResponse::r#async(future);
         }
 
-        return ActorResponse::reply(Err(anyhow!("Not my agreement {}.", &msg.agreement_id)));
+        ActorResponse::reply(Err(anyhow!("Not my agreement {}.", &msg.agreement_id)))
     }
 }
 
@@ -883,16 +883,16 @@ impl Handler<AgreementBroken> for Payments {
             return ActorResponse::reply(Ok(()));
         }
 
-        let address = ctx.address().clone();
+        let address = ctx.address();
         let future = async move {
             let msg = AgreementClosed {
                 agreement_id: msg.agreement_id,
                 send_terminate: false,
             };
-            Ok(address.send(msg).await??)
+            address.send(msg).await?
         };
 
-        return ActorResponse::r#async(future.into_actor(self));
+        ActorResponse::r#async(future.into_actor(self))
     }
 }
 
@@ -912,7 +912,7 @@ impl Handler<InvoiceAccepted> for Payments {
                 Err(e) => Err(anyhow!("Cannot get invoice: {}", e)),
             });
 
-        return ActorResponse::r#async(future);
+        ActorResponse::r#async(future)
     }
 }
 
@@ -1012,7 +1012,7 @@ impl Handler<DeadlineElapsed> for Payments {
             .log_err_msg(&format!(
                 "Failed to send BreakAgreement for [{}] with reason: {}",
                 msg.category,
-                reason.to_string(),
+                reason,
             ))
             .ok();
     }
@@ -1033,7 +1033,7 @@ impl Handler<GetAgreementSummary> for Payments {
             };
             return Ok(summary);
         }
-        return Err(anyhow!("Not my agreement {}.", &msg.agreement_id));
+        Err(anyhow!("Not my agreement {}.", &msg.agreement_id))
     }
 }
 
@@ -1051,7 +1051,7 @@ impl Actor for Payments {
             payment_addr.clone(),
         ));
         tokio::task::spawn_local(async move {
-            for checker in vec![&provider_ctx.debit_checker, &provider_ctx.payment_checker] {
+            for checker in &[&provider_ctx.debit_checker, &provider_ctx.payment_checker] {
                 let _ = checker
                     .send(Subscribe(payment_addr.clone().recipient()))
                     .await
@@ -1073,8 +1073,8 @@ fn get_backoff() -> backoff::ExponentialBackoff {
     }
 }
 
-const ACCEPT_PREFIX: &'static str = "debit-";
-const PAYMENT_PREFIX: &'static str = "payment-";
+const ACCEPT_PREFIX: &str = "debit-";
+const PAYMENT_PREFIX: &str = "payment-";
 
 #[inline(always)]
 fn note_accept_id(id: impl AsRef<str>) -> String {

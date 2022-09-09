@@ -29,7 +29,7 @@ pub mod local {
 
     use ya_client_model::NodeId;
 
-    pub const BUS_ID: &'static str = "/local/payment";
+    pub const BUS_ID: &str = "/local/payment";
     pub const DEFAULT_PAYMENT_DRIVER: &str = "erc20";
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -438,7 +438,7 @@ pub mod local {
         Display,
         Debug,
         Clone,
-        PartialEq,
+        PartialEq, Eq,
         Serialize,
         Deserialize,
     )]
@@ -466,7 +466,7 @@ pub mod local {
         Display,
         Debug,
         Clone,
-        PartialEq,
+        PartialEq, Eq,
         Serialize,
         Deserialize,
     )]
@@ -528,7 +528,7 @@ pub mod public {
     use super::*;
     use ya_client_model::NodeId;
 
-    pub const BUS_ID: &'static str = "/public/payment";
+    pub const BUS_ID: &str = "/public/payment";
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct Ack {}
@@ -612,7 +612,7 @@ pub mod public {
         type Error = AcceptRejectError;
     }
 
-    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct CancelDebitNote {
         pub debit_note_id: String,
@@ -671,7 +671,7 @@ pub mod public {
         type Error = AcceptRejectError;
     }
 
-    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct CancelInvoice {
         pub invoice_id: String,

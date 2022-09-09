@@ -78,7 +78,7 @@ impl IdentityService {
         {
             let subscription = subscription.clone();
             tokio::task::spawn_local(async move {
-                let _ = receiver
+                receiver
                     .for_each(|event| send_event(subscription.borrow(), event))
                     .await;
             });
@@ -102,11 +102,11 @@ impl IdentityService {
                 db.as_dao::<IdentityDao>()
                     .init_default_key(|| {
                         log::info!("generating new default identity");
-                        let key: IdentityKey = generate_new(None, "".into()).into();
+                        let key: IdentityKey = generate_new(None, "".into());
 
                         Ok(Identity {
                             identity_id: key.id(),
-                            key_file_json: key.to_key_file().map_err(|e| DaoError::internal(e))?,
+                            key_file_json: key.to_key_file().map_err(DaoError::internal)?,
                             is_default: true,
                             is_deleted: false,
                             alias: None,
@@ -154,7 +154,7 @@ impl IdentityService {
             None => return Ok(None),
             Some(id) => id,
         };
-        Ok(Some(to_info(&self.default_key, &id)))
+        Ok(Some(to_info(&self.default_key, id)))
     }
 
     pub fn get_by_id(&self, node_id: &NodeId) -> Result<Option<model::IdentityInfo>, model::Error> {
@@ -162,7 +162,7 @@ impl IdentityService {
             None => return Ok(None),
             Some(id) => id,
         };
-        Ok(Some(to_info(&self.default_key, &id)))
+        Ok(Some(to_info(&self.default_key, id)))
     }
 
     pub fn get_default_id(&self) -> Result<Option<model::IdentityInfo>, model::Error> {
@@ -170,7 +170,7 @@ impl IdentityService {
             None => return Ok(None),
             Some(id) => id,
         };
-        Ok(Some(to_info(&self.default_key, &id)))
+        Ok(Some(to_info(&self.default_key, id)))
     }
 
     pub fn list_ids(&self) -> Result<Vec<model::IdentityInfo>, model::Error> {
@@ -252,7 +252,7 @@ impl IdentityService {
     fn get_key_by_id(&mut self, node_id: &NodeId) -> Result<&mut IdentityKey, model::Error> {
         Ok(match self.ids.get_mut(node_id) {
             Some(v) => v,
-            None => return Err(model::Error::NodeNotFound(Box::new(node_id.clone()))),
+            None => return Err(model::Error::NodeNotFound(Box::new(*node_id))),
         })
     }
 
@@ -310,7 +310,7 @@ impl IdentityService {
         let node_id = update.node_id;
         let key = match self.ids.get_mut(&node_id) {
             Some(v) => v,
-            None => return Err(model::Error::NodeNotFound(Box::new(node_id.clone()))),
+            None => return Err(model::Error::NodeNotFound(Box::new(node_id))),
         };
         let update_alias = update.alias.clone();
         if let Some(new_alias) = update.alias {
@@ -372,7 +372,7 @@ impl IdentityService {
         key_id: model::GetPubKey,
     ) -> Result<PublicKey, model::Error> {
         let key = self.get_key_by_id(&key_id.0)?;
-        key.to_pub_key().map_err(|e| model::Error::new_err_msg(e))
+        key.to_pub_key().map_err(model::Error::new_err_msg)
     }
 
     pub async fn get_key_file(
@@ -380,7 +380,7 @@ impl IdentityService {
         key_id: model::GetKeyFile,
     ) -> Result<String, model::Error> {
         let key = self.get_key_by_id(&key_id.0)?;
-        key.to_key_file().map_err(|e| model::Error::new_err_msg(e))
+        key.to_key_file().map_err(model::Error::new_err_msg)
     }
 
     pub fn bind_service(me: Arc<Mutex<Self>>) {
@@ -497,7 +497,7 @@ impl IdentityService {
                     .map(|key| key.bytes().to_vec())
             }
         });
-        let this = me.clone();
+        let this = me;
         let _ = bus::bind(model::BUS_ID, move |node_id: model::GetKeyFile| {
             let this = this.clone();
             async move { this.lock().await.get_key_file(node_id).await }

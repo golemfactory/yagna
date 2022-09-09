@@ -53,7 +53,7 @@ impl TryFrom<i32> for TransactionStatus {
     }
 }
 
-#[derive(Clone, Queryable, Debug, Identifiable, Insertable, PartialEq)]
+#[derive(Clone, Queryable, Debug, Identifiable, Insertable, PartialEq, Eq)]
 #[primary_key(tx_id)]
 #[table_name = "transaction"]
 pub struct TransactionEntity {
@@ -82,7 +82,7 @@ pub struct TransactionEntity {
     pub encoded: String,
 }
 
-#[derive(Queryable, Clone, Debug, Identifiable, Insertable, PartialEq)]
+#[derive(Queryable, Clone, Debug, Identifiable, Insertable, PartialEq, Eq)]
 #[primary_key(order_id)]
 #[table_name = "payment"]
 pub struct PaymentEntity {
@@ -97,7 +97,7 @@ pub struct PaymentEntity {
     pub network: Network,
 }
 
-#[derive(AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy, FromPrimitive)]
+#[derive(AsExpression, FromSqlRow, PartialEq, Eq, Debug, Clone, Copy, FromPrimitive)]
 #[sql_type = "Integer"]
 pub enum Network {
     Mainnet = 1,    //Main Ethereum chain
@@ -125,7 +125,7 @@ impl FromStr for Network {
             "mumbai" => Ok(Network::Mumbai),
             _ => Err(DbError::InvalidData(format!(
                 "Invalid network: {}",
-                s.to_string()
+                s
             ))),
         }
     }

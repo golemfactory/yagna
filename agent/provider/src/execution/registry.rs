@@ -109,7 +109,7 @@ impl ExeUnitDesc {
                     return Some(coefficient_name.to_string());
                 }
                 config.counters.iter().find_map(|(prop_name, definition)| {
-                    if definition.name.eq_ignore_ascii_case(&coefficient_name) {
+                    if definition.name.eq_ignore_ascii_case(coefficient_name) {
                         Some(prop_name.into())
                     } else {
                         None
@@ -155,7 +155,7 @@ impl ExeUnitsRegistry {
 
     pub fn from_file(path: &Path) -> Result<ExeUnitsRegistry> {
         let mut registry = ExeUnitsRegistry::new();
-        registry.register_exeunits_from_file(&path)?;
+        registry.register_exeunits_from_file(path)?;
 
         Ok(registry)
     }
@@ -171,7 +171,7 @@ impl ExeUnitsRegistry {
         ExeUnitInstance::new(
             name,
             &exeunit_desc.supervisor_path,
-            &working_dir,
+            working_dir,
             &extended_args,
         )
     }
@@ -243,7 +243,7 @@ impl ExeUnitsRegistry {
 
     pub fn register_exeunits_from_file(&mut self, path: &Path) -> Result<()> {
         let current_dir = std::env::current_dir()?;
-        let base_path = path.parent().unwrap_or_else(|| &current_dir);
+        let base_path = path.parent().unwrap_or(&current_dir);
         let file = File::open(path).map_err(|error| {
             anyhow!(
                 "Can't load ExeUnits to registry from file {}, error: {}.",
@@ -301,7 +301,7 @@ impl ExeUnitsRegistry {
         if errors.is_empty() {
             return Ok(());
         }
-        return Err(RegistryError(errors));
+        Err(RegistryError(errors))
     }
 
     pub fn test_runtimes(&self) -> anyhow::Result<()> {
@@ -329,7 +329,7 @@ pub struct RegistryError(Vec<ExeUnitValidation>);
 impl fmt::Display for RegistryError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for v in &self.0 {
-            write!(f, "{}\n", v)?;
+            writeln!(f, "{}", v)?;
         }
         Ok(())
     }
@@ -366,7 +366,7 @@ impl OfferBuilder for ExeUnitDesc {
         let mut offer_part = self.properties.clone();
         offer_part.append(common.as_object_mut().unwrap());
 
-        return serde_json::Value::Object(offer_part);
+        serde_json::Value::Object(offer_part)
     }
 }
 
@@ -383,7 +383,7 @@ fn test_runtime(path: &Path) -> anyhow::Result<()> {
         if message.is_empty() {
             message = String::from_utf8_lossy(&output.stdout).to_string();
         }
-        if message.find("--help").is_none() {
+        if !message.contains("--help") {
             anyhow::bail!(message);
         }
     }
@@ -443,7 +443,7 @@ impl fmt::Display for ExeUnitDesc {
 fn expand_filename(pattern: &Path) -> Result<impl IntoIterator<Item = PathBuf>> {
     use std::fs::read_dir;
 
-    let path: &Path = pattern.as_ref();
+    let path: &Path = pattern;
     let (base_dir, file_name) = match (path.parent(), path.file_name()) {
         (Some(base_dir), Some(file_name)) => (base_dir, file_name),
         _ => return Ok(vec![PathBuf::from(pattern)]),
@@ -453,7 +453,7 @@ fn expand_filename(pattern: &Path) -> Result<impl IntoIterator<Item = PathBuf>> 
         None => anyhow::bail!("Not utf-8 filename: {:?}", file_name),
     };
 
-    if let Some(pos) = file_name.find("*") {
+    if let Some(pos) = file_name.find('*') {
         let (prefix, suffix) = file_name.split_at(pos);
         let suffix = &suffix[1..];
 

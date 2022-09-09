@@ -125,5 +125,5 @@ fn parse_auth<S: Scheme, T: HttpMessage>(msg: &T) -> Result<S, ParseError> {
         .headers()
         .get(actix_web::http::header::AUTHORIZATION)
         .ok_or(ParseError::Header)?;
-    Ok(S::parse(header).map_err(|_| ParseError::Header)?)
+    S::parse(header).map_err(|_| ParseError::Header)
 }

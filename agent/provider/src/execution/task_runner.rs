@@ -216,7 +216,7 @@ impl TaskRunner {
     // =========================================== //
 
     async fn dispatch_events(events: Vec<ProviderEvent>, myself: &Addr<TaskRunner>) {
-        if events.len() == 0 {
+        if events.is_empty() {
             return;
         };
 
@@ -266,13 +266,13 @@ impl TaskRunner {
             Some(agreement) => agreement,
         };
 
-        let exeunit_name = exe_unit_name_from(&agreement)?;
+        let exeunit_name = exe_unit_name_from(agreement)?;
 
         let task = match self.create_task(
             &exeunit_name,
             &msg.activity_id,
             &msg.agreement_id,
-            msg.requestor_pub_key.as_ref().map(|s| s.as_str()),
+            msg.requestor_pub_key.as_deref(),
         ) {
             Ok(task) => task,
             Err(error) => bail!("Error creating activity: {:?}: {}", msg, error),
@@ -370,9 +370,9 @@ impl TaskRunner {
 
         let destroy_msg = ActivityDestroyed {
             agreement_id: msg.agreement_id.to_string(),
-            activity_id: msg.activity_id.clone(),
+            activity_id: msg.activity_id,
         };
-        let _ = self.activity_destroyed.send_signal(destroy_msg.clone());
+        let _ = self.activity_destroyed.send_signal(destroy_msg);
         Ok(())
     }
 
@@ -394,7 +394,7 @@ impl TaskRunner {
         let args = vec![String::from("offer-template")];
         self.registry
             .run_exeunit_with_output(exeunit_name, args, &working_dir)
-            .map_err(|error| error.context(format!("ExeUnit offer-template command failed")))
+            .map_err(|error| error.context("ExeUnit offer-template command failed".to_string()))
     }
 
     fn exeunit_coeffs(&self, exeunit_name: &str) -> Result<Vec<String>> {
@@ -433,7 +433,7 @@ impl TaskRunner {
             .ok_or(anyhow!("None"))? // Parent must exist, since we built this path.
             .join("agreement.json");
 
-        self.save_agreement(&agreement_path, &agreement_id)?;
+        self.save_agreement(&agreement_path, agreement_id)?;
 
         let mut args = vec![
             "service-bus",
@@ -445,7 +445,7 @@ impl TaskRunner {
         args.extend(["-a", agreement_path.to_str().ok_or(anyhow!("None"))?].iter());
 
         if let Some(req_pub_key) = requestor_pub_key {
-            args.extend(["--requestor-pub-key", req_pub_key.as_ref()].iter());
+            args.extend(["--requestor-pub-key", req_pub_key].iter());
         }
 
         let args = args.iter().map(ToString::to_string).collect();
@@ -577,7 +577,7 @@ forward_actix_handler!(TaskRunner, GetExeUnit, get_exeunit);
 actix_signal_handler!(TaskRunner, CreateActivity, activity_created);
 actix_signal_handler!(TaskRunner, ActivityDestroyed, activity_destroyed);
 
-const PROPERTY_USAGE_VECTOR: &'static str = "golem.com.usage.vector";
+const PROPERTY_USAGE_VECTOR: &str = "golem.com.usage.vector";
 
 impl Handler<GetOfferTemplates> for TaskRunner {
     type Result = ResponseFuture<Result<HashMap<String, OfferTemplate>>>;
@@ -614,7 +614,7 @@ impl Handler<GetOfferTemplates> for TaskRunner {
                         usage_vector.extend(
                             coeffs
                                 .into_iter()
-                                .map(|prop| serde_json::Value::String(prop)),
+                                .map(serde_json::Value::String),
                         );
                         template.set_property(
                             PROPERTY_USAGE_VECTOR,
@@ -640,14 +640,14 @@ impl Handler<UpdateActivity> for TaskRunner {
         let addr = ctx.address();
         let client = self.api.clone();
 
-        let mut event_ts = self.event_ts.clone();
+        let mut event_ts = self.event_ts;
         let app_session_id = self.config.session_id.clone();
         let poll_timeout = Duration::from_secs(3);
 
         let fut = async move {
             let result = client
                 .get_activity_events(
-                    Some(event_ts.clone()),
+                    Some(event_ts),
                     Some(app_session_id),
                     Some(poll_timeout),
                     None,
@@ -681,7 +681,7 @@ impl Handler<TerminateActivity> for TaskRunner {
 
     fn handle(&mut self, msg: TerminateActivity, _ctx: &mut Context<Self>) -> Self::Result {
         let api = self.api.clone();
-        let state_retry_interval = self.config.exeunit_state_retry_interval.clone();
+        let state_retry_interval = self.config.exeunit_state_retry_interval;
 
         async move {
             set_activity_terminated(
@@ -703,7 +703,7 @@ impl Handler<CreateActivity> for TaskRunner {
     fn handle(&mut self, msg: CreateActivity, ctx: &mut Context<Self>) -> Self::Result {
         let api = self.api.clone();
         let activity_id = msg.activity_id.clone();
-        let state_retry_interval = self.config.exeunit_state_retry_interval.clone();
+        let state_retry_interval = self.config.exeunit_state_retry_interval;
 
         let result = self.on_create_activity(msg, ctx);
         match result {
@@ -770,8 +770,8 @@ impl Handler<AgreementClosed> for TaskRunner {
     type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: AgreementClosed, ctx: &mut Context<Self>) -> Self::Result {
-        let agreement_id = msg.agreement_id.to_string();
-        let myself = ctx.address().clone();
+        let agreement_id = msg.agreement_id;
+        let myself = ctx.address();
         let activities = self.list_activities(&agreement_id);
 
         self.active_agreements.remove(&agreement_id);
@@ -790,8 +790,8 @@ impl Handler<AgreementBroken> for TaskRunner {
     type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: AgreementBroken, ctx: &mut Context<Self>) -> Self::Result {
-        let agreement_id = msg.agreement_id.to_string();
-        let myself = ctx.address().clone();
+        let agreement_id = msg.agreement_id;
+        let myself = ctx.address();
         let activities = self.list_activities(&agreement_id);
 
         self.active_agreements.remove(&agreement_id);
@@ -871,10 +871,8 @@ impl StateMonitor {
             _ => {}
         }
 
-        if self.state.0 == State::Unresponsive {
-            if state.0 != State::Unresponsive {
-                log::warn!("ExeUnit is now responsive");
-            }
+        if self.state.0 == State::Unresponsive && state.0 != State::Unresponsive {
+            log::warn!("ExeUnit is now responsive");
         }
 
         self.state = state;

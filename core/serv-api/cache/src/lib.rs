@@ -114,7 +114,7 @@ where
         }
 
         self.ord.push(Reverse(KeyTimeEntry {
-            time: now.clone(),
+            time: now,
             key: key.clone(),
         }));
         self.map.insert(key, (now, value));

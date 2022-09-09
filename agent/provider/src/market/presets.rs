@@ -257,33 +257,33 @@ fn display_preset(
     let align = 20;
     let align_coeff = align - 4; // Minus indent.
 
-    write!(f, "{:width$}{}\n", "Name:", preset.name, width = align)?;
-    write!(
+    writeln!(f, "{:width$}{}", "Name:", preset.name, width = align)?;
+    writeln!(
         f,
-        "{:width$}{}\n",
+        "{:width$}{}",
         "ExeUnit:",
         preset.exeunit_name,
         width = align
     )?;
-    write!(
+    writeln!(
         f,
-        "{:width$}{}\n",
+        "{:width$}{}",
         "Pricing model:",
         preset.pricing_model,
         width = align
     )?;
-    write!(f, "{}\n", "Coefficients:")?;
+    writeln!(f, "Coefficients:")?;
 
     let exe_unit = registry.find_exeunit(&preset.exeunit_name).ok();
 
     for (name, coeff) in preset.usage_coeffs.iter() {
         let price_desc = exe_unit
             .as_ref()
-            .and_then(|e| e.coefficient_name(&name))
+            .and_then(|e| e.coefficient_name(name))
             .unwrap_or_else(|| name.to_string());
-        write!(
+        writeln!(
             f,
-            "    {:width$}{} GLM\n",
+            "    {:width$}{} GLM",
             price_desc,
             coeff,
             width = align_coeff

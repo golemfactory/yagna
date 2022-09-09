@@ -93,7 +93,7 @@ impl std::iter::IntoIterator for Constraints {
     }
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum ClauseOperator {
     And,
     Or,
@@ -135,7 +135,7 @@ impl fmt::Display for ConstraintOperator {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct ConstraintKey(serde_json::Value);
 
 impl ConstraintKey {

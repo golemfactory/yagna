@@ -71,7 +71,7 @@ impl AppKeyCommand {
                     name: name.clone(),
                     identity: id.clone(),
                 };
-                let _ = bus::service(model::BUS_ID)
+                bus::service(model::BUS_ID)
                     .send(remove)
                     .await
                     .map_err(anyhow::Error::msg)?
@@ -81,8 +81,8 @@ impl AppKeyCommand {
             AppKeyCommand::List { id, page, per_page } => {
                 let list = model::List {
                     identity: id.clone(),
-                    page: page.clone(),
-                    per_page: per_page.clone(),
+                    page: *page,
+                    per_page: *per_page,
                 };
                 let result: (Vec<model::AppKey>, u32) = bus::service(model::BUS_ID)
                     .send(list)

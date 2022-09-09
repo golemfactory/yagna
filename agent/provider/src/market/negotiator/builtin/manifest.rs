@@ -154,7 +154,7 @@ mod tests {
             --policy-disable-component manifest_signature_validation \
             --policy-trust-property {}={}",
             CAPABILITIES_PROPERTY,
-            Feature::Inet.to_string()
+            Feature::Inet
         ));
         assert!(!policy.enabled);
 
@@ -162,7 +162,7 @@ mod tests {
             "TEST \
             --policy-trust-property {}={}",
             CAPABILITIES_PROPERTY,
-            Feature::Inet.to_string()
+            Feature::Inet
         ));
         assert!(!policy.enabled);
 

@@ -25,17 +25,17 @@ pub struct LimitExpiration {
     min_deadline: i64,
 }
 
-pub static DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY: &'static str =
+pub static DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY: &str =
     "/golem/com/payment/debit-notes/accept-timeout?";
-pub static AGREEMENT_EXPIRATION_PROPERTY: &'static str = "/golem/srv/comp/expiration";
+pub static AGREEMENT_EXPIRATION_PROPERTY: &str = "/golem/srv/comp/expiration";
 
 // TODO: We should unify properties access in agreement-utils, because it is annoying to use both forms.
-pub static DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY_FLAT: &'static str =
+pub static DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY_FLAT: &str =
     "golem.com.payment.debit-notes.accept-timeout?";
 
 // Note: Tests are using this.
 #[allow(dead_code)]
-pub static AGREEMENT_EXPIRATION_PROPERTY_FLAT: &'static str = "golem.srv.comp.expiration";
+pub static AGREEMENT_EXPIRATION_PROPERTY_FLAT: &str = "golem.srv.comp.expiration";
 
 impl LimitExpiration {
     pub fn new(config: &AgreementExpirationNegotiatorConfig) -> anyhow::Result<LimitExpiration> {
@@ -89,7 +89,7 @@ impl NegotiatorComponent for LimitExpiration {
     ) -> Result<NegotiationResult> {
         let req_deadline = debit_deadline_from(demand)?;
         let our_deadline = debit_deadline_from(&offer)?;
-        let req_expiration = proposal_expiration_from(&demand)?;
+        let req_expiration = proposal_expiration_from(demand)?;
 
         // Let's check if Requestor is able to accept DebitNotes.
         let max_expiration_delta = match &req_deadline {

@@ -27,7 +27,7 @@ impl<'c> AppKeyDao<'c> {
     where
         F: Send + 'static + FnOnce(&ConnType) -> Result<R>,
     {
-        readonly_transaction(&self.pool, f).await
+        readonly_transaction(self.pool, f).await
     }
 
     #[inline]
@@ -38,7 +38,7 @@ impl<'c> AppKeyDao<'c> {
         &self,
         f: F,
     ) -> Result<R> {
-        do_with_transaction(&self.pool, f).await
+        do_with_transaction(self.pool, f).await
     }
 
     pub async fn create(

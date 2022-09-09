@@ -10,8 +10,8 @@ use crate::db::dao::ReleaseDAO;
 use crate::db::model::DBRelease;
 use crate::service::cli::ReleaseMessage;
 
-const REPO_OWNER: &'static str = "golemfactory";
-const REPO_NAME: &'static str = "yagna";
+const REPO_OWNER: &str = "golemfactory";
+const REPO_NAME: &str = "yagna";
 
 pub async fn check_latest_release(db: &DbExecutor) -> anyhow::Result<Release> {
     log::debug!("Checking latest Yagna release");

@@ -268,12 +268,12 @@ impl ActivitiesWaiter {
 
         log::debug!("Waiting for all activities to finish.");
 
-        while let Some(value) = self
+        while let Ok(value) = self
             .watch_receiver
             .changed()
             .await
             .map(|_| *self.watch_receiver.borrow())
-            .ok()
+            
         {
             log::debug!("Num active activities left: {}.", value);
             if value == 0 {

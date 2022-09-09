@@ -40,7 +40,7 @@ impl TryFrom<&MetaList> for Component {
                 Some(nested_meta) => match Keyword::try_from(nested_meta)? {
                     Keyword::Flatten => Ok(Component::Cli { flatten: true }),
                 },
-                None => return Err(error),
+                None => Err(error),
             },
             _ => Err(error),
         }
@@ -75,7 +75,7 @@ impl TryFrom<&NestedMeta> for Keyword {
     type Error = Error;
 
     fn try_from(nested_meta: &NestedMeta) -> Result<Self> {
-        let span = nested_meta.span().into();
+        let span = nested_meta.span();
         match nested_meta {
             NestedMeta::Meta(meta) => match meta {
                 Meta::Path(path) => Self::try_from(path),

@@ -100,7 +100,7 @@ impl TryFrom<&Variant> for Service {
     type Error = Error;
 
     fn try_from(variant: &Variant) -> Result<Self> {
-        let span = variant.ident.span().into();
+        let span = variant.ident.span();
         let name = variant.ident.clone();
         let components = Self::parse_attrs(&variant.attrs)?;
         let path = match &variant.fields {
@@ -121,7 +121,7 @@ impl std::fmt::Debug for Service {
         f.write_str(&format!(
             "Service < name: {}, path: {}, components: {:?} >",
             self.name,
-            self.path.to_token_stream().to_string(),
+            self.path.to_token_stream(),
             self.components
         ))
     }

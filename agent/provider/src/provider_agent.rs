@@ -380,7 +380,7 @@ fn get_prices(
         .get_initial_price()
         .ok_or_else(|| anyhow!("Preset [{}] is missing the initial price", preset.name))?;
     let prices = pricing_model
-        .prices(&preset)
+        .prices(preset)
         .into_iter()
         .filter_map(|(prop, v)| match offer_usage_vec.contains(&prop.as_str()) {
             true => Some((prop, v)),
@@ -487,10 +487,8 @@ impl Handler<Initialize> for ProviderAgent {
                         {
                             let mut state = preset_state.lock().unwrap();
                             new_names.retain(|n| {
-                                if state.active.contains(n) {
-                                    if !updated.contains(n) {
-                                        return false;
-                                    }
+                                if state.active.contains(n) && !updated.contains(n) {
+                                    return false;
                                 }
                                 true
                             });

@@ -4,8 +4,8 @@ use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-const LOCK_FILE_EXT: &'static str = "lock";
-const PID_FILE_EXT: &'static str = "pid";
+const LOCK_FILE_EXT: &str = "lock";
+const PID_FILE_EXT: &str = "pid";
 
 pub struct ProcLock {
     dir: PathBuf,
@@ -81,7 +81,7 @@ impl ProcLock {
 
     pub fn read_pid(&self) -> Result<u32> {
         let (lock_file, _) = self.lock_file(&self.name)?;
-        if let Ok(_) = lock_file.try_lock_exclusive() {
+        if lock_file.try_lock_exclusive().is_ok() {
             let _ = lock_file.unlock();
             bail!("{} is not running", self.name);
         }

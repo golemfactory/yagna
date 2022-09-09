@@ -61,7 +61,7 @@ fn connection_customizer(
             let mut lock_cnt = self.0.write().unwrap();
             *lock_cnt += 1;
             log::trace!("on_acquire connection [rw:{}]", *lock_cnt);
-            Ok(conn.batch_execute(CONNECTION_INIT).map_err(|e| {
+            conn.batch_execute(CONNECTION_INIT).map_err(|e| {
                 log::error!(
                     "error: {:?}, on: {}, [lock: {}]",
                     e,
@@ -69,7 +69,7 @@ fn connection_customizer(
                     *lock_cnt
                 );
                 diesel::r2d2::Error::QueryError(e)
-            })?)
+            })
         }
 
         fn on_release(&self, _conn: SqliteConnection) {
@@ -97,7 +97,7 @@ impl DbExecutor {
         let tx_lock: TxLock = Arc::new(RwLock::new(0));
 
         let builder = Pool::builder().connection_customizer(Box::new(connection_customizer(
-            database_url.clone(),
+            database_url,
             tx_lock.clone(),
         )));
 

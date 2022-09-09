@@ -40,7 +40,7 @@ pub struct BreakAgreement {
     pub reason: BreakReason,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum ClosingCause {
     ApprovalFail,
     Termination,
@@ -505,7 +505,9 @@ impl Handler<BreakAgreement> for TaskManager {
 
             start_transition(&actx.myself, &msg.agreement_id, new_state.clone()).await?;
 
-            let result = async move {
+            
+
+            async move {
                 let msg = AgreementBroken::from(msg.clone());
                 actx.runner.send(msg.clone()).await??;
                 // Notify market, but we don't care about result.
@@ -520,9 +522,7 @@ impl Handler<BreakAgreement> for TaskManager {
                 log::info!("Agreement [{}] cleanup finished.", msg.agreement_id);
                 Ok(())
             }
-            .await;
-
-            result
+            .await
         }
         .map_err(move |error: Error| log::error!("Can't break agreement. Error: {}", error));
 
@@ -580,7 +580,7 @@ async fn start_transition(
         agreement_id: agreement_id.to_string(),
         new_state,
     };
-    Ok(myself.clone().send(msg).await??)
+    myself.clone().send(msg).await?
 }
 
 async fn finish_transition(
@@ -592,7 +592,7 @@ async fn finish_transition(
         agreement_id: agreement_id.to_string(),
         new_state,
     };
-    Ok(myself.clone().send(msg).await??)
+    myself.clone().send(msg).await?
 }
 
 /// Helper struct storing TaskManager sub-actors addresses to use in async functions.

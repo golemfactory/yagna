@@ -51,7 +51,7 @@ impl std::str::FromStr for NodeOrAlias {
 impl NodeOrAlias {
     async fn resolve(&self) -> anyhow::Result<NodeId> {
         match self {
-            NodeOrAlias::Node(node_id) => Ok(node_id.clone()),
+            NodeOrAlias::Node(node_id) => Ok(*node_id),
             NodeOrAlias::Alias(alias) => {
                 let id = bus::service(identity::BUS_ID)
                     .send(identity::Get::ByAlias(alias.to_owned()))
@@ -180,7 +180,7 @@ impl IdentityCommand {
                 let mut identities: Vec<identity::IdentityInfo> = bus::service(identity::BUS_ID)
                     .send(identity::List::default())
                     .await
-                    .map_err(|e| anyhow::Error::msg(e))
+                    .map_err(anyhow::Error::msg)
                     .context("sending id List to BUS")?
                     .unwrap();
                 identities.sort_by_key(|id| Reverse((id.is_default, id.alias.clone())));
@@ -211,7 +211,7 @@ impl IdentityCommand {
                     bus::service(identity::BUS_ID)
                         .send(command)
                         .await
-                        .map_err(|e| anyhow::Error::msg(e))?,
+                        .map_err(anyhow::Error::msg)?,
                 )
             }
             IdentityCommand::PubKey { node_or_alias } => {
@@ -220,7 +220,7 @@ impl IdentityCommand {
                     bus::service(identity::BUS_ID)
                         .send(identity::GetPubKey(node_id))
                         .await
-                        .map_err(|e| anyhow::Error::msg(e))?
+                        .map_err(anyhow::Error::msg)?
                         .map(|v| {
                             let key = v.to_hex::<String>();
                             serde_json::json! {{ "pubKey": key }}
@@ -263,7 +263,7 @@ impl IdentityCommand {
                     bus::service(identity::BUS_ID)
                         .send(identity::Sign { node_id, payload })
                         .await
-                        .map_err(|e| anyhow::Error::msg(e))?
+                        .map_err(anyhow::Error::msg)?
                         .map(|v| {
                             let sig = v.to_hex::<String>();
                             serde_json::json! {{ "sig": sig }}
@@ -283,7 +283,7 @@ impl IdentityCommand {
                             .with_default(*set_default),
                     )
                     .await
-                    .map_err(|e| anyhow::Error::msg(e))?;
+                    .map_err(anyhow::Error::msg)?;
                 CommandOutput::object(id)
             }
             IdentityCommand::Create {
@@ -315,7 +315,7 @@ impl IdentityCommand {
                         from_keystore: Some(key_file),
                     })
                     .await
-                    .map_err(|e| anyhow::Error::msg(e))?;
+                    .map_err(anyhow::Error::msg)?;
                 CommandOutput::object(id)
             }
             IdentityCommand::Lock {
@@ -325,9 +325,9 @@ impl IdentityCommand {
                 let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
                 let password = if *new_password {
                     let password: String =
-                        rpassword::read_password_from_tty(Some("Password: "))?.into();
+                        rpassword::read_password_from_tty(Some("Password: "))?;
                     let password2: String =
-                        rpassword::read_password_from_tty(Some("Confirm password: "))?.into();
+                        rpassword::read_password_from_tty(Some("Confirm password: "))?;
                     if password != password2 {
                         anyhow::bail!("Password and confirmation do not match.")
                     }
@@ -339,7 +339,7 @@ impl IdentityCommand {
                     bus::service(identity::BUS_ID)
                         .send(identity::Lock::with_id(node_id).with_set_password(password))
                         .await
-                        .map_err(|e| anyhow::Error::msg(e))?,
+                        .map_err(anyhow::Error::msg)?,
                 )
             }
             IdentityCommand::Unlock { node_or_alias } => {
@@ -349,7 +349,7 @@ impl IdentityCommand {
                     bus::service(identity::BUS_ID)
                         .send(identity::Unlock::with_id(node_id, password))
                         .await
-                        .map_err(|e| anyhow::Error::msg(e))?,
+                        .map_err(anyhow::Error::msg)?,
                 )
             }
             IdentityCommand::Drop { node_or_alias } => {
@@ -357,7 +357,7 @@ impl IdentityCommand {
                 let id = bus::service(identity::BUS_ID)
                     .send(command)
                     .await
-                    .map_err(|e| anyhow::Error::msg(e))?;
+                    .map_err(anyhow::Error::msg)?;
                 let id = match id {
                     Ok(Some(v)) => v,
                     Err(e) => return CommandOutput::object(Err::<(), _>(e)),
@@ -371,7 +371,7 @@ impl IdentityCommand {
                     bus::service(identity::BUS_ID)
                         .send(identity::DropId::with_id(id.node_id))
                         .await
-                        .map_err(|e| anyhow::Error::msg(e))?,
+                        .map_err(anyhow::Error::msg)?,
                 )
             }
             IdentityCommand::Export {
@@ -382,7 +382,7 @@ impl IdentityCommand {
                 let key_file = bus::service(identity::BUS_ID)
                     .send(identity::GetKeyFile(node_id))
                     .await?
-                    .map_err(|e| anyhow::Error::msg(e))?;
+                    .map_err(anyhow::Error::msg)?;
 
                 match file_path {
                     Some(file) => {
