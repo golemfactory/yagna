@@ -73,7 +73,7 @@ impl ZksyncDao {
             gas: utils::u256_to_big_endian_hex(gas_amount),
             order_id: order_id.to_string(),
             payment_due_date: msg.due_date().naive_utc(),
-            sender: msg.sender().clone(),
+            sender: msg.sender(),
             recipient: recipient.clone(),
             status: PAYMENT_STATUS_NOT_YET,
             tx_id: None,

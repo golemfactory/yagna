@@ -132,6 +132,8 @@ async fn monitor(extension: Extension, ctx: ExtensionCtx) {
     let _ = futures::future::select(interrupted, restart_loop).await;
 }
 
+//TODO rafał
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]
 pub enum ExtensionCtx {
     Cli {
@@ -150,10 +152,7 @@ pub enum ExtensionCtx {
 
 impl ExtensionCtx {
     pub fn is_autostart(&self) -> bool {
-        match self {
-            Self::Autostart { .. } => true,
-            _ => false,
-        }
+        matches!(self, Self::Autostart { .. })
     }
 
     fn set_env(&self, command: &mut Command) -> anyhow::Result<()> {

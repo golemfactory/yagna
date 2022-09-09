@@ -183,14 +183,11 @@ impl<S: 'static> Provider<S, ()> for ServiceContext {
 }
 
 impl ServiceContext {
-    fn make_entry<S: 'static>(path: &PathBuf, name: &str) -> Result<(TypeId, DbExecutor)> {
+    fn make_entry<S: 'static>(path: &Path, name: &str) -> Result<(TypeId, DbExecutor)> {
         Ok((TypeId::of::<S>(), DbExecutor::from_data_dir(path, name)?))
     }
 
-    fn make_mixed_entry<S: 'static>(
-        path: &PathBuf,
-        name: &str,
-    ) -> Result<(TypeId, DbMixedExecutor)> {
+    fn make_mixed_entry<S: 'static>(path: &Path, name: &str) -> Result<(TypeId, DbMixedExecutor)> {
         let disk_db = DbExecutor::from_data_dir(path, name)?;
         let ram_db = DbExecutor::in_memory(name)?;
 

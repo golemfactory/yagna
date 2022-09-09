@@ -20,10 +20,10 @@ pub fn big_dec_to_big_uint(v: BigDecimal) -> Result<BigUint, GenericError> {
     let v = v * &(*PRECISION);
     let v = v
         .to_bigint()
-        .ok_or(GenericError::new("Failed to convert to bigint"))?;
+        .ok_or_else(|| GenericError::new("Failed to convert to bigint"))?;
     let v = v
         .to_biguint()
-        .ok_or(GenericError::new("Failed to convert to biguint"))?;
+        .ok_or_else(|| GenericError::new("Failed to convert to biguint"))?;
     Ok(v)
 }
 
@@ -43,8 +43,8 @@ pub fn pack_up(amount: &BigUint) -> BigUint {
 
 fn increase_least_significant_digit(amount: &BigUint) -> BigUint {
     let digits = amount.to_radix_le(10);
-    for i in 0..digits.len() {
-        if digits[i] != 0 {
+    for (i, digit) in digits.iter().enumerate() {
+        if *digit != 0 {
             return amount + BigUint::from(10u32).pow(i as u32);
         }
     }

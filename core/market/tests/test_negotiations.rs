@@ -939,11 +939,11 @@ async fn test_proposal_events_last() {
     assert_eq!(events.len(), 2);
     match events[0] {
         RequestorEvent::ProposalRejectedEvent { .. } => {}
-        _ => assert!(false, "Invalid first event_type: {:#?}", events[0]),
+        _ => panic!("Invalid first event_type: {:#?}", events[0]),
     }
     match events[events.len() - 1] {
         RequestorEvent::ProposalEvent { .. } => {}
-        _ => assert!(false, "Invalid last event_type: {:#?}", events[0]),
+        _ => panic!("Invalid last event_type: {:#?}", events[0]),
     }
 }
 
