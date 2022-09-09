@@ -45,12 +45,12 @@ impl WriteObj {
             .pointer(format!("/golem/com/payment/platform/{}/address", payment_platform).as_str())
             .as_typed(Value::as_str)
             .map(ToOwned::to_owned)
-            .unwrap_or(provider_id.to_string().to_lowercase());
+            .unwrap_or_else(|_| provider_id.to_string().to_lowercase());
         let payer_addr = demand_properties
             .pointer(format!("/golem/com/payment/platform/{}/address", payment_platform).as_str())
             .as_typed(Value::as_str)
             .map(ToOwned::to_owned)
-            .unwrap_or(requestor_id.to_string().to_lowercase());
+            .unwrap_or_else(|_| requestor_id.to_string().to_lowercase());
 
         Self {
             id: agreement.agreement_id,

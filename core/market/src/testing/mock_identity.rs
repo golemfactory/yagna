@@ -38,7 +38,7 @@ impl MockIdentity {
         let mut identities = HashMap::new();
         identities
             .entry(name.to_string())
-            .or_insert(default.clone());
+            .or_insert_else(|| default.clone());
 
         let mock_identity = MockIdentityInner {
             default,

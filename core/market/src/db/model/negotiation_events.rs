@@ -32,7 +32,8 @@ pub enum EventError {
     strum_macros::Display,
     AsExpression,
     FromSqlRow,
-    PartialEq, Eq,
+    PartialEq,
+    Eq,
     Debug,
     Clone,
     Copy,
@@ -142,7 +143,7 @@ impl MarketEvent {
             .get_proposal(&self.artifact_id)
             .await
             .map_err(|e| EventError::GetError(self.artifact_id.clone(), e.to_string()))?
-            .ok_or(EventError::ProposalNotFound(self.artifact_id.clone()))?;
+            .ok_or_else(|| EventError::ProposalNotFound(self.artifact_id.clone()))?;
 
         Ok(prop.into_client()?)
     }
@@ -156,7 +157,7 @@ impl MarketEvent {
             .select(&self.artifact_id, None, Utc::now().naive_utc())
             .await
             .map_err(|e| EventError::GetError(self.artifact_id.clone(), e.to_string()))?
-            .ok_or(EventError::AgreementNotFound(self.artifact_id.clone()))?;
+            .ok_or_else(|| EventError::AgreementNotFound(self.artifact_id.clone()))?;
 
         Ok(agreement.into_client()?)
     }

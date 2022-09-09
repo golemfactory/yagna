@@ -123,10 +123,10 @@ impl NegotiationApi {
             signature: agreement
                 .approved_signature
                 .clone()
-                .ok_or(AgreementProtocolError::NotSigned(id.clone()))?,
+                .ok_or_else(|| AgreementProtocolError::NotSigned(id.clone()))?,
             approved_ts: agreement
                 .approved_ts
-                .ok_or(AgreementProtocolError::NoApprovalTimestamp(id.clone()))?,
+                .ok_or_else(|| AgreementProtocolError::NoApprovalTimestamp(id.clone()))?,
         };
         let net_send_fut = net::from(agreement.provider_id)
             .to(agreement.requestor_id)

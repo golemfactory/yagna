@@ -74,7 +74,7 @@ async fn get_agreement(
         .select(&agreement_id, None, now)
         .await
         .map_err(|e| RpcMessageError::Market(e.to_string()))?
-        .ok_or(RpcMessageError::NotFound(msg.agreement_id.clone()))?
+        .ok_or_else(|| RpcMessageError::NotFound(msg.agreement_id.clone()))?
         .into_client()
         .map_err(|e| RpcMessageError::Market(e.to_string()))?)
 }

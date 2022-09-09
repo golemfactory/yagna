@@ -66,7 +66,7 @@ impl MockNet {
             .nodes
             .remove(node_id)
             .map(|_| ())
-            .ok_or(anyhow::anyhow!("node not registered: {}", node_id))
+            .ok_or_else(|| anyhow::anyhow!("node not registered: {}", node_id))
     }
 
     async fn translate_address(&self, address: String) -> Result<(NodeId, String)> {
