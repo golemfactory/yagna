@@ -192,6 +192,7 @@ pub struct TransferSink<T, E> {
 }
 
 impl<T, E> TransferSink<T, E> {
+    #[allow(clippy::type_complexity)]
     pub fn create(
         channel_size: usize,
     ) -> (Self, Receiver<Result<T, E>>, oneshot::Sender<Result<(), E>>) {

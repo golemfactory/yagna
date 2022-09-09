@@ -50,13 +50,13 @@ impl Iterator for Retry {
         self.backoff *= self.backoff_factor;
         let duration = Duration::from_secs_f32(self.backoff);
 
-        if self.count > 0 {
-            self.count -= 1;
-            Some(duration)
-        } else if self.count < 0 {
-            Some(duration)
-        } else {
-            None
+        match Ord::cmp(&self.count, &0) {
+            std::cmp::Ordering::Less => Some(duration),
+            std::cmp::Ordering::Equal => None,
+            std::cmp::Ordering::Greater => {
+                self.count -= 1;
+                Some(duration)
+            }
         }
     }
 }
@@ -65,26 +65,26 @@ fn can_retry(err: &Error) -> bool {
     match err {
         Error::HttpError(e) => match e {
             HttpError::Timeout(_) | HttpError::Connect(_) | HttpError::Server(_) => true,
-            HttpError::Io(kind) => match kind {
+            HttpError::Io(kind) => matches!(
+                kind,
                 ErrorKind::ConnectionReset
-                | ErrorKind::ConnectionAborted
-                | ErrorKind::NotConnected
-                | ErrorKind::AddrNotAvailable
-                | ErrorKind::BrokenPipe
-                | ErrorKind::TimedOut
-                | ErrorKind::Interrupted => true,
-                _ => false,
-            },
+                    | ErrorKind::ConnectionAborted
+                    | ErrorKind::NotConnected
+                    | ErrorKind::AddrNotAvailable
+                    | ErrorKind::BrokenPipe
+                    | ErrorKind::TimedOut
+                    | ErrorKind::Interrupted
+            ),
             _ => false,
         },
-        Error::Gsb(e) => match e {
+        Error::Gsb(e) => matches!(
+            e,
             BusError::Timeout(_)
-            | BusError::Closed(_)
-            | BusError::ConnectionFail(_, _)
-            | BusError::ConnectionTimeout(_)
-            | BusError::NoEndpoint(_) => true,
-            _ => false,
-        },
+                | BusError::Closed(_)
+                | BusError::ConnectionFail(_, _)
+                | BusError::ConnectionTimeout(_)
+                | BusError::NoEndpoint(_)
+        ),
         _ => false,
     }
 }

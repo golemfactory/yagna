@@ -77,7 +77,7 @@ impl<'s> TryFrom<&'s str> for ArchiveFormat {
     }
 }
 
-impl<'s> TryFrom<&TransferArgs> for ArchiveFormat {
+impl TryFrom<&TransferArgs> for ArchiveFormat {
     type Error = Error;
 
     fn try_from(args: &TransferArgs) -> Result<Self, Self::Error> {
@@ -391,44 +391,40 @@ where
     let path = path.as_ref();
     let mut reader = TokioAsyncRead(stream.into_async_read());
 
-    loop {
-        if let Some(mut result) = read_zipfile_from_stream(&mut reader)
-            .await
-            .map_err(io_error)?
-        {
-            let name = result.sanitized_name();
-            let size = result.size() as usize;
-            let file_path = path.join(&name);
+    while let Some(mut result) = read_zipfile_from_stream(&mut reader)
+        .await
+        .map_err(io_error)?
+    {
+        let name = result.sanitized_name();
+        let size = result.size() as usize;
+        let file_path = path.join(&name);
 
-            let _ = evt_sender
-                .send(FileEvent::Processing {
-                    name: name.clone(),
-                    size,
-                    is_dir: result.is_dir(),
-                })
-                .await;
+        let _ = evt_sender
+            .send(FileEvent::Processing {
+                name: name.clone(),
+                size,
+                is_dir: result.is_dir(),
+            })
+            .await;
 
-            if result.is_dir() {
-                create_dir_all(file_path)?;
-            } else {
-                if let Some(parent) = file_path.parent() {
-                    create_dir_all(parent)?;
-                }
-                let mut file = OpenOptions::new()
-                    .create(true)
-                    .write(true)
-                    .truncate(true)
-                    .open(file_path)
-                    .await?;
-                copy(&mut result, &mut file).await?;
-                file.flush().await?;
-            }
-
-            let _ = evt_sender.send(FileEvent::Finished { name }).await;
-            result.exhaust().await;
+        if result.is_dir() {
+            create_dir_all(file_path)?;
         } else {
-            break;
+            if let Some(parent) = file_path.parent() {
+                create_dir_all(parent)?;
+            }
+            let mut file = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(file_path)
+                .await?;
+            copy(&mut result, &mut file).await?;
+            file.flush().await?;
         }
+
+        let _ = evt_sender.send(FileEvent::Finished { name }).await;
+        result.exhaust().await;
     }
 
     Ok(())
@@ -456,10 +452,7 @@ where
         let evt = FileEvent::Processing {
             name: name.clone(),
             size: header.size().ok().unwrap_or(0) as usize,
-            is_dir: match header.entry_type() {
-                tokio_tar::EntryType::Directory => true,
-                _ => false,
-            },
+            is_dir: matches!(header.entry_type(), tokio_tar::EntryType::Directory),
         };
         let _ = evt_sender.send(evt).await;
 
@@ -471,9 +464,7 @@ where
     Ok(())
 }
 
-fn codec_stream<'a, R>(
-    s: R,
-) -> Pin<Box<dyn Stream<Item = io::Result<Bytes>> + Send + Sync + 'static>>
+fn codec_stream<R>(s: R) -> Pin<Box<dyn Stream<Item = io::Result<Bytes>> + Send + Sync + 'static>>
 where
     R: AsyncRead + Send + Sync + Unpin + 'static,
 {

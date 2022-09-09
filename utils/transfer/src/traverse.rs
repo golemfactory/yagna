@@ -261,21 +261,21 @@ mod tests {
         let dir = tempdir::TempDir::new("test-glob")?;
         create_files(dir.path());
 
-        let items = Builder::new()
+        let items_len = Builder::new()
             .include("*.txt")
             .build()
             .traverse(dir.path())?
-            .collect::<Vec<_>>();
+            .count();
 
-        assert_eq!(items.len(), 3);
+        assert_eq!(items_len, 3);
 
-        let items = Builder::new()
+        let items_len = Builder::new()
             .include("**/*.txt")
             .build()
             .traverse(dir.path())?
-            .collect::<Vec<_>>();
+            .count();
 
-        assert_eq!(items.len(), 5);
+        assert_eq!(items_len, 5);
 
         Ok(())
     }
@@ -285,12 +285,9 @@ mod tests {
         let dir = tempdir::TempDir::new("test-glob")?;
         create_files(dir.path());
 
-        let items = Builder::new()
-            .build()
-            .traverse(dir.path())?
-            .collect::<Vec<_>>();
+        let items_len = Builder::new().build().traverse(dir.path())?.count();
 
-        assert_eq!(items.len(), 3 + 9);
+        assert_eq!(items_len, 3 + 9);
         Ok(())
     }
 
@@ -339,29 +336,29 @@ mod tests {
         let dir = tempdir::TempDir::new("test-glob").unwrap();
         create_files(dir.path());
 
-        let entries = Builder::new()
+        let entries_len = Builder::new()
             .include("**/*.txt")
             .depth(0)
             .build()
             .traverse(dir.path())?
-            .collect::<Vec<_>>();
-        assert_eq!(entries.len(), 3_usize);
+            .count();
+        assert_eq!(entries_len, 3_usize);
 
-        let entries = Builder::new()
+        let entries_len = Builder::new()
             .include("**/*.txt")
             .depth(1)
             .build()
             .traverse(dir.path())?
-            .collect::<Vec<_>>();
-        assert_eq!(entries.len(), 4_usize);
+            .count();
+        assert_eq!(entries_len, 4_usize);
 
-        let entries = Builder::new()
+        let entries_len = Builder::new()
             .include("**/*.txt")
             .depth(2)
             .build()
             .traverse(dir.path())?
-            .collect::<Vec<_>>();
-        assert_eq!(entries.len(), 5_usize);
+            .count();
+        assert_eq!(entries_len, 5_usize);
 
         Ok(())
     }
