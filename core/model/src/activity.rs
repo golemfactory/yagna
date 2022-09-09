@@ -59,7 +59,7 @@ pub struct CreateResponse {
     pub credentials: Option<local::Credentials>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum CreateResponseCompat {
     ActivityId(String),
