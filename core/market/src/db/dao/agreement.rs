@@ -180,7 +180,7 @@ impl<'c> AgreementDao<'c> {
         let proposal_id = agreement.offer_proposal_id.clone();
         readonly_transaction(self.ram_pool, move |conn| {
             if has_counter_proposal(conn, &proposal_id)? {
-                return Err(SaveAgreementError::ProposalCountered(proposal_id.clone()));
+                return Err(SaveAgreementError::ProposalCountered(proposal_id));
             }
             Ok(())
         })

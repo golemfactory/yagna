@@ -43,7 +43,7 @@ pub fn generate_backtraced_name(level: Option<usize>) -> String {
         log::trace!("Generated name: {} level: {:?} BT: {:#?}", name, level, bt);
         return name;
     }
-    let u4 = uuid::Uuid::new_v4().to_string().to_string();
+    let u4 = uuid::Uuid::new_v4().to_string();
     log::error!(
         "No backtrace support. Generating default name from UUIDv4. uuid4={}, bt={:#?}",
         u4,

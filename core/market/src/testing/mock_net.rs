@@ -48,7 +48,7 @@ impl MockNet {
 
     pub fn register_node(&self, node_id: &NodeId, prefix: &str) {
         // Only two first components
-        let mut iter = prefix.split("/").fuse();
+        let mut iter = prefix.split('/').fuse();
         let prefix = match (iter.next(), iter.next(), iter.next()) {
             (Some(""), Some(test_name), Some(name)) => format!("/{}/{}", test_name, name),
             _ => panic!("[MockNet] Can't register prefix {}", prefix),
@@ -75,7 +75,7 @@ impl MockNet {
             Err(e) => Err(Error::GsbBadRequest(e.to_string()))?,
         };
 
-        let mut iter = to_addr.split("/").fuse();
+        let mut iter = to_addr.split('/').fuse();
         let dst_id = match (iter.next(), iter.next(), iter.next()) {
             (Some(""), Some("net"), Some(dst_id)) => dst_id,
             _ => panic!("[MockNet] Invalid destination address {}", to_addr),
@@ -209,7 +209,7 @@ impl MockNetInner {
 
 // Copied from core/net/api.rs
 pub(crate) fn parse_from_addr(from_addr: &str) -> Result<(NodeId, String)> {
-    let mut it = from_addr.split("/").fuse();
+    let mut it = from_addr.split('/').fuse();
     if let (Some(""), Some("from"), Some(from_node_id), Some("to"), Some(to_node_id)) =
         (it.next(), it.next(), it.next(), it.next(), it.next())
     {

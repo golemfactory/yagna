@@ -163,8 +163,8 @@ impl<'a> PropertyValue<'a> {
     // Note: Only str1 may contain wildcard
     // TODO my be sensible to move the Regex building to the point where property is parsed...
     fn str_equal_with_wildcard(str1: &str, str2: &str) -> bool {
-        if str1.contains("*") {
-            let regex_text = format!("^{}$", str1.replace("*", ".*"));
+        if str1.contains('*') {
+            let regex_text = format!("^{}$", str1.replace('*', ".*"));
             match Regex::new(&regex_text) {
                 Ok(regex) => regex.is_match(str2),
                 Err(_error) => false,

@@ -290,34 +290,34 @@ impl NegotiationApi {
         ServiceBinder::new(&provider::proposal_addr(public_prefix), &(), self.clone())
             .bind_with_processor(
                 move |_, myself, caller: String, msg: InitialProposalReceived| {
-                    let myself = myself.clone();
+                    let myself = myself;
                     myself.on_initial_proposal_received(caller, msg)
                 },
             )
             .bind_with_processor(move |_, myself, caller: String, msg: ProposalReceived| {
-                let myself = myself.clone();
+                let myself = myself;
                 myself.on_proposal_received(caller, msg)
             })
             .bind_with_processor(move |_, myself, caller: String, msg: ProposalRejected| {
-                let myself = myself.clone();
+                let myself = myself;
                 myself.on_proposal_rejected(caller, msg)
             });
 
         ServiceBinder::new(&provider::agreement_addr(public_prefix), &(), self.clone())
             .bind_with_processor(move |_, myself, caller: String, msg: AgreementReceived| {
-                let myself = myself.clone();
+                let myself = myself;
                 myself.on_agreement_received(caller, msg)
             })
             .bind_with_processor(move |_, myself, caller: String, msg: AgreementCancelled| {
-                let myself = myself.clone();
+                let myself = myself;
                 myself.on_agreement_cancelled(caller, msg)
             })
             .bind_with_processor(move |_, myself, caller: String, msg: AgreementTerminated| {
-                let myself = myself.clone();
+                let myself = myself;
                 myself.on_agreement_terminated(caller, msg)
             })
             .bind_with_processor(move |_, myself, caller: String, msg: AgreementCommitted| {
-                let myself = myself.clone();
+                let myself = myself;
                 myself.on_agreement_committed(caller, msg)
             });
         Ok(())

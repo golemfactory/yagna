@@ -244,7 +244,7 @@ impl Discovery {
 
         ServiceBinder::new(&get_offers_addr(public_prefix), &(), self.clone()).bind_with_processor(
             move |_, myself, caller: String, msg: RetrieveOffers| {
-                let myself = myself.clone();
+                let myself = myself;
                 myself.on_get_remote_offers(caller, msg)
             },
         );

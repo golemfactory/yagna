@@ -105,7 +105,7 @@ impl MarketService {
         )?;
         let requestor_engine = RequestorBroker::new(
             db.clone(),
-            store.clone(),
+            store,
             listeners.proposal_receiver,
             agreement_notifier,
             config.clone(),
