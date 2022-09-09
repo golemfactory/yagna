@@ -161,7 +161,7 @@ fn get_sign_tx(account: SecretKey) -> impl Fn(Vec<u8>) -> Pin<Box<dyn Future<Out
 }
 
 //TODO Rafał
-#[allow(clippy::large_enum_variant)]
+#[allow(clippy::large_enum_variant, clippy::type_complexity)]
 fn fake_sign_tx(sign_tx: Box<dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>>) {
     let sign_tx: Arc<dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>>>>> = sign_tx.into();
     bus::bind(identity::BUS_ID, move |msg: identity::Sign| {

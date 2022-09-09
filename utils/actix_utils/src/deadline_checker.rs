@@ -225,6 +225,8 @@ impl Actor for DeadlineChecker {
     type Context = Context<Self>;
 }
 
+//TODO Rafał
+#[allow(clippy::type_complexity)]
 struct DeadlineFun {
     callback: Box<dyn FnMut(DeadlineElapsed) -> Pin<Box<dyn Future<Output = ()>>> + 'static>,
 }

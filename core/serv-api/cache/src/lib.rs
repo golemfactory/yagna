@@ -10,6 +10,8 @@ pub trait ValueResolver {
     type Value: Clone;
     type Error;
 
+    //TODO Rafał
+    #[allow(clippy::type_complexity)]
     fn resolve<'a>(
         &self,
         key: &Self::Key,
