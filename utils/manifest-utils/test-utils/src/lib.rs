@@ -1,7 +1,7 @@
 use std::fs::{self, File};
+use std::str;
 use std::sync::Once;
 use std::{collections::HashSet, path::PathBuf};
-use std::str;
 
 use openssl::hash::MessageDigest;
 use openssl::pkey::PKey;
@@ -113,7 +113,8 @@ impl TestResources {
         password.push("pass.txt");
         let password = fs::read(password).expect("Can read password file");
         let password = str::from_utf8(&password).unwrap().trim(); // just in case it got newline at the end
-        let keypair = Rsa::private_key_from_pem_passphrase(&signing_key, password.as_bytes()).expect("Can parse signing key");
+        let keypair = Rsa::private_key_from_pem_passphrase(&signing_key, password.as_bytes())
+            .expect("Can parse signing key");
         let keypair = PKey::from_rsa(keypair).unwrap();
         let mut signer = Signer::new(MessageDigest::sha256(), &keypair).unwrap();
         signer.update(data_b64).unwrap();

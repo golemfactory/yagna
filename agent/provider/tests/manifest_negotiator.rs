@@ -110,17 +110,27 @@ fn manifest_negotiator_test(
 ) {
     let comp_manifest_b64 = create_comp_manifest_b64(urls);
 
-    let signature_b64 =  match signing_key {
-        Some(signing_key) => Some(MANIFEST_TEST_RESOURCES.sign_data(comp_manifest_b64.as_bytes(), signing_key)),
+    let signature_b64 = match signing_key {
+        Some(signing_key) => {
+            Some(MANIFEST_TEST_RESOURCES.sign_data(comp_manifest_b64.as_bytes(), signing_key))
+        }
         None => None,
     };
 
     let cert_b64 = match cert {
         Some(cert) => Some(cert_file_to_cert_b64(cert)),
-        None => None
+        None => None,
     };
 
-    manifest_negotiator_test_encoded_manifest_sign_and_cert(whitelist, comp_manifest_b64, offer, signature_b64, signature_alg, cert_b64, error_msg)
+    manifest_negotiator_test_encoded_manifest_sign_and_cert(
+        whitelist,
+        comp_manifest_b64,
+        offer,
+        signature_b64,
+        signature_alg,
+        cert_b64,
+        error_msg,
+    )
 }
 
 #[test_case(
@@ -151,9 +161,17 @@ fn manifest_negotiator_test_encoded_sign_and_cert(
 
     let cert_b64 = match cert {
         Some(cert) => Some(cert_file_to_cert_b64(cert)),
-        None => None
+        None => None,
     };
-    manifest_negotiator_test_encoded_manifest_sign_and_cert(whitelist, comp_manifest_b64, offer, signature_b64, signature_alg, cert_b64, error_msg)
+    manifest_negotiator_test_encoded_manifest_sign_and_cert(
+        whitelist,
+        comp_manifest_b64,
+        offer,
+        signature_b64,
+        signature_alg,
+        cert_b64,
+        error_msg,
+    )
 }
 
 fn manifest_negotiator_test_encoded_manifest_sign_and_cert(
@@ -212,7 +230,6 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert(
         assert_eq!(negotiation_result, NegotiationResult::Ready { offer });
     }
 }
-
 
 fn cert_file_to_cert_b64(cert_file: &str) -> String {
     let (resource_cert_dir, _) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
