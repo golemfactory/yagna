@@ -93,7 +93,7 @@ fn convert_to_eth_byte_order(signature: Vec<u8>) -> Vec<u8> {
     result.extend_from_slice(r);
     result.extend_from_slice(s);
     result.push(if v % 2 == 1 { 0x1c } else { 0x1b });
-    result.into()
+    result
 }
 
 fn sign_tx(

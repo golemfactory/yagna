@@ -14,7 +14,7 @@ where
     let stream = FramedRead::new(read, BytesCodec::new())
         .filter_map(|result| async { result.ok() })
         .ready_chunks(16)
-        .map(|v| v.into_iter().map(|b| b.to_vec()).flatten().collect())
+        .map(|v| v.into_iter().flat_map(|b| b.to_vec()).collect())
         .map(f)
         .map(Ok);
 
@@ -67,11 +67,10 @@ impl CapturedOutput {
 
     pub fn output_string(&self) -> Option<String> {
         self.output()
-            .map(|o| match o {
+            .and_then(|o| match o {
                 CommandOutput::Bin(b) => vec_to_string(b),
                 CommandOutput::Str(s) => Some(s),
             })
-            .flatten()
     }
 
     pub fn write<B: AsRef<[u8]> + ?Sized>(&mut self, bytes: &B) -> Option<CommandOutput> {

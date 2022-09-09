@@ -24,7 +24,7 @@ pub fn big_dec_to_u256(v: &BigDecimal) -> Result<U256, GenericError> {
         .to_bigint()
         .ok_or(GenericError::new("Failed to convert to bigint"))?;
     let v = &v.to_string();
-    Ok(U256::from_dec_str(v).map_err(GenericError::new)?)
+    U256::from_dec_str(v).map_err(GenericError::new)
 }
 
 pub fn big_dec_gwei_to_u256(v: BigDecimal) -> Result<U256, GenericError> {
@@ -33,7 +33,7 @@ pub fn big_dec_gwei_to_u256(v: BigDecimal) -> Result<U256, GenericError> {
         .to_bigint()
         .ok_or(GenericError::new("Failed to convert to bigint"))?;
     let v = &v.to_string();
-    Ok(U256::from_dec_str(v).map_err(GenericError::new)?)
+    U256::from_dec_str(v).map_err(GenericError::new)
 }
 
 pub fn u256_to_big_dec(v: U256) -> Result<BigDecimal, GenericError> {

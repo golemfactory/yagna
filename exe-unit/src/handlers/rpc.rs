@@ -63,7 +63,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetState>> for ExeUnit<R> {
         self.ctx.verify_activity_id(&msg.activity_id)?;
 
         Ok(ActivityState {
-            state: self.state.inner.clone(),
+            state: self.state.inner,
             reason: None,
             error_message: None,
         })
@@ -156,7 +156,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
         let duration = Duration::from_secs_f32(msg.timeout.unwrap_or(0.));
         let notifier = batch.notifier.clone();
 
-        let idx = msg.command_index.clone();
+        let idx = msg.command_index;
         let batch_id = msg.batch_id.clone();
 
         let fut = async move {

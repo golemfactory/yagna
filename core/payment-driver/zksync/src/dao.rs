@@ -136,7 +136,7 @@ impl ZksyncDao {
     pub async fn transaction_confirmed(&self, tx_id: &str) -> Vec<PaymentEntity> {
         if let Err(e) = self
             .transaction()
-            .update_tx_status(tx_id.to_string(), TransactionStatus::Confirmed.into(), None)
+            .update_tx_status(tx_id.to_string(), TransactionStatus::Confirmed, None)
             .await
         {
             log::error!("Failed to update tx status for {:?} : {:?}", tx_id, e)
@@ -184,7 +184,7 @@ impl ZksyncDao {
             .transaction()
             .update_tx_status(
                 tx_id.to_string(),
-                TransactionStatus::ErrorOnChain.into(),
+                TransactionStatus::ErrorOnChain,
                 Some(err.to_string()),
             )
             .await

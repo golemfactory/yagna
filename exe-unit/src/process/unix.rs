@@ -119,8 +119,7 @@ impl StatStub {
             it: &mut I,
         ) -> Result<T, SystemError> {
             it.next()
-                .map(|s| s.parse().ok())
-                .flatten()
+                .and_then(|s| s.parse().ok())
                 .ok_or_else(|| SystemError::Error("proc stat: invalid entry".into()))
         }
 
@@ -261,7 +260,7 @@ pub fn getrusage(resource: i32) -> Result<Usage, SystemError> {
     let ret = unsafe { libc::getrusage(resource as i32, usage.as_mut_ptr()) };
     match ret {
         0 => Ok(Usage::from(unsafe { usage.assume_init() })),
-        _ => Err(SystemError::from(nix::Error::last()).into()),
+        _ => Err(SystemError::from(nix::Error::last())),
     }
 }
 

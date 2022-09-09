@@ -306,9 +306,9 @@ impl PaymentDriver for ZksyncDriver {
                     &address
                 ))
             }
-            DbNetwork::Goerli => Ok(format!("Goerli network is not supported by this driver.")),
-            DbNetwork::Mumbai => Ok(format!("Mumbai network is not supported by this driver.")),
-            DbNetwork::Polygon => Ok(format!("Polygon network is not supported by this driver.")),
+            DbNetwork::Goerli => Ok("Goerli network is not supported by this driver.".to_string()),
+            DbNetwork::Mumbai => Ok("Mumbai network is not supported by this driver.".to_string()),
+            DbNetwork::Polygon => Ok("Polygon network is not supported by this driver.".to_string()),
             DbNetwork::Mainnet => Ok(format!(
                 r#"Using this driver is not recommended. Consider using the Polygon driver instead.
 

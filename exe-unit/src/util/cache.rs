@@ -25,7 +25,7 @@ impl Cache {
     pub fn name(transfer_url: &TransferUrl) -> Result<CachePath, TransferError> {
         let hash = match &transfer_url.hash {
             Some(hash) => hash,
-            None => return Err(TransferError::InvalidUrlError("hash required".to_owned()).into()),
+            None => return Err(TransferError::InvalidUrlError("hash required".to_owned())),
         };
 
         let name = transfer_url.file_name()?;
