@@ -332,8 +332,9 @@ async fn unbind_remote(nodes: Vec<NodeId>) {
     }
 }
 
+//TODO RAFAŁ
+#[allow(clippy::await_holding_lock)]
 async fn resubscribe() {
-    //TODO RAFAŁ
     futures::stream::iter({ SUBSCRIPTIONS.lock().unwrap().clone() }.into_iter())
         .for_each(|msg| {
             let topic = msg.topic().to_owned();
