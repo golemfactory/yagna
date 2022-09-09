@@ -198,7 +198,7 @@ impl Handler<StopTracking> for DeadlineChecker {
         // We could store inverse mapping from entities to agreements, but there will never
         // be so many Agreements at the same time, to make it worth.
         for deadlines in self.deadlines.values_mut() {
-            if let Some(idx) = deadlines.iter().position(|element| &element.id == &msg.id) {
+            if let Some(idx) = deadlines.iter().position(|element| element.id == msg.id) {
                 // Or we could remove all earlier entries??
                 deadlines.remove(idx);
                 any = true;

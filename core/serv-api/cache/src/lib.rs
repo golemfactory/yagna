@@ -143,12 +143,6 @@ impl<K: Clone> PartialOrd for KeyTimeEntry<K> {
 
 impl<K: Clone> Ord for KeyTimeEntry<K> {
     fn cmp(&self, other: &Self) -> Ordering {
-        if self.time > other.time {
-            Ordering::Greater
-        } else if self.time == other.time {
-            Ordering::Equal
-        } else {
-            Ordering::Less
-        }
+        self.time.cmp(&other.time)
     }
 }
