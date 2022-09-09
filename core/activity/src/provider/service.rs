@@ -101,7 +101,7 @@ async fn create_activity_gsb(
         return Err(RpcMessageError::BadRequest(msg));
     }
 
-    let provider_id = agreement.provider_id().clone();
+    let provider_id = *agreement.provider_id();
 
     db.as_dao::<ActivityDao>()
         .create_if_not_exists(&activity_id, &msg.agreement_id)
@@ -129,7 +129,7 @@ async fn create_activity_gsb(
         db.clone(),
         tracker.clone(),
         &activity_id,
-        provider_id.clone(),
+        provider_id,
         app_session_id.clone(),
         msg.timeout,
     )
@@ -142,7 +142,7 @@ async fn create_activity_gsb(
             provider_id,
             app_session_id,
         ));
-        Error::from(e)
+        e
     })?;
 
     counter!("activity.provider.created", 1);
@@ -169,7 +169,7 @@ async fn activity_credentials(
     let activity_state = db
         .as_dao::<ActivityStateDao>()
         .get_state_wait(
-            &activity_id,
+            activity_id,
             vec![State::Initialized.into(), State::Terminated.into()],
         )
         .timeout(timeout)
@@ -199,7 +199,7 @@ async fn activity_credentials(
 
     let credentials = db
         .as_dao::<ActivityCredentialsDao>()
-        .get(&activity_id)
+        .get(activity_id)
         .await?
         .map(|c| serde_json::from_str(&c.credentials).map_err(|e| Error::Service(e.to_string())))
         .transpose()?;
@@ -271,8 +271,8 @@ async fn get_activity_progress(
     db: &DbExecutor,
     activity_id: &str,
 ) -> Result<(ActivityState, ActivityUsage), Error> {
-    let state = db.as_dao::<ActivityStateDao>().get(&activity_id).await?;
-    let usage = db.as_dao::<ActivityUsageDao>().get(&activity_id).await?;
+    let state = db.as_dao::<ActivityStateDao>().get(activity_id).await?;
+    let usage = db.as_dao::<ActivityUsageDao>().get(activity_id).await?;
     Ok((state, usage))
 }
 

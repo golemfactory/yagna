@@ -9,7 +9,7 @@ use ya_service_api_web::scope::ExtendableScope;
 pub fn web_scope(db: &DbExecutor, tracker: TrackerRef) -> Scope {
     actix_web::web::scope(crate::ACTIVITY_API_PATH)
         .app_data(Data::new(db.clone()))
-        .app_data(Data::new(tracker.clone()))
+        .app_data(Data::new(tracker))
         .extend(common::extend_web_scope)
         .extend(crate::provider::extend_web_scope)
         .extend(crate::requestor::control::extend_web_scope)
@@ -86,7 +86,7 @@ mod common {
         let state = provider_service
             .send(activity::GetState {
                 activity_id: path.activity_id.to_string(),
-                timeout: query.timeout.clone(),
+                timeout: query.timeout,
             })
             .timeout(timeout_margin(query.timeout))
             .await???;
@@ -130,7 +130,7 @@ mod common {
         let usage = provider_service
             .send(activity::GetUsage {
                 activity_id: path.activity_id.to_string(),
-                timeout: query.timeout.clone(),
+                timeout: query.timeout,
             })
             .timeout(timeout_margin(query.timeout))
             .await???;
@@ -155,7 +155,7 @@ mod common {
                         (Ok(web::Bytes::from(line)), Some(stream))
                     }
                     Err(err) => (
-                        Err(actix_web::error::ErrorInternalServerError(err).into()),
+                        Err(actix_web::error::ErrorInternalServerError(err)),
                         None,
                     ),
                 })

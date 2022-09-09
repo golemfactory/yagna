@@ -94,7 +94,7 @@ pub(crate) fn agreement_provider_service(
     agreement: &Agreement,
 ) -> Result<Endpoint, Error> {
     Ok(ya_net::from(id.identity)
-        .to(agreement.provider_id().clone())
+        .to(*agreement.provider_id())
         .service(activity::BUS_ID))
 }
 
@@ -102,7 +102,7 @@ pub(crate) async fn get_persisted_usage(
     db: &DbExecutor,
     activity_id: &str,
 ) -> Result<ActivityUsage, Error> {
-    Ok(db.as_dao::<ActivityUsageDao>().get(&activity_id).await?)
+    Ok(db.as_dao::<ActivityUsageDao>().get(activity_id).await?)
 }
 
 pub(crate) async fn set_persisted_usage(
