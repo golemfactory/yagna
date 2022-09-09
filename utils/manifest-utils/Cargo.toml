@@ -37,4 +37,4 @@ serial_test = "0.9"
 shlex = "1.1"
 tar = "0.4"
 test-case = "2.2"
-ya-manifest-test-utils = { path = "test-utils" }
+ya-manifest-test-utils = "0.1"

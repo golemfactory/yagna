@@ -82,4 +82,4 @@ predicates = "2.1"
 serial_test = "0.9"
 shlex = "1.1"
 
-ya-manifest-test-utils = { path = "../../utils/manifest-utils/test-utils" }
+ya-manifest-test-utils = "0.1"

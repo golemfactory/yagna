@@ -211,6 +211,9 @@ ya-diesel-utils = { path = "utils/diesel-utils"}
 ya-metrics = { path = "core/metrics" }
 ya-provider = { path = "agent/provider"}
 
+## TEST UTILS
+ya-manifest-test-utils = { path = "utils/manifest-utils/test-utils" }
+
 ethereum-tx-sign = { git = "https://github.com/mfranciszkiewicz/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
 graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "3619f63a0c1ff44962ab604e55cd5dfb62177c56" }
 web3 = { git = "https://github.com/golemfactory/rust-web3", branch = "update_ethabi" }
