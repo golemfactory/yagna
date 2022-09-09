@@ -172,7 +172,7 @@ impl PaymentCli {
 
                 let gas_info = match status.gas {
                     Some(details) => format!("{} {}", details.balance, details.currency_short_name),
-                    None => format!("N/A"),
+                    None => "N/A".to_string(),
                 };
 
                 Ok(ResponseTable {

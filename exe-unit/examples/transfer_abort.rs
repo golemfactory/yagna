@@ -97,7 +97,7 @@ async fn interrupted_transfer(
     dest: &str,
     exe_ctx: &ExeUnitContext,
 ) -> anyhow::Result<()> {
-    let transfer_service = TransferService::new(&exe_ctx);
+    let transfer_service = TransferService::new(exe_ctx);
     let addr = transfer_service.start();
     let addr_thread = addr.clone();
 

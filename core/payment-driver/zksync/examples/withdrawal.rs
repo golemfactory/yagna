@@ -52,7 +52,7 @@ async fn main() -> anyhow::Result<()> {
     let cred = WalletCredentials::from_eth_signer(address, signer, Network::Rinkeby).await?;
     let wallet = Wallet::new(provider, cred).await?;
 
-    if wallet.is_signing_key_set().await? == false {
+    if !(wallet.is_signing_key_set().await?) {
         info!("Unlocking account");
         let unlock = wallet
             .start_change_pubkey()

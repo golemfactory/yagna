@@ -1,4 +1,4 @@
-use serde_json;
+
 use std::{thread, time::Duration};
 
 use ya_client::model::market::{AgreementProposal, NewDemand, RequestorEvent};
@@ -11,14 +11,14 @@ async fn query_events(
     let mut requestor_events = vec![];
 
     while requestor_events.is_empty() {
-        requestor_events = client.collect(&subscription_id, Some(1.0), Some(2)).await?;
+        requestor_events = client.collect(subscription_id, Some(1.0), Some(2)).await?;
 
         println!("Waiting for events");
         thread::sleep(Duration::from_millis(3000));
     }
 
     println!("{} events found.", requestor_events.len());
-    return Ok(requestor_events);
+    Ok(requestor_events)
 }
 
 async fn wait_for_approval(client: &MarketRequestorApi, proposal_id: &str) {
@@ -61,7 +61,7 @@ async fn simulate_requestor(client: MarketRequestorApi) -> Result<()> {
             let _res = client.create_agreement(&agreement_proposal).await?;
 
             println!("Confirm agreement {}.", &agreement_proposal.proposal_id);
-            let _res = client
+            client
                 .confirm_agreement(&agreement_proposal.proposal_id, None)
                 .await?;
 

@@ -131,7 +131,7 @@ async fn verify_payment(
 
     let confirmation = msg.confirmation();
     let json_str = std::str::from_utf8(confirmation.confirmation.as_slice()).unwrap();
-    let details = serde_json::from_str(&json_str).unwrap();
+    let details = serde_json::from_str(json_str).unwrap();
     Ok(details)
 }
 

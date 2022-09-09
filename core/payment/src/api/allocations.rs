@@ -58,7 +58,7 @@ async fn create_allocation(
         // payment_platform is of the form driver-network-token
         // eg. erc20-rinkeby-tglm
         let [driver, network, _token]: [&str; 3] =
-            match platform.split("-").collect::<Vec<_>>().try_into() {
+            match platform.split('-').collect::<Vec<_>>().try_into() {
                 Ok(arr) => arr,
                 Err(_e) => {
                     return response::bad_request(
@@ -104,7 +104,7 @@ async fn create_allocation(
         Ok(allocation_id) => match dao.get(allocation_id, node_id).await {
             Ok(AllocationStatus::Active(allocation)) => {
                 let allocation_id = allocation.allocation_id.clone();
-                let allocation_timeout = allocation.timeout.clone();
+                let allocation_timeout = allocation.timeout;
 
                 release_allocation_after(
                     db.clone(),
@@ -116,12 +116,12 @@ async fn create_allocation(
 
                 response::created(allocation)
             }
-            Ok(AllocationStatus::NotFound) => return response::server_error(&"Database error"),
-            Ok(AllocationStatus::Gone) => return response::server_error(&"Database error"),
-            Err(DbError::Query(e)) => return response::bad_request(&e),
-            Err(e) => return response::server_error(&e),
+            Ok(AllocationStatus::NotFound) => response::server_error(&"Database error"),
+            Ok(AllocationStatus::Gone) => response::server_error(&"Database error"),
+            Err(DbError::Query(e)) => response::bad_request(&e),
+            Err(e) => response::server_error(&e),
         },
-        Err(e) => return response::server_error(&e),
+        Err(e) => response::server_error(&e),
     }
 }
 

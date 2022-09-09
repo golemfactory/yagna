@@ -46,7 +46,7 @@ async fn test_session_events_filtering() {
         let agreement_id = req_engine
             .create_agreement(
                 req_id.clone(),
-                &proposal_id,
+                proposal_id,
                 Utc::now() + Duration::hours(1),
             )
             .await
@@ -64,7 +64,7 @@ async fn test_session_events_filtering() {
     let confirm_timestamp = Utc::now();
     for (agreement_id, session_id) in agreements.iter().zip(sessions.iter()) {
         req_engine
-            .confirm_agreement(req_id.clone(), &agreement_id, Some(session_id.clone()))
+            .confirm_agreement(req_id.clone(), agreement_id, Some(session_id.clone()))
             .await
             .unwrap();
     }
@@ -604,7 +604,7 @@ async fn test_common_event_flow() {
                 e
             ),
         }
-        current_timestamp = events[0].event_date.clone();
+        current_timestamp = events[0].event_date;
     }
 
     // We don't expect any events anymore.

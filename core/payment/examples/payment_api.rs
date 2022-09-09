@@ -5,7 +5,7 @@ use ethsign::keyfile::Bytes;
 use ethsign::{KeyFile, Protected, SecretKey};
 use futures::Future;
 use rand::Rng;
-use serde_json;
+
 use std::convert::TryInto;
 use std::io::Write;
 use std::pin::Pin;
@@ -340,7 +340,7 @@ async fn main() -> anyhow::Result<()> {
     let requestor_id = requestor_id.parse()?;
     log::info!("bind remote...");
 
-    let _ = ya_net::hybrid::start_network(
+    ya_net::hybrid::start_network(
         Arc::new(Config::from_env()?),
         provider_id,
         vec![provider_id, requestor_id],
