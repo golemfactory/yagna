@@ -125,14 +125,14 @@ async fn main() -> anyhow::Result<()> {
         let net_id = &network.id;
 
         api.add_address(
-            &net_id,
+            net_id,
             &Address {
                 ip: net_requestor_address,
             },
         )
         .await?;
         api.add_node(
-            &net_id,
+            net_id,
             &Node {
                 id: cli.id.clone(),
                 ip: cli.host.clone(),
@@ -165,7 +165,7 @@ async fn main() -> anyhow::Result<()> {
                 }
                 vec
             };
-            if vec.len() == 0 {
+            if vec.is_empty() {
                 break;
             }
             remaining -= vec.len() as u64;
