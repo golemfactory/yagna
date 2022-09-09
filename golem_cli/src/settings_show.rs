@@ -36,9 +36,9 @@ async fn get_resources() -> Result<Resources> {
     let active_profile =
         move_string_out_of_json(active_profile).ok_or_else(|| anyhow!("Invalid format"))?;
 
-    Ok(profiles
+    profiles
         .remove(&active_profile)
-        .ok_or_else(|| anyhow!("Active profile not found???"))?)
+        .ok_or_else(|| anyhow!("Active profile not found???"))
 }
 
 pub async fn show_resources() -> Result<()> {

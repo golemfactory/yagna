@@ -93,10 +93,9 @@ lazy_static! {
 impl PaymentDriver {
     pub fn platform(&self, network: &NetworkName) -> anyhow::Result<&PaymentPlatform> {
         let net: &str = network.into();
-        Ok(self.0.get(net).ok_or(anyhow!(
-            "Payment driver config for network '{}' not found.",
-            network
-        ))?)
+        self.0
+            .get(net)
+            .ok_or_else(|| anyhow!("Payment driver config for network '{}' not found.", network))
     }
 }
 

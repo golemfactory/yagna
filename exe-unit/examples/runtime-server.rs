@@ -165,11 +165,12 @@ async fn write_status(id: u64, status: response::ProcessStatus) {
 }
 
 async fn write_response(id: u64, command: response::Command) {
-    let mut response = Response::default();
-    response.id = id;
-    response.event = false;
-    response.command = Some(command);
-    write(response).await;
+    write(Response {
+        id,
+        event: false,
+        command: Some(command),
+    })
+    .await;
 }
 
 async fn write(res: Response) {

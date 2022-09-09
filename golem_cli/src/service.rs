@@ -111,8 +111,8 @@ pub async fn watch_for_vm() -> anyhow::Result<()> {
     }
 }
 
-pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
-    crate::setup::setup(&mut config, false).await?;
+pub async fn run(config: RunConfig) -> Result</*exit code*/ i32> {
+    crate::setup::setup(&config, false).await?;
 
     let cmd = YaCommand::new()?;
     let service = cmd.yagna()?.service_run(&config).await?;

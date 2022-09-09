@@ -44,9 +44,9 @@ async fn payment_status(
         }
         (f, l)
     };
+    //TOTO Rafał
     let fr = future::join_all(futures).await;
-    let mut n = 0;
-    for r in fr {
+    for (n, r) in fr.into_iter().enumerate() {
         result.insert(
             labels[n].clone(),
             r.unwrap_or_else(|e| {
@@ -54,7 +54,6 @@ async fn payment_status(
                 StatusResult::default()
             }),
         );
-        n += 1;
     }
     Ok(result)
 }
@@ -244,9 +243,10 @@ async fn get_payment_network() -> Result<(usize, NetworkName)> {
         ya_client::web::WebClient::with_token(&app_key).interface()?;
     let offers = mkt_api.get_offers().await?;
 
-    let latest_offer = offers.iter().max_by_key(|o| o.timestamp).ok_or(anyhow!(
-        "Provider is not functioning properly. No offers Subscribed."
-    ))?;
+    let latest_offer = offers
+        .iter()
+        .max_by_key(|o| o.timestamp)
+        .ok_or_else(|| anyhow!("Provider is not functioning properly. No offers Subscribed."))?;
     let mut network = None;
     for net in NetworkName::VARIANTS {
         let net_to_check = net.parse()?;
@@ -260,8 +260,8 @@ async fn get_payment_network() -> Result<(usize, NetworkName)> {
         };
     }
 
-    let network = network.ok_or(anyhow!(
-        "Unable to determine payment network used by the Yagna Provider."
-    ))?;
+    let network = network.ok_or_else(|| {
+        anyhow!("Unable to determine payment network used by the Yagna Provider.")
+    })?;
     Ok((offers.len(), network))
 }
