@@ -80,8 +80,8 @@ async fn send(
     }
 
     match res.body {
-        RpcBody::Error { error } => return Err(anyhow!("Request {:?} failed: {:?}", id, error)),
-        RpcBody::Request { .. } => return Err(anyhow!("Unexpected message: {:?}", res)),
+        RpcBody::Error { error } => Err(anyhow!("Request {:?} failed: {:?}", id, error)),
+        RpcBody::Request { .. } => Err(anyhow!("Unexpected message: {:?}", res)),
         RpcBody::Result { result } => Ok(result),
     }
 }
