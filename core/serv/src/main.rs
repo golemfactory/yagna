@@ -112,7 +112,7 @@ impl CliArgs {
     pub async fn run_command(self) -> Result<()> {
         let ctx: CliCtx = (&self).try_into()?;
 
-        ctx.output(self.command.run_command(&ctx).await?);
+        ctx.output(self.command.run_command(&ctx).await?)?;
         Ok(())
     }
 }
@@ -251,7 +251,7 @@ enum Services {
     //TODO enable VpnService::rest for v2 / or create common scope for v1 and v2
     #[enable(rest)]
     Vpn(VpnService),
-    #[enable(gsb, rest)]
+    #[enable(gsb, rest, cli)]
     Market(MarketService),
     #[enable(gsb, rest, cli)]
     Activity(ActivityService),

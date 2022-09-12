@@ -4,7 +4,6 @@ use futures::prelude::*;
 use metrics::counter;
 use std::collections::HashMap;
 use std::sync::Arc;
-use ya_core_model as core;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::ServiceBinder;
 
@@ -402,7 +401,12 @@ mod public {
         );
         counter!("payment.debit_notes.requestor.received.call", 1);
 
-        let agreement = match get_agreement(agreement_id.clone(), core::Role::Requestor).await {
+        let agreement = match get_agreement(
+            agreement_id.clone(),
+            ya_client_model::market::Role::Requestor,
+        )
+        .await
+        {
             Err(e) => {
                 return Err(SendError::ServiceError(e.to_string()));
             }
@@ -541,7 +545,12 @@ mod public {
         );
         counter!("payment.invoices.requestor.received.call", 1);
 
-        let agreement = match get_agreement(agreement_id.clone(), core::Role::Requestor).await {
+        let agreement = match get_agreement(
+            agreement_id.clone(),
+            ya_client_model::market::Role::Requestor,
+        )
+        .await
+        {
             Err(e) => {
                 return Err(SendError::ServiceError(e.to_string()));
             }
@@ -555,7 +564,12 @@ mod public {
         };
 
         for activity_id in activity_ids.iter() {
-            match provider::get_agreement_id(activity_id.clone(), core::Role::Requestor).await {
+            match provider::get_agreement_id(
+                activity_id.clone(),
+                ya_client_model::market::Role::Requestor,
+            )
+            .await
+            {
                 Ok(Some(id)) if id != agreement_id => {
                     return Err(SendError::BadRequest(format!(
                         "Activity {} belongs to agreement {} not {}",

@@ -1,8 +1,9 @@
 //! Market service bus API.
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::Role;
-pub use ya_client_model::market::Agreement;
+use ya_client_model::market::{agreement::State, Role};
+pub use ya_client_model::market::{Agreement, AgreementListEntry};
 use ya_service_bus::RpcMessage;
 
 /// Public Market bus address.
@@ -38,6 +39,22 @@ impl GetAgreement {
 impl RpcMessage for GetAgreement {
     const ID: &'static str = "GetAgreement";
     type Item = Agreement;
+    type Error = RpcMessageError;
+}
+
+/// Lists all agreements
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ListAgreements {
+    pub state: Option<State>,
+    pub before_date: Option<DateTime<Utc>>,
+    pub after_date: Option<DateTime<Utc>>,
+    pub app_session_id: Option<String>,
+}
+
+impl RpcMessage for ListAgreements {
+    const ID: &'static str = "ListAgreements";
+    type Item = Vec<AgreementListEntry>;
     type Error = RpcMessageError;
 }
 

@@ -1,4 +1,4 @@
-use chrono::{NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::prelude::*;
 
 use ya_client::model::market::Reason;
@@ -61,6 +61,48 @@ pub enum AgreementDaoError {
 }
 
 impl<'c> AgreementDao<'c> {
+    pub async fn list(
+        &self,
+        node_id: Option<NodeId>,
+        state: Option<AgreementState>,
+        before: Option<DateTime<Utc>>,
+        after: Option<DateTime<Utc>>,
+        app_session_id: Option<String>,
+    ) -> Result<Vec<Agreement>, AgreementDaoError> {
+        do_with_transaction(self.pool, move |conn| {
+            let mut query = market_agreement.into_boxed();
+
+            if let Some(node_id) = node_id {
+                query = query.filter(
+                    agreement::provider_id
+                        .eq(node_id)
+                        .or(agreement::requestor_id.eq(node_id)),
+                );
+            };
+
+            if let Some(app_session_id) = app_session_id {
+                query = query.filter(agreement::session_id.eq(app_session_id))
+            }
+
+            if let Some(state) = state {
+                query = query.filter(agreement::state.eq(state));
+            }
+
+            if let Some(before) = before {
+                query = query.filter(agreement::creation_ts.lt(before.naive_utc()));
+            }
+
+            if let Some(after) = after {
+                query = query.filter(agreement::creation_ts.gt(after.naive_utc()));
+            }
+
+            let agreements = query.get_results::<Agreement>(conn)?;
+
+            Ok(agreements)
+        })
+        .await
+    }
+
     pub async fn select(
         &self,
         id: &AgreementId,
