@@ -1,8 +1,10 @@
 use std::convert::TryFrom;
 use std::path::Path;
 
-use futures::channel::mpsc;
 use futures::Stream;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use ya_runtime_api::deploy::ContainerEndpoint;
 use ya_runtime_api::server::Network;
@@ -18,7 +20,7 @@ pub(crate) mod inet;
 pub(crate) mod vpn;
 
 pub(crate) struct Endpoint {
-    tx: mpsc::Sender<Result<Vec<u8>>>,
+    tx: mpsc::UnboundedSender<Result<Vec<u8>>>,
     rx: Option<Box<dyn Stream<Item = Result<Vec<u8>>> + Unpin>>,
 }
 
@@ -32,24 +34,46 @@ impl Endpoint {
 
     #[cfg(unix)]
     async fn connect_to_socket<P: AsRef<Path>>(path: P) -> Result<Self> {
-        use bytes::Bytes;
-        use futures::{future, SinkExt, StreamExt, TryStreamExt};
-        use tokio::io;
-        use tokio_util::codec::{BytesCodec, FramedRead, FramedWrite};
+        use futures::StreamExt;
+        use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+
+        type SocketChannel = (
+            UnboundedSender<Result<Vec<u8>>>,
+            UnboundedReceiver<Result<Vec<u8>>>,
+        );
 
         let socket = tokio::net::UnixStream::connect(path.as_ref()).await?;
-        let (read, write) = io::split(socket);
+        let (read, mut write) = tokio::io::split(socket);
+        let (tx_si, rx_si): SocketChannel = mpsc::unbounded_channel();
 
-        let sink = FramedWrite::new(write, BytesCodec::new()).with(|v| future::ok(Bytes::from(v)));
-        let stream = FramedRead::with_capacity(read, BytesCodec::new(), DEFAULT_MAX_FRAME_SIZE)
-            .into_stream()
-            .map_ok(|b| b.to_vec())
-            .map_err(Error::from);
+        let stream = {
+            let buffer: [u8; DEFAULT_MAX_FRAME_SIZE] = [0u8; DEFAULT_MAX_FRAME_SIZE];
+            futures::stream::unfold((read, buffer), |(mut r, mut b)| async move {
+                match r.read(&mut b).await {
+                    Ok(0) => None,
+                    Ok(n) => Some((Ok(b[..n].to_vec()), (r, b))),
+                    Err(e) => Some((Err(e.into()), (r, b))),
+                }
+            })
+            .boxed_local()
+        };
 
-        let (tx_si, rx_si) = mpsc::channel(1);
         tokio::task::spawn_local(async move {
-            if let Err(e) = rx_si.forward(sink).await {
-                log::error!("Socket endpoint error: {}", e);
+            let mut rx_si = UnboundedReceiverStream::new(rx_si);
+            loop {
+                match StreamExt::next(&mut rx_si).await {
+                    Some(Ok(data)) => {
+                        if let Err(e) = write.write_all(data.as_slice()).await {
+                            log::error!("error writing to VM socket endpoint: {e}");
+                            break;
+                        }
+                    }
+                    Some(Err(e)) => {
+                        log::error!("VM socket endpoint error: {e}");
+                        break;
+                    }
+                    None => break,
+                }
             }
         });
 
@@ -121,7 +145,7 @@ impl<'a> Iterator for RxIterator<'a> {
     type Item = Vec<u8>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.buffer.expected > 0 && self.received.len() > 0 {
+        if self.buffer.expected > 0 && !self.received.is_empty() {
             let len = self.buffer.expected.min(self.received.len());
             self.buffer.inner.extend(self.received.drain(..len));
         }

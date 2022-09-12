@@ -271,7 +271,7 @@ async fn inet_ingress_handler(rx: IngressReceiver, proxy: Proxy) {
 
 async fn inet_egress_handler<E: std::fmt::Display>(
     rx: EgressReceiver,
-    mut fwd: impl Sink<Result<Vec<u8>>, Error = E> + Unpin + 'static,
+    fwd: tokio::sync::mpsc::UnboundedSender<std::result::Result<Vec<u8>, E>>,
 ) {
     let mut rx = UnboundedReceiverStream::new(rx);
     while let Some(event) = rx.next().await {
@@ -279,7 +279,7 @@ async fn inet_egress_handler<E: std::fmt::Display>(
         log::debug!("[inet] egress -> runtime packet {} B", frame.len());
 
         network::write_prefix(&mut frame);
-        if let Err(e) = fwd.send(Ok(frame)).await {
+        if let Err(e) = fwd.send(Ok(frame)) {
             log::debug!("[inet] egress -> runtime error: {}", e);
         }
     }

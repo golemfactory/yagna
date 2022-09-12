@@ -2,7 +2,7 @@ use std::convert::TryFrom;
 use std::ops::Not;
 
 use actix::prelude::*;
-use futures::{future, FutureExt, SinkExt, TryFutureExt};
+use futures::{future, FutureExt, TryFutureExt};
 
 use ya_client_model::NodeId;
 use ya_core_model::activity::{self, RpcMessageError, VpnControl, VpnPacket};
@@ -32,6 +32,7 @@ pub(crate) async fn start_vpn<R: RuntimeService>(
 
     log::info!("Starting VPN service...");
 
+    // FIXME: allow use of non-default identities
     let node_id = typed::service(identity::BUS_ID)
         .send(identity::Get::ByDefault)
         .await?
@@ -45,7 +46,8 @@ pub(crate) async fn start_vpn<R: RuntimeService>(
         .map(TryFrom::try_from)
         .collect::<crate::Result<_>>()?;
     let hosts = deployment.hosts.clone();
-    let response = service
+
+    let created = service
         .create_network(CreateNetwork {
             networks,
             hosts,
@@ -54,12 +56,12 @@ pub(crate) async fn start_vpn<R: RuntimeService>(
         .await
         .map_err(|e| Error::Other(format!("initialization error: {:?}", e)))?;
 
-    let endpoint = match response.endpoint {
+    let endpoint = match created.endpoint {
         Some(endpoint) => Endpoint::connect(endpoint).await?,
         None => return Err(Error::Other("endpoint already connected".into())),
     };
-
     let vpn = Vpn::try_new(node_id, acl, endpoint, deployment.clone())?;
+
     Ok(Some(vpn.start()))
 }
 
@@ -131,7 +133,7 @@ impl Vpn {
     fn handle_arp(&mut self, frame: EtherFrame, ctx: &mut Context<Self>) {
         let arp = ArpPacket::packet(frame.payload());
         // forward only IP ARP packets
-        if arp.get_field(ArpField::PTYPE) != [08, 00] {
+        if arp.get_field(ArpField::PTYPE) != [8, 0] {
             return;
         }
 
@@ -139,6 +141,45 @@ impl Vpn {
         match self.networks.endpoint(ip) {
             Some(endpoint) => self.forward_frame(endpoint, frame, ctx),
             None => log::debug!("[vpn] no endpoint for {ip:?}"),
+        }
+    }
+
+    fn handle_packet(&mut self, packet: Packet) {
+        let network_id = packet.network_id;
+        let node_id = packet.caller;
+        let data = packet.data.into_boxed_slice();
+
+        // fixme: should requestor be queried for unknown IP addresses instead?
+        // read and add unknown node id -> ip if it doesn't exist
+        if let Ok(ether_type) = EtherFrame::peek_type(&data) {
+            let payload = EtherFrame::peek_payload(&data).unwrap();
+            let ip = match ether_type {
+                EtherType::Arp => {
+                    let pkt = ArpPacket::packet(payload);
+                    ntoh(pkt.get_field(ArpField::SPA))
+                }
+                EtherType::Ip => {
+                    let pkt = IpPacket::packet(payload);
+                    ntoh(pkt.src_address())
+                }
+                _ => None,
+            };
+
+            if let Some(ip) = ip {
+                let _ = self.networks.get_mut(&network_id).map(|network| {
+                    if !network.nodes().contains_key(&node_id) {
+                        log::debug!("[vpn] adding new node: {} {}", ip, node_id);
+                        let _ = network.add_node(ip, &node_id, network::gsb_endpoint);
+                    }
+                });
+            }
+        }
+
+        let mut data = data.into();
+        network::write_prefix(&mut data);
+
+        if let Err(e) = self.endpoint.tx.send(Ok(data)) {
+            log::debug!("[vpn] ingress error: {}", e);
         }
     }
 
@@ -253,7 +294,7 @@ impl StreamHandler<crate::Result<Vec<u8>>> for Vpn {
 impl Handler<RpcRawCall> for Vpn {
     type Result = Result<Vec<u8>, ya_service_bus::Error>;
 
-    fn handle(&mut self, msg: RpcRawCall, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: RpcRawCall, _ctx: &mut Self::Context) -> Self::Result {
         let network_id = {
             let mut split = msg.addr.rsplit('/').skip(1);
             match split.next() {
@@ -266,11 +307,12 @@ impl Handler<RpcRawCall> for Vpn {
             }
         };
 
-        ctx.address().do_send(Packet {
+        self.handle_packet(Packet {
             network_id,
-            caller: msg.caller.to_string(),
+            caller: msg.caller,
             data: msg.body,
         });
+
         Ok(Vec::new())
     }
 }
@@ -278,49 +320,8 @@ impl Handler<RpcRawCall> for Vpn {
 impl Handler<Packet> for Vpn {
     type Result = <Packet as Message>::Result;
 
-    fn handle(&mut self, packet: Packet, ctx: &mut Context<Self>) -> Self::Result {
-        let network_id = packet.network_id;
-        let node_id = packet.caller;
-        let data = packet.data.into_boxed_slice();
-
-        // fixme: should requestor be queried for unknown IP addresses instead?
-        // read and add unknown node id -> ip if it doesn't exist
-        if let Ok(ether_type) = EtherFrame::peek_type(&data) {
-            let payload = EtherFrame::peek_payload(&data).unwrap();
-            let ip = match ether_type {
-                EtherType::Arp => {
-                    let pkt = ArpPacket::packet(payload);
-                    ntoh(pkt.get_field(ArpField::SPA))
-                }
-                EtherType::Ip => {
-                    let pkt = IpPacket::packet(payload);
-                    ntoh(pkt.src_address())
-                }
-                _ => None,
-            };
-
-            if let Some(ip) = ip {
-                let _ = self.networks.get_mut(&network_id).map(|network| {
-                    if !network.nodes().contains_key(&node_id) {
-                        log::debug!("[vpn] adding new node: {} {}", ip, node_id);
-                        let _ = network.add_node(ip, &node_id, network::gsb_endpoint);
-                    }
-                });
-            }
-        }
-
-        let mut data = data.into();
-        network::write_prefix(&mut data);
-
-        let mut tx = self.endpoint.tx.clone();
-        async move {
-            if let Err(e) = tx.send(Ok(data)).await {
-                log::debug!("[vpn] ingress error: {}", e);
-            }
-        }
-        .into_actor(self)
-        .spawn(ctx);
-
+    fn handle(&mut self, packet: Packet, _ctx: &mut Context<Self>) -> Self::Result {
+        self.handle_packet(packet);
         Ok(())
     }
 }
