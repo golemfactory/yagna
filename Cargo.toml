@@ -17,7 +17,7 @@ erc20-driver = ['ya-erc20-driver']
 zksync-driver = ['ya-zksync-driver']
 tos = []
 # Temporary to make goth integration tests work
-central-net = ['ya-net/central-net']
+hybrid-net = ['ya-net/hybrid-net']
 
 [[bin]]
 name = "yagna"
