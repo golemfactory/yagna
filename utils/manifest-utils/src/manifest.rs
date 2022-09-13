@@ -71,9 +71,12 @@ pub enum Feature {
     Other,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(title = "Computation Payload Manifest"))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppManifest {
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub version: Version,
     pub created_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
@@ -124,12 +127,14 @@ impl AppManifest {
     }
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppMetadata {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<Version>,
     #[serde(default)]
@@ -139,6 +144,7 @@ pub struct AppMetadata {
     pub homepage: Option<String>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppPayload {
@@ -164,6 +170,7 @@ impl AppPayload {
     }
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PayloadPlatform {
@@ -173,9 +180,11 @@ pub struct PayloadPlatform {
     pub os_version: Option<String>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompManifest {
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub version: Version,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub script: Option<Script>,
@@ -183,6 +192,7 @@ pub struct CompManifest {
     pub net: Option<Net>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Script {
@@ -191,6 +201,7 @@ pub struct Script {
     pub arg_match: ArgMatch,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize)]
 #[serde(untagged)]
 pub enum Command {
@@ -227,6 +238,7 @@ impl<'de> Deserialize<'de> for Command {
     }
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, EnumString, AsRefStr)]
 #[serde(rename_all = "camelCase")]
 pub enum ArgMatch {
@@ -242,6 +254,7 @@ impl Default for ArgMatch {
     }
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Net {
@@ -249,6 +262,7 @@ pub struct Net {
     pub inet: Option<Inet>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Inet {
@@ -256,6 +270,7 @@ pub struct Inet {
     pub out: Option<InetOut>,
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InetOut {
