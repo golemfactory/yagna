@@ -1,14 +1,14 @@
 [package]
 name = "ya-transfer"
-version = "0.1.0"
+version = "0.2.0"
 description = "Yagna transfer util"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-ya-client-model = "0.4"
+ya-client-model = "0.5"
 ya-core-model = { version = "^0.7" }
-ya-service-bus = "0.4"
+ya-service-bus = "0.6"
 ya-utils-path = "0.1"
 gftp = { version = "^0.2"}
 

@@ -4,13 +4,14 @@ use std::convert::{TryFrom, TryInto};
 use std::rc::Rc;
 use std::sync::Arc;
 
+use anyhow::bail;
 use chrono::Utc;
 use ethsign::{KeyFile, Protected, PublicKey};
 use futures::lock::Mutex;
 use futures::prelude::*;
 
 use ya_client_model::NodeId;
-use ya_service_bus::typed as bus;
+use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
 use ya_core_model::identity as model;
 use ya_persistence::executor::DbExecutor;
@@ -27,6 +28,10 @@ struct Subscription {
 impl Subscription {
     fn subscribe(&mut self, endpoint: String) {
         self.subscriptions.push(endpoint);
+    }
+
+    fn unsubscribe(&mut self, endpoint: String) {
+        self.subscriptions.retain(|s| s != &endpoint);
     }
 }
 
@@ -289,9 +294,11 @@ impl IdentityService {
     ) -> Result<model::IdentityInfo, model::Error> {
         let default_key = self.default_key;
         let key = self.get_key_by_id(&node_id)?;
-        key.unlock(password).map_err(model::Error::new_err_msg)?;
-        let output = to_info(&default_key, key);
-        Ok(output)
+        if key.unlock(password).map_err(model::Error::new_err_msg)? {
+            Ok(to_info(&default_key, key))
+        } else {
+            Err(model::Error::InvalidPassword)
+        }
     }
 
     pub async fn sign(&mut self, node_id: NodeId, data: Vec<u8>) -> Result<Vec<u8>, model::Error> {
@@ -364,6 +371,16 @@ impl IdentityService {
         subscribe: model::Subscribe,
     ) -> Result<model::Ack, model::Error> {
         self.subscription.borrow_mut().subscribe(subscribe.endpoint);
+        Ok(model::Ack {})
+    }
+
+    pub async fn unsubscribe(
+        &mut self,
+        unsubscribe: model::Unsubscribe,
+    ) -> Result<model::Ack, model::Error> {
+        self.subscription
+            .borrow_mut()
+            .unsubscribe(unsubscribe.endpoint);
         Ok(model::Ack {})
     }
 
@@ -487,6 +504,11 @@ impl IdentityService {
             async move { this.lock().await.subscribe(subscribe).await }
         });
         let this = me.clone();
+        let _ = bus::bind(model::BUS_ID, move |unsubscribe: model::Unsubscribe| {
+            let this = this.clone();
+            async move { this.lock().await.unsubscribe(unsubscribe).await }
+        });
+        let this = me.clone();
         let _ = bus::bind(model::BUS_ID, move |node_id: model::GetPubKey| {
             let this = this.clone();
             async move {
@@ -503,4 +525,89 @@ impl IdentityService {
             async move { this.lock().await.get_key_file(node_id).await }
         });
     }
+}
+
+pub async fn wait_for_default_account_unlock() -> anyhow::Result<()> {
+    let identity_key = get_default_identity_key().await?;
+
+    if identity_key.is_locked {
+        let locked_identity = identity_key.node_id;
+        let (tx, rx) = futures::channel::mpsc::unbounded();
+        let endpoint = format!("{}/await_unlock", model::BUS_ID);
+
+        let _ = bus::bind(&endpoint, move |e: model::event::Event| {
+            let mut tx_clone = tx.clone();
+            async move {
+                match e {
+                    model::event::Event::AccountLocked { .. } => {}
+                    model::event::Event::AccountUnlocked { identity } => {
+                        if locked_identity == identity {
+                            log::debug!("Got unlocked event for default locked account with nodeId: {locked_identity}");
+                            tx_clone.send(()).await.expect("Receiver is closed");
+                        }
+                    }
+                };
+                Ok(())
+            }
+        });
+        subscribe(endpoint.clone()).await?;
+
+        log::info!("{}", yansi::Color::RGB(0xFF, 0xA5, 0x00).paint(
+            "Daemon cannot start because default account is locked. Unlock it by running 'yagna id unlock'"
+        ));
+
+        wait_for_unlock(rx).await?;
+
+        unsubscribe(endpoint.clone()).await?;
+        unbind(endpoint).await?;
+    }
+
+    Ok(())
+}
+
+async fn wait_for_unlock(
+    mut rx: futures::channel::mpsc::UnboundedReceiver<()>,
+) -> anyhow::Result<()> {
+    // Check lock second time because user could unlocked database before subscription
+    if get_default_identity_key().await?.is_locked {
+        tokio::select! {
+            _ = rx.next() => {
+                log::info!("Default account unlocked");
+            }
+            _ = tokio::signal::ctrl_c() => {
+                bail!("Default account is locked");
+            }
+        };
+    }
+
+    Ok(())
+}
+
+async fn subscribe(endpoint: String) -> anyhow::Result<()> {
+    bus::service(model::BUS_ID)
+        .send(model::Subscribe { endpoint })
+        .await??;
+
+    Ok(())
+}
+
+async fn unsubscribe(endpoint: String) -> anyhow::Result<()> {
+    bus::service(model::BUS_ID)
+        .send(model::Unsubscribe { endpoint })
+        .await??;
+
+    Ok(())
+}
+
+async fn unbind(endpoint: String) -> anyhow::Result<()> {
+    bus::unbind(&format!("{}/{}", endpoint.clone(), model::event::Event::ID)).await?;
+
+    Ok(())
+}
+
+async fn get_default_identity_key() -> anyhow::Result<model::IdentityInfo> {
+    Ok(bus::service(model::BUS_ID)
+        .send(model::Get::ByDefault {})
+        .await??
+        .ok_or(anyhow::anyhow!("No default Identity found"))?)
 }

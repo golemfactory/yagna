@@ -1,5 +1,5 @@
 use crate::appkey;
-use crate::command::{YaCommand, ERC20_DRIVER, NETWORK_GROUP_MAP, ZKSYNC_DRIVER};
+use crate::command::{YaCommand, DRIVERS, NETWORK_GROUP_MAP};
 use crate::setup::RunConfig;
 use crate::utils::payment_account;
 use anyhow::{Context, Result};
@@ -122,19 +122,15 @@ pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
     let address =
         payment_account(&cmd, &config.account.account.or(provider_config.account)).await?;
     for nn in NETWORK_GROUP_MAP[&config.account.network].iter() {
-        cmd.yagna()?
-            .payment_init(&address, &nn, &ERC20_DRIVER)
-            .await?;
-        if ZKSYNC_DRIVER.platform(&nn).is_err() {
-            continue;
+        for driver in DRIVERS.iter() {
+            if driver.platform(&nn).is_err() {
+                continue;
+            }
+
+            if let Err(e) = cmd.yagna()?.payment_init(&address, &nn, &driver).await {
+                log::debug!("Failed to initialize {} driver. Error: {e}", driver.name);
+            }
         }
-        if let Err(e) = cmd
-            .yagna()?
-            .payment_init(&address, &nn, &ZKSYNC_DRIVER)
-            .await
-        {
-            log::debug!("Failed to initialize zkSync driver. e:{}", e);
-        };
     }
 
     let provider = cmd.ya_provider()?.spawn(&app_key, &config).await?;

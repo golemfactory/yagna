@@ -234,7 +234,7 @@ async fn await_results(
 
     let results = ya_net::from(id.identity)
         .to(agreement.provider_id().clone())
-        .service(&activity::exeunit::bus_id(&path.activity_id))
+        .service_transfer(&activity::exeunit::bus_id(&path.activity_id))
         .send(msg)
         .timeout(timeout_margin(query.timeout))
         .await???;
@@ -255,7 +255,7 @@ fn stream_results(
     let seq = AtomicU64::new(0);
     let stream = ya_net::from(id.identity)
         .to(agreement.provider_id().clone())
-        .service(&activity::exeunit::bus_id(&path.activity_id))
+        .service_transfer(&activity::exeunit::bus_id(&path.activity_id))
         .call_streaming(msg)
         .map(|item| match item {
             Ok(result) => result.map_err(Error::from),

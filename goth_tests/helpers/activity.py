@@ -132,7 +132,7 @@ def vm_exe_script_outbound(runner: Runner, output_file: str = "output.txt"):
     ]
 
 
-def wasi_sleeper_exe_script(duration: float = 10.):
+def wasi_sleeper_exe_script(duration: float = 10.0):
     """WASI exe script builder."""
     """Create a WASI exe script for running a WASI sleeper task."""
 
@@ -144,5 +144,5 @@ def wasi_sleeper_exe_script(duration: float = 10.):
                 "entry_point": "rust-wasi-sleeper",
                 "args": [f"{duration}"],
             }
-        }
+        },
     ]
