@@ -236,6 +236,11 @@ async fn run() -> anyhow::Result<()> {
         }
     };
 
+    match std::env::current_exe() {
+        Ok(exe_path) => log::info!("Executable: {}", exe_path.display()),
+        Err(e) => log::warn!("Unable to determine binary path: {e}"),
+    };
+
     if !args.agreement.exists() {
         bail!(
             "Agreement file does not exist: {}",

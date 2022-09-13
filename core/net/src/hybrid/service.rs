@@ -19,9 +19,12 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use url::Url;
 
 use ya_core_model::net::local::{SendBroadcastMessage, SendBroadcastStub};
+use ya_core_model::net::{RegisterVpnEndpoint, VpnEndpointType};
 use ya_core_model::{identity, net, NodeId};
+use ya_relay_client::client::Forwarded;
 use ya_relay_client::codec::forward::{PrefixedSink, PrefixedStream, SinkKind};
 use ya_relay_client::crypto::CryptoProvider;
+use ya_relay_client::proto::{Forward, FORWARD_SLOT_ID, VPN_FLAG};
 use ya_relay_client::{Client, ClientBuilder, ForwardReceiver, TransportType};
 use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::CallReplyCode;
@@ -29,6 +32,7 @@ use ya_service_bus::{
     serialization, typed, untyped as local_bus, Error, ResponseChunk, RpcEndpoint, RpcMessage,
 };
 use ya_utils_networking::resolver;
+use ya_utils_networking::socket::{write_prefix, Endpoint, RxBuffer};
 
 use crate::bcast::BCastService;
 use crate::config::Config;
@@ -168,6 +172,88 @@ pub async fn start_network(
             Ok((from, to, addr))
         }
     };
+
+    let client_ = client.clone();
+    let state_ = state.clone();
+    let handle = Rc::new(RefCell::new(None));
+
+    typed::bind("/net/vpn", move |msg: RegisterVpnEndpoint| {
+        let client_ = client_.clone();
+        let state_ = state_.clone();
+        let handle = handle.clone();
+
+        async move {
+            let ids = msg
+                .ids
+                .into_iter()
+                .filter(|id| id.to_string() != "0xee9b0706c981400d856611367c4f3d34984e0531")
+                .collect::<Vec<_>>();
+
+            if ids.is_empty() {
+                log::info!("RegisterVpnEndpoint missing nodes");
+                return Ok(());
+            }
+
+            log::info!(
+                "RegisterVpnEndpoint with {} VPN nodes at {:?}: {:?}",
+                ids.len(),
+                msg.endpoint,
+                ids
+            );
+
+            let mut ids = ids.into_iter().peekable();
+            let mut endpoint = match msg.endpoint {
+                VpnEndpointType::Socket(path) => {
+                    Endpoint::socket(path).await.map_err(|e| e.to_string())?
+                }
+            };
+
+            let mut rx = endpoint.rx.take().unwrap();
+            let endpoint = Rc::new(endpoint);
+            let node_id = ids.peek().cloned().unwrap();
+
+            if {
+                let inner = handle.borrow();
+                inner.is_none()
+            } {
+                let session = client_.session(node_id).await.map_err(|e| e.to_string())?;
+                let h = tokio::task::spawn_local(async move {
+                    let mut rx_buf = RxBuffer::default();
+
+                    while let Some(Ok(data)) = rx.next().await {
+                        for payload in rx_buf.process(data) {
+                            let forward = Forward {
+                                session_id: session.id.into(),
+                                slot: FORWARD_SLOT_ID,
+                                flags: VPN_FLAG,
+                                payload: payload.into(),
+                            };
+
+                            if let Err(e) = session.send(forward).await {
+                                log::warn!("VPN forward error: {e}");
+                                return;
+                            }
+                        }
+                    }
+
+                    log::info!("VPN forwarding to {} stopped", node_id);
+                });
+
+                let mut inner = handle.borrow_mut();
+                inner.replace(h);
+            } else {
+                log::debug!("VPN forwarder already spawned");
+            }
+
+            let mut inner = state_.inner.borrow_mut();
+            for node_id in ids {
+                log::info!("VPN endpoint [{node_id}] registered");
+                inner.vpn_endpoints.insert(node_id, endpoint.clone());
+            }
+
+            Ok(())
+        }
+    });
 
     bind_local_bus(
         "/from",
@@ -576,13 +662,13 @@ fn forward_handler(
 
                 log::trace!(
                     "Net: received forward ({}) packet ({} B) from [{}]",
-                    fwd.transport,
+                    key.1,
                     fwd.payload.len(),
-                    fwd.node_id
+                    key.0
                 );
 
-                if tx.send(fwd.payload).await.is_err() {
-                    log::debug!("Net routing error: channel closed for [{}]", fwd.node_id);
+                if tx.send(fwd).await.is_err() {
+                    log::debug!("Net routing error: channel closed for [{}]", key.0);
                     state.remove(&key);
                 }
             }
@@ -592,12 +678,19 @@ fn forward_handler(
 
 fn forward_channel<'a>(
     transport: TransportType,
-) -> (mpsc::Sender<Vec<u8>>, LocalBoxStream<'a, Vec<u8>>) {
-    let (tx, rx) = mpsc::channel(1);
+) -> (mpsc::Sender<Forwarded>, LocalBoxStream<'a, Forwarded>) {
+    let (tx, rx) = mpsc::channel::<Forwarded>(1);
     let rx = if transport == TransportType::Reliable || transport == TransportType::Transfer {
-        PrefixedStream::new(rx)
+        PrefixedStream::new(rx.map(|fwd| fwd.payload))
             .inspect_err(|e| log::debug!("Prefixed stream error: {e}"))
-            .filter_map(|r| async move { r.ok().map(|b| b.to_vec()) })
+            .filter_map(move |r| async move {
+                r.ok().map(|b| Forwarded {
+                    transport,
+                    node_id: NodeId::default(),
+                    flags: 0,
+                    payload: b.to_vec(),
+                })
+            })
             .boxed_local()
     } else {
         rx.boxed_local()
@@ -607,18 +700,36 @@ fn forward_channel<'a>(
 
 /// Forward node GSB messages from the network to the local bus
 fn inbound_handler(
-    rx: impl Stream<Item = Vec<u8>> + 'static,
+    rx: impl Stream<Item = Forwarded> + 'static,
     remote_id: NodeId,
     transport: TransportType,
     state: State,
 ) -> impl Future<Output = ()> + Unpin + 'static {
-    StreamExt::for_each(rx, move |payload| {
-        let state = state.clone();
+    StreamExt::for_each(rx, move |fwd| {
+        let mut payload = fwd.payload;
+
         log::trace!(
             "local bus handler -> inbound message ({} B) from [{remote_id}]",
             payload.len()
         );
 
+        if fwd.flags & VPN_FLAG == VPN_FLAG {
+            match {
+                let state_ = state.inner.borrow();
+                state_.vpn_endpoints.get(&remote_id).map(|e| e.tx.clone())
+            } {
+                Some(tx) => {
+                    write_prefix(&mut payload);
+                    if let Err(e) = tx.send(Ok(payload)) {
+                        log::warn!("VPN endpoint error: {e}")
+                    }
+                }
+                None => log::warn!("VPN endpoint not found for node {remote_id}"),
+            }
+            return futures::future::ready(()).left_future();
+        }
+
+        let state = state.clone();
         async move {
             match codec::decode_message(payload.as_slice()) {
                 Ok(Some(GsbMessage::CallRequest(request @ ya_sb_proto::CallRequest { .. }))) => {
@@ -643,6 +754,7 @@ fn inbound_handler(
                 log::debug!("ingress message error: {}", e)
             }
         })
+        .right_future()
     })
     .boxed_local()
 }
@@ -858,9 +970,10 @@ struct State {
 #[derive(Default)]
 struct StateInner {
     requests: HashMap<String, Request<BusSender>>,
-    routes: HashMap<NetSinkKey, NetSender>,
+    routes: HashMap<NetSinkKey, mpsc::Sender<Forwarded>>,
     ids: HashSet<NodeId>,
     services: HashSet<String>,
+    vpn_endpoints: HashMap<NodeId, Rc<Endpoint>>,
 }
 
 impl State {

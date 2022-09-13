@@ -297,6 +297,24 @@ impl TryRemoteEndpoint for &str {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+pub enum VpnEndpointType {
+    Socket(std::path::PathBuf),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisterVpnEndpoint {
+    pub ids: Vec<NodeId>,
+    pub endpoint: VpnEndpointType,
+}
+
+impl RpcMessage for RegisterVpnEndpoint {
+    const ID: &'static str = "RegisterVpnEndpoint";
+    type Item = ();
+    type Error = String;
+}
+
 pub struct NetSrc {
     src: NodeId,
 }

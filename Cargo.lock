@@ -23,7 +23,7 @@ dependencies = [
  "pin-project-lite 0.2.9",
  "smallvec",
  "tokio 1.21.0",
- "tokio-util 0.7.3",
+ "tokio-util 0.7.4",
 ]
 
 [[package]]
@@ -40,7 +40,7 @@ dependencies = [
  "memchr",
  "pin-project-lite 0.2.9",
  "tokio 1.21.0",
- "tokio-util 0.7.3",
+ "tokio-util 0.7.4",
 ]
 
 [[package]]
@@ -68,9 +68,9 @@ dependencies = [
 
 [[package]]
 name = "actix-http"
-version = "3.2.1"
+version = "3.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f9ffb6db08c1c3a1f4aef540f1a63193adc73c4fbd40b75a95fc8c5258f6e51"
+checksum = "0c83abf9903e1f0ad9973cc4f7b9767fd5a03a583f51a5b7a339e07987cd2724"
 dependencies = [
  "actix-codec",
  "actix-rt",
@@ -184,7 +184,7 @@ dependencies = [
  "openssl",
  "pin-project-lite 0.2.9",
  "tokio-openssl",
- "tokio-util 0.7.3",
+ "tokio-util 0.7.4",
 ]
 
 [[package]]
@@ -199,9 +199,9 @@ dependencies = [
 
 [[package]]
 name = "actix-web"
-version = "4.1.0"
+version = "4.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a27e8fe9ba4ae613c21f677c2cfaf0696c3744030c6f485b34634e502d6bb379"
+checksum = "d48f7b6534e06c7bfc72ee91db7917d4af6afe23e7d223b51e68fffbb21e96b9"
 dependencies = [
  "actix-codec",
  "actix-http",
@@ -222,6 +222,7 @@ dependencies = [
  "encoding_rs",
  "futures-core",
  "futures-util",
+ "http",
  "itoa 1.0.3",
  "language-tags",
  "log",
@@ -257,9 +258,9 @@ dependencies = [
 
 [[package]]
 name = "actix-web-codegen"
-version = "4.0.1"
+version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f270541caec49c15673b0af0e9a00143421ad4f118d2df7edcb68b627632f56"
+checksum = "1fa9362663c8643d67b2d5eafba49e4cb2c8a053a29ed00a0bea121f17c76b13"
 dependencies = [
  "actix-router",
  "proc-macro2",
@@ -396,15 +397,15 @@ checksum = "ca77caf0ca1057c274cda103cda1363d892b7cad5f2e646afde4df0697bea100"
 
 [[package]]
 name = "alloc-no-stdlib"
-version = "2.0.3"
+version = "2.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35ef4730490ad1c4eae5c4325b2a95f521d023e5c885853ff7aca0a6a1631db3"
+checksum = "cc7bb162ec39d46ab1ca8c77bf72e890535becd1751bb45f64c597edb4c8c6b3"
 
 [[package]]
 name = "alloc-stdlib"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "697ed7edc0f1711de49ce108c541623a0af97c6c60b2f6e2b65229847ac843c2"
+checksum = "94fb8275041c72129eb51b7d0322c29b8387a0386127718b096429201a5d6ece"
 dependencies = [
  "alloc-no-stdlib",
 ]
@@ -2068,11 +2069,10 @@ checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
 
 [[package]]
 name = "form_urlencoded"
-version = "1.0.1"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fc25a87fa4fd2094bffb06925852034d90a17f0d1e05197d4956d3555752191"
+checksum = "a9c384f161156f5260c24a097c56119f9be8c798586aecc13afbcbe7b7e26bf8"
 dependencies = [
- "matches",
  "percent-encoding",
 ]
 
@@ -2487,7 +2487,7 @@ dependencies = [
  "indexmap",
  "slab",
  "tokio 1.21.0",
- "tokio-util 0.7.3",
+ "tokio-util 0.7.4",
  "tracing",
 ]
 
@@ -2798,6 +2798,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "idna"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e14ddfc70884202db2244c223200c204c2bda1bc6e0998d11b5e024d657209e6"
+dependencies = [
+ "unicode-bidi",
+ "unicode-normalization",
+]
+
+[[package]]
 name = "im"
 version = "15.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2983,9 +2993,9 @@ dependencies = [
 
 [[package]]
 name = "js-sys"
-version = "0.3.59"
+version = "0.3.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "258451ab10b34f8af53416d1fdab72c22e805f0c92a1136d59470ec0b11138b2"
+checksum = "49409df3e3bf0856b916e2ceaca09ee28e6871cf7d9ce97a692cacfdb2a25a47"
 dependencies = [
  "wasm-bindgen",
 ]
@@ -4170,15 +4180,15 @@ dependencies = [
 
 [[package]]
 name = "percent-encoding"
-version = "2.1.0"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4fd5641d01c8f18a23da7b6fe29298ff4b55afcccdf78973b24cf3175fee32e"
+checksum = "478c572c3d73181ff3c2539045f6eb99e5491218eae919370993b890cdbdd98e"
 
 [[package]]
 name = "pest"
-version = "2.3.0"
+version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b0560d531d1febc25a3c9398a62a71256c0178f2e3443baedd9ad4bb8c9deb4"
+checksum = "cb779fcf4bb850fbbb0edc96ff6cf34fd90c4b1a112ce042653280d9a7364048"
 dependencies = [
  "thiserror",
  "ucd-trie",
@@ -6288,7 +6298,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite 0.2.9",
  "tokio 1.21.0",
- "tokio-util 0.7.3",
+ "tokio-util 0.7.4",
 ]
 
 [[package]]
@@ -6347,9 +6357,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.7.3"
+version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc463cd8deddc3770d20f9852143d50bf6094e640b485cb2e189a2099085ff45"
+checksum = "0bb2e075f03b3d66d8d8785356224ba688d2906a371015e225beeb65ca92c740"
 dependencies = [
  "bytes 1.2.1",
  "futures-core",
@@ -6474,7 +6484,7 @@ dependencies = [
  "futures-channel",
  "futures-io",
  "futures-util",
- "idna",
+ "idna 0.2.3",
  "ipnet",
  "lazy_static",
  "log",
@@ -6620,13 +6630,12 @@ checksum = "39ec24b3121d976906ece63c9daad25b85969647682eee313cb5779fdd69e14e"
 
 [[package]]
 name = "url"
-version = "2.2.2"
+version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a507c383b2d33b5fc35d1861e77e6b383d158b2da5e14fe51b83dfedf6fd578c"
+checksum = "0d68c799ae75762b8c3fe375feb6600ef5602c883c5d21eb51c09f22b83c4643"
 dependencies = [
  "form_urlencoded",
- "idna",
- "matches",
+ "idna 0.3.0",
  "percent-encoding",
  "serde",
 ]
@@ -6760,9 +6769,9 @@ checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
 
 [[package]]
 name = "wasm-bindgen"
-version = "0.2.82"
+version = "0.2.83"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc7652e3f6c4706c8d9cd54832c4a4ccb9b5336e2c3bd154d5cccfbf1c1f5f7d"
+checksum = "eaf9f5aceeec8be17c128b2e93e031fb8a4d469bb9c4ae2d7dc1888b26887268"
 dependencies = [
  "cfg-if 1.0.0",
  "serde",
@@ -6772,9 +6781,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-backend"
-version = "0.2.82"
+version = "0.2.83"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "662cd44805586bd52971b9586b1df85cdbbd9112e4ef4d8f41559c334dc6ac3f"
+checksum = "4c8ffb332579b0557b52d268b91feab8df3615f265d5270fec2a8c95b17c1142"
 dependencies = [
  "bumpalo",
  "log",
@@ -6787,9 +6796,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-futures"
-version = "0.4.32"
+version = "0.4.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa76fb221a1f8acddf5b54ace85912606980ad661ac7a503b4570ffd3a624dad"
+checksum = "23639446165ca5a5de86ae1d8896b737ae80319560fbaa4c2887b7da6e7ebd7d"
 dependencies = [
  "cfg-if 1.0.0",
  "js-sys",
@@ -6799,9 +6808,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro"
-version = "0.2.82"
+version = "0.2.83"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b260f13d3012071dfb1512849c033b1925038373aea48ced3012c09df952c602"
+checksum = "052be0f94026e6cbc75cdefc9bae13fd6052cdcaf532fa6c45e7ae33a1e6c810"
 dependencies = [
  "quote",
  "wasm-bindgen-macro-support",
@@ -6809,9 +6818,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro-support"
-version = "0.2.82"
+version = "0.2.83"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5be8e654bdd9b79216c2929ab90721aa82faf65c48cdf08bdc4e7f51357b80da"
+checksum = "07bc0c051dc5f23e307b13285f9d75df86bfdf816c5721e573dec1f9b8aa193c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6822,15 +6831,15 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-shared"
-version = "0.2.82"
+version = "0.2.83"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6598dd0bd3c7d51095ff6531a5b23e02acdc81804e30d8f07afb77b7215a140a"
+checksum = "1c38c045535d93ec4f0b4defec448e4291638ee608530863b1e2ba115d4fff7f"
 
 [[package]]
 name = "web-sys"
-version = "0.3.59"
+version = "0.3.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed055ab27f941423197eb86b2035720b1a3ce40504df082cac2ecc6ed73335a1"
+checksum = "bcda906d8be16e728fd5adc5b729afad4e444e106ab28cd1c7256e54fa61510f"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
@@ -7316,7 +7325,7 @@ dependencies = [
  "thiserror",
  "tokio 1.21.0",
  "tokio-stream",
- "tokio-util 0.7.3",
+ "tokio-util 0.7.4",
  "url",
  "winapi 0.3.9",
  "ya-agreement-utils",
@@ -7532,7 +7541,7 @@ dependencies = [
  "thiserror",
  "tokio 1.21.0",
  "tokio-stream",
- "tokio-util 0.7.3",
+ "tokio-util 0.7.4",
  "url",
  "ya-client-model",
  "ya-core-model",
@@ -7712,7 +7721,6 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.3.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=6072306cefe6fb743896ef6d8c3b471260336140#6072306cefe6fb743896ef6d8c3b471260336140"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7727,13 +7735,12 @@ dependencies = [
  "url",
  "ya-relay-core",
  "ya-relay-proto",
- "ya-relay-stack 0.4.0 (git+https://github.com/golemfactory/ya-relay.git?rev=6072306cefe6fb743896ef6d8c3b471260336140)",
+ "ya-relay-stack 0.4.0",
 ]
 
 [[package]]
 name = "ya-relay-core"
 version = "0.3.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=6072306cefe6fb743896ef6d8c3b471260336140#6072306cefe6fb743896ef6d8c3b471260336140"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7752,18 +7759,17 @@ dependencies = [
  "sha3 0.9.1",
  "thiserror",
  "tokio 1.21.0",
- "tokio-util 0.7.3",
+ "tokio-util 0.7.4",
  "url",
  "uuid",
  "ya-client-model",
  "ya-relay-proto",
- "ya-relay-stack 0.4.0 (git+https://github.com/golemfactory/ya-relay.git?rev=6072306cefe6fb743896ef6d8c3b471260336140)",
+ "ya-relay-stack 0.4.0",
 ]
 
 [[package]]
 name = "ya-relay-proto"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=6072306cefe6fb743896ef6d8c3b471260336140#6072306cefe6fb743896ef6d8c3b471260336140"
 dependencies = [
  "anyhow",
  "bytes 1.2.1",
@@ -7774,7 +7780,25 @@ dependencies = [
  "rand 0.8.5",
  "thiserror",
  "tokio 1.21.0",
- "tokio-util 0.7.3",
+ "tokio-util 0.7.4",
+]
+
+[[package]]
+name = "ya-relay-stack"
+version = "0.4.0"
+dependencies = [
+ "derive_more",
+ "futures 0.3.24",
+ "lazy_static",
+ "log",
+ "managed 0.8.0",
+ "num-derive",
+ "num-traits",
+ "rand 0.8.5",
+ "smoltcp 0.8.1 (git+https://github.com/golemfactory/smoltcp?rev=acb743b6990fd92303c24c43ff75711422a5cb94)",
+ "thiserror",
+ "tokio 1.21.0",
+ "tokio-stream",
 ]
 
 [[package]]
@@ -7796,25 +7820,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ya-relay-stack"
-version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=6072306cefe6fb743896ef6d8c3b471260336140#6072306cefe6fb743896ef6d8c3b471260336140"
-dependencies = [
- "derive_more",
- "futures 0.3.24",
- "lazy_static",
- "log",
- "managed 0.8.0",
- "num-derive",
- "num-traits",
- "rand 0.8.5",
- "smoltcp 0.8.1 (git+https://github.com/golemfactory/smoltcp?rev=acb743b6990fd92303c24c43ff75711422a5cb94)",
- "thiserror",
- "tokio 1.21.0",
- "tokio-stream",
-]
-
-[[package]]
 name = "ya-runtime-api"
 version = "0.4.1"
 dependencies = [
@@ -7828,7 +7833,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio 1.21.0",
- "tokio-util 0.7.3",
+ "tokio-util 0.7.4",
 ]
 
 [[package]]
@@ -7842,7 +7847,7 @@ dependencies = [
  "prost-build 0.7.0",
  "thiserror",
  "tokio 1.21.0",
- "tokio-util 0.7.3",
+ "tokio-util 0.7.4",
  "url",
 ]
 
@@ -7868,7 +7873,7 @@ dependencies = [
  "structopt",
  "tokio 1.21.0",
  "tokio-stream",
- "tokio-util 0.7.3",
+ "tokio-util 0.7.4",
  "url",
  "uuid",
  "ya-sb-proto",
@@ -7983,7 +7988,7 @@ dependencies = [
  "serde",
  "thiserror",
  "tokio 1.21.0",
- "tokio-util 0.7.3",
+ "tokio-util 0.7.4",
  "url",
  "uuid",
  "ya-sb-proto",
@@ -8039,7 +8044,7 @@ dependencies = [
  "thiserror",
  "tokio 1.21.0",
  "tokio-tar",
- "tokio-util 0.7.3",
+ "tokio-util 0.7.4",
  "url",
  "walkdir",
  "ya-client-model",
@@ -8072,7 +8077,7 @@ dependencies = [
 
 [[package]]
 name = "ya-utils-networking"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "anyhow",
  "futures 0.3.24",
@@ -8081,6 +8086,8 @@ dependencies = [
  "log",
  "regex",
  "thiserror",
+ "tokio 1.21.0",
+ "tokio-stream",
  "trust-dns-resolver",
  "url",
  "ya-relay-stack 0.4.0 (git+https://github.com/golemfactory/ya-relay.git?rev=0e6863c24767a246531d038455921f12c9e75e94)",
@@ -8243,7 +8250,7 @@ dependencies = [
  "structopt",
  "tokio 1.21.0",
  "tokio-stream",
- "tokio-util 0.7.3",
+ "tokio-util 0.7.4",
  "url",
  "ya-activity",
  "ya-client",

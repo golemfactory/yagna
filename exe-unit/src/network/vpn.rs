@@ -1,15 +1,21 @@
 use std::convert::TryFrom;
 use std::ops::Not;
+use std::path::PathBuf;
+use std::str::FromStr;
 
 use actix::prelude::*;
+// use futures::{future, FutureExt, TryFutureExt, TryStreamExt};
 use futures::{future, FutureExt, TryFutureExt};
 
 use ya_client_model::NodeId;
 use ya_core_model::activity::{self, RpcMessageError, VpnControl, VpnPacket};
 use ya_core_model::identity;
+use ya_core_model::net::{RegisterVpnEndpoint, VpnEndpointType};
 use ya_runtime_api::server::{CreateNetwork, NetworkInterface, RuntimeService};
 use ya_service_bus::typed::Endpoint as GsbEndpoint;
 use ya_service_bus::{actix_rpc, typed, RpcEndpoint, RpcEnvelope, RpcRawCall};
+// use ya_utils_networking::socket::{write_prefix, Endpoint, RxBuffer};
+use ya_utils_networking::socket::RxBuffer;
 use ya_utils_networking::vpn::network::DuoEndpoint;
 use ya_utils_networking::vpn::{common::ntoh, Error as NetError, PeekPacket};
 use ya_utils_networking::vpn::{ArpField, ArpPacket, EtherFrame, EtherType, IpPacket, Networks};
@@ -18,7 +24,6 @@ use crate::acl::Acl;
 use crate::error::Error;
 use crate::message::Shutdown;
 use crate::network;
-use crate::network::{Endpoint, RxBuffer};
 use crate::state::Deployment;
 
 pub(crate) async fn start_vpn<R: RuntimeService>(
@@ -56,11 +61,25 @@ pub(crate) async fn start_vpn<R: RuntimeService>(
         .await
         .map_err(|e| Error::Other(format!("initialization error: {:?}", e)))?;
 
-    let endpoint = match created.endpoint {
-        Some(endpoint) => Endpoint::connect(endpoint).await?,
-        None => return Err(Error::Other("endpoint already connected".into())),
+    // let endpoint = match created.endpoint.clone() {
+    //     Some(endpoint) => match endpoint {
+    //         ya_runtime_api::server::proto::response::create_network::Endpoint::Socket(path) => {
+    //             Endpoint::socket(path).await?
+    //         }
+    //     },
+    //     None => return Err(Error::Other("endpoint already connected".into())),
+    // };
+    // let vpn = Vpn::try_new(node_id, acl, endpoint, deployment.clone())?;
+
+    let endpoint_path = match created.endpoint {
+        Some(kind) => match kind {
+            ya_runtime_api::server::proto::response::create_network::Endpoint::Socket(path) => {
+                PathBuf::from(path)
+            }
+        },
+        None => return Err(Error::Other("endpoint not defined".into())),
     };
-    let vpn = Vpn::try_new(node_id, acl, endpoint, deployment.clone())?;
+    let vpn = Vpn::try_new(node_id, acl, endpoint_path, deployment.clone())?;
 
     Ok(Some(vpn.start()))
 }
@@ -71,7 +90,8 @@ pub(crate) struct Vpn {
     #[allow(unused)]
     acl: Acl,
     networks: Networks<DuoEndpoint<GsbEndpoint>>,
-    endpoint: Endpoint,
+    // endpoint: Endpoint,
+    endpoint_path: PathBuf,
     rx_buf: Option<RxBuffer>,
 }
 
@@ -79,7 +99,8 @@ impl Vpn {
     fn try_new(
         node_id: NodeId,
         acl: Acl,
-        endpoint: Endpoint,
+        // endpoint: Endpoint,
+        endpoint_path: PathBuf,
         deployment: Deployment,
     ) -> crate::Result<Self> {
         let mut networks = Networks::default();
@@ -101,7 +122,8 @@ impl Vpn {
             default_id: node_id.to_string(),
             acl,
             networks,
-            endpoint,
+            // endpoint,
+            endpoint_path,
             rx_buf: Some(Default::default()),
         })
     }
@@ -175,12 +197,12 @@ impl Vpn {
             }
         }
 
-        let mut data = data.into();
-        network::write_prefix(&mut data);
-
-        if let Err(e) = self.endpoint.tx.send(Ok(data)) {
-            log::debug!("[vpn] ingress error: {}", e);
-        }
+        // let mut data = data.into();
+        // write_prefix(&mut data);
+        //
+        // if let Err(e) = self.endpoint.tx.send(Ok(data)) {
+        //     log::debug!("[vpn] ingress error: {}", e);
+        // }
     }
 
     fn forward_frame(
@@ -199,6 +221,41 @@ impl Vpn {
             .then(|_| future::ready(()))
             .into_actor(self)
             .spawn(ctx);
+    }
+
+    fn register_nodes(&self, ctx: &mut Context<Self>) {
+        log::info!("register_nodes called");
+
+        let ids = self
+            .networks
+            .iter()
+            .flat_map(|n| n.nodes().keys().collect::<Vec<_>>())
+            .filter_map(|id| NodeId::from_str(id.as_str()).ok())
+            .filter(|n| n.to_string() != self.default_id)
+            .collect::<Vec<_>>();
+
+        let msg = RegisterVpnEndpoint {
+            ids,
+            endpoint: VpnEndpointType::Socket(self.endpoint_path.clone()),
+        };
+
+        async move {
+            log::info!("Registering VPN nodes");
+
+            match typed::service("/net/vpn").send(msg).await {
+                Ok(Ok(())) => Ok(()),
+                Ok(Err(e)) => Err(Error::Other(e)),
+                Err(e) => Err(Error::from(e)),
+            }
+        }
+        .into_actor(self)
+        .map(move |result, _actor, ctx| {
+            if let Err(e) = result {
+                log::error!("VPN registration error: {e}");
+                ctx.stop();
+            }
+        })
+        .wait(ctx);
     }
 }
 
@@ -228,16 +285,20 @@ impl Actor for Vpn {
             });
         });
 
-        match self.endpoint.rx.take() {
-            Some(rx) => {
-                Self::add_stream(rx, ctx);
-                log::info!("[vpn] service started")
-            }
-            None => {
-                log::error!("[vpn] local endpoint missing");
-                ctx.stop();
-            }
-        };
+        self.register_nodes(ctx);
+
+        // match self.endpoint.rx.take() {
+        //     Some(rx) => {
+        //         Self::add_stream(rx.map_err(Error::from), ctx);
+        //         log::info!("[vpn] service started")
+        //     }
+        //     None => {
+        //         log::error!("[vpn] local endpoint missing");
+        //         ctx.stop();
+        //     }
+        // };
+
+        log::info!("[vpn] service started");
     }
 
     fn stopping(&mut self, ctx: &mut Self::Context) -> Running {
@@ -329,7 +390,7 @@ impl Handler<Packet> for Vpn {
 impl Handler<RpcEnvelope<VpnControl>> for Vpn {
     type Result = <RpcEnvelope<VpnControl> as Message>::Result;
 
-    fn handle(&mut self, msg: RpcEnvelope<VpnControl>, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: RpcEnvelope<VpnControl>, ctx: &mut Context<Self>) -> Self::Result {
         // if !self.acl.has_access(msg.caller(), AccessRole::Control) {
         //     return Err(AclError::Forbidden(msg.caller().to_string(), AccessRole::Control).into());
         // }
@@ -342,6 +403,8 @@ impl Handler<RpcEnvelope<VpnControl>> for Vpn {
                         .add_node(ip, &id, network::gsb_endpoint)
                         .map_err(Error::from)?;
                 }
+
+                self.register_nodes(ctx);
             }
             VpnControl::RemoveNodes {
                 network_id,

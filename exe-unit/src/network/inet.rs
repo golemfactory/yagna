@@ -28,6 +28,7 @@ use net::{EgressReceiver, IngressEvent, IngressReceiver};
 use net::{Error as NetError, Protocol};
 
 use ya_runtime_api::server::{CreateNetwork, NetworkInterface, RuntimeService};
+use ya_utils_networking::socket::{write_prefix, Endpoint, RxBuffer};
 use ya_utils_networking::vpn::common::{ntoh, DEFAULT_MAX_FRAME_SIZE};
 use ya_utils_networking::vpn::stack as net;
 use ya_utils_networking::vpn::stack::smoltcp::wire::{EthernetAddress, HardwareAddress};
@@ -38,8 +39,6 @@ use ya_utils_networking::vpn::{
 
 use crate::manifest::UrlValidator;
 use crate::message::Shutdown;
-use crate::network;
-use crate::network::{Endpoint, RxBuffer};
 use crate::{Error, Result};
 
 const IP4_ADDRESS: std::net::Ipv4Addr = std::net::Ipv4Addr::new(9, 0, 0x0d, 0x01);
@@ -99,7 +98,11 @@ pub(crate) async fn start_inet<R: RuntimeService>(
         .map_err(|e| Error::Other(format!("initialization error: {:?}", e)))?;
 
     let endpoint = match response.endpoint {
-        Some(endpoint) => Endpoint::connect(endpoint).await?,
+        Some(endpoint) => match endpoint {
+            ya_runtime_api::server::proto::response::create_network::Endpoint::Socket(path) => {
+                Endpoint::socket(path).await?
+            }
+        },
         None => return Err(Error::Other("endpoint already connected".into())),
     };
 
@@ -208,16 +211,18 @@ impl Handler<Shutdown> for Inet {
     }
 }
 
-async fn inet_endpoint_egress_handler(
-    mut rx: Box<dyn Stream<Item = Result<Vec<u8>>> + Unpin>,
+async fn inet_endpoint_egress_handler<E>(
+    mut rx: Box<dyn Stream<Item = std::result::Result<Vec<u8>, E>> + Unpin>,
     router: Router,
-) {
+) where
+    Error: From<E>,
+{
     let mut rx_buf = RxBuffer::default();
 
     while let Some(result) = rx.next().await {
         let received = match result {
             Ok(vec) => vec,
-            Err(err) => return log::debug!("[inet] runtime -> inet error: {}", err),
+            Err(err) => return log::debug!("[inet] runtime -> inet error: {}", Error::from(err)),
         };
 
         for packet in rx_buf.process(received) {
@@ -278,7 +283,7 @@ async fn inet_egress_handler<E: std::fmt::Display>(
         let mut frame = event.payload.into_vec();
         log::debug!("[inet] egress -> runtime packet {} B", frame.len());
 
-        network::write_prefix(&mut frame);
+        write_prefix(&mut frame);
         if let Err(e) = fwd.send(Ok(frame)) {
             log::debug!("[inet] egress -> runtime error: {}", e);
         }

@@ -1,8 +1,9 @@
+use std::collections::{BTreeSet, HashMap};
+use std::net::IpAddr;
+
 use crate::vpn::common::{hton, to_ip, to_octets};
 use crate::vpn::Error;
 use ipnet::IpNet;
-use std::collections::{BTreeSet, HashMap};
-use std::net::IpAddr;
 
 #[derive(Clone)]
 pub struct DuoEndpoint<E> {
@@ -62,6 +63,10 @@ impl<E: Clone> Networks<E> {
 
     pub fn remove(&mut self, id: &str) -> Option<Network<E>> {
         self.networks.remove(id)
+    }
+
+    pub fn iter(&self) -> std::collections::hash_map::Values<String, Network<E>> {
+        self.networks.values()
     }
 }
 

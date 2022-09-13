@@ -62,6 +62,8 @@ pub enum Error {
     AgreementError(#[from] agreement::Error),
     #[error("Net error: {0}")]
     Net(#[from] ya_utils_networking::vpn::Error),
+    #[error("Net endpoint error: {0}")]
+    Endpoint(#[from] ya_utils_networking::socket::EndpointError),
     #[error(transparent)]
     Acl(#[from] crate::acl::Error),
     #[error(transparent)]
@@ -140,6 +142,7 @@ impl From<Error> for RpcError {
             Error::GsbError(e) => RpcError::Service(e),
             Error::UsageLimitExceeded(e) => RpcError::UsageLimitExceeded(e),
             Error::Net(e) => RpcError::Service(e.to_string()),
+            Error::Endpoint(e) => RpcError::Service(e.to_string()),
             Error::Acl(e) => RpcError::Forbidden(e.to_string()),
             Error::Validation(e) => RpcError::BadRequest(e.to_string()),
             Error::Other(e) => RpcError::Service(e),
