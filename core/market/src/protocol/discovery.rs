@@ -260,7 +260,7 @@ impl Discovery {
         if self.re_broadcast_enabled() {
             self.bind_gsb_broadcast().await.map_or_else(
                 |e| {
-                    log::warn!("Failed to subscribe to broadcasts. Error: {:?}.", e,);
+                    log::warn!("Failed to subscribe to broadcasts. Error: {e}.");
                 },
                 |_| (),
             );

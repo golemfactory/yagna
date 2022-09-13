@@ -12,7 +12,8 @@ use ya_core_model::NodeId;
 
 use crate::appkey;
 use crate::command::{
-    NetworkGroup, PaymentSummary, YaCommand, ERC20_DRIVER, NETWORK_GROUP_MAP, ZKSYNC_DRIVER,
+    NetworkGroup, PaymentSummary, YaCommand, DRIVERS, ERC20_DRIVER, NETWORK_GROUP_MAP,
+    ZKSYNC_DRIVER,
 };
 use crate::platform::Status as KvmStatus;
 use crate::utils::{is_yagna_running, payment_account};
@@ -31,16 +32,12 @@ async fn payment_status(
         let mut f = vec![];
         let mut l = vec![];
         for nn in NETWORK_GROUP_MAP[&network_group].iter() {
-            if let Ok(_) = ZKSYNC_DRIVER.platform(&nn) {
-                l.push("zksync".to_string());
-                f.push(cmd.yagna()?.payment_status(&address, nn, &ZKSYNC_DRIVER));
+            for driver in DRIVERS.iter() {
+                if driver.platform(&nn).is_ok() {
+                    l.push(driver.status_label(nn));
+                    f.push(cmd.yagna()?.payment_status(&address, nn, driver));
+                }
             }
-            if nn == &NetworkName::Mainnet {
-                l.push("on-chain".to_string());
-            } else {
-                l.push(nn.to_string().to_lowercase());
-            };
-            f.push(cmd.yagna()?.payment_status(&address, nn, &ERC20_DRIVER));
         }
         (f, l)
     };

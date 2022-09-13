@@ -20,6 +20,8 @@ pub enum Error {
     InternalErr(String),
     #[error("bad keystore format: {0}")]
     BadKeyStoreFormat(String),
+    #[error("invalid password")]
+    InvalidPassword,
 }
 
 impl Error {
@@ -207,6 +209,18 @@ pub struct Subscribe {
 
 impl RpcMessage for Subscribe {
     const ID: &'static str = "Subscribe";
+    type Item = Ack;
+    type Error = Error;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Unsubscribe {
+    pub endpoint: String,
+}
+
+impl RpcMessage for Unsubscribe {
+    const ID: &'static str = "Unsubscribe";
     type Item = Ack;
     type Error = Error;
 }

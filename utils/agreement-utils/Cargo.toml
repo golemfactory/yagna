@@ -13,7 +13,7 @@ keywords=["golem", "yagna"]
 default = []
 
 [dependencies]
-ya-client-model = "0.4"
+ya-client-model = "0.5"
 
 regex = "1.5.4"
 serde = "1.0"

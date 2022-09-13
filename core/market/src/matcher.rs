@@ -238,7 +238,7 @@ impl Matcher {
             // If re-broadcasts are disabled, fallback to lazy broadcast binding
             self.discovery.bind_gsb_broadcast().await.map_or_else(
                 |e| {
-                    log::warn!("Failed to subscribe to broadcasts. Error: {:?}.", e,);
+                    log::warn!("Failed to subscribe to broadcasts. Error: {e}.");
                 },
                 |_| (),
             );

@@ -718,7 +718,7 @@ where
 {
     let subscriptions = subscriptions.into_iter();
     let mut all_broadcasted = false;
-    'retry: for _i in 0..10 {
+    'retry: for _i in 0..30 {
         for subscription in subscriptions.clone() {
             for mkt in mkts {
                 if mkt.get_offer(&subscription).await.is_err() {
