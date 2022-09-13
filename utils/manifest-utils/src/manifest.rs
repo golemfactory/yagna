@@ -76,7 +76,7 @@ pub enum Feature {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppManifest {
-    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    #[cfg_attr(feature = "schema", schemars(with = "String", description = "Semver"))]
     pub version: Version,
     pub created_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
@@ -184,7 +184,7 @@ pub struct PayloadPlatform {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompManifest {
-    #[cfg_attr(feature = "schema", schemars(with = "String"))]
+    #[cfg_attr(feature = "schema", schemars(with = "String", description = "Semver"))]
     pub version: Version,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub script: Option<Script>,
