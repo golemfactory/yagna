@@ -10,7 +10,7 @@ default = []
 [dependencies]
 ya-agreement-utils = { version = "0.4" }
 ya-client-model = { version = "0.5", features = ["with-diesel"] }
-ya-core-model = { version = "^0.7", features = [ "activity", "driver", "identity", "market", "payment" ] }
+ya-core-model = { version = "^0.8", features = [ "activity", "driver", "identity", "market", "payment" ] }
 ya-net = "0.2"
 ya-metrics = "0.1.0"
 ya-persistence = "0.2"
