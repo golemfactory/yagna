@@ -7289,7 +7289,7 @@ dependencies = [
  "tokio 1.21.1",
  "tokio-stream",
  "uuid",
- "ya-client-model 0.5.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-net",
  "ya-persistence",
@@ -7298,19 +7298,6 @@ dependencies = [
  "ya-service-api-interfaces",
  "ya-service-api-web",
  "ya-service-bus",
-]
-
-[[package]]
-name = "ya-agreement-utils"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a59f53bc89329d33bc1d143027535ae36fd0a981e6c5bfb2363516ff32ddf8e"
-dependencies = [
- "serde",
- "serde_json",
- "serde_yaml 0.8.26",
- "thiserror",
- "ya-client-model 0.4.0",
 ]
 
 [[package]]
@@ -7325,7 +7312,7 @@ dependencies = [
  "shlex 1.1.0",
  "tempdir",
  "thiserror",
- "ya-client-model 0.5.0",
+ "ya-client-model",
 ]
 
 [[package]]
@@ -7351,24 +7338,7 @@ dependencies = [
  "structopt",
  "thiserror",
  "url",
- "ya-client-model 0.5.0",
-]
-
-[[package]]
-name = "ya-client-model"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad140f78c6350dd741dd446ccb54c4ea1d521f4000edaa6699003ad8a2486f2a"
-dependencies = [
- "bigdecimal 0.2.2",
- "chrono",
- "derive_more",
- "rand 0.7.3",
- "serde",
- "serde_json",
- "strum 0.19.5",
- "strum_macros 0.19.4",
- "thiserror",
+ "ya-client-model",
 ]
 
 [[package]]
@@ -7418,7 +7388,7 @@ dependencies = [
  "strum 0.24.1",
  "strum_macros 0.24.3",
  "thiserror",
- "ya-client-model 0.5.0",
+ "ya-client-model",
  "ya-service-bus",
 ]
 
@@ -7446,7 +7416,7 @@ dependencies = [
  "serde_json",
  "tokio 1.21.1",
  "uuid",
- "ya-client-model 0.5.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-payment-driver",
  "ya-persistence",
@@ -7487,7 +7457,7 @@ dependencies = [
  "tokio 1.21.1",
  "uuid",
  "web3 0.16.0",
- "ya-client-model 0.5.0",
+ "ya-client-model",
  "ya-payment-driver",
  "ya-service-api-interfaces",
  "ya-utils-futures",
@@ -7540,8 +7510,8 @@ dependencies = [
  "tokio-util 0.7.4",
  "url",
  "winapi 0.3.9",
- "ya-agreement-utils 0.4.0",
- "ya-client-model 0.5.0",
+ "ya-agreement-utils",
+ "ya-client-model",
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-manifest-utils",
@@ -7596,7 +7566,7 @@ dependencies = [
  "thiserror",
  "tokio 1.21.1",
  "uuid",
- "ya-client-model 0.5.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-persistence",
  "ya-sb-router",
@@ -7644,7 +7614,7 @@ dependencies = [
  "test-case",
  "thiserror",
  "url",
- "ya-agreement-utils 0.4.0",
+ "ya-agreement-utils",
  "ya-manifest-test-utils",
  "ya-utils-path",
 ]
@@ -7689,7 +7659,7 @@ dependencies = [
  "thiserror",
  "tokio 1.21.1",
  "uuid",
- "ya-agreement-utils 0.4.0",
+ "ya-agreement-utils",
  "ya-client",
  "ya-core-model",
  "ya-diesel-utils",
@@ -7718,7 +7688,7 @@ dependencies = [
  "semver 0.11.0",
  "serde_json",
  "thiserror",
- "ya-agreement-utils 0.4.0",
+ "ya-agreement-utils",
 ]
 
 [[package]]
@@ -7773,7 +7743,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util 0.7.4",
  "url",
- "ya-client-model 0.5.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-relay-client",
  "ya-sb-proto",
@@ -7817,9 +7787,9 @@ dependencies = [
  "tokio 1.21.1",
  "uint 0.7.1",
  "uuid",
- "ya-agreement-utils 0.4.0",
+ "ya-agreement-utils",
  "ya-client",
- "ya-client-model 0.5.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-dummy-driver",
  "ya-erc20-driver",
@@ -7857,7 +7827,7 @@ dependencies = [
  "sha3 0.9.1",
  "thiserror",
  "tokio 1.21.0",
- "ya-client-model 0.5.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-persistence",
  "ya-service-bus",
@@ -7881,7 +7851,7 @@ dependencies = [
  "test-case",
  "thiserror",
  "tokio 1.21.0",
- "ya-client-model 0.5.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-service-api",
  "ya-service-api-interfaces",
@@ -7939,9 +7909,9 @@ dependencies = [
  "url",
  "walkdir",
  "winapi 0.3.9",
- "ya-agreement-utils 0.4.0",
+ "ya-agreement-utils",
  "ya-client",
- "ya-client-model 0.5.0",
+ "ya-client-model",
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-file-logging",
@@ -8001,7 +7971,7 @@ dependencies = [
  "tokio-util 0.7.4",
  "url",
  "uuid",
- "ya-client-model 0.5.0",
+ "ya-client-model",
  "ya-relay-proto",
  "ya-relay-stack",
 ]
@@ -8229,7 +8199,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "graphene-sgx",
- "ya-client-model 0.5.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-service-bus",
 ]
@@ -8275,7 +8245,7 @@ dependencies = [
  "tokio-util 0.7.4",
  "url",
  "walkdir",
- "ya-client-model 0.5.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-service-bus",
  "ya-utils-path",
@@ -8418,7 +8388,7 @@ dependencies = [
  "url",
  "uuid",
  "ya-client",
- "ya-client-model 0.5.0",
+ "ya-client-model",
  "ya-core-model",
  "ya-net",
  "ya-persistence",
@@ -8457,7 +8427,7 @@ dependencies = [
  "tokio 1.21.1",
  "tokio-compat-02",
  "uuid",
- "ya-client-model 0.5.0",
+ "ya-client-model",
  "ya-payment-driver",
  "ya-service-api-interfaces",
  "ya-utils-futures",
@@ -8492,7 +8462,7 @@ dependencies = [
  "url",
  "ya-activity",
  "ya-client",
- "ya-client-model 0.5.0",
+ "ya-client-model",
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-dummy-driver",
