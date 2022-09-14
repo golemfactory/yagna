@@ -1,6 +1,6 @@
 [package]
 name = "ya-transfer"
-version = "0.2.0"
+version = "0.3.0"
 description = "Yagna transfer util"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"

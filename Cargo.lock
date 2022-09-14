@@ -2378,7 +2378,7 @@ dependencies = [
 
 [[package]]
 name = "golemsp"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "actix-rt",
  "ansi_term",
@@ -6282,7 +6282,7 @@ dependencies = [
 
 [[package]]
 name = "tokio-process-ns"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "libc",
  "nix 0.22.3",
@@ -7081,7 +7081,7 @@ dependencies = [
 
 [[package]]
 name = "ya-activity"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "actix-http",
  "actix-rt",
@@ -7223,7 +7223,7 @@ dependencies = [
 
 [[package]]
 name = "ya-dummy-driver"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "bigdecimal 0.2.2",
@@ -7244,7 +7244,7 @@ dependencies = [
 
 [[package]]
 name = "ya-erc20-driver"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "actix-rt",
  "anyhow",
@@ -7284,7 +7284,7 @@ dependencies = [
 
 [[package]]
 name = "ya-exe-unit"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "actix",
  "actix-files",
@@ -7355,7 +7355,7 @@ dependencies = [
 
 [[package]]
 name = "ya-identity"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "actix-rt",
  "actix-service",
@@ -7397,7 +7397,7 @@ dependencies = [
 
 [[package]]
 name = "ya-manifest-utils"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "base64 0.13.0",
@@ -7421,7 +7421,7 @@ dependencies = [
 
 [[package]]
 name = "ya-market"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "actix",
  "actix-http",
@@ -7493,7 +7493,7 @@ dependencies = [
 
 [[package]]
 name = "ya-metrics"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix-web",
  "anyhow",
@@ -7517,7 +7517,7 @@ dependencies = [
 
 [[package]]
 name = "ya-net"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "actix",
  "actix-web",
@@ -7556,7 +7556,7 @@ dependencies = [
 
 [[package]]
 name = "ya-payment"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "actix-rt",
  "actix-web",
@@ -7605,7 +7605,7 @@ dependencies = [
 
 [[package]]
 name = "ya-payment-driver"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "actix",
  "anyhow",
@@ -7634,7 +7634,7 @@ dependencies = [
 
 [[package]]
 name = "ya-persistence"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "bigdecimal 0.2.2",
@@ -7659,7 +7659,7 @@ dependencies = [
 
 [[package]]
 name = "ya-provider"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "actix",
  "actix-rt",
@@ -7920,7 +7920,7 @@ dependencies = [
 
 [[package]]
 name = "ya-service-api-derive"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix-rt",
  "actix-service",
@@ -7940,7 +7940,7 @@ dependencies = [
 
 [[package]]
 name = "ya-service-api-interfaces"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix-web",
  "anyhow",
@@ -7949,7 +7949,7 @@ dependencies = [
 
 [[package]]
 name = "ya-service-api-web"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "actix-rt",
  "actix-service",
@@ -8001,7 +8001,7 @@ dependencies = [
 
 [[package]]
 name = "ya-sgx"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "graphene-sgx",
@@ -8020,7 +8020,7 @@ dependencies = [
 
 [[package]]
 name = "ya-transfer"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "actix-http",
  "actix-rt",
@@ -8060,7 +8060,7 @@ dependencies = [
 
 [[package]]
 name = "ya-utils-actix"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "actix",
  "actix-rt",
@@ -8073,7 +8073,7 @@ dependencies = [
 
 [[package]]
 name = "ya-utils-futures"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "futures 0.3.24",
  "tokio 1.21.1",
@@ -8081,7 +8081,7 @@ dependencies = [
 
 [[package]]
 name = "ya-utils-networking"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "futures 0.3.24",
@@ -8106,7 +8106,7 @@ dependencies = [
 
 [[package]]
 name = "ya-utils-process"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix",
  "anyhow",
@@ -8129,7 +8129,7 @@ dependencies = [
 
 [[package]]
 name = "ya-version"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix-web",
  "anyhow",
@@ -8155,7 +8155,7 @@ dependencies = [
 
 [[package]]
 name = "ya-vpn"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "actix",
  "actix-rt",
@@ -8195,7 +8195,7 @@ dependencies = [
 
 [[package]]
 name = "ya-zksync-driver"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "actix-rt",
  "anyhow",
@@ -8232,7 +8232,7 @@ dependencies = [
 
 [[package]]
 name = "yagna"
-version = "0.10.1"
+version = "0.11.0"
 dependencies = [
  "actix-rt",
  "actix-service",

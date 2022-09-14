@@ -1,6 +1,6 @@
 [package]
 name = "ya-net"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
@@ -20,9 +20,9 @@ ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = 
 
 ya-sb-proto = { version = "0.6" }
 ya-service-api = "0.1"
-ya-service-api-interfaces = "0.1"
+ya-service-api-interfaces = "0.2"
 ya-service-bus = "0.6"
-ya-utils-networking = "0.1"
+ya-utils-networking = "0.2"
 
 actix = "0.13"
 actix-web = "4"

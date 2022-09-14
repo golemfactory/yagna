@@ -1,6 +1,6 @@
 [package]
 name = "ya-erc20-driver"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
@@ -35,11 +35,11 @@ uuid = { version = "0.8", features = ["v4"] }
 web3 = { version = "0.16", default-features = false, features = [ "http-tls", "signing", "ws-tls-tokio" ] }
 
 ## yagna dependencies
-ya-payment-driver = "0.2"
+ya-payment-driver = "0.3"
 ya-client-model = "0.5"
-ya-service-api-interfaces = "0.1"
-ya-utils-futures = "0.1"
-ya-utils-networking = "0.1"
+ya-service-api-interfaces = "0.2"
+ya-utils-futures = "0.2"
+ya-utils-networking = "0.2"
 
 [dev-dependencies]
 actix-rt = "2.7"

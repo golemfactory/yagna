@@ -1,6 +1,6 @@
 [package]
 name = "ya-identity"
-version = "0.2.1"
+version = "0.3.0"
 description = "Yagna identity management"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
@@ -8,9 +8,9 @@ edition = "2018"
 [dependencies]
 ya-client-model = { version = "0.5", features = ["with-diesel"] }
 ya-core-model = { version = "^0.8", features = ["identity", "appkey"] }
-ya-persistence = "0.2"
+ya-persistence = "0.3"
 ya-service-api = "0.1"
-ya-service-api-interfaces = "0.1"
+ya-service-api-interfaces = "0.2"
 ya-service-bus = "0.6"
 
 anyhow = "1.0"
@@ -36,7 +36,7 @@ rustc-hex = "2.1.0"
 yansi = "0.5.0"
 
 [dev-dependencies]
-ya-service-api-derive = "0.1"
+ya-service-api-derive = "0.2"
 ya-sb-router = "0.6"
 
 actix-rt = "2.7"

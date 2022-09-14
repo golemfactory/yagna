@@ -1,6 +1,6 @@
 [package]
 name = "ya-service-api-web"
-version = "0.1.1"
+version = "0.2.0"
 description = "Web interface for modules of Yagna service and CLI"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
@@ -21,11 +21,11 @@ serde = { version = "1.0", features = ["derive"] }
 url = "2.1.1"
 
 [dev-dependencies]
-ya-identity = "0.2"
-ya-persistence = "0.2"
+ya-identity = "0.3"
+ya-persistence = "0.3"
 ya-sb-router = "0.6"
-ya-service-api-derive = "0.1"
-ya-service-api-interfaces = "0.1"
+ya-service-api-derive = "0.2"
+ya-service-api-interfaces = "0.2"
 
 actix-rt = "2.7"
 anyhow = "1.0"

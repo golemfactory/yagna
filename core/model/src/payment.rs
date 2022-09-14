@@ -25,8 +25,8 @@ pub mod local {
     use std::fmt::Display;
     use std::time::Duration;
     use structopt::*;
-    use strum_macros::{Display, EnumString, EnumVariantNames, IntoStaticStr};
     use strum::{EnumProperty, VariantNames};
+    use strum_macros::{Display, EnumString, EnumVariantNames, IntoStaticStr};
 
     use ya_client_model::NodeId;
 
