@@ -28,7 +28,7 @@ use crate::service::transfer::{AddVolumes, DeployImage, TransferResource, Transf
 use crate::service::{ServiceAddr, ServiceControl};
 use crate::state::{ExeUnitState, StateError, Supervision};
 
-mod acl;
+pub mod acl;
 pub mod agreement;
 #[cfg(feature = "sgx")]
 pub mod crypto;

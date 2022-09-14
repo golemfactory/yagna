@@ -226,12 +226,15 @@ impl Vpn {
     fn register_nodes(&self, ctx: &mut Context<Self>) {
         log::info!("register_nodes called");
 
+        // FIXME: this workaround excludes requestor id from the node list
+        let controllers = self.acl.controllers();
+
         let ids = self
             .networks
             .iter()
             .flat_map(|n| n.nodes().keys().collect::<Vec<_>>())
             .filter_map(|id| NodeId::from_str(id.as_str()).ok())
-            .filter(|n| n.to_string() != self.default_id)
+            .filter(|n| n.to_string() != self.default_id && !controllers.contains(n))
             .collect::<Vec<_>>();
 
         let msg = RegisterVpnEndpoint {

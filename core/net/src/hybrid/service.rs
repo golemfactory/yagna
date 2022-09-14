@@ -183,11 +183,7 @@ pub async fn start_network(
         let handle = handle.clone();
 
         async move {
-            let ids = msg
-                .ids
-                .into_iter()
-                .filter(|id| id.to_string() != "0xee9b0706c981400d856611367c4f3d34984e0531")
-                .collect::<Vec<_>>();
+            let ids = msg.ids;
 
             if ids.is_empty() {
                 log::info!("RegisterVpnEndpoint missing nodes");

@@ -1,13 +1,18 @@
-use crate::metrics::{MemMetric, StorageMetric};
-use serde_json::Value;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::path::PathBuf;
+use std::str::FromStr;
+
+use serde_json::Value;
+
+use crate::metrics::{MemMetric, StorageMetric};
 use ya_agreement_utils::agreement::{try_from_path, AgreementView, Error};
+use ya_client_model::NodeId;
 
 #[derive(Clone, Debug)]
 pub struct Agreement {
     pub inner: AgreementView,
+    pub requestor_id: NodeId,
     pub task_package: Option<String>,
     pub usage_vector: Vec<String>,
     pub usage_limits: HashMap<String, f64>,
@@ -32,6 +37,9 @@ impl TryFrom<Value> for Agreement {
         let usage_vector =
             agreement.pointer_typed::<Vec<String>>("/offer/properties/golem/com/usage/vector")?;
         let infra = agreement.properties::<f64>("/offer/properties/golem/inf")?;
+        let requestor_id = agreement.pointer_typed::<String>("/demand/requestorId")?;
+        let requestor_id = NodeId::from_str(requestor_id.as_str())
+            .map_err(|_| Error::InvalidValue("requestorId".to_string()))?;
 
         let limits = vec![
             (MemMetric::ID, MemMetric::INF),
@@ -43,6 +51,7 @@ impl TryFrom<Value> for Agreement {
 
         Ok(Agreement {
             inner: agreement,
+            requestor_id,
             task_package,
             usage_vector,
             usage_limits: limits,

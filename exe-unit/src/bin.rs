@@ -9,6 +9,7 @@ use ya_client_model::activity::ExeScriptCommand;
 use ya_service_bus::RpcEnvelope;
 
 use ya_core_model::activity;
+use ya_exe_unit::acl::{AccessRole, Acl};
 use ya_exe_unit::agreement::Agreement;
 use ya_exe_unit::logger::*;
 use ya_exe_unit::manifest::ManifestContext;
@@ -275,6 +276,9 @@ async fn run() -> anyhow::Result<()> {
     log::info!("Manifest-enabled features: {:?}", manifest_ctx.features());
     log::info!("User-provided payload: {:?}", agreement.task_package);
 
+    let acl: Acl = Default::default();
+    acl.grant(agreement.requestor_id, AccessRole::Control);
+
     let ctx = ExeUnitContext {
         supervise: Supervision {
             hardware: cli.supervise.hardware,
@@ -287,7 +291,7 @@ async fn run() -> anyhow::Result<()> {
         work_dir,
         cache_dir,
         runtime_args: cli.runtime_arg.clone(),
-        acl: Default::default(),
+        acl,
         credentials: None,
         #[cfg(feature = "sgx")]
         crypto: init_crypto(

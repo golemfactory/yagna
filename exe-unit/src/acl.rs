@@ -3,7 +3,9 @@ use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::rc::Rc;
 
-pub type Acl = AccessControl<String>;
+use ya_client_model::NodeId;
+
+pub type Acl = AccessControl<NodeId>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum AccessRole {
@@ -24,10 +26,10 @@ pub struct AccessControl<K: Hash + Eq> {
 }
 
 impl<K: Hash + Eq + ToOwned<Owned = K>> AccessControl<K> {
-    pub fn grant<T: AsRef<K>>(&self, id: T, role: AccessRole) {
+    pub fn grant(&self, id: K, role: AccessRole) {
         self.inner
             .borrow_mut()
-            .entry(id.as_ref().to_owned())
+            .entry(id)
             .or_insert_with(Default::default)
             .insert(role);
     }
@@ -48,6 +50,22 @@ impl<K: Hash + Eq> AccessControl<K> {
             .get_mut(id.as_ref())
             .map(|e| e.remove(&role))
             .unwrap_or(false)
+    }
+}
+
+impl<K: Hash + Eq + Clone> AccessControl<K> {
+    pub fn controllers(&self) -> HashSet<K> {
+        self.inner
+            .borrow()
+            .iter()
+            .filter_map(|(k, r)| {
+                if r.contains(&AccessRole::Control) {
+                    Some(k.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }
 

@@ -7,7 +7,8 @@
           "task_package": "hash://sha3:D5E31B2EED628572A5898BF8C34447644BFC4B5130CFC1E4F10AEAA1:http://yacn2.dev.golem.network:8000/rust-wasi-tutorial.zip"
         }
       }
-    }
+    },
+    "requestorId": "0xee9b0706c981400d856611367c4f3d34984e0531"
   },
   "offer": {
     "properties.golem.inf": {
