@@ -42,7 +42,7 @@ bigdecimal = { version = "0.2", features = ["serde"], optional = true }
 bitflags = { version = "1.2", optional = true }
 chrono = { version = "0.4", features = ["serde"] }
 derive_more = "0.99.11"
-graphene-sgx = { version = "0.4", optional = true }
+graphene-sgx = { version = "0.3.3", optional = true }
 log = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_bytes = "0.11.3"

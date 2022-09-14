@@ -50,7 +50,7 @@ derive_more = "0.99"
 dotenv = "0.15.0"
 flexi_logger = { version = "0.22", features = ["colors"] }
 futures = "0.3"
-graphene-sgx = { version = "0.4", optional = true }
+graphene-sgx = { version = "0.3.3", optional = true }
 hex = "0.4.2"
 ipnet = "2.3"
 lazy_static = "1.4.0"
