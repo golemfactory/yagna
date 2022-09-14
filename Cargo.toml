@@ -54,7 +54,7 @@ ya-vpn = "0.1"
 ya-client = "0.7"
 ya-client-model = "0.5"
 
-gftp = { version = "^0.2", optional = true } # just to enable gftp build for cargo-deb
+gftp = { version = "^0.3", optional = true } # just to enable gftp build for cargo-deb
 ya-provider = { version = "0.2", optional = true } # just to enable conditionally running some tests
 
 actix-rt = "2.7"
