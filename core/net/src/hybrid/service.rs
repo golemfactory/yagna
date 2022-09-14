@@ -208,15 +208,24 @@ pub async fn start_network(
             let endpoint = Rc::new(endpoint);
             let node_id = ids.peek().cloned().unwrap();
 
-            if {
+            let res = {
                 let inner = handle.borrow();
                 inner.is_none()
-            } {
+            };
+            if res {
                 let session = client_.session(node_id).await.map_err(|e| e.to_string())?;
                 let h = tokio::task::spawn_local(async move {
                     let mut rx_buf = RxBuffer::default();
 
-                    while let Some(Ok(data)) = rx.next().await {
+                    while let Some(result) = rx.next().await {
+                        let data = match result {
+                            Ok(data) => data,
+                            Err(err) => {
+                                log::warn!("VPN endpoint error: {err}");
+                                continue;
+                            }
+                        };
+
                         for payload in rx_buf.process(data) {
                             let forward = Forward {
                                 session_id: session.id.into(),
