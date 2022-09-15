@@ -320,7 +320,7 @@ pub enum KeystoreRemoveResult {
 }
 
 /// Calculates Md5 of `txt` and returns first 8 characters.
-pub fn str_to_short_hash<STR: AsRef<[u8]>>(txt: STR) -> String {
+pub fn str_to_short_hash(txt: impl AsRef<[u8]>) -> String {
     let digest = Md5::digest(txt);
     let digest = format!("{digest:x}");
     let short_hash = &digest[..8]; // Md5 is 32 characters

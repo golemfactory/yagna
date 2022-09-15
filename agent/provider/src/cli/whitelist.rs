@@ -66,19 +66,19 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
     if !added.is_empty() {
         println_conditional(&config, "Added patterns:");
         WhitelistTable::from(DomainPatterns { patterns: added }).print(&config)?
-    } else if config.json {
+    } else {
         println_conditional(&config, "No new patterns to add.");
-        // no new pattern to add, so empty list for json output
-        WhitelistTable::from(DomainPatterns {
-            patterns: Vec::new(),
-        })
-        .print(&config)?
+        if config.json {
+            // no new pattern to add, so empty list for json output
+            WhitelistTable::from(DomainPatterns {
+                patterns: Vec::new(),
+            })
+            .print(&config)?
+        }
     }
     if !skipped.is_empty() && !config.json {
-        println_conditional(&config, "Dropped duplicated patterns:");
-        if !config.json {
-            WhitelistTable::from(DomainPatterns { patterns: skipped }).print(&config)?
-        }
+        println!("Dropped duplicated patterns:");
+        WhitelistTable::from(DomainPatterns { patterns: skipped }).print(&config)?;
     }
     Ok(())
 }
@@ -141,6 +141,9 @@ impl From<DomainPatterns> for WhitelistTable {
     }
 }
 
+/// Collection of `DomainPattern`s mapped to ids generated from their contents.
+/// # See also
+/// ya_manifest_utils::matching::domain::pattern_to_id
 struct DomainPatternIds {
     pattern_ids: HashMap<String, DomainPattern>,
 }

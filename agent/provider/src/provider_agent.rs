@@ -67,6 +67,8 @@ impl GlobalsManager {
     }
 }
 
+/// Stores current whitelist state.
+/// Starts and stops whitelist config file monitor.
 struct WhitelistManager {
     state: DomainWhitelistState,
     monitor: Option<FileMonitor>,

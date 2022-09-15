@@ -4,13 +4,6 @@ use std::{collections::HashSet, fmt::Debug};
 
 use regex::RegexSet;
 
-use crate::ArgMatch;
-
-trait MatchPattern {
-    fn value(&self) -> String;
-    fn match_type(&self) -> ArgMatch;
-}
-
 pub trait Matcher: Debug + Send + Sync {
     fn matches(&self, txt: &str) -> bool;
 }
