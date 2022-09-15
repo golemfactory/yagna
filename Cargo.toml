@@ -1,6 +1,6 @@
 [package]
 name = "yagna"
-version = "0.10.1"
+version = "0.11.0"
 description = "Open platform and marketplace for distributed computations"
 readme = "README.md"
 authors = ["Golem Factory <contact@golem.network>"]
@@ -24,38 +24,38 @@ name = "yagna"
 path = "core/serv/src/main.rs"
 
 [dependencies]
-ya-activity = "0.3"
+ya-activity = "0.4"
 ya-compile-time-utils = "0.2"
-ya-core-model = { version = "^0.7" }
-ya-dummy-driver = { version = "0.2", optional = true }
+ya-core-model = { version = "^0.8" }
+ya-dummy-driver = { version = "0.3", optional = true }
 ya-file-logging = "0.1"
-ya-erc20-driver = { version = "0.3", optional = true }
-ya-zksync-driver = { version = "0.2", optional = true }
-ya-identity = "0.2"
-ya-market = "0.3"
-ya-metrics = "0.1"
-ya-net = { version = "0.2", features = ["service"] }
-ya-payment = "0.2"
-ya-persistence = { version = "0.2", features = ["service"] }
+ya-erc20-driver = { version = "0.4", optional = true }
+ya-zksync-driver = { version = "0.3", optional = true }
+ya-identity = "0.3"
+ya-market = "0.4"
+ya-metrics = "0.2"
+ya-net = { version = "0.3", features = ["service"] }
+ya-payment = "0.3"
+ya-persistence = { version = "0.3", features = ["service"] }
 ya-sb-proto = "0.6"
 ya-sb-router = "0.6"
 ya-service-api = "0.1"
-ya-service-api-derive = "0.1"
-ya-service-api-interfaces = "0.1"
-ya-service-api-web = "0.1"
+ya-service-api-derive = "0.2"
+ya-service-api-interfaces = "0.2"
+ya-service-api-web = "0.2"
 ya-service-bus = "0.6"
-ya-sgx = "0.1"
+ya-sgx = "0.2"
 ya-utils-path = "0.1"
-ya-utils-futures = "0.1"
-ya-utils-process = { version = "0.1", features = ["lock"] }
-ya-utils-networking = "0.1"
-ya-version = "0.1"
-ya-vpn = "0.1"
+ya-utils-futures = "0.2"
+ya-utils-process = { version = "0.2", features = ["lock"] }
+ya-utils-networking = "0.2"
+ya-version = "0.2"
+ya-vpn = "0.2"
 ya-client = "0.7"
 ya-client-model = "0.5"
 
-gftp = { version = "^0.2", optional = true } # just to enable gftp build for cargo-deb
-ya-provider = { version = "0.2", optional = true } # just to enable conditionally running some tests
+gftp = { version = "0.3", optional = true } # just to enable gftp build for cargo-deb
+ya-provider = { version = "0.3", optional = true } # just to enable conditionally running some tests
 
 actix-rt = "2.7"
 actix-service = "2"
@@ -210,7 +210,7 @@ ya-metrics = { path = "core/metrics" }
 ya-provider = { path = "agent/provider"}
 
 ethereum-tx-sign = { git = "https://github.com/mfranciszkiewicz/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
-graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "3619f63a0c1ff44962ab604e55cd5dfb62177c56" }
+graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "dbd993ebad7f9190410ea390a589348479af6407" }
 web3 = { git = "https://github.com/golemfactory/rust-web3", branch = "update_ethabi" }
 
 # Speed up builds on macOS (will be default in next rust version probably)

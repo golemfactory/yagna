@@ -207,7 +207,7 @@ fn test_cli_help() {
     Services::clap().write_long_help(&mut out).unwrap();
     assert_eq!(
         String::from_utf8_lossy(&out),
-        "ya-service-api-derive 0.1.0
+        "ya-service-api-derive 0.2.0
 gsb_cli command help
 
 USAGE:

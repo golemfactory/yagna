@@ -1,7 +1,7 @@
 [package]
 name = "ya-provider"
 description = "Yagna Provider Agent reference implementation."
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
@@ -14,15 +14,15 @@ path = "src/main.rs"
 
 [dependencies]
 ya-agreement-utils = { version = "0.4" }
-ya-manifest-utils = { version = "^0.1" }
+ya-manifest-utils = { version = "0.2" }
 ya-client = { version = "0.7", features = ['cli'] }
 ya-client-model = "0.5"
 ya-compile-time-utils = "0.2"
-ya-core-model = { version = "^0.7", features = ['activity', 'payment'] }
+ya-core-model = { version = "^0.8", features = ['activity', 'payment'] }
 ya-file-logging = "0.1"
-ya-utils-actix = "0.1"
+ya-utils-actix = "0.2"
 ya-utils-path = "0.1"
-ya-utils-process = { version = "0.1", features = ['lock'] }
+ya-utils-process = { version = "0.2", features = ['lock'] }
 ya-std-utils = "0.1"
 
 actix = { version = "0.13", default-features = false }
