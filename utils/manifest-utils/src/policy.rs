@@ -1,7 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::ffi::OsStr;
-use std::fs::File;
-use std::io::prelude::*;
+use std::hash::Hash;
 use std::ops::Not;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -11,9 +9,11 @@ use openssl::hash::MessageDigest;
 use openssl::pkey::{PKey, Public};
 use openssl::sign::Verifier;
 use openssl::x509::store::{X509Store, X509StoreBuilder};
-use openssl::x509::{X509StoreContext, X509};
+use openssl::x509::{X509ObjectRef, X509StoreContext, X509};
 use structopt::StructOpt;
 use strum::{Display, EnumIter, EnumString, EnumVariantNames, IntoEnumIterator, VariantNames};
+
+use crate::util::{CertBasicDataVisitor, X509Visitor};
 
 /// Policy configuration
 #[derive(StructOpt, Clone, Debug, Default)]
@@ -115,7 +115,7 @@ impl Keystore {
         for dir_entry in cert_dir {
             let cert = dir_entry?;
             let cert = cert.path();
-            Self::load_cert(&mut store, cert)?;
+            Self::load_file(&mut store, &cert)?;
         }
         let store = store.build();
         let inner = Arc::new(RwLock::new(store));
@@ -149,36 +149,40 @@ impl Keystore {
             sig_alg.as_ref()
         ))?;
         let mut verifier = Verifier::new(msg_digest, pkey.as_ref())?;
-        if false == verifier.verify_oneshot(&sig, data.as_ref().as_bytes())? {
+        if !(verifier.verify_oneshot(&sig, data.as_ref().as_bytes())?) {
             return Err(anyhow::anyhow!("Invalid signature"));
         }
         Ok(())
     }
 
-    fn load_cert(store: &mut X509StoreBuilder, cert: PathBuf) -> anyhow::Result<()> {
-        let extension = Self::get_file_extension(&cert);
-        let mut cert = File::open(cert)?;
-        let mut cert_buffer = Vec::new();
-        cert.read_to_end(&mut cert_buffer)?;
-        match extension {
-            Some(ref der) if der == "der" => {
-                let cert = X509::from_der(&cert_buffer)?;
-                store.add_cert(cert)?;
+    pub(crate) fn certs_ids(&self) -> anyhow::Result<HashSet<String>> {
+        let inner = self.inner.read().unwrap();
+        let mut ids = HashSet::new();
+        for cert in inner.objects() {
+            if let Some(cert) = cert.x509() {
+                let id = crate::util::cert_to_id(cert)?;
+                ids.insert(id);
             }
-            Some(ref pem) if pem == "pem" => {
-                for cert in X509::stack_from_pem(&cert_buffer)? {
-                    store.add_cert(cert)?;
-                }
-            }
-            _ => return Err(anyhow::anyhow!("Unknown certificate file extension")),
-        };
+        }
+        Ok(ids)
+    }
+
+    pub(crate) fn visit_certs<T: CertBasicDataVisitor>(
+        &self,
+        visitor: &mut X509Visitor<T>,
+    ) -> anyhow::Result<()> {
+        let inner = self.inner.read().unwrap();
+        for cert in inner.objects().iter().flat_map(X509ObjectRef::x509) {
+            visitor.accept(cert)?;
+        }
         Ok(())
     }
 
-    fn get_file_extension(path: &PathBuf) -> Option<String> {
-        path.extension()
-            .map(OsStr::to_ascii_lowercase)
-            .and_then(|ex| ex.to_str().map(ToString::to_string))
+    fn load_file(store: &mut X509StoreBuilder, cert: &PathBuf) -> anyhow::Result<()> {
+        for cert in crate::util::parse_cert_file(cert)? {
+            store.add_cert(cert)?
+        }
+        Ok(())
     }
 
     fn verify_cert<S: AsRef<str>>(&self, cert: S) -> anyhow::Result<PKey<Public>> {
@@ -193,7 +197,7 @@ impl Keystore {
             .map_err(|err| anyhow::anyhow!("Err: {}", err.to_string()))?;
         let cert_chain = openssl::stack::Stack::new()?;
         let mut ctx = X509StoreContext::new()?;
-        if false == ctx.init(&store, &cert, &cert_chain, |ctx| ctx.verify_cert())? {
+        if !(ctx.init(&store, &cert, &cert_chain, |ctx| ctx.verify_cert())?) {
             return Err(anyhow::anyhow!("Invalid certificate"));
         }
         Ok(cert.public_key()?)

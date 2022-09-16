@@ -194,6 +194,20 @@ impl From<AgreementState> for ClientAgreementState {
     }
 }
 
+impl From<ClientAgreementState> for AgreementState {
+    fn from(agreement_state: ClientAgreementState) -> Self {
+        match agreement_state {
+            ClientAgreementState::Proposal => AgreementState::Proposal,
+            ClientAgreementState::Pending => AgreementState::Pending,
+            ClientAgreementState::Cancelled => AgreementState::Cancelled,
+            ClientAgreementState::Rejected => AgreementState::Rejected,
+            ClientAgreementState::Approved => AgreementState::Approved,
+            ClientAgreementState::Expired => AgreementState::Expired,
+            ClientAgreementState::Terminated => AgreementState::Terminated,
+        }
+    }
+}
+
 pub fn check_transition(from: AgreementState, to: AgreementState) -> Result<(), AgreementDaoError> {
     log::trace!("Checking Agreement state transition: {} => {}", from, to);
     match from {

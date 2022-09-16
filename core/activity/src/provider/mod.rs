@@ -1,9 +1,9 @@
 //! Provider side operations
 use actix_web::{web, Responder};
 use ya_client_model::activity::{ActivityState, ProviderEvent};
+use ya_client_model::market::Role;
 use ya_service_bus::timeout::IntoTimeoutFuture;
 
-use ya_core_model::Role;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 

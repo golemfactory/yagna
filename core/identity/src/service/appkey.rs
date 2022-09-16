@@ -72,12 +72,27 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
         let mut create_tx = create_tx.clone();
         let identity = create.identity.clone();
         async move {
-            let result = db
-                .as_dao::<AppKeyDao>()
-                .create(key.clone(), create.name, create.role, create.identity)
-                .await
-                .map_err(|e| model::Error::internal(e))
-                .map(|_| key)?;
+            let dao = db.as_dao::<AppKeyDao>();
+
+            let result = match dao.get_for_name(create.name.clone()).await {
+                Ok((app_key, _)) => {
+                    if app_key.identity_id == create.identity {
+                        Ok(app_key.key)
+                    } else {
+                        Err(model::Error::bad_request(format!(
+                            "app-key with name {} already defined with identity {}",
+                            app_key.name, app_key.identity_id
+                        )))
+                    }
+                }
+                Err(crate::dao::Error::Dao(diesel::result::Error::NotFound)) => dao
+                    .create(key.clone(), create.name, create.role, create.identity)
+                    .await
+                    .map_err(model::Error::internal)
+                    .map(|_| key),
+                Err(e) => Err(model::Error::internal(e)),
+            }?;
+
             let _ = create_tx
                 .send(model::event::Event::NewKey { identity })
                 .await;

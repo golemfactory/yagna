@@ -45,7 +45,6 @@ async fn get_requestor_accounts(db: Data<DbExecutor>, id: Identity) -> HttpRespo
     };
     let recv_accounts: Vec<Account> = all_accounts
         .into_iter()
-        .filter(|account| account.send)
         .filter(|account| account.address == node_id) // TODO: Implement proper account permission system
         .collect();
     response::ok(recv_accounts)

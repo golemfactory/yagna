@@ -160,7 +160,7 @@ async fn issue_debit_note(
 
     let agreement = match get_agreement_for_activity(
         activity_id.clone(),
-        ya_core_model::Role::Provider,
+        ya_client_model::market::Role::Provider,
     )
     .await
     {

@@ -8,7 +8,7 @@ edition = "2018"
 default = []
 service = []
 # Temporary to make goth integration tests work
-central-net = []
+hybrid-net = []
 
 [dependencies]
 ya-client-model = "0.5"
