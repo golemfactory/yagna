@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::TryFrom;
 use std::ffi::OsStr;
 use std::fs::{self, DirEntry};
+use std::path::Path;
 use std::{fs::File, path::PathBuf};
 
 use md5::{Digest, Md5};
@@ -45,15 +46,15 @@ pub fn parse_cert_file(cert: &PathBuf) -> anyhow::Result<Vec<X509>> {
     }
 }
 
-fn get_file_extension(path: &PathBuf) -> Option<String> {
+fn get_file_extension(path: &Path) -> Option<String> {
     path.extension().map(os_str_to_string)
 }
 
-fn get_file_name(path: &PathBuf) -> Option<String> {
+fn get_file_name(path: &Path) -> Option<String> {
     path.file_name().map(os_str_to_string)
 }
 
-fn get_file_stem(path: &PathBuf) -> Option<String> {
+fn get_file_stem(path: &Path) -> Option<String> {
     path.file_stem().map(os_str_to_string)
 }
 
@@ -103,8 +104,7 @@ fn cert_subject_entries(cert: &X509Ref, nid: Nid) -> Option<String> {
 
 pub fn cert_to_id(cert: &X509Ref) -> anyhow::Result<String> {
     let txt = cert.to_text()?;
-    let digest = Md5::digest(&txt);
-    Ok(format!("{digest:x}"))
+    Ok(str_to_short_hash(&txt))
 }
 
 pub fn visit_certificates<T: CertBasicDataVisitor>(
@@ -269,7 +269,7 @@ impl KeystoreManager {
             let file_stem = get_file_stem(&new_cert_path).expect("Has to have stem");
             let dot_extension = get_file_extension(&new_cert_path)
                 .map(|ex| format!(".{ex}"))
-                .unwrap_or(String::from(""));
+                .unwrap_or_else(|| String::from(""));
             for i in 0..u32::MAX {
                 let numbered_filename = format!("{file_stem}.{i}{dot_extension}");
                 new_cert_path = self.cert_dir.clone();
@@ -287,16 +287,12 @@ impl KeystoreManager {
     }
 
     /// Loads certificates as individual files to `cert_dir`
-    fn load_as_certificate_files(
-        &self,
-        cert_path: &PathBuf,
-        certs: Vec<X509>,
-    ) -> anyhow::Result<()> {
+    fn load_as_certificate_files(&self, cert_path: &Path, certs: Vec<X509>) -> anyhow::Result<()> {
         let file_stem = get_file_stem(cert_path)
             .ok_or_else(|| anyhow::anyhow!("Cannot get file name stem."))?;
         let dot_extension = get_file_extension(cert_path)
             .map(|ex| format!(".{ex}"))
-            .unwrap_or(String::from(""));
+            .unwrap_or_else(|| String::from(""));
         for cert in certs.into_iter() {
             let id = cert_to_id(&cert)?;
             let mut new_cert_path = self.cert_dir.clone();
@@ -321,6 +317,14 @@ pub enum KeystoreLoadResult {
 pub enum KeystoreRemoveResult {
     NothingToRemove,
     Removed { removed: Vec<X509> },
+}
+
+/// Calculates Md5 of `txt` and returns first 8 characters.
+pub fn str_to_short_hash(txt: impl AsRef<[u8]>) -> String {
+    let digest = Md5::digest(txt);
+    let digest = format!("{digest:x}");
+    let short_hash = &digest[..8]; // Md5 is 32 characters
+    short_hash.to_string()
 }
 
 #[cfg(test)]

@@ -7,7 +7,9 @@ use semver::Version;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use strum;
+use strum::AsRefStr;
 use strum::Display;
+use strum::EnumString;
 use url::Url;
 
 use ya_agreement_utils::AgreementView;
@@ -15,14 +17,13 @@ use ya_agreement_utils::Error as AgreementError;
 
 use crate::decode_data;
 
-pub const AGREEMENT_MANIFEST_PROPERTY: &str = "demand.properties.golem.srv.comp.payload.@tag";
-pub const AGREEMENT_MANIFEST_SIG_PROPERTY: &str = "demand.properties.golem.srv.comp.payload.sig";
-
 pub const CAPABILITIES_PROPERTY: &str = "golem.runtime.capabilities";
-pub const DEMAND_MANIFEST_PROPERTY: &str = "golem.srv.comp.payload.@tag";
-pub const DEMAND_MANIFEST_SIG_PROPERTY: &str = "golem.srv.comp.payload.sig.@tag";
+pub const DEMAND_MANIFEST_PROPERTY: &str = "golem.srv.comp.payload";
+pub const DEMAND_MANIFEST_SIG_PROPERTY: &str = "golem.srv.comp.payload.sig";
 pub const DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY: &str = "golem.srv.comp.payload.sig.algorithm";
 pub const DEMAND_MANIFEST_CERT_PROPERTY: &str = "golem.srv.comp.payload.cert";
+
+pub const AGREEMENT_MANIFEST_PROPERTY: &str = "demand.properties.golem.srv.comp.payload";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -226,10 +227,12 @@ impl<'de> Deserialize<'de> for Command {
     }
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, EnumString, AsRefStr)]
 #[serde(rename_all = "camelCase")]
 pub enum ArgMatch {
+    #[strum(ascii_case_insensitive)]
     Strict,
+    #[strum(ascii_case_insensitive)]
     Regex,
 }
 

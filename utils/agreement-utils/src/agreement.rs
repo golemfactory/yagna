@@ -14,7 +14,7 @@ const DEFAULT_FORMAT: &str = "json";
 //  - 2 fields for parsed properties (demand, offer)
 //  - other fields for agreement remain typed.
 // TODO: Move to ya-client to make it available for third party developers.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AgreementView {
     pub json: Value,
     pub agreement_id: String,
@@ -31,7 +31,6 @@ impl AgreementView {
 
     pub fn pointer_typed<'a, T: Deserialize<'a>>(&self, pointer: &str) -> Result<T, Error> {
         let value = self
-            .json
             .pointer(pointer)
             .ok_or(Error::NoKey(pointer.to_string()))?
             .clone();
@@ -64,8 +63,11 @@ impl AgreementView {
     }
 
     pub fn get_property<'a, T: Deserialize<'a>>(&self, property: &str) -> Result<T, Error> {
-        let pointer = format!("/{}", property.replace(".", "/"));
-        self.pointer_typed(pointer.as_str())
+        let pointers = property_to_pointer_paths(property);
+        match self.pointer_typed(&pointers.path_w_tag) {
+            Err(Error::NoKey(_)) => self.pointer_typed(&pointers.path),
+            result => result,
+        }
     }
 
     pub fn remove_property(&mut self, pointer: &str) -> Result<(), Error> {
@@ -78,6 +80,19 @@ impl AgreementView {
             })?,
         )
     }
+}
+
+struct PointerPaths {
+    /// Pointer path
+    path: String,
+    /// Pointer path ending with `PROPERTY_TAG`
+    path_w_tag: String,
+}
+
+fn property_to_pointer_paths(property: &str) -> PointerPaths {
+    let path = format!("/{}", property.replace(".", "/"));
+    let path_w_tag = format!("{path}/{PROPERTY_TAG}");
+    PointerPaths { path, path_w_tag }
 }
 
 pub fn parse_constraints(input: &str, reg_expr: &str, group: usize) -> Option<HashSet<String>> {
