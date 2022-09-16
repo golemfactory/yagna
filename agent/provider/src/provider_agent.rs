@@ -76,8 +76,7 @@ struct WhitelistManager {
 
 impl WhitelistManager {
     fn try_new(whitelist_file: &Path) -> anyhow::Result<Self> {
-        let mut patterns = DomainPatterns::load_or_create(whitelist_file)?;
-        patterns.update_and_save(whitelist_file, patterns.clone())?; //TODO fix ownership issue
+        let patterns = DomainPatterns::load_or_create(whitelist_file)?;
         let state = DomainWhitelistState::try_from(patterns)?;
         Ok(Self {
             state,
