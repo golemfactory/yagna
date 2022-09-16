@@ -60,12 +60,15 @@ fn list(config: ProviderConfig) -> anyhow::Result<()> {
 fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
     let domain_patterns = DomainPatterns::load_or_create(&config.domain_whitelist_file)?;
     let mut domain_patterns = DomainPatternIds::from(domain_patterns);
-    let (added, skipped) = domain_patterns.add(add);
+    let added = domain_patterns.add(add);
     let domain_patterns: DomainPatterns = domain_patterns.into();
     domain_patterns.save(&config.domain_whitelist_file)?;
-    if !added.is_empty() {
+    if !added.processed.is_empty() {
         println_conditional(&config, "Added patterns:");
-        WhitelistTable::from(DomainPatterns { patterns: added }).print(&config)?
+        WhitelistTable::from(DomainPatterns {
+            patterns: added.processed,
+        })
+        .print(&config)?
     } else {
         println_conditional(&config, "No new patterns to add.");
         if config.json {
@@ -76,9 +79,12 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
             .print(&config)?
         }
     }
-    if !skipped.is_empty() && !config.json {
+    if !added.skipped.is_empty() && !config.json {
         println!("Dropped duplicated patterns:");
-        WhitelistTable::from(DomainPatterns { patterns: skipped }).print(&config)?;
+        WhitelistTable::from(DomainPatterns {
+            patterns: added.skipped,
+        })
+        .print(&config)?;
     }
     Ok(())
 }
@@ -86,11 +92,13 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
 fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
     let domain_patterns = DomainPatterns::load_or_create(&config.domain_whitelist_file)?;
     let mut domain_patterns = DomainPatternIds::from(domain_patterns);
-    let (removed, _) = domain_patterns.remove(remove.ids);
+    let removed = domain_patterns.remove(remove.ids);
     let domain_patterns: DomainPatterns = domain_patterns.into();
     domain_patterns.save(&config.domain_whitelist_file)?;
-    if !removed.is_empty() {
-        let table = WhitelistTable::from(DomainPatterns { patterns: removed });
+    if !removed.processed.is_empty() {
+        let table = WhitelistTable::from(DomainPatterns {
+            patterns: removed.processed,
+        });
         println_conditional(&config, "Removed patterns:");
         table.print(&config)?;
     } else {
@@ -168,7 +176,7 @@ impl From<DomainPatternIds> for DomainPatterns {
 }
 
 impl DomainPatternIds {
-    fn remove(&mut self, ids: Vec<String>) -> (Vec<DomainPattern>, Vec<String>) {
+    fn remove(&mut self, ids: Vec<String>) -> DomainPatternsRemoved {
         let mut removed = Vec::new();
         let mut skipped = Vec::new();
         for id in ids {
@@ -178,10 +186,13 @@ impl DomainPatternIds {
                 skipped.push(id);
             }
         }
-        (removed, skipped)
+        DomainPatternsRemoved {
+            processed: removed,
+            skipped,
+        }
     }
 
-    fn add(&mut self, add: Add) -> (Vec<DomainPattern>, Vec<DomainPattern>) {
+    fn add(&mut self, add: Add) -> DomainPatternsAdded {
         let mut added = Vec::new();
         let mut skipped = Vec::new();
         let domain_match = add.pattern_type;
@@ -198,6 +209,18 @@ impl DomainPatternIds {
                 added.push(pattern)
             }
         }
-        (added, skipped)
+        DomainPatternsAdded {
+            processed: added,
+            skipped,
+        }
     }
 }
+
+struct DomainPatternsChange<SKIPPED> {
+    processed: Vec<DomainPattern>,
+    skipped: Vec<SKIPPED>,
+}
+
+type DomainPatternsAdded = DomainPatternsChange<DomainPattern>;
+/// Removed `DomainPattern`s with `id`s of skipped patterns.
+type DomainPatternsRemoved = DomainPatternsChange<String>;
