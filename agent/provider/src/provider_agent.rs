@@ -77,7 +77,7 @@ struct WhitelistManager {
 impl WhitelistManager {
     fn try_new(whitelist_file: &Path) -> anyhow::Result<Self> {
         let patterns = DomainPatterns::load_or_create(whitelist_file)?;
-        let state = DomainWhitelistState::try_from(patterns)?;
+        let state = DomainWhitelistState::try_new(patterns)?;
         Ok(Self {
             state,
             monitor: None,

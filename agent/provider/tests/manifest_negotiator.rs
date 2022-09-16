@@ -2,8 +2,8 @@
 extern crate serial_test;
 
 use std::collections::HashMap;
+use std::fs;
 use std::path::PathBuf;
-use std::{convert::TryFrom, fs};
 
 use serde_json::{json, Value};
 use test_case::test_case;
@@ -324,7 +324,7 @@ fn create_whitelist(whitelist_json: &str) -> DomainWhitelistState {
     let whitelist = create_whitelist_file(whitelist_json);
     let whitelist_patterns =
         DomainPatterns::load(&whitelist).expect("Can deserialize whitelist patterns");
-    DomainWhitelistState::try_from(whitelist_patterns)
+    DomainWhitelistState::try_new(whitelist_patterns)
         .expect("Can create whitelist state from patterns")
 }
 

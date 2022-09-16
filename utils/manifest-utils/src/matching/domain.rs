@@ -24,10 +24,9 @@ pub struct DomainWhitelistState {
     pub matchers: SharedDomainMatchers,
 }
 
-impl TryFrom<DomainPatterns> for DomainWhitelistState {
-    type Error = anyhow::Error;
-
-    fn try_from(patterns: DomainPatterns) -> Result<Self, Self::Error> {
+impl DomainWhitelistState {
+    /// Creates a new `DomainWhitelistState` with patterns matching generated from them matchers
+    pub fn try_new(patterns: DomainPatterns) -> Result<Self, anyhow::Error> {
         let matcher = DomainsMatcher::try_from(&patterns)?;
         let matcher = Arc::new(RwLock::new(matcher));
         let patterns = Arc::new(Mutex::new(patterns));
