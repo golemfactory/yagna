@@ -1,9 +1,9 @@
 use std::{
     collections::HashSet,
     convert::TryFrom,
-    fs::{self, File},
-    io::{self, BufReader},
-    path::{Path, PathBuf},
+    fs::OpenOptions,
+    io::BufReader,
+    path::Path,
     sync::{Arc, Mutex, RwLock},
 };
 
@@ -43,23 +43,13 @@ pub struct DomainPatterns {
     pub patterns: Vec<DomainPattern>,
 }
 
-impl TryFrom<&PathBuf> for DomainPatterns {
-    type Error = anyhow::Error;
-
-    fn try_from(path: &PathBuf) -> Result<Self, anyhow::Error> {
-        let file = File::open(path)?;
-        let reader = BufReader::new(file);
-        Ok(serde_json::from_reader(reader)?)
-    }
-}
-
 impl DomainPatterns {
     pub fn load(path: &Path) -> anyhow::Result<Self> {
         if path.exists() {
             log::debug!("Loading domain patterns from: {}", path.display());
-            Ok(serde_json::from_reader(io::BufReader::new(
-                fs::OpenOptions::new().read(true).open(path)?,
-            ))?)
+            let patterns = OpenOptions::new().read(true).open(path)?;
+            let patterns = BufReader::new(patterns);
+            Ok(serde_json::from_reader(patterns)?)
         } else {
             Ok(Self::default())
         }

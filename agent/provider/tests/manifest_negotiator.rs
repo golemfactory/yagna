@@ -323,7 +323,7 @@ fn create_manifest_signature_validating_policy_config() -> PolicyConfig {
 fn create_whitelist(whitelist_json: &str) -> DomainWhitelistState {
     let whitelist = create_whitelist_file(whitelist_json);
     let whitelist_patterns =
-        DomainPatterns::try_from(&whitelist).expect("Can deserialize whitelist patterns");
+        DomainPatterns::load(&whitelist).expect("Can deserialize whitelist patterns");
     DomainWhitelistState::try_from(whitelist_patterns)
         .expect("Can create whitelist state from patterns")
 }
