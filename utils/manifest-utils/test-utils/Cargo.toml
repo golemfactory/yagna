@@ -13,5 +13,5 @@ base64 = "0.13"
 tar = "0.4"
 openssl = "0.10"
 
-ya-manifest-utils = "0.1"
+ya-manifest-utils = "0.2"
 ya-agreement-utils = "0.4"
