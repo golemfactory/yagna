@@ -21,6 +21,7 @@ use crate::cli::exe_unit::ExeUnitsConfig;
 use crate::cli::keystore::KeystoreConfig;
 pub use crate::cli::preset::PresetsConfig;
 use crate::cli::profile::ProfileConfig;
+use crate::cli::whitelist::WhitelistConfig;
 pub(crate) use crate::config::globals::GLOBALS_JSON;
 use crate::execution::{ExeUnitsRegistry, TaskRunnerConfig};
 use crate::market::config::MarketConfig;
@@ -32,6 +33,7 @@ lazy_static::lazy_static! {
     static ref DEFAULT_CERT_DIR: String = PathBuf::from(DEFAULT_DATA_DIR.as_str()).join(CERT_DIR).to_string_lossy().to_string();
     static ref DEFAULT_PLUGINS_DIR : PathBuf = default_plugins();
 }
+pub(crate) const DOMAIN_WHITELIST_JSON: &'static str = "domain_whitelist.json";
 pub(crate) const PRESETS_JSON: &'static str = "presets.json";
 pub(crate) const HARDWARE_JSON: &'static str = "hardware.json";
 pub(crate) const CERT_DIR: &'static str = "cert_dir";
@@ -72,7 +74,8 @@ pub struct ProviderConfig {
         default_value = &*DEFAULT_CERT_DIR,
     )]
     pub cert_dir: DataDir,
-
+    #[structopt(skip = DOMAIN_WHITELIST_JSON)]
+    pub domain_whitelist_file: PathBuf,
     #[structopt(skip = GLOBALS_JSON)]
     pub globals_file: PathBuf,
     #[structopt(skip = PRESETS_JSON)]
@@ -83,22 +86,22 @@ pub struct ProviderConfig {
     #[structopt(
         long,
         set = clap::ArgSettings::Global,
-        env = "YA_RT_CORES")
-    ]
+        env = "YA_RT_CORES"
+    )]
     pub rt_cores: Option<usize>,
     /// Max amount of available RAM (GiB)
     #[structopt(
         long,
         set = clap::ArgSettings::Global,
-        env = "YA_RT_MEM")
-    ]
+        env = "YA_RT_MEM"
+    )]
     pub rt_mem: Option<f64>,
     /// Max amount of available storage (GiB)
     #[structopt(
         long,
         set = clap::ArgSettings::Global,
-        env = "YA_RT_STORAGE")
-    ]
+        env = "YA_RT_STORAGE"
+    )]
     pub rt_storage: Option<f64>,
 
     #[structopt(long, set = clap::ArgSettings::Global)]
@@ -210,6 +213,8 @@ pub enum Commands {
     ExeUnit(ExeUnitsConfig),
     /// Manage trusted keys
     Keystore(KeystoreConfig),
+    /// Manage domain whitelist
+    Whitelist(WhitelistConfig),
     /// Clean up disk space
     Clean(CleanConfig),
 }

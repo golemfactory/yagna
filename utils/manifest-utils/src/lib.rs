@@ -1,4 +1,5 @@
 pub mod manifest;
+pub mod matching;
 pub mod policy;
 pub mod util;
 
