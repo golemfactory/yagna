@@ -13,6 +13,7 @@ use openssl::x509::{X509ObjectRef, X509StoreContext, X509};
 use structopt::StructOpt;
 use strum::{Display, EnumIter, EnumString, EnumVariantNames, IntoEnumIterator, VariantNames};
 
+use crate::matching::domain::DomainWhitelistState;
 use crate::util::{CertBasicDataVisitor, X509Visitor};
 
 /// Policy configuration
@@ -39,6 +40,8 @@ pub struct PolicyConfig {
     pub policy_trust_property: Vec<(String, Match)>,
     #[structopt(skip)]
     pub trusted_keys: Option<Keystore>,
+    #[structopt(skip)]
+    pub domain_patterns: DomainWhitelistState,
 }
 
 impl PolicyConfig {
@@ -144,10 +147,8 @@ impl Keystore {
 
         let pkey = self.verify_cert(cert)?;
 
-        let msg_digest = MessageDigest::from_name(sig_alg.as_ref()).ok_or(anyhow::anyhow!(
-            "Unknown signature algorithm: {}",
-            sig_alg.as_ref()
-        ))?;
+        let msg_digest = MessageDigest::from_name(sig_alg.as_ref())
+            .ok_or_else(|| anyhow::anyhow!("Unknown signature algorithm: {}", sig_alg.as_ref()))?;
         let mut verifier = Verifier::new(msg_digest, pkey.as_ref())?;
         if !(verifier.verify_oneshot(&sig, data.as_ref().as_bytes())?) {
             return Err(anyhow::anyhow!("Invalid signature"));

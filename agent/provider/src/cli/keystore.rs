@@ -7,10 +7,17 @@ use ya_manifest_utils::util::{self, CertBasicData, CertBasicDataVisitor};
 use ya_manifest_utils::KeystoreLoadResult;
 use ya_utils_cli::{CommandOutput, ResponseTable};
 
+use crate::cli::println_conditional;
 use crate::startup_config::ProviderConfig;
 
 #[derive(StructOpt, Clone, Debug)]
-#[structopt(rename_all = "kebab-case")]
+#[structopt(
+    rename_all = "kebab-case",
+    help = "Keystore stores X.509 certificates. They allow to accept Demands with 
+    Computation Payload Manifests which arrive with signature and app author's public certificate. 
+    Certificate gets validated against certificates loaded into the keystore.
+    Certificates are stored in a file format in directory. Its location can be configured using '--cert-dir' param."
+)]
 pub enum KeystoreConfig {
     /// List trusted X.509 certificates
     List,
@@ -22,8 +29,12 @@ pub enum KeystoreConfig {
 
 #[derive(StructOpt, Clone, Debug)]
 pub struct Add {
-    /// Paths to X.509 certificates (PEM or DER) or certificates chains
-    #[structopt(parse(from_os_str))]
+    /// Paths to X.509 certificates or certificates chains
+    #[structopt(
+        parse(from_os_str),
+        help = "Coma separated list of X.509 certificate files (PEM or DER) 
+        or PEM certificates chains to be added to the Keystore."
+    )]
     certs: Vec<PathBuf>,
 }
 
@@ -31,6 +42,8 @@ pub struct Add {
 #[structopt(rename_all = "kebab-case")]
 pub struct Remove {
     /// Certificate ids
+    #[structopt(help = "Coma separated list of X.509 certificates' ids. 
+        To find certificate id use `keystore list` command.")]
     ids: Vec<String>,
 }
 
@@ -67,9 +80,15 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
             }
         }
         KeystoreLoadResult::NothingNewToLoad { skipped } => {
-            println_conditional(&config, "No new certificate to add. Skipped:");
             let certs_data = util::to_cert_data(&skipped)?;
-            print_cert_list(&config, certs_data)?;
+            if !config.json {
+                println!("No new certificate to add.");
+                println!("Dropped duplicated certificates:");
+                print_cert_list(&config, certs_data)?;
+            } else {
+                // no new certificate added, so empty list for json output
+                print_cert_list(&config, Vec::new())?;
+            }
         }
     }
     Ok(())
@@ -82,6 +101,9 @@ fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
     match keystore_manager.remove_certs(&ids)? {
         util::KeystoreRemoveResult::NothingToRemove => {
             println_conditional(&config, "No matching certificates to remove.");
+            if config.json {
+                print_cert_list(&config, Vec::new())?;
+            }
         }
         util::KeystoreRemoveResult::Removed { removed } => {
             println!("Removed certificates:");
@@ -93,7 +115,7 @@ fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
 }
 
 fn cert_dir_path(config: &ProviderConfig) -> anyhow::Result<PathBuf> {
-    Ok(config.cert_dir.get_or_create()?)
+    config.cert_dir.get_or_create()
 }
 
 fn print_cert_list(
@@ -104,7 +126,7 @@ fn print_cert_list(
     for data in certs_data {
         table.add(data);
     }
-    table.print(&config)?;
+    table.print(config)?;
     Ok(())
 }
 
@@ -131,19 +153,13 @@ impl CertTable {
     }
 
     pub fn add(&mut self, data: CertBasicData) {
-        self.accept(data)
+        let row = serde_json::json! {[ data.id, data.not_after, data.subject ]};
+        self.table.values.push(row)
     }
 }
 
 impl CertBasicDataVisitor for CertTable {
     fn accept(&mut self, data: CertBasicData) {
-        let row = serde_json::json! {[ data.id, data.not_after, data.subject ]};
-        self.table.values.push(row);
-    }
-}
-
-fn println_conditional(config: &ProviderConfig, txt: &str) {
-    if !config.json {
-        println!("{txt}");
+        self.add(data)
     }
 }

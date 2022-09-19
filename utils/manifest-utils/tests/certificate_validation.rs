@@ -1,19 +1,21 @@
-pub mod common;
-
 #[macro_use]
 extern crate serial_test;
 
 use std::{fs, path::PathBuf};
 
-use common::*;
+use ya_manifest_test_utils::*;
 use ya_manifest_utils::Keystore;
+
+static TEST_RESOURCES: TestResources = TestResources {
+    temp_dir: env!("CARGO_TARGET_TMPDIR"),
+};
 
 #[test]
 #[serial]
 fn valid_certificate_test() {
     // Having
-    let (resource_cert_dir, test_cert_dir) = init_cert_dirs();
-    load_certificates(
+    let (resource_cert_dir, test_cert_dir) = TEST_RESOURCES.init_cert_dirs();
+    load_certificates_from_dir(
         &resource_cert_dir,
         &test_cert_dir,
         &["foo_ca-chain.cert.pem"],
@@ -32,8 +34,8 @@ fn valid_certificate_test() {
 #[serial]
 fn invalid_certificate_test() {
     // Having
-    let (resource_cert_dir, test_cert_dir) = init_cert_dirs();
-    load_certificates(&resource_cert_dir, &test_cert_dir, &[]);
+    let (resource_cert_dir, test_cert_dir) = TEST_RESOURCES.init_cert_dirs();
+    load_certificates_from_dir(&resource_cert_dir, &test_cert_dir, &[]);
 
     let request = prepare_request(resource_cert_dir);
 
@@ -45,7 +47,7 @@ fn invalid_certificate_test() {
         result.is_err(),
         "Keystore has no intermediate cert - verification should fail"
     );
-    let err = result.err().expect("Error result");
+    let err = result.expect_err("Error result");
     let msg = format!("{err:?}");
     assert_eq!(msg, "Invalid certificate");
 }
@@ -58,9 +60,9 @@ struct SignedRequest {
 }
 
 fn prepare_request(resource_cert_dir: PathBuf) -> SignedRequest {
-    let resource_dir = common::test_resources_dir_path();
+    let resource_dir = TEST_RESOURCES.test_resources_dir_path();
 
-    let mut cert = resource_cert_dir.clone();
+    let mut cert = resource_cert_dir;
     cert.push("foo_req.cert.pem");
     let mut cert = fs::read_to_string(cert).expect("Can read certificate file");
     cert = base64::encode(cert);
@@ -69,7 +71,7 @@ fn prepare_request(resource_cert_dir: PathBuf) -> SignedRequest {
     data.push("data.json.base64");
     let data = fs::read_to_string(data).expect("Can read resource file");
 
-    let mut sig = resource_dir.clone();
+    let mut sig = resource_dir;
     sig.push("data.json.base64.foo_req_sign.sha256.base64");
     let sig = fs::read_to_string(sig).expect("Can read resource file");
 
