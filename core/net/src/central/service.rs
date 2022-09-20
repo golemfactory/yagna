@@ -226,7 +226,7 @@ fn bind_net_handler<Transport, H>(
         log_message("rpc", &caller, addr);
         let addr = addr.to_string();
         central_bus_rpc
-            .call(caller, addr.clone(), Vec::from(msg))
+            .call(caller, addr.clone(), Vec::from(msg), false)
             .map_err(|e| Error::RemoteError(addr, e.to_string()))
     };
 
@@ -277,7 +277,12 @@ fn bind_from_handler<Transport, H>(
         }
 
         central_bus_rpc
-            .call(from_node.to_string(), to_addr.clone(), Vec::from(msg))
+            .call(
+                from_node.to_string(),
+                to_addr.clone(),
+                Vec::from(msg),
+                false,
+            )
             .map_err(|e| Error::RemoteError(to_addr, e.to_string()))
             .right_future()
     };

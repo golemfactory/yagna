@@ -113,7 +113,7 @@ impl Vpn {
                 .networks
                 .endpoints()
                 .into_iter()
-                .map(|e| e.udp.call_raw_as(&self.default_id, frame.as_ref().to_vec()))
+                .map(|e| e.udp.push_raw_as(&self.default_id, frame.as_ref().to_vec()))
                 .collect::<Vec<_>>();
             futs.is_empty().not().then(|| {
                 let fut = future::join_all(futs).then(|_| future::ready(()));
@@ -153,7 +153,7 @@ impl Vpn {
 
         endpoint
             .udp
-            .call_raw_as(&self.default_id, data)
+            .push_raw_as(&self.default_id, data)
             .map_err(|err| log::debug!("[vpn] call error: {err}"))
             .then(|_| future::ready(()))
             .into_actor(self)
@@ -312,14 +312,9 @@ impl Handler<Packet> for Vpn {
         let mut data = data.into();
         network::write_prefix(&mut data);
 
-        let mut tx = self.endpoint.tx.clone();
-        async move {
-            if let Err(e) = tx.send(Ok(data)).await {
-                log::debug!("[vpn] ingress error: {}", e);
-            }
+        if let Err(e) = self.endpoint.tx.send(Ok(data)) {
+            log::debug!("[vpn] ingress error: {}", e);
         }
-        .into_actor(self)
-        .spawn(ctx);
 
         Ok(())
     }

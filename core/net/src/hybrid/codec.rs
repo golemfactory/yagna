@@ -73,12 +73,14 @@ pub(crate) fn encode_request(
     address: String,
     request_id: String,
     data: Vec<u8>,
+    no_reply: bool,
 ) -> anyhow::Result<Vec<u8>> {
     let message = GsbMessage::CallRequest(ya_sb_proto::CallRequest {
         caller: caller.to_string(),
         address,
         request_id,
         data,
+        no_reply,
     });
     Ok(encode_message(message)?)
 }
