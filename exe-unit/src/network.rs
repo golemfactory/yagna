@@ -1,6 +1,7 @@
 use std::convert::TryFrom;
 use std::path::Path;
 
+use bytes::{Buf, BytesMut};
 use futures::Stream;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
@@ -19,6 +20,8 @@ use crate::Result;
 pub(crate) mod inet;
 pub(crate) mod vpn;
 
+const BUFFER_SIZE: usize = (DEFAULT_MAX_FRAME_SIZE + 2) * 4;
+
 pub(crate) struct Endpoint {
     tx: UnboundedSender<Result<Vec<u8>>>,
     rx: Option<Box<dyn Stream<Item = Result<Vec<u8>>> + Unpin>>,
@@ -34,10 +37,8 @@ impl Endpoint {
 
     #[cfg(unix)]
     async fn connect_to_socket<P: AsRef<Path>>(path: P) -> Result<Self> {
-        use bytes::Bytes;
-        use futures::{future, SinkExt, StreamExt, TryStreamExt};
+        use futures::StreamExt;
         use tokio::io;
-        use tokio_util::codec::{BytesCodec, FramedRead, FramedWrite};
 
         type SocketChannel = (
             UnboundedSender<Result<Vec<u8>>>,
@@ -49,7 +50,7 @@ impl Endpoint {
         let (tx_si, rx_si): SocketChannel = mpsc::unbounded_channel();
 
         let stream = {
-            let buffer: [u8; DEFAULT_MAX_FRAME_SIZE] = [0u8; DEFAULT_MAX_FRAME_SIZE];
+            let buffer: [u8; BUFFER_SIZE] = [0u8; BUFFER_SIZE];
             futures::stream::unfold((read, buffer), |(mut r, mut b)| async move {
                 match r.read(&mut b).await {
                     Ok(0) => None,
@@ -60,7 +61,7 @@ impl Endpoint {
             .boxed_local()
         };
 
-        tokio::task::spawn_local(async move {
+        tokio::task::spawn(async move {
             let mut rx_si = UnboundedReceiverStream::new(rx_si);
             loop {
                 match StreamExt::next(&mut rx_si).await {
@@ -115,69 +116,46 @@ impl<'a> TryFrom<&'a DeploymentNetwork> for Network {
 type Prefix = u16;
 const PREFIX_SIZE: usize = std::mem::size_of::<Prefix>();
 
-pub(self) struct RxBuffer {
-    expected: usize,
-    inner: Vec<u8>,
+pub struct RxBuffer {
+    inner: BytesMut,
 }
 
 impl Default for RxBuffer {
     fn default() -> Self {
         Self {
-            expected: 0,
-            inner: Vec::with_capacity(PREFIX_SIZE + DEFAULT_MAX_FRAME_SIZE),
+            inner: BytesMut::with_capacity(2 * (PREFIX_SIZE + DEFAULT_MAX_FRAME_SIZE)),
         }
     }
 }
 
 impl RxBuffer {
     pub fn process(&mut self, received: Vec<u8>) -> RxIterator {
-        RxIterator {
-            buffer: self,
-            received,
-        }
+        self.inner.extend(received);
+        RxIterator { buffer: self }
     }
 }
 
-struct RxIterator<'a> {
+pub struct RxIterator<'a> {
     buffer: &'a mut RxBuffer,
-    received: Vec<u8>,
 }
 
 impl<'a> Iterator for RxIterator<'a> {
     type Item = Vec<u8>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.buffer.expected > 0 && !self.received.is_empty() {
-            let len = self.buffer.expected.min(self.received.len());
-            self.buffer.inner.extend(self.received.drain(..len));
-        }
-
         if let Some(len) = read_prefix(&self.buffer.inner) {
-            if let Some(item) = take_next(&mut self.buffer.inner, len) {
-                self.buffer.expected = read_prefix(&self.buffer.inner).unwrap_or(0) as usize;
-                return Some(item);
-            }
+            return take_next(&mut self.buffer.inner, len);
         }
-
-        if let Some(len) = read_prefix(&self.received) {
-            if let Some(item) = take_next(&mut self.received, len) {
-                return Some(item);
-            }
-        }
-
-        self.buffer.inner.append(&mut self.received);
-        if let Some(len) = read_prefix(&self.buffer.inner) {
-            self.buffer.expected = len as usize;
-        }
-
         None
     }
 }
 
-fn take_next(src: &mut Vec<u8>, len: Prefix) -> Option<Vec<u8>> {
-    let p_len = PREFIX_SIZE + len as usize;
+fn take_next(src: &mut BytesMut, len: Prefix) -> Option<Vec<u8>> {
+    let len = len as usize;
+    let p_len = PREFIX_SIZE + len;
     if src.len() >= p_len {
-        return Some(src.drain(..p_len).skip(PREFIX_SIZE).collect());
+        src.advance(PREFIX_SIZE);
+        return Some(src.split_to(len).to_vec());
     }
     None
 }
