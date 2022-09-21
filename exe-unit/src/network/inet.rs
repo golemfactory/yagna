@@ -38,7 +38,6 @@ use ya_utils_networking::vpn::{
 
 use crate::manifest::UrlValidator;
 use crate::message::Shutdown;
-use crate::network;
 use crate::network::{write_prefix, Endpoint, RxBuffer};
 use crate::{Error, Result};
 
