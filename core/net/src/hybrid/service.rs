@@ -25,6 +25,7 @@ use ya_relay_client::crypto::CryptoProvider;
 use ya_relay_client::{Client, ClientBuilder, ForwardReceiver, TransportType};
 use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::CallReplyCode;
+use ya_sb_util::RevPrefixes;
 use ya_service_bus::untyped::Fn4HandlerExt;
 use ya_service_bus::{
     serialization, typed, untyped as local_bus, Error, ResponseChunk, RpcEndpoint, RpcMessage,
@@ -114,12 +115,11 @@ pub async fn start_network(
 
     let broadcast_size = config.broadcast_size;
     let crypto = IdentityCryptoProvider::new(default_id);
-
     let client = build_client(config, crypto.clone()).await?;
+
     CLIENT.with(|inner| {
         inner.borrow_mut().replace(client.clone());
     });
-
     ClientActor::init(client.clone());
 
     let receiver = client.clone().forward_receiver().await.unwrap();
@@ -261,9 +261,8 @@ where
             }
         };
 
-        let reply = !no_reply;
         log::trace!(
-            "local bus: rpc call (egress): {} ({} -> {}), reply: {reply}",
+            "local bus: rpc call (egress): {} ({} -> {}), no_reply: {no_reply}",
             address,
             caller_id,
             remote_id,
@@ -322,7 +321,7 @@ where
             }
         };
 
-        log::info!(
+        log::trace!(
             "local bus: stream call (egress): {} ({} -> {})",
             address,
             caller_id,
@@ -398,15 +397,7 @@ async fn bind_identity_event_handler(crypto: IdentityCryptoProvider) {
 
 /// Forward requests from and to the local bus
 fn forward_bus_to_local(caller: &str, addr: &str, data: &[u8], state: &State, tx: BusSender) {
-    let address = match {
-        let inner = state.inner.borrow();
-        inner
-            .services
-            .iter()
-            .find(|&id| addr.starts_with(id))
-            // replaces  /net/<dest_node_id>/test/1 --> /public/test/1
-            .map(|s| addr.replacen(s, net::PUBLIC_PREFIX, 1))
-    } {
+    let address = match state.get_public_service(addr) {
         Some(address) => address,
         None => {
             let err = format!("Net: unknown address: {}", addr);
@@ -426,15 +417,7 @@ fn forward_bus_to_local(caller: &str, addr: &str, data: &[u8], state: &State, tx
 }
 
 fn push_bus_to_local(caller: &str, addr: &str, data: &[u8], state: &State) {
-    let address = match {
-        let inner = state.inner.borrow();
-        inner
-            .services
-            .iter()
-            .find(|&id| addr.starts_with(id))
-            // replaces  /net/<dest_node_id>/test/1 --> /public/test/1
-            .map(|s| addr.replacen(s, net::PUBLIC_PREFIX, 1))
-    } {
+    let address = match state.get_public_service(addr) {
         Some(address) => address,
         None => {
             log::debug!("Net: unknown address: {}", addr);
@@ -462,8 +445,6 @@ fn forward_bus_to_net(
     let address = address.to_string();
     let state = state.clone();
     let request_id = gen_id().to_string();
-
-    log::trace!("Forward bus -> net ({caller_id} -> {remote_id}), address: {address}");
 
     let (tx, rx) = mpsc::channel(1);
     let msg = match codec::encode_request(
@@ -526,8 +507,6 @@ fn push_bus_to_net(
     let address = address.to_string();
     let state = state.clone();
     let request_id = gen_id().to_string();
-
-    log::trace!("Push bus -> net ({caller_id} -> {remote_id}), address: {address}");
 
     let msg = match codec::encode_request(
         caller_id,
@@ -670,10 +649,12 @@ fn forward_handler(
                     fwd.node_id
                 );
 
-                if tx.send(fwd.payload).await.is_err() {
-                    log::debug!("Net routing error: channel closed for [{}]", fwd.node_id);
-                    state.remove(&key);
-                }
+                tokio::task::spawn_local(async move {
+                    if tx.send(fwd.payload).await.is_err() {
+                        log::debug!("Net routing error: channel closed for [{}]", fwd.node_id);
+                        state.remove_sink(&key);
+                    }
+                });
             }
         })
         .boxed_local()
@@ -759,15 +740,7 @@ fn handle_push(
 
     log::debug!("Handle push request {request_id} to {address} from {remote_id}");
 
-    let fut = match {
-        let inner = state.inner.borrow();
-        inner
-            .services
-            .iter()
-            .find(|&id| address.starts_with(id))
-            // replaces  /net/<dest_node_id>/test/1 --> /public/test/1
-            .map(|s| address.replacen(s, net::PUBLIC_PREFIX, 1))
-    } {
+    let fut = match state.get_public_service(address.as_str()) {
         Some(address) => {
             log::trace!("Handle push request: calling: {address}");
             local_bus::push(&address, &request.caller, &request.data)
@@ -813,15 +786,7 @@ fn handle_request(
     let eos = Rc::new(AtomicBool::new(false));
     let eos_map = eos.clone();
 
-    let stream = match {
-        let inner = state.inner.borrow();
-        inner
-            .services
-            .iter()
-            .find(|&id| address.starts_with(id))
-            // replaces  /net/<dest_node_id>/test/1 --> /public/test/1
-            .map(|s| address.replacen(s, net::PUBLIC_PREFIX, 1))
-    } {
+    let stream = match state.get_public_service(address.as_str()) {
         Some(address) => {
             log::trace!("Handle request: calling: {address}");
             local_bus::call_stream(&address, &request.caller, &request.data).left_stream()
@@ -1041,7 +1006,14 @@ impl State {
         Ok(forward)
     }
 
-    fn remove(&self, key: &NetSinkKey) {
+    fn get_public_service(&self, addr: &str) -> Option<String> {
+        let inner = self.inner.borrow();
+        RevPrefixes(addr)
+            .find_map(|s| inner.services.get(s))
+            .map(|s| addr.replacen(s, net::PUBLIC_PREFIX, 1))
+    }
+
+    fn remove_sink(&self, key: &NetSinkKey) {
         let mut inner = self.inner.borrow_mut();
         inner.routes.remove(key);
     }

@@ -7548,6 +7548,7 @@ dependencies = [
  "ya-relay-client",
  "ya-sb-proto",
  "ya-sb-router",
+ "ya-sb-util",
  "ya-service-api",
  "ya-service-api-interfaces",
  "ya-service-bus",
