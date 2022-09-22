@@ -13,10 +13,10 @@ use crate::startup_config::ProviderConfig;
 #[derive(StructOpt, Clone, Debug)]
 #[structopt(
     rename_all = "kebab-case",
-    help = "Keystore stores X.509 certificates. They allow to accept Demands with 
-    Computation Payload Manifests which arrive with signature and app author's public certificate. 
-    Certificate gets validated against certificates loaded into the keystore.
-    Certificates are stored in a file format in directory. Its location can be configured using '--cert-dir' param."
+    help = "Keystore stores X.509 certificates.
+They allow to accept Demands with Computation Payload Manifests which arrive with signature and app author's public certificate.
+Certificate gets validated against certificates loaded into the keystore.
+Certificates are stored in a file format in directory. Its location can be configured using '--cert-dir' param."
 )]
 pub enum KeystoreConfig {
     /// List trusted X.509 certificates
@@ -32,8 +32,7 @@ pub struct Add {
     /// Paths to X.509 certificates or certificates chains
     #[structopt(
         parse(from_os_str),
-        help = "Coma separated list of X.509 certificate files (PEM or DER) 
-        or PEM certificates chains to be added to the Keystore."
+        help = "Space separated list of X.509 certificate files (PEM or DER) or PEM certificates chains to be added to the Keystore."
     )]
     certs: Vec<PathBuf>,
 }
@@ -42,8 +41,8 @@ pub struct Add {
 #[structopt(rename_all = "kebab-case")]
 pub struct Remove {
     /// Certificate ids
-    #[structopt(help = "Coma separated list of X.509 certificates' ids. 
-        To find certificate id use `keystore list` command.")]
+    #[structopt(help = "Space separated list of X.509 certificates' ids. 
+To find certificate id use `keystore list` command.")]
     ids: Vec<String>,
 }
 
