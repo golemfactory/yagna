@@ -132,6 +132,7 @@ async fn monitor(extension: Extension, ctx: ExtensionCtx) {
     let _ = futures::future::select(interrupted, restart_loop).await;
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]
 pub enum ExtensionCtx {
     Cli {

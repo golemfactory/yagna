@@ -408,6 +408,7 @@ impl ExtensionCommand {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(StructOpt, Debug)]
 enum ServiceCommand {
     /// Runs server in foreground
