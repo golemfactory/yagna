@@ -22,6 +22,7 @@ use ya_core_model::net::local::{SendBroadcastMessage, SendBroadcastStub};
 use ya_core_model::{identity, net, NodeId};
 use ya_relay_client::codec::forward::{PrefixedSink, PrefixedStream, SinkKind};
 use ya_relay_client::crypto::CryptoProvider;
+use ya_relay_client::proto::Payload;
 use ya_relay_client::{Client, ClientBuilder, ForwardReceiver, TransportType};
 use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::CallReplyCode;
@@ -43,7 +44,7 @@ const DEFAULT_NET_RELAY_HOST: &str = "127.0.0.1:7464";
 
 type BusSender = mpsc::Sender<ResponseChunk>;
 type BusReceiver = mpsc::Receiver<ResponseChunk>;
-type NetSender = mpsc::Sender<Vec<u8>>;
+type NetSender = mpsc::Sender<Payload>;
 type NetSinkKind = SinkKind<NetSender, mpsc::SendError>;
 type NetSinkKey = (NodeId, TransportType);
 
@@ -662,12 +663,12 @@ fn forward_handler(
 
 fn forward_channel<'a>(
     transport: TransportType,
-) -> (mpsc::Sender<Vec<u8>>, LocalBoxStream<'a, Vec<u8>>) {
-    let (tx, rx) = mpsc::channel(1);
+) -> (mpsc::Sender<Payload>, LocalBoxStream<'a, Payload>) {
+    let (tx, rx) = mpsc::channel(8);
     let rx = if transport == TransportType::Reliable || transport == TransportType::Transfer {
         PrefixedStream::new(rx)
             .inspect_err(|e| log::debug!("Prefixed stream error: {e}"))
-            .filter_map(|r| async move { r.ok().map(|b| b.to_vec()) })
+            .filter_map(|r| async move { r.ok().map(Payload::from) })
             .boxed_local()
     } else {
         rx.boxed_local()
@@ -677,7 +678,7 @@ fn forward_channel<'a>(
 
 /// Forward node GSB messages from the network to the local bus
 fn inbound_handler(
-    rx: impl Stream<Item = Vec<u8>> + 'static,
+    rx: impl Stream<Item = Payload> + 'static,
     remote_id: NodeId,
     transport: TransportType,
     state: State,
@@ -690,7 +691,7 @@ fn inbound_handler(
         );
 
         async move {
-            match codec::decode_message(payload.as_slice()) {
+            match codec::decode_message(payload.as_ref()) {
                 Ok(Some(GsbMessage::CallRequest(request @ ya_sb_proto::CallRequest { .. }))) => {
                     if request.no_reply {
                         handle_push(request, remote_id, state)
