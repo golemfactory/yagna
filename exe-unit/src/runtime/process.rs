@@ -535,10 +535,7 @@ struct ChildProcessGuard {
 impl ChildProcessGuard {
     fn new(inner: ChildProcess, addr: Addr<RuntimeProcess>) -> Self {
         addr.do_send(AddChildProcess(inner.clone()));
-        ChildProcessGuard {
-            inner,
-            addr: addr.clone(),
-        }
+        ChildProcessGuard { inner, addr }
     }
 }
 

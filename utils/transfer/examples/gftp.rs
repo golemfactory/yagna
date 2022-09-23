@@ -55,7 +55,10 @@ fn hash_file(path: &Path) -> HashOutput {
 
 #[actix_rt::main]
 async fn main() -> Result<(), Error> {
-    env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or("info".into()));
+    env::set_var(
+        "RUST_LOG",
+        env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
+    );
     env_logger::init();
 
     let temp_dir = TempDir::new("transfer").unwrap();

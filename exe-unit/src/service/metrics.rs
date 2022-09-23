@@ -146,7 +146,7 @@ impl Handler<GetMetrics> for MetricsService {
             let metric = self
                 .metrics
                 .get_mut(name)
-                .ok_or(MetricError::Unsupported(name.to_string()))?;
+                .ok_or_else(|| MetricError::Unsupported(name.to_string()))?;
 
             let report = metric.report();
             metric.log_report(report.clone());

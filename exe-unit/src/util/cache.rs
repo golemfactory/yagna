@@ -14,7 +14,7 @@ pub(crate) struct Cache {
 
 impl Cache {
     pub fn new(dir: PathBuf) -> Self {
-        let tmp_dir = dir.clone().join("tmp");
+        let tmp_dir = dir.join("tmp");
         std::fs::create_dir_all(&tmp_dir)
             .unwrap_or_else(|_| panic!("Unable to create directory: {}", tmp_dir.display()));
         Cache { dir, tmp_dir }
