@@ -32,7 +32,7 @@ impl AgreementLock {
                 let mut lock_map = self.lock_map.write().await;
                 lock_map
                     .entry(agreement_id.clone())
-                    .or_insert(Arc::new(Mutex::new(())))
+                    .or_insert_with(|| Arc::new(Mutex::new(())))
                     .clone()
             }
         }

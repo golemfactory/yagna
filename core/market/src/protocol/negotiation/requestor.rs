@@ -148,7 +148,7 @@ impl NegotiationApi {
             signature: agreement
                 .proposed_signature
                 .clone()
-                .ok_or(ProposeAgreementError::NotSigned(id.clone()))?,
+                .ok_or_else(|| ProposeAgreementError::NotSigned(id.clone()))?,
         };
         net::from(requestor_id)
             .to(provider_id)
@@ -168,7 +168,7 @@ impl NegotiationApi {
             signature: agreement
                 .committed_signature
                 .clone()
-                .ok_or(CommitAgreementError::NotSigned(id.clone()))?,
+                .ok_or_else(|| CommitAgreementError::NotSigned(id.clone()))?,
         };
         net::from(requestor_id)
             .to(provider_id)

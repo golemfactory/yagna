@@ -323,7 +323,7 @@ impl RequestorBroker {
                 .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
                 .await
                 .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
-                .ok_or(AgreementError::NotFound(agreement_id.to_string()))?;
+                .ok_or_else(|| AgreementError::NotFound(agreement_id.to_string()))?;
 
             validate_transition(&agreement, AgreementState::Cancelled)?;
 
@@ -371,7 +371,7 @@ impl RequestorBroker {
                 .select(id, None, Utc::now().naive_utc())
                 .await
                 .map_err(|e| WaitForApprovalError::Get(id.clone(), e))?
-                .ok_or(WaitForApprovalError::NotFound(id.clone()))?;
+                .ok_or_else(|| WaitForApprovalError::NotFound(id.clone()))?;
 
             match agreement.state {
                 AgreementState::Approved => {
@@ -507,7 +507,7 @@ async fn agreement_approved(
             .select(&msg.agreement_id, None, Utc::now().naive_utc())
             .await
             .map_err(|_e| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
-            .ok_or(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
+            .ok_or_else(|| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
 
         if agreement.provider_id != caller {
             // Don't reveal, that we know this Agreement id.
@@ -582,7 +582,7 @@ async fn commit_agreement(broker: CommonBroker, agreement_id: AgreementId) {
             .select(&agreement_id, None, Utc::now().naive_utc())
             .await
             .map_err(|_e| AgreementError::NotFound(agreement_id.to_string()))?
-            .ok_or(AgreementError::NotFound(agreement_id.to_string()))?;
+            .ok_or_else(|| AgreementError::NotFound(agreement_id.to_string()))?;
 
         // TODO: Sign Agreement.
         let signature = "NoSignature".to_string();
@@ -663,7 +663,7 @@ async fn agreement_rejected(
             .select(&msg.agreement_id, None, Utc::now().naive_utc())
             .await
             .map_err(|_e| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
-            .ok_or(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
+            .ok_or_else(|| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
 
         if agreement.provider_id != caller {
             // Don't reveal, that we know this Agreement id.

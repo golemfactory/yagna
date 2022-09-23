@@ -316,7 +316,7 @@ impl CommonBroker {
                 // that such Proposal exists, but for different subscription_id.
                 false
             })
-            .ok_or(GetProposalError::NotFound(id.clone(), subs_id.cloned()))?)
+            .ok_or_else(|| GetProposalError::NotFound(id.clone(), subs_id.cloned()))?)
     }
 
     pub async fn get_client_proposal(
@@ -452,7 +452,7 @@ impl CommonBroker {
                 .select(&agreement_id, None, Utc::now().naive_utc())
                 .await
                 .map_err(|_e| RemoteAgreementError::NotFound(agreement_id.clone()))?
-                .ok_or(RemoteAgreementError::NotFound(agreement_id.clone()))?;
+                .ok_or_else(|| RemoteAgreementError::NotFound(agreement_id.clone()))?;
 
             let auth_id = match caller_role {
                 Owner::Provider => agreement.provider_id,
@@ -842,7 +842,9 @@ pub fn inc_terminate_metrics(reason: &Option<Reason>, owner: Owner) {
     let p_code = get_reason_code(reason, "golem.provider.code");
     let r_code = get_reason_code(reason, "golem.requestor.code");
 
-    let reason_code = r_code.xor(p_code).unwrap_or("NotSpecified".to_string());
+    let reason_code = r_code
+        .xor(p_code)
+        .unwrap_or_else(|| "NotSpecified".to_string());
     match owner {
         Owner::Provider => {
             counter!("market.agreements.provider.terminated.reason", 1, "reason" => reason_code)

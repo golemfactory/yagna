@@ -49,8 +49,11 @@ async fn create_allocation(
     let payment_platform = allocation
         .payment_platform
         .clone()
-        .unwrap_or(DEFAULT_PAYMENT_PLATFORM.to_string());
-    let address = allocation.address.clone().unwrap_or(node_id.to_string());
+        .unwrap_or_else(|| DEFAULT_PAYMENT_PLATFORM.to_string());
+    let address = allocation
+        .address
+        .clone()
+        .unwrap_or_else(|| node_id.to_string());
 
     // If the request contains information about the payment platform, initialize the account
     // by setting the `send` field to `true`, as it is implied by the intent behing allocation of funds.

@@ -235,7 +235,7 @@ impl ProviderBroker {
                 .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
                 .await
                 .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
-                .ok_or(AgreementError::NotFound(agreement_id.to_string()))?;
+                .ok_or_else(|| AgreementError::NotFound(agreement_id.to_string()))?;
 
             if agreement.state == AgreementState::Cancelled {
                 return Ok(ApprovalResult::Cancelled);
@@ -328,10 +328,12 @@ impl ProviderBroker {
                 .select(agreement_id, None, Utc::now().naive_utc())
                 .await
                 .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
-                .ok_or(AgreementError::Internal(format!(
-                    "Agreement [{}], which existed previously, disappeared.",
-                    agreement_id
-                )))?;
+                .ok_or_else(|| {
+                    AgreementError::Internal(format!(
+                        "Agreement [{}], which existed previously, disappeared.",
+                        agreement_id
+                    ))
+                })?;
 
             match agreement.state {
                 AgreementState::Cancelled => Ok(ApprovalResult::Cancelled),
@@ -359,7 +361,7 @@ impl ProviderBroker {
                 .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
                 .await
                 .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
-                .ok_or(AgreementError::NotFound(agreement_id.to_string()))?;
+                .ok_or_else(|| AgreementError::NotFound(agreement_id.to_string()))?;
 
             validate_transition(&agreement, AgreementState::Rejected)?;
 
@@ -544,9 +546,7 @@ async fn agreement_received(
     let offer_id = &offer_proposal.negotiation.offer_id.clone();
 
     if offer_proposal.body.issuer != Issuer::Us {
-        return Err(RemoteProposeAgreementError::RequestorOwn(
-            offer_proposal_id,
-        ));
+        return Err(RemoteProposeAgreementError::RequestorOwn(offer_proposal_id));
     }
 
     let demand_proposal_id = offer_proposal
@@ -640,7 +640,7 @@ async fn agreement_cancelled(
             .await
             .log_err()
             .map_err(|_e| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
-            .ok_or(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
+            .ok_or_else(|| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
 
         if agreement.requestor_id != caller {
             // Don't reveal, that we know this Agreement id.

@@ -289,7 +289,9 @@ impl<'c> AgreementDao<'c> {
                 &agreement,
                 None,
                 Owner::Provider,
-                agreement.approved_ts.unwrap_or(Utc::now().naive_utc()),
+                agreement
+                    .approved_ts
+                    .unwrap_or_else(|| Utc::now().naive_utc()),
             )?;
 
             Ok(agreement)

@@ -155,7 +155,7 @@ impl PaymentCli {
                 let address = resolve_address(account.address()).await?;
                 let timestamp = last
                     .map(|d| Utc::now() - chrono::Duration::seconds(d.as_secs() as i64))
-                    .unwrap_or(DateTime::from(UNIX_EPOCH))
+                    .unwrap_or_else(|| DateTime::from(UNIX_EPOCH))
                     .timestamp();
                 let status = bus::service(pay::BUS_ID)
                     .call(pay::GetStatus {
