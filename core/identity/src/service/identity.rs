@@ -609,5 +609,5 @@ async fn get_default_identity_key() -> anyhow::Result<model::IdentityInfo> {
     Ok(bus::service(model::BUS_ID)
         .send(model::Get::ByDefault {})
         .await??
-        .ok_or(anyhow::anyhow!("No default Identity found"))?)
+        .ok_or_else(|| anyhow::anyhow!("No default Identity found"))?)
 }

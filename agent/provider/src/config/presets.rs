@@ -57,7 +57,7 @@ impl Presets {
             presets
                 .presets
                 .get(name)
-                .ok_or(anyhow!("Invalid active preset: {:?}", name))
+                .ok_or_else(|| anyhow!("Invalid active preset: {:?}", name))
                 .map(|_| ())
         })?;
 

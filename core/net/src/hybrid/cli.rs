@@ -55,7 +55,8 @@ pub(crate) fn bind_service() {
                 };
 
                 let mut metric = node_id
-                    .and_then(|node_id| metrics.remove(&node_id)).unwrap_or_default();
+                    .and_then(|node_id| metrics.remove(&node_id))
+                    .unwrap_or_default();
 
                 responses.push(model::SessionResponse {
                     node_id,
@@ -179,8 +180,8 @@ pub async fn cli_ping() -> anyhow::Result<Vec<GsbPingResponse>> {
             log::warn!("Failed to ping node: {} {}", nodes[idx].0, e);
         }
 
-        let udp_ping = results.0.unwrap_or(ping_timeout.clone());
-        let tcp_ping = results.1.unwrap_or(ping_timeout.clone());
+        let udp_ping = results.0.unwrap_or_else(|_| ping_timeout.clone());
+        let tcp_ping = results.1.unwrap_or_else(|_| ping_timeout.clone());
 
         GsbPingResponse {
             node_id: nodes[idx].0,

@@ -625,7 +625,7 @@ impl Handler<OnAgreementTerminated> for ProviderMarket {
         let reason = msg
             .reason
             .map(|msg| msg.message)
-            .unwrap_or("NotSpecified".to_string());
+            .unwrap_or_else(|| "NotSpecified".to_string());
 
         log::info!(
             "Agreement [{}] terminated by Requestor. Reason: {}",
