@@ -420,11 +420,9 @@ pub fn parse_prop_value_literal(input: &str) -> Result<Literal, String> {
                 Err(format!("Unknown literal type: {}", input))
             }
         }
-        IResult::Error(error_kind) => Err(format!(
-            "Parsing error: {} in text '{}'",
-            error_kind,
-            input
-        )),
+        IResult::Error(error_kind) => {
+            Err(format!("Parsing error: {} in text '{}'", error_kind, input))
+        }
         IResult::Incomplete(_needed) => Err(format!("Parsing error: {:?}", _needed)),
     }
 }

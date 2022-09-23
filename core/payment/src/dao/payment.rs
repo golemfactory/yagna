@@ -301,8 +301,12 @@ fn join_activity_and_agreement_payments(
     payments
         .into_iter()
         .map(|payment| {
-            let activity_payments = activity_payments_map.remove(&payment.id).unwrap_or_default();
-            let agreement_payments = agreement_payments_map.remove(&payment.id).unwrap_or_default();
+            let activity_payments = activity_payments_map
+                .remove(&payment.id)
+                .unwrap_or_default();
+            let agreement_payments = agreement_payments_map
+                .remove(&payment.id)
+                .unwrap_or_default();
             payment.into_api_model(activity_payments, agreement_payments)
         })
         .collect()
