@@ -418,7 +418,6 @@ impl MarketsNetwork {
             .map(|node| node.mock_identity.clone())
             .unwrap()
             .get_default_id()
-            
     }
 
     pub fn create_identity(&self, node_name: &str, id_name: &str) -> Identity {
