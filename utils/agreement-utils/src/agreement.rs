@@ -90,7 +90,7 @@ struct PointerPaths {
 }
 
 fn property_to_pointer_paths(property: &str) -> PointerPaths {
-    let path = format!("/{}", property.replace(".", "/"));
+    let path = format!("/{}", property.replace('.', "/"));
     let path_w_tag = format!("{path}/{PROPERTY_TAG}");
     PointerPaths { path, path_w_tag }
 }
@@ -101,7 +101,7 @@ pub fn parse_constraints(input: &str, reg_expr: &str, group: usize) -> Option<Ha
         .and_then(|cap| cap.get(group))
         .map(|mat| {
             mat.as_str()
-                .split(",")
+                .split(',')
                 .map(|s| s.trim().to_lowercase())
                 .collect::<HashSet<_>>()
         })
@@ -401,7 +401,7 @@ fn merge_obj(a: &mut Value, b: Value) {
             Value::Null => (),
             _ => {
                 let a = a.as_object_mut().unwrap();
-                a.insert(PROPERTY_TAG.to_string(), b.clone());
+                a.insert(PROPERTY_TAG.to_string(), b);
             }
         },
         (a, b) => *a = b,

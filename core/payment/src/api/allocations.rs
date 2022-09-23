@@ -58,7 +58,7 @@ async fn create_allocation(
         // payment_platform is of the form driver-network-token
         // eg. erc20-rinkeby-tglm
         let [driver, network, _token]: [&str; 3] =
-            match platform.split("-").collect::<Vec<_>>().try_into() {
+            match platform.split('-').collect::<Vec<_>>().try_into() {
                 Ok(arr) => arr,
                 Err(_e) => {
                     return response::bad_request(

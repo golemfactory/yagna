@@ -453,7 +453,7 @@ fn expand_filename(pattern: &Path) -> Result<impl IntoIterator<Item = PathBuf>> 
         None => anyhow::bail!("Not utf-8 filename: {:?}", file_name),
     };
 
-    if let Some(pos) = file_name.find("*") {
+    if let Some(pos) = file_name.find('*') {
         let (prefix, suffix) = file_name.split_at(pos);
         let suffix = &suffix[1..];
 

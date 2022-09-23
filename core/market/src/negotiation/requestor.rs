@@ -49,7 +49,7 @@ impl RequestorBroker {
         session_notifier: EventNotifier<AppSessionId>,
         config: Arc<Config>,
     ) -> Result<RequestorBroker, NegotiationInitError> {
-        let broker = CommonBroker::new(db.clone(), store, session_notifier, config);
+        let broker = CommonBroker::new(db, store, session_notifier, config);
 
         let broker1 = broker.clone();
         let broker2 = broker.clone();

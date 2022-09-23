@@ -304,7 +304,7 @@ impl Extension {
                 entry
                     .file_name()
                     .to_str()
-                    .map(|name| (name.to_string(), entry.path().to_path_buf()))
+                    .map(|name| (name.to_string(), entry.path()))
             })
             .filter_map(|(name, path)| {
                 if name.starts_with(&prefix) && name.ends_with(suffix) {

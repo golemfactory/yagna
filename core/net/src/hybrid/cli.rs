@@ -55,8 +55,7 @@ pub(crate) fn bind_service() {
                 };
 
                 let mut metric = node_id
-                    .and_then(|node_id| metrics.remove(&node_id))
-                    .unwrap_or(ChannelMetrics::default());
+                    .and_then(|node_id| metrics.remove(&node_id)).unwrap_or_default();
 
                 responses.push(model::SessionResponse {
                     node_id,

@@ -97,7 +97,7 @@ impl DbExecutor {
         let tx_lock: TxLock = Arc::new(RwLock::new(0));
 
         let builder = Pool::builder().connection_customizer(Box::new(connection_customizer(
-            database_url.clone(),
+            database_url,
             tx_lock.clone(),
         )));
 

@@ -168,7 +168,7 @@ impl MarketsNetwork {
             kind: node_kind,
         };
 
-        let node_id = node.mock_identity.get_default_id().clone().identity;
+        let node_id = node.mock_identity.get_default_id().identity;
         log::info!("Creating mock node {}: [{}].", name, &node_id);
         BCastService::default().register(&node_id, &self.test_name);
         MockNet::default().register_node(&node_id, &public_gsb_prefix);
@@ -418,7 +418,7 @@ impl MarketsNetwork {
             .map(|node| node.mock_identity.clone())
             .unwrap()
             .get_default_id()
-            .clone()
+            
     }
 
     pub fn create_identity(&self, node_name: &str, id_name: &str) -> Identity {
@@ -512,7 +512,7 @@ fn test_data_dir() -> PathBuf {
 
 fn escape_path(path: &str) -> String {
     // Windows can't handle colons
-    path.replace("::", "_").to_string()
+    path.replace("::", "_")
 }
 
 pub fn prepare_test_dir(dir_name: &str) -> Result<PathBuf> {

@@ -459,7 +459,7 @@ async fn handle_debit_note_event(
                 .log_err_msg(&format!(
                     "Failed to send BreakAgreement for [{}] with reason: {}",
                     debit_note.agreement_id,
-                    reason.to_string()
+                    reason
                 ))
                 .ok()
         }
@@ -761,7 +761,7 @@ impl Handler<AgreementClosed> for Payments {
             let activities_watch = agreement.activities_watch.clone();
             let agreement_id = msg.agreement_id.clone();
             let payment_timeout = agreement.payment_timeout;
-            let myself = ctx.address().clone();
+            let myself = ctx.address();
             let ctx = self.context.clone();
 
             let future = async move {
@@ -883,7 +883,7 @@ impl Handler<AgreementBroken> for Payments {
             return ActorResponse::reply(Ok(()));
         }
 
-        let address = ctx.address().clone();
+        let address = ctx.address();
         let future = async move {
             let msg = AgreementClosed {
                 agreement_id: msg.agreement_id,
@@ -1012,7 +1012,7 @@ impl Handler<DeadlineElapsed> for Payments {
             .log_err_msg(&format!(
                 "Failed to send BreakAgreement for [{}] with reason: {}",
                 msg.category,
-                reason.to_string(),
+                reason,
             ))
             .ok();
     }
@@ -1051,7 +1051,7 @@ impl Actor for Payments {
             payment_addr.clone(),
         ));
         tokio::task::spawn_local(async move {
-            for checker in vec![&provider_ctx.debit_checker, &provider_ctx.payment_checker] {
+            for checker in &[&provider_ctx.debit_checker, &provider_ctx.payment_checker] {
                 let _ = checker
                     .send(Subscribe(payment_addr.clone().recipient()))
                     .await

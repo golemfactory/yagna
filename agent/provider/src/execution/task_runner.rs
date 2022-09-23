@@ -370,9 +370,9 @@ impl TaskRunner {
 
         let destroy_msg = ActivityDestroyed {
             agreement_id: msg.agreement_id.to_string(),
-            activity_id: msg.activity_id.clone(),
+            activity_id: msg.activity_id,
         };
-        let _ = self.activity_destroyed.send_signal(destroy_msg.clone());
+        let _ = self.activity_destroyed.send_signal(destroy_msg);
         Ok(())
     }
 
@@ -770,8 +770,8 @@ impl Handler<AgreementClosed> for TaskRunner {
     type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: AgreementClosed, ctx: &mut Context<Self>) -> Self::Result {
-        let agreement_id = msg.agreement_id.to_string();
-        let myself = ctx.address().clone();
+        let agreement_id = msg.agreement_id;
+        let myself = ctx.address();
         let activities = self.list_activities(&agreement_id);
 
         self.active_agreements.remove(&agreement_id);
@@ -790,8 +790,8 @@ impl Handler<AgreementBroken> for TaskRunner {
     type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: AgreementBroken, ctx: &mut Context<Self>) -> Self::Result {
-        let agreement_id = msg.agreement_id.to_string();
-        let myself = ctx.address().clone();
+        let agreement_id = msg.agreement_id;
+        let myself = ctx.address();
         let activities = self.list_activities(&agreement_id);
 
         self.active_agreements.remove(&agreement_id);

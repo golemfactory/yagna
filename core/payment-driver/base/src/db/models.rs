@@ -125,7 +125,7 @@ impl FromStr for Network {
             "mumbai" => Ok(Network::Mumbai),
             _ => Err(DbError::InvalidData(format!(
                 "Invalid network: {}",
-                s.to_string()
+                s
             ))),
         }
     }

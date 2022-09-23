@@ -74,9 +74,9 @@ impl fmt::Display for Constraints {
             0 => Ok(()),
             1 => write!(f, "{}", self.constraints[0]),
             _ => {
-                write!(f, "({}\n", self.operator.to_string())?;
+                write!(f, "({}\n", self.operator)?;
                 for el in &self.constraints {
-                    write!(f, "  {}\n", el.to_string().replace("\n", "\n  "))?;
+                    write!(f, "  {}\n", el.to_string().replace('\n', "\n  "))?;
                 }
                 write!(f, ")")
             }
@@ -187,14 +187,14 @@ impl fmt::Display for ConstraintExpr {
                 } else {
                     for (op, val) in ops_values {
                         write!(f, "({}", key.0.as_str().unwrap_or(&key.0.to_string()))?;
-                        write!(f, "{}", op.to_string())?;
+                        write!(f, "{}", op)?;
                         write!(f, "{}", val.0.as_str().unwrap_or(&val.0.to_string()))?;
                         write!(f, ")")?
                     }
                     Ok(())
                 }
             }
-            ConstraintExpr::Constraints(c) => write!(f, "{}", c.to_string()),
+            ConstraintExpr::Constraints(c) => write!(f, "{}", c),
         }
     }
 }

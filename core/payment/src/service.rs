@@ -448,7 +448,7 @@ mod public {
         .await
         {
             Ok(_) => Ok(Ack {}),
-            Err(DbError::Query(e)) => return Err(SendError::BadRequest(e.to_string())),
+            Err(DbError::Query(e)) => return Err(SendError::BadRequest(e)),
             Err(e) => return Err(SendError::ServiceError(e.to_string())),
         }
     }
@@ -505,7 +505,7 @@ mod public {
                 counter!("payment.debit_notes.provider.accepted", 1);
                 Ok(Ack {})
             }
-            Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e.to_string())),
+            Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e)),
             Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
         }
     }
@@ -619,7 +619,7 @@ mod public {
         .await
         {
             Ok(_) => Ok(Ack {}),
-            Err(DbError::Query(e)) => return Err(SendError::BadRequest(e.to_string())),
+            Err(DbError::Query(e)) => return Err(SendError::BadRequest(e)),
             Err(e) => return Err(SendError::ServiceError(e.to_string())),
         }
     }
@@ -676,7 +676,7 @@ mod public {
                 counter!("payment.invoices.provider.accepted", 1);
                 Ok(Ack {})
             }
-            Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e.to_string())),
+            Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e)),
             Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
         }
     }

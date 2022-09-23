@@ -52,7 +52,7 @@ fn whitelist_add_test(add: &[&str], pattern_type: &str, expected_add_json_out: &
     clean_data_dir();
     let expected_add_json_out = json_to_printed_output(expected_add_json_out);
     whitelist_add(add, pattern_type)
-        .stdout(expected_add_json_out.to_string())
+        .stdout(expected_add_json_out)
         .success();
 }
 
@@ -123,7 +123,7 @@ fn whitelist_add(add: &[&str], pattern_type: &str) -> Assert {
         .arg("-p")
         .args(add)
         .arg("-t")
-        .arg(pattern_type.to_string())
+        .arg(pattern_type)
         .arg("--json")
         .args(data_dir_args())
         .assert()

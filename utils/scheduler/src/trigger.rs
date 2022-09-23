@@ -20,7 +20,7 @@ impl Interval {
     }
 
     fn next<Tz: TimeZone>(&self, from: DateTime<Tz>) -> DateTime<Tz> {
-        from.clone()
+        from
             + Duration::days(i64::from(self.days))
             + Duration::hours(i64::from(self.hours))
             + Duration::minutes(i64::from(self.minutes))

@@ -71,7 +71,7 @@ impl CommonBroker {
     ) -> CommonBroker {
         CommonBroker {
             store,
-            db: db.clone(),
+            db: db,
             negotiation_notifier: EventNotifier::new(),
             session_notifier,
             agreement_notifier: EventNotifier::new(),
