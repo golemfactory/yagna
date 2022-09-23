@@ -15,10 +15,8 @@ pub(crate) struct Cache {
 impl Cache {
     pub fn new(dir: PathBuf) -> Self {
         let tmp_dir = dir.clone().join("tmp");
-        std::fs::create_dir_all(&tmp_dir).expect(&format!(
-            "Unable to create directory: {}",
-            tmp_dir.display()
-        ));
+        std::fs::create_dir_all(&tmp_dir)
+            .unwrap_or_else(|_| panic!("Unable to create directory: {}", tmp_dir.display()));
         Cache { dir, tmp_dir }
     }
 
@@ -55,12 +53,9 @@ impl TryFrom<ProjectedPath> for TransferUrl {
 
     fn try_from(value: ProjectedPath) -> Result<Self, Error> {
         TransferUrl::parse(
-            value
-                .to_path_buf()
-                .to_str()
-                .ok_or(Error::local(TransferError::InvalidUrlError(
-                    "Invalid path".to_owned(),
-                )))?,
+            value.to_path_buf().to_str().ok_or_else(|| {
+                Error::local(TransferError::InvalidUrlError("Invalid path".to_owned()))
+            })?,
             "file",
         )
         .map_err(Error::local)

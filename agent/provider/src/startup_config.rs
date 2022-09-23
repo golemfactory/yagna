@@ -199,6 +199,7 @@ pub struct StartupConfig {
     pub commands: Commands,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(StructOpt, Clone)]
 pub enum Commands {
     /// Run provider agent
