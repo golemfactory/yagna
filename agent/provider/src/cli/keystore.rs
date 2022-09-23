@@ -57,7 +57,7 @@ impl KeystoreConfig {
 }
 
 fn list(config: ProviderConfig) -> anyhow::Result<()> {
-    let cert_dir = cert_dir_path(&config)?;
+    let cert_dir = config.cert_dir_path()?;
     let table = CertTable::new();
     let table = util::visit_certificates(&cert_dir, table)?;
     table.print(&config)?;
@@ -65,7 +65,7 @@ fn list(config: ProviderConfig) -> anyhow::Result<()> {
 }
 
 fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
-    let cert_dir = cert_dir_path(&config)?;
+    let cert_dir = config.cert_dir_path()?;
     let keystore_manager = util::KeystoreManager::try_new(&cert_dir)?;
     match keystore_manager.load_certs(&add.certs)? {
         KeystoreLoadResult::Loaded { loaded, skipped } => {
@@ -94,7 +94,7 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
 }
 
 fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
-    let cert_dir = cert_dir_path(&config)?;
+    let cert_dir = config.cert_dir_path()?;
     let keystore_manager = util::KeystoreManager::try_new(&cert_dir)?;
     let ids: HashSet<String> = remove.ids.into_iter().collect();
     match keystore_manager.remove_certs(&ids)? {
@@ -111,10 +111,6 @@ fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
         }
     };
     Ok(())
-}
-
-fn cert_dir_path(config: &ProviderConfig) -> anyhow::Result<PathBuf> {
-    config.cert_dir.get_or_create()
 }
 
 fn print_cert_list(
