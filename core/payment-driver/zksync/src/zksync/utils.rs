@@ -20,10 +20,10 @@ pub fn big_dec_to_big_uint(v: BigDecimal) -> Result<BigUint, GenericError> {
     let v = v * &(*PRECISION);
     let v = v
         .to_bigint()
-        .ok_or(GenericError::new("Failed to convert to bigint"))?;
+        .ok_or_else(|| GenericError::new("Failed to convert to bigint"))?;
     let v = v
         .to_biguint()
-        .ok_or(GenericError::new("Failed to convert to biguint"))?;
+        .ok_or_else(|| GenericError::new("Failed to convert to biguint"))?;
     Ok(v)
 }
 

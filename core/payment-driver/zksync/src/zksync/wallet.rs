@@ -306,7 +306,8 @@ fn get_ethereum_node_addr_from_env(network: Network) -> String {
 }
 
 fn get_ethereum_confirmation_timeout() -> std::time::Duration {
-    let value = std::env::var("ZKSYNC_ETH_CONFIRMATION_TIMEOUT_SECONDS").unwrap_or("60".to_owned());
+    let value = std::env::var("ZKSYNC_ETH_CONFIRMATION_TIMEOUT_SECONDS")
+        .unwrap_or_else(|_| "60".to_owned());
     std::time::Duration::from_secs(value.parse::<u64>().unwrap())
 }
 
@@ -375,7 +376,7 @@ async fn unlock_wallet<S: EthereumSigner + Clone, P: Provider + Clone>(
         log::debug!("tx_info = {:?}", tx_info);
         match tx_info.success {
             Some(true) => log::info!("Wallet successfully unlocked. address = {}", wallet.signer.address),
-            Some(false) => return Err(GenericError::new(format!("Failed to unlock wallet. reason={}", tx_info.fail_reason.unwrap_or("Unknown reason".to_string())))),
+            Some(false) => return Err(GenericError::new(format!("Failed to unlock wallet. reason={}", tx_info.fail_reason.unwrap_or_else(|| "Unknown reason".to_string())))),
             None => return Err(GenericError::new(format!("Unknown result from zksync unlock, please check your wallet on zkscan and try again. {:?}", tx_info))),
         }
     }
