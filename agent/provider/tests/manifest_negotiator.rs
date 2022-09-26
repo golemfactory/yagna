@@ -276,12 +276,12 @@ fn create_demand_json(
         payload.insert(
             "sig",
             json!({
-                "@tag": signature_b64.unwrap().to_string(),
+                "@tag": signature_b64.unwrap(),
                 "algorithm": signature_alg_b64.unwrap().to_string()
             }),
         );
     } else if signature_b64.is_some() {
-        payload.insert("sig", json!(signature_b64.unwrap().to_string()));
+        payload.insert("sig", json!(signature_b64.unwrap()));
     } else if signature_alg_b64.is_some() {
         payload.insert(
             "sig",
@@ -289,7 +289,7 @@ fn create_demand_json(
         );
     }
     if let Some(cert_b64) = cert_b64 {
-        payload.insert("cert", json!(cert_b64.to_string()));
+        payload.insert("cert", json!(cert_b64));
     }
     // let mut payload = manifest.to_string();
     let manifest = json!({

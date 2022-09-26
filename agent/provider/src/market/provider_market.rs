@@ -625,7 +625,7 @@ impl Handler<OnAgreementTerminated> for ProviderMarket {
         let reason = msg
             .reason
             .map(|msg| msg.message)
-            .unwrap_or("NotSpecified".to_string());
+            .unwrap_or_else(|| "NotSpecified".to_string());
 
         log::info!(
             "Agreement [{}] terminated by Requestor. Reason: {}",
@@ -843,7 +843,7 @@ impl Handler<AgreementClosed> for ProviderMarket {
 
     fn handle(&mut self, msg: AgreementClosed, ctx: &mut Context<Self>) -> Self::Result {
         let msg = AgreementFinalized::from(msg);
-        let myself = ctx.address().clone();
+        let myself = ctx.address();
 
         async move { myself.send(msg).await? }.boxed_local()
     }
@@ -854,7 +854,7 @@ impl Handler<AgreementBroken> for ProviderMarket {
 
     fn handle(&mut self, msg: AgreementBroken, ctx: &mut Context<Self>) -> Self::Result {
         let msg = AgreementFinalized::from(msg);
-        let myself = ctx.address().clone();
+        let myself = ctx.address();
 
         async move { myself.send(msg).await? }.boxed_local()
     }

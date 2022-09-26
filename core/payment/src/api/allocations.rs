@@ -49,8 +49,11 @@ async fn create_allocation(
     let payment_platform = allocation
         .payment_platform
         .clone()
-        .unwrap_or(DEFAULT_PAYMENT_PLATFORM.to_string());
-    let address = allocation.address.clone().unwrap_or(node_id.to_string());
+        .unwrap_or_else(|| DEFAULT_PAYMENT_PLATFORM.to_string());
+    let address = allocation
+        .address
+        .clone()
+        .unwrap_or_else(|| node_id.to_string());
 
     // If the request contains information about the payment platform, initialize the account
     // by setting the `send` field to `true`, as it is implied by the intent behing allocation of funds.
@@ -58,7 +61,7 @@ async fn create_allocation(
         // payment_platform is of the form driver-network-token
         // eg. erc20-rinkeby-tglm
         let [driver, network, _token]: [&str; 3] =
-            match platform.split("-").collect::<Vec<_>>().try_into() {
+            match platform.split('-').collect::<Vec<_>>().try_into() {
                 Ok(arr) => arr,
                 Err(_e) => {
                     return response::bad_request(

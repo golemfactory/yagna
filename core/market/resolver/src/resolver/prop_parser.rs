@@ -306,7 +306,7 @@ pub fn parse_prop_def(input: &str) -> Result<(&str, Option<&str>), String> {
 
     match iresult {
         IResult::Done(rest, t) => Ok((t, Some(rest))),
-        IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),
+        IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind)),
         IResult::Incomplete(_needed) => Ok((input, None)),
     }
 }
@@ -397,7 +397,7 @@ pub fn parse_prop_ref_as_list(input: &str) -> Result<Vec<&str>, String> {
                 Err(format!("Parsing list error: unexpected text {}", rest))
             }
         }
-        IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind.to_string())),
+        IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind)),
         IResult::Incomplete(needed) => Err(format!("Incomplete expression: {:?}", needed)),
     }
 }
@@ -420,11 +420,9 @@ pub fn parse_prop_value_literal(input: &str) -> Result<Literal, String> {
                 Err(format!("Unknown literal type: {}", input))
             }
         }
-        IResult::Error(error_kind) => Err(format!(
-            "Parsing error: {} in text '{}'",
-            error_kind.to_string(),
-            input
-        )),
+        IResult::Error(error_kind) => {
+            Err(format!("Parsing error: {} in text '{}'", error_kind, input))
+        }
         IResult::Incomplete(_needed) => Err(format!("Parsing error: {:?}", _needed)),
     }
 }

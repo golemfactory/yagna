@@ -118,8 +118,8 @@ impl NetCommand {
                         .into_iter()
                         .map(|s| {
                             serde_json::json! {[
-                                s.protocol.to_string(),
-                                s.local_port.to_string(),
+                                s.protocol,
+                                s.local_port,
                                 s.remote_addr,
                                 s.remote_port,
                                 s.state,

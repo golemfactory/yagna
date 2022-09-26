@@ -121,7 +121,7 @@ impl std::fmt::Debug for Service {
         f.write_str(&format!(
             "Service < name: {}, path: {}, components: {:?} >",
             self.name,
-            self.path.to_token_stream().to_string(),
+            self.path.to_token_stream(),
             self.components
         ))
     }

@@ -206,7 +206,7 @@ pub struct ComInfo {
 
 impl ComInfo {
     fn write_json(self, map: &mut serde_json::Map<String, Value>) {
-        let _ = map.insert("com".to_string(), self.params.clone());
+        let _ = map.insert("com".to_string(), self.params);
     }
 }
 

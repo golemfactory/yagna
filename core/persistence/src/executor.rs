@@ -97,7 +97,7 @@ impl DbExecutor {
         let tx_lock: TxLock = Arc::new(RwLock::new(0));
 
         let builder = Pool::builder().connection_customizer(Box::new(connection_customizer(
-            database_url.clone(),
+            database_url,
             tx_lock.clone(),
         )));
 
@@ -124,7 +124,7 @@ impl DbExecutor {
     pub fn from_env() -> Result<Self, Error> {
         dotenv().ok();
 
-        let database_url = env::var_os("DATABASE_URL").unwrap_or("".into());
+        let database_url = env::var_os("DATABASE_URL").unwrap_or_else(|| "".into());
         Self::new(database_url.to_string_lossy())
     }
 

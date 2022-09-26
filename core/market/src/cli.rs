@@ -68,7 +68,7 @@ impl AgreementsCommand {
                         agreement
                             .approved_date
                             .map(|ts| ts.to_rfc3339())
-                            .unwrap_or("N/A".to_owned()),
+                            .unwrap_or_else(|| "N/A".to_owned()),
                     ])?);
                 }
 

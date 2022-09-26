@@ -46,7 +46,7 @@ pub async fn resolve_srv_record(record: &str) -> std::io::Result<String> {
 pub async fn resolve_dns_record(request_url: &str) -> anyhow::Result<String> {
     let request_host = Url::parse(request_url)?
         .host()
-        .ok_or(anyhow::anyhow!("Invalid url: {}", request_url))?
+        .ok_or_else(|| anyhow::anyhow!("Invalid url: {}", request_url))?
         .to_string();
 
     let address = resolve_dns_record_host(&request_host).await?;
@@ -60,7 +60,7 @@ pub async fn resolve_dns_record_host(host: &str) -> anyhow::Result<String> {
     let address = response
         .iter()
         .next()
-        .ok_or(anyhow::anyhow!("DNS resolution failed for host: {}", host))?
+        .ok_or_else(|| anyhow::anyhow!("DNS resolution failed for host: {}", host))?
         .to_string();
     Ok(address)
 }

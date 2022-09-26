@@ -21,7 +21,7 @@ pub(crate) fn bind_service() {
     let _ = bus::bind(model::BUS_ID, move |_: model::GsbPing| {
         futures::future::err(err.clone())
     });
-    let err = error.clone();
+    let err = error;
     let _ = bus::bind(model::BUS_ID, move |_: model::FindNode| {
         futures::future::err(err.clone())
     });

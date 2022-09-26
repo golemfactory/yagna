@@ -132,7 +132,7 @@ impl PresetManager {
         state
             .presets
             .remove(name)
-            .ok_or(anyhow!("Preset [{}] doesn't exists.", name))?;
+            .ok_or_else(|| anyhow!("Preset [{}] doesn't exists.", name))?;
 
         Ok(())
     }

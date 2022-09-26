@@ -180,7 +180,7 @@ impl<'c> AgreementDao<'c> {
         let proposal_id = agreement.offer_proposal_id.clone();
         readonly_transaction(self.ram_pool, move |conn| {
             if has_counter_proposal(conn, &proposal_id)? {
-                return Err(SaveAgreementError::ProposalCountered(proposal_id.clone()));
+                return Err(SaveAgreementError::ProposalCountered(proposal_id));
             }
             Ok(())
         })
@@ -289,7 +289,9 @@ impl<'c> AgreementDao<'c> {
                 &agreement,
                 None,
                 Owner::Provider,
-                agreement.approved_ts.unwrap_or(Utc::now().naive_utc()),
+                agreement
+                    .approved_ts
+                    .unwrap_or_else(|| Utc::now().naive_utc()),
             )?;
 
             Ok(agreement)

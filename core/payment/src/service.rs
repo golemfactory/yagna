@@ -173,7 +173,7 @@ mod local {
             .get_network(driver.clone(), network)
             .await
             .map_err(GenericError::new)?;
-        let token = token.unwrap_or(network_details.default_token.clone());
+        let token = token.unwrap_or_else(|| network_details.default_token.clone());
         let after_timestamp = NaiveDateTime::from_timestamp(after_timestamp, 0);
         let platform = match network_details.tokens.get(&token) {
             Some(platform) => platform.clone(),
@@ -448,7 +448,7 @@ mod public {
         .await
         {
             Ok(_) => Ok(Ack {}),
-            Err(DbError::Query(e)) => return Err(SendError::BadRequest(e.to_string())),
+            Err(DbError::Query(e)) => return Err(SendError::BadRequest(e)),
             Err(e) => return Err(SendError::ServiceError(e.to_string())),
         }
     }
@@ -505,7 +505,7 @@ mod public {
                 counter!("payment.debit_notes.provider.accepted", 1);
                 Ok(Ack {})
             }
-            Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e.to_string())),
+            Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e)),
             Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
         }
     }
@@ -619,7 +619,7 @@ mod public {
         .await
         {
             Ok(_) => Ok(Ack {}),
-            Err(DbError::Query(e)) => return Err(SendError::BadRequest(e.to_string())),
+            Err(DbError::Query(e)) => return Err(SendError::BadRequest(e)),
             Err(e) => return Err(SendError::ServiceError(e.to_string())),
         }
     }
@@ -676,7 +676,7 @@ mod public {
                 counter!("payment.invoices.provider.accepted", 1);
                 Ok(Ack {})
             }
-            Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e.to_string())),
+            Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e)),
             Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
         }
     }

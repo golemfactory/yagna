@@ -32,7 +32,7 @@ impl AgreementView {
     pub fn pointer_typed<'a, T: Deserialize<'a>>(&self, pointer: &str) -> Result<T, Error> {
         let value = self
             .pointer(pointer)
-            .ok_or(Error::NoKey(pointer.to_string()))?
+            .ok_or_else(|| Error::NoKey(pointer.to_string()))?
             .clone();
         Ok(<T as Deserialize>::deserialize(value)
             .map_err(|error| Error::UnexpectedType(pointer.to_string(), error))?)
@@ -44,7 +44,7 @@ impl AgreementView {
     ) -> Result<HashMap<String, T>, Error> {
         let value = self
             .pointer(pointer)
-            .ok_or(Error::NoKey(pointer.to_string()))?;
+            .ok_or_else(|| Error::NoKey(pointer.to_string()))?;
 
         let map = flatten(value.clone())
             .into_iter()
@@ -90,7 +90,7 @@ struct PointerPaths {
 }
 
 fn property_to_pointer_paths(property: &str) -> PointerPaths {
-    let path = format!("/{}", property.replace(".", "/"));
+    let path = format!("/{}", property.replace('.', "/"));
     let path_w_tag = format!("{path}/{PROPERTY_TAG}");
     PointerPaths { path, path_w_tag }
 }
@@ -101,7 +101,7 @@ pub fn parse_constraints(input: &str, reg_expr: &str, group: usize) -> Option<Ha
         .and_then(|cap| cap.get(group))
         .map(|mat| {
             mat.as_str()
-                .split(",")
+                .split(',')
                 .map(|s| s.trim().to_lowercase())
                 .collect::<HashSet<_>>()
         })
@@ -115,7 +115,7 @@ fn remove_property_impl(value: &mut serde_json::Value, path: &[&str]) -> Result<
     } else {
         let nested_value = value
             .pointer_mut(&["/", path[0]].concat())
-            .ok_or(Error::NoKey(path[0].to_string()))?;
+            .ok_or_else(|| Error::NoKey(path[0].to_string()))?;
         remove_property_impl(nested_value, &path[1..])?;
 
         // Check if nested_value contains anything else.
@@ -145,7 +145,7 @@ fn remove_value(value: &mut Value, name: &str) -> Result<Value, Error> {
         ),
         Value::Object(object) => object
             .remove(name)
-            .ok_or(Error::InvalidValue(name.to_string()))?,
+            .ok_or_else(|| Error::InvalidValue(name.to_string()))?,
         _ => Err(Error::InvalidValue(name.to_string()))?,
     })
 }
@@ -292,7 +292,7 @@ impl TypedPointer for Option<&Value> {
     {
         self.map(f)
             .flatten()
-            .ok_or(Error::InvalidValue(format!("{:?}", self)))
+            .ok_or_else(|| Error::InvalidValue(format!("{:?}", self)))
     }
 }
 
@@ -309,13 +309,11 @@ impl TypedArrayPointer for Option<&Value> {
     {
         let r: Option<Result<Vec<T>, Error>> = self.map(Value::as_array).flatten().map(|v| {
             v.iter()
-                .map(|i| f(i).ok_or(Error::InvalidValue(format!("{:?}", i))))
+                .map(|i| f(i).ok_or_else(|| Error::InvalidValue(format!("{:?}", i))))
                 .collect::<Result<Vec<T>, Error>>()
         });
 
-        r.ok_or(Error::InvalidValue(
-            "Unable to convert to an array".to_string(),
-        ))?
+        r.ok_or_else(|| Error::InvalidValue("Unable to convert to an array".to_string()))?
     }
 }
 
@@ -401,7 +399,7 @@ fn merge_obj(a: &mut Value, b: Value) {
             Value::Null => (),
             _ => {
                 let a = a.as_object_mut().unwrap();
-                a.insert(PROPERTY_TAG.to_string(), b.clone());
+                a.insert(PROPERTY_TAG.to_string(), b);
             }
         },
         (a, b) => *a = b,
