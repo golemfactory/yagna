@@ -42,7 +42,7 @@ impl CommandOutput {
 
     fn print_plain(&self) -> anyhow::Result<()> {
         match self {
-            CommandOutput::NoOutput => {},
+            CommandOutput::NoOutput => {}
             CommandOutput::Table {
                 columns,
                 values,
@@ -53,15 +53,13 @@ impl CommandOutput {
                     println!("{}", txt);
                 }
                 crate::table::print_table(columns, values, summary)
-            },
-            CommandOutput::Object(value) => {
-                match value {
-                    serde_json::Value::String(s) => {
-                        println!("{}", s);
-                    }
-                    value => println!("{}", serde_yaml::to_string(&value)?),
-                }
             }
+            CommandOutput::Object(value) => match value {
+                serde_json::Value::String(s) => {
+                    println!("{}", s);
+                }
+                value => println!("{}", serde_yaml::to_string(&value)?),
+            },
         }
         Ok(())
     }
