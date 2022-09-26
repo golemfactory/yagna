@@ -1,6 +1,6 @@
+use crate::cmd::CommandOutput;
 use prettytable::{color, format, format::TableFormat, Attr, Cell, Row, Table};
 use std::collections::HashMap;
-use crate::cmd::CommandOutput;
 
 pub fn print_table(
     columns: &Vec<String>,
@@ -83,9 +83,7 @@ pub fn print_json_table(
         let kvs: Vec<HashMap<&String, &serde_json::Value>> = values
             .iter()
             .map(|row| match row {
-                serde_json::Value::Array(row_values)
-                    if columns.len() == row_values.len() =>
-                {
+                serde_json::Value::Array(row_values) if columns.len() == row_values.len() => {
                     columns
                         .into_iter()
                         .enumerate()
@@ -95,10 +93,7 @@ pub fn print_json_table(
                 _ => unreachable!(),
             })
             .collect();
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&serde_json::json!(kvs))?
-        )
+        println!("{}", serde_json::to_string_pretty(&serde_json::json!(kvs))?)
     } else {
         println!(
             "{}",
