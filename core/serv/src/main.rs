@@ -621,11 +621,11 @@ https://handbook.golem.network/see-also/terms
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
 
-    stdout.write(header.as_bytes())?;
+    let _ = stdout.write(header.as_bytes())?;
     stdout.flush()?;
 
     loop {
-        stdout.write("Do you accept the terms and conditions? [yes/no]: ".as_bytes())?;
+        let _ = stdout.write("Do you accept the terms and conditions? [yes/no]: ".as_bytes())?;
         stdout.flush()?;
 
         let mut buffer = String::new();

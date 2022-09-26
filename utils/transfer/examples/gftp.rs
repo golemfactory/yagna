@@ -32,7 +32,7 @@ fn create_file(path: &Path, name: &str, chunk_size: usize, chunk_count: usize) -
         let input: Vec<u8> = (0..chunk_size).map(|_| rng.gen_range(0..=255u8)).collect();
 
         hasher.input(&input);
-        file_src.write(&input).unwrap();
+        let _ = file_src.write(&input).unwrap();
     }
     file_src.flush().unwrap();
     hasher.result()

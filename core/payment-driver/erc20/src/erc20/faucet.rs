@@ -78,7 +78,7 @@ pub async fn request_glm(
         return Ok(());
     }
     let pending = dao.get_pending_faucet_txs(&str_addr, network).await;
-    for _tx in pending {
+    if pending.len() > 0 {
         log::info!("Already pending a mint transactin.");
         return Ok(());
     }
