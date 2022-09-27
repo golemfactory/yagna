@@ -102,7 +102,7 @@ pub(crate) async fn get_persisted_usage(
     db: &DbExecutor,
     activity_id: &str,
 ) -> Result<ActivityUsage, Error> {
-    Ok(db.as_dao::<ActivityUsageDao>().get(&activity_id).await?)
+    Ok(db.as_dao::<ActivityUsageDao>().get(activity_id).await?)
 }
 
 pub(crate) async fn set_persisted_usage(
