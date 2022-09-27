@@ -112,7 +112,7 @@ fn manifest_negotiator_test(
 
     let signature_b64 = signing_key.map(|signing_key| MANIFEST_TEST_RESOURCES.sign_data(comp_manifest_b64.as_bytes(), signing_key));
 
-    let cert_b64 = cert.map(|cert| cert_file_to_cert_b64(cert));
+    let cert_b64 = cert.map(cert_file_to_cert_b64);
 
     manifest_negotiator_test_encoded_manifest_sign_and_cert(
         whitelist,
@@ -148,7 +148,7 @@ fn manifest_negotiator_test_encoded_sign_and_cert(
     let comp_manifest_b64 = create_comp_manifest_b64(urls);
     let signature_b64 = signature_b64.map(|signature| signature.to_string());
 
-    let cert_b64 = cert.map(|cert| cert_file_to_cert_b64(cert));
+    let cert_b64 = cert.map(cert_file_to_cert_b64);
     manifest_negotiator_test_encoded_manifest_sign_and_cert(
         whitelist,
         comp_manifest_b64,
