@@ -53,7 +53,7 @@ impl ProcLock {
 
     pub fn lock(mut self, pid: u32) -> Result<Self> {
         let (lock_file, lock_path) = self.lock_file(&self.name)?;
-        if let Err(_) = lock_file.try_lock_exclusive() {
+        if lock_file.try_lock_exclusive().is_err() {
             bail!("{} is already running", self.name);
         }
 

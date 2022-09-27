@@ -3,7 +3,7 @@ use prettytable::{color, format, format::TableFormat, Attr, Cell, Row, Table};
 use std::collections::HashMap;
 
 pub fn print_table(
-    columns: &Vec<String>,
+    columns: &[String],
     values: &Vec<serde_json::Value>,
     summary: &Vec<serde_json::Value>,
 ) {

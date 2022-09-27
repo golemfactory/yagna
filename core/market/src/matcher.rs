@@ -77,7 +77,7 @@ impl Matcher {
             discovery,
             config,
             identity: identity_api,
-            expiration_tracker: DeadlineChecker::new().start(),
+            expiration_tracker: DeadlineChecker::default().start(),
         };
 
         let listeners = EventsListeners { proposal_receiver };

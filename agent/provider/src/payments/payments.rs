@@ -158,8 +158,8 @@ impl Payments {
         let provider_ctx = ProviderCtx {
             activity_api: Arc::new(activity_api),
             payment_api: Arc::new(payment_api),
-            debit_checker: DeadlineChecker::new().start(),
-            payment_checker: DeadlineChecker::new().start(),
+            debit_checker: DeadlineChecker::default().start(),
+            payment_checker: DeadlineChecker::default().start(),
             config,
         };
 
@@ -168,7 +168,7 @@ impl Payments {
             context: Arc::new(provider_ctx),
             invoices_to_pay: vec![],
             earnings: BigDecimal::zero(),
-            break_agreement_signal: SignalSlot::<BreakAgreement>::new(),
+            break_agreement_signal: SignalSlot::<BreakAgreement>::default(),
         }
     }
 

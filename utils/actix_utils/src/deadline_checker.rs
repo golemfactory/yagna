@@ -59,16 +59,18 @@ pub struct DeadlineChecker {
 
 actix_signal_handler!(DeadlineChecker, DeadlineElapsed, callback);
 
-impl DeadlineChecker {
-    pub fn new() -> DeadlineChecker {
-        DeadlineChecker {
-            deadlines: HashMap::new(),
+impl Default for DeadlineChecker {
+    fn default() -> Self {
+        Self {
+            deadlines: Default::default(),
             nearest_deadline: Utc::now() + Duration::weeks(50),
-            callback: SignalSlot::<DeadlineElapsed>::new(),
-            handle: None,
+            handle: Default::default(),
+            callback: Default::default(),
         }
     }
+}
 
+impl DeadlineChecker {
     fn update_deadline(&mut self, ctx: &mut Context<Self>) -> anyhow::Result<()> {
         let top_deadline = self.top_deadline();
         if self.nearest_deadline != top_deadline {
@@ -198,7 +200,7 @@ impl Handler<StopTracking> for DeadlineChecker {
         // We could store inverse mapping from entities to agreements, but there will never
         // be so many Agreements at the same time, to make it worth.
         for deadlines in self.deadlines.values_mut() {
-            if let Some(idx) = deadlines.iter().position(|element| &element.id == &msg.id) {
+            if let Some(idx) = deadlines.iter().position(|element| element.id == msg.id) {
                 // Or we could remove all earlier entries??
                 deadlines.remove(idx);
                 any = true;
@@ -294,7 +296,7 @@ mod test {
     }
 
     async fn init_checker(receiver: Addr<DeadlineReceiver>) -> Addr<DeadlineChecker> {
-        let checker = DeadlineChecker::new().start();
+        let checker = DeadlineChecker::default().start();
         checker
             .send(Subscribe::<DeadlineElapsed>(receiver.recipient()))
             .await

@@ -96,7 +96,7 @@ impl ProcessHandle {
     #[cfg(unix)]
     pub async fn terminate(&self, timeout: Duration) -> Result<()> {
         let process = self.process.clone();
-        if let Err(_) = process.send_signal(libc::SIGTERM) {
+        if process.send_signal(libc::SIGTERM).is_err() {
             // Error means, that probably process was already terminated, because:
             // - We have permissions to send signal, since we created this process.
             // - We specified correct signal SIGTERM.

@@ -530,12 +530,10 @@ constraints: |
 "#;
 
     fn check_values(o: &serde_json::Value) {
-        assert_eq!(
-            o.pointer("/properties/golem/srv/caps/multi-activity")
-                .as_typed(Value::as_bool)
-                .unwrap(),
-            true
-        );
+        assert!(o
+            .pointer("/properties/golem/srv/caps/multi-activity")
+            .as_typed(Value::as_bool)
+            .unwrap());
         assert_eq!(
             o.pointer("/properties/golem/inf/mem/gib")
                 .as_typed(Value::as_f64)
