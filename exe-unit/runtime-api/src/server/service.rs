@@ -35,19 +35,18 @@ async fn handle_command(
 }
 
 async fn handle(service: &impl RuntimeService, request: proto::Request) -> proto::Response {
-    let id = request.id;
-    let mut resp = proto::Response::default();
-    resp.id = id;
-
-    resp.command = Some(if let Some(command) = request.command {
-        match handle_command(service, command).await {
-            Ok(response) => response,
-            Err(err) => proto::response::Command::Error(err),
-        }
-    } else {
-        proto::response::Command::Error(ErrorResponse::msg("unknown command"))
-    });
-    resp
+    proto::Response {
+        id: request.id,
+        command: Some(if let Some(command) = request.command {
+            match handle_command(service, command).await {
+                Ok(response) => response,
+                Err(err) => proto::response::Command::Error(err),
+            }
+        } else {
+            proto::response::Command::Error(ErrorResponse::msg("unknown command"))
+        }),
+        ..Default::default()
+    }
 }
 
 pub struct EventEmitter {

@@ -60,7 +60,7 @@ pub fn match_demand_offer(
     }
 }
 
-fn extract_names(props_vec: &Vec<&PropertyRef>) -> Vec<String> {
+fn extract_names(props_vec: &[&PropertyRef]) -> Vec<String> {
     props_vec
         .iter()
         .map(|prop| match prop {

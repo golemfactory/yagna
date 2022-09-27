@@ -25,8 +25,7 @@ impl<H: RuntimeHandler> RuntimeService for RuntimeMock<H> {
 
     fn run_process(&self, _run: RunProcess) -> AsyncResponse<RunProcessResp> {
         async move {
-            let mut resp: RunProcessResp = Default::default();
-            resp.pid = 100;
+            let resp = RunProcessResp { pid: 100 };
             log::debug!("before sleep");
             tokio::time::sleep(Duration::from_secs(3)).await;
             log::debug!("after sleep");
@@ -112,9 +111,11 @@ async fn main() -> anyhow::Result<()> {
         let events = EventMock::new();
         let c = spawn(cmd, events.clone()).await?;
         log::debug!("hello_result={:?}", c.hello("0.0.0x").await);
-        let mut run = RunProcess::default();
-        run.bin = "sleep".to_owned();
-        run.args = vec!["10".to_owned()];
+        let run = RunProcess {
+            bin: "sleep".to_owned(),
+            args: vec!["10".to_owned()],
+            ..Default::default()
+        };
         let sleep_1 = c.run_process(run.clone());
         let sleep_2 = c.run_process(run.clone());
         let sleep_3 = c.run_process(run);
