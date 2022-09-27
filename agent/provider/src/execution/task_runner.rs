@@ -196,8 +196,8 @@ impl TaskRunner {
             registry,
             tasks: vec![],
             active_agreements: HashMap::new(),
-            activity_created: SignalSlot::<CreateActivity>::new(),
-            activity_destroyed: SignalSlot::<ActivityDestroyed>::new(),
+            activity_created: SignalSlot::<CreateActivity>::default(),
+            activity_destroyed: SignalSlot::<ActivityDestroyed>::default(),
             config: Arc::new(config),
             event_ts: Utc::now(),
             tasks_dir,
@@ -625,11 +625,7 @@ impl Handler<GetOfferTemplates> for TaskRunner {
                 {
                     serde_json::Value::Array(vec) => {
                         let mut usage_vector = vec.clone();
-                        usage_vector.extend(
-                            coeffs
-                                .into_iter()
-                                .map(serde_json::Value::String),
-                        );
+                        usage_vector.extend(coeffs.into_iter().map(serde_json::Value::String));
                         template.set_property(
                             PROPERTY_USAGE_VECTOR,
                             serde_json::Value::Array(usage_vector),

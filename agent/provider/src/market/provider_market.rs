@@ -144,8 +144,8 @@ impl ProviderMarket {
             config: Arc::new(config),
             subscriptions: HashMap::new(),
             postponed_demands: Vec::new(),
-            agreement_signed_signal: SignalSlot::<NewAgreement>::new(),
-            agreement_terminated_signal: SignalSlot::<CloseAgreement>::new(),
+            agreement_signed_signal: SignalSlot::<NewAgreement>::default(),
+            agreement_terminated_signal: SignalSlot::<CloseAgreement>::default(),
             handles: HashMap::new(),
         }
     }
