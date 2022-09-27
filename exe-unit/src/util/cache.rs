@@ -194,11 +194,7 @@ fn flatten_container_path(path: PathBuf) -> PathBuf {
 /// Remove the root dir and all prefixes from a path. Specific to the custom "container" scheme.
 fn remove_container_path_base(path: PathBuf) -> PathBuf {
     path.components()
-        .filter(|c| match c {
-            Component::RootDir => false,
-            Component::Prefix(_) => false,
-            _ => true,
-        })
+        .filter(|c| !matches!(c, Component::RootDir | Component::Prefix(_)))
         .collect::<PathBuf>()
 }
 

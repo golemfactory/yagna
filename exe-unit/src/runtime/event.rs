@@ -169,16 +169,11 @@ impl<'a> Handle<'a> {
 
 impl<'a> Drop for Handle<'a> {
     fn drop(&mut self) {
-        match self {
-            Handle::Process { monitor, waker, .. } => {
-                if let Some(pid) = { waker.lock().unwrap().pid } {
-                    let mut inner = monitor.inner.lock().unwrap();
-                    inner.processes.remove(&pid);
-                    inner.next_process.take();
-                }
-            }
-            _ => {
-                // ignore
+        if let Handle::Process { monitor, waker, .. } = self {
+            if let Some(pid) = { waker.lock().unwrap().pid } {
+                let mut inner = monitor.inner.lock().unwrap();
+                inner.processes.remove(&pid);
+                inner.next_process.take();
             }
         }
     }

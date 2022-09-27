@@ -157,19 +157,21 @@ async fn mock_process(pid: u64, id: u64, run: request::RunProcess) {
 }
 
 async fn write_status(id: u64, status: response::ProcessStatus) {
-    let mut response = Response::default();
-    response.id = id;
-    response.event = true;
-    response.command = Some(response::Command::Status(status));
-    write(response).await;
+    write(Response {
+        id,
+        event: true,
+        command: Some(response::Command::Status(status)),
+    })
+    .await;
 }
 
 async fn write_response(id: u64, command: response::Command) {
-    let mut response = Response::default();
-    response.id = id;
-    response.event = false;
-    response.command = Some(command);
-    write(response).await;
+    write(Response {
+        id,
+        event: false,
+        command: Some(command),
+    })
+    .await;
 }
 
 async fn write(res: Response) {
