@@ -1,3 +1,5 @@
+#![allow(clippy::let_unit_value)]
+
 use crate::message::*;
 use crate::network::VpnSupervisor;
 use actix::prelude::*;
