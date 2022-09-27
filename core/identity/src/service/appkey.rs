@@ -53,8 +53,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     {
         let subscription = subscription.clone();
         tokio::task::spawn_local(async move {
-            rx
-                .for_each(|event| send_events(subscription.borrow(), event))
+            rx.for_each(|event| send_events(subscription.borrow(), event))
                 .await;
         });
     }
@@ -156,7 +155,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                 .as_dao::<AppKeyDao>()
                 .list(list.identity, list.page, list.per_page)
                 .await
-                .map_err(Into::into)?;
+                .map_err(Into::<model::Error>::into)?;
 
             let keys = result
                 .0
@@ -181,7 +180,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
             db.as_dao::<AppKeyDao>()
                 .remove(rm.name, rm.identity)
                 .await
-                .map_err(Into::into)?;
+                .map_err(Into::<model::Error>::into)?;
             Ok(())
         }
     });
