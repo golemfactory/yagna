@@ -43,8 +43,8 @@ pub fn pack_up(amount: &BigUint) -> BigUint {
 
 fn increase_least_significant_digit(amount: &BigUint) -> BigUint {
     let digits = amount.to_radix_le(10);
-    for i in 0..digits.len() {
-        if digits[i] != 0 {
+    for (i, digit) in digits.iter().enumerate() {
+        if *digit != 0 {
             return amount + BigUint::from(10u32).pow(i as u32);
         }
     }

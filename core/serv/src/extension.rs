@@ -151,10 +151,7 @@ pub enum ExtensionCtx {
 
 impl ExtensionCtx {
     pub fn is_autostart(&self) -> bool {
-        match self {
-            Self::Autostart { .. } => true,
-            _ => false,
-        }
+        matches!(self, Self::Autostart { .. })
     }
 
     fn set_env(&self, command: &mut Command) -> anyhow::Result<()> {
