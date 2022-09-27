@@ -1,3 +1,5 @@
+#![allow(clippy::let_unit_value)]
+
 use chrono::Utc;
 use futures::future::LocalBoxFuture;
 use futures::prelude::*;
