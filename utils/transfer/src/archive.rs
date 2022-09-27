@@ -456,10 +456,7 @@ where
         let evt = FileEvent::Processing {
             name: name.clone(),
             size: header.size().ok().unwrap_or(0) as usize,
-            is_dir: match header.entry_type() {
-                tokio_tar::EntryType::Directory => true,
-                _ => false,
-            },
+            is_dir: header.entry_type() == tokio_tar::EntryType::Directory,
         };
         let _ = evt_sender.send(evt).await;
 

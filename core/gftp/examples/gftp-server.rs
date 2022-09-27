@@ -72,10 +72,11 @@ async fn send(
 
     let res = reader.read_message().await?;
     match res.id {
-        Some(RpcId::Int(v)) => match v == id {
-            false => return Err(anyhow!("Invalid response ID: {}, expected {}", v, id)),
-            _ => (),
-        },
+        Some(RpcId::Int(v)) => {
+            if v != id {
+                return Err(anyhow!("Invalid response ID: {}, expected {}", v, id));
+            }
+        }
         id => return Err(anyhow!("Invalid response ID: {:?}", id)),
     }
 

@@ -380,7 +380,7 @@ where
 
                 let reconnect_clone = reconnect.clone();
                 tokio::task::spawn_local(async move {
-                    if let Ok(_) = dc_rx.await {
+                    if dc_rx.await.is_ok() {
                         metrics::counter!("net.disconnect", 1);
                         reconnect_clone.borrow_mut().last_disconnect = Some(Instant::now());
                         log::warn!("Handlers disconnected");
