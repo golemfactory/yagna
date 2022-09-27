@@ -267,7 +267,7 @@ impl VpnWebSocket {
         vpn.send(Packet { data, meta })
             .into_actor(self)
             .map(move |result, this, ctx| {
-                if let Err(_) = result {
+                if result.is_err() {
                     log::error!("VPN WebSocket: VPN {} no longer exists", this.network_id);
                     let _ = ctx.address().do_send(Shutdown {});
                 }

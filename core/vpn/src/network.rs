@@ -74,7 +74,7 @@ impl VpnSupervisor {
         self.blueprints
             .get(network_id)
             .cloned()
-            .ok_or_else(|| Error::NetNotFound)
+            .ok_or(Error::NetNotFound)
     }
 
     pub async fn create_network(
@@ -88,7 +88,7 @@ impl VpnSupervisor {
         let net_gw = match network
             .gateway
             .as_ref()
-            .map(|g| IpAddr::from_str(&g))
+            .map(|g| IpAddr::from_str(g))
             .transpose()?
         {
             Some(gw) => gw,
@@ -134,7 +134,7 @@ impl VpnSupervisor {
         let vpn = self
             .networks
             .remove(network_id)
-            .ok_or_else(|| Error::NetNotFound)?;
+            .ok_or(Error::NetNotFound)?;
         self.blueprints.remove(network_id);
         self.forward(vpn, Shutdown {})
     }
@@ -174,16 +174,16 @@ impl VpnSupervisor {
         self.networks
             .get(network_id)
             .cloned()
-            .ok_or_else(|| Error::NetNotFound)
+            .ok_or(Error::NetNotFound)
     }
 
     fn owner(&self, node_id: &NodeId, network_id: &str) -> Result<()> {
         self.ownership
             .get(node_id)
             .map(|s| s.contains(network_id))
-            .ok_or_else(|| Error::NetNotFound)?
+            .ok_or(Error::NetNotFound)?
             .then(|| ())
-            .ok_or_else(|| Error::Forbidden)
+            .ok_or(Error::Forbidden)
     }
 }
 
@@ -264,7 +264,7 @@ impl Vpn {
 
                 let addr_ = addr.clone();
                 tokio::task::spawn_local(async move {
-                    if let Err(_) = user_tx.send(data).await {
+                    if (user_tx.send(data).await).is_err() {
                         addr_.do_send(Disconnect::new(handle, DisconnectReason::SinkClosed));
                     }
                 });
@@ -337,7 +337,7 @@ impl Actor for Vpn {
 
     fn started(&mut self, ctx: &mut Self::Context) {
         let id = self.vpn.id();
-        let vpn_url = gsb_local_url(&id);
+        let vpn_url = gsb_local_url(id);
         let addr = ctx.address();
 
         actix_rpc::bind(&vpn_url, addr.clone().recipient());
