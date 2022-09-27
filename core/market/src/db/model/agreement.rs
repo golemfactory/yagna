@@ -25,7 +25,8 @@ pub type AppSessionId = Option<String>;
     derive_more::Display,
     AsExpression,
     FromSqlRow,
-    PartialEq, Eq,
+    PartialEq,
+    Eq,
     Debug,
     Clone,
     Copy,
@@ -233,10 +234,11 @@ pub fn check_transition(from: AgreementState, to: AgreementState) -> Result<(), 
         },
         AgreementState::Cancelled => (),
         AgreementState::Rejected => (),
-        AgreementState::Approved => match to {
-            AgreementState::Terminated => return Ok(()),
-            _ => (),
-        },
+        AgreementState::Approved => {
+            if to == AgreementState::Terminated {
+                return Ok(());
+            }
+        }
         AgreementState::Expired => (),
         AgreementState::Terminated => (),
     };

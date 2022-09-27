@@ -72,9 +72,9 @@ impl CommonBroker {
         CommonBroker {
             store,
             db,
-            negotiation_notifier: EventNotifier::new(),
+            negotiation_notifier: EventNotifier::default(),
             session_notifier,
-            agreement_notifier: EventNotifier::new(),
+            agreement_notifier: EventNotifier::default(),
             config,
             agreement_lock: AgreementLock::new(),
         }
@@ -796,16 +796,14 @@ pub fn validate_match(
         | Match::Undefined {
             demand_mismatch,
             offer_mismatch,
-        } => {
-            Err(MatchValidationError::NotMatching {
-                new: new_proposal.body.id.clone(),
-                prev: prev_proposal.body.id.clone(),
-                mismatches: format!(
-                    "Mismatched constraints - Offer: {:?}, Demand: {:?}",
-                    offer_mismatch, demand_mismatch
-                ),
-            })
-        }
+        } => Err(MatchValidationError::NotMatching {
+            new: new_proposal.body.id.clone(),
+            prev: prev_proposal.body.id.clone(),
+            mismatches: format!(
+                "Mismatched constraints - Offer: {:?}, Demand: {:?}",
+                offer_mismatch, demand_mismatch
+            ),
+        }),
     }
 }
 

@@ -703,14 +703,13 @@ pub async fn proposal_receiver_thread(
 ) {
     while let Some(proposal) = proposal_receiver.recv().await {
         let broker = broker.clone();
-        match async move {
+        if let Err(error) = async move {
             log::debug!("Got matching Offer-Demand pair; emitting as Proposal to Requestor.");
             broker.generate_proposal(proposal).await
         }
         .await
         {
-            Err(error) => log::warn!("Failed to add proposal. Error: {}", error),
-            Ok(_) => (),
+            log::warn!("Failed to add proposal. Error: {}", error)
         }
     }
 }

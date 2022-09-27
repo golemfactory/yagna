@@ -21,9 +21,8 @@ pub async fn clean(db: DbMixedExecutor, cfg: &DbConfig) {
     );
     let v_results = vec![results.0, results.1, results.2, results.3, results.4];
     for db_result in v_results.into_iter() {
-        match db_result {
-            Err(e) => log::error!("Market database cleaner error: {}", e),
-            _ => (),
+        if let Err(e) = db_result {
+            log::error!("Market database cleaner error: {}", e)
         }
     }
 }
