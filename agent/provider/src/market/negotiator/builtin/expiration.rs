@@ -125,38 +125,41 @@ impl NegotiatorComponent for LimitExpiration {
             // Both Provider and Requestor support DebitNotes acceptance. We must
             // negotiate until we will agree to the same value.
             (Some(req_deadline), Some(our_deadline)) => {
-                if req_deadline > our_deadline {
-                    NegotiationResult::Reject {
+                match req_deadline.cmp(&our_deadline) {
+                    std::cmp::Ordering::Greater => NegotiationResult::Reject {
                         message: format!(
                             "DebitNote acceptance deadline should be less than {}.",
                             self.accept_timeout.display()
                         ),
                         is_final: true,
+                    },
+                    std::cmp::Ordering::Equal => {
+                        // We agree with Requestor to the same deadline.
+                        NegotiationResult::Ready { offer }
                     }
-                } else if req_deadline == our_deadline {
-                    // We agree with Requestor to the same deadline.
-                    NegotiationResult::Ready { offer }
-                } else {
-                    // Below certain timeout it is impossible for Requestor to accept DebitNotes.
-                    if req_deadline.num_seconds() < self.min_deadline {
-                        return Ok(NegotiationResult::Reject {
-                            message: format!(
-                                "To low DebitNotes timeout: {}",
-                                req_deadline.display()
-                            ),
-                            is_final: true,
-                        });
+                    std::cmp::Ordering::Less => {
+                        // Below certain timeout it is impossible for Requestor to accept DebitNotes.
+                        if req_deadline.num_seconds() < self.min_deadline {
+                            return Ok(NegotiationResult::Reject {
+                                message: format!(
+                                    "To low DebitNotes timeout: {}",
+                                    req_deadline.display()
+                                ),
+                                is_final: true,
+                            });
+                        }
+
+                        // Requestor proposed better deadline, than we required.
+                        // We are expected to set property to the same value if we agree.
+                        let deadline_prop = offer
+                            .pointer_mut(DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY)
+                            .unwrap();
+                        *deadline_prop =
+                            serde_json::Value::Number(req_deadline.num_seconds().into());
+
+                        // Since we changed our proposal, we can't return `Ready`.
+                        NegotiationResult::Negotiating { offer }
                     }
-
-                    // Requestor proposed better deadline, than we required.
-                    // We are expected to set property to the same value if we agree.
-                    let deadline_prop = offer
-                        .pointer_mut(DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY)
-                        .unwrap();
-                    *deadline_prop = serde_json::Value::Number(req_deadline.num_seconds().into());
-
-                    // Since we changed our proposal, we can't return `Ready`.
-                    NegotiationResult::Negotiating { offer }
                 }
             }
             // Requestor doesn't support DebitNotes acceptance, so we should

@@ -76,9 +76,9 @@ impl NodeOrAlias {
     }
 }
 
-impl Into<identity::Get> for NodeOrAlias {
-    fn into(self) -> identity::Get {
-        match self {
+impl From<NodeOrAlias> for identity::Get {
+    fn from(na: NodeOrAlias) -> Self {
+        match na {
             NodeOrAlias::DefaultNode => identity::Get::ByDefault,
             NodeOrAlias::Alias(alias) => identity::Get::ByAlias(alias),
             NodeOrAlias::Node(node_id) => identity::Get::ByNodeId(node_id),

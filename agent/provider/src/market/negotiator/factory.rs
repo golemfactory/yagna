@@ -83,7 +83,7 @@ pub fn create_negotiator(
         "Composite" => NegotiatorAddr::from(
             CompositeNegotiator::new(market, &config.negotiator_config.composite_config).unwrap(),
         ),
-        "AcceptAll" => NegotiatorAddr::from(AcceptAllNegotiator::new()),
+        "AcceptAll" => NegotiatorAddr::from(AcceptAllNegotiator::default()),
         _ => Default::default(),
     };
     Arc::new(negotiator)
@@ -91,6 +91,6 @@ pub fn create_negotiator(
 
 impl Default for NegotiatorAddr {
     fn default() -> Self {
-        NegotiatorAddr::from(AcceptAllNegotiator::new())
+        NegotiatorAddr::from(AcceptAllNegotiator::default())
     }
 }

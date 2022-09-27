@@ -146,15 +146,17 @@ pub struct ExeUnitsRegistry {
     descriptors: HashMap<String, ExeUnitDesc>,
 }
 
-impl ExeUnitsRegistry {
-    pub fn new() -> ExeUnitsRegistry {
-        ExeUnitsRegistry {
-            descriptors: HashMap::new(),
+impl Default for ExeUnitsRegistry {
+    fn default() -> Self {
+        Self {
+            descriptors: Default::default(),
         }
     }
+}
 
+impl ExeUnitsRegistry {
     pub fn from_file(path: &Path) -> Result<ExeUnitsRegistry> {
-        let mut registry = ExeUnitsRegistry::new();
+        let mut registry = ExeUnitsRegistry::default();
         registry.register_exeunits_from_file(path)?;
 
         Ok(registry)
@@ -492,7 +494,7 @@ mod tests {
 
     #[test]
     fn test_fill_registry_from_file() {
-        let mut registry = ExeUnitsRegistry::new();
+        let mut registry = ExeUnitsRegistry::default();
         registry
             .register_exeunits_from_file(&resources_directory().join("example-exeunits.json"))
             .unwrap();
@@ -518,7 +520,7 @@ mod tests {
     fn test_fill_registry_from_local_exe_unit_descriptor() {
         let exe_units_descriptor = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../exe-unit/resources/local-exeunits-descriptor.json");
-        let mut registry = ExeUnitsRegistry::new();
+        let mut registry = ExeUnitsRegistry::default();
         registry
             .register_exeunits_from_file(&exe_units_descriptor)
             .unwrap();
@@ -536,7 +538,7 @@ mod tests {
     fn test_fill_registry_from_deb_exe_unit_descriptor() {
         let exe_units_descriptor = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../exe-unit/resources/exeunits-descriptor.json");
-        let mut registry = ExeUnitsRegistry::new();
+        let mut registry = ExeUnitsRegistry::default();
         registry
             .register_exeunits_from_file(&exe_units_descriptor)
             .unwrap();

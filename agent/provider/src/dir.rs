@@ -65,10 +65,8 @@ fn clean_dir<P: AsRef<Path>>(dir: P, min_depth: usize, lifetime: Duration, dry_r
                 }
         })
         .fold(0, |acc, path_meta| {
-            if !dry_run {
-                if let Err(_) = std::fs::remove_file(&path_meta.0) {
-                    return acc;
-                }
+            if !dry_run && std::fs::remove_file(&path_meta.0).is_err() {
+                return acc;
             }
             acc + path_meta.1.len()
         });

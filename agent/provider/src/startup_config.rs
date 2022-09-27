@@ -110,7 +110,7 @@ pub struct ProviderConfig {
 
 impl ProviderConfig {
     pub fn registry(&self) -> anyhow::Result<ExeUnitsRegistry> {
-        let mut r = ExeUnitsRegistry::new();
+        let mut r = ExeUnitsRegistry::default();
         r.register_from_file_pattern(&self.exe_unit_path)?;
         Ok(r)
     }

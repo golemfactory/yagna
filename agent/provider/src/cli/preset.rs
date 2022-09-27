@@ -209,14 +209,16 @@ pub fn create(config: ProviderConfig, params: PresetNoInteractive) -> anyhow::Re
 
     let mut presets = PresetManager::load_or_create(&config.presets_file)?;
 
-    let mut preset = Preset::default();
-    preset.name = params
-        .preset_name
-        .ok_or_else(|| anyhow!("Preset name is required."))?;
-    preset.exeunit_name = params
-        .exe_unit
-        .ok_or_else(|| anyhow!("ExeUnit is required."))?;
-    preset.pricing_model = params.pricing.unwrap_or_else(|| "linear".to_string());
+    let mut preset = Preset {
+        name: params
+            .preset_name
+            .ok_or_else(|| anyhow!("Preset name is required."))?,
+        exeunit_name: params
+            .exe_unit
+            .ok_or_else(|| anyhow!("ExeUnit is required."))?,
+        pricing_model: params.pricing.unwrap_or_else(|| "linear".to_string()),
+        ..Default::default()
+    };
 
     let registry = config.registry()?;
 
