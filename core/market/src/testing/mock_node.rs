@@ -106,10 +106,7 @@ impl MockNodeKind {
 fn testname_from_backtrace(bn: &str) -> String {
     log::info!("Test name to regex match: {}", &bn);
     // Extract test name
-    let captures = Regex::new(r"(.*)::(.*)::.*")
-        .unwrap()
-        .captures(bn)
-        .unwrap();
+    let captures = Regex::new(r"(.*)::(.*)::.*").unwrap().captures(bn).unwrap();
     let filename = captures.get(1).unwrap().as_str().to_string();
     let testname = captures.get(2).unwrap().as_str().to_string();
 
@@ -414,7 +411,7 @@ impl MarketsNetwork {
     pub fn get_default_id(&self, node_name: &str) -> Identity {
         self.nodes
             .iter()
-            .find(|node| &node.name == node_name)
+            .find(|node| node.name == node_name)
             .map(|node| node.mock_identity.clone())
             .unwrap()
             .get_default_id()
@@ -424,7 +421,7 @@ impl MarketsNetwork {
         let mock_identity = self
             .nodes
             .iter()
-            .find(|node| &node.name == node_name)
+            .find(|node| node.name == node_name)
             .map(|node| node.mock_identity.clone())
             .unwrap();
         let id = mock_identity.new_identity(id_name);
@@ -439,7 +436,7 @@ impl MarketsNetwork {
     pub fn list_ids(&self, node_name: &str) -> HashMap<String, Identity> {
         self.nodes
             .iter()
-            .find(|node| &node.name == node_name)
+            .find(|node| node.name == node_name)
             .map(|node| node.mock_identity.list_ids())
             .unwrap()
     }

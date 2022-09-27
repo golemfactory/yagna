@@ -28,7 +28,7 @@ pub struct PaymentDao<'c> {
 
 fn insert_activity_payments(
     activity_payments: Vec<ActivityPayment>,
-    payment_id: &String,
+    payment_id: &str,
     owner_id: &NodeId,
     conn: &ConnType,
 ) -> DbResult<()> {
@@ -41,7 +41,7 @@ fn insert_activity_payments(
 
         diesel::insert_into(activity_pay_dsl::pay_activity_payment)
             .values(DbActivityPayment {
-                payment_id: payment_id.clone(),
+                payment_id: payment_id.to_string(),
                 activity_id: activity_payment.activity_id,
                 owner_id: owner_id.clone(),
                 amount,
@@ -56,7 +56,7 @@ fn insert_activity_payments(
 
 fn insert_agreement_payments(
     agreement_payments: Vec<AgreementPayment>,
-    payment_id: &String,
+    payment_id: &str,
     owner_id: &NodeId,
     conn: &ConnType,
 ) -> DbResult<()> {
@@ -69,7 +69,7 @@ fn insert_agreement_payments(
 
         diesel::insert_into(agreement_pay_dsl::pay_agreement_payment)
             .values(DbAgreementPayment {
-                payment_id: payment_id.clone(),
+                payment_id: payment_id.to_string(),
                 agreement_id: agreement_payment.agreement_id,
                 owner_id: owner_id.clone(),
                 amount,
