@@ -184,8 +184,8 @@ pub struct PayloadPlatform {
 }
 
 /// # Computation Manifest
-/// Computation Manifests lets Requestors to define a certain set of allowed actions, 
-/// to be negotiated with and approved by a Provider. 
+/// Computation Manifests lets Requestors to define a certain set of allowed actions,
+/// to be negotiated with and approved by a Provider.
 /// Requestors' actions will be verified against the Manifest during computation.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -213,8 +213,8 @@ pub struct CompManifest {
 pub struct Script {
     /// Specifies a curated list of commands.
     pub commands: Vec<Command>,
-    /// Selects a default way of comparing command arguments stated in the manifest 
-    /// and the ones received in the ExeScript, 
+    /// Selects a default way of comparing command arguments stated in the manifest
+    /// and the ones received in the ExeScript,
     /// unless stated otherwise in a command JSON object.
     #[serde(rename = "match", default)]
     pub arg_match: ArgMatch,
@@ -273,7 +273,7 @@ pub enum ArgMatch {
     #[strum(ascii_case_insensitive)]
     Strict,
     /// Treat argument as regular expression.
-    /// Syntax: Perl-compatible regular expressions (UTF-8 Unicode mode), 
+    /// Syntax: Perl-compatible regular expressions (UTF-8 Unicode mode),
     /// w/o the support for look around and backreferences (among others).
     #[strum(ascii_case_insensitive)]
     Regex,
@@ -286,7 +286,7 @@ impl Default for ArgMatch {
 }
 
 /// # Net
-/// Applies constraints to networking. 
+/// Applies constraints to networking.
 /// Currently, outgoing requests to the public Internet network are covered.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -308,7 +308,7 @@ pub struct Inet {
 }
 
 /// # Internet Outbound Network
-/// Applies constraints to networking. 
+/// Applies constraints to networking.
 /// Currently, outgoing requests to the public Internet network are covered.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -320,7 +320,7 @@ pub struct InetOut {
     pub protocols: Vec<String>,
     // keep the option here to retain information on
     // whether urls were specified
-    /// List of allowed external URLs that outbound requests can be sent to. 
+    /// List of allowed external URLs that outbound requests can be sent to.
     /// E.g. ["http://golemfactory.s3.amazonaws.com/file1", "http://golemfactory.s3.amazonaws.com/file2"]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub urls: Option<Vec<Url>>,

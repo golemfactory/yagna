@@ -1,7 +1,6 @@
 extern crate ya_manifest_utils;
 
 use schemars::schema_for;
-use serde_json;
 
 use ya_manifest_utils::manifest::AppManifest;
 
