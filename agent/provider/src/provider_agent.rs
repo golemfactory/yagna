@@ -292,7 +292,7 @@ impl ProviderAgent {
     fn build_offer(
         node_info: NodeInfo,
         inf_node_info: InfNodeInfo,
-        accounts: &Vec<AccountView>,
+        accounts: &[AccountView],
         preset: Preset,
         mut offer: OfferTemplate,
         exeunit_desc: ExeUnitDesc,
@@ -721,15 +721,18 @@ mod tests {
         let inf_node_info = InfNodeInfo::default();
         let accounts = Vec::new();
 
-        let mut preset: Preset = Default::default();
-        preset.pricing_model = "linear".to_string();
-        preset.usage_coeffs =
-            std::collections::HashMap::from([("test_coefficient".to_string(), 1.0)]);
+        let preset = Preset {
+            pricing_model: "linear".to_string(),
+            usage_coeffs: std::collections::HashMap::from([("test_coefficient".to_string(), 1.0)]),
+            ..Default::default()
+        };
 
-        let mut offer_template: OfferTemplate = Default::default();
-        offer_template.properties = serde_json::json!({
-            "golem.com.usage.vector": ["test_coefficient"]
-        });
+        let offer_template = OfferTemplate {
+            properties: serde_json::json!({
+                "golem.com.usage.vector": ["test_coefficient"]
+            }),
+            ..Default::default()
+        };
 
         let exeunit_desc = ExeUnitDesc {
             name: Default::default(),

@@ -175,10 +175,7 @@ impl AgreementPayment {
     pub fn count_active_activities(&self) -> usize {
         self.activities
             .iter()
-            .filter(|(_, activity)| match activity {
-                ActivityPayment::Finalized { .. } => false,
-                _ => true,
-            })
+            .filter(|(_, activity)| !matches!(activity, ActivityPayment::Finalized { .. }))
             .count()
     }
 
@@ -273,7 +270,6 @@ impl ActivitiesWaiter {
             .changed()
             .await
             .map(|_| *self.watch_receiver.borrow())
-            
         {
             log::debug!("Num active activities left: {}.", value);
             if value == 0 {

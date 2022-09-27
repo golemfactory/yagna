@@ -547,7 +547,7 @@ impl Handler<ReSubscribe> for ProviderMarket {
         let to_resubscribe = self
             .subscriptions
             .values()
-            .filter(|sub| &sub.id == &msg.0)
+            .filter(|sub| sub.id == msg.0)
             .cloned()
             .map(|sub| (sub.id.clone(), sub))
             .collect::<HashMap<String, Subscription>>();
@@ -693,9 +693,9 @@ async fn terminate_agreement(api: Arc<MarketProviderApi>, msg: AgreementFinalize
         AgreementResult::ClosedByUs => GolemReason::success(),
         AgreementResult::Broken { reason } => GolemReason::new(reason),
         // No need to terminate, because Requestor already did it.
-        AgreementResult::ClosedByRequestor => return ,
+        AgreementResult::ClosedByRequestor => return,
         // No need to terminate since we didn't have Agreement with Requestor.
-        AgreementResult::ApprovalFailed => return ,
+        AgreementResult::ApprovalFailed => return,
     };
 
     log::info!(
@@ -716,7 +716,7 @@ async fn terminate_agreement(api: Arc<MarketProviderApi>, msg: AgreementFinalize
                     e,
                     repeats.max_elapsed_time,
                 );
-                return ;
+                return;
             }
         };
 
@@ -912,13 +912,14 @@ actix_signal_handler!(ProviderMarket, NewAgreement, agreement_signed_signal);
 
 fn get_backoff() -> backoff::ExponentialBackoff {
     // TODO: We could have config for Market actor to be able to set at least initial interval.
-    let mut backoff = backoff::ExponentialBackoff::default();
-    backoff.current_interval = std::time::Duration::from_secs(5);
-    backoff.initial_interval = std::time::Duration::from_secs(5);
-    backoff.multiplier = 1.5f64;
-    backoff.max_interval = std::time::Duration::from_secs(60 * 60);
-    backoff.max_elapsed_time = Some(std::time::Duration::from_secs(u64::max_value()));
-    backoff
+    backoff::ExponentialBackoff {
+        current_interval: std::time::Duration::from_secs(5),
+        initial_interval: std::time::Duration::from_secs(5),
+        multiplier: 1.5f64,
+        max_interval: std::time::Duration::from_secs(60 * 60),
+        max_elapsed_time: Some(std::time::Duration::from_secs(u64::max_value())),
+        ..Default::default()
+    }
 }
 
 // =========================================== //

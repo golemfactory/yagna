@@ -499,25 +499,19 @@ mod tests {
 
         let dummy_desc = registry.find_exeunit("dummy").unwrap();
         assert_eq!(dummy_desc.name.as_str(), "dummy");
-        assert_eq!(
-            dummy_desc
-                .supervisor_path
-                .to_str()
-                .unwrap()
-                .contains("dummy.exe"),
-            true
-        );
+        assert!(dummy_desc
+            .supervisor_path
+            .to_str()
+            .unwrap()
+            .contains("dummy.exe"));
 
         let dummy_desc = registry.find_exeunit("wasm").unwrap();
         assert_eq!(dummy_desc.name.as_str(), "wasm");
-        assert_eq!(
-            dummy_desc
-                .supervisor_path
-                .to_str()
-                .unwrap()
-                .contains("wasm.exe"),
-            true
-        );
+        assert!(dummy_desc
+            .supervisor_path
+            .to_str()
+            .unwrap()
+            .contains("wasm.exe"));
     }
 
     #[test]
@@ -531,14 +525,11 @@ mod tests {
 
         let dummy_desc = registry.find_exeunit("wasmtime").unwrap();
         assert_eq!(dummy_desc.name.as_str(), "wasmtime");
-        assert_eq!(
-            dummy_desc
-                .supervisor_path
-                .to_str()
-                .unwrap()
-                .contains("exe-unit"),
-            true
-        );
+        assert!(dummy_desc
+            .supervisor_path
+            .to_str()
+            .unwrap()
+            .contains("exe-unit"));
     }
 
     #[test]
@@ -552,13 +543,10 @@ mod tests {
 
         let dummy_desc = registry.find_exeunit("wasmtime").unwrap();
         assert_eq!(dummy_desc.name.as_str(), "wasmtime");
-        assert_eq!(
-            dummy_desc
-                .supervisor_path
-                .to_str()
-                .unwrap()
-                .contains("/usr/lib/yagna/plugins/exe-unit"),
-            true
-        );
+        assert!(dummy_desc
+            .supervisor_path
+            .to_str()
+            .unwrap()
+            .contains("/usr/lib/yagna/plugins/exe-unit"));
     }
 }

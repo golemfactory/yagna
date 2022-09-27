@@ -164,7 +164,7 @@ impl PresetManager {
         state.presets.values().cloned().collect()
     }
 
-    pub fn list_matching(&self, names: &Vec<String>) -> Result<Vec<Preset>> {
+    pub fn list_matching(&self, names: &[String]) -> Result<Vec<Preset>> {
         let state = self.state.lock().unwrap();
         names
             .iter()

@@ -63,13 +63,15 @@ pub struct NegotiatorsPack {
     components: HashMap<String, Box<dyn NegotiatorComponent>>,
 }
 
-impl NegotiatorsPack {
-    pub fn new() -> NegotiatorsPack {
-        NegotiatorsPack {
-            components: HashMap::new(),
+impl Default for NegotiatorsPack {
+    fn default() -> Self {
+        Self {
+            components: HashMap::default(),
         }
     }
+}
 
+impl NegotiatorsPack {
     pub fn add_component(
         mut self,
         name: &str,
