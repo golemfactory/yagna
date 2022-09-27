@@ -16,7 +16,7 @@ where
         .ready_chunks(16)
         .map(|v| v.into_iter().map(|b| b.to_vec()).flatten().collect())
         .map(f)
-        .map(|evt| Ok(evt));
+        .map(Ok);
 
     if let Err(e) = stream.forward(tx).await {
         log::error!("Error forwarding output: {:?}", e);
@@ -60,7 +60,7 @@ impl CapturedOutput {
         } else {
             match self.format {
                 CaptureFormat::Bin => Some(CommandOutput::Bin(output)),
-                CaptureFormat::Str => vec_to_string(output).map(|s| CommandOutput::Str(s)),
+                CaptureFormat::Str => vec_to_string(output).map(CommandOutput::Str),
             }
         }
     }
@@ -115,14 +115,14 @@ impl From<Option<CaptureMode>> for CapturedOutput {
 
                 CapturedOutput {
                     stream: false,
-                    format: format.unwrap_or_else(CaptureFormat::default),
+                    format: format.unwrap_or_default(),
                     head,
                     tail,
                 }
             }
             CaptureMode::Stream { limit, format } => CapturedOutput {
                 stream: true,
-                format: format.unwrap_or_else(CaptureFormat::default),
+                format: format.unwrap_or_default(),
                 head: match limit {
                     Some(limit) => CaptureBuffer::capped(limit),
                     None => CaptureBuffer::all(),
@@ -234,7 +234,7 @@ pub(crate) fn vec_to_string(vec: Vec<u8>) -> Option<String> {
         Ok(utf8) => utf8,
         Err(error) => error
             .as_bytes()
-            .into_iter()
+            .iter()
             .map(|&c| c as char)
             .collect::<String>(),
     };

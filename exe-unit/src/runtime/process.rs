@@ -91,7 +91,7 @@ impl RuntimeProcess {
         let result = child.wait_with_output()?;
         match result.status.success() {
             true => {
-                let stdout = vec_to_string(result.stdout).unwrap_or_else(String::new);
+                let stdout = vec_to_string(result.stdout).unwrap_or_default();
                 Ok(serde_json::from_str(&stdout).map_err(|e| {
                     let msg = format!("Invalid offer template [{}]: {:?}", binary.display(), e);
                     Error::Other(msg)
@@ -454,7 +454,7 @@ impl Handler<Shutdown> for RuntimeProcess {
         let proc = self.service.take();
         let vpn = self.vpn.take();
         let inet = self.inet.take();
-        let mut children = std::mem::replace(&mut self.children, HashSet::new());
+        let mut children = std::mem::take(&mut self.children);
 
         log::info!("Shutting down the runtime process: {:?}", msg.0);
 

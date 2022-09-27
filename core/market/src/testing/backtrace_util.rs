@@ -24,7 +24,7 @@ fn adjust_backtrace_level(frames: &[backtrace::BacktraceFrame]) -> Option<usize>
 
 fn get_symbol_at_level(bt: &backtrace::Backtrace, lvl: usize) -> Option<String> {
     let frames = &bt.frames();
-    match adjust_backtrace_level(&frames) {
+    match adjust_backtrace_level(frames) {
         Some(adjustment) => {
             let frame = &frames[lvl + adjustment];
             return get_innermost_backtrace_symbol(frame);

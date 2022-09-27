@@ -32,7 +32,7 @@ pub enum EventError {
     strum_macros::Display,
     AsExpression,
     FromSqlRow,
-    PartialEq,
+    PartialEq, Eq,
     Debug,
     Clone,
     Copy,
@@ -97,7 +97,7 @@ impl MarketEvent {
                 Owner::Provider => EventType::ProviderProposalRejected,
             },
             artifact_id: proposal.body.id.clone(),
-            reason: reason.map(|reason| DbReason(reason)),
+            reason: reason.map(DbReason),
         }
     }
 

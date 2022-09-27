@@ -24,7 +24,7 @@ use crate::protocol::negotiation::messages::ProposalContent;
     derive_more::Display,
     AsExpression,
     FromSqlRow,
-    PartialEq,
+    PartialEq, Eq,
     Debug,
     Clone,
     Copy,
@@ -51,7 +51,7 @@ pub enum ProposalState {
     derive_more::Display,
     AsExpression,
     FromSqlRow,
-    PartialEq,
+    PartialEq, Eq,
     Debug,
     Clone,
     Copy,
@@ -169,7 +169,7 @@ impl Proposal {
         // TODO: Initial proposal id will differ on Requestor and Provider!!
         let creation_ts = Utc::now().naive_utc();
         let proposal_id =
-            ProposalId::generate_id(&offer.id, &demand_id, &creation_ts, Owner::Provider);
+            ProposalId::generate_id(&offer.id, demand_id, &creation_ts, Owner::Provider);
 
         let proposal = DbProposal {
             id: proposal_id,

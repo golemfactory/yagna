@@ -226,7 +226,7 @@ pub async fn spawn(
                     map_return_code(child.wait().await, pid)
                 }
             };
-            if let Err(_) = status_tx.send(code) {
+            if status_tx.send(code).is_err() {
                 log::warn!("Unable to update process {} status: receiver is gone", pid);
             }
         });
@@ -236,10 +236,10 @@ pub async fn spawn(
         use proto::response::Command;
         match response.command {
             Some(Command::Status(status)) => {
-                let _ = handler.on_process_status(status).await;
+                handler.on_process_status(status).await;
             }
             Some(Command::RtStatus(status)) => {
-                let _ = handler.on_runtime_status(status).await;
+                handler.on_runtime_status(status).await;
             }
             cmd => log::warn!("invalid event: {:?}", cmd),
         }

@@ -1,4 +1,4 @@
-use actix_rt;
+
 use chrono::Utc;
 
 use ya_identity::dao::{identity::*, init};

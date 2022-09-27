@@ -93,7 +93,7 @@ async fn main() -> anyhow::Result<()> {
                 .json()
                 .await
                 .map_err(|e| anyhow::Error::msg(e.to_string()))?;
-            eprintln!("");
+            eprintln!();
             eprintln!("response={}", serde_json::to_string_pretty(&resp)?);
         }
         Args::List => {

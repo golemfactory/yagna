@@ -46,7 +46,7 @@ pub mod gsb_rest {
         pub fn rest<Context: Provider<Self, Map>>(ctx: &Context) -> actix_web::Scope {
             inc(ctx, "GsbRest-rest");
             actix_web::Scope::new("/gsb-rest-api")
-                .service(web::resource("/test").to(|| HttpResponse::Ok()))
+                .service(web::resource("/test").to(HttpResponse::Ok))
         }
     }
 }
@@ -140,7 +140,7 @@ pub mod rest_cli {
         pub fn rest<Context: Provider<Self, Map>>(ctx: &Context) -> actix_web::Scope {
             inc(ctx, "RestCli-rest");
             actix_web::Scope::new("/rest-cli-api")
-                .service(web::resource("/tester").to(|| HttpResponse::Ok()))
+                .service(web::resource("/tester").to(HttpResponse::Ok))
         }
     }
 }

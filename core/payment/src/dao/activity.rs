@@ -185,7 +185,7 @@ impl<'a> ActivityDao<'a> {
                 .select(dsl::id)
                 .first(conn)
                 .optional()?;
-            if let Some(_) = existing {
+            if existing.is_some() {
                 return Ok(());
             }
 

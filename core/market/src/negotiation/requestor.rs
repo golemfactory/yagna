@@ -317,7 +317,7 @@ impl RequestorBroker {
     ) -> Result<(), AgreementError> {
         let dao = self.common.db.as_dao::<AgreementDao>();
         let agreement = {
-            let _hold = self.common.agreement_lock.lock(&agreement_id).await;
+            let _hold = self.common.agreement_lock.lock(agreement_id).await;
 
             let agreement = dao
                 .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
@@ -418,7 +418,7 @@ impl RequestorBroker {
             // We won't be able to process `on_agreement_approved`, before we
             // finish execution under this lock. This avoids errors related to
             // Provider approving Agreement before we set proper state in database.
-            let _hold = self.common.agreement_lock.lock(&agreement_id).await;
+            let _hold = self.common.agreement_lock.lock(agreement_id).await;
 
             let mut agreement = match dao
                 .select(
@@ -458,7 +458,7 @@ impl RequestorBroker {
                 &agreement_id
             );
         }
-        return Ok(());
+        Ok(())
     }
 
     async fn query_reason_for(&self, agreement_id: &AgreementId) -> Option<Reason> {
@@ -487,7 +487,7 @@ async fn on_agreement_approved(
     let caller: NodeId = CommonBroker::parse_caller(&caller)?;
     Ok(agreement_approved(broker, caller, msg)
         .await
-        .map_err(|e| AgreementProtocolError::Remote(e))?)
+        .map_err(AgreementProtocolError::Remote)?)
 }
 
 async fn agreement_approved(
@@ -647,7 +647,7 @@ async fn on_agreement_rejected(
     let caller: NodeId = CommonBroker::parse_caller(&caller)?;
     Ok(agreement_rejected(broker, caller, msg)
         .await
-        .map_err(|e| AgreementProtocolError::Remote(e))?)
+        .map_err(AgreementProtocolError::Remote)?)
 }
 
 async fn agreement_rejected(

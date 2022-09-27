@@ -26,13 +26,13 @@ async fn main() {
     let balance_com = acc_info
         .committed
         .balances
-        .get(&token as &str)
+        .get(token as &str)
         .map(|x| x.0.clone())
         .unwrap_or_default();
     let balance_ver = acc_info
         .verified
         .balances
-        .get(&token as &str)
+        .get(token as &str)
         .map(|x| x.0.clone())
         .unwrap_or_default();
 

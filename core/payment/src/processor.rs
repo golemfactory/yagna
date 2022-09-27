@@ -383,7 +383,7 @@ impl PaymentProcessor {
                     amount,
                     allocation_id: Some(order.allocation_id.clone()),
                 }),
-                _ => return NotifyPaymentError::invalid_order(&order),
+                _ => return NotifyPaymentError::invalid_order(order),
             }
         }
 

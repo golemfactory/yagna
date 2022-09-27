@@ -30,7 +30,7 @@ impl ProcessGroupExt<Command> for Command {
 
         unsafe {
             self.pre_exec(|| {
-                nix::unistd::setsid().map_err(|e| io::Error::from(e))?;
+                nix::unistd::setsid().map_err(io::Error::from)?;
                 Ok(())
             });
         }
@@ -50,7 +50,7 @@ impl ProcessGroupExt<tokio::process::Command> for tokio::process::Command {
 
         unsafe {
             self.pre_exec(|| {
-                nix::unistd::setsid().map_err(|e| io::Error::from(e))?;
+                nix::unistd::setsid().map_err(io::Error::from)?;
                 Ok(())
             });
         }
@@ -79,9 +79,9 @@ pub struct ProcessHandle {
 }
 
 impl ProcessHandle {
-    pub fn new(mut command: &mut Command) -> Result<ProcessHandle> {
+    pub fn new(command: &mut Command) -> Result<ProcessHandle> {
         Ok(ProcessHandle {
-            process: Arc::new(SharedChild::spawn(&mut command)?),
+            process: Arc::new(SharedChild::spawn(command)?),
         })
     }
 
@@ -164,6 +164,6 @@ impl ProcessHandle {
         // Note: unwrap can't fail here. All sender, receiver and thread will
         // end their lifetime before await will return. There's no danger
         // that one of them will be dropped earlier.
-        return receiver.await.unwrap();
+        receiver.await.unwrap()
     }
 }

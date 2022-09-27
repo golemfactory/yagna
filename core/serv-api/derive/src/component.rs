@@ -40,7 +40,7 @@ impl TryFrom<&MetaList> for Component {
                 Some(nested_meta) => match Keyword::try_from(nested_meta)? {
                     Keyword::Flatten => Ok(Component::Cli { flatten: true }),
                 },
-                None => return Err(error),
+                None => Err(error),
             },
             _ => Err(error),
         }

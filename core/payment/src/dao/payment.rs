@@ -37,7 +37,7 @@ fn insert_activity_payments(
         let amount = activity_payment.amount.into();
         let allocation_id = activity_payment.allocation_id;
 
-        activity::increase_amount_paid(&activity_payment.activity_id, &owner_id, &amount, conn)?;
+        activity::increase_amount_paid(&activity_payment.activity_id, owner_id, &amount, conn)?;
 
         diesel::insert_into(activity_pay_dsl::pay_activity_payment)
             .values(DbActivityPayment {
@@ -65,7 +65,7 @@ fn insert_agreement_payments(
         let amount = agreement_payment.amount.into();
         let allocation_id = agreement_payment.allocation_id;
 
-        agreement::increase_amount_paid(&agreement_payment.agreement_id, &owner_id, &amount, conn)?;
+        agreement::increase_amount_paid(&agreement_payment.agreement_id, owner_id, &amount, conn)?;
 
         diesel::insert_into(agreement_pay_dsl::pay_agreement_payment)
             .values(DbAgreementPayment {
@@ -106,8 +106,8 @@ impl<'c> PaymentDao<'c> {
                 .execute(conn)?;
             log::trace!("Payment inserted.");
 
-            insert_activity_payments(activity_payments, &payment_id, &owner_id, &conn)?;
-            insert_agreement_payments(agreement_payments, &payment_id, &owner_id, &conn)?;
+            insert_activity_payments(activity_payments, &payment_id, &owner_id, conn)?;
+            insert_agreement_payments(agreement_payments, &payment_id, &owner_id, conn)?;
 
             Ok(())
         })

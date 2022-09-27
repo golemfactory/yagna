@@ -20,7 +20,7 @@ use ya_persistence::types::{AdaptTimestamp, TimestampAdapter};
     derive_more::Display,
     AsExpression,
     FromSqlRow,
-    PartialEq,
+    PartialEq, Eq,
     Debug,
     Clone,
     Copy,
@@ -93,7 +93,7 @@ impl NewAgreementEvent {
             // add this external timestamp to database, but here I will use generated value.
             timestamp: Utc::now().adapt(),
             issuer: terminator,
-            reason: reason.map(|reason| DbReason(reason)),
+            reason: reason.map(DbReason),
         })
     }
 }

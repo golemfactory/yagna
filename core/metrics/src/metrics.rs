@@ -37,6 +37,6 @@ impl Metrics {
     }
 
     pub fn export(&mut self) -> String {
-        return self.exporter.turn();
+        self.exporter.turn()
     }
 }

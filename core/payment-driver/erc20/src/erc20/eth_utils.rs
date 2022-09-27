@@ -22,7 +22,7 @@ pub fn keccak256_hash(bytes: &[u8]) -> Vec<u8> {
     hasher.update(bytes);
     let mut resp: [u8; 32] = Default::default();
     hasher.finalize(&mut resp);
-    resp.iter().cloned().collect()
+    resp.to_vec()
 }
 
 fn tx_encode(tx: &YagnaRawTransaction, s: &mut RlpStream) {
@@ -51,7 +51,7 @@ pub fn encode_signed_tx(
 
     tx.begin_unbounded_list();
 
-    tx_encode(&raw_tx, &mut tx);
+    tx_encode(raw_tx, &mut tx);
     tx.append(&sig_v);
     tx.append(&sig_r);
     tx.append(&sig_s);

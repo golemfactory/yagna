@@ -82,8 +82,8 @@ mod mock_activity {
 
         fn started(&mut self, ctx: &mut Self::Context) {
             let addr = ctx.address();
-            actix_rpc::bind::<SetState>(&super::ACTIVITY_BUS_ID, addr.clone().recipient());
-            actix_rpc::bind::<SetUsage>(&super::ACTIVITY_BUS_ID, addr.recipient());
+            actix_rpc::bind::<SetState>(super::ACTIVITY_BUS_ID, addr.clone().recipient());
+            actix_rpc::bind::<SetUsage>(super::ACTIVITY_BUS_ID, addr.recipient());
         }
     }
 

@@ -123,11 +123,11 @@ pub async fn run(mut config: RunConfig) -> Result</*exit code*/ i32> {
         payment_account(&cmd, &config.account.account.or(provider_config.account)).await?;
     for nn in NETWORK_GROUP_MAP[&config.account.network].iter() {
         for driver in DRIVERS.iter() {
-            if driver.platform(&nn).is_err() {
+            if driver.platform(nn).is_err() {
                 continue;
             }
 
-            if let Err(e) = cmd.yagna()?.payment_init(&address, &nn, &driver).await {
+            if let Err(e) = cmd.yagna()?.payment_init(&address, nn, driver).await {
                 log::debug!("Failed to initialize {} driver. Error: {e}", driver.name);
             }
         }

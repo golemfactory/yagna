@@ -53,20 +53,20 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     {
         let subscription = subscription.clone();
         tokio::task::spawn_local(async move {
-            let _ = rx
+            rx
                 .for_each(|event| send_events(subscription.borrow(), event))
                 .await;
         });
     }
 
-    let _ = bus::bind(&model::BUS_ID, move |s: model::Subscribe| {
+    let _ = bus::bind(model::BUS_ID, move |s: model::Subscribe| {
         let id = subscription.borrow_mut().subscribe(s.endpoint);
         future::ok(id)
     });
 
     let create_tx = tx;
     // Create a new application key entry
-    let _ = bus::bind(&model::BUS_ID, move |create: model::Create| {
+    let _ = bus::bind(model::BUS_ID, move |create: model::Create| {
         let key = Uuid::new_v4().to_simple().to_string();
         let db = dbx.clone();
         let mut create_tx = create_tx.clone();
@@ -105,7 +105,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     let preconfigured_node_id = crate::autoconf::preconfigured_node_id()?;
     let start_datetime = Utc::now().naive_utc();
     // Retrieve an application key entry based on the key itself
-    let _ = bus::bind(&model::BUS_ID, move |get: model::Get| {
+    let _ = bus::bind(model::BUS_ID, move |get: model::Get| {
         let db = dbx.clone();
         let preconfigured_appkey = preconfigured_appkey.clone();
         async move {
@@ -175,7 +175,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
     });
 
     let dbx = db.clone();
-    let _ = bus::bind(&model::BUS_ID, move |rm: model::Remove| {
+    let _ = bus::bind(model::BUS_ID, move |rm: model::Remove| {
         let db = dbx.clone();
         async move {
             db.as_dao::<AppKeyDao>()

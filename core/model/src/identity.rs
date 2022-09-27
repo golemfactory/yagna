@@ -3,7 +3,7 @@ use thiserror::Error;
 use ya_client_model::NodeId;
 use ya_service_bus::RpcMessage;
 
-pub const BUS_ID: &'static str = "/local/identity";
+pub const BUS_ID: &str = "/local/identity";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Ack {}

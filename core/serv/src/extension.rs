@@ -20,17 +20,17 @@ use ya_core_model::appkey::AppKey;
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_bus::typed as bus;
 
-const APP_NAME: &'static str = structopt::clap::crate_name!();
-const DIR_NAME: &'static str = "extensions";
+const APP_NAME: &str = structopt::clap::crate_name!();
+const DIR_NAME: &str = "extensions";
 
-pub const VAR_YAGNA_EXTENSIONS_DIR: &'static str = "YAGNA_EXTENSIONS_DIR";
+pub const VAR_YAGNA_EXTENSIONS_DIR: &str = "YAGNA_EXTENSIONS_DIR";
 
-const VAR_YAGNA_DATA_DIR: &'static str = "YAGNA_DATA_DIR";
-const VAR_YAGNA_NODE_ID: &'static str = "YAGNA_NODE_ID";
-const VAR_YAGNA_APP_KEY: &'static str = "YAGNA_APP_KEY";
-const VAR_YAGNA_API_URL: &'static str = "YAGNA_API_URL";
-const VAR_YAGNA_GSB_URL: &'static str = "YAGNA_GSB_URL";
-const VAR_YAGNA_JSON_OUTPUT: &'static str = "YAGNA_JSON_OUTPUT";
+const VAR_YAGNA_DATA_DIR: &str = "YAGNA_DATA_DIR";
+const VAR_YAGNA_NODE_ID: &str = "YAGNA_NODE_ID";
+const VAR_YAGNA_APP_KEY: &str = "YAGNA_APP_KEY";
+const VAR_YAGNA_API_URL: &str = "YAGNA_API_URL";
+const VAR_YAGNA_GSB_URL: &str = "YAGNA_GSB_URL";
+const VAR_YAGNA_JSON_OUTPUT: &str = "YAGNA_JSON_OUTPUT";
 
 pub async fn run<T: StructOpt>(
     cli_ctx: &CliCtx,
@@ -318,7 +318,7 @@ impl Extension {
             .fold(Default::default(), |mut coll, (name, path)| {
                 if is_executable(&path) {
                     let conf = Self::conf_path(&path)
-                        .and_then(|p| ExtensionConf::read(p))
+                        .and_then(ExtensionConf::read)
                         .unwrap_or_default();
                     let ext = Self { name, path, conf };
                     if !coll.contains(&ext) {

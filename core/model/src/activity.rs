@@ -52,7 +52,7 @@ impl RpcMessage for Create {
     type Error = RpcMessageError;
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateResponse {
     pub activity_id: String,
@@ -144,7 +144,7 @@ impl RpcMessage for GetUsage {
 }
 
 /// Update remote network configuration
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum VpnControl {
     AddNodes {
@@ -180,7 +180,7 @@ impl RpcMessage for VpnControl {
 }
 
 /// Network data
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VpnPacket(pub Vec<u8>);
 
@@ -246,7 +246,7 @@ impl RpcMessage for GetExecBatchResults {
 }
 
 /// Stream script execution events.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StreamExecBatchResults {
     pub activity_id: String,
     pub batch_id: String,
@@ -285,13 +285,13 @@ pub mod local {
     pub const BUS_ID: &str = "/local/activity";
 
     /// Set state of the activity.
-    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct Stats {
         pub identity: NodeId,
     }
 
-    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub struct StatsResult {
         pub total: BTreeMap<String, u64>,
@@ -337,7 +337,7 @@ pub mod local {
         type Error = RpcMessageError;
     }
 
-    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub enum Credentials {
         Sgx {

@@ -162,12 +162,12 @@ fn validate_subscription(
     owner: Owner,
 ) -> Result<(), TakeEventsError> {
     match owner {
-        Owner::Requestor => match demand_status(conn, &subscription_id)? {
+        Owner::Requestor => match demand_status(conn, subscription_id)? {
             DemandState::NotFound => Err(TakeEventsError::NotFound(subscription_id.clone()))?,
             DemandState::Expired(_) => Err(TakeEventsError::Expired(subscription_id.clone()))?,
             _ => Ok(()),
         },
-        Owner::Provider => match query_state(conn, &subscription_id, &Utc::now().naive_utc())? {
+        Owner::Provider => match query_state(conn, subscription_id, &Utc::now().naive_utc())? {
             OfferState::NotFound => Err(TakeEventsError::NotFound(subscription_id.clone()))?,
             OfferState::Expired(_) => Err(TakeEventsError::Expired(subscription_id.clone()))?,
             _ => Ok(()),

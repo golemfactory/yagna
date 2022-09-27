@@ -59,7 +59,7 @@ where
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
-        std::mem::replace(&mut self.signals, Vec::new())
+        std::mem::take(&mut self.signals)
             .into_iter()
             .for_each(|s| {
                 unregister(s);

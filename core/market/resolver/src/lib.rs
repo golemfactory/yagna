@@ -12,7 +12,7 @@ use resolver::error::PrepareError;
 pub use resolver::matching::{match_weak, MatchResult};
 pub use resolver::prepare::{PreparedDemand, PreparedOffer};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Match {
     Yes,
     No {

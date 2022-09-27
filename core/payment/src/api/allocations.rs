@@ -119,12 +119,12 @@ async fn create_allocation(
 
                 response::created(allocation)
             }
-            Ok(AllocationStatus::NotFound) => return response::server_error(&"Database error"),
-            Ok(AllocationStatus::Gone) => return response::server_error(&"Database error"),
-            Err(DbError::Query(e)) => return response::bad_request(&e),
-            Err(e) => return response::server_error(&e),
+            Ok(AllocationStatus::NotFound) => response::server_error(&"Database error"),
+            Ok(AllocationStatus::Gone) => response::server_error(&"Database error"),
+            Err(DbError::Query(e)) => response::bad_request(&e),
+            Err(e) => response::server_error(&e),
         },
-        Err(e) => return response::server_error(&e),
+        Err(e) => response::server_error(&e),
     }
 }
 

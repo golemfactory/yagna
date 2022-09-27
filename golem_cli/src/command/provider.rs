@@ -8,7 +8,7 @@ pub use ya_provider::GlobalsState as ProviderConfig;
 use crate::command::{NetworkGroup, NETWORK_GROUP_MAP};
 use crate::setup::RunConfig;
 
-const CLASSIC_RUNTIMES: &'static [&'static str] = &["wasmtime", "vm"];
+const CLASSIC_RUNTIMES: &[&str] = &["wasmtime", "vm"];
 
 pub struct YaProviderCommand {
     pub(super) cmd: Command,
@@ -62,7 +62,7 @@ impl YaProviderCommand {
         if let Some(account) = &config.account {
             cmd.args(&["--account", &account.to_string()]);
         }
-        for n in NETWORK_GROUP_MAP[&network_group].iter() {
+        for n in NETWORK_GROUP_MAP[network_group].iter() {
             cmd.args(&["--payment-network", &n.to_string()]);
         }
 
@@ -207,9 +207,9 @@ impl YaProviderCommand {
         exeunit_name: &str,
         usage_coeffs: &UsageDef,
     ) -> anyhow::Result<()> {
-        let mut cmd = &mut self.cmd;
+        let cmd = &mut self.cmd;
         cmd.args(&["preset", "update", "--no-interactive"]);
-        preset_command(&mut cmd, name, exeunit_name, usage_coeffs);
+        preset_command(cmd, name, exeunit_name, usage_coeffs);
         cmd.arg("--").arg(name);
         self.exec_no_output()
             .await

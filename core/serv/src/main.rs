@@ -179,8 +179,8 @@ impl<S: 'static> Provider<S, CliCtx> for ServiceContext {
 }
 
 impl<S: 'static> Provider<S, ()> for ServiceContext {
-    fn component(&self) -> () {
-        ()
+    fn component(&self) {
+        
     }
 }
 
@@ -569,7 +569,7 @@ impl ServiceCommand {
                 .bind(api_host_port.clone())
                 .context(format!("Failed to bind http server on {:?}", api_host_port))?;
 
-                let _ = extension::autostart(&ctx.data_dir, &api_url, &ctx.gsb_url)
+                let _ = extension::autostart(&ctx.data_dir, api_url, &ctx.gsb_url)
                     .await
                     .map_err(|e| log::warn!("Failed to autostart extensions: {e}"));
 
