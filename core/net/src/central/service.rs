@@ -340,7 +340,7 @@ async fn unbind_remote(nodes: Vec<NodeId>) {
 }
 
 async fn resubscribe() {
-    futures::stream::iter({ SUBSCRIPTIONS.lock().unwrap().clone() }.into_iter())
+    futures::stream::iter({ SUBSCRIPTIONS.lock().await.clone() }.into_iter())
         .for_each(|msg| {
             let topic = msg.topic().to_owned();
             async move {
