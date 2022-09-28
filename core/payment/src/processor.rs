@@ -219,7 +219,7 @@ impl DriverRegistry {
         network: Option<String>,
     ) -> Result<(String, Network), RegisterAccountError> {
         let driver_details = self.get_driver(&driver)?;
-        let network_name = network.unwrap_or(driver_details.default_network.to_owned());
+        let network_name = network.unwrap_or_else(|| driver_details.default_network.to_owned());
         match driver_details.networks.get(&network_name) {
             None => Err(RegisterAccountError::UnsupportedNetwork(
                 network_name,
@@ -236,7 +236,7 @@ impl DriverRegistry {
         token: Option<String>,
     ) -> Result<String, RegisterAccountError> {
         let (network_name, network_details) = self.get_network(driver.clone(), network)?;
-        let token = token.unwrap_or(network_details.default_token.to_owned());
+        let token = token.unwrap_or_else(|| network_details.default_token.to_owned());
         match network_details.tokens.get(&token) {
             None => Err(RegisterAccountError::UnsupportedToken(
                 token,

@@ -22,7 +22,7 @@ pub fn big_dec_to_u256(v: &BigDecimal) -> Result<U256, GenericError> {
     let v = v * &(*PRECISION);
     let v = v
         .to_bigint()
-        .ok_or(GenericError::new("Failed to convert to bigint"))?;
+        .ok_or_else(|| GenericError::new("Failed to convert to bigint"))?;
     let v = &v.to_string();
     Ok(U256::from_dec_str(v).map_err(GenericError::new)?)
 }
@@ -31,7 +31,7 @@ pub fn big_dec_gwei_to_u256(v: BigDecimal) -> Result<U256, GenericError> {
     let v = v * &(*GWEI_PRECISION);
     let v = v
         .to_bigint()
-        .ok_or(GenericError::new("Failed to convert to bigint"))?;
+        .ok_or_else(|| GenericError::new("Failed to convert to bigint"))?;
     let v = &v.to_string();
     Ok(U256::from_dec_str(v).map_err(GenericError::new)?)
 }
@@ -61,7 +61,7 @@ pub fn str_to_addr(addr: &str) -> Result<Address, GenericError> {
         Ok(addr) => Ok(addr),
         Err(_e) => Err(GenericError::new(format!(
             "Unable to parse address {}",
-            addr.to_string()
+            addr
         ))),
     }
 }

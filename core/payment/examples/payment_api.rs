@@ -216,7 +216,7 @@ async fn main() -> anyhow::Result<()> {
     let provider_id = format!("0x{}", hex::encode(provider_account.public().address()));
     let provider_addr = args
         .provider_addr
-        .unwrap_or(provider_id.clone())
+        .unwrap_or_else(|| provider_id.clone())
         .to_lowercase();
 
     let requestor_pass: Protected = args.requestor_pass.clone().into();
@@ -224,7 +224,7 @@ async fn main() -> anyhow::Result<()> {
     let requestor_id = format!("0x{}", hex::encode(requestor_account.public().address()));
     let requestor_addr = args
         .requestor_addr
-        .unwrap_or(requestor_id.clone())
+        .unwrap_or_else(|| requestor_id.clone())
         .to_lowercase();
 
     log::info!(

@@ -119,7 +119,7 @@ impl ProviderConfig {
 #[derive(StructOpt, Clone, Debug, Serialize, Deserialize, derive_more::Display)]
 #[display(
     fmt = "{}Networks: {:?}",
-    "account.map(|a| format!(\"Address: {}\n\", a)).unwrap_or(\"\".into())",
+    "account.map(|a| format!(\"Address: {}\n\", a)).unwrap_or_else(|| \"\".into())",
     networks
 )]
 pub struct ReceiverAccount {
@@ -199,6 +199,7 @@ pub struct StartupConfig {
     pub commands: Commands,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(StructOpt, Clone)]
 pub enum Commands {
     /// Run provider agent

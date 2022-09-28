@@ -123,10 +123,7 @@ impl FromStr for Network {
             "goerli" => Ok(Network::Goerli),
             "polygon" => Ok(Network::Polygon),
             "mumbai" => Ok(Network::Mumbai),
-            _ => Err(DbError::InvalidData(format!(
-                "Invalid network: {}",
-                s.to_string()
-            ))),
+            _ => Err(DbError::InvalidData(format!("Invalid network: {}", s))),
         }
     }
 }

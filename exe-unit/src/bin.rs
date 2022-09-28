@@ -265,7 +265,9 @@ async fn run() -> anyhow::Result<()> {
 
     let manifest_ctx =
         ManifestContext::try_new(&agreement.inner).context("Invalid app manifest")?;
-    agreement.task_package = manifest_ctx.payload().or(agreement.task_package.take());
+    agreement.task_package = manifest_ctx
+        .payload()
+        .or_else(|| agreement.task_package.take());
 
     log::info!("Manifest-enabled features: {:?}", manifest_ctx.features());
     log::info!("User-provided payload: {:?}", agreement.task_package);

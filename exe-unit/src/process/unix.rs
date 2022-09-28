@@ -37,7 +37,7 @@ impl<T> From<std::sync::PoisonError<T>> for SystemError {
 
 impl From<io::Error> for SystemError {
     fn from(e: io::Error) -> Self {
-        SystemError::Error(format!("IO error: {}", e.to_string()))
+        SystemError::Error(format!("IO error: {e}"))
     }
 }
 

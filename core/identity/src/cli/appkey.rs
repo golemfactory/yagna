@@ -40,7 +40,7 @@ impl AppKeyCommand {
             .await
             .map_err(anyhow::Error::msg)?
             .map_err(anyhow::Error::msg)?
-            .ok_or(anyhow::Error::msg("Identity not found"))
+            .ok_or_else(|| anyhow::Error::msg("Identity not found"))
     }
 
     pub async fn run_command(&self, _ctx: &CliCtx) -> Result<CommandOutput> {

@@ -231,7 +231,7 @@ pub(crate) fn vec_to_string(vec: Vec<u8>) -> Option<String> {
         return None;
     }
     let string = match String::from_utf8(vec) {
-        Ok(utf8) => utf8.to_owned(),
+        Ok(utf8) => utf8,
         Err(error) => error
             .as_bytes()
             .into_iter()

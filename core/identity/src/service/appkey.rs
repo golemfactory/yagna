@@ -64,7 +64,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
         future::ok(id)
     });
 
-    let create_tx = tx.clone();
+    let create_tx = tx;
     // Create a new application key entry
     let _ = bus::bind(&model::BUS_ID, move |create: model::Create| {
         let key = Uuid::new_v4().to_simple().to_string();
