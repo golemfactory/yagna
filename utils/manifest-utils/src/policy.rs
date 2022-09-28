@@ -186,7 +186,7 @@ impl Keystore {
         Ok(())
     }
 
-    fn verify_cert<S: AsRef<str>>(&self, cert: S) -> anyhow::Result<PKey<Public>> {
+    pub fn verify_cert<S: AsRef<str>>(&self, cert: S) -> anyhow::Result<PKey<Public>> {
         let cert = crate::decode_data(cert)?;
         let cert = match X509::from_der(&cert) {
             Ok(cert) => cert,
