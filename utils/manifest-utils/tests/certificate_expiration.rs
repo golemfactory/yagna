@@ -207,7 +207,6 @@ mod utils {
         Ok((cert, key_pair))
     }
 
-    /// Make a X509 request with the given private key
     pub fn create_csr() -> Result<(X509Req, PKey<Private>), ErrorStack> {
         let rsa = Rsa::generate(2048)?;
         let key_pair = PKey::from_rsa(rsa)?;
