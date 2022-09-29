@@ -20,6 +20,7 @@ fn accept_not_expired_certificate() {
 
     let (self_signed_cert, ca_key_pair) =
         create_self_signed_certificate(valid_from, valid_to).unwrap();
+
     write_cert_to_file(
         &self_signed_cert,
         &test_cert_dir.path().join("self_signed.pem"),
@@ -49,6 +50,37 @@ fn not_accept_expired_certificate() {
 
     let (self_signed_cert, ca_key_pair) =
         create_self_signed_certificate(valid_from, valid_to).unwrap();
+
+    write_cert_to_file(
+        &self_signed_cert,
+        &test_cert_dir.path().join("self_signed.pem"),
+    );
+
+    let sut = Keystore::load(&test_cert_dir).unwrap();
+
+    let (req, csr_key_pair) = create_csr().unwrap();
+    let signed_cert = sign_csr(req, csr_key_pair, &self_signed_cert, ca_key_pair).unwrap();
+
+    assert!(sut
+        .verify_cert(base64::encode(signed_cert.to_pem().unwrap()))
+        .is_err());
+}
+
+#[test]
+fn not_accept_not_ready_certificate() {
+    let test_cert_dir = tempfile::tempdir().unwrap();
+
+    let valid_from = chrono::Utc::now()
+        .checked_add_signed(chrono::Duration::days(1))
+        .unwrap();
+
+    let valid_to = chrono::Utc::now()
+        .checked_add_signed(chrono::Duration::days(2))
+        .unwrap();
+
+    let (self_signed_cert, ca_key_pair) =
+        create_self_signed_certificate(valid_from, valid_to).unwrap();
+
     write_cert_to_file(
         &self_signed_cert,
         &test_cert_dir.path().join("self_signed.pem"),
