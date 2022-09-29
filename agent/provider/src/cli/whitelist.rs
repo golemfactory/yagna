@@ -14,8 +14,8 @@ use crate::startup_config::ProviderConfig;
 #[derive(StructOpt, Clone, Debug)]
 #[structopt(
     rename_all = "kebab-case",
-    help = "Domain Whitelist allows to accept Demands with 
-    Computation Payload Manifests which declare usage of Outbound Network but arrive with no signature."
+    help = "Domain Whitelist allows to accept Demands with Computation Payload Manifests 
+which declare usage of Outbound Network but arrive with no signature."
 )]
 pub enum WhitelistConfig {
     /// List domain whitelist patterns
@@ -33,8 +33,8 @@ pub struct Add {
     #[structopt(
         long,
         short,
-        help = "Coma separated domain Whitelist patterns. 
-        Adding URL as a pattern ('regex' or 'strict') will not work."
+        help = "Space separated domain Whitelist patterns. 
+Adding URL as a pattern ('regex' or 'strict') will not work."
     )]
     patterns: Vec<String>,
 
@@ -44,7 +44,7 @@ pub struct Add {
         short = "t",
         default_value = "strict",
         help = "Domain Whitelist pattern type takes value 'strict' or 'regex'. 
-        Regex patterns are by default wrapped with '.*' patterns."
+Regex patterns are by default wrapped with '.*' patterns."
     )]
     pattern_type: ArgMatch,
 }
@@ -54,8 +54,8 @@ pub struct Add {
 pub struct Remove {
     /// Domain whitelist pattern ids.
     #[structopt(
-        help = "Coma separated list of domain Whitelist patterns' ids to be removed. 
-        To find pattern's id use 'whitelist list' command."
+        help = "Space separated list of domain Whitelist patterns' ids to be removed. 
+To find pattern's id use 'whitelist list' command."
     )]
     ids: Vec<String>,
 }

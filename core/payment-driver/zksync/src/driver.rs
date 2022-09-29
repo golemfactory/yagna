@@ -85,8 +85,8 @@ impl ZksyncDriver {
 
     pub async fn load_active_accounts(&self) {
         log::debug!("load_active_accounts");
-        let mut accounts = self.active_accounts.borrow_mut();
         let unlocked_accounts = bus::list_unlocked_identities().await.unwrap();
+        let mut accounts = self.active_accounts.borrow_mut();
         for account in unlocked_accounts {
             log::debug!("account={}", account);
             accounts.add_account(account)
@@ -564,7 +564,8 @@ impl PaymentDriverCron for ZksyncDriver {
             Some(guard) => guard,
         };
         log::trace!("Running zkSync send-out job...");
-        for node_id in self.active_accounts.borrow().list_accounts() {
+        let accounts = self.active_accounts.borrow().list_accounts();
+        for node_id in accounts {
             self.process_payments_for_account(&node_id).await;
         }
         log::trace!("ZkSync send-out job complete.");

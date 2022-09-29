@@ -29,14 +29,15 @@ use crate::payments::PaymentsConfig;
 use crate::tasks::config::TaskConfig;
 
 lazy_static::lazy_static! {
-    static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
-    static ref DEFAULT_CERT_DIR: String = PathBuf::from(DEFAULT_DATA_DIR.as_str()).join(CERT_DIR).to_string_lossy().to_string();
+    static ref DEFAULT_DATA_DIR: String = default_data_dir();
     static ref DEFAULT_PLUGINS_DIR : PathBuf = default_plugins();
 }
 pub(crate) const DOMAIN_WHITELIST_JSON: &str = "domain_whitelist.json";
 pub(crate) const PRESETS_JSON: &str = "presets.json";
 pub(crate) const HARDWARE_JSON: &str = "hardware.json";
 pub(crate) const CERT_DIR: &str = "cert_dir";
+
+const DATA_DIR_ENV: &str = "DATA_DIR";
 
 /// Common configuration for all Provider commands.
 #[derive(StructOpt, Clone, Debug)]
@@ -55,7 +56,7 @@ pub struct ProviderConfig {
     #[structopt(
         long,
         set = clap::ArgSettings::Global,
-        env = "DATA_DIR",
+        env = DATA_DIR_ENV,
         default_value = &*DEFAULT_DATA_DIR,
     )]
     pub data_dir: DataDir,
@@ -65,15 +66,14 @@ pub struct ProviderConfig {
         set = clap::ArgSettings::Global,
         env = "PROVIDER_LOG_DIR",
     )]
-    pub log_dir: Option<DataDir>,
+    log_dir: Option<DataDir>,
     /// Certificates directory
     #[structopt(
         long,
         set = clap::ArgSettings::Global,
         env = "PROVIDER_CERT_DIR",
-        default_value = &*DEFAULT_CERT_DIR,
     )]
-    pub cert_dir: DataDir,
+    cert_dir: Option<DataDir>,
     #[structopt(skip = DOMAIN_WHITELIST_JSON)]
     pub domain_whitelist_file: PathBuf,
     #[structopt(skip = GLOBALS_JSON)]
@@ -113,6 +113,27 @@ impl ProviderConfig {
         let mut r = ExeUnitsRegistry::default();
         r.register_from_file_pattern(&self.exe_unit_path)?;
         Ok(r)
+    }
+
+    pub fn log_dir_path(&self) -> anyhow::Result<PathBuf> {
+        let log_dir = if let Some(log_dir) = &self.log_dir {
+            log_dir.get_or_create()?
+        } else {
+            self.data_dir.get_or_create()?
+        };
+        Ok(log_dir)
+    }
+
+    pub fn cert_dir_path(&self) -> anyhow::Result<PathBuf> {
+        let cert_dir = if let Some(cert_dir) = &self.cert_dir {
+            cert_dir.get_or_create()?
+        } else {
+            let mut cert_dir = self.data_dir.get_or_create()?;
+            cert_dir.push("cert_dir");
+            std::fs::create_dir_all(&cert_dir)?;
+            cert_dir
+        };
+        Ok(cert_dir)
     }
 }
 
@@ -362,6 +383,10 @@ where
         .find('=')
         .ok_or_else(|| format!("invalid KEY=value: no `=` found in `{}`", s))?;
     Ok((s[..pos].parse()?, s[pos + 1..].parse()?))
+}
+
+fn default_data_dir() -> String {
+    DataDir::new(clap::crate_name!()).to_string()
 }
 
 fn default_plugins() -> PathBuf {

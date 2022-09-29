@@ -138,11 +138,7 @@ impl ProviderAgent {
         let data_dir = config.data_dir.get_or_create()?;
 
         //log_dir is the same as data_dir by default, but can be changed using --log-dir option
-        let log_dir = if let Some(log_dir) = &config.log_dir {
-            log_dir.get_or_create()?
-        } else {
-            data_dir.clone()
-        };
+        let log_dir = config.log_dir_path()?;
 
         //start_logger is using env var RUST_LOG internally.
         //args.debug options sets default logger to debug
@@ -186,8 +182,8 @@ impl ProviderAgent {
             .clone()
             .unwrap_or_else(|| app_name.to_string());
 
-        let cert_dir = &config.cert_dir.get_or_create()?;
-        let keystore = load_keystore(cert_dir)?;
+        let cert_dir = config.cert_dir_path()?;
+        let keystore = load_keystore(&cert_dir)?;
 
         args.market.session_id = format!("{}-{}", name, std::process::id());
         args.runner.session_id = args.market.session_id.clone();
@@ -419,7 +415,7 @@ fn load_keystore(cert_dir: &PathBuf) -> anyhow::Result<Keystore> {
             keystore
         }
         Err(err) => {
-            log::info!("Using a new keystore: {}", err);
+            log::error!("Failed to load keystore: {}", err);
             Default::default()
         }
     };
