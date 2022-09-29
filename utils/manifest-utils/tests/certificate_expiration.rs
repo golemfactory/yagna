@@ -1,13 +1,6 @@
-use openssl::{hash::MessageDigest, sign::Signer};
 use utils::*;
 
 use ya_manifest_utils::Keystore;
-
-//Open Points:
-//refactor utils functions
-//rename tests
-//validate only private functions
-//add test valid_not_before
 
 #[test]
 fn accept_not_expired_certificate() {
@@ -34,32 +27,18 @@ fn accept_not_expired_certificate() {
     let (req, csr_key_pair) = create_csr().unwrap();
     let signed_cert = sign_csr(req, csr_key_pair.clone(), &self_signed_cert, ca_key_pair).unwrap();
 
-    let data = b"DEADFACE";
+    let data = "DEADFACE";
     let sig_alg = "sha256".to_string();
+    let sig = sign_data(data.as_bytes(), &csr_key_pair, &sig_alg);
 
-    let mut signer = Signer::new(
-        MessageDigest::from_name(sig_alg.as_ref()).unwrap(),
-        &csr_key_pair,
-    )
-    .unwrap();
-    let sig = signer.sign_oneshot_to_vec(data).unwrap();
-
-    sut.verify_signature(
-        base64::encode(signed_cert.to_pem().unwrap()),
-        base64::encode(sig),
-        sig_alg,
-        base64::encode(data),
-    )
-    .unwrap();
-
-    // assert!(sut
-    //     .verify_signature(
-    //         base64::encode(signed_cert.to_pem().unwrap()),
-    //         base64::encode(sig),
-    //         sig_alg,
-    //         base64::encode(data)
-    //     )
-    //     .is_ok());
+    assert!(sut
+        .verify_signature(
+            base64::encode(signed_cert.to_pem().unwrap()),
+            base64::encode(sig),
+            sig_alg,
+            data
+        )
+        .is_ok());
 }
 
 #[test]
@@ -85,10 +64,19 @@ fn not_accept_expired_certificate() {
     let sut = Keystore::load(&test_cert_dir).unwrap();
 
     let (req, csr_key_pair) = create_csr().unwrap();
-    let signed_cert = sign_csr(req, csr_key_pair, &self_signed_cert, ca_key_pair).unwrap();
+    let signed_cert = sign_csr(req, csr_key_pair.clone(), &self_signed_cert, ca_key_pair).unwrap();
+
+    let data = "DEADFACE";
+    let sig_alg = "sha256".to_string();
+    let sig = sign_data(data.as_bytes(), &csr_key_pair, &sig_alg);
 
     assert!(sut
-        .verify_cert(base64::encode(signed_cert.to_pem().unwrap()))
+        .verify_signature(
+            base64::encode(signed_cert.to_pem().unwrap()),
+            base64::encode(sig),
+            sig_alg,
+            data
+        )
         .is_err());
 }
 
@@ -115,10 +103,19 @@ fn not_accept_not_ready_certificate() {
     let sut = Keystore::load(&test_cert_dir).unwrap();
 
     let (req, csr_key_pair) = create_csr().unwrap();
-    let signed_cert = sign_csr(req, csr_key_pair, &self_signed_cert, ca_key_pair).unwrap();
+    let signed_cert = sign_csr(req, csr_key_pair.clone(), &self_signed_cert, ca_key_pair).unwrap();
+
+    let data = "DEADFACE";
+    let sig_alg = "sha256".to_string();
+    let sig = sign_data(data.as_bytes(), &csr_key_pair, &sig_alg);
 
     assert!(sut
-        .verify_cert(base64::encode(signed_cert.to_pem().unwrap()))
+        .verify_signature(
+            base64::encode(signed_cert.to_pem().unwrap()),
+            base64::encode(sig),
+            sig_alg,
+            data
+        )
         .is_err());
 }
 
@@ -132,13 +129,27 @@ mod utils {
     use openssl::bn::{BigNum, MsbOption};
     use openssl::error::ErrorStack;
     use openssl::hash::MessageDigest;
-    use openssl::pkey::{PKey, PKeyRef, Private};
+    use openssl::pkey::{PKey, Private};
     use openssl::rsa::Rsa;
+    use openssl::sign::Signer;
     use openssl::x509::extension::{
         AuthorityKeyIdentifier, BasicConstraints, KeyUsage, SubjectAlternativeName,
         SubjectKeyIdentifier,
     };
     use openssl::x509::{X509NameBuilder, X509Ref, X509Req, X509ReqBuilder, X509};
+
+    pub fn sign_data(
+        data: &[u8],
+        csr_key_pair: &openssl::pkey::PKey<openssl::pkey::Private>,
+        sig_alg: &str,
+    ) -> Vec<u8> {
+        let mut signer = Signer::new(
+            MessageDigest::from_name(sig_alg.as_ref()).unwrap(),
+            &csr_key_pair,
+        )
+        .unwrap();
+        signer.sign_oneshot_to_vec(data).unwrap()
+    }
 
     pub fn write_cert_to_file(cert: &X509Ref, file_path: &Path) {
         let mut file = File::create(&file_path).unwrap();
