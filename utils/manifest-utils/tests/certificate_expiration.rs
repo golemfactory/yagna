@@ -1,3 +1,4 @@
+use openssl::{hash::MessageDigest, sign::Signer};
 use utils::*;
 
 use ya_manifest_utils::Keystore;
@@ -12,7 +13,9 @@ use ya_manifest_utils::Keystore;
 fn accept_not_expired_certificate() {
     let test_cert_dir = tempfile::tempdir().unwrap();
 
-    let valid_from = chrono::Utc::now();
+    let valid_from = chrono::Utc::now()
+        .checked_sub_signed(chrono::Duration::days(2))
+        .unwrap();
 
     let valid_to = chrono::Utc::now()
         .checked_add_signed(chrono::Duration::days(2))
@@ -29,11 +32,34 @@ fn accept_not_expired_certificate() {
     let sut = Keystore::load(&test_cert_dir).unwrap();
 
     let (req, csr_key_pair) = create_csr().unwrap();
-    let signed_cert = sign_csr(req, csr_key_pair, &self_signed_cert, ca_key_pair).unwrap();
+    let signed_cert = sign_csr(req, csr_key_pair.clone(), &self_signed_cert, ca_key_pair).unwrap();
 
-    assert!(sut
-        .verify_cert(base64::encode(signed_cert.to_pem().unwrap()))
-        .is_ok());
+    let data = b"DEADFACE";
+    let sig_alg = "sha256".to_string();
+
+    let mut signer = Signer::new(
+        MessageDigest::from_name(sig_alg.as_ref()).unwrap(),
+        &csr_key_pair,
+    )
+    .unwrap();
+    let sig = signer.sign_oneshot_to_vec(data).unwrap();
+
+    sut.verify_signature(
+        base64::encode(signed_cert.to_pem().unwrap()),
+        base64::encode(sig),
+        sig_alg,
+        base64::encode(data),
+    )
+    .unwrap();
+
+    // assert!(sut
+    //     .verify_signature(
+    //         base64::encode(signed_cert.to_pem().unwrap()),
+    //         base64::encode(sig),
+    //         sig_alg,
+    //         base64::encode(data)
+    //     )
+    //     .is_ok());
 }
 
 #[test]
@@ -106,7 +132,7 @@ mod utils {
     use openssl::bn::{BigNum, MsbOption};
     use openssl::error::ErrorStack;
     use openssl::hash::MessageDigest;
-    use openssl::pkey::{PKey, Private};
+    use openssl::pkey::{PKey, PKeyRef, Private};
     use openssl::rsa::Rsa;
     use openssl::x509::extension::{
         AuthorityKeyIdentifier, BasicConstraints, KeyUsage, SubjectAlternativeName,
