@@ -2,6 +2,13 @@ use utils::*;
 
 use ya_manifest_utils::Keystore;
 
+//Open Points:
+//refactor utils functions
+//rename tests
+//mock time
+//validate only private functions
+//add test valid_not_before
+
 #[test]
 fn accept_not_expired_certificate() {
     let test_cert_dir = tempfile::tempdir().unwrap();
