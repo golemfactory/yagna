@@ -12,12 +12,14 @@ use ya_manifest_utils::Keystore;
 fn accept_not_expired_certificate() {
     let test_cert_dir = tempfile::tempdir().unwrap();
 
-    //Is valid two days from now
-    let not_after = chrono::Utc::now()
+    let valid_from = chrono::Utc::now();
+
+    let valid_to = chrono::Utc::now()
         .checked_add_signed(chrono::Duration::days(2))
         .unwrap();
 
-    let (self_signed_cert, ca_key_pair) = create_self_signed_certificate(not_after).unwrap();
+    let (self_signed_cert, ca_key_pair) =
+        create_self_signed_certificate(valid_from, valid_to).unwrap();
     write_cert_to_file(
         &self_signed_cert,
         &test_cert_dir.path().join("self_signed.pem"),
@@ -37,12 +39,16 @@ fn accept_not_expired_certificate() {
 fn not_accept_expired_certificate() {
     let test_cert_dir = tempfile::tempdir().unwrap();
 
-    //Was valid two days before
-    let not_after = chrono::Utc::now()
+    let valid_from = chrono::Utc::now()
         .checked_sub_signed(chrono::Duration::days(2))
         .unwrap();
 
-    let (self_signed_cert, ca_key_pair) = create_self_signed_certificate(not_after).unwrap();
+    let valid_to = chrono::Utc::now()
+        .checked_sub_signed(chrono::Duration::days(1))
+        .unwrap();
+
+    let (self_signed_cert, ca_key_pair) =
+        create_self_signed_certificate(valid_from, valid_to).unwrap();
     write_cert_to_file(
         &self_signed_cert,
         &test_cert_dir.path().join("self_signed.pem"),
@@ -82,7 +88,8 @@ mod utils {
     }
 
     pub fn create_self_signed_certificate(
-        not_after: DateTime<Utc>,
+        valid_from: DateTime<Utc>,
+        valid_to: DateTime<Utc>,
     ) -> Result<(X509, PKey<Private>), ErrorStack> {
         let rsa = Rsa::generate(2048)?;
         let key_pair = PKey::from_rsa(rsa)?;
@@ -105,10 +112,11 @@ mod utils {
         cert_builder.set_subject_name(&x509_name)?;
         cert_builder.set_issuer_name(&x509_name)?;
         cert_builder.set_pubkey(&key_pair)?;
-        let not_before = Asn1Time::days_from_now(0)?;
+
+        let not_before = Asn1Time::from_unix(valid_from.timestamp())?;
         cert_builder.set_not_before(&not_before)?;
 
-        let not_after = Asn1Time::from_unix(not_after.timestamp())?;
+        let not_after = Asn1Time::from_unix(valid_to.timestamp())?;
         cert_builder.set_not_after(&not_after)?;
 
         cert_builder.append_extension(BasicConstraints::new().critical().ca().build()?)?;
