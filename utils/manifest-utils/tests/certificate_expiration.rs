@@ -14,7 +14,7 @@ fn accept_not_expired_certificate() {
     let test_cert_dir = tempfile::tempdir().unwrap();
 
     let valid_not_after = chrono::Utc::now()
-        .checked_add_signed(chrono::Duration::seconds(2))
+        .checked_add_signed(chrono::Duration::days(2))
         .unwrap();
 
     let (self_signed_cert, ca_key_pair) = create_self_signed_certificate(valid_not_after).unwrap();
@@ -38,7 +38,7 @@ fn not_accept_expired_certificate() {
     let test_cert_dir = tempfile::tempdir().unwrap();
 
     let valid_not_after = chrono::Utc::now()
-        .checked_add_signed(chrono::Duration::seconds(2))
+        .checked_sub_signed(chrono::Duration::days(2))
         .unwrap();
 
     let (self_signed_cert, ca_key_pair) = create_self_signed_certificate(valid_not_after).unwrap();
@@ -51,8 +51,6 @@ fn not_accept_expired_certificate() {
     );
 
     let sut = Keystore::load(&test_cert_dir).unwrap();
-
-    std::thread::sleep(std::time::Duration::from_secs(2));
 
     assert!(sut
         .verify_cert(base64::encode(signed_cert.to_pem().unwrap()))
