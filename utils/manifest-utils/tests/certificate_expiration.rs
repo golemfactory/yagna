@@ -12,11 +12,12 @@ use ya_manifest_utils::Keystore;
 fn accept_not_expired_certificate() {
     let test_cert_dir = tempfile::tempdir().unwrap();
 
-    let valid_not_after = chrono::Utc::now()
+    //Is valid two days from now
+    let not_after = chrono::Utc::now()
         .checked_add_signed(chrono::Duration::days(2))
         .unwrap();
 
-    let (self_signed_cert, ca_key_pair) = create_self_signed_certificate(valid_not_after).unwrap();
+    let (self_signed_cert, ca_key_pair) = create_self_signed_certificate(not_after).unwrap();
     write_cert_to_file(
         &self_signed_cert,
         &test_cert_dir.path().join("self_signed.pem"),
@@ -36,11 +37,12 @@ fn accept_not_expired_certificate() {
 fn not_accept_expired_certificate() {
     let test_cert_dir = tempfile::tempdir().unwrap();
 
-    let valid_not_after = chrono::Utc::now()
+    //Was valid two days before
+    let not_after = chrono::Utc::now()
         .checked_sub_signed(chrono::Duration::days(2))
         .unwrap();
 
-    let (self_signed_cert, ca_key_pair) = create_self_signed_certificate(valid_not_after).unwrap();
+    let (self_signed_cert, ca_key_pair) = create_self_signed_certificate(not_after).unwrap();
     write_cert_to_file(
         &self_signed_cert,
         &test_cert_dir.path().join("self_signed.pem"),
