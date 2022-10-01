@@ -127,7 +127,7 @@ pub fn get_polygon_gas_price_method() -> PolygonGasPriceMethod {
 
 pub fn get_polygon_priority() -> PolygonPriority {
     match std::env::var("POLYGON_PRIORITY")
-        .unwrap_or("default".to_string())
+        .unwrap_or_else(|_| "default".to_string())
         .to_lowercase()
         .as_str()
     {
@@ -550,7 +550,7 @@ fn get_rpc_addr_from_env(network: Network) -> Vec<String> {
 fn collect_rpc_addr_from(env: &str, default: &str) -> Vec<String> {
     std::env::var(env)
         .ok()
-        .unwrap_or(default.to_string())
+        .unwrap_or_else(|| default.to_string())
         .split(',')
         .map(|path| path.to_string())
         .collect()

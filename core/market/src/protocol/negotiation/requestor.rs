@@ -148,7 +148,7 @@ impl NegotiationApi {
             signature: agreement
                 .proposed_signature
                 .clone()
-                .ok_or(ProposeAgreementError::NotSigned(id.clone()))?,
+                .ok_or_else(|| ProposeAgreementError::NotSigned(id.clone()))?,
         };
         net::from(requestor_id)
             .to(provider_id)
@@ -168,7 +168,7 @@ impl NegotiationApi {
             signature: agreement
                 .committed_signature
                 .clone()
-                .ok_or(CommitAgreementError::NotSigned(id.clone()))?,
+                .ok_or_else(|| CommitAgreementError::NotSigned(id.clone()))?,
         };
         net::from(requestor_id)
             .to(provider_id)
@@ -290,25 +290,25 @@ impl NegotiationApi {
 
         ServiceBinder::new(&requestor::proposal_addr(public_prefix), &(), self.clone())
             .bind_with_processor(move |_, myself, caller: String, msg: ProposalReceived| {
-                let myself = myself.clone();
+                let myself = myself;
                 myself.on_proposal_received(caller, msg)
             })
             .bind_with_processor(move |_, myself, caller: String, msg: ProposalRejected| {
-                let myself = myself.clone();
+                let myself = myself;
                 myself.on_proposal_rejected(caller, msg)
             });
 
         ServiceBinder::new(&requestor::agreement_addr(public_prefix), &(), self.clone())
             .bind_with_processor(move |_, myself, caller: String, msg: AgreementApproved| {
-                let myself = myself.clone();
+                let myself = myself;
                 myself.on_agreement_approved(caller, msg)
             })
             .bind_with_processor(move |_, myself, caller: String, msg: AgreementRejected| {
-                let myself = myself.clone();
+                let myself = myself;
                 myself.on_agreement_rejected(caller, msg)
             })
             .bind_with_processor(move |_, myself, caller: String, msg: AgreementTerminated| {
-                let myself = myself.clone();
+                let myself = myself;
                 myself.on_agreement_terminated(caller, msg)
             });
         Ok(())

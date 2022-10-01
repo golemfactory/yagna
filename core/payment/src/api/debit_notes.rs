@@ -107,14 +107,14 @@ async fn get_debit_note_events(
         .headers()
         .get("X-Requestor-Events")
         .and_then(|v| v.to_str().ok())
-        .map(|v| v.split(",").map(|s| Cow::Owned(s.to_owned())).collect())
+        .map(|v| v.split(',').map(|s| Cow::Owned(s.to_owned())).collect())
         .unwrap_or_else(|| vec!["RECEIVED".into(), "CANCELLED".into()]);
 
     let provider_events: Vec<Cow<'static, str>> = req
         .headers()
         .get("X-Provider-Events")
         .and_then(|v| v.to_str().ok())
-        .map(|v| v.split(",").map(|s| Cow::Owned(s.to_owned())).collect())
+        .map(|v| v.split(',').map(|s| Cow::Owned(s.to_owned())).collect())
         .unwrap_or_else(|| {
             vec![
                 "ACCEPTED".into(),
@@ -160,7 +160,7 @@ async fn issue_debit_note(
 
     let agreement = match get_agreement_for_activity(
         activity_id.clone(),
-        ya_core_model::Role::Provider,
+        ya_client_model::market::Role::Provider,
     )
     .await
     {

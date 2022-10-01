@@ -17,7 +17,8 @@ struct Args {
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
-    let log_level = std::env::var("RUST_LOG").unwrap_or("invoice_flow=debug,info".to_owned());
+    let log_level =
+        std::env::var("RUST_LOG").unwrap_or_else(|_| "invoice_flow=debug,info".to_owned());
     std::env::set_var("RUST_LOG", log_level);
     env_logger::init();
 

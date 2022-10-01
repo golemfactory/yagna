@@ -64,7 +64,7 @@ async fn main() -> anyhow::Result<()> {
         Some(_) => cli.api_url,
         None => std::env::var("YAGNA_API_URL").ok(),
     }
-    .unwrap_or("http://127.0.0.1:7464".to_string());
+    .unwrap_or_else(|| "http://127.0.0.1:7464".to_string());
     let app_key = match &cli.app_key {
         Some(app_key) => Some(app_key.clone()),
         None => std::env::var("YAGNA_APPKEY").ok(),

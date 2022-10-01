@@ -218,6 +218,7 @@ impl<'c> AllocationDao<'c> {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum AllocationStatus {
     Active(Allocation),
     Gone,

@@ -112,7 +112,7 @@ impl CliArgs {
     pub async fn run_command(self) -> Result<()> {
         let ctx: CliCtx = (&self).try_into()?;
 
-        ctx.output(self.command.run_command(&ctx).await?);
+        ctx.output(self.command.run_command(&ctx).await?)?;
         Ok(())
     }
 }
@@ -251,7 +251,7 @@ enum Services {
     //TODO enable VpnService::rest for v2 / or create common scope for v1 and v2
     #[enable(rest)]
     Vpn(VpnService),
-    #[enable(gsb, rest)]
+    #[enable(gsb, rest, cli)]
     Market(MarketService),
     #[enable(gsb, rest, cli)]
     Activity(ActivityService),
@@ -321,7 +321,7 @@ impl CliCommand {
     pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
             CliCommand::Commands(command) => {
-                start_logger("warn", None, &vec![], false)?;
+                start_logger("warn", None, &[], false)?;
                 command.run_command(ctx).await
             }
             CliCommand::Complete(complete) => complete.run_command(ctx),
@@ -408,6 +408,7 @@ impl ExtensionCommand {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(StructOpt, Debug)]
 enum ServiceCommand {
     /// Runs server in foreground
@@ -620,11 +621,11 @@ https://handbook.golem.network/see-also/terms
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
 
-    stdout.write(header.as_bytes())?;
+    let _ = stdout.write(header.as_bytes())?;
     stdout.flush()?;
 
     loop {
-        stdout.write("Do you accept the terms and conditions? [yes/no]: ".as_bytes())?;
+        let _ = stdout.write("Do you accept the terms and conditions? [yes/no]: ".as_bytes())?;
         stdout.flush()?;
 
         let mut buffer = String::new();

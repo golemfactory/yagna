@@ -64,7 +64,7 @@ impl<'c> ProposalDao<'c> {
             let prev_proposal_id = proposal
                 .prev_proposal_id
                 .clone()
-                .ok_or(SaveProposalError::NoPrevious(proposal.id.clone()))?;
+                .ok_or_else(|| SaveProposalError::NoPrevious(proposal.id.clone()))?;
 
             if has_counter_proposal(conn, &prev_proposal_id)? {
                 return Err(SaveProposalError::AlreadyCountered(prev_proposal_id));
@@ -74,7 +74,7 @@ impl<'c> ProposalDao<'c> {
                 .filter(dsl::id.eq(&prev_proposal_id))
                 .first(conn)
                 .optional()?
-                .ok_or(SaveProposalError::NoPrevious(proposal.id.clone()))?;
+                .ok_or_else(|| SaveProposalError::NoPrevious(proposal.id.clone()))?;
 
             // If previous Proposal was rejected, we must change it's state back.
             if prev_proposal.state == ProposalState::Rejected {

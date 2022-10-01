@@ -5,7 +5,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
-use crate::Role;
 use ya_client_model::activity::{
     ActivityState, ActivityUsage, ExeScriptCommand, ExeScriptCommandResult, ExeScriptCommandState,
     RuntimeEvent,
@@ -280,6 +279,7 @@ pub mod local {
     use super::*;
     use chrono::{DateTime, Utc};
     use std::collections::BTreeMap;
+    use ya_client_model::market::Role;
 
     /// Local activity bus address.
     pub const BUS_ID: &str = "/local/activity";

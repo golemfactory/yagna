@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use crate::config::Config;
 use crate::db::dao::AgreementDao;
-use crate::db::model::{AgreementId, AppSessionId, SubscriptionId};
+use crate::db::model::{AgreementId, AppSessionId, Owner, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityGSB};
 use crate::matcher::error::{
     DemandError, MatcherError, MatcherInitError, QueryDemandsError, QueryOfferError,
@@ -19,10 +19,11 @@ use crate::negotiation::error::{
 };
 use crate::negotiation::{EventNotifier, ProviderBroker, RequestorBroker};
 use crate::rest_api;
+use crate::testing::AgreementState;
 
 use ya_client::model::market::{
-    Agreement, AgreementOperationEvent as ClientAgreementEvent, Demand, NewDemand, NewOffer, Offer,
-    Reason,
+    Agreement, AgreementListEntry, AgreementOperationEvent as ClientAgreementEvent, Demand,
+    NewDemand, NewOffer, Offer, Reason, Role,
 };
 use ya_core_model::market::{local, BUS_ID};
 use ya_service_api_interfaces::{Provider, Service};
@@ -104,7 +105,7 @@ impl MarketService {
         )?;
         let requestor_engine = RequestorBroker::new(
             db.clone(),
-            store.clone(),
+            store,
             listeners.proposal_receiver,
             agreement_notifier,
             config.clone(),
@@ -234,6 +235,41 @@ impl MarketService {
         Ok(())
     }
 
+    pub async fn list_agreements(
+        &self,
+        id: &Identity,
+        state: Option<AgreementState>,
+        before: Option<DateTime<Utc>>,
+        after: Option<DateTime<Utc>>,
+        app_sesssion_id: Option<String>,
+    ) -> Result<Vec<AgreementListEntry>, AgreementError> {
+        let agreements = self
+            .db
+            .as_dao::<AgreementDao>()
+            .list(Some(id.identity), state, before, after, app_sesssion_id)
+            .await
+            .map_err(|e| AgreementError::Internal(e.to_string()))?;
+
+        let mut result = Vec::new();
+        let naive_to_utc = |ts| DateTime::<Utc>::from_utc(ts, Utc);
+
+        for agreement in agreements {
+            let role = match agreement.id.owner() {
+                Owner::Provider => Role::Provider,
+                Owner::Requestor => Role::Requestor,
+            };
+
+            result.push(AgreementListEntry {
+                id: agreement.id.into_client(),
+                timestamp: naive_to_utc(agreement.creation_ts),
+                approved_date: agreement.approved_ts.map(naive_to_utc),
+                role,
+            });
+        }
+
+        Ok(result)
+    }
+
     pub async fn get_agreement(
         &self,
         agreement_id: &AgreementId,
@@ -285,7 +321,7 @@ impl MarketService {
 }
 
 impl Service for MarketService {
-    type Cli = ();
+    type Cli = crate::cli::Command;
 }
 
 // =========================================== //

@@ -519,7 +519,7 @@ impl IdentityService {
                     .map(|key| key.bytes().to_vec())
             }
         });
-        let this = me.clone();
+        let this = me;
         let _ = bus::bind(model::BUS_ID, move |node_id: model::GetKeyFile| {
             let this = this.clone();
             async move { this.lock().await.get_key_file(node_id).await }
@@ -609,5 +609,5 @@ async fn get_default_identity_key() -> anyhow::Result<model::IdentityInfo> {
     Ok(bus::service(model::BUS_ID)
         .send(model::Get::ByDefault {})
         .await??
-        .ok_or(anyhow::anyhow!("No default Identity found"))?)
+        .ok_or_else(|| anyhow::anyhow!("No default Identity found"))?)
 }

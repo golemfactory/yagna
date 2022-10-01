@@ -85,8 +85,8 @@ impl ZksyncDriver {
 
     pub async fn load_active_accounts(&self) {
         log::debug!("load_active_accounts");
-        let mut accounts = self.active_accounts.borrow_mut();
         let unlocked_accounts = bus::list_unlocked_identities().await.unwrap();
+        let mut accounts = self.active_accounts.borrow_mut();
         for account in unlocked_accounts {
             log::debug!("account={}", account);
             accounts.add_account(account)
@@ -263,7 +263,7 @@ impl PaymentDriver for ZksyncDriver {
             .await
             .map_err(GenericError::new)??;
 
-        let network = msg.network().unwrap_or(DEFAULT_NETWORK.to_string());
+        let network = msg.network().unwrap_or_else(|| DEFAULT_NETWORK.to_string());
         let token = get_network_token(
             DbNetwork::from_str(&network).map_err(GenericError::new)?,
             msg.token(),
@@ -288,8 +288,9 @@ impl PaymentDriver for ZksyncDriver {
         msg: Fund,
     ) -> Result<String, GenericError> {
         let address = msg.address();
-        let network = DbNetwork::from_str(&msg.network().unwrap_or(DEFAULT_NETWORK.to_string()))
-            .map_err(GenericError::new)?;
+        let network =
+            DbNetwork::from_str(&msg.network().unwrap_or_else(|| DEFAULT_NETWORK.to_string()))
+                .map_err(GenericError::new)?;
         match network {
             DbNetwork::Rinkeby => {
                 log::info!(
@@ -528,7 +529,7 @@ impl PaymentDriverCron for ZksyncDriver {
                         let mut details = utils::db_to_payment_details(&first_payment);
                         details.amount = payments
                             .into_iter()
-                            .map(|payment| utils::db_amount_to_big_dec(payment.amount.clone()))
+                            .map(|payment| utils::db_amount_to_big_dec(payment.amount))
                             .sum::<BigDecimal>();
                         details
                     }
@@ -563,7 +564,8 @@ impl PaymentDriverCron for ZksyncDriver {
             Some(guard) => guard,
         };
         log::trace!("Running zkSync send-out job...");
-        for node_id in self.active_accounts.borrow().list_accounts() {
+        let accounts = self.active_accounts.borrow().list_accounts();
+        for node_id in accounts {
             self.process_payments_for_account(&node_id).await;
         }
         log::trace!("ZkSync send-out job complete.");

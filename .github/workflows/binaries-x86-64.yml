@@ -49,7 +49,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --workspace --features central-net
+          args: --workspace
 
       - name: Copy binaries
         shell: bash

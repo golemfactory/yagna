@@ -184,10 +184,12 @@ impl TaskRunner {
 
         // Try convert to str to check if won't fail. If not we can than
         // unwrap() all paths that we created relative to current_dir.
-        data_dir.to_str().ok_or(anyhow!(
-            "Current dir [{}] contains invalid characters.",
-            data_dir.display()
-        ))?;
+        data_dir.to_str().ok_or_else(|| {
+            anyhow!(
+                "Current dir [{}] contains invalid characters.",
+                data_dir.display()
+            )
+        })?;
 
         Ok(TaskRunner {
             api: Arc::new(client),
@@ -370,9 +372,9 @@ impl TaskRunner {
 
         let destroy_msg = ActivityDestroyed {
             agreement_id: msg.agreement_id.to_string(),
-            activity_id: msg.activity_id.clone(),
+            activity_id: msg.activity_id,
         };
-        let _ = self.activity_destroyed.send_signal(destroy_msg.clone());
+        let _ = self.activity_destroyed.send_signal(destroy_msg);
         Ok(())
     }
 
@@ -430,7 +432,7 @@ impl TaskRunner {
 
         let agreement_path = working_dir
             .parent()
-            .ok_or(anyhow!("None"))? // Parent must exist, since we built this path.
+            .ok_or_else(|| anyhow!("None"))? // Parent must exist, since we built this path.
             .join("agreement.json");
 
         self.save_agreement(&agreement_path, &agreement_id)?;
@@ -440,9 +442,21 @@ impl TaskRunner {
             activity_id,
             ya_core_model::activity::local::BUS_ID,
         ];
-        args.extend(["-c", self.cache_dir.to_str().ok_or(anyhow!("None"))?].iter());
-        args.extend(["-w", working_dir.to_str().ok_or(anyhow!("None"))?].iter());
-        args.extend(["-a", agreement_path.to_str().ok_or(anyhow!("None"))?].iter());
+        args.extend(
+            [
+                "-c",
+                self.cache_dir.to_str().ok_or_else(|| anyhow!("None"))?,
+            ]
+            .iter(),
+        );
+        args.extend(["-w", working_dir.to_str().ok_or_else(|| anyhow!("None"))?].iter());
+        args.extend(
+            [
+                "-a",
+                agreement_path.to_str().ok_or_else(|| anyhow!("None"))?,
+            ]
+            .iter(),
+        );
 
         if let Some(req_pub_key) = requestor_pub_key {
             args.extend(["--requestor-pub-key", req_pub_key.as_ref()].iter());
@@ -475,7 +489,7 @@ impl TaskRunner {
         let agreement = self
             .active_agreements
             .get(agreement_id)
-            .ok_or(anyhow!("Can't find agreement [{}].", agreement_id))?;
+            .ok_or_else(|| anyhow!("Can't find agreement [{}].", agreement_id))?;
 
         let agreement_file = File::create(&agreement_path).map_err(|error| {
             anyhow!(
@@ -770,8 +784,8 @@ impl Handler<AgreementClosed> for TaskRunner {
     type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: AgreementClosed, ctx: &mut Context<Self>) -> Self::Result {
-        let agreement_id = msg.agreement_id.to_string();
-        let myself = ctx.address().clone();
+        let agreement_id = msg.agreement_id;
+        let myself = ctx.address();
         let activities = self.list_activities(&agreement_id);
 
         self.active_agreements.remove(&agreement_id);
@@ -790,8 +804,8 @@ impl Handler<AgreementBroken> for TaskRunner {
     type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: AgreementBroken, ctx: &mut Context<Self>) -> Self::Result {
-        let agreement_id = msg.agreement_id.to_string();
-        let myself = ctx.address().clone();
+        let agreement_id = msg.agreement_id;
+        let myself = ctx.address();
         let activities = self.list_activities(&agreement_id);
 
         self.active_agreements.remove(&agreement_id);

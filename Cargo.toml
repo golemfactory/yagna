@@ -17,7 +17,7 @@ erc20-driver = ['ya-erc20-driver']
 zksync-driver = ['ya-zksync-driver']
 tos = []
 # Temporary to make goth integration tests work
-central-net = ['ya-net/central-net']
+hybrid-net = ['ya-net/hybrid-net']
 
 [[bin]]
 name = "yagna"
@@ -142,9 +142,12 @@ members = [
     "golem_cli",
     "utils/actix_utils",
     "utils/agreement-utils",
+    "utils/cli",
     "utils/compile-time-utils",
+    "utils/file-logging",
     "utils/futures",
     "utils/manifest-utils",
+    "utils/manifest-utils/test-utils",
     "utils/networking",
     "utils/path",
     "utils/process",
@@ -206,6 +209,7 @@ ya-file-logging = { path = "utils/file-logging" }
 ya-manifest-utils = { path = "utils/manifest-utils" }
 ya-transfer = { path = "utils/transfer" }
 ya-utils-actix = { path = "utils/actix_utils"}
+ya-utils-cli = { path = "utils/cli"}
 ya-utils-futures = { path = "utils/futures" }
 ya-utils-networking = { path = "utils/networking" }
 ya-utils-path = { path = "utils/path" }
@@ -213,6 +217,9 @@ ya-utils-process = { path = "utils/process"}
 ya-diesel-utils = { path = "utils/diesel-utils"}
 ya-metrics = { path = "core/metrics" }
 ya-provider = { path = "agent/provider"}
+
+## TEST UTILS
+ya-manifest-test-utils = { path = "utils/manifest-utils/test-utils" }
 
 ethereum-tx-sign = { git = "https://github.com/mfranciszkiewicz/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
 graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "dbd993ebad7f9190410ea390a589348479af6407" }

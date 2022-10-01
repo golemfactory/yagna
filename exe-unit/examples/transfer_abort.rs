@@ -34,7 +34,7 @@ fn create_file(path: &PathBuf) {
         .collect();
 
     for _ in 0..CHUNK_COUNT {
-        file.write(&input).unwrap();
+        let _ = file.write(&input).unwrap();
     }
     file.flush().unwrap();
 }
@@ -126,14 +126,17 @@ async fn interrupted_transfer(
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
-    env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or("debug".into()));
+    env::set_var(
+        "RUST_LOG",
+        env::var("RUST_LOG").unwrap_or_else(|_| "debug".into()),
+    );
     env_logger::init();
 
     log::debug!("Creating directories");
 
     let temp_dir = TempDir::new("transfer")?;
-    let work_dir = temp_dir.path().clone().join("work_dir");
-    let cache_dir = temp_dir.path().clone().join("cache_dir");
+    let work_dir = temp_dir.path().to_owned().join("work_dir");
+    let cache_dir = temp_dir.path().to_owned().join("cache_dir");
 
     let src_file = temp_dir.path().join("rnd");
     let dest_file = temp_dir.path().join("rnd2");

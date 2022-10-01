@@ -11,13 +11,34 @@ use super::PathAgreement;
 use crate::db::model::Owner;
 use crate::market::MarketService;
 use crate::negotiation::error::AgreementError;
-use crate::rest_api::QueryAgreementEvents;
+use crate::rest_api::{QueryAgreementEvents, QueryAgreementList};
 
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
+        .service(list_agreements)
         .service(collect_agreement_events)
         .service(get_agreement)
         .service(terminate_agreement)
+}
+
+#[actix_web::get("/agreements")]
+async fn list_agreements(
+    market: Data<Arc<MarketService>>,
+    query: Query<QueryAgreementList>,
+    id: Identity,
+) -> impl Responder {
+    let query = query.into_inner();
+
+    market
+        .list_agreements(
+            &id,
+            query.state.map(Into::into),
+            query.before_date,
+            query.after_date,
+            query.app_session_id,
+        )
+        .await
+        .map(|list| HttpResponse::Ok().json(list))
 }
 
 #[actix_web::get("/agreements/{agreement_id}")]
@@ -57,7 +78,7 @@ async fn collect_agreement_events(
     let timeout: f32 = query.timeout;
     let after_timestamp = query
         .after_timestamp
-        .unwrap_or(Utc.ymd(2016, 11, 11).and_hms(15, 12, 0));
+        .unwrap_or_else(|| Utc.ymd(2016, 11, 11).and_hms(15, 12, 0));
 
     market
         .query_agreement_events(

@@ -49,7 +49,7 @@ impl ProviderBroker {
         session_notifier: EventNotifier<AppSessionId>,
         config: Arc<Config>,
     ) -> Result<ProviderBroker, NegotiationInitError> {
-        let broker = CommonBroker::new(db.clone(), store, session_notifier, config);
+        let broker = CommonBroker::new(db, store, session_notifier, config);
 
         let broker1 = broker.clone();
         let broker2 = broker.clone();
@@ -235,7 +235,7 @@ impl ProviderBroker {
                 .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
                 .await
                 .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
-                .ok_or(AgreementError::NotFound(agreement_id.to_string()))?;
+                .ok_or_else(|| AgreementError::NotFound(agreement_id.to_string()))?;
 
             if agreement.state == AgreementState::Cancelled {
                 return Ok(ApprovalResult::Cancelled);
@@ -328,15 +328,17 @@ impl ProviderBroker {
                 .select(agreement_id, None, Utc::now().naive_utc())
                 .await
                 .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
-                .ok_or(AgreementError::Internal(format!(
-                    "Agreement [{}], which existed previously, disappeared.",
-                    agreement_id
-                )))?;
+                .ok_or_else(|| {
+                    AgreementError::Internal(format!(
+                        "Agreement [{}], which existed previously, disappeared.",
+                        agreement_id
+                    ))
+                })?;
 
             match agreement.state {
                 AgreementState::Cancelled => Ok(ApprovalResult::Cancelled),
                 AgreementState::Approved => Ok(ApprovalResult::Approved),
-                AgreementState::Expired => Err(AgreementError::Expired(agreement.id.clone()))?,
+                AgreementState::Expired => Err(AgreementError::Expired(agreement.id))?,
                 _ => Err(AgreementError::Internal(format!(
                     "Agreement [{}] has unexpected state [{}]",
                     agreement.id, agreement.state
@@ -359,7 +361,7 @@ impl ProviderBroker {
                 .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
                 .await
                 .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
-                .ok_or(AgreementError::NotFound(agreement_id.to_string()))?;
+                .ok_or_else(|| AgreementError::NotFound(agreement_id.to_string()))?;
 
             validate_transition(&agreement, AgreementState::Rejected)?;
 
@@ -544,9 +546,7 @@ async fn agreement_received(
     let offer_id = &offer_proposal.negotiation.offer_id.clone();
 
     if offer_proposal.body.issuer != Issuer::Us {
-        return Err(RemoteProposeAgreementError::RequestorOwn(
-            offer_proposal_id.clone(),
-        ));
+        return Err(RemoteProposeAgreementError::RequestorOwn(offer_proposal_id));
     }
 
     let demand_proposal_id = offer_proposal
@@ -640,7 +640,7 @@ async fn agreement_cancelled(
             .await
             .log_err()
             .map_err(|_e| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
-            .ok_or(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
+            .ok_or_else(|| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
 
         if agreement.requestor_id != caller {
             // Don't reveal, that we know this Agreement id.
@@ -680,7 +680,7 @@ impl From<GetProposalError> for RemoteProposeAgreementError {
             GetProposalError::NotFound(id, ..) => RemoteProposeAgreementError::NotFound(id),
             GetProposalError::Internal(id, _, original_msg) => {
                 RemoteProposeAgreementError::Unexpected {
-                    public_msg: format!("Failed to get proposal from db [{}].", id.to_string()),
+                    public_msg: format!("Failed to get proposal from db [{}].", id),
                     original_msg,
                 }
             }

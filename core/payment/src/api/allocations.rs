@@ -1,3 +1,4 @@
+use std::convert::TryInto;
 use std::time::Duration;
 // External crates
 use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
@@ -18,6 +19,7 @@ use ya_service_api_web::middleware::Identity;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
+use crate::accounts::{init_account, Account};
 use crate::dao::*;
 use crate::error::{DbError, Error};
 use crate::utils::response;
@@ -47,8 +49,40 @@ async fn create_allocation(
     let payment_platform = allocation
         .payment_platform
         .clone()
-        .unwrap_or(DEFAULT_PAYMENT_PLATFORM.to_string());
-    let address = allocation.address.clone().unwrap_or(node_id.to_string());
+        .unwrap_or_else(|| DEFAULT_PAYMENT_PLATFORM.to_string());
+    let address = allocation
+        .address
+        .clone()
+        .unwrap_or_else(|| node_id.to_string());
+
+    // If the request contains information about the payment platform, initialize the account
+    // by setting the `send` field to `true`, as it is implied by the intent behing allocation of funds.
+    if let Some(platform) = &allocation.payment_platform {
+        // payment_platform is of the form driver-network-token
+        // eg. erc20-rinkeby-tglm
+        let [driver, network, _token]: [&str; 3] =
+            match platform.split('-').collect::<Vec<_>>().try_into() {
+                Ok(arr) => arr,
+                Err(_e) => {
+                    return response::bad_request(
+                        &"paymentPlatform must be of the form driver-network-token",
+                    )
+                }
+            };
+
+        let acc = Account {
+            driver: driver.to_owned(),
+            address: address.clone(),
+            network: Some(network.to_owned()),
+            token: None,
+            send: true,
+            receive: false,
+        };
+
+        if let Err(e) = init_account(acc).await {
+            return response::server_error(&e);
+        }
+    }
 
     let validate_msg = ValidateAllocation {
         platform: payment_platform.clone(),

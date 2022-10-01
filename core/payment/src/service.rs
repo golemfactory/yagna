@@ -4,7 +4,6 @@ use futures::prelude::*;
 use metrics::counter;
 use std::collections::HashMap;
 use std::sync::Arc;
-use ya_core_model as core;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::typed::ServiceBinder;
 
@@ -174,7 +173,7 @@ mod local {
             .get_network(driver.clone(), network)
             .await
             .map_err(GenericError::new)?;
-        let token = token.unwrap_or(network_details.default_token.clone());
+        let token = token.unwrap_or_else(|| network_details.default_token.clone());
         let after_timestamp = NaiveDateTime::from_timestamp(after_timestamp, 0);
         let platform = match network_details.tokens.get(&token) {
             Some(platform) => platform.clone(),
@@ -402,7 +401,12 @@ mod public {
         );
         counter!("payment.debit_notes.requestor.received.call", 1);
 
-        let agreement = match get_agreement(agreement_id.clone(), core::Role::Requestor).await {
+        let agreement = match get_agreement(
+            agreement_id.clone(),
+            ya_client_model::market::Role::Requestor,
+        )
+        .await
+        {
             Err(e) => {
                 return Err(SendError::ServiceError(e.to_string()));
             }
@@ -444,7 +448,7 @@ mod public {
         .await
         {
             Ok(_) => Ok(Ack {}),
-            Err(DbError::Query(e)) => return Err(SendError::BadRequest(e.to_string())),
+            Err(DbError::Query(e)) => return Err(SendError::BadRequest(e)),
             Err(e) => return Err(SendError::ServiceError(e.to_string())),
         }
     }
@@ -501,7 +505,7 @@ mod public {
                 counter!("payment.debit_notes.provider.accepted", 1);
                 Ok(Ack {})
             }
-            Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e.to_string())),
+            Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e)),
             Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
         }
     }
@@ -541,7 +545,12 @@ mod public {
         );
         counter!("payment.invoices.requestor.received.call", 1);
 
-        let agreement = match get_agreement(agreement_id.clone(), core::Role::Requestor).await {
+        let agreement = match get_agreement(
+            agreement_id.clone(),
+            ya_client_model::market::Role::Requestor,
+        )
+        .await
+        {
             Err(e) => {
                 return Err(SendError::ServiceError(e.to_string()));
             }
@@ -555,7 +564,12 @@ mod public {
         };
 
         for activity_id in activity_ids.iter() {
-            match provider::get_agreement_id(activity_id.clone(), core::Role::Requestor).await {
+            match provider::get_agreement_id(
+                activity_id.clone(),
+                ya_client_model::market::Role::Requestor,
+            )
+            .await
+            {
                 Ok(Some(id)) if id != agreement_id => {
                     return Err(SendError::BadRequest(format!(
                         "Activity {} belongs to agreement {} not {}",
@@ -605,7 +619,7 @@ mod public {
         .await
         {
             Ok(_) => Ok(Ack {}),
-            Err(DbError::Query(e)) => return Err(SendError::BadRequest(e.to_string())),
+            Err(DbError::Query(e)) => return Err(SendError::BadRequest(e)),
             Err(e) => return Err(SendError::ServiceError(e.to_string())),
         }
     }
@@ -662,7 +676,7 @@ mod public {
                 counter!("payment.invoices.provider.accepted", 1);
                 Ok(Ack {})
             }
-            Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e.to_string())),
+            Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e)),
             Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
         }
     }

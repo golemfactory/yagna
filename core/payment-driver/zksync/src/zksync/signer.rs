@@ -131,14 +131,14 @@ fn encode_signed_tx(raw_tx: &RawTransaction, signature: Vec<u8>, chain_id: u64) 
     tx.out().to_vec()
 }
 
-fn prepare_signature(signature: Vec<u8>, chain_id: u64) -> (u64, Vec<u8>, Vec<u8>) {
+fn prepare_signature(mut signature: Vec<u8>, chain_id: u64) -> (u64, Vec<u8>, Vec<u8>) {
     // TODO ugly solution
     assert_eq!(signature.len(), 65);
 
     let sig_v = signature[0];
     let sig_v = sig_v as u64 + chain_id * 2 + 35;
 
-    let mut sig_r = signature.to_owned().split_off(1);
+    let mut sig_r = signature.split_off(1);
     let mut sig_s = sig_r.split_off(32);
 
     prepare_signature_part(&mut sig_r);

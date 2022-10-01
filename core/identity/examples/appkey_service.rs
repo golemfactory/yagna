@@ -36,11 +36,11 @@ async fn main() -> anyhow::Result<()> {
         }
         Args::ClientAK(cmd) => {
             let ctx = CliCtx::default();
-            ctx.output(cmd.run_command(&ctx).await?);
+            ctx.output(cmd.run_command(&ctx).await?)?;
         }
         Args::ClientID(cmd) => {
             let ctx = CliCtx::default();
-            ctx.output(cmd.run_command(&ctx).await?);
+            ctx.output(cmd.run_command(&ctx).await?)?;
         }
     }
     Ok(())

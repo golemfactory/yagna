@@ -106,7 +106,7 @@ async fn main() -> Result<()> {
     dotenv::dotenv().ok();
     std::env::set_var(
         "RUST_LOG",
-        std::env::var("RUST_LOG").unwrap_or("info".into()),
+        std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
     );
     env_logger::init();
 

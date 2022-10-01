@@ -125,7 +125,7 @@ impl<'c> InvoiceDao<'c> {
     }
 
     pub async fn create_new(&self, invoice: NewInvoice, issuer_id: NodeId) -> DbResult<String> {
-        let activity_ids = invoice.activity_ids.clone().unwrap_or(vec![]);
+        let activity_ids = invoice.activity_ids.clone().unwrap_or_default();
         let invoice = WriteObj::new_issued(invoice, issuer_id.clone());
         let invoice_id = invoice.id.clone();
         self.insert(invoice, activity_ids).await?;
@@ -343,7 +343,7 @@ fn join_invoices_with_activities(
     invoices
         .into_iter()
         .map(|invoice| {
-            let activity_ids = activities_map.remove(&invoice.id).unwrap_or(vec![]);
+            let activity_ids = activities_map.remove(&invoice.id).unwrap_or_default();
             invoice.into_api_model(activity_ids)
         })
         .collect()
