@@ -1,7 +1,10 @@
 use std::convert::TryFrom;
+use std::process::Stdio;
+use std::time::Duration;
 
 use actix::prelude::*;
 use futures::{future, FutureExt};
+use ipnet::IpNet;
 
 use ya_client_model::NodeId;
 use ya_core_model::activity::{self, RpcMessageError, VpnControl, VpnPacket};
@@ -20,11 +23,124 @@ use crate::network;
 use crate::network::{Endpoint, RxBuffer};
 use crate::state::Deployment;
 
+async fn endpoint_hack(
+    ip_addr: std::net::IpAddr,
+    endpoint: impl Into<ya_runtime_api::deploy::ContainerEndpoint>,
+) -> crate::network::Result<(Endpoint, String)> {
+    let tap_name = "tap0";
+    let tap_dir = std::env::temp_dir().join(ip_addr.to_string());
+
+    let _ = std::fs::remove_dir_all(&tap_dir);
+    std::fs::create_dir_all(&tap_dir).map_err(|e| {
+        Error::Other(format!(
+            "unable to create temp dir {}: {}",
+            tap_dir.display(),
+            e
+        ))
+    })?;
+
+    let net = IpNet::new(ip_addr, 24).map_err(|e| Error::Other(e.to_string()))?;
+    let gw_addr = net.hosts().next().ok_or_else(|| {
+        Error::Other("No host addresses are available in the network".to_string())
+    })?;
+
+    let env_ip_addr = format!("IP_ADDR={ip_addr}");
+    let env_gw_ip_addr = format!("IP_GW={gw_addr}");
+    let env_tap_name = format!("TAP_NAME={tap_name}");
+    let volume = format!("{}:/golem/output", tap_dir.display());
+
+    let child = tokio::process::Command::new("/usr/bin/docker")
+        .envs(std::env::vars())
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .arg("run")
+        .arg("-d")
+        .arg("--rm")
+        .arg("--privileged")
+        .arg("--env")
+        .arg(env_ip_addr.as_str())
+        .arg("--env")
+        .arg(env_tap_name.as_str())
+        .arg("--env")
+        .arg(env_gw_ip_addr.as_str())
+        .arg("-v")
+        .arg(volume.as_str())
+        .arg("docker-tap")
+        .spawn()?;
+
+    log::info!("docker run --rm --privileged --env {env_ip_addr} --env {env_tap_name} -v {volume} docker-tap");
+
+    let path = tap_dir.join(tap_name);
+    let _endpoint = endpoint.into();
+    let (tx, rx) = futures::channel::oneshot::channel();
+
+    tokio::task::spawn_local(async move {
+        log::info!("spawning network docker container");
+
+        match child.wait_with_output().await {
+            Ok(output) => {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                log::info!("network docker container status: {}", output.status);
+                log::info!("stdout: {}", stdout);
+                log::info!("stderr: {}", stderr);
+
+                tx.send(Ok(stdout.to_string())).unwrap();
+            }
+            Err(e) => {
+                log::error!("network docker error: {e}");
+
+                tx.send(Err(Error::Other(e.to_string()))).unwrap();
+            }
+        }
+    });
+
+    let container = rx.await.unwrap()?.as_str()[..12].to_string();
+
+    log::info!("container: {container}");
+    log::info!(
+        "expecting network docker container socket at: {}",
+        path.display()
+    );
+
+    let path_ = path.clone();
+    tokio::time::timeout(Duration::from_secs(10), async move {
+        while !path_.exists() {
+            tokio::time::sleep(Duration::from_millis(250)).await;
+            match std::fs::read_dir(path_.parent().unwrap()) {
+                Ok(paths) => {
+                    for path in paths.flatten() {
+                        log::info!("Name: {}", path.path().display());
+                    }
+                }
+                Err(e) => {
+                    log::error!("unable to read parent dir of {}: {e}", path_.display());
+                }
+            }
+        }
+    })
+    .await
+    .map_err(|_| {
+        Error::RuntimeError(format!(
+            "timeout setting up the network docker container: {}",
+            path.display()
+        ))
+    })?;
+
+    let endpoint = Endpoint::connect(ya_runtime_api::deploy::ContainerEndpoint::Socket(
+        path.clone(),
+    ))
+    .await?;
+
+    Ok((endpoint, container))
+}
+
 pub(crate) async fn start_vpn<R: RuntimeService>(
     acl: Acl,
     service: &R,
     deployment: &Deployment,
-) -> crate::Result<Option<Addr<Vpn>>> {
+) -> crate::Result<Option<(Addr<Vpn>, String)>> {
     if !deployment.networking() {
         return Ok(None);
     }
@@ -38,11 +154,18 @@ pub(crate) async fn start_vpn<R: RuntimeService>(
         .ok_or_else(|| Error::Other("no default identity set".to_string()))?
         .node_id;
 
+    let ip_addr = deployment
+        .networks
+        .values()
+        .next()
+        .map(|n| n.node_ip)
+        .ok_or_else(|| Error::Other("no ip address set".to_string()))?;
     let networks = deployment
         .networks
         .values()
         .map(TryFrom::try_from)
         .collect::<crate::Result<_>>()?;
+
     let hosts = deployment.hosts.clone();
     let response = service
         .create_network(CreateNetwork {
@@ -53,13 +176,14 @@ pub(crate) async fn start_vpn<R: RuntimeService>(
         .await
         .map_err(|e| Error::Other(format!("initialization error: {:?}", e)))?;
 
-    let endpoint = match response.endpoint {
-        Some(endpoint) => Endpoint::connect(endpoint).await?,
+    let (endpoint, container) = match response.endpoint {
+        Some(endpoint) => endpoint_hack(ip_addr, endpoint).await?,
         None => return Err(Error::Other("endpoint already connected".into())),
     };
 
     let vpn = Vpn::try_new(node_id, acl, endpoint, deployment.clone())?;
-    Ok(Some(vpn.start()))
+    let addr = vpn.start();
+    Ok(Some((addr, container)))
 }
 
 pub(crate) struct Vpn {
@@ -112,6 +236,8 @@ impl Vpn {
         let node_id = packet.caller;
         let mut data = packet.data;
 
+        log::info!("receive packet {} B", data.len());
+
         // fixme: should requestor be queried for unknown IP addresses instead?
         // read and add unknown node id -> ip if it doesn't exist
         if let Ok(ether_type) = EtherFrame::peek_type(&data) {
@@ -138,6 +264,7 @@ impl Vpn {
             }
         }
 
+        // network::write_prefix(&mut data);
         network::write_prefix(&mut data);
 
         if let Err(e) = self.endpoint.tx.send(Ok(data)) {
@@ -193,7 +320,8 @@ impl Vpn {
 
     fn forward_frame(endpoint: DuoEndpoint<GsbEndpoint>, default_id: &str, frame: EtherFrame) {
         let data: Vec<_> = frame.into();
-        log::trace!("[vpn] egress {} b", data.len());
+
+        log::info!("send packet {} B", data.len());
 
         let fut = endpoint
             .udp
@@ -290,6 +418,20 @@ impl StreamHandler<crate::Result<Vec<u8>>> for Vpn {
                 }
             };
         }
+
+        // match EtherFrame::try_from(received) {
+        //     Ok(frame) => match &frame {
+        //         EtherFrame::Arp(_) => Self::handle_arp(frame, networks, &self.default_id),
+        //         EtherFrame::Ip(_) => Self::handle_ip(frame, networks, &self.default_id),
+        //         frame => log::debug!("[vpn] unimplemented EtherType: {}", frame),
+        //     },
+        //     Err(err) => {
+        //         match &err {
+        //             NetError::ProtocolNotSupported(_) => (),
+        //             _ => log::debug!("[vpn] frame error (egress): {}", err),
+        //         };
+        //     }
+        // };
     }
 }
 

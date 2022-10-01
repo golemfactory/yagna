@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
 use std::path::Path;
+use std::sync::Arc;
 
 use bytes::{Buf, BytesMut};
 use futures::Stream;
@@ -21,6 +22,8 @@ pub(crate) mod inet;
 pub(crate) mod vpn;
 
 const BUFFER_SIZE: usize = (DEFAULT_MAX_FRAME_SIZE + 2) * 4;
+
+const SOCK_SEQPACKET: i32 = 5;
 
 pub(crate) struct Endpoint {
     tx: UnboundedSender<Result<Vec<u8>>>,
@@ -45,17 +48,29 @@ impl Endpoint {
             UnboundedReceiver<Result<Vec<u8>>>,
         );
 
-        let socket = tokio::net::UnixStream::connect(path.as_ref()).await?;
-        let (read, mut write) = io::split(socket);
+        let socket = tokio::net::UnixDatagram::unbound()?;
+        socket.connect(path.as_ref())?;
+
         let (tx_si, rx_si): SocketChannel = mpsc::unbounded_channel();
+        let socket_stream = Arc::new(socket);
+        let socket_sink = socket_stream.clone();
 
         let stream = {
             let buffer: [u8; BUFFER_SIZE] = [0u8; BUFFER_SIZE];
-            futures::stream::unfold((read, buffer), |(mut r, mut b)| async move {
-                match r.read(&mut b).await {
-                    Ok(0) => None,
-                    Ok(n) => Some((Ok(b[..n].to_vec()), (r, b))),
-                    Err(e) => Some((Err(e.into()), (r, b))),
+            futures::stream::unfold((socket_stream, buffer), |(mut socket, mut b)| async move {
+                match socket.recv(&mut b).await {
+                    Ok(0) => {
+                        log::info!("read 0 B");
+                        None
+                    }
+                    Ok(n) => {
+                        log::info!("read {n} B");
+                        Some((Ok(b[..n].to_vec()), (socket, b)))
+                    }
+                    Err(e) => {
+                        log::error!("err {e}");
+                        Some((Err(e.into()), (socket, b)))
+                    }
                 }
             })
             .boxed_local()
@@ -66,7 +81,9 @@ impl Endpoint {
             loop {
                 match StreamExt::next(&mut rx_si).await {
                     Some(Ok(data)) => {
-                        if let Err(e) = write.write_all(data.as_slice()).await {
+                        log::info!("write {} B", data.len());
+
+                        if let Err(e) = socket_sink.send(data.as_slice()).await {
                             log::error!("error writing to VM socket endpoint: {e}");
                             break;
                         }
@@ -75,10 +92,63 @@ impl Endpoint {
                         log::error!("VM socket endpoint error: {e}");
                         break;
                     }
-                    None => break,
+                    None => {
+                        log::info!("VM socket endpoint read None");
+                        break;
+                    }
                 }
             }
         });
+
+        // let socket = tokio::net::UnixStream::connect(path.as_ref()).await?;
+        // let (read, mut write) = io::split(socket);
+        // let (tx_si, rx_si): SocketChannel = mpsc::unbounded_channel();
+        //
+        // log::info!("[vpn] opened socket at {}", path.as_ref().display());
+        //
+        // let stream = {
+        //     let buffer: [u8; BUFFER_SIZE] = [0u8; BUFFER_SIZE];
+        //     futures::stream::unfold((read, buffer), |(mut r, mut b)| async move {
+        //         match r.read(&mut b).await {
+        //             Ok(0) => {
+        //                 log::info!("read 0 B");
+        //                 None
+        //             }
+        //             Ok(n) => {
+        //                 log::info!("read {n} B");
+        //                 Some((Ok(b[..n].to_vec()), (r, b)))
+        //             }
+        //             Err(e) => {
+        //                 log::error!("err {e}");
+        //                 Some((Err(e.into()), (r, b)))
+        //             }
+        //         }
+        //     })
+        //     .boxed_local()
+        // };
+        //
+        // tokio::task::spawn(async move {
+        //     let mut rx_si = UnboundedReceiverStream::new(rx_si);
+        //     loop {
+        //         match StreamExt::next(&mut rx_si).await {
+        //             Some(Ok(data)) => {
+        //                 log::info!("write {} B", data.len());
+        //                 if let Err(e) = write.write_all(data.as_slice()).await {
+        //                     log::error!("error writing to VM socket endpoint: {e}");
+        //                     break;
+        //                 }
+        //             }
+        //             Some(Err(e)) => {
+        //                 log::error!("VM socket endpoint error: {e}");
+        //                 break;
+        //             }
+        //             None => {
+        //                 log::info!("VM socket endpoint read None");
+        //                 break;
+        //             }
+        //         }
+        //     }
+        // });
 
         Ok(Self {
             tx: tx_si,

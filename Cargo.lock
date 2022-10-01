@@ -1948,6 +1948,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "filedesc"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17d6dfea8da8b55b0c77800947567f282cad3940dc7edc37bf897a6933afee8d"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "filetime"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6290,6 +6299,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-seqpacket"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "356ba5f3f21fb560e9c5e890eb2eaafaa53e98a2c0a4b188521516654f12e7ff"
+dependencies = [
+ "filedesc",
+ "libc",
+ "tokio 1.21.1",
+]
+
+[[package]]
 name = "tokio-stream"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7324,6 +7344,7 @@ dependencies = [
  "tempdir",
  "thiserror",
  "tokio 1.21.1",
+ "tokio-seqpacket",
  "tokio-stream",
  "tokio-util 0.7.4",
  "url",
@@ -7741,7 +7762,7 @@ dependencies = [
 
 [[package]]
 name = "ya-relay-core"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7754,6 +7775,7 @@ dependencies = [
  "lazy_static",
  "log",
  "metrics 0.19.0",
+ "net2",
  "rand 0.8.5",
  "serde_json",
  "sha2 0.9.9",

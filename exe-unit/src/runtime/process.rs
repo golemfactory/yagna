@@ -4,7 +4,7 @@ use std::hash::{Hash, Hasher};
 use std::ops::Not;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use actix::prelude::*;
 use futures::future::{self, LocalBoxFuture};
@@ -54,6 +54,7 @@ pub struct RuntimeProcess {
     acl: Acl,
     vpn: Option<Addr<Vpn>>,
     inet: Option<Addr<Inet>>,
+    container: Arc<Mutex<Option<String>>>,
 }
 
 impl RuntimeProcess {
@@ -68,6 +69,7 @@ impl RuntimeProcess {
             acl: ctx.acl.clone(),
             vpn: None,
             inet: None,
+            container: Default::default(),
         }
     }
 
@@ -260,6 +262,7 @@ impl RuntimeProcess {
         let acl = self.acl.clone();
         let deployment = self.deployment.clone();
         let mut monitor = self.monitor.get_or_insert_with(Default::default).clone();
+        let cont = self.container.clone();
 
         async move {
             let service = spawn(command, monitor.clone())
@@ -283,7 +286,11 @@ impl RuntimeProcess {
                 }
 
                 if proc_ctx.feature_vpn {
-                    if let Some(vpn) = start_vpn(acl, &service_, &deployment).await? {
+                    if let Some((vpn, container)) = start_vpn(acl, &service_, &deployment).await? {
+                        {
+                            let mut inner = cont.lock().unwrap();
+                            inner.replace(container);
+                        }
                         address.send(SetVpnService(vpn)).await?;
                     }
                 }
@@ -323,23 +330,43 @@ impl RuntimeProcess {
             args
         );
 
+        let container = self.container.clone();
         let mut monitor = self.monitor.get_or_insert_with(Default::default).clone();
+        let handle = monitor.next_process(ctx.clone());
+
         let exec = async move {
             let name = Path::new(&entry_point)
                 .file_name()
                 .ok_or_else(|| Error::runtime("Invalid binary name"))?;
-            args.insert(0, name.to_string_lossy().to_string());
 
-            let mut run_process = RunProcess::default();
-            run_process.bin = entry_point;
-            run_process.args = args;
+            let run_in_container = args
+                .iter()
+                .any(|a| a.starts_with("scp ") || a.starts_with("ssh "));
+            if run_in_container {
+                let container = {
+                    let inner = container.lock().unwrap();
+                    inner.as_ref().cloned()
+                }
+                .ok_or_else(|| {
+                    Error::Other("network docker container not initialized".to_string())
+                })?;
 
-            let handle = monitor.next_process(ctx);
-            if let Err(error) = service.run_process(run_process).await {
-                return Err(Error::RuntimeError(format!("{:?}", error)));
-            };
+                args.insert(0, entry_point);
 
-            Ok(handle.await)
+                run_in_container_hack(container, args, ctx).await
+            } else {
+                args.insert(0, name.to_string_lossy().to_string());
+
+                let mut run_process = RunProcess::default();
+                run_process.bin = entry_point;
+                run_process.args = args;
+
+                if let Err(error) = service.run_process(run_process).await {
+                    return Err(Error::RuntimeError(format!("{:?}", error)));
+                };
+
+                Ok(handle.await)
+            }
         };
 
         async move {
@@ -349,6 +376,67 @@ impl RuntimeProcess {
         }
         .boxed_local()
     }
+}
+
+// impl Drop for RuntimeProcess {
+//     fn drop(&mut self) {
+//         if let Some(container) = {
+//             let inner = self.container.lock().unwrap();
+//             inner.as_ref().cloned()
+//         } {
+//             drop_container_hack(container);
+//         }
+//     }
+// }
+
+fn drop_container_hack(container: String) {
+    match std::process::Command::new("/usr/bin/docker")
+        .envs(std::env::vars())
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .arg("kill")
+        .arg(container)
+        .spawn()
+    {
+        Ok(mut child) => {
+            let _ = child.wait();
+        }
+        Err(e) => {
+            log::error!("failed to kill network docker container");
+        }
+    }
+}
+
+async fn run_in_container_hack(
+    container: String,
+    args: Vec<String>,
+    ctx: CommandContext,
+) -> Result<i32, Error> {
+    log::info!("executing in container: {:?}", args);
+
+    let mut child = tokio::process::Command::new("/usr/bin/docker")
+        .envs(std::env::vars())
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .arg("exec")
+        .arg(container)
+        .args(args)
+        .spawn()?;
+
+    let idx = ctx.idx;
+    let id = ctx.batch_id.clone();
+    let stdout = forward_output(child.stdout.take().unwrap(), &ctx.tx, move |out| {
+        RuntimeEvent::stdout(id.clone(), idx, CommandOutput::Bin(out))
+    });
+    let id = ctx.batch_id.clone();
+    let stderr = forward_output(child.stderr.take().unwrap(), &ctx.tx, move |out| {
+        RuntimeEvent::stderr(id.clone(), idx, CommandOutput::Bin(out))
+    });
+
+    let result = future::join3(child.wait(), stdout, stderr).await;
+    Ok(result.0?.code().unwrap_or(-1))
 }
 
 impl Runtime for RuntimeProcess {}
