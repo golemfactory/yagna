@@ -5760,19 +5760,6 @@ dependencies = [
 [[package]]
 name = "smoltcp"
 version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72165c4af59f5f19c7fb774b88b95660591b612380305b5f4503157341a9f7ee"
-dependencies = [
- "bitflags",
- "byteorder",
- "libc",
- "log",
- "managed 0.8.0",
-]
-
-[[package]]
-name = "smoltcp"
-version = "0.8.1"
 source = "git+https://github.com/golemfactory/smoltcp?rev=acb743b6990fd92303c24c43ff75711422a5cb94#acb743b6990fd92303c24c43ff75711422a5cb94"
 dependencies = [
  "bitflags",
@@ -7722,6 +7709,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.3.1"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=8733c8c1b7c81dec5a9fb301fc7b4cce8106b315#8733c8c1b7c81dec5a9fb301fc7b4cce8106b315"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7736,12 +7724,13 @@ dependencies = [
  "url",
  "ya-relay-core",
  "ya-relay-proto",
- "ya-relay-stack 0.4.1",
+ "ya-relay-stack",
 ]
 
 [[package]]
 name = "ya-relay-core"
 version = "0.3.1"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=8733c8c1b7c81dec5a9fb301fc7b4cce8106b315#8733c8c1b7c81dec5a9fb301fc7b4cce8106b315"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7765,12 +7754,13 @@ dependencies = [
  "uuid",
  "ya-client-model",
  "ya-relay-proto",
- "ya-relay-stack 0.4.1",
+ "ya-relay-stack",
 ]
 
 [[package]]
 name = "ya-relay-proto"
 version = "0.4.1"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=8733c8c1b7c81dec5a9fb301fc7b4cce8106b315#8733c8c1b7c81dec5a9fb301fc7b4cce8106b315"
 dependencies = [
  "anyhow",
  "bytes 1.2.1",
@@ -7787,25 +7777,8 @@ dependencies = [
 
 [[package]]
 name = "ya-relay-stack"
-version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=0e6863c24767a246531d038455921f12c9e75e94#0e6863c24767a246531d038455921f12c9e75e94"
-dependencies = [
- "derive_more",
- "futures 0.3.24",
- "log",
- "managed 0.8.0",
- "num-derive",
- "num-traits",
- "rand 0.8.5",
- "smoltcp 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "thiserror",
- "tokio 1.21.1",
- "tokio-stream",
-]
-
-[[package]]
-name = "ya-relay-stack"
 version = "0.4.1"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=8733c8c1b7c81dec5a9fb301fc7b4cce8106b315#8733c8c1b7c81dec5a9fb301fc7b4cce8106b315"
 dependencies = [
  "derive_more",
  "futures 0.3.24",
@@ -7815,7 +7788,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "rand 0.8.5",
- "smoltcp 0.8.1 (git+https://github.com/golemfactory/smoltcp?rev=acb743b6990fd92303c24c43ff75711422a5cb94)",
+ "smoltcp 0.8.1",
  "thiserror",
  "tokio 1.21.1",
  "tokio-stream",
@@ -7825,6 +7798,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-util"
 version = "0.1.0"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=8733c8c1b7c81dec5a9fb301fc7b4cce8106b315#8733c8c1b7c81dec5a9fb301fc7b4cce8106b315"
 dependencies = [
  "bytes 1.2.1",
  "derive_more",
@@ -7850,6 +7824,7 @@ dependencies = [
 [[package]]
 name = "ya-sb-proto"
 version = "0.6.0"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=c24844de31b464ca47b42ec2119f39e50ee7c52f#c24844de31b464ca47b42ec2119f39e50ee7c52f"
 dependencies = [
  "bytes 1.2.1",
  "prost 0.10.4",
@@ -7863,6 +7838,7 @@ dependencies = [
 [[package]]
 name = "ya-sb-router"
 version = "0.6.0"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=c24844de31b464ca47b42ec2119f39e50ee7c52f#c24844de31b464ca47b42ec2119f39e50ee7c52f"
 dependencies = [
  "actix",
  "actix-rt",
@@ -7890,6 +7866,7 @@ dependencies = [
 [[package]]
 name = "ya-sb-util"
 version = "0.4.0"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=c24844de31b464ca47b42ec2119f39e50ee7c52f#c24844de31b464ca47b42ec2119f39e50ee7c52f"
 dependencies = [
  "actix",
  "bitflags",
@@ -7979,6 +7956,7 @@ dependencies = [
 [[package]]
 name = "ya-service-bus"
 version = "0.6.0"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=c24844de31b464ca47b42ec2119f39e50ee7c52f#c24844de31b464ca47b42ec2119f39e50ee7c52f"
 dependencies = [
  "actix",
  "flexbuffers",
@@ -8091,7 +8069,7 @@ dependencies = [
  "thiserror",
  "trust-dns-resolver",
  "url",
- "ya-relay-stack 0.4.0",
+ "ya-relay-stack",
 ]
 
 [[package]]
