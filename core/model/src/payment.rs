@@ -439,7 +439,8 @@ pub mod local {
         strum_macros::Display,
         Debug,
         Clone,
-        PartialEq, Eq,
+        PartialEq,
+        Eq,
         Serialize,
         Deserialize,
     )]
@@ -467,7 +468,8 @@ pub mod local {
         Display,
         Debug,
         Clone,
-        PartialEq, Eq,
+        PartialEq,
+        Eq,
         Serialize,
         Deserialize,
     )]

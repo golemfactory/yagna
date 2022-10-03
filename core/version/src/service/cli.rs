@@ -4,10 +4,8 @@ use ya_core_model::version;
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
-const PROVIDER_UPDATE_CMD: &str =
-    "curl -sSf https://join.golem.network/as-provider | bash -";
-const REQUESTOR_UPDATE_CMD: &str =
-    "curl -sSf https://join.golem.network/as-requestor | bash -";
+const PROVIDER_UPDATE_CMD: &str = "curl -sSf https://join.golem.network/as-provider | bash -";
+const REQUESTOR_UPDATE_CMD: &str = "curl -sSf https://join.golem.network/as-requestor | bash -";
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub(crate) enum ReleaseMessage<'a> {

@@ -274,7 +274,6 @@ impl StateWaiter {
             .changed()
             .await
             .map(|_| self.changed_receiver.borrow().clone())
-            
         {
             if let StateChange::TransitionFinished(state) = change {
                 return Ok(state);

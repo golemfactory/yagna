@@ -549,11 +549,9 @@ async fn agreement_received(
         return Err(RemoteProposeAgreementError::RequestorOwn(offer_proposal_id));
     }
 
-    let demand_proposal_id = offer_proposal
-        .body
-        .prev_proposal_id
-        .clone()
-        .ok_or(RemoteProposeAgreementError::NoNegotiations(offer_proposal_id))?;
+    let demand_proposal_id = offer_proposal.body.prev_proposal_id.clone().ok_or(
+        RemoteProposeAgreementError::NoNegotiations(offer_proposal_id),
+    )?;
     let demand_proposal = broker.get_proposal(None, &demand_proposal_id).await?;
 
     let mut agreement = Agreement::new_with_ts(

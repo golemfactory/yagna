@@ -110,7 +110,9 @@ fn manifest_negotiator_test(
 ) {
     let comp_manifest_b64 = create_comp_manifest_b64(urls);
 
-    let signature_b64 = signing_key.map(|signing_key| MANIFEST_TEST_RESOURCES.sign_data(comp_manifest_b64.as_bytes(), signing_key));
+    let signature_b64 = signing_key.map(|signing_key| {
+        MANIFEST_TEST_RESOURCES.sign_data(comp_manifest_b64.as_bytes(), signing_key)
+    });
 
     let cert_b64 = cert.map(cert_file_to_cert_b64);
 

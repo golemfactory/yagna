@@ -131,10 +131,7 @@ impl VpnSupervisor {
         network_id: &str,
     ) -> Result<BoxFuture<'a, Result<()>>> {
         self.owner(node_id, network_id)?;
-        let vpn = self
-            .networks
-            .remove(network_id)
-            .ok_or(Error::NetNotFound)?;
+        let vpn = self.networks.remove(network_id).ok_or(Error::NetNotFound)?;
         self.blueprints.remove(network_id);
         self.forward(vpn, Shutdown {})
     }

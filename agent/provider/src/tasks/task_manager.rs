@@ -505,8 +505,6 @@ impl Handler<BreakAgreement> for TaskManager {
 
             start_transition(&actx.myself, &msg.agreement_id, new_state.clone()).await?;
 
-            
-
             async move {
                 let msg = AgreementBroken::from(msg.clone());
                 actx.runner.send(msg.clone()).await??;

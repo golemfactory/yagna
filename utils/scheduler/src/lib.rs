@@ -14,10 +14,7 @@ pub struct Job {
 
 impl Job {
     fn new(task: Task, trigger: Trigger) -> Job {
-        Job {
-            task,
-            trigger,
-        }
+        Job { task, trigger }
     }
 
     fn is_pending(&self) -> bool {

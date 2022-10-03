@@ -59,11 +59,9 @@ where
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
-        std::mem::take(&mut self.signals)
-            .into_iter()
-            .for_each(|s| {
-                unregister(s);
-            });
+        std::mem::take(&mut self.signals).into_iter().for_each(|s| {
+            unregister(s);
+        });
 
         log::debug!("Signal monitoring service stopped");
     }

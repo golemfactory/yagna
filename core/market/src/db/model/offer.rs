@@ -1,7 +1,6 @@
 use chrono::{NaiveDateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 
-
 use ya_client::model::{market::Offer as ClientOffer, ErrorMessage, NodeId};
 use ya_service_api_web::middleware::Identity;
 

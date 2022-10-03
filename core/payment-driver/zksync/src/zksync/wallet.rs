@@ -536,10 +536,7 @@ pub async fn deposit<S: EthereumSigner + Clone, P: Provider + Clone>(
             tx
         );
 
-        ethereum
-            .wait_for_tx(tx)
-            .await
-            .map_err(GenericError::new)?;
+        ethereum.wait_for_tx(tx).await.map_err(GenericError::new)?;
     }
 
     let deposit_tx_hash = ethereum

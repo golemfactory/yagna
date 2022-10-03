@@ -119,7 +119,9 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
                     }
                 }
             }
-            if tx.status == TransactionStatus::ErrorSent as i32 && time_elapsed_from_last_action > *ERC20_WAIT_FOR_ERROR_SENT_TRANSACTION {
+            if tx.status == TransactionStatus::ErrorSent as i32
+                && time_elapsed_from_last_action > *ERC20_WAIT_FOR_ERROR_SENT_TRANSACTION
+            {
                 log::info!("Transaction not sent, retrying");
                 log::warn!(
                     "Transaction not found on chain for {:?}",

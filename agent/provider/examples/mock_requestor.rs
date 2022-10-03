@@ -1,4 +1,3 @@
-
 use std::{thread, time::Duration};
 
 use ya_client::model::market::{AgreementProposal, NewDemand, RequestorEvent};

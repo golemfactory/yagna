@@ -206,7 +206,7 @@ impl Discovery {
 
         // Should never happen, but just to be certain.
         if offer_ids.is_empty() {
-            return ;
+            return;
         }
         let default_id = match self.default_identity().await {
             Ok(id) => id,

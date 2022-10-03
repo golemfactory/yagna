@@ -289,7 +289,7 @@ impl<T: Clone + Send + 'static> Broadcast<T> {
     fn initialize(&mut self) {
         let (tx, rx) = broadcast::channel(16);
         let receiver = tokio_stream::wrappers::BroadcastStream::new(rx);
-        tokio::task::spawn_local(receiver.for_each(|_| async {  }));
+        tokio::task::spawn_local(receiver.for_each(|_| async {}));
         self.sender = Some(tx);
     }
 }

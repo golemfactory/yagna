@@ -399,9 +399,7 @@ async fn accept_debit_note(
             }
             Ok(Err(Error::Rpc(RpcMessageError::AcceptReject(AcceptRejectError::BadRequest(
                 e,
-            ))))) => {
-                response::bad_request(&e)
-            }
+            ))))) => response::bad_request(&e),
             Ok(Err(e)) => response::server_error(&e),
             Err(_) => response::timeout(&"Timeout accepting Debit Note on remote Node."),
         }

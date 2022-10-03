@@ -162,7 +162,9 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
         let fut = async move {
             if timeout(duration, notifier.when(move |i| i >= await_idx))
                 .await
-                .is_err() && msg.command_index.is_some() {
+                .is_err()
+                && msg.command_index.is_some()
+            {
                 return Err(RpcMessageError::Timeout);
             }
             match address.send(GetBatchResults { batch_id, idx }).await {
