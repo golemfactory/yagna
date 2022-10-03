@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
 use std::hash::Hash;
 use std::ops::Not;
 use std::path::{Path, PathBuf};
@@ -112,13 +113,18 @@ impl Default for Keystore {
 
 impl Keystore {
     /// Reads DER or PEM certificates (or PEM certificate stacks) from `cert_dir` and creates new `X509Store`.
-    pub fn load(cert_dir: impl AsRef<Path>) -> anyhow::Result<Self> {
+    pub fn load(cert_dir: impl AsRef<Path> + Debug) -> anyhow::Result<Self> {
+        std::fs::create_dir_all(&cert_dir)?;
         let mut store = X509StoreBuilder::new()?;
         let cert_dir = std::fs::read_dir(cert_dir)?;
         for dir_entry in cert_dir {
             let cert = dir_entry?;
             let cert = cert.path();
-            Self::load_file(&mut store, &cert)?;
+            if cert.is_file() {
+                Self::load_file(&mut store, &cert)?;
+            } else {
+                log::debug!("Skipping '{:?}' while loading a keystore", cert);
+            }
         }
         let store = store.build();
         let inner = Arc::new(RwLock::new(store));
