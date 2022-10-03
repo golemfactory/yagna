@@ -7623,6 +7623,7 @@ dependencies = [
  "structopt",
  "strum 0.24.1",
  "tar",
+ "tempfile",
  "test-case",
  "thiserror",
  "url",
