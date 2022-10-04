@@ -184,10 +184,10 @@ ya-service-api-interfaces = { path = "core/serv-api/interfaces" }
 ya-service-api-web = { path = "core/serv-api/web" }
 
 ## SERVICE BUS
-ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "c24844de31b464ca47b42ec2119f39e50ee7c52f"}
-ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "c24844de31b464ca47b42ec2119f39e50ee7c52f"}
-ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "c24844de31b464ca47b42ec2119f39e50ee7c52f"}
-ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "c24844de31b464ca47b42ec2119f39e50ee7c52f"}
+ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "33de7cf73263b439c3b05bd1cc34f29d1090280f"}
+ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "33de7cf73263b439c3b05bd1cc34f29d1090280f"}
+ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "33de7cf73263b439c3b05bd1cc34f29d1090280f"}
+ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "33de7cf73263b439c3b05bd1cc34f29d1090280f"}
 
 #ya-service-bus = { path = "../ya-service-bus" }
 #ya-sb-proto = { path = "../ya-service-bus/crates/proto" }
