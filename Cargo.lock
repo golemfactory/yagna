@@ -1003,6 +1003,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
+name = "char-device"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b41bc4d156fa537caa1bb9760b0547cd09b4984859e796aebcb66c423c650ae2"
+dependencies = [
+ "io-extras",
+ "io-lifetimes",
+ "rustix",
+ "tokio 1.21.1",
+ "winapi-util",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2929,10 +2942,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "io-extras"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a5d8c2ab5becd8720e30fd25f8fa5500d8dc3fceadd8378f05859bd7b46fc49"
+dependencies = [
+ "io-lifetimes",
+ "tokio 1.21.1",
+ "windows-sys",
+]
+
+[[package]]
 name = "io-lifetimes"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ea37f355c05dde75b84bba2d767906ad522e97cd9e2eef2be7a4ab7fb442c06"
+dependencies = [
+ "tokio 1.21.1",
+]
 
 [[package]]
 name = "iovec"
@@ -7313,6 +7340,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bytes 1.2.1",
+ "char-device",
  "chrono",
  "derivative",
  "derive_more",
@@ -7762,7 +7790,7 @@ dependencies = [
 
 [[package]]
 name = "ya-relay-core"
-version = "0.3.2"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7775,7 +7803,6 @@ dependencies = [
  "lazy_static",
  "log",
  "metrics 0.19.0",
- "net2",
  "rand 0.8.5",
  "serde_json",
  "sha2 0.9.9",

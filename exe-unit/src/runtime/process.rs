@@ -287,11 +287,11 @@ impl RuntimeProcess {
 
                 if proc_ctx.feature_vpn {
                     if let Some((vpn, container)) = start_vpn(acl, &service_, &deployment).await? {
+                        address.do_send(SetVpnService(vpn));
                         {
                             let mut inner = cont.lock().unwrap();
                             inner.replace(container);
                         }
-                        address.send(SetVpnService(vpn)).await?;
                     }
                 }
 

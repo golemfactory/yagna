@@ -4,9 +4,11 @@ use std::sync::Arc;
 
 use bytes::{Buf, BytesMut};
 use futures::Stream;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::net::{UnixDatagram, UnixListener, UnixStream};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
+use tokio_util::codec::{BytesCodec, FramedRead, FramedWrite};
 
 use ya_runtime_api::deploy::ContainerEndpoint;
 use ya_runtime_api::server::Network;
@@ -22,8 +24,7 @@ pub(crate) mod inet;
 pub(crate) mod vpn;
 
 const BUFFER_SIZE: usize = (DEFAULT_MAX_FRAME_SIZE + 2) * 4;
-
-const SOCK_SEQPACKET: i32 = 5;
+type UnixSocket = UnixDatagram;
 
 pub(crate) struct Endpoint {
     tx: UnboundedSender<Result<Vec<u8>>>,
@@ -33,13 +34,79 @@ pub(crate) struct Endpoint {
 impl Endpoint {
     pub async fn connect(endpoint: impl Into<ContainerEndpoint>) -> Result<Self> {
         match endpoint.into() {
-            ContainerEndpoint::Socket(path) => Self::connect_to_socket(path).await,
+            ContainerEndpoint::Socket(path) => Self::connect_to_socket(path, None).await,
+            // ContainerEndpoint::Socket(path) => Self::connect_to_chardev(path).await,
             ep => Err(Error::Other(format!("Unsupported endpoint type: {:?}", ep))),
         }
     }
 
     #[cfg(unix)]
-    async fn connect_to_socket<P: AsRef<Path>>(path: P) -> Result<Self> {
+    pub async fn connect_with(sockets: (UnixSocket, UnixSocket)) -> Result<Self> {
+        Self::connect_to_socket(Path::new("/"), Some(sockets)).await
+    }
+
+    #[allow(unused)]
+    #[cfg(unix)]
+    async fn connect_to_chardev<P: AsRef<Path>>(path: P) -> Result<Self> {
+        use futures::StreamExt;
+
+        type SocketChannel = (
+            UnboundedSender<Result<Vec<u8>>>,
+            UnboundedReceiver<Result<Vec<u8>>>,
+        );
+
+        let read = char_device::TokioCharDevice::open(path.as_ref()).await?;
+        let read = FramedRead::with_capacity(read, BytesCodec::new(), BUFFER_SIZE);
+        let mut write = char_device::TokioCharDevice::open(path.as_ref()).await?;
+        // let mut write = FramedWrite::new(write, BytesCodec::default());
+
+        let (tx_si, rx_si): SocketChannel = mpsc::unbounded_channel();
+
+        let stream = read
+            .map(|r| r.map(|b| b.to_vec()).map_err(Into::into))
+            .boxed_local();
+
+        tokio::task::spawn(async move {
+            let mut rx_si = UnboundedReceiverStream::new(rx_si);
+            loop {
+                match StreamExt::next(&mut rx_si).await {
+                    Some(Ok(data)) => {
+                        log::info!("write {} B", data.len());
+
+                        if let Err(e) = write.write(data.as_slice()).await {
+                            log::error!("error writing to VM chardev endpoint: {e}");
+                            break;
+                        }
+                    }
+                    Some(Err(e)) => {
+                        log::error!("VM chardev endpoint error: {e}");
+                        break;
+                    }
+                    None => {
+                        log::info!("VM chardev endpoint read None");
+                        break;
+                    }
+                }
+            }
+        });
+
+        Ok(Self {
+            tx: tx_si,
+            rx: Some(Box::new(stream)),
+        })
+    }
+
+    #[cfg(not(unix))]
+    async fn connect_to_chardev<P: AsRef<Path>>(_path: P) -> Result<Self> {
+        Err(Error::Other("OS not supported".into()))
+    }
+
+    #[allow(unused)]
+    #[cfg(unix)]
+    async fn connect_to_socket(
+        path: impl AsRef<Path>,
+        sockets: Option<(UnixSocket, UnixSocket)>,
+    ) -> Result<Self> {
         use futures::StreamExt;
         use tokio::io;
 
@@ -48,25 +115,16 @@ impl Endpoint {
             UnboundedReceiver<Result<Vec<u8>>>,
         );
 
-        let socket = tokio::net::UnixDatagram::unbound()?;
-        socket.connect(path.as_ref())?;
-
+        let (mut bound, mut connected) = sockets.unwrap();
         let (tx_si, rx_si): SocketChannel = mpsc::unbounded_channel();
-        let socket_stream = Arc::new(socket);
-        let socket_sink = socket_stream.clone();
 
         let stream = {
             let buffer: [u8; BUFFER_SIZE] = [0u8; BUFFER_SIZE];
-            futures::stream::unfold((socket_stream, buffer), |(mut socket, mut b)| async move {
+            futures::stream::unfold((bound, buffer), |(mut socket, mut b)| async move {
                 match socket.recv(&mut b).await {
-                    Ok(0) => {
-                        log::info!("read 0 B");
-                        None
-                    }
-                    Ok(n) => {
-                        log::info!("read {n} B");
-                        Some((Ok(b[..n].to_vec()), (socket, b)))
-                    }
+                    // match socket.readv(&mut b).await {
+                    Ok(0) => None,
+                    Ok(n) => Some((Ok(b[..n].to_vec()), (socket, b))),
                     Err(e) => {
                         log::error!("err {e}");
                         Some((Err(e.into()), (socket, b)))
@@ -81,12 +139,31 @@ impl Endpoint {
             loop {
                 match StreamExt::next(&mut rx_si).await {
                     Some(Ok(data)) => {
-                        log::info!("write {} B", data.len());
+                        let mut off = 0;
+                        let total = data.len();
 
-                        if let Err(e) = socket_sink.send(data.as_slice()).await {
-                            log::error!("error writing to VM socket endpoint: {e}");
-                            break;
+                        loop {
+                            match connected.send(&data[off..total]).await {
+                                // match connected.write(&data[off..total]).await {
+                                Ok(0) => (),
+                                Ok(n) => {
+                                    off += n;
+                                }
+                                Err(e) => {
+                                    log::error!("error writing to VM socket endpoint: {e}");
+                                    break;
+                                }
+                            };
+
+                            if off >= total {
+                                break;
+                            }
                         }
+                        //
+                        // if let Err(e) = connected.send(data.as_slice()).await {
+                        //     log::error!("error writing to VM socket endpoint: {e}");
+                        //     break;
+                        // }
                     }
                     Some(Err(e)) => {
                         log::error!("VM socket endpoint error: {e}");
@@ -157,7 +234,7 @@ impl Endpoint {
     }
 
     #[cfg(not(unix))]
-    async fn connect_to_socket<P: AsRef<Path>>(_path: P) -> Result<Self> {
+    async fn connect_to_socket<P: AsRef<Path>>(_path: P, _bind: bool) -> Result<Self> {
         Err(Error::Other("OS not supported".into()))
     }
 }

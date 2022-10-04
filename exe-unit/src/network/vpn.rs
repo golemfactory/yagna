@@ -5,6 +5,7 @@ use std::time::Duration;
 use actix::prelude::*;
 use futures::{future, FutureExt};
 use ipnet::IpNet;
+use tokio::net::UnixDatagram;
 
 use ya_client_model::NodeId;
 use ya_core_model::activity::{self, RpcMessageError, VpnControl, VpnPacket};
@@ -27,14 +28,14 @@ async fn endpoint_hack(
     ip_addr: std::net::IpAddr,
     endpoint: impl Into<ya_runtime_api::deploy::ContainerEndpoint>,
 ) -> crate::network::Result<(Endpoint, String)> {
-    let tap_name = "tap0";
-    let tap_dir = std::env::temp_dir().join(ip_addr.to_string());
+    let socket_name = "tap0";
+    let socket_dir = std::env::temp_dir().join(ip_addr.to_string());
 
-    let _ = std::fs::remove_dir_all(&tap_dir);
-    std::fs::create_dir_all(&tap_dir).map_err(|e| {
+    let _ = std::fs::remove_dir_all(&socket_dir);
+    std::fs::create_dir_all(&socket_dir).map_err(|e| {
         Error::Other(format!(
             "unable to create temp dir {}: {}",
-            tap_dir.display(),
+            socket_dir.display(),
             e
         ))
     })?;
@@ -46,8 +47,8 @@ async fn endpoint_hack(
 
     let env_ip_addr = format!("IP_ADDR={ip_addr}");
     let env_gw_ip_addr = format!("IP_GW={gw_addr}");
-    let env_tap_name = format!("TAP_NAME={tap_name}");
-    let volume = format!("{}:/golem/output", tap_dir.display());
+    let env_tap_name = format!("TAP_NAME={socket_name}");
+    let volume = format!("{}:/golem/output", socket_dir.display());
 
     let child = tokio::process::Command::new("/usr/bin/docker")
         .envs(std::env::vars())
@@ -71,7 +72,19 @@ async fn endpoint_hack(
 
     log::info!("docker run --rm --privileged --env {env_ip_addr} --env {env_tap_name} -v {volume} docker-tap");
 
-    let path = tap_dir.join(tap_name);
+    let bound_path = socket_dir.join(socket_name);
+    let connect_path = socket_dir.join(format!("{}-write", socket_name));
+
+    log::info!("binding socket at {}", bound_path.display());
+
+    let _ = tokio::fs::remove_file(bound_path.as_path()).await;
+
+    // let bound = UnixDatagram::bind(bound_path.as_path())?;
+    // let connected = UnixDatagram::unbound()?;
+
+    let bound = UnixDatagram::bind(bound_path.as_path())?;
+    let connected = UnixDatagram::unbound()?;
+
     let _endpoint = endpoint.into();
     let (tx, rx) = futures::channel::oneshot::channel();
 
@@ -101,10 +114,10 @@ async fn endpoint_hack(
     log::info!("container: {container}");
     log::info!(
         "expecting network docker container socket at: {}",
-        path.display()
+        connect_path.display()
     );
 
-    let path_ = path.clone();
+    let path_ = connect_path.clone();
     tokio::time::timeout(Duration::from_secs(10), async move {
         while !path_.exists() {
             tokio::time::sleep(Duration::from_millis(250)).await;
@@ -124,15 +137,18 @@ async fn endpoint_hack(
     .map_err(|_| {
         Error::RuntimeError(format!(
             "timeout setting up the network docker container: {}",
-            path.display()
+            connect_path.display()
         ))
     })?;
 
-    let endpoint = Endpoint::connect(ya_runtime_api::deploy::ContainerEndpoint::Socket(
-        path.clone(),
-    ))
-    .await?;
+    connected.connect(connect_path.as_path()).map_err(|e| {
+        Error::Other(format!(
+            "unable to connect to socket at {}: {e}",
+            connect_path.display()
+        ))
+    })?;
 
+    let endpoint = Endpoint::connect_with((bound, connected)).await?;
     Ok((endpoint, container))
 }
 
@@ -182,8 +198,7 @@ pub(crate) async fn start_vpn<R: RuntimeService>(
     };
 
     let vpn = Vpn::try_new(node_id, acl, endpoint, deployment.clone())?;
-    let addr = vpn.start();
-    Ok(Some((addr, container)))
+    Ok(Some((vpn.start(), container)))
 }
 
 pub(crate) struct Vpn {
@@ -194,6 +209,7 @@ pub(crate) struct Vpn {
     networks: Networks<DuoEndpoint<GsbEndpoint>>,
     endpoint: Endpoint,
     rx_buf: RxBuffer,
+    is_tap: bool,
 }
 
 impl Vpn {
@@ -224,6 +240,7 @@ impl Vpn {
             networks,
             endpoint,
             rx_buf: Default::default(),
+            is_tap: true,
         })
     }
 
@@ -236,35 +253,50 @@ impl Vpn {
         let node_id = packet.caller;
         let mut data = packet.data;
 
-        log::info!("receive packet {} B", data.len());
+        // log::info!("receive packet {} B", data.len());
+        // {
+        //     let d = DbgVec(&data);
+        //     log::info!("{:x}", d);
+        // }
 
         // fixme: should requestor be queried for unknown IP addresses instead?
-        // read and add unknown node id -> ip if it doesn't exist
-        if let Ok(ether_type) = EtherFrame::peek_type(&data) {
-            let payload = EtherFrame::peek_payload(&data).unwrap();
-            let ip = match ether_type {
-                EtherType::Arp => {
-                    let pkt = ArpPacket::packet(payload);
-                    ntoh(pkt.get_field(ArpField::SPA))
+        let ip = if self.is_tap {
+            match EtherFrame::peek_type(&data) {
+                Ok(ether_type) => {
+                    let payload = EtherFrame::peek_payload(&data).unwrap();
+                    match ether_type {
+                        EtherType::Arp => {
+                            let pkt = ArpPacket::packet(payload);
+                            ntoh(pkt.get_field(ArpField::SPA))
+                        }
+                        EtherType::Ip => {
+                            let pkt = IpPacket::packet(payload);
+                            ntoh(pkt.src_address())
+                        }
+                        _ => None,
+                    }
                 }
-                EtherType::Ip => {
-                    let pkt = IpPacket::packet(payload);
+                _ => None,
+            }
+        } else {
+            match IpPacket::peek(&data) {
+                Ok(_) => {
+                    let pkt = IpPacket::packet(&data);
                     ntoh(pkt.src_address())
                 }
                 _ => None,
-            };
-
-            if let Some(ip) = ip {
-                let _ = self.networks.get_mut(&network_id).map(|network| {
-                    if !network.nodes().contains_key(&node_id) {
-                        log::debug!("[vpn] adding new node: {} {}", ip, node_id);
-                        let _ = network.add_node(ip, &node_id, network::gsb_endpoint);
-                    }
-                });
             }
+        };
+
+        if let Some(ip) = ip {
+            let _ = self.networks.get_mut(&network_id).map(|network| {
+                if !network.nodes().contains_key(&node_id) {
+                    log::debug!("[vpn] adding new node: {} {}", ip, node_id);
+                    let _ = network.add_node(ip, &node_id, network::gsb_endpoint);
+                }
+            });
         }
 
-        // network::write_prefix(&mut data);
         network::write_prefix(&mut data);
 
         if let Err(e) = self.endpoint.tx.send(Ok(data)) {
@@ -274,7 +306,7 @@ impl Vpn {
         Ok(())
     }
 
-    fn handle_ip(
+    fn handle_eth_ip(
         frame: EtherFrame,
         networks: &Networks<DuoEndpoint<GsbEndpoint>>,
         default_id: &str,
@@ -294,13 +326,13 @@ impl Vpn {
         } else {
             let ip = ip_pkt.dst_address();
             match networks.endpoint(ip) {
-                Some(endpoint) => Self::forward_frame(endpoint, default_id, frame),
+                Some(endpoint) => Self::endpoint_send(endpoint, default_id, frame.into()),
                 None => log::debug!("[vpn] no endpoint for {ip:?}"),
             }
         }
     }
 
-    fn handle_arp(
+    fn handle_eth_arp(
         frame: EtherFrame,
         networks: &Networks<DuoEndpoint<GsbEndpoint>>,
         default_id: &str,
@@ -313,15 +345,32 @@ impl Vpn {
 
         let ip = arp.get_field(ArpField::TPA);
         match networks.endpoint(ip) {
-            Some(endpoint) => Self::forward_frame(endpoint, default_id, frame),
+            Some(endpoint) => Self::endpoint_send(endpoint, default_id, frame.into()),
             None => log::debug!("[vpn] no endpoint for {ip:?}"),
         }
     }
 
-    fn forward_frame(endpoint: DuoEndpoint<GsbEndpoint>, default_id: &str, frame: EtherFrame) {
-        let data: Vec<_> = frame.into();
+    fn handle_ip(data: Vec<u8>, networks: &Networks<DuoEndpoint<GsbEndpoint>>, default_id: &str) {
+        let ip_pkt = IpPacket::packet(data.as_slice());
+        // log::debug!("[vpn] egress packet to {:?}", ip_pkt.dst_address());
 
-        log::info!("send packet {} B", data.len());
+        let ip = ip_pkt.dst_address();
+        match networks.endpoint(ip) {
+            Some(endpoint) => {
+                drop(ip_pkt);
+                Self::endpoint_send(endpoint, default_id, data)
+            }
+            None => log::debug!("[vpn] no endpoint for {ip:?}"),
+        }
+    }
+
+    fn endpoint_send(endpoint: DuoEndpoint<GsbEndpoint>, default_id: &str, data: Vec<u8>) {
+        // {
+        //     let d = DbgVec(&data);
+        //     log::info!("{:x}", d);
+        // }
+
+        // log::info!("send packet {} B", data.len());
 
         let fut = endpoint
             .udp
@@ -333,6 +382,17 @@ impl Vpn {
             });
 
         tokio::task::spawn_local(fut);
+    }
+}
+
+struct DbgVec<'a>(&'a Vec<u8>);
+
+impl<'a> std::fmt::LowerHex for DbgVec<'a> {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        for byte in self.0 {
+            fmt.write_fmt(format_args!("{:02x}", byte))?;
+        }
+        Ok(())
     }
 }
 
@@ -375,19 +435,20 @@ impl Actor for Vpn {
     }
 
     fn stopping(&mut self, ctx: &mut Self::Context) -> Running {
-        log::info!("[vpn] stopping service");
-
-        let networks = self.networks.as_ref().keys().cloned().collect::<Vec<_>>();
-        async move {
-            for net in networks {
-                let vpn_id = activity::exeunit::network_id(&net);
-                let _ = typed::unbind(&vpn_id).await;
-            }
-        }
-        .into_actor(self)
-        .wait(ctx);
-
-        Running::Stop
+        Running::Continue
+        // log::info!("[vpn] stopping service");
+        //
+        // let networks = self.networks.as_ref().keys().cloned().collect::<Vec<_>>();
+        // async move {
+        //     for net in networks {
+        //         let vpn_id = activity::exeunit::network_id(&net);
+        //         let _ = typed::unbind(&vpn_id).await;
+        //     }
+        // }
+        // .into_actor(self)
+        // .wait(ctx);
+        //
+        // Running::Stop
     }
 }
 
@@ -403,35 +464,27 @@ impl StreamHandler<crate::Result<Vec<u8>>> for Vpn {
         let rx_buf = &mut self.rx_buf;
 
         for packet in rx_buf.process(received) {
-            match EtherFrame::try_from(packet) {
-                Ok(frame) => match &frame {
-                    EtherFrame::Arp(_) => Self::handle_arp(frame, networks, &self.default_id),
-                    EtherFrame::Ip(_) => Self::handle_ip(frame, networks, &self.default_id),
-                    frame => log::debug!("[vpn] unimplemented EtherType: {}", frame),
-                },
-                Err(err) => {
-                    match &err {
-                        NetError::ProtocolNotSupported(_) => (),
-                        _ => log::debug!("[vpn] frame error (egress): {}", err),
-                    };
-                    continue;
-                }
-            };
+            if self.is_tap {
+                match EtherFrame::try_from(packet) {
+                    Ok(frame) => match &frame {
+                        EtherFrame::Arp(_) => {
+                            Self::handle_eth_arp(frame, networks, &self.default_id)
+                        }
+                        EtherFrame::Ip(_) => Self::handle_eth_ip(frame, networks, &self.default_id),
+                        frame => log::debug!("[vpn] unimplemented EtherType: {}", frame),
+                    },
+                    Err(err) => {
+                        match &err {
+                            NetError::ProtocolNotSupported(_) => (),
+                            _ => log::debug!("[vpn] frame error (egress): {}", err),
+                        };
+                        continue;
+                    }
+                };
+            } else {
+                Self::handle_ip(packet, networks, &self.default_id);
+            }
         }
-
-        // match EtherFrame::try_from(received) {
-        //     Ok(frame) => match &frame {
-        //         EtherFrame::Arp(_) => Self::handle_arp(frame, networks, &self.default_id),
-        //         EtherFrame::Ip(_) => Self::handle_ip(frame, networks, &self.default_id),
-        //         frame => log::debug!("[vpn] unimplemented EtherType: {}", frame),
-        //     },
-        //     Err(err) => {
-        //         match &err {
-        //             NetError::ProtocolNotSupported(_) => (),
-        //             _ => log::debug!("[vpn] frame error (egress): {}", err),
-        //         };
-        //     }
-        // };
     }
 }
 
