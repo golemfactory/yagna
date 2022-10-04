@@ -36,7 +36,6 @@ impl Endpoint {
         use futures::StreamExt;
         use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
         use tokio_stream::wrappers::UnboundedReceiverStream;
-        use tokio_util::codec::{FramedRead, FramedWrite};
 
         const BUFFER_SIZE: usize = (DEFAULT_MAX_FRAME_SIZE + 2) * 4;
 
