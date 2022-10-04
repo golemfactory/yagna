@@ -71,7 +71,7 @@ impl Metrics {
 
         if usage.cpu_sec > self.cpu_total {
             let dv = usage.cpu_sec - self.cpu_total;
-            *self.cpu.entry(-1).or_insert_with(|| Duration::default()) += dv;
+            *self.cpu.entry(-1).or_insert_with(Duration::default) += dv;
             self.cpu_total += dv;
         }
         if usage.rss_gib > self.mem_total {

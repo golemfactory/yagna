@@ -1,7 +1,7 @@
 use chrono::Utc;
 use diesel::expression::dsl::exists;
 use diesel::prelude::*;
-use serde_json;
+
 use std::convert::TryInto;
 
 use ya_client_model::activity::activity_usage::ActivityUsage;

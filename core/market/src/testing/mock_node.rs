@@ -106,10 +106,7 @@ impl MockNodeKind {
 fn testname_from_backtrace(bn: &str) -> String {
     log::info!("Test name to regex match: {}", &bn);
     // Extract test name
-    let captures = Regex::new(r"(.*)::(.*)::.*")
-        .unwrap()
-        .captures(&bn)
-        .unwrap();
+    let captures = Regex::new(r"(.*)::(.*)::.*").unwrap().captures(bn).unwrap();
     let filename = captures.get(1).unwrap().as_str().to_string();
     let testname = captures.get(2).unwrap().as_str().to_string();
 
@@ -414,7 +411,7 @@ impl MarketsNetwork {
     pub fn get_default_id(&self, node_name: &str) -> Identity {
         self.nodes
             .iter()
-            .find(|node| &node.name == node_name)
+            .find(|node| node.name == node_name)
             .map(|node| node.mock_identity.clone())
             .unwrap()
             .get_default_id()
@@ -424,7 +421,7 @@ impl MarketsNetwork {
         let mock_identity = self
             .nodes
             .iter()
-            .find(|node| &node.name == node_name)
+            .find(|node| node.name == node_name)
             .map(|node| node.mock_identity.clone())
             .unwrap();
         let id = mock_identity.new_identity(id_name);
@@ -433,13 +430,13 @@ impl MarketsNetwork {
         let (public_gsb_prefix, _) = gsb_prefixes(&self.test_name, node_name);
 
         MockNet::default().register_node(&node_id, &public_gsb_prefix);
-        return id;
+        id
     }
 
     pub fn list_ids(&self, node_name: &str) -> HashMap<String, Identity> {
         self.nodes
             .iter()
-            .find(|node| &node.name == node_name)
+            .find(|node| node.name == node_name)
             .map(|node| node.mock_identity.list_ids())
             .unwrap()
     }
@@ -720,7 +717,7 @@ where
     'retry: for _i in 0..30 {
         for subscription in subscriptions.clone() {
             for mkt in mkts {
-                if mkt.get_offer(&subscription).await.is_err() {
+                if mkt.get_offer(subscription).await.is_err() {
                     // Every 150ms we should get at least one broadcast from each Node.
                     // After a few tries all nodes should have the same knowledge about Offers.
                     tokio::time::sleep(Duration::from_millis(250)).await;
@@ -750,7 +747,7 @@ where
         for subscription in subscriptions.clone() {
             for mkt in mkts {
                 let expect_error = QueryOfferError::Unsubscribed(subscription.clone()).to_string();
-                match mkt.get_offer(&subscription).await {
+                match mkt.get_offer(subscription).await {
                     Err(e) => assert_eq!(e.to_string(), expect_error),
                     Ok(_) => {
                         // Every 150ms we should get at least one broadcast from each Node.

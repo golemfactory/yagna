@@ -7,23 +7,15 @@ use ya_market_resolver::*;
 #[test]
 fn prepare_offer_error_for_empty() {
     let demand = Demand::default();
-    match PreparedDemand::from(&demand) {
-        Err(_) => {}
-        _ => {
-            assert!(false);
-        }
-    }
+
+    assert!(PreparedDemand::from(&demand).is_err());
 }
 
 #[test]
 fn prepare_demand_error_for_empty() {
     let offer = Offer::default();
-    match PreparedOffer::from(&offer) {
-        Err(_) => {}
-        _ => {
-            assert!(false);
-        }
-    }
+
+    assert!(PreparedOffer::from(&offer).is_err());
 }
 
 #[test]

@@ -158,8 +158,8 @@ impl Payments {
         let provider_ctx = ProviderCtx {
             activity_api: Arc::new(activity_api),
             payment_api: Arc::new(payment_api),
-            debit_checker: DeadlineChecker::new().start(),
-            payment_checker: DeadlineChecker::new().start(),
+            debit_checker: DeadlineChecker::default().start(),
+            payment_checker: DeadlineChecker::default().start(),
             config,
         };
 
@@ -168,7 +168,7 @@ impl Payments {
             context: Arc::new(provider_ctx),
             invoices_to_pay: vec![],
             earnings: BigDecimal::zero(),
-            break_agreement_signal: SignalSlot::<BreakAgreement>::new(),
+            break_agreement_signal: SignalSlot::<BreakAgreement>::default(),
         }
     }
 
@@ -307,7 +307,7 @@ async fn send_debit_note(
     Ok(debit_note)
 }
 
-async fn check_invoice_events(provider_ctx: Arc<ProviderCtx>, payments_addr: Addr<Payments>) -> () {
+async fn check_invoice_events(provider_ctx: Arc<ProviderCtx>, payments_addr: Addr<Payments>) {
     let config = &provider_ctx.config;
     let timeout = config.get_events_timeout.clone();
     let error_timeout = config.get_events_error_timeout.clone();
@@ -617,7 +617,7 @@ impl Handler<ActivityDestroyed> for Payments {
         }
         .into_actor(self);
 
-        return ActorResponse::r#async(future.map(|_, _, _| Ok(())));
+        ActorResponse::r#async(future.map(|_, _, _| Ok(())))
     }
 }
 
@@ -793,7 +793,7 @@ impl Handler<AgreementClosed> for Payments {
             return ActorResponse::r#async(future);
         }
 
-        return ActorResponse::reply(Err(anyhow!("Not my agreement {}.", &msg.agreement_id)));
+        ActorResponse::reply(Err(anyhow!("Not my agreement {}.", &msg.agreement_id)))
     }
 }
 
@@ -892,7 +892,7 @@ impl Handler<AgreementBroken> for Payments {
             Ok(address.send(msg).await??)
         };
 
-        return ActorResponse::r#async(future.into_actor(self));
+        ActorResponse::r#async(future.into_actor(self))
     }
 }
 
@@ -912,7 +912,7 @@ impl Handler<InvoiceAccepted> for Payments {
                 Err(e) => Err(anyhow!("Cannot get invoice: {}", e)),
             });
 
-        return ActorResponse::r#async(future);
+        ActorResponse::r#async(future)
     }
 }
 
@@ -1032,7 +1032,7 @@ impl Handler<GetAgreementSummary> for Payments {
             };
             return Ok(summary);
         }
-        return Err(anyhow!("Not my agreement {}.", &msg.agreement_id));
+        Err(anyhow!("Not my agreement {}.", &msg.agreement_id))
     }
 }
 
@@ -1072,8 +1072,8 @@ fn get_backoff() -> backoff::ExponentialBackoff {
     }
 }
 
-const ACCEPT_PREFIX: &'static str = "debit-";
-const PAYMENT_PREFIX: &'static str = "payment-";
+const ACCEPT_PREFIX: &str = "debit-";
+const PAYMENT_PREFIX: &str = "payment-";
 
 #[inline(always)]
 fn note_accept_id(id: impl AsRef<str>) -> String {

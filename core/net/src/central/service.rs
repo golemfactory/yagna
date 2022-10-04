@@ -46,7 +46,7 @@ pub async fn bind_remote(
     let bcast_service_id = <SendBroadcastMessage<()> as RpcMessage>::ID;
 
     // connect to hub with forwarding handler
-    let own_net_nodes: Vec<_> = nodes.iter().map(|id| net_service(id)).collect();
+    let own_net_nodes: Vec<_> = nodes.iter().map(net_service).collect();
 
     let forward_call = move |request_id: String, caller: String, addr: String, data: Vec<u8>| {
         let prefix = own_net_nodes
@@ -65,11 +65,11 @@ pub async fn bind_remote(
             // actual forwarding to my local bus
             local_bus::call_stream(&local_addr, &caller, &data).right_stream()
         } else {
-            return stream::once(future::err(Error::GsbBadRequest(format!(
+            stream::once(future::err(Error::GsbBadRequest(format!(
                 "wrong routing: {}; I'll accept only addrs starting with: {:?}",
                 addr, own_net_nodes
             ))))
-            .left_stream();
+            .left_stream()
         }
     };
 
@@ -323,7 +323,7 @@ fn bind_from_handler<Transport, H>(
 async fn unbind_remote(nodes: Vec<NodeId>) {
     let addrs = nodes
         .into_iter()
-        .map(|node_id| net_service(node_id))
+        .map(net_service)
         .chain(std::iter::once(format!(
             "{}/{}",
             local_net::BUS_ID,
@@ -385,7 +385,7 @@ where
 
                 let reconnect_clone = reconnect.clone();
                 tokio::task::spawn_local(async move {
-                    if let Ok(_) = dc_rx.await {
+                    if dc_rx.await.is_ok() {
                         metrics::counter!("net.disconnect", 1);
                         reconnect_clone.borrow_mut().last_disconnect = Some(Instant::now());
                         log::warn!("Handlers disconnected");
@@ -482,7 +482,7 @@ pub(crate) fn parse_from_addr(from_addr: &str) -> anyhow::Result<(NodeId, String
         to_node_id.parse::<NodeId>()?;
         let prefix = 10 + from_node_id.len();
         let service_id = &from_addr[prefix..];
-        if let Some(_) = it.next() {
+        if it.next().is_some() {
             return Ok((from_node_id.parse()?, net_service(service_id)));
         }
     }

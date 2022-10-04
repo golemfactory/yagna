@@ -232,7 +232,7 @@ impl Profiles {
                 }
                 std::fs::File::create(&path)?;
 
-                let mut profiles = Self::try_with_config(&path, &config)?;
+                let mut profiles = Self::try_with_config(&path, config)?;
                 let default_caps = Resources::default_caps(&path)?;
                 for profile in profiles.profiles.values_mut() {
                     *profile = profile.cap(&default_caps);
@@ -260,7 +260,7 @@ impl Profiles {
     }
 
     fn try_with_config<P: AsRef<Path>>(path: P, config: &ProviderConfig) -> Result<Self, Error> {
-        let resources = Resources::try_with_config(path.as_ref(), &config)?;
+        let resources = Resources::try_with_config(path.as_ref(), config)?;
         let active = DEFAULT_PROFILE_NAME.to_string();
         let profiles = vec![(active.clone(), resources)].into_iter().collect();
         Ok(Profiles { active, profiles })
@@ -298,7 +298,7 @@ impl Profiles {
         if name == self.active {
             return Err(ProfileError::Active(name).into());
         }
-        if let None = self.profiles.remove(&name) {
+        if self.profiles.remove(&name).is_none() {
             return Err(ProfileError::Unknown(name).into());
         }
         Ok(())
@@ -351,7 +351,7 @@ impl ManagerState {
             .profiles
             .get(&self.profiles.active)
             .cloned()
-            .ok_or_else(|| ProfileError::Unknown(name))?
+            .ok_or(ProfileError::Unknown(name))?
             .cap(&self.res_available);
 
         if res == self.res_cap {
@@ -369,11 +369,11 @@ impl ManagerState {
 
 impl Manager {
     pub fn try_new(conf: &ProviderConfig) -> Result<Self, Error> {
-        let profiles = Profiles::load_or_create(&conf)?;
+        let profiles = Profiles::load_or_create(conf)?;
 
         let mut state = ManagerState {
             profiles,
-            res_available: Resources::try_with_config(conf.hardware_file.as_path(), &conf)?,
+            res_available: Resources::try_with_config(conf.hardware_file.as_path(), conf)?,
             res_cap: Resources::new_empty(),
             res_remaining: Resources::new_empty(),
             res_alloc: HashMap::new(),

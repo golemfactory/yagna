@@ -11,9 +11,9 @@ use crate::market::negotiator::common::{
 #[derive(Debug)]
 pub struct AcceptAllNegotiator;
 
-impl AcceptAllNegotiator {
-    pub fn new() -> AcceptAllNegotiator {
-        AcceptAllNegotiator {}
+impl Default for AcceptAllNegotiator {
+    fn default() -> Self {
+        Self {}
     }
 }
 

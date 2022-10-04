@@ -43,7 +43,7 @@ impl RpcMessage for GetAgreement {
 }
 
 /// Lists all agreements
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ListAgreements {
     pub state: Option<State>,

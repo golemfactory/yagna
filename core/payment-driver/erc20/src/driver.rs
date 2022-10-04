@@ -255,7 +255,7 @@ impl PaymentDriverCron for Erc20Driver {
 
         log::trace!("Running ERC-20 send-out job...");
         'outer: for network_key in self.get_networks().keys() {
-            let network = Network::from_str(&network_key).unwrap();
+            let network = Network::from_str(network_key).unwrap();
             // Process payment rows
             let accounts = self.active_accounts.borrow().list_accounts();
             for node_id in accounts {

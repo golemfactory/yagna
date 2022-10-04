@@ -87,7 +87,7 @@ pub async fn show_prices(cmd: &YaCommand) -> Result<()> {
     for (preset_name, prices) in presets_prices {
         println!("\n\nPricing for preset \"{}\":\n", preset_name);
         for (price_name, price_value) in prices {
-            let default: (&str, f64) = (&price_name.as_str(), 1.0);
+            let default: (&str, f64) = (price_name.as_str(), 1.0);
             let (price_desc, price_multiplier) = price_description
                 .get(&price_name.as_str())
                 .unwrap_or(&default);

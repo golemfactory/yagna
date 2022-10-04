@@ -191,12 +191,12 @@ where
 
     let fut = async move {
         let mut path_iter = path_iter.peekable();
-        if let None = path_iter.peek() {
+        if path_iter.peek().is_none() {
             return Err(io::Error::from(io::ErrorKind::InvalidData));
         }
 
         let writer = TokioAsyncWrite(
-            tx.sink_map_err(|e| io_error(e))
+            tx.sink_map_err(io_error)
                 .with(|b| futures::future::ok::<_, io::Error>(Ok(b))),
         );
         let mut builder = tokio_tar::Builder::new(writer);
@@ -394,7 +394,7 @@ where
     loop {
         if let Some(mut result) = read_zipfile_from_stream(&mut reader)
             .await
-            .map_err(|e| io_error(e))?
+            .map_err(io_error)?
         {
             let name = result.sanitized_name();
             let size = result.size() as usize;
@@ -456,10 +456,7 @@ where
         let evt = FileEvent::Processing {
             name: name.clone(),
             size: header.size().ok().unwrap_or(0) as usize,
-            is_dir: match header.entry_type() {
-                tokio_tar::EntryType::Directory => true,
-                _ => false,
-            },
+            is_dir: header.entry_type() == tokio_tar::EntryType::Directory,
         };
         let _ = evt_sender.send(evt).await;
 

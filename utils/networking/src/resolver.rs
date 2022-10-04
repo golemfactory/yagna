@@ -8,7 +8,7 @@ use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::TokioAsyncResolver;
 use url::Url;
 
-const DEFAULT_LOOKUP_DOMAIN: &'static str = "dev.golem.network";
+const DEFAULT_LOOKUP_DOMAIN: &str = "dev.golem.network";
 
 /// Resolves prefixes in the `DEFAULT_LOOKUP_DOMAIN`, see also `resolve_record`
 pub async fn resolve_yagna_srv_record(prefix: &str) -> std::io::Result<String> {

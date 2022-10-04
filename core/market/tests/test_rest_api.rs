@@ -75,12 +75,12 @@ async fn test_rest_get_offers() {
 
     assert_offers_broadcasted(&[&market_remote], &[subscription_id_local.clone()]).await;
 
-    let mut app = network.get_rest_app("Node-1").await;
+    let app = network.get_rest_app("Node-1").await;
 
     let req = actix_web::test::TestRequest::get()
         .uri("/market-api/v1/offers")
         .to_request();
-    let resp = actix_web::test::call_service(&mut app, req).await;
+    let resp = actix_web::test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), StatusCode::OK);
     let result: Vec<Offer> = read_response_json(resp).await;
@@ -104,12 +104,12 @@ async fn test_rest_get_demands() {
         .unwrap();
     let demand_local = market_local.get_demand(&subscription_id).await.unwrap();
 
-    let mut app = network.get_rest_app("Node-1").await;
+    let app = network.get_rest_app("Node-1").await;
 
     let req = actix_web::test::TestRequest::get()
         .uri("/market-api/v1/demands")
         .to_request();
-    let resp = actix_web::test::call_service(&mut app, req).await;
+    let resp = actix_web::test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::OK);
     let result: Vec<Demand> = read_response_json(resp).await;
     assert_eq!(vec![demand_local.into_client_demand().unwrap()], result);
@@ -123,14 +123,14 @@ async fn test_rest_invalid_subscription_id_should_return_400() {
         .await
         .add_market_instance("Node-1")
         .await;
-    let mut app = network.get_rest_app("Node-1").await;
+    let app = network.get_rest_app("Node-1").await;
 
     let req = actix_web::test::TestRequest::delete()
         .uri("/market-api/v1/offers/invalid-id")
         .to_request();
 
     // when
-    let resp = actix_web::test::call_service(&mut app, req).await;
+    let resp = actix_web::test::call_service(&app, req).await;
 
     // then
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
@@ -154,7 +154,7 @@ async fn test_rest_subscribe_unsubscribe_offer() {
         .await
         .add_market_instance("Node-1")
         .await;
-    let mut app = network.get_rest_app("Node-1").await;
+    let app = network.get_rest_app("Node-1").await;
 
     let client_offer = sample_offer();
 
@@ -164,7 +164,7 @@ async fn test_rest_subscribe_unsubscribe_offer() {
         .to_request();
 
     // when create offer
-    let resp = actix_web::test::call_service(&mut app, req).await;
+    let resp = actix_web::test::call_service(&app, req).await;
 
     // then
     assert_eq!(resp.status(), StatusCode::CREATED);
@@ -188,7 +188,7 @@ async fn test_rest_subscribe_unsubscribe_offer() {
         .uri(&format!("/market-api/v1/offers/{}", subscription_id))
         .to_request();
     // when unsubscribe
-    let resp = actix_web::test::call_service(&mut app, req).await;
+    let resp = actix_web::test::call_service(&app, req).await;
     // then
     assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
@@ -197,7 +197,7 @@ async fn test_rest_subscribe_unsubscribe_offer() {
         .uri(&format!("/market-api/v1/offers/{}", subscription_id))
         .to_request();
     // when unsubscribe again
-    let resp = actix_web::test::call_service(&mut app, req).await;
+    let resp = actix_web::test::call_service(&app, req).await;
     // then
     assert_eq!(resp.status(), StatusCode::GONE);
     let result: ErrorMessage = read_response_json(resp).await;
@@ -216,7 +216,7 @@ async fn test_rest_subscribe_unsubscribe_demand() {
         .await
         .add_market_instance("Node-1")
         .await;
-    let mut app = network.get_rest_app("Node-1").await;
+    let app = network.get_rest_app("Node-1").await;
 
     let client_demand = sample_demand();
 
@@ -226,7 +226,7 @@ async fn test_rest_subscribe_unsubscribe_demand() {
         .to_request();
 
     // when
-    let resp = actix_web::test::call_service(&mut app, req).await;
+    let resp = actix_web::test::call_service(&app, req).await;
 
     // then
     assert_eq!(resp.status(), StatusCode::CREATED);
@@ -253,7 +253,7 @@ async fn test_rest_subscribe_unsubscribe_demand() {
         .uri(&format!("/market-api/v1/demands/{}", subscription_id))
         .to_request();
     // when
-    let resp = actix_web::test::call_service(&mut app, req).await;
+    let resp = actix_web::test::call_service(&app, req).await;
     // then
     assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
@@ -262,7 +262,7 @@ async fn test_rest_subscribe_unsubscribe_demand() {
         .uri(&format!("/market-api/v1/demands/{}", subscription_id))
         .to_request();
     // when
-    let resp = actix_web::test::call_service(&mut app, req).await;
+    let resp = actix_web::test::call_service(&app, req).await;
     // then
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     let result: ErrorMessage = read_response_json(resp).await;
@@ -300,7 +300,7 @@ async fn test_rest_get_proposal() {
         .unwrap()
         .into_client()
         .unwrap();
-    let mut app = network.get_rest_app("Provider").await;
+    let app = network.get_rest_app("Provider").await;
 
     let req_offers = actix_web::test::TestRequest::get()
         .uri(
@@ -311,7 +311,7 @@ async fn test_rest_get_proposal() {
             .as_str(),
         )
         .to_request();
-    let resp_offers = actix_web::test::call_service(&mut app, req_offers).await;
+    let resp_offers = actix_web::test::call_service(&app, req_offers).await;
     assert_eq!(resp_offers.status(), StatusCode::OK);
     let result_offers: Proposal = read_response_json(resp_offers).await;
     assert_eq!(proposal, result_offers);
@@ -325,7 +325,7 @@ async fn test_rest_get_proposal() {
             .as_str(),
         )
         .to_request();
-    let resp_demands = actix_web::test::call_service(&mut app, req_demands).await;
+    let resp_demands = actix_web::test::call_service(&app, req_demands).await;
     assert_eq!(resp_demands.status(), StatusCode::OK);
     let resp_demands: Proposal = read_response_json(resp_demands).await;
     assert_eq!(proposal, resp_demands);
@@ -355,14 +355,14 @@ async fn test_rest_get_agreement() {
         .await
         .unwrap();
 
-    let mut app = network.get_rest_app("Node-1").await;
+    let app = network.get_rest_app("Node-1").await;
     let req = actix_web::test::TestRequest::get()
         .uri(&format!(
             "/market-api/v1/agreements/{}",
             agreement_id.into_client()
         ))
         .to_request();
-    let resp = actix_web::test::call_service(&mut app, req).await;
+    let resp = actix_web::test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::OK);
 
     let agreement: Agreement = read_response_json(resp).await;
@@ -407,7 +407,7 @@ async fn test_rest_query_agreement_events() {
 
     let after_timestamp = negotiation.confirm_timestamp;
 
-    let mut app = network.get_rest_app("Node-1").await;
+    let app = network.get_rest_app("Node-1").await;
     let url = format!(
         "/market-api/v1/agreementEvents?{}",
         QueryParamsBuilder::new()
@@ -417,7 +417,7 @@ async fn test_rest_query_agreement_events() {
             .build()
     );
     let req = actix_web::test::TestRequest::get().uri(&url).to_request();
-    let resp = actix_web::test::call_service(&mut app, req).await;
+    let resp = actix_web::test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), StatusCode::OK);
     let events: Vec<AgreementOperationEvent> = read_response_json(resp).await;
@@ -463,8 +463,8 @@ async fn test_terminate_agreement() {
         .uri(&url)
         .set_json(&reason)
         .to_request();
-    let mut app = network.get_rest_app(REQ_NAME).await;
-    let resp = actix_web::test::call_service(&mut app, req).await;
+    let app = network.get_rest_app(REQ_NAME).await;
+    let resp = actix_web::test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), StatusCode::OK);
 
@@ -523,8 +523,8 @@ async fn test_terminate_agreement_without_reason() {
         .uri(&url)
         .set_json(&reason)
         .to_request();
-    let mut app = network.get_rest_app(REQ_NAME).await;
-    let resp = actix_web::test::call_service(&mut app, req).await;
+    let app = network.get_rest_app(REQ_NAME).await;
+    let resp = actix_web::test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), StatusCode::OK);
 
@@ -592,8 +592,8 @@ async fn test_rest_agreement_rejected() {
         .uri(&url)
         .set_json(&Some(gen_reason("Not-interested")))
         .to_request();
-    let mut app = network.get_rest_app(PROV_NAME).await;
-    let resp = actix_web::test::call_service(&mut app, req).await;
+    let app = network.get_rest_app(PROV_NAME).await;
+    let resp = actix_web::test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), StatusCode::OK);
 
@@ -654,8 +654,8 @@ async fn test_rest_agreement_cancelled() {
         .uri(&url)
         .set_json(&Some(gen_reason("Changed my mind")))
         .to_request();
-    let mut app = network.get_rest_app(REQ_NAME).await;
-    let resp = actix_web::test::call_service(&mut app, req).await;
+    let app = network.get_rest_app(REQ_NAME).await;
+    let resp = actix_web::test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), StatusCode::OK);
 

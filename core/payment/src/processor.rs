@@ -46,13 +46,13 @@ async fn validate_orders(
 
     let mut total_amount = BigDecimal::zero();
     for order in orders.iter() {
-        if &order.payment_platform != platform {
+        if order.payment_platform != platform {
             return OrderValidationError::platform(order, platform);
         }
-        if &order.payer_addr != &payer_addr {
+        if order.payer_addr != payer_addr {
             return OrderValidationError::payer_addr(order, payer_addr);
         }
-        if &order.payee_addr != &payee_addr {
+        if order.payee_addr != payee_addr {
             return OrderValidationError::payee_addr(order, payee_addr);
         }
 
@@ -383,7 +383,7 @@ impl PaymentProcessor {
                     amount,
                     allocation_id: Some(order.allocation_id.clone()),
                 }),
-                _ => return NotifyPaymentError::invalid_order(&order),
+                _ => return NotifyPaymentError::invalid_order(order),
             }
         }
 
@@ -496,14 +496,14 @@ impl PaymentProcessor {
             .await??;
 
         // Verify if amount declared in message matches actual amount transferred on blockchain
-        if &details.amount < &payment.amount {
+        if details.amount < payment.amount {
             return VerifyPaymentError::amount(&details.amount, &payment.amount);
         }
 
         // Verify if payment shares for agreements and activities sum up to the total amount
         let agreement_sum = payment.agreement_payments.iter().map(|p| &p.amount).sum();
         let activity_sum = payment.activity_payments.iter().map(|p| &p.amount).sum();
-        if &details.amount < &(&agreement_sum + &activity_sum) {
+        if details.amount < (&agreement_sum + &activity_sum) {
             return VerifyPaymentError::shares(&details.amount, &agreement_sum, &activity_sum);
         }
 
@@ -533,7 +533,7 @@ impl PaymentProcessor {
                 Some(agreement) if &agreement.payer_addr != payer_addr => {
                     return VerifyPaymentError::agreement_payer(&agreement, payer_addr);
                 }
-                Some(agreement) if &agreement.payment_platform != &payment.payment_platform => {
+                Some(agreement) if agreement.payment_platform != payment.payment_platform => {
                     return VerifyPaymentError::agreement_platform(
                         &agreement,
                         &payment.payment_platform,

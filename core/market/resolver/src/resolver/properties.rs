@@ -285,14 +285,8 @@ impl<'a> PropertyValue<'a> {
                 // ...then check if all results are successful.
 
                 for item in results.iter() {
-                    match item {
-                        Err(error) => {
-                            return Err(ParseError::new(&format!(
-                                "Error parsing list: '{}'",
-                                error
-                            )));
-                        }
-                        _ => {}
+                    if let Err(error) = item {
+                        return Err(ParseError::new(&format!("Error parsing list: '{}'", error)));
                     }
                 }
 
@@ -434,13 +428,13 @@ impl<'a> PropertySet<'a> {
 // #endregion
 
 // Property reference (element of filter expression)
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PropertyRef {
     Value(String, PropertyRefType), // reference to property value (prop name)
     Aspect(String, String, PropertyRefType), // reference to property aspect (prop name, aspect name)
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PropertyRefType {
     Any,
     Decimal,

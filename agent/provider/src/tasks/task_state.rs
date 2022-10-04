@@ -269,12 +269,11 @@ impl TasksStates {
 impl StateWaiter {
     /// Returns final state of Agreement.
     pub async fn transition_finished(&mut self) -> anyhow::Result<AgreementState> {
-        while let Some(change) = self
+        while let Ok(change) = self
             .changed_receiver
             .changed()
             .await
             .map(|_| self.changed_receiver.borrow().clone())
-            .ok()
         {
             if let StateChange::TransitionFinished(state) = change {
                 return Ok(state);

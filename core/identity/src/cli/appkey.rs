@@ -71,7 +71,7 @@ impl AppKeyCommand {
                     name: name.clone(),
                     identity: id.clone(),
                 };
-                let _ = bus::service(model::BUS_ID)
+                bus::service(model::BUS_ID)
                     .send(remove)
                     .await
                     .map_err(anyhow::Error::msg)?

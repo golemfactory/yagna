@@ -51,7 +51,7 @@ async fn get_agreement(
     // and check, if any will be returned. Note that we won't get Agreement if we aren't
     // owner, so here is no danger, that Provider gets Requestor's Offer and opposite.
     let path = path.into_inner();
-    let r_agreement_id = path.clone().to_id(Owner::Requestor)?;
+    let r_agreement_id = path.to_id(Owner::Requestor)?;
     let p_agreement_id = r_agreement_id.clone().swap_owner();
 
     let r_result = market.get_agreement(&r_agreement_id, &id).await;

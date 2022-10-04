@@ -176,7 +176,7 @@ pub async fn open_for_upload(filepath: &Path) -> Result<Url> {
         .take(65)
         .collect::<String>();
 
-    let file = Arc::new(Mutex::new(create_dest_file(&filepath)?));
+    let file = Arc::new(Mutex::new(create_dest_file(filepath)?));
 
     let gsb_address = model::file_bus_id(&hash_name);
     let file_clone = file.clone();
@@ -337,7 +337,7 @@ pub fn extract_url(url: &Url) -> Result<(NodeId, String)> {
         )));
     }
 
-    let node_id = NodeId::from_str(hostname(&url))
+    let node_id = NodeId::from_str(hostname(url))
         .with_context(|| format!("Url {} has invalid node_id.", url))?;
 
     // Note: Remove slash from beginning of path.

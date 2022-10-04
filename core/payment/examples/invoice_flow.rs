@@ -128,7 +128,7 @@ async fn main() -> anyhow::Result<()> {
         .await?;
     assert_eq!(payments.len(), 1);
     let payment = payments.pop().unwrap();
-    assert!(&payment.amount >= &invoice.amount);
+    assert!(payment.amount >= invoice.amount);
     log::info!("Payment verified correctly.");
 
     log::info!("Verifying invoice status...");

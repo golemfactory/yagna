@@ -213,11 +213,11 @@ impl<'c> AgreementDao<'c> {
         &self,
         id: &AgreementId,
         session: &AppSessionId,
-        signature: &String,
+        signature: &str,
     ) -> Result<Agreement, AgreementDaoError> {
         let id = id.clone();
         let session = session.clone();
-        let signature = signature.clone();
+        let signature = signature.to_owned();
 
         do_with_transaction(self.pool, move |conn| {
             let mut agreement: Agreement =
@@ -240,12 +240,12 @@ impl<'c> AgreementDao<'c> {
         &self,
         id: &AgreementId,
         session: &AppSessionId,
-        signature: &String,
+        signature: &str,
         timestamp: &NaiveDateTime,
     ) -> Result<Agreement, AgreementDaoError> {
         let id = id.clone();
         let session = session.clone();
-        let signature = signature.clone();
+        let signature = signature.to_owned();
         let timestamp = timestamp.clone();
 
         do_with_transaction(self.pool, move |conn| {
@@ -271,10 +271,10 @@ impl<'c> AgreementDao<'c> {
     pub async fn approve(
         &self,
         id: &AgreementId,
-        signature: &String,
+        signature: &str,
     ) -> Result<Agreement, AgreementDaoError> {
         let id = id.clone();
-        let signature = signature.clone();
+        let signature = signature.to_owned();
 
         do_with_transaction(self.pool, move |conn| {
             let mut agreement: Agreement =

@@ -1,3 +1,5 @@
+#![allow(clippy::let_unit_value)]
+
 use chrono::Utc;
 use futures::future::LocalBoxFuture;
 use futures::prelude::*;
@@ -169,7 +171,7 @@ async fn activity_credentials(
     let activity_state = db
         .as_dao::<ActivityStateDao>()
         .get_state_wait(
-            &activity_id,
+            activity_id,
             vec![State::Initialized.into(), State::Terminated.into()],
         )
         .timeout(timeout)
@@ -199,7 +201,7 @@ async fn activity_credentials(
 
     let credentials = db
         .as_dao::<ActivityCredentialsDao>()
-        .get(&activity_id)
+        .get(activity_id)
         .await?
         .map(|c| serde_json::from_str(&c.credentials).map_err(|e| Error::Service(e.to_string())))
         .transpose()?;
@@ -271,8 +273,8 @@ async fn get_activity_progress(
     db: &DbExecutor,
     activity_id: &str,
 ) -> Result<(ActivityState, ActivityUsage), Error> {
-    let state = db.as_dao::<ActivityStateDao>().get(&activity_id).await?;
-    let usage = db.as_dao::<ActivityUsageDao>().get(&activity_id).await?;
+    let state = db.as_dao::<ActivityStateDao>().get(activity_id).await?;
+    let usage = db.as_dao::<ActivityUsageDao>().get(activity_id).await?;
     Ok((state, usage))
 }
 

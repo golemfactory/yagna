@@ -19,14 +19,8 @@ impl AgreementLock {
     pub async fn lock(&self, agreement_id: &AgreementId) -> OwnedMutexGuard<()> {
         // Note how important are '{}' around this statement. Otherwise lock isn't freed
         // and we can't acquire write lock
-        let potencial_lock = {
-            self.lock_map
-                .read()
-                .await
-                .get(agreement_id)
-                .map(|lock| lock.clone())
-        };
-        match potencial_lock {
+        let potential_lock = { self.lock_map.read().await.get(agreement_id).cloned() };
+        match potential_lock {
             Some(mutex) => mutex,
             None => {
                 let mut lock_map = self.lock_map.write().await;

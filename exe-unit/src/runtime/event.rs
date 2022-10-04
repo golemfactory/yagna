@@ -38,7 +38,7 @@ impl EventMonitor {
     pub fn next_process<'a>(&mut self, ctx: CommandContext) -> Handle<'a> {
         let mut inner = self.inner.lock().unwrap();
         let channel = Channel::new(ctx, Default::default());
-        let handle = Handle::process(&self, &channel);
+        let handle = Handle::process(self, &channel);
         inner.next_process.replace(channel);
 
         handle
@@ -48,7 +48,7 @@ impl EventMonitor {
     pub fn process<'a>(&mut self, ctx: CommandContext, pid: u64) -> Handle<'a> {
         let mut inner = self.inner.lock().unwrap();
         let channel = Channel::new(ctx, pid);
-        let handle = Handle::process(&self, &channel);
+        let handle = Handle::process(self, &channel);
         inner.processes.insert(pid, channel);
 
         handle
@@ -169,16 +169,11 @@ impl<'a> Handle<'a> {
 
 impl<'a> Drop for Handle<'a> {
     fn drop(&mut self) {
-        match self {
-            Handle::Process { monitor, waker, .. } => {
-                if let Some(pid) = { waker.lock().unwrap().pid } {
-                    let mut inner = monitor.inner.lock().unwrap();
-                    inner.processes.remove(&pid);
-                    inner.next_process.take();
-                }
-            }
-            _ => {
-                // ignore
+        if let Handle::Process { monitor, waker, .. } = self {
+            if let Some(pid) = { waker.lock().unwrap().pid } {
+                let mut inner = monitor.inner.lock().unwrap();
+                inner.processes.remove(&pid);
+                inner.next_process.take();
             }
         }
     }

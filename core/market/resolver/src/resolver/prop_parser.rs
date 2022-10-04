@@ -203,7 +203,7 @@ named!(
         map!(separated_list!(tag!(","), val_literal), |v: Vec<
             Literal<'a>,
         >| {
-            Literal::List(v.into_iter().map(|item| Box::new(item)).collect())
+            Literal::List(v.into_iter().map(Box::new).collect())
         }),
         char!(']')
     ))
@@ -321,7 +321,7 @@ pub fn parse_prop_ref_with_aspect(
 ) -> Result<(&str, Option<&str>, Option<&str>), String> {
     match prop_ref_aspect_type(input) {
         IResult::Done(rest, t) => {
-            if rest == "" {
+            if rest.is_empty() {
                 Ok(t)
             } else {
                 Err(format!(
@@ -334,7 +334,7 @@ pub fn parse_prop_ref_with_aspect(
             // no type, try parsing ref with aspect alone
             match prop_ref_aspect(input) {
                 IResult::Done(rest, t) => {
-                    if rest == "" {
+                    if rest.is_empty() {
                         Ok(t)
                     } else {
                         Err(format!(
@@ -357,7 +357,7 @@ pub fn parse_prop_ref_with_aspect(
 fn parse_prop_ref_no_aspect(input: &str) -> Result<(&str, Option<&str>, Option<&str>), String> {
     match prop_ref_type(input) {
         IResult::Done(rest, t) => {
-            if rest == "" {
+            if rest.is_empty() {
                 Ok(t)
             } else {
                 Err(format!(
@@ -368,7 +368,7 @@ fn parse_prop_ref_no_aspect(input: &str) -> Result<(&str, Option<&str>, Option<&
         }
         IResult::Incomplete(_) | IResult::Error(_) => match prop_ref_no_type(input) {
             IResult::Done(rest, t) => {
-                if rest == "" {
+                if rest.is_empty() {
                     Ok(t)
                 } else {
                     Err(format!(
@@ -391,7 +391,7 @@ fn parse_prop_ref_no_aspect(input: &str) -> Result<(&str, Option<&str>, Option<&
 pub fn parse_prop_ref_as_list(input: &str) -> Result<Vec<&str>, String> {
     match prop_ref_list(input) {
         IResult::Done(rest, t) => {
-            if rest == "" {
+            if rest.is_empty() {
                 Ok(t)
             } else {
                 Err(format!("Parsing list error: unexpected text {}", rest))
@@ -414,7 +414,7 @@ pub fn parse_prop_value_literal(input: &str) -> Result<Literal, String> {
 
     match iresult {
         IResult::Done(rest, t) => {
-            if rest.len() == 0 {
+            if rest.is_empty() {
                 Ok(t)
             } else {
                 Err(format!("Unknown literal type: {}", input))

@@ -465,8 +465,8 @@ async fn accept_invoice(
             }
             Ok(Err(Error::Rpc(RpcMessageError::AcceptReject(AcceptRejectError::BadRequest(
                 e,
-            ))))) => return response::bad_request(&e),
-            Ok(Err(e)) => return response::server_error(&e),
+            ))))) => response::bad_request(&e),
+            Ok(Err(e)) => response::server_error(&e),
             Err(_) => response::timeout(&"Timeout accepting Invoice on remote Node."),
         }
     }
