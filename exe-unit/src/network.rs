@@ -3,9 +3,7 @@ use std::path::Path;
 
 use bytes::{Buf, BytesMut};
 use futures::Stream;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
-use tokio_stream::wrappers::UnboundedReceiverStream;
+use tokio::sync::mpsc;
 
 use ya_runtime_api::deploy::ContainerEndpoint;
 use ya_runtime_api::server::Network;
@@ -20,10 +18,8 @@ use crate::Result;
 pub(crate) mod inet;
 pub(crate) mod vpn;
 
-const BUFFER_SIZE: usize = (DEFAULT_MAX_FRAME_SIZE + 2) * 4;
-
 pub(crate) struct Endpoint {
-    tx: UnboundedSender<Result<Vec<u8>>>,
+    tx: mpsc::UnboundedSender<Result<Vec<u8>>>,
     rx: Option<Box<dyn Stream<Item = Result<Vec<u8>>> + Unpin>>,
 }
 
@@ -38,11 +34,15 @@ impl Endpoint {
     #[cfg(unix)]
     async fn connect_to_socket<P: AsRef<Path>>(path: P) -> Result<Self> {
         use futures::StreamExt;
-        use tokio::io;
+        use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
+        use tokio_stream::wrappers::UnboundedReceiverStream;
+        use tokio_util::codec::{FramedRead, FramedWrite};
+
+        const BUFFER_SIZE: usize = (DEFAULT_MAX_FRAME_SIZE + 2) * 4;
 
         type SocketChannel = (
-            UnboundedSender<Result<Vec<u8>>>,
-            UnboundedReceiver<Result<Vec<u8>>>,
+            mpsc::UnboundedSender<Result<Vec<u8>>>,
+            mpsc::UnboundedReceiver<Result<Vec<u8>>>,
         );
 
         let socket = tokio::net::UnixStream::connect(path.as_ref()).await?;
