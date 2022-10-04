@@ -318,7 +318,7 @@ impl Vpn {
             };
 
             let id = vpn_id.clone();
-            let fut = endpoint.udp.call_raw_as(&self.node_id, frame.into());
+            let fut = endpoint.udp.push_raw_as(&self.node_id, frame.into());
 
             tokio::task::spawn_local(async move {
                 if let Err(err) = fut.await {
