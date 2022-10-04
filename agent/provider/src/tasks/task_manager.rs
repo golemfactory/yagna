@@ -578,7 +578,7 @@ async fn start_transition(
         agreement_id: agreement_id.to_string(),
         new_state,
     };
-    Ok(myself.clone().send(msg).await??)
+    myself.clone().send(msg).await?
 }
 
 async fn finish_transition(
@@ -590,7 +590,7 @@ async fn finish_transition(
         agreement_id: agreement_id.to_string(),
         new_state,
     };
-    Ok(myself.clone().send(msg).await??)
+    myself.clone().send(msg).await?
 }
 
 /// Helper struct storing TaskManager sub-actors addresses to use in async functions.

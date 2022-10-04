@@ -27,12 +27,12 @@ use crate::runtime::RuntimeMode;
 fn invalid_state_err_msg(state_pair: &StatePair) -> String {
     match state_pair {
         StatePair(State::Initialized, None) => {
-            format!("Activity is initialized - deploy() command is expected now")
+            "Activity is initialized - deploy() command is expected now".to_string()
         }
         StatePair(State::Deployed, None) => {
-            format!("Activity is deployed - start() command is expected now")
+            "Activity is deployed - start() command is expected now".to_string()
         }
-        StatePair(State::Ready, None) => format!("Cannot send command after a successful start()"),
+        StatePair(State::Ready, None) => "Cannot send command after a successful start()".to_string(),
         _ => format!(
             "This command is not allowed when activity is in the {:?} state",
             state_pair.0
@@ -190,9 +190,7 @@ impl Batch {
         let result = self
             .results
             .iter()
-            .enumerate()
-            .filter(|(_, s)| s.result.is_none())
-            .next()
+            .enumerate().find(|(_, s)| s.result.is_none())
             .map(|(i, s)| (i, s.message.clone()));
 
         match result {
@@ -212,7 +210,7 @@ impl Batch {
             .enumerate()
             .take_while(|(idx, s)| *idx <= last_idx && s.result.is_some())
             .map(|(idx, s)| {
-                let result = s.result.clone().unwrap();
+                let result = s.result.unwrap();
                 let output = cmd_idx.as_ref().map(|i| *i == idx).unwrap_or(true);
                 ExeScriptCommandResult {
                     index: idx as u32,
@@ -330,7 +328,7 @@ impl CommandState {
     #[allow(dead_code)]
     pub fn repr(&self) -> CommandStateRepr {
         CommandStateRepr {
-            result: self.result.clone(),
+            result: self.result,
             stdout: self.stdout.output_string(),
             stderr: self.stderr.output_string(),
             message: self.message.clone(),

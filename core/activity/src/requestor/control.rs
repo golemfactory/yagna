@@ -84,11 +84,11 @@ async fn create_activity(
     let agreement = get_agreement(&agreement_id, Role::Requestor).await?;
     log::debug!("agreement: {:#?}", agreement);
 
-    let provider_id = agreement.provider_id().clone();
+    let provider_id = *agreement.provider_id();
     let msg = activity::Create {
         provider_id,
         agreement_id: agreement_id.to_string(),
-        timeout: query.timeout.clone(),
+        timeout: query.timeout,
         requestor_pub_key: body.pub_key()?,
     };
 
@@ -136,7 +136,7 @@ async fn destroy_activity(
     let msg = activity::Destroy {
         activity_id: path.activity_id.to_string(),
         agreement_id: agreement.agreement_id.clone(),
-        timeout: query.timeout.clone(),
+        timeout: query.timeout,
     };
     agreement_provider_service(&id, &agreement)?
         .send(msg)
@@ -183,11 +183,11 @@ async fn exec(
         activity_id: path.activity_id.clone(),
         batch_id: batch_id.clone(),
         exe_script: commands,
-        timeout: query.timeout.clone(),
+        timeout: query.timeout,
     };
 
     ya_net::from(id.identity)
-        .to(agreement.provider_id().clone())
+        .to(*agreement.provider_id())
         .service(&activity::exeunit::bus_id(&path.activity_id))
         .send(msg)
         .timeout(timeout_margin(query.timeout))
@@ -233,7 +233,7 @@ async fn await_results(
     };
 
     let results = ya_net::from(id.identity)
-        .to(agreement.provider_id().clone())
+        .to(*agreement.provider_id())
         .service_transfer(&activity::exeunit::bus_id(&path.activity_id))
         .send(msg)
         .timeout(timeout_margin(query.timeout))
@@ -254,7 +254,7 @@ fn stream_results(
 
     let seq = AtomicU64::new(0);
     let stream = ya_net::from(id.identity)
-        .to(agreement.provider_id().clone())
+        .to(*agreement.provider_id())
         .service_transfer(&activity::exeunit::bus_id(&path.activity_id))
         .call_streaming(msg)
         .map(|item| match item {
@@ -318,7 +318,7 @@ async fn encrypted(
     };
 
     let result = ya_net::from(id.identity)
-        .to(agreement.provider_id().clone())
+        .to(*agreement.provider_id())
         .service(&activity::exeunit::bus_id(&path.activity_id))
         .send(msg)
         .timeout(query.timeout)

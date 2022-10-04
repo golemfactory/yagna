@@ -387,7 +387,7 @@ fn test_runtime(path: &Path) -> anyhow::Result<()> {
         if message.is_empty() {
             message = String::from_utf8_lossy(&output.stdout).to_string();
         }
-        if message.find("--help").is_none() {
+        if !message.contains("--help") {
             anyhow::bail!(message);
         }
     }
@@ -447,7 +447,7 @@ impl fmt::Display for ExeUnitDesc {
 fn expand_filename(pattern: &Path) -> Result<impl IntoIterator<Item = PathBuf>> {
     use std::fs::read_dir;
 
-    let path: &Path = pattern.as_ref();
+    let path: &Path = pattern;
     let (base_dir, file_name) = match (path.parent(), path.file_name()) {
         (Some(base_dir), Some(file_name)) => (base_dir, file_name),
         _ => return Ok(vec![PathBuf::from(pattern)]),

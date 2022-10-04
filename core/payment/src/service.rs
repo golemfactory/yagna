@@ -190,7 +190,7 @@ mod local {
                 .incoming_transaction_summary(
                     platform.clone(),
                     address.clone(),
-                    after_timestamp.clone(),
+                    after_timestamp,
                 )
                 .await
         }
@@ -201,7 +201,7 @@ mod local {
                 .outgoing_transaction_summary(
                     platform.clone(),
                     address.clone(),
-                    after_timestamp.clone(),
+                    after_timestamp,
                 )
                 .await
         }
@@ -212,7 +212,7 @@ mod local {
                 .total_remaining_allocation(
                     platform.clone(),
                     address.clone(),
-                    after_timestamp.clone(),
+                    after_timestamp,
                 )
                 .await
         }
@@ -328,7 +328,8 @@ mod local {
         _caller: String,
         msg: ReleaseAllocations,
     ) -> Result<(), GenericError> {
-        Ok(processor.lock().await.release_allocations(true).await)
+        processor.lock().await.release_allocations(true).await;
+        Ok(())
     }
 
     async fn get_drivers(
@@ -349,7 +350,8 @@ mod local {
         // It's crucial to drop the lock on processor (hence assigning the future to a variable).
         // Otherwise, we won't be able to handle calls to `notify_payment` sent by drivers during shutdown.
         let shutdown_future = processor.lock().await.shut_down(msg.timeout);
-        Ok(shutdown_future.await)
+        shutdown_future.await;
+        Ok(())
     }
 }
 
@@ -425,7 +427,7 @@ mod public {
             return Err(SendError::BadRequest("Invalid sender node ID".to_owned()));
         }
 
-        let node_id = agreement.requestor_id().clone();
+        let node_id = *agreement.requestor_id();
         match async move {
             db.as_dao::<AgreementDao>()
                 .create_if_not_exists(agreement, node_id, Role::Requestor)
@@ -471,7 +473,7 @@ mod public {
 
         let dao: DebitNoteDao = db.as_dao();
         let debit_note: DebitNote = match dao.get(debit_note_id.clone(), node_id).await {
-            Ok(Some(debit_note)) => debit_note.into(),
+            Ok(Some(debit_note)) => debit_note,
             Ok(None) => return Err(AcceptRejectError::ObjectNotFound),
             Err(e) => return Err(AcceptRejectError::ServiceError(e.to_string())),
         };
@@ -593,7 +595,7 @@ mod public {
             return Err(SendError::BadRequest("Invalid sender node ID".to_owned()));
         }
 
-        let node_id = agreement.requestor_id().clone();
+        let node_id = *agreement.requestor_id();
         match async move {
             db.as_dao::<AgreementDao>()
                 .create_if_not_exists(agreement, node_id, Role::Requestor)
@@ -642,7 +644,7 @@ mod public {
 
         let dao: InvoiceDao = db.as_dao();
         let invoice: Invoice = match dao.get(invoice_id.clone(), node_id).await {
-            Ok(Some(invoice)) => invoice.into(),
+            Ok(Some(invoice)) => invoice,
             Ok(None) => return Err(AcceptRejectError::ObjectNotFound),
             Err(e) => return Err(AcceptRejectError::ServiceError(e.to_string())),
         };
@@ -705,7 +707,7 @@ mod public {
 
         let dao: InvoiceDao = db.as_dao();
         let invoice: Invoice = match dao.get(invoice_id.clone(), msg.recipient_id).await {
-            Ok(Some(invoice)) => invoice.into(),
+            Ok(Some(invoice)) => invoice,
             Ok(None) => return Err(CancelError::ObjectNotFound),
             Err(e) => return Err(CancelError::ServiceError(e.to_string())),
         };

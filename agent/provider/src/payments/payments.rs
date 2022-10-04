@@ -309,8 +309,8 @@ async fn send_debit_note(
 
 async fn check_invoice_events(provider_ctx: Arc<ProviderCtx>, payments_addr: Addr<Payments>) {
     let config = &provider_ctx.config;
-    let timeout = config.get_events_timeout.clone();
-    let error_timeout = config.get_events_error_timeout.clone();
+    let timeout = config.get_events_timeout;
+    let error_timeout = config.get_events_error_timeout;
     let mut after_timestamp = Utc::now();
 
     loop {
@@ -889,7 +889,7 @@ impl Handler<AgreementBroken> for Payments {
                 agreement_id: msg.agreement_id,
                 send_terminate: false,
             };
-            Ok(address.send(msg).await??)
+            address.send(msg).await?
         };
 
         ActorResponse::r#async(future.into_actor(self))

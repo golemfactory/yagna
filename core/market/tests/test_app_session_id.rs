@@ -600,7 +600,7 @@ async fn test_common_event_flow() {
                 e
             ),
         }
-        current_timestamp = events[0].event_date.clone();
+        current_timestamp = events[0].event_date;
     }
 
     // We don't expect any events anymore.

@@ -260,7 +260,7 @@ impl Init {
         self.token.clone()
     }
     pub fn mode(&self) -> AccountMode {
-        self.mode.clone()
+        self.mode
     }
 }
 
@@ -315,7 +315,7 @@ impl SchedulePayment {
     }
 
     pub fn due_date(&self) -> DateTime<Utc> {
-        self.due_date.clone()
+        self.due_date
     }
 }
 

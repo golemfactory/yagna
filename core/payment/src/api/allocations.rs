@@ -107,7 +107,7 @@ async fn create_allocation(
         Ok(allocation_id) => match dao.get(allocation_id, node_id).await {
             Ok(AllocationStatus::Active(allocation)) => {
                 let allocation_id = allocation.allocation_id.clone();
-                let allocation_timeout = allocation.timeout.clone();
+                let allocation_timeout = allocation.timeout;
 
                 release_allocation_after(
                     db.clone(),

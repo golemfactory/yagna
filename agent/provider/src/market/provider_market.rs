@@ -600,18 +600,19 @@ impl Handler<Shutdown> for ProviderMarket {
     type Result = ResponseFuture<Result<(), Error>>;
 
     fn handle(&mut self, _msg: Shutdown, ctx: &mut Context<Self>) -> Self::Result {
-        for (_, handle) in self.handles.drain().into_iter() {
+        for (_, handle) in self.handles.drain() {
             ctx.cancel_future(handle);
         }
 
         let market = ctx.address();
         async move {
-            Ok(market
-                .send(Unsubscribe(OfferKind::Any))
-                .await?
-                .map_err(|e| log::warn!("Failed to unsubscribe Offers. {}", e))
-                .ok()
-                .unwrap_or(()))
+            market
+            .send(Unsubscribe(OfferKind::Any))
+            .await?
+            .map_err(|e| log::warn!("Failed to unsubscribe Offers. {}", e))
+            .ok()
+            .unwrap_or(());
+            Ok(())
         }
         .boxed_local()
     }

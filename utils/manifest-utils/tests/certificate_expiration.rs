@@ -144,7 +144,7 @@ mod utils {
         sig_alg: &str,
     ) -> Vec<u8> {
         let mut signer = Signer::new(
-            MessageDigest::from_name(sig_alg.as_ref()).unwrap(),
+            MessageDigest::from_name(sig_alg).unwrap(),
             &csr_key_pair,
         )
         .unwrap();

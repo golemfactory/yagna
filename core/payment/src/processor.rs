@@ -41,7 +41,7 @@ async fn validate_orders(
     amount: &BigDecimal,
 ) -> Result<(), OrderValidationError> {
     if orders.is_empty() {
-        return Err(OrderValidationError::new("orders not found in the database").into());
+        return Err(OrderValidationError::new("orders not found in the database"));
     }
 
     let mut total_amount = BigDecimal::zero();
@@ -223,7 +223,7 @@ impl DriverRegistry {
         match driver_details.networks.get(&network_name) {
             None => Err(RegisterAccountError::UnsupportedNetwork(
                 network_name,
-                driver.into(),
+                driver,
             )),
             Some(network_details) => Ok((network_name, network_details.clone())),
         }
@@ -455,7 +455,7 @@ impl PaymentProcessor {
                 msg.payer_addr.clone(),
                 msg.payee_addr.clone(),
                 msg.payment_platform.clone(),
-                msg.due_date.clone(),
+                msg.due_date,
             ))
             .await??;
 

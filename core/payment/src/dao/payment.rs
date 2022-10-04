@@ -43,7 +43,7 @@ fn insert_activity_payments(
             .values(DbActivityPayment {
                 payment_id: payment_id.to_string(),
                 activity_id: activity_payment.activity_id,
-                owner_id: owner_id.clone(),
+                owner_id: *owner_id,
                 amount,
                 allocation_id,
             })
@@ -71,7 +71,7 @@ fn insert_agreement_payments(
             .values(DbAgreementPayment {
                 payment_id: payment_id.to_string(),
                 agreement_id: agreement_payment.agreement_id,
-                owner_id: owner_id.clone(),
+                owner_id: *owner_id,
                 amount,
                 allocation_id,
             })
@@ -96,7 +96,7 @@ impl<'c> PaymentDao<'c> {
         agreement_payments: Vec<AgreementPayment>,
     ) -> DbResult<()> {
         let payment_id = payment.id.clone();
-        let owner_id = payment.owner_id.clone();
+        let owner_id = payment.owner_id;
         let amount = payment.amount.clone();
 
         do_with_transaction(self.pool, move |conn| {

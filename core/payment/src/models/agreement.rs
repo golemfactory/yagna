@@ -26,11 +26,11 @@ pub struct WriteObj {
 
 impl WriteObj {
     pub fn new(agreement: Agreement, role: Role) -> Self {
-        let provider_id = agreement.provider_id().clone();
-        let requestor_id = agreement.requestor_id().clone();
+        let provider_id = *agreement.provider_id();
+        let requestor_id = *agreement.requestor_id();
         let (owner_id, peer_id) = match &role {
-            Role::Provider => (provider_id.clone(), requestor_id.clone()),
-            Role::Requestor => (requestor_id.clone(), provider_id.clone()),
+            Role::Provider => (provider_id, requestor_id),
+            Role::Requestor => (requestor_id, provider_id),
         };
 
         let demand_properties = expand(agreement.demand.properties);

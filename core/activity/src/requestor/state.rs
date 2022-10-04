@@ -26,7 +26,7 @@ async fn get_running_command(
     let agreement = get_activity_agreement(&db, &path.activity_id, Role::Requestor).await?;
     let msg = activity::GetRunningCommand {
         activity_id: path.activity_id.to_string(),
-        timeout: query.timeout.clone(),
+        timeout: query.timeout,
     };
 
     let cmd = agreement_provider_service(&id, &agreement)?

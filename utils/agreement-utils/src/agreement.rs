@@ -34,8 +34,8 @@ impl AgreementView {
             .pointer(pointer)
             .ok_or_else(|| Error::NoKey(pointer.to_string()))?
             .clone();
-        Ok(<T as Deserialize>::deserialize(value)
-            .map_err(|error| Error::UnexpectedType(pointer.to_string(), error))?)
+        <T as Deserialize>::deserialize(value)
+            .map_err(|error| Error::UnexpectedType(pointer.to_string(), error))
     }
 
     pub fn properties<'a, T: Deserialize<'a>>(
@@ -72,13 +72,10 @@ impl AgreementView {
 
     pub fn remove_property(&mut self, pointer: &str) -> Result<(), Error> {
         let path: Vec<&str> = pointer.split('/').collect();
-        Ok(
-            // Path should start with '/', so we must omit first element, which will be empty.
-            remove_property_impl(&mut self.json, &path[1..]).map_err(|e| match e {
+        remove_property_impl(&mut self.json, &path[1..]).map_err(|e| match e {
                 Error::NoKey(_) => Error::NoKey(pointer.to_string()),
                 _ => e,
-            })?,
-        )
+            })
     }
 }
 
@@ -319,7 +316,7 @@ impl TypedArrayPointer for Option<&Value> {
 
 pub fn try_from_path(path: &PathBuf) -> Result<Value, Error> {
     let contents = std::fs::read_to_string(&path).map_err(Error::from)?;
-    let ext = match path.extension().map(|e| e.to_str()).flatten() {
+    let ext = match path.extension().and_then(|e| e.to_str()) {
         Some(ext) => ext,
         None => DEFAULT_FORMAT,
     };

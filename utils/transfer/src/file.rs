@@ -117,7 +117,7 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
             }
             .map_err(|error| {
                 log::error!("Error writing to file [{}]: {}", path_c.display(), error);
-                Error::from(error)
+                error
             });
 
             abortable_sink(fut, res_tx).await
@@ -180,7 +180,7 @@ impl TransferProvider<TransferData, Error> for DirTransferProvider {
                     .await
                     .forward(
                         tx.sink_map_err(Error::from)
-                            .with(|b| ready(Ok(Ok(TransferData::from(b))))),
+                            .with(|b| ready(Ok(Ok(b)))),
                     )
                     .await
             };

@@ -135,8 +135,7 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
             let size: Option<u64> = response
                 .headers()
                 .get(header::CONTENT_LENGTH)
-                .map(|v| v.to_str().ok().map(|s| u64::from_str(s).ok()).flatten())
-                .flatten();
+                .and_then(|v| v.to_str().ok().and_then(|s| u64::from_str(s).ok()));
 
             state.set_size(size);
             if !ranges {
@@ -216,8 +215,7 @@ impl DownloadRequest {
             match resp
                 .headers()
                 .get(header::LOCATION)
-                .map(|v| v.to_str().ok())
-                .flatten()
+                .and_then(|v| v.to_str().ok())
             {
                 Some(location) => {
                     url = location.to_string();
@@ -274,7 +272,7 @@ impl<'a> HttpErr<LocalBoxFuture<'a, Result<awc::ConnectResponse, Error>>> for Se
     fn http_err(self) -> Result<LocalBoxFuture<'a, Result<awc::ConnectResponse, Error>>, Error> {
         match self {
             SendClientRequest::Fut(fut, _, _) => {
-                Ok(async move { Ok(fut.await?.http_err()?) }.boxed_local())
+                Ok(async move { fut.await?.http_err() }.boxed_local())
             }
             SendClientRequest::Err(err) => Err(err
                 .map(|e| e.into())

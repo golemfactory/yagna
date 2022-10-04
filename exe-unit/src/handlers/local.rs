@@ -56,7 +56,7 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
 
         log::debug!("Entering state: {:?}", update.state);
         log::debug!("Report: {}", self.state.report());
-        self.state.inner = update.state.clone();
+        self.state.inner = update.state;
 
         if self.ctx.activity_id.is_none() || self.ctx.report_url.is_none() {
             return ActorResponse::reply(());
@@ -95,13 +95,11 @@ impl<R: Runtime> Handler<GetStdOut> for ExeUnit<R> {
         self.state
             .batches
             .get(&msg.batch_id)
-            .map(|b| {
+            .and_then(|b| {
                 b.results
                     .get(msg.idx)
-                    .map(|r| r.stdout.output_string())
-                    .flatten()
+                    .and_then(|r| r.stdout.output_string())
             })
-            .flatten()
     }
 }
 

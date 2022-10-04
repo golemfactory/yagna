@@ -140,7 +140,7 @@ impl Erc20Dao {
             .transaction()
             .confirm_tx(
                 tx_id.to_string(),
-                TransactionStatus::Confirmed.into(),
+                TransactionStatus::Confirmed,
                 None,
                 Some(final_hash.to_string()),
                 final_gas_price,
@@ -163,7 +163,7 @@ impl Erc20Dao {
             .transaction()
             .confirm_tx(
                 tx_id.to_string(),
-                TransactionStatus::ErrorOnChain.into(),
+                TransactionStatus::ErrorOnChain,
                 Some(error.to_string()),
                 Some(final_hash.to_string()),
                 final_gas_price,
@@ -180,7 +180,7 @@ impl Erc20Dao {
             .transaction()
             .confirm_tx(
                 tx_id.to_string(),
-                TransactionStatus::ErrorNonceTooLow.into(),
+                TransactionStatus::ErrorNonceTooLow,
                 Some(error.to_string()),
                 None,
                 None,
@@ -276,7 +276,7 @@ impl Erc20Dao {
             .transaction()
             .update_error_sent(
                 tx_id.to_string(),
-                TransactionStatus::ErrorSent.into(),
+                TransactionStatus::ErrorSent,
                 new_resent_count,
                 Some(error.to_string()),
             )

@@ -51,7 +51,7 @@ impl std::str::FromStr for NodeOrAlias {
 impl NodeOrAlias {
     async fn resolve(&self) -> anyhow::Result<NodeId> {
         match self {
-            NodeOrAlias::Node(node_id) => Ok(node_id.clone()),
+            NodeOrAlias::Node(node_id) => Ok(*node_id),
             NodeOrAlias::Alias(alias) => {
                 let id = bus::service(identity::BUS_ID)
                     .send(identity::Get::ByAlias(alias.to_owned()))
@@ -325,9 +325,9 @@ impl IdentityCommand {
                 let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
                 let password = if *new_password {
                     let password: String =
-                        rpassword::read_password_from_tty(Some("Password: "))?.into();
+                        rpassword::read_password_from_tty(Some("Password: "))?;
                     let password2: String =
-                        rpassword::read_password_from_tty(Some("Confirm password: "))?.into();
+                        rpassword::read_password_from_tty(Some("Confirm password: "))?;
                     if password != password2 {
                         anyhow::bail!("Password and confirmation do not match.")
                     }

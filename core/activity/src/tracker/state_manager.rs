@@ -101,7 +101,7 @@ impl StateManager {
                 .map(|state| ActivityStateModel {
                     id: String::from(state.activity_id.as_str()),
                     agreement_id: state.agreement_id.clone(),
-                    state: state.last_state.clone(),
+                    state: state.last_state,
                     usage: state.usage(),
                     exe_unit: state.exe_unit.as_ref().map(|v| v.to_string()),
                     provider_id: Some(state.identity_id),

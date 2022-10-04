@@ -75,7 +75,7 @@ impl TryFrom<&NestedMeta> for Keyword {
     type Error = Error;
 
     fn try_from(nested_meta: &NestedMeta) -> Result<Self> {
-        let span = nested_meta.span().into();
+        let span = nested_meta.span();
         match nested_meta {
             NestedMeta::Meta(Meta::Path(path)) => Self::try_from(path),
             _ => Err(Error::new(span, "Invalid format")),
