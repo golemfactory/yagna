@@ -1,7 +1,7 @@
 use anyhow::Result;
 use env_logger::{Builder, Env, Target};
 use gftp::rpc::{RpcBody, RpcId, RpcMessage, RpcRequest, RpcResult, RpcStatusResult};
-use std::mem;
+
 use structopt::{clap, StructOpt};
 use tokio::io;
 use tokio::io::AsyncBufReadExt;
@@ -116,7 +116,7 @@ async fn server_loop() {
                 0 => break,
                 _ => match buffer.trim().is_empty() {
                     true => continue,
-                    _ => mem::replace(&mut buffer, String::new()),
+                    _ => std::mem::take(&mut buffer),
                 },
             },
             Err(error) => {

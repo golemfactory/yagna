@@ -77,7 +77,7 @@ impl Matcher {
             discovery,
             config,
             identity: identity_api,
-            expiration_tracker: DeadlineChecker::new().start(),
+            expiration_tracker: DeadlineChecker::default().start(),
         };
 
         let listeners = EventsListeners { proposal_receiver };
@@ -122,20 +122,18 @@ impl Matcher {
             async move {
                 let id = SubscriptionId::from_str(&msg.id);
                 match (&msg.category[..], &id) {
-                    ("Offer", Ok(id)) => match store.get_offer(id).await {
-                        Err(QueryOfferError::Expired(_)) => {
+                    ("Offer", Ok(id)) => {
+                        if let Err(QueryOfferError::Expired(_)) = store.get_offer(id).await {
                             log::info!("Offer [{}] expired.", id);
                             counter!("market.offers.expired", 1)
                         }
-                        _ => (),
-                    },
+                    }
                     ("Demand", Ok(id)) => {
-                        match store.db.as_dao::<DemandDao>().demand_state(id).await {
-                            Ok(DemandState::Expired(_)) => {
-                                log::info!("Demand [{}] expired.", id);
-                                counter!("market.demands.expired", 1)
-                            }
-                            _ => (),
+                        if let Ok(DemandState::Expired(_)) =
+                            store.db.as_dao::<DemandDao>().demand_state(id).await
+                        {
+                            log::info!("Demand [{}] expired.", id);
+                            counter!("market.demands.expired", 1)
                         }
                     }
                     _ => {}

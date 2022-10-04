@@ -1,9 +1,9 @@
 mod service;
 
-pub const DRIVER_NAME: &'static str = "dummy";
-pub const NETWORK_NAME: &'static str = "dummy";
-pub const TOKEN_NAME: &'static str = "GLM";
-pub const PLATFORM_NAME: &'static str = "dummy-glm";
+pub const DRIVER_NAME: &str = "dummy";
+pub const NETWORK_NAME: &str = "dummy";
+pub const TOKEN_NAME: &str = "GLM";
+pub const PLATFORM_NAME: &str = "dummy-glm";
 
 pub struct PaymentDriverService;
 

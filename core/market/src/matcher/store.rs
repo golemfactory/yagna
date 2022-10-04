@@ -35,7 +35,7 @@ impl SubscriptionStore {
         let creation_ts = Utc::now().naive_utc();
         // TODO: provider agent should set expiration.
         let expiration_ts = creation_ts + self.config.subscription.default_ttl;
-        let offer = Offer::from_new(offer, &id, creation_ts, expiration_ts)?;
+        let offer = Offer::from_new(offer, id, creation_ts, expiration_ts)?;
         self.insert_offer(offer).await
     }
 
@@ -227,7 +227,7 @@ impl SubscriptionStore {
         }
 
         log::debug!("Removing not owned unsubscribed Offer [{}].", offer_id);
-        match self.db.as_dao::<OfferDao>().delete(&offer_id).await {
+        match self.db.as_dao::<OfferDao>().delete(offer_id).await {
             Ok(true) => Ok(()),
             Ok(false) => Err(ModifyOfferError::UnsubscribedNotRemoved(offer_id.clone())),
             Err(e) => Err(ModifyOfferError::Remove(e, offer_id.clone())),
@@ -242,12 +242,12 @@ impl SubscriptionStore {
         let creation_ts = Utc::now().naive_utc();
         // TODO: requestor agent should set expiration.
         let expiration_ts = creation_ts + self.config.subscription.default_ttl;
-        let demand = Demand::from_new(demand, &id, creation_ts, expiration_ts)?;
+        let demand = Demand::from_new(demand, id, creation_ts, expiration_ts)?;
         self.db
             .as_dao::<DemandDao>()
             .insert(&demand)
             .await
-            .map_err(|e| DemandError::Save(e))?;
+            .map_err(DemandError::Save)?;
         Ok(demand)
     }
 
@@ -289,7 +289,7 @@ impl SubscriptionStore {
             .as_dao::<DemandDao>()
             .get_demands(None, Some(insertion_ts), Utc::now().naive_utc())
             .await
-            .map_err(|e| DemandError::GetMany(e))?)
+            .map_err(DemandError::GetMany)?)
     }
 
     pub async fn remove_demand(
@@ -305,7 +305,7 @@ impl SubscriptionStore {
         match self
             .db
             .as_dao::<DemandDao>()
-            .delete(&demand_id)
+            .delete(demand_id)
             .await
             .map_err(|e| DemandError::Remove(e, demand_id.clone()))?
         {

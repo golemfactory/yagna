@@ -288,7 +288,7 @@ impl ProviderAgent {
     fn build_offer(
         node_info: NodeInfo,
         inf_node_info: InfNodeInfo,
-        accounts: &Vec<AccountView>,
+        accounts: &[AccountView],
         preset: Preset,
         mut offer: OfferTemplate,
         exeunit_desc: ExeUnitDesc,
@@ -436,7 +436,7 @@ fn get_prices(
         .get_initial_price()
         .ok_or_else(|| anyhow!("Preset [{}] is missing the initial price", preset.name))?;
     let prices = pricing_model
-        .prices(&preset)
+        .prices(preset)
         .into_iter()
         .filter_map(|(prop, v)| match offer_usage_vec.contains(&prop.as_str()) {
             true => Some((prop, v)),
@@ -543,10 +543,8 @@ impl Handler<Initialize> for ProviderAgent {
                         {
                             let mut state = preset_state.lock().unwrap();
                             new_names.retain(|n| {
-                                if state.active.contains(n) {
-                                    if !updated.contains(n) {
-                                        return false;
-                                    }
+                                if state.active.contains(n) && !updated.contains(n) {
+                                    return false;
                                 }
                                 true
                             });
@@ -719,15 +717,18 @@ mod tests {
         let inf_node_info = InfNodeInfo::default();
         let accounts = Vec::new();
 
-        let mut preset: Preset = Default::default();
-        preset.pricing_model = "linear".to_string();
-        preset.usage_coeffs =
-            std::collections::HashMap::from([("test_coefficient".to_string(), 1.0)]);
+        let preset = Preset {
+            pricing_model: "linear".to_string(),
+            usage_coeffs: std::collections::HashMap::from([("test_coefficient".to_string(), 1.0)]),
+            ..Default::default()
+        };
 
-        let mut offer_template: OfferTemplate = Default::default();
-        offer_template.properties = serde_json::json!({
-            "golem.com.usage.vector": ["test_coefficient"]
-        });
+        let offer_template = OfferTemplate {
+            properties: serde_json::json!({
+                "golem.com.usage.vector": ["test_coefficient"]
+            }),
+            ..Default::default()
+        };
 
         let exeunit_desc = ExeUnitDesc {
             name: Default::default(),

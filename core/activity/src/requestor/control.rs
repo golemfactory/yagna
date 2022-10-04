@@ -101,7 +101,7 @@ async fn create_activity(
 
     log::debug!("activity created: {}, inserting", create_resp.activity_id());
     db.as_dao::<ActivityDao>()
-        .create_if_not_exists(&create_resp.activity_id(), agreement_id)
+        .create_if_not_exists(create_resp.activity_id(), agreement_id)
         .await?;
 
     let create_result = CreateActivityResult {

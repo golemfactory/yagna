@@ -95,7 +95,7 @@ impl MarketService {
 
         // We need the same notifier for both Provider and Requestor implementation since we have
         // single endpoint and both implementations are able to add events.
-        let agreement_notifier = EventNotifier::<AppSessionId>::new();
+        let agreement_notifier = EventNotifier::<AppSessionId>::default();
 
         let provider_engine = ProviderBroker::new(
             db.clone(),

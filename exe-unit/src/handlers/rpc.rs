@@ -41,7 +41,7 @@ impl<R: Runtime> Handler<RpcEnvelope<Exec>> for ExeUnit<R> {
         let (tx, rx) = oneshot::channel();
         self.state.start_batch(msg.clone(), tx);
 
-        RuntimeRef::from_ctx(&ctx)
+        RuntimeRef::from_ctx(ctx)
             .exec(
                 msg,
                 self.runtime.clone(),
@@ -163,10 +163,9 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
             if timeout(duration, notifier.when(move |i| i >= await_idx))
                 .await
                 .is_err()
+                && msg.command_index.is_some()
             {
-                if msg.command_index.is_some() {
-                    return Err(RpcMessageError::Timeout);
-                }
+                return Err(RpcMessageError::Timeout);
             }
             match address.send(GetBatchResults { batch_id, idx }).await {
                 Ok(results) => Ok(results.0),

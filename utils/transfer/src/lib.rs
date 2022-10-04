@@ -66,7 +66,7 @@ where
 
             log::debug!("Transferring from offset: {}", ctx.state.offset());
 
-            let stream = wrap_stream(src.source(&src_url.url, ctx), &src_url)?;
+            let stream = wrap_stream(src.source(&src_url.url, ctx), src_url)?;
             let sink = dst.destination(&dst_url.url, ctx);
 
             transfer(stream, sink).await?;
@@ -351,7 +351,7 @@ impl TransferState {
         (*self.inner.borrow_mut())
             .retry
             .as_mut()
-            .map(|r| r.delay(&err))
+            .map(|r| r.delay(err))
             .flatten()
     }
 }

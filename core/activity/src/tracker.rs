@@ -92,7 +92,7 @@ impl TrackerRef {
         &mut self,
     ) -> anyhow::Result<(TrackingEvent, broadcast::Receiver<TrackingEvent>)> {
         let (tx, rx) = oneshot::channel();
-        if let Ok(_) = self.tx.send(Command::Subscribe { tx }).await {
+        if (self.tx.send(Command::Subscribe { tx }).await).is_ok() {
             return Ok(rx.await?);
         }
         anyhow::bail!("Fatal error activity state tracker is unavailable");
@@ -209,7 +209,7 @@ pub fn start_tracker() -> (TrackerRef, broadcast::Receiver<TrackingEvent>) {
                     exe_unit_states.emit_state();
                 }
                 Command::Subscribe { tx } => {
-                    if let Err(_) = tx.send(exe_unit_states.subscribe()) {
+                    if tx.send(exe_unit_states.subscribe()).is_err() {
                         log::debug!("dead subscribe");
                     }
                 }

@@ -33,6 +33,7 @@ pub enum EventError {
     AsExpression,
     FromSqlRow,
     PartialEq,
+    Eq,
     Debug,
     Clone,
     Copy,
@@ -97,7 +98,7 @@ impl MarketEvent {
                 Owner::Provider => EventType::ProviderProposalRejected,
             },
             artifact_id: proposal.body.id.clone(),
-            reason: reason.map(|reason| DbReason(reason)),
+            reason: reason.map(DbReason),
         }
     }
 

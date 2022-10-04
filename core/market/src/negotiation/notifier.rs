@@ -51,17 +51,23 @@ where
     StopEvents(Type),
 }
 
+impl<Type> Default for EventNotifier<Type>
+where
+    Type: Debug + PartialEq + Clone + EnableDisplay<Type> + 'static,
+    for<'a> DisplayEnabler<'a, Type>: std::fmt::Display,
+{
+    fn default() -> Self {
+        // We will create receivers later, when someone needs it.
+        let (sender, _receiver) = channel(100);
+        Self { sender }
+    }
+}
+
 impl<Type> EventNotifier<Type>
 where
     Type: Debug + PartialEq + Clone + EnableDisplay<Type> + 'static,
     for<'a> DisplayEnabler<'a, Type>: std::fmt::Display,
 {
-    pub fn new() -> EventNotifier<Type> {
-        // We will create receivers later, when someone needs it.
-        let (sender, _receiver) = channel(100);
-        EventNotifier { sender }
-    }
-
     pub async fn notify(&self, subscription_id: &Type) {
         let sender = self.sender.clone();
         let to_send = Notification::<Type>::NewEvent(subscription_id.clone());

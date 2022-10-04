@@ -9,10 +9,8 @@ use crate::market::negotiator::{
 };
 
 pub const DEFAULT_DEBIT_NOTE_INTERVAL_SEC: u32 = 120;
-pub const DEBIT_NOTE_INTERVAL_PROPERTY: &'static str =
-    "/golem/com/scheme/payu/debit-note/interval-sec?";
-const DEBIT_NOTE_INTERVAL_PROPERTY_FLAT: &'static str =
-    "golem.com.scheme.payu.debit-note.interval-sec?";
+pub const DEBIT_NOTE_INTERVAL_PROPERTY: &str = "/golem/com/scheme/payu/debit-note/interval-sec?";
+const DEBIT_NOTE_INTERVAL_PROPERTY_FLAT: &str = "golem.com.scheme.payu.debit-note.interval-sec?";
 
 /// DebitNoteInterval negotiator
 pub struct DebitNoteInterval {

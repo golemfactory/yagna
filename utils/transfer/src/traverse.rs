@@ -223,7 +223,7 @@ mod tests {
 
         fn include_in<S: ToString>(set: &mut Option<SetEntry<String>>, glob: S) {
             let glob = glob.to_string();
-            let includes = match mem::replace(set, None) {
+            let includes = match set.take() {
                 Some(entry) => match entry {
                     SetEntry::Single(e) => Some(SetEntry::Multiple(vec![e, glob])),
                     SetEntry::Multiple(mut v) => {

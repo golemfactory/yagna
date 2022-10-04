@@ -772,7 +772,7 @@ async fn test_reject_initial_offer() {
 
     req_mkt
         .requestor_engine
-        .reject_proposal(&demand_id, &proposal0id, &req_id, Some("dblah".into()))
+        .reject_proposal(&demand_id, proposal0id, &req_id, Some("dblah".into()))
         .await
         .map_err(|e| panic!("Expected Ok(()), got: {}\nDEBUG: {:?}", e, e))
         .unwrap();
@@ -785,7 +785,7 @@ async fn test_reject_initial_offer() {
         .map(|events| assert_eq!(events.len(), 0))
         .unwrap();
 
-    let proposal0updated = req_mkt.get_proposal(&proposal0id).await.unwrap();
+    let proposal0updated = req_mkt.get_proposal(proposal0id).await.unwrap();
 
     assert_eq!(proposal0updated.body.state, ProposalState::Rejected);
 }
@@ -822,7 +822,7 @@ async fn test_reject_demand() {
 
     let req_demand_proposal1_id = req_mkt
         .requestor_engine
-        .counter_proposal(&demand_id, &proposal0id, &demand, &req_id)
+        .counter_proposal(&demand_id, proposal0id, &demand, &req_id)
         .await
         .unwrap();
 
@@ -939,11 +939,11 @@ async fn test_proposal_events_last() {
     assert_eq!(events.len(), 2);
     match events[0] {
         RequestorEvent::ProposalRejectedEvent { .. } => {}
-        _ => assert!(false, "Invalid first event_type: {:#?}", events[0]),
+        _ => panic!("Invalid first event_type: {:#?}", events[0]),
     }
     match events[events.len() - 1] {
         RequestorEvent::ProposalEvent { .. } => {}
-        _ => assert!(false, "Invalid last event_type: {:#?}", events[0]),
+        _ => panic!("Invalid last event_type: {:#?}", events[0]),
     }
 }
 

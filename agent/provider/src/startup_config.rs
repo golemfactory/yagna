@@ -32,10 +32,10 @@ lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = default_data_dir();
     static ref DEFAULT_PLUGINS_DIR : PathBuf = default_plugins();
 }
-pub(crate) const DOMAIN_WHITELIST_JSON: &'static str = "domain_whitelist.json";
-pub(crate) const PRESETS_JSON: &'static str = "presets.json";
-pub(crate) const HARDWARE_JSON: &'static str = "hardware.json";
-pub(crate) const CERT_DIR: &'static str = "cert_dir";
+pub(crate) const DOMAIN_WHITELIST_JSON: &str = "domain_whitelist.json";
+pub(crate) const PRESETS_JSON: &str = "presets.json";
+pub(crate) const HARDWARE_JSON: &str = "hardware.json";
+pub(crate) const CERT_DIR: &str = "cert_dir";
 
 const DATA_DIR_ENV: &str = "DATA_DIR";
 
@@ -110,7 +110,7 @@ pub struct ProviderConfig {
 
 impl ProviderConfig {
     pub fn registry(&self) -> anyhow::Result<ExeUnitsRegistry> {
-        let mut r = ExeUnitsRegistry::new();
+        let mut r = ExeUnitsRegistry::default();
         r.register_from_file_pattern(&self.exe_unit_path)?;
         Ok(r)
     }
@@ -278,7 +278,7 @@ impl FileMonitor {
     pub fn spawn<P, H>(path: P, handler: H) -> std::result::Result<Self, notify::Error>
     where
         P: AsRef<Path>,
-        H: Fn(DebouncedEvent) -> () + Send + 'static,
+        H: Fn(DebouncedEvent) + Send + 'static,
     {
         Self::spawn_with(path, handler, Default::default())
     }
@@ -290,7 +290,7 @@ impl FileMonitor {
     ) -> std::result::Result<Self, notify::Error>
     where
         P: AsRef<Path>,
-        H: Fn(DebouncedEvent) -> () + Send + 'static,
+        H: Fn(DebouncedEvent) + Send + 'static,
     {
         let path = path.as_ref().to_path_buf();
         let path_th = path.clone();
@@ -347,9 +347,9 @@ impl FileMonitor {
         }
     }
 
-    pub fn on_modified<F>(f: F) -> impl Fn(DebouncedEvent) -> ()
+    pub fn on_modified<F>(f: F) -> impl Fn(DebouncedEvent)
     where
-        F: Fn(PathBuf) -> () + Send + 'static,
+        F: Fn(PathBuf) + Send + 'static,
     {
         move |e| match e {
             DebouncedEvent::Write(p)
@@ -390,7 +390,7 @@ fn default_data_dir() -> String {
 }
 
 fn default_plugins() -> PathBuf {
-    if let Some(mut exe) = env::current_exe().ok() {
+    if let Ok(mut exe) = env::current_exe() {
         exe.pop();
         exe.push("plugins");
         if exe.is_dir() {

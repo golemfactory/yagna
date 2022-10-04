@@ -111,9 +111,8 @@ impl StateManager {
     }
 
     pub fn emit_state(&self) {
-        match self.events.send(self.current_state()) {
-            Ok(cnt) => log::trace!("send to {} recievers", cnt),
-            Err(_) => (),
+        if let Ok(cnt) = self.events.send(self.current_state()) {
+            log::trace!("send to {} recievers", cnt)
         }
     }
 }
