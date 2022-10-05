@@ -70,8 +70,7 @@ async fn get_agreement(
     //  I'm not sure we can trust `sender_id` value from gsb now.
     let dao = db.as_dao::<AgreementDao>();
     let now = chrono::Utc::now().naive_utc();
-    dao
-        .select(&agreement_id, None, now)
+    dao.select(&agreement_id, None, now)
         .await
         .map_err(|e| RpcMessageError::Market(e.to_string()))?
         .ok_or_else(|| RpcMessageError::NotFound(msg.agreement_id.clone()))?

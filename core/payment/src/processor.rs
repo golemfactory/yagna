@@ -41,7 +41,9 @@ async fn validate_orders(
     amount: &BigDecimal,
 ) -> Result<(), OrderValidationError> {
     if orders.is_empty() {
-        return Err(OrderValidationError::new("orders not found in the database"));
+        return Err(OrderValidationError::new(
+            "orders not found in the database",
+        ));
     }
 
     let mut total_amount = BigDecimal::zero();

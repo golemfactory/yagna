@@ -74,8 +74,7 @@ impl SubscriptionStore {
         &self,
         node_ids: Option<Vec<NodeId>>,
     ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
-        self
-            .db
+        self.db
             .as_dao::<OfferDao>()
             .get_offer_ids(node_ids, Utc::now().naive_utc())
             .await
@@ -86,8 +85,7 @@ impl SubscriptionStore {
         &self,
         node_ids: Option<Vec<NodeId>>,
     ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
-        self
-            .db
+        self.db
             .as_dao::<OfferDao>()
             .get_unsubscribed_ids(node_ids, Utc::now().naive_utc())
             .await
@@ -124,8 +122,7 @@ impl SubscriptionStore {
         &self,
         ids: Vec<SubscriptionId>,
     ) -> Result<Vec<Offer>, QueryOffersError> {
-        self
-            .db
+        self.db
             .as_dao::<OfferDao>()
             .get_offers(Some(ids), None, None, Utc::now().naive_utc())
             .await
@@ -136,8 +133,7 @@ impl SubscriptionStore {
         &self,
         inserted_before_ts: NaiveDateTime,
     ) -> Result<Vec<Offer>, QueryOffersError> {
-        self
-            .db
+        self.db
             .as_dao::<OfferDao>()
             .get_offers(None, None, Some(inserted_before_ts), Utc::now().naive_utc())
             .await
@@ -284,8 +280,7 @@ impl SubscriptionStore {
         &self,
         insertion_ts: NaiveDateTime,
     ) -> Result<Vec<Demand>, DemandError> {
-        self
-            .db
+        self.db
             .as_dao::<DemandDao>()
             .get_demands(None, Some(insertion_ts), Utc::now().naive_utc())
             .await

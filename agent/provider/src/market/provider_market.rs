@@ -607,11 +607,11 @@ impl Handler<Shutdown> for ProviderMarket {
         let market = ctx.address();
         async move {
             market
-            .send(Unsubscribe(OfferKind::Any))
-            .await?
-            .map_err(|e| log::warn!("Failed to unsubscribe Offers. {}", e))
-            .ok()
-            .unwrap_or(());
+                .send(Unsubscribe(OfferKind::Any))
+                .await?
+                .map_err(|e| log::warn!("Failed to unsubscribe Offers. {}", e))
+                .ok()
+                .unwrap_or(());
             Ok(())
         }
         .boxed_local()

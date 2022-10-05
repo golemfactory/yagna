@@ -324,8 +324,7 @@ impl IdentityCommand {
             } => {
                 let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
                 let password = if *new_password {
-                    let password: String =
-                        rpassword::read_password_from_tty(Some("Password: "))?;
+                    let password: String = rpassword::read_password_from_tty(Some("Password: "))?;
                     let password2: String =
                         rpassword::read_password_from_tty(Some("Confirm password: "))?;
                     if password != password2 {

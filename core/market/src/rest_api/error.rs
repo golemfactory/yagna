@@ -71,15 +71,13 @@ impl ResponseError for DemandError {
 
 impl ResponseError for QueryDemandsError {
     fn error_response(&self) -> HttpResponse {
-        HttpResponse::InternalServerError()
-            .json(ErrorMessage::new(self.to_string()))
+        HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string()))
     }
 }
 
 impl ResponseError for QueryOffersError {
     fn error_response(&self) -> HttpResponse {
-        HttpResponse::InternalServerError()
-            .json(ErrorMessage::new(self.to_string()))
+        HttpResponse::InternalServerError().json(ErrorMessage::new(self.to_string()))
     }
 }
 
@@ -194,9 +192,7 @@ impl ResponseError for AgreementError {
         match self {
             AgreementError::NotFound(_) => HttpResponse::NotFound().json(msg),
             AgreementError::Expired(_) => HttpResponse::Gone().json(msg),
-            AgreementError::ProposalAlreadyAccepted(..) => {
-                HttpResponse::Conflict().json(msg)
-            }
+            AgreementError::ProposalAlreadyAccepted(..) => HttpResponse::Conflict().json(msg),
             AgreementError::UpdateState(_, e) => e.error_response(),
             AgreementError::NoNegotiations(_)
             | AgreementError::ProposalRejected(..)

@@ -278,8 +278,7 @@ impl Matcher {
         &self,
     ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
         let our_node_ids = self.identity.list().await?;
-        self
-            .store
+        self.store
             .get_unsubscribed_offer_ids(Some(our_node_ids))
             .await
     }

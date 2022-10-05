@@ -421,11 +421,7 @@ impl RequestorBroker {
             let _hold = self.common.agreement_lock.lock(agreement_id).await;
 
             let mut agreement = match dao
-                .select(
-                    agreement_id,
-                    Some(id.identity),
-                    Utc::now().naive_utc(),
-                )
+                .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
                 .await
                 .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
             {
@@ -593,8 +589,7 @@ async fn commit_agreement(broker: CommonBroker, agreement_id: AgreementId) {
         NegotiationApi::commit_agreement(&agreement).await?;
 
         // We approve Agreement in database, when we are sure, that committing succeeded.
-        dao
-            .approve(&agreement.id, &signature)
+        dao.approve(&agreement.id, &signature)
             .await
             .map_err(|e| AgreementError::UpdateState(agreement.id.clone(), e))
     }

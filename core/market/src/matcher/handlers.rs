@@ -75,7 +75,9 @@ pub(super) async fn get_local_offers(
         Ok(offers) => Ok(offers),
         Err(e) => {
             log::error!("Failed to get batch offers. Error: {}", e);
-            Err(DiscoveryRemoteError::InternalError("Failed to get offers from db.".to_string()))
+            Err(DiscoveryRemoteError::InternalError(
+                "Failed to get offers from db.".to_string(),
+            ))
         }
     }
 }

@@ -66,11 +66,10 @@ impl CapturedOutput {
     }
 
     pub fn output_string(&self) -> Option<String> {
-        self.output()
-            .and_then(|o| match o {
-                CommandOutput::Bin(b) => vec_to_string(b),
-                CommandOutput::Str(s) => Some(s),
-            })
+        self.output().and_then(|o| match o {
+            CommandOutput::Bin(b) => vec_to_string(b),
+            CommandOutput::Str(s) => Some(s),
+        })
     }
 
     pub fn write<B: AsRef<[u8]> + ?Sized>(&mut self, bytes: &B) -> Option<CommandOutput> {

@@ -154,10 +154,7 @@ mod common {
                         );
                         (Ok(web::Bytes::from(line)), Some(stream))
                     }
-                    Err(err) => (
-                        Err(actix_web::error::ErrorInternalServerError(err)),
-                        None,
-                    ),
+                    Err(err) => (Err(actix_web::error::ErrorInternalServerError(err)), None),
                 })
             } else {
                 None

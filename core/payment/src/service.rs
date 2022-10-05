@@ -187,33 +187,21 @@ mod local {
 
         let incoming_fut = async {
             db.as_dao::<AgreementDao>()
-                .incoming_transaction_summary(
-                    platform.clone(),
-                    address.clone(),
-                    after_timestamp,
-                )
+                .incoming_transaction_summary(platform.clone(), address.clone(), after_timestamp)
                 .await
         }
         .map_err(GenericError::new);
 
         let outgoing_fut = async {
             db.as_dao::<AgreementDao>()
-                .outgoing_transaction_summary(
-                    platform.clone(),
-                    address.clone(),
-                    after_timestamp,
-                )
+                .outgoing_transaction_summary(platform.clone(), address.clone(), after_timestamp)
                 .await
         }
         .map_err(GenericError::new);
 
         let reserved_fut = async {
             db.as_dao::<AllocationDao>()
-                .total_remaining_allocation(
-                    platform.clone(),
-                    address.clone(),
-                    after_timestamp,
-                )
+                .total_remaining_allocation(platform.clone(), address.clone(), after_timestamp)
                 .await
         }
         .map_err(GenericError::new);

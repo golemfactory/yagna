@@ -85,7 +85,10 @@ impl<'c> InvoiceDao<'c> {
             {
                 return match equivalent(&read_invoice, &invoice) {
                     true => Ok(()),
-                    false => Err(DbError::Integrity("Invoice with the same id and different content already exists.".to_string())),
+                    false => Err(DbError::Integrity(
+                        "Invoice with the same id and different content already exists."
+                            .to_string(),
+                    )),
                 };
             };
 
@@ -257,13 +260,7 @@ impl<'c> InvoiceDao<'c> {
             agreement::set_amount_accepted(&agreement_id, &owner_id, &amount, conn)?;
 
             for event in events {
-                invoice_event::create::<()>(
-                    invoice_id.clone(),
-                    owner_id,
-                    event,
-                    None,
-                    conn,
-                )?;
+                invoice_event::create::<()>(invoice_id.clone(), owner_id, event, None, conn)?;
             }
 
             Ok(())
