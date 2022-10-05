@@ -395,7 +395,7 @@ pub fn build_expression(root: &Tag) -> Result<Expression, ExpressionError> {
         Tag::ExplicitTag(exp_tag) => build_expression_from_explicit_tag(exp_tag),
         Tag::OctetString(oct_string) => build_expression_from_octet_string(oct_string),
         Tag::Null(_) => Ok(Expression::Empty(true)),
-        _ => Err(ExpressionError::new(&format!("Unexpected tag type"))),
+        _ => Err(ExpressionError::new("Unexpected tag type")),
     }
 }
 
@@ -500,7 +500,7 @@ fn build_simple_expression(
     }
 }
 
-fn extract_str_from_octet_string<'a>(tag: &'a Tag) -> Result<&'a str, ExpressionError> {
+fn extract_str_from_octet_string(tag: &Tag) -> Result<&str, ExpressionError> {
     match tag {
         Tag::OctetString(oct) => match str::from_utf8(&oct.inner) {
             Ok(s) => Ok(s),

@@ -452,6 +452,7 @@ pub struct Transfer {
     pub gasless: bool,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl Transfer {
     pub fn new(
         sender: String,
