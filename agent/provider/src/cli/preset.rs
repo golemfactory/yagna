@@ -209,12 +209,16 @@ pub fn create(config: ProviderConfig, params: PresetNoInteractive) -> anyhow::Re
 
     let mut presets = PresetManager::load_or_create(&config.presets_file)?;
 
-    let mut preset = Preset::default();
-    preset.name = params
-        .preset_name
-        .ok_or(anyhow!("Preset name is required."))?;
-    preset.exeunit_name = params.exe_unit.ok_or(anyhow!("ExeUnit is required."))?;
-    preset.pricing_model = params.pricing.unwrap_or("linear".to_string());
+    let mut preset = Preset {
+        name: params
+            .preset_name
+            .ok_or_else(|| anyhow!("Preset name is required."))?,
+        exeunit_name: params
+            .exe_unit
+            .ok_or_else(|| anyhow!("ExeUnit is required."))?,
+        pricing_model: params.pricing.unwrap_or_else(|| "linear".to_string()),
+        ..Default::default()
+    };
 
     let registry = config.registry()?;
 
@@ -224,7 +228,7 @@ pub fn create(config: ProviderConfig, params: PresetNoInteractive) -> anyhow::Re
         if is_initial_coefficient_name(name) {
             preset.initial_price = *price;
         } else {
-            let usage_coefficient = exe_unit_desc.resolve_coefficient(&name)?;
+            let usage_coefficient = exe_unit_desc.resolve_coefficient(name)?;
 
             preset.usage_coeffs.insert(usage_coefficient, *price);
         }
@@ -319,11 +323,11 @@ fn update_presets(
                 } else {
                     preset
                         .usage_coeffs
-                        .insert(exe_unit_desc.resolve_coefficient(&name)?, *price);
+                        .insert(exe_unit_desc.resolve_coefficient(name)?, *price);
                 }
             }
 
-            validate_preset(&config, &preset)?;
+            validate_preset(config, preset)?;
 
             Ok(())
         })?;

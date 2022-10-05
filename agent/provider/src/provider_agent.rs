@@ -2,6 +2,7 @@ use actix::prelude::*;
 use anyhow::{anyhow, Error};
 use futures::{FutureExt, StreamExt, TryFutureExt};
 use ya_client::net::NetApi;
+use ya_manifest_utils::matching::domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher};
 
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
@@ -66,6 +67,57 @@ impl GlobalsManager {
     }
 }
 
+/// Stores current whitelist state.
+/// Starts and stops whitelist config file monitor.
+struct WhitelistManager {
+    state: DomainWhitelistState,
+    monitor: Option<FileMonitor>,
+}
+
+impl WhitelistManager {
+    fn try_new(whitelist_file: &Path) -> anyhow::Result<Self> {
+        let patterns = DomainPatterns::load_or_create(whitelist_file)?;
+        let state = DomainWhitelistState::try_new(patterns)?;
+        Ok(Self {
+            state,
+            monitor: None,
+        })
+    }
+
+    fn spawn_monitor(&mut self, whitelist_file: &Path) -> anyhow::Result<()> {
+        let state = self.state.clone();
+        let handler = move |p: PathBuf| match DomainPatterns::load(&p) {
+            Ok(patterns) => {
+                match DomainsMatcher::try_from(&patterns) {
+                    Ok(matcher) => {
+                        *state.matchers.write().unwrap() = matcher;
+                        *state.patterns.lock().unwrap() = patterns;
+                    }
+                    Err(err) => log::error!("Failed to update domain whitelist: {err}"),
+                };
+            }
+            Err(e) => log::warn!(
+                "Error updating whitelist configuration from {:?}: {:?}",
+                p,
+                e
+            ),
+        };
+        let monitor = FileMonitor::spawn(whitelist_file, FileMonitor::on_modified(handler))?;
+        self.monitor = Some(monitor);
+        Ok(())
+    }
+
+    fn get_state(&self) -> DomainWhitelistState {
+        self.state.clone()
+    }
+
+    fn stop(&mut self) {
+        if let Some(monitor) = &mut self.monitor {
+            monitor.stop();
+        }
+    }
+}
+
 pub struct ProviderAgent {
     globals: GlobalsManager,
     market: Addr<ProviderMarket>,
@@ -78,6 +130,7 @@ pub struct ProviderAgent {
     networks: Vec<NetworkName>,
     keystore_monitor: FileMonitor,
     net_api: NetApi,
+    domain_whitelist: WhitelistManager,
 }
 
 impl ProviderAgent {
@@ -85,11 +138,7 @@ impl ProviderAgent {
         let data_dir = config.data_dir.get_or_create()?;
 
         //log_dir is the same as data_dir by default, but can be changed using --log-dir option
-        let log_dir = if let Some(log_dir) = &config.log_dir {
-            log_dir.get_or_create()?
-        } else {
-            data_dir.clone()
-        };
+        let log_dir = config.log_dir_path()?;
 
         //start_logger is using env var RUST_LOG internally.
         //args.debug options sets default logger to debug
@@ -133,26 +182,14 @@ impl ProviderAgent {
             .clone()
             .unwrap_or_else(|| app_name.to_string());
 
-        let cert_dir = &config.cert_dir.get_or_create()?;
-        let keystore = match Keystore::load(cert_dir) {
-            Ok(store) => {
-                log::info!("Trusted key store loaded from {}", cert_dir.display());
-                store
-            }
-            Err(err) => {
-                log::info!("Using a new keystore: {}", err);
-                Default::default()
-            }
-        };
+        let cert_dir = config.cert_dir_path()?;
+        let keystore = load_keystore(&cert_dir)?;
 
         args.market.session_id = format!("{}-{}", name, std::process::id());
         args.runner.session_id = args.market.session_id.clone();
         args.payment.session_id = args.market.session_id.clone();
-        args.market
-            .negotiator_config
-            .composite_config
-            .policy_config
-            .trusted_keys = Some(keystore.clone());
+        let policy_config = &mut args.market.negotiator_config.composite_config.policy_config;
+        policy_config.trusted_keys = Some(keystore.clone());
 
         let networks = args.node.account.networks.clone();
         for n in networks.iter() {
@@ -166,6 +203,7 @@ impl ProviderAgent {
             };
             log::info!("Using payment network: {}", net_color.paint(&n));
         }
+
         let mut globals = GlobalsManager::try_new(&config.globals_file, args.node)?;
         globals.spawn_monitor(&config.globals_file)?;
         let mut presets = PresetManager::load_or_create(&config.presets_file)?;
@@ -173,6 +211,9 @@ impl ProviderAgent {
         let mut hardware = hardware::Manager::try_new(&config)?;
         hardware.spawn_monitor(&config.hardware_file)?;
         let keystore_monitor = spawn_keystore_monitor(cert_dir, keystore)?;
+        let mut domain_whitelist = WhitelistManager::try_new(&config.domain_whitelist_file)?;
+        domain_whitelist.spawn_monitor(&config.domain_whitelist_file)?;
+        policy_config.domain_patterns = domain_whitelist.get_state();
 
         let market = ProviderMarket::new(api.market, args.market).start();
         let payments = Payments::new(api.activity.clone(), api.payment, args.payment).start();
@@ -193,6 +234,7 @@ impl ProviderAgent {
             networks,
             keystore_monitor,
             net_api,
+            domain_whitelist,
         })
     }
 
@@ -246,7 +288,7 @@ impl ProviderAgent {
     fn build_offer(
         node_info: NodeInfo,
         inf_node_info: InfNodeInfo,
-        accounts: &Vec<AccountView>,
+        accounts: &[AccountView],
         preset: Preset,
         mut offer: OfferTemplate,
         exeunit_desc: ExeUnitDesc,
@@ -366,6 +408,20 @@ impl ProviderAgent {
     }
 }
 
+fn load_keystore(cert_dir: &PathBuf) -> anyhow::Result<Keystore> {
+    let keystore = match Keystore::load(cert_dir) {
+        Ok(keystore) => {
+            log::info!("Trusted key store loaded from {}", cert_dir.display());
+            keystore
+        }
+        Err(err) => {
+            log::error!("Failed to load keystore: {}", err);
+            Default::default()
+        }
+    };
+    Ok(keystore)
+}
+
 fn get_prices(
     pricing_model: &dyn PricingOffer,
     preset: &Preset,
@@ -380,7 +436,7 @@ fn get_prices(
         .get_initial_price()
         .ok_or_else(|| anyhow!("Preset [{}] is missing the initial price", preset.name))?;
     let prices = pricing_model
-        .prices(&preset)
+        .prices(preset)
         .into_iter()
         .filter_map(|(prop, v)| match offer_usage_vec.contains(&prop.as_str()) {
             true => Some((prop, v)),
@@ -487,10 +543,8 @@ impl Handler<Initialize> for ProviderAgent {
                         {
                             let mut state = preset_state.lock().unwrap();
                             new_names.retain(|n| {
-                                if state.active.contains(n) {
-                                    if !updated.contains(n) {
-                                        return false;
-                                    }
+                                if state.active.contains(n) && !updated.contains(n) {
+                                    return false;
                                 }
                                 true
                             });
@@ -538,6 +592,7 @@ impl Handler<Shutdown> for ProviderAgent {
         let runner = self.runner.clone();
         let log_handler = self.log_handler.clone();
         self.keystore_monitor.stop();
+        self.domain_whitelist.stop();
 
         async move {
             market.send(MarketShutdown).await??;
@@ -662,15 +717,18 @@ mod tests {
         let inf_node_info = InfNodeInfo::default();
         let accounts = Vec::new();
 
-        let mut preset: Preset = Default::default();
-        preset.pricing_model = "linear".to_string();
-        preset.usage_coeffs =
-            std::collections::HashMap::from([("test_coefficient".to_string(), 1.0)]);
+        let preset = Preset {
+            pricing_model: "linear".to_string(),
+            usage_coeffs: std::collections::HashMap::from([("test_coefficient".to_string(), 1.0)]),
+            ..Default::default()
+        };
 
-        let mut offer_template: OfferTemplate = Default::default();
-        offer_template.properties = serde_json::json!({
-            "golem.com.usage.vector": ["test_coefficient"]
-        });
+        let offer_template = OfferTemplate {
+            properties: serde_json::json!({
+                "golem.com.usage.vector": ["test_coefficient"]
+            }),
+            ..Default::default()
+        };
 
         let exeunit_desc = ExeUnitDesc {
             name: Default::default(),

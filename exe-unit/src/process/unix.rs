@@ -37,7 +37,7 @@ impl<T> From<std::sync::PoisonError<T>> for SystemError {
 
 impl From<io::Error> for SystemError {
     fn from(e: io::Error) -> Self {
-        SystemError::Error(format!("IO error: {}", e.to_string()))
+        SystemError::Error(format!("IO error: {e}"))
     }
 }
 
@@ -113,6 +113,7 @@ impl StatStub {
         Self::parse_stat(stat.trim())
     }
 
+    #[allow(clippy::field_reassign_with_default)]
     fn parse_stat(stat: &str) -> Result<StatStub, SystemError> {
         #[inline(always)]
         fn next<'l, T: std::str::FromStr, I: Iterator<Item = &'l str>>(
@@ -267,10 +268,10 @@ pub fn getrusage(resource: i32) -> Result<Usage, SystemError> {
 
 pub async fn kill(pid: i32, timeout: i64) -> Result<(), SystemError> {
     fn alive(pid: Pid) -> Result<bool, SystemError> {
-        Ok(match waitpid(pid, Some(WaitPidFlag::WNOHANG))? {
-            WaitStatus::Exited(_, _) | WaitStatus::Signaled(_, _, _) => false,
-            _ => true,
-        })
+        Ok(!matches!(
+            waitpid(pid, Some(WaitPidFlag::WNOHANG))?,
+            WaitStatus::Exited(_, _) | WaitStatus::Signaled(_, _, _)
+        ))
     }
 
     let pid = Pid::from_raw(pid);

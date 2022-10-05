@@ -74,9 +74,9 @@ impl fmt::Display for Constraints {
             0 => Ok(()),
             1 => write!(f, "{}", self.constraints[0]),
             _ => {
-                write!(f, "({}\n", self.operator.to_string())?;
+                writeln!(f, "({}", self.operator)?;
                 for el in &self.constraints {
-                    write!(f, "  {}\n", el.to_string().replace("\n", "\n  "))?;
+                    writeln!(f, "  {}", el.to_string().replace('\n', "\n  "))?;
                 }
                 write!(f, ")")
             }
@@ -93,7 +93,7 @@ impl std::iter::IntoIterator for Constraints {
     }
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum ClauseOperator {
     And,
     Or,
@@ -135,7 +135,7 @@ impl fmt::Display for ConstraintOperator {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct ConstraintKey(serde_json::Value);
 
 impl ConstraintKey {
@@ -182,19 +182,19 @@ impl fmt::Display for ConstraintExpr {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             ConstraintExpr::KeyValue { key, ops_values } => {
-                if ops_values.len() == 0 {
+                if ops_values.is_empty() {
                     write!(f, "({})", key.0.as_str().unwrap_or(&key.0.to_string()))
                 } else {
                     for (op, val) in ops_values {
                         write!(f, "({}", key.0.as_str().unwrap_or(&key.0.to_string()))?;
-                        write!(f, "{}", op.to_string())?;
+                        write!(f, "{}", op)?;
                         write!(f, "{}", val.0.as_str().unwrap_or(&val.0.to_string()))?;
                         write!(f, ")")?
                     }
                     Ok(())
                 }
             }
-            ConstraintExpr::Constraints(c) => write!(f, "{}", c.to_string()),
+            ConstraintExpr::Constraints(c) => write!(f, "{}", c),
         }
     }
 }

@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::ops::Not;
 
 #[allow(dead_code)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum Status {
     Valid,
     Permission(Cow<'static, str>),

@@ -105,10 +105,10 @@ lazy_static! {
 impl PaymentDriver {
     pub fn platform(&self, network: &NetworkName) -> anyhow::Result<&PaymentPlatform> {
         let net: &str = network.into();
-        Ok(self.platforms.get(net).ok_or(anyhow!(
-            "Payment driver config for network '{}' not found.",
-            network
-        ))?)
+        Ok(self
+            .platforms
+            .get(net)
+            .ok_or_else(|| anyhow!("Payment driver config for network '{}' not found.", network))?)
     }
 
     pub fn status_label(&self, network: &NetworkName) -> String {
@@ -116,11 +116,11 @@ impl PaymentDriver {
             return "zksync".to_string();
         }
 
-        return if network == &NetworkName::Mainnet {
+        if network == &NetworkName::Mainnet {
             "on-chain".to_string()
         } else {
             network.to_string().to_lowercase()
-        };
+        }
     }
 }
 
@@ -366,7 +366,7 @@ impl YagnaCommand {
                 Ok(_) => Ok(child),
                 Err(e) => {
                     log::error!("Killing Golem Service, since wait failed: {}", e);
-                    let _ = child.kill().await?;
+                    child.kill().await?;
                     Err(e)
                 }
             }

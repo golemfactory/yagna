@@ -9,7 +9,8 @@ pub use rest_api::web_scope;
 pub use service::{bind_remote, Net};
 
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use ya_core_model::net::local::Subscribe;
 

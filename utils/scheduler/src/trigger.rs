@@ -12,16 +12,15 @@ pub struct Interval {
 impl Interval {
     pub fn new(days: u32, hours: u32, minutes: u32, seconds: u32) -> Interval {
         Interval {
-            days: days,
-            hours: hours,
-            minutes: minutes,
-            seconds: seconds,
+            days,
+            hours,
+            minutes,
+            seconds,
         }
     }
 
     fn next<Tz: TimeZone>(&self, from: DateTime<Tz>) -> DateTime<Tz> {
-        from.clone()
-            + Duration::days(i64::from(self.days))
+        from + Duration::days(i64::from(self.days))
             + Duration::hours(i64::from(self.hours))
             + Duration::minutes(i64::from(self.minutes))
             + Duration::seconds(i64::from(self.seconds))
@@ -42,7 +41,7 @@ impl Trigger {
     {
         Trigger {
             name: name.into(),
-            interval: interval,
+            interval,
             next_run: start_from,
             last_run: None,
         }

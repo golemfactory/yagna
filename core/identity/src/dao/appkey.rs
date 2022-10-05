@@ -27,7 +27,7 @@ impl<'c> AppKeyDao<'c> {
     where
         F: Send + 'static + FnOnce(&ConnType) -> Result<R>,
     {
-        readonly_transaction(&self.pool, f).await
+        readonly_transaction(self.pool, f).await
     }
 
     #[inline]
@@ -38,7 +38,7 @@ impl<'c> AppKeyDao<'c> {
         &self,
         f: F,
     ) -> Result<R> {
-        do_with_transaction(&self.pool, f).await
+        do_with_transaction(self.pool, f).await
     }
 
     pub async fn create(
@@ -94,6 +94,21 @@ impl<'c> AppKeyDao<'c> {
             let result = app_key_dsl::table
                 .inner_join(role_dsl::table)
                 .filter(app_key_dsl::identity_id.eq(identity_id))
+                .first(conn)?;
+
+            Ok(result)
+        })
+        .await
+    }
+
+    pub async fn get_for_name(&self, name: String) -> Result<(AppKey, Role)> {
+        use crate::db::schema::app_key as app_key_dsl;
+        use crate::db::schema::role as role_dsl;
+
+        readonly_transaction(self.pool, |conn| {
+            let result = app_key_dsl::table
+                .inner_join(role_dsl::table)
+                .filter(app_key_dsl::name.eq(name))
                 .first(conn)?;
 
             Ok(result)

@@ -13,7 +13,7 @@ const PRIVATE_KEY: &str = "e0c704b6e925c3be222337f9c94610c46b7fec95c14b8f5b9800d
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
-    let log_level = std::env::var("RUST_LOG").unwrap_or("info".to_owned());
+    let log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_owned());
     std::env::set_var("RUST_LOG", log_level);
     env_logger::init();
 

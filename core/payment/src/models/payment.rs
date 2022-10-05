@@ -124,12 +124,12 @@ pub struct ActivityPayment {
     pub allocation_id: Option<String>,
 }
 
-impl Into<api_model::ActivityPayment> for ActivityPayment {
-    fn into(self) -> api_model::ActivityPayment {
-        api_model::ActivityPayment {
-            activity_id: self.activity_id,
-            amount: self.amount.0,
-            allocation_id: self.allocation_id,
+impl From<ActivityPayment> for api_model::ActivityPayment {
+    fn from(ap: ActivityPayment) -> Self {
+        Self {
+            activity_id: ap.activity_id,
+            amount: ap.amount.0,
+            allocation_id: ap.allocation_id,
         }
     }
 }
@@ -145,12 +145,12 @@ pub struct AgreementPayment {
     pub allocation_id: Option<String>,
 }
 
-impl Into<api_model::AgreementPayment> for AgreementPayment {
-    fn into(self) -> api_model::AgreementPayment {
-        api_model::AgreementPayment {
-            agreement_id: self.agreement_id,
-            amount: self.amount.0,
-            allocation_id: self.allocation_id,
+impl From<AgreementPayment> for api_model::AgreementPayment {
+    fn from(ap: AgreementPayment) -> Self {
+        Self {
+            agreement_id: ap.agreement_id,
+            amount: ap.amount.0,
+            allocation_id: ap.allocation_id,
         }
     }
 }

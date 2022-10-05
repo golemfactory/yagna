@@ -185,13 +185,13 @@ impl<'c> AllocationDao<'c> {
                 .set(dsl::released.eq(true))
                 .execute(conn)?;
 
-            return match num_released {
+            match num_released {
                 1 => Ok(AllocationReleaseStatus::Released),
                 _ => Err(DbError::Query(format!(
                     "Update error occurred when releasing allocation {}",
                     allocation_id
                 ))),
-            };
+            }
         })
         .await
     }
@@ -218,6 +218,7 @@ impl<'c> AllocationDao<'c> {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum AllocationStatus {
     Active(Allocation),
     Gone,

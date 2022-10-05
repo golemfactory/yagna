@@ -4,7 +4,7 @@ use thiserror::Error;
 use ya_client_model::NodeId;
 use ya_service_bus::RpcMessage;
 
-pub const BUS_ID: &'static str = "/local/appkey";
+pub const BUS_ID: &str = "/local/appkey";
 
 pub const DEFAULT_ROLE: &str = "manager";
 
@@ -21,6 +21,13 @@ impl Error {
     pub fn internal(e: impl std::fmt::Display) -> Self {
         Self {
             code: 500,
+            message: e.to_string(),
+        }
+    }
+
+    pub fn bad_request(e: impl std::fmt::Display) -> Self {
+        Self {
+            code: 400,
             message: e.to_string(),
         }
     }

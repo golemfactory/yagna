@@ -55,7 +55,7 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
                         reader.read_to_end(&mut vec).await?;
                         vec
                     };
-                    if vec.len() == 0 {
+                    if vec.is_empty() {
                         break;
                     }
 
@@ -74,7 +74,7 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
 
     fn destination(&self, url: &Url, ctx: &TransferContext) -> TransferSink<TransferData, Error> {
         let (sink, mut rx, res_tx) = TransferSink::<TransferData, Error>::create(1);
-        let path = PathBuf::from(extract_file_url(&url));
+        let path = PathBuf::from(extract_file_url(url));
         let path_c = path.clone();
         let state = ctx.state.clone();
 
@@ -103,7 +103,7 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
                 while let Some(result) = rx.next().await {
                     let data = result?;
                     let bytes = data.as_ref();
-                    if bytes.len() == 0 {
+                    if bytes.is_empty() {
                         break;
                     }
 
@@ -131,7 +131,7 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
         url: &Url,
         ctx: &TransferContext,
     ) -> LocalBoxFuture<'a, Result<(), Error>> {
-        let path = PathBuf::from(extract_file_url(&url));
+        let path = PathBuf::from(extract_file_url(url));
         let state = ctx.state.clone();
         async move {
             state.set_offset(match tokio::fs::metadata(path).await {

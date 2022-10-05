@@ -46,7 +46,7 @@ pub async fn bind_remote(
     let bcast_service_id = <SendBroadcastMessage<()> as RpcMessage>::ID;
 
     // connect to hub with forwarding handler
-    let own_net_nodes: Vec<_> = nodes.iter().map(|id| net_service(id)).collect();
+    let own_net_nodes: Vec<_> = nodes.iter().map(net_service).collect();
 
     let forward_call = move |request_id: String, caller: String, addr: String, data: Vec<u8>| {
         let prefix = own_net_nodes
@@ -65,11 +65,11 @@ pub async fn bind_remote(
             // actual forwarding to my local bus
             local_bus::call_stream(&local_addr, &caller, &data).right_stream()
         } else {
-            return stream::once(future::err(Error::GsbBadRequest(format!(
+            stream::once(future::err(Error::GsbBadRequest(format!(
                 "wrong routing: {}; I'll accept only addrs starting with: {:?}",
                 addr, own_net_nodes
             ))))
-            .left_stream();
+            .left_stream()
         }
     };
 
@@ -230,7 +230,7 @@ fn bind_net_handler<Transport, H>(
             .map_err(|e| Error::RemoteError(addr, e.to_string()))
     };
 
-    let central_bus_stream = central_bus.clone();
+    let central_bus_stream = central_bus;
     let default_caller_stream = default_node_id.to_string();
     let stream = move |_caller: &str, addr: &str, msg: &[u8]| {
         let caller = default_caller_stream.clone();
@@ -287,8 +287,8 @@ fn bind_from_handler<Transport, H>(
             .right_future()
     };
 
-    let nodes_stream = nodes.clone();
-    let central_bus_stream = central_bus.clone();
+    let nodes_stream = nodes;
+    let central_bus_stream = central_bus;
     let stream = move |_caller: &str, addr: &str, msg: &[u8]| {
         let addr = strip_prefixes_for_compatibility(addr);
 
@@ -323,7 +323,7 @@ fn bind_from_handler<Transport, H>(
 async fn unbind_remote(nodes: Vec<NodeId>) {
     let addrs = nodes
         .into_iter()
-        .map(|node_id| net_service(node_id))
+        .map(net_service)
         .chain(std::iter::once(format!(
             "{}/{}",
             local_net::BUS_ID,
@@ -345,7 +345,7 @@ async fn unbind_remote(nodes: Vec<NodeId>) {
 }
 
 async fn resubscribe() {
-    futures::stream::iter({ SUBSCRIPTIONS.lock().unwrap().clone() }.into_iter())
+    futures::stream::iter({ SUBSCRIPTIONS.lock().await.clone() }.into_iter())
         .for_each(|msg| {
             let topic = msg.topic().to_owned();
             async move {
@@ -385,7 +385,7 @@ where
 
                 let reconnect_clone = reconnect.clone();
                 tokio::task::spawn_local(async move {
-                    if let Ok(_) = dc_rx.await {
+                    if dc_rx.await.is_ok() {
                         metrics::counter!("net.disconnect", 1);
                         reconnect_clone.borrow_mut().last_disconnect = Some(Instant::now());
                         log::warn!("Handlers disconnected");
@@ -475,14 +475,14 @@ impl Net {
 }
 
 pub(crate) fn parse_from_addr(from_addr: &str) -> anyhow::Result<(NodeId, String)> {
-    let mut it = from_addr.split("/").fuse();
+    let mut it = from_addr.split('/').fuse();
     if let (Some(""), Some("from"), Some(from_node_id), Some("to"), Some(to_node_id)) =
         (it.next(), it.next(), it.next(), it.next(), it.next())
     {
         to_node_id.parse::<NodeId>()?;
         let prefix = 10 + from_node_id.len();
         let service_id = &from_addr[prefix..];
-        if let Some(_) = it.next() {
+        if it.next().is_some() {
             return Ok((from_node_id.parse()?, net_service(service_id)));
         }
     }

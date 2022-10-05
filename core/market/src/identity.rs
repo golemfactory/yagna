@@ -51,6 +51,7 @@ impl IdentityApi for IdentityGSB {
     }
 }
 
+#[allow(clippy::new_ret_no_self)]
 impl IdentityGSB {
     pub fn new() -> Arc<dyn IdentityApi> {
         Arc::new(IdentityGSB)

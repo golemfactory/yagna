@@ -118,15 +118,23 @@ pub enum InvoiceCommand {
 impl PaymentCli {
     pub async fn run_command(self, ctx: &CliCtx) -> anyhow::Result<CommandOutput> {
         match self {
-            PaymentCli::Fund { account } => CommandOutput::object(
-                wallet::fund(
-                    resolve_address(account.address()).await?,
-                    account.driver(),
-                    Some(account.network()),
-                    None,
+            PaymentCli::Fund { account } => {
+                let address = resolve_address(account.address()).await?;
+
+                init_account(Account {
+                    driver: account.driver(),
+                    address: address.clone(),
+                    network: Some(account.network()),
+                    token: None, // Use default -- we don't yet support other tokens than GLM
+                    send: true,
+                    receive: false,
+                })
+                .await?;
+
+                CommandOutput::object(
+                    wallet::fund(address, account.driver(), Some(account.network()), None).await?,
                 )
-                .await?,
-            ),
+            }
             PaymentCli::Init {
                 account,
                 sender,
@@ -147,7 +155,7 @@ impl PaymentCli {
                 let address = resolve_address(account.address()).await?;
                 let timestamp = last
                     .map(|d| Utc::now() - chrono::Duration::seconds(d.as_secs() as i64))
-                    .unwrap_or(DateTime::from(UNIX_EPOCH))
+                    .unwrap_or_else(|| DateTime::from(UNIX_EPOCH))
                     .timestamp();
                 let status = bus::service(pay::BUS_ID)
                     .call(pay::GetStatus {

@@ -1,14 +1,9 @@
 use std::convert::TryFrom;
 use std::path::Path;
-use std::sync::Arc;
 
 use bytes::{Buf, BytesMut};
 use futures::Stream;
-use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tokio::net::{UnixDatagram, UnixListener, UnixStream};
-use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
-use tokio_stream::wrappers::UnboundedReceiverStream;
-use tokio_util::codec::{BytesCodec, FramedRead, FramedWrite};
+use tokio::sync::mpsc;
 
 use ya_runtime_api::deploy::ContainerEndpoint;
 use ya_runtime_api::server::Network;
@@ -24,10 +19,9 @@ pub(crate) mod inet;
 pub(crate) mod vpn;
 
 const BUFFER_SIZE: usize = (DEFAULT_MAX_FRAME_SIZE + 2) * 4;
-type UnixSocket = UnixDatagram;
 
 pub(crate) struct Endpoint {
-    tx: UnboundedSender<Result<Vec<u8>>>,
+    tx: mpsc::UnboundedSender<Result<Vec<u8>>>,
     rx: Option<Box<dyn Stream<Item = Result<Vec<u8>>> + Unpin>>,
 }
 
@@ -41,7 +35,9 @@ impl Endpoint {
     }
 
     #[cfg(unix)]
-    pub async fn connect_with(sockets: (UnixSocket, UnixSocket)) -> Result<Self> {
+    pub async fn connect_with(
+        sockets: (tokio::net::UnixDatagram, tokio::net::UnixDatagram),
+    ) -> Result<Self> {
         Self::connect_to_socket(Path::new("/"), Some(sockets)).await
     }
 
@@ -49,10 +45,13 @@ impl Endpoint {
     #[cfg(unix)]
     async fn connect_to_chardev<P: AsRef<Path>>(path: P) -> Result<Self> {
         use futures::StreamExt;
+        use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
+        use tokio_stream::wrappers::UnboundedReceiverStream;
+        use tokio_util::codec::{BytesCodec, FramedRead, FramedWrite};
 
         type SocketChannel = (
-            UnboundedSender<Result<Vec<u8>>>,
-            UnboundedReceiver<Result<Vec<u8>>>,
+            mpsc::UnboundedSender<Result<Vec<u8>>>,
+            mpsc::UnboundedReceiver<Result<Vec<u8>>>,
         );
 
         let read = char_device::TokioCharDevice::open(path.as_ref()).await?;
@@ -105,14 +104,15 @@ impl Endpoint {
     #[cfg(unix)]
     async fn connect_to_socket(
         path: impl AsRef<Path>,
-        sockets: Option<(UnixSocket, UnixSocket)>,
+        sockets: Option<(tokio::net::UnixDatagram, tokio::net::UnixDatagram)>,
     ) -> Result<Self> {
         use futures::StreamExt;
-        use tokio::io;
+        use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
+        use tokio_stream::wrappers::UnboundedReceiverStream;
 
         type SocketChannel = (
-            UnboundedSender<Result<Vec<u8>>>,
-            UnboundedReceiver<Result<Vec<u8>>>,
+            mpsc::UnboundedSender<Result<Vec<u8>>>,
+            mpsc::UnboundedReceiver<Result<Vec<u8>>>,
         );
 
         let (mut bound, mut connected) = sockets.unwrap();

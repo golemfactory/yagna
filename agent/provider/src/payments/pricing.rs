@@ -42,7 +42,7 @@ pub struct LinearPricing {
 }
 
 impl PaymentModel for LinearPricing {
-    fn compute_cost(&self, usage: &Vec<f64>) -> Result<BigDecimal> {
+    fn compute_cost(&self, usage: &[f64]) -> Result<BigDecimal> {
         // Note: last element of usage_coeffs contains constant initial cost
         // of computing task, so we don't multiply it.
         let const_coeff_idx = self.usage_coeffs.len() - 1;

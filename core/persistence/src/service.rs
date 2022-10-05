@@ -1,3 +1,5 @@
+#![allow(clippy::ptr_arg)]
+
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
 

@@ -27,7 +27,7 @@ use ya_relay_client::{Client, ClientBuilder, ForwardReceiver, TransportType};
 use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::CallReplyCode;
 use ya_sb_util::RevPrefixes;
-use ya_service_bus::untyped::Fn4HandlerExt;
+use ya_service_bus::untyped::{Fn4HandlerExt, Fn4StreamHandlerExt};
 use ya_service_bus::{
     serialization, typed, untyped as local_bus, Error, ResponseChunk, RpcEndpoint, RpcMessage,
 };
@@ -273,7 +273,7 @@ where
 
         let rx = if no_reply {
             if is_local_dest {
-                push_bus_to_local(&caller_id.to_string(), addr, msg, &state_);
+                push_bus_to_local(caller_id, addr, msg, &state_);
             } else {
                 push_bus_to_net(caller_id, remote_id, address, msg, &state_, transport);
             }
@@ -282,7 +282,7 @@ where
         } else {
             let rx = if is_local_dest {
                 let (tx, rx) = mpsc::channel(1);
-                forward_bus_to_local(&caller_id.to_string(), addr, msg, &state_, tx);
+                forward_bus_to_local(caller_id, addr, msg, &state_, tx);
                 rx
             } else {
                 forward_bus_to_net(caller_id, remote_id, address, msg, &state_, transport)
@@ -307,9 +307,8 @@ where
         }
         .right_future()
     };
-    let rpc = rpc.into_handler();
 
-    let stream = move |caller: &str, addr: &str, msg: &[u8]| {
+    let stream = move |caller: &str, addr: &str, msg: &[u8], no_reply: bool| {
         let (caller_id, remote_id, address) = match (*resolver)(caller, addr) {
             Ok(id) => id,
             Err(err) => {
@@ -329,12 +328,23 @@ where
             remote_id
         );
 
-        let rx = if state.inner.borrow().ids.contains(&remote_id) {
-            let (tx, rx) = mpsc::channel(1);
-            forward_bus_to_local(&caller_id.to_string(), addr, msg, &state, tx);
-            rx
+        let is_local_dest = state.inner.borrow().ids.contains(&remote_id);
+        let rx = if no_reply {
+            if is_local_dest {
+                push_bus_to_local(caller_id, addr, msg, &state);
+            } else {
+                push_bus_to_net(caller_id, remote_id, address, msg, &state, transport);
+            }
+            futures::stream::empty().left_stream()
         } else {
-            forward_bus_to_net(caller_id, remote_id, address, msg, &state, transport)
+            let rx = if is_local_dest {
+                let (tx, rx) = mpsc::channel(1);
+                forward_bus_to_local(caller_id, addr, msg, &state, tx);
+                rx
+            } else {
+                forward_bus_to_net(caller_id, remote_id, address, msg, &state, transport)
+            };
+            rx.right_stream()
         };
 
         let eos = Rc::new(AtomicBool::new(false));
@@ -360,6 +370,8 @@ where
     };
 
     log::debug!("local bus: subscribing to {}", address);
+    let rpc = rpc.into_handler();
+    let stream = stream.into_stream_handler();
     local_bus::subscribe(address, rpc, stream);
 }
 
@@ -397,7 +409,8 @@ async fn bind_identity_event_handler(crypto: IdentityCryptoProvider) {
 }
 
 /// Forward requests from and to the local bus
-fn forward_bus_to_local(caller: &str, addr: &str, data: &[u8], state: &State, tx: BusSender) {
+fn forward_bus_to_local(caller: NodeId, addr: &str, data: &[u8], state: &State, tx: BusSender) {
+    let caller = caller.to_string();
     let address = match state.get_public_service(addr) {
         Some(address) => address,
         None => {
@@ -409,7 +422,7 @@ fn forward_bus_to_local(caller: &str, addr: &str, data: &[u8], state: &State, tx
 
     log::trace!("forwarding /net call to a local endpoint: {}", address);
 
-    let send = local_bus::call_stream(address.as_str(), caller, data);
+    let send = local_bus::call_stream(&address, &caller, data);
     tokio::task::spawn_local(async move {
         let _ = send
             .forward(tx.sink_map_err(|e| Error::GsbFailure(e.to_string())))
@@ -417,7 +430,8 @@ fn forward_bus_to_local(caller: &str, addr: &str, data: &[u8], state: &State, tx
     });
 }
 
-fn push_bus_to_local(caller: &str, addr: &str, data: &[u8], state: &State) {
+fn push_bus_to_local(caller: NodeId, addr: &str, data: &[u8], state: &State) {
+    let caller = caller.to_string();
     let address = match state.get_public_service(addr) {
         Some(address) => address,
         None => {
@@ -428,7 +442,7 @@ fn push_bus_to_local(caller: &str, addr: &str, data: &[u8], state: &State) {
 
     log::trace!("pushing /net message to a local endpoint: {}", address);
 
-    let send = local_bus::push(address.as_str(), caller, data);
+    let send = local_bus::push(&address, &caller, data);
     tokio::task::spawn_local(async move {
         let _ = send.await;
     });

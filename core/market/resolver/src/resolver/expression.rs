@@ -268,12 +268,10 @@ impl Expression {
         if undefined_found {
             ResolveResult::Undefined(
                 unresolved_refs,
-                if unresolved_exprs.len() > 1 {
-                    Expression::And(unresolved_exprs)
-                } else if unresolved_exprs.len() == 1 {
-                    *unresolved_exprs.pop().unwrap()
-                } else {
-                    Expression::Empty(true)
+                match unresolved_exprs.len().cmp(&1) {
+                    std::cmp::Ordering::Greater => Expression::And(unresolved_exprs),
+                    std::cmp::Ordering::Equal => *unresolved_exprs.pop().unwrap(),
+                    std::cmp::Ordering::Less => Expression::Empty(true),
                 },
             )
         } else {
@@ -321,23 +319,19 @@ impl Expression {
         if undefined_found {
             ResolveResult::Undefined(
                 all_un_props,
-                if unresolved_exprs.len() > 1 {
-                    Expression::Or(unresolved_exprs)
-                } else if unresolved_exprs.len() == 1 {
-                    *unresolved_exprs.pop().unwrap()
-                } else {
-                    Expression::Empty(true)
+                match unresolved_exprs.len().cmp(&1) {
+                    std::cmp::Ordering::Greater => Expression::Or(unresolved_exprs),
+                    std::cmp::Ordering::Equal => *unresolved_exprs.pop().unwrap(),
+                    std::cmp::Ordering::Less => Expression::Empty(true),
                 },
             )
         } else {
             ResolveResult::False(
                 all_un_props,
-                if unresolved_exprs.len() > 1 {
-                    Expression::Or(unresolved_exprs)
-                } else if unresolved_exprs.len() == 1 {
-                    *unresolved_exprs.pop().unwrap()
-                } else {
-                    Expression::Empty(false)
+                match unresolved_exprs.len().cmp(&1) {
+                    std::cmp::Ordering::Greater => Expression::Or(unresolved_exprs),
+                    std::cmp::Ordering::Equal => *unresolved_exprs.pop().unwrap(),
+                    std::cmp::Ordering::Less => Expression::Empty(false),
                 },
             )
         }
@@ -522,22 +516,8 @@ fn extract_two_octet_strings<'a>(
     sequence: &'a Vec<Tag>,
 ) -> Result<(&'a str, &'a str), ExpressionError> {
     if sequence.len() >= 2 {
-        let attr: &'a str;
-        let val: &'a str;
-
-        match extract_str_from_octet_string(&sequence[0]) {
-            Ok(s) => {
-                attr = s;
-            }
-            Err(err) => return Err(err),
-        }
-
-        match extract_str_from_octet_string(&sequence[1]) {
-            Ok(s) => {
-                val = s;
-            }
-            Err(err) => return Err(err),
-        }
+        let attr: &'a str = extract_str_from_octet_string(&sequence[0])?;
+        let val: &'a str = extract_str_from_octet_string(&sequence[1])?;
 
         Ok((attr, val))
     } else {

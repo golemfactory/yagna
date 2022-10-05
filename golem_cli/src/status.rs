@@ -23,7 +23,7 @@ async fn payment_status(
     network: &NetworkName,
     account: &Option<NodeId>,
 ) -> anyhow::Result<BTreeMap<String, StatusResult>> {
-    let address = payment_account(&cmd, account).await?;
+    let address = payment_account(cmd, account).await?;
 
     let network_group = get_network_group(network);
 
@@ -33,7 +33,7 @@ async fn payment_status(
         let mut l = vec![];
         for nn in NETWORK_GROUP_MAP[&network_group].iter() {
             for driver in DRIVERS.iter() {
-                if driver.platform(&nn).is_ok() {
+                if driver.platform(nn).is_ok() {
                     l.push(driver.status_label(nn));
                     f.push(cmd.yagna()?.payment_status(&address, nn, driver));
                 }
@@ -65,7 +65,7 @@ fn get_network_group(network: &NetworkName) -> NetworkGroup {
 }
 
 pub async fn run() -> Result</*exit code*/ i32> {
-    let size = crossterm::terminal::size().ok().unwrap_or_else(|| (80, 50));
+    let size = crossterm::terminal::size().ok().unwrap_or((80, 50));
     let cmd = YaCommand::new()?;
     let kvm_status = crate::platform::kvm_status();
 
@@ -241,9 +241,10 @@ async fn get_payment_network() -> Result<(usize, NetworkName)> {
         ya_client::web::WebClient::with_token(&app_key).interface()?;
     let offers = mkt_api.get_offers().await?;
 
-    let latest_offer = offers.iter().max_by_key(|o| o.timestamp).ok_or(anyhow!(
-        "Provider is not functioning properly. No offers Subscribed."
-    ))?;
+    let latest_offer = offers
+        .iter()
+        .max_by_key(|o| o.timestamp)
+        .ok_or_else(|| anyhow!("Provider is not functioning properly. No offers Subscribed."))?;
     let mut network = None;
     for net in NetworkName::VARIANTS {
         let net_to_check = net.parse()?;
@@ -257,8 +258,8 @@ async fn get_payment_network() -> Result<(usize, NetworkName)> {
         };
     }
 
-    let network = network.ok_or(anyhow!(
-        "Unable to determine payment network used by the Yagna Provider."
-    ))?;
+    let network = network.ok_or_else(|| {
+        anyhow!("Unable to determine payment network used by the Yagna Provider.")
+    })?;
     Ok((offers.len(), network))
 }

@@ -223,7 +223,7 @@ mod tests {
 
         fn include_in<S: ToString>(set: &mut Option<SetEntry<String>>, glob: S) {
             let glob = glob.to_string();
-            let includes = match mem::replace(set, None) {
+            let includes = match set.take() {
                 Some(entry) => match entry {
                     SetEntry::Single(e) => Some(SetEntry::Multiple(vec![e, glob])),
                     SetEntry::Multiple(mut v) => {
@@ -261,21 +261,21 @@ mod tests {
         let dir = tempdir::TempDir::new("test-glob")?;
         create_files(dir.path());
 
-        let items = Builder::new()
+        let items_count = Builder::new()
             .include("*.txt")
             .build()
             .traverse(dir.path())?
-            .collect::<Vec<_>>();
+            .count();
 
-        assert_eq!(items.len(), 3);
+        assert_eq!(items_count, 3);
 
-        let items = Builder::new()
+        let items_count = Builder::new()
             .include("**/*.txt")
             .build()
             .traverse(dir.path())?
-            .collect::<Vec<_>>();
+            .count();
 
-        assert_eq!(items.len(), 5);
+        assert_eq!(items_count, 5);
 
         Ok(())
     }
@@ -285,12 +285,9 @@ mod tests {
         let dir = tempdir::TempDir::new("test-glob")?;
         create_files(dir.path());
 
-        let items = Builder::new()
-            .build()
-            .traverse(dir.path())?
-            .collect::<Vec<_>>();
+        let items_count = Builder::new().build().traverse(dir.path())?.count();
 
-        assert_eq!(items.len(), 3 + 9);
+        assert_eq!(items_count, 3 + 9);
         Ok(())
     }
 
@@ -339,29 +336,29 @@ mod tests {
         let dir = tempdir::TempDir::new("test-glob").unwrap();
         create_files(dir.path());
 
-        let entries = Builder::new()
+        let entries_count = Builder::new()
             .include("**/*.txt")
             .depth(0)
             .build()
             .traverse(dir.path())?
-            .collect::<Vec<_>>();
-        assert_eq!(entries.len(), 3 as usize);
+            .count();
+        assert_eq!(entries_count, 3 as usize);
 
-        let entries = Builder::new()
+        let entries_count = Builder::new()
             .include("**/*.txt")
             .depth(1)
             .build()
             .traverse(dir.path())?
-            .collect::<Vec<_>>();
-        assert_eq!(entries.len(), 4 as usize);
+            .count();
+        assert_eq!(entries_count, 4 as usize);
 
-        let entries = Builder::new()
+        let entries_count = Builder::new()
             .include("**/*.txt")
             .depth(2)
             .build()
             .traverse(dir.path())?
-            .collect::<Vec<_>>();
-        assert_eq!(entries.len(), 5 as usize);
+            .count();
+        assert_eq!(entries_count, 5 as usize);
 
         Ok(())
     }

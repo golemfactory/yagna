@@ -71,10 +71,10 @@ impl CommonBroker {
     ) -> CommonBroker {
         CommonBroker {
             store,
-            db: db.clone(),
-            negotiation_notifier: EventNotifier::new(),
+            db,
+            negotiation_notifier: EventNotifier::default(),
             session_notifier,
-            agreement_notifier: EventNotifier::new(),
+            agreement_notifier: EventNotifier::default(),
             config,
             agreement_lock: AgreementLock::new(),
         }
@@ -197,7 +197,7 @@ impl CommonBroker {
                 .take_events(subscription_id, max_events, owner)
                 .await?;
 
-            if events.len() > 0 {
+            if !events.is_empty() {
                 return Ok(events);
             }
 
@@ -255,7 +255,7 @@ impl CommonBroker {
                 .await
                 .map_err(|e| AgreementEventsError::Internal(e.to_string()))?;
 
-            if events.len() > 0 {
+            if !events.is_empty() {
                 counter!("market.agreements.events.queried", events.len() as u64);
                 return Ok(events);
             }
@@ -295,7 +295,7 @@ impl CommonBroker {
         Ok(self
             .db
             .as_dao::<ProposalDao>()
-            .get_proposal(&id)
+            .get_proposal(id)
             .await
             .map_err(|e| GetProposalError::Internal(id.clone(), subs_id.cloned(), e.to_string()))?
             .filter(|proposal| {
@@ -316,7 +316,7 @@ impl CommonBroker {
                 // that such Proposal exists, but for different subscription_id.
                 false
             })
-            .ok_or(GetProposalError::NotFound(id.clone(), subs_id.cloned()))?)
+            .ok_or_else(|| GetProposalError::NotFound(id.clone(), subs_id.cloned()))?)
     }
 
     pub async fn get_client_proposal(
@@ -452,7 +452,7 @@ impl CommonBroker {
                 .select(&agreement_id, None, Utc::now().naive_utc())
                 .await
                 .map_err(|_e| RemoteAgreementError::NotFound(agreement_id.clone()))?
-                .ok_or(RemoteAgreementError::NotFound(agreement_id.clone()))?;
+                .ok_or_else(|| RemoteAgreementError::NotFound(agreement_id.clone()))?;
 
             let auth_id = match caller_role {
                 Owner::Provider => agreement.provider_id,
@@ -719,7 +719,7 @@ impl CommonBroker {
         let session_notifier = &self.session_notifier;
 
         // Notify everyone waiting on Agreement events endpoint.
-        if let Some(_) = &agreement.session_id {
+        if agreement.session_id.is_some() {
             session_notifier.notify(&agreement.session_id.clone()).await;
         }
         // Even if session_id was not None, we want to notify everyone else,
@@ -796,16 +796,14 @@ pub fn validate_match(
         | Match::Undefined {
             demand_mismatch,
             offer_mismatch,
-        } => {
-            return Err(MatchValidationError::NotMatching {
-                new: new_proposal.body.id.clone(),
-                prev: prev_proposal.body.id.clone(),
-                mismatches: format!(
-                    "Mismatched constraints - Offer: {:?}, Demand: {:?}",
-                    offer_mismatch, demand_mismatch
-                ),
-            })
-        }
+        } => Err(MatchValidationError::NotMatching {
+            new: new_proposal.body.id.clone(),
+            prev: prev_proposal.body.id.clone(),
+            mismatches: format!(
+                "Mismatched constraints - Offer: {:?}, Demand: {:?}",
+                offer_mismatch, demand_mismatch
+            ),
+        }),
     }
 }
 
@@ -842,7 +840,9 @@ pub fn inc_terminate_metrics(reason: &Option<Reason>, owner: Owner) {
     let p_code = get_reason_code(reason, "golem.provider.code");
     let r_code = get_reason_code(reason, "golem.requestor.code");
 
-    let reason_code = r_code.xor(p_code).unwrap_or("NotSpecified".to_string());
+    let reason_code = r_code
+        .xor(p_code)
+        .unwrap_or_else(|| "NotSpecified".to_string());
     match owner {
         Owner::Provider => {
             counter!("market.agreements.provider.terminated.reason", 1, "reason" => reason_code)

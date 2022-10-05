@@ -22,7 +22,7 @@ pub fn big_dec_to_u256(v: &BigDecimal) -> Result<U256, GenericError> {
     let v = v * &(*PRECISION);
     let v = v
         .to_bigint()
-        .ok_or(GenericError::new("Failed to convert to bigint"))?;
+        .ok_or_else(|| GenericError::new("Failed to convert to bigint"))?;
     let v = &v.to_string();
     Ok(U256::from_dec_str(v).map_err(GenericError::new)?)
 }
@@ -31,7 +31,7 @@ pub fn big_dec_gwei_to_u256(v: BigDecimal) -> Result<U256, GenericError> {
     let v = v * &(*GWEI_PRECISION);
     let v = v
         .to_bigint()
-        .ok_or(GenericError::new("Failed to convert to bigint"))?;
+        .ok_or_else(|| GenericError::new("Failed to convert to bigint"))?;
     let v = &v.to_string();
     Ok(U256::from_dec_str(v).map_err(GenericError::new)?)
 }
@@ -61,7 +61,7 @@ pub fn str_to_addr(addr: &str) -> Result<Address, GenericError> {
         Ok(addr) => Ok(addr),
         Err(_e) => Err(GenericError::new(format!(
             "Unable to parse address {}",
-            addr.to_string()
+            addr
         ))),
     }
 }
@@ -73,15 +73,16 @@ pub fn convert_float_gas_to_u256(gas_in_gwei: f64) -> U256 {
 }
 pub fn convert_u256_gas_to_float(gas_in_wei: U256) -> f64 {
     let gas_in_wei = gas_in_wei.as_u64() as f64;
-    let gas_in_gwei = gas_in_wei * 1.0E-9;
-    gas_in_gwei
+
+    gas_in_wei * 1.0E-9
 }
 
 pub fn gas_float_equals(gas_value1: f64, gas_value2: f64) -> bool {
-    if gas_value1 > 0.0 && gas_value2 > 0.0 {
-        if (gas_value1 - gas_value2).abs() / (gas_value1 + gas_value2) < 0.0001 {
-            return true;
-        }
+    if gas_value1 > 0.0
+        && gas_value2 > 0.0
+        && (gas_value1 - gas_value2).abs() / (gas_value1 + gas_value2) < 0.0001
+    {
+        return true;
     }
     if gas_value1 == 0.0 && gas_value2 == 0.0 {
         return true;

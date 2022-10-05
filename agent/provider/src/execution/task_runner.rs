@@ -184,18 +184,20 @@ impl TaskRunner {
 
         // Try convert to str to check if won't fail. If not we can than
         // unwrap() all paths that we created relative to current_dir.
-        data_dir.to_str().ok_or(anyhow!(
-            "Current dir [{}] contains invalid characters.",
-            data_dir.display()
-        ))?;
+        data_dir.to_str().ok_or_else(|| {
+            anyhow!(
+                "Current dir [{}] contains invalid characters.",
+                data_dir.display()
+            )
+        })?;
 
         Ok(TaskRunner {
             api: Arc::new(client),
             registry,
             tasks: vec![],
             active_agreements: HashMap::new(),
-            activity_created: SignalSlot::<CreateActivity>::new(),
-            activity_destroyed: SignalSlot::<ActivityDestroyed>::new(),
+            activity_created: SignalSlot::<CreateActivity>::default(),
+            activity_destroyed: SignalSlot::<ActivityDestroyed>::default(),
             config: Arc::new(config),
             event_ts: Utc::now(),
             tasks_dir,
@@ -216,7 +218,7 @@ impl TaskRunner {
     // =========================================== //
 
     async fn dispatch_events(events: Vec<ProviderEvent>, myself: &Addr<TaskRunner>) {
-        if events.len() == 0 {
+        if events.is_empty() {
             return;
         };
 
@@ -266,7 +268,7 @@ impl TaskRunner {
             Some(agreement) => agreement,
         };
 
-        let exeunit_name = exe_unit_name_from(&agreement)?;
+        let exeunit_name = exe_unit_name_from(agreement)?;
 
         let task = match self.create_task(
             &exeunit_name,
@@ -370,9 +372,9 @@ impl TaskRunner {
 
         let destroy_msg = ActivityDestroyed {
             agreement_id: msg.agreement_id.to_string(),
-            activity_id: msg.activity_id.clone(),
+            activity_id: msg.activity_id,
         };
-        let _ = self.activity_destroyed.send_signal(destroy_msg.clone());
+        let _ = self.activity_destroyed.send_signal(destroy_msg);
         Ok(())
     }
 
@@ -430,19 +432,31 @@ impl TaskRunner {
 
         let agreement_path = working_dir
             .parent()
-            .ok_or(anyhow!("None"))? // Parent must exist, since we built this path.
+            .ok_or_else(|| anyhow!("None"))? // Parent must exist, since we built this path.
             .join("agreement.json");
 
-        self.save_agreement(&agreement_path, &agreement_id)?;
+        self.save_agreement(&agreement_path, agreement_id)?;
 
         let mut args = vec![
             "service-bus",
             activity_id,
             ya_core_model::activity::local::BUS_ID,
         ];
-        args.extend(["-c", self.cache_dir.to_str().ok_or(anyhow!("None"))?].iter());
-        args.extend(["-w", working_dir.to_str().ok_or(anyhow!("None"))?].iter());
-        args.extend(["-a", agreement_path.to_str().ok_or(anyhow!("None"))?].iter());
+        args.extend(
+            [
+                "-c",
+                self.cache_dir.to_str().ok_or_else(|| anyhow!("None"))?,
+            ]
+            .iter(),
+        );
+        args.extend(["-w", working_dir.to_str().ok_or_else(|| anyhow!("None"))?].iter());
+        args.extend(
+            [
+                "-a",
+                agreement_path.to_str().ok_or_else(|| anyhow!("None"))?,
+            ]
+            .iter(),
+        );
 
         if let Some(req_pub_key) = requestor_pub_key {
             args.extend(["--requestor-pub-key", req_pub_key.as_ref()].iter());
@@ -475,7 +489,7 @@ impl TaskRunner {
         let agreement = self
             .active_agreements
             .get(agreement_id)
-            .ok_or(anyhow!("Can't find agreement [{}].", agreement_id))?;
+            .ok_or_else(|| anyhow!("Can't find agreement [{}].", agreement_id))?;
 
         let agreement_file = File::create(&agreement_path).map_err(|error| {
             anyhow!(
@@ -577,7 +591,7 @@ forward_actix_handler!(TaskRunner, GetExeUnit, get_exeunit);
 actix_signal_handler!(TaskRunner, CreateActivity, activity_created);
 actix_signal_handler!(TaskRunner, ActivityDestroyed, activity_destroyed);
 
-const PROPERTY_USAGE_VECTOR: &'static str = "golem.com.usage.vector";
+const PROPERTY_USAGE_VECTOR: &str = "golem.com.usage.vector";
 
 impl Handler<GetOfferTemplates> for TaskRunner {
     type Result = ResponseFuture<Result<HashMap<String, OfferTemplate>>>;
@@ -611,11 +625,7 @@ impl Handler<GetOfferTemplates> for TaskRunner {
                 {
                     serde_json::Value::Array(vec) => {
                         let mut usage_vector = vec.clone();
-                        usage_vector.extend(
-                            coeffs
-                                .into_iter()
-                                .map(|prop| serde_json::Value::String(prop)),
-                        );
+                        usage_vector.extend(coeffs.into_iter().map(serde_json::Value::String));
                         template.set_property(
                             PROPERTY_USAGE_VECTOR,
                             serde_json::Value::Array(usage_vector),
@@ -770,8 +780,8 @@ impl Handler<AgreementClosed> for TaskRunner {
     type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: AgreementClosed, ctx: &mut Context<Self>) -> Self::Result {
-        let agreement_id = msg.agreement_id.to_string();
-        let myself = ctx.address().clone();
+        let agreement_id = msg.agreement_id;
+        let myself = ctx.address();
         let activities = self.list_activities(&agreement_id);
 
         self.active_agreements.remove(&agreement_id);
@@ -790,8 +800,8 @@ impl Handler<AgreementBroken> for TaskRunner {
     type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: AgreementBroken, ctx: &mut Context<Self>) -> Self::Result {
-        let agreement_id = msg.agreement_id.to_string();
-        let myself = ctx.address().clone();
+        let agreement_id = msg.agreement_id;
+        let myself = ctx.address();
         let activities = self.list_activities(&agreement_id);
 
         self.active_agreements.remove(&agreement_id);
@@ -871,10 +881,8 @@ impl StateMonitor {
             _ => {}
         }
 
-        if self.state.0 == State::Unresponsive {
-            if state.0 != State::Unresponsive {
-                log::warn!("ExeUnit is now responsive");
-            }
+        if self.state.0 == State::Unresponsive && state.0 != State::Unresponsive {
+            log::warn!("ExeUnit is now responsive");
         }
 
         self.state = state;

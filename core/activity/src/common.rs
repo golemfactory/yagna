@@ -7,10 +7,10 @@ use uuid::Uuid;
 
 use ya_client_model::{
     activity::{ActivityState, ActivityUsage},
-    market::Agreement,
+    market::{Agreement, Role},
     NodeId,
 };
-use ya_core_model::{activity, market, Role};
+use ya_core_model::{activity, market};
 use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
@@ -102,7 +102,7 @@ pub(crate) async fn get_persisted_usage(
     db: &DbExecutor,
     activity_id: &str,
 ) -> Result<ActivityUsage, Error> {
-    Ok(db.as_dao::<ActivityUsageDao>().get(&activity_id).await?)
+    Ok(db.as_dao::<ActivityUsageDao>().get(activity_id).await?)
 }
 
 pub(crate) async fn set_persisted_usage(

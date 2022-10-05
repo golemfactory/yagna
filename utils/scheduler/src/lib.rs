@@ -14,10 +14,7 @@ pub struct Job {
 
 impl Job {
     fn new(task: Task, trigger: Trigger) -> Job {
-        Job {
-            task: task,
-            trigger: trigger,
-        }
+        Job { task, trigger }
     }
 
     fn is_pending(&self) -> bool {
@@ -43,7 +40,7 @@ impl<'a> Scheduler {
     {
         Scheduler {
             name: name.into(),
-            tick_time: tick_time,
+            tick_time,
             jobs: vec![],
         }
     }

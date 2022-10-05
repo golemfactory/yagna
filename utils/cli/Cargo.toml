@@ -1,0 +1,20 @@
+[package]
+name = "ya-utils-cli"
+version = "0.1.0"
+authors = ["Golem Factory <contact@golem.network>"]
+edition = "2018"
+homepage = "https://github.com/golemfactory/yagna"
+repository = "https://github.com/golemfactory/yagna"
+license = "LGPL-3.0"
+description = "Yagna CLI utils"
+keywords = ["golem", "yagna"]
+
+[dependencies]
+anyhow = "1.0"
+prettytable-rs = "0.9"
+serde = "1.0"
+serde_json = "1.0"
+serde_yaml = "0.9"
+lazy_static = "1.4"
+
+[dev-dependencies]

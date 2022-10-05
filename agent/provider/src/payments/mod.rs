@@ -1,6 +1,7 @@
 mod agreement;
 mod factory;
 mod model;
+#[allow(clippy::module_inception)]
 mod payments;
 mod pricing;
 

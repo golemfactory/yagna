@@ -155,7 +155,7 @@ pub async fn send_gasless_transfer(
             Err(GenericError::new(err.message))
         }
 
-        status @ _ => {
+        status => {
             let resp_bytes = resp.body().await.map_err(GenericError::new)?;
 
             Err(GenericError::new(format!(
@@ -167,5 +167,5 @@ pub async fn send_gasless_transfer(
 }
 
 fn resolve_gasless_url() -> String {
-    env::var(GASLESS_ADDR_ENVAR).unwrap_or(DEFAULT_GASLESS_HOST.to_string())
+    env::var(GASLESS_ADDR_ENVAR).unwrap_or_else(|_| DEFAULT_GASLESS_HOST.to_string())
 }
