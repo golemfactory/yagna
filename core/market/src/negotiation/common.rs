@@ -688,8 +688,7 @@ impl CommonBroker {
             Owner::Provider => &proposal.negotiation.provider_id != caller_id,
             Owner::Requestor => &proposal.negotiation.requestor_id != caller_id,
         } {
-            proposal.body.id.clone();
-            let _ = *caller_id;
+            ProposalValidationError::Unauthorized(proposal.body.id.clone(), caller_id.clone());
         }
 
         if &proposal.issuer() == caller_id {
