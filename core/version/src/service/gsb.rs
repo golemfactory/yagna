@@ -27,7 +27,6 @@ async fn skip_version_gsb(
 ) -> RpcMessageResult<version::Skip> {
     match db.as_dao::<ReleaseDAO>().skip_pending_release().await {
         Ok(r) => Ok(r.map(|r| {
-            let r = r;
             log::info!("{}", ReleaseMessage::Skipped(&r));
             counter!("version.skip", 1);
             r
