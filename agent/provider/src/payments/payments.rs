@@ -665,30 +665,33 @@ impl Handler<UpdateCost> for Payments {
                         // We break Agreement, if we weren't able to send any DebitNote lately.
                         match result {
                             Err(_) => {
-                                if accept_timeout.is_some() && Utc::now() > last_debit_note + accept_timeout.unwrap() {
-                                    myself.break_agreement_signal
-                                        .send_signal(BreakAgreement {
-                                            agreement_id: msg.invoice_info.agreement_id.clone(),
-                                            reason: BreakReason::RequestorUnreachable(accept_timeout.unwrap()),
-                                        })
-                                        .log_err_msg(&format!(
-                                            "Failed to send BreakAgreement for [{}], when Requestor is unreachable.",
-                                            msg.invoice_info.agreement_id
-                                        ))
-                                        .ok();
+                                if let Some(accept_timeout) = accept_timeout {
+                                    if Utc::now() > last_debit_note + accept_timeout {
+                                        myself.break_agreement_signal
+                                            .send_signal(BreakAgreement {
+                                                agreement_id: msg.invoice_info.agreement_id.clone(),
+                                                reason: BreakReason::RequestorUnreachable(accept_timeout),
+                                            })
+                                            .log_err_msg(&format!(
+                                                "Failed to send BreakAgreement for [{}], when Requestor is unreachable.",
+                                                msg.invoice_info.agreement_id
+                                            ))
+                                            .ok();
+                                    }
                                 }
                             },
                             Ok(debit_note) => {
+                                // Payment due date is always set _before_ sending the DebitNote.
+                                // The following synchronises the acceptance timeout check.
+                                if let Some(agreement) = 
                                 myself.agreements
                                     .get_mut(&msg.invoice_info.agreement_id)
-                                    // Payment due date is always set _before_ sending the DebitNote.
-                                    // The following synchronises the acceptance timeout check.
-                                    .map(|agreement| {
+                                    {
                                         agreement.last_send_debit_note = debit_note.timestamp;
                                         if debit_note.payment_due_date.is_some() {
                                             agreement.last_payable_debit_note = debit_note.timestamp
                                         }
-                                    });
+                                    }
                             }
                         }
 
