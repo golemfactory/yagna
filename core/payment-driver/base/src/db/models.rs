@@ -1,3 +1,5 @@
+#![allow(clippy::extra_unused_lifetimes)]
+
 /*
     Raw database models.
 */
