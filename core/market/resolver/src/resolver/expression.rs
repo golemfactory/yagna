@@ -24,8 +24,8 @@ pub enum Expression {
     Less(PropertyRef, String),         // property ref, value
     LessEqual(PropertyRef, String),    // property ref, value
     Present(PropertyRef),              // property ref
-    Or(Vec<Box<Expression>>),          // operands
-    And(Vec<Box<Expression>>),         // operands
+    Or(Vec<Expression>),               // operands
+    And(Vec<Expression>),              // operands
     Not(Box<Expression>),              // operand
     Empty(bool),                       // empty expression of specific logical value (true/false)
 }
@@ -45,7 +45,7 @@ impl Expression {
     }
 
     // Resolve the expression to bool value if possible (ie. if an expression has a known boolean value)
-    pub fn to_value<'a>(&'a self) -> Option<bool> {
+    pub fn to_value(&self) -> Option<bool> {
         match self {
             Expression::Empty(val) => Some(*val),
             _ => None,
@@ -231,7 +231,7 @@ impl Expression {
 
     fn resolve_and<'a>(
         &'a self,
-        seq: &'a Vec<Box<Expression>>,
+        seq: &'a Vec<Expression>,
         property_set: &'a PropertySet,
     ) -> ResolveResult {
         let mut undefined_found = false;
@@ -245,7 +245,7 @@ impl Expression {
                     match unresolved_expr {
                         Expression::Empty(_) => {}
                         _ => {
-                            unresolved_exprs.push(Box::new(unresolved_expr));
+                            unresolved_exprs.push(unresolved_expr);
                         }
                     };
                     return ResolveResult::False(vec![], Expression::Empty(false));
@@ -256,7 +256,7 @@ impl Expression {
                     match unresolved_expr {
                         Expression::Empty(_) => {}
                         _ => {
-                            unresolved_exprs.push(Box::new(unresolved_expr));
+                            unresolved_exprs.push(unresolved_expr);
                         }
                     };
                     undefined_found = true;
@@ -270,7 +270,7 @@ impl Expression {
                 unresolved_refs,
                 match unresolved_exprs.len().cmp(&1) {
                     std::cmp::Ordering::Greater => Expression::And(unresolved_exprs),
-                    std::cmp::Ordering::Equal => *unresolved_exprs.pop().unwrap(),
+                    std::cmp::Ordering::Equal => unresolved_exprs.pop().unwrap(),
                     std::cmp::Ordering::Less => Expression::Empty(true),
                 },
             )
@@ -281,7 +281,7 @@ impl Expression {
 
     fn resolve_or<'a>(
         &'a self,
-        seq: &'a Vec<Box<Expression>>,
+        seq: &'a Vec<Expression>,
         property_set: &'a PropertySet,
     ) -> ResolveResult {
         let mut undefined_found = false;
@@ -297,7 +297,7 @@ impl Expression {
                     match unresolved_expr {
                         Expression::Empty(_) => {}
                         _ => {
-                            unresolved_exprs.push(Box::new(unresolved_expr));
+                            unresolved_exprs.push(unresolved_expr);
                         }
                     };
                 }
@@ -306,7 +306,7 @@ impl Expression {
                     match unresolved_expr {
                         Expression::Empty(_) => {}
                         _ => {
-                            unresolved_exprs.push(Box::new(unresolved_expr));
+                            unresolved_exprs.push(unresolved_expr);
                         }
                     };
                     undefined_found = true;
@@ -321,7 +321,7 @@ impl Expression {
                 all_un_props,
                 match unresolved_exprs.len().cmp(&1) {
                     std::cmp::Ordering::Greater => Expression::Or(unresolved_exprs),
-                    std::cmp::Ordering::Equal => *unresolved_exprs.pop().unwrap(),
+                    std::cmp::Ordering::Equal => unresolved_exprs.pop().unwrap(),
                     std::cmp::Ordering::Less => Expression::Empty(true),
                 },
             )
@@ -330,7 +330,7 @@ impl Expression {
                 all_un_props,
                 match unresolved_exprs.len().cmp(&1) {
                     std::cmp::Ordering::Greater => Expression::Or(unresolved_exprs),
-                    std::cmp::Ordering::Equal => *unresolved_exprs.pop().unwrap(),
+                    std::cmp::Ordering::Equal => unresolved_exprs.pop().unwrap(),
                     std::cmp::Ordering::Less => Expression::Empty(false),
                 },
             )
@@ -446,7 +446,7 @@ fn build_multi_expression(
     for tag in sequence {
         match build_expression(tag) {
             Ok(expr) => {
-                expr_vec.push(Box::new(expr));
+                expr_vec.push(expr);
             }
             Err(err) => return Err(err),
         }

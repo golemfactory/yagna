@@ -68,18 +68,18 @@ fn build_expression_and() {
     let f = "(&(a=b)(b=c)(c=d))";
 
     let expression = Expression::And(vec![
-        Box::new(Expression::Equals(
+        Expression::Equals(
             PropertyRef::Value(String::from("a"), PropertyRefType::Any),
             String::from("b"),
-        )),
-        Box::new(Expression::Equals(
+        ),
+        Expression::Equals(
             PropertyRef::Value(String::from("b"), PropertyRefType::Any),
             String::from("c"),
-        )),
-        Box::new(Expression::Equals(
+        ),
+        Expression::Equals(
             PropertyRef::Value(String::from("c"), PropertyRefType::Any),
             String::from("d"),
-        )),
+        ),
     ]);
 
     assert_eq!(build_expression(&parse(f).unwrap()), Ok(expression));
