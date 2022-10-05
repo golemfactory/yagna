@@ -208,7 +208,7 @@ impl DownloadRequest {
                 .await?;
 
             let is_redirect = resp.status().is_redirection();
-            if (!is_redirect) || (is_redirect && redirects == 0) {
+            if !is_redirect || redirects == 0 {
                 return Ok(resp);
             }
 
