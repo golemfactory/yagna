@@ -142,5 +142,5 @@ named!(
 );
 
 pub fn is_delimiter(chr: u8) -> bool {
-    chr == '=' as u8 || chr == '<' as u8 || chr == '>' as u8 || chr == '~' as u8
+    chr == b'=' as u8 || chr == b'<' as u8 || chr == b'>' as u8 || chr == b'~' as u8
 }
