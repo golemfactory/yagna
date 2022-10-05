@@ -271,7 +271,7 @@ impl Vpn {
         processed
     }
 
-    fn process_egress<'a>(&mut self) -> bool {
+    fn process_egress(&mut self) -> bool {
         let mut processed = false;
         let vpn_id = self.vpn.id().clone();
 
