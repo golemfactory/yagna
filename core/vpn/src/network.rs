@@ -410,7 +410,7 @@ impl Handler<GetNodes> for Vpn {
             .vpn
             .nodes()
             .iter()
-            .map(|(id, ips)| {
+            .flat_map(|(id, ips)| {
                 ips.iter()
                     .map(|ip| ya_client_model::net::Node {
                         id: id.clone(),
@@ -418,7 +418,6 @@ impl Handler<GetNodes> for Vpn {
                     })
                     .collect::<Vec<_>>()
             })
-            .flatten()
             .collect())
     }
 }
