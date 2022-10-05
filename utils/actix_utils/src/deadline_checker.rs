@@ -369,7 +369,7 @@ mod test {
             checker
                 .send(TrackDeadline {
                     category: "agrrrrr-1".to_string(),
-                    deadline: now + Duration::milliseconds(200) + Duration::milliseconds(1 * i),
+                    deadline: now + Duration::milliseconds(200) + Duration::milliseconds(i),
                     id: i.to_string(),
                 })
                 .await

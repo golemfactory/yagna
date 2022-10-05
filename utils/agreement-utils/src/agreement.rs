@@ -73,9 +73,9 @@ impl AgreementView {
     pub fn remove_property(&mut self, pointer: &str) -> Result<(), Error> {
         let path: Vec<&str> = pointer.split('/').collect();
         remove_property_impl(&mut self.json, &path[1..]).map_err(|e| match e {
-                Error::NoKey(_) => Error::NoKey(pointer.to_string()),
-                _ => e,
-            })
+            Error::NoKey(_) => Error::NoKey(pointer.to_string()),
+            _ => e,
+        })
     }
 }
 
@@ -179,7 +179,7 @@ impl TryFrom<&Agreement> for AgreementView {
     }
 }
 
-impl<'a> std::fmt::Display for AgreementView {
+impl std::fmt::Display for AgreementView {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FormatError> {
         let mut agreement = self.json.clone();
 
@@ -213,7 +213,7 @@ impl Default for OfferTemplate {
     }
 }
 
-impl<'a> std::fmt::Display for OfferTemplate {
+impl std::fmt::Display for OfferTemplate {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FormatError> {
         let mut template = self.clone();
         template.properties = flatten_value(template.properties);
