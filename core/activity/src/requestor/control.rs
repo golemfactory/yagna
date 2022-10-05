@@ -84,16 +84,15 @@ async fn create_activity(
     let agreement = get_agreement(&agreement_id, Role::Requestor).await?;
     log::debug!("agreement: {:#?}", agreement);
 
-    let provider_id = *agreement.provider_id();
     let msg = activity::Create {
-        provider_id,
+        provider_id: *agreement.provider_id(),
         agreement_id: agreement_id.to_string(),
         timeout: query.timeout,
         requestor_pub_key: body.pub_key()?,
     };
 
     let create_resp = net::from(id.identity)
-        .to(provider_id)
+        .to(*agreement.provider_id())
         .service(activity::BUS_ID)
         .send(msg)
         .timeout(timeout_margin(query.timeout))
