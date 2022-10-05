@@ -274,7 +274,10 @@ impl CommonBroker {
                     NotifierError::ChannelClosed(_) => {
                         Err(AgreementEventsError::Internal(error.to_string()))
                     }
-                    NotifierError::Unsubscribed(_) => Err(AgreementEventsError::Internal("Code logic error. Shouldn't get Unsubscribe in Agreement events notifier.".to_string())),
+                    NotifierError::Unsubscribed(_) => Err(AgreementEventsError::Internal(
+                        "Code logic error. Shouldn't get Unsubscribe in Agreement events notifier."
+                            .to_string(),
+                    )),
                 };
             }
             // Ok result means, that event with required sessionId id was added.
@@ -290,8 +293,7 @@ impl CommonBroker {
         subs_id: Option<&SubscriptionId>,
         id: &ProposalId,
     ) -> Result<Proposal, GetProposalError> {
-        self
-            .db
+        self.db
             .as_dao::<ProposalDao>()
             .get_proposal(id)
             .await
@@ -340,11 +342,7 @@ impl CommonBroker {
     ) -> Result<(), AgreementError> {
         let dao = self.db.as_dao::<AgreementDao>();
         let agreement = match dao
-            .select_by_node(
-                &client_agreement_id,
-                id.identity,
-                Utc::now().naive_utc(),
-            )
+            .select_by_node(&client_agreement_id, id.identity, Utc::now().naive_utc())
             .await
             .map_err(|e| AgreementError::Get(client_agreement_id.clone(), e))?
         {
@@ -690,7 +688,8 @@ impl CommonBroker {
             Owner::Provider => &proposal.negotiation.provider_id != caller_id,
             Owner::Requestor => &proposal.negotiation.requestor_id != caller_id,
         } {
-            proposal.body.id.clone();let _ = *caller_id;
+            proposal.body.id.clone();
+            let _ = *caller_id;
         }
 
         if &proposal.issuer() == caller_id {

@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 use actix_http::body::BoxBody;
 use actix_http::Request;
 use actix_service::Service as ActixService;

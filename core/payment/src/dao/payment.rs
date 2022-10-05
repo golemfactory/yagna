@@ -114,6 +114,7 @@ impl<'c> PaymentDao<'c> {
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_new(
         &self,
         payer_id: NodeId,
