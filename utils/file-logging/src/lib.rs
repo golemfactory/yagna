@@ -2,7 +2,6 @@ use anyhow::Result;
 use chrono::format::strftime::StrftimeItems;
 use chrono::format::DelayedFormat;
 use chrono::{DateTime, Local};
-
 use flexi_logger::{
     style, AdaptiveFormat, Age, Cleanup, Criterion, DeferredNow, Duplicate, LogSpecBuilder,
     LogSpecification, Logger, Naming, Record,
