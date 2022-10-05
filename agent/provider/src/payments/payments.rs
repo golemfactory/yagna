@@ -683,8 +683,7 @@ impl Handler<UpdateCost> for Payments {
                             Ok(debit_note) => {
                                 // Payment due date is always set _before_ sending the DebitNote.
                                 // The following synchronises the acceptance timeout check.
-                                if let Some(agreement) = 
-                                myself.agreements
+                                if let Some(agreement) = myself.agreements
                                     .get_mut(&msg.invoice_info.agreement_id)
                                     {
                                         agreement.last_send_debit_note = debit_note.timestamp;
