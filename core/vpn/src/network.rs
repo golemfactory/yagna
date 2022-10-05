@@ -102,7 +102,7 @@ impl VpnSupervisor {
         let actor = self
             .arbiter
             .spawn_ext(async move {
-                let stack = Stack::new(net_ip, net_route(net_gw.clone())?);
+                let stack = Stack::new(net_ip, net_route(net_gw)?);
                 let vpn = Vpn::new(node_id, stack, vpn_net);
                 Ok::<_, Error>(vpn.start())
             })
@@ -118,7 +118,7 @@ impl VpnSupervisor {
         self.networks.insert(net_id.clone(), actor);
         self.blueprints.insert(net_id.clone(), network.clone());
         self.ownership
-            .entry(node_id.clone())
+            .entry(node_id)
             .or_insert_with(Default::default)
             .insert(net_id);
 

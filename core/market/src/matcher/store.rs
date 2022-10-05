@@ -74,24 +74,24 @@ impl SubscriptionStore {
         &self,
         node_ids: Option<Vec<NodeId>>,
     ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
-        Ok(self
+        self
             .db
             .as_dao::<OfferDao>()
             .get_offer_ids(node_ids, Utc::now().naive_utc())
             .await
-            .map_err(QueryOffersError::from)?)
+            .map_err(QueryOffersError::from)
     }
 
     pub async fn get_unsubscribed_offer_ids(
         &self,
         node_ids: Option<Vec<NodeId>>,
     ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
-        Ok(self
+        self
             .db
             .as_dao::<OfferDao>()
             .get_unsubscribed_ids(node_ids, Utc::now().naive_utc())
             .await
-            .map_err(QueryOffersError::from)?)
+            .map_err(QueryOffersError::from)
     }
 
     pub async fn get_client_offers(
@@ -124,24 +124,24 @@ impl SubscriptionStore {
         &self,
         ids: Vec<SubscriptionId>,
     ) -> Result<Vec<Offer>, QueryOffersError> {
-        Ok(self
+        self
             .db
             .as_dao::<OfferDao>()
             .get_offers(Some(ids), None, None, Utc::now().naive_utc())
             .await
-            .map_err(QueryOffersError::from)?)
+            .map_err(QueryOffersError::from)
     }
 
     pub async fn get_offers_before(
         &self,
         inserted_before_ts: NaiveDateTime,
     ) -> Result<Vec<Offer>, QueryOffersError> {
-        Ok(self
+        self
             .db
             .as_dao::<OfferDao>()
             .get_offers(None, None, Some(inserted_before_ts), Utc::now().naive_utc())
             .await
-            .map_err(QueryOffersError::from)?)
+            .map_err(QueryOffersError::from)
     }
 
     /// Returns Offers SubscriptionId from vector, that don't exist in our database.
@@ -187,7 +187,7 @@ impl SubscriptionStore {
             .as_dao::<OfferDao>()
             .unsubscribe(id, Utc::now().naive_utc())
             .await
-            .map_err(|e| ModifyOfferError::Unsubscribe(e.into(), id.clone()))
+            .map_err(|e| ModifyOfferError::Unsubscribe(e, id.clone()))
             .and_then(|state| match state {
                 OfferState::Active(_) => Ok(()),
                 OfferState::NotFound => Err(ModifyOfferError::NotFound(id.clone())),
@@ -284,12 +284,12 @@ impl SubscriptionStore {
         &self,
         insertion_ts: NaiveDateTime,
     ) -> Result<Vec<Demand>, DemandError> {
-        Ok(self
+        self
             .db
             .as_dao::<DemandDao>()
             .get_demands(None, Some(insertion_ts), Utc::now().naive_utc())
             .await
-            .map_err(DemandError::GetMany)?)
+            .map_err(DemandError::GetMany)
     }
 
     pub async fn remove_demand(

@@ -367,7 +367,7 @@ impl ProviderBroker {
 
             let timestamp = Utc::now().naive_utc();
             self.api
-                .reject_agreement(&agreement, reason.clone(), timestamp.clone())
+                .reject_agreement(&agreement, reason.clone(), timestamp)
                 .await?;
 
             dao.reject(&agreement.id, reason.clone(), &timestamp)
@@ -584,7 +584,7 @@ async fn agreement_received(
                 RemoteProposeAgreementError::AlreadyCountered(id)
             }
             _ => RemoteProposeAgreementError::Unexpected {
-                public_msg: format!("Failed to save Agreement."),
+                public_msg: "Failed to save Agreement.".to_string(),
                 original_msg: e.to_string(),
             },
         })?;
@@ -597,7 +597,7 @@ async fn agreement_received(
         .add_agreement_event(&agreement)
         .await
         .map_err(|e| RemoteProposeAgreementError::Unexpected {
-            public_msg: format!("Failed to add event for Agreement."),
+            public_msg: "Failed to add event for Agreement.".to_string(),
             original_msg: e.to_string(),
         })?;
 
@@ -619,9 +619,9 @@ async fn on_agreement_cancelled(
     msg: AgreementCancelled,
 ) -> Result<(), AgreementProtocolError> {
     let caller: NodeId = CommonBroker::parse_caller(&caller)?;
-    Ok(agreement_cancelled(broker, caller, msg)
+    agreement_cancelled(broker, caller, msg)
         .await
-        .map_err(AgreementProtocolError::Remote)?)
+        .map_err(AgreementProtocolError::Remote)
 }
 
 async fn agreement_cancelled(
@@ -646,7 +646,7 @@ async fn agreement_cancelled(
         }
 
         validate_transition(&agreement, AgreementState::Cancelled).map_err(|_| {
-            RemoteAgreementError::InvalidState(agreement.id.clone(), agreement.state.clone())
+            RemoteAgreementError::InvalidState(agreement.id.clone(), agreement.state)
         })?;
 
         dao.cancel(&agreement.id, msg.reason.clone(), &msg.cancellation_ts)

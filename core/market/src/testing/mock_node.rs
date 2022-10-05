@@ -426,7 +426,7 @@ impl MarketsNetwork {
             .unwrap();
         let id = mock_identity.new_identity(id_name);
 
-        let node_id = id.identity.clone();
+        let node_id = id.identity;
         let (public_gsb_prefix, _) = gsb_prefixes(&self.test_name, node_name);
 
         MockNet::default().register_node(&node_id, &public_gsb_prefix);

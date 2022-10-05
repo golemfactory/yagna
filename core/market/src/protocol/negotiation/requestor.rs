@@ -137,13 +137,13 @@ impl NegotiationApi {
         &self,
         agreement: &Agreement,
     ) -> Result<(), ProposeAgreementError> {
-        let requestor_id = agreement.requestor_id.clone();
-        let provider_id = agreement.provider_id.clone();
+        let requestor_id = agreement.requestor_id;
+        let provider_id = agreement.provider_id;
         let id = agreement.id.clone();
         let msg = AgreementReceived {
             agreement_id: agreement.id.clone(),
-            valid_to: agreement.valid_to.clone(),
-            creation_ts: agreement.creation_ts.clone(),
+            valid_to: agreement.valid_to,
+            creation_ts: agreement.creation_ts,
             proposal_id: agreement.offer_proposal_id.clone(),
             signature: agreement
                 .proposed_signature
@@ -160,8 +160,8 @@ impl NegotiationApi {
     }
 
     pub async fn commit_agreement(agreement: &Agreement) -> Result<(), CommitAgreementError> {
-        let requestor_id = agreement.requestor_id.clone();
-        let provider_id = agreement.provider_id.clone();
+        let requestor_id = agreement.requestor_id;
+        let provider_id = agreement.provider_id;
         let id = agreement.id.clone();
         let msg = AgreementCommitted {
             agreement_id: agreement.id.clone(),

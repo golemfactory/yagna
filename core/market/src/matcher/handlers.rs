@@ -20,10 +20,10 @@ pub(super) async fn filter_out_known_offer_ids(
     // We shouldn't propagate Offer, if we already have it in our database.
     // Note that when we broadcast our Offer, it will reach us too, so it concerns
     // not only Offers from other nodes.
-    Ok(store
+    store
         .filter_out_known_offer_ids(msg.offer_ids)
         .await
-        .map_err(|e| log::warn!("Error filtering Offers. Error: {}", e))?)
+        .map_err(|e| log::warn!("Error filtering Offers. Error: {}", e))
 }
 
 /// Returns only ids of those from input offers, that was successfully stored locally.
@@ -75,9 +75,7 @@ pub(super) async fn get_local_offers(
         Ok(offers) => Ok(offers),
         Err(e) => {
             log::error!("Failed to get batch offers. Error: {}", e);
-            Err(DiscoveryRemoteError::InternalError(format!(
-                "Failed to get offers from db."
-            )))
+            Err(DiscoveryRemoteError::InternalError("Failed to get offers from db.".to_string()))
         }
     }
 }

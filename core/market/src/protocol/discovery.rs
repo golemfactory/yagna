@@ -386,7 +386,7 @@ impl Discovery {
     ) -> Result<Vec<ModelOffer>, DiscoveryRemoteError> {
         log::trace!("[{}] asks for {} Offers.", &caller, msg.offer_ids.len());
         let get_local_offers = self.inner.get_local_offers_handler.clone();
-        Ok(get_local_offers.call(caller, msg).await?)
+        get_local_offers.call(caller, msg).await
     }
 
     async fn on_bcast_unsubscribes(
@@ -427,7 +427,7 @@ impl Discovery {
     }
 
     async fn default_identity(&self) -> Result<NodeId, IdentityError> {
-        Ok(self.inner.identity.default_identity().await?)
+        self.inner.identity.default_identity().await
     }
 }
 

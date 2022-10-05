@@ -44,7 +44,7 @@ pub fn add_iface_route(iface: &mut CaptureInterface, net_ip: IpCidr, route: Rout
         }
         ManagedMap::Borrowed(ref map) => {
             let mut map: BTreeMap<IpCidr, Route> =
-                map.iter().filter_map(|e| (*e).clone()).collect();
+                map.iter().filter_map(|e| (*e)).collect();
             map.insert(net_ip, route);
             *routes = map.into();
         }

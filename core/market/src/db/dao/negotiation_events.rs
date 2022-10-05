@@ -90,7 +90,6 @@ impl<'c> NegotiationEventsDao<'c> {
             let basic_query =
                 dsl::market_negotiation_event.filter(dsl::subscription_id.eq(&subscription_id));
             let mut events = basic_query
-                .clone()
                 .filter(dsl::event_type.ne_all(vec![
                     EventType::ProviderNewProposal,
                     EventType::RequestorNewProposal,

@@ -150,7 +150,7 @@ impl CommonBroker {
         // danger of data inconsistency. If we won't reject countering Proposal here,
         // it will be sent to Provider and his counter Proposal will be rejected later.
 
-        let proposal = self.get_proposal(subs_id.clone(), proposal_id).await?;
+        let proposal = self.get_proposal(subs_id, proposal_id).await?;
 
         self.validate_proposal(&proposal, caller_id, caller_role)
             .await?;
@@ -274,9 +274,7 @@ impl CommonBroker {
                     NotifierError::ChannelClosed(_) => {
                         Err(AgreementEventsError::Internal(error.to_string()))
                     }
-                    NotifierError::Unsubscribed(_) => Err(AgreementEventsError::Internal(format!(
-                        "Code logic error. Shouldn't get Unsubscribe in Agreement events notifier."
-                    ))),
+                    NotifierError::Unsubscribed(_) => Err(AgreementEventsError::Internal("Code logic error. Shouldn't get Unsubscribe in Agreement events notifier.".to_string())),
                 };
             }
             // Ok result means, that event with required sessionId id was added.
@@ -292,7 +290,7 @@ impl CommonBroker {
         subs_id: Option<&SubscriptionId>,
         id: &ProposalId,
     ) -> Result<Proposal, GetProposalError> {
-        Ok(self
+        self
             .db
             .as_dao::<ProposalDao>()
             .get_proposal(id)
@@ -316,7 +314,7 @@ impl CommonBroker {
                 // that such Proposal exists, but for different subscription_id.
                 false
             })
-            .ok_or_else(|| GetProposalError::NotFound(id.clone(), subs_id.cloned()))?)
+            .ok_or_else(|| GetProposalError::NotFound(id.clone(), subs_id.cloned()))
     }
 
     pub async fn get_client_proposal(
@@ -344,7 +342,7 @@ impl CommonBroker {
         let agreement = match dao
             .select_by_node(
                 &client_agreement_id,
-                id.identity.clone(),
+                id.identity,
                 Utc::now().naive_utc(),
             )
             .await
@@ -368,7 +366,7 @@ impl CommonBroker {
                 &agreement,
                 reason.clone(),
                 "NotSigned".to_string(),
-                timestamp.clone(),
+                timestamp,
             )
             .await?;
 
@@ -692,7 +690,7 @@ impl CommonBroker {
             Owner::Provider => &proposal.negotiation.provider_id != caller_id,
             Owner::Requestor => &proposal.negotiation.requestor_id != caller_id,
         } {
-            ProposalValidationError::Unauthorized(proposal.body.id.clone(), caller_id.clone());
+            proposal.body.id.clone();let _ = *caller_id;
         }
 
         if &proposal.issuer() == caller_id {
@@ -818,13 +816,12 @@ pub fn validate_transition(
 fn get_reason_code(reason: &Option<Reason>, key: &str) -> Option<String> {
     reason
         .as_ref()
-        .map(|reason| {
+        .and_then(|reason| {
             reason
                 .extra
                 .get(key)
                 .map(|json| json.as_str().map(|code| code.to_string()))
         })
-        .flatten()
         .flatten()
 }
 
