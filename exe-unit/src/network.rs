@@ -177,56 +177,6 @@ impl Endpoint {
             }
         });
 
-        // let socket = tokio::net::UnixStream::connect(path.as_ref()).await?;
-        // let (read, mut write) = io::split(socket);
-        // let (tx_si, rx_si): SocketChannel = mpsc::unbounded_channel();
-        //
-        // log::info!("[vpn] opened socket at {}", path.as_ref().display());
-        //
-        // let stream = {
-        //     let buffer: [u8; BUFFER_SIZE] = [0u8; BUFFER_SIZE];
-        //     futures::stream::unfold((read, buffer), |(mut r, mut b)| async move {
-        //         match r.read(&mut b).await {
-        //             Ok(0) => {
-        //                 log::info!("read 0 B");
-        //                 None
-        //             }
-        //             Ok(n) => {
-        //                 log::info!("read {n} B");
-        //                 Some((Ok(b[..n].to_vec()), (r, b)))
-        //             }
-        //             Err(e) => {
-        //                 log::error!("err {e}");
-        //                 Some((Err(e.into()), (r, b)))
-        //             }
-        //         }
-        //     })
-        //     .boxed_local()
-        // };
-        //
-        // tokio::task::spawn(async move {
-        //     let mut rx_si = UnboundedReceiverStream::new(rx_si);
-        //     loop {
-        //         match StreamExt::next(&mut rx_si).await {
-        //             Some(Ok(data)) => {
-        //                 log::info!("write {} B", data.len());
-        //                 if let Err(e) = write.write_all(data.as_slice()).await {
-        //                     log::error!("error writing to VM socket endpoint: {e}");
-        //                     break;
-        //                 }
-        //             }
-        //             Some(Err(e)) => {
-        //                 log::error!("VM socket endpoint error: {e}");
-        //                 break;
-        //             }
-        //             None => {
-        //                 log::info!("VM socket endpoint read None");
-        //                 break;
-        //             }
-        //         }
-        //     }
-        // });
-
         Ok(Self {
             tx: tx_si,
             rx: Some(Box::new(stream)),
