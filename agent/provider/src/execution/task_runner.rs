@@ -292,18 +292,15 @@ impl TaskRunner {
             let mut finished = Box::pin(proc.wait_until_finished());
             let mut monitor = StateMonitor::default();
 
-            loop {
-                match select(Box::pin(api.get_activity_state(&activity_id)), finished).await {
-                    Either::Left((result, fut)) => {
-                        finished = fut;
+            while let Either::Left((result, fut)) =
+                select(Box::pin(api.get_activity_state(&activity_id)), finished).await
+            {
+                finished = fut;
 
-                        if let Ok(state) = result {
-                            monitor.update(state.state);
-                        }
-                        monitor.sleep().await;
-                    }
-                    Either::Right(_) => break,
+                if let Ok(state) = result {
+                    monitor.update(state.state);
                 }
+                monitor.sleep().await;
             }
         });
 
@@ -666,10 +663,9 @@ impl Handler<UpdateActivity> for TaskRunner {
 
             match result {
                 Ok(events) => {
-                    events
-                        .iter()
-                        .max_by_key(|e| e.event_date)
-                        .map(|e| event_ts = event_ts.max(e.event_date));
+                    if let Some(e) = events.iter().max_by_key(|e| e.event_date) {
+                        event_ts = event_ts.max(e.event_date);
+                    }
                     Self::dispatch_events(events, &addr).await;
                 }
                 Err(error) => log::error!("Can't query activity events: {:?}", error),
