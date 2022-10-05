@@ -1,6 +1,7 @@
 use anyhow::Result;
 use chrono::format::strftime::StrftimeItems;
 use chrono::format::DelayedFormat;
+use chrono::{DateTime, Local};
 
 use flexi_logger::{
     style, AdaptiveFormat, Age, Cleanup, Criterion, DeferredNow, Duplicate, LogSpecBuilder,
@@ -10,9 +11,10 @@ use std::path::Path;
 
 pub use flexi_logger::LoggerHandle;
 
+#[allow(clippy::useless_conversion)]
 fn log_format_date(now: &mut DeferredNow) -> DelayedFormat<StrftimeItems> {
     //use DateTime::<Local> instead of DateTime::<UTC> to obtain local date
-    let local_date = *now.now();
+    let local_date = DateTime::<Local>::from(*now.now());
 
     //format date as following: 2020-08-27T07:56:22.348+02:00 (local date + time zone with milliseconds precision)
     const DATE_FORMAT_STR: &str = "%Y-%m-%dT%H:%M:%S%.3f%z";
