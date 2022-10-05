@@ -97,12 +97,11 @@ impl TryFrom<&Variant> for Service {
     type Error = Error;
 
     fn try_from(variant: &Variant) -> Result<Self> {
-        let span = variant.ident.span();
         let name = variant.ident.clone();
         let components = Self::parse_attrs(&variant.attrs)?;
         let path = match &variant.fields {
             Fields::Unnamed(fields) => Self::parse_fields(fields)?,
-            _ => return Err(Error::new(span, "Invalid format")),
+            _ => return Err(Error::new(variant.ident.span(), "Invalid format")),
         };
 
         Ok(Self {
