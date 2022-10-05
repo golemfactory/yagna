@@ -32,7 +32,9 @@ fn invalid_state_err_msg(state_pair: &StatePair) -> String {
         StatePair(State::Deployed, None) => {
             "Activity is deployed - start() command is expected now".to_string()
         }
-        StatePair(State::Ready, None) => "Cannot send command after a successful start()".to_string(),
+        StatePair(State::Ready, None) => {
+            "Cannot send command after a successful start()".to_string()
+        }
         _ => format!(
             "This command is not allowed when activity is in the {:?} state",
             state_pair.0
@@ -60,6 +62,7 @@ pub struct Supervision {
     pub manifest: ManifestContext,
 }
 
+#[derive(Default)]
 pub(crate) struct ExeUnitState {
     pub inner: StatePair,
     pub last_batch: Option<String>,
@@ -85,16 +88,6 @@ impl ExeUnitState {
             report.cmds_pending += total - done;
         });
         report
-    }
-}
-
-impl Default for ExeUnitState {
-    fn default() -> Self {
-        ExeUnitState {
-            inner: Default::default(),
-            batches: Default::default(),
-            last_batch: None,
-        }
     }
 }
 
@@ -190,7 +183,8 @@ impl Batch {
         let result = self
             .results
             .iter()
-            .enumerate().find(|(_, s)| s.result.is_none())
+            .enumerate()
+            .find(|(_, s)| s.result.is_none())
             .map(|(i, s)| (i, s.message.clone()));
 
         match result {
