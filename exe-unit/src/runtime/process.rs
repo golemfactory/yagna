@@ -380,16 +380,16 @@ impl RuntimeProcess {
     }
 }
 
-// impl Drop for RuntimeProcess {
-//     fn drop(&mut self) {
-//         if let Some(container) = {
-//             let inner = self.container.lock().unwrap();
-//             inner.as_ref().cloned()
-//         } {
-//             drop_container_hack(container);
-//         }
-//     }
-// }
+impl Drop for RuntimeProcess {
+    fn drop(&mut self) {
+        if let Some(container) = {
+            let inner = self.container.lock().unwrap();
+            inner.as_ref().cloned()
+        } {
+            drop_container_hack(container);
+        }
+    }
+}
 
 fn drop_container_hack(container: String) {
     match std::process::Command::new("/usr/bin/docker")
