@@ -137,8 +137,6 @@ impl NegotiationApi {
         &self,
         agreement: &Agreement,
     ) -> Result<(), ProposeAgreementError> {
-        let requestor_id = agreement.requestor_id;
-        let provider_id = agreement.provider_id;
         let id = agreement.id.clone();
         let msg = AgreementReceived {
             agreement_id: agreement.id.clone(),
@@ -150,8 +148,8 @@ impl NegotiationApi {
                 .clone()
                 .ok_or_else(|| ProposeAgreementError::NotSigned(id.clone()))?,
         };
-        net::from(requestor_id)
-            .to(provider_id)
+        net::from(agreement.requestor_id)
+            .to(agreement.provider_id)
             .service(&provider::agreement_addr(BUS_ID))
             .send(msg)
             .map_err(|e| GsbAgreementError(e.to_string(), id))
@@ -160,8 +158,6 @@ impl NegotiationApi {
     }
 
     pub async fn commit_agreement(agreement: &Agreement) -> Result<(), CommitAgreementError> {
-        let requestor_id = agreement.requestor_id;
-        let provider_id = agreement.provider_id;
         let id = agreement.id.clone();
         let msg = AgreementCommitted {
             agreement_id: agreement.id.clone(),
@@ -170,8 +166,8 @@ impl NegotiationApi {
                 .clone()
                 .ok_or_else(|| CommitAgreementError::NotSigned(id.clone()))?,
         };
-        net::from(requestor_id)
-            .to(provider_id)
+        net::from(agreement.requestor_id)
+            .to(agreement.provider_id)
             .service(&provider::agreement_addr(BUS_ID))
             .send(msg)
             .map_err(|e| GsbAgreementError(e.to_string(), id))
