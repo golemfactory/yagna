@@ -309,8 +309,6 @@ async fn send_debit_note(
 
 async fn check_invoice_events(provider_ctx: Arc<ProviderCtx>, payments_addr: Addr<Payments>) {
     let config = &provider_ctx.config;
-    let timeout = config.get_events_timeout;
-    let error_timeout = config.get_events_error_timeout;
     let mut after_timestamp = Utc::now();
 
     loop {
@@ -318,7 +316,7 @@ async fn check_invoice_events(provider_ctx: Arc<ProviderCtx>, payments_addr: Add
             .payment_api
             .get_invoice_events(
                 Some(&after_timestamp),
-                Some(timeout),
+                Some(config.get_events_timeout),
                 None,
                 Some(config.session_id.clone()),
             )
@@ -327,7 +325,7 @@ async fn check_invoice_events(provider_ctx: Arc<ProviderCtx>, payments_addr: Add
             Ok(events) => events,
             Err(e) => {
                 log::error!("Can't query invoice events: {}", e);
-                tokio::time::sleep(error_timeout).await;
+                tokio::time::sleep(config.get_events_error_timeout).await;
                 vec![]
             }
         };
