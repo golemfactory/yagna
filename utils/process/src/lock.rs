@@ -43,11 +43,10 @@ impl ProcLock {
                     })
                     .unwrap_or(false)
             })
-            .filter(|p| match File::open(&p) {
+            .find(|p| match File::open(&p) {
                 Ok(f) => f.try_lock_exclusive().is_err(),
                 _ => true,
             })
-            .next()
             .is_some())
     }
 

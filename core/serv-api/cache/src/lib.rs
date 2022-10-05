@@ -5,6 +5,7 @@ use std::hash::Hash;
 use std::pin::Pin;
 use std::time::{Duration, SystemTime};
 
+#[allow(clippy::type_complexity)]
 pub trait ValueResolver {
     type Key: Clone;
     type Value: Clone;
