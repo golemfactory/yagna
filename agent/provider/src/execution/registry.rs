@@ -142,16 +142,9 @@ impl ExeUnitDesc {
 
 /// Responsible for creating ExeUnits.
 /// Stores registry of ExeUnits that can be created.
+#[derive(Default)]
 pub struct ExeUnitsRegistry {
     descriptors: HashMap<String, ExeUnitDesc>,
-}
-
-impl Default for ExeUnitsRegistry {
-    fn default() -> Self {
-        Self {
-            descriptors: Default::default(),
-        }
-    }
 }
 
 impl ExeUnitsRegistry {
