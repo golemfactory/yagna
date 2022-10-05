@@ -72,6 +72,7 @@ impl AgreementView {
 
     pub fn remove_property(&mut self, pointer: &str) -> Result<(), Error> {
         let path: Vec<&str> = pointer.split('/').collect();
+        // Path should start with '/', so we must omit first element, which will be empty.
         remove_property_impl(&mut self.json, &path[1..]).map_err(|e| match e {
             Error::NoKey(_) => Error::NoKey(pointer.to_string()),
             _ => e,
