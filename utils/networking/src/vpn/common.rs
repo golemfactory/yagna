@@ -7,7 +7,7 @@ use ipnet::IpNet;
 use ya_relay_stack::Error;
 
 pub const DEFAULT_MAX_FRAME_SIZE: usize = 1500;
-pub const DEFAULT_IPV4_NET_MASK: &'static str = "255.255.255.0";
+pub const DEFAULT_IPV4_NET_MASK: &str = "255.255.255.0";
 
 #[inline(always)]
 pub fn hton(ip: IpAddr) -> Box<[u8]> {
@@ -55,7 +55,7 @@ pub fn to_net<S: AsRef<str>>(ip: &str, mask: Option<S>) -> Result<IpNet, Error> 
     let result = match ip.find('/') {
         Some(_) => IpNet::from_str(ip),
         None => {
-            let ip = IpAddr::from_str(&ip)?;
+            let ip = IpAddr::from_str(ip)?;
             let cidr = match &ip {
                 IpAddr::V4(_) => {
                     let mask = mask

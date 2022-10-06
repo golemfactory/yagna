@@ -56,7 +56,7 @@ impl NetCommand {
                 let mut sessions: Vec<model::SessionResponse> = bus::service(model::BUS_ID)
                     .send(model::Sessions {})
                     .await
-                    .map_err(|e| anyhow::Error::msg(e))??;
+                    .map_err(anyhow::Error::msg)??;
 
                 sessions.sort_by_key(|s| s.node_id.unwrap_or_default().into_array());
 
@@ -97,7 +97,7 @@ impl NetCommand {
                 let mut sockets: Vec<model::SocketResponse> = bus::service(model::BUS_ID)
                     .send(model::Sockets {})
                     .await
-                    .map_err(|e| anyhow::Error::msg(e))??;
+                    .map_err(anyhow::Error::msg)??;
 
                 sockets.sort_by(|l, r| match l.remote_addr.cmp(&r.remote_addr) {
                     Ordering::Equal => l.remote_port.cmp(&r.remote_port),
@@ -135,7 +135,7 @@ impl NetCommand {
                 let node: model::FindNodeResponse = bus::service(model::BUS_ID)
                     .send(model::FindNode { node_id })
                     .await
-                    .map_err(|e| anyhow::Error::msg(e))??;
+                    .map_err(anyhow::Error::msg)??;
 
                 let naive = NaiveDateTime::from_timestamp(node.seen.into(), 0);
                 let seen: DateTime<Utc> = DateTime::from_utc(naive, Utc);
@@ -152,7 +152,7 @@ impl NetCommand {
                 let pings = bus::service(model::BUS_ID)
                     .send(model::GsbPing {})
                     .await
-                    .map_err(|e| anyhow::Error::msg(e))??;
+                    .map_err(anyhow::Error::msg)??;
 
                 Ok(ResponseTable {
                     columns: vec![

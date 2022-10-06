@@ -136,7 +136,7 @@ pub(crate) fn default_event_timeout() -> f32 {
 }
 
 impl PathAgreement {
-    pub fn to_id(self, owner: Owner) -> Result<AgreementId, ProposalIdParseError> {
+    pub fn to_id(&self, owner: Owner) -> Result<AgreementId, ProposalIdParseError> {
         AgreementId::from_client(&self.agreement_id, owner)
     }
 }

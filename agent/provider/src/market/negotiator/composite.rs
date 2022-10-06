@@ -28,7 +28,7 @@ impl CompositeNegotiator {
         _market: Addr<ProviderMarket>,
         config: &CompositeNegotiatorConfig,
     ) -> anyhow::Result<CompositeNegotiator> {
-        let components = NegotiatorsPack::new()
+        let components = NegotiatorsPack::default()
             .add_component(
                 "LimitAgreements",
                 Box::new(MaxAgreements::new(&config.limit_agreements_config)),

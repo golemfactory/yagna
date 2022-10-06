@@ -448,8 +448,8 @@ mod public {
         .await
         {
             Ok(_) => Ok(Ack {}),
-            Err(DbError::Query(e)) => return Err(SendError::BadRequest(e)),
-            Err(e) => return Err(SendError::ServiceError(e.to_string())),
+            Err(DbError::Query(e)) => Err(SendError::BadRequest(e)),
+            Err(e) => Err(SendError::ServiceError(e.to_string())),
         }
     }
 
@@ -619,8 +619,8 @@ mod public {
         .await
         {
             Ok(_) => Ok(Ack {}),
-            Err(DbError::Query(e)) => return Err(SendError::BadRequest(e)),
-            Err(e) => return Err(SendError::ServiceError(e.to_string())),
+            Err(DbError::Query(e)) => Err(SendError::BadRequest(e)),
+            Err(e) => Err(SendError::ServiceError(e.to_string())),
         }
     }
 

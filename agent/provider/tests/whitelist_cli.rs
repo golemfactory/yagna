@@ -149,7 +149,7 @@ fn whitelist_list() -> Assert {
 }
 
 fn json_to_printed_output(out: &str) -> String {
-    let out: Value = serde_json::from_str(&out).unwrap();
+    let out: Value = serde_json::from_str(out).unwrap();
     let out = serde_json::to_string_pretty(&out).unwrap();
     format!("{out}\n")
 }

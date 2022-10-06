@@ -167,7 +167,7 @@ impl<'c> EventDao<'c> {
                 .get_events(identity_id, app_session_id, after_timestamp, max_events)
                 .await?
             {
-                if events.len() > 0 {
+                if !events.is_empty() {
                     return Ok(events);
                 }
             }

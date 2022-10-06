@@ -59,6 +59,6 @@ where
 
     // We created endpoint address above. Now we must add handler, which will
     // handle broadcasts forwarded to this address.
-    bus::bind_with_caller(&broadcast_address, handler);
+    bus::bind_with_caller(broadcast_address, handler);
     Ok(())
 }

@@ -12,7 +12,7 @@ use ya_diesel_utils::DbTextField;
 const RANDOM_PREFIX_LEN: usize = 32;
 const HASH_SUFFIX_LEN: usize = 64;
 
-#[derive(thiserror::Error, Debug, PartialEq)]
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum SubscriptionParseError {
     #[error("Subscription id [{0}] has invalid format.")]
     InvalidFormat(String),
@@ -26,7 +26,7 @@ pub enum SubscriptionParseError {
     InvalidLength(String),
 }
 
-#[derive(thiserror::Error, Debug, PartialEq)]
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
 #[error("Subscription id [{0}] doesn't match content hash [{1}].")]
 pub struct SubscriptionValidationError(SubscriptionId, String);
 

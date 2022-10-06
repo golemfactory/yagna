@@ -1236,7 +1236,7 @@ async fn test_terminate_invalid_reason() {
     .unwrap()
     .r_agreement;
 
-    let mut app = network.get_rest_app(REQ_NAME).await;
+    let app = network.get_rest_app(REQ_NAME).await;
     let url = format!(
         "/market-api/v1/agreements/{}/terminate",
         agreement_id.into_client(),
@@ -1248,7 +1248,7 @@ async fn test_terminate_invalid_reason() {
         .set_payload(Bytes::copy_from_slice(reason.as_bytes()))
         .to_request();
 
-    let resp = actix_web::test::call_service(&mut app, req).await;
+    let resp = actix_web::test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 
     let reason = "{'no_message_field': 'Reason expects message field'}".to_string();
@@ -1257,6 +1257,6 @@ async fn test_terminate_invalid_reason() {
         .set_payload(Bytes::copy_from_slice(reason.as_bytes()))
         .to_request();
 
-    let resp = actix_web::test::call_service(&mut app, req).await;
+    let resp = actix_web::test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 }

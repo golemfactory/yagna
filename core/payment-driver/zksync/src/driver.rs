@@ -104,7 +104,7 @@ impl ZksyncDriver {
     async fn process_payments_for_account(&self, node_id: &str) {
         log::trace!("Processing payments for node_id={}", node_id);
         for network_key in self.get_networks().keys() {
-            let network = DbNetwork::from_str(&network_key).unwrap();
+            let network = DbNetwork::from_str(network_key).unwrap();
             let payments: Vec<PaymentEntity> =
                 self.dao.get_pending_payments(node_id, network).await;
             let mut nonce = 0;
@@ -436,7 +436,7 @@ impl PaymentDriverCron for ZksyncDriver {
 
         for network_key in self.get_networks().keys() {
             let network =
-                match DbNetwork::from_str(&network_key) {
+                match DbNetwork::from_str(network_key) {
                     Ok(n) => n,
                     Err(e) => {
                         log::error!(
@@ -460,7 +460,7 @@ impl PaymentDriverCron for ZksyncDriver {
                     &network,
                     &tx_hash
                 );
-                let tx_success = match wallet::check_tx(&tx_hash, network).await {
+                let tx_success = match wallet::check_tx(tx_hash, network).await {
                     None => continue, // Check_tx returns None when the result is unknown
                     Some(tx_success) => tx_success,
                 };
@@ -512,7 +512,7 @@ impl PaymentDriverCron for ZksyncDriver {
 
                 // TODO: Add token support
                 let platform = network_token_to_platform(Some(network), None).unwrap(); // TODO: Catch error?
-                let details = match wallet::verify_tx(&tx_hash, network).await {
+                let details = match wallet::verify_tx(tx_hash, network).await {
                     Ok(a) => a,
                     Err(e) => {
                         log::warn!("Failed to get transaction details from zksync, creating bespoke details. Error={}", e);
@@ -522,7 +522,7 @@ impl PaymentDriverCron for ZksyncDriver {
                         // - Date is always now
                         // - Amount needs to be updated to total of all PaymentEntity's
                         let first_payment: PaymentEntity =
-                            match self.dao.get_first_payment(&tx_hash).await {
+                            match self.dao.get_first_payment(tx_hash).await {
                                 Some(p) => p,
                                 None => continue,
                             };

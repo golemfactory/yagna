@@ -62,7 +62,7 @@ impl TryFrom<DebitNoteEventType> for BreakReason {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GolemReason {
     #[serde(rename = "message")]
     pub message: String,

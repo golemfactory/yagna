@@ -196,8 +196,8 @@ impl TaskRunner {
             registry,
             tasks: vec![],
             active_agreements: HashMap::new(),
-            activity_created: SignalSlot::<CreateActivity>::new(),
-            activity_destroyed: SignalSlot::<ActivityDestroyed>::new(),
+            activity_created: SignalSlot::<CreateActivity>::default(),
+            activity_destroyed: SignalSlot::<ActivityDestroyed>::default(),
             config: Arc::new(config),
             event_ts: Utc::now(),
             tasks_dir,
@@ -218,7 +218,7 @@ impl TaskRunner {
     // =========================================== //
 
     async fn dispatch_events(events: Vec<ProviderEvent>, myself: &Addr<TaskRunner>) {
-        if events.len() == 0 {
+        if events.is_empty() {
             return;
         };
 
@@ -268,7 +268,7 @@ impl TaskRunner {
             Some(agreement) => agreement,
         };
 
-        let exeunit_name = exe_unit_name_from(&agreement)?;
+        let exeunit_name = exe_unit_name_from(agreement)?;
 
         let task = match self.create_task(
             &exeunit_name,
@@ -435,7 +435,7 @@ impl TaskRunner {
             .ok_or_else(|| anyhow!("None"))? // Parent must exist, since we built this path.
             .join("agreement.json");
 
-        self.save_agreement(&agreement_path, &agreement_id)?;
+        self.save_agreement(&agreement_path, agreement_id)?;
 
         let mut args = vec![
             "service-bus",
@@ -591,7 +591,7 @@ forward_actix_handler!(TaskRunner, GetExeUnit, get_exeunit);
 actix_signal_handler!(TaskRunner, CreateActivity, activity_created);
 actix_signal_handler!(TaskRunner, ActivityDestroyed, activity_destroyed);
 
-const PROPERTY_USAGE_VECTOR: &'static str = "golem.com.usage.vector";
+const PROPERTY_USAGE_VECTOR: &str = "golem.com.usage.vector";
 
 impl Handler<GetOfferTemplates> for TaskRunner {
     type Result = ResponseFuture<Result<HashMap<String, OfferTemplate>>>;
@@ -625,11 +625,7 @@ impl Handler<GetOfferTemplates> for TaskRunner {
                 {
                     serde_json::Value::Array(vec) => {
                         let mut usage_vector = vec.clone();
-                        usage_vector.extend(
-                            coeffs
-                                .into_iter()
-                                .map(|prop| serde_json::Value::String(prop)),
-                        );
+                        usage_vector.extend(coeffs.into_iter().map(serde_json::Value::String));
                         template.set_property(
                             PROPERTY_USAGE_VECTOR,
                             serde_json::Value::Array(usage_vector),
@@ -885,10 +881,8 @@ impl StateMonitor {
             _ => {}
         }
 
-        if self.state.0 == State::Unresponsive {
-            if state.0 != State::Unresponsive {
-                log::warn!("ExeUnit is now responsive");
-            }
+        if self.state.0 == State::Unresponsive && state.0 != State::Unresponsive {
+            log::warn!("ExeUnit is now responsive");
         }
 
         self.state = state;

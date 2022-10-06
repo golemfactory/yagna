@@ -121,7 +121,7 @@ impl<'a> Iterator for RxIterator<'a> {
     type Item = Vec<u8>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.buffer.expected > 0 && self.received.len() > 0 {
+        if self.buffer.expected > 0 && !self.received.is_empty() {
             let len = self.buffer.expected.min(self.received.len());
             self.buffer.inner.extend(self.received.drain(..len));
         }

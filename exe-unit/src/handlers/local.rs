@@ -79,12 +79,12 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
             ),
         );
 
-        return ActorResponse::r#async(
+        ActorResponse::r#async(
             async move {
                 fut.await;
             }
             .into_actor(self),
-        );
+        )
     }
 }
 
@@ -280,7 +280,7 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
         }
 
         let address = ctx.address();
-        let services = std::mem::replace(&mut self.services, Vec::new());
+        let services = std::mem::take(&mut self.services);
         let state = self.state.inner.to_pending(State::Terminated);
         let reason = format!("{}: {}", msg.0, self.state.report());
 

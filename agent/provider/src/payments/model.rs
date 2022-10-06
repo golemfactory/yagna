@@ -13,7 +13,7 @@ use crate::market::negotiator::builtin::payment_timeout::PAYMENT_TIMEOUT_PROPERT
 /// Implementation of payment model which knows, how to compute amount
 /// of money, that requestor should pay for computations.
 pub trait PaymentModel {
-    fn compute_cost(&self, usage: &Vec<f64>) -> Result<BigDecimal>;
+    fn compute_cost(&self, usage: &[f64]) -> Result<BigDecimal>;
     fn expected_usage_len(&self) -> usize;
 }
 

@@ -23,7 +23,7 @@ impl Service {
         self.components.contains(&component)
     }
 
-    fn parse_attrs(attrs: &Vec<Attribute>) -> Result<HashSet<Component>> {
+    fn parse_attrs(attrs: &[Attribute]) -> Result<HashSet<Component>> {
         let mut components = HashSet::new();
 
         for attr in attrs.iter() {
@@ -49,10 +49,7 @@ impl Service {
 
         let nested = syn::parse_macro_input::parse::<AttributeArgs>(stream.into())?;
         match nested.first() {
-            Some(nested_meta) => match nested_meta {
-                NestedMeta::Meta(meta) => Ok(meta.clone()),
-                _ => Err(Error::new(attr.span(), "Invalid format")),
-            },
+            Some(NestedMeta::Meta(meta)) => Ok(meta.clone()),
             _ => Err(Error::new(attr.span(), "Invalid format")),
         }
     }

@@ -179,20 +179,15 @@ impl<S: 'static> Provider<S, CliCtx> for ServiceContext {
 }
 
 impl<S: 'static> Provider<S, ()> for ServiceContext {
-    fn component(&self) -> () {
-        ()
-    }
+    fn component(&self) {}
 }
 
 impl ServiceContext {
-    fn make_entry<S: 'static>(path: &PathBuf, name: &str) -> Result<(TypeId, DbExecutor)> {
+    fn make_entry<S: 'static>(path: &Path, name: &str) -> Result<(TypeId, DbExecutor)> {
         Ok((TypeId::of::<S>(), DbExecutor::from_data_dir(path, name)?))
     }
 
-    fn make_mixed_entry<S: 'static>(
-        path: &PathBuf,
-        name: &str,
-    ) -> Result<(TypeId, DbMixedExecutor)> {
+    fn make_mixed_entry<S: 'static>(path: &Path, name: &str) -> Result<(TypeId, DbMixedExecutor)> {
         let disk_db = DbExecutor::from_data_dir(path, name)?;
         let ram_db = DbExecutor::in_memory(name)?;
 
@@ -569,7 +564,7 @@ impl ServiceCommand {
                 .bind(api_host_port.clone())
                 .context(format!("Failed to bind http server on {:?}", api_host_port))?;
 
-                let _ = extension::autostart(&ctx.data_dir, &api_url, &ctx.gsb_url)
+                let _ = extension::autostart(&ctx.data_dir, api_url, &ctx.gsb_url)
                     .await
                     .map_err(|e| log::warn!("Failed to autostart extensions: {e}"));
 

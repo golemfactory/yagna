@@ -53,11 +53,9 @@ impl Future for SignalMonitor {
 
 impl Drop for SignalMonitor {
     fn drop(&mut self) {
-        std::mem::replace(&mut self.hooks, Vec::new())
-            .into_iter()
-            .for_each(|s| {
-                unregister(s);
-            });
+        std::mem::take(&mut self.hooks).into_iter().for_each(|s| {
+            unregister(s);
+        });
     }
 }
 
