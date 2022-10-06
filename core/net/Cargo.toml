@@ -14,9 +14,9 @@ hybrid-net = []
 ya-client-model = "0.5"
 ya-core-model = { version = "^0.8", features=["net", "identity"] }
 
-# ya-relay-client = "0.2"
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "8733c8c1b7c81dec5a9fb301fc7b4cce8106b315" }
-#ya-relay-client = { path = "../../../ya-relay/client" }
+# ya-relay-client = "0.4"
+# ya-relay-client = { path = "../../../ya-relay/client" }
+ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "49450c35441f31a96e95198fe75cf816af216001" }
 
 ya-sb-proto = { version = "0.6" }
 ya-sb-util = { version = "0.4" }
