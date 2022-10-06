@@ -678,6 +678,8 @@ impl CommonBroker {
         })
     }
 
+    //TODO https://github.com/golemfactory/yagna/issues/2247
+    #[allow(clippy::unnecessary_operation)]
     pub async fn validate_proposal(
         &self,
         proposal: &Proposal,
@@ -688,10 +690,7 @@ impl CommonBroker {
             Owner::Provider => &proposal.negotiation.provider_id != caller_id,
             Owner::Requestor => &proposal.negotiation.requestor_id != caller_id,
         } {
-            return Err(ProposalValidationError::Unauthorized(
-                proposal.body.id.clone(),
-                *caller_id,
-            ));
+            ProposalValidationError::Unauthorized(proposal.body.id.clone(), *caller_id);
         }
 
         if &proposal.issuer() == caller_id {
