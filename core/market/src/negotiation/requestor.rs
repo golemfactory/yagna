@@ -329,7 +329,7 @@ impl RequestorBroker {
 
             let timestamp = Utc::now().naive_utc();
             self.api
-                .cancel_agreement(&agreement, reason.clone(), timestamp.clone())
+                .cancel_agreement(&agreement, reason.clone(), timestamp)
                 .await?;
 
             dao.cancel(&agreement.id, reason.clone(), &timestamp)
@@ -421,11 +421,7 @@ impl RequestorBroker {
             let _hold = self.common.agreement_lock.lock(agreement_id).await;
 
             let mut agreement = match dao
-                .select(
-                    agreement_id,
-                    Some(id.identity.clone()),
-                    Utc::now().naive_utc(),
-                )
+                .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
                 .await
                 .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
             {
@@ -485,9 +481,9 @@ async fn on_agreement_approved(
     msg: AgreementApproved,
 ) -> Result<(), AgreementProtocolError> {
     let caller: NodeId = CommonBroker::parse_caller(&caller)?;
-    Ok(agreement_approved(broker, caller, msg)
+    agreement_approved(broker, caller, msg)
         .await
-        .map_err(AgreementProtocolError::Remote)?)
+        .map_err(AgreementProtocolError::Remote)
 }
 
 async fn agreement_approved(
@@ -515,7 +511,7 @@ async fn agreement_approved(
         }
 
         validate_transition(&agreement, AgreementState::Approving).map_err(|_| {
-            RemoteAgreementError::InvalidState(agreement.id.clone(), agreement.state.clone())
+            RemoteAgreementError::InvalidState(agreement.id.clone(), agreement.state)
         })?;
 
         // Validate Agreement `valid_to` timestamp. In previous version we got
@@ -593,10 +589,9 @@ async fn commit_agreement(broker: CommonBroker, agreement_id: AgreementId) {
         NegotiationApi::commit_agreement(&agreement).await?;
 
         // We approve Agreement in database, when we are sure, that committing succeeded.
-        Ok(dao
-            .approve(&agreement.id, &signature)
+        dao.approve(&agreement.id, &signature)
             .await
-            .map_err(|e| AgreementError::UpdateState(agreement.id.clone(), e))?)
+            .map_err(|e| AgreementError::UpdateState(agreement.id.clone(), e))
     }
     .await
     {
@@ -645,9 +640,9 @@ async fn on_agreement_rejected(
     msg: AgreementRejected,
 ) -> Result<(), AgreementProtocolError> {
     let caller: NodeId = CommonBroker::parse_caller(&caller)?;
-    Ok(agreement_rejected(broker, caller, msg)
+    agreement_rejected(broker, caller, msg)
         .await
-        .map_err(AgreementProtocolError::Remote)?)
+        .map_err(AgreementProtocolError::Remote)
 }
 
 async fn agreement_rejected(
@@ -671,7 +666,7 @@ async fn agreement_rejected(
         }
 
         validate_transition(&agreement, AgreementState::Rejected).map_err(|_| {
-            RemoteAgreementError::InvalidState(agreement.id.clone(), agreement.state.clone())
+            RemoteAgreementError::InvalidState(agreement.id.clone(), agreement.state)
         })?;
 
         dao.reject(&agreement.id, msg.reason.clone(), &msg.rejection_ts)

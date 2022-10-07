@@ -13,16 +13,13 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, SeekFrom};
 use tokio::task::spawn_local;
 use url::Url;
 
+#[derive(Default)]
 pub struct FileTransferProvider;
+
+#[derive(Default)]
 pub struct DirTransferProvider;
 
 pub const DEFAULT_CHUNK_SIZE: usize = 40 * 1024;
-
-impl Default for FileTransferProvider {
-    fn default() -> Self {
-        FileTransferProvider {}
-    }
-}
 
 impl TransferProvider<TransferData, Error> for FileTransferProvider {
     fn schemes(&self) -> Vec<&'static str> {
@@ -117,7 +114,7 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
             }
             .map_err(|error| {
                 log::error!("Error writing to file [{}]: {}", path_c.display(), error);
-                Error::from(error)
+                error
             });
 
             abortable_sink(fut, res_tx).await
@@ -142,12 +139,6 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
             Ok(())
         }
         .boxed_local()
-    }
-}
-
-impl Default for DirTransferProvider {
-    fn default() -> Self {
-        DirTransferProvider {}
     }
 }
 
@@ -178,10 +169,7 @@ impl TransferProvider<TransferData, Error> for DirTransferProvider {
 
                 archive(path_iter, dir, format, evt_tx)
                     .await
-                    .forward(
-                        tx.sink_map_err(Error::from)
-                            .with(|b| ready(Ok(Ok(TransferData::from(b))))),
-                    )
+                    .forward(tx.sink_map_err(Error::from).with(|b| ready(Ok(Ok(b)))))
                     .await
             };
 

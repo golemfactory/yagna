@@ -81,7 +81,7 @@ impl Offer {
     pub fn into_client_offer(&self) -> Result<ClientOffer, ErrorMessage> {
         Ok(ClientOffer {
             offer_id: self.id.to_string(),
-            provider_id: self.node_id.clone(),
+            provider_id: self.node_id,
             constraints: self.constraints.clone(),
             properties: serde_json::from_str(&self.properties).map_err(|e| {
                 format!(

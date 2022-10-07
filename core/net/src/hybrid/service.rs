@@ -498,13 +498,13 @@ fn broadcast_handler(
 
         let client = CLIENT
             .with(|c| c.borrow().clone())
-            .ok_or_else(|| Error::GsbFailure(format!("Network not initialized")))?;
+            .ok_or_else(|| Error::GsbFailure("Network not initialized".to_string()))?;
         client
             .broadcast(payload, broadcast_size)
             .await
             .map_err(|e| Error::GsbFailure(format!("Broadcast failed: {e}")))?;
 
-        Ok(Vec::from(serialization::to_vec(&Ok::<(), ()>(())).unwrap()))
+        Ok(serialization::to_vec(&Ok::<(), ()>(())).unwrap())
     }
     .then(|result| async move {
         if let Err(e) = &result {

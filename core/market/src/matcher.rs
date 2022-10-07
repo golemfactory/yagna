@@ -271,16 +271,15 @@ impl Matcher {
 
     pub async fn get_our_active_offer_ids(&self) -> Result<Vec<SubscriptionId>, QueryOffersError> {
         let our_node_ids = self.identity.list().await?;
-        Ok(self.store.get_active_offer_ids(Some(our_node_ids)).await?)
+        self.store.get_active_offer_ids(Some(our_node_ids)).await
     }
 
     pub async fn get_our_unsubscribed_offer_ids(
         &self,
     ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
         let our_node_ids = self.identity.list().await?;
-        Ok(self
-            .store
+        self.store
             .get_unsubscribed_offer_ids(Some(our_node_ids))
-            .await?)
+            .await
     }
 }

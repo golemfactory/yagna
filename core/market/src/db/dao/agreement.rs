@@ -246,7 +246,7 @@ impl<'c> AgreementDao<'c> {
         let id = id.clone();
         let session = session.clone();
         let signature = signature.to_owned();
-        let timestamp = timestamp.clone();
+        let timestamp = *timestamp;
 
         do_with_transaction(self.pool, move |conn| {
             let mut agreement: Agreement =
@@ -306,7 +306,7 @@ impl<'c> AgreementDao<'c> {
         timestamp: &NaiveDateTime,
     ) -> Result<Agreement, AgreementDaoError> {
         let id = id.clone();
-        let timestamp = timestamp.clone();
+        let timestamp = *timestamp;
 
         do_with_transaction(self.pool, move |conn| {
             let mut agreement: Agreement =
@@ -327,7 +327,7 @@ impl<'c> AgreementDao<'c> {
         timestamp: &NaiveDateTime,
     ) -> Result<Agreement, AgreementDaoError> {
         let id = id.clone();
-        let timestamp = timestamp.clone();
+        let timestamp = *timestamp;
 
         do_with_transaction(self.pool, move |conn| {
             let mut agreement: Agreement =
@@ -349,7 +349,7 @@ impl<'c> AgreementDao<'c> {
         timestamp: &NaiveDateTime,
     ) -> Result<bool, AgreementDaoError> {
         let id = id.clone();
-        let timestamp = timestamp.clone();
+        let timestamp = *timestamp;
 
         do_with_transaction(self.pool, move |conn| {
             let mut agreement: Agreement =

@@ -62,8 +62,8 @@ async fn main() -> Result<(), Error> {
     env_logger::init();
 
     let temp_dir = TempDir::new("transfer").unwrap();
-    let chunk_size = 4096 as usize;
-    let chunk_count = 256 as usize;
+    let chunk_size = 4096_usize;
+    let chunk_count = 256_usize;
 
     log::info!(
         "Creating a random file of size {} * {}",

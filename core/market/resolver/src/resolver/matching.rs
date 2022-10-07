@@ -90,7 +90,7 @@ pub fn match_weak<'a>(
             (un_props1, result1_unres_expr),
             (un_props2, result2_unres_expr),
         ))
-    } else if result1_binary == true && result2_binary == true {
+    } else if result1_binary && result2_binary {
         Ok(MatchResult::True)
     } else {
         Ok(MatchResult::False(un_props1, un_props2))

@@ -351,7 +351,7 @@ fn validate_preset(config: &ProviderConfig, preset: &Preset) -> anyhow::Result<(
     let registry = config.registry()?;
     registry.find_exeunit(&preset.exeunit_name)?;
 
-    if !(preset.pricing_model == "linear") {
+    if preset.pricing_model != "linear" {
         bail!("Not supported pricing model.")
     }
 

@@ -9,15 +9,13 @@ fn get_innermost_backtrace_symbol(fm: &backtrace::BacktraceFrame) -> Option<Stri
 
 fn adjust_backtrace_level(frames: &[backtrace::BacktraceFrame]) -> Option<usize> {
     // On some systems backtrace lib doesn't properly set actual_start_index
-    let mut idx = 0;
-    for frame in frames.iter() {
+    for (idx, frame) in frames.iter().enumerate() {
         if let Some(name) = get_innermost_backtrace_symbol(frame) {
             // Note: On windows there is no "::<hash>" suffix
             if name.starts_with("ya_market::testing::backtrace_util::generate_backtraced_name") {
                 return Some(idx);
             }
         }
-        idx += 1;
     }
     None
 }

@@ -132,9 +132,9 @@ async fn get_debit_note_events(
     let dao: DebitNoteEventDao = db.as_dao();
     let getter = || async {
         dao.get_for_node_id(
-            node_id.clone(),
-            after_timestamp.clone(),
-            max_events.clone(),
+            node_id,
+            after_timestamp,
+            max_events,
             app_session_id.clone(),
             requestor_events.clone(),
             provider_events.clone(),

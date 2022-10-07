@@ -180,7 +180,7 @@ mod test {
 
         let discovery = DiscoveryBuilder::default()
             .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
-            .add_data(7 as usize)
+            .add_data(7_usize)
             .add_data("mock data")
             .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
             .add_handler(|_, _: RetrieveOffers| async { panic!("should not be invoked") })

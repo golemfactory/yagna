@@ -8,14 +8,8 @@ use crate::market::negotiator::common::{
     AgreementFinalized, CreateOffer, ReactToAgreement, ReactToProposal,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct AcceptAllNegotiator;
-
-impl Default for AcceptAllNegotiator {
-    fn default() -> Self {
-        Self {}
-    }
-}
 
 impl Handler<CreateOffer> for AcceptAllNegotiator {
     type Result = anyhow::Result<NewOffer>;

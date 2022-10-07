@@ -484,7 +484,7 @@ impl Proxy {
                     conn
                 );
 
-                match network.send(vec, conn.clone()) {
+                match network.send(vec, conn) {
                     Ok(fut) => {
                         if let Err(e) = fut.await {
                             log::debug!("[inet] proxy conn: forward error: {}", e);
@@ -603,10 +603,10 @@ fn bind_local_address(
 ) -> anyhow::Result<()> {
     match (*dst_addr, local_addr_ipv4, local_addr_ipv6) {
         (SocketAddr::V4(_), Some(addr), _) => {
-            socket.bind(&SocketAddr::new(addr.clone().into(), 0).into())?;
+            socket.bind(&SocketAddr::new((*addr).into(), 0).into())?;
         }
         (SocketAddr::V6(_), _, Some(addr)) => {
-            socket.bind(&SocketAddr::new(addr.clone().into(), 0).into())?;
+            socket.bind(&SocketAddr::new((*addr).into(), 0).into())?;
         }
         _ => {
             if cfg!(windows) {

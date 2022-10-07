@@ -102,7 +102,7 @@ impl VpnSupervisor {
         let actor = self
             .arbiter
             .spawn_ext(async move {
-                let stack = Stack::new(net_ip, net_route(net_gw.clone())?);
+                let stack = Stack::new(net_ip, net_route(net_gw)?);
                 let vpn = Vpn::new(node_id, stack, vpn_net);
                 Ok::<_, Error>(vpn.start())
             })
@@ -118,7 +118,7 @@ impl VpnSupervisor {
         self.networks.insert(net_id.clone(), actor);
         self.blueprints.insert(net_id.clone(), network.clone());
         self.ownership
-            .entry(node_id.clone())
+            .entry(node_id)
             .or_insert_with(Default::default)
             .insert(net_id);
 
@@ -271,7 +271,7 @@ impl Vpn {
         processed
     }
 
-    fn process_egress<'a>(&mut self) -> bool {
+    fn process_egress(&mut self) -> bool {
         let mut processed = false;
         let vpn_id = self.vpn.id().clone();
 
@@ -410,7 +410,7 @@ impl Handler<GetNodes> for Vpn {
             .vpn
             .nodes()
             .iter()
-            .map(|(id, ips)| {
+            .flat_map(|(id, ips)| {
                 ips.iter()
                     .map(|ip| ya_client_model::net::Node {
                         id: id.clone(),
@@ -418,7 +418,6 @@ impl Handler<GetNodes> for Vpn {
                     })
                     .collect::<Vec<_>>()
             })
-            .flatten()
             .collect())
     }
 }

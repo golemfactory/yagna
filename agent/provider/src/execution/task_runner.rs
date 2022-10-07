@@ -274,7 +274,7 @@ impl TaskRunner {
             &exeunit_name,
             &msg.activity_id,
             &msg.agreement_id,
-            msg.requestor_pub_key.as_ref().map(|s| s.as_str()),
+            msg.requestor_pub_key.as_deref(),
         ) {
             Ok(task) => task,
             Err(error) => bail!("Error creating activity: {:?}: {}", msg, error),
@@ -292,18 +292,15 @@ impl TaskRunner {
             let mut finished = Box::pin(proc.wait_until_finished());
             let mut monitor = StateMonitor::default();
 
-            loop {
-                match select(Box::pin(api.get_activity_state(&activity_id)), finished).await {
-                    Either::Left((result, fut)) => {
-                        finished = fut;
+            while let Either::Left((result, fut)) =
+                select(Box::pin(api.get_activity_state(&activity_id)), finished).await
+            {
+                finished = fut;
 
-                        if let Ok(state) = result {
-                            monitor.update(state.state);
-                        }
-                        monitor.sleep().await;
-                    }
-                    Either::Right(_) => break,
+                if let Ok(state) = result {
+                    monitor.update(state.state);
                 }
+                monitor.sleep().await;
             }
         });
 
@@ -396,7 +393,7 @@ impl TaskRunner {
         let args = vec![String::from("offer-template")];
         self.registry
             .run_exeunit_with_output(exeunit_name, args, &working_dir)
-            .map_err(|error| error.context(format!("ExeUnit offer-template command failed")))
+            .map_err(|error| error.context("ExeUnit offer-template command failed".to_string()))
     }
 
     fn exeunit_coeffs(&self, exeunit_name: &str) -> Result<Vec<String>> {
@@ -459,7 +456,7 @@ impl TaskRunner {
         );
 
         if let Some(req_pub_key) = requestor_pub_key {
-            args.extend(["--requestor-pub-key", req_pub_key.as_ref()].iter());
+            args.extend(["--requestor-pub-key", req_pub_key].iter());
         }
 
         let args = args.iter().map(ToString::to_string).collect();
@@ -650,14 +647,14 @@ impl Handler<UpdateActivity> for TaskRunner {
         let addr = ctx.address();
         let client = self.api.clone();
 
-        let mut event_ts = self.event_ts.clone();
+        let mut event_ts = self.event_ts;
         let app_session_id = self.config.session_id.clone();
         let poll_timeout = Duration::from_secs(3);
 
         let fut = async move {
             let result = client
                 .get_activity_events(
-                    Some(event_ts.clone()),
+                    Some(event_ts),
                     Some(app_session_id),
                     Some(poll_timeout),
                     None,
@@ -666,10 +663,9 @@ impl Handler<UpdateActivity> for TaskRunner {
 
             match result {
                 Ok(events) => {
-                    events
-                        .iter()
-                        .max_by_key(|e| e.event_date)
-                        .map(|e| event_ts = event_ts.max(e.event_date));
+                    if let Some(e) = events.iter().max_by_key(|e| e.event_date) {
+                        event_ts = event_ts.max(e.event_date);
+                    }
                     Self::dispatch_events(events, &addr).await;
                 }
                 Err(error) => log::error!("Can't query activity events: {:?}", error),
@@ -691,7 +687,7 @@ impl Handler<TerminateActivity> for TaskRunner {
 
     fn handle(&mut self, msg: TerminateActivity, _ctx: &mut Context<Self>) -> Self::Result {
         let api = self.api.clone();
-        let state_retry_interval = self.config.exeunit_state_retry_interval.clone();
+        let state_retry_interval = self.config.exeunit_state_retry_interval;
 
         async move {
             set_activity_terminated(
@@ -713,7 +709,7 @@ impl Handler<CreateActivity> for TaskRunner {
     fn handle(&mut self, msg: CreateActivity, ctx: &mut Context<Self>) -> Self::Result {
         let api = self.api.clone();
         let activity_id = msg.activity_id.clone();
-        let state_retry_interval = self.config.exeunit_state_retry_interval.clone();
+        let state_retry_interval = self.config.exeunit_state_retry_interval;
 
         let result = self.on_create_activity(msg, ctx);
         match result {
