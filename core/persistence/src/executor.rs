@@ -250,6 +250,7 @@ where
     do_with_rw_connection(pool, move |conn| conn.immediate_transaction(|| f(conn))).await
 }
 
+#[allow(clippy::let_and_return)]
 pub async fn readonly_transaction<R: Send + 'static, Error, F>(
     pool: &PoolType,
     f: F,
