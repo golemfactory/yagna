@@ -117,7 +117,7 @@ impl JobObject {
             )
         } == 0
         {
-            return Err(SystemError::last().into());
+            return Err(SystemError::last());
         }
 
         Ok(info)
@@ -136,7 +136,7 @@ impl JobObject {
             )
         } == 0
         {
-            return Err(SystemError::last().into());
+            return Err(SystemError::last());
         }
 
         Ok(info)
@@ -144,7 +144,7 @@ impl JobObject {
 
     pub fn terminate(&self) -> Result<(), SystemError> {
         if unsafe { um::jobapi2::TerminateJobObject(self.handle, 0) } == 0 {
-            return Err(SystemError::last().into());
+            return Err(SystemError::last());
         }
         Ok(())
     }
@@ -162,7 +162,7 @@ impl JobObject {
             )
         } == 0
         {
-            return Err(SystemError::last().into());
+            return Err(SystemError::last());
         }
         Ok(())
     }
@@ -170,7 +170,7 @@ impl JobObject {
     fn create_job(proc: HANDLE) -> Result<HANDLE, SystemError> {
         let handle = unsafe { um::jobapi2::CreateJobObjectW(ptr::null_mut(), ptr::null()) };
         if handle.is_null() {
-            return Err(SystemError::NullPointer(format!("JobObject handle")).into());
+            return Er176r(SystemError::NullPointer("JobObject handle".to_string()));
         }
         if unsafe { um::jobapi2::AssignProcessToJobObject(handle, proc) } == 0 {
             return Err(SystemError::last().into());
@@ -204,7 +204,7 @@ fn process_handle(pid: Option<u32>) -> Result<HANDLE, SystemError> {
                 )
             };
             if handle.is_null() {
-                return Err(SystemError::NullPointer(format!("process {} handle", pid)).into());
+                return Err(SystemError::NullPointer(format!("process {} handle", pid)));
             }
             Ok(handle)
         }
