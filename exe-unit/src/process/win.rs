@@ -170,7 +170,7 @@ impl JobObject {
     fn create_job(proc: HANDLE) -> Result<HANDLE, SystemError> {
         let handle = unsafe { um::jobapi2::CreateJobObjectW(ptr::null_mut(), ptr::null()) };
         if handle.is_null() {
-            return Er176r(SystemError::NullPointer("JobObject handle".to_string()));
+            return Err(SystemError::NullPointer("JobObject handle".to_string()));
         }
         if unsafe { um::jobapi2::AssignProcessToJobObject(handle, proc) } == 0 {
             return Err(SystemError::last().into());
