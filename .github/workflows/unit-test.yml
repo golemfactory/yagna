@@ -48,7 +48,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --all-targets --all-features --workspace
+          args: --all-targets --all-features --workspace -- -D warnings
 
       - name: Install openssl ( Windows only )
         if: runner.os == 'Windows'
