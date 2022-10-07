@@ -173,7 +173,7 @@ impl JobObject {
             return Err(SystemError::NullPointer("JobObject handle".to_string()));
         }
         if unsafe { um::jobapi2::AssignProcessToJobObject(handle, proc) } == 0 {
-            return Err(SystemError::last().into());
+            return Err(SystemError::last());
         }
 
         Ok(handle)
