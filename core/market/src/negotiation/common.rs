@@ -375,7 +375,7 @@ impl CommonBroker {
                 &timestamp,
             )
             .await
-            .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?;
+            .map_err(|e| AgreementError::UpdateState((agreement.id).clone(), e))?;
         }
 
         self.notify_agreement(&agreement).await;

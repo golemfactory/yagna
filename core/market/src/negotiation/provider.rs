@@ -372,7 +372,7 @@ impl ProviderBroker {
 
             dao.reject(&agreement.id, reason.clone(), &timestamp)
                 .await
-                .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?
+                .map_err(|e| AgreementError::UpdateState((agreement.id).clone(), e))?
         };
 
         counter!("market.agreements.provider.rejected", 1);

@@ -179,7 +179,7 @@ impl VpnSupervisor {
             .get(node_id)
             .map(|s| s.contains(network_id))
             .ok_or(Error::NetNotFound)?
-            .then(|| ())
+            .then_some(())
             .ok_or(Error::Forbidden)
     }
 }

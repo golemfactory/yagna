@@ -41,20 +41,20 @@ async fn test_agreement() {
 
     // create agreement event in 3 steps
     agreement_dao
-        .confirm(&expired_agreement.id, &None, &"signature,".to_string())
+        .confirm(&expired_agreement.id, &None, "signature,")
         .await
         .unwrap();
     agreement_dao
         .approving(
             &expired_agreement.id,
             &None,
-            &"signature,".to_string(),
+            "signature,",
             &Utc::now().naive_utc(),
         )
         .await
         .unwrap();
     agreement_dao
-        .approve(&expired_agreement.id, &"signature,".to_string())
+        .approve(&expired_agreement.id, "signature,")
         .await
         .unwrap();
 
