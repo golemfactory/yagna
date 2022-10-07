@@ -407,20 +407,17 @@ impl<'a> PropertySet<'a> {
         aspect_name: &'a str,
         aspect_value: &'a str,
     ) {
-        match self.properties.remove(prop_name) {
-            Some(prop) => {
-                let new_prop = match prop {
-                    Property::Explicit(name, val, mut aspects) => {
-                        // remove aspect if already exists
-                        aspects.remove(aspect_name);
-                        aspects.insert(aspect_name, aspect_value);
-                        Property::Explicit(name, val, aspects)
-                    }
-                    _ => unreachable!(),
-                };
-                self.properties.insert(prop_name, new_prop);
-            }
-            None => {}
+        if let Some(prop) = self.properties.remove(prop_name) {
+            let new_prop = match prop {
+                Property::Explicit(name, val, mut aspects) => {
+                    // remove aspect if already exists
+                    aspects.remove(aspect_name);
+                    aspects.insert(aspect_name, aspect_value);
+                    Property::Explicit(name, val, aspects)
+                }
+                _ => unreachable!(),
+            };
+            self.properties.insert(prop_name, new_prop);
         }
     }
 }

@@ -49,7 +49,7 @@ impl AgreementsCommand {
                 app_session_id,
             } => {
                 let request = ListAgreements {
-                    state: state,
+                    state,
                     before_date: before,
                     after_date: after,
                     app_session_id,

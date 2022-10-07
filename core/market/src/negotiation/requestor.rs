@@ -334,7 +334,7 @@ impl RequestorBroker {
 
             dao.cancel(&agreement.id, reason.clone(), &timestamp)
                 .await
-                .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?
+                .map_err(|e| AgreementError::UpdateState((agreement.id).clone(), e))?
         };
 
         self.common.notify_agreement(&agreement).await;
