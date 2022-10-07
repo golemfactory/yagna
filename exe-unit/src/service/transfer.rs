@@ -303,7 +303,7 @@ impl Handler<DeployImage> for TransferService {
                 std::fs::write(&path, bytes)?;
                 Ok(Some(path))
             };
-            return ActorResponse::r#async(fut.into_actor(self));
+            ActorResponse::r#async(fut.into_actor(self))
         }
     }
 }
