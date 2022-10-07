@@ -108,7 +108,7 @@ impl FromStr for SubscriptionId {
         if !elements
             .iter()
             .map(|slice| slice.chars().all(|character| character.is_ascii_hexdigit()))
-            .all(|result| result == true)
+            .all(|result| result)
         {
             Err(SubscriptionParseError::NotHexadecimal(s.to_string()))?;
         }

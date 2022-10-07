@@ -329,7 +329,8 @@ impl Handler<Shutdown> for VpnWebSocket {
 
     fn handle(&mut self, _: Shutdown, ctx: &mut Self::Context) -> Self::Result {
         log::warn!("VPN WebSocket: VPN {} is shutting down", self.network_id);
-        Ok(ctx.stop())
+        ctx.stop();
+        Ok(())
     }
 }
 

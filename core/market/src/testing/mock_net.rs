@@ -55,7 +55,7 @@ impl MockNet {
         };
 
         let mut inner = self.inner.lock().unwrap();
-        if inner.nodes.insert(node_id.clone(), prefix).is_some() {
+        if inner.nodes.insert(*node_id, prefix).is_some() {
             panic!("[MockNet] Node [{}] already existed.", &node_id);
         }
     }
@@ -100,7 +100,7 @@ impl MockNet {
         let inner = self.inner.lock().unwrap();
         for (id, prefix) in inner.nodes.iter() {
             if address.contains(prefix) {
-                return Some(id.clone());
+                return Some(*id);
             }
         }
         None
@@ -199,7 +199,7 @@ impl MockNetInner {
                         &caller,
                         &local_addr
                     );
-                    Ok(local_bus::send(&local_addr, &from.to_string(), &data).await?)
+                    local_bus::send(&local_addr, &from.to_string(), &data).await
                 }
             },
             (),

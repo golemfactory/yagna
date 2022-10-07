@@ -309,8 +309,6 @@ async fn send_debit_note(
 
 async fn check_invoice_events(provider_ctx: Arc<ProviderCtx>, payments_addr: Addr<Payments>) {
     let config = &provider_ctx.config;
-    let timeout = config.get_events_timeout.clone();
-    let error_timeout = config.get_events_error_timeout.clone();
     let mut after_timestamp = Utc::now();
 
     loop {
@@ -318,7 +316,7 @@ async fn check_invoice_events(provider_ctx: Arc<ProviderCtx>, payments_addr: Add
             .payment_api
             .get_invoice_events(
                 Some(&after_timestamp),
-                Some(timeout),
+                Some(config.get_events_timeout),
                 None,
                 Some(config.session_id.clone()),
             )
@@ -327,7 +325,7 @@ async fn check_invoice_events(provider_ctx: Arc<ProviderCtx>, payments_addr: Add
             Ok(events) => events,
             Err(e) => {
                 log::error!("Can't query invoice events: {}", e);
-                tokio::time::sleep(error_timeout).await;
+                tokio::time::sleep(config.get_events_error_timeout).await;
                 vec![]
             }
         };
@@ -665,30 +663,32 @@ impl Handler<UpdateCost> for Payments {
                         // We break Agreement, if we weren't able to send any DebitNote lately.
                         match result {
                             Err(_) => {
-                                if accept_timeout.is_some() && Utc::now() > last_debit_note + accept_timeout.unwrap() {
-                                    myself.break_agreement_signal
-                                        .send_signal(BreakAgreement {
-                                            agreement_id: msg.invoice_info.agreement_id.clone(),
-                                            reason: BreakReason::RequestorUnreachable(accept_timeout.unwrap()),
-                                        })
-                                        .log_err_msg(&format!(
-                                            "Failed to send BreakAgreement for [{}], when Requestor is unreachable.",
-                                            msg.invoice_info.agreement_id
-                                        ))
-                                        .ok();
+                                if let Some(accept_timeout) = accept_timeout {
+                                    if Utc::now() > last_debit_note + accept_timeout {
+                                        myself.break_agreement_signal
+                                            .send_signal(BreakAgreement {
+                                                agreement_id: msg.invoice_info.agreement_id.clone(),
+                                                reason: BreakReason::RequestorUnreachable(accept_timeout),
+                                            })
+                                            .log_err_msg(&format!(
+                                                "Failed to send BreakAgreement for [{}], when Requestor is unreachable.",
+                                                msg.invoice_info.agreement_id
+                                            ))
+                                            .ok();
+                                    }
                                 }
                             },
                             Ok(debit_note) => {
-                                myself.agreements
+                                // Payment due date is always set _before_ sending the DebitNote.
+                                // The following synchronises the acceptance timeout check.
+                                if let Some(agreement) = myself.agreements
                                     .get_mut(&msg.invoice_info.agreement_id)
-                                    // Payment due date is always set _before_ sending the DebitNote.
-                                    // The following synchronises the acceptance timeout check.
-                                    .map(|agreement| {
+                                    {
                                         agreement.last_send_debit_note = debit_note.timestamp;
                                         if debit_note.payment_due_date.is_some() {
                                             agreement.last_payable_debit_note = debit_note.timestamp
                                         }
-                                    });
+                                    }
                             }
                         }
 
@@ -889,7 +889,7 @@ impl Handler<AgreementBroken> for Payments {
                 agreement_id: msg.agreement_id,
                 send_terminate: false,
             };
-            Ok(address.send(msg).await??)
+            address.send(msg).await?
         };
 
         ActorResponse::r#async(future.into_actor(self))

@@ -102,7 +102,7 @@ pub async fn publish(path: &Path) -> Result<Url> {
     let filedesc = FileDesc::open(path)?;
     filedesc.bind_handlers();
 
-    Ok(gftp_url(&filedesc.hash).await?)
+    gftp_url(&filedesc.hash).await
 }
 
 pub async fn close(url: &Url) -> Result<bool> {
@@ -182,16 +182,16 @@ pub async fn open_for_upload(filepath: &Path) -> Result<Url> {
     let file_clone = file.clone();
     let _ = bus::bind(&gsb_address, move |msg: model::UploadChunk| {
         let file = file_clone.clone();
-        async move { Ok(chunk_uploaded(file.clone(), msg).await?) }
+        async move { chunk_uploaded(file.clone(), msg).await }
     });
 
     let file_clone = file.clone();
     let _ = bus::bind(&gsb_address, move |msg: model::UploadFinished| {
         let file = file_clone.clone();
-        async move { Ok(upload_finished(file.clone(), msg).await?) }
+        async move { upload_finished(file.clone(), msg).await }
     });
 
-    Ok(gftp_url(&hash_name).await?)
+    gftp_url(&hash_name).await
 }
 
 async fn chunk_uploaded(
@@ -320,7 +320,7 @@ fn hash_file_sha256(mut file: &mut fs::File) -> Result<String> {
     let mut hasher = Sha3_256::new();
 
     file.seek(SeekFrom::Start(0))
-        .with_context(|| format!("Can't seek file at offset 0."))?;
+        .with_context(|| "Can't seek file at offset 0.".to_string())?;
     io::copy(&mut file, &mut hasher)?;
 
     Ok(format!("{:x}", hasher.result()))
@@ -368,11 +368,11 @@ fn create_dest_file(file_path: &Path) -> Result<File> {
             file_path.display()
         )
     })?;
-    Ok(OpenOptions::new()
+    OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(true)
         .open(file_path)
-        .with_context(|| format!("Can't create destination file: [{}].", file_path.display()))?)
+        .with_context(|| format!("Can't create destination file: [{}].", file_path.display()))
 }

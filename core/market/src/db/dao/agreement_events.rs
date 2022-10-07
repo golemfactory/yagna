@@ -35,7 +35,7 @@ impl<'c> AgreementEventsDao<'c> {
         after_timestamp: NaiveDateTime,
     ) -> DbResult<Vec<AgreementEvent>> {
         let session_id = session_id.clone();
-        let node_id = node_id.clone();
+        let node_id = *node_id;
         readonly_transaction(self.pool, move |conn| {
             // We will get only one Agreement, by using this filter.
             // There will be no way to get Requestor'a Agreement, when being Provider, and vice versa,

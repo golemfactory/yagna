@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 use actix_web::web::Data;
 use actix_web::{middleware, App, HttpServer, Scope};
 use chrono::Utc;

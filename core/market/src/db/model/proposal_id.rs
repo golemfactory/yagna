@@ -82,7 +82,7 @@ impl ProposalId {
     }
 
     pub fn owner(&self) -> Owner {
-        self.owner.clone()
+        self.owner
     }
 
     pub fn translate(mut self, new_owner: Owner) -> Self {

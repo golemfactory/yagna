@@ -113,7 +113,7 @@ impl<'a> Stack<'a> {
                 let socket = sockets.get::<UdpSocket>(handle);
                 socket.endpoint().port
             }
-            _ => 0 as u16,
+            _ => 0_u16,
         };
 
         sockets.remove(handle);

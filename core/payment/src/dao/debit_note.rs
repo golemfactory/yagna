@@ -128,7 +128,7 @@ impl<'c> DebitNoteDao<'c> {
                 .optional()?;
             let debit_note = WriteObj::issued(debit_note, previous_debit_note_id, issuer_id);
             let debit_note_id = debit_note.id.clone();
-            let owner_id = debit_note.owner_id.clone();
+            let owner_id = debit_note.owner_id;
             activity::set_amount_due(
                 &debit_note.activity_id,
                 &debit_note.owner_id,
@@ -160,7 +160,7 @@ impl<'c> DebitNoteDao<'c> {
                 .optional()?;
             let debit_note = WriteObj::received(debit_note, previous_debit_note_id);
             let debit_note_id = debit_note.id.clone();
-            let owner_id = debit_note.owner_id.clone();
+            let owner_id = debit_note.owner_id;
             activity::set_amount_due(
                 &debit_note.activity_id,
                 &debit_note.owner_id,

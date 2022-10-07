@@ -93,7 +93,7 @@ impl Resources {
     ) -> Result<Self, Error> {
         let max_caps = Self::max_caps(path)?;
         if config.rt_cores.is_some() || config.rt_mem.is_some() || config.rt_storage.is_some() {
-            let mut user_caps = max_caps.clone();
+            let mut user_caps = max_caps;
 
             if let Some(cores) = config.rt_cores {
                 user_caps.cpu_threads = cores as i32;
@@ -421,7 +421,7 @@ impl Manager {
     #[inline]
     pub fn capped(&self) -> Resources {
         let state = self.state.lock().unwrap();
-        state.res_cap.clone()
+        state.res_cap
     }
 
     #[allow(dead_code)]
@@ -580,9 +580,9 @@ mod tests {
             storage_gib: 200.,
         };
         let state = ManagerState {
-            res_available: res.clone(),
-            res_cap: res.clone(),
-            res_remaining: res.clone(),
+            res_available: res,
+            res_cap: res,
+            res_remaining: res,
             res_alloc: HashMap::new(),
             profiles: profiles(),
         };
@@ -599,9 +599,9 @@ mod tests {
             storage_gib: 12.37,
         };
 
-        man.allocate("1".into(), alloc.clone()).unwrap();
-        man.allocate("2".into(), alloc.clone()).unwrap();
-        man.allocate("3".into(), alloc.clone()).unwrap();
+        man.allocate("1".into(), alloc).unwrap();
+        man.allocate("2".into(), alloc).unwrap();
+        man.allocate("3".into(), alloc).unwrap();
         man.release("1".into()).unwrap();
         man.release("2".into()).unwrap();
         man.release("3".into()).unwrap();
@@ -620,9 +620,9 @@ mod tests {
             storage_gib: 200.,
         };
         let state = ManagerState {
-            res_available: res.clone(),
-            res_cap: res.clone(),
-            res_remaining: res.clone(),
+            res_available: res,
+            res_cap: res,
+            res_remaining: res,
             res_alloc: HashMap::new(),
             profiles: profiles(),
         };
@@ -639,7 +639,7 @@ mod tests {
             storage_gib: 12.37,
         };
 
-        man.allocate("1".into(), alloc.clone()).unwrap();
+        man.allocate("1".into(), alloc).unwrap();
         assert!(man.allocate("1".into(), alloc).is_err());
         assert!(man.release("2".into()).is_err());
         assert!(man

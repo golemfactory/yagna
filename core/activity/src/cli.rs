@@ -32,9 +32,7 @@ impl ActivityCli {
                         if id.starts_with("0x") {
                             id.parse()?
                         } else {
-                            Self::get_identity(idm::Get::ByAlias(id.into()))
-                                .await?
-                                .node_id
+                            Self::get_identity(idm::Get::ByAlias(id)).await?.node_id
                         }
                     }
                     None => Self::get_identity(idm::Get::ByDefault).await?.node_id,

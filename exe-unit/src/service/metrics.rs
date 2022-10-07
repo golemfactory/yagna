@@ -201,6 +201,7 @@ impl Metric for CustomMetric {
     }
 }
 
+#[allow(clippy::type_complexity)]
 struct MetricProvider {
     metric: Box<dyn Metric>,
     backlog: Arc<Mutex<VecDeque<(DateTime<Utc>, MetricReport)>>>,

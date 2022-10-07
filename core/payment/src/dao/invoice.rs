@@ -74,7 +74,7 @@ pub fn update_status(
 impl<'c> InvoiceDao<'c> {
     async fn insert(&self, invoice: WriteObj, activity_ids: Vec<String>) -> DbResult<()> {
         let invoice_id = invoice.id.clone();
-        let owner_id = invoice.owner_id.clone();
+        let owner_id = invoice.owner_id;
         let role = invoice.role.clone();
         do_with_transaction(self.pool, move |conn| {
             if let Some(read_invoice) = query!()
@@ -85,9 +85,10 @@ impl<'c> InvoiceDao<'c> {
             {
                 return match equivalent(&read_invoice, &invoice) {
                     true => Ok(()),
-                    false => Err(DbError::Integrity(format!(
+                    false => Err(DbError::Integrity(
                         "Invoice with the same id and different content already exists."
-                    ))),
+                            .to_string(),
+                    )),
                 };
             };
 
@@ -100,7 +101,7 @@ impl<'c> InvoiceDao<'c> {
             // Diesel cannot do batch insert into SQLite database
             activity_ids.into_iter().try_for_each(|activity_id| {
                 let invoice_id = invoice_id.clone();
-                let owner_id = owner_id.clone();
+                let owner_id = owner_id;
                 diesel::insert_into(activity_dsl::pay_invoice_x_activity)
                     .values(InvoiceXActivity {
                         invoice_id,
@@ -126,7 +127,7 @@ impl<'c> InvoiceDao<'c> {
 
     pub async fn create_new(&self, invoice: NewInvoice, issuer_id: NodeId) -> DbResult<String> {
         let activity_ids = invoice.activity_ids.clone().unwrap_or_default();
-        let invoice = WriteObj::new_issued(invoice, issuer_id.clone());
+        let invoice = WriteObj::new_issued(invoice, issuer_id);
         let invoice_id = invoice.id.clone();
         self.insert(invoice, activity_ids).await?;
         Ok(invoice_id)
@@ -259,13 +260,7 @@ impl<'c> InvoiceDao<'c> {
             agreement::set_amount_accepted(&agreement_id, &owner_id, &amount, conn)?;
 
             for event in events {
-                invoice_event::create::<()>(
-                    invoice_id.clone(),
-                    owner_id.clone(),
-                    event,
-                    None,
-                    conn,
-                )?;
+                invoice_event::create::<()>(invoice_id.clone(), owner_id, event, None, conn)?;
             }
 
             Ok(())

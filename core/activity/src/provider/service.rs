@@ -103,8 +103,6 @@ async fn create_activity_gsb(
         return Err(RpcMessageError::BadRequest(msg));
     }
 
-    let provider_id = agreement.provider_id().clone();
-
     db.as_dao::<ActivityDao>()
         .create_if_not_exists(&activity_id, &msg.agreement_id)
         .await
@@ -115,7 +113,7 @@ async fn create_activity_gsb(
     db.as_dao::<EventDao>()
         .create(
             &activity_id,
-            &provider_id,
+            agreement.provider_id(),
             ActivityEventType::CreateActivity,
             msg.requestor_pub_key,
             &agreement.app_session_id,
@@ -131,7 +129,7 @@ async fn create_activity_gsb(
         db.clone(),
         tracker.clone(),
         &activity_id,
-        provider_id.clone(),
+        *agreement.provider_id(),
         app_session_id.clone(),
         msg.timeout,
     )
@@ -141,10 +139,10 @@ async fn create_activity_gsb(
             db.clone(),
             tracker.clone(),
             &activity_id,
-            provider_id,
+            *agreement.provider_id(),
             app_session_id,
         ));
-        Error::from(e)
+        e
     })?;
 
     counter!("activity.provider.created", 1);

@@ -60,7 +60,7 @@ impl Demand {
     pub fn into_client_demand(&self) -> Result<ClientDemand, ErrorMessage> {
         Ok(ClientDemand {
             demand_id: self.id.to_string(),
-            requestor_id: self.node_id.clone(),
+            requestor_id: self.node_id,
             constraints: self.constraints.clone(),
             properties: serde_json::from_str(&self.properties).map_err(|e| {
                 format!(

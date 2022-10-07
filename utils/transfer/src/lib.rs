@@ -41,7 +41,7 @@ where
 {
     let rx = sink.res_rx.take().unwrap();
     stream.forward(sink).await?;
-    Ok(rx.await??)
+    rx.await?
 }
 
 /// Transfers data between `TransferProvider`s within current context
@@ -191,6 +191,7 @@ pub struct TransferSink<T, E> {
     res_rx: Option<oneshot::Receiver<Result<(), E>>>,
 }
 
+#[allow(clippy::type_complexity)]
 impl<T, E> TransferSink<T, E> {
     pub fn create(
         channel_size: usize,
@@ -330,7 +331,7 @@ impl TransferState {
     }
 
     pub fn size(&self) -> Option<u64> {
-        self.inner.borrow().size.clone()
+        self.inner.borrow().size
     }
 
     pub fn set_size(&self, size: Option<u64>) {
@@ -351,8 +352,7 @@ impl TransferState {
         (*self.inner.borrow_mut())
             .retry
             .as_mut()
-            .map(|r| r.delay(err))
-            .flatten()
+            .and_then(|r| r.delay(err))
     }
 }
 

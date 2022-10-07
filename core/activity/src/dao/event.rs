@@ -78,7 +78,7 @@ impl<'c> EventDao<'c> {
                     dsl::activity
                         .select((
                             dsl::id,
-                            identity_id.clone().into_sql::<Text>(),
+                            identity_id.into_sql::<Text>(),
                             now.into_sql::<Timestamp>(),
                             event_type.into_sql::<Integer>(),
                             requestor_pub_key.into_sql(),

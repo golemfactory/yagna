@@ -175,8 +175,8 @@ async fn main() -> anyhow::Result<()> {
         },
     ];
 
-    let chunk_size = 4096 as usize;
-    let chunk_count = 256 as usize;
+    let chunk_size = 4096_usize;
+    let chunk_count = 256_usize;
 
     log::debug!(
         "Creating a random file of size {} * {}",

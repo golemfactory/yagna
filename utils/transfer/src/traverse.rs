@@ -342,7 +342,7 @@ mod tests {
             .build()
             .traverse(dir.path())?
             .count();
-        assert_eq!(entries_count, 3 as usize);
+        assert_eq!(entries_count, 3_usize);
 
         let entries_count = Builder::new()
             .include("**/*.txt")
@@ -350,7 +350,7 @@ mod tests {
             .build()
             .traverse(dir.path())?
             .count();
-        assert_eq!(entries_count, 4 as usize);
+        assert_eq!(entries_count, 4_usize);
 
         let entries_count = Builder::new()
             .include("**/*.txt")
@@ -358,7 +358,7 @@ mod tests {
             .build()
             .traverse(dir.path())?
             .count();
-        assert_eq!(entries_count, 5 as usize);
+        assert_eq!(entries_count, 5_usize);
 
         Ok(())
     }
