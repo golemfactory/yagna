@@ -19,10 +19,7 @@ fn keystore_list_cmd_creates_cert_dir_in_data_dir_set_by_env() {
     // When
     Command::cargo_bin("ya-provider")
         .unwrap()
-        .env(
-            "DATA_DIR".to_string(),
-            data_dir.as_path().to_str().unwrap().to_string(),
-        )
+        .env("DATA_DIR", data_dir.as_path().to_str().unwrap())
         .arg("keystore")
         .arg("list")
         .arg("--json")
@@ -54,7 +51,7 @@ fn keystore_list_cmd_creates_cert_dir_in_dir_set_by_env() {
     // When
     Command::cargo_bin("ya-provider")
         .unwrap()
-        .env("DATA_DIR".to_string(), data_dir.as_path().to_str().unwrap())
+        .env("DATA_DIR", data_dir.as_path().to_str().unwrap())
         .env("PROVIDER_CERT_DIR", cert_dir.as_path().to_str().unwrap())
         .arg("keystore")
         .arg("list")
@@ -89,7 +86,7 @@ fn keystore_list_cmd_creates_cert_dir_in_dir_set_by_arg() {
     // When
     Command::cargo_bin("ya-provider")
         .unwrap()
-        .env("DATA_DIR".to_string(), data_dir.as_path().to_str().unwrap())
+        .env("DATA_DIR", data_dir.as_path().to_str().unwrap())
         .args(["--cert-dir", cert_dir.as_path().to_str().unwrap()])
         .arg("keystore")
         .arg("list")

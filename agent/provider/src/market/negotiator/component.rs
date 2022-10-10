@@ -59,16 +59,9 @@ pub trait NegotiatorComponent {
     fn on_agreement_approved(&mut self, agreement_id: &str) -> anyhow::Result<()>;
 }
 
+#[derive(Default)]
 pub struct NegotiatorsPack {
     components: HashMap<String, Box<dyn NegotiatorComponent>>,
-}
-
-impl Default for NegotiatorsPack {
-    fn default() -> Self {
-        Self {
-            components: HashMap::default(),
-        }
-    }
 }
 
 impl NegotiatorsPack {

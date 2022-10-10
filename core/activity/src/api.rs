@@ -86,7 +86,7 @@ mod common {
         let state = provider_service
             .send(activity::GetState {
                 activity_id: path.activity_id.to_string(),
-                timeout: query.timeout.clone(),
+                timeout: query.timeout,
             })
             .timeout(timeout_margin(query.timeout))
             .await???;
@@ -130,7 +130,7 @@ mod common {
         let usage = provider_service
             .send(activity::GetUsage {
                 activity_id: path.activity_id.to_string(),
-                timeout: query.timeout.clone(),
+                timeout: query.timeout,
             })
             .timeout(timeout_margin(query.timeout))
             .await???;
@@ -154,10 +154,7 @@ mod common {
                         );
                         (Ok(web::Bytes::from(line)), Some(stream))
                     }
-                    Err(err) => (
-                        Err(actix_web::error::ErrorInternalServerError(err).into()),
-                        None,
-                    ),
+                    Err(err) => (Err(actix_web::error::ErrorInternalServerError(err)), None),
                 })
             } else {
                 None

@@ -78,6 +78,7 @@ pub fn normalize_path<P: AsRef<Path>>(path: P) -> std::io::Result<PathBuf> {
     Ok(path)
 }
 
+#[allow(clippy::unnecessary_filter_map)]
 fn remove_insecure_chars<PathRef: AsRef<Path>>(path: PathRef) -> PathBuf {
     let path = path.as_ref().to_path_buf();
     path.components()

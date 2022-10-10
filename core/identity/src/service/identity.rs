@@ -107,7 +107,7 @@ impl IdentityService {
                 db.as_dao::<IdentityDao>()
                     .init_default_key(|| {
                         log::info!("generating new default identity");
-                        let key: IdentityKey = generate_new(None, "".into()).into();
+                        let key: IdentityKey = generate_new(None, "".into());
 
                         Ok(Identity {
                             identity_id: key.id(),
@@ -257,7 +257,7 @@ impl IdentityService {
     fn get_key_by_id(&mut self, node_id: &NodeId) -> Result<&mut IdentityKey, model::Error> {
         Ok(match self.ids.get_mut(node_id) {
             Some(v) => v,
-            None => return Err(model::Error::NodeNotFound(Box::new(node_id.clone()))),
+            None => return Err(model::Error::NodeNotFound(Box::new(*node_id))),
         })
     }
 
@@ -317,7 +317,7 @@ impl IdentityService {
         let node_id = update.node_id;
         let key = match self.ids.get_mut(&node_id) {
             Some(v) => v,
-            None => return Err(model::Error::NodeNotFound(Box::new(node_id.clone()))),
+            None => return Err(model::Error::NodeNotFound(Box::new(node_id))),
         };
         let update_alias = update.alias.clone();
         if let Some(new_alias) = update.alias {
@@ -606,8 +606,8 @@ async fn unbind(endpoint: String) -> anyhow::Result<()> {
 }
 
 async fn get_default_identity_key() -> anyhow::Result<model::IdentityInfo> {
-    Ok(bus::service(model::BUS_ID)
+    bus::service(model::BUS_ID)
         .send(model::Get::ByDefault {})
         .await??
-        .ok_or_else(|| anyhow::anyhow!("No default Identity found"))?)
+        .ok_or_else(|| anyhow::anyhow!("No default Identity found"))
 }

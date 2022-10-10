@@ -78,7 +78,7 @@ impl DeadlineChecker {
                 ctx.cancel_future(handle);
             }
 
-            let notify_timestamp = top_deadline.clone();
+            let notify_timestamp = top_deadline;
             let wait_duration = (top_deadline - Utc::now())
                 .max(Duration::milliseconds(1))
                 .to_std()
@@ -111,7 +111,7 @@ impl DeadlineChecker {
         let mut elapsed = self
             .deadlines
             .iter_mut()
-            .map(|(agreement_id, deadlines)| {
+            .flat_map(|(agreement_id, deadlines)| {
                 let idx =
                     match deadlines.binary_search_by(|element| element.deadline.cmp(&timestamp)) {
                         Ok(idx) => idx + 1,
@@ -127,7 +127,6 @@ impl DeadlineChecker {
                     .collect::<Vec<DeadlineElapsed>>()
                     .into_iter()
             })
-            .flatten()
             .collect::<Vec<DeadlineElapsed>>();
 
         elapsed.sort_by(|dead1, dead2| dead1.deadline.cmp(&dead2.deadline));
@@ -149,7 +148,7 @@ impl DeadlineChecker {
             .filter_map(|element| {
                 let dead_vec = element.1;
                 if !dead_vec.is_empty() {
-                    Some(dead_vec[0].deadline.clone())
+                    Some(dead_vec[0].deadline)
                 } else {
                     None
                 }
@@ -227,6 +226,7 @@ impl Actor for DeadlineChecker {
     type Context = Context<Self>;
 }
 
+#[allow(clippy::type_complexity)]
 struct DeadlineFun {
     callback: Box<dyn FnMut(DeadlineElapsed) -> Pin<Box<dyn Future<Output = ()>>> + 'static>,
 }
@@ -369,7 +369,7 @@ mod test {
             checker
                 .send(TrackDeadline {
                     category: "agrrrrr-1".to_string(),
-                    deadline: now + Duration::milliseconds(200) + Duration::milliseconds(1 * i),
+                    deadline: now + Duration::milliseconds(200) + Duration::milliseconds(i),
                     id: i.to_string(),
                 })
                 .await

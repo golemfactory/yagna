@@ -33,7 +33,7 @@ pub struct Scheduler {
     jobs: Vec<Job>,
 }
 
-impl<'a> Scheduler {
+impl Scheduler {
     pub fn new<T>(name: T, tick_time: u64) -> Scheduler
     where
         T: Into<String>,

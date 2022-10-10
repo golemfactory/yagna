@@ -168,7 +168,7 @@ impl Handler<ReactToAgreement> for CompositeNegotiator {
             }
             NegotiationResult::Negotiating { .. } => Ok(AgreementResponse::RejectAgreement {
                 reason: Some(reason_with_extra(
-                    format!("Negotiations aren't finished."),
+                    "Negotiations aren't finished.".to_string(),
                     serde_json::json!({ "golem.proposal.rejection.is-final": false }),
                 )),
                 is_final: false,

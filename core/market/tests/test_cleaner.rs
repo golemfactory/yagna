@@ -41,20 +41,20 @@ async fn test_agreement() {
 
     // create agreement event in 3 steps
     agreement_dao
-        .confirm(&expired_agreement.id, &None, &"signature,".to_string())
+        .confirm(&expired_agreement.id, &None, "signature,")
         .await
         .unwrap();
     agreement_dao
         .approving(
             &expired_agreement.id,
             &None,
-            &"signature,".to_string(),
+            "signature,",
             &Utc::now().naive_utc(),
         )
         .await
         .unwrap();
     agreement_dao
-        .approve(&expired_agreement.id, &"signature,".to_string())
+        .approve(&expired_agreement.id, "signature,")
         .await
         .unwrap();
 
@@ -106,11 +106,11 @@ async fn test_offer() {
     let offer_dao = db.as_dao::<OfferDao>();
     let validation_ts = (Utc::now() - Duration::days(100)).naive_utc();
     offer_dao
-        .put(valid_offer.clone(), validation_ts.clone())
+        .put(valid_offer.clone(), validation_ts)
         .await
         .unwrap();
     offer_dao
-        .put(expired_offer.clone(), validation_ts.clone())
+        .put(expired_offer.clone(), validation_ts)
         .await
         .unwrap();
     clean(db.clone(), &db_config()).await;

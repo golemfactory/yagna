@@ -61,7 +61,7 @@ fn connection_customizer(
             let mut lock_cnt = self.0.write().unwrap();
             *lock_cnt += 1;
             log::trace!("on_acquire connection [rw:{}]", *lock_cnt);
-            Ok(conn.batch_execute(CONNECTION_INIT).map_err(|e| {
+            conn.batch_execute(CONNECTION_INIT).map_err(|e| {
                 log::error!(
                     "error: {:?}, on: {}, [lock: {}]",
                     e,
@@ -69,7 +69,7 @@ fn connection_customizer(
                     *lock_cnt
                 );
                 diesel::r2d2::Error::QueryError(e)
-            })?)
+            })
         }
 
         fn on_release(&self, _conn: SqliteConnection) {
@@ -250,6 +250,7 @@ where
     do_with_rw_connection(pool, move |conn| conn.immediate_transaction(|| f(conn))).await
 }
 
+#[allow(clippy::let_and_return)]
 pub async fn readonly_transaction<R: Send + 'static, Error, F>(
     pool: &PoolType,
     f: F,

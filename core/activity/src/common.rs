@@ -94,7 +94,7 @@ pub(crate) fn agreement_provider_service(
     agreement: &Agreement,
 ) -> Result<Endpoint, Error> {
     Ok(ya_net::from(id.identity)
-        .to(agreement.provider_id().clone())
+        .to(*agreement.provider_id())
         .service(activity::BUS_ID))
 }
 

@@ -123,7 +123,7 @@ mod tests {
         let days = 1;
         let now = Local::now();
         let interval = Interval::new(days, 0, 0, 0);
-        let mut trigger = Trigger::new("trigger1", now.clone(), interval);
+        let mut trigger = Trigger::new("trigger1", now, interval);
         trigger.tick();
         assert_ne!(trigger.last_run, None);
         assert_eq!(trigger.next_run, now + Duration::days(i64::from(days)));

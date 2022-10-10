@@ -10,6 +10,7 @@ use std::path::Path;
 
 pub use flexi_logger::LoggerHandle;
 
+#[allow(clippy::useless_conversion)]
 fn log_format_date(now: &mut DeferredNow) -> DelayedFormat<StrftimeItems> {
     //use DateTime::<Local> instead of DateTime::<UTC> to obtain local date
     let local_date = DateTime::<Local>::from(*now.now());

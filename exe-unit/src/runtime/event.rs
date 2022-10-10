@@ -241,7 +241,7 @@ impl Channel {
     }
 
     fn done_tx(&mut self) -> Option<oneshot::Sender<i32>> {
-        self.done.as_mut().map(|d| d.tx.take()).flatten()
+        self.done.as_mut().and_then(|d| d.tx.take())
     }
 
     fn done_rx<'a>(&self) -> Option<BoxFuture<'a, Result<i32, ()>>> {

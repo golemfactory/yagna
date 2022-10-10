@@ -88,7 +88,7 @@ async fn resolve_identity_and_key() -> anyhow::Result<(NodeId, Option<AppKey>)> 
         .await?
         .context("Failed to call the identity service")?;
 
-    let node_id = match identities.into_iter().filter(|i| i.is_default).next() {
+    let node_id = match identities.into_iter().find(|i| i.is_default) {
         Some(i) => i.node_id,
         None => bail!("Default identity not found"),
     };

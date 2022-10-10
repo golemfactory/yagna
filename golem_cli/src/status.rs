@@ -42,8 +42,7 @@ async fn payment_status(
         (f, l)
     };
     let fr = future::join_all(futures).await;
-    let mut n = 0;
-    for r in fr {
+    for (n, r) in fr.into_iter().enumerate() {
         result.insert(
             labels[n].clone(),
             r.unwrap_or_else(|e| {
@@ -51,7 +50,6 @@ async fn payment_status(
                 StatusResult::default()
             }),
         );
-        n += 1;
     }
     Ok(result)
 }

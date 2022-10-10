@@ -61,7 +61,7 @@ impl Config {
     pub fn from_env() -> Result<Config, structopt::clap::Error> {
         // Empty command line arguments, because we want to use ENV fallback
         // or default values if ENV variables are not set.
-        Ok(Config::from_iter_safe(&[""])?)
+        Config::from_iter_safe(&[""])
     }
 }
 

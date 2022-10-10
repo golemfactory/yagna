@@ -370,14 +370,14 @@ impl ExtensionCommand {
     }
 
     fn map<I: Iterator<Item = Extension>>(extensions: I) -> Result<CommandOutput> {
-        Ok(CommandOutput::object(
+        CommandOutput::object(
             extensions
                 .map(|mut ext| {
                     let name = std::mem::take(&mut ext.name);
                     (name, ext)
                 })
                 .collect::<HashMap<_, _>>(),
-        )?)
+        )
     }
 
     fn table<I: Iterator<Item = Extension>>(extensions: I) -> Result<CommandOutput> {
@@ -486,7 +486,7 @@ impl ServiceCommand {
                 env::set_var(
                     "RUST_LOG",
                     env::var("RUST_LOG")
-                        .unwrap_or(format!("info,actix_web::middleware::logger=warn",)),
+                        .unwrap_or_else(|_| "info,actix_web::middleware::logger=warn".to_string()),
                 );
 
                 //this force_debug flag sets default log level to debug

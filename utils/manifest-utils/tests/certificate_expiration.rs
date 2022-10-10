@@ -143,11 +143,8 @@ mod utils {
         csr_key_pair: &openssl::pkey::PKey<openssl::pkey::Private>,
         sig_alg: &str,
     ) -> Vec<u8> {
-        let mut signer = Signer::new(
-            MessageDigest::from_name(sig_alg.as_ref()).unwrap(),
-            &csr_key_pair,
-        )
-        .unwrap();
+        let mut signer =
+            Signer::new(MessageDigest::from_name(sig_alg).unwrap(), csr_key_pair).unwrap();
         signer.sign_oneshot_to_vec(data).unwrap()
     }
 

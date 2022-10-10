@@ -180,7 +180,7 @@ impl Vpn {
     ) {
         let arp = ArpPacket::packet(frame.payload());
         // forward only IP ARP packets
-        if arp.get_field(ArpField::PTYPE) != [08, 00] {
+        if arp.get_field(ArpField::PTYPE) != [8, 0] {
             return;
         }
 

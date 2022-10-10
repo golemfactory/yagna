@@ -69,7 +69,6 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
         let key = Uuid::new_v4().to_simple().to_string();
         let db = dbx.clone();
         let mut create_tx = create_tx.clone();
-        let identity = create.identity.clone();
         async move {
             let dao = db.as_dao::<AppKeyDao>();
 
@@ -93,7 +92,9 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
             }?;
 
             let _ = create_tx
-                .send(model::event::Event::NewKey { identity })
+                .send(model::event::Event::NewKey {
+                    identity: create.identity,
+                })
                 .await;
             Ok(result)
         }
@@ -126,7 +127,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                     key: get.key.clone(),
                     role: model::DEFAULT_ROLE.to_string(),
                     identity: node_id,
-                    created_date: start_datetime.clone(),
+                    created_date: start_datetime,
                 })
             } else {
                 let (appkey, role) = db

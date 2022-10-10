@@ -167,8 +167,7 @@ impl TransferService {
     pub fn schemes() -> Vec<String> {
         Self::default_providers()
             .values()
-            .map(|p| p.schemes())
-            .flatten()
+            .flat_map(|p| p.schemes())
             .collect::<HashSet<_>>()
             .into_iter()
             .map(ToString::to_string)
@@ -304,7 +303,7 @@ impl Handler<DeployImage> for TransferService {
                 std::fs::write(&path, bytes)?;
                 Ok(Some(path))
             };
-            return ActorResponse::r#async(fut.into_actor(self));
+            ActorResponse::r#async(fut.into_actor(self))
         }
     }
 }

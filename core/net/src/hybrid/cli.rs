@@ -49,7 +49,11 @@ pub(crate) fn bind_service() {
                 let kind = match node_id {
                     Some(id) => {
                         let is_p2p = client.is_p2p(id).await?;
-                        is_p2p.then(|| "p2p").unwrap_or("relay")
+                        if is_p2p {
+                            "p2p"
+                        } else {
+                            "relay"
+                        }
                     }
                     None => "server",
                 };
@@ -180,8 +184,8 @@ pub async fn cli_ping() -> anyhow::Result<Vec<GsbPingResponse>> {
             log::warn!("Failed to ping node: {} {}", nodes[idx].0, e);
         }
 
-        let udp_ping = results.0.unwrap_or_else(|_| ping_timeout.clone());
-        let tcp_ping = results.1.unwrap_or_else(|_| ping_timeout.clone());
+        let udp_ping = results.0.unwrap_or(ping_timeout);
+        let tcp_ping = results.1.unwrap_or(ping_timeout);
 
         GsbPingResponse {
             node_id: nodes[idx].0,
