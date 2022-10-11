@@ -28,23 +28,23 @@ use net::{EgressReceiver, IngressEvent, IngressReceiver};
 use net::{Error as NetError, Protocol};
 
 use ya_runtime_api::server::{CreateNetwork, NetworkInterface, RuntimeService};
-use ya_utils_networking::vpn::common::{ntoh, DEFAULT_MAX_FRAME_SIZE};
+use ya_utils_networking::vpn::common::ntoh;
 use ya_utils_networking::vpn::stack as net;
 use ya_utils_networking::vpn::stack::smoltcp::wire::{EthernetAddress, HardwareAddress};
-use ya_utils_networking::vpn::stack::NetworkConfig;
+use ya_utils_networking::vpn::stack::StackConfig;
 use ya_utils_networking::vpn::{
     EtherFrame, EtherType, IpPacket, PeekPacket, SocketEndpoint, TcpPacket, UdpPacket,
 };
 
 use crate::manifest::UrlValidator;
 use crate::message::Shutdown;
-use crate::network;
-use crate::network::{Endpoint, RxBuffer};
+use crate::network::{write_prefix, Endpoint, RxBuffer};
 use crate::{Error, Result};
 
-const IP4_ADDRESS: std::net::Ipv4Addr = std::net::Ipv4Addr::new(9, 0, 0x0d, 0x01);
-const IP6_ADDRESS: std::net::Ipv6Addr = IP4_ADDRESS.to_ipv6_mapped();
+const IP4_ADDRESS: Ipv4Addr = Ipv4Addr::new(9, 0, 0x0d, 0x01);
+const IP6_ADDRESS: Ipv6Addr = IP4_ADDRESS.to_ipv6_mapped();
 const TCP_KEEP_ALIVE: Duration = Duration::from_secs(30);
+const DEFAULT_MAX_PACKET_SIZE: usize = 65536;
 const DEFAULT_PREFIX_LEN: u8 = 24;
 
 type TcpSender = Arc<Mutex<SplitSink<Framed<TcpStream, BytesCodec>, Bytes>>>;
@@ -124,9 +124,9 @@ impl Inet {
     }
 
     fn create_network() -> net::Network {
-        let config = Rc::new(NetworkConfig {
-            max_transmission_unit: DEFAULT_MAX_FRAME_SIZE,
-            buffer_size_multiplier: 4,
+        let config = Rc::new(StackConfig {
+            max_transmission_unit: DEFAULT_MAX_PACKET_SIZE,
+            ..Default::default()
         });
 
         let ethernet_addr = loop {
@@ -271,15 +271,15 @@ async fn inet_ingress_handler(rx: IngressReceiver, proxy: Proxy) {
 
 async fn inet_egress_handler<E: std::fmt::Display>(
     rx: EgressReceiver,
-    mut fwd: impl Sink<Result<Vec<u8>>, Error = E> + Unpin + 'static,
+    fwd: tokio::sync::mpsc::UnboundedSender<std::result::Result<Vec<u8>, E>>,
 ) {
     let mut rx = UnboundedReceiverStream::new(rx);
     while let Some(event) = rx.next().await {
         let mut frame = event.payload.into_vec();
         log::debug!("[inet] egress -> runtime packet {} B", frame.len());
 
-        network::write_prefix(&mut frame);
-        if let Err(e) = fwd.send(Ok(frame)).await {
+        write_prefix(&mut frame);
+        if let Err(e) = fwd.send(Ok(frame)) {
             log::debug!("[inet] egress -> runtime error: {}", e);
         }
     }
@@ -484,15 +484,8 @@ impl Proxy {
                     conn
                 );
 
-                match network.send(vec, conn) {
-                    Ok(fut) => {
-                        if let Err(e) = fut.await {
-                            log::debug!("[inet] proxy conn: forward error: {}", e);
-                        }
-                    }
-                    Err(e) => {
-                        log::debug!("[inet] proxy conn: send error: {}", e);
-                    }
+                if let Err(e) = network.send(vec, conn).await {
+                    log::debug!("[inet] proxy conn: send error: {}", e);
                 };
             }
 
@@ -526,7 +519,7 @@ async fn inet_tcp_proxy<'a>(ip: IpAddr, port: u16) -> Result<(TransportSender, T
         .map_err(|e| Error::Other(e.to_string()))?;
     let _ = tcp_stream.set_nodelay(true);
 
-    let stream = Framed::with_capacity(tcp_stream, BytesCodec::new(), DEFAULT_MAX_FRAME_SIZE);
+    let stream = Framed::with_capacity(tcp_stream, BytesCodec::new(), DEFAULT_MAX_PACKET_SIZE);
     let (tx, rx) = stream.split();
     Ok((
         TransportSender::Tcp(Arc::new(Mutex::new(tx))),

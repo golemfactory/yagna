@@ -22,9 +22,12 @@ use ya_core_model::net::local::{SendBroadcastMessage, SendBroadcastStub};
 use ya_core_model::{identity, net, NodeId};
 use ya_relay_client::codec::forward::{PrefixedSink, PrefixedStream, SinkKind};
 use ya_relay_client::crypto::CryptoProvider;
+use ya_relay_client::proto::Payload;
 use ya_relay_client::{Client, ClientBuilder, ForwardReceiver, TransportType};
 use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::CallReplyCode;
+use ya_sb_util::RevPrefixes;
+use ya_service_bus::untyped::{Fn4HandlerExt, Fn4StreamHandlerExt};
 use ya_service_bus::{
     serialization, typed, untyped as local_bus, Error, ResponseChunk, RpcEndpoint, RpcMessage,
 };
@@ -41,7 +44,7 @@ const DEFAULT_NET_RELAY_HOST: &str = "127.0.0.1:7464";
 
 type BusSender = mpsc::Sender<ResponseChunk>;
 type BusReceiver = mpsc::Receiver<ResponseChunk>;
-type NetSender = mpsc::Sender<Vec<u8>>;
+type NetSender = mpsc::Sender<Payload>;
 type NetSinkKind = SinkKind<NetSender, mpsc::SendError>;
 type NetSinkKey = (NodeId, TransportType);
 
@@ -113,12 +116,11 @@ pub async fn start_network(
 
     let broadcast_size = config.broadcast_size;
     let crypto = IdentityCryptoProvider::new(default_id);
-
     let client = build_client(config, crypto.clone()).await?;
+
     CLIENT.with(|inner| {
         inner.borrow_mut().replace(client.clone());
     });
-
     ClientActor::init(client.clone());
 
     let receiver = client.clone().forward_receiver().await.unwrap();
@@ -248,12 +250,10 @@ where
     F: Fn(&str, &str) -> anyhow::Result<(NodeId, NodeId, String)> + 'static,
 {
     let resolver = Rc::new(resolver);
-
     let resolver_ = resolver.clone();
     let state_ = state.clone();
-    let rpc = move |caller: &str, addr: &str, msg: &[u8]| {
-        log::trace!("local bus: rpc call (egress): {}", addr);
 
+    let rpc = move |caller: &str, addr: &str, msg: &[u8], no_reply: bool| {
         let (caller_id, remote_id, address) = match (*resolver_)(caller, addr) {
             Ok(id) => id,
             Err(err) => {
@@ -263,37 +263,52 @@ where
         };
 
         log::trace!(
-            "local bus: rpc call (egress): {} ({} -> {})",
+            "local bus: rpc call (egress): {} ({} -> {}), no_reply: {no_reply}",
             address,
             caller_id,
-            remote_id
+            remote_id,
         );
 
-        let mut rx = if state_.inner.borrow().ids.contains(&remote_id) {
-            let (tx, rx) = mpsc::channel(1);
-            forward_bus_to_local(&caller_id.to_string(), addr, msg, &state_, tx);
-            rx
+        let is_local_dest = state_.inner.borrow().ids.contains(&remote_id);
+
+        let rx = if no_reply {
+            if is_local_dest {
+                push_bus_to_local(caller_id, addr, msg, &state_);
+            } else {
+                push_bus_to_net(caller_id, remote_id, address, msg, &state_, transport);
+            }
+
+            None
         } else {
-            forward_bus_to_net(caller_id, remote_id, address, msg, &state_, transport)
+            let rx = if is_local_dest {
+                let (tx, rx) = mpsc::channel(1);
+                forward_bus_to_local(caller_id, addr, msg, &state_, tx);
+                rx
+            } else {
+                forward_bus_to_net(caller_id, remote_id, address, msg, &state_, transport)
+            };
+
+            Some(rx)
         };
 
         async move {
-            match rx.next().await.ok_or(Error::Cancelled) {
-                Ok(chunk) => match chunk {
-                    ResponseChunk::Full(data) => codec::decode_reply(data),
-                    ResponseChunk::Part(_) => {
-                        Err(Error::GsbFailure("partial response".to_string()))
-                    }
+            match rx {
+                None => Ok(Vec::new()),
+                Some(mut rx) => match rx.next().await.ok_or(Error::Cancelled) {
+                    Ok(chunk) => match chunk {
+                        ResponseChunk::Full(data) => codec::decode_reply(data),
+                        ResponseChunk::Part(_) => {
+                            Err(Error::GsbFailure("partial response".to_string()))
+                        }
+                    },
+                    Err(err) => Err(err),
                 },
-                Err(err) => Err(err),
             }
         }
         .right_future()
     };
 
-    let stream = move |caller: &str, addr: &str, msg: &[u8]| {
-        log::trace!("local bus: stream call (egress): {}", addr);
-
+    let stream = move |caller: &str, addr: &str, msg: &[u8], no_reply: bool| {
         let (caller_id, remote_id, address) = match (*resolver)(caller, addr) {
             Ok(id) => id,
             Err(err) => {
@@ -313,12 +328,23 @@ where
             remote_id
         );
 
-        let rx = if state.inner.borrow().ids.contains(&remote_id) {
-            let (tx, rx) = mpsc::channel(1);
-            forward_bus_to_local(&caller_id.to_string(), addr, msg, &state, tx);
-            rx
+        let is_local_dest = state.inner.borrow().ids.contains(&remote_id);
+        let rx = if no_reply {
+            if is_local_dest {
+                push_bus_to_local(caller_id, addr, msg, &state);
+            } else {
+                push_bus_to_net(caller_id, remote_id, address, msg, &state, transport);
+            }
+            futures::stream::empty().left_stream()
         } else {
-            forward_bus_to_net(caller_id, remote_id, address, msg, &state, transport)
+            let rx = if is_local_dest {
+                let (tx, rx) = mpsc::channel(1);
+                forward_bus_to_local(caller_id, addr, msg, &state, tx);
+                rx
+            } else {
+                forward_bus_to_net(caller_id, remote_id, address, msg, &state, transport)
+            };
+            rx.right_stream()
         };
 
         let eos = Rc::new(AtomicBool::new(false));
@@ -344,6 +370,8 @@ where
     };
 
     log::debug!("local bus: subscribing to {}", address);
+    let rpc = rpc.into_handler();
+    let stream = stream.into_stream_handler();
     local_bus::subscribe(address, rpc, stream);
 }
 
@@ -381,16 +409,9 @@ async fn bind_identity_event_handler(crypto: IdentityCryptoProvider) {
 }
 
 /// Forward requests from and to the local bus
-fn forward_bus_to_local(caller: &str, addr: &str, data: &[u8], state: &State, tx: BusSender) {
-    let address = match {
-        let inner = state.inner.borrow();
-        inner
-            .services
-            .iter()
-            .find(|&id| addr.starts_with(id))
-            // replaces  /net/<dest_node_id>/test/1 --> /public/test/1
-            .map(|s| addr.replacen(s, net::PUBLIC_PREFIX, 1))
-    } {
+fn forward_bus_to_local(caller: NodeId, addr: &str, data: &[u8], state: &State, tx: BusSender) {
+    let caller = caller.to_string();
+    let address = match state.get_public_service(addr) {
         Some(address) => address,
         None => {
             let err = format!("Net: unknown address: {}", addr);
@@ -401,11 +422,29 @@ fn forward_bus_to_local(caller: &str, addr: &str, data: &[u8], state: &State, tx
 
     log::trace!("forwarding /net call to a local endpoint: {}", address);
 
-    let send = local_bus::call_stream(address.as_str(), caller, data);
+    let send = local_bus::call_stream(&address, &caller, data);
     tokio::task::spawn_local(async move {
         let _ = send
             .forward(tx.sink_map_err(|e| Error::GsbFailure(e.to_string())))
             .await;
+    });
+}
+
+fn push_bus_to_local(caller: NodeId, addr: &str, data: &[u8], state: &State) {
+    let caller = caller.to_string();
+    let address = match state.get_public_service(addr) {
+        Some(address) => address,
+        None => {
+            log::debug!("Net: unknown address: {}", addr);
+            return;
+        }
+    };
+
+    log::trace!("pushing /net message to a local endpoint: {}", address);
+
+    let send = local_bus::push(&address, &caller, data);
+    tokio::task::spawn_local(async move {
+        let _ = send.await;
     });
 }
 
@@ -422,14 +461,13 @@ fn forward_bus_to_net(
     let state = state.clone();
     let request_id = gen_id().to_string();
 
-    log::trace!("Forward bus -> net ({caller_id} -> {remote_id}), address: {address}");
-
     let (tx, rx) = mpsc::channel(1);
     let msg = match codec::encode_request(
         caller_id,
         address.clone(),
         request_id.clone(),
         msg.to_vec(),
+        false,
     ) {
         Ok(vec) => vec,
         Err(err) => {
@@ -471,6 +509,51 @@ fn forward_bus_to_net(
     });
 
     rx
+}
+
+fn push_bus_to_net(
+    caller_id: NodeId,
+    remote_id: NodeId,
+    address: impl ToString,
+    msg: &[u8],
+    state: &State,
+    transport: TransportType,
+) {
+    let address = address.to_string();
+    let state = state.clone();
+    let request_id = gen_id().to_string();
+
+    let msg = match codec::encode_request(
+        caller_id,
+        address.clone(),
+        request_id.clone(),
+        msg.to_vec(),
+        true,
+    ) {
+        Ok(vec) => vec,
+        Err(err) => {
+            log::debug!("Push bus->net ({caller_id} -> {remote_id}), address: {address}: invalid request: {err}");
+            return;
+        }
+    };
+
+    tokio::task::spawn_local(async move {
+        log::debug!(
+            "Local bus push handler ({caller_id} -> {remote_id}), address: {address}, id: {request_id} -> send message to remote ({} B)",
+            msg.len()
+        );
+
+        match state.forward_sink(remote_id, transport).await {
+            Ok(mut sink) => {
+                let _ = sink.send(msg).await.map_err(|_| {
+                    log::debug!("Net: error sending message: session closed");
+                });
+            }
+            Err(error) => {
+                log::debug!("Net: error forwarding message: {}", error);
+            }
+        };
+    });
 }
 
 /// Forward broadcast messages from the local bus to the network
@@ -581,10 +664,12 @@ fn forward_handler(
                     fwd.node_id
                 );
 
-                if tx.send(fwd.payload).await.is_err() {
-                    log::debug!("Net routing error: channel closed for [{}]", fwd.node_id);
-                    state.remove(&key);
-                }
+                tokio::task::spawn_local(async move {
+                    if tx.send(fwd.payload).await.is_err() {
+                        log::debug!("Net routing error: channel closed for [{}]", fwd.node_id);
+                        state.remove_sink(&key);
+                    }
+                });
             }
         })
         .boxed_local()
@@ -592,12 +677,12 @@ fn forward_handler(
 
 fn forward_channel<'a>(
     transport: TransportType,
-) -> (mpsc::Sender<Vec<u8>>, LocalBoxStream<'a, Vec<u8>>) {
-    let (tx, rx) = mpsc::channel(1);
+) -> (mpsc::Sender<Payload>, LocalBoxStream<'a, Payload>) {
+    let (tx, rx) = mpsc::channel(8);
     let rx = if transport == TransportType::Reliable || transport == TransportType::Transfer {
         PrefixedStream::new(rx)
             .inspect_err(|e| log::debug!("Prefixed stream error: {e}"))
-            .filter_map(|r| async move { r.ok().map(|b| b.to_vec()) })
+            .filter_map(|r| async move { r.ok().map(Payload::from) })
             .boxed_local()
     } else {
         rx.boxed_local()
@@ -607,7 +692,7 @@ fn forward_channel<'a>(
 
 /// Forward node GSB messages from the network to the local bus
 fn inbound_handler(
-    rx: impl Stream<Item = Vec<u8>> + 'static,
+    rx: impl Stream<Item = Payload> + 'static,
     remote_id: NodeId,
     transport: TransportType,
     state: State,
@@ -620,9 +705,13 @@ fn inbound_handler(
         );
 
         async move {
-            match codec::decode_message(payload.as_slice()) {
+            match codec::decode_message(payload.as_ref()) {
                 Ok(Some(GsbMessage::CallRequest(request @ ya_sb_proto::CallRequest { .. }))) => {
-                    handle_request(request, remote_id, state, transport)
+                    if request.no_reply {
+                        handle_push(request, remote_id, state)
+                    } else {
+                        handle_request(request, remote_id, state, transport)
+                    }
                 }
                 Ok(Some(GsbMessage::CallReply(reply @ ya_sb_proto::CallReply { .. }))) => {
                     handle_reply(reply, remote_id, state)
@@ -645,6 +734,45 @@ fn inbound_handler(
         })
     })
     .boxed_local()
+}
+
+/// Forward messages from the network to the local bus
+fn handle_push(
+    request: ya_sb_proto::CallRequest,
+    remote_id: NodeId,
+    state: State,
+) -> anyhow::Result<()> {
+    let caller_id = NodeId::from_str(&request.caller).ok();
+
+    // FIXME: implement authorization with encryption
+    // if !caller_id.map(|id| id == remote_id).unwrap_or(false) {
+    //     anyhow::bail!("Invalid caller id: {}", request.caller);
+    // }
+
+    let address = request.address;
+    let request_id = request.request_id;
+    let caller_id = caller_id.unwrap();
+
+    log::debug!("Handle push request {request_id} to {address} from {remote_id}");
+
+    let fut = match state.get_public_service(address.as_str()) {
+        Some(address) => {
+            log::trace!("Handle push request: calling: {address}");
+            local_bus::push(&address, &request.caller, &request.data)
+        }
+        None => {
+            log::trace!("Handle push request failed: unknown address: {address}");
+            let err = Error::GsbBadRequest(format!("Unknown address: {address}"));
+            return Err(err.into());
+        }
+    };
+
+    tokio::task::spawn_local(async move {
+        let _ = fut.await;
+        log::debug!("Handled push request: {request_id} from: {caller_id}");
+    });
+
+    Ok(())
 }
 
 /// Forward messages from the network to the local bus
@@ -673,15 +801,7 @@ fn handle_request(
     let eos = Rc::new(AtomicBool::new(false));
     let eos_map = eos.clone();
 
-    let stream = match {
-        let inner = state.inner.borrow();
-        inner
-            .services
-            .iter()
-            .find(|&id| address.starts_with(id))
-            // replaces  /net/<dest_node_id>/test/1 --> /public/test/1
-            .map(|s| address.replacen(s, net::PUBLIC_PREFIX, 1))
-    } {
+    let stream = match state.get_public_service(address.as_str()) {
         Some(address) => {
             log::trace!("Handle request: calling: {address}");
             local_bus::call_stream(&address, &request.caller, &request.data).left_stream()
@@ -901,7 +1021,14 @@ impl State {
         Ok(forward)
     }
 
-    fn remove(&self, key: &NetSinkKey) {
+    fn get_public_service(&self, addr: &str) -> Option<String> {
+        let inner = self.inner.borrow();
+        RevPrefixes(addr)
+            .find_map(|s| inner.services.get(s))
+            .map(|s| addr.replacen(s, net::PUBLIC_PREFIX, 1))
+    }
+
+    fn remove_sink(&self, key: &NetSinkKey) {
         let mut inner = self.inner.borrow_mut();
         inner.routes.remove(key);
     }

@@ -68,7 +68,8 @@ signal-hook = "0.3"
 socket2 = "0.4"
 structopt = "0.3"
 thiserror = "1.0"
-tokio = { version = "1", features = ["process", "signal", "time", "net"] }
+# keep the "rt-multi-thread" feature
+tokio = { version = "1", features = ["process", "signal", "time", "net", "rt-multi-thread"] }
 tokio-util = { version = "0.7.2", features = ["codec", "net"] }
 tokio-stream = "0.1.6"
 url = "2.1"
