@@ -107,7 +107,11 @@ message Response {
 
     message CreateNetwork {
         oneof endpoint {
-            string socket = 1;
+            string unix_stream = 1;
+            string unix_datagram = 2;
+            string udp_datagram = 3;
+            string tcp_listener = 4;
+            string tcp_stream = 5;
         }
     }
 
