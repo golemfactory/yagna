@@ -613,19 +613,16 @@ mod test {
     async fn process_rx_buffer_stream(mode: TxMode, size: usize) {
         let src = (0..=255u8)
             .into_iter()
-            .map(|e| {
+            .flat_map(|e| {
                 let vec = Vec::from_iter(std::iter::repeat(e).take(size));
-                let bytes_vec = mode
-                    .split(vec)
+                mode.split(vec)
                     .into_iter()
                     .map(|mut v| {
                         write_prefix(&mut v, PREFIX_SIZE, false);
                         Ok::<_, TestError>(BytesMut::from_iter(v))
                     })
-                    .collect::<Vec<_>>();
-                bytes_vec
+                    .collect::<Vec<_>>()
             })
-            .flatten()
             .collect::<Vec<_>>();
 
         let stream = futures::stream::iter(src.clone());
