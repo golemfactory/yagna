@@ -243,11 +243,10 @@ impl RemoteEndpoint {
     }
 
     #[cfg(not(unix))]
-    async fn connect_to_unix_socket<P: AsRef<Path>>(_path: P) -> Result<Self> {
+    async fn unix<P: AsRef<Path>>(_path: P) -> Result<Self> {
         Err(Error::Other("OS not supported".into()))
     }
 
-    #[cfg(unix)]
     async fn tcp(addr: SocketAddr) -> Result<Self> {
         type SocketChannel = (
             mpsc::UnboundedSender<Result<Vec<u8>>>,
