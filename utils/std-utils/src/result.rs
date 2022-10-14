@@ -37,10 +37,10 @@ impl<T, E: Debug + Display> LogErr<T, E> for Result<T, E> {
                     if let Some(name) = symbol.name() {
                         let module_path = name.to_string();
                         if module_path.starts_with("<ya") {
-                            let module_path = module_path.strip_prefix("<").unwrap();
+                            let module_path = module_path.strip_prefix('<').unwrap();
                             let module_path = module_path.split(" as ").next().unwrap();
                             let mut msg = message;
-                            if msg.len() == 0 {
+                            if msg.is_empty() {
                                 msg = "Error occurred";
                             }
                             log::logger().log(

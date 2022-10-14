@@ -1,12 +1,12 @@
 [package]
 name = "ya-utils-networking"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [features]
 default = ["dns"]
-dns = ["anyhow",  "url", "trust-dns-resolver/mdns"]
+dns = ["anyhow",  "url", "trust-dns-resolver/tokio-openssl"]
 vpn = ["ya-relay-stack", "ipnet", "thiserror"]
 
 [dependencies]
@@ -15,11 +15,10 @@ lazy_static = "1.4"
 log = "0.4"
 regex = "1"
 
-ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "0e6863c24767a246531d038455921f12c9e75e94", optional = true }
+ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "ec174a250fc014fba084088a90f9b1c95d613ed3", optional = true }
 
 anyhow = { version = "1.0", optional = true }
-trust-dns-resolver = { version = "0.19", optional = true }
-tokio-compat-02 = "0.2"
+trust-dns-resolver = { version = "0.21", optional = true }
 url = { version = "2.2", optional = true }
 
 ipnet = { version = "2.3", optional = true }

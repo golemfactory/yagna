@@ -9,9 +9,9 @@ use ya_negotiators::{NegotiationResult, NegotiatorComponent};
 
 use crate::display::EnableDisplay;
 
-const PAYMENT_TIMEOUT_PROPERTY_FLAT: &'static str = "golem.com.scheme.payu.payment-timeout-sec?";
-pub const PAYMENT_TIMEOUT_PROPERTY: &'static str = "/golem/com/scheme/payu/payment-timeout-sec?";
-const EXPIRATION_PROPERTY: &'static str = "/golem/srv/comp/expiration";
+const PAYMENT_TIMEOUT_PROPERTY_FLAT: &str = "golem.com.scheme.payu.payment-timeout-sec?";
+pub const PAYMENT_TIMEOUT_PROPERTY: &str = "/golem/com/scheme/payu/payment-timeout-sec?";
+const EXPIRATION_PROPERTY: &str = "/golem/srv/comp/expiration";
 
 /// PaymentTimeout negotiator
 pub struct PaymentTimeout {

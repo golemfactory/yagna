@@ -59,16 +59,18 @@ pub struct DeadlineChecker {
 
 actix_signal_handler!(DeadlineChecker, DeadlineElapsed, callback);
 
-impl DeadlineChecker {
-    pub fn new() -> DeadlineChecker {
-        DeadlineChecker {
-            deadlines: HashMap::new(),
+impl Default for DeadlineChecker {
+    fn default() -> Self {
+        Self {
+            deadlines: Default::default(),
             nearest_deadline: Utc::now() + Duration::weeks(50),
-            callback: SignalSlot::<DeadlineElapsed>::new(),
-            handle: None,
+            handle: Default::default(),
+            callback: Default::default(),
         }
     }
+}
 
+impl DeadlineChecker {
     fn update_deadline(&mut self, ctx: &mut Context<Self>) -> anyhow::Result<()> {
         let top_deadline = self.top_deadline();
         if self.nearest_deadline != top_deadline {
@@ -76,7 +78,7 @@ impl DeadlineChecker {
                 ctx.cancel_future(handle);
             }
 
-            let notify_timestamp = top_deadline.clone();
+            let notify_timestamp = top_deadline;
             let wait_duration = (top_deadline - Utc::now())
                 .max(Duration::milliseconds(1))
                 .to_std()
@@ -109,7 +111,7 @@ impl DeadlineChecker {
         let mut elapsed = self
             .deadlines
             .iter_mut()
-            .map(|(agreement_id, deadlines)| {
+            .flat_map(|(agreement_id, deadlines)| {
                 let idx =
                     match deadlines.binary_search_by(|element| element.deadline.cmp(&timestamp)) {
                         Ok(idx) => idx + 1,
@@ -125,7 +127,6 @@ impl DeadlineChecker {
                     .collect::<Vec<DeadlineElapsed>>()
                     .into_iter()
             })
-            .flatten()
             .collect::<Vec<DeadlineElapsed>>();
 
         elapsed.sort_by(|dead1, dead2| dead1.deadline.cmp(&dead2.deadline));
@@ -146,8 +147,8 @@ impl DeadlineChecker {
             .iter()
             .filter_map(|element| {
                 let dead_vec = element.1;
-                if dead_vec.len() > 0 {
-                    Some(dead_vec[0].deadline.clone())
+                if !dead_vec.is_empty() {
+                    Some(dead_vec[0].deadline)
                 } else {
                     None
                 }
@@ -165,7 +166,7 @@ impl Handler<TrackDeadline> for DeadlineChecker {
     type Result = ();
 
     fn handle(&mut self, msg: TrackDeadline, ctx: &mut Context<Self>) -> Self::Result {
-        if let None = self.deadlines.get(&msg.category) {
+        if self.deadlines.get(&msg.category).is_none() {
             self.deadlines.insert(msg.category.to_string(), vec![]);
         }
 
@@ -198,7 +199,7 @@ impl Handler<StopTracking> for DeadlineChecker {
         // We could store inverse mapping from entities to agreements, but there will never
         // be so many Agreements at the same time, to make it worth.
         for deadlines in self.deadlines.values_mut() {
-            if let Some(idx) = deadlines.iter().position(|element| &element.id == &msg.id) {
+            if let Some(idx) = deadlines.iter().position(|element| element.id == msg.id) {
                 // Or we could remove all earlier entries??
                 deadlines.remove(idx);
                 any = true;
@@ -215,7 +216,7 @@ impl Handler<StopTrackingCategory> for DeadlineChecker {
     type Result = ();
 
     fn handle(&mut self, msg: StopTrackingCategory, ctx: &mut Context<Self>) -> Self::Result {
-        if let Some(_) = self.deadlines.remove(&msg.category) {
+        if self.deadlines.remove(&msg.category).is_some() {
             self.update_deadline(ctx).unwrap()
         }
     }
@@ -225,6 +226,7 @@ impl Actor for DeadlineChecker {
     type Context = Context<Self>;
 }
 
+#[allow(clippy::type_complexity)]
 struct DeadlineFun {
     callback: Box<dyn FnMut(DeadlineElapsed) -> Pin<Box<dyn Future<Output = ()>>> + 'static>,
 }
@@ -294,7 +296,7 @@ mod test {
     }
 
     async fn init_checker(receiver: Addr<DeadlineReceiver>) -> Addr<DeadlineChecker> {
-        let checker = DeadlineChecker::new().start();
+        let checker = DeadlineChecker::default().start();
         checker
             .send(Subscribe::<DeadlineElapsed>(receiver.recipient()))
             .await
@@ -367,7 +369,7 @@ mod test {
             checker
                 .send(TrackDeadline {
                     category: "agrrrrr-1".to_string(),
-                    deadline: now + Duration::milliseconds(200) + Duration::milliseconds(1 * i),
+                    deadline: now + Duration::milliseconds(200) + Duration::milliseconds(i),
                     id: i.to_string(),
                 })
                 .await

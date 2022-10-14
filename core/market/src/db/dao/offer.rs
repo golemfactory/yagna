@@ -277,7 +277,7 @@ pub(super) fn query_state(
     id: &SubscriptionId,
     expiry_validation_ts: &NaiveDateTime,
 ) -> DbResult<OfferState> {
-    let offer: Option<Offer> = query_offer(conn, &id)?;
+    let offer: Option<Offer> = query_offer(conn, id)?;
 
     if is_unsubscribed(conn, id)? {
         return Ok(OfferState::Unsubscribed(offer));

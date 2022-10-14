@@ -35,7 +35,7 @@ impl SubscriptionStore {
         let creation_ts = Utc::now().naive_utc();
         // TODO: provider agent should set expiration.
         let expiration_ts = creation_ts + self.config.subscription.default_ttl;
-        let offer = Offer::from_new(offer, &id, creation_ts, expiration_ts)?;
+        let offer = Offer::from_new(offer, id, creation_ts, expiration_ts)?;
         self.insert_offer(offer).await
     }
 
@@ -74,24 +74,22 @@ impl SubscriptionStore {
         &self,
         node_ids: Option<Vec<NodeId>>,
     ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
-        Ok(self
-            .db
+        self.db
             .as_dao::<OfferDao>()
             .get_offer_ids(node_ids, Utc::now().naive_utc())
             .await
-            .map_err(QueryOffersError::from)?)
+            .map_err(QueryOffersError::from)
     }
 
     pub async fn get_unsubscribed_offer_ids(
         &self,
         node_ids: Option<Vec<NodeId>>,
     ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
-        Ok(self
-            .db
+        self.db
             .as_dao::<OfferDao>()
             .get_unsubscribed_ids(node_ids, Utc::now().naive_utc())
             .await
-            .map_err(QueryOffersError::from)?)
+            .map_err(QueryOffersError::from)
     }
 
     pub async fn get_client_offers(
@@ -124,24 +122,22 @@ impl SubscriptionStore {
         &self,
         ids: Vec<SubscriptionId>,
     ) -> Result<Vec<Offer>, QueryOffersError> {
-        Ok(self
-            .db
+        self.db
             .as_dao::<OfferDao>()
             .get_offers(Some(ids), None, None, Utc::now().naive_utc())
             .await
-            .map_err(QueryOffersError::from)?)
+            .map_err(QueryOffersError::from)
     }
 
     pub async fn get_offers_before(
         &self,
         inserted_before_ts: NaiveDateTime,
     ) -> Result<Vec<Offer>, QueryOffersError> {
-        Ok(self
-            .db
+        self.db
             .as_dao::<OfferDao>()
             .get_offers(None, None, Some(inserted_before_ts), Utc::now().naive_utc())
             .await
-            .map_err(QueryOffersError::from)?)
+            .map_err(QueryOffersError::from)
     }
 
     /// Returns Offers SubscriptionId from vector, that don't exist in our database.
@@ -187,7 +183,7 @@ impl SubscriptionStore {
             .as_dao::<OfferDao>()
             .unsubscribe(id, Utc::now().naive_utc())
             .await
-            .map_err(|e| ModifyOfferError::Unsubscribe(e.into(), id.clone()))
+            .map_err(|e| ModifyOfferError::Unsubscribe(e, id.clone()))
             .and_then(|state| match state {
                 OfferState::Active(_) => Ok(()),
                 OfferState::NotFound => Err(ModifyOfferError::NotFound(id.clone())),
@@ -227,7 +223,7 @@ impl SubscriptionStore {
         }
 
         log::debug!("Removing not owned unsubscribed Offer [{}].", offer_id);
-        match self.db.as_dao::<OfferDao>().delete(&offer_id).await {
+        match self.db.as_dao::<OfferDao>().delete(offer_id).await {
             Ok(true) => Ok(()),
             Ok(false) => Err(ModifyOfferError::UnsubscribedNotRemoved(offer_id.clone())),
             Err(e) => Err(ModifyOfferError::Remove(e, offer_id.clone())),
@@ -242,12 +238,12 @@ impl SubscriptionStore {
         let creation_ts = Utc::now().naive_utc();
         // TODO: requestor agent should set expiration.
         let expiration_ts = creation_ts + self.config.subscription.default_ttl;
-        let demand = Demand::from_new(demand, &id, creation_ts, expiration_ts)?;
+        let demand = Demand::from_new(demand, id, creation_ts, expiration_ts)?;
         self.db
             .as_dao::<DemandDao>()
             .insert(&demand)
             .await
-            .map_err(|e| DemandError::Save(e))?;
+            .map_err(DemandError::Save)?;
         Ok(demand)
     }
 
@@ -284,12 +280,11 @@ impl SubscriptionStore {
         &self,
         insertion_ts: NaiveDateTime,
     ) -> Result<Vec<Demand>, DemandError> {
-        Ok(self
-            .db
+        self.db
             .as_dao::<DemandDao>()
             .get_demands(None, Some(insertion_ts), Utc::now().naive_utc())
             .await
-            .map_err(|e| DemandError::GetMany(e))?)
+            .map_err(DemandError::GetMany)
     }
 
     pub async fn remove_demand(
@@ -305,7 +300,7 @@ impl SubscriptionStore {
         match self
             .db
             .as_dao::<DemandDao>()
-            .delete(&demand_id)
+            .delete(demand_id)
             .await
             .map_err(|e| DemandError::Remove(e, demand_id.clone()))?
         {

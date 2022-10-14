@@ -9,7 +9,7 @@ use ya_service_api_web::scope::ExtendableScope;
 pub fn web_scope(db: &DbExecutor, tracker: TrackerRef) -> Scope {
     actix_web::web::scope(crate::ACTIVITY_API_PATH)
         .app_data(Data::new(db.clone()))
-        .app_data(Data::new(tracker.clone()))
+        .app_data(Data::new(tracker))
         .extend(common::extend_web_scope)
         .extend(crate::provider::extend_web_scope)
         .extend(crate::requestor::control::extend_web_scope)
@@ -21,7 +21,8 @@ mod common {
     use actix_web::{web, HttpResponse, Responder};
     use futures::prelude::*;
 
-    use ya_core_model::{activity, NodeId, Role};
+    use ya_client_model::market::Role;
+    use ya_core_model::{activity, NodeId};
     use ya_persistence::executor::DbExecutor;
     use ya_service_api_web::middleware::Identity;
     use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
@@ -85,7 +86,7 @@ mod common {
         let state = provider_service
             .send(activity::GetState {
                 activity_id: path.activity_id.to_string(),
-                timeout: query.timeout.clone(),
+                timeout: query.timeout,
             })
             .timeout(timeout_margin(query.timeout))
             .await???;
@@ -129,7 +130,7 @@ mod common {
         let usage = provider_service
             .send(activity::GetUsage {
                 activity_id: path.activity_id.to_string(),
-                timeout: query.timeout.clone(),
+                timeout: query.timeout,
             })
             .timeout(timeout_margin(query.timeout))
             .await???;
@@ -153,10 +154,7 @@ mod common {
                         );
                         (Ok(web::Bytes::from(line)), Some(stream))
                     }
-                    Err(err) => (
-                        Err(actix_web::error::ErrorInternalServerError(err).into()),
-                        None,
-                    ),
+                    Err(err) => (Err(actix_web::error::ErrorInternalServerError(err)), None),
                 })
             } else {
                 None

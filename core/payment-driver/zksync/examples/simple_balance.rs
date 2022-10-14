@@ -9,7 +9,7 @@ extern crate log;
 
 #[tokio::main]
 async fn main() {
-    let log_level = std::env::var("RUST_LOG").unwrap_or("info".to_owned());
+    let log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_owned());
     std::env::set_var("RUST_LOG", log_level);
     env_logger::init();
     info!("Simple balance check example.");
@@ -26,13 +26,13 @@ async fn main() {
     let balance_com = acc_info
         .committed
         .balances
-        .get(&token as &str)
+        .get(token as &str)
         .map(|x| x.0.clone())
         .unwrap_or_default();
     let balance_ver = acc_info
         .verified
         .balances
-        .get(&token as &str)
+        .get(token as &str)
         .map(|x| x.0.clone())
         .unwrap_or_default();
 

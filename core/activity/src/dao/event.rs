@@ -11,6 +11,7 @@ use crate::dao::Result;
 use crate::db::{models::ActivityEventType, schema};
 use ya_client_model::activity::provider_event::ProviderEventType;
 use ya_client_model::NodeId;
+use ya_persistence::types::AdaptTimestamp;
 
 pub const MAX_EVENTS: i64 = 100;
 
@@ -71,13 +72,13 @@ impl<'c> EventDao<'c> {
         let identity_id = identity_id.to_owned();
 
         do_with_transaction(self.pool, move |conn| {
-            let now = Utc::now().naive_utc();
+            let now = Utc::now().adapt();
             diesel::insert_into(dsl_event::activity_event)
                 .values(
                     dsl::activity
                         .select((
                             dsl::id,
-                            identity_id.clone().into_sql::<Text>(),
+                            identity_id.into_sql::<Text>(),
                             now.into_sql::<Timestamp>(),
                             event_type.into_sql::<Integer>(),
                             requestor_pub_key.into_sql(),
@@ -134,7 +135,7 @@ impl<'c> EventDao<'c> {
                     dsl::agreement_id,
                     dsl_event::requestor_pub_key,
                 ))
-                .filter(dsl_event::event_date.gt(after_timestamp.naive_utc()))
+                .filter(dsl_event::event_date.gt(after_timestamp.adapt()))
                 .into_boxed();
 
             if let Some(app_sid) = app_session_id {
@@ -166,7 +167,7 @@ impl<'c> EventDao<'c> {
                 .get_events(identity_id, app_session_id, after_timestamp, max_events)
                 .await?
             {
-                if events.len() > 0 {
+                if !events.is_empty() {
                     return Ok(events);
                 }
             }

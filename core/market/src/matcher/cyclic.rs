@@ -9,7 +9,7 @@ use super::Matcher;
 use std::time::Instant;
 
 pub(super) async fn bcast_offers(matcher: Matcher) {
-    if matcher.config.discovery.max_bcasted_offers <= 0 {
+    if matcher.config.discovery.max_bcasted_offers == 0 {
         return;
     }
 
@@ -26,18 +26,22 @@ pub(super) async fn bcast_offers(matcher: Matcher) {
 
             // Add some random subset of Offers to broadcast.
             let num_our_offers = our_ids.len();
-            // let num_to_bcast = matcher.config.discovery.max_bcasted_offers;
-            //
-            // let all_ids = matcher.store.get_active_offer_ids(None).await?;
-            // let our_and_random_ids = randomize_ids(our_ids, all_ids, num_to_bcast as usize);
+            let num_to_bcast = matcher.config.discovery.max_bcasted_offers;
+
+            let offers_to_broadcast = if matcher.discovery.is_hybrid_net() {
+                let all_ids = matcher.store.get_active_offer_ids(None).await?;
+                randomize_ids(our_ids, all_ids, num_to_bcast as usize)
+            } else {
+                our_ids
+            };
 
             log::trace!(
                 "Broadcasted {} Offers including {} ours.",
-                our_ids.len(),
+                offers_to_broadcast.len(),
                 num_our_offers
             );
 
-            matcher.discovery.bcast_offers(our_ids).await?;
+            matcher.discovery.bcast_offers(offers_to_broadcast).await?;
 
             let end = Instant::now();
             counter!("market.offers.broadcasts", 1);
@@ -52,7 +56,7 @@ pub(super) async fn bcast_offers(matcher: Matcher) {
 }
 
 pub(super) async fn bcast_unsubscribes(matcher: Matcher) {
-    if matcher.config.discovery.max_bcasted_unsubscribes <= 0 {
+    if matcher.config.discovery.max_bcasted_unsubscribes == 0 {
         return;
     }
 
@@ -69,18 +73,25 @@ pub(super) async fn bcast_unsubscribes(matcher: Matcher) {
 
             // Add some random subset of Offer unsubscribes to bcast.
             let num_our_unsubscribes = our_ids.len();
-            // let max_bcast = matcher.config.discovery.max_bcasted_unsubscribes as usize;
-            //
-            // let all_ids = matcher.store.get_unsubscribed_offer_ids(None).await?;
-            // let our_and_random_ids = randomize_ids(our_ids, all_ids, max_bcast);
+            let max_bcast = matcher.config.discovery.max_bcasted_unsubscribes as usize;
+
+            let offers_to_broadcast = if matcher.discovery.is_hybrid_net() {
+                let all_ids = matcher.store.get_unsubscribed_offer_ids(None).await?;
+                randomize_ids(our_ids, all_ids, max_bcast as usize)
+            } else {
+                our_ids
+            };
 
             log::trace!(
                 "Broadcasted {} unsubscribed Offers including {} ours.",
-                our_ids.len(),
+                offers_to_broadcast.len(),
                 num_our_unsubscribes
             );
 
-            matcher.discovery.bcast_unsubscribes(our_ids).await?;
+            matcher
+                .discovery
+                .bcast_unsubscribes(offers_to_broadcast)
+                .await?;
 
             let end = Instant::now();
             counter!("market.offers.unsubscribes.broadcasts", 1);

@@ -30,18 +30,24 @@ where
     MessageType: Message + std::marker::Send + std::marker::Sync + std::clone::Clone,
     MessageType::Result: std::marker::Send + std::marker::Sync;
 
+impl<MessageType> Default for SignalSlot<MessageType>
+where
+    MessageType: Message + std::marker::Send + std::marker::Sync + std::clone::Clone,
+    MessageType::Result: std::marker::Send + std::marker::Sync,
+{
+    fn default() -> Self {
+        Self {
+            subscribers: Default::default(),
+        }
+    }
+}
+
 #[allow(dead_code)]
 impl<MessageType> SignalSlot<MessageType>
 where
     MessageType: Message + std::marker::Send + std::marker::Sync + std::clone::Clone,
     MessageType::Result: std::marker::Send + std::marker::Sync,
 {
-    pub fn new() -> SignalSlot<MessageType> {
-        SignalSlot::<MessageType> {
-            subscribers: Default::default(),
-        }
-    }
-
     /// Send signal to all subscribers
     pub fn send_signal(&self, message: MessageType) -> Result<()> {
         let subscribers = self.subscribers.lock().unwrap();

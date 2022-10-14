@@ -49,7 +49,7 @@ async fn test_agreement_approved_event() {
 
     // Provider will approve agreement after some delay.
     let agr_id = agreement_id.clone();
-    let from_timestamp = confirm_timestamp.clone();
+    let from_timestamp = confirm_timestamp;
     let query_handle = tokio::task::spawn_local(async move {
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         prov_market
@@ -374,7 +374,7 @@ async fn test_agreement_rejected_event() {
 
     // Provider will approve agreement after some delay.
     let agr_id = agreement_id.clone();
-    let from_timestamp = confirm_timestamp.clone();
+    let from_timestamp = confirm_timestamp;
     let query_handle = tokio::task::spawn_local(async move {
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         prov_market

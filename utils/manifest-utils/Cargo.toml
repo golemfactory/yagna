@@ -1,6 +1,6 @@
 [package]
 name = "ya-manifest-utils"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 homepage = "https://github.com/golemfactory/yagna"
@@ -11,28 +11,33 @@ keywords = ["golem", "yagna"]
 
 [dependencies]
 ya-agreement-utils = "0.4"
+ya-utils-path = "0.1"
 
+regex = "1.5"
 serde = "1.0"
 serde_json = "1.0"
-serde_yaml = "0.8"
+serde_yaml = "0.9"
 thiserror = "1.0"
-
 anyhow = { version = "1.0" }
 base64 = { version = "0.13" }
 chrono = { version = "0.4", features = ["serde"] }
-ethsign = { version = "0.8.0" }
 hex = { version = "0.4" }
-petname = { version = "1.1.2" }
 semver = { version = "1.0", features = ["serde"] }
 serde_with = "1.14"
 sha2 = { version = "0.9" }
 snailquote = { version = "0.3" }
 structopt = { version =  "0.3" }
-strum = {version = "0.22" }
-strum_macros = {version = "0.22" }
+strum = { version = "0.24", features = ["derive"] }
 url = {version = "2.2", features = ["serde"] }
+openssl = { version = "0.10", features = ["vendored"] }
+md-5 = "0.10"
+log = "0.4"
 
 [dev-dependencies]
-anyhow = "1.0.31"
-tempdir = "0.3.7"
-shlex = "1.1.0"
+tempfile = "3"
+anyhow = "1.0"
+serial_test = "0.9"
+shlex = "1.1"
+tar = "0.4"
+test-case = "2.2"
+ya-manifest-test-utils = "0.1"

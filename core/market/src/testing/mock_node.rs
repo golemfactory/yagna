@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 use actix_http::body::BoxBody;
 use actix_http::Request;
 use actix_service::Service as ActixService;
@@ -106,10 +108,7 @@ impl MockNodeKind {
 fn testname_from_backtrace(bn: &str) -> String {
     log::info!("Test name to regex match: {}", &bn);
     // Extract test name
-    let captures = Regex::new(r"(.*)::(.*)::.*")
-        .unwrap()
-        .captures(&bn)
-        .unwrap();
+    let captures = Regex::new(r"(.*)::(.*)::.*").unwrap().captures(bn).unwrap();
     let filename = captures.get(1).unwrap().as_str().to_string();
     let testname = captures.get(2).unwrap().as_str().to_string();
 
@@ -168,7 +167,7 @@ impl MarketsNetwork {
             kind: node_kind,
         };
 
-        let node_id = node.mock_identity.get_default_id().clone().identity;
+        let node_id = node.mock_identity.get_default_id().identity;
         log::info!("Creating mock node {}: [{}].", name, &node_id);
         BCastService::default().register(&node_id, &self.test_name);
         MockNet::default().register_node(&node_id, &public_gsb_prefix);
@@ -414,33 +413,31 @@ impl MarketsNetwork {
     pub fn get_default_id(&self, node_name: &str) -> Identity {
         self.nodes
             .iter()
-            .find(|node| &node.name == node_name)
+            .find(|node| node.name == node_name)
             .map(|node| node.mock_identity.clone())
             .unwrap()
             .get_default_id()
-            .clone()
     }
 
     pub fn create_identity(&self, node_name: &str, id_name: &str) -> Identity {
         let mock_identity = self
             .nodes
             .iter()
-            .find(|node| &node.name == node_name)
+            .find(|node| node.name == node_name)
             .map(|node| node.mock_identity.clone())
             .unwrap();
         let id = mock_identity.new_identity(id_name);
 
-        let node_id = id.identity.clone();
         let (public_gsb_prefix, _) = gsb_prefixes(&self.test_name, node_name);
 
-        MockNet::default().register_node(&node_id, &public_gsb_prefix);
-        return id;
+        MockNet::default().register_node(&id.identity, &public_gsb_prefix);
+        id
     }
 
     pub fn list_ids(&self, node_name: &str) -> HashMap<String, Identity> {
         self.nodes
             .iter()
-            .find(|node| &node.name == node_name)
+            .find(|node| node.name == node_name)
             .map(|node| node.mock_identity.list_ids())
             .unwrap()
     }
@@ -512,7 +509,7 @@ fn test_data_dir() -> PathBuf {
 
 fn escape_path(path: &str) -> String {
     // Windows can't handle colons
-    path.replace("::", "_").to_string()
+    path.replace("::", "_")
 }
 
 pub fn prepare_test_dir(dir_name: &str) -> Result<PathBuf> {
@@ -718,10 +715,10 @@ where
 {
     let subscriptions = subscriptions.into_iter();
     let mut all_broadcasted = false;
-    'retry: for _i in 0..10 {
+    'retry: for _i in 0..30 {
         for subscription in subscriptions.clone() {
             for mkt in mkts {
-                if mkt.get_offer(&subscription).await.is_err() {
+                if mkt.get_offer(subscription).await.is_err() {
                     // Every 150ms we should get at least one broadcast from each Node.
                     // After a few tries all nodes should have the same knowledge about Offers.
                     tokio::time::sleep(Duration::from_millis(250)).await;
@@ -751,7 +748,7 @@ where
         for subscription in subscriptions.clone() {
             for mkt in mkts {
                 let expect_error = QueryOfferError::Unsubscribed(subscription.clone()).to_string();
-                match mkt.get_offer(&subscription).await {
+                match mkt.get_offer(subscription).await {
                     Err(e) => assert_eq!(e.to_string(), expect_error),
                     Ok(_) => {
                         // Every 150ms we should get at least one broadcast from each Node.

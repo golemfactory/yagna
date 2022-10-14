@@ -29,6 +29,6 @@ where
     pub fn turn(&mut self) -> String {
         let mut observer = self.builder.build();
         self.controller.observe(&mut observer);
-        return observer.drain();
+        observer.drain()
     }
 }

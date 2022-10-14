@@ -5,7 +5,7 @@ use std::convert::TryFrom;
 use crate::db::schema::version_release;
 use ya_compile_time_utils::tag2semver;
 
-pub(crate) const DEFAULT_RELEASE_TS: &'static str = "2015-10-13T15:43:00GMT+2";
+pub(crate) const DEFAULT_RELEASE_TS: &str = "2015-10-13T15:43:00GMT+2";
 
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable, Serialize, Deserialize)]
 #[primary_key(version)]
@@ -29,7 +29,7 @@ impl DBRelease {
                 ya_compile_time_utils::build_date(),
                 ya_compile_time_utils::build_number_str()
                     .map(|bn| format!(" build #{}", bn))
-                    .unwrap_or("".into())
+                    .unwrap_or_else(|| "".into())
             ),
             seen: true,
             release_ts: parse_release_ts(DEFAULT_RELEASE_TS)?,
@@ -67,7 +67,7 @@ impl TryFrom<self_update::update::Release> for DBRelease {
 }
 
 fn parse_release_ts(ts: &str) -> anyhow::Result<NaiveDateTime> {
-    Ok(NaiveDateTime::parse_from_str(&ts, "%Y-%m-%dT%H:%M:%S%Z")?)
+    Ok(NaiveDateTime::parse_from_str(ts, "%Y-%m-%dT%H:%M:%S%Z")?)
 }
 
 #[cfg(test)]

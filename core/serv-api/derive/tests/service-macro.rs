@@ -46,7 +46,7 @@ pub mod gsb_rest {
         pub fn rest<Context: Provider<Self, Map>>(ctx: &Context) -> actix_web::Scope {
             inc(ctx, "GsbRest-rest");
             actix_web::Scope::new("/gsb-rest-api")
-                .service(web::resource("/test").to(|| HttpResponse::Ok()))
+                .service(web::resource("/test").to(HttpResponse::Ok))
         }
     }
 }
@@ -140,7 +140,7 @@ pub mod rest_cli {
         pub fn rest<Context: Provider<Self, Map>>(ctx: &Context) -> actix_web::Scope {
             inc(ctx, "RestCli-rest");
             actix_web::Scope::new("/rest-cli-api")
-                .service(web::resource("/tester").to(|| HttpResponse::Ok()))
+                .service(web::resource("/tester").to(HttpResponse::Ok))
         }
     }
 }
@@ -207,7 +207,7 @@ fn test_cli_help() {
     Services::clap().write_long_help(&mut out).unwrap();
     assert_eq!(
         String::from_utf8_lossy(&out),
-        "ya-service-api-derive 0.1.0
+        "ya-service-api-derive 0.2.0
 gsb_cli command help
 
 USAGE:

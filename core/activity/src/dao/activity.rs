@@ -1,6 +1,5 @@
 use chrono::Utc;
 use diesel::prelude::*;
-use serde_json;
 
 use ya_client_model::activity::{State, StatePair};
 use ya_persistence::executor::{do_with_transaction, AsDao, PoolType};
@@ -90,7 +89,7 @@ impl<'c> ActivityDao<'c> {
     }
 
     pub async fn create_if_not_exists(&self, activity_id: &str, agreement_id: &str) -> Result<()> {
-        if let Err(e) = self.create(&activity_id, &agreement_id).await {
+        if let Err(e) = self.create(activity_id, agreement_id).await {
             if !self.exists(activity_id, agreement_id).await? {
                 return Err(e);
             }

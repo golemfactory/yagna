@@ -20,17 +20,17 @@ use ya_core_model::appkey::AppKey;
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_bus::typed as bus;
 
-const APP_NAME: &'static str = structopt::clap::crate_name!();
-const DIR_NAME: &'static str = "extensions";
+const APP_NAME: &str = structopt::clap::crate_name!();
+const DIR_NAME: &str = "extensions";
 
-pub const VAR_YAGNA_EXTENSIONS_DIR: &'static str = "YAGNA_EXTENSIONS_DIR";
+pub const VAR_YAGNA_EXTENSIONS_DIR: &str = "YAGNA_EXTENSIONS_DIR";
 
-const VAR_YAGNA_DATA_DIR: &'static str = "YAGNA_DATA_DIR";
-const VAR_YAGNA_NODE_ID: &'static str = "YAGNA_NODE_ID";
-const VAR_YAGNA_APP_KEY: &'static str = "YAGNA_APP_KEY";
-const VAR_YAGNA_API_URL: &'static str = "YAGNA_API_URL";
-const VAR_YAGNA_GSB_URL: &'static str = "YAGNA_GSB_URL";
-const VAR_YAGNA_JSON_OUTPUT: &'static str = "YAGNA_JSON_OUTPUT";
+const VAR_YAGNA_DATA_DIR: &str = "YAGNA_DATA_DIR";
+const VAR_YAGNA_NODE_ID: &str = "YAGNA_NODE_ID";
+const VAR_YAGNA_APP_KEY: &str = "YAGNA_APP_KEY";
+const VAR_YAGNA_API_URL: &str = "YAGNA_API_URL";
+const VAR_YAGNA_GSB_URL: &str = "YAGNA_GSB_URL";
+const VAR_YAGNA_JSON_OUTPUT: &str = "YAGNA_JSON_OUTPUT";
 
 pub async fn run<T: StructOpt>(
     cli_ctx: &CliCtx,
@@ -88,7 +88,7 @@ async fn resolve_identity_and_key() -> anyhow::Result<(NodeId, Option<AppKey>)> 
         .await?
         .context("Failed to call the identity service")?;
 
-    let node_id = match identities.into_iter().filter(|i| i.is_default).next() {
+    let node_id = match identities.into_iter().find(|i| i.is_default) {
         Some(i) => i.node_id,
         None => bail!("Default identity not found"),
     };
@@ -132,6 +132,7 @@ async fn monitor(extension: Extension, ctx: ExtensionCtx) {
     let _ = futures::future::select(interrupted, restart_loop).await;
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]
 pub enum ExtensionCtx {
     Cli {
@@ -150,10 +151,7 @@ pub enum ExtensionCtx {
 
 impl ExtensionCtx {
     pub fn is_autostart(&self) -> bool {
-        match self {
-            Self::Autostart { .. } => true,
-            _ => false,
-        }
+        matches!(self, Self::Autostart { .. })
     }
 
     fn set_env(&self, command: &mut Command) -> anyhow::Result<()> {
@@ -304,7 +302,7 @@ impl Extension {
                 entry
                     .file_name()
                     .to_str()
-                    .map(|name| (name.to_string(), entry.path().to_path_buf()))
+                    .map(|name| (name.to_string(), entry.path()))
             })
             .filter_map(|(name, path)| {
                 if name.starts_with(&prefix) && name.ends_with(suffix) {
@@ -317,7 +315,7 @@ impl Extension {
             .fold(Default::default(), |mut coll, (name, path)| {
                 if is_executable(&path) {
                     let conf = Self::conf_path(&path)
-                        .and_then(|p| ExtensionConf::read(p))
+                        .and_then(ExtensionConf::read)
                         .unwrap_or_default();
                     let ext = Self { name, path, conf };
                     if !coll.contains(&ext) {

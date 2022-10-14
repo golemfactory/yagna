@@ -206,7 +206,7 @@ impl Discovery {
 
         // Should never happen, but just to be certain.
         if offer_ids.is_empty() {
-            return ();
+            return;
         }
         let default_id = match self.default_identity().await {
             Ok(id) => id,
@@ -244,7 +244,7 @@ impl Discovery {
 
         ServiceBinder::new(&get_offers_addr(public_prefix), &(), self.clone()).bind_with_processor(
             move |_, myself, caller: String, msg: RetrieveOffers| {
-                let myself = myself.clone();
+                let myself = myself;
                 myself.on_get_remote_offers(caller, msg)
             },
         );
@@ -260,7 +260,7 @@ impl Discovery {
         if self.re_broadcast_enabled() {
             self.bind_gsb_broadcast().await.map_or_else(
                 |e| {
-                    log::warn!("Failed to subscribe to broadcasts. Error: {:?}.", e,);
+                    log::warn!("Failed to subscribe to broadcasts. Error: {e}.");
                 },
                 |_| (),
             );
@@ -386,7 +386,7 @@ impl Discovery {
     ) -> Result<Vec<ModelOffer>, DiscoveryRemoteError> {
         log::trace!("[{}] asks for {} Offers.", &caller, msg.offer_ids.len());
         let get_local_offers = self.inner.get_local_offers_handler.clone();
-        Ok(get_local_offers.call(caller, msg).await?)
+        get_local_offers.call(caller, msg).await
     }
 
     async fn on_bcast_unsubscribes(
@@ -427,7 +427,7 @@ impl Discovery {
     }
 
     async fn default_identity(&self) -> Result<NodeId, IdentityError> {
-        Ok(self.inner.identity.default_identity().await?)
+        self.inner.identity.default_identity().await
     }
 }
 

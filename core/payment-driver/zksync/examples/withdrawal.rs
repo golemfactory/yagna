@@ -26,7 +26,7 @@ struct Args {
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
-    let log_level = std::env::var("RUST_LOG").unwrap_or("info".to_owned());
+    let log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_owned());
     std::env::set_var("RUST_LOG", log_level);
     env_logger::init();
 
@@ -52,7 +52,7 @@ async fn main() -> anyhow::Result<()> {
     let cred = WalletCredentials::from_eth_signer(address, signer, Network::Rinkeby).await?;
     let wallet = Wallet::new(provider, cred).await?;
 
-    if wallet.is_signing_key_set().await? == false {
+    if !(wallet.is_signing_key_set().await?) {
         info!("Unlocking account");
         let unlock = wallet
             .start_change_pubkey()

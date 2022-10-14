@@ -112,7 +112,7 @@ impl CliArgs {
     pub async fn run_command(self) -> Result<()> {
         let ctx: CliCtx = (&self).try_into()?;
 
-        ctx.output(self.command.run_command(&ctx).await?);
+        ctx.output(self.command.run_command(&ctx).await?)?;
         Ok(())
     }
 }
@@ -179,20 +179,15 @@ impl<S: 'static> Provider<S, CliCtx> for ServiceContext {
 }
 
 impl<S: 'static> Provider<S, ()> for ServiceContext {
-    fn component(&self) -> () {
-        ()
-    }
+    fn component(&self) {}
 }
 
 impl ServiceContext {
-    fn make_entry<S: 'static>(path: &PathBuf, name: &str) -> Result<(TypeId, DbExecutor)> {
+    fn make_entry<S: 'static>(path: &Path, name: &str) -> Result<(TypeId, DbExecutor)> {
         Ok((TypeId::of::<S>(), DbExecutor::from_data_dir(path, name)?))
     }
 
-    fn make_mixed_entry<S: 'static>(
-        path: &PathBuf,
-        name: &str,
-    ) -> Result<(TypeId, DbMixedExecutor)> {
+    fn make_mixed_entry<S: 'static>(path: &Path, name: &str) -> Result<(TypeId, DbMixedExecutor)> {
         let disk_db = DbExecutor::from_data_dir(path, name)?;
         let ram_db = DbExecutor::in_memory(name)?;
 
@@ -246,11 +241,12 @@ enum Services {
     Metrics(MetricsService),
     #[enable(gsb, rest, cli)]
     Version(VersionService),
-    #[enable(gsb, cli)]
+    #[enable(gsb, rest, cli)]
     Net(NetService),
+    //TODO enable VpnService::rest for v2 / or create common scope for v1 and v2
     #[enable(rest)]
     Vpn(VpnService),
-    #[enable(gsb, rest)]
+    #[enable(gsb, rest, cli)]
     Market(MarketService),
     #[enable(gsb, rest, cli)]
     Activity(ActivityService),
@@ -320,7 +316,7 @@ impl CliCommand {
     pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
         match self {
             CliCommand::Commands(command) => {
-                start_logger("warn", None, &vec![], false)?;
+                start_logger("warn", None, &[], false)?;
                 command.run_command(ctx).await
             }
             CliCommand::Complete(complete) => complete.run_command(ctx),
@@ -374,14 +370,14 @@ impl ExtensionCommand {
     }
 
     fn map<I: Iterator<Item = Extension>>(extensions: I) -> Result<CommandOutput> {
-        Ok(CommandOutput::object(
+        CommandOutput::object(
             extensions
                 .map(|mut ext| {
                     let name = std::mem::take(&mut ext.name);
                     (name, ext)
                 })
                 .collect::<HashMap<_, _>>(),
-        )?)
+        )
     }
 
     fn table<I: Iterator<Item = Extension>>(extensions: I) -> Result<CommandOutput> {
@@ -407,6 +403,7 @@ impl ExtensionCommand {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(StructOpt, Debug)]
 enum ServiceCommand {
     /// Runs server in foreground
@@ -489,7 +486,7 @@ impl ServiceCommand {
                 env::set_var(
                     "RUST_LOG",
                     env::var("RUST_LOG")
-                        .unwrap_or(format!("info,actix_web::middleware::logger=warn",)),
+                        .unwrap_or_else(|_| "info,actix_web::middleware::logger=warn".to_string()),
                 );
 
                 //this force_debug flag sets default log level to debug
@@ -558,7 +555,6 @@ impl ServiceCommand {
                         .wrap(auth::Auth::default())
                         .route("/me", web::get().to(me))
                         .service(forward_gsb);
-
                     let rest = Services::rest(app, &context);
                     log::info!("Http server thread started on: {}", rest_address);
                     rest
@@ -568,7 +564,7 @@ impl ServiceCommand {
                 .bind(api_host_port.clone())
                 .context(format!("Failed to bind http server on {:?}", api_host_port))?;
 
-                let _ = extension::autostart(&ctx.data_dir, &api_url, &ctx.gsb_url)
+                let _ = extension::autostart(&ctx.data_dir, api_url, &ctx.gsb_url)
                     .await
                     .map_err(|e| log::warn!("Failed to autostart extensions: {e}"));
 
@@ -620,11 +616,11 @@ https://handbook.golem.network/see-also/terms
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
 
-    stdout.write(header.as_bytes())?;
+    let _ = stdout.write(header.as_bytes())?;
     stdout.flush()?;
 
     loop {
-        stdout.write("Do you accept the terms and conditions? [yes/no]: ".as_bytes())?;
+        let _ = stdout.write("Do you accept the terms and conditions? [yes/no]: ".as_bytes())?;
         stdout.flush()?;
 
         let mut buffer = String::new();

@@ -72,16 +72,17 @@ async fn send(
 
     let res = reader.read_message().await?;
     match res.id {
-        Some(RpcId::Int(v)) => match v == id {
-            false => return Err(anyhow!("Invalid response ID: {}, expected {}", v, id)),
-            _ => (),
-        },
+        Some(RpcId::Int(v)) => {
+            if v != id {
+                return Err(anyhow!("Invalid response ID: {}, expected {}", v, id));
+            }
+        }
         id => return Err(anyhow!("Invalid response ID: {:?}", id)),
     }
 
     match res.body {
-        RpcBody::Error { error } => return Err(anyhow!("Request {:?} failed: {:?}", id, error)),
-        RpcBody::Request { .. } => return Err(anyhow!("Unexpected message: {:?}", res)),
+        RpcBody::Error { error } => Err(anyhow!("Request {:?} failed: {:?}", id, error)),
+        RpcBody::Request { .. } => Err(anyhow!("Unexpected message: {:?}", res)),
         RpcBody::Result { result } => Ok(result),
     }
 }
@@ -106,7 +107,7 @@ async fn main() -> Result<()> {
     dotenv::dotenv().ok();
     std::env::set_var(
         "RUST_LOG",
-        std::env::var("RUST_LOG").unwrap_or("info".into()),
+        std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
     );
     env_logger::init();
 

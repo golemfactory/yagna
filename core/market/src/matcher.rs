@@ -77,7 +77,7 @@ impl Matcher {
             discovery,
             config,
             identity: identity_api,
-            expiration_tracker: DeadlineChecker::new().start(),
+            expiration_tracker: DeadlineChecker::default().start(),
         };
 
         let listeners = EventsListeners { proposal_receiver };
@@ -122,20 +122,18 @@ impl Matcher {
             async move {
                 let id = SubscriptionId::from_str(&msg.id);
                 match (&msg.category[..], &id) {
-                    ("Offer", Ok(id)) => match store.get_offer(id).await {
-                        Err(QueryOfferError::Expired(_)) => {
+                    ("Offer", Ok(id)) => {
+                        if let Err(QueryOfferError::Expired(_)) = store.get_offer(id).await {
                             log::info!("Offer [{}] expired.", id);
                             counter!("market.offers.expired", 1)
                         }
-                        _ => (),
-                    },
+                    }
                     ("Demand", Ok(id)) => {
-                        match store.db.as_dao::<DemandDao>().demand_state(id).await {
-                            Ok(DemandState::Expired(_)) => {
-                                log::info!("Demand [{}] expired.", id);
-                                counter!("market.demands.expired", 1)
-                            }
-                            _ => (),
+                        if let Ok(DemandState::Expired(_)) =
+                            store.db.as_dao::<DemandDao>().demand_state(id).await
+                        {
+                            log::info!("Demand [{}] expired.", id);
+                            counter!("market.demands.expired", 1)
                         }
                     }
                     _ => {}
@@ -238,7 +236,7 @@ impl Matcher {
             // If re-broadcasts are disabled, fallback to lazy broadcast binding
             self.discovery.bind_gsb_broadcast().await.map_or_else(
                 |e| {
-                    log::warn!("Failed to subscribe to broadcasts. Error: {:?}.", e,);
+                    log::warn!("Failed to subscribe to broadcasts. Error: {e}.");
                 },
                 |_| (),
             );
@@ -273,16 +271,15 @@ impl Matcher {
 
     pub async fn get_our_active_offer_ids(&self) -> Result<Vec<SubscriptionId>, QueryOffersError> {
         let our_node_ids = self.identity.list().await?;
-        Ok(self.store.get_active_offer_ids(Some(our_node_ids)).await?)
+        self.store.get_active_offer_ids(Some(our_node_ids)).await
     }
 
     pub async fn get_our_unsubscribed_offer_ids(
         &self,
     ) -> Result<Vec<SubscriptionId>, QueryOffersError> {
         let our_node_ids = self.identity.list().await?;
-        Ok(self
-            .store
+        self.store
             .get_unsubscribed_offer_ids(Some(our_node_ids))
-            .await?)
+            .await
     }
 }

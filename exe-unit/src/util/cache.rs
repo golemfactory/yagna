@@ -14,18 +14,16 @@ pub(crate) struct Cache {
 
 impl Cache {
     pub fn new(dir: PathBuf) -> Self {
-        let tmp_dir = dir.clone().join("tmp");
-        std::fs::create_dir_all(&tmp_dir).expect(&format!(
-            "Unable to create directory: {}",
-            tmp_dir.display()
-        ));
+        let tmp_dir = dir.join("tmp");
+        std::fs::create_dir_all(&tmp_dir)
+            .unwrap_or_else(|_| panic!("Unable to create directory: {}", tmp_dir.display()));
         Cache { dir, tmp_dir }
     }
 
     pub fn name(transfer_url: &TransferUrl) -> Result<CachePath, TransferError> {
         let hash = match &transfer_url.hash {
             Some(hash) => hash,
-            None => return Err(TransferError::InvalidUrlError("hash required".to_owned()).into()),
+            None => return Err(TransferError::InvalidUrlError("hash required".to_owned())),
         };
 
         let name = transfer_url.file_name()?;
@@ -55,12 +53,9 @@ impl TryFrom<ProjectedPath> for TransferUrl {
 
     fn try_from(value: ProjectedPath) -> Result<Self, Error> {
         TransferUrl::parse(
-            value
-                .to_path_buf()
-                .to_str()
-                .ok_or(Error::local(TransferError::InvalidUrlError(
-                    "Invalid path".to_owned(),
-                )))?,
+            value.to_path_buf().to_str().ok_or_else(|| {
+                Error::local(TransferError::InvalidUrlError("Invalid path".to_owned()))
+            })?,
             "file",
         )
         .map_err(Error::local)
@@ -199,11 +194,7 @@ fn flatten_container_path(path: PathBuf) -> PathBuf {
 /// Remove the root dir and all prefixes from a path. Specific to the custom "container" scheme.
 fn remove_container_path_base(path: PathBuf) -> PathBuf {
     path.components()
-        .filter(|c| match c {
-            Component::RootDir => false,
-            Component::Prefix(_) => false,
-            _ => true,
-        })
+        .filter(|c| !matches!(c, Component::RootDir | Component::Prefix(_)))
         .collect::<PathBuf>()
 }
 

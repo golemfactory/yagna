@@ -1,10 +1,13 @@
-use std::net::SocketAddr;
+use std::collections::HashMap;
+use std::convert::TryFrom;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
+use std::sync::RwLock;
 
 use actix::prelude::*;
 use anyhow::{anyhow, bail};
-use tokio::sync::RwLock;
 
+use ya_core_model::net::local::FindNodeResponse;
 use ya_core_model::NodeId;
 use ya_relay_client::{ChannelMetrics, Client, SessionDesc, SocketDesc, SocketState};
 
@@ -16,10 +19,10 @@ lazy_static::lazy_static! {
 pub struct ClientProxy(Addr<ClientActor>);
 
 impl ClientProxy {
-    pub async fn new() -> anyhow::Result<Self> {
-        let addr = match ADDRESS.read().await.clone() {
+    pub fn new() -> anyhow::Result<Self> {
+        let addr = match ADDRESS.read().unwrap().clone() {
             Some(addr) => addr,
-            None => bail!("network not initialized"),
+            None => bail!("Net client not initialized. ClientProxy has no address of ClientActor"),
         };
 
         Ok(Self(addr))
@@ -45,23 +48,16 @@ pub(crate) struct ClientActor {
 }
 
 impl ClientActor {
-    pub fn new(client: Client) -> Self {
-        Self { client }
+    /// Creates and starts `ClientActor`, and then shares its address with `ClientProxy`.
+    pub fn init(client: Client) {
+        let client = Self { client };
+        let addr = client.start();
+        ADDRESS.write().unwrap().replace(addr);
     }
 }
 
 impl Actor for ClientActor {
     type Context = Context<Self>;
-
-    fn started(&mut self, ctx: &mut Self::Context) {
-        let addr = ctx.address();
-        ctx.wait(
-            async move {
-                ADDRESS.write().await.replace(addr);
-            }
-            .into_actor(self),
-        );
-    }
 }
 
 macro_rules! proxy {
@@ -142,6 +138,29 @@ proxy!(
     |client: Client| { futures::future::ready(client.sockets()) }
 );
 proxy!(
+    FindNode(NodeId) -> anyhow::Result<FindNodeResponse>,
+    find_node,
+    |client: Client, msg: FindNode| async move {
+        let res = client.find_node(msg.0).await?;
+        let identities = res.identities.into_iter()
+            .map(|i| NodeId::try_from(&i.node_id.to_vec()))
+            .collect::<Result<Vec<NodeId>, _>>()?;
+        let endpoints = res.endpoints.into_iter()
+            .map(|e| {
+                e.address.parse().map(|ip: IpAddr| SocketAddr::new(ip, e.port as u16))
+            })
+            .collect::<Result<Vec<SocketAddr>, _>>()?;
+
+        Ok(FindNodeResponse {
+            identities,
+            endpoints,
+            seen: res.seen_ts,
+            slot: res.slot,
+            encryption: res.supported_encryptions,
+        })
+    }
+);
+proxy!(
     GetSessions -> Vec<SessionDesc>,
     sessions,
     |client: Client| async move { client.sessions().await }
@@ -170,4 +189,9 @@ proxy!(
     Shutdown -> anyhow::Result<()>,
     shutdown,
     |mut client: Client| async move { client.shutdown().await }
+);
+proxy!(
+    GetSessionMetrics -> HashMap<NodeId, ChannelMetrics>,
+    session_metrics,
+    |client: Client| async move { client.session_metrics().await }
 );

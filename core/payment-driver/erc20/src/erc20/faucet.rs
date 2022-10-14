@@ -78,7 +78,7 @@ pub async fn request_glm(
         return Ok(());
     }
     let pending = dao.get_pending_faucet_txs(&str_addr, network).await;
-    for _tx in pending {
+    if !pending.is_empty() {
         log::info!("Already pending a mint transactin.");
         return Ok(());
     }
@@ -161,7 +161,7 @@ async fn resolve_faucet_url() -> Result<String, GenericError> {
         _ => {
             let faucet_host = resolver::resolve_yagna_srv_record(DEFAULT_FAUCET_SRV_PREFIX)
                 .await
-                .unwrap_or(DEFAULT_ETH_FAUCET_HOST.to_string());
+                .unwrap_or_else(|_| DEFAULT_ETH_FAUCET_HOST.to_string());
 
             Ok(format!("http://{}:4000/donate", faucet_host))
         }

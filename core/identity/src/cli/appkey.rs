@@ -13,7 +13,7 @@ use ya_service_bus::{typed as bus, RpcEndpoint};
 pub enum AppKeyCommand {
     Create {
         name: String,
-        #[structopt(default_value = model::DEFAULT_ROLE, long)]
+        #[structopt(skip = model::DEFAULT_ROLE)]
         role: String,
         #[structopt(long)]
         id: Option<String>,
@@ -40,7 +40,7 @@ impl AppKeyCommand {
             .await
             .map_err(anyhow::Error::msg)?
             .map_err(anyhow::Error::msg)?
-            .ok_or(anyhow::Error::msg("Identity not found"))
+            .ok_or_else(|| anyhow::Error::msg("Identity not found"))
     }
 
     pub async fn run_command(&self, _ctx: &CliCtx) -> Result<CommandOutput> {
@@ -63,11 +63,7 @@ impl AppKeyCommand {
                     role: role.clone(),
                     identity,
                 };
-                let key = bus::service(model::BUS_ID)
-                    .send(create)
-                    .await
-                    .map_err(anyhow::Error::msg)?
-                    .unwrap();
+                let key = bus::service(model::BUS_ID).send(create).await??;
                 Ok(CommandOutput::Object(serde_json::to_value(key)?))
             }
             AppKeyCommand::Drop { name, id } => {
@@ -75,7 +71,7 @@ impl AppKeyCommand {
                     name: name.clone(),
                     identity: id.clone(),
                 };
-                let _ = bus::service(model::BUS_ID)
+                bus::service(model::BUS_ID)
                     .send(remove)
                     .await
                     .map_err(anyhow::Error::msg)?
@@ -85,8 +81,8 @@ impl AppKeyCommand {
             AppKeyCommand::List { id, page, per_page } => {
                 let list = model::List {
                     identity: id.clone(),
-                    page: page.clone(),
-                    per_page: per_page.clone(),
+                    page: *page,
+                    per_page: *per_page,
                 };
                 let result: (Vec<model::AppKey>, u32) = bus::service(model::BUS_ID)
                     .send(list)

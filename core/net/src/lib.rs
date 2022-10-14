@@ -12,3 +12,4 @@ mod service;
 
 mod cli;
 mod config;
+mod error;

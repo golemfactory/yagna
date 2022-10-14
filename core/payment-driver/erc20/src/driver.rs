@@ -65,8 +65,8 @@ impl Erc20Driver {
 
     pub async fn load_active_accounts(&self) {
         log::debug!("load_active_accounts");
-        let mut accounts = self.active_accounts.borrow_mut();
         let unlocked_accounts = bus::list_unlocked_identities().await.unwrap();
+        let mut accounts = self.active_accounts.borrow_mut();
         for account in unlocked_accounts {
             log::debug!("account={}", account);
             accounts.add_account(account)
@@ -255,9 +255,10 @@ impl PaymentDriverCron for Erc20Driver {
 
         log::trace!("Running ERC-20 send-out job...");
         'outer: for network_key in self.get_networks().keys() {
-            let network = Network::from_str(&network_key).unwrap();
+            let network = Network::from_str(network_key).unwrap();
             // Process payment rows
-            for node_id in self.active_accounts.borrow().list_accounts() {
+            let accounts = self.active_accounts.borrow().list_accounts();
+            for node_id in accounts {
                 if let Err(e) =
                     cron::process_payments_for_account(&self.dao, &node_id, network).await
                 {

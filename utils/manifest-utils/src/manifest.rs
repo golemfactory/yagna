@@ -1,33 +1,36 @@
 use std::collections::HashSet;
 use std::ops::Not;
+use std::string::ToString;
 
 use chrono::{DateTime, Utc};
 use semver::Version;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
-use sha2::{Digest, Sha256};
+use strum;
+use strum::AsRefStr;
+use strum::Display;
+use strum::EnumString;
 use url::Url;
 
 use ya_agreement_utils::AgreementView;
 use ya_agreement_utils::Error as AgreementError;
 
-pub const AGREEMENT_MANIFEST_PROPERTY: &str =
-    "demand.properties.golem.experimental.srv.comp.payload.@tag";
-pub const AGREEMENT_MANIFEST_SIG_PROPERTY: &str =
-    "demand.properties.golem.experimental.srv.comp.payload.sig";
+use crate::decode_data;
 
 pub const CAPABILITIES_PROPERTY: &str = "golem.runtime.capabilities";
-pub const DEMAND_MANIFEST_PROPERTY: &str = "golem.experimental.srv.comp.payload.@tag";
-pub const DEMAND_MANIFEST_SIG_PROPERTY: &str = "golem.experimental.srv.comp.payload.sig";
+pub const DEMAND_MANIFEST_PROPERTY: &str = "golem.srv.comp.payload";
+pub const DEMAND_MANIFEST_SIG_PROPERTY: &str = "golem.srv.comp.payload.sig";
+pub const DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY: &str = "golem.srv.comp.payload.sig.algorithm";
+pub const DEMAND_MANIFEST_CERT_PROPERTY: &str = "golem.srv.comp.payload.cert";
+
+pub const AGREEMENT_MANIFEST_PROPERTY: &str = "demand.properties.golem.srv.comp.payload";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("agreement error: {0}")]
     AgreementError(#[from] AgreementError),
-    #[error("invalid input base64: {0}")]
-    BlobBase64(#[from] base64::DecodeError),
-    #[error("invalid escaped json string: {0}")]
-    BlobJsonString(#[from] snailquote::UnescapeError),
+    #[error(transparent)]
+    DecodingError(#[from] crate::DecodingError),
     #[error("invalid input json encoding: {0}")]
     BlobJsonEncoding(#[from] snailquote::ParseUnicodeError),
     #[error("invalid hash format: '{0}'")]
@@ -36,8 +39,6 @@ pub enum Error {
     HashHexValue(#[from] hex::FromHexError),
     #[error("invalid manifest format: {0}")]
     ManifestFormat(#[from] serde_json::Error),
-    #[error("ECDSA error: {0}")]
-    SignatureEcdsa(#[from] ethsign::Error),
     #[error("invalid signature format: {0}")]
     SignatureFormat(String),
     #[error("unsupported signature algorithm")]
@@ -53,38 +54,21 @@ pub fn read_manifest(view: &AgreementView) -> Result<Option<AppManifest>, Error>
     Ok(Some(decode_manifest(manifest)?))
 }
 
-pub fn decode_manifest<S: AsRef<str>>(input: S) -> Result<AppManifest, Error> {
-    match decode_base64(&input) {
-        Ok(manifest) => Ok(manifest),
-        Err(_) => decode_escaped_json(input),
-    }
-}
-
-fn decode_base64<S: AsRef<str>>(input: S) -> Result<AppManifest, Error> {
-    let decoded = base64::decode(input.as_ref())?;
-    Ok(serde_json::de::from_slice(&decoded)?)
-}
-
-fn decode_escaped_json<S: AsRef<str>>(input: S) -> Result<AppManifest, Error> {
-    let decoded = snailquote::unescape(input.as_ref())?;
-    Ok(serde_json::de::from_str(&decoded)?)
+pub fn decode_manifest<S: AsRef<str>>(data: S) -> Result<AppManifest, Error> {
+    let data = decode_data(data)?;
+    Ok(serde_json::de::from_slice(&data)?)
 }
 
 #[non_exhaustive]
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Display)]
+#[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum Feature {
     Inet,
     Vpn,
-}
-
-impl ToString for Feature {
-    fn to_string(&self) -> String {
-        match self {
-            Self::Inet => "inet",
-            Self::Vpn => "vpn",
-        }
-        .to_string()
-    }
+    ManifestSupport,
+    #[serde(other)]
+    Other,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -243,10 +227,12 @@ impl<'de> Deserialize<'de> for Command {
     }
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, EnumString, AsRefStr)]
 #[serde(rename_all = "camelCase")]
 pub enum ArgMatch {
+    #[strum(ascii_case_insensitive)]
     Strict,
+    #[strum(ascii_case_insensitive)]
     Regex,
 }
 
@@ -281,66 +267,11 @@ pub struct InetOut {
     pub urls: Option<Vec<Url>>,
 }
 
-#[non_exhaustive]
-#[derive(Clone, Eq, PartialEq, Hash)]
-pub enum Signature {
-    Secp256k1(Vec<u8>),
-    Secp256k1Hex(String),
-}
-
-impl Signature {
-    pub fn verify(&self, input: &[u8]) -> Result<Vec<u8>, Error> {
-        match self {
-            Signature::Secp256k1(vec) => verify_secp256k1(input, vec),
-            Signature::Secp256k1Hex(string) => {
-                let sig = hex::decode(normalize_hex_string(string))?;
-                verify_secp256k1(input, &sig)
-            }
-        }
-    }
-
-    #[inline]
-    pub fn verify_str<S: AsRef<str>>(&self, input: S) -> Result<Vec<u8>, Error> {
-        self.verify(input.as_ref().as_bytes())
-    }
-}
-
-fn verify_secp256k1(input: &[u8], sig: &[u8]) -> Result<Vec<u8>, Error> {
-    if sig.len() < 65 {
-        return Err(Error::SignatureFormat(
-            "invalid signature length".to_string(),
-        ));
-    }
-
-    let v = sig[0];
-    let mut r = [0; 32];
-    let mut s = [0; 32];
-
-    r.copy_from_slice(&sig[1..33]);
-    s.copy_from_slice(&sig[33..65]);
-
-    let hash = Sha256::digest(input);
-    let key = ethsign::Signature { v, r, s }
-        .recover(hash.as_slice())
-        .map_err(ethsign::Error::Secp256k1)?;
-
-    Ok(key.bytes().to_vec())
-}
-
 pub fn default_protocols() -> Vec<String> {
     ["http", "https", "ws", "wss"]
         .iter()
         .map(|s| s.to_string())
         .collect()
-}
-
-fn normalize_hex_string<S: AsRef<str>>(input: S) -> String {
-    let input = input.as_ref();
-    if input.starts_with("0x") || input.starts_with("0X") {
-        input[2..].to_string()
-    } else {
-        input.to_string()
-    }
 }
 
 #[cfg(test)]

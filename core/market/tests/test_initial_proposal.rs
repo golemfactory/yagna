@@ -264,7 +264,7 @@ async fn test_query_events_edge_cases() {
         .await
         .unwrap()
         .unwrap();
-        if events.len() > 0 {
+        if !events.is_empty() {
             assert_eq!(events.len(), 1);
             break;
         }

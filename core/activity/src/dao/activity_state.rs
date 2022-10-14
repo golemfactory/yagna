@@ -2,7 +2,7 @@ use chrono::Utc;
 use diesel::expression::dsl::exists;
 use diesel::prelude::*;
 use diesel::QueryableByName;
-use serde_json;
+
 use std::{convert::TryInto, time::Duration};
 use tokio::time::sleep;
 

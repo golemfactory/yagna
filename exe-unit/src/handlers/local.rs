@@ -56,7 +56,7 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
 
         log::debug!("Entering state: {:?}", update.state);
         log::debug!("Report: {}", self.state.report());
-        self.state.inner = update.state.clone();
+        self.state.inner = update.state;
 
         if self.ctx.activity_id.is_none() || self.ctx.report_url.is_none() {
             return ActorResponse::reply(());
@@ -79,12 +79,12 @@ impl<R: Runtime> Handler<SetState> for ExeUnit<R> {
             ),
         );
 
-        return ActorResponse::r#async(
+        ActorResponse::r#async(
             async move {
                 fut.await;
             }
             .into_actor(self),
-        );
+        )
     }
 }
 
@@ -92,16 +92,11 @@ impl<R: Runtime> Handler<GetStdOut> for ExeUnit<R> {
     type Result = <GetStdOut as Message>::Result;
 
     fn handle(&mut self, msg: GetStdOut, _: &mut Context<Self>) -> Self::Result {
-        self.state
-            .batches
-            .get(&msg.batch_id)
-            .map(|b| {
-                b.results
-                    .get(msg.idx)
-                    .map(|r| r.stdout.output_string())
-                    .flatten()
-            })
-            .flatten()
+        self.state.batches.get(&msg.batch_id).and_then(|b| {
+            b.results
+                .get(msg.idx)
+                .and_then(|r| r.stdout.output_string())
+        })
     }
 }
 
@@ -280,7 +275,7 @@ impl<R: Runtime> Handler<Shutdown> for ExeUnit<R> {
         }
 
         let address = ctx.address();
-        let services = std::mem::replace(&mut self.services, Vec::new());
+        let services = std::mem::take(&mut self.services);
         let state = self.state.inner.to_pending(State::Terminated);
         let reason = format!("{}: {}", msg.0, self.state.report());
 

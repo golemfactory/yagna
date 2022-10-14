@@ -92,7 +92,7 @@ async fn my_main() -> Result</*exit code*/ i32> {
     let cli_args: StartupConfig = StartupConfig::from_args();
 
     match cli_args.commands {
-        Commands::Setup(mut run_config) => setup::setup(&mut run_config, true).await,
+        Commands::Setup(run_config) => setup::setup(&run_config, true).await,
         Commands::Run(run_config) => service::run(run_config).await,
         Commands::Stop => service::stop().await,
         Commands::Settings(command) => match command {

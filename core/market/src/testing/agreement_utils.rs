@@ -33,6 +33,7 @@ pub async fn negotiate_agreement(
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn negotiate_agreement_with_ids(
     network: &MarketsNetwork,
     req_name: &str,

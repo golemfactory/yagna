@@ -27,17 +27,17 @@ pub struct LimitExpiration {
     min_deadline: i64,
 }
 
-pub static DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY: &'static str =
+pub static DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY: &str =
     "/golem/com/payment/debit-notes/accept-timeout?";
-pub static AGREEMENT_EXPIRATION_PROPERTY: &'static str = "/golem/srv/comp/expiration";
+pub static AGREEMENT_EXPIRATION_PROPERTY: &str = "/golem/srv/comp/expiration";
 
 // TODO: We should unify properties access in agreement-utils, because it is annoying to use both forms.
-pub static DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY_FLAT: &'static str =
+pub static DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY_FLAT: &str =
     "golem.com.payment.debit-notes.accept-timeout?";
 
 // Note: Tests are using this.
 #[allow(dead_code)]
-pub static AGREEMENT_EXPIRATION_PROPERTY_FLAT: &'static str = "golem.srv.comp.expiration";
+pub static AGREEMENT_EXPIRATION_PROPERTY_FLAT: &str = "golem.srv.comp.expiration";
 
 /// Configuration for LimitAgreements Negotiator.
 #[derive(StructOpt, Clone, Debug, Serialize, Deserialize)]
@@ -146,43 +146,46 @@ impl NegotiatorComponent for LimitExpiration {
             // Both Provider and Requestor support DebitNotes acceptance. We must
             // negotiate until we will agree to the same value.
             (Some(req_deadline), Some(our_deadline)) => {
-                if req_deadline > our_deadline {
-                    NegotiationResult::Reject {
+                match req_deadline.cmp(&our_deadline) {
+                    std::cmp::Ordering::Greater => NegotiationResult::Reject {
                         reason: RejectReason::new(format!(
                             "DebitNote acceptance deadline should be less than {}.",
                             self.accept_timeout.display()
                         )),
                         is_final: true,
+                    },
+                    std::cmp::Ordering::Equal => {
+                        // We agree with Requestor to the same deadline.
+                        NegotiationResult::Ready {
+                            proposal: ours,
+                            score,
+                        }
                     }
-                } else if req_deadline == our_deadline {
-                    // We agree with Requestor to the same deadline.
-                    NegotiationResult::Ready {
-                        proposal: ours,
-                        score,
-                    }
-                } else {
-                    // Below certain timeout it is impossible for Requestor to accept DebitNotes.
-                    if req_deadline.num_seconds() < self.min_deadline {
-                        return Ok(NegotiationResult::Reject {
-                            reason: RejectReason::new(format!(
-                                "To low DebitNotes timeout: {}",
-                                req_deadline.display()
-                            )),
-                            is_final: true,
-                        });
-                    }
+                    std::cmp::Ordering::Less => {
+                        // Below certain timeout it is impossible for Requestor to accept DebitNotes.
+                        if req_deadline.num_seconds() < self.min_deadline {
+                            return Ok(NegotiationResult::Reject {
+                                reason: RejectReason::new(format!(
+                                    "To low DebitNotes timeout: {}",
+                                    req_deadline.display()
+                                )),
+                                is_final: true,
+                            });
+                        }
 
-                    // Requestor proposed better deadline, than we required.
-                    // We are expected to set property to the same value if we agree.
-                    let deadline_prop = ours
-                        .pointer_mut(DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY)
-                        .unwrap();
-                    *deadline_prop = serde_json::Value::Number(req_deadline.num_seconds().into());
+                        // Requestor proposed better deadline, than we required.
+                        // We are expected to set property to the same value if we agree.
+                        let deadline_prop = ours
+                            .pointer_mut(DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY)
+                            .unwrap();
+                        *deadline_prop =
+                            serde_json::Value::Number(req_deadline.num_seconds().into());
 
-                    // Since we changed our proposal, we can't return `Ready`.
-                    NegotiationResult::Negotiating {
-                        proposal: ours,
-                        score,
+                        // Since we changed our proposal, we can't return `Ready`.
+                        NegotiationResult::Negotiating {
+                            proposal: ours,
+                            score,
+                        }
                     }
                 }
             }

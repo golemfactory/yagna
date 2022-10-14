@@ -19,7 +19,7 @@ pub fn build_number_str() -> Option<&'static str> {
 
 /// Returns Github Actions build number if available or None.
 pub fn build_number() -> Option<i64> {
-    build_number_str().map(|s| s.parse().ok()).flatten()
+    build_number_str().and_then(|s| s.parse().ok())
 }
 
 /// Converts a tag to semantic version

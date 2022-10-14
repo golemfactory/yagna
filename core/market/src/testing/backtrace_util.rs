@@ -9,22 +9,20 @@ fn get_innermost_backtrace_symbol(fm: &backtrace::BacktraceFrame) -> Option<Stri
 
 fn adjust_backtrace_level(frames: &[backtrace::BacktraceFrame]) -> Option<usize> {
     // On some systems backtrace lib doesn't properly set actual_start_index
-    let mut idx = 0;
-    for frame in frames.iter() {
+    for (idx, frame) in frames.iter().enumerate() {
         if let Some(name) = get_innermost_backtrace_symbol(frame) {
             // Note: On windows there is no "::<hash>" suffix
             if name.starts_with("ya_market::testing::backtrace_util::generate_backtraced_name") {
                 return Some(idx);
             }
         }
-        idx += 1;
     }
     None
 }
 
 fn get_symbol_at_level(bt: &backtrace::Backtrace, lvl: usize) -> Option<String> {
     let frames = &bt.frames();
-    match adjust_backtrace_level(&frames) {
+    match adjust_backtrace_level(frames) {
         Some(adjustment) => {
             let frame = &frames[lvl + adjustment];
             return get_innermost_backtrace_symbol(frame);
@@ -43,7 +41,7 @@ pub fn generate_backtraced_name(level: Option<usize>) -> String {
         log::trace!("Generated name: {} level: {:?} BT: {:#?}", name, level, bt);
         return name;
     }
-    let u4 = uuid::Uuid::new_v4().to_string().to_string();
+    let u4 = uuid::Uuid::new_v4().to_string();
     log::error!(
         "No backtrace support. Generating default name from UUIDv4. uuid4={}, bt={:#?}",
         u4,

@@ -109,7 +109,7 @@ impl ExeUnitDesc {
                     return Some(coefficient_name.to_string());
                 }
                 config.counters.iter().find_map(|(prop_name, definition)| {
-                    if definition.name.eq_ignore_ascii_case(&coefficient_name) {
+                    if definition.name.eq_ignore_ascii_case(coefficient_name) {
                         Some(prop_name.into())
                     } else {
                         None
@@ -142,20 +142,15 @@ impl ExeUnitDesc {
 
 /// Responsible for creating ExeUnits.
 /// Stores registry of ExeUnits that can be created.
+#[derive(Default)]
 pub struct ExeUnitsRegistry {
     descriptors: HashMap<String, ExeUnitDesc>,
 }
 
 impl ExeUnitsRegistry {
-    pub fn new() -> ExeUnitsRegistry {
-        ExeUnitsRegistry {
-            descriptors: HashMap::new(),
-        }
-    }
-
     pub fn from_file(path: &Path) -> Result<ExeUnitsRegistry> {
-        let mut registry = ExeUnitsRegistry::new();
-        registry.register_exeunits_from_file(&path)?;
+        let mut registry = ExeUnitsRegistry::default();
+        registry.register_exeunits_from_file(path)?;
 
         Ok(registry)
     }
@@ -171,7 +166,7 @@ impl ExeUnitsRegistry {
         ExeUnitInstance::new(
             name,
             &exeunit_desc.supervisor_path,
-            &working_dir,
+            working_dir,
             &extended_args,
         )
     }
@@ -200,10 +195,12 @@ impl ExeUnitsRegistry {
         // by supervisor as subprocess.
         let mut extended_args = Vec::new();
         if let Some(runtime_path) = &exeunit_desc.runtime_path {
-            let runtime_path = runtime_path.to_str().ok_or(anyhow!(
-                "ExeUnit runtime path [{}] contains invalid characters.",
-                runtime_path.display()
-            ))?;
+            let runtime_path = runtime_path.to_str().ok_or_else(|| {
+                anyhow!(
+                    "ExeUnit runtime path [{}] contains invalid characters.",
+                    runtime_path.display()
+                )
+            })?;
             extended_args.push("-b".to_owned());
             extended_args.push(runtime_path.to_owned());
         }
@@ -243,7 +240,7 @@ impl ExeUnitsRegistry {
 
     pub fn register_exeunits_from_file(&mut self, path: &Path) -> Result<()> {
         let current_dir = std::env::current_dir()?;
-        let base_path = path.parent().unwrap_or_else(|| &current_dir);
+        let base_path = path.parent().unwrap_or(&current_dir);
         let file = File::open(path).map_err(|error| {
             anyhow!(
                 "Can't load ExeUnits to registry from file {}, error: {}.",
@@ -301,7 +298,7 @@ impl ExeUnitsRegistry {
         if errors.is_empty() {
             return Ok(());
         }
-        return Err(RegistryError(errors));
+        Err(RegistryError(errors))
     }
 
     pub fn test_runtimes(&self) -> anyhow::Result<()> {
@@ -329,7 +326,7 @@ pub struct RegistryError(Vec<ExeUnitValidation>);
 impl fmt::Display for RegistryError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for v in &self.0 {
-            write!(f, "{}\n", v)?;
+            writeln!(f, "{}", v)?;
         }
         Ok(())
     }
@@ -366,7 +363,7 @@ impl OfferBuilder for ExeUnitDesc {
         let mut offer_part = self.properties.clone();
         offer_part.append(common.as_object_mut().unwrap());
 
-        return serde_json::Value::Object(offer_part);
+        serde_json::Value::Object(offer_part)
     }
 }
 
@@ -383,7 +380,7 @@ fn test_runtime(path: &Path) -> anyhow::Result<()> {
         if message.is_empty() {
             message = String::from_utf8_lossy(&output.stdout).to_string();
         }
-        if message.find("--help").is_none() {
+        if !message.contains("--help") {
             anyhow::bail!(message);
         }
     }
@@ -443,7 +440,7 @@ impl fmt::Display for ExeUnitDesc {
 fn expand_filename(pattern: &Path) -> Result<impl IntoIterator<Item = PathBuf>> {
     use std::fs::read_dir;
 
-    let path: &Path = pattern.as_ref();
+    let path: &Path = pattern;
     let (base_dir, file_name) = match (path.parent(), path.file_name()) {
         (Some(base_dir), Some(file_name)) => (base_dir, file_name),
         _ => return Ok(vec![PathBuf::from(pattern)]),
@@ -453,7 +450,7 @@ fn expand_filename(pattern: &Path) -> Result<impl IntoIterator<Item = PathBuf>> 
         None => anyhow::bail!("Not utf-8 filename: {:?}", file_name),
     };
 
-    if let Some(pos) = file_name.find("*") {
+    if let Some(pos) = file_name.find('*') {
         let (prefix, suffix) = file_name.split_at(pos);
         let suffix = &suffix[1..];
 
@@ -490,73 +487,61 @@ mod tests {
 
     #[test]
     fn test_fill_registry_from_file() {
-        let mut registry = ExeUnitsRegistry::new();
+        let mut registry = ExeUnitsRegistry::default();
         registry
             .register_exeunits_from_file(&resources_directory().join("example-exeunits.json"))
             .unwrap();
 
         let dummy_desc = registry.find_exeunit("dummy").unwrap();
         assert_eq!(dummy_desc.name.as_str(), "dummy");
-        assert_eq!(
-            dummy_desc
-                .supervisor_path
-                .to_str()
-                .unwrap()
-                .contains("dummy.exe"),
-            true
-        );
+        assert!(dummy_desc
+            .supervisor_path
+            .to_str()
+            .unwrap()
+            .contains("dummy.exe"));
 
         let dummy_desc = registry.find_exeunit("wasm").unwrap();
         assert_eq!(dummy_desc.name.as_str(), "wasm");
-        assert_eq!(
-            dummy_desc
-                .supervisor_path
-                .to_str()
-                .unwrap()
-                .contains("wasm.exe"),
-            true
-        );
+        assert!(dummy_desc
+            .supervisor_path
+            .to_str()
+            .unwrap()
+            .contains("wasm.exe"));
     }
 
     #[test]
     fn test_fill_registry_from_local_exe_unit_descriptor() {
         let exe_units_descriptor = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../exe-unit/resources/local-exeunits-descriptor.json");
-        let mut registry = ExeUnitsRegistry::new();
+        let mut registry = ExeUnitsRegistry::default();
         registry
             .register_exeunits_from_file(&exe_units_descriptor)
             .unwrap();
 
         let dummy_desc = registry.find_exeunit("wasmtime").unwrap();
         assert_eq!(dummy_desc.name.as_str(), "wasmtime");
-        assert_eq!(
-            dummy_desc
-                .supervisor_path
-                .to_str()
-                .unwrap()
-                .contains("exe-unit"),
-            true
-        );
+        assert!(dummy_desc
+            .supervisor_path
+            .to_str()
+            .unwrap()
+            .contains("exe-unit"));
     }
 
     #[test]
     fn test_fill_registry_from_deb_exe_unit_descriptor() {
         let exe_units_descriptor = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../exe-unit/resources/exeunits-descriptor.json");
-        let mut registry = ExeUnitsRegistry::new();
+        let mut registry = ExeUnitsRegistry::default();
         registry
             .register_exeunits_from_file(&exe_units_descriptor)
             .unwrap();
 
         let dummy_desc = registry.find_exeunit("wasmtime").unwrap();
         assert_eq!(dummy_desc.name.as_str(), "wasmtime");
-        assert_eq!(
-            dummy_desc
-                .supervisor_path
-                .to_str()
-                .unwrap()
-                .contains("/usr/lib/yagna/plugins/exe-unit"),
-            true
-        );
+        assert!(dummy_desc
+            .supervisor_path
+            .to_str()
+            .unwrap()
+            .contains("/usr/lib/yagna/plugins/exe-unit"));
     }
 }

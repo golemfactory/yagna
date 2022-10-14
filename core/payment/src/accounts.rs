@@ -75,7 +75,7 @@ pub async fn save_default_account(data_dir: &Path, drivers: Vec<String>) -> anyh
     let default_node_id = bus::service(identity::BUS_ID)
         .call(identity::Get::ByDefault)
         .await??
-        .ok_or(anyhow::anyhow!("Default identity not found"))?
+        .ok_or_else(|| anyhow::anyhow!("Default identity not found"))?
         .node_id;
     let default_accounts: Vec<Account> = drivers
         .into_iter()

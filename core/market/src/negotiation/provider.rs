@@ -49,7 +49,7 @@ impl ProviderBroker {
         session_notifier: EventNotifier<AppSessionId>,
         config: Arc<Config>,
     ) -> Result<ProviderBroker, NegotiationInitError> {
-        let broker = CommonBroker::new(db.clone(), store, session_notifier, config);
+        let broker = CommonBroker::new(db, store, session_notifier, config);
 
         let broker1 = broker.clone();
         let broker2 = broker.clone();
@@ -229,13 +229,13 @@ impl ProviderBroker {
         let dao = self.common.db.as_dao::<AgreementDao>();
 
         let agreement = {
-            let _hold = self.common.agreement_lock.lock(&agreement_id).await;
+            let _hold = self.common.agreement_lock.lock(agreement_id).await;
 
             let agreement = dao
                 .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
                 .await
                 .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
-                .ok_or(AgreementError::NotFound(agreement_id.to_string()))?;
+                .ok_or_else(|| AgreementError::NotFound(agreement_id.to_string()))?;
 
             if agreement.state == AgreementState::Cancelled {
                 return Ok(ApprovalResult::Cancelled);
@@ -284,7 +284,7 @@ impl ProviderBroker {
                 AgreementState::Cancelled,
             ))) => return Ok(ApprovalResult::Cancelled),
             Err(e) => {
-                let _hold = self.common.agreement_lock.lock(&agreement_id).await;
+                let _hold = self.common.agreement_lock.lock(agreement_id).await;
 
                 log::warn!(
                     "Failed to send Approve Agreement [{}] to Requestor. {}. Reverting state to `Pending`.",
@@ -308,7 +308,7 @@ impl ProviderBroker {
         // is supposed to return after approval.
         match notifier.wait_for_event_until(stop_time).await {
             Err(NotifierError::Timeout(_)) => {
-                let _hold = self.common.agreement_lock.lock(&agreement_id).await;
+                let _hold = self.common.agreement_lock.lock(agreement_id).await;
                 dao.revert_approving(agreement_id).await.log_err().ok();
 
                 Err(AgreementProtocolError::Timeout(agreement.id.clone()).into())
@@ -322,21 +322,23 @@ impl ProviderBroker {
         .log_err()?;
 
         {
-            let _hold = self.common.agreement_lock.lock(&agreement_id).await;
+            let _hold = self.common.agreement_lock.lock(agreement_id).await;
 
             let agreement = dao
                 .select(agreement_id, None, Utc::now().naive_utc())
                 .await
                 .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
-                .ok_or(AgreementError::Internal(format!(
-                    "Agreement [{}], which existed previously, disappeared.",
-                    agreement_id
-                )))?;
+                .ok_or_else(|| {
+                    AgreementError::Internal(format!(
+                        "Agreement [{}], which existed previously, disappeared.",
+                        agreement_id
+                    ))
+                })?;
 
             match agreement.state {
                 AgreementState::Cancelled => Ok(ApprovalResult::Cancelled),
                 AgreementState::Approved => Ok(ApprovalResult::Approved),
-                AgreementState::Expired => Err(AgreementError::Expired(agreement.id.clone()))?,
+                AgreementState::Expired => Err(AgreementError::Expired(agreement.id))?,
                 _ => Err(AgreementError::Internal(format!(
                     "Agreement [{}] has unexpected state [{}]",
                     agreement.id, agreement.state
@@ -353,24 +355,24 @@ impl ProviderBroker {
     ) -> Result<(), AgreementError> {
         let dao = self.common.db.as_dao::<AgreementDao>();
         let agreement = {
-            let _hold = self.common.agreement_lock.lock(&agreement_id).await;
+            let _hold = self.common.agreement_lock.lock(agreement_id).await;
 
             let agreement = dao
                 .select(agreement_id, Some(id.identity), Utc::now().naive_utc())
                 .await
                 .map_err(|e| AgreementError::Get(agreement_id.to_string(), e))?
-                .ok_or(AgreementError::NotFound(agreement_id.to_string()))?;
+                .ok_or_else(|| AgreementError::NotFound(agreement_id.to_string()))?;
 
             validate_transition(&agreement, AgreementState::Rejected)?;
 
             let timestamp = Utc::now().naive_utc();
             self.api
-                .reject_agreement(&agreement, reason.clone(), timestamp.clone())
+                .reject_agreement(&agreement, reason.clone(), timestamp)
                 .await?;
 
             dao.reject(&agreement.id, reason.clone(), &timestamp)
                 .await
-                .map_err(|e| AgreementError::UpdateState((&agreement.id).clone(), e))?
+                .map_err(|e| AgreementError::UpdateState((agreement.id).clone(), e))?
         };
 
         counter!("market.agreements.provider.rejected", 1);
@@ -544,16 +546,12 @@ async fn agreement_received(
     let offer_id = &offer_proposal.negotiation.offer_id.clone();
 
     if offer_proposal.body.issuer != Issuer::Us {
-        return Err(RemoteProposeAgreementError::RequestorOwn(
-            offer_proposal_id.clone(),
-        ));
+        return Err(RemoteProposeAgreementError::RequestorOwn(offer_proposal_id));
     }
 
-    let demand_proposal_id = offer_proposal
-        .body
-        .prev_proposal_id
-        .clone()
-        .ok_or_else(|| RemoteProposeAgreementError::NoNegotiations(offer_proposal_id))?;
+    let demand_proposal_id = offer_proposal.body.prev_proposal_id.clone().ok_or(
+        RemoteProposeAgreementError::NoNegotiations(offer_proposal_id),
+    )?;
     let demand_proposal = broker.get_proposal(None, &demand_proposal_id).await?;
 
     let mut agreement = Agreement::new_with_ts(
@@ -586,7 +584,7 @@ async fn agreement_received(
                 RemoteProposeAgreementError::AlreadyCountered(id)
             }
             _ => RemoteProposeAgreementError::Unexpected {
-                public_msg: format!("Failed to save Agreement."),
+                public_msg: "Failed to save Agreement.".to_string(),
                 original_msg: e.to_string(),
             },
         })?;
@@ -599,12 +597,12 @@ async fn agreement_received(
         .add_agreement_event(&agreement)
         .await
         .map_err(|e| RemoteProposeAgreementError::Unexpected {
-            public_msg: format!("Failed to add event for Agreement."),
+            public_msg: "Failed to add event for Agreement.".to_string(),
             original_msg: e.to_string(),
         })?;
 
     // Send channel message to wake all query_events waiting for proposals.
-    broker.negotiation_notifier.notify(&offer_id).await;
+    broker.negotiation_notifier.notify(offer_id).await;
 
     counter!("market.agreements.provider.proposed", 1);
     log::info!(
@@ -621,9 +619,9 @@ async fn on_agreement_cancelled(
     msg: AgreementCancelled,
 ) -> Result<(), AgreementProtocolError> {
     let caller: NodeId = CommonBroker::parse_caller(&caller)?;
-    Ok(agreement_cancelled(broker, caller, msg)
+    agreement_cancelled(broker, caller, msg)
         .await
-        .map_err(|e| AgreementProtocolError::Remote(e))?)
+        .map_err(AgreementProtocolError::Remote)
 }
 
 async fn agreement_cancelled(
@@ -640,7 +638,7 @@ async fn agreement_cancelled(
             .await
             .log_err()
             .map_err(|_e| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?
-            .ok_or(RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
+            .ok_or_else(|| RemoteAgreementError::NotFound(msg.agreement_id.clone()))?;
 
         if agreement.requestor_id != caller {
             // Don't reveal, that we know this Agreement id.
@@ -648,7 +646,7 @@ async fn agreement_cancelled(
         }
 
         validate_transition(&agreement, AgreementState::Cancelled).map_err(|_| {
-            RemoteAgreementError::InvalidState(agreement.id.clone(), agreement.state.clone())
+            RemoteAgreementError::InvalidState(agreement.id.clone(), agreement.state)
         })?;
 
         dao.cancel(&agreement.id, msg.reason.clone(), &msg.cancellation_ts)
@@ -680,7 +678,7 @@ impl From<GetProposalError> for RemoteProposeAgreementError {
             GetProposalError::NotFound(id, ..) => RemoteProposeAgreementError::NotFound(id),
             GetProposalError::Internal(id, _, original_msg) => {
                 RemoteProposeAgreementError::Unexpected {
-                    public_msg: format!("Failed to get proposal from db [{}].", id.to_string()),
+                    public_msg: format!("Failed to get proposal from db [{}].", id),
                     original_msg,
                 }
             }

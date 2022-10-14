@@ -1,18 +1,18 @@
 [package]
 name = "ya-version"
-version = "0.1.0"
+version = "0.2.0"
 description = "Version handling"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
-ya-client = "0.6"
+ya-client = "0.7"
 ya-compile-time-utils = "0.2"
-ya-core-model = { version = "^0.6", features = ["version"] }
-ya-persistence = "0.2"
+ya-core-model = { version = "^0.8", features = ["version"] }
+ya-persistence = "0.3"
 ya-service-api = "0.1"
-ya-service-api-interfaces = "0.1"
-ya-service-bus = "0.4"
+ya-service-api-interfaces = "0.2"
+ya-service-bus = "0.6"
 
 actix-web = "4"
 anyhow = "1.0"

@@ -84,7 +84,7 @@ mod test {
         .unwrap();
         let info = TaskInfo::from(&view).unwrap();
 
-        assert_eq!(info.multi_activity, true);
+        assert!(info.multi_activity);
     }
 
     pub static SAMPLE_AGREEMENT_MULTI_FALSE: &str = r#"{
@@ -105,7 +105,7 @@ mod test {
         .unwrap();
         let info = TaskInfo::from(&view).unwrap();
 
-        assert_eq!(info.multi_activity, false);
+        assert!(!info.multi_activity);
     }
 
     pub static SAMPLE_AGREEMENT_MULTI_EMPTY: &str = r#"{
@@ -125,6 +125,6 @@ mod test {
         .unwrap();
         let info = TaskInfo::from(&view).unwrap();
 
-        assert_eq!(info.multi_activity, false);
+        assert!(!info.multi_activity);
     }
 }

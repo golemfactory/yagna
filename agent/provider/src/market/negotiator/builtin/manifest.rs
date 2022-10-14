@@ -7,20 +7,28 @@ use std::ops::Not;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
+use url::Url;
 use ya_agreement_utils::{Error, ProposalView};
-use ya_manifest_utils::manifest::{
-    decode_manifest, Feature, Signature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_PROPERTY,
-    DEMAND_MANIFEST_SIG_PROPERTY,
+use ya_manifest_utils::matching::domain::{
+    DomainWhitelistState, DomainsMatcher, SharedDomainMatchers,
 };
+use ya_manifest_utils::matching::Matcher;
 use ya_manifest_utils::policy::{Keystore, Match, Policy, PolicyConfig};
+use ya_manifest_utils::{
+    decode_manifest, AppManifest, Feature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
+    DEMAND_MANIFEST_PROPERTY, DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY, DEMAND_MANIFEST_SIG_PROPERTY,
+};
 use ya_negotiators::component::{RejectReason, Score};
 use ya_negotiators::factory::{LoadMode, NegotiatorConfig};
 use ya_negotiators::{NegotiationResult, NegotiatorComponent};
 
+use crate::market::negotiator::*;
+
 #[derive(Default)]
 pub struct ManifestSignature {
     enabled: bool,
-    trusted_keys: Keystore,
+    keystore: Keystore,
+    whitelist_matcher: DomainsMatcher,
 }
 
 impl NegotiatorComponent for ManifestSignature {
@@ -35,50 +43,44 @@ impl NegotiatorComponent for ManifestSignature {
                 proposal: ours,
                 score,
             });
+            log::trace!("Manifest signature verification disabled.");
+            return acceptance(ours, score);
         }
 
-        let manifest = match their.get_property::<String>(DEMAND_MANIFEST_PROPERTY) {
-            Err(Error::NoKey(_)) => {
-                return Ok(NegotiationResult::Ready {
-                    proposal: ours,
-                    score,
-                })
-            }
-            Err(e) => return rejection(format!("invalid manifest type: {:?}", e)),
-            Ok(s) => match decode_manifest(s) {
-                Ok(manifest) => manifest,
+        let demand = match their.get_property::<String>(DEMAND_MANIFEST_PROPERTY) {
+            Ok(manifest_encoded) => match decode_manifest(&manifest_encoded) {
+                Ok(manifest) => DemandWithManifest {
+                    demand: their,
+                    manifest_encoded,
+                    manifest,
+                },
                 Err(e) => return rejection(format!("invalid manifest: {:?}", e)),
             },
+            Err(Error::NoKey(_)) => return acceptance(ours, score),
+            Err(e) => return rejection(format!("invalid manifest type: {:?}", e)),
         };
 
-        if manifest.features().is_empty() {
-            return Ok(NegotiationResult::Ready {
-                proposal: ours,
-                score,
-            });
-        }
-
-        let pub_key = match verify_signature(their) {
-            Ok(pub_key) => pub_key,
-            Err(e) => return rejection(format!("invalid manifest signature: {:?}", e)),
-        };
-
-        if self.trusted_keys.contains(pub_key.as_slice()) {
-            Ok(NegotiationResult::Ready {
-                proposal: ours,
-                score,
-            })
+        if demand.has_signature() {
+            match demand.verify_signature(&self.keystore) {
+                Ok(()) => acceptance(ours, score),
+                Err(err) => rejection(format!("failed to verify manifest signature: {}", err)),
+            }
+        } else if demand.requires_signature(&self.whitelist_matcher) {
+            rejection("manifest requires signature but it has none".to_string())
         } else {
-            rejection("manifest not signed by a trusted authority".to_string())
+            log::trace!("No signature required. No signature provided.");
+            acceptance(ours, score)
         }
     }
 
     fn control_event(&mut self, _component: &str, params: Value) -> anyhow::Result<Value> {
-        let event: UpdateKeystore =
-            serde_json::from_value(params).map_err(|e| anyhow!("Unrecognized event: {e}"))?;
-
-        self.trusted_keys = Keystore::load(event.keystore_path)
-            .map_err(|e| anyhow!("Failed to load keystore file: {e}"))?;
+        if let Some(event) = serde_json::from_value::<UpdateKeystore>(params.clone()) {
+            self.trusted_keys = Keystore::load(event.keystore_path)
+                .map_err(|e| anyhow!("Failed to load keystore file: {e}"))?;
+        } else if let Some(event) = serde_json::from_value::<UpdateWhitelist>(params) {
+            self.whitelist_matcher = DomainsMatcher::load_or_create(&event.whitelist_path)
+                .map_err(|e| anyhow!("Failed to load keystore file: {e}"))?;
+        }
 
         // No return value.
         Ok(Value::Null)
@@ -90,6 +92,13 @@ impl NegotiatorComponent for ManifestSignature {
 #[rtype(result = "anyhow::Result<serde_json::Value>")]
 pub struct UpdateKeystore {
     pub keystore_path: PathBuf,
+}
+
+// Control event sent to negotiator, that should cause whitelist update.
+#[derive(Message, Clone, Debug, Serialize, Deserialize)]
+#[rtype(result = "anyhow::Result<serde_json::Value>")]
+pub struct UpdateWhitelist {
+    pub whitelist_path: PathBuf,
 }
 
 impl ManifestSignature {
@@ -130,10 +139,79 @@ impl From<PolicyConfig> for ManifestSignature {
             }
         };
 
+        let whitelist_matcher = config.domain_patterns.matchers.clone();
+        let keystore = config.trusted_keys.unwrap_or_default();
         ManifestSignature {
             enabled,
-            trusted_keys: config.trusted_keys.unwrap_or_default(),
+            keystore,
+            whitelist_matcher,
         }
+    }
+}
+
+struct DemandWithManifest<'demand> {
+    demand: &'demand ProposalView,
+    manifest_encoded: String,
+    manifest: AppManifest,
+}
+
+impl<'demand> DemandWithManifest<'demand> {
+    fn has_signature(&self) -> bool {
+        self.demand
+            .get_property::<String>(DEMAND_MANIFEST_SIG_PROPERTY)
+            .is_ok()
+    }
+
+    fn requires_signature(&self, whitelist_matcher: &DomainsMatcher) -> bool {
+        let features = self.manifest.features();
+        if features.is_empty() {
+            log::debug!("No features in demand. Signature not required.");
+            return false;
+        // Inet is the only feature
+        } else if features.contains(&Feature::Inet) && features.len() == 1 {
+            if let Some(urls) = self
+                .manifest
+                .comp_manifest
+                .as_ref()
+                .and_then(|comp| comp.net.as_ref())
+                .and_then(|net| net.inet.as_ref())
+                .and_then(|inet| inet.out.as_ref())
+                .and_then(|out| out.urls.as_ref())
+            {
+                let matcher = whitelist_matcher;
+                let non_whitelisted_urls: Vec<&str> = urls
+                    .iter()
+                    .flat_map(Url::host_str)
+                    .filter(|domain| matcher.matches(domain).not())
+                    .collect();
+                if non_whitelisted_urls.is_empty() {
+                    log::debug!("Demand does not require signature. Every URL on whitelist");
+                    return false;
+                }
+                log::debug!(
+                    "Demand requires signature. Non whitelisted URLs: {:?}",
+                    non_whitelisted_urls
+                );
+                return true;
+            }
+        }
+        log::debug!("Demand requires signature.");
+        true
+    }
+
+    fn verify_signature(&self, keystore: &Keystore) -> anyhow::Result<()> {
+        let sig = self
+            .demand
+            .get_property::<String>(DEMAND_MANIFEST_SIG_PROPERTY)?;
+        log::trace!("sig_hex: {}", sig);
+        let sig_alg: String = self
+            .demand
+            .get_property(DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY)?;
+        log::trace!("sig_alg: {}", sig_alg);
+        let cert: String = self.demand.get_property(DEMAND_MANIFEST_CERT_PROPERTY)?;
+        log::trace!("cert: {}", cert);
+        log::trace!("manifest: {}", &self.manifest_encoded);
+        keystore.verify_signature(cert, sig, sig_alg, &self.manifest_encoded)
     }
 }
 
@@ -144,13 +222,11 @@ fn rejection(message: String) -> anyhow::Result<NegotiationResult> {
     })
 }
 
-fn verify_signature(demand: &ProposalView) -> anyhow::Result<Vec<u8>> {
-    let manifest: String = demand.get_property(DEMAND_MANIFEST_PROPERTY)?;
-    log::debug!("manifest: {}", manifest);
-    let sig_hex: String = demand.get_property(DEMAND_MANIFEST_SIG_PROPERTY)?;
-    log::debug!("sig_hex: {}", sig_hex);
-    let sig = Signature::Secp256k1Hex(sig_hex);
-    Ok(sig.verify_str(manifest)?)
+fn acceptance(offer: ProposalView, score: Score) -> anyhow::Result<NegotiationResult> {
+    Ok(NegotiationResult::Ready {
+        proposal: offer,
+        score,
+    })
 }
 
 #[cfg(test)]
@@ -192,7 +268,7 @@ mod tests {
             --policy-disable-component manifest_signature_validation \
             --policy-trust-property {}={}",
             CAPABILITIES_PROPERTY,
-            Feature::Inet.to_string()
+            Feature::Inet
         ));
         assert!(!policy.enabled);
 
@@ -200,7 +276,7 @@ mod tests {
             "TEST \
             --policy-trust-property {}={}",
             CAPABILITIES_PROPERTY,
-            Feature::Inet.to_string()
+            Feature::Inet
         ));
         assert!(!policy.enabled);
 

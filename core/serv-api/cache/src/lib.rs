@@ -5,6 +5,7 @@ use std::hash::Hash;
 use std::pin::Pin;
 use std::time::{Duration, SystemTime};
 
+#[allow(clippy::type_complexity)]
 pub trait ValueResolver {
     type Key: Clone;
     type Value: Clone;
@@ -114,7 +115,7 @@ where
         }
 
         self.ord.push(Reverse(KeyTimeEntry {
-            time: now.clone(),
+            time: now,
             key: key.clone(),
         }));
         self.map.insert(key, (now, value));
@@ -143,12 +144,6 @@ impl<K: Clone> PartialOrd for KeyTimeEntry<K> {
 
 impl<K: Clone> Ord for KeyTimeEntry<K> {
     fn cmp(&self, other: &Self) -> Ordering {
-        if self.time > other.time {
-            Ordering::Greater
-        } else if self.time == other.time {
-            Ordering::Equal
-        } else {
-            Ordering::Less
-        }
+        self.time.cmp(&other.time)
     }
 }

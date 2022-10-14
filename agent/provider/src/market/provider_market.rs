@@ -224,8 +224,8 @@ impl ProviderMarket {
             config: Arc::new(config),
             subscriptions: HashMap::new(),
             postponed_demands: Vec::new(),
-            agreement_signed_signal: SignalSlot::<NewAgreement>::new(),
-            agreement_terminated_signal: SignalSlot::<CloseAgreement>::new(),
+            agreement_signed_signal: SignalSlot::<NewAgreement>::default(),
+            agreement_terminated_signal: SignalSlot::<CloseAgreement>::default(),
             handles: HashMap::new(),
             callbacks: Some(callbacks),
         })
@@ -282,13 +282,13 @@ async fn subscribe(
 async fn unsubscribe_all(api: Arc<MarketProviderApi>, subscriptions: Vec<String>) -> Result<()> {
     for subscription in subscriptions.iter() {
         log::info!("Unsubscribing: {}", subscription);
-        api.unsubscribe(&subscription).await?;
+        api.unsubscribe(subscription).await?;
     }
     Ok(())
 }
 
 async fn dispatch_events(ctx: AsyncCtx, events: Vec<ProviderEvent>, subscription: &Subscription) {
-    if events.len() == 0 {
+    if events.is_empty() {
         return;
     };
 
@@ -677,12 +677,12 @@ impl Handler<ReSubscribe> for ProviderMarket {
         let to_resubscribe = self
             .subscriptions
             .values()
-            .filter(|sub| &sub.id == &msg.0)
+            .filter(|sub| sub.id == msg.0)
             .cloned()
             .map(|sub| (sub.id.clone(), sub))
             .collect::<HashMap<String, Subscription>>();
 
-        if to_resubscribe.len() > 0 {
+        if !to_resubscribe.is_empty() {
             return ActorResponse::r#async(
                 resubscribe_offers(ctx.address(), self.api.clone(), to_resubscribe)
                     .into_actor(self)
@@ -746,18 +746,19 @@ impl Handler<Shutdown> for ProviderMarket {
     type Result = ResponseFuture<Result<(), Error>>;
 
     fn handle(&mut self, _msg: Shutdown, ctx: &mut Context<Self>) -> Self::Result {
-        for (_, handle) in self.handles.drain().into_iter() {
+        for (_, handle) in self.handles.drain() {
             ctx.cancel_future(handle);
         }
 
         let market = ctx.address();
         async move {
-            Ok(market
+            market
                 .send(Unsubscribe(OfferKind::Any))
                 .await?
                 .map_err(|e| log::warn!("Failed to unsubscribe Offers. {}", e))
                 .ok()
-                .unwrap_or(()))
+                .unwrap_or(());
+            Ok(())
         }
         .boxed_local()
     }
@@ -771,7 +772,7 @@ impl Handler<OnAgreementTerminated> for ProviderMarket {
         let reason = msg
             .reason
             .map(|msg| msg.message)
-            .unwrap_or("NotSpecified".to_string());
+            .unwrap_or_else(|| "NotSpecified".to_string());
 
         log::info!(
             "Agreement [{}] terminated by Requestor. Reason: {}",
@@ -840,10 +841,10 @@ async fn terminate_agreement(api: Arc<MarketProviderApi>, msg: AgreementFinalize
         ProviderAgreementResult::ClosedByUs => GolemReason::success(),
         ProviderAgreementResult::BrokenByUs { reason } => GolemReason::new(reason),
         // No need to terminate, because Requestor already did it.
-        ProviderAgreementResult::ClosedByRequestor => return (),
+        ProviderAgreementResult::ClosedByRequestor => return,
         ProviderAgreementResult::BrokenByRequestor { .. } => return (),
         // No need to terminate since we didn't have Agreement with Requestor.
-        ProviderAgreementResult::ApprovalFailed => return (),
+        ProviderAgreementResult::ApprovalFailed => return,
     };
 
     log::info!(
@@ -864,7 +865,7 @@ async fn terminate_agreement(api: Arc<MarketProviderApi>, msg: AgreementFinalize
                     e,
                     repeats.max_elapsed_time,
                 );
-                return ();
+                return;
             }
         };
 
@@ -981,7 +982,7 @@ impl Handler<AgreementFinalized> for ProviderMarket {
 
             log::info!("Re-negotiating all demands");
 
-            let demands = std::mem::replace(&mut myself.postponed_demands, Vec::new());
+            let demands = std::mem::take(&mut myself.postponed_demands);
             ctx.spawn(
                 renegotiate_demands(async_ctx, myself.subscriptions.clone(), demands)
                     .into_actor(myself),
@@ -999,7 +1000,7 @@ impl Handler<AgreementClosed> for ProviderMarket {
 
     fn handle(&mut self, msg: AgreementClosed, ctx: &mut Context<Self>) -> Self::Result {
         let msg = AgreementFinalized::from(msg);
-        let myself = ctx.address().clone();
+        let myself = ctx.address();
 
         async move { myself.send(msg).await? }.boxed_local()
     }
@@ -1012,7 +1013,7 @@ impl Handler<AgreementBroken> for ProviderMarket {
 
     fn handle(&mut self, msg: AgreementBroken, ctx: &mut Context<Self>) -> Self::Result {
         let msg = AgreementFinalized::from(msg);
-        let myself = ctx.address().clone();
+        let myself = ctx.address();
 
         async move { myself.send(msg).await? }.boxed_local()
     }
@@ -1025,7 +1026,7 @@ impl Handler<Unsubscribe> for ProviderMarket {
         let subscriptions = match msg.0 {
             OfferKind::Any => {
                 log::info!("Unsubscribing all active offers");
-                std::mem::replace(&mut self.subscriptions, HashMap::new())
+                std::mem::take(&mut self.subscriptions)
                     .into_iter()
                     .map(|(k, _)| k)
                     .collect::<Vec<_>>()
@@ -1107,13 +1108,14 @@ actix_signal_handler!(ProviderMarket, NewAgreement, agreement_signed_signal);
 
 fn get_backoff() -> backoff::ExponentialBackoff {
     // TODO: We could have config for Market actor to be able to set at least initial interval.
-    let mut backoff = backoff::ExponentialBackoff::default();
-    backoff.current_interval = std::time::Duration::from_secs(5);
-    backoff.initial_interval = std::time::Duration::from_secs(5);
-    backoff.multiplier = 1.5f64;
-    backoff.max_interval = std::time::Duration::from_secs(60 * 60);
-    backoff.max_elapsed_time = Some(std::time::Duration::from_secs(u64::max_value()));
-    backoff
+    backoff::ExponentialBackoff {
+        current_interval: std::time::Duration::from_secs(5),
+        initial_interval: std::time::Duration::from_secs(5),
+        multiplier: 1.5f64,
+        max_interval: std::time::Duration::from_secs(60 * 60),
+        max_elapsed_time: Some(std::time::Duration::from_secs(u64::max_value())),
+        ..Default::default()
+    }
 }
 
 // =========================================== //

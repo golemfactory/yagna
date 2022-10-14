@@ -3,7 +3,9 @@ pub(crate) mod cli;
 mod client;
 mod codec;
 mod crypto;
+mod rest_api;
 mod service;
 
 pub use api::*;
+pub use rest_api::web_scope;
 pub use service::{start_network, Net};

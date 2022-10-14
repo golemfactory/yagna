@@ -6,7 +6,7 @@ use serde::Serialize;
 use std::convert::TryFrom;
 use ya_client_model::payment::{InvoiceEvent, InvoiceEventType};
 use ya_client_model::NodeId;
-use ya_persistence::types::Role;
+use ya_persistence::types::{AdaptTimestamp, Role, TimestampAdapter};
 
 #[derive(Debug, Identifiable, Insertable)]
 #[table_name = "pay_invoice_event"]
@@ -16,6 +16,7 @@ pub struct WriteObj {
     pub owner_id: NodeId,
     pub event_type: String,
     pub details: Option<String>,
+    pub timestamp: TimestampAdapter,
 }
 
 impl WriteObj {
@@ -29,11 +30,13 @@ impl WriteObj {
             Some(details) => Some(json_to_string(&details)?),
             None => None,
         };
+
         Ok(Self {
             invoice_id,
             owner_id,
             event_type: event_type.to_string(),
             details,
+            timestamp: Utc::now().adapt(),
         })
     }
 }

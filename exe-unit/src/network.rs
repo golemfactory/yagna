@@ -1,8 +1,9 @@
 use std::convert::TryFrom;
 use std::path::Path;
 
-use futures::channel::mpsc;
+use bytes::{Buf, BytesMut};
 use futures::Stream;
+use tokio::sync::mpsc;
 
 use ya_runtime_api::deploy::ContainerEndpoint;
 use ya_runtime_api::server::Network;
@@ -18,7 +19,7 @@ pub(crate) mod inet;
 pub(crate) mod vpn;
 
 pub(crate) struct Endpoint {
-    tx: mpsc::Sender<Result<Vec<u8>>>,
+    tx: mpsc::UnboundedSender<Result<Vec<u8>>>,
     rx: Option<Box<dyn Stream<Item = Result<Vec<u8>>> + Unpin>>,
 }
 
@@ -32,24 +33,49 @@ impl Endpoint {
 
     #[cfg(unix)]
     async fn connect_to_socket<P: AsRef<Path>>(path: P) -> Result<Self> {
-        use bytes::Bytes;
-        use futures::{future, SinkExt, StreamExt, TryStreamExt};
-        use tokio::io;
-        use tokio_util::codec::{BytesCodec, FramedRead, FramedWrite};
+        use futures::StreamExt;
+        use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
+        use tokio_stream::wrappers::UnboundedReceiverStream;
+
+        const BUFFER_SIZE: usize = (DEFAULT_MAX_FRAME_SIZE + 2) * 4;
+
+        type SocketChannel = (
+            mpsc::UnboundedSender<Result<Vec<u8>>>,
+            mpsc::UnboundedReceiver<Result<Vec<u8>>>,
+        );
 
         let socket = tokio::net::UnixStream::connect(path.as_ref()).await?;
-        let (read, write) = io::split(socket);
+        let (read, mut write) = io::split(socket);
+        let (tx_si, rx_si): SocketChannel = mpsc::unbounded_channel();
 
-        let sink = FramedWrite::new(write, BytesCodec::new()).with(|v| future::ok(Bytes::from(v)));
-        let stream = FramedRead::with_capacity(read, BytesCodec::new(), DEFAULT_MAX_FRAME_SIZE)
-            .into_stream()
-            .map_ok(|b| b.to_vec())
-            .map_err(Error::from);
+        let stream = {
+            let buffer: [u8; BUFFER_SIZE] = [0u8; BUFFER_SIZE];
+            futures::stream::unfold((read, buffer), |(mut r, mut b)| async move {
+                match r.read(&mut b).await {
+                    Ok(0) => None,
+                    Ok(n) => Some((Ok(b[..n].to_vec()), (r, b))),
+                    Err(e) => Some((Err(e.into()), (r, b))),
+                }
+            })
+            .boxed_local()
+        };
 
-        let (tx_si, rx_si) = mpsc::channel(1);
-        tokio::task::spawn_local(async move {
-            if let Err(e) = rx_si.forward(sink).await {
-                log::error!("Socket endpoint error: {}", e);
+        tokio::task::spawn(async move {
+            let mut rx_si = UnboundedReceiverStream::new(rx_si);
+            loop {
+                match StreamExt::next(&mut rx_si).await {
+                    Some(Ok(data)) => {
+                        if let Err(e) = write.write_all(data.as_slice()).await {
+                            log::error!("error writing to VM socket endpoint: {e}");
+                            break;
+                        }
+                    }
+                    Some(Err(e)) => {
+                        log::error!("VM socket endpoint error: {e}");
+                        break;
+                    }
+                    None => break,
+                }
             }
         });
 
@@ -89,69 +115,46 @@ impl<'a> TryFrom<&'a DeploymentNetwork> for Network {
 type Prefix = u16;
 const PREFIX_SIZE: usize = std::mem::size_of::<Prefix>();
 
-pub(self) struct RxBuffer {
-    expected: usize,
-    inner: Vec<u8>,
+pub struct RxBuffer {
+    inner: BytesMut,
 }
 
 impl Default for RxBuffer {
     fn default() -> Self {
         Self {
-            expected: 0,
-            inner: Vec::with_capacity(PREFIX_SIZE + DEFAULT_MAX_FRAME_SIZE),
+            inner: BytesMut::with_capacity(2 * (PREFIX_SIZE + DEFAULT_MAX_FRAME_SIZE)),
         }
     }
 }
 
 impl RxBuffer {
     pub fn process(&mut self, received: Vec<u8>) -> RxIterator {
-        RxIterator {
-            buffer: self,
-            received,
-        }
+        self.inner.extend(received);
+        RxIterator { buffer: self }
     }
 }
 
-struct RxIterator<'a> {
+pub struct RxIterator<'a> {
     buffer: &'a mut RxBuffer,
-    received: Vec<u8>,
 }
 
 impl<'a> Iterator for RxIterator<'a> {
     type Item = Vec<u8>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.buffer.expected > 0 && self.received.len() > 0 {
-            let len = self.buffer.expected.min(self.received.len());
-            self.buffer.inner.extend(self.received.drain(..len));
-        }
-
         if let Some(len) = read_prefix(&self.buffer.inner) {
-            if let Some(item) = take_next(&mut self.buffer.inner, len) {
-                self.buffer.expected = read_prefix(&self.buffer.inner).unwrap_or(0) as usize;
-                return Some(item);
-            }
+            return take_next(&mut self.buffer.inner, len);
         }
-
-        if let Some(len) = read_prefix(&self.received) {
-            if let Some(item) = take_next(&mut self.received, len) {
-                return Some(item);
-            }
-        }
-
-        self.buffer.inner.append(&mut self.received);
-        if let Some(len) = read_prefix(&self.buffer.inner) {
-            self.buffer.expected = len as usize;
-        }
-
         None
     }
 }
 
-fn take_next(src: &mut Vec<u8>, len: Prefix) -> Option<Vec<u8>> {
-    let p_len = PREFIX_SIZE + len as usize;
+fn take_next(src: &mut BytesMut, len: Prefix) -> Option<Vec<u8>> {
+    let len = len as usize;
+    let p_len = PREFIX_SIZE + len;
     if src.len() >= p_len {
-        return Some(src.drain(..p_len).skip(PREFIX_SIZE).collect());
+        src.advance(PREFIX_SIZE);
+        return Some(src.split_to(len).to_vec());
     }
     None
 }
@@ -174,7 +177,7 @@ fn write_prefix(dst: &mut Vec<u8>) {
 fn gsb_endpoint(node_id: &str, net_id: &str) -> DuoEndpoint<GsbEndpoint> {
     DuoEndpoint {
         tcp: typed::service(format!("/net/{}/vpn/{}", node_id, net_id)),
-        udp: typed::service(format!("/udp/net/{}/vpn/{}", node_id, net_id)),
+        udp: typed::service(format!("/udp/net/{}/vpn/{}/raw", node_id, net_id)),
     }
 }
 

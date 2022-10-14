@@ -20,12 +20,10 @@ pub struct Config {
     pub host: Option<String>,
     #[structopt(env = "YA_NET_BIND_URL", default_value = "udp://0.0.0.0:11500")]
     pub bind_url: Url,
-    #[structopt(env = "YA_NET_BROADCAST_SIZE", default_value = "12")]
+    #[structopt(env = "YA_NET_BROADCAST_SIZE", default_value = "10")]
     pub broadcast_size: u32,
     #[structopt(env = "YA_NET_SESSION_EXPIRATION", parse(try_from_str = humantime::parse_duration), default_value = "15s")]
     pub session_expiration: Duration,
-    #[structopt(env = "YA_NET_VIRTUAL_TCP_BUFFER_SIZE_MULTIPLIER", default_value = "4")]
-    pub vtcp_buffer_size_multiplier: usize,
 }
 
 impl Config {
@@ -43,6 +41,7 @@ impl Config {
 #[cfg(not(feature = "hybrid-net"))]
 impl Default for NetType {
     fn default() -> Self {
+        std::env::set_var("YA_NET_TYPE", "central");
         NetType::Central
     }
 }

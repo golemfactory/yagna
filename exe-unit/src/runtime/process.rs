@@ -91,7 +91,7 @@ impl RuntimeProcess {
         let result = child.wait_with_output()?;
         match result.status.success() {
             true => {
-                let stdout = vec_to_string(result.stdout).unwrap_or_else(String::new);
+                let stdout = vec_to_string(result.stdout).unwrap_or_default();
                 Ok(serde_json::from_str(&stdout).map_err(|e| {
                     let msg = format!("Invalid offer template [{}]: {:?}", binary.display(), e);
                     Error::Other(msg)
@@ -330,9 +330,11 @@ impl RuntimeProcess {
                 .ok_or_else(|| Error::runtime("Invalid binary name"))?;
             args.insert(0, name.to_string_lossy().to_string());
 
-            let mut run_process = RunProcess::default();
-            run_process.bin = entry_point;
-            run_process.args = args;
+            let run_process = RunProcess {
+                bin: entry_point,
+                args,
+                ..Default::default()
+            };
 
             let handle = monitor.next_process(ctx);
             if let Err(error) = service.run_process(run_process).await {
@@ -454,7 +456,7 @@ impl Handler<Shutdown> for RuntimeProcess {
         let proc = self.service.take();
         let vpn = self.vpn.take();
         let inet = self.inet.take();
-        let mut children = std::mem::replace(&mut self.children, HashSet::new());
+        let mut children = std::mem::take(&mut self.children);
 
         log::info!("Shutting down the runtime process: {:?}", msg.0);
 
@@ -535,10 +537,7 @@ struct ChildProcessGuard {
 impl ChildProcessGuard {
     fn new(inner: ChildProcess, addr: Addr<RuntimeProcess>) -> Self {
         addr.do_send(AddChildProcess(inner.clone()));
-        ChildProcessGuard {
-            inner,
-            addr: addr.clone(),
-        }
+        ChildProcessGuard { inner, addr }
     }
 }
 

@@ -1,6 +1,5 @@
 use chrono::{NaiveDateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json;
 
 use ya_client::model::{market::Offer as ClientOffer, ErrorMessage, NodeId};
 use ya_service_api_web::middleware::Identity;
@@ -82,7 +81,7 @@ impl Offer {
     pub fn into_client_offer(&self) -> Result<ClientOffer, ErrorMessage> {
         Ok(ClientOffer {
             offer_id: self.id.to_string(),
-            provider_id: self.node_id.clone(),
+            provider_id: self.node_id,
             constraints: self.constraints.clone(),
             properties: serde_json::from_str(&self.properties).map_err(|e| {
                 format!(
@@ -142,7 +141,7 @@ mod tests {
         let node_id = "0xbabe000000000000000000000000000000000000";
 
         let offer = Offer {
-            id: SubscriptionId::from_str(&false_subscription_id).unwrap(),
+            id: SubscriptionId::from_str(false_subscription_id).unwrap(),
             properties: "{}".to_string(),
             constraints: "()".to_string(),
             node_id: NodeId::from_str(node_id).unwrap(),
@@ -165,7 +164,7 @@ mod tests {
         let node_id = "0xbabe000000000000000000000000000000000000";
 
         let offer = Offer {
-            id: SubscriptionId::from_str(&offer_id).unwrap(),
+            id: SubscriptionId::from_str(offer_id).unwrap(),
             properties: "{}".to_string(),
             constraints: "()".to_string(),
             node_id: NodeId::from_str(node_id).unwrap(),

@@ -1,4 +1,5 @@
 use chrono::{Duration, NaiveDateTime, Utc};
+use std::ops::Not;
 use structopt::StructOpt;
 
 use ya_market::testing::cleaner::clean;
@@ -40,32 +41,30 @@ async fn test_agreement() {
 
     // create agreement event in 3 steps
     agreement_dao
-        .confirm(&expired_agreement.id, &None, &"signature,".to_string())
+        .confirm(&expired_agreement.id, &None, "signature,")
         .await
         .unwrap();
     agreement_dao
         .approving(
             &expired_agreement.id,
             &None,
-            &"signature,".to_string(),
+            "signature,",
             &Utc::now().naive_utc(),
         )
         .await
         .unwrap();
     agreement_dao
-        .approve(&expired_agreement.id, &"signature,".to_string())
+        .approve(&expired_agreement.id, "signature,")
         .await
         .unwrap();
 
     clean(db.clone(), &db_config()).await;
-    assert_eq!(
-        <PoolType as TestingDao<Agreement>>::exists(&db.disk_db.pool, valid_agreement.id).await,
-        true
+    assert!(
+        <PoolType as TestingDao<Agreement>>::exists(&db.disk_db.pool, valid_agreement.id).await
     );
-    assert_eq!(
-        <PoolType as TestingDao<Agreement>>::exists(&db.disk_db.pool, expired_agreement.id).await,
-        false
-    );
+    assert!(Not::not(
+        <PoolType as TestingDao<Agreement>>::exists(&db.disk_db.pool, expired_agreement.id).await
+    ));
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
@@ -85,14 +84,10 @@ async fn test_demand() {
     demand_dao.insert(&valid_demand).await.unwrap();
     demand_dao.insert(&expired_demand).await.unwrap();
     clean(db.clone(), &db_config()).await;
-    assert_eq!(
-        <PoolType as TestingDao<Demand>>::exists(&db.ram_db.pool, valid_demand.id).await,
-        true
-    );
-    assert_eq!(
-        <PoolType as TestingDao<Demand>>::exists(&db.ram_db.pool, expired_demand.id).await,
-        false
-    );
+    assert!(<PoolType as TestingDao<Demand>>::exists(&db.ram_db.pool, valid_demand.id).await);
+    assert!(Not::not(
+        <PoolType as TestingDao<Demand>>::exists(&db.ram_db.pool, expired_demand.id).await
+    ));
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
@@ -111,22 +106,18 @@ async fn test_offer() {
     let offer_dao = db.as_dao::<OfferDao>();
     let validation_ts = (Utc::now() - Duration::days(100)).naive_utc();
     offer_dao
-        .put(valid_offer.clone(), validation_ts.clone())
+        .put(valid_offer.clone(), validation_ts)
         .await
         .unwrap();
     offer_dao
-        .put(expired_offer.clone(), validation_ts.clone())
+        .put(expired_offer.clone(), validation_ts)
         .await
         .unwrap();
     clean(db.clone(), &db_config()).await;
-    assert_eq!(
-        <PoolType as TestingDao<Offer>>::exists(&db.ram_db.pool, valid_offer.id).await,
-        true
-    );
-    assert_eq!(
-        <PoolType as TestingDao<Offer>>::exists(&db.ram_db.pool, expired_offer.id).await,
-        false
-    );
+    assert!(<PoolType as TestingDao<Offer>>::exists(&db.ram_db.pool, valid_offer.id).await);
+    assert!(Not::not(
+        <PoolType as TestingDao<Offer>>::exists(&db.ram_db.pool, expired_offer.id).await
+    ));
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
@@ -143,14 +134,12 @@ async fn test_events() {
         .await
         .unwrap();
     clean(db.clone(), &db_config()).await;
-    assert_eq!(
-        <PoolType as TestingDao<TestMarketEvent>>::exists(&db.ram_db.pool, valid_event.id).await,
-        true
+    assert!(
+        <PoolType as TestingDao<TestMarketEvent>>::exists(&db.ram_db.pool, valid_event.id).await
     );
-    assert_eq!(
-        <PoolType as TestingDao<TestMarketEvent>>::exists(&db.ram_db.pool, expired_event.id).await,
-        false
-    );
+    assert!(Not::not(
+        <PoolType as TestingDao<TestMarketEvent>>::exists(&db.ram_db.pool, expired_event.id).await
+    ));
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
@@ -192,26 +181,20 @@ async fn test_proposal() {
         expired_proposals.push(proposal.clone());
     }
     clean(db.clone(), &db_config()).await;
-    assert_eq!(
-        <PoolType as TestingDao<Negotiation>>::exists(&db.ram_db.pool, valid_negotiation.id).await,
-        true
+    assert!(
+        <PoolType as TestingDao<Negotiation>>::exists(&db.ram_db.pool, valid_negotiation.id).await
     );
     for proposal in valid_proposals.into_iter() {
-        assert_eq!(
-            <PoolType as TestingDao<DbProposal>>::exists(&db.ram_db.pool, proposal.id).await,
-            true
-        );
+        assert!(<PoolType as TestingDao<DbProposal>>::exists(&db.ram_db.pool, proposal.id).await);
     }
-    assert_eq!(
+    assert!(Not::not(
         <PoolType as TestingDao<Negotiation>>::exists(&db.ram_db.pool, expired_negotiation.id)
-            .await,
-        false
-    );
+            .await
+    ));
     for proposal in expired_proposals.into_iter() {
-        assert_eq!(
-            <PoolType as TestingDao<DbProposal>>::exists(&db.ram_db.pool, proposal.id).await,
-            false
-        );
+        assert!(Not::not(
+            <PoolType as TestingDao<DbProposal>>::exists(&db.ram_db.pool, proposal.id).await
+        ));
     }
 }
 
@@ -241,9 +224,8 @@ async fn test_proposal_lotsa_negotiations() {
     }
     clean(db.clone(), &db_config()).await;
     for n in expired_negotiations {
-        assert_eq!(
-            <PoolType as TestingDao<Negotiation>>::exists(&db.ram_db.pool, n.id).await,
-            false
-        );
+        assert!(Not::not(
+            <PoolType as TestingDao<Negotiation>>::exists(&db.ram_db.pool, n.id).await
+        ));
     }
 }

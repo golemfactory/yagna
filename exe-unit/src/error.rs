@@ -146,7 +146,7 @@ impl From<Error> for RpcError {
             #[cfg(feature = "sgx")]
             Error::Crypto(e) => RpcError::Service(e.to_string()),
             #[cfg(feature = "sgx")]
-            Error::Attestation(e) => RpcError::Service(e.to_string()),
+            Error::Attestation(e) => RpcError::Service(e),
         }
     }
 }

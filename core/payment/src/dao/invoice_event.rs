@@ -13,7 +13,7 @@ use ya_client_model::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
 };
-use ya_persistence::types::Role;
+use ya_persistence::types::{AdaptTimestamp, Role};
 
 pub fn create<T: Serialize>(
     invoice_id: String,
@@ -68,7 +68,7 @@ impl<'c> InvoiceEventDao<'c> {
                 .order_by(read_dsl::timestamp.asc())
                 .into_boxed();
             if let Some(timestamp) = after_timestamp {
-                query = query.filter(read_dsl::timestamp.gt(timestamp));
+                query = query.filter(read_dsl::timestamp.gt(timestamp.adapt()));
             }
             if let Some(app_session_id) = app_session_id {
                 query = query.filter(read_dsl::app_session_id.eq(app_session_id));

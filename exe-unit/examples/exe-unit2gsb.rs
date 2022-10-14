@@ -82,8 +82,8 @@ mod mock_activity {
 
         fn started(&mut self, ctx: &mut Self::Context) {
             let addr = ctx.address();
-            actix_rpc::bind::<SetState>(&super::ACTIVITY_BUS_ID, addr.clone().recipient());
-            actix_rpc::bind::<SetUsage>(&super::ACTIVITY_BUS_ID, addr.clone().recipient());
+            actix_rpc::bind::<SetState>(super::ACTIVITY_BUS_ID, addr.clone().recipient());
+            actix_rpc::bind::<SetUsage>(super::ACTIVITY_BUS_ID, addr.recipient());
         }
     }
 
@@ -108,7 +108,10 @@ mod mock_activity {
 
 #[actix_rt::main]
 async fn main() -> anyhow::Result<()> {
-    env::set_var("RUST_LOG", env::var("RUST_LOG").unwrap_or("info".into()));
+    env::set_var(
+        "RUST_LOG",
+        env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
+    );
     env_logger::init();
 
     let args: Cli = Cli::from_args();
