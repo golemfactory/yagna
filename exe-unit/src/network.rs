@@ -34,9 +34,6 @@ type SocketChannel = (
     mpsc::UnboundedReceiver<Result<Vec<u8>>>,
 );
 
-pub type Prefix = u32;
-pub const PREFIX_SIZE: usize = size_of::<Prefix>();
-
 const SOCKET_BUFFER_SIZE: usize = 2097152;
 const BUFFER_SIZE: usize = DEFAULT_MAX_FRAME_SIZE * 4;
 
@@ -213,8 +210,12 @@ pub(crate) struct RemoteEndpoint {
 }
 
 impl RemoteEndpoint {
+    // legacy socket endpoint (non-virtio)
     #[cfg(unix)]
     async fn unix<P: AsRef<Path>>(path: P) -> Result<Self> {
+        const PREFIX_SIZE: usize = size_of::<u16>();
+        const PREFIX_NE: bool = true;
+
         type SocketChannel = (
             mpsc::UnboundedSender<Result<Vec<u8>>>,
             mpsc::UnboundedReceiver<Result<Vec<u8>>>,
@@ -230,9 +231,8 @@ impl RemoteEndpoint {
         let (read, write) = io::split(socket);
         let (tx, rx): SocketChannel = mpsc::unbounded_channel();
 
-        let prefix_ne = true;
-        let stream = async_read_stream::<BUFFER_SIZE, _>(read, PREFIX_SIZE, prefix_ne);
-        let writer = async_write_future(rx, write, PREFIX_SIZE, prefix_ne);
+        let stream = async_read_stream::<BUFFER_SIZE, _>(read, PREFIX_SIZE, PREFIX_NE);
+        let writer = async_write_future(rx, write, PREFIX_SIZE, PREFIX_NE);
 
         tokio::task::spawn(writer);
 
@@ -248,6 +248,9 @@ impl RemoteEndpoint {
     }
 
     async fn tcp(addr: SocketAddr) -> Result<Self> {
+        const PREFIX_SIZE: usize = size_of::<u32>();
+        const PREFIX_NE: bool = false;
+
         type SocketChannel = (
             mpsc::UnboundedSender<Result<Vec<u8>>>,
             mpsc::UnboundedReceiver<Result<Vec<u8>>>,
@@ -272,9 +275,8 @@ impl RemoteEndpoint {
         let (tx, rx): SocketChannel = mpsc::unbounded_channel();
 
         log::info!("Spawning TCP endpoint event loop");
-        let prefix_ne = false;
-        let stream = async_read_stream::<BUFFER_SIZE, _>(read, PREFIX_SIZE, prefix_ne);
-        let writer = async_write_future(rx, write, PREFIX_SIZE, prefix_ne);
+        let stream = async_read_stream::<BUFFER_SIZE, _>(read, PREFIX_SIZE, PREFIX_NE);
+        let writer = async_write_future(rx, write, PREFIX_SIZE, PREFIX_NE);
 
         tokio::task::spawn(writer);
 
@@ -578,12 +580,14 @@ impl_prefix!(u128, prefix_u128);
 
 #[cfg(test)]
 mod test {
-    use crate::network::{RxBufferStream, PREFIX_SIZE};
+    use crate::network::RxBufferStream;
     use bytes::BytesMut;
     use futures::StreamExt;
     use std::iter::FromIterator;
 
     use super::write_prefix;
+
+    const PREFIX_SIZE: usize = std::mem::size_of::<u32>();
 
     #[derive(Copy, Clone)]
     enum TxMode {
