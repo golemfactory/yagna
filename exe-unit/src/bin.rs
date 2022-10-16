@@ -315,6 +315,10 @@ async fn run() -> anyhow::Result<()> {
 
 #[actix_rt::main]
 async fn main() {
+    std::panic::set_hook(Box::new(|e| {
+        log::error!("ExeUnit Supervisor panic: {e}");
+    }));
+
     if let Err(error) = start_file_logger() {
         start_logger().expect("Failed to start logging");
         log::warn!("Using fallback logging due to an error: {:?}", error);
