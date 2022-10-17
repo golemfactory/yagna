@@ -315,8 +315,10 @@ async fn run() -> anyhow::Result<()> {
 
 #[actix_rt::main]
 async fn main() {
-    std::panic::set_hook(Box::new(|e| {
+    let panic_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |e| {
         log::error!("ExeUnit Supervisor panic: {e}");
+        panic_hook(e)
     }));
 
     if let Err(error) = start_file_logger() {
