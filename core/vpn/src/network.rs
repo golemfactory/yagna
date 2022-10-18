@@ -2,6 +2,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::convert::TryFrom;
 use std::net::IpAddr;
 use std::ops::DerefMut;
+use std::rc::Rc;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -9,14 +10,16 @@ use actix::prelude::*;
 use futures::channel::oneshot::Canceled;
 use futures::channel::{mpsc, oneshot};
 use futures::{future, future::BoxFuture, Future, FutureExt, SinkExt, TryFutureExt};
-use smoltcp::iface::Route;
-use smoltcp::socket::{Socket, SocketHandle};
-use smoltcp::wire::{IpAddress, IpCidr, IpEndpoint};
+use smoltcp::iface::{Route, SocketHandle};
+use smoltcp::socket::Socket;
+use smoltcp::wire::{EthernetAddress, HardwareAddress, IpAddress, IpCidr, IpEndpoint};
 use uuid::Uuid;
+use ya_utils_networking::vpn::socket::SocketExt;
+use ya_utils_networking::vpn::stack::interface::{add_iface_route, tap_iface};
 
 use crate::message::*;
 use crate::socket::*;
-use crate::stack::Stack;
+// use crate::stack::Stack;
 use crate::Result;
 
 use ya_core_model::activity::{VpnControl, VpnPacket};
@@ -24,9 +27,11 @@ use ya_core_model::NodeId;
 use ya_service_bus::typed::{self, Endpoint};
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcEnvelope, RpcRawCall};
 use ya_utils_networking::vpn::common::{to_ip, to_net};
+use ya_utils_networking::vpn::stack::{self as net, StackConfig};
 use ya_utils_networking::vpn::*;
 
 const STACK_POLL_INTERVAL: Duration = Duration::from_millis(2500);
+const DEFAULT_MAX_PACKET_SIZE: usize = 65536;
 
 pub struct VpnSupervisor {
     networks: HashMap<String, Addr<Vpn>>,
@@ -99,10 +104,30 @@ impl VpnSupervisor {
         };
 
         let vpn_net = Network::new(&net_id, net);
+
         let actor = self
             .arbiter
             .spawn_ext(async move {
-                let stack = Stack::new(net_ip, net_route(net_gw)?);
+                //TODO Rafał tune it & move to func
+                let config = Rc::new(StackConfig {
+                    max_transmission_unit: DEFAULT_MAX_PACKET_SIZE,
+                    ..Default::default()
+                });
+
+                let ethernet_addr = loop {
+                    let addr = EthernetAddress(rand::random());
+                    if addr.is_unicast() {
+                        break addr;
+                    }
+                };
+
+                let mut iface = tap_iface(
+                    HardwareAddress::Ethernet(ethernet_addr),
+                    config.max_transmission_unit,
+                );
+
+                add_iface_route(&mut iface, net_ip, net_route(net_gw)?);
+                let stack = net::Stack::new(iface, config.clone());
                 let vpn = Vpn::new(node_id, stack, vpn_net);
                 Ok::<_, Error>(vpn.start())
             })
@@ -187,14 +212,14 @@ impl VpnSupervisor {
 pub struct Vpn {
     node_id: String,
     vpn: Network<network::DuoEndpoint<Endpoint>>,
-    stack: Stack<'static>,
+    stack: net::Stack<'static>,
     connections: HashMap<SocketHandle, Connection>,
 }
 
 impl Vpn {
     pub fn new(
         node_id: NodeId,
-        stack: Stack<'static>,
+        stack: net::Stack<'static>,
         vpn: Network<network::DuoEndpoint<Endpoint>>,
     ) -> Self {
         Self {
@@ -232,7 +257,7 @@ impl Vpn {
             let socket: &mut Socket = socket_ref.deref_mut();
             let handle = socket.handle();
 
-            if !socket.is_open() {
+            if socket.is_closed() {
                 addr.do_send(Disconnect::new(handle, DisconnectReason::SocketClosed));
                 continue;
             }
@@ -570,8 +595,7 @@ impl Handler<Disconnect> for Vpn {
         );
 
         conn.tx.close_channel();
-        self.stack
-            .disconnect(conn.meta.protocol, conn.meta.handle)?;
+        self.stack.disconnect(conn.meta.protocol, conn.meta.handle);
         Ok(())
     }
 }
@@ -642,91 +666,6 @@ struct Connection {
 impl Connection {
     pub fn new(meta: ConnectionMeta, local: IpEndpoint, tx: mpsc::Sender<Vec<u8>>) -> Self {
         Self { meta, local, tx }
-    }
-}
-
-trait SocketExt {
-    fn is_open(&self) -> bool;
-
-    fn can_recv(&self) -> bool;
-    fn recv(&mut self) -> std::result::Result<Option<(IpEndpoint, Vec<u8>)>, smoltcp::Error>;
-
-    fn can_send(&self) -> bool;
-    fn send_capacity(&self) -> usize;
-    fn send_queue(&self) -> usize;
-}
-
-impl<'a> SocketExt for Socket<'a> {
-    fn is_open(&self) -> bool {
-        match &self {
-            Self::Tcp(s) => s.is_open(),
-            Self::Udp(s) => s.is_open(),
-            Self::Icmp(s) => s.is_open(),
-            Self::Raw(_) => true,
-        }
-    }
-
-    fn can_recv(&self) -> bool {
-        match &self {
-            Self::Tcp(s) => s.can_recv(),
-            Self::Udp(s) => s.can_recv(),
-            Self::Icmp(s) => s.can_recv(),
-            Self::Raw(s) => s.can_recv(),
-        }
-    }
-
-    fn recv(&mut self) -> std::result::Result<Option<(IpEndpoint, Vec<u8>)>, smoltcp::Error> {
-        let result = match self {
-            Self::Tcp(tcp) => tcp
-                .recv(|bytes| (bytes.len(), bytes.to_vec()))
-                .map(|vec| (tcp.remote_endpoint(), vec)),
-            Self::Udp(udp) => udp
-                .recv()
-                .map(|(bytes, endpoint)| (endpoint, bytes.to_vec())),
-            Self::Icmp(icmp) => icmp
-                .recv()
-                .map(|(bytes, address)| ((address, 0).into(), bytes.to_vec())),
-            Self::Raw(raw) => raw
-                .recv()
-                .map(|bytes| (IpEndpoint::default(), bytes.to_vec())),
-        };
-
-        match result {
-            Ok(tuple) => Ok(Some(tuple)),
-            Err(smoltcp::Error::Exhausted) => Ok(None),
-            Err(err) => Err(err),
-        }
-    }
-
-    fn can_send(&self) -> bool {
-        match &self {
-            Self::Tcp(s) => s.can_send(),
-            Self::Udp(s) => s.can_send(),
-            Self::Icmp(s) => s.can_send(),
-            Self::Raw(s) => s.can_send(),
-        }
-    }
-
-    fn send_capacity(&self) -> usize {
-        match &self {
-            Self::Tcp(s) => s.send_capacity(),
-            Self::Udp(s) => s.payload_send_capacity(),
-            Self::Icmp(s) => s.payload_send_capacity(),
-            Self::Raw(s) => s.payload_send_capacity(),
-        }
-    }
-
-    fn send_queue(&self) -> usize {
-        match &self {
-            Self::Tcp(s) => s.send_queue(),
-            _ => {
-                if self.can_send() {
-                    self.send_capacity() // mock value
-                } else {
-                    0
-                }
-            }
-        }
     }
 }
 

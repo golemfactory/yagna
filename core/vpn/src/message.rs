@@ -1,7 +1,7 @@
 use crate::Result;
 use actix::{Message, Recipient};
 use futures::channel::mpsc;
-use smoltcp::socket::SocketHandle;
+use smoltcp::iface::SocketHandle;
 use smoltcp::wire::IpEndpoint;
 use ya_client_model::net::*;
 use ya_utils_networking::vpn::{Error, Protocol};

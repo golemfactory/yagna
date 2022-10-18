@@ -24,14 +24,14 @@ env_logger = "0.7"
 futures = "0.3"
 hex = "0.4"
 ipnet = "2.3"
-managed = "0.7.2"
+# managed = { version = "0.8", features = ["std"] }
 lazy_static = "1.4"
 log = "0.4"
 mime = "0.3.16"
 rand = "0.7.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-smoltcp = { version = "0.7" }
+smoltcp = { git = "https://github.com/golemfactory/smoltcp", rev = "acb743b6990fd92303c24c43ff75711422a5cb94" }
 thiserror = "1.0"
 tokio = { version = "1", features = ["time"] }
 uuid = { version = "0.8", features = ["v4"] }

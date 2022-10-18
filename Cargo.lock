@@ -3254,12 +3254,6 @@ dependencies = [
 
 [[package]]
 name = "managed"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c75de51135344a4f8ed3cfe2720dc27736f7711989703a0b43aadf3753c55577"
-
-[[package]]
-name = "managed"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ca88d725a0a943b096803bd34e73a4437208b6077654cc4ecb2947a5f91618d"
@@ -5898,19 +5892,6 @@ checksum = "2fd0db749597d91ff862fd1d55ea87f7855a744a8425a64695b6fca237d1dad1"
 
 [[package]]
 name = "smoltcp"
-version = "0.7.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e4a069bef843d170df47e7c0a8bf8d037f217d9f5b325865acc3e466ffe40d3"
-dependencies = [
- "bitflags",
- "byteorder",
- "libc",
- "log",
- "managed 0.7.2",
-]
-
-[[package]]
-name = "smoltcp"
 version = "0.8.1"
 source = "git+https://github.com/golemfactory/smoltcp?rev=acb743b6990fd92303c24c43ff75711422a5cb94#acb743b6990fd92303c24c43ff75711422a5cb94"
 dependencies = [
@@ -5918,7 +5899,7 @@ dependencies = [
  "byteorder",
  "libc",
  "log",
- "managed 0.8.0",
+ "managed",
 ]
 
 [[package]]
@@ -8003,11 +7984,11 @@ dependencies = [
  "futures 0.3.24",
  "lazy_static",
  "log",
- "managed 0.8.0",
+ "managed",
  "num-derive",
  "num-traits",
  "rand 0.8.5",
- "smoltcp 0.8.1",
+ "smoltcp",
  "thiserror",
  "tokio 1.21.1",
  "tokio-stream",
@@ -8374,13 +8355,12 @@ dependencies = [
  "ipnet",
  "lazy_static",
  "log",
- "managed 0.7.2",
  "mime",
  "rand 0.7.3",
  "serde",
  "serde_json",
  "sha3 0.8.2",
- "smoltcp 0.7.5",
+ "smoltcp",
  "structopt",
  "thiserror",
  "tokio 1.21.1",

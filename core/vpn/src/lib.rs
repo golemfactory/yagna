@@ -1,12 +1,12 @@
 mod device;
-mod interface;
+// mod interface;
 mod message;
 mod network;
 mod port;
 mod requestor;
 mod service;
 mod socket;
-mod stack;
+// mod stack;
 
 pub use self::service::VpnService;
 

@@ -1,10 +1,10 @@
 use super::device::CaptureDevice;
 use managed::{ManagedMap, ManagedSlice};
-use smoltcp::iface::{EthernetInterface, EthernetInterfaceBuilder, NeighborCache, Route, Routes};
-use smoltcp::wire::{EthernetAddress, IpCidr};
+use smoltcp::iface::{Interface, InterfaceBuilder, NeighborCache, Route, Routes};
+use smoltcp::wire::{EthernetAddress, HardwareAddress, IpCidr};
 use std::collections::BTreeMap;
 
-pub type CaptureInterface<'a> = EthernetInterface<'a, CaptureDevice>;
+pub type CaptureInterface<'a> = Interface<'a, CaptureDevice>;
 
 pub fn default_iface<'a>() -> CaptureInterface<'a> {
     let neighbor_cache = NeighborCache::new(BTreeMap::new());
@@ -18,8 +18,8 @@ pub fn default_iface<'a>() -> CaptureInterface<'a> {
         }
     };
 
-    EthernetInterfaceBuilder::new(CaptureDevice::default())
-        .ethernet_addr(ethernet_addr)
+    InterfaceBuilder::new(CaptureDevice::default(), vec![]) //TODO Rafał 2nd arg
+        .hardware_addr(HardwareAddress::Ethernet(ethernet_addr)) //TODO Rafał is it the same as before?
         .neighbor_cache(neighbor_cache)
         .ip_addrs(addrs)
         .routes(routes)
