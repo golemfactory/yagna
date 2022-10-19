@@ -15,7 +15,7 @@ use smoltcp::socket::Socket;
 use smoltcp::wire::{EthernetAddress, HardwareAddress, IpAddress, IpCidr, IpEndpoint};
 use uuid::Uuid;
 use ya_utils_networking::vpn::socket::{SocketExt, TCP_CONN_TIMEOUT};
-use ya_utils_networking::vpn::stack::connection::Connection as Dupa;
+use ya_utils_networking::vpn::stack::connection::{Connection as Dupa, ConnectionMeta};
 use ya_utils_networking::vpn::stack::interface::{add_iface_route, tap_iface};
 
 use crate::message::*;
@@ -415,27 +415,6 @@ impl Handler<RemoveNode> for Vpn {
     }
 }
 
-impl Handler<GetConnections> for Vpn {
-    type Result = <GetConnections as Message>::Result;
-
-    fn handle(&mut self, _: GetConnections, _: &mut Self::Context) -> Self::Result {
-        //TODO Rafał
-        todo!()
-
-        // Ok(self
-        //     .connections
-        //     .values()
-        //     .map(|c| ya_client_model::net::Connection {
-        //         protocol: c.meta.protocol as u16,
-        //         local_ip: c.local.addr.to_string(),
-        //         local_port: c.local.port,
-        //         remote_ip: c.meta.remote.addr.to_string(),
-        //         remote_port: c.meta.remote.port,
-        //     })
-        //     .collect())
-    }
-}
-
 impl Handler<Connect> for Vpn {
     type Result = ActorResponse<Self, Result<UserConnection>>;
 
@@ -447,13 +426,41 @@ impl Handler<Connect> for Vpn {
 
         log::info!("VPN {}: connecting to {:?}", self.vpn.id(), remote);
 
-        //TODO Rafał
-        let fut = self.network.connect(remote, TCP_CONN_TIMEOUT);
+        //TODO Rafał think about UDP later (bind some port?)
+
+        let fut = async move { self.network.connect(remote, TCP_CONN_TIMEOUT).await }
+            .into_actor(self)
+            .map(move |result, this, ctx| {
+                let id = this.vpn.id();
+                match result {
+                    Ok(connection) => {
+                        log::info!("VPN {}: connected to {:?}", id, remote);
+
+                        let (tx, rx) = mpsc::channel(1);
+                        let vpn = ctx.address().recipient();
+
+                        //TODO Rafał how to pass tx to self to write there ingress?
+
+                        Ok(UserConnection {
+                            vpn,
+                            rx,
+                            connection,
+                        })
+                    }
+                    Err(e) => {
+                        //TODO Rafał
+                        log::warn!("VPN {}: cannot connect to {:?}: {}", id, remote, e);
+                        // ctx.address().do_send(Disconnect::with(meta.handle, &e));
+                        Err(e)
+                    }
+                }
+            });
 
         ActorResponse::r#async(fut)
     }
 }
 
+//TODO Rafał Marek: to delete?
 impl Handler<Disconnect> for Vpn {
     type Result = <Disconnect as Message>::Result;
 
@@ -488,7 +495,7 @@ impl Handler<Packet> for Vpn {
         let addr = ctx.address();
         let fut = self
             .network
-            .send(pkt.data, todo!()) //TODO Rafał Get connection
+            .send(pkt.data, pkt.connection)
             .map_err(|e| Error::Other(e.to_string()));
         ActorResponse::r#async(fut.into_actor(self))
     }

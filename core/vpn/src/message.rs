@@ -4,7 +4,10 @@ use futures::channel::mpsc;
 use smoltcp::iface::SocketHandle;
 use smoltcp::wire::IpEndpoint;
 use ya_client_model::net::*;
-use ya_utils_networking::vpn::{Error, Protocol};
+use ya_utils_networking::vpn::{
+    stack::connection::{Connection, ConnectionMeta},
+    Error, Protocol,
+};
 
 #[derive(Debug, Message)]
 #[rtype(result = "Result<Vec<Address>>")]
@@ -73,7 +76,7 @@ impl Disconnect {
 #[rtype(result = "Result<()>")]
 pub struct Packet {
     pub data: Vec<u8>,
-    pub meta: ConnectionMeta,
+    pub connection: Connection,
 }
 
 #[derive(Debug, Message)]
@@ -84,18 +87,11 @@ pub struct Shutdown;
 #[rtype(result = "Result<()>")]
 pub struct DataSent;
 
-#[derive(Clone, Debug)]
-pub struct ConnectionMeta {
-    pub handle: SocketHandle,
-    pub protocol: Protocol,
-    pub remote: IpEndpoint,
-}
-
 #[derive(Debug)]
 pub struct UserConnection {
     pub vpn: Recipient<Packet>,
     pub rx: mpsc::Receiver<Vec<u8>>,
-    pub meta: ConnectionMeta,
+    pub connection: Connection,
 }
 
 #[derive(Clone, Debug)]
