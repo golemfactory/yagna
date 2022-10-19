@@ -15,11 +15,10 @@ use smoltcp::socket::Socket;
 use smoltcp::wire::{EthernetAddress, HardwareAddress, IpAddress, IpCidr, IpEndpoint};
 use uuid::Uuid;
 use ya_utils_networking::vpn::socket::{SocketExt, TCP_CONN_TIMEOUT};
+use ya_utils_networking::vpn::stack::connection::Connection as Dupa;
 use ya_utils_networking::vpn::stack::interface::{add_iface_route, tap_iface};
 
 use crate::message::*;
-// use crate::socket::*;
-// use crate::stack::Stack;
 use crate::Result;
 
 use ya_core_model::activity::{VpnControl, VpnPacket};
@@ -193,7 +192,6 @@ pub struct Vpn {
     node_id: String,
     vpn: Network<network::DuoEndpoint<Endpoint>>,
     network: net::Network,
-    // connections: HashMap<SocketHandle, Connection>,
 }
 
 impl Vpn {
@@ -296,129 +294,6 @@ impl Actor for Vpn {
         .into_actor(self)
         .wait(ctx);
     }
-
-    // fn poll(&mut self, addr: Addr<Self>) {
-    //     loop {
-    //         if let Err(err) = self.stack.poll() {
-    //             log::warn!("VPN {}: socket poll error: {}", self.vpn.id(), err);
-    //         }
-
-    //         let egress = self.process_egress();
-    //         let ingress = self.process_ingress(addr.clone());
-
-    //         if !egress && !ingress {
-    //             break;
-    //         }
-    //     }
-    // }
-
-    // fn process_ingress(&mut self, addr: Addr<Self>) -> bool {
-    //     let mut processed = false;
-
-    //     let id = self.vpn.id().clone();
-    //     let connections = &self.connections;
-    //     let socket_rfc = self.stack.sockets();
-    //     let mut sockets = socket_rfc.borrow_mut();
-
-    //     for mut socket_ref in (*sockets).iter_mut() {
-    //         let socket: &mut Socket = socket_ref.deref_mut();
-    //         let handle = socket.handle();
-
-    //         if socket.is_closed() {
-    //             addr.do_send(Disconnect::new(handle, DisconnectReason::SocketClosed));
-    //             continue;
-    //         }
-
-    //         while socket.can_recv() {
-    //             let (remote, data) = match socket.recv() {
-    //                 Ok(Some(tup)) => {
-    //                     processed = true;
-    //                     tup
-    //                 }
-    //                 Ok(None) => break,
-    //                 Err(err) => {
-    //                     log::warn!("VPN {}: packet error: {}", id, err);
-    //                     processed = true;
-    //                     continue;
-    //                 }
-    //             };
-
-    //             let mut user_tx = match connections.get(&handle) {
-    //                 Some(conn) => conn.tx.clone(),
-    //                 None => {
-    //                     log::warn!("VPN {}: no connection to {:?}", id, remote);
-    //                     continue;
-    //                 }
-    //             };
-
-    //             let addr_ = addr.clone();
-    //             tokio::task::spawn_local(async move {
-    //                 if (user_tx.send(data).await).is_err() {
-    //                     addr_.do_send(Disconnect::new(handle, DisconnectReason::SinkClosed));
-    //                 }
-    //             });
-    //         }
-    //     }
-
-    //     processed
-    // }
-
-    // fn process_egress(&mut self) -> bool {
-    //     let mut processed = false;
-    //     let vpn_id = self.vpn.id().clone();
-
-    //     let iface_rfc = self.stack.iface();
-    //     let mut iface = iface_rfc.borrow_mut();
-    //     let device = iface.device_mut();
-
-    //     while let Some(data) = device.next_phy_tx() {
-    //         processed = true;
-
-    //         let frame = match EtherFrame::try_from(data) {
-    //             Ok(frame) => frame,
-    //             Err(err) => {
-    //                 log::error!("VPN {}: Ethernet frame error: {}", vpn_id, err);
-    //                 continue;
-    //             }
-    //         };
-
-    //         let endpoint = match &frame {
-    //             EtherFrame::Ip(_) => {
-    //                 let packet = IpPacket::packet(frame.payload());
-    //                 log::trace!("Egress IP packet to {:?}", packet.dst_address());
-    //                 self.vpn.endpoint(packet.dst_address())
-    //             }
-    //             EtherFrame::Arp(_) => {
-    //                 let packet = ArpPacket::packet(frame.payload());
-    //                 log::trace!("Egress ARP packet to {:?}", packet.get_field(ArpField::TPA));
-    //                 self.vpn.endpoint(packet.get_field(ArpField::TPA))
-    //             }
-    //             _ => {
-    //                 log::error!("VPN {}: unimplemented Ethernet frame type", vpn_id);
-    //                 continue;
-    //             }
-    //         };
-    //         let endpoint = match endpoint {
-    //             Some(endpoint) => endpoint,
-    //             None => {
-    //                 log::trace!("No endpoint for egress packet");
-    //                 continue;
-    //             }
-    //         };
-
-    //         let id = vpn_id.clone();
-    //         let fut = endpoint.udp.push_raw_as(&self.node_id, frame.into());
-
-    //         tokio::task::spawn_local(async move {
-    //             if let Err(err) = fut.await {
-    //                 let addr = endpoint.tcp.addr();
-    //                 log::warn!("VPN {}: send error to endpoint '{}': {}", id, addr, err);
-    //             }
-    //         });
-    //     }
-
-    //     processed
-    // }
 }
 
 impl Handler<GetAddresses> for Vpn {
@@ -575,43 +450,6 @@ impl Handler<Connect> for Vpn {
         //TODO Rafał
         let fut = self.network.connect(remote, TCP_CONN_TIMEOUT);
 
-        // let connect = match self.network.stack.connect(remote) {
-        //     Ok(fut) => fut,
-        //     Err(err) => return ActorResponse::reply(Err(Error::ConnectionError(err.to_string()))),
-        // };
-
-        // self.network.poll();
-
-        // let meta = connect.meta.clone();
-        // let fut = async move {
-        //     match tokio::time::timeout(TCP_CONN_TIMEOUT, connect).await {
-        //         Ok(Ok(h)) => Ok(h),
-        //         Ok(Err(e)) => Err(Error::ConnectionError(e.to_string())),
-        //         Err(_) => Err(Error::ConnectionTimeout),
-        //     }
-        // }
-        // .into_actor(self)
-        // .map(move |result, this, ctx| {
-        //     let id = this.vpn.id();
-        //     match result {
-        //         Ok(local) => {
-        //             log::info!("VPN {}: connected to {:?}", id, remote);
-
-        //             let (tx, rx) = mpsc::channel(1);
-        //             let vpn = ctx.address().recipient();
-        //             let conn = Connection::new(meta.clone(), local, tx);
-        //             this.connections.insert(meta.handle, conn);
-
-        //             Ok(UserConnection { vpn, rx, meta })
-        //         }
-        //         Err(e) => {
-        //             log::warn!("VPN {}: cannot connect to {:?}: {}", id, remote, e);
-        //             ctx.address().do_send(Disconnect::with(meta.handle, &e));
-        //             Err(e)
-        //         }
-        //     }
-        // });
-
         ActorResponse::r#async(fut)
     }
 }
@@ -650,7 +488,7 @@ impl Handler<Packet> for Vpn {
         let addr = ctx.address();
         let fut = self
             .network
-            .send(pkt.data, pkt.meta)
+            .send(pkt.data, todo!()) //TODO Rafał Get connection
             .map_err(|e| Error::Other(e.to_string()));
         ActorResponse::r#async(fut.into_actor(self))
     }
@@ -692,19 +530,6 @@ impl Handler<Shutdown> for Vpn {
     fn handle(&mut self, _: Shutdown, ctx: &mut Self::Context) -> Self::Result {
         ctx.stop();
         Ok(())
-    }
-}
-
-#[derive(Clone)]
-struct Connection {
-    meta: ConnectionMeta,
-    local: IpEndpoint,
-    tx: mpsc::Sender<Vec<u8>>,
-}
-
-impl Connection {
-    pub fn new(meta: ConnectionMeta, local: IpEndpoint, tx: mpsc::Sender<Vec<u8>>) -> Self {
-        Self { meta, local, tx }
     }
 }
 
