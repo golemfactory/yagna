@@ -14,7 +14,7 @@ use smoltcp::iface::{Route, SocketHandle};
 use smoltcp::socket::Socket;
 use smoltcp::wire::{EthernetAddress, HardwareAddress, IpAddress, IpCidr, IpEndpoint};
 use uuid::Uuid;
-use ya_utils_networking::vpn::socket::SocketExt;
+use ya_utils_networking::vpn::socket::{SocketExt, TCP_CONN_TIMEOUT};
 use ya_utils_networking::vpn::stack::interface::{add_iface_route, tap_iface};
 
 use crate::message::*;
@@ -261,6 +261,18 @@ impl Actor for Vpn {
             .expect("Egress receiver already taken");
 
         //TODO Rafał other handlers
+
+        //     inet_endpoint_egress_handler(endpoint_rx, router)
+        //     .into_actor(self)
+        //     .spawn(ctx);
+
+        // inet_ingress_handler(ingress_rx, self.proxy.clone())
+        //     .into_actor(self)
+        //     .spawn(ctx);
+
+        // inet_egress_handler(egress_rx, self.endpoint.tx.clone())
+        //     .into_actor(self)
+        //     .spawn(ctx);
 
         log::info!("VPN {} started", id);
     }
@@ -560,42 +572,45 @@ impl Handler<Connect> for Vpn {
 
         log::info!("VPN {}: connecting to {:?}", self.vpn.id(), remote);
 
-        let connect = match self.network.stack.connect(remote) {
-            Ok(fut) => fut,
-            Err(err) => return ActorResponse::reply(Err(Error::ConnectionError(err.to_string()))),
-        };
+        //TODO Rafał
+        let fut = self.network.connect(remote, TCP_CONN_TIMEOUT);
 
-        self.network.poll();
+        // let connect = match self.network.stack.connect(remote) {
+        //     Ok(fut) => fut,
+        //     Err(err) => return ActorResponse::reply(Err(Error::ConnectionError(err.to_string()))),
+        // };
 
-        let meta = connect.meta.clone();
-        let fut = async move {
-            match tokio::time::timeout(TCP_CONN_TIMEOUT, connect).await {
-                Ok(Ok(h)) => Ok(h),
-                Ok(Err(e)) => Err(Error::ConnectionError(e.to_string())),
-                Err(_) => Err(Error::ConnectionTimeout),
-            }
-        }
-        .into_actor(self)
-        .map(move |result, this, ctx| {
-            let id = this.vpn.id();
-            match result {
-                Ok(local) => {
-                    log::info!("VPN {}: connected to {:?}", id, remote);
+        // self.network.poll();
 
-                    let (tx, rx) = mpsc::channel(1);
-                    let vpn = ctx.address().recipient();
-                    let conn = Connection::new(meta.clone(), local, tx);
-                    this.connections.insert(meta.handle, conn);
+        // let meta = connect.meta.clone();
+        // let fut = async move {
+        //     match tokio::time::timeout(TCP_CONN_TIMEOUT, connect).await {
+        //         Ok(Ok(h)) => Ok(h),
+        //         Ok(Err(e)) => Err(Error::ConnectionError(e.to_string())),
+        //         Err(_) => Err(Error::ConnectionTimeout),
+        //     }
+        // }
+        // .into_actor(self)
+        // .map(move |result, this, ctx| {
+        //     let id = this.vpn.id();
+        //     match result {
+        //         Ok(local) => {
+        //             log::info!("VPN {}: connected to {:?}", id, remote);
 
-                    Ok(UserConnection { vpn, rx, meta })
-                }
-                Err(e) => {
-                    log::warn!("VPN {}: cannot connect to {:?}: {}", id, remote, e);
-                    ctx.address().do_send(Disconnect::with(meta.handle, &e));
-                    Err(e)
-                }
-            }
-        });
+        //             let (tx, rx) = mpsc::channel(1);
+        //             let vpn = ctx.address().recipient();
+        //             let conn = Connection::new(meta.clone(), local, tx);
+        //             this.connections.insert(meta.handle, conn);
+
+        //             Ok(UserConnection { vpn, rx, meta })
+        //         }
+        //         Err(e) => {
+        //             log::warn!("VPN {}: cannot connect to {:?}: {}", id, remote, e);
+        //             ctx.address().do_send(Disconnect::with(meta.handle, &e));
+        //             Err(e)
+        //         }
+        //     }
+        // });
 
         ActorResponse::r#async(fut)
     }
@@ -628,13 +643,14 @@ impl Handler<Packet> for Vpn {
     type Result = ActorResponse<Self, Result<()>>;
 
     fn handle(&mut self, pkt: Packet, ctx: &mut Self::Context) -> Self::Result {
-        if !self.connections.contains_key(&pkt.meta.handle) {
+        //TODO Rafał make public? + incompatibility
+        if !self.network.is_connected(&pkt.meta.handle) {
             return ActorResponse::reply(Err(Error::ConnectionError("no connection".into())));
         }
         let addr = ctx.address();
         let fut = self
             .network
-            .send(pkt.data, pkt.meta, move || addr.do_send(DataSent {}))
+            .send(pkt.data, pkt.meta)
             .map_err(|e| Error::Other(e.to_string()));
         ActorResponse::r#async(fut.into_actor(self))
     }
@@ -645,8 +661,8 @@ impl Handler<RpcEnvelope<VpnPacket>> for Vpn {
     type Result = <RpcEnvelope<VpnPacket> as Message>::Result;
 
     fn handle(&mut self, msg: RpcEnvelope<VpnPacket>, ctx: &mut Self::Context) -> Self::Result {
-        self.stack.receive_phy(msg.into_inner().0);
-        self.poll(ctx.address());
+        self.network.receive(msg.into_inner().0);
+        self.network.poll();
         Ok(())
     }
 }
@@ -655,20 +671,20 @@ impl Handler<RpcRawCall> for Vpn {
     type Result = std::result::Result<Vec<u8>, ya_service_bus::Error>;
 
     fn handle(&mut self, msg: RpcRawCall, ctx: &mut Self::Context) -> Self::Result {
-        self.stack.receive_phy(msg.body);
-        self.poll(ctx.address());
+        self.network.receive(msg.body);
+        self.network.poll();
         Ok(Vec::new())
     }
 }
 
-impl Handler<DataSent> for Vpn {
-    type Result = <DataSent as Message>::Result;
+// impl Handler<DataSent> for Vpn {
+//     type Result = <DataSent as Message>::Result;
 
-    fn handle(&mut self, _: DataSent, ctx: &mut Self::Context) -> Self::Result {
-        self.poll(ctx.address());
-        Ok(())
-    }
-}
+//     fn handle(&mut self, _: DataSent, ctx: &mut Self::Context) -> Self::Result {
+//         self.network.poll();
+//         Ok(())
+//     }
+// }
 
 impl Handler<Shutdown> for Vpn {
     type Result = <Shutdown as Message>::Result;
