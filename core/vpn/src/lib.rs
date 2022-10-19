@@ -5,7 +5,7 @@ mod network;
 mod port;
 mod requestor;
 mod service;
-mod socket;
+// mod socket;
 // mod stack;
 
 pub use self::service::VpnService;
