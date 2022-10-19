@@ -26,7 +26,7 @@ use ya_core_model::NodeId;
 use ya_service_bus::typed::{self, Endpoint};
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcEnvelope, RpcRawCall};
 use ya_utils_networking::vpn::common::{to_ip, to_net};
-use ya_utils_networking::vpn::stack::{self as net, StackConfig};
+use ya_utils_networking::vpn::stack::{self as net, EgressReceiver, IngressReceiver, StackConfig};
 use ya_utils_networking::vpn::*;
 
 const STACK_POLL_INTERVAL: Duration = Duration::from_millis(2500);
@@ -264,13 +264,9 @@ impl Actor for Vpn {
         //     .into_actor(self)
         //     .spawn(ctx);
 
-        // inet_ingress_handler(ingress_rx, self.proxy.clone())
-        //     .into_actor(self)
-        //     .spawn(ctx);
+        inet_ingress_handler(ingress_rx).into_actor(self).spawn(ctx);
 
-        // inet_egress_handler(egress_rx, self.endpoint.tx.clone())
-        //     .into_actor(self)
-        //     .spawn(ctx);
+        inet_egress_handler(egress_rx).into_actor(self).spawn(ctx);
 
         log::info!("VPN {} started", id);
     }
@@ -538,6 +534,16 @@ impl Handler<Shutdown> for Vpn {
         ctx.stop();
         Ok(())
     }
+}
+
+//TODO Rafał send to TX User
+async fn inet_ingress_handler(rx: IngressReceiver) {
+    todo!()
+}
+
+//TODO Rafał send to VPN
+async fn inet_egress_handler(rx: EgressReceiver) {
+    todo!()
 }
 
 fn net_route(ip: IpAddr) -> Result<Route> {
