@@ -4,16 +4,20 @@ use std::net::IpAddr;
 use std::ops::DerefMut;
 use std::rc::Rc;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use actix::prelude::*;
 use futures::channel::oneshot::Canceled;
 use futures::channel::{mpsc, oneshot};
-use futures::{future, future::BoxFuture, Future, FutureExt, SinkExt, TryFutureExt};
+use futures::{future, future::BoxFuture, Future, FutureExt, SinkExt, StreamExt, TryFutureExt};
 use smoltcp::iface::{Route, SocketHandle};
 use smoltcp::socket::Socket;
 use smoltcp::wire::{EthernetAddress, HardwareAddress, IpAddress, IpCidr, IpEndpoint};
+use tokio::sync::RwLock;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use uuid::Uuid;
+
 use ya_utils_networking::vpn::socket::{SocketExt, TCP_CONN_TIMEOUT};
 use ya_utils_networking::vpn::stack::connection::{Connection as Dupa, ConnectionMeta};
 use ya_utils_networking::vpn::stack::interface::{add_iface_route, tap_iface};
@@ -26,7 +30,9 @@ use ya_core_model::NodeId;
 use ya_service_bus::typed::{self, Endpoint};
 use ya_service_bus::{actix_rpc, RpcEndpoint, RpcEnvelope, RpcRawCall};
 use ya_utils_networking::vpn::common::{to_ip, to_net};
-use ya_utils_networking::vpn::stack::{self as net, EgressReceiver, IngressReceiver, StackConfig};
+use ya_utils_networking::vpn::stack::{
+    self as net, EgressReceiver, IngressEvent, IngressReceiver, StackConfig,
+};
 use ya_utils_networking::vpn::*;
 
 const STACK_POLL_INTERVAL: Duration = Duration::from_millis(2500);
@@ -192,6 +198,7 @@ pub struct Vpn {
     node_id: String,
     vpn: Network<network::DuoEndpoint<Endpoint>>,
     network: net::Network,
+    ingress_senders: Arc<RwLock<HashMap<SocketDesc, mpsc::Sender<Vec<u8>>>>>,
 }
 
 impl Vpn {
@@ -200,6 +207,7 @@ impl Vpn {
             node_id: node_id.to_string(),
             vpn,
             network: Self::create_network(),
+            ingress_senders: Arc::new(RwLock::new(Default::default())),
         }
     }
 
@@ -264,9 +272,11 @@ impl Actor for Vpn {
         //     .into_actor(self)
         //     .spawn(ctx);
 
-        inet_ingress_handler(ingress_rx).into_actor(self).spawn(ctx);
+        vpn_ingress_handler(ingress_rx, self.ingress_senders.clone())
+            .into_actor(self)
+            .spawn(ctx);
 
-        inet_egress_handler(egress_rx).into_actor(self).spawn(ctx);
+        vpn_egress_handler(egress_rx).into_actor(self).spawn(ctx);
 
         log::info!("VPN {} started", id);
     }
@@ -421,61 +431,34 @@ impl Handler<Connect> for Vpn {
         };
 
         log::info!("VPN {}: connecting to {:?}", self.vpn.id(), remote);
-
         //TODO Rafał think about UDP later (bind some port?)
 
-        let fut = async move { self.network.connect(remote, TCP_CONN_TIMEOUT).await }
-            .into_actor(self)
-            .map(move |result, this, ctx| {
-                let id = this.vpn.id();
-                match result {
-                    Ok(connection) => {
-                        log::info!("VPN {}: connected to {:?}", id, remote);
+        //TODO Rafał Shady AF
+        let id = self.vpn.id().clone();
+        let network = self.network.clone();
+        let ingress_senders = self.ingress_senders.clone();
+        let vpn = ctx.address().recipient();
 
-                        let (tx, rx) = mpsc::channel(1);
-                        let vpn = ctx.address().recipient();
+        let fut = async move {
+            let connection = network.connect(remote, TCP_CONN_TIMEOUT).await?;
 
-                        //TODO Rafał how to pass tx to self to write there ingress?
+            log::info!("VPN {}: connected to {:?}", id, remote);
 
-                        Ok(UserConnection {
-                            vpn,
-                            rx,
-                            connection,
-                        })
-                    }
-                    Err(e) => {
-                        //TODO Rafał
-                        log::warn!("VPN {}: cannot connect to {:?}: {}", id, remote, e);
-                        // ctx.address().do_send(Disconnect::with(meta.handle, &e));
-                        Err(e)
-                    }
-                }
-            });
+            let (tx, rx) = mpsc::channel(1);
 
-        ActorResponse::r#async(fut)
-    }
-}
+            ingress_senders
+                .write()
+                .await
+                .insert(connection.meta.clone().into(), tx);
 
-//TODO Rafał Marek: to delete?
-impl Handler<Disconnect> for Vpn {
-    type Result = <Disconnect as Message>::Result;
-
-    fn handle(&mut self, msg: Disconnect, _: &mut Self::Context) -> Self::Result {
-        let mut conn = match self.connections.remove(&msg.handle) {
-            Some(conn) => conn,
-            None => return Err(Error::ConnectionError("no connection".into())),
+            Ok(UserConnection {
+                vpn,
+                rx,
+                connection,
+            })
         };
 
-        log::info!(
-            "Dropping connection to {:?}: {:?}",
-            conn.meta.remote,
-            msg.reason
-        );
-
-        //TODO Rafał Discarding UDP support?
-        conn.tx.close_channel();
-        self.network.stack.disconnect(conn.meta.handle);
-        Ok(())
+        ActorResponse::r#async(fut.into_actor(self))
     }
 }
 
@@ -485,9 +468,9 @@ impl Handler<Packet> for Vpn {
 
     fn handle(&mut self, pkt: Packet, ctx: &mut Self::Context) -> Self::Result {
         //TODO Rafał make public? + incompatibility
-        if !self.network.is_connected(&pkt.meta.handle) {
-            return ActorResponse::reply(Err(Error::ConnectionError("no connection".into())));
-        }
+        // if !self.connections.contains_key(&pkt.meta.handle) {
+        //     return ActorResponse::reply(Err(Error::ConnectionError("no connection".into())));
+        // }
         let addr = ctx.address();
         let fut = self
             .network
@@ -518,15 +501,6 @@ impl Handler<RpcRawCall> for Vpn {
     }
 }
 
-// impl Handler<DataSent> for Vpn {
-//     type Result = <DataSent as Message>::Result;
-
-//     fn handle(&mut self, _: DataSent, ctx: &mut Self::Context) -> Self::Result {
-//         self.network.poll();
-//         Ok(())
-//     }
-// }
-
 impl Handler<Shutdown> for Vpn {
     type Result = <Shutdown as Message>::Result;
 
@@ -536,13 +510,47 @@ impl Handler<Shutdown> for Vpn {
     }
 }
 
-//TODO Rafał send to TX User
-async fn inet_ingress_handler(rx: IngressReceiver) {
-    todo!()
+async fn vpn_ingress_handler(
+    rx: IngressReceiver,
+    ingress_senders: Arc<RwLock<HashMap<SocketDesc, mpsc::Sender<Vec<u8>>>>>,
+) {
+    let mut rx = UnboundedReceiverStream::new(rx);
+    while let Some(event) = rx.next().await {
+        match event {
+            IngressEvent::InboundConnection { desc } => log::debug!(
+                "[vpn] ingress: connection to {:?} ({}) from {:?}",
+                desc.local,
+                desc.protocol,
+                desc.remote
+            ),
+            IngressEvent::Disconnected { desc } => {
+                log::debug!(
+                    "[vpn] ingress: disconnect {:?} ({}) by {:?}",
+                    desc.local,
+                    desc.protocol,
+                    desc.remote,
+                );
+                // let _ = proxy.unbind(desc).await;
+            }
+            IngressEvent::Packet { payload, desc, .. } => {
+                if let Some(mut sender) = ingress_senders.read().await.get(&desc).cloned() {
+                    log::debug!("[vpn] ingress proxy: send to {:?}", desc.local);
+
+                    if let Err(e) = sender.send(payload).await {
+                        log::debug!("[vpn] ingress proxy: send error: {}", e);
+                    }
+                } else {
+                    log::debug!("[vpn] ingress proxy: no connection to {:?}", desc);
+                }
+            }
+        }
+    }
+
+    log::debug!("[vpn] ingress handler stopped");
 }
 
 //TODO Rafał send to VPN
-async fn inet_egress_handler(rx: EgressReceiver) {
+async fn vpn_egress_handler(rx: EgressReceiver) {
     todo!()
 }
 

@@ -199,23 +199,6 @@ async fn remove_node(
     Ok::<_, ApiError>(web::Json(fut.await?))
 }
 
-//TODO Rafał Remove
-/// Retrieves existing connections (socket tuples) within a private network
-// #[actix_web::get("/net/{net_id}/tcp")]
-// async fn get_connections(
-//     vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
-//     path: web::Path<PathNetwork>,
-//     identity: Identity,
-// ) -> impl Responder {
-//     let path = path.into_inner();
-//     let vpn = {
-//         let supervisor = vpn_sup.lock().await;
-//         supervisor.get_network(&identity.identity, &path.net_id)?
-//     };
-//     let response = vpn.send(GetConnections {}).await??;
-//     Ok::<_, ApiError>(web::Json(response))
-// }
-
 /// Initiates a new TCP connection via WebSockets to the destination address.
 #[actix_web::get("/net/{net_id}/tcp/{ip}/{port}")]
 async fn connect_tcp(

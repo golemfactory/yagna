@@ -8364,6 +8364,7 @@ dependencies = [
  "structopt",
  "thiserror",
  "tokio 1.21.1",
+ "tokio-stream",
  "url",
  "uuid",
  "ya-client",
