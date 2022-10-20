@@ -196,7 +196,7 @@ impl VpnSupervisor {
 
 pub struct Vpn {
     node_id: String,
-    vpn: Network<network::DuoEndpoint<Endpoint>>,
+    vpn: Arc<std::sync::RwLock<Network<network::DuoEndpoint<Endpoint>>>>,
     network: net::Network,
     ingress_senders: Arc<RwLock<HashMap<SocketDesc, mpsc::Sender<Vec<u8>>>>>,
 }
@@ -205,7 +205,7 @@ impl Vpn {
     pub fn new(node_id: NodeId, vpn: Network<network::DuoEndpoint<Endpoint>>) -> Self {
         Self {
             node_id: node_id.to_string(),
-            vpn,
+            vpn: Arc::new(std::sync::RwLock::new(vpn)),
             network: Self::create_network(),
             ingress_senders: Arc::new(RwLock::new(Default::default())),
         }
@@ -244,7 +244,8 @@ impl Actor for Vpn {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        let id = self.vpn.id();
+        let vpn = self.vpn.read().expect("dupa");
+        let id = vpn.id();
         let vpn_url = gsb_local_url(id);
         let addr = ctx.address();
         self.network.spawn_local(); //TODO Rafał env is there
@@ -276,20 +277,22 @@ impl Actor for Vpn {
             .into_actor(self)
             .spawn(ctx);
 
-        vpn_egress_handler(egress_rx).into_actor(self).spawn(ctx);
+        vpn_egress_handler(egress_rx, self.vpn.clone(), self.node_id.clone())
+            .into_actor(self)
+            .spawn(ctx);
 
         log::info!("VPN {} started", id);
     }
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
         //TODO Rafał proxy?
-        log::warn!("Stopping VPN {}", self.vpn.id());
+        log::warn!("Stopping VPN {}", self.vpn.read().expect("dupa").id());
         Running::Stop
     }
 
     fn stopped(&mut self, ctx: &mut Self::Context) {
         //TODO Rafał is it needed?
-        let id = self.vpn.id().clone();
+        let id = self.vpn.read().expect("dupa").id().clone();
         let vpn_url = gsb_local_url(&id);
 
         async move {
@@ -322,7 +325,8 @@ impl Handler<AddAddress> for Vpn {
     fn handle(&mut self, msg: AddAddress, _: &mut Self::Context) -> Self::Result {
         let ip: IpAddr = msg.address.parse()?;
 
-        let net = self.vpn.as_ref();
+        let vpn = self.vpn.write().expect("dupa");
+        let net = vpn.as_ref();
         if !net.contains(&ip) {
             return Err(Error::NetAddrMismatch(ip));
         }
@@ -333,7 +337,7 @@ impl Handler<AddAddress> for Vpn {
         }
 
         self.network.stack.add_address(cidr);
-        self.vpn.add_address(&msg.address)?;
+        self.vpn.write().expect("dupa").add_address(&msg.address)?;
 
         Ok(())
     }
@@ -345,6 +349,8 @@ impl Handler<GetNodes> for Vpn {
     fn handle(&mut self, _: GetNodes, _: &mut Self::Context) -> Self::Result {
         Ok(self
             .vpn
+            .read()
+            .expect("dupa")
             .nodes()
             .iter()
             .flat_map(|(id, ips)| {
@@ -364,14 +370,21 @@ impl Handler<AddNode> for Vpn {
 
     fn handle(&mut self, msg: AddNode, _: &mut Self::Context) -> Self::Result {
         let ip = to_ip(&msg.address)?;
-        match self.vpn.add_node(ip, &msg.id, gsb_remote_url) {
+        match self
+            .vpn
+            .write()
+            .expect("dupa")
+            .add_node(ip, &msg.id, gsb_remote_url)
+        {
             Ok(_) | Err(Error::IpAddrTaken(_)) => {}
             Err(err) => return Err(err),
         }
 
-        let vpn_id = self.vpn.id().clone();
+        let vpn_id = self.vpn.read().expect("dupa").id().clone();
         let futs = self
             .vpn
+            .read()
+            .expect("dupa")
             .endpoints()
             .values()
             .cloned()
@@ -397,11 +410,13 @@ impl Handler<RemoveNode> for Vpn {
     type Result = <RemoveNode as Message>::Result;
 
     fn handle(&mut self, msg: RemoveNode, _: &mut Self::Context) -> Self::Result {
-        self.vpn.remove_node(&msg.id);
+        self.vpn.write().expect("dupa").remove_node(&msg.id);
 
-        let vpn_id = self.vpn.id().clone();
+        let vpn_id = self.vpn.read().expect("dupa").id().clone();
         let futs = self
             .vpn
+            .read()
+            .expect("dupa")
             .endpoints()
             .values()
             .cloned()
@@ -430,11 +445,15 @@ impl Handler<Connect> for Vpn {
             Err(err) => return ActorResponse::reply(Err(err)),
         };
 
-        log::info!("VPN {}: connecting to {:?}", self.vpn.id(), remote);
+        log::info!(
+            "VPN {}: connecting to {:?}",
+            self.vpn.read().expect("dupa").id(),
+            remote
+        );
         //TODO Rafał think about UDP later (bind some port?)
 
         //TODO Rafał Shady AF
-        let id = self.vpn.id().clone();
+        let id = self.vpn.read().expect("dupa").id().clone();
         let network = self.network.clone();
         let ingress_senders = self.ingress_senders.clone();
         let vpn = ctx.address().recipient();
@@ -550,8 +569,29 @@ async fn vpn_ingress_handler(
 }
 
 //TODO Rafał send to VPN
-async fn vpn_egress_handler(rx: EgressReceiver) {
-    todo!()
+async fn vpn_egress_handler(
+    rx: EgressReceiver,
+    vpn: Arc<std::sync::RwLock<Network<network::DuoEndpoint<Endpoint>>>>,
+    node_id: String,
+) {
+    let mut rx = UnboundedReceiverStream::new(rx);
+    while let Some(event) = rx.next().await {
+        let frame = event.payload.into_vec();
+
+        log::debug!("[vpn] egress -> runtime packet {} B", frame.len());
+
+        let endpoint = match vpn.read().expect("dupa").endpoint(event.remote) {
+            Some(endpoint) => endpoint,
+            None => {
+                log::trace!("No endpoint for egress packet");
+                continue;
+            }
+        };
+
+        endpoint.udp.push_raw_as(&node_id, frame);
+    }
+
+    log::debug!("[vpn] egress -> runtime handler stopped");
 }
 
 fn net_route(ip: IpAddr) -> Result<Route> {
