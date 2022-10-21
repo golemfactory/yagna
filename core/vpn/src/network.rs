@@ -1,25 +1,20 @@
 use std::collections::{BTreeSet, HashMap};
-use std::convert::TryFrom;
 use std::net::IpAddr;
-use std::ops::DerefMut;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
 
 use actix::prelude::*;
 use futures::channel::oneshot::Canceled;
 use futures::channel::{mpsc, oneshot};
 use futures::{future, future::BoxFuture, Future, FutureExt, SinkExt, StreamExt, TryFutureExt};
-use smoltcp::iface::{Route, SocketHandle};
-use smoltcp::socket::Socket;
+use smoltcp::iface::Route;
 use smoltcp::wire::{EthernetAddress, HardwareAddress, IpAddress, IpCidr, IpEndpoint};
 use tokio::sync::RwLock;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use uuid::Uuid;
 
-use ya_utils_networking::vpn::socket::{SocketExt, TCP_CONN_TIMEOUT};
-use ya_utils_networking::vpn::stack::connection::{Connection as Dupa, ConnectionMeta};
+use ya_utils_networking::vpn::socket::TCP_CONN_TIMEOUT;
 use ya_utils_networking::vpn::stack::interface::{add_iface_address, add_iface_route, tap_iface};
 
 use crate::message::*;
@@ -35,7 +30,6 @@ use ya_utils_networking::vpn::stack::{
 };
 use ya_utils_networking::vpn::*;
 
-const STACK_POLL_INTERVAL: Duration = Duration::from_millis(2500);
 const DEFAULT_MAX_PACKET_SIZE: usize = 65536;
 
 pub struct VpnSupervisor {
@@ -483,12 +477,12 @@ impl Handler<Connect> for Vpn {
 impl Handler<Packet> for Vpn {
     type Result = ActorResponse<Self, Result<()>>;
 
-    fn handle(&mut self, pkt: Packet, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, pkt: Packet, _: &mut Self::Context) -> Self::Result {
         //TODO Rafał make public? + incompatibility
         // if !self.connections.contains_key(&pkt.meta.handle) {
         //     return ActorResponse::reply(Err(Error::ConnectionError("no connection".into())));
         // }
-        let addr = ctx.address();
+        // let addr = ctx.address();
         let fut = self
             .network
             .send(pkt.data, pkt.connection)
@@ -501,7 +495,7 @@ impl Handler<Packet> for Vpn {
 impl Handler<RpcEnvelope<VpnPacket>> for Vpn {
     type Result = <RpcEnvelope<VpnPacket> as Message>::Result;
 
-    fn handle(&mut self, msg: RpcEnvelope<VpnPacket>, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: RpcEnvelope<VpnPacket>, _: &mut Self::Context) -> Self::Result {
         self.network.receive(msg.into_inner().0);
         self.network.poll();
         Ok(())
@@ -511,7 +505,7 @@ impl Handler<RpcEnvelope<VpnPacket>> for Vpn {
 impl Handler<RpcRawCall> for Vpn {
     type Result = std::result::Result<Vec<u8>, ya_service_bus::Error>;
 
-    fn handle(&mut self, msg: RpcRawCall, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: RpcRawCall, _: &mut Self::Context) -> Self::Result {
         self.network.receive(msg.body);
         self.network.poll();
         Ok(Vec::new())

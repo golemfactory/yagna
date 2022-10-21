@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use ya_client_model::net::*;
 use ya_client_model::ErrorMessage;
 use ya_service_api_web::middleware::Identity;
-use ya_utils_networking::vpn::stack::connection::{Connection, ConnectionMeta};
+use ya_utils_networking::vpn::stack::connection::Connection;
 use ya_utils_networking::vpn::{Error as VpnError, Protocol};
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
