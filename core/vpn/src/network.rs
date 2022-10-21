@@ -220,7 +220,7 @@ pub struct Vpn {
     node_id: String,
     vpn: Arc<std::sync::RwLock<Network<network::DuoEndpoint<Endpoint>>>>,
     network: net::Network,
-    ingress_senders: Arc<RwLock<HashMap<SocketDesc, mpsc::Sender<Vec<u8>>>>>,
+    ingress_senders: Arc<std::sync::RwLock<HashMap<SocketDesc, mpsc::Sender<Vec<u8>>>>>,
 }
 
 impl Vpn {
@@ -233,7 +233,7 @@ impl Vpn {
             node_id: node_id.to_string(),
             vpn: Arc::new(std::sync::RwLock::new(vpn)),
             network,
-            ingress_senders: Arc::new(RwLock::new(Default::default())),
+            ingress_senders: Arc::new(std::sync::RwLock::new(Default::default())),
         }
     }
 }
@@ -443,7 +443,7 @@ impl Handler<Connect> for Vpn {
 
             ingress_senders
                 .write()
-                .await
+                .unwrap()
                 .insert(connection.meta.clone().into(), tx);
 
             Ok(UserConnection {
@@ -462,11 +462,14 @@ impl Handler<Packet> for Vpn {
     type Result = ActorResponse<Self, Result<()>>;
 
     fn handle(&mut self, pkt: Packet, _: &mut Self::Context) -> Self::Result {
-        //TODO Rafał make public? + incompatibility
-        // if !self.connections.contains_key(&pkt.meta.handle) {
-        //     return ActorResponse::reply(Err(Error::ConnectionError("no connection".into())));
-        // }
-        // let addr = ctx.address();
+        if !self
+            .ingress_senders
+            .read()
+            .unwrap()
+            .contains_key(&pkt.connection.meta.into())
+        {
+            return ActorResponse::reply(Err(Error::ConnectionError("no connection".into())));
+        }
         let fut = self
             .network
             .send(pkt.data, pkt.connection)
@@ -507,7 +510,7 @@ impl Handler<Shutdown> for Vpn {
 
 async fn vpn_ingress_handler(
     rx: IngressReceiver,
-    ingress_senders: Arc<RwLock<HashMap<SocketDesc, mpsc::Sender<Vec<u8>>>>>,
+    ingress_senders: Arc<std::sync::RwLock<HashMap<SocketDesc, mpsc::Sender<Vec<u8>>>>>,
 ) {
     let mut rx = UnboundedReceiverStream::new(rx);
     while let Some(event) = rx.next().await {
@@ -528,7 +531,7 @@ async fn vpn_ingress_handler(
                 // let _ = proxy.unbind(desc).await;
             }
             IngressEvent::Packet { payload, desc, .. } => {
-                if let Some(mut sender) = ingress_senders.read().await.get(&desc).cloned() {
+                if let Some(mut sender) = ingress_senders.read().unwrap().get(&desc).cloned() {
                     log::debug!("[vpn] ingress proxy: send to {:?}", desc.local);
 
                     if let Err(e) = sender.send(payload).await {
