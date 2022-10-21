@@ -87,6 +87,8 @@ impl VpnSupervisor {
         network: ya_client_model::net::NewNetwork,
     ) -> Result<ya_client_model::net::Network> {
         let net = to_net(&network.ip, network.mask.as_ref())?;
+        let my_ip = IpCidr::new(net.hosts().next().unwrap().into(), net.prefix_len());
+
         let net_id = Uuid::new_v4().to_simple().to_string();
         let net_ip = IpCidr::new(net.addr().into(), net.prefix_len());
         let net_gw = match network
@@ -126,7 +128,7 @@ impl VpnSupervisor {
                     );
 
                     //TODO Rafał is necessary?
-                    add_iface_address(&mut iface, net_ip);
+                    add_iface_address(&mut iface, my_ip);
                     add_iface_route(&mut iface, net_ip, net_route(net_gw)?);
 
                     let stack = net::Stack::new(iface, config.clone());
@@ -574,7 +576,7 @@ async fn vpn_egress_handler(
         let endpoint = match vpn.read().expect("dupa").endpoint(event.remote) {
             Some(endpoint) => endpoint,
             None => {
-                log::trace!("No endpoint for egress packet");
+                log::debug!("No endpoint for egress packet");
                 continue;
             }
         };
