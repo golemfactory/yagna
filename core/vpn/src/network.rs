@@ -127,16 +127,12 @@ impl VpnSupervisor {
                         config.max_transmission_unit,
                     );
 
-                    //TODO Rafał is necessary?
                     add_iface_address(&mut iface, my_ip);
                     add_iface_route(&mut iface, net_ip, net_route(net_gw)?);
 
                     let stack = net::Stack::new(iface, config.clone());
 
-                    // stack.add_address(IpCidr::new(IP4_ADDRESS.into(), 16));
-                    // stack.add_address(IpCidr::new(IP6_ADDRESS.into(), 0));
-
-                    net::Network::new("vpn", config, stack) //TODO Rafał name?
+                    net::Network::new("vpn", config, stack)
                 };
 
                 let vpn = Vpn::new(node_id, vpn_net, stack_net);
@@ -250,14 +246,10 @@ impl Actor for Vpn {
         let id = vpn.id();
         let vpn_url = gsb_local_url(id);
         let addr = ctx.address();
-        self.network.spawn_local(); //TODO Rafał env is there
+        self.network.spawn_local();
 
         actix_rpc::bind(&vpn_url, addr.clone().recipient());
         actix_rpc::bind_raw(&format!("{vpn_url}/raw"), addr.recipient());
-
-        // ctx.run_interval(STACK_POLL_INTERVAL, |this, ctx| {
-        //     this.poll(ctx.address());
-        // });
 
         let ingress_rx = self
             .network
@@ -268,12 +260,6 @@ impl Actor for Vpn {
             .network
             .egress_receiver()
             .expect("Egress receiver already taken");
-
-        //TODO Rafał other handlers
-
-        //     inet_endpoint_egress_handler(endpoint_rx, router)
-        //     .into_actor(self)
-        //     .spawn(ctx);
 
         vpn_ingress_handler(ingress_rx, self.ingress_senders.clone())
             .into_actor(self)
@@ -287,13 +273,11 @@ impl Actor for Vpn {
     }
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
-        //TODO Rafał proxy?
         log::warn!("Stopping VPN {}", self.vpn.read().expect("dupa").id());
         Running::Stop
     }
 
     fn stopped(&mut self, ctx: &mut Self::Context) {
-        //TODO Rafał is it needed?
         let id = self.vpn.read().expect("dupa").id().clone();
         let vpn_url = gsb_local_url(&id);
 
@@ -443,9 +427,7 @@ impl Handler<Connect> for Vpn {
         let vpn = self.vpn.read().expect("dupa");
 
         log::info!("VPN {}: connecting to {:?}", vpn.id(), remote);
-        //TODO Rafał think about UDP later (bind some port?)
 
-        //TODO Rafał Shady AF
         let id = vpn.id().clone();
         let network = self.network.clone();
         let ingress_senders = self.ingress_senders.clone();
