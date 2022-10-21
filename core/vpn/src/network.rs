@@ -131,8 +131,9 @@ impl VpnSupervisor {
                         config.max_transmission_unit,
                     );
 
-                    add_iface_route(&mut iface, net_ip, net_route(net_gw)?); //TODO Rafał is necessary?
+                    //TODO Rafał is necessary?
                     add_iface_address(&mut iface, net_ip);
+                    add_iface_route(&mut iface, net_ip, net_route(net_gw)?);
 
                     let stack = net::Stack::new(iface, config.clone());
 
@@ -278,13 +279,13 @@ impl Actor for Vpn {
         //     .into_actor(self)
         //     .spawn(ctx);
 
-        // vpn_ingress_handler(ingress_rx, self.ingress_senders.clone())
-        //     .into_actor(self)
-        //     .spawn(ctx);
+        vpn_ingress_handler(ingress_rx, self.ingress_senders.clone())
+            .into_actor(self)
+            .spawn(ctx);
 
-        // vpn_egress_handler(egress_rx, self.vpn.clone(), self.node_id.clone())
-        //     .into_actor(self)
-        //     .spawn(ctx);
+        vpn_egress_handler(egress_rx, self.vpn.clone(), self.node_id.clone())
+            .into_actor(self)
+            .spawn(ctx);
 
         log::info!("VPN {} started", id);
     }
