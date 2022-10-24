@@ -506,6 +506,7 @@ impl Handler<RpcRawCall> for Vpn {
     }
 }
 
+/// Handle ingress event from stack
 impl Handler<Ingress> for Vpn {
     type Result = ActorResponse<Self, Result<()>>;
 
@@ -555,6 +556,7 @@ impl Handler<Ingress> for Vpn {
     }
 }
 
+/// Handle egress event from stack
 impl Handler<Egress> for Vpn {
     type Result = ActorResponse<Self, Result<()>>;
 
