@@ -425,7 +425,6 @@ impl Handler<Connect> for Vpn {
         let fut = async move { network.connect(remote, TCP_CONN_TIMEOUT).await }
             .into_actor(self)
             .map(move |result, this, ctx| {
-                //TODO Rafał Handle connection error?
                 let connection = result?;
                 log::info!("VPN {}: connected to {:?}", id, remote);
                 let vpn = ctx.address().recipient();
@@ -458,7 +457,6 @@ impl Handler<Disconnect> for Vpn {
                 );
 
                 sender.close_channel();
-                // self.stack_network.stack.disconnect(conn.meta.handle);
 
                 Ok(())
             }
