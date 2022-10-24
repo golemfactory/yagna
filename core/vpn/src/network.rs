@@ -308,11 +308,12 @@ impl Handler<AddAddress> for Vpn {
     fn handle(&mut self, msg: AddAddress, _: &mut Self::Context) -> Self::Result {
         let ip: IpAddr = msg.address.parse()?;
 
-        if !self.vpn.as_ref().contains(&ip) {
+        let net = self.vpn.as_ref();
+        if !net.contains(&ip) {
             return Err(Error::NetAddrMismatch(ip));
         }
 
-        let cidr = IpCidr::new(IpAddress::from(ip), self.vpn.as_ref().prefix_len());
+        let cidr = IpCidr::new(IpAddress::from(ip), net.prefix_len());
         if !cidr.address().is_unicast() && !cidr.address().is_unspecified() {
             return Err(Error::IpAddrNotAllowed(ip));
         }
