@@ -1,4 +1,3 @@
-mod device;
 mod message;
 mod network;
 mod requestor;

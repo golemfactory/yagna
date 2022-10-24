@@ -431,8 +431,7 @@ impl Handler<Connect> for Vpn {
 
                 let (tx, rx) = mpsc::channel(1);
 
-                this.ingress_senders
-                    .insert(connection.meta.clone().into(), tx);
+                this.ingress_senders.insert(connection.meta.into(), tx);
 
                 Ok(UserConnection {
                     vpn,
@@ -506,7 +505,8 @@ impl Handler<Ingress> for Vpn {
                     desc.protocol,
                     desc.remote,
                 );
-                // let _ = proxy.unbind(desc).await;
+                //TODO Rafał?
+                // self.ingress_senders.remove(&desc);
                 ActorResponse::reply(Ok(()))
             }
             IngressEvent::Packet { payload, desc, .. } => {
@@ -535,15 +535,25 @@ impl Handler<Egress> for Vpn {
     fn handle(&mut self, msg: Egress, _: &mut Self::Context) -> Self::Result {
         let frame = msg.event.payload.into_vec();
 
-        log::debug!("[vpn] egress -> runtime packet {} B", frame.len());
+        log::warn!("[vpn] egress -> runtime packet {} B", frame.len());
 
-        let endpoint = match self.vpn.endpoint(msg.event.remote) {
-            Some(endpoint) => endpoint,
+        match self.vpn.endpoint(msg.event.remote) {
+            Some(endpoint) => {
+                let fut = endpoint
+                    .udp
+                    .push_raw_as(&self.node_id, frame)
+                    .map(|r| match r {
+                        Ok(_) => Ok(()),
+                        Err(e) => Err(Error::Other(e.to_string())),
+                    });
+
+                ActorResponse::r#async(fut.into_actor(self))
+            }
             None => {
                 log::debug!("No endpoint for egress packet");
-                return ActorResponse::reply(Ok(()));
+                ActorResponse::reply(Ok(()))
             }
-        };
+        }
         /*
         {
             let addr = endpoint.tcp.addr();
@@ -555,15 +565,6 @@ impl Handler<Egress> for Vpn {
                     );
                 };
                 */
-        let fut = endpoint
-            .udp
-            .push_raw_as(&self.node_id, frame)
-            .map(|r| match r {
-                Ok(_) => Ok(()),
-                Err(e) => Err(Error::Other(e.to_string())),
-            });
-
-        ActorResponse::r#async(fut.into_actor(self))
     }
 }
 
@@ -579,11 +580,10 @@ impl Handler<Shutdown> for Vpn {
 async fn vpn_ingress_handler(rx: IngressReceiver, addr: Addr<Vpn>) {
     let mut rx = UnboundedReceiverStream::new(rx);
     while let Some(event) = rx.next().await {
-        //TODO Rafał Maybe trysend?
         addr.do_send(Ingress { event });
     }
 
-    log::debug!("[vpn] ingress handler stopped");
+    log::warn!("[vpn] ingress handler stopped");
 }
 
 async fn vpn_egress_handler(rx: EgressReceiver, addr: Addr<Vpn>) {
@@ -592,7 +592,7 @@ async fn vpn_egress_handler(rx: EgressReceiver, addr: Addr<Vpn>) {
         addr.do_send(Egress { event });
     }
 
-    log::debug!("[vpn] egress -> runtime handler stopped");
+    log::warn!("[vpn] egress handler stopped");
 }
 
 fn net_route(ip: IpAddr) -> Result<Route> {

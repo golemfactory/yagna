@@ -247,7 +247,7 @@ impl VpnWebSocket {
 
     fn forward(&self, data: Vec<u8>, ctx: &mut <Self as Actor>::Context) {
         let vpn = self.vpn.clone();
-        let connection = self.connection.clone();
+        let connection = self.connection;
         vpn.send(Packet { data, connection })
             .into_actor(self)
             .map(move |result, this, ctx| {
