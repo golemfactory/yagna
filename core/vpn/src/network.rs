@@ -425,6 +425,7 @@ impl Handler<Connect> for Vpn {
         let fut = async move { network.connect(remote, TCP_CONN_TIMEOUT).await }
             .into_actor(self)
             .map(move |result, this, ctx| {
+                //TODO Rafał Handle connection error?
                 let connection = result?;
                 log::info!("VPN {}: connected to {:?}", id, remote);
                 let vpn = ctx.address().recipient();
@@ -441,6 +442,28 @@ impl Handler<Connect> for Vpn {
             });
 
         ActorResponse::r#async(fut)
+    }
+}
+
+impl Handler<Disconnect> for Vpn {
+    type Result = <Disconnect as Message>::Result;
+
+    fn handle(&mut self, msg: Disconnect, _: &mut Self::Context) -> Self::Result {
+        match self.ingress_senders.remove(&msg.desc) {
+            Some(sender) => {
+                log::info!(
+                    "Dropping connection to {:?}: {:?}",
+                    msg.desc.remote,
+                    msg.reason
+                );
+
+                sender.close_channel();
+                // self.stack_network.stack.disconnect(conn.meta.handle);
+
+                Ok(())
+            }
+            None => Err(Error::ConnectionError("no connection".into())),
+        }
     }
 }
 
@@ -487,7 +510,7 @@ impl Handler<RpcRawCall> for Vpn {
 impl Handler<Ingress> for Vpn {
     type Result = ActorResponse<Self, Result<()>>;
 
-    fn handle(&mut self, msg: Ingress, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: Ingress, ctx: &mut Self::Context) -> Self::Result {
         match msg.event {
             IngressEvent::InboundConnection { desc } => {
                 log::debug!(
@@ -505,21 +528,25 @@ impl Handler<Ingress> for Vpn {
                     desc.protocol,
                     desc.remote,
                 );
-                //TODO Rafał?
-                // self.ingress_senders.remove(&desc);
+                ctx.address()
+                    .do_send(Disconnect::new(desc, DisconnectReason::SocketClosed));
+
                 ActorResponse::reply(Ok(()))
             }
             IngressEvent::Packet { payload, desc, .. } => {
                 if let Some(mut sender) = self.ingress_senders.get(&desc).cloned() {
                     log::debug!("[vpn] ingress proxy: send to {:?}", desc.local);
 
-                    let fut = async move {
-                        sender
-                            .send(payload)
-                            .map_err(|e| Error::Other(e.to_string()))
-                            .await
-                    };
-                    ActorResponse::r#async(fut.into_actor(self))
+                    let fut = async move { sender.send(payload).await }
+                        .into_actor(self)
+                        .map(move |res, _, ctx| {
+                            res.map_err(|e| {
+                                ctx.address()
+                                    .do_send(Disconnect::new(desc, DisconnectReason::SinkClosed));
+                                Error::Other(e.to_string())
+                            })
+                        });
+                    ActorResponse::r#async(fut)
                 } else {
                     log::debug!("[vpn] ingress proxy: no connection to {:?}", desc);
                     ActorResponse::reply(Ok(()))
