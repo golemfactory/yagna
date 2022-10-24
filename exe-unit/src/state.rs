@@ -147,6 +147,7 @@ impl Batch {
             RuntimeEventKind::StdOut(out) => {
                 let state = self.state(idx)?;
                 let output = state.stdout.write(output_bytes(out));
+                log::info!("output: {output}");
                 output
                     .filter(|_| state.stdout.stream)
                     .map(|o| RuntimeEvent {
