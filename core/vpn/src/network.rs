@@ -10,7 +10,6 @@ use futures::channel::{mpsc, oneshot};
 use futures::{future, future::BoxFuture, Future, FutureExt, SinkExt, StreamExt, TryFutureExt};
 use smoltcp::iface::Route;
 use smoltcp::wire::{EthernetAddress, HardwareAddress, IpAddress, IpCidr, IpEndpoint};
-use tokio::sync::RwLock;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use uuid::Uuid;
 
