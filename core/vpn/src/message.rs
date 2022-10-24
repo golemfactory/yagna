@@ -2,7 +2,10 @@ use crate::Result;
 use actix::{Message, Recipient};
 use futures::channel::mpsc;
 use ya_client_model::net::*;
-use ya_utils_networking::vpn::{stack::connection::Connection, Protocol};
+use ya_utils_networking::vpn::{
+    stack::{connection::Connection, EgressEvent, IngressEvent},
+    Protocol,
+};
 
 #[derive(Debug, Message)]
 #[rtype(result = "Result<Vec<Address>>")]
@@ -63,4 +66,16 @@ pub struct UserConnection {
     pub vpn: Recipient<Packet>,
     pub rx: mpsc::Receiver<Vec<u8>>,
     pub connection: Connection,
+}
+
+#[derive(Debug, Message)]
+#[rtype(result = "Result<()>")]
+pub struct Ingress {
+    pub event: IngressEvent,
+}
+
+#[derive(Debug, Message)]
+#[rtype(result = "Result<()>")]
+pub struct Egress {
+    pub event: EgressEvent,
 }

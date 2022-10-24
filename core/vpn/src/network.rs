@@ -217,9 +217,9 @@ impl VpnSupervisor {
 
 pub struct Vpn {
     node_id: String,
-    vpn: Arc<std::sync::RwLock<Network<network::DuoEndpoint<Endpoint>>>>,
+    vpn: Network<network::DuoEndpoint<Endpoint>>,
     network: net::Network,
-    ingress_senders: Arc<std::sync::RwLock<HashMap<SocketDesc, mpsc::Sender<Vec<u8>>>>>,
+    ingress_senders: HashMap<SocketDesc, mpsc::Sender<Vec<u8>>>,
 }
 
 impl Vpn {
@@ -230,9 +230,9 @@ impl Vpn {
     ) -> Self {
         Self {
             node_id: node_id.to_string(),
-            vpn: Arc::new(std::sync::RwLock::new(vpn)),
+            vpn,
             network,
-            ingress_senders: Arc::new(std::sync::RwLock::new(Default::default())),
+            ingress_senders: Default::default(),
         }
     }
 }
@@ -241,14 +241,13 @@ impl Actor for Vpn {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        let vpn = self.vpn.read().expect("dupa");
-        let id = vpn.id();
+        let id = self.vpn.id();
         let vpn_url = gsb_local_url(id);
         let addr = ctx.address();
         self.network.spawn_local();
 
         actix_rpc::bind(&vpn_url, addr.clone().recipient());
-        actix_rpc::bind_raw(&format!("{vpn_url}/raw"), addr.recipient());
+        actix_rpc::bind_raw(&format!("{vpn_url}/raw"), addr.clone().recipient());
 
         let ingress_rx = self
             .network
@@ -260,11 +259,11 @@ impl Actor for Vpn {
             .egress_receiver()
             .expect("Egress receiver already taken");
 
-        vpn_ingress_handler(ingress_rx, self.ingress_senders.clone())
+        vpn_ingress_handler(ingress_rx, addr.clone())
             .into_actor(self)
             .spawn(ctx);
 
-        vpn_egress_handler(egress_rx, self.vpn.clone(), self.node_id.clone())
+        vpn_egress_handler(egress_rx, addr)
             .into_actor(self)
             .spawn(ctx);
 
@@ -272,12 +271,12 @@ impl Actor for Vpn {
     }
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
-        log::warn!("Stopping VPN {}", self.vpn.read().expect("dupa").id());
+        log::warn!("Stopping VPN {}", self.vpn.id());
         Running::Stop
     }
 
     fn stopped(&mut self, ctx: &mut Self::Context) {
-        let id = self.vpn.read().expect("dupa").id().clone();
+        let id = self.vpn.id().clone();
         let vpn_url = gsb_local_url(&id);
 
         async move {
@@ -310,19 +309,18 @@ impl Handler<AddAddress> for Vpn {
     fn handle(&mut self, msg: AddAddress, _: &mut Self::Context) -> Self::Result {
         let ip: IpAddr = msg.address.parse()?;
 
-        let mut vpn = self.vpn.write().expect("dupa");
-        if !vpn.as_ref().contains(&ip) {
+        if !self.vpn.as_ref().contains(&ip) {
             return Err(Error::NetAddrMismatch(ip));
         }
 
-        let cidr = IpCidr::new(IpAddress::from(ip), vpn.as_ref().prefix_len());
+        let cidr = IpCidr::new(IpAddress::from(ip), self.vpn.as_ref().prefix_len());
         if !cidr.address().is_unicast() && !cidr.address().is_unspecified() {
             return Err(Error::IpAddrNotAllowed(ip));
         }
 
         self.network.stack.add_address(cidr);
 
-        vpn.add_address(&msg.address)?;
+        self.vpn.add_address(&msg.address)?;
 
         Ok(())
     }
@@ -334,8 +332,6 @@ impl Handler<GetNodes> for Vpn {
     fn handle(&mut self, _: GetNodes, _: &mut Self::Context) -> Self::Result {
         Ok(self
             .vpn
-            .read()
-            .expect("dupa")
             .nodes()
             .iter()
             .flat_map(|(id, ips)| {
@@ -355,15 +351,15 @@ impl Handler<AddNode> for Vpn {
 
     fn handle(&mut self, msg: AddNode, _: &mut Self::Context) -> Self::Result {
         let ip = to_ip(&msg.address)?;
-        let mut vpn = self.vpn.write().expect("dupa");
 
-        match vpn.add_node(ip, &msg.id, gsb_remote_url) {
+        match self.vpn.add_node(ip, &msg.id, gsb_remote_url) {
             Ok(_) | Err(Error::IpAddrTaken(_)) => {}
             Err(err) => return Err(err),
         }
 
-        let vpn_id = vpn.id().clone();
-        let futs = vpn
+        let vpn_id = self.vpn.id().clone();
+        let futs = self
+            .vpn
             .endpoints()
             .values()
             .cloned()
@@ -389,12 +385,11 @@ impl Handler<RemoveNode> for Vpn {
     type Result = <RemoveNode as Message>::Result;
 
     fn handle(&mut self, msg: RemoveNode, _: &mut Self::Context) -> Self::Result {
-        let mut vpn = self.vpn.write().expect("dupa");
+        self.vpn.remove_node(&msg.id);
 
-        vpn.remove_node(&msg.id);
-
-        let vpn_id = vpn.id().clone();
-        let futs = vpn
+        let vpn_id = self.vpn.id().clone();
+        let futs = self
+            .vpn
             .endpoints()
             .values()
             .cloned()
@@ -423,36 +418,31 @@ impl Handler<Connect> for Vpn {
             Err(err) => return ActorResponse::reply(Err(err)),
         };
 
-        let vpn = self.vpn.read().expect("dupa");
+        log::info!("VPN {}: connecting to {:?}", self.vpn.id(), remote);
 
-        log::info!("VPN {}: connecting to {:?}", vpn.id(), remote);
-
-        let id = vpn.id().clone();
+        let id = self.vpn.id().clone();
         let network = self.network.clone();
-        let ingress_senders = self.ingress_senders.clone();
         let vpn = ctx.address().recipient();
 
-        let fut = async move {
-            log::info!("VPN {}: DUPA connecting to {:?}", id, remote);
-            let connection = network.connect(remote, TCP_CONN_TIMEOUT).await?;
+        let fut = async move { network.connect(remote, TCP_CONN_TIMEOUT).await }
+            .into_actor(self)
+            .map(move |result, this, ctx| {
+                let connection = result?;
+                log::info!("VPN {}: connected to {:?}", id, remote);
 
-            log::info!("VPN {}: connected to {:?}", id, remote);
+                let (tx, rx) = mpsc::channel(1);
 
-            let (tx, rx) = mpsc::channel(1);
+                this.ingress_senders
+                    .insert(connection.meta.clone().into(), tx);
 
-            ingress_senders
-                .write()
-                .unwrap()
-                .insert(connection.meta.clone().into(), tx);
+                Ok(UserConnection {
+                    vpn,
+                    rx,
+                    connection,
+                })
+            });
 
-            Ok(UserConnection {
-                vpn,
-                rx,
-                connection,
-            })
-        };
-
-        ActorResponse::r#async(fut.into_actor(self))
+        ActorResponse::r#async(fut)
     }
 }
 
@@ -463,8 +453,6 @@ impl Handler<Packet> for Vpn {
     fn handle(&mut self, pkt: Packet, _: &mut Self::Context) -> Self::Result {
         if !self
             .ingress_senders
-            .read()
-            .unwrap()
             .contains_key(&pkt.connection.meta.into())
         {
             return ActorResponse::reply(Err(Error::ConnectionError("no connection".into())));
@@ -498,6 +486,88 @@ impl Handler<RpcRawCall> for Vpn {
     }
 }
 
+impl Handler<Ingress> for Vpn {
+    type Result = ActorResponse<Self, Result<()>>;
+
+    fn handle(&mut self, msg: Ingress, ctx: &mut Self::Context) -> Self::Result {
+        match msg.event {
+            IngressEvent::InboundConnection { desc } => {
+                log::debug!(
+                    "[vpn] ingress: connection to {:?} ({}) from {:?}",
+                    desc.local,
+                    desc.protocol,
+                    desc.remote
+                );
+                ActorResponse::reply(Ok(()))
+            }
+            IngressEvent::Disconnected { desc } => {
+                log::debug!(
+                    "[vpn] ingress: disconnect {:?} ({}) by {:?}",
+                    desc.local,
+                    desc.protocol,
+                    desc.remote,
+                );
+                // let _ = proxy.unbind(desc).await;
+                ActorResponse::reply(Ok(()))
+            }
+            IngressEvent::Packet { payload, desc, .. } => {
+                if let Some(mut sender) = self.ingress_senders.get(&desc).cloned() {
+                    log::debug!("[vpn] ingress proxy: send to {:?}", desc.local);
+
+                    let fut = async move {
+                        sender
+                            .send(payload)
+                            .map_err(|e| Error::Other(e.to_string()))
+                            .await
+                    };
+                    ActorResponse::r#async(fut.into_actor(self))
+                } else {
+                    log::debug!("[vpn] ingress proxy: no connection to {:?}", desc);
+                    ActorResponse::reply(Ok(()))
+                }
+            }
+        }
+    }
+}
+
+impl Handler<Egress> for Vpn {
+    type Result = ActorResponse<Self, Result<()>>;
+
+    fn handle(&mut self, msg: Egress, ctx: &mut Self::Context) -> Self::Result {
+        let frame = msg.event.payload.into_vec();
+
+        log::debug!("[vpn] egress -> runtime packet {} B", frame.len());
+
+        let endpoint = match self.vpn.endpoint(msg.event.remote) {
+            Some(endpoint) => endpoint,
+            None => {
+                log::debug!("No endpoint for egress packet");
+                return ActorResponse::reply(Ok(()));
+            }
+        };
+        /*
+        {
+            let addr = endpoint.tcp.addr();
+            log::warn!(
+                "VPN {}: send error to endpoint '{}': {}",
+                        vpn.id(),
+                        addr,
+                        e
+                    );
+                };
+                */
+        let fut = endpoint
+            .udp
+            .push_raw_as(&self.node_id, frame)
+            .map(|r| match r {
+                Ok(_) => Ok(()),
+                Err(e) => Err(Error::Other(e.to_string())),
+            });
+
+        ActorResponse::r#async(fut.into_actor(self))
+    }
+}
+
 impl Handler<Shutdown> for Vpn {
     type Result = <Shutdown as Message>::Result;
 
@@ -507,73 +577,20 @@ impl Handler<Shutdown> for Vpn {
     }
 }
 
-async fn vpn_ingress_handler(
-    rx: IngressReceiver,
-    ingress_senders: Arc<std::sync::RwLock<HashMap<SocketDesc, mpsc::Sender<Vec<u8>>>>>,
-) {
+async fn vpn_ingress_handler(rx: IngressReceiver, addr: Addr<Vpn>) {
     let mut rx = UnboundedReceiverStream::new(rx);
     while let Some(event) = rx.next().await {
-        match event {
-            IngressEvent::InboundConnection { desc } => log::debug!(
-                "[vpn] ingress: connection to {:?} ({}) from {:?}",
-                desc.local,
-                desc.protocol,
-                desc.remote
-            ),
-            IngressEvent::Disconnected { desc } => {
-                log::debug!(
-                    "[vpn] ingress: disconnect {:?} ({}) by {:?}",
-                    desc.local,
-                    desc.protocol,
-                    desc.remote,
-                );
-                // let _ = proxy.unbind(desc).await;
-            }
-            IngressEvent::Packet { payload, desc, .. } => {
-                if let Some(mut sender) = ingress_senders.read().unwrap().get(&desc).cloned() {
-                    log::debug!("[vpn] ingress proxy: send to {:?}", desc.local);
-
-                    if let Err(e) = sender.send(payload).await {
-                        log::debug!("[vpn] ingress proxy: send error: {}", e);
-                    }
-                } else {
-                    log::debug!("[vpn] ingress proxy: no connection to {:?}", desc);
-                }
-            }
-        }
+        //TODO Rafał Maybe trysend?
+        addr.do_send(Ingress { event });
     }
 
     log::debug!("[vpn] ingress handler stopped");
 }
 
-async fn vpn_egress_handler(
-    rx: EgressReceiver,
-    vpn: Arc<std::sync::RwLock<Network<network::DuoEndpoint<Endpoint>>>>,
-    node_id: String,
-) {
+async fn vpn_egress_handler(rx: EgressReceiver, addr: Addr<Vpn>) {
     let mut rx = UnboundedReceiverStream::new(rx);
     while let Some(event) = rx.next().await {
-        let frame = event.payload.into_vec();
-
-        log::debug!("[vpn] egress -> runtime packet {} B", frame.len());
-
-        let endpoint = match vpn.read().expect("dupa").endpoint(event.remote) {
-            Some(endpoint) => endpoint,
-            None => {
-                log::debug!("No endpoint for egress packet");
-                continue;
-            }
-        };
-
-        if let Err(e) = endpoint.udp.push_raw_as(&node_id, frame).await {
-            let addr = endpoint.tcp.addr();
-            log::warn!(
-                "VPN {}: send error to endpoint '{}': {}",
-                vpn.read().expect("dupa").id(),
-                addr,
-                e
-            );
-        };
+        addr.do_send(Egress { event });
     }
 
     log::debug!("[vpn] egress -> runtime handler stopped");
