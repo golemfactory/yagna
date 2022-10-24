@@ -49,7 +49,6 @@ fn vpn_web_scope(path: &str) -> actix_web::Scope {
         .service(get_nodes)
         .service(add_node)
         .service(remove_node)
-        // .service(get_connections)
         .service(connect_tcp)
 }
 
