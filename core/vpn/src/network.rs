@@ -107,7 +107,7 @@ impl VpnSupervisor {
         let actor = self
             .arbiter
             .spawn_ext(async move {
-                let stack_net = {
+                let stack_network = {
                     let config = Rc::new(StackConfig {
                         max_transmission_unit: DEFAULT_MAX_PACKET_SIZE,
                         ..Default::default()
@@ -133,7 +133,7 @@ impl VpnSupervisor {
                     net::Network::new("vpn", config, stack)
                 };
 
-                let vpn = Vpn::new(node_id, vpn_net, stack_net);
+                let vpn = Vpn::new(node_id, vpn_net, stack_network);
                 Ok::<_, Error>(vpn.start())
             })
             .await?;
@@ -217,7 +217,7 @@ impl VpnSupervisor {
 pub struct Vpn {
     node_id: String,
     vpn: Network<network::DuoEndpoint<Endpoint>>,
-    network: net::Network,
+    stack_network: net::Network,
     ingress_senders: HashMap<SocketDesc, mpsc::Sender<Vec<u8>>>,
 }
 
@@ -225,12 +225,12 @@ impl Vpn {
     pub fn new(
         node_id: NodeId,
         vpn: Network<network::DuoEndpoint<Endpoint>>,
-        network: net::Network,
+        stack_network: net::Network,
     ) -> Self {
         Self {
             node_id: node_id.to_string(),
             vpn,
-            network,
+            stack_network,
             ingress_senders: Default::default(),
         }
     }
@@ -243,18 +243,18 @@ impl Actor for Vpn {
         let id = self.vpn.id();
         let vpn_url = gsb_local_url(id);
         let addr = ctx.address();
-        self.network.spawn_local();
+        self.stack_network.spawn_local();
 
         actix_rpc::bind(&vpn_url, addr.clone().recipient());
         actix_rpc::bind_raw(&format!("{vpn_url}/raw"), addr.clone().recipient());
 
         let ingress_rx = self
-            .network
+            .stack_network
             .ingress_receiver()
             .expect("Ingress receiver already taken");
 
         let egress_rx = self
-            .network
+            .stack_network
             .egress_receiver()
             .expect("Egress receiver already taken");
 
@@ -293,7 +293,7 @@ impl Handler<GetAddresses> for Vpn {
 
     fn handle(&mut self, _: GetAddresses, _: &mut Self::Context) -> Self::Result {
         Ok(self
-            .network
+            .stack_network
             .stack
             .addresses()
             .into_iter()
@@ -317,7 +317,7 @@ impl Handler<AddAddress> for Vpn {
             return Err(Error::IpAddrNotAllowed(ip));
         }
 
-        self.network.stack.add_address(cidr);
+        self.stack_network.stack.add_address(cidr);
 
         self.vpn.add_address(&msg.address)?;
 
@@ -420,7 +420,7 @@ impl Handler<Connect> for Vpn {
         log::info!("VPN {}: connecting to {:?}", self.vpn.id(), remote);
 
         let id = self.vpn.id().clone();
-        let network = self.network.clone();
+        let network = self.stack_network.clone();
 
         let fut = async move { network.connect(remote, TCP_CONN_TIMEOUT).await }
             .into_actor(self)
@@ -456,7 +456,7 @@ impl Handler<Packet> for Vpn {
             return ActorResponse::reply(Err(Error::ConnectionError("no connection".into())));
         }
         let fut = self
-            .network
+            .stack_network
             .send(pkt.data, pkt.connection)
             .map_err(|e| Error::Other(e.to_string()));
         ActorResponse::r#async(fut.into_actor(self))
@@ -468,8 +468,8 @@ impl Handler<RpcEnvelope<VpnPacket>> for Vpn {
     type Result = <RpcEnvelope<VpnPacket> as Message>::Result;
 
     fn handle(&mut self, msg: RpcEnvelope<VpnPacket>, _: &mut Self::Context) -> Self::Result {
-        self.network.receive(msg.into_inner().0);
-        self.network.poll();
+        self.stack_network.receive(msg.into_inner().0);
+        self.stack_network.poll();
         Ok(())
     }
 }
@@ -478,8 +478,8 @@ impl Handler<RpcRawCall> for Vpn {
     type Result = std::result::Result<Vec<u8>, ya_service_bus::Error>;
 
     fn handle(&mut self, msg: RpcRawCall, _: &mut Self::Context) -> Self::Result {
-        self.network.receive(msg.body);
-        self.network.poll();
+        self.stack_network.receive(msg.body);
+        self.stack_network.poll();
         Ok(Vec::new())
     }
 }
@@ -554,17 +554,6 @@ impl Handler<Egress> for Vpn {
                 ActorResponse::reply(Ok(()))
             }
         }
-        /*
-        {
-            let addr = endpoint.tcp.addr();
-            log::warn!(
-                "VPN {}: send error to endpoint '{}': {}",
-                        vpn.id(),
-                        addr,
-                        e
-                    );
-                };
-                */
     }
 }
 
