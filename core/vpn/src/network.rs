@@ -450,7 +450,7 @@ impl Handler<Disconnect> for Vpn {
 
     fn handle(&mut self, msg: Disconnect, _: &mut Self::Context) -> Self::Result {
         match self.ingress_senders.remove(&msg.desc) {
-            Some(sender) => {
+            Some(mut sender) => {
                 log::info!(
                     "Dropping connection to {:?}: {:?}",
                     msg.desc.remote,
