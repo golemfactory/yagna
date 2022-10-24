@@ -85,7 +85,13 @@ impl VpnSupervisor {
         network: ya_client_model::net::NewNetwork,
     ) -> Result<ya_client_model::net::Network> {
         let net = to_net(&network.ip, network.mask.as_ref())?;
-        let my_ip = IpCidr::new(net.hosts().next().unwrap().into(), net.prefix_len());
+        let my_ip = IpCidr::new(
+            net.hosts()
+                .next()
+                .ok_or(Error::Other("No IP address found".into()))?
+                .into(),
+            net.prefix_len(),
+        );
 
         let net_id = Uuid::new_v4().to_simple().to_string();
         let net_ip = IpCidr::new(net.addr().into(), net.prefix_len());
