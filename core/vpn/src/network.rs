@@ -2,7 +2,6 @@ use std::collections::{BTreeSet, HashMap};
 use std::net::IpAddr;
 use std::rc::Rc;
 use std::str::FromStr;
-use std::sync::Arc;
 
 use actix::prelude::*;
 use futures::channel::oneshot::Canceled;
@@ -412,7 +411,7 @@ impl Handler<RemoveNode> for Vpn {
 impl Handler<Connect> for Vpn {
     type Result = ActorResponse<Self, Result<UserConnection>>;
 
-    fn handle(&mut self, msg: Connect, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: Connect, _: &mut Self::Context) -> Self::Result {
         let remote = match to_ip(&msg.address) {
             Ok(ip) => IpEndpoint::new(ip.into(), msg.port),
             Err(err) => return ActorResponse::reply(Err(err)),
@@ -422,13 +421,13 @@ impl Handler<Connect> for Vpn {
 
         let id = self.vpn.id().clone();
         let network = self.network.clone();
-        let vpn = ctx.address().recipient();
 
         let fut = async move { network.connect(remote, TCP_CONN_TIMEOUT).await }
             .into_actor(self)
             .map(move |result, this, ctx| {
                 let connection = result?;
                 log::info!("VPN {}: connected to {:?}", id, remote);
+                let vpn = ctx.address().recipient();
 
                 let (tx, rx) = mpsc::channel(1);
 
@@ -489,7 +488,7 @@ impl Handler<RpcRawCall> for Vpn {
 impl Handler<Ingress> for Vpn {
     type Result = ActorResponse<Self, Result<()>>;
 
-    fn handle(&mut self, msg: Ingress, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: Ingress, _: &mut Self::Context) -> Self::Result {
         match msg.event {
             IngressEvent::InboundConnection { desc } => {
                 log::debug!(
@@ -533,7 +532,7 @@ impl Handler<Ingress> for Vpn {
 impl Handler<Egress> for Vpn {
     type Result = ActorResponse<Self, Result<()>>;
 
-    fn handle(&mut self, msg: Egress, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: Egress, _: &mut Self::Context) -> Self::Result {
         let frame = msg.event.payload.into_vec();
 
         log::debug!("[vpn] egress -> runtime packet {} B", frame.len());
