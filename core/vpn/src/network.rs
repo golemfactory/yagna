@@ -427,16 +427,16 @@ impl Handler<Connect> for Vpn {
         let fut = async move { network.connect(remote, TCP_CONN_TIMEOUT).await }
             .into_actor(self)
             .map(move |result, this, ctx| {
-                let connection = result?;
+                let stack_connection = result?;
                 log::info!("VPN {}: connected to {:?}", id, remote);
                 let vpn = ctx.address().recipient();
 
                 let (tx, rx) = mpsc::channel(1);
 
                 this.connections.insert(
-                    connection.meta.into(),
+                    stack_connection.meta.into(),
                     InternalConnection {
-                        stack_connection: connection.clone(),
+                        stack_connection: stack_connection.clone(),
                         ingress_tx: tx,
                     },
                 );
@@ -444,7 +444,7 @@ impl Handler<Connect> for Vpn {
                 Ok(UserConnection {
                     vpn,
                     rx,
-                    connection,
+                    stack_connection,
                 })
             });
 

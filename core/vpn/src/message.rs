@@ -81,7 +81,7 @@ pub struct DataSent;
 pub struct UserConnection {
     pub vpn: Recipient<Packet>,
     pub rx: mpsc::Receiver<Vec<u8>>,
-    pub connection: Connection,
+    pub stack_connection: Connection,
 }
 
 #[derive(Clone, Debug)]

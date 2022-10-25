@@ -241,7 +241,7 @@ impl VpnWebSocket {
             heartbeat: Instant::now(),
             vpn: conn.vpn,
             vpn_rx: Some(conn.rx),
-            meta: conn.connection.meta,
+            meta: conn.stack_connection.meta,
         }
     }
 
