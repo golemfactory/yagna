@@ -9,6 +9,16 @@ license = "LGPL-3.0"
 description = "Yagna manifest utils"
 keywords = ["golem", "yagna"]
 
+[[bin]]
+name = "schema"
+path = "src/schema_bin.rs"
+required-features = ["schema"]
+test = false
+bench = false
+
+[features]
+schema = ["schemars"]
+
 [dependencies]
 ya-agreement-utils = "0.4"
 ya-utils-path = "0.1"
@@ -30,6 +40,7 @@ url = {version = "2.2", features = ["serde"] }
 openssl = { version = "0.10", features = ["vendored"] }
 md-5 = "0.10"
 log = "0.4"
+schemars = { version="0.8", features = ["preserve_order", "chrono", "url"], optional = true }
 
 [dev-dependencies]
 tempfile = "3"

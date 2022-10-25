@@ -1714,6 +1714,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77c90badedccf4105eca100756a0b1289e191f6fcbdadd3cee1d2f614f97da8f"
 
 [[package]]
+name = "dyn-clone"
+version = "1.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f94fa09c2aeea5b8839e414b7b841bf429fd25b9c522116ac97ee87856d88b2"
+
+[[package]]
 name = "either"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2930,6 +2936,7 @@ checksum = "10a35a97730320ffe8e2d410b5d3b69279b98d2c14bdb8b70ea89ecf7888d41e"
 dependencies = [
  "autocfg 1.1.0",
  "hashbrown 0.12.3",
+ "serde",
 ]
 
 [[package]]
@@ -5335,6 +5342,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "schemars"
+version = "0.8.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1847b767a3d62d95cbf3d8a9f0e421cf57a0d8aa4f411d4b16525afb0284d4ed"
+dependencies = [
+ "chrono",
+ "dyn-clone",
+ "indexmap",
+ "schemars_derive",
+ "serde",
+ "serde_json",
+ "url",
+]
+
+[[package]]
+name = "schemars_derive"
+version = "0.8.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af4d7e1b012cb3d9129567661a63755ea4b8a7386d339dc945ae187e403c6743"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "serde_derive_internals",
+ "syn",
+]
+
+[[package]]
 name = "scopeguard"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5588,6 +5622,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_derive_internals"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85bf8229e7920a9f636479437026331ce11aa132b4dde37d121944a44d6e5f3c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "serde_json"
 version = "1.0.85"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5674,7 +5719,7 @@ version = "0.5.1"
 source = "git+https://github.com/tworec/serial_test.git?branch=actix_rt_test#6a9176a54cab7e3682a05dbac3741812b221a8c5"
 dependencies = [
  "lazy_static",
- "parking_lot 0.11.2",
+ "parking_lot 0.10.2",
  "serial_test_derive 0.5.1",
 ]
 
@@ -6842,7 +6887,7 @@ checksum = "e7141e445af09c8919f1d5f8a20dae0b20c3b57a45dee0d5823c6ed5d237f15a"
 dependencies = [
  "bitflags",
  "chrono",
- "rustc_version 0.4.0",
+ "rustc_version 0.2.3",
 ]
 
 [[package]]
@@ -7447,7 +7492,7 @@ dependencies = [
 
 [[package]]
 name = "ya-exe-unit"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "actix",
  "actix-files",
@@ -7581,6 +7626,7 @@ dependencies = [
  "md-5",
  "openssl",
  "regex",
+ "schemars",
  "semver 1.0.13",
  "serde",
  "serde_json",
@@ -7909,7 +7955,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=ec174a250fc014fba084088a90f9b1c95d613ed3#ec174a250fc014fba084088a90f9b1c95d613ed3"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=6e2c55808f363c948805c99b90d47c9c2a3eed7d#6e2c55808f363c948805c99b90d47c9c2a3eed7d"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7930,7 +7976,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-core"
 version = "0.3.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=ec174a250fc014fba084088a90f9b1c95d613ed3#ec174a250fc014fba084088a90f9b1c95d613ed3"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=6e2c55808f363c948805c99b90d47c9c2a3eed7d#6e2c55808f363c948805c99b90d47c9c2a3eed7d"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7960,7 +8006,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-proto"
 version = "0.4.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=ec174a250fc014fba084088a90f9b1c95d613ed3#ec174a250fc014fba084088a90f9b1c95d613ed3"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=6e2c55808f363c948805c99b90d47c9c2a3eed7d#6e2c55808f363c948805c99b90d47c9c2a3eed7d"
 dependencies = [
  "anyhow",
  "bytes 1.2.1",
@@ -7978,7 +8024,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.4.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=ec174a250fc014fba084088a90f9b1c95d613ed3#ec174a250fc014fba084088a90f9b1c95d613ed3"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=6e2c55808f363c948805c99b90d47c9c2a3eed7d#6e2c55808f363c948805c99b90d47c9c2a3eed7d"
 dependencies = [
  "derive_more",
  "futures 0.3.24",
@@ -7998,7 +8044,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-util"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=ec174a250fc014fba084088a90f9b1c95d613ed3#ec174a250fc014fba084088a90f9b1c95d613ed3"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=6e2c55808f363c948805c99b90d47c9c2a3eed7d#6e2c55808f363c948805c99b90d47c9c2a3eed7d"
 dependencies = [
  "bytes 1.2.1",
  "derive_more",
@@ -8006,7 +8052,7 @@ dependencies = [
 
 [[package]]
 name = "ya-runtime-api"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "bytes 1.2.1",
@@ -8019,6 +8065,7 @@ dependencies = [
  "serde_json",
  "tokio 1.21.1",
  "tokio-util 0.7.4",
+ "url",
 ]
 
 [[package]]

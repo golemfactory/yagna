@@ -40,9 +40,6 @@ enum Commands {
     /// Manage settings
     Settings(SettingsCommand),
 
-    /// Manage trusted keys
-    Keystore(ProviderCommand),
-
     /// Show provider status
     Status,
 
@@ -52,11 +49,6 @@ enum Commands {
     #[structopt(external_subcommand)]
     #[structopt(setting = structopt::clap::AppSettings::Hidden)]
     Other(Vec<String>),
-}
-
-#[derive(StructOpt)]
-pub struct ProviderCommand {
-    args: Vec<String>,
 }
 
 #[derive(StructOpt)]
@@ -100,13 +92,6 @@ async fn my_main() -> Result</*exit code*/ i32> {
             SettingsCommand::Show => settings_show::run().await,
         },
         Commands::Status => status::run().await,
-        Commands::Keystore(mut command) => {
-            command.args.insert(0, "keystore".to_string());
-            Ok(command::YaCommand::new()?
-                .ya_provider()?
-                .forward(command.args)
-                .await?)
-        }
         Commands::Complete(complete) => {
             let binary_name = clap::crate_name!();
             println!(
