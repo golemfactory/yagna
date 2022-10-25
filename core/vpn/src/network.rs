@@ -85,7 +85,7 @@ impl VpnSupervisor {
         network: ya_client_model::net::NewNetwork,
     ) -> Result<ya_client_model::net::Network> {
         let net = to_net(&network.ip, network.mask.as_ref())?;
-        let my_ip = IpCidr::new(
+        let node_ip = IpCidr::new(
             net.hosts()
                 .next()
                 .ok_or(Error::Other("No IP address found".into()))?
@@ -113,28 +113,11 @@ impl VpnSupervisor {
         let actor = self
             .arbiter
             .spawn_ext(async move {
-                let stack_network = {
-                    let config = Rc::new(StackConfig {
-                        max_transmission_unit: DEFAULT_MAX_PACKET_SIZE,
-                        ..Default::default()
-                    });
-
-                    let ethernet_addr = pick_up_random_ethernet_addr();
-
-                    let mut iface = tap_iface(
-                        HardwareAddress::Ethernet(ethernet_addr),
-                        config.max_transmission_unit,
-                    );
-
-                    add_iface_address(&mut iface, my_ip);
-                    add_iface_route(&mut iface, net_ip, net_route(net_gw)?);
-
-                    let stack = net::Stack::new(iface, config.clone());
-
-                    net::Network::new("vpn", config, stack)
-                };
-
-                let vpn = Vpn::new(node_id, vpn_net, stack_network);
+                let vpn = Vpn::new(
+                    node_id,
+                    vpn_net,
+                    create_stack_network(node_ip, net_ip, net_gw)?,
+                );
                 Ok::<_, Error>(vpn.start())
             })
             .await?;
@@ -686,6 +669,31 @@ fn pick_up_random_ethernet_addr() -> EthernetAddress {
             break addr;
         }
     }
+}
+
+fn create_stack_network(
+    node_ip: IpCidr,
+    network_ip: IpCidr,
+    network_gateway: IpAddr,
+) -> Result<net::Network> {
+    let config = Rc::new(StackConfig {
+        max_transmission_unit: DEFAULT_MAX_PACKET_SIZE,
+        ..Default::default()
+    });
+
+    let ethernet_addr = pick_up_random_ethernet_addr();
+
+    let mut iface = tap_iface(
+        HardwareAddress::Ethernet(ethernet_addr),
+        config.max_transmission_unit,
+    );
+
+    add_iface_address(&mut iface, node_ip);
+    add_iface_route(&mut iface, network_ip, net_route(network_gateway)?);
+
+    let stack = net::Stack::new(iface, config.clone());
+
+    Ok(net::Network::new("vpn", config, stack))
 }
 
 #[cfg(test)]
