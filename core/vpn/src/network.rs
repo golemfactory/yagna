@@ -572,7 +572,7 @@ impl Handler<Egress> for Vpn {
     fn handle(&mut self, msg: Egress, _: &mut Self::Context) -> Self::Result {
         let frame = msg.event.payload.into_vec();
 
-        log::warn!("[vpn] egress -> runtime packet {} B", frame.len());
+        log::debug!("[vpn] egress -> runtime packet {} B", frame.len());
 
         match self.vpn.endpoint(msg.event.remote) {
             Some(endpoint) => {
