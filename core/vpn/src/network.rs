@@ -662,7 +662,7 @@ impl ArbiterExt for Arbiter {
     }
 }
 
-fn pick_up_random_ethernet_addr() -> EthernetAddress {
+fn pick_random_ethernet_addr() -> EthernetAddress {
     loop {
         let addr = EthernetAddress(rand::random());
         if addr.is_unicast() {
@@ -681,7 +681,7 @@ fn create_stack_network(
         ..Default::default()
     });
 
-    let ethernet_addr = pick_up_random_ethernet_addr();
+    let ethernet_addr = pick_random_ethernet_addr();
 
     let mut iface = tap_iface(
         HardwareAddress::Ethernet(ethernet_addr),
