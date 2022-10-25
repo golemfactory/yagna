@@ -219,7 +219,7 @@ pub struct Vpn {
     node_id: String,
     vpn: Network<network::DuoEndpoint<Endpoint>>,
     stack_network: net::Network,
-    ingress_senders: HashMap<SocketDesc, mpsc::Sender<Vec<u8>>>,
+    connections: HashMap<SocketDesc, InternalConnection>,
 }
 
 impl Vpn {
@@ -232,7 +232,7 @@ impl Vpn {
             node_id: node_id.to_string(),
             vpn,
             stack_network,
-            ingress_senders: Default::default(),
+            connections: Default::default(),
         }
     }
 }
@@ -433,7 +433,13 @@ impl Handler<Connect> for Vpn {
 
                 let (tx, rx) = mpsc::channel(1);
 
-                this.ingress_senders.insert(connection.meta.into(), tx);
+                this.connections.insert(
+                    connection.meta.into(),
+                    InternalConnection {
+                        stack_connection: connection.clone(),
+                        ingress_tx: tx,
+                    },
+                );
 
                 Ok(UserConnection {
                     vpn,
@@ -450,15 +456,19 @@ impl Handler<Disconnect> for Vpn {
     type Result = <Disconnect as Message>::Result;
 
     fn handle(&mut self, msg: Disconnect, _: &mut Self::Context) -> Self::Result {
-        match self.ingress_senders.remove(&msg.desc) {
-            Some(mut sender) => {
+        match self.connections.remove(&msg.desc) {
+            Some(mut connection) => {
                 log::info!(
                     "Dropping connection to {:?}: {:?}",
                     msg.desc.remote,
                     msg.reason
                 );
 
-                sender.close_channel();
+                connection.ingress_tx.close_channel();
+
+                self.stack_network
+                    .stack
+                    .disconnect(connection.stack_connection.handle);
 
                 Ok(())
             }
@@ -472,10 +482,7 @@ impl Handler<Packet> for Vpn {
     type Result = ActorResponse<Self, Result<()>>;
 
     fn handle(&mut self, pkt: Packet, _: &mut Self::Context) -> Self::Result {
-        if !self
-            .ingress_senders
-            .contains_key(&pkt.connection.meta.into())
-        {
+        if !self.connections.contains_key(&pkt.connection.meta.into()) {
             return ActorResponse::reply(Err(Error::ConnectionError("no connection".into())));
         }
         let fut = self
@@ -535,15 +542,16 @@ impl Handler<Ingress> for Vpn {
                 ActorResponse::reply(Ok(()))
             }
             IngressEvent::Packet { payload, desc, .. } => {
-                if let Some(mut sender) = self.ingress_senders.get(&desc).cloned() {
+                if let Some(mut connection) = self.connections.get(&desc).cloned() {
                     log::debug!("[vpn] ingress proxy: send to {:?}", desc.local);
 
-                    let fut = async move { sender.send(payload).await }
+                    let fut = async move { connection.ingress_tx.send(payload).await }
                         .into_actor(self)
                         .map(move |res, _, ctx| {
                             res.map_err(|e| {
                                 ctx.address()
                                     .do_send(Disconnect::new(desc, DisconnectReason::SinkClosed));
+
                                 Error::Other(e.to_string())
                             })
                         });
@@ -593,6 +601,12 @@ impl Handler<Shutdown> for Vpn {
         ctx.stop();
         Ok(())
     }
+}
+
+#[derive(Debug, Clone)]
+struct InternalConnection {
+    pub stack_connection: stack::Connection,
+    pub ingress_tx: mpsc::Sender<Vec<u8>>,
 }
 
 async fn vpn_ingress_handler(rx: IngressReceiver, addr: Addr<Vpn>) {
