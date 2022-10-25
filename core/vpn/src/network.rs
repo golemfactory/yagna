@@ -482,14 +482,16 @@ impl Handler<Packet> for Vpn {
     type Result = ActorResponse<Self, Result<()>>;
 
     fn handle(&mut self, pkt: Packet, _: &mut Self::Context) -> Self::Result {
-        if !self.connections.contains_key(&pkt.connection.meta.into()) {
-            return ActorResponse::reply(Err(Error::ConnectionError("no connection".into())));
+        match self.connections.get(&pkt.meta.into()) {
+            Some(connection) => {
+                let fut = self
+                    .stack_network
+                    .send(pkt.data, connection.stack_connection)
+                    .map_err(|e| Error::Other(e.to_string()));
+                ActorResponse::r#async(fut.into_actor(self))
+            }
+            None => ActorResponse::reply(Err(Error::ConnectionError("no connection".into()))),
         }
-        let fut = self
-            .stack_network
-            .send(pkt.data, pkt.connection)
-            .map_err(|e| Error::Other(e.to_string()));
-        ActorResponse::r#async(fut.into_actor(self))
     }
 }
 

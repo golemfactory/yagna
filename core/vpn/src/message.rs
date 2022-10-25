@@ -3,7 +3,10 @@ use actix::{Message, Recipient};
 use futures::channel::mpsc;
 use ya_client_model::net::*;
 use ya_utils_networking::vpn::{
-    stack::{connection::Connection, EgressEvent, IngressEvent},
+    stack::{
+        connection::{Connection, ConnectionMeta},
+        EgressEvent, IngressEvent,
+    },
     Protocol, SocketDesc,
 };
 
@@ -63,7 +66,7 @@ impl Disconnect {
 #[rtype(result = "Result<()>")]
 pub struct Packet {
     pub data: Vec<u8>,
-    pub connection: Connection,
+    pub meta: ConnectionMeta,
 }
 
 #[derive(Debug, Message)]

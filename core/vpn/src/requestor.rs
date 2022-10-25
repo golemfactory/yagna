@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use ya_client_model::net::*;
 use ya_client_model::ErrorMessage;
 use ya_service_api_web::middleware::Identity;
-use ya_utils_networking::vpn::stack::connection::Connection;
+use ya_utils_networking::vpn::stack::connection::ConnectionMeta;
 use ya_utils_networking::vpn::{Error as VpnError, Protocol};
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -231,7 +231,7 @@ pub struct VpnWebSocket {
     heartbeat: Instant,
     vpn: Recipient<Packet>,
     vpn_rx: Option<mpsc::Receiver<Vec<u8>>>,
-    connection: Connection,
+    meta: ConnectionMeta,
 }
 
 impl VpnWebSocket {
@@ -241,14 +241,14 @@ impl VpnWebSocket {
             heartbeat: Instant::now(),
             vpn: conn.vpn,
             vpn_rx: Some(conn.rx),
-            connection: conn.connection,
+            meta: conn.connection.meta,
         }
     }
 
     fn forward(&self, data: Vec<u8>, ctx: &mut <Self as Actor>::Context) {
         let vpn = self.vpn.clone();
-        let connection = self.connection;
-        vpn.send(Packet { data, connection })
+        let meta = self.meta.clone();
+        vpn.send(Packet { data, meta })
             .into_actor(self)
             .map(move |result, this, ctx| {
                 if result.is_err() {
