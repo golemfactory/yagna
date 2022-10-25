@@ -119,12 +119,7 @@ impl VpnSupervisor {
                         ..Default::default()
                     });
 
-                    let ethernet_addr = loop {
-                        let addr = EthernetAddress(rand::random());
-                        if addr.is_unicast() {
-                            break addr;
-                        }
-                    };
+                    let ethernet_addr = pick_up_random_ethernet_addr();
 
                     let mut iface = tap_iface(
                         HardwareAddress::Ethernet(ethernet_addr),
@@ -665,6 +660,15 @@ impl ArbiterExt for Arbiter {
 
         self.spawn(tx_fut);
         Box::pin(rx_fut)
+    }
+}
+
+fn pick_up_random_ethernet_addr() -> EthernetAddress {
+    loop {
+        let addr = EthernetAddress(rand::random());
+        if addr.is_unicast() {
+            break addr;
+        }
     }
 }
 
