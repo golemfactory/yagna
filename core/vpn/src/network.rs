@@ -88,7 +88,7 @@ impl VpnSupervisor {
         let node_ip = IpCidr::new(
             net.hosts()
                 .next()
-                .ok_or(Error::Other("No IP address found".into()))?
+                .ok_or_else(|| Error::Other("No IP address found".into()))?
                 .into(),
             net.prefix_len(),
         );
@@ -419,7 +419,7 @@ impl Handler<Connect> for Vpn {
                 this.connections.insert(
                     stack_connection.meta.into(),
                     InternalConnection {
-                        stack_connection: stack_connection.clone(),
+                        stack_connection,
                         ingress_tx: tx,
                     },
                 );

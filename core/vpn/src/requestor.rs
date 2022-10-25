@@ -247,16 +247,18 @@ impl VpnWebSocket {
 
     fn forward(&self, data: Vec<u8>, ctx: &mut <Self as Actor>::Context) {
         let vpn = self.vpn.clone();
-        let meta = self.meta.clone();
-        vpn.send(Packet { data, meta })
-            .into_actor(self)
-            .map(move |result, this, ctx| {
-                if result.is_err() {
-                    log::error!("VPN WebSocket: VPN {} no longer exists", this.network_id);
-                    let _ = ctx.address().do_send(Shutdown {});
-                }
-            })
-            .wait(ctx);
+        vpn.send(Packet {
+            data,
+            meta: self.meta,
+        })
+        .into_actor(self)
+        .map(move |result, this, ctx| {
+            if result.is_err() {
+                log::error!("VPN WebSocket: VPN {} no longer exists", this.network_id);
+                let _ = ctx.address().do_send(Shutdown {});
+            }
+        })
+        .wait(ctx);
     }
 }
 
