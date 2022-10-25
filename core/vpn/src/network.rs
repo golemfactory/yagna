@@ -455,7 +455,10 @@ impl Handler<Disconnect> for Vpn {
 
                 Ok(())
             }
-            None => Err(Error::ConnectionError("no connection".into())),
+            None => Err(Error::ConnectionError(format!(
+                "no connection to remote: {:?}",
+                msg.desc.remote
+            ))),
         }
     }
 }
@@ -473,7 +476,10 @@ impl Handler<Packet> for Vpn {
                     .map_err(|e| Error::Other(e.to_string()));
                 ActorResponse::r#async(fut.into_actor(self))
             }
-            None => ActorResponse::reply(Err(Error::ConnectionError("no connection".into()))),
+            None => ActorResponse::reply(Err(Error::ConnectionError(format!(
+                "no connection to remote: {:?}",
+                pkt.meta.remote
+            )))),
         }
     }
 }
