@@ -4,7 +4,7 @@ use futures::channel::mpsc;
 use ya_client_model::net::*;
 use ya_utils_networking::vpn::{
     stack::{connection::Connection, EgressEvent, IngressEvent},
-    Error, Protocol, SocketDesc,
+    Protocol, SocketDesc,
 };
 
 #[derive(Debug, Message)]
@@ -57,17 +57,6 @@ impl Disconnect {
     pub fn new(desc: SocketDesc, reason: DisconnectReason) -> Self {
         Self { desc, reason }
     }
-
-    pub fn with(desc: SocketDesc, err: &Error) -> Self {
-        Self::new(
-            desc,
-            match &err {
-                Error::Cancelled => DisconnectReason::SinkClosed,
-                Error::ConnectionTimeout => DisconnectReason::ConnectionTimeout,
-                _ => DisconnectReason::ConnectionFailed,
-            },
-        )
-    }
 }
 
 #[derive(Message)]
@@ -96,8 +85,6 @@ pub struct UserConnection {
 pub enum DisconnectReason {
     SinkClosed,
     SocketClosed,
-    ConnectionFailed,
-    ConnectionTimeout,
 }
 
 impl std::fmt::Display for DisconnectReason {
