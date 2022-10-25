@@ -242,11 +242,11 @@ impl Actor for Vpn {
             .egress_receiver()
             .expect("Egress receiver already taken");
 
-        vpn_ingress_handler(ingress_rx, addr.clone())
+        vpn_ingress_handler(ingress_rx, addr.clone(), id.clone())
             .into_actor(self)
             .spawn(ctx);
 
-        vpn_egress_handler(egress_rx, addr)
+        vpn_egress_handler(egress_rx, addr, id.clone())
             .into_actor(self)
             .spawn(ctx);
 
@@ -600,22 +600,22 @@ struct InternalConnection {
     pub ingress_tx: mpsc::Sender<Vec<u8>>,
 }
 
-async fn vpn_ingress_handler(rx: IngressReceiver, addr: Addr<Vpn>) {
+async fn vpn_ingress_handler(rx: IngressReceiver, addr: Addr<Vpn>, vpn_id: String) {
     let mut rx = UnboundedReceiverStream::new(rx);
     while let Some(event) = rx.next().await {
         addr.do_send(Ingress { event });
     }
 
-    log::warn!("[vpn] ingress handler stopped");
+    log::warn!("[vpn: {}] ingress handler stopped", vpn_id);
 }
 
-async fn vpn_egress_handler(rx: EgressReceiver, addr: Addr<Vpn>) {
+async fn vpn_egress_handler(rx: EgressReceiver, addr: Addr<Vpn>, vpn_id: String) {
     let mut rx = UnboundedReceiverStream::new(rx);
     while let Some(event) = rx.next().await {
         addr.do_send(Egress { event });
     }
 
-    log::warn!("[vpn] egress handler stopped");
+    log::warn!("[vpn: {}] egress handler stopped", vpn_id);
 }
 
 fn net_route(ip: IpAddr) -> Result<Route> {
