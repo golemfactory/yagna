@@ -668,12 +668,18 @@ impl ArbiterExt for Arbiter {
     }
 }
 
-fn pick_random_ethernet_addr() -> EthernetAddress {
-    loop {
-        let addr = EthernetAddress(rand::random());
-        if addr.is_unicast() {
-            break addr;
-        }
+fn create_ethernet_addr(ip: IpCidr) -> Result<EthernetAddress> {
+    match ip.address() {
+        IpAddress::Ipv4(ip4) => Ok(EthernetAddress([
+            0xA0, 0x13, ip4.0[0], ip4.0[1], ip4.0[2], ip4.0[3],
+        ])),
+        IpAddress::Ipv6(ip6) => Ok(EthernetAddress([
+            0xA0, 0x13, ip6.0[12], ip6.0[13], ip6.0[14], ip6.0[15],
+        ])),
+        _ => Err(Error::Other(format!(
+            "Could not create ethernet addr from ip: {:?}",
+            ip
+        ))),
     }
 }
 
@@ -687,7 +693,7 @@ fn create_stack_network(
         ..Default::default()
     });
 
-    let ethernet_addr = pick_random_ethernet_addr();
+    let ethernet_addr = create_ethernet_addr(node_ip)?;
 
     let mut iface = tap_iface(
         HardwareAddress::Ethernet(ethernet_addr),
