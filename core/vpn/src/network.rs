@@ -603,7 +603,13 @@ struct InternalConnection {
 async fn vpn_ingress_handler(rx: IngressReceiver, addr: Addr<Vpn>, vpn_id: String) {
     let mut rx = UnboundedReceiverStream::new(rx);
     while let Some(event) = rx.next().await {
-        let _x = addr.send(Ingress { event }).await.unwrap();
+        if let Err(e) = addr.send(Ingress { event }).await {
+            log::error!(
+                "[vpn: {}] ingress event handler returned error: {}",
+                vpn_id,
+                e
+            );
+        }
     }
 
     log::warn!("[vpn: {}] ingress handler stopped", vpn_id);
@@ -612,7 +618,13 @@ async fn vpn_ingress_handler(rx: IngressReceiver, addr: Addr<Vpn>, vpn_id: Strin
 async fn vpn_egress_handler(rx: EgressReceiver, addr: Addr<Vpn>, vpn_id: String) {
     let mut rx = UnboundedReceiverStream::new(rx);
     while let Some(event) = rx.next().await {
-        let _x = addr.send(Egress { event }).await.unwrap();
+        if let Err(e) = addr.send(Egress { event }).await {
+            log::error!(
+                "[vpn: {}] egress event handler returned error: {}",
+                vpn_id,
+                e
+            );
+        }
     }
 
     log::warn!("[vpn: {}] egress handler stopped", vpn_id);
