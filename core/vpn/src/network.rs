@@ -467,14 +467,29 @@ impl Handler<Disconnect> for Vpn {
 impl Handler<Packet> for Vpn {
     type Result = ActorResponse<Self, Result<()>>;
 
-    fn handle(&mut self, pkt: Packet, _: &mut Self::Context) -> Self::Result {
-        match self.connections.get(&pkt.meta.into()) {
+    fn handle(&mut self, pkt: Packet, ctx: &mut Self::Context) -> Self::Result {
+        match self.connections.get(&pkt.meta.into()).cloned() {
             Some(connection) => {
                 let fut = self
                     .stack_network
                     .send(pkt.data, connection.stack_connection)
                     .map_err(|e| Error::Other(e.to_string()));
-                ActorResponse::r#async(fut.into_actor(self))
+
+                ctx.spawn(fut.into_actor(self).map(move |result, this, ctx| {
+                    if let Err(e) = result {
+                        log::warn!(
+                            "[vpn: {}] error while sending egress Packet to stack: {}",
+                            this.vpn.id(),
+                            e
+                        );
+
+                        ctx.address().do_send(Disconnect::new(
+                            connection.stack_connection.meta.into(),
+                            DisconnectReason::ConnectionError,
+                        ));
+                    }
+                }));
+                ActorResponse::reply(Ok(()))
             }
             None => ActorResponse::reply(Err(Error::ConnectionError(format!(
                 "no connection to remote: {:?}",

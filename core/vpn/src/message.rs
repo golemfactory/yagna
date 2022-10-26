@@ -88,6 +88,7 @@ pub struct UserConnection {
 pub enum DisconnectReason {
     SinkClosed,
     SocketClosed,
+    ConnectionError,
 }
 
 impl std::fmt::Display for DisconnectReason {
