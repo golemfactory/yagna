@@ -28,8 +28,6 @@ use ya_utils_networking::vpn::stack::{
 };
 use ya_utils_networking::vpn::*;
 
-const DEFAULT_MAX_PACKET_SIZE: usize = 65536;
-
 pub struct VpnSupervisor {
     networks: HashMap<String, Addr<Vpn>>,
     blueprints: HashMap<String, ya_client_model::net::Network>,
@@ -747,10 +745,7 @@ fn create_stack_network(
     network_ip: IpCidr,
     network_gateway: IpAddr,
 ) -> Result<net::Network> {
-    let config = Rc::new(StackConfig {
-        max_transmission_unit: DEFAULT_MAX_PACKET_SIZE,
-        ..Default::default()
-    });
+    let config = Rc::new(StackConfig::default());
 
     let ethernet_addr = create_ethernet_addr(node_ip)?;
 
