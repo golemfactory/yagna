@@ -13,6 +13,7 @@ use std::time::{Duration, Instant};
 use ya_client_model::net::*;
 use ya_client_model::ErrorMessage;
 use ya_service_api_web::middleware::Identity;
+use ya_utils_networking::vpn::stack::connection::ConnectionMeta;
 use ya_utils_networking::vpn::{Error as VpnError, Protocol};
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -48,7 +49,6 @@ fn vpn_web_scope(path: &str) -> actix_web::Scope {
         .service(get_nodes)
         .service(add_node)
         .service(remove_node)
-        .service(get_connections)
         .service(connect_tcp)
 }
 
@@ -198,22 +198,6 @@ async fn remove_node(
     Ok::<_, ApiError>(web::Json(fut.await?))
 }
 
-/// Retrieves existing connections (socket tuples) within a private network
-#[actix_web::get("/net/{net_id}/tcp")]
-async fn get_connections(
-    vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
-    path: web::Path<PathNetwork>,
-    identity: Identity,
-) -> impl Responder {
-    let path = path.into_inner();
-    let vpn = {
-        let supervisor = vpn_sup.lock().await;
-        supervisor.get_network(&identity.identity, &path.net_id)?
-    };
-    let response = vpn.send(GetConnections {}).await??;
-    Ok::<_, ApiError>(web::Json(response))
-}
-
 /// Initiates a new TCP connection via WebSockets to the destination address.
 #[actix_web::get("/net/{net_id}/tcp/{ip}/{port}")]
 async fn connect_tcp(
@@ -257,22 +241,24 @@ impl VpnWebSocket {
             heartbeat: Instant::now(),
             vpn: conn.vpn,
             vpn_rx: Some(conn.rx),
-            meta: conn.meta,
+            meta: conn.stack_connection.meta,
         }
     }
 
     fn forward(&self, data: Vec<u8>, ctx: &mut <Self as Actor>::Context) {
         let vpn = self.vpn.clone();
-        let meta = self.meta.clone();
-        vpn.send(Packet { data, meta })
-            .into_actor(self)
-            .map(move |result, this, ctx| {
-                if result.is_err() {
-                    log::error!("VPN WebSocket: VPN {} no longer exists", this.network_id);
-                    let _ = ctx.address().do_send(Shutdown {});
-                }
-            })
-            .wait(ctx);
+        vpn.send(Packet {
+            data,
+            meta: self.meta,
+        })
+        .into_actor(self)
+        .map(move |result, this, ctx| {
+            if result.is_err() {
+                log::error!("VPN WebSocket: VPN {} no longer exists", this.network_id);
+                let _ = ctx.address().do_send(Shutdown {});
+            }
+        })
+        .wait(ctx);
     }
 }
 
