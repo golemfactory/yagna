@@ -619,12 +619,26 @@ struct InternalConnection {
 async fn vpn_ingress_handler(rx: IngressReceiver, addr: Addr<Vpn>, vpn_id: String) {
     let mut rx = UnboundedReceiverStream::new(rx);
     while let Some(event) = rx.next().await {
-        if let Err(e) = addr.send(Ingress { event }).await {
+        if let Err(e) = addr
+            .send(Ingress {
+                event: event.clone(),
+            })
+            .await
+        {
             log::error!(
                 "[vpn: {}] ingress event handler returned error: {}",
                 vpn_id,
                 e
             );
+
+            addr.do_send(Disconnect {
+                desc: match event {
+                    IngressEvent::InboundConnection { desc } => desc,
+                    IngressEvent::Disconnected { desc } => desc,
+                    IngressEvent::Packet { desc, .. } => desc,
+                },
+                reason: DisconnectReason::ConnectionError,
+            });
         }
     }
 
@@ -634,12 +648,29 @@ async fn vpn_ingress_handler(rx: IngressReceiver, addr: Addr<Vpn>, vpn_id: Strin
 async fn vpn_egress_handler(rx: EgressReceiver, addr: Addr<Vpn>, vpn_id: String) {
     let mut rx = UnboundedReceiverStream::new(rx);
     while let Some(event) = rx.next().await {
-        if let Err(e) = addr.send(Egress { event }).await {
+        if let Err(e) = addr
+            .send(Egress {
+                event: event.clone(),
+            })
+            .await
+        {
             log::error!(
                 "[vpn: {}] egress event handler returned error: {}",
                 vpn_id,
                 e
             );
+
+            if let Some((desc, ..)) = event.desc {
+                addr.do_send(Disconnect {
+                    desc,
+                    reason: DisconnectReason::ConnectionError,
+                });
+            } else {
+                log::warn!(
+                    "[vpn: {}] egress event handler couldn't disconnect: no desc available",
+                    vpn_id
+                );
+            }
         }
     }
 
