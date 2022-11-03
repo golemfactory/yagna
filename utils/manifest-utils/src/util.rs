@@ -10,6 +10,7 @@ use openssl::nid::Nid;
 use openssl::x509::{X509Ref, X509};
 use std::io::prelude::*;
 
+use crate::policy::PermissionsManager;
 use crate::Keystore;
 
 /// Tries do decode base64. On failure tries to unescape snailquotes.
@@ -162,6 +163,7 @@ impl<T: CertBasicDataVisitor> X509Visitor<T> {
 }
 
 pub struct KeystoreManager {
+    keystore: Keystore,
     ids: HashSet<String>,
     cert_dir: PathBuf,
 }
@@ -171,11 +173,19 @@ impl KeystoreManager {
         let keystore = Keystore::load(cert_dir)?;
         let ids = keystore.certs_ids()?;
         let cert_dir = cert_dir.clone();
-        Ok(Self { ids, cert_dir })
+        Ok(Self {
+            ids,
+            cert_dir,
+            keystore,
+        })
     }
 
-    /// Copies certificates from given file to `cert_dir` and returns newly added certificates.
-    /// Certificates already existing in `cert_dir` are skipped.
+    pub fn permissions_manager(&self) -> PermissionsManager {
+        self.keystore.permissions_manager()
+    }
+
+    /// Copies certificates from given file to `cert-dir` and returns newly added certificates.
+    /// Certificates already existing in `cert-dir` are skipped.
     pub fn load_certs(self, cert_paths: &Vec<PathBuf>) -> anyhow::Result<KeystoreLoadResult> {
         let mut loaded = HashMap::new();
         let mut skipped = HashMap::new();
@@ -259,7 +269,7 @@ impl KeystoreManager {
         Ok(KeystoreRemoveResult::Removed { removed })
     }
 
-    /// Loads keychain file to `cert_dir`
+    /// Loads keychain file to `cert-dir`
     fn load_as_keychain_file(&self, cert_path: &PathBuf) -> anyhow::Result<()> {
         let file_name = get_file_name(cert_path)
             .ok_or_else(|| anyhow::anyhow!(format!("Cannot get filename of {cert_path:?}")))?;
@@ -286,7 +296,7 @@ impl KeystoreManager {
         Ok(())
     }
 
-    /// Loads certificates as individual files to `cert_dir`
+    /// Loads certificates as individual files to `cert-dir`
     fn load_as_certificate_files(&self, cert_path: &Path, certs: Vec<X509>) -> anyhow::Result<()> {
         let file_stem = get_file_stem(cert_path)
             .ok_or_else(|| anyhow::anyhow!("Cannot get file name stem."))?;

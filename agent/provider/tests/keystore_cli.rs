@@ -8,9 +8,9 @@ use serial_test::serial;
 fn keystore_list_cmd_creates_cert_dir_in_data_dir_set_by_env() {
     // Having
     let mut data_dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR"));
-    data_dir.push("data_dir");
+    data_dir.push("data-dir");
     let mut cert_dir = data_dir.clone();
-    cert_dir.push("cert_dir");
+    cert_dir.push("cert-dir");
     #[allow(unused_must_use)]
     {
         std::fs::remove_dir_all(&data_dir); // ignores error if does not exist
@@ -38,9 +38,9 @@ fn keystore_list_cmd_creates_cert_dir_in_data_dir_set_by_env() {
 fn keystore_list_cmd_creates_cert_dir_in_dir_set_by_env() {
     // Having
     let mut data_dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR"));
-    data_dir.push("data_dir");
+    data_dir.push("data-dir");
     let mut cert_dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR"));
-    cert_dir.push("cert_dir");
+    cert_dir.push("cert-dir");
     #[allow(unused_must_use)]
     {
         std::fs::remove_dir_all(&data_dir); // ignores error if does not exist

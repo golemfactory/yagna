@@ -1,5 +1,7 @@
+use anyhow::anyhow;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
+use std::fs::File;
 use std::hash::Hash;
 use std::ops::Not;
 use std::path::{Path, PathBuf};
@@ -10,12 +12,15 @@ use openssl::hash::MessageDigest;
 use openssl::pkey::{PKey, Public};
 use openssl::sign::Verifier;
 use openssl::x509::store::{X509Store, X509StoreBuilder};
-use openssl::x509::{X509ObjectRef, X509StoreContext, X509};
+use openssl::x509::{X509ObjectRef, X509StoreContext, X509VerifyResult, X509};
+use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 use strum::{Display, EnumIter, EnumString, EnumVariantNames, IntoEnumIterator, VariantNames};
 
 use crate::matching::domain::DomainWhitelistState;
-use crate::util::{CertBasicDataVisitor, X509Visitor};
+use crate::util::{cert_to_id, CertBasicDataVisitor, X509Visitor};
+
+pub(crate) const PERMISSIONS_FILE: &str = "cert-permissions.json";
 
 /// Policy configuration
 #[derive(StructOpt, Clone, Debug, Default)]
@@ -97,44 +102,100 @@ impl FromStr for Match {
     }
 }
 
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    EnumIter,
+    EnumVariantNames,
+    EnumString,
+    Display,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Eq,
+)]
+#[strum(serialize_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
+pub enum CertPermissions {
+    /// Allows all permissions (including permissions created in future)
+    All,
+    /// Certificate is allowed to sign Payload Manifest requiring Outbound Network Traffic feature.
+    OutboundManifest,
+}
+
+#[derive(Clone, Default)]
+pub struct PermissionsManager {
+    permissions: HashMap<String, Vec<CertPermissions>>,
+}
+
+pub struct CertStore {
+    store: X509Store,
+    permissions: PermissionsManager,
+}
+
 #[derive(Clone)]
 pub struct Keystore {
-    inner: Arc<RwLock<X509Store>>,
+    inner: Arc<RwLock<CertStore>>,
 }
 
 impl Default for Keystore {
     fn default() -> Self {
         let store = X509StoreBuilder::new().expect("SSL works").build();
         Self {
-            inner: Arc::new(RwLock::new(store)),
+            inner: CertStore::new(store, Default::default()),
         }
     }
 }
 
+impl CertStore {
+    pub fn new(store: X509Store, permissions: PermissionsManager) -> Arc<RwLock<CertStore>> {
+        Arc::new(RwLock::new(CertStore { store, permissions }))
+    }
+}
+
 impl Keystore {
-    /// Reads DER or PEM certificates (or PEM certificate stacks) from `cert_dir` and creates new `X509Store`.
-    pub fn load(cert_dir: impl AsRef<Path> + Debug) -> anyhow::Result<Self> {
+    /// Reads DER or PEM certificates (or PEM certificate stacks) from `cert-dir` and creates new `X509Store`.
+    pub fn load(cert_dir: impl AsRef<Path>) -> anyhow::Result<Self> {
         std::fs::create_dir_all(&cert_dir)?;
+        let permissions = PermissionsManager::load(&cert_dir).map_err(|e| {
+            anyhow!(
+                "Failed to load permissions file: {}, {e}",
+                cert_dir.as_ref().display()
+            )
+        })?;
+
         let mut store = X509StoreBuilder::new()?;
         let cert_dir = std::fs::read_dir(cert_dir)?;
         for dir_entry in cert_dir {
-            let cert = dir_entry?;
-            let cert = cert.path();
-            if cert.is_file() {
-                Self::load_file(&mut store, &cert)?;
-            } else {
-                log::debug!("Skipping '{:?}' while loading a keystore", cert);
+            let cert = dir_entry?.path();
+            if let Err(e) = Self::load_file(&mut store, &cert) {
+                log::debug!(
+                    "Skipping '{}' while loading a keystore. Error: {e}",
+                    cert.display()
+                );
             }
         }
-        let store = store.build();
-        let inner = Arc::new(RwLock::new(store));
-        Ok(Keystore { inner })
+        let store = CertStore::new(store.build(), permissions);
+        Ok(Keystore { inner: store })
     }
 
-    pub fn replace(&self, other: Keystore) {
+    pub fn reload(&self, cert_dir: impl AsRef<Path>) -> anyhow::Result<()> {
+        let keystore = Keystore::load(&cert_dir)?;
+        self.replace(keystore);
+        Ok(())
+    }
+
+    fn replace(&self, other: Keystore) {
         let store = {
             let mut inner = other.inner.write().unwrap();
-            std::mem::replace(&mut (*inner), X509StoreBuilder::new().unwrap().build())
+            std::mem::replace(
+                &mut (*inner),
+                CertStore {
+                    store: X509StoreBuilder::new().unwrap().build(),
+                    permissions: Default::default(),
+                },
+            )
         };
         let mut inner = self.inner.write().unwrap();
         *inner = store;
@@ -165,7 +226,7 @@ impl Keystore {
     pub(crate) fn certs_ids(&self) -> anyhow::Result<HashSet<String>> {
         let inner = self.inner.read().unwrap();
         let mut ids = HashSet::new();
-        for cert in inner.objects() {
+        for cert in inner.store.objects() {
             if let Some(cert) = cert.x509() {
                 let id = crate::util::cert_to_id(cert)?;
                 ids.insert(id);
@@ -179,7 +240,7 @@ impl Keystore {
         visitor: &mut X509Visitor<T>,
     ) -> anyhow::Result<()> {
         let inner = self.inner.read().unwrap();
-        for cert in inner.objects().iter().flat_map(X509ObjectRef::x509) {
+        for cert in inner.store.objects().iter().flat_map(X509ObjectRef::x509) {
             visitor.accept(cert)?;
         }
         Ok(())
@@ -204,10 +265,85 @@ impl Keystore {
             .map_err(|err| anyhow::anyhow!("Err: {}", err.to_string()))?;
         let cert_chain = openssl::stack::Stack::new()?;
         let mut ctx = X509StoreContext::new()?;
-        if !(ctx.init(&store, &cert, &cert_chain, |ctx| ctx.verify_cert())?) {
+        if !(ctx.init(&store.store, &cert, &cert_chain, |ctx| ctx.verify_cert())?) {
             return Err(anyhow::anyhow!("Invalid certificate"));
         }
         Ok(cert.public_key()?)
+    }
+
+    pub fn permissions_manager(&self) -> PermissionsManager {
+        self.inner.read().unwrap().permissions.clone()
+    }
+}
+
+impl PermissionsManager {
+    pub fn load(cert_dir: impl AsRef<Path>) -> anyhow::Result<PermissionsManager> {
+        let path = cert_dir.as_ref().join(PERMISSIONS_FILE);
+        let content = match std::fs::read_to_string(path) {
+            Ok(content) if !content.is_empty() => content,
+            _ => return Ok(Default::default()),
+        };
+        let permissions = serde_json::from_str(&content)?;
+        Ok(PermissionsManager { permissions })
+    }
+
+    pub fn set(&mut self, cert: &str, mut permissions: Vec<CertPermissions>) {
+        if permissions.contains(&CertPermissions::All) {
+            permissions.clear();
+            permissions.push(CertPermissions::All);
+        }
+        self.permissions.insert(cert.to_string(), permissions);
+    }
+
+    pub fn set_x509(
+        &mut self,
+        cert: &X509,
+        permissions: Vec<CertPermissions>,
+    ) -> anyhow::Result<()> {
+        let id = cert_to_id(cert)?;
+        Ok(self.set(&id, permissions))
+    }
+
+    pub fn set_many(
+        &mut self,
+        certs: &Vec<X509>,
+        permissions: Vec<CertPermissions>,
+        whole_chain: bool,
+    ) {
+        let certs = match whole_chain {
+            false => Self::leaf_certs(certs),
+            true => certs.clone(),
+        };
+
+        for cert in certs {
+            if let Err(e) = self.set_x509(&cert, permissions.clone()) {
+                log::error!(
+                    "Failed to set permissions for certificate {:?}. {e}",
+                    cert.subject_name()
+                );
+            }
+        }
+    }
+
+    pub fn leaf_certs(certs: &Vec<X509>) -> Vec<X509> {
+        certs
+            .iter()
+            .cloned()
+            .filter(|cert| {
+                !certs.iter().any(|cert2| {
+                    if cert.issued(&cert2) == X509VerifyResult::OK {
+                        true
+                    } else {
+                        false
+                    }
+                })
+            })
+            .collect()
+    }
+
+    pub fn save(&self, path: &Path) -> anyhow::Result<()> {
+        let mut file = File::create(&path.join(PERMISSIONS_FILE))?;
+        Ok(serde_json::to_writer_pretty(&mut file, &self.permissions)?)
     }
 }
 

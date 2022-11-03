@@ -1,8 +1,11 @@
+use anyhow::anyhow;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
 use structopt::StructOpt;
+use strum::VariantNames;
 
+use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::util::{self, CertBasicData, CertBasicDataVisitor};
 use ya_manifest_utils::KeystoreLoadResult;
 use ya_utils_cli::{CommandOutput, ResponseTable};
@@ -10,14 +13,14 @@ use ya_utils_cli::{CommandOutput, ResponseTable};
 use crate::cli::println_conditional;
 use crate::startup_config::ProviderConfig;
 
+/// Manage trusted keys
+///
+/// Keystore stores X.509 certificates.
+/// They allow to accept Demands with Computation Payload Manifests which arrive with signature and app author's public certificate.
+/// Certificate gets validated against certificates loaded into the keystore.
+/// Certificates are stored as files in directory, that's location can be configured using '--cert-dir' param."
 #[derive(StructOpt, Clone, Debug)]
-#[structopt(
-    rename_all = "kebab-case",
-    help = "Keystore stores X.509 certificates.
-They allow to accept Demands with Computation Payload Manifests which arrive with signature and app author's public certificate.
-Certificate gets validated against certificates loaded into the keystore.
-Certificates are stored in a file format in directory. Its location can be configured using '--cert-dir' param."
-)]
+#[structopt(rename_all = "kebab-case")]
 pub enum KeystoreConfig {
     /// List trusted X.509 certificates
     List,
@@ -35,6 +38,17 @@ pub struct Add {
         help = "Space separated list of X.509 certificate files (PEM or DER) or PEM certificates chains to be added to the Keystore."
     )]
     certs: Vec<PathBuf>,
+    /// Set certificates permissions for signing certain Golem features.
+    #[structopt(
+        long,
+        parse(try_from_str),
+        possible_values = CertPermissions::VARIANTS,
+        case_insensitive = true,
+    )]
+    permissions: Vec<CertPermissions>,
+    /// Apply permissions to all certificates in chain found in files.
+    #[structopt(short, long)]
+    whole_chain: bool,
 }
 
 #[derive(StructOpt, Clone, Debug)]
@@ -67,6 +81,7 @@ fn list(config: ProviderConfig) -> anyhow::Result<()> {
 fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
     let keystore_manager = util::KeystoreManager::try_new(&cert_dir)?;
+    let mut permissions_manager = keystore_manager.permissions_manager();
     match keystore_manager.load_certs(&add.certs)? {
         KeystoreLoadResult::Loaded { loaded, skipped } => {
             println_conditional(&config, "Added certificates:");
@@ -77,19 +92,27 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
                 let certs_data = util::to_cert_data(&skipped)?;
                 print_cert_list(&config, certs_data)?;
             }
+            let all_certs = loaded.into_iter().chain(skipped.into_iter()).collect();
+            permissions_manager.set_many(&all_certs, add.permissions, !add.whole_chain);
         }
         KeystoreLoadResult::NothingNewToLoad { skipped } => {
             let certs_data = util::to_cert_data(&skipped)?;
             if !config.json {
                 println!("No new certificate to add.");
-                println!("Dropped duplicated certificates:");
+                println!("Ignored duplicated certificates:");
                 print_cert_list(&config, certs_data)?;
             } else {
                 // no new certificate added, so empty list for json output
                 print_cert_list(&config, Vec::new())?;
             }
+
+            permissions_manager.set_many(&skipped, add.permissions, add.whole_chain);
         }
     }
+
+    permissions_manager
+        .save(&cert_dir)
+        .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
     Ok(())
 }
 
