@@ -1,4 +1,4 @@
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::fs::File;
@@ -254,11 +254,7 @@ impl Keystore {
     }
 
     fn verify_cert<S: AsRef<str>>(&self, cert: S) -> anyhow::Result<PKey<Public>> {
-        let cert = crate::decode_data(cert)?;
-        let cert = match X509::from_der(&cert) {
-            Ok(cert) => cert,
-            Err(_) => X509::from_pem(&cert)?,
-        };
+        let cert = Self::decode_cert(cert)?;
         let store = self
             .inner
             .read()
@@ -269,6 +265,69 @@ impl Keystore {
             return Err(anyhow::anyhow!("Invalid certificate"));
         }
         Ok(cert.public_key()?)
+    }
+
+    pub fn verify_permissions<S: AsRef<str>>(
+        &self,
+        cert: S,
+        required: Vec<CertPermissions>,
+    ) -> anyhow::Result<()> {
+        if required.contains(&CertPermissions::All) {
+            bail!("`All` permissions shouldn't be required.")
+        }
+
+        if required.is_empty() {
+            return Ok(());
+        }
+
+        let cert = Self::decode_cert(cert)?;
+        let issuer = self.find_issuer(&cert)?;
+
+        let issuer_permissions = self.get_permissions(&issuer)?;
+
+        if issuer_permissions.contains(&CertPermissions::All) {
+            return Ok(());
+        }
+
+        if required
+            .iter()
+            .all(|permission| issuer_permissions.contains(permission))
+        {
+            return Ok(());
+        }
+
+        bail!("Not sufficient permissions")
+    }
+
+    fn get_permissions(&self, cert: &X509Ref) -> anyhow::Result<Vec<CertPermissions>> {
+        let store = self
+            .inner
+            .read()
+            .map_err(|err| anyhow::anyhow!("RwLock error: {}", err.to_string()))?;
+        Ok(store.permissions.get(&cert)?)
+    }
+
+    fn find_issuer(&self, cert: &X509) -> anyhow::Result<X509> {
+        let store = self
+            .inner
+            .read()
+            .map_err(|err| anyhow::anyhow!("RwLock error: {}", err.to_string()))?;
+        Ok(store
+            .store
+            .objects()
+            .iter()
+            .filter_map(|cert| cert.x509())
+            .map(|cert| cert.to_owned())
+            .find(|trusted| trusted.issued(&cert) == X509VerifyResult::OK)
+            .ok_or(anyhow!("Issuer certificate not found in keystore"))?)
+    }
+
+    fn decode_cert<S: AsRef<str>>(cert: S) -> anyhow::Result<X509> {
+        let cert = crate::decode_data(cert)?;
+        Ok(match X509::from_der(&cert) {
+            Ok(cert) => cert,
+            Err(_) => X509::from_pem(&cert)?,
+        })
     }
 
     pub fn permissions_manager(&self) -> PermissionsManager {
