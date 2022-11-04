@@ -142,13 +142,13 @@ impl TestResources {
 
     fn resource_cert_dir_path(&self) -> PathBuf {
         let mut cert_resources = self.temp_dir_path();
-        cert_resources.push("cert_resources");
+        cert_resources.push("cert-resources");
         cert_resources
     }
 
     fn store_cert_dir_path(&self) -> PathBuf {
         let mut cert_dir = self.temp_dir_path();
-        cert_dir.push("cert_dir");
+        cert_dir.push("cert-dir");
         cert_dir
     }
 

@@ -12,7 +12,7 @@ use openssl::hash::MessageDigest;
 use openssl::pkey::{PKey, Public};
 use openssl::sign::Verifier;
 use openssl::x509::store::{X509Store, X509StoreBuilder};
-use openssl::x509::{X509ObjectRef, X509StoreContext, X509VerifyResult, X509};
+use openssl::x509::{X509ObjectRef, X509Ref, X509StoreContext, X509VerifyResult, X509};
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 use strum::{Display, EnumIter, EnumString, EnumVariantNames, IntoEnumIterator, VariantNames};
@@ -241,7 +241,7 @@ impl Keystore {
     ) -> anyhow::Result<()> {
         let inner = self.inner.read().unwrap();
         for cert in inner.store.objects().iter().flat_map(X509ObjectRef::x509) {
-            visitor.accept(cert)?;
+            visitor.accept(cert, &inner.permissions)?;
         }
         Ok(())
     }
@@ -325,7 +325,19 @@ impl PermissionsManager {
         }
     }
 
-    pub fn leaf_certs(certs: &Vec<X509>) -> Vec<X509> {
+    pub fn get(&self, cert: &X509Ref) -> anyhow::Result<Vec<CertPermissions>> {
+        self.permissions
+            .get(&cert_to_id(cert)?)
+            .cloned()
+            .ok_or(anyhow!("Permissions for certificate no found"))
+    }
+
+    pub fn save(&self, path: &Path) -> anyhow::Result<()> {
+        let mut file = File::create(&path.join(PERMISSIONS_FILE))?;
+        Ok(serde_json::to_writer_pretty(&mut file, &self.permissions)?)
+    }
+
+    fn leaf_certs(certs: &Vec<X509>) -> Vec<X509> {
         certs
             .iter()
             .cloned()
@@ -339,11 +351,6 @@ impl PermissionsManager {
                 })
             })
             .collect()
-    }
-
-    pub fn save(&self, path: &Path) -> anyhow::Result<()> {
-        let mut file = File::create(&path.join(PERMISSIONS_FILE))?;
-        Ok(serde_json::to_writer_pretty(&mut file, &self.permissions)?)
     }
 }
 

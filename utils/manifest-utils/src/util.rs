@@ -1,9 +1,9 @@
+use itertools::Itertools;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::TryFrom;
 use std::ffi::OsStr;
-use std::fs::{self, DirEntry};
-use std::path::Path;
-use std::{fs::File, path::PathBuf};
+use std::fs::{self, DirEntry, File};
+use std::path::{Path, PathBuf};
 
 use md5::{Digest, Md5};
 use openssl::nid::Nid;
@@ -63,10 +63,13 @@ fn os_str_to_string(os_str: &OsStr) -> String {
     os_str.to_string_lossy().to_string()
 }
 
-pub fn to_cert_data(certs: &Vec<X509>) -> anyhow::Result<Vec<CertBasicData>> {
+pub fn to_cert_data(
+    certs: &Vec<X509>,
+    permissions: &PermissionsManager,
+) -> anyhow::Result<Vec<CertBasicData>> {
     let mut certs_data = Vec::new();
     for cert in certs {
-        let data = CertBasicData::try_from(cert.as_ref())?;
+        let data = CertBasicData::create(cert.as_ref(), permissions)?;
         certs_data.push(data);
     }
     Ok(certs_data)
@@ -122,6 +125,7 @@ pub struct CertBasicData {
     pub id: String,
     pub not_after: String,
     pub subject: BTreeMap<String, String>,
+    pub permissions: String,
 }
 
 impl TryFrom<&X509Ref> for CertBasicData {
@@ -142,7 +146,17 @@ impl TryFrom<&X509Ref> for CertBasicData {
             id,
             not_after,
             subject,
+            permissions: "".to_string(),
         })
+    }
+}
+
+impl CertBasicData {
+    pub fn create(cert: &X509Ref, permissions: &PermissionsManager) -> anyhow::Result<Self> {
+        let mut data = CertBasicData::try_from(cert)?;
+        let permissions = permissions.get(cert).unwrap_or(vec![]);
+        data.permissions = format!("{}", permissions.iter().format("|"));
+        Ok(data)
     }
 }
 
@@ -155,8 +169,12 @@ pub(crate) struct X509Visitor<T: CertBasicDataVisitor> {
 }
 
 impl<T: CertBasicDataVisitor> X509Visitor<T> {
-    pub(crate) fn accept(&mut self, cert: &X509Ref) -> anyhow::Result<()> {
-        let cert_data = CertBasicData::try_from(cert)?;
+    pub(crate) fn accept(
+        &mut self,
+        cert: &X509Ref,
+        permissions: &PermissionsManager,
+    ) -> anyhow::Result<()> {
+        let cert_data = CertBasicData::create(cert, permissions)?;
         self.visitor.accept(cert_data);
         Ok(())
     }
@@ -213,12 +231,10 @@ impl KeystoreManager {
             }
         }
 
-        let loaded: Vec<X509> = loaded.into_values().collect();
-        let skipped: Vec<X509> = skipped.into_values().collect();
-        if loaded.is_empty() {
-            return Ok(KeystoreLoadResult::NothingNewToLoad { skipped });
-        }
-        Ok(KeystoreLoadResult::Loaded { loaded, skipped })
+        Ok(KeystoreLoadResult {
+            loaded: loaded.into_values().collect(),
+            skipped: skipped.into_values().collect(),
+        })
     }
 
     pub fn remove_certs(self, ids: &HashSet<String>) -> anyhow::Result<KeystoreRemoveResult> {
@@ -314,14 +330,9 @@ impl KeystoreManager {
     }
 }
 
-pub enum KeystoreLoadResult {
-    NothingNewToLoad {
-        skipped: Vec<X509>,
-    },
-    Loaded {
-        loaded: Vec<X509>,
-        skipped: Vec<X509>,
-    },
+pub struct KeystoreLoadResult {
+    pub loaded: Vec<X509>,
+    pub skipped: Vec<X509>,
 }
 
 pub enum KeystoreRemoveResult {

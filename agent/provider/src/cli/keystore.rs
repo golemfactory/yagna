@@ -39,6 +39,8 @@ pub struct Add {
     )]
     certs: Vec<PathBuf>,
     /// Set certificates permissions for signing certain Golem features.
+    /// If not specified, no permissions will be set for certificate.
+    /// If certificate already existed, permissions will be cleared.
     #[structopt(
         long,
         parse(try_from_str),
@@ -82,32 +84,25 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
     let keystore_manager = util::KeystoreManager::try_new(&cert_dir)?;
     let mut permissions_manager = keystore_manager.permissions_manager();
-    match keystore_manager.load_certs(&add.certs)? {
-        KeystoreLoadResult::Loaded { loaded, skipped } => {
-            println_conditional(&config, "Added certificates:");
-            let certs_data = util::to_cert_data(&loaded)?;
-            print_cert_list(&config, certs_data)?;
-            if !skipped.is_empty() && !config.json {
-                println!("Certificates already loaded to keystore:");
-                let certs_data = util::to_cert_data(&skipped)?;
-                print_cert_list(&config, certs_data)?;
-            }
-            let all_certs = loaded.into_iter().chain(skipped.into_iter()).collect();
-            permissions_manager.set_many(&all_certs, add.permissions, !add.whole_chain);
-        }
-        KeystoreLoadResult::NothingNewToLoad { skipped } => {
-            let certs_data = util::to_cert_data(&skipped)?;
-            if !config.json {
-                println!("No new certificate to add.");
-                println!("Ignored duplicated certificates:");
-                print_cert_list(&config, certs_data)?;
-            } else {
-                // no new certificate added, so empty list for json output
-                print_cert_list(&config, Vec::new())?;
-            }
 
-            permissions_manager.set_many(&skipped, add.permissions, add.whole_chain);
-        }
+    let KeystoreLoadResult { loaded, skipped } = keystore_manager.load_certs(&add.certs)?;
+
+    permissions_manager.set_many(
+        &loaded.iter().chain(skipped.iter()).cloned().collect(),
+        add.permissions,
+        add.whole_chain,
+    );
+
+    if !loaded.is_empty() {
+        println_conditional(&config, "Added certificates:");
+        let certs_data = util::to_cert_data(&loaded, &permissions_manager)?;
+        print_cert_list(&config, certs_data)?;
+    }
+
+    if !skipped.is_empty() && !config.json {
+        println!("Certificates already loaded to keystore:");
+        let certs_data = util::to_cert_data(&skipped, &permissions_manager)?;
+        print_cert_list(&config, certs_data)?;
     }
 
     permissions_manager
@@ -119,6 +114,7 @@ fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
 fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
     let keystore_manager = util::KeystoreManager::try_new(&cert_dir)?;
+    let mut permissions_manager = keystore_manager.permissions_manager();
     let ids: HashSet<String> = remove.ids.into_iter().collect();
     match keystore_manager.remove_certs(&ids)? {
         util::KeystoreRemoveResult::NothingToRemove => {
@@ -128,11 +124,17 @@ fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
             }
         }
         util::KeystoreRemoveResult::Removed { removed } => {
+            permissions_manager.set_many(&removed, vec![], true);
+
             println!("Removed certificates:");
-            let certs_data = util::to_cert_data(&removed)?;
+            let certs_data = util::to_cert_data(&removed, &permissions_manager)?;
             print_cert_list(&config, certs_data)?;
         }
     };
+
+    permissions_manager
+        .save(&cert_dir)
+        .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
     Ok(())
 }
 
@@ -158,6 +160,7 @@ impl CertTable {
             "ID".to_string(),
             "Not After".to_string(),
             "Subject".to_string(),
+            "Permissions".to_string(),
         ];
         let values = vec![];
         let table = ResponseTable { columns, values };
@@ -171,7 +174,7 @@ impl CertTable {
     }
 
     pub fn add(&mut self, data: CertBasicData) {
-        let row = serde_json::json! {[ data.id, data.not_after, data.subject ]};
+        let row = serde_json::json! {[ data.id, data.not_after, data.subject, data.permissions ]};
         self.table.values.push(row)
     }
 }
