@@ -54,6 +54,7 @@ impl From<ContainerEndpoint> for PathBuf {
     }
 }
 
+#[cfg(feature = "server")]
 impl<'a> TryFrom<&'a crate::server::NetworkEndpoint> for ContainerEndpoint {
     type Error = String;
 
@@ -102,6 +103,7 @@ impl TryFrom<url::Url> for ContainerEndpoint {
     }
 }
 
+#[cfg(feature = "server")]
 fn to_socket_addr(s: &str) -> Result<SocketAddr, String> {
     s.parse().map_err(|e: AddrParseError| e.to_string())
 }
