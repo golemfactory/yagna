@@ -147,7 +147,7 @@ impl Batch {
             RuntimeEventKind::StdOut(out) => {
                 let state = self.state(idx)?;
                 let output = state.stdout.write(output_bytes(out));
-                log::info!("output: {output}");
+                log::trace!("output stdout: {output}");
                 output
                     .filter(|_| state.stdout.stream)
                     .map(|o| RuntimeEvent {
@@ -158,6 +158,7 @@ impl Batch {
             RuntimeEventKind::StdErr(out) => {
                 let state = self.state(idx)?;
                 let output = state.stderr.write(output_bytes(out));
+                log::trace!("output stderr: {output}");
                 output
                     .filter(|_| state.stderr.stream)
                     .map(|o| RuntimeEvent {

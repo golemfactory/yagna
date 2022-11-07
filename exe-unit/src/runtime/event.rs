@@ -85,7 +85,7 @@ impl ya_runtime_api::server::RuntimeHandler for EventMonitor {
 
         async move {
             if !status.stdout.is_empty() {
-                log::info!(
+                log::trace!(
                     "stdout: {}",
                     String::from_utf8_lossy(&status.stdout).trim_end()
                 );
@@ -95,7 +95,7 @@ impl ya_runtime_api::server::RuntimeHandler for EventMonitor {
                 ctx.tx.send(evt).await?;
             }
             if !status.stderr.is_empty() {
-                log::info!(
+                log::trace!(
                     "stderr: {}",
                     String::from_utf8_lossy(&status.stderr).trim_end()
                 );
