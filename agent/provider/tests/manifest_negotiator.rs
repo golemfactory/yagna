@@ -10,6 +10,7 @@ use test_case::test_case;
 use ya_agreement_utils::AgreementView;
 use ya_manifest_test_utils::{load_certificates_from_dir, TestResources};
 use ya_manifest_utils::matching::domain::{DomainPatterns, DomainWhitelistState};
+use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::{Keystore, Policy, PolicyConfig};
 use ya_provider::market::negotiator::builtin::ManifestSignature;
 use ya_provider::market::negotiator::*;
@@ -124,6 +125,7 @@ fn manifest_negotiator_test(
         signature_alg,
         cert_b64,
         error_msg,
+        &vec![CertPermissions::All],
     )
 }
 
@@ -159,6 +161,71 @@ fn manifest_negotiator_test_encoded_sign_and_cert(
         signature_alg,
         cert_b64,
         error_msg,
+        &vec![CertPermissions::All],
+    )
+}
+
+#[test_case(
+    r#"{ "any": "thing" }"#, // offer
+    Some("foo_req.key.pem"), // private key file
+    Some("sha256"), // sig alg
+    Some("foo_req.cert.pem"), // cert
+    &vec![CertPermissions::OutboundManifest],
+    None;
+    "Manifest accepted, because permissions are sufficient"
+)]
+#[test_case(
+    r#"{ "any": "thing" }"#, // offer
+    Some("foo_req.key.pem"), // private key file
+    Some("sha256"), // sig alg
+    Some("foo_req.cert.pem"), // cert
+    &vec![CertPermissions::All],
+    None;
+    "Manifest accepted, when permissions are set to `All`"
+)]
+#[test_case(
+    r#"{ "any": "thing" }"#, // offer
+    Some("foo_req.key.pem"), // private key file
+    Some("sha256"), // sig alg
+    Some("foo_req.cert.pem"), // cert
+    &vec![],
+    Some("certificate permissions verification: Not sufficient permissions. Required: `outbound-manifest`, but has only: `none`"); // error msg
+    "Manifest rejected, because certificate has no permissions"
+)]
+#[test_case(
+    r#"{ "any": "thing" }"#, // offer
+    Some("foo_inter.key.pem"), // private key file
+    Some("sha256"), // sig alg
+    Some("foo_inter.cert.pem"), // cert
+    &vec![CertPermissions::OutboundManifest],
+    Some("certificate permissions verification: Not sufficient permissions. Required: `outbound-manifest`, but has only: `none`"); // error msg
+    "Manifest rejected, because parent certificate has no permissions"
+)]
+#[serial]
+fn test_manifest_negotiator_certs_permissions(
+    offer: &str,
+    signing_key: Option<&str>,
+    signature_alg: Option<&str>,
+    cert: Option<&str>,
+    cert_permissions: &Vec<CertPermissions>,
+    error_msg: Option<&str>,
+) {
+    let comp_manifest_b64 = create_comp_manifest_b64(r#"["https://domain.com"]"#);
+
+    let signature_b64 = signing_key.map(|signing_key| {
+        MANIFEST_TEST_RESOURCES.sign_data(comp_manifest_b64.as_bytes(), signing_key)
+    });
+
+    let cert_b64 = cert.map(cert_file_to_cert_b64);
+    manifest_negotiator_test_encoded_manifest_sign_and_cert(
+        r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#,
+        comp_manifest_b64,
+        offer,
+        signature_b64,
+        signature_alg,
+        cert_b64,
+        error_msg,
+        cert_permissions,
     )
 }
 
@@ -170,6 +237,7 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert(
     signature_alg: Option<&str>,
     cert_b64: Option<String>,
     error_msg: Option<&str>,
+    certs_permissions: &Vec<CertPermissions>,
 ) {
     // Having
     let whitelist_state = create_whitelist(whitelist);
@@ -180,6 +248,7 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert(
             &resource_cert_dir,
             &test_cert_dir,
             &["foo_ca-chain.cert.pem"],
+            certs_permissions,
         );
     }
     let keystore = Keystore::load(&test_cert_dir).expect("Can load test certificates");

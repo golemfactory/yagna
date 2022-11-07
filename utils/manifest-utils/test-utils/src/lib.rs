@@ -22,6 +22,7 @@ pub fn load_certificates_from_dir(
     resource_cert_dir: &PathBuf,
     test_cert_dir: &PathBuf,
     certfile_names: &[&str],
+    certs_permissions: &Vec<CertPermissions>,
 ) -> KeystoreLoadResult {
     let cert_paths: Vec<PathBuf> = certfile_names
         .iter()
@@ -39,8 +40,8 @@ pub fn load_certificates_from_dir(
         .load_certs(&cert_paths)
         .expect("Can load certificates");
 
-    permissions.set_many(&certs.loaded, vec![CertPermissions::All], false);
-    permissions.set_many(&certs.skipped, vec![CertPermissions::All], false);
+    permissions.set_many(&certs.loaded, certs_permissions.clone(), false);
+    permissions.set_many(&certs.skipped, certs_permissions.clone(), false);
     permissions
         .save(&test_cert_dir)
         .expect("Should be able to save permissions file.");

@@ -6,6 +6,7 @@ use std::fs;
 use test_case::test_case;
 
 use ya_manifest_test_utils::*;
+use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::util::visit_certificates;
 
 static TEST_RESOURCES: TestResources = TestResources {
@@ -71,7 +72,12 @@ fn certificate_store_test(
 ) {
     // Having
     let (resource_cert_dir, test_cert_dir) = TEST_RESOURCES.init_cert_dirs();
-    load_certificates_from_dir(&resource_cert_dir, &test_cert_dir, certs_to_add);
+    load_certificates_from_dir(
+        &resource_cert_dir,
+        &test_cert_dir,
+        certs_to_add,
+        &vec![CertPermissions::All],
+    );
     remove_certificates(&test_cert_dir, ids_to_remove);
     let mut visitor = TestCertDataVisitor::new(expected_ids);
     // When
@@ -105,6 +111,7 @@ fn certificate_name_collision_test() {
         &resource_cert_dir,
         &test_cert_dir,
         &[colliding_name, &format!("copy/{colliding_name}")],
+        &vec![CertPermissions::All],
     );
     let mut visitor = TestCertDataVisitor::new(&["4e0df976", "0e136cb3"]);
     // When
