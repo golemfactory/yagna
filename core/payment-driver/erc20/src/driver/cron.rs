@@ -188,20 +188,22 @@ pub async fn confirm_payments(dao: &Erc20Dao, name: &str, network_key: &str) {
 
                     let max_gas_price = tx
                         .max_gas_price
-                        .and_then(|str| U256::from_dec_str(&str).ok())
-                        .unwrap_or_default();
+                        .and_then(|str| U256::from_dec_str(&str).ok());
 
-                    if cur_gas_price.is_zero() || max_gas_price.is_zero() {
-                        log::debug!(
-                            "Wrong gas prices: cur_gas_price: {} max_gas_price: {}",
+                    if cur_gas_price.is_zero() {
+                        log::warn!(
+                            "Wrong gas prices: cur_gas_price: {} max_gas_price: {:?}",
                             cur_gas_price,
                             max_gas_price
                         );
                         continue;
                     }
-                    if cur_gas_price >= max_gas_price {
-                        log::debug!("Cannot bump gas more: Current gas price current_gas_price: {} max_gas_price: {}", cur_gas_price, max_gas_price);
-                        continue;
+
+                    if let Some(max_gas_price) = max_gas_price {
+                        if cur_gas_price >= max_gas_price {
+                            log::info!("Cannot bump gas more: Current gas price current_gas_price: {} max_gas_price: {}", cur_gas_price, max_gas_price);
+                            continue;
+                        }
                     }
 
                     log::warn!(

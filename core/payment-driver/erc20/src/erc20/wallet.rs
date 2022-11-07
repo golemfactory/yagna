@@ -251,7 +251,12 @@ pub async fn make_gasless_transfer(
 fn bump_gas_price(gas_in_gwei: U256) -> U256 {
     let min_bump_num: U256 = U256::from(111u64);
     let min_bump_den: U256 = U256::from(100u64);
-    let min_gas = gas_in_gwei * min_bump_num / min_bump_den;
+    let mut min_gas = gas_in_gwei * min_bump_num / min_bump_den;
+
+    if min_gas == gas_in_gwei {
+        min_gas += U256::from(1u64);
+        log::warn!("Forcing gas price increase by 1 to {min_gas:?}");
+    }
 
     match get_polygon_gas_price_method() {
         PolygonGasPriceMethod::PolygonGasPriceDynamic => {
