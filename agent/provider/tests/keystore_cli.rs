@@ -107,14 +107,14 @@ fn test_keystore_list_cmd_creates_cert_dir_in_dir_set_by_arg() {
     vec!["foo_ca-chain.cert.pem"],
     vec!["all"],
     false,
-    vec![("c128af8c", ""), ("4e0df976", "all")];
+    vec![("c128af8c", "none"), ("4e0df976", "all")];
     "Add certificates specifying permissions without `--whole-chain` flag"
 )]
 #[test_case(
     vec!["foo_ca-chain.cert.pem"],
     vec![],
     false,
-    vec![("c128af8c", ""), ("4e0df976", "")];
+    vec![("c128af8c", "none"), ("4e0df976", "none")];
     "No permissions specified"
 )]
 #[test_case(
@@ -128,21 +128,21 @@ fn test_keystore_list_cmd_creates_cert_dir_in_dir_set_by_arg() {
     vec!["foo_ca-chain.cert.pem"],
     vec!["all", "outbound-manifest"],
     false,
-    vec![("c128af8c", ""), ("4e0df976", "all")];
+    vec![("c128af8c", "none"), ("4e0df976", "all")];
     "If `all` permission is specified, all other permissions are ignored"
 )]
 #[test_case(
     vec!["foo_ca-chain.cert.pem", "foo_req.cert.pem"],
     vec!["outbound-manifest"],
     false,
-    vec![("c128af8c", ""), ("4e0df976", ""), ("0e136cb3", "outbound-manifest")];
+    vec![("c128af8c", "none"), ("4e0df976", "none"), ("0e136cb3", "outbound-manifest")];
     "Add longer permissions chain"
 )]
 #[test_case(
     vec!["foo_ca-chain.cert.pem", "dummy_inter.cert.pem"],
     vec!["outbound-manifest"],
     false,
-    vec![("c128af8c", ""), ("4e0df976", "outbound-manifest"), ("2e6e701d", "outbound-manifest")];
+    vec![("c128af8c", "none"), ("4e0df976", "outbound-manifest"), ("2e6e701d", "outbound-manifest")];
     "Add multiple certificates and check permissions"
 )]
 #[serial]
@@ -218,8 +218,8 @@ fn test_keystore_add_certificate_second_time() {
 
     let result = list_certificates_command(&cert_dir).unwrap();
 
-    assert_eq!(check_permissions(&result, "4e0df976"), "");
-    assert_eq!(check_permissions(&result, "c128af8c"), "");
+    assert_eq!(check_permissions(&result, "4e0df976"), "none");
+    assert_eq!(check_permissions(&result, "c128af8c"), "none");
 }
 
 #[serial]

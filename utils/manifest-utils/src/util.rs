@@ -10,7 +10,7 @@ use openssl::nid::Nid;
 use openssl::x509::{X509Ref, X509};
 use std::io::prelude::*;
 
-use crate::policy::PermissionsManager;
+use crate::policy::{CertPermissions, PermissionsManager};
 use crate::Keystore;
 
 /// Tries do decode base64. On failure tries to unescape snailquotes.
@@ -154,9 +154,17 @@ impl TryFrom<&X509Ref> for CertBasicData {
 impl CertBasicData {
     pub fn create(cert: &X509Ref, permissions: &PermissionsManager) -> anyhow::Result<Self> {
         let mut data = CertBasicData::try_from(cert)?;
-        let permissions = permissions.get(cert).unwrap_or(vec![]);
-        data.permissions = format!("{}", permissions.iter().format("|"));
+        let permissions = permissions.get(cert);
+        data.permissions = format_permissions(&permissions);
         Ok(data)
+    }
+}
+
+pub fn format_permissions(permissions: &Vec<CertPermissions>) -> String {
+    if permissions.is_empty() {
+        "none".to_string()
+    } else {
+        format!("{}", permissions.iter().format("|"))
     }
 }
 

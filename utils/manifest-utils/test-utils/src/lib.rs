@@ -9,6 +9,7 @@ use openssl::rsa::Rsa;
 use openssl::sign::Signer;
 use tar::Archive;
 
+use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::{
     util::{self, CertBasicData, CertBasicDataVisitor},
     KeystoreLoadResult, KeystoreRemoveResult,
@@ -32,9 +33,19 @@ pub fn load_certificates_from_dir(
         .collect();
     let keystore_manager =
         util::KeystoreManager::try_new(test_cert_dir).expect("Can create keystore manager");
-    keystore_manager
+    let mut permissions = keystore_manager.permissions_manager();
+
+    let certs = keystore_manager
         .load_certs(&cert_paths)
-        .expect("Can load certificates")
+        .expect("Can load certificates");
+
+    permissions.set_many(&certs.loaded, vec![CertPermissions::All], false);
+    permissions.set_many(&certs.skipped, vec![CertPermissions::All], false);
+    permissions
+        .save(&test_cert_dir)
+        .expect("Should be able to save permissions file.");
+
+    certs
 }
 
 pub fn remove_certificates(test_cert_dir: &PathBuf, cert_ids: &[&str]) -> KeystoreRemoveResult {

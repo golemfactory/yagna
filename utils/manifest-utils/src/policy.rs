@@ -18,7 +18,7 @@ use structopt::StructOpt;
 use strum::{Display, EnumIter, EnumString, EnumVariantNames, IntoEnumIterator, VariantNames};
 
 use crate::matching::domain::DomainWhitelistState;
-use crate::util::{cert_to_id, CertBasicDataVisitor, X509Visitor};
+use crate::util::{cert_to_id, format_permissions, CertBasicDataVisitor, X509Visitor};
 
 pub(crate) const PERMISSIONS_FILE: &str = "cert-permissions.json";
 
@@ -283,20 +283,7 @@ impl Keystore {
         let cert = Self::decode_cert(cert)?;
         let issuer = self.find_issuer(&cert)?;
 
-        let issuer_permissions = self.get_permissions(&issuer)?;
-
-        if issuer_permissions.contains(&CertPermissions::All) {
-            return Ok(());
-        }
-
-        if required
-            .iter()
-            .all(|permission| issuer_permissions.contains(permission))
-        {
-            return Ok(());
-        }
-
-        bail!("Not sufficient permissions")
+        self.has_permissions(&issuer, &required)
     }
 
     fn get_permissions(&self, cert: &X509Ref) -> anyhow::Result<Vec<CertPermissions>> {
@@ -304,7 +291,29 @@ impl Keystore {
             .inner
             .read()
             .map_err(|err| anyhow::anyhow!("RwLock error: {}", err.to_string()))?;
-        Ok(store.permissions.get(&cert)?)
+        Ok(store.permissions.get(&cert))
+    }
+
+    fn has_permissions(
+        &self,
+        cert: &X509Ref,
+        required: &Vec<CertPermissions>,
+    ) -> anyhow::Result<()> {
+        let cert = self.get_permissions(&cert)?;
+
+        if cert.contains(&CertPermissions::All) {
+            return Ok(());
+        }
+
+        if required.iter().all(|permission| cert.contains(permission)) {
+            return Ok(());
+        }
+
+        bail!(
+            "Not sufficient permissions. Required: `{}`, but has only: `{}`",
+            format_permissions(&required),
+            format_permissions(&cert)
+        )
     }
 
     fn find_issuer(&self, cert: &X509) -> anyhow::Result<X509> {
@@ -384,11 +393,14 @@ impl PermissionsManager {
         }
     }
 
-    pub fn get(&self, cert: &X509Ref) -> anyhow::Result<Vec<CertPermissions>> {
-        self.permissions
-            .get(&cert_to_id(cert)?)
-            .cloned()
-            .ok_or(anyhow!("Permissions for certificate no found"))
+    /// If we don't have this certificate registered, it means it has no permissions,
+    /// so empty vector is returned.
+    pub fn get(&self, cert: &X509Ref) -> Vec<CertPermissions> {
+        let id = match cert_to_id(cert) {
+            Ok(id) => id,
+            Err(_) => return vec![],
+        };
+        self.permissions.get(&id).cloned().unwrap_or(vec![])
     }
 
     pub fn save(&self, path: &Path) -> anyhow::Result<()> {

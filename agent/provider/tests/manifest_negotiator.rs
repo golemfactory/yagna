@@ -26,7 +26,7 @@ static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
     None, // sig alg
     None, // cert
     None; // error msg
-    "Manifest without singature accepted because domain whitelisted"
+    "Manifest without signature accepted because domain whitelisted"
 )]
 #[test_case(
     r#"{ "patterns": [{ "domain": "do.*ain.com", "type": "regex" }, { "domain": "another.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
@@ -36,7 +36,7 @@ static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
     None, // sig alg
     None, // cert
     None; // error msg
-    "Manifest without singature accepted because domain whitelisted (regex pattern)"
+    "Manifest without signature accepted because domain whitelisted (regex pattern)"
 )]
 #[test_case(
     r#"{ "patterns": [{ "domain": "different_domain.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
@@ -46,7 +46,7 @@ static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
     None, // sig alg
     None, // cert
     Some("manifest requires signature but it has none"); // error msg
-    "Manifest without singature rejected because domain NOT whitelisted"
+    "Manifest without signature rejected because domain NOT whitelisted"
 )]
 #[test_case(
     r#"{ "patterns": [{ "domain": "domain.com", "type": "regex" }, { "domain": "another.whitelisted.com", "type": "strict" }] }"#, // data_dir/domain_whitelist.json
@@ -56,7 +56,7 @@ static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
     None, // sig alg
     None, // cert
     Some("manifest requires signature but it has none"); // error msg
-    "Manifest without singature rejected because ONE of domains NOT whitelisted"
+    "Manifest without signature rejected because ONE of domains NOT whitelisted"
 )]
 #[test_case(
     r#"{ "patterns": [{ "domain": "domain.com", "type": "regex" }] }"#, // data_dir/domain_whitelist.json
