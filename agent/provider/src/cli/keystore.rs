@@ -42,6 +42,7 @@ pub struct Add {
     /// If not specified, no permissions will be set for certificate.
     /// If certificate already existed, permissions will be cleared.
     #[structopt(
+        short,
         long,
         parse(try_from_str),
         possible_values = CertPermissions::VARIANTS,
