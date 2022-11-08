@@ -123,34 +123,12 @@ impl MarketsNetwork {
         std::env::set_var("RUST_LOG", "debug");
         let _ = env_logger::builder().try_init();
 
-        let test_name_from_bt = || {
-            // level 1 is this function.
-            // level 2 is <core::future::from_generator::GenFuture<T> as
-            // core::future::future::Future>::poll::XXX> (async)
-            // We want to know the caller.
-            crate::testing::backtrace_util::generate_backtraced_name(Some(3))
-                .and_then(|name| {
-                    // Special case for mac&windows. Tests are run in adifferent way on those systems and we
-                    // have to dive one less level down the stack to find the caller (test_* module).
-                    if !name.starts_with("test_") {
-                        crate::testing::backtrace_util::generate_backtraced_name(Some(2))
-                    } else {
-                        Some(name)
-                    }
-                })
-                .as_deref()
-                .and_then(testname_from_backtrace)
-        };
-
-        let unknown_test_name = || {
+        let gen_test_name = || {
             let nonce = rand::random::<u128>();
-            format!("unknown-test-{:#32x}", nonce)
+            format!("test-{:#32x}", nonce)
         };
 
-        let test_name = test_name
-            .map(String::from)
-            .or_else(test_name_from_bt)
-            .unwrap_or_else(unknown_test_name);
+        let test_name = test_name.map(String::from).unwrap_or_else(gen_test_name);
         log::info!("Intializing MarketsNetwork. tn={}", test_name);
 
         MockNet::default().bind_gsb();
