@@ -1,6 +1,7 @@
 use actix_web::{middleware, web, App, HttpServer, Responder};
 use anyhow::{Context, Result};
 use futures::prelude::*;
+use metrics::gauge;
 #[cfg(feature = "static-openssl")]
 extern crate openssl_probe;
 
@@ -11,6 +12,7 @@ use std::{
     env,
     fmt::Debug,
     path::{Path, PathBuf},
+    time::Duration,
 };
 use structopt::{clap, StructOpt};
 use url::Url;
@@ -50,6 +52,8 @@ use ya_activity::TrackerRef;
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
 }
+
+const FD_METRICS_INTERVAL: Duration = Duration::from_secs(60);
 
 #[derive(StructOpt, Debug)]
 #[structopt(about = clap::crate_description!())]
@@ -576,6 +580,16 @@ impl ServiceCommand {
                     // });
 
                     async move { Ok(()) }
+                });
+
+                tokio::spawn(async {
+                    loop {
+                        for (fd_type, count) in ya_fd_metrics::fd_metrics() {
+                            gauge!(format!("yagna.fds.{fd_type}"), count as i64);
+                        }
+
+                        tokio::time::sleep(FD_METRICS_INTERVAL).await;
+                    }
                 });
 
                 future::try_join(server.run(), sd_notify(false, "READY=1")).await?;
