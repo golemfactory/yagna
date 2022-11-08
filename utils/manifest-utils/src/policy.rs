@@ -123,7 +123,7 @@ pub enum CertPermissions {
     /// Certificate is allowed to sign Payload Manifest requiring Outbound Network Traffic feature.
     OutboundManifest,
     /// Permissions signed by this certificate will not be verified.
-    Unverified,
+    UnverifiedPermissionsChain,
 }
 
 #[derive(Clone, Default)]
@@ -304,9 +304,9 @@ impl Keystore {
         let cert = self.get_permissions(&cert)?;
 
         if cert.contains(&CertPermissions::All) {
-            if !required.contains(&CertPermissions::Unverified) {
+            if !required.contains(&CertPermissions::UnverifiedPermissionsChain) {
                 return Ok(());
-            } else if cert.contains(&CertPermissions::Unverified) {
+            } else if cert.contains(&CertPermissions::UnverifiedPermissionsChain) {
                 return Ok(());
             }
         }

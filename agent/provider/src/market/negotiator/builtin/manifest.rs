@@ -184,8 +184,8 @@ impl<'demand> DemandWithManifest<'demand> {
         {
             // Verification of certificate permissions defined in demand is NYI.
             // To make Provider accept Demand containig Certificates Permissions it is required to
-            // add Certificate with "Unverified" permission into the keystore.
-            required.push(CertPermissions::Unverified);
+            // add Certificate with "unverified-permissions-chain" permission into the keystore.
+            required.push(CertPermissions::UnverifiedPermissionsChain);
         }
 
         Ok(keystore.verify_permissions(&cert, required)?)
