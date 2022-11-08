@@ -304,7 +304,11 @@ impl Keystore {
         let cert = self.get_permissions(&cert)?;
 
         if cert.contains(&CertPermissions::All) {
-            return Ok(());
+            if !required.contains(&CertPermissions::Unverified) {
+                return Ok(());
+            } else if cert.contains(&CertPermissions::Unverified) {
+                return Ok(());
+            }
         }
 
         if required.iter().all(|permission| cert.contains(permission)) {
