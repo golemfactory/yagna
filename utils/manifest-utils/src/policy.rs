@@ -122,6 +122,8 @@ pub enum CertPermissions {
     All,
     /// Certificate is allowed to sign Payload Manifest requiring Outbound Network Traffic feature.
     OutboundManifest,
+    /// Permissions signed by this certificate will not be verified.
+    Unverified,
 }
 
 #[derive(Clone, Default)]

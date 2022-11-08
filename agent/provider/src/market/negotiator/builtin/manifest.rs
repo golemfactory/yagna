@@ -7,7 +7,8 @@ use ya_manifest_utils::matching::domain::SharedDomainMatchers;
 use ya_manifest_utils::matching::Matcher;
 use ya_manifest_utils::policy::{CertPermissions, Keystore, Match, Policy, PolicyConfig};
 use ya_manifest_utils::{
-    decode_manifest, AppManifest, Feature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
+    decode_manifest, AppManifest, Feature, CAPABILITIES_PROPERTY,
+    DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
     DEMAND_MANIFEST_PROPERTY, DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY, DEMAND_MANIFEST_SIG_PROPERTY,
 };
 
@@ -174,8 +175,18 @@ impl<'demand> DemandWithManifest<'demand> {
     }
 
     fn verify_permissions(&self, keystore: &Keystore) -> anyhow::Result<()> {
-        let required = required_permissions(&self.manifest.features());
+        let mut required = required_permissions(&self.manifest.features());
         let cert: String = self.demand.get_property(DEMAND_MANIFEST_CERT_PROPERTY)?;
+
+        if let Ok(_) = self
+            .demand
+            .get_property::<String>(DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY)
+        {
+            // Verification of certificate permissions defined in demand is NYI.
+            // To make Provider accept Demand containig Certificates Permissions it is required to
+            // add Certificate with "Unverified" permission into the keystore.
+            required.push(CertPermissions::Unverified);
+        }
 
         Ok(keystore.verify_permissions(&cert, required)?)
     }

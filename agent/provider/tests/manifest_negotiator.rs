@@ -124,6 +124,7 @@ fn manifest_negotiator_test(
         signature_b64,
         signature_alg,
         cert_b64,
+        None,
         error_msg,
         &vec![CertPermissions::All],
     )
@@ -160,6 +161,7 @@ fn manifest_negotiator_test_encoded_sign_and_cert(
         signature_b64,
         signature_alg,
         cert_b64,
+        None,
         error_msg,
         &vec![CertPermissions::All],
     )
@@ -170,6 +172,7 @@ fn manifest_negotiator_test_encoded_sign_and_cert(
     Some("foo_req.key.pem"), // private key file
     Some("sha256"), // sig alg
     Some("foo_req.cert.pem"), // cert
+    None, // cert_permissions_b64
     &vec![CertPermissions::OutboundManifest],
     None;
     "Manifest accepted, because permissions are sufficient"
@@ -179,6 +182,7 @@ fn manifest_negotiator_test_encoded_sign_and_cert(
     Some("foo_req.key.pem"), // private key file
     Some("sha256"), // sig alg
     Some("foo_req.cert.pem"), // cert
+    None, // cert_permissions_b64
     &vec![CertPermissions::All],
     None;
     "Manifest accepted, when permissions are set to `All`"
@@ -188,6 +192,7 @@ fn manifest_negotiator_test_encoded_sign_and_cert(
     Some("foo_req.key.pem"), // private key file
     Some("sha256"), // sig alg
     Some("foo_req.cert.pem"), // cert
+    None, // cert_permissions_b64
     &vec![],
     Some("certificate permissions verification: Not sufficient permissions. Required: `outbound-manifest`, but has only: `none`"); // error msg
     "Manifest rejected, because certificate has no permissions"
@@ -197,9 +202,30 @@ fn manifest_negotiator_test_encoded_sign_and_cert(
     Some("foo_inter.key.pem"), // private key file
     Some("sha256"), // sig alg
     Some("foo_inter.cert.pem"), // cert
-    &vec![CertPermissions::OutboundManifest],
+    None, // cert_permissions_b64
+    &vec![CertPermissions::OutboundManifest], // certs_permissions
     Some("certificate permissions verification: Not sufficient permissions. Required: `outbound-manifest`, but has only: `none`"); // error msg
     "Manifest rejected, because parent certificate has no permissions"
+)]
+#[test_case(
+    r#"{ "any": "thing" }"#, // offer
+    Some("foo_req.key.pem"), // private key file
+    Some("sha256"), // sig alg
+    Some("foo_req.cert.pem"), // cert
+    Some("NYI"), // cert_permissions_b64
+    &vec![CertPermissions::OutboundManifest, CertPermissions::Unverified],
+    None;
+    "Manifest accepted, because permissions are sufficient (has `unverified` permission)"
+)]
+#[test_case(
+    r#"{ "any": "thing" }"#, // offer
+    Some("foo_req.key.pem"), // private key file
+    Some("sha256"), // sig alg
+    Some("foo_req.cert.pem"), // cert
+    Some("NYI"), // cert_permissions_b64
+    &vec![CertPermissions::OutboundManifest],
+    Some("certificate permissions verification: Not sufficient permissions. Required: `outbound-manifest|unverified`, but has only: `outbound-manifest`"); // error msg
+    "Manifest rejected, because certificate has no `unverified` permission."
 )]
 #[serial]
 fn test_manifest_negotiator_certs_permissions(
@@ -207,7 +233,8 @@ fn test_manifest_negotiator_certs_permissions(
     signing_key: Option<&str>,
     signature_alg: Option<&str>,
     cert: Option<&str>,
-    cert_permissions: &Vec<CertPermissions>,
+    cert_permissions_b64: Option<&str>,
+    certs_permissions: &Vec<CertPermissions>,
     error_msg: Option<&str>,
 ) {
     let comp_manifest_b64 = create_comp_manifest_b64(r#"["https://domain.com"]"#);
@@ -224,8 +251,9 @@ fn test_manifest_negotiator_certs_permissions(
         signature_b64,
         signature_alg,
         cert_b64,
+        cert_permissions_b64,
         error_msg,
-        cert_permissions,
+        certs_permissions,
     )
 }
 
@@ -236,6 +264,7 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert(
     signature_b64: Option<String>,
     signature_alg: Option<&str>,
     cert_b64: Option<String>,
+    cert_permissions_b64: Option<&str>,
     error_msg: Option<&str>,
     certs_permissions: &Vec<CertPermissions>,
 ) {
@@ -257,8 +286,15 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert(
     config.domain_patterns = whitelist_state;
     config.trusted_keys = Some(keystore);
     let mut manifest_negotiator = ManifestSignature::from(config);
+    // Current implementation does not verify content of certificate permissions incoming in demand.
 
-    let demand = create_demand_json(&comp_manifest_b64, signature_b64, signature_alg, cert_b64);
+    let demand = create_demand_json(
+        &comp_manifest_b64,
+        signature_b64,
+        signature_alg,
+        cert_b64,
+        cert_permissions_b64,
+    );
     let demand: Value = serde_json::from_str(&demand).unwrap();
     let demand = AgreementView {
         json: demand,
@@ -326,6 +362,7 @@ fn create_demand_json(
     signature_b64: Option<String>,
     signature_alg_b64: Option<&str>,
     cert_b64: Option<String>,
+    cert_permissions_b64: Option<&str>,
 ) -> String {
     let mut payload = HashMap::new();
     payload.insert("@tag", json!(comp_manifest_b64));
@@ -345,9 +382,19 @@ fn create_demand_json(
             json!({ "algorithm": signature_alg_b64.unwrap().to_string() }),
         );
     }
-    if let Some(cert_b64) = cert_b64 {
+
+    if cert_b64.is_some() && cert_permissions_b64.is_some() {
+        payload.insert(
+            "cert",
+            json!({
+                "@tag": cert_b64.unwrap(),
+                "permissions": cert_permissions_b64.unwrap().to_string()
+            }),
+        );
+    } else if let Some(cert_b64) = cert_b64 {
         payload.insert("cert", json!(cert_b64));
     }
+
     // let mut payload = manifest.to_string();
     let manifest = json!({
         "golem": {
