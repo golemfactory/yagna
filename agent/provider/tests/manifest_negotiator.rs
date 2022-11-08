@@ -267,6 +267,7 @@ fn test_manifest_negotiator_certs_permissions(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn manifest_negotiator_test_encoded_manifest_sign_and_cert(
     whitelist: &str,
     comp_manifest_b64: String,

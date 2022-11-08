@@ -178,9 +178,9 @@ impl<'demand> DemandWithManifest<'demand> {
         let mut required = required_permissions(&self.manifest.features());
         let cert: String = self.demand.get_property(DEMAND_MANIFEST_CERT_PROPERTY)?;
 
-        if let Ok(_) = self
+        if self
             .demand
-            .get_property::<String>(DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY)
+            .get_property::<String>(DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY).is_ok()
         {
             // Verification of certificate permissions defined in demand is NYI.
             // To make Provider accept Demand containig Certificates Permissions it is required to
@@ -188,7 +188,7 @@ impl<'demand> DemandWithManifest<'demand> {
             required.push(CertPermissions::UnverifiedPermissionsChain);
         }
 
-        Ok(keystore.verify_permissions(&cert, required)?)
+        keystore.verify_permissions(&cert, required)
     }
 }
 

@@ -293,7 +293,7 @@ impl Keystore {
             .inner
             .read()
             .map_err(|err| anyhow::anyhow!("RwLock error: {}", err.to_string()))?;
-        Ok(store.permissions.get(&cert))
+        Ok(store.permissions.get(cert))
     }
 
     fn has_permissions(
@@ -301,14 +301,11 @@ impl Keystore {
         cert: &X509Ref,
         required: &Vec<CertPermissions>,
     ) -> anyhow::Result<()> {
-        let cert = self.get_permissions(&cert)?;
+        let cert = self.get_permissions(cert)?;
 
-        if cert.contains(&CertPermissions::All) {
-            if !required.contains(&CertPermissions::UnverifiedPermissionsChain) {
-                return Ok(());
-            } else if cert.contains(&CertPermissions::UnverifiedPermissionsChain) {
-                return Ok(());
-            }
+        if cert.contains(&CertPermissions::All) && (!required.contains(&CertPermissions::UnverifiedPermissionsChain) || (required.contains(&CertPermissions::UnverifiedPermissionsChain)
+                    && cert.contains(&CertPermissions::UnverifiedPermissionsChain))) {
+            return Ok(());
         }
 
         if required.iter().all(|permission| cert.contains(permission)) {
@@ -317,7 +314,7 @@ impl Keystore {
 
         bail!(
             "Not sufficient permissions. Required: `{}`, but has only: `{}`",
-            format_permissions(&required),
+            format_permissions(required),
             format_permissions(&cert)
         )
     }
@@ -327,14 +324,14 @@ impl Keystore {
             .inner
             .read()
             .map_err(|err| anyhow::anyhow!("RwLock error: {}", err.to_string()))?;
-        Ok(store
+        store
             .store
             .objects()
             .iter()
             .filter_map(|cert| cert.x509())
             .map(|cert| cert.to_owned())
-            .find(|trusted| trusted.issued(&cert) == X509VerifyResult::OK)
-            .ok_or(anyhow!("Issuer certificate not found in keystore"))?)
+            .find(|trusted| trusted.issued(cert) == X509VerifyResult::OK)
+            .ok_or_else(|| anyhow!("Issuer certificate not found in keystore"))
     }
 
     fn decode_cert<S: AsRef<str>>(cert: S) -> anyhow::Result<X509> {
@@ -375,11 +372,14 @@ impl PermissionsManager {
         permissions: Vec<CertPermissions>,
     ) -> anyhow::Result<()> {
         let id = cert_to_id(cert)?;
-        Ok(self.set(&id, permissions))
+        self.set(&id, permissions);
+        Ok(())
     }
 
     pub fn set_many(
         &mut self,
+        // With slice I would need add `openssl` dependency directly to ya-rovider.
+        #[allow(clippy::ptr_arg)]
         certs: &Vec<X509>,
         permissions: Vec<CertPermissions>,
         whole_chain: bool,
@@ -406,7 +406,7 @@ impl PermissionsManager {
             Ok(id) => id,
             Err(_) => return vec![],
         };
-        self.permissions.get(&id).cloned().unwrap_or(vec![])
+        self.permissions.get(&id).cloned().unwrap_or_default()
     }
 
     pub fn save(&self, path: &Path) -> anyhow::Result<()> {
@@ -414,17 +414,13 @@ impl PermissionsManager {
         Ok(serde_json::to_writer_pretty(&mut file, &self.permissions)?)
     }
 
-    fn leaf_certs(certs: &Vec<X509>) -> Vec<X509> {
+    fn leaf_certs(certs: &[X509]) -> Vec<X509> {
         certs
             .iter()
             .cloned()
             .filter(|cert| {
                 !certs.iter().any(|cert2| {
-                    if cert.issued(&cert2) == X509VerifyResult::OK {
-                        true
-                    } else {
-                        false
-                    }
+                    cert.issued(cert2) == X509VerifyResult::OK
                 })
             })
             .collect()

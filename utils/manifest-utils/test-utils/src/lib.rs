@@ -43,7 +43,7 @@ pub fn load_certificates_from_dir(
     permissions.set_many(&certs.loaded, certs_permissions.clone(), false);
     permissions.set_many(&certs.skipped, certs_permissions.clone(), false);
     permissions
-        .save(&test_cert_dir)
+        .save(test_cert_dir)
         .expect("Should be able to save permissions file.");
 
     certs
