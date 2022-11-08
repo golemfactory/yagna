@@ -180,7 +180,8 @@ impl<'demand> DemandWithManifest<'demand> {
 
         if self
             .demand
-            .get_property::<String>(DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY).is_ok()
+            .get_property::<String>(DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY)
+            .is_ok()
         {
             // Verification of certificate permissions defined in demand is NYI.
             // To make Provider accept Demand containig Certificates Permissions it is required to

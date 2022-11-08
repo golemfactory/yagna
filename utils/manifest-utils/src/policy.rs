@@ -303,8 +303,11 @@ impl Keystore {
     ) -> anyhow::Result<()> {
         let cert = self.get_permissions(cert)?;
 
-        if cert.contains(&CertPermissions::All) && (!required.contains(&CertPermissions::UnverifiedPermissionsChain) || (required.contains(&CertPermissions::UnverifiedPermissionsChain)
-                    && cert.contains(&CertPermissions::UnverifiedPermissionsChain))) {
+        if cert.contains(&CertPermissions::All)
+            && (!required.contains(&CertPermissions::UnverifiedPermissionsChain)
+                || (required.contains(&CertPermissions::UnverifiedPermissionsChain)
+                    && cert.contains(&CertPermissions::UnverifiedPermissionsChain)))
+        {
             return Ok(());
         }
 
@@ -379,8 +382,7 @@ impl PermissionsManager {
     pub fn set_many(
         &mut self,
         // With slice I would need add `openssl` dependency directly to ya-rovider.
-        #[allow(clippy::ptr_arg)]
-        certs: &Vec<X509>,
+        #[allow(clippy::ptr_arg)] certs: &Vec<X509>,
         permissions: Vec<CertPermissions>,
         whole_chain: bool,
     ) {
@@ -419,9 +421,9 @@ impl PermissionsManager {
             .iter()
             .cloned()
             .filter(|cert| {
-                !certs.iter().any(|cert2| {
-                    cert.issued(cert2) == X509VerifyResult::OK
-                })
+                !certs
+                    .iter()
+                    .any(|cert2| cert.issued(cert2) == X509VerifyResult::OK)
             })
             .collect()
     }
