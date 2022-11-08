@@ -3138,9 +3138,9 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 
 [[package]]
 name = "libc"
-version = "0.2.132"
+version = "0.2.137"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8371e4e5341c3a96db127eb2465ac681ced4c433e01dd0e938adbef26ba93ba5"
+checksum = "fc7fcc620a3bff7cdd7a365be3376c97191aeaccc2a603e600951e452615bf89"
 
 [[package]]
 name = "libm"
@@ -3761,6 +3761,8 @@ dependencies = [
  "bitflags",
  "cfg-if 1.0.0",
  "libc",
+ "memoffset 0.6.5",
+ "pin-utils",
 ]
 
 [[package]]
@@ -7551,6 +7553,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-fd-metrics"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "nix 0.25.0",
+]
+
+[[package]]
 name = "ya-file-logging"
 version = "0.1.0"
 dependencies = [
@@ -8479,6 +8489,7 @@ dependencies = [
  "gftp",
  "lazy_static",
  "log",
+ "metrics 0.12.1",
  "openssl",
  "openssl-probe",
  "serde",
@@ -8495,6 +8506,7 @@ dependencies = [
  "ya-core-model",
  "ya-dummy-driver",
  "ya-erc20-driver",
+ "ya-fd-metrics",
  "ya-file-logging",
  "ya-identity",
  "ya-market",
