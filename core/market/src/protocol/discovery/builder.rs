@@ -81,7 +81,7 @@ impl DiscoveryBuilder {
                 get_local_offers_handler: self.get_handler(),
                 offer_unsubscribe_handler: self.get_handler(),
                 config: self.config.unwrap(),
-                net_config: net::Config::from_env().unwrap(),
+                net_type: net::Config::from_env().unwrap().net_type,
             }),
         }
     }

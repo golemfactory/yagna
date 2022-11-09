@@ -56,7 +56,7 @@ pub struct DiscoveryImpl {
     config: DiscoveryConfig,
     /// We need this to determine, if we use hybrid NET. Should be removed together
     /// with central NET implementation in future.
-    net_config: net::Config,
+    net_type: net::NetType,
 }
 
 impl Discovery {
@@ -66,7 +66,7 @@ impl Discovery {
     }
 
     pub fn is_hybrid_net(&self) -> bool {
-        self.inner.net_config.net_type == net::NetType::Hybrid
+        self.inner.net_type == net::NetType::Hybrid
     }
 
     pub async fn bcast_offers(&self, offer_ids: Vec<SubscriptionId>) -> Result<(), DiscoveryError> {
