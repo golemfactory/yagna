@@ -38,7 +38,7 @@ impl Config {
 ///  This conditional compilation is hack to make Goth integration tests work.
 ///  Current solution in Goth is to build separate binary with compilation flag.
 ///  This is only temporary for transition period, to make this PR as small as possible.
-#[cfg(not(feature = "hybrid-net"))]
+#[cfg(feature = "central-net")]
 impl Default for NetType {
     fn default() -> Self {
         std::env::set_var("YA_NET_TYPE", "central");
@@ -46,7 +46,7 @@ impl Default for NetType {
     }
 }
 
-#[cfg(feature = "hybrid-net")]
+#[cfg(not(feature = "central-net"))]
 impl Default for NetType {
     fn default() -> Self {
         std::env::set_var("YA_NET_TYPE", "hybrid");
