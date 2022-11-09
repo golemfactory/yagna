@@ -5,6 +5,7 @@ use tokio::sync::Mutex;
 
 use crate::protocol::callback::{CallbackFuture, OutputFuture};
 use crate::protocol::callback::{CallbackHandler, CallbackMessage, HandlerSlot};
+use ya_net::{self as net};
 
 use super::{Discovery, DiscoveryImpl};
 use crate::config::DiscoveryConfig;
@@ -80,6 +81,7 @@ impl DiscoveryBuilder {
                 get_local_offers_handler: self.get_handler(),
                 offer_unsubscribe_handler: self.get_handler(),
                 config: self.config.unwrap(),
+                net_type: net::Config::from_env().unwrap().net_type,
             }),
         }
     }
