@@ -1,15 +1,16 @@
+use itertools::Itertools;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::TryFrom;
 use std::ffi::OsStr;
-use std::fs::{self, DirEntry};
-use std::path::Path;
-use std::{fs::File, path::PathBuf};
+use std::fs::{self, DirEntry, File};
+use std::path::{Path, PathBuf};
 
 use md5::{Digest, Md5};
 use openssl::nid::Nid;
 use openssl::x509::{X509Ref, X509};
 use std::io::prelude::*;
 
+use crate::policy::{CertPermissions, PermissionsManager};
 use crate::Keystore;
 
 /// Tries do decode base64. On failure tries to unescape snailquotes.
@@ -62,10 +63,13 @@ fn os_str_to_string(os_str: &OsStr) -> String {
     os_str.to_string_lossy().to_string()
 }
 
-pub fn to_cert_data(certs: &Vec<X509>) -> anyhow::Result<Vec<CertBasicData>> {
+pub fn to_cert_data(
+    certs: &Vec<X509>,
+    permissions: &PermissionsManager,
+) -> anyhow::Result<Vec<CertBasicData>> {
     let mut certs_data = Vec::new();
     for cert in certs {
-        let data = CertBasicData::try_from(cert.as_ref())?;
+        let data = CertBasicData::create(cert.as_ref(), permissions)?;
         certs_data.push(data);
     }
     Ok(certs_data)
@@ -121,6 +125,7 @@ pub struct CertBasicData {
     pub id: String,
     pub not_after: String,
     pub subject: BTreeMap<String, String>,
+    pub permissions: String,
 }
 
 impl TryFrom<&X509Ref> for CertBasicData {
@@ -141,7 +146,25 @@ impl TryFrom<&X509Ref> for CertBasicData {
             id,
             not_after,
             subject,
+            permissions: "".to_string(),
         })
+    }
+}
+
+impl CertBasicData {
+    pub fn create(cert: &X509Ref, permissions: &PermissionsManager) -> anyhow::Result<Self> {
+        let mut data = CertBasicData::try_from(cert)?;
+        let permissions = permissions.get(cert);
+        data.permissions = format_permissions(&permissions);
+        Ok(data)
+    }
+}
+
+pub fn format_permissions(permissions: &Vec<CertPermissions>) -> String {
+    if permissions.is_empty() {
+        "none".to_string()
+    } else {
+        format!("{}", permissions.iter().format("|"))
     }
 }
 
@@ -154,14 +177,19 @@ pub(crate) struct X509Visitor<T: CertBasicDataVisitor> {
 }
 
 impl<T: CertBasicDataVisitor> X509Visitor<T> {
-    pub(crate) fn accept(&mut self, cert: &X509Ref) -> anyhow::Result<()> {
-        let cert_data = CertBasicData::try_from(cert)?;
+    pub(crate) fn accept(
+        &mut self,
+        cert: &X509Ref,
+        permissions: &PermissionsManager,
+    ) -> anyhow::Result<()> {
+        let cert_data = CertBasicData::create(cert, permissions)?;
         self.visitor.accept(cert_data);
         Ok(())
     }
 }
 
 pub struct KeystoreManager {
+    keystore: Keystore,
     ids: HashSet<String>,
     cert_dir: PathBuf,
 }
@@ -171,11 +199,19 @@ impl KeystoreManager {
         let keystore = Keystore::load(cert_dir)?;
         let ids = keystore.certs_ids()?;
         let cert_dir = cert_dir.clone();
-        Ok(Self { ids, cert_dir })
+        Ok(Self {
+            ids,
+            cert_dir,
+            keystore,
+        })
     }
 
-    /// Copies certificates from given file to `cert_dir` and returns newly added certificates.
-    /// Certificates already existing in `cert_dir` are skipped.
+    pub fn permissions_manager(&self) -> PermissionsManager {
+        self.keystore.permissions_manager()
+    }
+
+    /// Copies certificates from given file to `cert-dir` and returns newly added certificates.
+    /// Certificates already existing in `cert-dir` are skipped.
     pub fn load_certs(self, cert_paths: &Vec<PathBuf>) -> anyhow::Result<KeystoreLoadResult> {
         let mut loaded = HashMap::new();
         let mut skipped = HashMap::new();
@@ -203,12 +239,10 @@ impl KeystoreManager {
             }
         }
 
-        let loaded: Vec<X509> = loaded.into_values().collect();
-        let skipped: Vec<X509> = skipped.into_values().collect();
-        if loaded.is_empty() {
-            return Ok(KeystoreLoadResult::NothingNewToLoad { skipped });
-        }
-        Ok(KeystoreLoadResult::Loaded { loaded, skipped })
+        Ok(KeystoreLoadResult {
+            loaded: loaded.into_values().collect(),
+            skipped: skipped.into_values().collect(),
+        })
     }
 
     pub fn remove_certs(self, ids: &HashSet<String>) -> anyhow::Result<KeystoreRemoveResult> {
@@ -259,7 +293,7 @@ impl KeystoreManager {
         Ok(KeystoreRemoveResult::Removed { removed })
     }
 
-    /// Loads keychain file to `cert_dir`
+    /// Loads keychain file to `cert-dir`
     fn load_as_keychain_file(&self, cert_path: &PathBuf) -> anyhow::Result<()> {
         let file_name = get_file_name(cert_path)
             .ok_or_else(|| anyhow::anyhow!(format!("Cannot get filename of {cert_path:?}")))?;
@@ -286,7 +320,7 @@ impl KeystoreManager {
         Ok(())
     }
 
-    /// Loads certificates as individual files to `cert_dir`
+    /// Loads certificates as individual files to `cert-dir`
     fn load_as_certificate_files(&self, cert_path: &Path, certs: Vec<X509>) -> anyhow::Result<()> {
         let file_stem = get_file_stem(cert_path)
             .ok_or_else(|| anyhow::anyhow!("Cannot get file name stem."))?;
@@ -304,14 +338,9 @@ impl KeystoreManager {
     }
 }
 
-pub enum KeystoreLoadResult {
-    NothingNewToLoad {
-        skipped: Vec<X509>,
-    },
-    Loaded {
-        loaded: Vec<X509>,
-        skipped: Vec<X509>,
-    },
+pub struct KeystoreLoadResult {
+    pub loaded: Vec<X509>,
+    pub skipped: Vec<X509>,
 }
 
 pub enum KeystoreRemoveResult {

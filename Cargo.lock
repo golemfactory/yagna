@@ -7632,6 +7632,7 @@ dependencies = [
  "base64 0.13.0",
  "chrono",
  "hex",
+ "itertools 0.10.4",
  "log",
  "md-5",
  "openssl",

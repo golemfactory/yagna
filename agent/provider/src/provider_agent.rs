@@ -484,12 +484,11 @@ fn spawn_keystore_monitor<P: AsRef<Path>>(
     keystore: Keystore,
 ) -> Result<FileMonitor, Error> {
     let cert_dir = path.as_ref().to_path_buf();
-    let handler = move |p: PathBuf| match Keystore::load(&cert_dir) {
-        Ok(new_keystore) => {
-            keystore.replace(new_keystore);
+    let handler = move |p: PathBuf| match keystore.reload(&cert_dir) {
+        Ok(()) => {
             log::info!("Trusted keystore updated from {}", p.display());
         }
-        Err(e) => log::warn!("Error updating trusted keystore from {:?}: {:?}", p, e),
+        Err(e) => log::warn!("Error updating trusted keystore from {}: {e}", p.display()),
     };
     let monitor = FileMonitor::spawn_with(
         path,

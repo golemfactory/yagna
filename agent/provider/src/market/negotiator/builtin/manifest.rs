@@ -1,12 +1,14 @@
+use std::collections::HashSet;
 use std::ops::Not;
 
 use url::Url;
 use ya_agreement_utils::{Error, OfferDefinition};
 use ya_manifest_utils::matching::domain::SharedDomainMatchers;
 use ya_manifest_utils::matching::Matcher;
-use ya_manifest_utils::policy::{Keystore, Match, Policy, PolicyConfig};
+use ya_manifest_utils::policy::{CertPermissions, Keystore, Match, Policy, PolicyConfig};
 use ya_manifest_utils::{
-    decode_manifest, AppManifest, Feature, CAPABILITIES_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
+    decode_manifest, AppManifest, Feature, CAPABILITIES_PROPERTY,
+    DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
     DEMAND_MANIFEST_PROPERTY, DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY, DEMAND_MANIFEST_SIG_PROPERTY,
 };
 
@@ -45,8 +47,11 @@ impl NegotiatorComponent for ManifestSignature {
 
         if demand.has_signature() {
             match demand.verify_signature(&self.keystore) {
-                Ok(()) => acceptance(offer),
-                Err(err) => rejection(format!("failed to verify manifest signature: {}", err)),
+                Ok(()) => match demand.verify_permissions(&self.keystore) {
+                    Ok(_) => acceptance(offer),
+                    Err(e) => rejection(format!("certificate permissions verification: {e}")),
+                },
+                Err(e) => rejection(format!("failed to verify manifest signature: {e}")),
             }
         } else if demand.requires_signature(&self.whitelist_matcher) {
             rejection("manifest requires signature but it has none".to_string())
@@ -168,6 +173,34 @@ impl<'demand> DemandWithManifest<'demand> {
         log::trace!("manifest: {}", &self.manifest_encoded);
         keystore.verify_signature(cert, sig, sig_alg, &self.manifest_encoded)
     }
+
+    fn verify_permissions(&self, keystore: &Keystore) -> anyhow::Result<()> {
+        let mut required = required_permissions(&self.manifest.features());
+        let cert: String = self.demand.get_property(DEMAND_MANIFEST_CERT_PROPERTY)?;
+
+        if self
+            .demand
+            .get_property::<String>(DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY)
+            .is_ok()
+        {
+            // Verification of certificate permissions defined in demand is NYI.
+            // To make Provider accept Demand containig Certificates Permissions it is required to
+            // add Certificate with "unverified-permissions-chain" permission into the keystore.
+            required.push(CertPermissions::UnverifiedPermissionsChain);
+        }
+
+        keystore.verify_permissions(&cert, required)
+    }
+}
+
+fn required_permissions(features: &HashSet<Feature>) -> Vec<CertPermissions> {
+    features
+        .iter()
+        .filter_map(|feature| match feature {
+            Feature::Inet => Some(CertPermissions::OutboundManifest),
+            _ => None,
+        })
+        .collect()
 }
 
 fn rejection(message: String) -> anyhow::Result<NegotiationResult> {
