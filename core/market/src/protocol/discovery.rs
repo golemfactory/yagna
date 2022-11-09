@@ -54,6 +54,9 @@ pub struct DiscoveryImpl {
     offer_unsubscribe_handler: HandlerSlot<UnsubscribedOffersBcast>,
 
     config: DiscoveryConfig,
+    /// We need this to determine, if we use hybrid NET. Should be removed together
+    /// with central NET implementation in future.
+    net_type: net::NetType,
 }
 
 impl Discovery {
@@ -63,10 +66,7 @@ impl Discovery {
     }
 
     pub fn is_hybrid_net(&self) -> bool {
-        match std::env::var("YA_NET_TYPE") {
-            Ok(val) => val == "hybrid",
-            Err(_) => false,
-        }
+        self.inner.net_type == net::NetType::Hybrid
     }
 
     pub async fn bcast_offers(&self, offer_ids: Vec<SubscriptionId>) -> Result<(), DiscoveryError> {
