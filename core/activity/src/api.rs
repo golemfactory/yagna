@@ -36,6 +36,7 @@ mod common {
         scope
             // .service(get_activities_web)
             .service(get_events)
+            .service(get_activity_agreement_web)
             .service(get_activity_state_web)
             .service(get_activity_usage_web)
     }
@@ -46,6 +47,39 @@ mod common {
     //     log::debug!("get_activities_web");
     //     get_activities(&db).await.map(web::Json)
     // }
+
+    #[actix_web::get("/activity/{activity_id}/agreement")]
+    async fn get_activity_agreement_web(
+        db: web::Data<DbExecutor>,
+        path: web::Path<PathActivity>,
+        id: Identity,
+    ) -> impl Responder {
+        log::debug!("get_activity_agreement_web");
+
+        // check if caller is the Provider
+        if authorize_activity_executor(&db, id.identity, &path.activity_id, Role::Provider)
+            .await
+            .is_ok()
+        {
+            log::trace!("get_activity_agreement_web: I'm the provider");
+            return get_activity_agreement(&db, &path.activity_id, Role::Provider)
+                .await
+                .map(|agreement| agreement.agreement_id)
+                .map(web::Json);
+        }
+
+        log::trace!("get_activity_agreement_web: Not provider, maybe requestor?");
+
+        // check if caller is the Requestor
+        authorize_activity_initiator(&db, id.identity, &path.activity_id, Role::Requestor).await?;
+
+        log::trace!("get_activity_agreement_web: I'm the requestor");
+        get_activity_agreement(&db, &path.activity_id, Role::Requestor)
+            .await
+            .map(|agreement| agreement.agreement_id)
+            .map(web::Json)
+    }
+
     #[actix_web::get("/activity/{activity_id}/state")]
     async fn get_activity_state_web(
         db: web::Data<DbExecutor>,
