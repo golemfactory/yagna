@@ -66,24 +66,31 @@ impl DiscoveryBuilder {
     }
 
     pub fn build(mut self) -> Discovery {
-        let offer_handlers = Mutex::new(OfferHandlers {
+        let offer_handlers = OfferHandlers {
             filter_out_known_ids: self.get_handler(),
             receive_remote_offers: self.get_handler(),
-        });
+            get_local_offers_handler: self.get_handler(),
+            offer_unsubscribe_handler: self.get_handler(),
+        };
 
-        Discovery {
+        let (sender, receiver) =
+            tokio::sync::mpsc::channel(self.config.clone().unwrap().bcast_receiving_queue_size);
+
+        let discovery = Discovery {
             inner: Arc::new(DiscoveryImpl {
                 identity: self.get_data(),
                 offer_handlers,
-                offer_queue: Mutex::new(vec![]),
-                unsub_queue: Mutex::new(vec![]),
+                offer_sending_queue: Mutex::new(vec![]),
+                unsub_sending_queue: Mutex::new(vec![]),
                 lazy_binder_prefix: Mutex::new(None),
-                get_local_offers_handler: self.get_handler(),
-                offer_unsubscribe_handler: self.get_handler(),
                 config: self.config.unwrap(),
                 net_type: net::Config::from_env().unwrap().net_type,
+                offers_receiving_queue: sender,
             }),
-        }
+        };
+
+        tokio::task::spawn_local(discovery.clone().bcast_receiver_loop(receiver));
+        discovery
     }
 }
 
