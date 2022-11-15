@@ -445,14 +445,14 @@ impl Discovery {
 
 async fn broadcast_offers(node_id: NodeId, offer_ids: Vec<SubscriptionId>) {
     if let Err(e) = net::broadcast(node_id, OffersBcast { offer_ids }).await {
-        log::error!("Error broadcasting offers: {:?}", e);
+        log::error!("Error broadcasting offers: {e}");
         counter!("market.offers.broadcasts.net_errors", 1);
     };
 }
 
 async fn broadcast_unsubscribed(node_id: NodeId, offer_ids: Vec<SubscriptionId>) {
     if let Err(e) = net::broadcast(node_id, UnsubscribedOffersBcast { offer_ids }).await {
-        log::error!("Error broadcasting unsubscribed offers: {:?}", e);
+        log::error!("Error broadcasting unsubscribed offers: {e}");
         counter!("market.offers.unsubscribes.broadcasts.net_errors", 1);
     };
 }

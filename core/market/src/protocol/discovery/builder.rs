@@ -121,33 +121,33 @@ mod test {
     use super::super::*;
     use super::*;
 
-    #[test]
+    #[actix::test]
     #[should_panic]
-    fn build_from_default_should_fail() {
+    async fn build_from_default_should_fail() {
         DiscoveryBuilder::default().build();
     }
 
-    #[test]
+    #[actix::test]
     #[should_panic]
-    fn build_with_single_handler_should_fail() {
+    async fn build_with_single_handler_should_fail() {
         DiscoveryBuilder::default()
             .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
             .build();
     }
 
-    #[test]
+    #[actix::test]
     #[should_panic(expected = "[DiscoveryBuilder] Can't find data of required type.")]
-    fn setting_db_handler_wo_db_should_fail() {
+    async fn setting_db_handler_wo_db_should_fail() {
         DiscoveryBuilder::default()
             .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_data_handler(|_: u8, _, _: OffersRetrieved| async { Ok(vec![]) })
             .build();
     }
 
-    #[test]
+    #[actix::test]
     #[should_panic]
-    fn build_from_with_missing_handler_should_fail() {
+    async fn build_from_with_missing_handler_should_fail() {
         DiscoveryBuilder::default()
             .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
@@ -155,8 +155,8 @@ mod test {
             .build();
     }
 
-    #[test]
-    fn build_from_with_four_handlers_should_pass() {
+    #[actix::test]
+    async fn build_from_with_four_handlers_should_pass() {
         DiscoveryBuilder::default()
             .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
@@ -167,8 +167,8 @@ mod test {
             .build();
     }
 
-    #[test]
-    fn build_from_with_mixed_handlers_should_pass() {
+    #[actix::test]
+    async fn build_from_with_mixed_handlers_should_pass() {
         DiscoveryBuilder::default()
             .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_data("mock data")
