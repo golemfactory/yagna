@@ -12,6 +12,7 @@ use smoltcp::wire::{EthernetAddress, HardwareAddress, IpAddress, IpCidr, IpEndpo
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use uuid::Uuid;
 
+use ya_packet_trace::{packet_trace, packet_trace_maybe};
 use ya_utils_networking::vpn::socket::TCP_CONN_TIMEOUT;
 use ya_utils_networking::vpn::stack::interface::{add_iface_address, add_iface_route, tap_iface};
 
@@ -468,9 +469,18 @@ impl Handler<Packet> for Vpn {
     fn handle(&mut self, pkt: Packet, ctx: &mut Self::Context) -> Self::Result {
         match self.connections.get(&pkt.meta.into()).cloned() {
             Some(connection) => {
+                #[cfg(feature = "packet-trace-enable")]
+                let data2 = pkt.data.clone();
+
+                packet_trace!("Vpn::Tx::Handler<Packet>::1", { &data2 });
+
                 let fut = self
                     .stack_network
                     .send(pkt.data, connection.stack_connection)
+                    .map(move |res| {
+                        packet_trace!("Vpn::Tx::Handler<Packet>::2", { &data2 });
+                        res
+                    })
                     .map_err(|e| Error::Other(e.to_string()));
 
                 ctx.spawn(fut.into_actor(self).map(move |result, this, ctx| {
@@ -547,6 +557,8 @@ impl Handler<Ingress> for Vpn {
                 ActorResponse::reply(Ok(()))
             }
             IngressEvent::Packet { payload, desc, .. } => {
+                packet_trace!("Vpn::Tx::Handler<Ingress>", { &payload });
+
                 if let Some(mut connection) = self.connections.get(&desc).cloned() {
                     log::debug!("[vpn] ingress proxy: send to {:?}", desc.local);
 
@@ -577,6 +589,16 @@ impl Handler<Egress> for Vpn {
     fn handle(&mut self, msg: Egress, _: &mut Self::Context) -> Self::Result {
         let frame = msg.event.payload.into_vec();
 
+        #[cfg(feature = "packet-trace-enable")]
+        // Only trace IP frames
+        let to_trace = if frame[12..14] == [0x08, 0x00] && frame.len() > 55 {
+            Some(frame[54..].to_owned())
+        } else {
+            None
+        };
+
+        packet_trace_maybe!("Vpn::Tx::Handler<Egress>::1", { &to_trace });
+
         log::debug!("[vpn] egress -> runtime packet {} B", frame.len());
 
         match self.vpn.endpoint(msg.event.remote) {
@@ -587,6 +609,11 @@ impl Handler<Egress> for Vpn {
                     .map(|r| match r {
                         Ok(_) => Ok(()),
                         Err(e) => Err(Error::Other(e.to_string())),
+                    })
+                    .map(move |r| {
+                        packet_trace_maybe!("Vpn::Tx::Handler<Egress>::2", { &to_trace });
+
+                        r
                     });
 
                 ActorResponse::r#async(fut.into_actor(self))

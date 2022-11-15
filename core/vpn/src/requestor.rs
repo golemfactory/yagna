@@ -7,11 +7,13 @@ use actix_web::{web, HttpRequest, HttpResponse, Responder, ResponseError};
 use actix_web_actors::ws;
 use futures::channel::mpsc;
 use futures::lock::Mutex;
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use ya_client_model::net::*;
 use ya_client_model::ErrorMessage;
+use ya_packet_trace::packet_trace;
 use ya_service_api_web::middleware::Identity;
 use ya_utils_networking::vpn::stack::connection::ConnectionMeta;
 use ya_utils_networking::vpn::{Error as VpnError, Protocol};
@@ -246,6 +248,10 @@ impl VpnWebSocket {
     }
 
     fn forward(&self, data: Vec<u8>, ctx: &mut <Self as Actor>::Context) {
+        #[cfg(feature = "packet-trace-enable")]
+        let data2 = data.clone();
+        packet_trace!("VpnWebSocket::Tx::1", { &data });
+
         let vpn = self.vpn.clone();
         vpn.send(Packet {
             data,
@@ -259,6 +265,8 @@ impl VpnWebSocket {
             }
         })
         .wait(ctx);
+
+        packet_trace!("VpnWebSocket::Tx::2", { &data2 });
     }
 }
 
@@ -275,7 +283,10 @@ impl Actor for VpnWebSocket {
             }
         });
 
-        ctx.add_stream(self.vpn_rx.take().unwrap());
+        ctx.add_stream(self.vpn_rx.take().unwrap().map(|packet| {
+            packet_trace!("VpnWebSocket::Rx", { &packet });
+            packet
+        }));
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
