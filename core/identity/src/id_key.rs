@@ -1,10 +1,10 @@
 #![allow(unused)]
 
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 
-use anyhow::Context;
+use anyhow::{bail, Context};
 use ethsign::keyfile::Bytes;
-use ethsign::{KeyFile, Protected, PublicKey, SecretKey};
+use ethsign::{KeyFile, Protected, PublicKey, SecretKey, Signature};
 use rand::Rng;
 use ya_client_model::NodeId;
 
@@ -73,6 +73,20 @@ impl IdentityKey {
 
             v
         })
+    }
+
+    /// Verify given 32-byte message with the key.
+    pub fn verify(&self, data: &[u8], signature: &[u8]) -> anyhow::Result<bool> {
+        let secret = match &self.secret {
+            Some(secret) => secret,
+            None => bail!("No secret!!"),
+        };
+        let v = signature[0];
+        let r: [u8; 32] = signature[1..33].try_into()?;
+        let s: [u8; 32] = signature[33..65].try_into()?;
+        let signature = Signature { v, r, s };
+
+        Ok(secret.public().verify(&signature, data)?)
     }
 
     pub fn lock(&mut self, new_password: Option<String>) -> anyhow::Result<()> {

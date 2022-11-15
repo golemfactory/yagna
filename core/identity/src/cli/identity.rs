@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use ethsign::Protected;
-use rustc_hex::ToHex;
+use rustc_hex::{FromHex, ToHex};
 use sha2::Digest;
 use structopt::*;
 use tokio::io::{AsyncReadExt, BufReader};
@@ -109,6 +109,9 @@ pub enum IdentityCommand {
     /// Sign file contents
     Sign(SignCommand),
 
+    /// Verify file contents
+    VerifySignature(VerifySignatureCommand),
+
     /// Locks identity
     Lock {
         /// NodeId or key
@@ -168,6 +171,20 @@ pub enum IdentityCommand {
 pub struct SignCommand {
     /// Input file path
     file_path: PathBuf,
+
+    /// NodeId or key
+    node_or_alias: Option<NodeOrAlias>,
+}
+
+#[derive(StructOpt, Debug)]
+#[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
+#[structopt(rename_all = "kebab-case")]
+pub struct VerifySignatureCommand {
+    /// Input file path
+    file_path: PathBuf,
+
+    /// Signature to verify
+    signature: String,
 
     /// NodeId or key
     node_or_alias: Option<NodeOrAlias>,
@@ -268,6 +285,50 @@ impl IdentityCommand {
                             let sig = v.to_hex::<String>();
                             serde_json::json! {{ "sig": sig }}
                         })?,
+                )
+            }
+            IdentityCommand::VerifySignature(VerifySignatureCommand {
+                node_or_alias,
+                file_path,
+                signature,
+            }) => {
+                let node_id = node_or_alias.clone().unwrap_or_default().resolve().await?;
+
+                let file = tokio::fs::File::open(file_path)
+                    .await
+                    .context("unable to read input path")?;
+                let meta = file
+                    .metadata()
+                    .await
+                    .context("unable to read input metadata")?;
+
+                let mut reader = BufReader::with_capacity(FILE_CHUNK_SIZE, file);
+                let mut buf: [u8; FILE_CHUNK_SIZE] = [0; FILE_CHUNK_SIZE];
+                let mut remaining = meta.len() as usize;
+
+                let mut sha256 = sha2::Sha256::default();
+
+                loop {
+                    let count = remaining.min(FILE_CHUNK_SIZE);
+                    match reader.read_exact(&mut buf[..count]).await? {
+                        0 => break,
+                        count => {
+                            sha256.update(&buf[..count]);
+                            remaining -= count;
+                        }
+                    }
+                }
+                let payload = sha256.finalize().to_vec();
+
+                CommandOutput::object(
+                    bus::service(identity::BUS_ID)
+                        .send(identity::Verify {
+                            node_id,
+                            payload,
+                            signature: signature.from_hex()?,
+                        })
+                        .await
+                        .map_err(anyhow::Error::msg)?,
                 )
             }
             IdentityCommand::Update {

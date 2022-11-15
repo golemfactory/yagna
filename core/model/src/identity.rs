@@ -203,6 +203,20 @@ impl RpcMessage for Sign {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct Verify {
+    pub node_id: NodeId,
+    pub payload: Vec<u8>,
+    pub signature: Vec<u8>,
+}
+
+impl RpcMessage for Verify {
+    const ID: &'static str = "Verify";
+    type Item = bool;
+    type Error = Error;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Subscribe {
     pub endpoint: String,
 }

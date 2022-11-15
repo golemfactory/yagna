@@ -310,6 +310,19 @@ impl IdentityService {
         }
     }
 
+    pub async fn verify(
+        &mut self,
+        node_id: NodeId,
+        data: Vec<u8>,
+        signature: Vec<u8>,
+    ) -> Result<bool, model::Error> {
+        let key = self.get_key_by_id(&node_id)?;
+        match key.verify(data.as_slice(), signature.as_slice()) {
+            Ok(result) => Ok(result),
+            Err(_) => Err(model::Error::new_err_msg("verify error")),
+        }
+    }
+
     pub async fn update_identity(
         &mut self,
         update: model::Update,
@@ -497,6 +510,16 @@ impl IdentityService {
         let _ = bus::bind(model::BUS_ID, move |sign: model::Sign| {
             let this = this.clone();
             async move { this.lock().await.sign(sign.node_id, sign.payload).await }
+        });
+        let this = me.clone();
+        let _ = bus::bind(model::BUS_ID, move |verify: model::Verify| {
+            let this = this.clone();
+            async move {
+                this.lock()
+                    .await
+                    .verify(verify.node_id, verify.payload, verify.signature)
+                    .await
+            }
         });
         let this = me.clone();
         let _ = bus::bind(model::BUS_ID, move |subscribe: model::Subscribe| {
