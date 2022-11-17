@@ -25,7 +25,7 @@ pub(crate) mod store;
 use crate::db::dao::{DemandDao, DemandState};
 use error::{MatcherError, MatcherInitError, QueryOfferError, QueryOffersError};
 use futures::FutureExt;
-use log::{debug, info};
+use log::info;
 use resolver::Resolver;
 use store::SubscriptionStore;
 use ya_core_model::net::local::{BroadcastMessage, NewNeighbour, SendBroadcastMessage};
