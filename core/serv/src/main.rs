@@ -553,6 +553,8 @@ impl ServiceCommand {
                 let api_host_port = rest_api_host_port(api_url.clone());
                 let rest_address = api_host_port.clone();
 
+                ya_net::hybrid::send_bcast_new_neighbour().await;
+
                 let server = HttpServer::new(move || {
                     let app = App::new()
                         .wrap(middleware::Logger::default())

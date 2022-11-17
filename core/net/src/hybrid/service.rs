@@ -42,7 +42,8 @@ use crate::hybrid::client::{ClientActor, ClientProxy};
 use crate::hybrid::codec;
 use crate::hybrid::codec::encode_message;
 use crate::hybrid::crypto::IdentityCryptoProvider;
-use crate::{bind_broadcast_with_caller, broadcast};
+use crate::service::NET_TYPE;
+use crate::{bind_broadcast_with_caller, broadcast, NetType};
 
 const DEFAULT_NET_RELAY_HOST: &str = "127.0.0.1:7464";
 
@@ -209,7 +210,7 @@ pub async fn start_network(
 
     tokio::task::spawn_local(async move {
         tokio::time::sleep(Duration::from_secs(5)).await;
-        send_bcast_new_neighbour(default_id).await;
+        send_bcast_new_neighbour().await;
     });
 
     Ok(())
@@ -1143,10 +1144,19 @@ async fn bind_neighbourhood_bcast() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn send_bcast_new_neighbour(node_id: NodeId) {
-    if let Err(e) = broadcast(node_id, NewNeighbour {}).await {
-        log::error!("Error broadcasting new neighbour: {:?}", e);
-    };
+pub async fn send_bcast_new_neighbour() {
+    let node_id = crate::service::identities().await.unwrap().0;
+
+    let net_type = { *NET_TYPE.read().unwrap() };
+    match net_type {
+        NetType::Hybrid => {
+            log::info!("Broadcasting new neighbour");
+            if let Err(e) = broadcast(node_id, NewNeighbour {}).await {
+                log::error!("Error broadcasting new neighbour: {:?}", e);
+            }
+        }
+        _ => {}
+    }
 }
 
 #[cfg(test)]
