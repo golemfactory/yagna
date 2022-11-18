@@ -25,7 +25,7 @@ pub(crate) mod store;
 use crate::db::dao::{DemandDao, DemandState};
 use error::{MatcherError, MatcherInitError, QueryOfferError, QueryOffersError};
 use futures::FutureExt;
-use log::info;
+use log::debug;
 use resolver::Resolver;
 use store::SubscriptionStore;
 use ya_core_model::net::local::{BroadcastMessage, NewNeighbour, SendBroadcastMessage};
@@ -126,10 +126,10 @@ impl Matcher {
         let myself = self.clone();
         bind_broadcast_with_caller(
             &bcast_address,
-            move |_caller, _msg: SendBroadcastMessage<NewNeighbour>| {
+            move |caller, _msg: SendBroadcastMessage<NewNeighbour>| {
                 let myself = myself.clone();
                 async move {
-                    info!("Received new neighbour broadcast");
+                    debug!("Received new neighbour broadcast from [{}].", &caller);
                     cyclic::bcast_offers_once(myself.clone()).await;
                     return Ok(());
                 }

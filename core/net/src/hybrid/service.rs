@@ -1144,9 +1144,9 @@ pub async fn send_bcast_new_neighbour() {
     let net_type = { *NET_TYPE.read().unwrap() };
     match net_type {
         NetType::Hybrid => {
-            log::info!("Broadcasting new neighbour");
+            log::debug!("Broadcasting new neighbour");
             if let Err(e) = broadcast(node_id, NewNeighbour {}).await {
-                log::error!("Error broadcasting new neighbour: {:?}", e);
+                log::error!("Error broadcasting new neighbour: {e}");
             }
         }
         _ => {}
