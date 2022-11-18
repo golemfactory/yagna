@@ -4,7 +4,9 @@ use strum::VariantNames;
 use strum::{EnumString, EnumVariantNames, IntoStaticStr};
 use url::Url;
 
-#[derive(StructOpt, EnumString, EnumVariantNames, IntoStaticStr, Copy, Clone, PartialEq, Debug)]
+#[derive(
+    StructOpt, EnumString, EnumVariantNames, IntoStaticStr, Copy, Clone, Eq, PartialEq, Debug,
+)]
 #[strum(serialize_all = "lowercase")]
 pub enum NetType {
     Central,
