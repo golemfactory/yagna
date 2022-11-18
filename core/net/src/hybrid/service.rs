@@ -8,7 +8,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::Arc;
 use std::task::Poll;
-use std::time::Duration;
 
 use anyhow::{anyhow, Context as AnyhowContext};
 use futures::channel::{mpsc, oneshot};
@@ -207,11 +206,6 @@ pub async fn start_network(
     } else {
         counter!("net.public-addresses", 0);
     }
-
-    tokio::task::spawn_local(async move {
-        tokio::time::sleep(Duration::from_secs(5)).await;
-        send_bcast_new_neighbour().await;
-    });
 
     Ok(())
 }
