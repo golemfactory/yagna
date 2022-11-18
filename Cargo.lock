@@ -7966,7 +7966,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?branch=kek/p2p-rev-conn-fix#69d5a615cc0365ba0a1a41fd314f33df32a077ee"
+source = "git+https://github.com/golemfactory/ya-relay.git?branch=kek/p2p-rev-conn-fix#317bcb02f470a9b1ffe4b48550dcdb5fd995d9dd"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7987,7 +7987,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-core"
 version = "0.3.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?branch=kek/p2p-rev-conn-fix#69d5a615cc0365ba0a1a41fd314f33df32a077ee"
+source = "git+https://github.com/golemfactory/ya-relay.git?branch=kek/p2p-rev-conn-fix#317bcb02f470a9b1ffe4b48550dcdb5fd995d9dd"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8017,7 +8017,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-proto"
 version = "0.4.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?branch=kek/p2p-rev-conn-fix#69d5a615cc0365ba0a1a41fd314f33df32a077ee"
+source = "git+https://github.com/golemfactory/ya-relay.git?branch=kek/p2p-rev-conn-fix#317bcb02f470a9b1ffe4b48550dcdb5fd995d9dd"
 dependencies = [
  "anyhow",
  "bytes 1.2.1",
@@ -8035,7 +8035,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.4.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?branch=kek/p2p-rev-conn-fix#69d5a615cc0365ba0a1a41fd314f33df32a077ee"
+source = "git+https://github.com/golemfactory/ya-relay.git?branch=kek/p2p-rev-conn-fix#317bcb02f470a9b1ffe4b48550dcdb5fd995d9dd"
 dependencies = [
  "derive_more",
  "futures 0.3.24",
@@ -8075,7 +8075,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-util"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?branch=kek/p2p-rev-conn-fix#69d5a615cc0365ba0a1a41fd314f33df32a077ee"
+source = "git+https://github.com/golemfactory/ya-relay.git?branch=kek/p2p-rev-conn-fix#317bcb02f470a9b1ffe4b48550dcdb5fd995d9dd"
 dependencies = [
  "bytes 1.2.1",
  "derive_more",
