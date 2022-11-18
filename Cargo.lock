@@ -7777,6 +7777,7 @@ dependencies = [
  "ya-compile-time-utils",
  "ya-core-model",
  "ya-manifest-utils",
+ "ya-packet-trace",
  "ya-runtime-api",
  "ya-sb-router",
  "ya-service-bus",
@@ -8030,7 +8031,7 @@ dependencies = [
 [[package]]
 name = "ya-packet-trace"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-packet-trace#23cbcc33043156970c858d6873dab30dee29a114"
+source = "git+https://github.com/golemfactory/ya-packet-trace#423a02f5cf14bb703ea4324453400aa0914742e1"
 dependencies = [
  "chrono",
  "fxhash",

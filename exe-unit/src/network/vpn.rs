@@ -6,6 +6,7 @@ use futures::{future, FutureExt};
 use ya_client_model::NodeId;
 use ya_core_model::activity::{self, RpcMessageError, VpnControl, VpnPacket};
 use ya_core_model::identity;
+use ya_packet_trace::packet_trace_maybe;
 use ya_runtime_api::deploy::ContainerEndpoint;
 use ya_runtime_api::server::{CreateNetwork, NetworkInterface, RuntimeService};
 use ya_service_bus::typed::Endpoint as GsbEndpoint;
@@ -276,6 +277,10 @@ impl StreamHandler<crate::Result<Vec<u8>>> for Vpn {
             Err(err) => return log::debug!("[vpn] error (egress): {err}"),
         };
 
+        packet_trace_maybe!("exe-unit::Vpn::Handler<Egress>", {
+            (packet[12..14] == [0x08, 0x00] && packet.len() > 55).then(|| &packet[54..])
+        });
+
         match EtherFrame::try_from(packet) {
             Ok(frame) => match &frame {
                 EtherFrame::Arp(_) => Self::handle_arp(frame, &self.networks, &self.default_id),
@@ -313,6 +318,11 @@ impl Handler<RpcRawCall> for Vpn {
             }
         };
 
+        packet_trace_maybe!("exe-unit::Vpn::Handler<Ingress>", {
+            (packet.data[12..14] == [0x08, 0x00] && packet.data.len() > 55)
+                .then(|| &packet.data[54..])
+        });
+
         self.handle_packet(packet, ctx)
             .map(|_| Vec::new())
             .map_err(|e| ya_service_bus::Error::GsbBadRequest(e.to_string()))
@@ -323,6 +333,11 @@ impl Handler<Packet> for Vpn {
     type Result = <Packet as Message>::Result;
 
     fn handle(&mut self, packet: Packet, ctx: &mut Context<Self>) -> Self::Result {
+        packet_trace_maybe!("exe-unit::Vpn::Handler<Packet>", {
+            (packet.data[12..14] == [0x08, 0x00] && packet.data.len() > 55)
+                .then(|| &packet.data[..])
+        });
+
         self.handle_packet(packet, ctx)
     }
 }
