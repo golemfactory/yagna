@@ -19,7 +19,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use url::Url;
 
 use ya_core_model::net::local::{
-    BroadcastMessage, NewNeighbour, SendBroadcastMessage, SendBroadcastStub,
+    BindBroadcastError, BroadcastMessage, NewNeighbour, SendBroadcastMessage, SendBroadcastStub,
 };
 use ya_core_model::{identity, net, NodeId};
 use ya_relay_client::codec::forward::{PrefixedSink, PrefixedStream, SinkKind};
@@ -1121,7 +1121,7 @@ fn gen_id() -> u64 {
     rng.gen::<u64>() & 0x001f_ffff_ffff_ffff_u64
 }
 
-async fn bind_neighbourhood_bcast() -> anyhow::Result<()> {
+async fn bind_neighbourhood_bcast() -> anyhow::Result<(), BindBroadcastError> {
     let bcast_address = format!("{}/{}", net::local::BUS_ID, NewNeighbour::TOPIC);
     bind_broadcast_with_caller(
         &bcast_address,
@@ -1130,12 +1130,10 @@ async fn bind_neighbourhood_bcast() -> anyhow::Result<()> {
                 client.invalidate_neighbourhood_cache().await.ok();
             }
 
-            return Ok(());
+            Ok(())
         },
     )
-    .await?;
-
-    Ok(())
+    .await
 }
 
 pub async fn send_bcast_new_neighbour() {

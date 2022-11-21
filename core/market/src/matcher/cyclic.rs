@@ -24,7 +24,6 @@ pub(super) async fn bcast_offers(matcher: Matcher) {
 
 /// Broadcast set of Offers once which always includes our own Offers plus some random subset.
 pub async fn bcast_offers_once(matcher: Matcher) {
-    let matcher = matcher.clone();
     async move {
         let start = Instant::now();
 
