@@ -7966,7 +7966,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.4.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=6e2c55808f363c948805c99b90d47c9c2a3eed7d#6e2c55808f363c948805c99b90d47c9c2a3eed7d"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=098dba92d130035b8a3eac1132841787fcecf522#098dba92d130035b8a3eac1132841787fcecf522"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7981,13 +7981,13 @@ dependencies = [
  "url",
  "ya-relay-core",
  "ya-relay-proto",
- "ya-relay-stack",
+ "ya-relay-stack 0.4.1 (git+https://github.com/golemfactory/ya-relay.git?rev=098dba92d130035b8a3eac1132841787fcecf522)",
 ]
 
 [[package]]
 name = "ya-relay-core"
 version = "0.3.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=6e2c55808f363c948805c99b90d47c9c2a3eed7d#6e2c55808f363c948805c99b90d47c9c2a3eed7d"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=098dba92d130035b8a3eac1132841787fcecf522#098dba92d130035b8a3eac1132841787fcecf522"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8011,13 +8011,13 @@ dependencies = [
  "uuid",
  "ya-client-model",
  "ya-relay-proto",
- "ya-relay-stack",
+ "ya-relay-stack 0.4.1 (git+https://github.com/golemfactory/ya-relay.git?rev=098dba92d130035b8a3eac1132841787fcecf522)",
 ]
 
 [[package]]
 name = "ya-relay-proto"
 version = "0.4.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=6e2c55808f363c948805c99b90d47c9c2a3eed7d#6e2c55808f363c948805c99b90d47c9c2a3eed7d"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=098dba92d130035b8a3eac1132841787fcecf522#098dba92d130035b8a3eac1132841787fcecf522"
 dependencies = [
  "anyhow",
  "bytes 1.2.1",
@@ -8029,7 +8029,27 @@ dependencies = [
  "thiserror",
  "tokio 1.21.1",
  "tokio-util 0.7.4",
- "ya-relay-util",
+ "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=098dba92d130035b8a3eac1132841787fcecf522)",
+]
+
+[[package]]
+name = "ya-relay-stack"
+version = "0.4.1"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=098dba92d130035b8a3eac1132841787fcecf522#098dba92d130035b8a3eac1132841787fcecf522"
+dependencies = [
+ "derive_more",
+ "futures 0.3.24",
+ "lazy_static",
+ "log",
+ "managed",
+ "num-derive",
+ "num-traits",
+ "rand 0.8.5",
+ "smoltcp",
+ "thiserror",
+ "tokio 1.21.1",
+ "tokio-stream",
+ "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=098dba92d130035b8a3eac1132841787fcecf522)",
 ]
 
 [[package]]
@@ -8049,7 +8069,16 @@ dependencies = [
  "thiserror",
  "tokio 1.21.1",
  "tokio-stream",
- "ya-relay-util",
+ "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=6e2c55808f363c948805c99b90d47c9c2a3eed7d)",
+]
+
+[[package]]
+name = "ya-relay-util"
+version = "0.1.0"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=098dba92d130035b8a3eac1132841787fcecf522#098dba92d130035b8a3eac1132841787fcecf522"
+dependencies = [
+ "bytes 1.2.1",
+ "derive_more",
 ]
 
 [[package]]
@@ -8336,7 +8365,7 @@ dependencies = [
  "thiserror",
  "trust-dns-resolver",
  "url",
- "ya-relay-stack",
+ "ya-relay-stack 0.4.1 (git+https://github.com/golemfactory/ya-relay.git?rev=6e2c55808f363c948805c99b90d47c9c2a3eed7d)",
 ]
 
 [[package]]
