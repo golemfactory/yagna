@@ -29,6 +29,7 @@ use ya_relay_client::{Client, ClientBuilder, ForwardReceiver, TransportType};
 use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::CallReplyCode;
 use ya_sb_util::RevPrefixes;
+use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_service_bus::untyped::{Fn4HandlerExt, Fn4StreamHandlerExt};
 use ya_service_bus::{
     serialization, typed, untyped as local_bus, Error, ResponseChunk, RpcEndpoint, RpcMessage,
@@ -99,7 +100,13 @@ impl Net {
 
     pub async fn shutdown() -> anyhow::Result<()> {
         if let Ok(client) = Self::client().await {
-            let _ = client.shutdown().await;
+            if let Err(_) = client
+                .shutdown()
+                .timeout(Some(std::time::Duration::from_secs(30)))
+                .await
+            {
+                log::info!("NET shutdown due to timeout.");
+            }
         }
         if let Some(sender) = { SHUTDOWN_TX.write().await.take() } {
             let _ = sender.send(());

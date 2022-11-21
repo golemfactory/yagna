@@ -66,24 +66,31 @@ impl DiscoveryBuilder {
     }
 
     pub fn build(mut self) -> Discovery {
-        let offer_handlers = Mutex::new(OfferHandlers {
+        let offer_handlers = OfferHandlers {
             filter_out_known_ids: self.get_handler(),
             receive_remote_offers: self.get_handler(),
-        });
+            get_local_offers_handler: self.get_handler(),
+            offer_unsubscribe_handler: self.get_handler(),
+        };
 
-        Discovery {
+        let (sender, receiver) =
+            tokio::sync::mpsc::channel(self.config.clone().unwrap().bcast_receiving_queue_size);
+
+        let discovery = Discovery {
             inner: Arc::new(DiscoveryImpl {
                 identity: self.get_data(),
                 offer_handlers,
-                offer_queue: Mutex::new(vec![]),
-                unsub_queue: Mutex::new(vec![]),
+                offer_sending_queue: Mutex::new(vec![]),
+                unsub_sending_queue: Mutex::new(vec![]),
                 lazy_binder_prefix: Mutex::new(None),
-                get_local_offers_handler: self.get_handler(),
-                offer_unsubscribe_handler: self.get_handler(),
                 config: self.config.unwrap(),
                 net_type: net::Config::from_env().unwrap().net_type,
+                offers_receiving_queue: sender,
             }),
-        }
+        };
+
+        tokio::task::spawn_local(discovery.clone().bcast_receiver_loop(receiver));
+        discovery
     }
 }
 
@@ -114,33 +121,33 @@ mod test {
     use super::super::*;
     use super::*;
 
-    #[test]
+    #[actix::test]
     #[should_panic]
-    fn build_from_default_should_fail() {
+    async fn build_from_default_should_fail() {
         DiscoveryBuilder::default().build();
     }
 
-    #[test]
+    #[actix::test]
     #[should_panic]
-    fn build_with_single_handler_should_fail() {
+    async fn build_with_single_handler_should_fail() {
         DiscoveryBuilder::default()
             .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
             .build();
     }
 
-    #[test]
+    #[actix::test]
     #[should_panic(expected = "[DiscoveryBuilder] Can't find data of required type.")]
-    fn setting_db_handler_wo_db_should_fail() {
+    async fn setting_db_handler_wo_db_should_fail() {
         DiscoveryBuilder::default()
             .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_data_handler(|_: u8, _, _: OffersRetrieved| async { Ok(vec![]) })
             .build();
     }
 
-    #[test]
+    #[actix::test]
     #[should_panic]
-    fn build_from_with_missing_handler_should_fail() {
+    async fn build_from_with_missing_handler_should_fail() {
         DiscoveryBuilder::default()
             .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
@@ -148,8 +155,8 @@ mod test {
             .build();
     }
 
-    #[test]
-    fn build_from_with_four_handlers_should_pass() {
+    #[actix::test]
+    async fn build_from_with_four_handlers_should_pass() {
         DiscoveryBuilder::default()
             .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_handler(|_, _: OffersRetrieved| async { Ok(vec![]) })
@@ -160,8 +167,8 @@ mod test {
             .build();
     }
 
-    #[test]
-    fn build_from_with_mixed_handlers_should_pass() {
+    #[actix::test]
+    async fn build_from_with_mixed_handlers_should_pass() {
         DiscoveryBuilder::default()
             .add_data(MockIdentity::new("test") as Arc<dyn IdentityApi>)
             .add_data("mock data")

@@ -28,7 +28,7 @@ cargo build --release --features static-openssl --target x86_64-unknown-linux-mu
 bash .ci/pack-build.sh
 
 CURRENT_DIR=`pwd`
-SUBNET="hybrid"
+SUBNET="public"
 YAGNA_VERSION=${GITHUB_REF}
 RELEASE_DIR="${CURRENT_DIR}/releases"
 PROVIDER_BINARY_PATH="${RELEASE_DIR}/golem-provider-linux-${YAGNA_VERSION}.tar.gz"
