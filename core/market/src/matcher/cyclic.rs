@@ -8,6 +8,8 @@ use std::hash::Hash;
 use super::Matcher;
 use std::time::Instant;
 
+/// Infinitely broadcast set of Offers according to the configured interval.
+/// The set always includes our own Offers plus some random subset.
 pub(super) async fn bcast_offers(matcher: Matcher) {
     if matcher.config.discovery.max_bcasted_offers == 0 {
         return;
@@ -15,44 +17,47 @@ pub(super) async fn bcast_offers(matcher: Matcher) {
 
     let bcast_interval = matcher.config.discovery.mean_cyclic_bcast_interval;
     loop {
-        let matcher = matcher.clone();
-        async move {
-            wait_random_interval(bcast_interval).await;
-
-            let start = Instant::now();
-
-            // We always broadcast our own Offers.
-            let our_ids = matcher.get_our_active_offer_ids().await?;
-
-            // Add some random subset of Offers to broadcast.
-            let num_our_offers = our_ids.len();
-            let num_to_bcast = matcher.config.discovery.max_bcasted_offers;
-
-            let offers_to_broadcast = if matcher.discovery.is_hybrid_net() {
-                let all_ids = matcher.store.get_active_offer_ids(None).await?;
-                randomize_ids(our_ids, all_ids, num_to_bcast as usize)
-            } else {
-                our_ids
-            };
-
-            log::trace!(
-                "Broadcasted {} Offers including {} ours.",
-                offers_to_broadcast.len(),
-                num_our_offers
-            );
-
-            matcher.discovery.bcast_offers(offers_to_broadcast).await?;
-
-            let end = Instant::now();
-            counter!("market.offers.broadcasts", 1);
-            timing!("market.offers.broadcasts.time", start, end);
-
-            Result::<(), anyhow::Error>::Ok(())
-        }
-        .await
-        .map_err(|e| log::warn!("Failed to send random subscriptions bcast. Error: {}", e))
-        .ok();
+        wait_random_interval(bcast_interval).await;
+        bcast_offers_once(matcher.clone()).await;
     }
+}
+
+/// Broadcast set of Offers once which always includes our own Offers plus some random subset.
+pub async fn bcast_offers_once(matcher: Matcher) {
+    async move {
+        let start = Instant::now();
+
+        // We always broadcast our own Offers.
+        let our_ids = matcher.get_our_active_offer_ids().await?;
+
+        // Add some random subset of Offers to broadcast.
+        let num_our_offers = our_ids.len();
+        let num_to_bcast = matcher.config.discovery.max_bcasted_offers;
+
+        let offers_to_broadcast = if matcher.discovery.is_hybrid_net() {
+            let all_ids = matcher.store.get_active_offer_ids(None).await?;
+            randomize_ids(our_ids, all_ids, num_to_bcast as usize)
+        } else {
+            our_ids
+        };
+
+        log::debug!(
+            "Broadcasted {} Offers including {} ours.",
+            offers_to_broadcast.len(),
+            num_our_offers
+        );
+
+        matcher.discovery.bcast_offers(offers_to_broadcast).await?;
+
+        let end = Instant::now();
+        counter!("market.offers.broadcasts", 1);
+        timing!("market.offers.broadcasts.time", start, end);
+
+        Result::<(), anyhow::Error>::Ok(())
+    }
+    .await
+    .map_err(|e| log::warn!("Failed to send random subscriptions bcast. Error: {}", e))
+    .ok();
 }
 
 pub(super) async fn bcast_unsubscribes(matcher: Matcher) {

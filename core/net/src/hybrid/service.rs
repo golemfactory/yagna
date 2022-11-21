@@ -18,7 +18,9 @@ use tokio::sync::RwLock;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use url::Url;
 
-use ya_core_model::net::local::{SendBroadcastMessage, SendBroadcastStub};
+use ya_core_model::net::local::{
+    BindBroadcastError, BroadcastMessage, NewNeighbour, SendBroadcastMessage, SendBroadcastStub,
+};
 use ya_core_model::{identity, net, NodeId};
 use ya_relay_client::codec::forward::{PrefixedSink, PrefixedStream, SinkKind};
 use ya_relay_client::crypto::CryptoProvider;
@@ -40,6 +42,8 @@ use crate::hybrid::client::{ClientActor, ClientProxy};
 use crate::hybrid::codec;
 use crate::hybrid::codec::encode_message;
 use crate::hybrid::crypto::IdentityCryptoProvider;
+use crate::service::NET_TYPE;
+use crate::{bind_broadcast_with_caller, broadcast, NetType};
 
 const DEFAULT_NET_RELAY_HOST: &str = "127.0.0.1:7464";
 
@@ -201,6 +205,7 @@ pub async fn start_network(
 
     bind_broadcast_handlers(broadcast_size);
     bind_identity_event_handler(crypto).await;
+    bind_neighbourhood_bcast().await?;
 
     if let Some(address) = client.public_addr().await {
         log::info!("Public address: {}", address);
@@ -1121,6 +1126,36 @@ fn gen_id() -> u64 {
     use rand::Rng;
     let mut rng = rand::thread_rng();
     rng.gen::<u64>() & 0x001f_ffff_ffff_ffff_u64
+}
+
+async fn bind_neighbourhood_bcast() -> anyhow::Result<(), BindBroadcastError> {
+    let bcast_address = format!("{}/{}", net::local::BUS_ID, NewNeighbour::TOPIC);
+    bind_broadcast_with_caller(
+        &bcast_address,
+        move |_caller, _msg: SendBroadcastMessage<NewNeighbour>| async move {
+            if let Ok(client) = Net::client().await {
+                client.invalidate_neighbourhood_cache().await.ok();
+            }
+
+            Ok(())
+        },
+    )
+    .await
+}
+
+pub async fn send_bcast_new_neighbour() {
+    let node_id = crate::service::identities().await.unwrap().0;
+
+    let net_type = { *NET_TYPE.read().unwrap() };
+    match net_type {
+        NetType::Hybrid => {
+            log::debug!("Broadcasting new neighbour");
+            if let Err(e) = broadcast(node_id, NewNeighbour {}).await {
+                log::error!("Error broadcasting new neighbour: {e}");
+            }
+        }
+        _ => {}
+    }
 }
 
 #[cfg(test)]
