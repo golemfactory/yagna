@@ -69,6 +69,7 @@ pub fn fd_metrics() -> HashMap<FdType, usize> {
 /// Maps fd to FdType
 ///
 /// Uses fstat on unix, always returns None on Windows
+#[allow(unused_variables)]
 fn fd_type(fd: i32) -> Option<FdType> {
     #[cfg(target_family = "unix")]
     {
