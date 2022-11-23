@@ -117,7 +117,7 @@ fn manifest_negotiator_test(
 
     let cert_b64 = cert.map(cert_file_to_cert_b64);
 
-    manifest_negotiator_test_encoded_manifest_sign_and_cert(
+    manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
         whitelist,
         comp_manifest_b64,
         offer,
@@ -127,6 +127,7 @@ fn manifest_negotiator_test(
         None,
         error_msg,
         &vec![CertPermissions::All],
+        &["foo_ca-chain.cert.pem"],
     )
 }
 
@@ -154,7 +155,7 @@ fn manifest_negotiator_test_encoded_sign_and_cert(
     let signature_b64 = signature_b64.map(|signature| signature.to_string());
 
     let cert_b64 = cert.map(cert_file_to_cert_b64);
-    manifest_negotiator_test_encoded_manifest_sign_and_cert(
+    manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
         whitelist,
         comp_manifest_b64,
         offer,
@@ -164,6 +165,7 @@ fn manifest_negotiator_test_encoded_sign_and_cert(
         None,
         error_msg,
         &vec![CertPermissions::All],
+        &["foo_ca-chain.cert.pem"],
     )
 }
 
@@ -247,6 +249,40 @@ fn test_manifest_negotiator_certs_permissions(
     certs_permissions: &Vec<CertPermissions>,
     error_msg: Option<&str>,
 ) {
+    manifest_negotiator_test_manifest_sign_and_cert_and_cert_dir_files(
+        offer,
+        signing_key,
+        signature_alg,
+        cert,
+        cert_permissions_b64,
+        certs_permissions,
+        &["foo_ca-chain.cert.pem"],
+        error_msg,
+    )
+}
+
+#[test_case(
+    r#"{ "any": "thing" }"#, // offer
+    Some("foo_req.key.pem"), // private key file
+    Some("sha256"), // sig alg
+    Some("foo_inter_req-chain.cert.pem"), // cert
+    Some("NYI"), // cert_permissions_b64
+    &vec![CertPermissions::All],
+    &["foo_ca.cert.pem"], // cert dir files
+    None; // error msg
+    "Certificate chain in Demand supported"
+)]
+#[serial]
+fn manifest_negotiator_test_manifest_sign_and_cert_and_cert_dir_files(
+    offer: &str,
+    signing_key: Option<&str>,
+    signature_alg: Option<&str>,
+    cert: Option<&str>,
+    cert_permissions_b64: Option<&str>,
+    certs_permissions: &Vec<CertPermissions>,
+    cert_dir_files: &[&str],
+    error_msg: Option<&str>,
+) {
     let comp_manifest_b64 = create_comp_manifest_b64(r#"["https://domain.com"]"#);
 
     let signature_b64 = signing_key.map(|signing_key| {
@@ -254,7 +290,7 @@ fn test_manifest_negotiator_certs_permissions(
     });
 
     let cert_b64 = cert.map(cert_file_to_cert_b64);
-    manifest_negotiator_test_encoded_manifest_sign_and_cert(
+    manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
         r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#,
         comp_manifest_b64,
         offer,
@@ -264,11 +300,13 @@ fn test_manifest_negotiator_certs_permissions(
         cert_permissions_b64,
         error_msg,
         certs_permissions,
+        cert_dir_files,
     )
 }
 
+
 #[allow(clippy::too_many_arguments)]
-fn manifest_negotiator_test_encoded_manifest_sign_and_cert(
+fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
     whitelist: &str,
     comp_manifest_b64: String,
     offer: &str,
@@ -278,6 +316,7 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert(
     cert_permissions_b64: Option<&str>,
     error_msg: Option<&str>,
     certs_permissions: &Vec<CertPermissions>,
+    cert_dir_files: &[&str],
 ) {
     // Having
     let whitelist_state = create_whitelist(whitelist);
@@ -287,7 +326,7 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert(
         load_certificates_from_dir(
             &resource_cert_dir,
             &test_cert_dir,
-            &["foo_ca-chain.cert.pem"],
+            cert_dir_files,
             certs_permissions,
         );
     }
