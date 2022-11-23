@@ -78,10 +78,7 @@ async fn extend_whitelist(path: &Path) -> Result<()> {
     let file_stem = path
         .file_stem()
         .and_then(|osstr| osstr.to_str())
-        .ok_or(anyhow::anyhow!(
-            "Cannot determine filename from path: {:?}",
-            path
-        ))?;
+        .ok_or_else(|| anyhow::anyhow!("Cannot determine filename from path: {:?}", path))?;
 
     let whitelist_type = WhitelistType::from_str(file_stem)?;
     let file_content = fs::read_to_string(path)?;
