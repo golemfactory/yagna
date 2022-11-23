@@ -28,7 +28,9 @@ use futures::FutureExt;
 use log::debug;
 use resolver::Resolver;
 use store::SubscriptionStore;
-use ya_core_model::net::local::{BroadcastMessage, NewNeighbour, SendBroadcastMessage};
+use ya_core_model::net::local::{
+    BindBroadcastError, BroadcastMessage, NewNeighbour, SendBroadcastMessage,
+};
 use ya_net::bind_broadcast_with_caller;
 
 /// Stores proposal generated from resolver.
@@ -121,7 +123,7 @@ impl Matcher {
         Ok(())
     }
 
-    async fn bind_neighbourhood_bcast(&self, local_prefix: &str) -> anyhow::Result<()> {
+    async fn bind_neighbourhood_bcast(&self, local_prefix: &str) -> Result<(), BindBroadcastError> {
         let bcast_address = format!("{local_prefix}/{}", NewNeighbour::TOPIC);
         let myself = self.clone();
         bind_broadcast_with_caller(
@@ -135,9 +137,7 @@ impl Matcher {
                 }
             },
         )
-        .await?;
-
-        Ok(())
+        .await
     }
 
     pub async fn bind_expiration_tracker(&self) -> anyhow::Result<()> {
