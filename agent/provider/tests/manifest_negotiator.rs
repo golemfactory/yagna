@@ -246,7 +246,7 @@ fn test_manifest_negotiator_certs_permissions(
     signature_alg: Option<&str>,
     cert: Option<&str>,
     cert_permissions_b64: Option<&str>,
-    certs_permissions: &Vec<CertPermissions>,
+    provider_certs_permissions: &Vec<CertPermissions>,
     error_msg: Option<&str>,
 ) {
     manifest_negotiator_test_manifest_sign_and_cert_and_cert_dir_files(
@@ -255,7 +255,7 @@ fn test_manifest_negotiator_certs_permissions(
         signature_alg,
         cert,
         cert_permissions_b64,
-        certs_permissions,
+        provider_certs_permissions,
         &["foo_ca-chain.cert.pem"],
         error_msg,
     )
@@ -267,7 +267,7 @@ fn test_manifest_negotiator_certs_permissions(
     Some("sha256"), // sig alg
     Some("foo_inter_req-chain.cert.pem"), // cert
     Some("NYI"), // cert_permissions_b64
-    &vec![CertPermissions::All],
+    &vec![CertPermissions::All, CertPermissions::UnverifiedPermissionsChain],
     &["foo_ca.cert.pem"], // cert dir files
     None; // error msg
     "Certificate chain in Demand supported"
@@ -279,8 +279,8 @@ fn manifest_negotiator_test_manifest_sign_and_cert_and_cert_dir_files(
     signature_alg: Option<&str>,
     cert: Option<&str>,
     cert_permissions_b64: Option<&str>,
-    certs_permissions: &Vec<CertPermissions>,
-    cert_dir_files: &[&str],
+    provider_certs_permissions: &Vec<CertPermissions>,
+    provider_certs: &[&str],
     error_msg: Option<&str>,
 ) {
     let comp_manifest_b64 = create_comp_manifest_b64(r#"["https://domain.com"]"#);
@@ -299,11 +299,10 @@ fn manifest_negotiator_test_manifest_sign_and_cert_and_cert_dir_files(
         cert_b64,
         cert_permissions_b64,
         error_msg,
-        certs_permissions,
-        cert_dir_files,
+        provider_certs_permissions,
+        provider_certs,
     )
 }
-
 
 #[allow(clippy::too_many_arguments)]
 fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
@@ -315,8 +314,8 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
     cert_b64: Option<String>,
     cert_permissions_b64: Option<&str>,
     error_msg: Option<&str>,
-    certs_permissions: &Vec<CertPermissions>,
-    cert_dir_files: &[&str],
+    provider_certs_permissions: &Vec<CertPermissions>,
+    provider_certs: &[&str],
 ) {
     // Having
     let whitelist_state = create_whitelist(whitelist);
@@ -326,8 +325,8 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
         load_certificates_from_dir(
             &resource_cert_dir,
             &test_cert_dir,
-            cert_dir_files,
-            certs_permissions,
+            provider_certs,
+            provider_certs_permissions,
         );
     }
     let keystore = Keystore::load(&test_cert_dir).expect("Can load test certificates");
