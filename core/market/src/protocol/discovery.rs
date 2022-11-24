@@ -386,14 +386,14 @@ impl Discovery {
 
         // We don't want to get overwhelmed by incoming broadcasts, that's why we drop them,
         // if the queue is full.
-        return match self.inner.offers_receiving_queue.try_send((caller, msg)) {
+        match self.inner.offers_receiving_queue.try_send((caller, msg)) {
             Ok(_) => Ok(()),
             Err(_) => {
                 log::trace!("Already handling to many broadcasts, skipping...");
                 counter!("market.offers.broadcasts.skip", 1);
                 Ok(())
             }
-        };
+        }
     }
 
     async fn on_get_remote_offers(

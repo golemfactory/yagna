@@ -100,10 +100,11 @@ impl Net {
 
     pub async fn shutdown() -> anyhow::Result<()> {
         if let Ok(client) = Self::client().await {
-            if let Err(_) = client
+            if client
                 .shutdown()
                 .timeout(Some(std::time::Duration::from_secs(30)))
                 .await
+                .is_err()
             {
                 log::info!("NET shutdown due to timeout.");
             }
@@ -1147,14 +1148,11 @@ pub async fn send_bcast_new_neighbour() {
     let node_id = crate::service::identities().await.unwrap().0;
 
     let net_type = { *NET_TYPE.read().unwrap() };
-    match net_type {
-        NetType::Hybrid => {
-            log::debug!("Broadcasting new neighbour");
-            if let Err(e) = broadcast(node_id, NewNeighbour {}).await {
-                log::error!("Error broadcasting new neighbour: {e}");
-            }
+    if net_type == NetType::Hybrid {
+        log::debug!("Broadcasting new neighbour");
+        if let Err(e) = broadcast(node_id, NewNeighbour {}).await {
+            log::error!("Error broadcasting new neighbour: {e}");
         }
-        _ => {}
     }
 }
 
