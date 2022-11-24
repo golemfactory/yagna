@@ -289,7 +289,7 @@ impl Keystore {
         }
 
         let cert_chain = Self::decode_cert_chain(cert)?;
-        // Demands do not cantain certificates permissions
+        // Demands do not contain certificates permissions
         // so only first certificate in chain signer permissions are verified.
         let Some(cert) = cert_chain.first() else {
             bail!("Unable to verify certificate permissions. No certificate.")
