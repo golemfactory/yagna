@@ -29,11 +29,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v1
 
+      - name: Musl
+        run: |
+          sudo apt-get install musl musl-tools
+
+          musl-gcc -v
+
       - name: Install Rust ${{ env.rust_stable }}
         uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ env.rust_stable }}
           components: rustfmt, clippy
+          target: x86_64-unknown-linux-musl
+          override: true
 
       - name: Check lockfile
         uses: actions-rs/cargo@v1
@@ -49,17 +57,19 @@ jobs:
           vcpkg integrate install
 
       - name: Build binaries
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --workspace
+        run: |
+          cargo build --features static-openssl --target x86_64-unknown-linux-musl
+          (cd core/gftp && cargo build --bin gftp -p gftp --features bin --target x86_64-unknown-linux-musl)
+          (cd golem_cli && cargo build --bin golemsp -p golemsp --target x86_64-unknown-linux-musl)
+          (cd agent/provider && cargo build --bin ya-provider -p ya-provider --target x86_64-unknown-linux-musl)
+          (cd exe-unit && cargo build --bin exe-unit -p ya-exe-unit --features openssl/vendored --target x86_64-unknown-linux-musl)
 
       - name: Copy binaries
         shell: bash
         run: |
           mkdir build
           if [ "$RUNNER_OS" == "Linux" ]; then
-            cp target/debug/{yagna,ya-provider,exe-unit,golemsp,gftp} build
+            cp target/x86_64-unknown-linux-musl/debug/{yagna,ya-provider,exe-unit,golemsp,gftp} build
             strip -x build/*
           elif [ "$RUNNER_OS" == "macOS" ]; then
             cp target/debug/{yagna,gftp} build
