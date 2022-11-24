@@ -316,7 +316,7 @@ impl TypedArrayPointer for Option<&Value> {
 }
 
 pub fn try_from_path(path: &PathBuf) -> Result<Value, Error> {
-    let contents = std::fs::read_to_string(&path).map_err(Error::from)?;
+    let contents = std::fs::read_to_string(path).map_err(Error::from)?;
     let ext = match path.extension().and_then(|e| e.to_str()) {
         Some(ext) => ext,
         None => DEFAULT_FORMAT,
