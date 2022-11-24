@@ -19,7 +19,8 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.8.0"
 pytest = "^6.2"
-pytest-asyncio = "^0.14"
+pytest-asyncio = "^0.20.2"
+pytest-rerunfailures = "^10.3"
 #goth = "^0.11"
 # to use development goth version uncomment below
 goth =  { git = "https://github.com/golemfactory/goth.git", rev = "e81663ab5f220abf4dd497dec735c3ec73702351" }
@@ -32,6 +33,6 @@ poethepoet = "^0.10.0"
 [tool.poe.tasks]
 codestyle = "black --check --diff ."
 goth-assets = "python -m goth create-assets assets"
-goth-tests = "pytest -svx ."
+goth-tests = "pytest -svx . --reruns 3 --only-rerun AssertionError --only-rerun TimeoutError --only-rerun ApiException --only-rerun goth.runner.exceptions.TemporalAssertionError --only-rerun urllib.error.URLError --only-rerun goth.runner.exceptions.CommandError"
 provider-tests = "pytest -svx ./domain/ya-provider"
 typecheck = "mypy ."
