@@ -256,15 +256,21 @@ impl Keystore {
     }
 
     fn verify_cert<S: AsRef<str>>(&self, cert: S) -> anyhow::Result<PKey<Public>> {
-        let cert = Self::decode_cert(cert)?;
+        let cert_chain = Self::decode_cert_chain(cert)?;
         let store = self
             .inner
             .read()
             .map_err(|err| anyhow::anyhow!("Err: {}", err.to_string()))?;
-        let cert_chain = openssl::stack::Stack::new()?;
+        let Some(cert) = cert_chain.last().map(Clone::clone) else {
+            bail!("Unable to verify certificate. No certificate.");
+        };
+        let mut cert_stack = openssl::stack::Stack::new()?;
+        for cert in cert_chain {
+            cert_stack.push(cert).unwrap();
+        }
         let mut ctx = X509StoreContext::new()?;
-        if !(ctx.init(&store.store, &cert, &cert_chain, |ctx| ctx.verify_cert())?) {
-            return Err(anyhow::anyhow!("Invalid certificate"));
+        if !(ctx.init(&store.store, &cert, &cert_stack, |ctx| ctx.verify_cert())?) {
+            bail!("Invalid certificate");
         }
         Ok(cert.public_key()?)
     }
@@ -282,8 +288,13 @@ impl Keystore {
             return Ok(());
         }
 
-        let cert = Self::decode_cert(cert)?;
-        let issuer = self.find_issuer(&cert)?;
+        let cert_chain = Self::decode_cert_chain(cert)?;
+        // Demands do not cantain certificates permissions
+        // so only first certificate in chain signer permissions are verified.
+        let Some(cert) = cert_chain.first() else {
+            bail!("Unable to verify certificate permissions. No certificate.")
+        };
+        let issuer = self.find_issuer(cert)?;
 
         self.has_permissions(&issuer, &required)
     }
@@ -336,12 +347,12 @@ impl Keystore {
             .find(|trusted| trusted.issued(cert) == X509VerifyResult::OK)
             .ok_or_else(|| anyhow!("Issuer certificate not found in keystore"))
     }
-
-    fn decode_cert<S: AsRef<str>>(cert: S) -> anyhow::Result<X509> {
+    
+    fn decode_cert_chain<S: AsRef<str>>(cert: S) -> anyhow::Result<Vec<X509>> {
         let cert = crate::decode_data(cert)?;
         Ok(match X509::from_der(&cert) {
-            Ok(cert) => cert,
-            Err(_) => X509::from_pem(&cert)?,
+            Ok(cert) => vec![cert],
+            Err(_) => X509::stack_from_pem(&cert)?,
         })
     }
 
