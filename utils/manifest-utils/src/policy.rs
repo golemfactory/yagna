@@ -261,8 +261,9 @@ impl Keystore {
             .inner
             .read()
             .map_err(|err| anyhow::anyhow!("Err: {}", err.to_string()))?;
-        let Some(cert) = cert_chain.last().map(Clone::clone) else {
-            bail!("Unable to verify certificate. No certificate.");
+        let cert = match cert_chain.last().map(Clone::clone) {
+            Some(cert) => cert,
+            None => bail!("Unable to verify certificate. No certificate."),
         };
         let mut cert_stack = openssl::stack::Stack::new()?;
         for cert in cert_chain {
@@ -291,8 +292,9 @@ impl Keystore {
         let cert_chain = Self::decode_cert_chain(cert)?;
         // Demands do not contain certificates permissions
         // so only first certificate in chain signer permissions are verified.
-        let Some(cert) = cert_chain.first() else {
-            bail!("Unable to verify certificate permissions. No certificate.")
+        let cert = match cert_chain.first() {
+            Some(cert) => cert,
+            None => bail!("Unable to verify certificate permissions. No certificate."),
         };
         let issuer = self.find_issuer(cert)?;
 
