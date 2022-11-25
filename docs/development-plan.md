@@ -73,7 +73,7 @@ https://phauer.com/2018/code-review-guidelines/
 
 ### Automatic Builds
 
-The project artifacts (i.e. installation packages and standalone/portable binaries) 
+The project artifacts (i.e. installation packages and standalone/portable binaries)
 should automatically build in Jenkins for every supported operating system (Linux, macOS, Windows).
 
 ### Bug Reporting
@@ -85,7 +85,7 @@ Bugs should be reported in GitHub Issues.
 ### Technology Stack
 
 The programming language used in this project will be Rust (https://www.rust-lang.org/).
-The newest stable version of Rust compiler (`rustc`) should compile all source code without errors.
+The 1.64.0 stable version of Rust compiler (`rustc`) should compile all source code without errors.
 
 For HTTP client/server code, Actix Web 1.0 (https://actix.rs) will be used.
 
@@ -126,7 +126,7 @@ The dependencies should not be spontaneously updated by developers.
 
 ### Usage Examples
 
-If a crate needs usage examples, they should be placed in the `examples` subdirectory of the crate. To run such example, 
+If a crate needs usage examples, they should be placed in the `examples` subdirectory of the crate. To run such example,
 please run `cargo run -p <package name> --example <example name>` command.
 
 ### Tests
