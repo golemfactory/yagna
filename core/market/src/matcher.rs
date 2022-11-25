@@ -131,7 +131,7 @@ impl Matcher {
                 async move {
                     debug!("Received new neighbour broadcast from [{}].", &caller);
                     cyclic::bcast_offers_once(myself.clone()).await;
-                    return Ok(());
+                    Ok(())
                 }
             },
         )
