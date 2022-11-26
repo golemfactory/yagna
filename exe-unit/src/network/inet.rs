@@ -43,7 +43,8 @@ use crate::message::Shutdown;
 use crate::network::Endpoint;
 use crate::{Error, Result};
 
-const IP4_ADDRESS: Ipv4Addr = Ipv4Addr::new(9, 0, 0x0d, 0x01);
+// 10.0.0.0/8 is a reserved private address space
+const IP4_ADDRESS: Ipv4Addr = Ipv4Addr::new(10, 42, 42, 1);
 const IP6_ADDRESS: Ipv6Addr = IP4_ADDRESS.to_ipv6_mapped();
 const TCP_KEEP_ALIVE: Duration = Duration::from_secs(30);
 const DEFAULT_MAX_PACKET_SIZE: usize = 65536;
