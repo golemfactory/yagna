@@ -41,9 +41,12 @@ impl ManifestContext {
     pub fn try_new(agreement: &AgreementView) -> anyhow::Result<Self> {
         let policy = PolicyConfig::from_args_safe().unwrap_or_default();
         let manifest = read_manifest(agreement).context("Unable to read manifest")?;
-        let features = match manifest {
-            Some(ref manifest) => manifest.features(),
-            None => Self::build_default_features(agreement),
+        let features = {
+            let mut features = Self::build_default_features(agreement);
+            if let Some(ref manifest) = manifest {
+                features.extend(manifest.features().into_iter());
+            }
+            features
         };
 
         Ok(Self {
