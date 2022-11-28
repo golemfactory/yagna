@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, Ipv4Addr};
 use std::ops::Not;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use anyhow::Context;
 use futures::future::LocalBoxFuture;
@@ -29,12 +29,12 @@ pub enum ValidationError {
     Url(String),
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ManifestContext {
     pub manifest: Arc<Option<AppManifest>>,
     pub policy: Arc<PolicyConfig>,
     features: HashSet<Feature>,
-    validators: ValidatorMap,
+    validators: Arc<RwLock<ValidatorMap>>,
 }
 
 impl ManifestContext {
@@ -53,7 +53,7 @@ impl ManifestContext {
             manifest: Arc::new(manifest),
             policy: Arc::new(policy),
             features,
-            validators: Default::default(),
+            validators: Arc::new(RwLock::new(Default::default())),
         })
     }
 
@@ -100,11 +100,13 @@ impl ManifestContext {
     }
 
     pub fn add_validators(&mut self, iter: impl IntoIterator<Item = (Validator, Box<dyn Any>)>) {
-        self.validators.extend(iter.into_iter());
+        self.validators.write().unwrap().extend(iter.into_iter());
     }
 
     pub fn validator<T: ManifestValidator + 'static>(&self) -> Option<T> {
         self.validators
+            .read()
+            .unwrap()
             .get(&<T as ManifestValidator>::VALIDATOR)
             .and_then(|c| {
                 let validator_ref: &dyn Any = &**c;
@@ -138,7 +140,7 @@ impl std::fmt::Debug for ManifestContext {
             "ManifestContext {{ manifest: {:?}, policy: {:?}, validators: {:?} }}",
             self.manifest,
             self.policy,
-            self.validators.keys().collect::<Vec<_>>()
+            self.validators.read().unwrap().keys().collect::<Vec<_>>()
         )
     }
 }
@@ -443,20 +445,13 @@ impl UrlValidator {
         (Protocol::Udp, Ipv4Addr::new(149, 112, 112, 112), 53),
     ];
 
-    pub fn validate(
-        &self,
-        protocol: Protocol,
-        ip: IpAddr,
-        port: u16,
-    ) -> Result<(), ValidationError> {
-        if self.inner.contains(&(protocol, ip, port)) {
-            Ok(())
-        } else {
-            Err(ValidationError::Url(format!(
-                "address not allowed: {}:{} ({})",
-                ip, port, protocol
-            )))
-        }
+    pub fn validate(&self, proto: Protocol, ip: IpAddr, port: u16) -> Result<(), ValidationError> {
+        self.inner
+            .contains(&(proto, ip, port))
+            .then_some(())
+            .ok_or_else(|| {
+                ValidationError::Url(format!("address not allowed: {}:{} ({})", ip, port, proto))
+            })
     }
 }
 

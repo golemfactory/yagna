@@ -18,7 +18,7 @@ use ya_runtime_api::server::{spawn, RunProcess, RuntimeControl, RuntimeService};
 
 use crate::acl::Acl;
 use crate::error::Error;
-use crate::manifest::UrlValidator;
+use crate::manifest::{ManifestContext, UrlValidator};
 use crate::message::{
     CommandContext, ExecuteCommand, RuntimeEvent, Shutdown, ShutdownReason, UpdateDeployment,
 };
@@ -255,7 +255,7 @@ impl RuntimeProcess {
         };
 
         async move {
-            let vpn_endpoint = if rt_ctx.feature_vpn {
+            let vpn_endpoint = if rt_ctx.manifest.features().contains(&Feature::Vpn) {
                 let endpoint = Endpoint::default_transport().await?;
                 rt_args.arg("--vpn-endpoint");
                 rt_args.arg(endpoint.local().to_string());
@@ -264,7 +264,7 @@ impl RuntimeProcess {
                 None
             };
 
-            let inet_endpoint = if rt_ctx.feature_inet {
+            let inet_endpoint = if rt_ctx.manifest.features().contains(&Feature::Inet) {
                 let endpoint = Endpoint::default_transport().await?;
                 rt_args.arg("--inet-endpoint");
                 rt_args.arg(endpoint.local().to_string());
@@ -301,17 +301,17 @@ impl RuntimeProcess {
 
             let service_ = service.clone();
             let net = async {
-                if rt_ctx.feature_inet {
+                if rt_ctx.manifest.features().contains(&Feature::Inet) {
                     let inet = start_inet(
                         inet_endpoint.unwrap(),
                         &service_,
-                        rt_ctx.feature_inet_filter,
+                        rt_ctx.manifest.validator::<UrlValidator>(),
                     )
                     .await?;
                     address.send(SetInetService(inet)).await?;
                 }
 
-                if rt_ctx.feature_vpn {
+                if rt_ctx.manifest.features().contains(&Feature::Vpn) {
                     if let Some(vpn) =
                         start_vpn(vpn_endpoint.unwrap(), acl, &service_, &deployment).await?
                     {
@@ -515,23 +515,18 @@ struct RuntimeProcessContext {
     supervise_image: bool,
     supervise_hardware: bool,
     infrastructure: HashMap<String, f64>,
-    feature_vpn: bool,
-    feature_inet: bool,
-    feature_inet_filter: Option<UrlValidator>,
+    manifest: ManifestContext,
 }
 
 impl<'a> From<&'a ExeUnitContext> for RuntimeProcessContext {
     fn from(ctx: &'a ExeUnitContext) -> Self {
-        let manifest = &ctx.supervise.manifest;
         Self {
             work_dir: ctx.work_dir.clone(),
             runtime_args: ctx.runtime_args.clone(),
             supervise_image: ctx.supervise.image,
             supervise_hardware: ctx.supervise.hardware,
             infrastructure: ctx.agreement.infrastructure.clone(),
-            feature_vpn: manifest.features().contains(&Feature::Vpn),
-            feature_inet: manifest.features().contains(&Feature::Inet),
-            feature_inet_filter: manifest.validator::<UrlValidator>(),
+            manifest: ctx.supervise.manifest.clone(),
         }
     }
 }
