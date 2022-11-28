@@ -265,6 +265,28 @@ fn test_manifest_negotiator_certs_permissions(
 
 #[test_case(
     r#"{ "any": "thing" }"#, // offer
+    Some("foo_ca.key.pem"), // private key file
+    Some("sha256"), // sig alg
+    Some("foo_ca.cert.pem"), // cert
+    Some("NYI"), // cert_permissions_b64
+    &vec![CertPermissions::All, CertPermissions::UnverifiedPermissionsChain],
+    &[], // cert dir files
+    Some("failed to verify manifest signature: Invalid certificate"); // error msg
+    "Root cert in chain rejected when same root cert is not in keystore"
+)]
+#[test_case(
+    r#"{ "any": "thing" }"#, // offer
+    Some("foo_req.key.pem"), // private key file
+    Some("sha256"), // sig alg
+    Some("foo_ca_inter_req-chain.cert.pem"), // cert
+    Some("NYI"), // cert_permissions_b64
+    &vec![CertPermissions::All, CertPermissions::UnverifiedPermissionsChain],
+    &["foo_ca.cert.pem"], // same CA root cert in keystore
+    None; // error msg
+    "Self signed root certificate in chain supported when same root cert in keystore"
+)]
+#[test_case(
+    r#"{ "any": "thing" }"#, // offer
     Some("foo_req.key.pem"), // private key file
     Some("sha256"), // sig alg
     Some("foo_inter_req-chain.cert.pem"), // cert
