@@ -136,7 +136,7 @@ pub fn banner() {
     .unwrap();
 }
 
-#[actix_rt::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() {
     std::process::exit(match my_main().await {
         Ok(code) => code,
