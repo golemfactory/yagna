@@ -13,6 +13,7 @@ ya-provider = "0.3"
 ya-utils-path = "0.1.0"
 ya-utils-process = { version = "0.2", features = ["lock"] }
 
+actix-rt="2.7"
 ansi_term="0.12.1"
 anyhow = "1.0"
 bigdecimal = "0.2"
@@ -35,7 +36,7 @@ strip-ansi-escapes = "0.1"
 structopt = "0.3"
 strum = "0.24"
 strum_macros = "0.24"
-tokio = { version = "1", features = ["process", "signal", "time", "io-util", "io-std", "macros", "rt"] }
+tokio = { version = "1", features = ["process", "signal", "time", "io-util", "io-std", "macros"] }
 url = "2.1"
 
 [target.'cfg(target_family = "unix")'.dependencies]
