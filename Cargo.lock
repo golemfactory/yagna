@@ -2440,6 +2440,7 @@ dependencies = [
 name = "golemsp"
 version = "0.3.0"
 dependencies = [
+ "actix-rt",
  "ansi_term",
  "anyhow",
  "bigdecimal 0.2.2",
