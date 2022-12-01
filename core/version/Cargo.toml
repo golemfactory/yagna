@@ -12,7 +12,7 @@ ya-core-model = { version = "^0.8", features = ["version"] }
 ya-persistence = "0.3"
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.2"
-ya-service-bus = "0.6"
+ya-service-bus = "0.6.1"
 
 actix-web = "4"
 anyhow = "1.0"

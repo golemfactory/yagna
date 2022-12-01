@@ -20,7 +20,7 @@ required-features=['bin']
 [dependencies]
 ya-compile-time-utils = "0.2"
 ya-core-model = { version = "^0.8", features = ["gftp", "identity", "net"] }
-ya-service-bus = "0.6"
+ya-service-bus = "0.6.1"
 
 actix-rt = "2.7"
 anyhow = "1.0"

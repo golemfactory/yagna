@@ -12,7 +12,7 @@ ya-persistence = "0.3"
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.2"
 ya-service-api-web = "0.2"
-ya-service-bus = "0.6"
+ya-service-bus = "0.6.1"
 ya-utils-networking = { version = "0.2", default-features = false, features = ["vpn"]}
 
 actix = "0.13"
@@ -30,7 +30,7 @@ mime = "0.3.16"
 rand = "0.7.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-smoltcp = { git = "https://github.com/golemfactory/smoltcp", rev = "acb743b6990fd92303c24c43ff75711422a5cb94" }
+smoltcp = { package = "ya-smoltcp", version = "0.1" }
 thiserror = "1.0"
 tokio = { version = "1", features = ["time"] }
 tokio-stream = "0.1.6"

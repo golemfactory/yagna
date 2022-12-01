@@ -34,7 +34,7 @@ ya-client-model = "0.5"
 ya-compile-time-utils = "0.2"
 ya-core-model = { version = "^0.8", features = ["activity", "appkey"] }
 ya-runtime-api = { version = "0.6", path = "runtime-api", features = ["server"] }
-ya-service-bus = "0.6"
+ya-service-bus = "0.6.1"
 ya-transfer = "0.3"
 ya-utils-path = "0.1"
 ya-utils-networking = { version = "0.2", default-features = false, features = ["dns", "vpn"]}
@@ -77,7 +77,7 @@ yansi = "0.5.0"
 
 [dev-dependencies]
 ya-runtime-api = { version = "0.6", path = "runtime-api", features = ["codec", "server"] }
-ya-sb-router = "0.6"
+ya-sb-router = "0.6.1"
 
 actix-files = "0.6"
 actix-web = "4"

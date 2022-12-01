@@ -14,15 +14,15 @@ central-net = []
 ya-client-model = "0.5"
 ya-core-model = { version = "^0.8", features=["net", "identity"] }
 
-# ya-relay-client = "0.4"
+ ya-relay-client = "0.5"
 # ya-relay-client = { path = "../../../ya-relay/client" }
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "f1009ec013d27795a56c6493447836a851352b72" }
+#ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "f1009ec013d27795a56c6493447836a851352b72" }
 
-ya-sb-proto = { version = "0.6" }
-ya-sb-util = { version = "0.4" }
+ya-sb-proto = { version = "0.6.1" }
+ya-sb-util = { version = "0.4.1" }
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.2"
-ya-service-bus = "0.6"
+ya-service-bus = "0.6.1"
 ya-utils-networking = "0.2"
 
 actix = "0.13"
@@ -49,8 +49,8 @@ prost = { version = "0.10" }
 rand = { version = "0.7"}
 
 [dev-dependencies]
-ya-sb-proto = "0.6"
-ya-sb-router = "0.6"
+ya-sb-proto = "0.6.1"
+ya-sb-router = "0.6.1"
 
 env_logger = "0.7"
 serde = "1.0"
