@@ -145,7 +145,8 @@ fn read_utc_timestamp(pointer: &str, proposal: &ProposalView) -> anyhow::Result<
         Ok(val) => {
             let secs = (val / 1000) as i64;
             let nsecs = 1_000_000 * (val % 1000) as u32;
-            let naive = NaiveDateTime::from_timestamp(secs, nsecs);
+            let naive = NaiveDateTime::from_timestamp_opt(secs, nsecs)
+                .ok_or_else(|| anyhow::anyhow!("Cannot make DateTime from {secs} and {nsecs}"))?;
             Ok(DateTime::from_utc(naive, Utc))
         }
         Err(err) => Err(err.into()),
