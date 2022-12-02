@@ -17,7 +17,7 @@ erc20-driver = ['ya-erc20-driver']
 zksync-driver = ['ya-zksync-driver']
 tos = []
 # Temporary to make goth integration tests work
-hybrid-net = ['ya-net/hybrid-net']
+central-net = ['ya-net/central-net']
 
 [[bin]]
 name = "yagna"
@@ -49,6 +49,7 @@ ya-utils-path = "0.1"
 ya-utils-futures = "0.2"
 ya-utils-process = { version = "0.2", features = ["lock"] }
 ya-utils-networking = "0.2"
+ya-fd-metrics = { path = "utils/fd-metrics" }
 ya-version = "0.2"
 ya-vpn = "0.2"
 ya-client = "0.7"
@@ -67,6 +68,7 @@ dotenv = "0.15.0"
 futures = "0.3"
 lazy_static = "1.4"
 log = "0.4"
+metrics = "0.12"
 openssl = "0.10"
 openssl-probe = { version = "0.1", optional = true }
 serde = "1.0"
@@ -155,6 +157,7 @@ members = [
     "utils/scheduler",
     "utils/transfer",
     "utils/diesel-utils",
+    "utils/fd-metrics",
     "core/metrics"
 ]
 
@@ -227,5 +230,9 @@ web3 = { git = "https://github.com/golemfactory/rust-web3", branch = "update_eth
 
 # Speed up builds on macOS (will be default in next rust version probably)
 # https://jakedeichert.com/blog/reducing-rust-incremental-compilation-times-on-macos-by-70-percent/
-[profile.dev]
-split-debuginfo = "unpacked"
+#
+# TODO: reenable split-debuginfo.
+# Commented out split-debuginfo makes Windows builds fail due to "`-Csplit-debuginfo=unpacked` is unstable on this platform."
+# This should not be the case (cargo is meant to verify that this option is supported), but it is since version 1.65, I think.
+# [profile.dev]
+# split-debuginfo = "unpacked"

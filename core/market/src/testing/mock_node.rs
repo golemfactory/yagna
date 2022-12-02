@@ -105,14 +105,14 @@ impl MockNodeKind {
     }
 }
 
-fn testname_from_backtrace(bn: &str) -> String {
+fn testname_from_backtrace(bn: &str) -> Option<String> {
     log::info!("Test name to regex match: {}", &bn);
     // Extract test name
-    let captures = Regex::new(r"(.*)::(.*)::.*").unwrap().captures(bn).unwrap();
+    let captures = Regex::new(r"(.*)::(.*)::.*").unwrap().captures(bn)?;
     let filename = captures.get(1).unwrap().as_str().to_string();
     let testname = captures.get(2).unwrap().as_str().to_string();
 
-    format!("{}.{}", filename, testname)
+    Some(format!("{}.{}", filename, testname))
 }
 
 impl MarketsNetwork {
@@ -122,19 +122,13 @@ impl MarketsNetwork {
     pub async fn new(test_name: Option<&str>) -> Self {
         std::env::set_var("RUST_LOG", "debug");
         let _ = env_logger::builder().try_init();
-        // level 1 is this function.
-        // level 2 is <core::future::from_generator::GenFuture<T> as
-        // core::future::future::Future>::poll::XXX> (async)
-        // We want to know the caller.
-        let mut bn = crate::testing::backtrace_util::generate_backtraced_name(Some(3));
-        // Special case for mac&windows. Tests are run in adifferent way on those systems and we
-        // have to dive one less level down the stack to find the caller (test_* module).
-        if !bn.starts_with("test_") {
-            bn = crate::testing::backtrace_util::generate_backtraced_name(Some(2));
-        }
-        bn = testname_from_backtrace(&bn);
 
-        let test_name = test_name.unwrap_or(&bn).to_string();
+        let gen_test_name = || {
+            let nonce = rand::random::<u128>();
+            format!("test-{:#32x}", nonce)
+        };
+
+        let test_name = test_name.map(String::from).unwrap_or_else(gen_test_name);
         log::info!("Intializing MarketsNetwork. tn={}", test_name);
 
         MockNet::default().bind_gsb();

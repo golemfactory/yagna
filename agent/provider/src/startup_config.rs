@@ -35,7 +35,7 @@ lazy_static::lazy_static! {
 pub(crate) const DOMAIN_WHITELIST_JSON: &str = "domain_whitelist.json";
 pub(crate) const PRESETS_JSON: &str = "presets.json";
 pub(crate) const HARDWARE_JSON: &str = "hardware.json";
-pub(crate) const CERT_DIR: &str = "cert_dir";
+pub(crate) const CERT_DIR: &str = "cert-dir";
 
 const DATA_DIR_ENV: &str = "DATA_DIR";
 
@@ -129,7 +129,7 @@ impl ProviderConfig {
             cert_dir.get_or_create()?
         } else {
             let mut cert_dir = self.data_dir.get_or_create()?;
-            cert_dir.push("cert_dir");
+            cert_dir.push(CERT_DIR);
             std::fs::create_dir_all(&cert_dir)?;
             cert_dir
         };
@@ -233,7 +233,6 @@ pub enum Commands {
     Profile(ProfileConfig),
     /// Manage ExeUnits
     ExeUnit(ExeUnitsConfig),
-    /// Manage trusted keys
     Keystore(KeystoreConfig),
     /// Manage domain whitelist
     Whitelist(WhitelistConfig),

@@ -22,6 +22,8 @@ pub const DEMAND_MANIFEST_PROPERTY: &str = "golem.srv.comp.payload";
 pub const DEMAND_MANIFEST_SIG_PROPERTY: &str = "golem.srv.comp.payload.sig";
 pub const DEMAND_MANIFEST_SIG_ALGORITHM_PROPERTY: &str = "golem.srv.comp.payload.sig.algorithm";
 pub const DEMAND_MANIFEST_CERT_PROPERTY: &str = "golem.srv.comp.payload.cert";
+pub const DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY: &str =
+    "golem.srv.comp.payload.cert.permissions";
 
 pub const AGREEMENT_MANIFEST_PROPERTY: &str = "demand.properties.golem.srv.comp.payload";
 
@@ -71,9 +73,12 @@ pub enum Feature {
     Other,
 }
 
+/// # Computation Payload Manifest
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppManifest {
+    #[cfg_attr(feature = "schema", schemars(with = "String", description = "Semver"))]
     pub version: Version,
     pub created_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
@@ -124,12 +129,15 @@ impl AppManifest {
     }
 }
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(title = "Application Metadata"))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppMetadata {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<Version>,
     #[serde(default)]
@@ -139,6 +147,8 @@ pub struct AppMetadata {
     pub homepage: Option<String>,
 }
 
+/// # Payload
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppPayload {
@@ -164,6 +174,8 @@ impl AppPayload {
     }
 }
 
+/// # Payload Platform
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PayloadPlatform {
@@ -173,28 +185,55 @@ pub struct PayloadPlatform {
     pub os_version: Option<String>,
 }
 
+/// # Computation Manifest
+/// Computation Manifests lets Requestors to define a certain set of allowed actions,
+/// to be negotiated with and approved by a Provider.
+/// Requestors' actions will be verified against the Manifest during computation.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompManifest {
+    /// # Version
+    /// Specifies a version (Semantic Versioning 2.0 specification) of the manifest.
+    #[cfg_attr(feature = "schema", schemars(with = "String", description = "Semver"))]
     pub version: Version,
+    /// # Script
+    /// Defines a set of allowed ExeScript commands and applies constraints to their arguments.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub script: Option<Script>,
+    /// # Net
+    /// Applies constraints to networking. Currently, outgoing requests to the public Internet network are covered.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub net: Option<Net>,
 }
 
+/// # Script
+/// Defines a set of allowed ExeScript commands and applies constraints to their arguments.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Script {
+    /// Specifies a curated list of commands.
     pub commands: Vec<Command>,
+    /// Selects a default way of comparing command arguments stated in the manifest
+    /// and the ones received in the ExeScript,
+    /// unless stated otherwise in a command JSON object.
     #[serde(rename = "match", default)]
     pub arg_match: ArgMatch,
 }
 
+/// # Command
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize)]
 #[serde(untagged)]
 pub enum Command {
+    /// UTF-8 encoded string.
+    /// No command context or matching mode need to be specified.
+    /// E.g. ["run /bin/cat /etc/motd", "run /bin/date -R"]
     String(String),
+    /// UTF-8 encoded JSON string.
+    /// Command context (e.g. env) or argument matching mode need to be specified for a command.
+    /// E.g. ["{\"run\": { \"args\": \"/bin/date -R\", \"env\": { \"MYVAR\": \"42\", \"match\": \"strict\" }}}"]
     Json(Value),
 }
 
@@ -227,11 +266,17 @@ impl<'de> Deserialize<'de> for Command {
     }
 }
 
+/// # Argument Match
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, EnumString, AsRefStr)]
 #[serde(rename_all = "camelCase")]
 pub enum ArgMatch {
+    /// Byte-to-byte argument equality (default).
     #[strum(ascii_case_insensitive)]
     Strict,
+    /// Treat argument as regular expression.
+    /// Syntax: Perl-compatible regular expressions (UTF-8 Unicode mode),
+    /// w/o the support for look around and backreferences (among others).
     #[strum(ascii_case_insensitive)]
     Regex,
 }
@@ -242,27 +287,43 @@ impl Default for ArgMatch {
     }
 }
 
+/// # Net
+/// Applies constraints to networking.
+/// Currently, outgoing requests to the public Internet network are covered.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Net {
+    /// # Internet Network
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inet: Option<Inet>,
 }
 
+/// # Internet Network
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Inet {
+    /// Internet Outbound Network
     #[serde(skip_serializing_if = "Option::is_none")]
     pub out: Option<InetOut>,
 }
 
+/// # Internet Outbound Network
+/// Applies constraints to networking.
+/// Currently, outgoing requests to the public Internet network are covered.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InetOut {
+    /// List of allowed outbound protocols.
+    /// Supports "http", "https", "ws", and "wss".
     #[serde(default = "default_protocols")]
     pub protocols: Vec<String>,
     // keep the option here to retain information on
     // whether urls were specified
+    /// List of allowed external URLs that outbound requests can be sent to.
+    /// E.g. ["http://golemfactory.s3.amazonaws.com/file1", "http://golemfactory.s3.amazonaws.com/file2"]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub urls: Option<Vec<Url>>,
 }

@@ -4,6 +4,7 @@ extern crate serial_test;
 use std::{fs, path::PathBuf};
 
 use ya_manifest_test_utils::*;
+use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::Keystore;
 
 static TEST_RESOURCES: TestResources = TestResources {
@@ -19,6 +20,7 @@ fn valid_certificate_test() {
         &resource_cert_dir,
         &test_cert_dir,
         &["foo_ca-chain.cert.pem"],
+        &vec![CertPermissions::All],
     );
 
     let request = prepare_request(resource_cert_dir);
@@ -35,7 +37,12 @@ fn valid_certificate_test() {
 fn invalid_certificate_test() {
     // Having
     let (resource_cert_dir, test_cert_dir) = TEST_RESOURCES.init_cert_dirs();
-    load_certificates_from_dir(&resource_cert_dir, &test_cert_dir, &[]);
+    load_certificates_from_dir(
+        &resource_cert_dir,
+        &test_cert_dir,
+        &[],
+        &vec![CertPermissions::All],
+    );
 
     let request = prepare_request(resource_cert_dir);
 

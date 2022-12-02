@@ -9,6 +9,7 @@ use openssl::rsa::Rsa;
 use openssl::sign::Signer;
 use tar::Archive;
 
+use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::{
     util::{self, CertBasicData, CertBasicDataVisitor},
     KeystoreLoadResult, KeystoreRemoveResult,
@@ -21,6 +22,7 @@ pub fn load_certificates_from_dir(
     resource_cert_dir: &PathBuf,
     test_cert_dir: &PathBuf,
     certfile_names: &[&str],
+    certs_permissions: &Vec<CertPermissions>,
 ) -> KeystoreLoadResult {
     let cert_paths: Vec<PathBuf> = certfile_names
         .iter()
@@ -32,9 +34,19 @@ pub fn load_certificates_from_dir(
         .collect();
     let keystore_manager =
         util::KeystoreManager::try_new(test_cert_dir).expect("Can create keystore manager");
-    keystore_manager
+    let mut permissions = keystore_manager.permissions_manager();
+
+    let certs = keystore_manager
         .load_certs(&cert_paths)
-        .expect("Can load certificates")
+        .expect("Can load certificates");
+
+    permissions.set_many(&certs.loaded, certs_permissions.clone(), false);
+    permissions.set_many(&certs.skipped, certs_permissions.clone(), false);
+    permissions
+        .save(test_cert_dir)
+        .expect("Should be able to save permissions file.");
+
+    certs
 }
 
 pub fn remove_certificates(test_cert_dir: &PathBuf, cert_ids: &[&str]) -> KeystoreRemoveResult {
@@ -142,13 +154,13 @@ impl TestResources {
 
     fn resource_cert_dir_path(&self) -> PathBuf {
         let mut cert_resources = self.temp_dir_path();
-        cert_resources.push("cert_resources");
+        cert_resources.push("cert-resources");
         cert_resources
     }
 
     fn store_cert_dir_path(&self) -> PathBuf {
         let mut cert_dir = self.temp_dir_path();
-        cert_dir.push("cert_dir");
+        cert_dir.push("cert-dir");
         cert_dir
     }
 

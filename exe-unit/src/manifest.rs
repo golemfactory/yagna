@@ -21,8 +21,6 @@ use ya_utils_networking::vpn::Protocol;
 
 type ValidatorMap = HashMap<Validator, Box<dyn Any>>;
 
-static DEFAULT_FEATURES: [Feature; 1] = [Feature::Vpn];
-
 #[derive(Debug, thiserror::Error)]
 pub enum ValidationError {
     #[error("script validation error: {0}")]
@@ -31,6 +29,7 @@ pub enum ValidationError {
     Url(String),
 }
 
+#[derive(Default)]
 pub struct ManifestContext {
     pub manifest: Arc<Option<AppManifest>>,
     pub policy: Arc<PolicyConfig>,
@@ -38,22 +37,14 @@ pub struct ManifestContext {
     validators: ValidatorMap,
 }
 
-impl Default for ManifestContext {
-    fn default() -> Self {
-        Self {
-            manifest: Default::default(),
-            policy: Default::default(),
-            features: HashSet::from(DEFAULT_FEATURES),
-            validators: Default::default(),
-        }
-    }
-}
-
 impl ManifestContext {
     pub fn try_new(agreement: &AgreementView) -> anyhow::Result<Self> {
-        let manifest = read_manifest(agreement).context("Unable to read manifest")?;
-        let features = Self::build_features(&manifest);
         let policy = PolicyConfig::from_args_safe().unwrap_or_default();
+        let manifest = read_manifest(agreement).context("Unable to read manifest")?;
+        let features = match manifest {
+            Some(ref manifest) => manifest.features(),
+            None => Self::build_default_features(agreement),
+        };
 
         Ok(Self {
             manifest: Arc::new(manifest),
@@ -118,11 +109,21 @@ impl ManifestContext {
             })
     }
 
-    fn build_features(manifest: &Option<AppManifest>) -> HashSet<Feature> {
-        let mut features = HashSet::from(DEFAULT_FEATURES);
-        if let Some(ref manifest) = manifest {
-            features.extend(manifest.features());
+    fn build_default_features(agreement: &AgreementView) -> HashSet<Feature> {
+        const CAPABILITIES: &str = "offer.properties.golem.runtime.capabilities";
+
+        let mut features = HashSet::default();
+        let cap_vpn = Feature::Vpn.to_string().to_lowercase();
+
+        if let Ok(capabilities) = agreement.get_property::<Vec<String>>(CAPABILITIES) {
+            if capabilities
+                .iter()
+                .any(|c| c.trim().to_lowercase() == cap_vpn)
+            {
+                features.insert(Feature::Vpn);
+            }
         }
+
         features
     }
 }

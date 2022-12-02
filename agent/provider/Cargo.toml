@@ -24,8 +24,8 @@ ya-utils-cli = "0.1"
 ya-utils-path = "0.1"
 ya-utils-process = { version = "0.2", features = ['lock'] }
 ya-std-utils = "0.1"
-ya-negotiators = { git = "https://github.com/nieznanysprawiciel/ya-negotiator", rev = "9c32969bdcb14ccd18260fb570c68ad44bb95b76" }
-ya-agreement-utils = { git = 'https://github.com/nieznanysprawiciel/ya-negotiator', rev = "9c32969bdcb14ccd18260fb570c68ad44bb95b76" }
+ya-negotiators = { git = "https://github.com/nieznanysprawiciel/ya-negotiator", rev = "a63631d57ad85d9e1f4e97b6813395ff8240cdf6" }
+ya-agreement-utils = { git = 'https://github.com/nieznanysprawiciel/ya-negotiator', rev = "a63631d57ad85d9e1f4e97b6813395ff8240cdf6" }
 
 actix = { version = "0.13", default-features = false }
 actix-rt = "2.7"

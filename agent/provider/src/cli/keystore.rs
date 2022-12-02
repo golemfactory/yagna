@@ -1,8 +1,11 @@
+use anyhow::anyhow;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
 use structopt::StructOpt;
+use strum::VariantNames;
 
+use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::util::{self, CertBasicData, CertBasicDataVisitor};
 use ya_manifest_utils::KeystoreLoadResult;
 use ya_utils_cli::{CommandOutput, ResponseTable};
@@ -10,14 +13,14 @@ use ya_utils_cli::{CommandOutput, ResponseTable};
 use crate::cli::println_conditional;
 use crate::startup_config::ProviderConfig;
 
+/// Manage trusted keys
+///
+/// Keystore stores X.509 certificates.
+/// They allow to accept Demands with Computation Payload Manifests which arrive with signature and app author's public certificate.
+/// Certificate gets validated against certificates loaded into the keystore.
+/// Certificates are stored as files in directory, that's location can be configured using '--cert-dir' param."
 #[derive(StructOpt, Clone, Debug)]
-#[structopt(
-    rename_all = "kebab-case",
-    help = "Keystore stores X.509 certificates.
-They allow to accept Demands with Computation Payload Manifests which arrive with signature and app author's public certificate.
-Certificate gets validated against certificates loaded into the keystore.
-Certificates are stored in a file format in directory. Its location can be configured using '--cert-dir' param."
-)]
+#[structopt(rename_all = "kebab-case")]
 pub enum KeystoreConfig {
     /// List trusted X.509 certificates
     List,
@@ -35,6 +38,20 @@ pub struct Add {
         help = "Space separated list of X.509 certificate files (PEM or DER) or PEM certificates chains to be added to the Keystore."
     )]
     certs: Vec<PathBuf>,
+    /// Set certificates permissions for signing certain Golem features.
+    /// If not specified, no permissions will be set for certificate.
+    /// If certificate already existed, permissions will be cleared.
+    #[structopt(
+        short,
+        long,
+        parse(try_from_str),
+        possible_values = CertPermissions::VARIANTS,
+        case_insensitive = true,
+    )]
+    permissions: Vec<CertPermissions>,
+    /// Apply permissions to all certificates in chain found in files.
+    #[structopt(short, long)]
+    whole_chain: bool,
 }
 
 #[derive(StructOpt, Clone, Debug)]
@@ -67,35 +84,38 @@ fn list(config: ProviderConfig) -> anyhow::Result<()> {
 fn add(config: ProviderConfig, add: Add) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
     let keystore_manager = util::KeystoreManager::try_new(&cert_dir)?;
-    match keystore_manager.load_certs(&add.certs)? {
-        KeystoreLoadResult::Loaded { loaded, skipped } => {
-            println_conditional(&config, "Added certificates:");
-            let certs_data = util::to_cert_data(&loaded)?;
-            print_cert_list(&config, certs_data)?;
-            if !skipped.is_empty() && !config.json {
-                println!("Certificates already loaded to keystore:");
-                let certs_data = util::to_cert_data(&skipped)?;
-                print_cert_list(&config, certs_data)?;
-            }
-        }
-        KeystoreLoadResult::NothingNewToLoad { skipped } => {
-            let certs_data = util::to_cert_data(&skipped)?;
-            if !config.json {
-                println!("No new certificate to add.");
-                println!("Dropped duplicated certificates:");
-                print_cert_list(&config, certs_data)?;
-            } else {
-                // no new certificate added, so empty list for json output
-                print_cert_list(&config, Vec::new())?;
-            }
-        }
+    let mut permissions_manager = keystore_manager.permissions_manager();
+
+    let KeystoreLoadResult { loaded, skipped } = keystore_manager.load_certs(&add.certs)?;
+
+    permissions_manager.set_many(
+        &loaded.iter().chain(skipped.iter()).cloned().collect(),
+        add.permissions,
+        add.whole_chain,
+    );
+
+    if !loaded.is_empty() {
+        println_conditional(&config, "Added certificates:");
+        let certs_data = util::to_cert_data(&loaded, &permissions_manager)?;
+        print_cert_list(&config, certs_data)?;
     }
+
+    if !skipped.is_empty() && !config.json {
+        println!("Certificates already loaded to keystore:");
+        let certs_data = util::to_cert_data(&skipped, &permissions_manager)?;
+        print_cert_list(&config, certs_data)?;
+    }
+
+    permissions_manager
+        .save(&cert_dir)
+        .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
     Ok(())
 }
 
 fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
     let cert_dir = config.cert_dir_path()?;
     let keystore_manager = util::KeystoreManager::try_new(&cert_dir)?;
+    let mut permissions_manager = keystore_manager.permissions_manager();
     let ids: HashSet<String> = remove.ids.into_iter().collect();
     match keystore_manager.remove_certs(&ids)? {
         util::KeystoreRemoveResult::NothingToRemove => {
@@ -105,11 +125,17 @@ fn remove(config: ProviderConfig, remove: Remove) -> anyhow::Result<()> {
             }
         }
         util::KeystoreRemoveResult::Removed { removed } => {
+            permissions_manager.set_many(&removed, vec![], true);
+
             println!("Removed certificates:");
-            let certs_data = util::to_cert_data(&removed)?;
+            let certs_data = util::to_cert_data(&removed, &permissions_manager)?;
             print_cert_list(&config, certs_data)?;
         }
     };
+
+    permissions_manager
+        .save(&cert_dir)
+        .map_err(|e| anyhow!("Failed to save permissions file: {e}"))?;
     Ok(())
 }
 
@@ -135,6 +161,7 @@ impl CertTable {
             "ID".to_string(),
             "Not After".to_string(),
             "Subject".to_string(),
+            "Permissions".to_string(),
         ];
         let values = vec![];
         let table = ResponseTable { columns, values };
@@ -148,7 +175,7 @@ impl CertTable {
     }
 
     pub fn add(&mut self, data: CertBasicData) {
-        let row = serde_json::json! {[ data.id, data.not_after, data.subject ]};
+        let row = serde_json::json! {[ data.id, data.not_after, data.subject, data.permissions ]};
         self.table.values.push(row)
     }
 }

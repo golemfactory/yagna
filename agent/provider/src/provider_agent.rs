@@ -210,7 +210,6 @@ impl ProviderAgent {
         presets.spawn_monitor(&config.presets_file)?;
         let mut hardware = hardware::Manager::try_new(&config)?;
         hardware.spawn_monitor(&config.hardware_file)?;
-        let keystore_monitor = spawn_keystore_monitor(cert_dir, keystore)?;
         let mut domain_whitelist = WhitelistManager::try_new(&config.domain_whitelist_file)?;
         domain_whitelist.spawn_monitor(&config.domain_whitelist_file)?;
         policy_config.domain_patterns = domain_whitelist.get_state();
@@ -487,30 +486,32 @@ fn spawn_keystore_monitor<P: AsRef<Path>>(
     market: Addr<ProviderMarket>,
     path: P,
 ) -> Result<FileMonitor, Error> {
-    let _keystore = match Keystore::load(&path.as_ref()) {
+    let cert_dir = path.as_ref().to_path_buf();
+    let keystore = match Keystore::load(&cert_dir) {
         Ok(store) => {
             market.do_send(UpdateKeystore {
-                keystore_path: path.as_ref().to_path_buf(),
+                keystore_path: cert_dir.clone(),
             });
-            log::info!("Trusted key store loaded from {}", path.as_ref().display());
+            log::info!("Trusted key store loaded from {}", cert_dir.display());
             store
         }
         Err(err) => {
-            log::info!("Using a new keystore: {}", err);
+            log::info!("Using a new keystore: {err}");
             Default::default()
         }
     };
 
     // Validate if keystore file is valid before sending update message.
-    let handler = move |p: PathBuf| match Keystore::load(&p) {
-        Ok(_new_keystore) => {
+    let handler = move |p: PathBuf| match keystore.reload(&cert_dir) {
+        Ok(_) => {
             market.do_send(UpdateKeystore {
-                keystore_path: p.clone(),
+                keystore_path: cert_dir.clone(),
             });
-            log::info!("Trusted keystore updated from {}", p.display());
+            log::info!("Trusted keystore updated from {}", cert_dir.display());
         }
-        Err(e) => log::warn!("Error updating trusted keystore from {:?}: {:?}", p, e),
+        Err(e) => log::warn!("Error updating trusted keystore from {}: {e}", cert_dir.display()),
     };
+
     let monitor = FileMonitor::spawn_with(
         path,
         FileMonitor::on_modified(handler),

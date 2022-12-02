@@ -13,6 +13,7 @@ use actix::prelude::*;
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
 use futures::prelude::stream::{SplitSink, SplitStream};
+use futures::stream::BoxStream;
 use futures::{FutureExt, Sink, SinkExt, StreamExt};
 use tokio::net::{TcpSocket, TcpStream};
 use tokio::sync::RwLock;
@@ -27,6 +28,7 @@ use net::socket::SocketDesc;
 use net::{EgressReceiver, IngressEvent, IngressReceiver};
 use net::{Error as NetError, Protocol};
 
+use ya_runtime_api::deploy::ContainerEndpoint;
 use ya_runtime_api::server::{CreateNetwork, NetworkInterface, RuntimeService};
 use ya_utils_networking::vpn::common::ntoh;
 use ya_utils_networking::vpn::stack as net;
@@ -38,7 +40,7 @@ use ya_utils_networking::vpn::{
 
 use crate::manifest::UrlValidator;
 use crate::message::Shutdown;
-use crate::network::{write_prefix, Endpoint, RxBuffer};
+use crate::network::Endpoint;
 use crate::{Error, Result};
 
 const IP4_ADDRESS: Ipv4Addr = Ipv4Addr::new(9, 0, 0x0d, 0x01);
@@ -60,6 +62,7 @@ type TransportKey = (
 );
 
 pub(crate) async fn start_inet<R: RuntimeService>(
+    mut endpoint: Endpoint,
     service: &R,
     filter: Option<UrlValidator>,
 ) -> Result<Addr<Inet>> {
@@ -98,9 +101,17 @@ pub(crate) async fn start_inet<R: RuntimeService>(
         .await
         .map_err(|e| Error::Other(format!("initialization error: {:?}", e)))?;
 
-    let endpoint = match response.endpoint {
-        Some(endpoint) => Endpoint::connect(endpoint).await?,
-        None => return Err(Error::Other("endpoint already connected".into())),
+    match response.endpoint {
+        Some(ep) => {
+            let cep = ContainerEndpoint::try_from(&ep)
+                .map_err(|e| Error::Other(format!("Invalid endpoint '{ep:?}': {e}")))?;
+            endpoint.connect(cep).await?
+        }
+        None => {
+            return Err(Error::Other(
+                "No VM INET network endpoint in CreateNetwork response".into(),
+            ))
+        }
     };
 
     Ok(Inet::new(endpoint, filter).start())
@@ -157,10 +168,18 @@ impl Actor for Inet {
 
         let router = Router::new(self.network.clone(), self.proxy.clone());
 
-        let endpoint_rx = match self.endpoint.rx.take() {
-            Some(rx) => rx,
-            None => {
-                log::error!("[inet] local endpoint missing");
+        let tx = match self.endpoint.sender() {
+            Ok(tx) => tx,
+            Err(err) => {
+                log::error!("[inet] {err}");
+                ctx.stop();
+                return;
+            }
+        };
+        let rx = match self.endpoint.receiver() {
+            Ok(rx) => rx,
+            Err(err) => {
+                log::error!("[inet] {err}");
                 ctx.stop();
                 return;
             }
@@ -176,7 +195,7 @@ impl Actor for Inet {
             .egress_receiver()
             .expect("Egress receiver already taken");
 
-        inet_endpoint_egress_handler(endpoint_rx, router)
+        inet_endpoint_egress_handler(rx, router)
             .into_actor(self)
             .spawn(ctx);
 
@@ -184,7 +203,7 @@ impl Actor for Inet {
             .into_actor(self)
             .spawn(ctx);
 
-        inet_egress_handler(egress_rx, self.endpoint.tx.clone())
+        inet_egress_handler(egress_rx, tx)
             .into_actor(self)
             .spawn(ctx);
     }
@@ -208,26 +227,19 @@ impl Handler<Shutdown> for Inet {
     }
 }
 
-async fn inet_endpoint_egress_handler(
-    mut rx: Box<dyn Stream<Item = Result<Vec<u8>>> + Unpin>,
-    router: Router,
-) {
-    let mut rx_buf = RxBuffer::default();
-
+async fn inet_endpoint_egress_handler(mut rx: BoxStream<'static, Result<Vec<u8>>>, router: Router) {
     while let Some(result) = rx.next().await {
-        let received = match result {
+        let packet = match result {
             Ok(vec) => vec,
             Err(err) => return log::debug!("[inet] runtime -> inet error: {}", err),
         };
 
-        for packet in rx_buf.process(received) {
-            router.handle(&packet).await;
+        router.handle(&packet).await;
 
-            log::debug!("[inet] runtime -> inet packet {:?}", packet);
+        log::trace!("[inet] runtime -> inet packet {:?}", packet);
 
-            router.network.receive(packet);
-            router.network.poll();
-        }
+        router.network.receive(packet);
+        router.network.poll();
     }
 }
 
@@ -254,7 +266,7 @@ async fn inet_ingress_handler(rx: IngressReceiver, proxy: Proxy) {
                 let key = (&desc).proxy_key().unwrap();
 
                 if let Some(mut sender) = proxy.get(&key).await {
-                    log::debug!("[inet] ingress proxy: send to {:?}", desc.local);
+                    log::trace!("[inet] ingress proxy: send to {:?}", desc.local);
 
                     if let Err(e) = sender.send(Bytes::from(payload)).await {
                         log::debug!("[inet] ingress proxy: send error: {}", e);
@@ -275,10 +287,9 @@ async fn inet_egress_handler<E: std::fmt::Display>(
 ) {
     let mut rx = UnboundedReceiverStream::new(rx);
     while let Some(event) = rx.next().await {
-        let mut frame = event.payload.into_vec();
-        log::debug!("[inet] egress -> runtime packet {} B", frame.len());
+        let frame = event.payload.into_vec();
+        log::trace!("[inet] egress -> runtime packet {} B", frame.len());
 
-        write_prefix(&mut frame);
         if let Err(e) = fwd.send(Ok(frame)) {
             log::debug!("[inet] egress -> runtime error: {}", e);
         }
