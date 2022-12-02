@@ -103,7 +103,7 @@ fn from_value_datetime_ok() {
     assert_eq!(
         prop_value,
         Ok(PropertyValue::DateTime(
-            Utc.ymd(1996, 12, 19).and_hms(23, 39, 57)
+            Utc.with_ymd_and_hms(1996, 12, 19, 23, 39, 57).unwrap()
         ))
     );
 }
