@@ -12,7 +12,7 @@ ya-persistence = "0.3"
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.2"
 ya-service-api-web = "0.2"
-ya-service-bus = "0.6"
+ya-service-bus = "0.6.1"
 
 actix-web = "4"
 actix-http = "3"
@@ -39,6 +39,6 @@ uuid = { version = "0.8", features = ["serde", "v4"] }
 structopt = "0.3.7"
 
 [dev-dependencies]
-ya-sb-router = "0.6"
+ya-sb-router = "0.6.1"
 
 actix-rt = "2.7"

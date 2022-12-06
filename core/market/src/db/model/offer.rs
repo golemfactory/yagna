@@ -146,13 +146,13 @@ mod tests {
             constraints: "()".to_string(),
             node_id: NodeId::from_str(node_id).unwrap(),
             creation_ts: NaiveDateTime::new(
-                NaiveDate::from_ymd(1970, 1, 1),
-                NaiveTime::from_hms(0, 1, 1),
+                NaiveDate::from_ymd_opt(1970, 1, 1).unwrap(),
+                NaiveTime::from_hms_opt(0, 1, 1).unwrap(),
             ),
             insertion_ts: None,
             expiration_ts: NaiveDateTime::new(
-                NaiveDate::from_ymd(1970, 1, 1),
-                NaiveTime::from_hms(15, 1, 1),
+                NaiveDate::from_ymd_opt(1970, 1, 1).unwrap(),
+                NaiveTime::from_hms_opt(15, 1, 1).unwrap(),
             ),
         };
         assert!(offer.validate().is_err());
@@ -169,13 +169,13 @@ mod tests {
             constraints: "()".to_string(),
             node_id: NodeId::from_str(node_id).unwrap(),
             creation_ts: NaiveDateTime::new(
-                NaiveDate::from_ymd(1970, 1, 1),
-                NaiveTime::from_hms(0, 1, 1),
+                NaiveDate::from_ymd_opt(1970, 1, 1).unwrap(),
+                NaiveTime::from_hms_opt(0, 1, 1).unwrap(),
             ),
             insertion_ts: None,
             expiration_ts: NaiveDateTime::new(
-                NaiveDate::from_ymd(1970, 1, 1),
-                NaiveTime::from_hms(15, 1, 1),
+                NaiveDate::from_ymd_opt(1970, 1, 1).unwrap(),
+                NaiveTime::from_hms_opt(15, 1, 1).unwrap(),
             ),
         };
         let id = SubscriptionId::generate_id(
