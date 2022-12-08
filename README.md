@@ -19,11 +19,11 @@ Official Rust implementation of Golem. Golem is a network of nodes that implemen
         <img src="https://img.shields.io/github/watchers/golemfactory/yagna.svg?style=social" /></a>
     <a href="https://github.com/golemfactory/yagna/stargazers" alt="Star on GitHub">
         <img src="https://img.shields.io/github/stars/golemfactory/yagna.svg?style=social" /></a>
-    <a href="https://discord.gg/y29dtcM" alt="Discord">
+    <a href="https://discord.com/invite/golem" alt="Discord">
         <img src="https://img.shields.io/discord/684703559954333727?logo=discord" /></a>
     <a href="https://twitter.com/golemproject" alt="Twitter">
         <img src="https://img.shields.io/twitter/follow/golemproject?style=social" /></a>
-    <a href="https://reddit.com/GolemProject" alt="Reddit">
+    <a href="https://reddit.com/r/GolemProject" alt="Reddit">
         <img src="https://img.shields.io/reddit/subreddit-subscribers/GolemProject?style=social" /></a>
 </p>
 
