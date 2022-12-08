@@ -46,5 +46,6 @@ async fn main() -> anyhow::Result<()> {
         Commands::Keystore(keystore_cmd) => keystore_cmd.run(config),
         Commands::Whitelist(whitelist_cmd) => whitelist_cmd.run(config),
         Commands::Clean(clean_cmd) => clean_cmd.run(config),
+        Commands::OutboundConfig(outbound_cmd) => outbound_cmd.run(config),
     }
 }
