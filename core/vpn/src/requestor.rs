@@ -7,11 +7,14 @@ use actix_web::{web, HttpRequest, HttpResponse, Responder, ResponseError};
 use actix_web_actors::ws;
 use futures::channel::mpsc;
 use futures::lock::Mutex;
+use futures::FutureExt;
 use serde::{Deserialize, Serialize};
+use std::net::IpAddr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use ya_client_model::net::*;
-use ya_client_model::ErrorMessage;
+use ya_client_model::{ErrorMessage, NodeId};
 use ya_service_api_web::middleware::Identity;
 use ya_utils_networking::vpn::stack::connection::ConnectionMeta;
 use ya_utils_networking::vpn::{Error as VpnError, Protocol};
@@ -50,6 +53,7 @@ fn vpn_web_scope(path: &str) -> actix_web::Scope {
         .service(add_node)
         .service(remove_node)
         .service(connect_tcp)
+        .service(connect_raw)
 }
 
 /// Retrieves existing virtual private networks.
@@ -207,13 +211,14 @@ async fn connect_tcp(
     stream: web::Payload,
     identity: Identity,
 ) -> Result<HttpResponse> {
+    log::warn!("connect_tcp called {:?}", path);
     let path = path.into_inner();
     let vpn = {
         let supervisor = vpn_sup.lock().await;
         supervisor.get_network(&identity.identity, &path.net_id)?
     };
     let conn = vpn
-        .send(Connect {
+        .send(ConnectTcp {
             protocol: Protocol::Tcp,
             address: path.ip.to_string(),
             port: path.port,
@@ -235,7 +240,7 @@ pub struct VpnWebSocket {
 }
 
 impl VpnWebSocket {
-    pub fn new(network_id: String, conn: UserConnection) -> Self {
+    pub fn new(network_id: String, conn: UserTcpConnection) -> Self {
         VpnWebSocket {
             network_id,
             heartbeat: Instant::now(),
@@ -311,6 +316,196 @@ impl StreamHandler<WsResult<ws::Message>> for VpnWebSocket {
 }
 
 impl Handler<Shutdown> for VpnWebSocket {
+    type Result = <Shutdown as Message>::Result;
+
+    fn handle(&mut self, _: Shutdown, ctx: &mut Self::Context) -> Self::Result {
+        log::warn!("VPN WebSocket: VPN {} is shutting down", self.network_id);
+        ctx.stop();
+        Ok(())
+    }
+}
+
+/// Initiates a new RAW connection via WebSockets to the destination address.
+#[actix_web::get("/net/{net_id}/raw/from/{src}/to/{dst}")]
+async fn connect_raw(
+    vpn_sup: web::Data<Arc<Mutex<VpnSupervisor>>>,
+    path: web::Path<(String, IpAddr, IpAddr)>,
+    req: HttpRequest,
+    stream: web::Payload,
+    identity: Identity,
+) -> Result<HttpResponse> {
+    let (net_id, src, dst_ip) = path.into_inner();
+    log::info!("vpn {net_id} connection from {src} to {dst_ip}");
+    let vpn = {
+        let supervisor = vpn_sup.lock().await;
+        supervisor.get_network(&identity.identity, &net_id)
+    }?;
+
+    let nodes = vpn.send(GetNodes).await??;
+    let dst_ip_str = dst_ip.to_string();
+    let dst_node = match nodes.into_iter().find(|n| n.ip == dst_ip_str) {
+        Some(n) => n,
+        None => {
+            return Err(ApiError::Vpn(VpnError::ConnectionError(
+                "destination address not found".to_string(),
+            )))
+        }
+    };
+
+    let conn = vpn
+        .send(ConnectRaw {
+            dst_addr: dst_ip,
+            src_addr: src,
+            dst_id: dst_node.id.clone(),
+        })
+        .await??;
+
+    Ok(ws::start(
+        VpnRawSocket {
+            node_id: identity.identity.to_string(),
+            network_id: net_id,
+            _src_ip: src,
+            _dst_ip: dst_ip,
+            dst_node,
+            heartbeat: Instant::now(),
+            vpn_rx: Some(conn.rx),
+        },
+        &req,
+        stream,
+    )?)
+}
+
+pub struct VpnRawSocket {
+    node_id: String,
+    network_id: String,
+    _src_ip: IpAddr,
+    _dst_ip: IpAddr,
+    dst_node: Node,
+    heartbeat: Instant,
+    vpn_rx: Option<mpsc::Receiver<Vec<u8>>>,
+}
+
+impl VpnRawSocket {
+    fn forward(&self, data: Vec<u8>, ctx: &mut <Self as Actor>::Context) {
+        use ya_net::*;
+
+        let dst_node_id: NodeId = self.dst_node.id.parse().unwrap();
+        let current_node_id = self.node_id.clone();
+
+        static PACKET_NO: AtomicU64 = AtomicU64::new(0);
+        let packet_no = PACKET_NO.fetch_add(1, Ordering::Relaxed);
+
+        log::info!(
+            "VPN WebSocket: VPN {} forwarding packet to {}",
+            packet_no,
+            dst_node_id
+        );
+        let vpn_node = dst_node_id.service_udp(&format!("/public/vpn/{}/raw", self.network_id));
+        log::info!(
+            "VPN WebSocket: VPN {} forwarding packet 2 to {}",
+            packet_no,
+            dst_node_id
+        );
+
+        ctx.wait(
+            async move {
+                let _res = match vpn_node.push_raw_as(&current_node_id, data).await {
+                    Ok(_) => Ok(()),
+                    Err(e) => {
+                        log::error!("failed to send packet {:?}", e);
+                        Err(anyhow::anyhow!("failed to send packet {:?}", e))
+                    }
+                };
+                log::info!("Pushed message to {}", packet_no);
+
+                Ok::<_, anyhow::Error>(())
+            }
+            .then(|v| match v {
+                Err(e) => fut::ready(log::error!("failed to send packet {:?}", e)),
+                Ok(()) => fut::ready(()),
+            })
+            .into_actor(self),
+        );
+    }
+}
+
+impl Actor for VpnRawSocket {
+    type Context = ws::WebsocketContext<Self>;
+
+    fn started(&mut self, ctx: &mut Self::Context) {
+        ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
+            if Instant::now().duration_since(act.heartbeat) > CLIENT_TIMEOUT {
+                log::warn!("VPN WebSocket: VPN {} connection timed out", act.network_id);
+                ctx.stop();
+            } else {
+                ctx.ping(b"");
+            }
+        });
+
+        ctx.add_stream(self.vpn_rx.take().unwrap());
+    }
+
+    fn stopped(&mut self, _: &mut Self::Context) {
+        log::warn!("VPN WebSocket: VPN {} connection stopped", self.network_id);
+    }
+}
+
+impl StreamHandler<Vec<u8>> for VpnRawSocket {
+    fn handle(&mut self, data: Vec<u8>, ctx: &mut Self::Context) {
+        ctx.binary(data)
+    }
+
+    fn finished(&mut self, ctx: &mut Self::Context) {
+        log::warn!("VPN WebSocket: UserRawConnection stream closed");
+        ctx.stop();
+    }
+}
+
+impl StreamHandler<WsResult<ws::Message>> for VpnRawSocket {
+    fn handle(&mut self, msg: WsResult<ws::Message>, ctx: &mut Self::Context) {
+        self.heartbeat = Instant::now();
+        match msg {
+            Ok(ws::Message::Text(text)) => self.forward(text.into_bytes().to_vec(), ctx),
+            Ok(ws::Message::Binary(bytes)) => self.forward(bytes.to_vec(), ctx),
+            Ok(ws::Message::Ping(msg)) => {
+                ctx.pong(&msg);
+            }
+            Ok(ws::Message::Pong(_)) => {}
+            Ok(ws::Message::Close(reason)) => {
+                log::warn!("Received message close, close reason: {:?}", reason);
+                ctx.close(reason);
+                ctx.stop();
+            }
+            Ok(ws::Message::Continuation(_)) => {
+                log::warn!(
+                    "VPN WebSocket: VPN {} connection error: continuation not supported",
+                    self.network_id
+                );
+            }
+            Ok(ws::Message::Nop) => {
+                log::warn!(
+                    "VPN WebSocket: VPN {} connection error: nop not supported",
+                    self.network_id
+                );
+            }
+            Err(e) => {
+                log::error!(
+                    "VPN WebSocket: VPN {} connection error: {:?}",
+                    self.network_id,
+                    e
+                );
+                ctx.stop();
+            }
+        }
+    }
+
+    fn finished(&mut self, ctx: &mut Self::Context) {
+        log::warn!("VPN WebSocket: Websocket stream closed");
+        ctx.stop();
+    }
+}
+
+impl Handler<Shutdown> for VpnRawSocket {
     type Result = <Shutdown as Message>::Result;
 
     fn handle(&mut self, _: Shutdown, ctx: &mut Self::Context) -> Self::Result {

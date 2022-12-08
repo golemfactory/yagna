@@ -134,7 +134,6 @@ impl Vpn {
                 }
                 _ => None,
             };
-
             if let Some(ip) = ip {
                 let _ = self.networks.get_mut(&network_id).map(|network| {
                     if !network.nodes().contains_key(&node_id) {
@@ -275,6 +274,8 @@ impl StreamHandler<crate::Result<Vec<u8>>> for Vpn {
             Ok(vec) => vec,
             Err(err) => return log::debug!("[vpn] error (egress): {err}"),
         };
+
+        log::trace!("[vpn] Runtime to VPN: {} bytes", packet.len());
 
         match EtherFrame::try_from(packet) {
             Ok(frame) => match &frame {
