@@ -7797,6 +7797,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-gsb-api"
+version = "0.1.0"
+dependencies = [
+ "actix-http",
+ "actix-web",
+ "anyhow",
+ "log",
+ "serde",
+ "serde_json",
+ "ya-persistence",
+ "ya-service-api",
+ "ya-service-api-interfaces",
+ "ya-service-api-web",
+ "ya-service-bus",
+]
+
+[[package]]
 name = "ya-identity"
 version = "0.3.0"
 dependencies = [
@@ -8749,6 +8766,7 @@ dependencies = [
  "ya-erc20-driver",
  "ya-fd-metrics",
  "ya-file-logging",
+ "ya-gsb-api",
  "ya-identity",
  "ya-market",
  "ya-metrics",

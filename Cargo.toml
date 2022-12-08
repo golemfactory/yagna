@@ -29,6 +29,7 @@ ya-compile-time-utils = "0.2"
 ya-core-model = { version = "^0.8" }
 ya-dummy-driver = { version = "0.3", optional = true }
 ya-file-logging = "0.1"
+ya-gsb-api = "0.1"
 ya-erc20-driver = { version = "0.4", optional = true }
 ya-zksync-driver = { version = "0.3", optional = true }
 ya-identity = "0.3"
@@ -163,6 +164,7 @@ members = [
     "agent/provider",
     "core/activity",
     "core/gftp",
+    "core/gsb-api",
     "core/identity",
     "core/market",
     "core/market/resolver",
@@ -219,6 +221,7 @@ ya-erc20-driver = { path = "core/payment-driver/erc20" }
 ya-zksync-driver = { path = "core/payment-driver/zksync" }
 ya-version = { path = "core/version" }
 ya-vpn = { path = "core/vpn" }
+ya-gsb-api = { path = "core/gsb-api" }
 
 ## CORE UTILS
 ya-core-model = { path = "core/model" }
