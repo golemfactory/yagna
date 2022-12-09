@@ -26,6 +26,7 @@ async fn main() -> anyhow::Result<()> {
     config.globals_file = data_dir.join(config.globals_file);
     config.presets_file = data_dir.join(config.presets_file);
     config.hardware_file = data_dir.join(config.hardware_file);
+    config.rules_file = data_dir.join(config.rules_file);
 
     match cli_args.commands {
         Commands::Run(args) => {

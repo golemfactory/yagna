@@ -11,13 +11,6 @@ pub enum RuleCommand {
     UnblockAll,
 }
 
-impl RuleCommand {
-    pub fn run(self, config: ProviderConfig) -> Result<()> {
-        dbg!(&self);
-        Ok(())
-    }
-}
-
 #[derive(StructOpt, Clone, Debug)]
 pub enum SetRule {
     Everyone {
@@ -57,4 +50,30 @@ pub enum Mode {
     All,
     None,
     Whitelist { whitelist: String },
+}
+
+impl RuleCommand {
+    pub fn run(self, config: ProviderConfig) -> Result<()> {
+        match self {
+            RuleCommand::Set(set_rule) => set(set_rule, config),
+            RuleCommand::List => list(config),
+            RuleCommand::BlockAll => todo!(),
+            RuleCommand::UnblockAll => todo!(),
+        }
+    }
+}
+
+fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
+    //Read rules from file or default
+    //add new / edit existing
+    //save rules to file
+
+    Ok(())
+}
+
+fn list(config: ProviderConfig) -> Result<()> {
+    //Read rules from file or default
+    //Print table / json depending on config
+
+    Ok(())
 }

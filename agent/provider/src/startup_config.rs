@@ -34,6 +34,7 @@ lazy_static::lazy_static! {
     static ref DEFAULT_PLUGINS_DIR : PathBuf = default_plugins();
 }
 pub(crate) const DOMAIN_WHITELIST_JSON: &str = "domain_whitelist.json";
+pub(crate) const RULES_JSON: &str = "rules.json";
 pub(crate) const PRESETS_JSON: &str = "presets.json";
 pub(crate) const HARDWARE_JSON: &str = "hardware.json";
 pub(crate) const CERT_DIR: &str = "cert-dir";
@@ -83,6 +84,8 @@ pub struct ProviderConfig {
     pub presets_file: PathBuf,
     #[structopt(skip = HARDWARE_JSON)]
     pub hardware_file: PathBuf,
+    #[structopt(skip = RULES_JSON)]
+    pub rules_file: PathBuf,
     /// Max number of available CPU cores
     #[structopt(
         long,
