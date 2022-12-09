@@ -7800,8 +7800,10 @@ dependencies = [
 name = "ya-gsb-api"
 version = "0.1.0"
 dependencies = [
+ "actix",
  "actix-http",
  "actix-web",
+ "actix-web-actors",
  "anyhow",
  "log",
  "serde",
