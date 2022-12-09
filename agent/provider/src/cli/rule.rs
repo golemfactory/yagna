@@ -4,12 +4,12 @@ use structopt::StructOpt;
 use crate::startup_config::ProviderConfig;
 
 #[derive(StructOpt, Clone, Debug)]
-pub enum OutboundConfig {
-    Set(RuleConfig),
+pub enum RuleCommand {
+    Set(SetRule),
     List,
 }
 
-impl OutboundConfig {
+impl RuleCommand {
     pub fn run(self, config: ProviderConfig) -> Result<()> {
         dbg!(&self);
 
@@ -18,7 +18,7 @@ impl OutboundConfig {
 }
 
 #[derive(StructOpt, Clone, Debug)]
-pub enum RuleConfig {
+pub enum SetRule {
     Everyone {
         #[structopt(subcommand)]
         mode: Mode,
