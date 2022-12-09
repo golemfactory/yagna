@@ -233,8 +233,14 @@ mod tests {
         let properties = "{}";
         let constraints = "()";
         let node_id = NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap();
-        let creation_ts = NaiveDate::from_ymd(2020, 6, 19).and_hms(18, 53, 1);
-        let expiration_ts = NaiveDate::from_ymd(2020, 6, 19).and_hms(20, 19, 17);
+        let creation_ts = NaiveDate::from_ymd_opt(2020, 6, 19)
+            .unwrap()
+            .and_hms_opt(18, 53, 1)
+            .unwrap();
+        let expiration_ts = NaiveDate::from_ymd_opt(2020, 6, 19)
+            .unwrap()
+            .and_hms_opt(20, 19, 17)
+            .unwrap();
         let good_subscription_id = SubscriptionId::generate_id(
             properties,
             constraints,
@@ -260,8 +266,14 @@ mod tests {
         let properties = "{}";
         let constraints = "()";
         let node_id = NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap();
-        let creation_ts = NaiveDate::from_ymd(2020, 6, 19).and_hms(18, 53, 1);
-        let expiration_ts = NaiveDate::from_ymd(2020, 6, 19).and_hms(20, 19, 17);
+        let creation_ts = NaiveDate::from_ymd_opt(2020, 6, 19)
+            .unwrap()
+            .and_hms_opt(18, 53, 1)
+            .unwrap();
+        let expiration_ts = NaiveDate::from_ymd_opt(2020, 6, 19)
+            .unwrap()
+            .and_hms_opt(20, 19, 17)
+            .unwrap();
         assert_eq!(
             bad_subscription_id.validate(
                 properties,

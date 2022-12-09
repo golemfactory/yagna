@@ -689,6 +689,7 @@ pub fn create_market_config_for_test() -> Config {
     let discovery = DiscoveryConfig {
         max_bcasted_offers: 100,
         max_bcasted_unsubscribes: 100,
+        bcast_receiving_queue_size: 14,
         mean_cyclic_bcast_interval: Duration::from_millis(200),
         mean_cyclic_unsubscribes_interval: Duration::from_millis(200),
         offer_broadcast_delay: Duration::from_millis(200),

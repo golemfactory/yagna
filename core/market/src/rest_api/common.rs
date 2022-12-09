@@ -78,7 +78,7 @@ async fn collect_agreement_events(
     let timeout: f32 = query.timeout;
     let after_timestamp = query
         .after_timestamp
-        .unwrap_or_else(|| Utc.ymd(2016, 11, 11).and_hms(15, 12, 0));
+        .unwrap_or_else(|| Utc.with_ymd_and_hms(2016, 11, 11, 15, 12, 0).unwrap());
 
     market
         .query_agreement_events(

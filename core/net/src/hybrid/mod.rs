@@ -8,4 +8,4 @@ mod service;
 
 pub use api::*;
 pub use rest_api::web_scope;
-pub use service::{start_network, Net};
+pub use service::{send_bcast_new_neighbour, start_network, Net};
