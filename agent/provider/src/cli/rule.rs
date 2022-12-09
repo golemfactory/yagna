@@ -7,12 +7,13 @@ use crate::startup_config::ProviderConfig;
 pub enum RuleCommand {
     Set(SetRule),
     List,
+    BlockAll,
+    UnblockAll,
 }
 
 impl RuleCommand {
     pub fn run(self, config: ProviderConfig) -> Result<()> {
         dbg!(&self);
-
         Ok(())
     }
 }
