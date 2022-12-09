@@ -19,9 +19,9 @@ use crate::cli::clean::CleanConfig;
 use crate::cli::config::ConfigConfig;
 use crate::cli::exe_unit::ExeUnitsConfig;
 use crate::cli::keystore::KeystoreConfig;
-use crate::cli::outbound_config::OutboundConfig;
 pub use crate::cli::preset::PresetsConfig;
 use crate::cli::profile::ProfileConfig;
+use crate::cli::rule::OutboundConfig;
 use crate::cli::whitelist::WhitelistConfig;
 pub(crate) use crate::config::globals::GLOBALS_JSON;
 use crate::execution::{ExeUnitsRegistry, TaskRunnerConfig};
@@ -239,8 +239,8 @@ pub enum Commands {
     Whitelist(WhitelistConfig),
     /// Clean up disk space
     Clean(CleanConfig),
-    /// Manage Outbound config
-    OutboundConfig(OutboundConfig),
+    /// Manage Rule config
+    Rule(OutboundConfig),
 }
 
 #[derive(Debug)]
