@@ -73,7 +73,6 @@ impl RulesConfig {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OutboundRules {
     blocked: bool,
-    /// Make more rules here
     everyone: Mode,
     #[serde(flatten)]
     rules: HashMap<RuleType, HashMap<String, CertRule>>,
