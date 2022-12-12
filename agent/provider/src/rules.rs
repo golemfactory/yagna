@@ -86,11 +86,13 @@ pub struct CertRule {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Hash, Eq)]
+#[serde(rename_all = "kebab-case")]
 pub enum RuleType {
     AuditedPayload,
 }
 
 #[derive(StructOpt, Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "kebab-case")]
 pub enum Mode {
     All,
     None,
