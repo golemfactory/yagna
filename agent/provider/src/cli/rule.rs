@@ -1,7 +1,10 @@
 use anyhow::Result;
 use structopt::StructOpt;
 
-use crate::{rules::Mode, startup_config::ProviderConfig};
+use crate::{
+    rules::{Mode, Rule, RuleType, RulesConfig},
+    startup_config::ProviderConfig,
+};
 
 #[derive(StructOpt, Clone, Debug)]
 pub enum RuleCommand {
@@ -37,15 +40,30 @@ impl RuleCommand {
 }
 
 fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
-    //Read rules from file or default
-    //add new / edit existing
-    //save rules to file
+    let mut rules = RulesConfig::load_or_create(&config.rules_file)?;
+
+    match set_rule {
+        SetRule::Everyone { mode } => match mode {
+            Mode::None => todo!(),
+            mode => rules.set(Rule {
+                rule_type: RuleType::Everyone,
+                mode,
+                subject: None,
+                cert_id: None,
+            }),
+        },
+        SetRule::AuditedPayload { certificate, mode } => todo!(),
+    }
+
+    rules.save(&config.rules_file)?;
 
     Ok(())
 }
 
 fn list(config: ProviderConfig) -> Result<()> {
-    //Read rules from file or default
+    let rules = RulesConfig::load_or_create(&config.rules_file)?;
+
+    rules.list();
     //Print table / json depending on config
 
     Ok(())
