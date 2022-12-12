@@ -52,7 +52,10 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 cert_id: None,
             }),
         },
-        SetRule::AuditedPayload { certificate, mode } => todo!(),
+        SetRule::AuditedPayload {
+            certificate: _,
+            mode: _,
+        } => todo!(),
     }
 
     rules.save(&config.rules_file)?;

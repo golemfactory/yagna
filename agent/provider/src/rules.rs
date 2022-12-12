@@ -1,12 +1,8 @@
-use std::{collections::HashSet, fs::OpenOptions, io::BufReader, path::Path};
+use std::{fs::OpenOptions, io::BufReader, path::Path};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
-use ya_manifest_utils::{
-    util::{self, CertBasicData, CertBasicDataVisitor},
-    Keystore,
-};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RulesConfig {
