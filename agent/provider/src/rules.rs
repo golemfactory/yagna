@@ -1,4 +1,4 @@
-use std::{fs::OpenOptions, io::BufReader, path::Path};
+use std::{collections::HashMap, fs::OpenOptions, io::BufReader, path::Path};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -22,6 +22,7 @@ impl RulesConfig {
                 outbound: OutboundRules {
                     blocked: false,
                     everyone: Mode::Whitelist,
+                    rules: HashMap::new(),
                 },
             };
 
@@ -42,6 +43,22 @@ impl RulesConfig {
         self.outbound.everyone = mode;
     }
 
+    pub fn set_default_cert_rule(&mut self, rule_type: RuleType, mode: Mode) {
+        let rule = self
+            .outbound
+            .rules
+            .entry(rule_type)
+            .or_insert(HashMap::new());
+
+        rule.insert(
+            "default".into(),
+            CertRule {
+                mode,
+                subject: String::new(),
+            },
+        );
+    }
+
     pub fn list(&self, json: bool) -> Result<()> {
         if json {
             println!("{}", serde_json::to_string_pretty(&self)?);
@@ -58,18 +75,17 @@ pub struct OutboundRules {
     blocked: bool,
     /// Make more rules here
     everyone: Mode,
-}
-
-//TODO Rafał remove public fields- create helper functions
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct Rule {
-    pub rule_type: RuleType,
-    pub mode: Mode,
-    pub subject: Option<String>,
-    pub cert_id: Option<String>,
+    #[serde(flatten)]
+    rules: HashMap<RuleType, HashMap<String, CertRule>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct CertRule {
+    mode: Mode,
+    subject: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Hash, Eq)]
 pub enum RuleType {
     AuditedPayload,
 }
@@ -78,6 +94,6 @@ pub enum RuleType {
 pub enum Mode {
     All,
     None,
-    /// In the future we will have { whitelist: String } here
+    /// In the future we will have { whitelist: String } here probably
     Whitelist,
 }
