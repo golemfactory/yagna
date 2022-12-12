@@ -2,7 +2,7 @@ use anyhow::Result;
 use structopt::StructOpt;
 
 use crate::{
-    rules::{Mode, Rule, RuleType, RulesConfig},
+    rules::{Mode, RulesConfig},
     startup_config::ProviderConfig,
 };
 
@@ -44,18 +44,13 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
 
     match set_rule {
         SetRule::Everyone { mode } => match mode {
-            Mode::None => todo!(),
-            mode => rules.set(Rule {
-                rule_type: RuleType::Everyone,
-                mode,
-                subject: None,
-                cert_id: None,
-            }),
+            Mode::None => todo!("Setting mode none for Everyone rule isn't implemented yet"),
+            mode => rules.set_everyone_mode(mode),
         },
         SetRule::AuditedPayload {
             certificate: _,
             mode: _,
-        } => todo!(),
+        } => todo!("Setting rule for AuditedPayload isn't implemented yet"),
     }
 
     rules.save(&config.rules_file)?;

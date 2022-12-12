@@ -21,12 +21,7 @@ impl RulesConfig {
             let config = RulesConfig {
                 outbound: OutboundRules {
                     blocked: false,
-                    rule: Rule {
-                        rule_type: RuleType::Everyone,
-                        mode: Mode::Whitelist,
-                        subject: None,
-                        cert_id: None,
-                    },
+                    everyone: Mode::Whitelist,
                 },
             };
 
@@ -43,15 +38,15 @@ impl RulesConfig {
         )?)
     }
 
-    pub fn set(&mut self, rule: Rule) {
-        self.outbound.rule = rule;
+    pub fn set_everyone_mode(&mut self, mode: Mode) {
+        self.outbound.everyone = mode;
     }
 
     pub fn list(&self, json: bool) -> Result<()> {
         if json {
             println!("{}", serde_json::to_string_pretty(&self)?);
         } else {
-            todo!()
+            todo!("Printing pretty table isn't implemented yet")
         }
 
         Ok(())
@@ -62,7 +57,7 @@ impl RulesConfig {
 pub struct OutboundRules {
     blocked: bool,
     /// Make more rules here
-    rule: Rule,
+    everyone: Mode,
 }
 
 //TODO Rafał remove public fields- create helper functions
@@ -76,7 +71,6 @@ pub struct Rule {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum RuleType {
-    Everyone,
     AuditedPayload,
 }
 
