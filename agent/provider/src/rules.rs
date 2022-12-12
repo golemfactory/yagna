@@ -51,8 +51,14 @@ impl RulesConfig {
         self.outbound.rule = rule;
     }
 
-    pub fn list(&self) {
-        dbg!(&self);
+    pub fn list(&self, json: bool) -> Result<()> {
+        if json {
+            println!("{}", serde_json::to_string_pretty(&self)?);
+        } else {
+            todo!()
+        }
+
+        Ok(())
     }
 }
 

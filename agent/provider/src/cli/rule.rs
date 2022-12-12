@@ -63,8 +63,7 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
 fn list(config: ProviderConfig) -> Result<()> {
     let rules = RulesConfig::load_or_create(&config.rules_file)?;
 
-    rules.list();
-    //Print table / json depending on config
+    rules.list(config.json)?;
 
     Ok(())
 }
