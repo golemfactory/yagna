@@ -111,9 +111,6 @@ pub struct RulesConfig {
     outbound: OutboundRules,
 }
 
-//TODO Rafał How file will be used in negotiator?
-impl RulesConfig {}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OutboundRules {
     blocked: bool,
@@ -139,6 +136,5 @@ pub enum RuleType {
 pub enum Mode {
     All,
     None,
-    /// In the future we will have { whitelist: String } here probably
     Whitelist,
 }
