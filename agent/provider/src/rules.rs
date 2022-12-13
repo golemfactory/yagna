@@ -16,11 +16,11 @@ pub struct RuleStore {
 }
 
 impl RuleStore {
-    pub fn load_or_create(rules_file: &Path) -> Result<RuleStore> {
+    pub fn load_or_create(rules_file: &Path) -> Result<Self> {
         if rules_file.exists() {
             let file = OpenOptions::new().read(true).open(rules_file)?;
 
-            Ok(RuleStore {
+            Ok(Self {
                 config: Arc::new(serde_json::from_reader(BufReader::new(file))?),
             })
         } else {
@@ -43,7 +43,7 @@ impl RuleStore {
                 },
             };
 
-            let store = RuleStore {
+            let store = Self {
                 config: Arc::new(RwLock::new(config)),
             };
             store.save(rules_file)?;
@@ -57,6 +57,15 @@ impl RuleStore {
             rules_file,
             serde_json::to_string_pretty(&*self.config.read().unwrap())?, //TODO Rafał unwrap
         )?)
+    }
+
+    pub fn reload(&mut self, rules_file: &Path) -> Result<()> {
+        let new_rule_store = Self::load_or_create(rules_file)?;
+
+        //TODO Rafał Check if it works properly
+        *self = new_rule_store;
+
+        Ok(())
     }
 
     //TODO Rafał better interface without two separate functions
