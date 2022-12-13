@@ -7805,6 +7805,7 @@ dependencies = [
  "actix-web",
  "actix-web-actors",
  "anyhow",
+ "lazy_static",
  "log",
  "serde",
  "serde_json",
