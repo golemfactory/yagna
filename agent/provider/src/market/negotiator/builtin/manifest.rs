@@ -6,7 +6,7 @@ use ya_agreement_utils::{Error, OfferDefinition};
 use ya_manifest_utils::matching::domain::SharedDomainMatchers;
 use ya_manifest_utils::matching::Matcher;
 use ya_manifest_utils::policy::{CertPermissions, Keystore, Match, Policy, PolicyConfig};
-use ya_manifest_utils::rules::Mode;
+use ya_manifest_utils::rules::{Mode, RuleStore};
 use ya_manifest_utils::{
     decode_manifest, AppManifest, Feature, CAPABILITIES_PROPERTY,
     DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
@@ -19,6 +19,7 @@ use crate::market::negotiator::*;
 pub struct ManifestSignature {
     enabled: bool,
     keystore: Keystore,
+    rulestore: Option<RuleStore>,
     whitelist_matcher: SharedDomainMatchers,
 }
 
@@ -28,7 +29,12 @@ impl NegotiatorComponent for ManifestSignature {
         demand: &ProposalView,
         offer: ProposalView,
     ) -> anyhow::Result<NegotiationResult> {
-        if self.enabled.not() {
+        if self.enabled.not()
+            || self
+                .rulestore
+                .as_ref()
+                .map_or(false, |cfg| cfg.get_everyone_mode() == Mode::All)
+        {
             log::trace!("Manifest signature verification disabled.");
             return acceptance(offer);
         }
@@ -93,12 +99,6 @@ impl From<PolicyConfig> for ManifestSignature {
             .not()
         {
             false
-        } else if config
-            .rules_config
-            .map_or(false, |cfg| cfg.get_everyone_mode() == Mode::All)
-        {
-            //TODO Rafał it is probably bad place
-            false
         } else {
             match properties.get(CAPABILITIES_PROPERTY) {
                 Some(Match::Values(vec)) => vec.contains(&Feature::Inet.to_string()).not(),
@@ -112,6 +112,7 @@ impl From<PolicyConfig> for ManifestSignature {
         ManifestSignature {
             enabled,
             keystore,
+            rulestore: config.rules_config,
             whitelist_matcher,
         }
     }
