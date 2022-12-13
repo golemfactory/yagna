@@ -1,22 +1,28 @@
-use std::{collections::HashMap, fs::OpenOptions, io::BufReader, path::Path};
+use std::{
+    collections::HashMap,
+    fs::OpenOptions,
+    io::BufReader,
+    path::Path,
+    sync::{Arc, RwLock},
+};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 
-//TODO Rafał Arc<RwLock> to be used & reloaded in providerAgent
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct RulesConfig {
-    outbound: OutboundRules,
+#[derive(Clone)]
+pub struct RuleStore {
+    config: Arc<RwLock<RulesConfig>>,
 }
 
-//TODO Rafał How file will be used in negotiator?
-impl RulesConfig {
-    pub fn load_or_create(rules_file: &Path) -> Result<RulesConfig> {
+impl RuleStore {
+    pub fn load_or_create(rules_file: &Path) -> Result<RuleStore> {
         if rules_file.exists() {
             let file = OpenOptions::new().read(true).open(rules_file)?;
 
-            Ok(serde_json::from_reader(BufReader::new(file))?)
+            Ok(RuleStore {
+                config: Arc::new(serde_json::from_reader(BufReader::new(file))?),
+            })
         } else {
             let config = RulesConfig {
                 outbound: OutboundRules {
@@ -37,26 +43,31 @@ impl RulesConfig {
                 },
             };
 
-            config.save(rules_file)?;
+            let store = RuleStore {
+                config: Arc::new(RwLock::new(config)),
+            };
+            store.save(rules_file)?;
 
-            Ok(config)
+            Ok(store)
         }
     }
 
     pub fn save(&self, rules_file: &Path) -> Result<()> {
         Ok(std::fs::write(
             rules_file,
-            serde_json::to_string_pretty(&self)?,
+            serde_json::to_string_pretty(&*self.config.read().unwrap())?, //TODO Rafał unwrap
         )?)
     }
 
     //TODO Rafał better interface without two separate functions
     pub fn set_everyone_mode(&mut self, mode: Mode) {
-        self.outbound.everyone = mode;
+        self.config.write().unwrap().outbound.everyone = mode;
     }
 
     pub fn set_default_cert_rule(&mut self, rule_type: RuleType, mode: Mode) {
-        let rule = self
+        let mut config = self.config.write().unwrap();
+
+        let rule = config
             .outbound
             .rules
             .entry(rule_type)
@@ -73,7 +84,10 @@ impl RulesConfig {
 
     pub fn list(&self, json: bool) -> Result<()> {
         if json {
-            println!("{}", serde_json::to_string_pretty(&self)?);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&*self.config.read().unwrap())?
+            );
         } else {
             todo!("Printing pretty table isn't implemented yet")
         }
@@ -81,6 +95,15 @@ impl RulesConfig {
         Ok(())
     }
 }
+
+//TODO Rafał Arc<RwLock> to be used & reloaded in providerAgent
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RulesConfig {
+    outbound: OutboundRules,
+}
+
+//TODO Rafał How file will be used in negotiator?
+impl RulesConfig {}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OutboundRules {

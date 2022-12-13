@@ -2,7 +2,7 @@ use anyhow::Result;
 use structopt::StructOpt;
 
 use crate::{
-    rules::{Mode, RuleType, RulesConfig},
+    rules::{Mode, RuleStore, RuleType},
     startup_config::ProviderConfig,
 };
 
@@ -40,7 +40,7 @@ impl RuleCommand {
 }
 
 fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
-    let mut rules = RulesConfig::load_or_create(&config.rules_file)?;
+    let mut rules = RuleStore::load_or_create(&config.rules_file)?;
 
     match set_rule {
         SetRule::Everyone { mode } => match mode {
@@ -59,7 +59,7 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
 }
 
 fn list(config: ProviderConfig) -> Result<()> {
-    let rules = RulesConfig::load_or_create(&config.rules_file)?;
+    let rules = RuleStore::load_or_create(&config.rules_file)?;
 
     rules.list(config.json)?;
 
