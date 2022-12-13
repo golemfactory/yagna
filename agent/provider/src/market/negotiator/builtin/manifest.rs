@@ -97,6 +97,7 @@ impl From<PolicyConfig> for ManifestSignature {
             .rules_config
             .map_or(false, |cfg| cfg.get_everyone_mode() == Mode::All)
         {
+            //TODO Rafał it is probably bad place
             false
         } else {
             match properties.get(CAPABILITIES_PROPERTY) {
