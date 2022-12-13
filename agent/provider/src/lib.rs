@@ -9,7 +9,6 @@ mod interval;
 pub mod market;
 pub mod payments;
 pub mod provider_agent;
-pub mod rules;
 pub mod signal;
 pub mod startup_config;
 pub mod tasks;

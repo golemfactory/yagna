@@ -6,6 +6,7 @@ use ya_agreement_utils::{Error, OfferDefinition};
 use ya_manifest_utils::matching::domain::SharedDomainMatchers;
 use ya_manifest_utils::matching::Matcher;
 use ya_manifest_utils::policy::{CertPermissions, Keystore, Match, Policy, PolicyConfig};
+use ya_manifest_utils::rules::Mode;
 use ya_manifest_utils::{
     decode_manifest, AppManifest, Feature, CAPABILITIES_PROPERTY,
     DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
@@ -86,9 +87,15 @@ impl From<PolicyConfig> for ManifestSignature {
         let policies = config.policy_set();
         let properties = config.trusted_property_map();
 
+        //TODO Rafał probably to delete ManifestSignatureValidation
         let enabled = if policies
             .contains(&Policy::ManifestSignatureValidation)
             .not()
+        {
+            false
+        } else if config
+            .rules_config
+            .map_or(false, |cfg| cfg.get_everyone_mode() == Mode::All)
         {
             false
         } else {

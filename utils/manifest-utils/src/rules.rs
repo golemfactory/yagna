@@ -10,7 +10,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RuleStore {
     config: Arc<RwLock<RulesConfig>>,
 }
@@ -24,6 +24,7 @@ impl RuleStore {
                 config: Arc::new(serde_json::from_reader(BufReader::new(file))?),
             })
         } else {
+            //TODO Rafał Implement default for RulesConfig and use it in provider_agent.rs
             let config = RulesConfig {
                 outbound: OutboundRules {
                     blocked: false,
@@ -52,6 +53,11 @@ impl RuleStore {
         }
     }
 
+    // pub fn spawn_monitor(&mut self, rules_file: &Path) -> Result<()> {
+    //     Ok(())
+    // }
+
+    //TODO Rafał Path to pathbuf
     pub fn save(&self, rules_file: &Path) -> Result<()> {
         Ok(std::fs::write(
             rules_file,
@@ -59,18 +65,45 @@ impl RuleStore {
         )?)
     }
 
-    pub fn reload(&mut self, rules_file: &Path) -> Result<()> {
+    pub fn reload(&self, rules_file: &Path) -> Result<()> {
         let new_rule_store = Self::load_or_create(rules_file)?;
 
         //TODO Rafał Check if it works properly
-        *self = new_rule_store;
+
+        self.replace(new_rule_store);
 
         Ok(())
     }
 
+    //TODO Rafał Refactor it
+    fn replace(&self, other: Self) {
+        let store = {
+            let mut config = other.config.write().unwrap();
+            std::mem::replace(
+                &mut (*config),
+                RulesConfig {
+                    outbound: OutboundRules {
+                        //Use default?
+                        blocked: false,
+                        everyone: Mode::None,
+                        rules: HashMap::new(),
+                    },
+                },
+            )
+        };
+        let mut inner = self.config.write().unwrap();
+        *inner = store;
+    }
+
     //TODO Rafał better interface without two separate functions
+    //TODO Rafał Muts
     pub fn set_everyone_mode(&mut self, mode: Mode) {
         self.config.write().unwrap().outbound.everyone = mode;
+    }
+
+    pub fn get_everyone_mode(&self) -> Mode {
+        //TODO Rafał clone?
+        self.config.read().unwrap().outbound.everyone.clone()
     }
 
     pub fn set_default_cert_rule(&mut self, rule_type: RuleType, mode: Mode) {
