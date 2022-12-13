@@ -4,6 +4,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 
+//TODO Rafał Arc<RwLock> to be used & reloaded in providerAgent
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RulesConfig {
     outbound: OutboundRules,
@@ -22,7 +23,18 @@ impl RulesConfig {
                 outbound: OutboundRules {
                     blocked: false,
                     everyone: Mode::Whitelist,
-                    rules: HashMap::new(),
+                    rules: [(
+                        RuleType::AuditedPayload,
+                        [(
+                            "default".into(),
+                            CertRule {
+                                mode: Mode::All,
+                                subject: String::new(),
+                            },
+                        )]
+                        .into(),
+                    )]
+                    .into(),
                 },
             };
 
@@ -39,6 +51,7 @@ impl RulesConfig {
         )?)
     }
 
+    //TODO Rafał better interface without two separate functions
     pub fn set_everyone_mode(&mut self, mode: Mode) {
         self.outbound.everyone = mode;
     }
