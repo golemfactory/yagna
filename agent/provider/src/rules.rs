@@ -18,7 +18,6 @@ impl RulesConfig {
 
             Ok(serde_json::from_reader(BufReader::new(file))?)
         } else {
-            //TODO Rafał audited_manifest rule
             let config = RulesConfig {
                 outbound: OutboundRules {
                     blocked: false,
