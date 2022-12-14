@@ -21,7 +21,7 @@ use ya_service_api_cache::AutoResolveCache;
 pub type Cache = AutoResolveCache<AppKeyResolver>;
 
 pub struct Auth {
-    cache: Arc<Mutex<Cache>>,
+    pub(crate) cache: Arc<Mutex<Cache>>,
 }
 
 impl Default for Auth {
@@ -120,7 +120,7 @@ where
     }
 }
 
-fn parse_auth<S: Scheme, T: HttpMessage>(msg: &T) -> Result<S, ParseError> {
+pub(crate) fn parse_auth<S: Scheme, T: HttpMessage>(msg: &T) -> Result<S, ParseError> {
     let header = msg
         .headers()
         .get(actix_web::http::header::AUTHORIZATION)

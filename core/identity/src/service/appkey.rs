@@ -91,11 +91,13 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                 Err(e) => Err(model::Error::internal(e)),
             }?;
 
-            let _ = create_tx
-                .send(model::event::Event::NewKey {
-                    identity: create.identity,
-                })
-                .await;
+            let (appkey, _) = db
+                .as_dao::<AppKeyDao>()
+                .get(result.clone())
+                .await
+                .map_err(|e| model::Error::internal(e.to_string()))?;
+
+            let _ = create_tx.send(model::event::Event::NewKey(appkey)).await;
             Ok(result)
         }
     });

@@ -126,6 +126,7 @@ impl RpcMessage for Subscribe {
 
 pub mod event {
     use super::Error;
+    use crate::appkey::AppKey;
     use serde::{Deserialize, Serialize};
     use ya_client_model::NodeId;
     use ya_service_bus::RpcMessage;
@@ -133,7 +134,8 @@ pub mod event {
     #[derive(Clone, Debug, Serialize, Deserialize)]
     #[serde(rename_all = "camelCase")]
     pub enum Event {
-        NewKey { identity: NodeId },
+        NewKey(AppKey),
+        DroppedKey(AppKey),
     }
 
     impl RpcMessage for Event {
