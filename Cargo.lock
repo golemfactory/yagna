@@ -7762,6 +7762,7 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
+ "thiserror",
  "ya-persistence",
  "ya-service-api",
  "ya-service-api-interfaces",
