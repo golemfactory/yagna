@@ -11,6 +11,7 @@ ya-service-api = "0.1"
 ya-service-api-interfaces = "0.2"
 ya-service-api-web = "0.2"
 ya-service-bus = "0.6"
+ya-core-model = "0.8"
 
 actix = "0"
 actix-web = "4"
