@@ -59,7 +59,7 @@ async fn post_services(
 async fn delete_services(
     path: web::Path<ServicesPath>,
     id: Identity,
-    services: Data<Arc<GsbServices>>,
+    services: Data<Arc<Mutex<GsbServices>>>,
 ) -> impl Responder {
     log::debug!("DELETE /services/{}", path.key);
     web::Json(())
@@ -70,7 +70,8 @@ async fn get_service_messages(
     path: web::Path<ServicesPath>,
     req: HttpRequest,
     stream: web::Payload,
-    services: Data<Arc<GsbServices>>, // id: Identity
+    services: Data<Arc<Mutex<GsbServices>>>,
+    // id: Identity
 ) -> Result<HttpResponse, Error> {
     let services = services.as_ref().clone();
     let handler = WsMessagesHandler { services };

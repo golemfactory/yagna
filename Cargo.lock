@@ -7763,6 +7763,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "ya-core-model",
  "ya-persistence",
  "ya-service-api",
  "ya-service-api-interfaces",
