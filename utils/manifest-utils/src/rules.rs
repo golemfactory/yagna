@@ -117,6 +117,7 @@ pub struct RulesConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct OutboundConfig {
     blocked: bool,
     everyone: Mode,

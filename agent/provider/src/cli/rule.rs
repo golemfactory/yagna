@@ -41,12 +41,9 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
     let rules = RuleStore::load_or_create(&config.rules_file)?;
 
     match set_rule {
-        SetRule::Everyone { mode } => match mode {
-            Mode::None => todo!("Setting mode none for Everyone rule isn't implemented yet"),
-            mode => rules.set_everyone_mode(mode),
-        },
+        SetRule::Everyone { mode } => rules.set_everyone_mode(mode),
         SetRule::AuditedPayload { certificate, mode } => match certificate {
-            Some(_) => todo!("Setting rule for AuditedPayload isn't implemented yet"),
+            Some(_) => todo!("Setting rule for specific certificate isn't implemented yet"),
             None => rules.set_default_audited_payload_mode(mode),
         },
     }
