@@ -216,7 +216,7 @@ impl ProviderAgent {
         let mut hardware = hardware::Manager::try_new(&config)?;
         hardware.spawn_monitor(&config.hardware_file)?;
         let keystore_monitor = spawn_keystore_monitor(cert_dir, keystore)?;
-        let rulestore_monitor = spawn_rulestore_monitor(config.rules_file, rulestore)?;
+        let rulestore_monitor = spawn_rulestore_monitor(rulestore)?;
         let mut domain_whitelist = WhitelistManager::try_new(&config.domain_whitelist_file)?;
         domain_whitelist.spawn_monitor(&config.domain_whitelist_file)?;
         policy_config.domain_patterns = domain_whitelist.get_state();
@@ -505,16 +505,13 @@ fn spawn_keystore_monitor<P: AsRef<Path>>(
     Ok(monitor)
 }
 
-fn spawn_rulestore_monitor<P: AsRef<Path>>(
-    path: P,
-    rulestore: RuleStore,
-) -> Result<FileMonitor, Error> {
-    let rules_file = path.as_ref().to_path_buf();
-    let handler = move |p: PathBuf| match rulestore.reload(&rules_file) {
+fn spawn_rulestore_monitor(rulestore: RuleStore) -> Result<FileMonitor, Error> {
+    let path = rulestore.path.clone();
+    let handler = move |p: PathBuf| match rulestore.reload() {
         Ok(()) => {
-            log::info!("Trusted keystore updated from {}", p.display());
+            log::info!("rulestore updated from {}", p.display());
         }
-        Err(e) => log::warn!("Error updating trusted keystore from {}: {e}", p.display()),
+        Err(e) => log::warn!("Error updating rulestore from {}: {e}", p.display()),
     };
     let monitor = FileMonitor::spawn_with(
         path,

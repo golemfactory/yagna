@@ -12,7 +12,7 @@ use structopt::StructOpt;
 #[derive(Clone, Debug, Default)]
 pub struct RuleStore {
     config: Arc<RwLock<RulesConfig>>,
-    path: PathBuf,
+    pub path: PathBuf,
 }
 
 impl RuleStore {
@@ -46,8 +46,8 @@ impl RuleStore {
     }
 
     //TODO Rafał Check if it works properly
-    pub fn reload(&self, rules_file: &Path) -> Result<()> {
-        let new_rule_store = Self::load_or_create(rules_file)?;
+    pub fn reload(&self) -> Result<()> {
+        let new_rule_store = Self::load_or_create(&self.path)?;
 
         self.replace(new_rule_store);
 
