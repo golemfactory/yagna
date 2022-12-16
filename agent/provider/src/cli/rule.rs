@@ -44,7 +44,7 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
         },
     }
 
-    rules.save(&config.rules_file)?;
+    rules.save()?;
 
     Ok(())
 }

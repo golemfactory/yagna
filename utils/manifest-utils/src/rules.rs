@@ -1,7 +1,7 @@
 use std::{
     fs::OpenOptions,
     io::BufReader,
-    path::Path,
+    path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
 
@@ -12,6 +12,7 @@ use structopt::StructOpt;
 #[derive(Clone, Debug, Default)]
 pub struct RuleStore {
     config: Arc<RwLock<RulesConfig>>,
+    path: PathBuf,
 }
 
 impl RuleStore {
@@ -21,23 +22,25 @@ impl RuleStore {
 
             Ok(Self {
                 config: Arc::new(serde_json::from_reader(BufReader::new(file))?),
+                path: rules_file.to_path_buf(),
             })
         } else {
             let config = Default::default();
 
             let store = Self {
                 config: Arc::new(RwLock::new(config)),
+                path: rules_file.to_path_buf(),
             };
-            store.save(rules_file)?;
+            store.save()?;
 
             Ok(store)
         }
     }
 
     //TODO Rafał Path to pathbuf
-    pub fn save(&self, rules_file: &Path) -> Result<()> {
+    pub fn save(&self) -> Result<()> {
         Ok(std::fs::write(
-            rules_file,
+            &self.path,
             serde_json::to_string_pretty(&*self.config.read().unwrap())?,
         )?)
     }
