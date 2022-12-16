@@ -26,7 +26,7 @@ impl RuleStore {
             })
         } else {
             let config = RulesConfig {
-                outbound: OutboundRules {
+                outbound: OutboundConfig {
                     blocked: false,
                     everyone: Mode::Whitelist,
                     audited_payload: Rule {
@@ -113,17 +113,17 @@ impl RuleStore {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RulesConfig {
-    outbound: OutboundRules,
+    outbound: OutboundConfig,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct OutboundRules {
+pub struct OutboundConfig {
     blocked: bool,
     everyone: Mode,
     audited_payload: Rule,
 }
 
-impl Default for OutboundRules {
+impl Default for OutboundConfig {
     fn default() -> Self {
         Self {
             blocked: false,
