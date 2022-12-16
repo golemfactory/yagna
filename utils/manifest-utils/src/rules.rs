@@ -10,7 +10,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct RuleStore {
     config: Arc<RwLock<RulesConfig>>,
 }
@@ -25,19 +25,7 @@ impl RuleStore {
                 config: Arc::new(serde_json::from_reader(BufReader::new(file))?),
             })
         } else {
-            let config = RulesConfig {
-                outbound: OutboundConfig {
-                    blocked: false,
-                    everyone: Mode::Whitelist,
-                    audited_payload: Rule {
-                        default: CertRule {
-                            mode: Mode::All,
-                            subject: String::new(),
-                        },
-                        cert_specific_rules: HashMap::new(),
-                    },
-                },
-            };
+            let config = Default::default();
 
             let store = Self {
                 config: Arc::new(RwLock::new(config)),
@@ -69,12 +57,7 @@ impl RuleStore {
     fn replace(&self, other: Self) {
         let store = {
             let mut config = other.config.write().unwrap();
-            std::mem::replace(
-                &mut (*config),
-                RulesConfig {
-                    outbound: Default::default(),
-                },
-            )
+            std::mem::replace(&mut (*config), Default::default())
         };
         let mut inner = self.config.write().unwrap();
         *inner = store;
@@ -116,28 +99,30 @@ pub struct RulesConfig {
     outbound: OutboundConfig,
 }
 
+impl Default for RulesConfig {
+    fn default() -> Self {
+        Self {
+            outbound: OutboundConfig {
+                blocked: false,
+                everyone: Mode::None,
+                audited_payload: Rule {
+                    default: CertRule {
+                        mode: Mode::All,
+                        subject: String::new(),
+                    },
+                    cert_specific_rules: HashMap::new(),
+                },
+            },
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct OutboundConfig {
     blocked: bool,
     everyone: Mode,
     audited_payload: Rule,
-}
-
-impl Default for OutboundConfig {
-    fn default() -> Self {
-        Self {
-            blocked: false,
-            everyone: Mode::None,
-            audited_payload: Rule {
-                default: CertRule {
-                    mode: Mode::All,
-                    subject: String::new(),
-                },
-                cert_specific_rules: HashMap::new(),
-            },
-        }
-    }
 }
 
 //TODO Rafał rename

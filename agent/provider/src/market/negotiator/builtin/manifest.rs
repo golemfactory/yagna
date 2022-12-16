@@ -102,8 +102,9 @@ impl From<PolicyConfig> for ManifestSignature {
         };
 
         let whitelist_matcher = config.domain_patterns.matchers.clone();
+        //TODO Rafał these Defaults should be errors
         let keystore = config.trusted_keys.unwrap_or_default();
-        let rulestore = config.rules_config.unwrap(); //TODO Rafał Option
+        let rulestore = config.rules_config.unwrap_or_default();
         ManifestSignature {
             enabled,
             keystore,
