@@ -1,6 +1,6 @@
 use anyhow::Result;
 use structopt::StructOpt;
-use ya_manifest_utils::rules::{Mode, RuleStore, RuleType};
+use ya_manifest_utils::rules::{Mode, RuleStore};
 
 use crate::startup_config::ProviderConfig;
 
@@ -47,7 +47,7 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
         },
         SetRule::AuditedPayload { certificate, mode } => match certificate {
             Some(_) => todo!("Setting rule for AuditedPayload isn't implemented yet"),
-            None => rules.set_default_cert_rule(RuleType::AuditedPayload, mode),
+            None => rules.set_default_audited_payload_mode(mode),
         },
     }
 

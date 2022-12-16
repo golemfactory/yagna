@@ -16,6 +16,7 @@ pub struct RuleStore {
 }
 
 impl RuleStore {
+    //TODO Rafał load also certs
     pub fn load_or_create(rules_file: &Path) -> Result<Self> {
         if rules_file.exists() {
             let file = OpenOptions::new().read(true).open(rules_file)?;
@@ -24,23 +25,17 @@ impl RuleStore {
                 config: Arc::new(serde_json::from_reader(BufReader::new(file))?),
             })
         } else {
-            //TODO Rafał Implement default for RulesConfig and use it in provider_agent.rs
             let config = RulesConfig {
                 outbound: OutboundRules {
                     blocked: false,
                     everyone: Mode::Whitelist,
-                    rules: [(
-                        RuleType::AuditedPayload,
-                        [(
-                            "default".into(),
-                            CertRule {
-                                mode: Mode::All,
-                                subject: String::new(),
-                            },
-                        )]
-                        .into(),
-                    )]
-                    .into(),
+                    audited_payload: Rule {
+                        default: CertRule {
+                            mode: Mode::All,
+                            subject: String::new(),
+                        },
+                        cert_specific_rules: HashMap::new(),
+                    },
                 },
             };
 
@@ -53,22 +48,17 @@ impl RuleStore {
         }
     }
 
-    // pub fn spawn_monitor(&mut self, rules_file: &Path) -> Result<()> {
-    //     Ok(())
-    // }
-
     //TODO Rafał Path to pathbuf
     pub fn save(&self, rules_file: &Path) -> Result<()> {
         Ok(std::fs::write(
             rules_file,
-            serde_json::to_string_pretty(&*self.config.read().unwrap())?, //TODO Rafał unwrap
+            serde_json::to_string_pretty(&*self.config.read().unwrap())?,
         )?)
     }
 
+    //TODO Rafał Check if it works properly
     pub fn reload(&self, rules_file: &Path) -> Result<()> {
         let new_rule_store = Self::load_or_create(rules_file)?;
-
-        //TODO Rafał Check if it works properly
 
         self.replace(new_rule_store);
 
@@ -82,12 +72,7 @@ impl RuleStore {
             std::mem::replace(
                 &mut (*config),
                 RulesConfig {
-                    outbound: OutboundRules {
-                        //Use default?
-                        blocked: false,
-                        everyone: Mode::None,
-                        rules: HashMap::new(),
-                    },
+                    outbound: Default::default(),
                 },
             )
         };
@@ -96,32 +81,20 @@ impl RuleStore {
     }
 
     //TODO Rafał better interface without two separate functions
-    //TODO Rafał Muts
-    pub fn set_everyone_mode(&mut self, mode: Mode) {
+    pub fn set_everyone_mode(&self, mode: Mode) {
         self.config.write().unwrap().outbound.everyone = mode;
     }
 
     pub fn get_everyone_mode(&self) -> Mode {
         //TODO Rafał clone?
+        //TODO Rafał unwraps
         self.config.read().unwrap().outbound.everyone.clone()
     }
 
-    pub fn set_default_cert_rule(&mut self, rule_type: RuleType, mode: Mode) {
+    pub fn set_default_audited_payload_mode(&self, mode: Mode) {
         let mut config = self.config.write().unwrap();
 
-        let rule = config
-            .outbound
-            .rules
-            .entry(rule_type)
-            .or_insert(HashMap::new());
-
-        rule.insert(
-            "default".into(),
-            CertRule {
-                mode,
-                subject: String::new(),
-            },
-        );
+        config.outbound.audited_payload.default.mode = mode;
     }
 
     pub fn list(&self, json: bool) -> Result<()> {
@@ -138,7 +111,6 @@ impl RuleStore {
     }
 }
 
-//TODO Rafał Arc<RwLock> to be used & reloaded in providerAgent
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RulesConfig {
     outbound: OutboundRules,
@@ -148,20 +120,37 @@ pub struct RulesConfig {
 pub struct OutboundRules {
     blocked: bool,
     everyone: Mode,
+    audited_payload: Rule,
+}
+
+impl Default for OutboundRules {
+    fn default() -> Self {
+        Self {
+            blocked: false,
+            everyone: Mode::None,
+            audited_payload: Rule {
+                default: CertRule {
+                    mode: Mode::All,
+                    subject: String::new(),
+                },
+                cert_specific_rules: HashMap::new(),
+            },
+        }
+    }
+}
+
+//TODO Rafał rename
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Rule {
+    default: CertRule,
     #[serde(flatten)]
-    rules: HashMap<RuleType, HashMap<String, CertRule>>,
+    cert_specific_rules: HashMap<String, CertRule>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct CertRule {
     mode: Mode,
     subject: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Hash, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub enum RuleType {
-    AuditedPayload,
 }
 
 #[derive(StructOpt, Clone, Debug, Serialize, Deserialize, PartialEq)]
