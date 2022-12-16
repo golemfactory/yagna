@@ -122,7 +122,6 @@ pub struct OutboundConfig {
     audited_payload: CertRules,
 }
 
-//TODO Rafał rename
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CertRules {
     default: CertRule,
