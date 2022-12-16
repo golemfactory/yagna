@@ -11,8 +11,8 @@ use structopt::StructOpt;
 
 #[derive(Clone, Debug, Default)]
 pub struct RuleStore {
-    config: Arc<RwLock<RulesConfig>>,
     pub path: PathBuf,
+    config: Arc<RwLock<RulesConfig>>,
 }
 
 impl RuleStore {
@@ -53,7 +53,6 @@ impl RuleStore {
         Ok(())
     }
 
-    //TODO Rafał Refactor it
     fn replace(&self, other: Self) {
         let store = std::mem::take(&mut (*other.config.write().unwrap()));
 
