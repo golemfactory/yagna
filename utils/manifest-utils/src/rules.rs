@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     fs::OpenOptions,
     io::BufReader,
     path::Path,
@@ -16,7 +15,6 @@ pub struct RuleStore {
 }
 
 impl RuleStore {
-    //TODO Rafał load also certs
     pub fn load_or_create(rules_file: &Path) -> Result<Self> {
         if rules_file.exists() {
             let file = OpenOptions::new().read(true).open(rules_file)?;
@@ -57,7 +55,7 @@ impl RuleStore {
     fn replace(&self, other: Self) {
         let store = {
             let mut config = other.config.write().unwrap();
-            std::mem::replace(&mut (*config), Default::default())
+            std::mem::take(&mut (*config))
         };
         let mut inner = self.config.write().unwrap();
         *inner = store;
@@ -105,12 +103,11 @@ impl Default for RulesConfig {
             outbound: OutboundConfig {
                 blocked: false,
                 everyone: Mode::None,
-                audited_payload: Rule {
+                audited_payload: CertRules {
                     default: CertRule {
                         mode: Mode::All,
                         subject: String::new(),
                     },
-                    cert_specific_rules: HashMap::new(),
                 },
             },
         }
@@ -122,24 +119,22 @@ impl Default for RulesConfig {
 pub struct OutboundConfig {
     blocked: bool,
     everyone: Mode,
-    audited_payload: Rule,
+    audited_payload: CertRules,
 }
 
 //TODO Rafał rename
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct Rule {
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CertRules {
     default: CertRule,
-    #[serde(flatten)]
-    cert_specific_rules: HashMap<String, CertRule>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CertRule {
     mode: Mode,
     subject: String,
 }
 
-#[derive(StructOpt, Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(StructOpt, Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum Mode {
     All,
