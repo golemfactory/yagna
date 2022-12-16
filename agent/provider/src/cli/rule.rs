@@ -8,8 +8,6 @@ use crate::startup_config::ProviderConfig;
 pub enum RuleCommand {
     Set(SetRule),
     List,
-    BlockAll,
-    UnblockAll,
 }
 
 #[derive(StructOpt, Clone, Debug)]
@@ -31,8 +29,6 @@ impl RuleCommand {
         match self {
             RuleCommand::Set(set_rule) => set(set_rule, config),
             RuleCommand::List => list(config),
-            RuleCommand::BlockAll => todo!(),
-            RuleCommand::UnblockAll => todo!(),
         }
     }
 }
