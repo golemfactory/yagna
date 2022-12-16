@@ -15,11 +15,10 @@ use ya_manifest_utils::{
 
 use crate::market::negotiator::*;
 
-#[derive(Default)]
 pub struct ManifestSignature {
     enabled: bool,
     keystore: Keystore,
-    rulestore: Option<RuleStore>,
+    rulestore: RuleStore,
     whitelist_matcher: SharedDomainMatchers,
 }
 
@@ -29,12 +28,7 @@ impl NegotiatorComponent for ManifestSignature {
         demand: &ProposalView,
         offer: ProposalView,
     ) -> anyhow::Result<NegotiationResult> {
-        if self.enabled.not()
-            || self
-                .rulestore
-                .as_ref()
-                .map_or(false, |cfg| cfg.get_everyone_mode() == Mode::All)
-        {
+        if self.enabled.not() || self.rulestore.get_everyone_mode() == Mode::All {
             log::trace!("Manifest signature verification disabled.");
             return acceptance(offer);
         }
@@ -109,10 +103,11 @@ impl From<PolicyConfig> for ManifestSignature {
 
         let whitelist_matcher = config.domain_patterns.matchers.clone();
         let keystore = config.trusted_keys.unwrap_or_default();
+        let rulestore = config.rules_config.unwrap(); //TODO Rafał Option
         ManifestSignature {
             enabled,
             keystore,
-            rulestore: config.rules_config,
+            rulestore,
             whitelist_matcher,
         }
     }
