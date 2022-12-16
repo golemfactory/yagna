@@ -37,7 +37,6 @@ impl RuleStore {
         }
     }
 
-    //TODO Rafał Path to pathbuf
     pub fn save(&self) -> Result<()> {
         Ok(std::fs::write(
             &self.path,
@@ -45,7 +44,7 @@ impl RuleStore {
         )?)
     }
 
-    //TODO Rafał Check if it works properly
+    //TODO Rafał test it automatically (with notifier)
     pub fn reload(&self) -> Result<()> {
         let new_rule_store = Self::load_or_create(&self.path)?;
 
@@ -56,12 +55,9 @@ impl RuleStore {
 
     //TODO Rafał Refactor it
     fn replace(&self, other: Self) {
-        let store = {
-            let mut config = other.config.write().unwrap();
-            std::mem::take(&mut (*config))
-        };
-        let mut inner = self.config.write().unwrap();
-        *inner = store;
+        let store = std::mem::take(&mut (*other.config.write().unwrap()));
+
+        *self.config.write().unwrap() = store;
     }
 
     //TODO Rafał better interface without two separate functions
@@ -70,15 +66,18 @@ impl RuleStore {
     }
 
     pub fn get_everyone_mode(&self) -> Mode {
-        //TODO Rafał clone?
-        //TODO Rafał unwraps
         self.config.read().unwrap().outbound.everyone.clone()
     }
 
+    //TODO Rafał Better api to be used
     pub fn set_default_audited_payload_mode(&self, mode: Mode) {
-        let mut config = self.config.write().unwrap();
-
-        config.outbound.audited_payload.default.mode = mode;
+        self.config
+            .write()
+            .unwrap()
+            .outbound
+            .audited_payload
+            .default
+            .mode = mode;
     }
 
     pub fn list(&self, json: bool) -> Result<()> {
