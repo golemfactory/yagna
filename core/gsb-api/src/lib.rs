@@ -1,6 +1,6 @@
 use std::{
     future::Future,
-    sync::{MutexGuard, PoisonError},
+    sync::{MutexGuard, PoisonError}, pin::Pin,
 };
 
 use actix_http::StatusCode;
@@ -93,8 +93,18 @@ struct WsResponse {
 //     }
 // }
 
+trait WsCall {
+    fn call(&mut self, path: String, request: WsRequest) -> Pin<Box<dyn Future<Output = Result<WsResponse, anyhow::Error>>>>;
+}
+
 type WS_CALL = Box<
-    dyn FnMut(String, WsRequest) -> Future<Output = Result<WsResponse, anyhow::Error>>
+    dyn WsCall
         + Sync
         + Send,
 >;
+
+// type WS_CALL = Box<
+//     dyn FnMut(String, WsRequest) -> Future<Output = Result<WsResponse, anyhow::Error>>
+//         + Sync
+//         + Send,
+// >;
