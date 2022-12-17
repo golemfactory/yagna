@@ -4,7 +4,7 @@ use std::{
     fmt::Debug,
     future::Future,
     marker::PhantomData,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
     vec,
 };
 
@@ -15,7 +15,7 @@ use actix_http::{
 };
 use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer, Responder};
 use actix_web_actors::ws;
-use lazy_static::lazy_static;
+use lazy_static::{lazy_static, __Deref};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use serde_json::json;
@@ -37,32 +37,60 @@ lazy_static! {
 // // trait Caller: FnMut(String, MSG) -> Future<Output = Result<MSG, anyhow::Error>> + 'static {}
 // type CALLER = Box<dyn FnMut(String, MSG) -> MSG_FUT>;
 
-#[derive(Default)]
-struct GsbCaller<REQ, RES>
-where
-    REQ: RpcMessage + Into<WsRequest>,
-    RES: RpcMessage + From<WsResponse>,
-{
-    req_type: PhantomData<REQ>,
-    res_type: PhantomData<RES>,
-    ws_caller: Option<Arc<Mutex<WS_CALL>>>,
+// trait GsbCaller {
+//     type REQ: RpcMessage + Into<WsRequest>;
+//     type RES: RpcMessage + From<WsResponse>;
+
+//     fn call(self, path: String, req: Self::REQ) -> Future<Output=Result<Self::RES, <<Self as GsbCaller>::RES as RpcMessage>::Error >>;
+// }
+
+trait GsbCaller {
+    fn call<REQ: RpcMessage + Into<WsRequest>, RES: RpcMessage + From<WsResponse>>(self, path: String, req: REQ) -> Future<Output=Result<RES, RES::Error>>;
 }
 
-impl<REQ, RES> GsbCaller<REQ, RES>
-where
-    REQ: RpcMessage + Into<WsRequest>,
-    RES: RpcMessage + From<WsResponse>,
-{
-    async fn call(path: String, req: REQ) -> Result<REQ, REQ::Error> {
-        todo!("NYI")
-    }
+struct GsbCallerEnabled {
+
 }
+
+// impl GsbCaller for GsbCallerEnabled {
+//     fn call<REQ: RpcMessage + Into<WsRequest>, RES: RpcMessage + From<WsResponse>>(self, path: String, req: REQ) -> Future<Output=Result<RES, RES::Error>> {
+//         todo!()
+//     }
+// }
+
+// #[derive(Default)]
+// struct GsbCaller<REQ, RES>
+// where
+//     REQ: RpcMessage + Into<WsRequest>,
+//     RES: RpcMessage + From<WsResponse>,
+// {
+//     req_type: PhantomData<REQ>,
+//     res_type: PhantomData<RES>,
+//     ws_caller: Option<Arc<Mutex<WS_CALL>>>,
+// }
+
+// impl<REQ, RES> GsbCaller<REQ, RES>
+// where
+//     REQ: RpcMessage + Into<WsRequest>,
+//     RES: RpcMessage + From<WsResponse>,
+// {
+//     async fn call(self, path: String, req: REQ) -> Result<REQ, REQ::Error> {
+//         if let Some(ws_caller) = self.ws_caller {
+//             let ws_caller = ws_caller.lock().unwrap();
+//             ws_caller.as_mut()
+//         }
+//         let ws_req: WsRequest = req.into();
+//         todo!("NYI")
+//     }
+// }
+
+type OPTIONAL_WS_CALL = Arc<RwLock<Option<WS_CALL>>>;
 
 struct GsbMessage;
 
 #[derive(Default)]
 pub(crate) struct GsbServices {
-    callers: HashMap<String, Vec<WS_CALL>>,
+    callers: HashMap<String, HashMap<String,OPTIONAL_WS_CALL>>,
 }
 
 impl GsbServices {
@@ -81,9 +109,48 @@ impl GsbServices {
         Ok(())
     }
 
-    pub fn bind_service<T: RpcMessage>(id: String, path: String) {
-        let caller = bus::bind_with_caller(&path, move |caller, packet: T| {});
+    fn bind_service<MSG>(&mut self, path: String, id: String)
+    where 
+        MSG: RpcMessage + Into<WsRequest>, 
+        MSG::Item: From<WsResponse>
+    {
+        let ws_call_pointer = self.ws_call_pointer(&path, &id);
+        let _ = bus::bind_with_caller(&path, 
+            move |path, packet: MSG| async move 
+            {
+                let ws_call = ws_call_pointer.read().unwrap();
+                let ws_request = packet.into();
+                if let Some(ws_call) = ws_call.as_deref_mut() {
+                    match ws_call.call(path, ws_request).await {
+                        Ok(res) => Ok(MSG::Item::from(res)),
+                        Err(_err) => todo!("Error"),
+                    }
+                } else {
+                    todo!("Not initialised")
+                }
+            
+        });
         todo!()
+    }
+
+    fn ws_call_pointer(&mut self, path: &str, id: &str) -> OPTIONAL_WS_CALL {
+        let id_callers = match self.callers.get_mut(path) {
+            Some(id_callers) => id_callers,
+            None => {
+                let id_callers = HashMap::new();
+                self.callers.insert(path.to_string(), id_callers);
+                self.callers.get_mut(path).unwrap()
+            }
+        };
+        let caller_ref = match id_callers.get_mut(id) {
+            Some(callers) => callers,
+            None => {
+                let caller = Arc::new(RwLock::new(None));
+                id_callers.insert(id.to_string(), caller);
+                id_callers.get_mut(id).unwrap()
+            }
+        };
+        caller_ref.clone()
     }
 }
 
