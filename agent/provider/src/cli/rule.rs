@@ -6,7 +6,9 @@ use crate::startup_config::ProviderConfig;
 
 #[derive(StructOpt, Clone, Debug)]
 pub enum RuleCommand {
+    /// Set Modes for specific Rules
     Set(SetRule),
+    /// List active Rules and their information
     List,
 }
 
