@@ -79,15 +79,11 @@ impl RuleStore {
             .mode = mode;
     }
 
-    pub fn list(&self, json: bool) -> Result<()> {
-        if json {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&*self.config.read().unwrap())?
-            );
-        } else {
-            todo!("Printing pretty table isn't implemented yet")
-        }
+    pub fn print(&self) -> Result<()> {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&*self.config.read().unwrap())?
+        );
 
         Ok(())
     }

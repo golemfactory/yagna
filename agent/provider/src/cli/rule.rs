@@ -52,7 +52,11 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
 fn list(config: ProviderConfig) -> Result<()> {
     let rules = RuleStore::load_or_create(&config.rules_file)?;
 
-    rules.list(config.json)?;
+    if config.json {
+        rules.print()?;
+    } else {
+        todo!("Printing pretty table isn't implemented yet")
+    }
 
     Ok(())
 }
