@@ -198,8 +198,8 @@ ya-service-api-web = { path = "core/serv-api/web" }
 #ya-sb-util = { path = "../ya-service-bus/crates/util" }
 
 ## CLIENT
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "2a6350f62cf8d926721225a3451822731456e3fe" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "2a6350f62cf8d926721225a3451822731456e3fe" }
+#ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "2a6350f62cf8d926721225a3451822731456e3fe" }
+#ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "2a6350f62cf8d926721225a3451822731456e3fe" }
 
 ## OTHERS
 gftp = { path = "core/gftp" }
