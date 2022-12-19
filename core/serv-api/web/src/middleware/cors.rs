@@ -1,14 +1,13 @@
 use actix_cors::Cors;
 use actix_web::dev::RequestHead;
-use actix_web::http::header;
 use actix_web::http::header::HeaderValue;
 use actix_web_httpauth::headers::authorization::{Bearer, Scheme};
 
 use anyhow::anyhow;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use actix_web::http::header;
 use structopt::StructOpt;
-use url::Url;
 
 use crate::middleware::auth::resolver::AppKeyResolver;
 
@@ -24,7 +23,7 @@ pub type Cache = AutoResolveCache<AppKeyResolver>;
 #[derive(Clone, StructOpt, Debug)]
 pub struct CorsConfig {
     #[structopt(long)]
-    allowed_origin: Url,
+    allowed_origin: Option<String>,
     /// Set a maximum time (in seconds) for which this CORS request may be cached.
     #[structopt(long, default_value = "3600")]
     max_age: usize,
@@ -54,13 +53,21 @@ impl AppKeyCors {
         let this = self.clone();
         let config = self.config.clone();
 
-        Cors::default()
-            .allowed_origin(&config.allowed_origin.to_string())
+        let mut cors = Cors::default()
             .allowed_origin_fn(move |header, request| this.verify_origin(header, request))
-            .allowed_methods(vec!["GET", "POST", "DELETE"])
-            .allowed_headers(vec![header::AUTHORIZATION, header::ACCEPT])
-            .allowed_header(header::CONTENT_TYPE)
-            .max_age(config.max_age)
+            .allow_any_method()
+            .allow_any_header()
+            .block_on_origin_mismatch(false)
+            .max_age(config.max_age);
+
+        if let Some(allowed_origin) = config.allowed_origin.clone() {
+            if allowed_origin == "*" {
+                cors = cors.send_wildcard()
+            } else {
+                cors = cors.allowed_origin(&allowed_origin);
+            }
+        }
+        cors
     }
 
     fn get(&self, key: &str) -> Option<String> {
@@ -99,13 +106,19 @@ impl AppKeyCors {
         Ok(())
     }
 
-    fn verify_origin(&self, header: &HeaderValue, _request: &RequestHead) -> bool {
+    fn verify_origin(&self, header: &HeaderValue, request: &RequestHead) -> bool {
         let key = Bearer::parse(header).ok().map(|b| b.token().to_string());
         match key {
-            Some(key) => match self.cors.read().unwrap().get(&key) {
+            Some(key) => match self.get(&key) {
                 None => false,
-                Some(_origins) => {
-                    unimplemented!();
+                Some(domains) => {
+                    if let Some(origin) = request.headers().get(header::ORIGIN) {
+                        //TODO: no unwrap
+                        if domains == origin.to_str().unwrap() {
+                            return true;
+                        }
+                    }
+                    false
                 }
             },
             None => false,
