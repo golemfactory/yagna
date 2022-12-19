@@ -1,20 +1,12 @@
-use crate::services::{self, GsbServices, WsMessagesHandler};
+use crate::services::{GsbServices, WsMessagesHandler};
 use crate::GsbApiError;
-use actix::{Actor, StreamHandler};
-use actix_http::{
-    ws::{CloseReason, ProtocolError},
-    StatusCode,
-};
-use actix_web::web::{service, Data};
+use actix_http::StatusCode;
+use actix_web::web::Data;
 use actix_web::Scope;
-use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer, Responder, Result};
+use actix_web::{web, Error, HttpRequest, HttpResponse, Responder, Result};
 use actix_web_actors::ws;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
-use std::iter::FromIterator;
 use std::sync::{Arc, Mutex};
-use std::vec;
-
 use ya_service_api_web::middleware::Identity;
 
 pub const DEFAULT_SERVICES_TIMEOUT: f32 = 60.0;
@@ -29,9 +21,9 @@ pub fn web_scope() -> Scope {
 
 #[actix_web::post("/services")]
 async fn post_services(
-    query: web::Query<Timeout>,
+    _query: web::Query<Timeout>,
     body: web::Json<ServicesBody>,
-    id: Identity,
+    _id: Identity,
     services: Data<Arc<Mutex<GsbServices>>>,
 ) -> Result<impl Responder, GsbApiError> {
     log::debug!("POST /services Body: {:?}", body);
@@ -39,35 +31,36 @@ async fn post_services(
         let components = listen.components.clone();
         let path = listen.on.clone();
         let mut services = services.lock()?;
-        services.bind(HashSet::from_iter(components.iter().cloned()), path);
-    }
-    let services = ServicesBody {
-        listen: Some(ServicesListenBody {
-            on: "dummy".to_string(),
-            components: vec!["foo".to_string(), "bar".to_string()],
-            links: Some(ServicesLinksBody {
-                messages: "gsb-api/v1/services/dummy/messages".to_string(),
+        let _ = services.bind(components.iter().map(String::as_str).collect(), &path)?;
+        let services = ServicesBody {
+            listen: Some(ServicesListenBody {
+                on: path.clone(),
+                components: components,
+                links: Some(ServicesLinksBody {
+                    messages: format!("gsb-api/v1/services/{path}"),
+                }),
             }),
-        }),
-    };
-    Ok(web::Json(services)
-        .customize()
-        .with_status(StatusCode::CREATED))
+        };
+        return Ok(web::Json(services)
+            .customize()
+            .with_status(StatusCode::CREATED));
+    }
+    Err(GsbApiError::BadRequest)
 }
 
 #[actix_web::delete("/services/{key}")]
 async fn delete_services(
     path: web::Path<ServicesPath>,
-    id: Identity,
-    services: Data<Arc<Mutex<GsbServices>>>,
+    _id: Identity,
+    _services: Data<Arc<Mutex<GsbServices>>>,
 ) -> impl Responder {
     log::debug!("DELETE /services/{}", path.key);
     web::Json(())
 }
 
-#[actix_web::get("/services/{key}/messages")]
+#[actix_web::get("/services/{key}")]
 async fn get_service_messages(
-    path: web::Path<ServicesPath>,
+    _path: web::Path<ServicesPath>,
     req: HttpRequest,
     stream: web::Payload,
     services: Data<Arc<Mutex<GsbServices>>>,

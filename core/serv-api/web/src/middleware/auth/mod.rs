@@ -76,7 +76,7 @@ where
         if req.uri().to_string().starts_with("/metrics-api")
             || req.uri().to_string().starts_with("/version")
             // TODO: add authorization for WS endpoint
-            || (req.uri().to_string().starts_with("/gsb-api/v1/services/") && req.uri().to_string().ends_with("/messages"))
+            || (req.uri().to_string().starts_with("/gsb-api/v1/services/"))
         {
             log::debug!("skipping authorization for uri={}", req.uri());
             return Box::pin(service.borrow_mut().call(req));
