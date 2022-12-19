@@ -87,7 +87,6 @@ impl From<PolicyConfig> for ManifestSignature {
         let policies = config.policy_set();
         let properties = config.trusted_property_map();
 
-        //TODO Rafał probably to delete ManifestSignatureValidation
         let enabled = if policies
             .contains(&Policy::ManifestSignatureValidation)
             .not()
