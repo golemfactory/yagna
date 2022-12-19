@@ -44,7 +44,6 @@ impl RuleStore {
         )?)
     }
 
-    //TODO Rafał test it automatically (with notifier)
     pub fn reload(&self) -> Result<()> {
         let new_rule_store = Self::load_or_create(&self.path)?;
 
@@ -150,4 +149,28 @@ pub enum Mode {
     All,
     None,
     Whitelist,
+}
+
+#[cfg(test)]
+mod should {
+    use std::fs::{read_to_string, write};
+
+    use serde_json::{from_str, to_string_pretty};
+
+    use super::*;
+
+    #[test]
+    fn reload_rules_config() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let rules_file = tempdir.path().join("rules.json");
+        let sut = RuleStore::load_or_create(&rules_file).unwrap();
+        let mut cfg: RulesConfig = from_str(&read_to_string(&rules_file).unwrap()).unwrap();
+
+        cfg.outbound.everyone = Mode::All;
+        write(&rules_file, to_string_pretty(&cfg).unwrap()).unwrap();
+
+        sut.reload().unwrap();
+
+        assert_eq!(Mode::All, sut.get_default_outbound_settings().everyone);
+    }
 }
