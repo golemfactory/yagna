@@ -1,20 +1,17 @@
-use std::{
-    future::Future,
-    sync::{MutexGuard, PoisonError}, pin::Pin,
-};
-
-use actix_http::StatusCode;
-use actix_web::{HttpResponse, ResponseError};
-use serde::{Deserialize, Serialize};
-use services::GsbServices;
-use ya_core_model::gftp::{GetChunk, GetMetadata, GftpChunk, GftpMetadata};
-use ya_service_api_interfaces::Provider;
-use ya_service_bus::serialization::Config;
-
-use thiserror::Error;
-
 mod api;
 mod services;
+
+use actix_http::StatusCode;
+use actix_web::ResponseError;
+use serde::{Deserialize, Serialize};
+use services::GsbServices;
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::{MutexGuard, PoisonError},
+};
+use thiserror::Error;
+use ya_service_api_interfaces::Provider;
 
 pub const GSB_API_PATH: &str = "/gsb-api/v1";
 
@@ -25,15 +22,17 @@ impl GsbApiService {
         Ok(())
     }
 
-    pub fn rest<Context: Provider<Self, ()>>(ctx: &Context) -> actix_web::Scope {
+    pub fn rest<Context: Provider<Self, ()>>(_ctx: &Context) -> actix_web::Scope {
         api::web_scope()
     }
 }
 
 #[derive(Error, Debug)]
 enum GsbApiError {
+    //TODO add msg
     #[error("Bad request")]
     BadRequest,
+    //TODO add msg
     #[error("Internal error")]
     InternalError,
     #[error(transparent)]
@@ -41,7 +40,13 @@ enum GsbApiError {
 }
 
 impl From<PoisonError<MutexGuard<'_, GsbServices>>> for GsbApiError {
-    fn from(value: PoisonError<MutexGuard<'_, GsbServices>>) -> Self {
+    fn from(_value: PoisonError<MutexGuard<'_, GsbServices>>) -> Self {
+        GsbApiError::InternalError
+    }
+}
+
+impl From<serde_json::Error> for GsbApiError {
+    fn from(_value: serde_json::Error) -> Self {
         GsbApiError::InternalError
     }
 }
@@ -69,42 +74,10 @@ struct WsResponse {
     payload: Vec<u8>,
 }
 
-// impl From<GetMetadata> for WsRequest {
-//     fn from(value: GetMetadata) -> Self {
-//         todo!()
-//     }
-// }
-
-// impl From<GftpMetadata> for WsResponse {
-//     fn from(value: GftpMetadata) -> Self {
-//         todo!()
-//     }
-// }
-
-// impl From<GetChunk> for WsRequest {
-//     fn from(value: GetChunk) -> Self {
-//         todo!()
-//     }
-// }
-
-// impl From<GftpChunk> for WsResponse {
-//     fn from(value: GftpChunk) -> Self {
-//         todo!()
-//     }
-// }
+struct WsResult(Result<WsResponse, anyhow::Error>);
 
 trait WsCall {
-    fn call(&mut self, path: String, request: WsRequest) -> Pin<Box<dyn Future<Output = Result<WsResponse, anyhow::Error>>>>;
+    fn call(&self, path: String, request: WsRequest) -> Pin<Box<dyn Future<Output = WsResult>>>;
 }
 
-type WS_CALL = Box<
-    dyn WsCall
-        + Sync
-        + Send,
->;
-
-// type WS_CALL = Box<
-//     dyn FnMut(String, WsRequest) -> Future<Output = Result<WsResponse, anyhow::Error>>
-//         + Sync
-//         + Send,
-// >;
+type WS_CALL = Box<dyn WsCall + Sync + Send>;

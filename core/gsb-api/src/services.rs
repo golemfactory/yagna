@@ -1,104 +1,47 @@
 //! Provider side operations
+use crate::{GsbApiError, WsCall, WsRequest, WsResponse, WsResult, WS_CALL};
+use actix::{Actor, StreamHandler};
+use actix_http::ws::{CloseReason, ProtocolError};
+use actix_web_actors::ws;
+use lazy_static::lazy_static;
+use serde_json::json;
 use std::{
     collections::{HashMap, HashSet},
+    convert::{TryFrom, TryInto},
     fmt::Debug,
     future::Future,
-    marker::PhantomData,
+    pin::Pin,
+    result::Result::{Err, Ok},
     sync::{Arc, Mutex, RwLock},
-    vec,
 };
-
-use actix::{Actor, StreamHandler};
-use actix_http::{
-    ws::{CloseReason, Item, ProtocolError},
-    StatusCode,
-};
-use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer, Responder};
-use actix_web_actors::ws;
-use lazy_static::{lazy_static, __Deref};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-
-use serde_json::json;
-use ya_persistence::executor::DbExecutor;
-use ya_service_api_web::middleware::Identity;
-use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
-
-use crate::{GsbApiError, WsRequest, WsResponse, WS_CALL};
+use ya_core_model::gftp::{GetChunk, GetMetadata, GftpChunk, GftpMetadata};
+use ya_service_bus::{typed as bus, RpcMessage};
 
 lazy_static! {
     pub(crate) static ref SERVICES: Arc<Mutex<GsbServices>> =
         Arc::new(Mutex::new(GsbServices::default()));
 }
 
-// type MSG = Box<dyn RpcMessage<Item = Box<dyn Serialize + 'static + Sync + Send>, Error = Box<dyn Serialize + 'static + Sync + Send>>>;
-// // type CALLER = ;
-// type MSG_FUT = Future<Output = Result<MSG, anyhow::Error>>;
-
-// // trait Caller: FnMut(String, MSG) -> Future<Output = Result<MSG, anyhow::Error>> + 'static {}
-// type CALLER = Box<dyn FnMut(String, MSG) -> MSG_FUT>;
-
-// trait GsbCaller {
-//     type REQ: RpcMessage + Into<WsRequest>;
-//     type RES: RpcMessage + From<WsResponse>;
-
-//     fn call(self, path: String, req: Self::REQ) -> Future<Output=Result<Self::RES, <<Self as GsbCaller>::RES as RpcMessage>::Error >>;
-// }
-
 trait GsbCaller {
-    fn call<REQ: RpcMessage + Into<WsRequest>, RES: RpcMessage + From<WsResponse>>(self, path: String, req: REQ) -> Future<Output=Result<RES, RES::Error>>;
+    fn call<REQ: RpcMessage + Into<WsRequest>, RES: RpcMessage + From<WsResponse>>(
+        self,
+        path: String,
+        req: REQ,
+    ) -> dyn Future<Output = Result<RES, RES::Error>>;
 }
-
-struct GsbCallerEnabled {
-
-}
-
-// impl GsbCaller for GsbCallerEnabled {
-//     fn call<REQ: RpcMessage + Into<WsRequest>, RES: RpcMessage + From<WsResponse>>(self, path: String, req: REQ) -> Future<Output=Result<RES, RES::Error>> {
-//         todo!()
-//     }
-// }
-
-// #[derive(Default)]
-// struct GsbCaller<REQ, RES>
-// where
-//     REQ: RpcMessage + Into<WsRequest>,
-//     RES: RpcMessage + From<WsResponse>,
-// {
-//     req_type: PhantomData<REQ>,
-//     res_type: PhantomData<RES>,
-//     ws_caller: Option<Arc<Mutex<WS_CALL>>>,
-// }
-
-// impl<REQ, RES> GsbCaller<REQ, RES>
-// where
-//     REQ: RpcMessage + Into<WsRequest>,
-//     RES: RpcMessage + From<WsResponse>,
-// {
-//     async fn call(self, path: String, req: REQ) -> Result<REQ, REQ::Error> {
-//         if let Some(ws_caller) = self.ws_caller {
-//             let ws_caller = ws_caller.lock().unwrap();
-//             ws_caller.as_mut()
-//         }
-//         let ws_req: WsRequest = req.into();
-//         todo!("NYI")
-//     }
-// }
-
-type OPTIONAL_WS_CALL = Arc<RwLock<Option<WS_CALL>>>;
-
-struct GsbMessage;
 
 #[derive(Default)]
 pub(crate) struct GsbServices {
-    callers: HashMap<String, HashMap<String,OPTIONAL_WS_CALL>>,
+    callers: HashMap<String, HashMap<String, Arc<RwLock<WS_CALL>>>>,
 }
 
 impl GsbServices {
-    pub fn bind(&mut self, components: HashSet<String>, path: String) -> Result<(), GsbApiError> {
+    pub fn bind(&mut self, components: HashSet<&str>, path: &str) -> Result<(), GsbApiError> {
         for component in components {
-            match component.as_str() {
+            match component {
                 "GetMetadata" => {
                     log::info!("GetMetadata {path}");
+                    self.bind_service::<GetMetadata>(path, component.to_string());
                 }
                 "GetChunk" => {
                     log::info!("GetChunk {path}");
@@ -106,34 +49,31 @@ impl GsbServices {
                 _ => return Err(GsbApiError::BadRequest),
             }
         }
-        Ok(())
+        std::result::Result::Ok(())
     }
 
-    fn bind_service<MSG>(&mut self, path: String, id: String)
-    where 
-        MSG: RpcMessage + Into<WsRequest>, 
-        MSG::Item: From<WsResponse>
+    fn bind_service<'a, MSG>(&mut self, path: &str, component: String)
+    where
+        MSG: RpcMessage,
+        (String, MSG): TryInto<WsRequest, Error = <MSG as RpcMessage>::Error>,
+        MSG::Item: TryFrom<WsResult, Error = <MSG as RpcMessage>::Error>,
     {
-        let ws_call_pointer = self.ws_call_pointer(&path, &id);
-        let _ = bus::bind_with_caller(&path, 
-            move |path, packet: MSG| async move 
-            {
+        let ws_call_pointer = self.ws_call_pointer(&path, &component);
+        let _ = bus::bind_with_caller(&path, move |path, packet: MSG| {
+            let ws_call_pointer = ws_call_pointer.clone();
+            let component = component.to_string().clone();
+            let path = path.clone();
+            async move {
+                let ws_request = (component, packet).try_into()?;
                 let ws_call = ws_call_pointer.read().unwrap();
-                let ws_request = packet.into();
-                if let Some(ws_call) = ws_call.as_deref_mut() {
-                    match ws_call.call(path, ws_request).await {
-                        Ok(res) => Ok(MSG::Item::from(res)),
-                        Err(_err) => todo!("Error"),
-                    }
-                } else {
-                    todo!("Not initialised")
-                }
-            
+                let ws_res = ws_call.call(path, ws_request).await;
+                MSG::Item::try_from(ws_res)
+            }
         });
         todo!()
     }
 
-    fn ws_call_pointer(&mut self, path: &str, id: &str) -> OPTIONAL_WS_CALL {
+    fn ws_call_pointer(&mut self, path: &str, id: &str) -> Arc<RwLock<WS_CALL>> {
         let id_callers = match self.callers.get_mut(path) {
             Some(id_callers) => id_callers,
             None => {
@@ -145,7 +85,8 @@ impl GsbServices {
         let caller_ref = match id_callers.get_mut(id) {
             Some(callers) => callers,
             None => {
-                let caller = Arc::new(RwLock::new(None));
+                let caller: Arc<RwLock<Box<dyn WsCall + Send + Sync + 'static>>> =
+                    Arc::new(RwLock::new(Box::new(UnboundWsCall {})));
                 id_callers.insert(id.to_string(), caller);
                 id_callers.get_mut(id).unwrap()
             }
@@ -169,12 +110,12 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
         ctx: &mut Self::Context,
     ) {
         match item {
-            Ok(msg) => {
+            std::result::Result::Ok(msg) => {
                 match msg {
                     ws::Message::Text(msg) => {
                         log::info!("Text: {:?}", msg);
                         match serde_json::from_slice::<WsRequest>(msg.as_bytes()) {
-                            Ok(request) => {
+                            std::result::Result::Ok(request) => {
                                 log::info!("WsRequest: {request:?}");
                             }
                             Err(err) => todo!("NYI Deserialization error: {err:?}"),
@@ -213,5 +154,76 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
                 ),
             })),
         };
+    }
+}
+
+#[derive(Debug)]
+pub struct UnboundWsCall;
+
+impl WsCall for UnboundWsCall {
+    fn call(&self, _path: String, _request: WsRequest) -> Pin<Box<dyn Future<Output = WsResult>>> {
+        todo!("Unbound Call NYI")
+    }
+}
+
+impl TryInto<WsRequest> for (String, GetMetadata) {
+    type Error = <GetMetadata as RpcMessage>::Error;
+
+    fn try_into(self) -> Result<WsRequest, Self::Error> {
+        let payload = serde_json::to_vec(&self)
+            .map_err(|err| ya_core_model::gftp::Error::InternalError(err.to_string()))?;
+        let component = self.0;
+        let id = GetMetadata::ID.to_string();
+        std::result::Result::Ok(WsRequest {
+            id,
+            component,
+            payload,
+        })
+    }
+}
+
+impl TryFrom<WsResult> for GftpMetadata {
+    type Error = <GetMetadata as RpcMessage>::Error;
+
+    fn try_from(res: WsResult) -> Result<Self, Self::Error> {
+        match res.0 {
+            Ok(ws_response) => {
+                let response = serde_json::from_slice(&ws_response.payload)
+                    .map_err(|err| ya_core_model::gftp::Error::InternalError(err.to_string()))?;
+                Ok(response)
+            }
+            Err(err) => Err(ya_core_model::gftp::Error::InternalError(err.to_string())),
+        }
+    }
+}
+
+impl TryInto<WsRequest> for (String, GetChunk) {
+    type Error = <GetChunk as RpcMessage>::Error;
+
+    fn try_into(self) -> Result<WsRequest, Self::Error> {
+        let payload = serde_json::to_vec(&self)
+            .map_err(|err| ya_core_model::gftp::Error::InternalError(err.to_string()))?;
+        let component = self.0;
+        let id = GetMetadata::ID.to_string();
+        std::result::Result::Ok(WsRequest {
+            id,
+            component,
+            payload,
+        })
+    }
+}
+
+impl TryFrom<WsResult> for GftpChunk {
+    type Error = <GetChunk as RpcMessage>::Error;
+
+    fn try_from(res: WsResult) -> Result<Self, Self::Error> {
+        match res.0 {
+            Ok(ws_response) => {
+                let response = serde_json::from_slice(&ws_response.payload)
+                    .map_err(|err| ya_core_model::gftp::Error::InternalError(err.to_string()))?;
+                Ok(response)
+            }
+            Err(err) => Err(ya_core_model::gftp::Error::InternalError(err.to_string())),
+        }
     }
 }
