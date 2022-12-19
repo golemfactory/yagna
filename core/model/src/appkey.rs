@@ -128,7 +128,6 @@ pub mod event {
     use super::Error;
     use crate::appkey::AppKey;
     use serde::{Deserialize, Serialize};
-    use ya_client_model::NodeId;
     use ya_service_bus::RpcMessage;
 
     #[derive(Clone, Debug, Serialize, Deserialize)]

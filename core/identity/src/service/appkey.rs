@@ -91,11 +91,19 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                 Err(e) => Err(model::Error::internal(e)),
             }?;
 
-            let (appkey, _) = db
+            let (appkey, role) = db
                 .as_dao::<AppKeyDao>()
                 .get(result.clone())
                 .await
                 .map_err(|e| model::Error::internal(e.to_string()))?;
+
+            let appkey = model::AppKey {
+                name: appkey.name,
+                key: appkey.key,
+                role: role.name,
+                identity: appkey.identity_id,
+                created_date: appkey.created_date,
+            };
 
             let _ = create_tx.send(model::event::Event::NewKey(appkey)).await;
             Ok(result)
