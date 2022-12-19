@@ -50,7 +50,7 @@ pub struct PolicyConfig {
     #[structopt(skip)]
     pub domain_patterns: DomainWhitelistState,
     #[structopt(skip)]
-    pub rules_config: Option<RuleStore>, //TODO Rafał Why option here?
+    pub rules_config: Option<RuleStore>,
 }
 
 impl PolicyConfig {
