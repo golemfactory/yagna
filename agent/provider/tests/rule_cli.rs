@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use assert_cmd::Command;
+use pretty_assertions::assert_eq;
 use serde_json::json;
 use tempdir::TempDir;
 use test_case::test_case;
@@ -20,7 +21,6 @@ fn rule_list_cmd_should_print_default_rules() {
 
     let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
 
-    //TODO Rafał Pretty assert
     assert_eq!(
         result,
         json!({
