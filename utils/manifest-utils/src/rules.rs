@@ -18,6 +18,7 @@ pub struct RuleStore {
 impl RuleStore {
     pub fn load_or_create(rules_file: &Path) -> Result<Self> {
         if rules_file.exists() {
+            log::debug!("Loading rule from: {:?}", rules_file);
             let file = OpenOptions::new().read(true).open(rules_file)?;
 
             Ok(Self {
@@ -25,6 +26,7 @@ impl RuleStore {
                 path: rules_file.to_path_buf(),
             })
         } else {
+            log::debug!("Creating default Rules configuration");
             let config = Default::default();
 
             let store = Self {
@@ -38,6 +40,7 @@ impl RuleStore {
     }
 
     fn save(&self) -> Result<()> {
+        log::debug!("Saving RuleStore to: {:?}", self.path);
         Ok(std::fs::write(
             &self.path,
             serde_json::to_string_pretty(&*self.config.read().unwrap())?,
@@ -45,6 +48,7 @@ impl RuleStore {
     }
 
     pub fn reload(&self) -> Result<()> {
+        log::debug!("Reloading RuleStore from: {:?}", self.path);
         let new_rule_store = Self::load_or_create(&self.path)?;
 
         self.replace(new_rule_store);
@@ -59,12 +63,14 @@ impl RuleStore {
     }
 
     pub fn set_everyone_mode(&self, mode: Mode) -> Result<()> {
+        log::debug!("Setting outbound everyone mode: {:?}", mode);
         self.config.write().unwrap().outbound.everyone = mode;
 
         self.save()
     }
 
     pub fn set_default_audited_payload_mode(&self, mode: Mode) -> Result<()> {
+        log::debug!("Setting outbound audited_payload default mode: {:?}", mode);
         self.config
             .write()
             .unwrap()
