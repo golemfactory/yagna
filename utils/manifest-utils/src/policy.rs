@@ -259,15 +259,22 @@ impl Keystore {
     }
 
     fn verify_cert<S: AsRef<str>>(&self, cert: S) -> anyhow::Result<PKey<Public>> {
-        let cert = Self::decode_cert(cert)?;
+        let cert_chain = Self::decode_cert_chain(cert)?;
         let store = self
             .inner
             .read()
             .map_err(|err| anyhow::anyhow!("Err: {}", err.to_string()))?;
-        let cert_chain = openssl::stack::Stack::new()?;
+        let cert = match cert_chain.last().map(Clone::clone) {
+            Some(cert) => cert,
+            None => bail!("Unable to verify certificate. No certificate."),
+        };
+        let mut cert_stack = openssl::stack::Stack::new()?;
+        for cert in cert_chain {
+            cert_stack.push(cert).unwrap();
+        }
         let mut ctx = X509StoreContext::new()?;
-        if !(ctx.init(&store.store, &cert, &cert_chain, |ctx| ctx.verify_cert())?) {
-            return Err(anyhow::anyhow!("Invalid certificate"));
+        if !(ctx.init(&store.store, &cert, &cert_stack, |ctx| ctx.verify_cert())?) {
+            bail!("Invalid certificate");
         }
         Ok(cert.public_key()?)
     }
@@ -285,8 +292,14 @@ impl Keystore {
             return Ok(());
         }
 
-        let cert = Self::decode_cert(cert)?;
-        let issuer = self.find_issuer(&cert)?;
+        let cert_chain = Self::decode_cert_chain(cert)?;
+        // Demands do not contain certificates permissions
+        // so only first certificate in chain signer permissions are verified.
+        let cert = match cert_chain.first() {
+            Some(cert) => cert,
+            None => bail!("Unable to verify certificate permissions. No certificate."),
+        };
+        let issuer = self.find_issuer(cert)?;
 
         self.has_permissions(&issuer, &required)
     }
@@ -304,24 +317,27 @@ impl Keystore {
         cert: &X509Ref,
         required: &Vec<CertPermissions>,
     ) -> anyhow::Result<()> {
-        let cert = self.get_permissions(cert)?;
+        let cert_permissions = self.get_permissions(cert)?;
 
-        if cert.contains(&CertPermissions::All)
+        if cert_permissions.contains(&CertPermissions::All)
             && (!required.contains(&CertPermissions::UnverifiedPermissionsChain)
-                || (required.contains(&CertPermissions::UnverifiedPermissionsChain)
-                    && cert.contains(&CertPermissions::UnverifiedPermissionsChain)))
+                || (cert_permissions.contains(&CertPermissions::UnverifiedPermissionsChain)
+                    && required.contains(&CertPermissions::UnverifiedPermissionsChain)))
         {
             return Ok(());
         }
 
-        if required.iter().all(|permission| cert.contains(permission)) {
+        if required
+            .iter()
+            .all(|permission| cert_permissions.contains(permission))
+        {
             return Ok(());
         }
 
         bail!(
             "Not sufficient permissions. Required: `{}`, but has only: `{}`",
             format_permissions(required),
-            format_permissions(&cert)
+            format_permissions(&cert_permissions)
         )
     }
 
@@ -340,11 +356,11 @@ impl Keystore {
             .ok_or_else(|| anyhow!("Issuer certificate not found in keystore"))
     }
 
-    fn decode_cert<S: AsRef<str>>(cert: S) -> anyhow::Result<X509> {
+    fn decode_cert_chain<S: AsRef<str>>(cert: S) -> anyhow::Result<Vec<X509>> {
         let cert = crate::decode_data(cert)?;
         Ok(match X509::from_der(&cert) {
-            Ok(cert) => cert,
-            Err(_) => X509::from_pem(&cert)?,
+            Ok(cert) => vec![cert],
+            Err(_) => X509::stack_from_pem(&cert)?,
         })
     }
 
@@ -366,8 +382,13 @@ impl PermissionsManager {
 
     pub fn set(&mut self, cert: &str, mut permissions: Vec<CertPermissions>) {
         if permissions.contains(&CertPermissions::All) {
+            let supports_unverified_permissions =
+                permissions.contains(&CertPermissions::UnverifiedPermissionsChain);
             permissions.clear();
             permissions.push(CertPermissions::All);
+            if supports_unverified_permissions {
+                permissions.push(CertPermissions::UnverifiedPermissionsChain);
+            }
         }
         self.permissions.insert(cert.to_string(), permissions);
     }
@@ -420,6 +441,10 @@ impl PermissionsManager {
     }
 
     fn leaf_certs(certs: &[X509]) -> Vec<X509> {
+        if certs.len() == 1 {
+            // when there is 1 cert it is a leaf cert
+            return certs.to_vec();
+        }
         certs
             .iter()
             .cloned()

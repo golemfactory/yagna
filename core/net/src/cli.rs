@@ -137,7 +137,8 @@ impl NetCommand {
                     .await
                     .map_err(anyhow::Error::msg)??;
 
-                let naive = NaiveDateTime::from_timestamp(node.seen.into(), 0);
+                let naive = NaiveDateTime::from_timestamp_opt(node.seen.into(), 0)
+                    .expect("Failed on out-of-range number of seconds");
                 let seen: DateTime<Utc> = DateTime::from_utc(naive, Utc);
 
                 CommandOutput::object(serde_json::json!({

@@ -13,7 +13,7 @@ name = "ya-provider"
 path = "src/main.rs"
 
 [dependencies]
-ya-agreement-utils = { version = "0.4" }
+ya-agreement-utils = { version = "0.4.1" }
 ya-manifest-utils = { version = "0.2" }
 ya-client = { version = "0.7", features = ['cli'] }
 ya-client-model = "0.5"
@@ -59,7 +59,7 @@ signal-hook = "0.3"
 structopt = "0.3.20"
 strum = "0.24"
 strum_macros = "0.24"
-sys-info = "0.7.0"
+sys-info = "0.8.0"
 thiserror = "1.0.14"
 tokio = { version = "1", features = ["process", "signal"] }
 tokio-stream = { version = "0.1.6", features = ["sync"] }

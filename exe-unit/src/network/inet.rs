@@ -23,8 +23,8 @@ use tokio_util::udp::UdpFramed;
 
 use net::connection::{Connection, ConnectionMeta};
 use net::interface::tap_iface;
-use net::smoltcp::wire::{IpAddress, IpCidr, IpEndpoint};
 use net::socket::SocketDesc;
+use net::ya_smoltcp::wire::{IpAddress, IpCidr, IpEndpoint};
 use net::{EgressReceiver, IngressEvent, IngressReceiver};
 use net::{Error as NetError, Protocol};
 
@@ -32,7 +32,7 @@ use ya_runtime_api::deploy::ContainerEndpoint;
 use ya_runtime_api::server::{CreateNetwork, NetworkInterface, RuntimeService};
 use ya_utils_networking::vpn::common::ntoh;
 use ya_utils_networking::vpn::stack as net;
-use ya_utils_networking::vpn::stack::smoltcp::wire::{EthernetAddress, HardwareAddress};
+use ya_utils_networking::vpn::stack::ya_smoltcp::wire::{EthernetAddress, HardwareAddress};
 use ya_utils_networking::vpn::stack::StackConfig;
 use ya_utils_networking::vpn::{
     EtherFrame, EtherType, IpPacket, PeekPacket, SocketEndpoint, TcpPacket, UdpPacket,
@@ -43,7 +43,8 @@ use crate::message::Shutdown;
 use crate::network::Endpoint;
 use crate::{Error, Result};
 
-const IP4_ADDRESS: Ipv4Addr = Ipv4Addr::new(9, 0, 0x0d, 0x01);
+// 10.0.0.0/8 is a reserved private address space
+const IP4_ADDRESS: Ipv4Addr = Ipv4Addr::new(10, 42, 42, 1);
 const IP6_ADDRESS: Ipv6Addr = IP4_ADDRESS.to_ipv6_mapped();
 const TCP_KEEP_ALIVE: Duration = Duration::from_secs(30);
 const DEFAULT_MAX_PACKET_SIZE: usize = 65536;

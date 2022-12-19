@@ -25,8 +25,13 @@ pub(crate) mod store;
 use crate::db::dao::{DemandDao, DemandState};
 use error::{MatcherError, MatcherInitError, QueryOfferError, QueryOffersError};
 use futures::FutureExt;
+use log::debug;
 use resolver::Resolver;
 use store::SubscriptionStore;
+use ya_core_model::net::local::{
+    BindBroadcastError, BroadcastMessage, NewNeighbour, SendBroadcastMessage,
+};
+use ya_net::bind_broadcast_with_caller;
 
 /// Stores proposal generated from resolver.
 #[derive(Debug)]
@@ -109,10 +114,30 @@ impl Matcher {
         tokio::task::spawn_local(cyclic::bcast_offers(self.clone()));
         tokio::task::spawn_local(cyclic::bcast_unsubscribes(self.clone()));
 
+        self.bind_neighbourhood_bcast(local_prefix).await.ok();
+
         self.bind_expiration_tracker()
             .await
             .map_err(|e| MatcherInitError::ExpirationTrackerError(e.to_string()))?;
+
         Ok(())
+    }
+
+    async fn bind_neighbourhood_bcast(&self, local_prefix: &str) -> Result<(), BindBroadcastError> {
+        let bcast_address = format!("{local_prefix}/{}", NewNeighbour::TOPIC);
+        let myself = self.clone();
+        bind_broadcast_with_caller(
+            &bcast_address,
+            move |caller, _msg: SendBroadcastMessage<NewNeighbour>| {
+                let myself = myself.clone();
+                async move {
+                    debug!("Received new neighbour broadcast from [{}].", &caller);
+                    cyclic::bcast_offers_once(myself.clone()).await;
+                    Ok(())
+                }
+            },
+        )
+        .await
     }
 
     pub async fn bind_expiration_tracker(&self) -> anyhow::Result<()> {

@@ -8,6 +8,7 @@ use structopt::{clap, StructOpt};
 
 mod appkey;
 mod command;
+mod manifest;
 mod platform;
 mod service;
 mod settings;
@@ -30,6 +31,9 @@ enum SettingsCommand {
 enum Commands {
     #[structopt(setting = clap::AppSettings::Hidden)]
     Setup(setup::RunConfig),
+
+    #[structopt(setting = clap::AppSettings::Hidden)]
+    ManifestBundle(manifest::ManifestBundleCommand),
 
     /// Run the golem provider
     Run(setup::RunConfig),
@@ -105,8 +109,9 @@ async fn my_main() -> Result</*exit code*/ i32> {
             );
             Ok(0)
         }
+        Commands::ManifestBundle(command) => manifest::manifest_bundle(command).await,
         Commands::Other(args) => {
-            let cmd = crate::command::YaCommand::new()?;
+            let cmd = command::YaCommand::new()?;
             match cmd.yagna()?.forward(args).await? {
                 1 => {
                     let mut clap = Commands::clap();

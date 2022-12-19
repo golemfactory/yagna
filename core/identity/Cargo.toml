@@ -11,7 +11,7 @@ ya-core-model = { version = "^0.8", features = ["identity", "appkey"] }
 ya-persistence = "0.3"
 ya-service-api = "0.1"
 ya-service-api-interfaces = "0.2"
-ya-service-bus = "0.6"
+ya-service-bus = "0.6.1"
 
 anyhow = "1.0"
 appdirs = "0.2"
@@ -37,7 +37,7 @@ yansi = "0.5.0"
 
 [dev-dependencies]
 ya-service-api-derive = "0.2"
-ya-sb-router = "0.6"
+ya-sb-router = "0.6.1"
 
 actix-rt = "2.7"
 actix-service = "2"

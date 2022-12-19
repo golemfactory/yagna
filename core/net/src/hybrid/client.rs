@@ -195,3 +195,8 @@ proxy!(
     session_metrics,
     |client: Client| async move { client.session_metrics().await }
 );
+proxy!(
+    InvalidateNeighbourhoodCache -> (),
+    invalidate_neighbourhood_cache,
+    |client: Client| async move { client.invalidate_neighbourhood_cache().await }
+);
