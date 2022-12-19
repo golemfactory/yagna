@@ -29,6 +29,7 @@ pub struct AppKey {
     pub key: String,
     pub identity_id: NodeId,
     pub created_date: NaiveDateTime,
+    pub allow_origin: Option<String>,
 }
 
 #[derive(Queryable, Debug, Identifiable)]

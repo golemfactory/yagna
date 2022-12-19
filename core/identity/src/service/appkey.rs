@@ -103,6 +103,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                 role: role.name,
                 identity: appkey.identity_id,
                 created_date: appkey.created_date,
+                allow_origin: appkey.allow_origin,
             };
 
             let _ = create_tx.send(model::event::Event::NewKey(appkey)).await;
@@ -138,6 +139,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                     role: model::DEFAULT_ROLE.to_string(),
                     identity: node_id,
                     created_date: start_datetime,
+                    allow_origin: None,
                 })
             } else {
                 let (appkey, role) = db
@@ -152,6 +154,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                     role: role.name,
                     identity: appkey.identity_id,
                     created_date: appkey.created_date,
+                    allow_origin: appkey.allow_origin,
                 })
             }
         }
@@ -177,6 +180,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                     role: role.name,
                     identity: app_key.identity_id,
                     created_date: app_key.created_date,
+                    allow_origin: app_key.allow_origin,
                 })
                 .collect();
 

@@ -92,10 +92,17 @@ impl AppKeyCors {
 
         let _ = bus::bind(&endpoint, move |event: model::event::Event| {
             let this = this.clone();
+
             async move {
                 match event {
-                    model::event::Event::NewKey(appkey) => this.update(&appkey.key, None),
-                    model::event::Event::DroppedKey(appkey) => this.update(&appkey.key, None),
+                    model::event::Event::NewKey(appkey) => {
+                        log::debug!("Updating CORS for app-key: {}, origin: ", appkey.name);
+                        this.update(&appkey.key, None)
+                    },
+                    model::event::Event::DroppedKey(appkey) => {
+                        log::debug!("Removing CORS for app-key: {}", appkey.name);
+                        this.update(&appkey.key, None)
+                    },
                 };
                 Ok(())
             }
@@ -111,11 +118,15 @@ impl AppKeyCors {
         match key {
             Some(key) => match self.get(&key) {
                 None => false,
-                Some(domains) => {
+                Some(domain) => {
                     if let Some(origin) = request.headers().get(header::ORIGIN) {
-                        //TODO: no unwrap
-                        if domains == origin.to_str().unwrap() {
-                            return true;
+                        if let Ok(origin) = origin.to_str() {
+                            if origin == "*" {
+                                return true;
+                            }
+                            if domain == origin {
+                                return true;
+                            }
                         }
                     }
                     false

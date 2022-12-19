@@ -97,6 +97,7 @@ impl AppKeyCommand {
                         "id".into(),
                         "role".into(),
                         "created".into(),
+                        "allowOrigin".into(),
                     ],
                     values: result
                         .0
@@ -104,7 +105,7 @@ impl AppKeyCommand {
                         .map(|app_key| {
                             serde_json::json! {[
                                 app_key.name, app_key.key, app_key.identity,
-                                app_key.role, app_key.created_date
+                                app_key.role, app_key.created_date, app_key.allow_origin.unwrap_or("".to_string()),
                             ]}
                         })
                         .collect(),
