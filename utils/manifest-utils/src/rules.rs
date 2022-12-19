@@ -65,7 +65,6 @@ impl RuleStore {
         self.save()
     }
 
-    //TODO Rafał Better api to be used
     pub fn set_default_audited_payload_mode(&self, mode: Mode) -> Result<()> {
         self.config
             .write()

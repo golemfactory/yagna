@@ -103,7 +103,7 @@ impl From<PolicyConfig> for ManifestSignature {
         };
 
         let whitelist_matcher = config.domain_patterns.matchers.clone();
-        //TODO Rafał these Defaults should be errors
+        //TODO Nones should be errors or config should not wrap stores inside Option
         let keystore = config.trusted_keys.unwrap_or_default();
         let rulestore = config.rules_config.unwrap_or_default();
         ManifestSignature {
