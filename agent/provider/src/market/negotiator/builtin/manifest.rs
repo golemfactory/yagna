@@ -28,8 +28,7 @@ impl NegotiatorComponent for ManifestSignature {
         demand: &ProposalView,
         offer: ProposalView,
     ) -> anyhow::Result<NegotiationResult> {
-        let settings = self.rulestore.get_default_outbound_settings();
-        if self.enabled.not() || settings.everyone == Mode::All {
+        if self.enabled.not() || self.rulestore.always_accept_outbound() {
             log::trace!("Manifest signature verification disabled.");
             return acceptance(offer);
         }
