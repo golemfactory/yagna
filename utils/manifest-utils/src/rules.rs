@@ -59,15 +59,10 @@ impl RuleStore {
         *self.config.write().unwrap() = store;
     }
 
-    //TODO Rafał better interface without two separate functions
     pub fn set_everyone_mode(&self, mode: Mode) -> Result<()> {
         self.config.write().unwrap().outbound.everyone = mode;
 
         self.save()
-    }
-
-    pub fn get_everyone_mode(&self) -> Mode {
-        self.config.read().unwrap().outbound.everyone.clone()
     }
 
     //TODO Rafał Better api to be used
@@ -81,6 +76,15 @@ impl RuleStore {
             .mode = mode;
 
         self.save()
+    }
+
+    pub fn get_default_outbound_settings(&self) -> OutboundSettings {
+        let cfg = &self.config.read().unwrap().outbound;
+        OutboundSettings {
+            enabled: cfg.enabled,
+            everyone: cfg.everyone.clone(),
+            audited_payload: cfg.audited_payload.default.mode.clone(),
+        }
     }
 
     pub fn print(&self) -> Result<()> {
@@ -102,7 +106,7 @@ impl Default for RulesConfig {
     fn default() -> Self {
         Self {
             outbound: OutboundConfig {
-                blocked: false,
+                enabled: true,
                 everyone: Mode::None,
                 audited_payload: CertRules {
                     default: CertRule {
@@ -118,9 +122,16 @@ impl Default for RulesConfig {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct OutboundConfig {
-    blocked: bool,
+    enabled: bool,
     everyone: Mode,
     audited_payload: CertRules,
+}
+
+#[derive(Clone, Debug)]
+pub struct OutboundSettings {
+    pub enabled: bool,
+    pub everyone: Mode,
+    pub audited_payload: Mode,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
