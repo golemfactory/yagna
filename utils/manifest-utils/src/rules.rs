@@ -110,7 +110,7 @@ impl Default for RulesConfig {
                 audited_payload: CertRules {
                     default: CertRule {
                         mode: Mode::All,
-                        subject: String::new(),
+                        description: "Default setting".into(),
                     },
                 },
             },
@@ -126,13 +126,6 @@ pub struct OutboundConfig {
     audited_payload: CertRules,
 }
 
-#[derive(Clone, Debug)]
-pub struct OutboundSettings {
-    pub enabled: bool,
-    pub everyone: Mode,
-    pub audited_payload: Mode,
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CertRules {
     default: CertRule,
@@ -141,7 +134,7 @@ pub struct CertRules {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CertRule {
     mode: Mode,
-    subject: String,
+    description: String,
 }
 
 #[derive(StructOpt, Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
