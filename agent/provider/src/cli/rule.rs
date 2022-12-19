@@ -43,10 +43,6 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
             None => rules.set_default_audited_payload_mode(mode),
         },
     }
-
-    rules.save()?;
-
-    Ok(())
 }
 
 fn list(config: ProviderConfig) -> Result<()> {

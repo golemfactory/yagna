@@ -37,7 +37,7 @@ impl RuleStore {
         }
     }
 
-    pub fn save(&self) -> Result<()> {
+    fn save(&self) -> Result<()> {
         Ok(std::fs::write(
             &self.path,
             serde_json::to_string_pretty(&*self.config.read().unwrap())?,
@@ -60,8 +60,10 @@ impl RuleStore {
     }
 
     //TODO Rafał better interface without two separate functions
-    pub fn set_everyone_mode(&self, mode: Mode) {
+    pub fn set_everyone_mode(&self, mode: Mode) -> Result<()> {
         self.config.write().unwrap().outbound.everyone = mode;
+
+        self.save()
     }
 
     pub fn get_everyone_mode(&self) -> Mode {
@@ -69,7 +71,7 @@ impl RuleStore {
     }
 
     //TODO Rafał Better api to be used
-    pub fn set_default_audited_payload_mode(&self, mode: Mode) {
+    pub fn set_default_audited_payload_mode(&self, mode: Mode) -> Result<()> {
         self.config
             .write()
             .unwrap()
@@ -77,6 +79,8 @@ impl RuleStore {
             .audited_payload
             .default
             .mode = mode;
+
+        self.save()
     }
 
     pub fn print(&self) -> Result<()> {
