@@ -3,7 +3,6 @@ use anyhow::{anyhow, Error};
 use futures::{FutureExt, StreamExt, TryFutureExt};
 use ya_client::net::NetApi;
 use ya_manifest_utils::matching::domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher};
-use ya_manifest_utils::rules::RuleStore;
 
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
@@ -30,6 +29,7 @@ use crate::market::negotiator::builtin::manifest::PolicyStruct;
 use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{AccountView, LinearPricingOffer, Payments, PricingOffer};
+use crate::rules::RuleStore;
 use crate::startup_config::{
     FileMonitor, FileMonitorConfig, NodeConfig, ProviderConfig, RunConfig,
 };
