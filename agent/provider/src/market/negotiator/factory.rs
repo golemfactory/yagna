@@ -2,10 +2,10 @@ use actix::Addr;
 use humantime;
 use std::sync::Arc;
 use structopt::StructOpt;
-use ya_manifest_utils::policy::PolicyStruct;
 
 use ya_manifest_utils::PolicyConfig;
 
+use super::builtin::manifest::PolicyStruct;
 use super::common::NegotiatorAddr;
 use crate::market::config::MarketConfig;
 use crate::market::negotiator::{AcceptAllNegotiator, CompositeNegotiator};

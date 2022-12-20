@@ -17,8 +17,6 @@ use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 use strum::{Display, EnumIter, EnumString, EnumVariantNames, IntoEnumIterator, VariantNames};
 
-use crate::matching::domain::DomainWhitelistState;
-use crate::rules::RuleStore;
 use crate::util::{cert_to_id, format_permissions, CertBasicDataVisitor, X509Visitor};
 
 pub(crate) const PERMISSIONS_FILE: &str = "cert-permissions.json";
@@ -45,14 +43,6 @@ pub struct PolicyConfig {
         parse(try_from_str = parse_property_match),
     )]
     pub policy_trust_property: Vec<(String, Match)>,
-}
-
-//TODO Rafał Rename
-#[derive(Clone, Debug, Default)]
-pub struct PolicyStruct {
-    pub trusted_keys: Keystore,
-    pub domain_patterns: DomainWhitelistState, //TODO Rafał Is is used?
-    pub rules_config: RuleStore,
 }
 
 impl PolicyConfig {

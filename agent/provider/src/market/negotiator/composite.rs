@@ -5,8 +5,8 @@ use serde_json::Value;
 use ya_agreement_utils::agreement::{expand, flatten_value};
 use ya_agreement_utils::AgreementView;
 use ya_client::model::market::NewOffer;
-use ya_manifest_utils::policy::PolicyStruct;
 
+use super::builtin::manifest::PolicyStruct;
 use super::builtin::{
     DebitNoteInterval, LimitExpiration, ManifestSignature, MaxAgreements, PaymentTimeout,
 };

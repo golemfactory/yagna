@@ -11,7 +11,6 @@ use std::convert::TryFrom;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::time::timeout;
-use ya_manifest_utils::policy::PolicyStruct;
 
 use ya_agreement_utils::{AgreementView, OfferDefinition};
 use ya_client::market::MarketProviderApi;
@@ -27,6 +26,7 @@ use ya_utils_actix::{
     forward_actix_handler,
 };
 
+use super::negotiator::builtin::manifest::PolicyStruct;
 use super::negotiator::factory;
 use super::negotiator::{AgreementResponse, AgreementResult, NegotiatorAddr, ProposalResponse};
 use super::Preset;
