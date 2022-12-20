@@ -5,6 +5,7 @@ use serde_json::Value;
 use ya_agreement_utils::agreement::{expand, flatten_value};
 use ya_agreement_utils::AgreementView;
 use ya_client::model::market::NewOffer;
+use ya_manifest_utils::policy::PolicyStruct;
 
 use super::builtin::{
     DebitNoteInterval, LimitExpiration, ManifestSignature, MaxAgreements, PaymentTimeout,
@@ -27,6 +28,7 @@ impl CompositeNegotiator {
     pub fn new(
         _market: Addr<ProviderMarket>,
         config: &CompositeNegotiatorConfig,
+        x: PolicyStruct,
     ) -> anyhow::Result<CompositeNegotiator> {
         let components = NegotiatorsPack::default()
             .add_component(
@@ -47,7 +49,7 @@ impl CompositeNegotiator {
             )
             .add_component(
                 "ManifestSignature",
-                Box::new(ManifestSignature::from(config.policy_config.clone())),
+                Box::new(ManifestSignature::new(&config.policy_config.clone(), x)),
             );
 
         Ok(CompositeNegotiator { components })

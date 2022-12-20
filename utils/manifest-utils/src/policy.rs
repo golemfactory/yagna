@@ -45,12 +45,14 @@ pub struct PolicyConfig {
         parse(try_from_str = parse_property_match),
     )]
     pub policy_trust_property: Vec<(String, Match)>,
-    #[structopt(skip)]
-    pub trusted_keys: Option<Keystore>,
-    #[structopt(skip)]
-    pub domain_patterns: DomainWhitelistState,
-    #[structopt(skip)]
-    pub rules_config: Option<RuleStore>,
+}
+
+//TODO Rafał Rename
+#[derive(Clone, Debug, Default)]
+pub struct PolicyStruct {
+    pub trusted_keys: Keystore,
+    pub domain_patterns: DomainWhitelistState, //TODO Rafał Is is used?
+    pub rules_config: RuleStore,
 }
 
 impl PolicyConfig {

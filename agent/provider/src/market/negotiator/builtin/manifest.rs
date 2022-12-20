@@ -5,7 +5,9 @@ use url::Url;
 use ya_agreement_utils::{Error, OfferDefinition};
 use ya_manifest_utils::matching::domain::SharedDomainMatchers;
 use ya_manifest_utils::matching::Matcher;
-use ya_manifest_utils::policy::{CertPermissions, Keystore, Match, Policy, PolicyConfig};
+use ya_manifest_utils::policy::{
+    CertPermissions, Keystore, Match, Policy, PolicyConfig, PolicyStruct,
+};
 use ya_manifest_utils::rules::RuleStore;
 use ya_manifest_utils::{
     decode_manifest, AppManifest, Feature, CAPABILITIES_PROPERTY,
@@ -82,8 +84,8 @@ impl NegotiatorComponent for ManifestSignature {
     }
 }
 
-impl From<PolicyConfig> for ManifestSignature {
-    fn from(config: PolicyConfig) -> Self {
+impl ManifestSignature {
+    pub fn new(config: &PolicyConfig, x: PolicyStruct) -> Self {
         let policies = config.policy_set();
         let properties = config.trusted_property_map();
 
@@ -100,10 +102,10 @@ impl From<PolicyConfig> for ManifestSignature {
             }
         };
 
-        let whitelist_matcher = config.domain_patterns.matchers.clone();
+        let whitelist_matcher = x.domain_patterns.matchers.clone();
         //TODO Nones should be errors or config should not wrap stores inside Option
-        let keystore = config.trusted_keys.unwrap_or_default();
-        let rulestore = config.rules_config.unwrap_or_default();
+        let keystore = x.trusted_keys;
+        let rulestore = x.rules_config;
         ManifestSignature {
             enabled,
             keystore,
@@ -225,7 +227,9 @@ mod tests {
 
     fn build_policy<S: AsRef<str>>(args: S) -> ManifestSignature {
         let arguments = shlex::split(args.as_ref()).expect("failed to parse arguments");
-        PolicyConfig::from_iter(arguments).into()
+        //TODO Rafał
+        todo!()
+        // PolicyConfig::from_iter(arguments).into()
     }
 
     #[test]

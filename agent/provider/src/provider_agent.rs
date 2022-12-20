@@ -3,6 +3,7 @@ use anyhow::{anyhow, Error};
 use futures::{FutureExt, StreamExt, TryFutureExt};
 use ya_client::net::NetApi;
 use ya_manifest_utils::matching::domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher};
+use ya_manifest_utils::policy::PolicyStruct;
 use ya_manifest_utils::rules::RuleStore;
 
 use std::convert::TryFrom;
@@ -192,10 +193,6 @@ impl ProviderAgent {
         args.market.session_id = format!("{}-{}", name, std::process::id());
         args.runner.session_id = args.market.session_id.clone();
         args.payment.session_id = args.market.session_id.clone();
-        let policy_config = &mut args.market.negotiator_config.composite_config.policy_config;
-        policy_config.trusted_keys = Some(keystore.clone());
-        policy_config.rules_config = Some(rulestore.clone());
-
         let networks = args.node.account.networks.clone();
         for n in networks.iter() {
             let net_color = match n {
@@ -215,13 +212,17 @@ impl ProviderAgent {
         presets.spawn_monitor(&config.presets_file)?;
         let mut hardware = hardware::Manager::try_new(&config)?;
         hardware.spawn_monitor(&config.hardware_file)?;
-        let keystore_monitor = spawn_keystore_monitor(cert_dir, keystore)?;
-        let rulestore_monitor = spawn_rulestore_monitor(rulestore)?;
+        let keystore_monitor = spawn_keystore_monitor(cert_dir, keystore.clone())?;
+        let rulestore_monitor = spawn_rulestore_monitor(rulestore.clone())?;
         let mut domain_whitelist = WhitelistManager::try_new(&config.domain_whitelist_file)?;
         domain_whitelist.spawn_monitor(&config.domain_whitelist_file)?;
-        policy_config.domain_patterns = domain_whitelist.get_state();
 
-        let market = ProviderMarket::new(api.market, args.market).start();
+        let x = PolicyStruct {
+            trusted_keys: keystore,
+            domain_patterns: domain_whitelist.get_state(),
+            rules_config: rulestore,
+        };
+        let market = ProviderMarket::new(api.market, args.market, x).start();
         let payments = Payments::new(api.activity.clone(), api.payment, args.payment).start();
         let runner = TaskRunner::new(api.activity, args.runner, registry, data_dir)?.start();
         let task_manager =

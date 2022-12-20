@@ -11,6 +11,7 @@ use std::convert::TryFrom;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::time::timeout;
+use ya_manifest_utils::policy::PolicyStruct;
 
 use ya_agreement_utils::{AgreementView, OfferDefinition};
 use ya_client::market::MarketProviderApi;
@@ -115,6 +116,7 @@ pub struct ProviderMarket {
     subscriptions: HashMap<String, Subscription>,
     postponed_demands: Vec<SubscriptionProposal>,
     config: Arc<MarketConfig>,
+    x: Arc<PolicyStruct>,
 
     /// External actors can listen on this signal.
     pub agreement_signed_signal: SignalSlot<NewAgreement>,
@@ -137,13 +139,14 @@ impl ProviderMarket {
     // Initialization
     // =========================================== //
 
-    pub fn new(api: MarketProviderApi, config: MarketConfig) -> ProviderMarket {
+    pub fn new(api: MarketProviderApi, config: MarketConfig, x: PolicyStruct) -> ProviderMarket {
         ProviderMarket {
-            api: Arc::new(api),
             negotiator: Arc::new(NegotiatorAddr::default()),
-            config: Arc::new(config),
+            api: Arc::new(api),
             subscriptions: HashMap::new(),
             postponed_demands: Vec::new(),
+            config: Arc::new(config),
+            x: Arc::new(x),
             agreement_signed_signal: SignalSlot::<NewAgreement>::default(),
             agreement_terminated_signal: SignalSlot::<CloseAgreement>::default(),
             handles: HashMap::new(),
@@ -592,7 +595,7 @@ impl Actor for ProviderMarket {
             ctx.spawn(collect_agreement_events(actx).into_actor(self)),
         );
 
-        self.negotiator = factory::create_negotiator(ctx.address(), &self.config);
+        self.negotiator = factory::create_negotiator(ctx.address(), &self.config, &self.x);
     }
 }
 

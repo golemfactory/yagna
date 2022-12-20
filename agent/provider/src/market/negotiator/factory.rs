@@ -2,6 +2,7 @@ use actix::Addr;
 use humantime;
 use std::sync::Arc;
 use structopt::StructOpt;
+use ya_manifest_utils::policy::PolicyStruct;
 
 use ya_manifest_utils::PolicyConfig;
 
@@ -78,10 +79,16 @@ pub struct NegotiatorsConfig {
 pub fn create_negotiator(
     market: Addr<ProviderMarket>,
     config: &MarketConfig,
+    x: &PolicyStruct,
 ) -> Arc<NegotiatorAddr> {
     let negotiator = match &config.negotiator_type[..] {
         "Composite" => NegotiatorAddr::from(
-            CompositeNegotiator::new(market, &config.negotiator_config.composite_config).unwrap(),
+            CompositeNegotiator::new(
+                market,
+                &config.negotiator_config.composite_config,
+                x.clone(),
+            )
+            .unwrap(),
         ),
         "AcceptAll" => NegotiatorAddr::from(AcceptAllNegotiator::default()),
         _ => Default::default(),
