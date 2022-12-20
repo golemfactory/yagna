@@ -227,9 +227,14 @@ mod tests {
 
     fn build_policy<S: AsRef<str>>(args: S) -> ManifestSignature {
         let arguments = shlex::split(args.as_ref()).expect("failed to parse arguments");
-        //TODO Rafał
-        todo!()
-        // PolicyConfig::from_iter(arguments).into()
+        ManifestSignature::new(
+            &PolicyConfig::from_iter(arguments).into(),
+            PolicyStruct {
+                trusted_keys: Default::default(),
+                domain_patterns: Default::default(),
+                rules_config: Default::default(),
+            },
+        )
     }
 
     #[test]

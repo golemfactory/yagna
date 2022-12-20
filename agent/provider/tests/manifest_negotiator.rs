@@ -12,7 +12,8 @@ use test_case::test_case;
 use ya_agreement_utils::AgreementView;
 use ya_manifest_test_utils::{load_certificates_from_dir, TestResources};
 use ya_manifest_utils::matching::domain::{DomainPatterns, DomainWhitelistState};
-use ya_manifest_utils::policy::CertPermissions;
+use ya_manifest_utils::policy::{CertPermissions, PolicyStruct};
+use ya_manifest_utils::rules::RuleStore;
 use ya_manifest_utils::{Keystore, Policy, PolicyConfig};
 use ya_provider::market::negotiator::builtin::ManifestSignature;
 use ya_provider::market::negotiator::*;
@@ -331,12 +332,19 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
             provider_certs_permissions,
         );
     }
+
     let keystore = Keystore::load(&test_cert_dir).expect("Can load test certificates");
 
-    let mut config = create_manifest_signature_validating_policy_config();
-    config.domain_patterns = whitelist_state;
-    config.trusted_keys = Some(keystore);
-    let mut manifest_negotiator = ManifestSignature::from(config);
+    let rules_file = test_cert_dir.join("rules.json");
+    let rulestore = RuleStore::load_or_create(&rules_file).expect("Can't load RuleStore");
+
+    let config = create_manifest_signature_validating_policy_config();
+    let x = PolicyStruct {
+        trusted_keys: keystore,
+        domain_patterns: whitelist_state,
+        rules_config: rulestore,
+    };
+    let mut manifest_negotiator = ManifestSignature::new(&config, x);
     // Current implementation does not verify content of certificate permissions incoming in demand.
 
     let demand = create_demand_json(
