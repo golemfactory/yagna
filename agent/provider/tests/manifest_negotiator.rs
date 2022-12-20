@@ -12,9 +12,10 @@ use test_case::test_case;
 use ya_agreement_utils::AgreementView;
 use ya_manifest_test_utils::{load_certificates_from_dir, TestResources};
 use ya_manifest_utils::matching::domain::{DomainPatterns, DomainWhitelistState};
-use ya_manifest_utils::policy::{CertPermissions, PolicyStruct};
+use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::rules::RuleStore;
 use ya_manifest_utils::{Keystore, Policy, PolicyConfig};
+use ya_provider::market::negotiator::builtin::manifest::PolicyStruct;
 use ya_provider::market::negotiator::builtin::ManifestSignature;
 use ya_provider::market::negotiator::*;
 
