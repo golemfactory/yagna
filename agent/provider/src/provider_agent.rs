@@ -3,6 +3,7 @@ use anyhow::{anyhow, Error};
 use futures::{FutureExt, StreamExt, TryFutureExt};
 use ya_client::net::NetApi;
 use ya_manifest_utils::matching::domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher};
+use ya_manifest_utils::rules::RuleStore;
 
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
