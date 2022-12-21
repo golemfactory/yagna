@@ -18,6 +18,7 @@ use structopt::StructOpt;
 use strum::{Display, EnumIter, EnumString, EnumVariantNames, IntoEnumIterator, VariantNames};
 
 use crate::matching::domain::DomainWhitelistState;
+use crate::rules::RuleStore;
 use crate::util::{cert_to_id, format_permissions, CertBasicDataVisitor, X509Visitor};
 
 pub(crate) const PERMISSIONS_FILE: &str = "cert-permissions.json";
@@ -48,6 +49,8 @@ pub struct PolicyConfig {
     pub trusted_keys: Option<Keystore>,
     #[structopt(skip)]
     pub domain_patterns: DomainWhitelistState,
+    #[structopt(skip)]
+    pub rules_config: Option<RuleStore>,
 }
 
 impl PolicyConfig {

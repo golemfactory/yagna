@@ -3,6 +3,7 @@ use anyhow::{anyhow, Error};
 use futures::{FutureExt, StreamExt, TryFutureExt};
 use ya_client::net::NetApi;
 use ya_manifest_utils::matching::domain::{DomainPatterns, DomainWhitelistState, DomainsMatcher};
+use ya_manifest_utils::rules::RuleStore;
 
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
@@ -129,6 +130,7 @@ pub struct ProviderAgent {
     log_handler: LoggerHandle,
     networks: Vec<NetworkName>,
     keystore_monitor: FileMonitor,
+    rulestore_monitor: FileMonitor,
     net_api: NetApi,
     domain_whitelist: WhitelistManager,
 }
@@ -185,11 +187,14 @@ impl ProviderAgent {
         let cert_dir = config.cert_dir_path()?;
         let keystore = load_keystore(&cert_dir)?;
 
+        let rulestore = RuleStore::load_or_create(&config.rules_file)?;
+
         args.market.session_id = format!("{}-{}", name, std::process::id());
         args.runner.session_id = args.market.session_id.clone();
         args.payment.session_id = args.market.session_id.clone();
         let policy_config = &mut args.market.negotiator_config.composite_config.policy_config;
         policy_config.trusted_keys = Some(keystore.clone());
+        policy_config.rules_config = Some(rulestore.clone());
 
         let networks = args.node.account.networks.clone();
         for n in networks.iter() {
@@ -211,6 +216,7 @@ impl ProviderAgent {
         let mut hardware = hardware::Manager::try_new(&config)?;
         hardware.spawn_monitor(&config.hardware_file)?;
         let keystore_monitor = spawn_keystore_monitor(cert_dir, keystore)?;
+        let rulestore_monitor = spawn_rulestore_monitor(rulestore)?;
         let mut domain_whitelist = WhitelistManager::try_new(&config.domain_whitelist_file)?;
         domain_whitelist.spawn_monitor(&config.domain_whitelist_file)?;
         policy_config.domain_patterns = domain_whitelist.get_state();
@@ -233,6 +239,7 @@ impl ProviderAgent {
             log_handler,
             networks,
             keystore_monitor,
+            rulestore_monitor,
             net_api,
             domain_whitelist,
         })
@@ -498,6 +505,22 @@ fn spawn_keystore_monitor<P: AsRef<Path>>(
     Ok(monitor)
 }
 
+fn spawn_rulestore_monitor(rulestore: RuleStore) -> Result<FileMonitor, Error> {
+    let path = rulestore.path.clone();
+    let handler = move |p: PathBuf| match rulestore.reload() {
+        Ok(()) => {
+            log::info!("rulestore updated from {}", p.display());
+        }
+        Err(e) => log::warn!("Error updating rulestore from {}: {e}", p.display()),
+    };
+    let monitor = FileMonitor::spawn_with(
+        path,
+        FileMonitor::on_modified(handler),
+        FileMonitorConfig::silent(),
+    )?;
+    Ok(monitor)
+}
+
 impl Actor for ProviderAgent {
     type Context = Context<Self>;
 
@@ -591,6 +614,7 @@ impl Handler<Shutdown> for ProviderAgent {
         let runner = self.runner.clone();
         let log_handler = self.log_handler.clone();
         self.keystore_monitor.stop();
+        self.rulestore_monitor.stop();
         self.domain_whitelist.stop();
 
         async move {
