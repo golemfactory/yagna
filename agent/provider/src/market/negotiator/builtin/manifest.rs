@@ -6,7 +6,6 @@ use ya_agreement_utils::{Error, OfferDefinition};
 use ya_manifest_utils::matching::domain::{DomainWhitelistState, SharedDomainMatchers};
 use ya_manifest_utils::matching::Matcher;
 use ya_manifest_utils::policy::{CertPermissions, Keystore, Match, Policy, PolicyConfig};
-use ya_manifest_utils::rules::RuleStore;
 use ya_manifest_utils::{
     decode_manifest, AppManifest, Feature, CAPABILITIES_PROPERTY,
     DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
@@ -109,10 +108,10 @@ impl ManifestSignature {
             }
         };
 
-        let whitelist_matcher = config.domain_patterns.matchers.clone();
+        let whitelist_matcher = x.domain_patterns.matchers.clone();
         //TODO Nones should be errors or config should not wrap stores inside Option
-        let keystore = config.trusted_keys.unwrap_or_default();
-        let rulestore = config.rules_config.unwrap_or_default();
+        let keystore = x.trusted_keys;
+        let rulestore = x.rules_config;
         ManifestSignature {
             enabled,
             keystore,

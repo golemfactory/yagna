@@ -1,7 +1,6 @@
 pub mod manifest;
 pub mod matching;
 pub mod policy;
-pub mod rules;
 pub mod util;
 
 pub use manifest::*;
