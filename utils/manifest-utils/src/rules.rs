@@ -8,6 +8,7 @@ use std::{
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
+use strum::Display;
 
 #[derive(Clone, Debug, Default)]
 pub struct RuleStore {
@@ -18,7 +19,7 @@ pub struct RuleStore {
 impl RuleStore {
     pub fn load_or_create(rules_file: &Path) -> Result<Self> {
         if rules_file.exists() {
-            log::debug!("Loading rule from: {:?}", rules_file);
+            log::debug!("Loading rule from: {}", rules_file.display());
             let file = OpenOptions::new().read(true).open(rules_file)?;
 
             Ok(Self {
@@ -40,7 +41,7 @@ impl RuleStore {
     }
 
     fn save(&self) -> Result<()> {
-        log::debug!("Saving RuleStore to: {:?}", self.path);
+        log::debug!("Saving RuleStore to: {}", self.path.display());
         Ok(std::fs::write(
             &self.path,
             serde_json::to_string_pretty(&*self.config.read().unwrap())?,
@@ -48,7 +49,7 @@ impl RuleStore {
     }
 
     pub fn reload(&self) -> Result<()> {
-        log::debug!("Reloading RuleStore from: {:?}", self.path);
+        log::debug!("Reloading RuleStore from: {}", self.path.display());
         let new_rule_store = Self::load_or_create(&self.path)?;
 
         self.replace(new_rule_store);
@@ -63,14 +64,14 @@ impl RuleStore {
     }
 
     pub fn set_everyone_mode(&self, mode: Mode) -> Result<()> {
-        log::debug!("Setting outbound everyone mode: {:?}", mode);
+        log::debug!("Setting outbound everyone mode: {mode}");
         self.config.write().unwrap().outbound.everyone = mode;
 
         self.save()
     }
 
     pub fn set_default_audited_payload_mode(&self, mode: Mode) -> Result<()> {
-        log::debug!("Setting outbound audited_payload default mode: {:?}", mode);
+        log::debug!("Setting outbound audited_payload default mode: {mode}");
         self.config
             .write()
             .unwrap()
@@ -137,7 +138,7 @@ pub struct CertRule {
     description: String,
 }
 
-#[derive(StructOpt, Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(StructOpt, Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Display)]
 #[serde(rename_all = "kebab-case")]
 pub enum Mode {
     All,
