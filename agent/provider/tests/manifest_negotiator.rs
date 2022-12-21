@@ -14,9 +14,9 @@ use ya_manifest_test_utils::{load_certificates_from_dir, TestResources};
 use ya_manifest_utils::matching::domain::{DomainPatterns, DomainWhitelistState};
 use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::{Keystore, Policy, PolicyConfig};
-use ya_provider::market::negotiator::builtin::manifest::PolicyStruct;
 use ya_provider::market::negotiator::builtin::ManifestSignature;
 use ya_provider::market::negotiator::*;
+use ya_provider::provider_agent::AgentNegotiatorsConfig;
 use ya_provider::rules::RuleStore;
 
 static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
@@ -340,7 +340,7 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
     let rulestore = RuleStore::load_or_create(&rules_file).expect("Can't load RuleStore");
 
     let config = create_manifest_signature_validating_policy_config();
-    let x = PolicyStruct {
+    let x = AgentNegotiatorsConfig {
         trusted_keys: keystore,
         domain_patterns: whitelist_state,
         rules_config: rulestore,

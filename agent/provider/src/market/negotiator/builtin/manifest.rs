@@ -3,7 +3,7 @@ use std::ops::Not;
 
 use url::Url;
 use ya_agreement_utils::{Error, OfferDefinition};
-use ya_manifest_utils::matching::domain::{DomainWhitelistState, SharedDomainMatchers};
+use ya_manifest_utils::matching::domain::SharedDomainMatchers;
 use ya_manifest_utils::matching::Matcher;
 use ya_manifest_utils::policy::{CertPermissions, Keystore, Match, Policy, PolicyConfig};
 use ya_manifest_utils::{
@@ -13,15 +13,8 @@ use ya_manifest_utils::{
 };
 
 use crate::market::negotiator::*;
+use crate::provider_agent::AgentNegotiatorsConfig;
 use crate::rules::RuleStore;
-
-//TODO Rafał Rename
-#[derive(Clone, Debug, Default)]
-pub struct PolicyStruct {
-    pub trusted_keys: Keystore,
-    pub domain_patterns: DomainWhitelistState,
-    pub rules_config: RuleStore,
-}
 
 pub struct ManifestSignature {
     enabled: bool,
@@ -91,7 +84,7 @@ impl NegotiatorComponent for ManifestSignature {
 }
 
 impl ManifestSignature {
-    pub fn new(config: &PolicyConfig, x: PolicyStruct) -> Self {
+    pub fn new(config: &PolicyConfig, agent_negotiators_cfg: AgentNegotiatorsConfig) -> Self {
         let policies = config.policy_set();
         let properties = config.trusted_property_map();
 
@@ -108,15 +101,11 @@ impl ManifestSignature {
             }
         };
 
-        let whitelist_matcher = x.domain_patterns.matchers.clone();
-        //TODO Nones should be errors or config should not wrap stores inside Option
-        let keystore = x.trusted_keys;
-        let rulestore = x.rules_config;
         ManifestSignature {
             enabled,
-            keystore,
-            rulestore,
-            whitelist_matcher,
+            keystore: agent_negotiators_cfg.trusted_keys,
+            rulestore: agent_negotiators_cfg.rules_config,
+            whitelist_matcher: agent_negotiators_cfg.domain_patterns.matchers.clone(),
         }
     }
 }
@@ -235,7 +224,7 @@ mod tests {
         let arguments = shlex::split(args.as_ref()).expect("failed to parse arguments");
         ManifestSignature::new(
             &PolicyConfig::from_iter(arguments).into(),
-            PolicyStruct {
+            AgentNegotiatorsConfig {
                 trusted_keys: Default::default(),
                 domain_patterns: Default::default(),
                 rules_config: Default::default(),

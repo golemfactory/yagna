@@ -25,7 +25,6 @@ use crate::execution::{
     UpdateActivity,
 };
 use crate::hardware;
-use crate::market::negotiator::builtin::manifest::PolicyStruct;
 use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{AccountView, LinearPricingOffer, Payments, PricingOffer};
@@ -118,6 +117,13 @@ impl WhitelistManager {
             monitor.stop();
         }
     }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct AgentNegotiatorsConfig {
+    pub trusted_keys: Keystore,
+    pub domain_patterns: DomainWhitelistState,
+    pub rules_config: RuleStore,
 }
 
 pub struct ProviderAgent {
@@ -218,12 +224,12 @@ impl ProviderAgent {
         let mut domain_whitelist = WhitelistManager::try_new(&config.domain_whitelist_file)?;
         domain_whitelist.spawn_monitor(&config.domain_whitelist_file)?;
 
-        let x = PolicyStruct {
+        let agent_negotiators_cfg = AgentNegotiatorsConfig {
             trusted_keys: keystore,
             domain_patterns: domain_whitelist.get_state(),
             rules_config: rulestore,
         };
-        let market = ProviderMarket::new(api.market, args.market, x).start();
+        let market = ProviderMarket::new(api.market, args.market, agent_negotiators_cfg).start();
         let payments = Payments::new(api.activity.clone(), api.payment, args.payment).start();
         let runner = TaskRunner::new(api.activity, args.runner, registry, data_dir)?.start();
         let task_manager =

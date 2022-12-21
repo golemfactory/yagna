@@ -5,11 +5,11 @@ use structopt::StructOpt;
 
 use ya_manifest_utils::PolicyConfig;
 
-use super::builtin::manifest::PolicyStruct;
 use super::common::NegotiatorAddr;
 use crate::market::config::MarketConfig;
 use crate::market::negotiator::{AcceptAllNegotiator, CompositeNegotiator};
 use crate::market::ProviderMarket;
+use crate::provider_agent::AgentNegotiatorsConfig;
 
 /// Configuration for LimitAgreements Negotiator.
 #[derive(StructOpt, Clone, Debug)]
@@ -79,14 +79,14 @@ pub struct NegotiatorsConfig {
 pub fn create_negotiator(
     market: Addr<ProviderMarket>,
     config: &MarketConfig,
-    x: &PolicyStruct,
+    agent_negotiators_cfg: &AgentNegotiatorsConfig,
 ) -> Arc<NegotiatorAddr> {
     let negotiator = match &config.negotiator_type[..] {
         "Composite" => NegotiatorAddr::from(
             CompositeNegotiator::new(
                 market,
                 &config.negotiator_config.composite_config,
-                x.clone(),
+                agent_negotiators_cfg.clone(),
             )
             .unwrap(),
         ),

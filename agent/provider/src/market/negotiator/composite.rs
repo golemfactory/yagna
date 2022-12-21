@@ -6,7 +6,6 @@ use ya_agreement_utils::agreement::{expand, flatten_value};
 use ya_agreement_utils::AgreementView;
 use ya_client::model::market::NewOffer;
 
-use super::builtin::manifest::PolicyStruct;
 use super::builtin::{
     DebitNoteInterval, LimitExpiration, ManifestSignature, MaxAgreements, PaymentTimeout,
 };
@@ -18,6 +17,7 @@ use crate::market::negotiator::common::{
 use crate::market::negotiator::factory::CompositeNegotiatorConfig;
 use crate::market::negotiator::{NegotiatorComponent, ProposalView};
 use crate::market::ProviderMarket;
+use crate::provider_agent::AgentNegotiatorsConfig;
 
 /// Negotiator that can limit number of running agreements.
 pub struct CompositeNegotiator {
@@ -28,7 +28,7 @@ impl CompositeNegotiator {
     pub fn new(
         _market: Addr<ProviderMarket>,
         config: &CompositeNegotiatorConfig,
-        x: PolicyStruct,
+        agent_negotiators_cfg: AgentNegotiatorsConfig,
     ) -> anyhow::Result<CompositeNegotiator> {
         let components = NegotiatorsPack::default()
             .add_component(
@@ -49,7 +49,10 @@ impl CompositeNegotiator {
             )
             .add_component(
                 "ManifestSignature",
-                Box::new(ManifestSignature::new(&config.policy_config.clone(), x)),
+                Box::new(ManifestSignature::new(
+                    &config.policy_config.clone(),
+                    agent_negotiators_cfg,
+                )),
             );
 
         Ok(CompositeNegotiator { components })
