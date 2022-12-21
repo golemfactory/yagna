@@ -1,10 +1,8 @@
 use anyhow::Result;
 use structopt::StructOpt;
+use ya_manifest_utils::rules::{Mode, RuleStore};
 
-use crate::{
-    rules::{Mode, RuleStore},
-    startup_config::ProviderConfig,
-};
+use crate::startup_config::ProviderConfig;
 
 #[derive(StructOpt, Clone, Debug)]
 pub enum RuleCommand {
