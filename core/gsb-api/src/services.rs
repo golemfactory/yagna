@@ -1,20 +1,16 @@
 //! Provider side operations
-use crate::{GsbApiError, WsCall, WsRequest, WsResponse, WsResult, WS_CALL};
-use actix::{Actor, StreamHandler};
-use actix_http::ws::{CloseReason, ProtocolError};
-use actix_web_actors::ws;
+use crate::{GsbApiError, WsMessagesHandler, WsRequest, WsResponse, WsResult};
+use actix::Addr;
+use futures::channel::oneshot::{self, Canceled};
 use lazy_static::lazy_static;
-use serde_json::json;
 use std::{
     collections::{HashMap, HashSet},
     convert::{TryFrom, TryInto},
-    fmt::Debug,
     future::Future,
-    pin::Pin,
     result::Result::{Err, Ok},
     sync::{Arc, Mutex, RwLock},
 };
-use ya_core_model::gftp::{GetChunk, GetMetadata, GftpChunk, GftpMetadata};
+use ya_core_model::gftp::{self, GetChunk, GetMetadata, GftpChunk, GftpMetadata};
 use ya_service_bus::{typed as bus, RpcMessage};
 
 lazy_static! {
@@ -32,137 +28,101 @@ trait GsbCaller {
 
 #[derive(Default)]
 pub(crate) struct GsbServices {
-    callers: HashMap<String, HashMap<String, Arc<RwLock<WS_CALL>>>>,
+    pub ws_requests_dst: HashMap<String, Arc<Addr<WsMessagesHandler>>>,
+    ws_responses_dst: HashMap<String, Arc<RwLock<HashMap<String, oneshot::Sender<WsResult>>>>>,
 }
 
 impl GsbServices {
     pub fn bind(&mut self, components: HashSet<&str>, path: &str) -> Result<(), GsbApiError> {
-        for component in components {
-            match component {
-                "GetMetadata" => {
-                    log::info!("GetMetadata {path}");
-                    self.bind_service::<GetMetadata>(path, component.to_string());
+        let ws_calls = self.ws_responders_map(path);
+        match self.ws_requests_dst.get(path) {
+            //TODO add msg
+            None => return Err(GsbApiError::BadRequest),
+            Some(addr) => {
+                for component in components {
+                    match component {
+                        "GetMetadata" => {
+                            log::info!("GetMetadata {path}");
+                            <Self as ServiceBinder<GetMetadata>>::bind_service(
+                                path,
+                                component.to_string(),
+                                ws_calls.clone(),
+                                addr.clone(),
+                            );
+                        }
+                        "GetChunk" => {
+                            log::info!("GetChunk {path}");
+                            <Self as ServiceBinder<GetChunk>>::bind_service(
+                                path,
+                                component.to_string(),
+                                ws_calls.clone(),
+                                addr.clone(),
+                            );
+                        }
+                        _ => return Err(GsbApiError::BadRequest),
+                    }
                 }
-                "GetChunk" => {
-                    log::info!("GetChunk {path}");
-                }
-                _ => return Err(GsbApiError::BadRequest),
             }
         }
-        std::result::Result::Ok(())
+        Ok(())
     }
 
-    fn bind_service<'a, MSG>(&mut self, path: &str, component: String)
-    where
-        MSG: RpcMessage,
-        (String, MSG): TryInto<WsRequest, Error = <MSG as RpcMessage>::Error>,
-        MSG::Item: TryFrom<WsResult, Error = <MSG as RpcMessage>::Error>,
-    {
-        let ws_call_pointer = self.ws_call_pointer(&path, &component);
+    pub fn ws_responders_map(
+        &mut self,
+        path: &str,
+    ) -> Arc<RwLock<HashMap<String, oneshot::Sender<WsResult>>>> {
+        match self.ws_responses_dst.get_mut(path) {
+            Some(calls_map) => calls_map.clone(),
+            None => {
+                let calls_map = Arc::new(RwLock::new(HashMap::new()));
+                self.ws_responses_dst
+                    .insert(path.to_string(), calls_map.clone());
+                calls_map
+            }
+        }
+    }
+}
+
+trait ServiceBinder<MSG>
+where
+    MSG: RpcMessage,
+    (String, MSG): TryInto<WsRequest, Error = <MSG as RpcMessage>::Error>,
+    MSG::Item: TryFrom<WsResult, Error = <MSG as RpcMessage>::Error>,
+{
+    fn bind_service(
+        path: &str,
+        _component: String,
+        senders_map: Arc<RwLock<HashMap<String, oneshot::Sender<WsResult>>>>,
+        request_dst: Arc<Addr<WsMessagesHandler>>,
+    ) -> Result<(), GsbApiError> {
         let _ = bus::bind_with_caller(&path, move |path, packet: MSG| {
-            let ws_call_pointer = ws_call_pointer.clone();
-            let component = component.to_string().clone();
+            let senders_map = senders_map.clone();
             let path = path.clone();
+            let id = uuid::Uuid::new_v4().to_string();
+            let request_dst = request_dst.clone();
             async move {
-                let ws_request = (component, packet).try_into()?;
-                let ws_call = ws_call_pointer.read().unwrap();
-                let ws_res = ws_call.call(path, ws_request).await;
+                let ws_request = (path, packet).try_into()?;
+                let (ws_sender, ws_receiver) = oneshot::channel();
+                {
+                    let mut senders = senders_map.write().unwrap();
+                    senders.insert(id, ws_sender);
+                }
+                //TODO handle it properly
+                request_dst.send(ws_request).await.unwrap();
+                let ws_res = ws_receiver.await.map_err(Self::map_err)?;
                 MSG::Item::try_from(ws_res)
             }
         });
-        todo!()
+
+        Ok(())
     }
 
-    fn ws_call_pointer(&mut self, path: &str, id: &str) -> Arc<RwLock<WS_CALL>> {
-        let id_callers = match self.callers.get_mut(path) {
-            Some(id_callers) => id_callers,
-            None => {
-                let id_callers = HashMap::new();
-                self.callers.insert(path.to_string(), id_callers);
-                self.callers.get_mut(path).unwrap()
-            }
-        };
-        let caller_ref = match id_callers.get_mut(id) {
-            Some(callers) => callers,
-            None => {
-                let caller: Arc<RwLock<Box<dyn WsCall + Send + Sync + 'static>>> =
-                    Arc::new(RwLock::new(Box::new(UnboundWsCall {})));
-                id_callers.insert(id.to_string(), caller);
-                id_callers.get_mut(id).unwrap()
-            }
-        };
-        caller_ref.clone()
-    }
+    fn map_err(err: Canceled) -> MSG::Error;
 }
 
-pub(crate) struct WsMessagesHandler {
-    pub services: Arc<Mutex<GsbServices>>,
-}
-
-impl Actor for WsMessagesHandler {
-    type Context = ws::WebsocketContext<Self>;
-}
-
-impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessagesHandler {
-    fn handle(
-        &mut self,
-        item: Result<actix_http::ws::Message, ProtocolError>,
-        ctx: &mut Self::Context,
-    ) {
-        match item {
-            std::result::Result::Ok(msg) => {
-                match msg {
-                    ws::Message::Text(msg) => {
-                        log::info!("Text: {:?}", msg);
-                        match serde_json::from_slice::<WsRequest>(msg.as_bytes()) {
-                            std::result::Result::Ok(request) => {
-                                log::info!("WsRequest: {request:?}");
-                            }
-                            Err(err) => todo!("NYI Deserialization error: {err:?}"),
-                        }
-                    }
-                    ws::Message::Binary(msg) => {
-                        todo!("NYI Binary: {:?}", msg);
-                    }
-                    ws::Message::Continuation(msg) => {
-                        todo!("NYI Continuation: {:?}", msg);
-                    }
-                    ws::Message::Close(msg) => {
-                        log::info!("Close: {:?}", msg);
-                    }
-                    ws::Message::Ping(msg) => {
-                        log::info!("Ping: {:?}", msg);
-                    }
-                    any => todo!("NYI support of: {:?}", any),
-                }
-                ctx.text(
-                    json!({
-                      "id": "myId",
-                      "component": "GetMetadata",
-                      "payload": "payload",
-                    })
-                    .to_string(),
-                )
-            }
-            Err(cause) => ctx.close(Some(CloseReason {
-                code: ws::CloseCode::Error,
-                description: Some(
-                    json!({
-                        "cause": cause.to_string()
-                    })
-                    .to_string(),
-                ),
-            })),
-        };
-    }
-}
-
-#[derive(Debug)]
-pub struct UnboundWsCall;
-
-impl WsCall for UnboundWsCall {
-    fn call(&self, _path: String, _request: WsRequest) -> Pin<Box<dyn Future<Output = WsResult>>> {
-        todo!("Unbound Call NYI")
+impl ServiceBinder<GetMetadata> for GsbServices {
+    fn map_err(err: Canceled) -> <GetMetadata as RpcMessage>::Error {
+        gftp::Error::InternalError(format!("WS request failed: {}", err))
     }
 }
 
@@ -174,7 +134,7 @@ impl TryInto<WsRequest> for (String, GetMetadata) {
             .map_err(|err| ya_core_model::gftp::Error::InternalError(err.to_string()))?;
         let component = self.0;
         let id = GetMetadata::ID.to_string();
-        std::result::Result::Ok(WsRequest {
+        Ok(WsRequest {
             id,
             component,
             payload,
@@ -197,6 +157,12 @@ impl TryFrom<WsResult> for GftpMetadata {
     }
 }
 
+impl ServiceBinder<GetChunk> for GsbServices {
+    fn map_err(err: Canceled) -> <GetChunk as RpcMessage>::Error {
+        gftp::Error::InternalError(format!("WS request failed: {}", err))
+    }
+}
+
 impl TryInto<WsRequest> for (String, GetChunk) {
     type Error = <GetChunk as RpcMessage>::Error;
 
@@ -205,7 +171,7 @@ impl TryInto<WsRequest> for (String, GetChunk) {
             .map_err(|err| ya_core_model::gftp::Error::InternalError(err.to_string()))?;
         let component = self.0;
         let id = GetMetadata::ID.to_string();
-        std::result::Result::Ok(WsRequest {
+        Ok(WsRequest {
             id,
             component,
             payload,

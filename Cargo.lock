@@ -1598,7 +1598,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6ee87af31d84ef885378aebca32be3d682b0e0dc119d5b4860a2c5bb5046730"
 dependencies = [
  "serde",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -5732,7 +5732,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "url",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -7026,6 +7026,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "uuid"
+version = "1.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "422ee0de9031b5b948b97a8fc04e3aa35230001a722ddd27943e0be31564ce4c"
+dependencies = [
+ "getrandom 0.2.8",
+]
+
+[[package]]
 name = "valuable"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7492,7 +7501,7 @@ dependencies = [
  "thiserror",
  "tokio 1.24.2",
  "tokio-stream",
- "uuid",
+ "uuid 0.8.2",
  "ya-client-model",
  "ya-core-model",
  "ya-net",
@@ -7620,7 +7629,7 @@ dependencies = [
  "maplit",
  "serde_json",
  "tokio 1.24.2",
- "uuid",
+ "uuid 0.8.2",
  "ya-client-model",
  "ya-core-model",
  "ya-payment-driver",
@@ -7660,7 +7669,7 @@ dependencies = [
  "thiserror",
  "tiny-keccak 2.0.2",
  "tokio 1.24.2",
- "uuid",
+ "uuid 0.8.2",
  "web3 0.16.0",
  "ya-client-model",
  "ya-payment-driver",
@@ -7758,11 +7767,13 @@ dependencies = [
  "actix-web",
  "actix-web-actors",
  "anyhow",
+ "futures 0.3.25",
  "lazy_static",
  "log",
  "serde",
  "serde_json",
  "thiserror",
+ "uuid 1.2.2",
  "ya-core-model",
  "ya-persistence",
  "ya-service-api",
@@ -7801,7 +7812,7 @@ dependencies = [
  "structopt",
  "thiserror",
  "tokio 1.24.2",
- "uuid",
+ "uuid 0.8.2",
  "ya-client-model",
  "ya-core-model",
  "ya-persistence",
@@ -7896,7 +7907,7 @@ dependencies = [
  "strum_macros 0.24.3",
  "thiserror",
  "tokio 1.24.2",
- "uuid",
+ "uuid 0.8.2",
  "ya-agreement-utils",
  "ya-client",
  "ya-core-model",
@@ -8035,7 +8046,7 @@ dependencies = [
  "thiserror",
  "tokio 1.24.2",
  "uint 0.7.1",
- "uuid",
+ "uuid 0.8.2",
  "ya-agreement-utils",
  "ya-client",
  "ya-client-model",
@@ -8223,7 +8234,7 @@ dependencies = [
  "tokio 1.24.2",
  "tokio-util 0.7.4",
  "url",
- "uuid",
+ "uuid 0.8.2",
  "ya-client-model",
  "ya-relay-proto",
  "ya-relay-stack",
@@ -8334,7 +8345,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util 0.7.4",
  "url",
- "uuid",
+ "uuid 0.8.2",
  "ya-sb-proto",
  "ya-sb-util",
 ]
@@ -8436,7 +8447,7 @@ dependencies = [
  "tokio 1.24.2",
  "tokio-util 0.7.4",
  "url",
- "uuid",
+ "uuid 0.8.2",
  "ya-packet-trace",
  "ya-sb-proto",
  "ya-sb-util",
@@ -8647,7 +8658,7 @@ dependencies = [
  "tokio 1.24.2",
  "tokio-stream",
  "url",
- "uuid",
+ "uuid 0.8.2",
  "ya-client",
  "ya-client-model",
  "ya-core-model",
@@ -8689,7 +8700,7 @@ dependencies = [
  "tiny-keccak 1.5.0",
  "tokio 1.24.2",
  "tokio-compat-02",
- "uuid",
+ "uuid 0.8.2",
  "ya-client-model",
  "ya-payment-driver",
  "ya-service-api-interfaces",
