@@ -1,14 +1,20 @@
 mod api;
 mod services;
 
-use actix_http::StatusCode;
+use actix::{dev::MessageResponse, Actor, Handler, StreamHandler};
+use actix_http::{
+    ws::{CloseReason, ProtocolError},
+    StatusCode,
+};
 use actix_web::ResponseError;
+use actix_web_actors::ws;
+use futures::channel::oneshot::Sender;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use services::GsbServices;
 use std::{
-    future::Future,
-    pin::Pin,
-    sync::{MutexGuard, PoisonError},
+    collections::HashMap,
+    sync::{Arc, MutexGuard, PoisonError, RwLock},
 };
 use thiserror::Error;
 use ya_service_api_interfaces::Provider;
@@ -51,6 +57,20 @@ impl From<serde_json::Error> for GsbApiError {
     }
 }
 
+impl From<actix_web::Error> for GsbApiError {
+    fn from(_value: actix_web::Error) -> Self {
+        GsbApiError::InternalError
+    }
+}
+
+#[derive(Error, Debug)]
+enum WsApiError {
+    #[error("Internal Error")]
+    InternalError,
+    #[error(transparent)]
+    Any(#[from] anyhow::Error),
+}
+
 impl ResponseError for GsbApiError {
     fn status_code(&self) -> StatusCode {
         match *self {
@@ -68,6 +88,10 @@ struct WsRequest {
     payload: Vec<u8>,
 }
 
+impl actix::Message for WsRequest {
+    type Result = WsResult;
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 struct WsResponse {
     id: String,
@@ -76,8 +100,93 @@ struct WsResponse {
 
 struct WsResult(Result<WsResponse, anyhow::Error>);
 
-trait WsCall {
-    fn call(&self, path: String, request: WsRequest) -> Pin<Box<dyn Future<Output = WsResult>>>;
+impl MessageResponse<WsMessagesHandler, WsRequest> for Result<(), WsApiError> {
+    fn handle(
+        self,
+        _ctx: &mut <WsMessagesHandler as Actor>::Context,
+        _tx: Option<actix::dev::OneshotSender<<WsRequest as actix::Message>::Result>>,
+    ) {
+        todo!()
+    }
 }
 
-type WS_CALL = Box<dyn WsCall + Sync + Send>;
+pub(crate) struct WsMessagesHandler {
+    pub responders: Arc<RwLock<HashMap<String, Sender<WsResult>>>>,
+}
+
+impl Actor for WsMessagesHandler {
+    type Context = ws::WebsocketContext<Self>;
+}
+
+impl Handler<WsRequest> for WsMessagesHandler {
+    type Result = Result<(), WsApiError>;
+
+    fn handle(&mut self, msg: WsRequest, ctx: &mut Self::Context) -> Self::Result {
+        ctx.text(
+            serde_json::to_string(&msg)
+                .map_err(|err| anyhow::anyhow!("Failed to serialize msg: {}", err))?,
+        );
+        Ok(())
+    }
+}
+
+impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessagesHandler {
+    fn handle(
+        &mut self,
+        item: Result<actix_http::ws::Message, ProtocolError>,
+        ctx: &mut Self::Context,
+    ) {
+        match item {
+            Ok(msg) => {
+                match msg {
+                    ws::Message::Text(msg) => {
+                        log::info!("Text: {:?}", msg);
+                        match serde_json::from_slice::<WsResponse>(msg.as_bytes()) {
+                            Ok(response) => {
+                                log::info!("WsRequest: {response:?}");
+                                let mut responders = self.responders.write().unwrap();
+                                match responders.remove(&response.id) {
+                                    Some(responder) => {
+                                        responder.send(WsResult(Ok(response)));
+                                    }
+                                    None => {}
+                                }
+                            }
+                            Err(err) => todo!("Expected response: Error {err:?}"),
+                        }
+                    }
+                    ws::Message::Binary(msg) => {
+                        todo!("NYI Binary: {:?}", msg);
+                    }
+                    ws::Message::Continuation(msg) => {
+                        todo!("NYI Continuation: {:?}", msg);
+                    }
+                    ws::Message::Close(msg) => {
+                        log::info!("Close: {:?}", msg);
+                    }
+                    ws::Message::Ping(msg) => {
+                        log::info!("Ping: {:?}", msg);
+                    }
+                    any => todo!("NYI support of: {:?}", any),
+                }
+                ctx.text(
+                    json!({
+                      "id": "myId",
+                      "component": "GetMetadata",
+                      "payload": "payload",
+                    })
+                    .to_string(),
+                )
+            }
+            Err(cause) => ctx.close(Some(CloseReason {
+                code: ws::CloseCode::Error,
+                description: Some(
+                    json!({
+                        "cause": cause.to_string()
+                    })
+                    .to_string(),
+                ),
+            })),
+        };
+    }
+}

@@ -1,10 +1,10 @@
-use crate::services::{GsbServices, WsMessagesHandler};
-use crate::GsbApiError;
+use crate::services::GsbServices;
+use crate::{GsbApiError, WsMessagesHandler};
 use actix_http::StatusCode;
 use actix_web::web::Data;
 use actix_web::Scope;
-use actix_web::{web, Error, HttpRequest, HttpResponse, Responder, Result};
-use actix_web_actors::ws;
+use actix_web::{web, HttpRequest, Responder, Result};
+use actix_web_actors::ws::{self};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use ya_service_api_web::middleware::Identity;
@@ -60,17 +60,18 @@ async fn delete_services(
 
 #[actix_web::get("/services/{key}")]
 async fn get_service_messages(
-    _path: web::Path<ServicesPath>,
+    path: web::Path<ServicesPath>,
     req: HttpRequest,
     stream: web::Payload,
     services: Data<Arc<Mutex<GsbServices>>>,
-    // id: Identity
-) -> Result<HttpResponse, Error> {
-    let services = services.as_ref().clone();
-    let handler = WsMessagesHandler { services };
-    let resp = ws::start(handler, &req, stream);
-    println!("{:?}", resp);
-    resp
+) -> Result<impl Responder, GsbApiError> {
+    let mut services = services.lock()?;
+    let responders = services.ws_responders_map(&path.key);
+    let responders = responders.clone();
+    let handler = WsMessagesHandler { responders };
+    let (_addr, resp) = ws::WsResponseBuilder::new(handler, &req, stream).start_with_addr()?;
+    // services.ws_requests_dst.insert(path.key.clone(), Arc::new(addr));
+    Ok(resp)
 }
 
 #[derive(Deserialize)]
