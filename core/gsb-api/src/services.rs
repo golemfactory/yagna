@@ -4,6 +4,7 @@ use actix::Addr;
 use futures::channel::oneshot::{self, Canceled};
 use lazy_static::lazy_static;
 use std::{
+    borrow::Borrow,
     collections::{HashMap, HashSet},
     convert::{TryFrom, TryInto},
     future::Future,
@@ -28,46 +29,54 @@ trait GsbCaller {
 
 #[derive(Default)]
 pub(crate) struct GsbServices {
-    pub ws_requests_dst: HashMap<String, Arc<Addr<WsMessagesHandler>>>,
+    ws_requests_dst: HashMap<String, Arc<RwLock<Option<Addr<WsMessagesHandler>>>>>,
     ws_responses_dst: HashMap<String, Arc<RwLock<HashMap<String, oneshot::Sender<WsResult>>>>>,
 }
 
 impl GsbServices {
     pub fn bind(&mut self, components: HashSet<&str>, path: &str) -> Result<(), GsbApiError> {
-        let ws_calls = self.ws_responders_map(path);
-        match self.ws_requests_dst.get(path) {
-            //TODO add msg
-            None => return Err(GsbApiError::BadRequest),
-            Some(addr) => {
-                for component in components {
-                    match component {
-                        "GetMetadata" => {
-                            log::info!("GetMetadata {path}");
-                            <Self as ServiceBinder<GetMetadata>>::bind_service(
-                                path,
-                                component.to_string(),
-                                ws_calls.clone(),
-                                addr.clone(),
-                            );
-                        }
-                        "GetChunk" => {
-                            log::info!("GetChunk {path}");
-                            <Self as ServiceBinder<GetChunk>>::bind_service(
-                                path,
-                                component.to_string(),
-                                ws_calls.clone(),
-                                addr.clone(),
-                            );
-                        }
-                        _ => return Err(GsbApiError::BadRequest),
-                    }
+        let ws_calls = self.ws_responses_dst(path);
+        let ws_request_dst = self.ws_request_dst(path);
+        for component in components {
+            //TODO handle errors
+            match component {
+                "GetMetadata" => {
+                    log::info!("GetMetadata {path}");
+                    <Self as ServiceBinder<GetMetadata>>::bind_service(
+                        path,
+                        ws_calls.clone(),
+                        ws_request_dst.clone(),
+                    )
+                    .unwrap();
                 }
+                "GetChunk" => {
+                    log::info!("GetChunk {path}");
+                    <Self as ServiceBinder<GetChunk>>::bind_service(
+                        path,
+                        ws_calls.clone(),
+                        ws_request_dst.clone(),
+                    )
+                    .unwrap();
+                }
+                _ => return Err(GsbApiError::BadRequest),
             }
         }
         Ok(())
     }
 
-    pub fn ws_responders_map(
+    pub fn ws_request_dst(&mut self, path: &str) -> Arc<RwLock<Option<Addr<WsMessagesHandler>>>> {
+        match self.ws_requests_dst.get_mut(path) {
+            Some(request_dst) => request_dst.clone(),
+            None => {
+                let request_dst = Arc::new(RwLock::new(None));
+                self.ws_requests_dst
+                    .insert(path.to_string(), request_dst.clone());
+                request_dst
+            }
+        }
+    }
+
+    pub fn ws_responses_dst(
         &mut self,
         path: &str,
     ) -> Arc<RwLock<HashMap<String, oneshot::Sender<WsResult>>>> {
@@ -91,9 +100,8 @@ where
 {
     fn bind_service(
         path: &str,
-        _component: String,
         senders_map: Arc<RwLock<HashMap<String, oneshot::Sender<WsResult>>>>,
-        request_dst: Arc<Addr<WsMessagesHandler>>,
+        request_dst: Arc<RwLock<Option<Addr<WsMessagesHandler>>>>,
     ) -> Result<(), GsbApiError> {
         let _ = bus::bind_with_caller(&path, move |path, packet: MSG| {
             let senders_map = senders_map.clone();
@@ -108,8 +116,17 @@ where
                     senders.insert(id, ws_sender);
                 }
                 //TODO handle it properly
-                request_dst.send(ws_request).await.unwrap();
-                let ws_res = ws_receiver.await.map_err(Self::map_err)?;
+                let request_dst = request_dst.read().unwrap();
+                match &*request_dst {
+                    Some(request_dst) => {
+                        request_dst.send(ws_request).await.unwrap();
+                    }
+                    None => {
+                        //TODO handle it
+                        todo!("handle not initialized/uninitialised request addr");
+                    }
+                };
+                let ws_res = ws_receiver.await.map_err(Self::map_canceled)?;
                 MSG::Item::try_from(ws_res)
             }
         });
@@ -117,11 +134,11 @@ where
         Ok(())
     }
 
-    fn map_err(err: Canceled) -> MSG::Error;
+    fn map_canceled(err: Canceled) -> MSG::Error;
 }
 
 impl ServiceBinder<GetMetadata> for GsbServices {
-    fn map_err(err: Canceled) -> <GetMetadata as RpcMessage>::Error {
+    fn map_canceled(err: Canceled) -> <GetMetadata as RpcMessage>::Error {
         gftp::Error::InternalError(format!("WS request failed: {}", err))
     }
 }
@@ -158,7 +175,7 @@ impl TryFrom<WsResult> for GftpMetadata {
 }
 
 impl ServiceBinder<GetChunk> for GsbServices {
-    fn map_err(err: Canceled) -> <GetChunk as RpcMessage>::Error {
+    fn map_canceled(err: Canceled) -> <GetChunk as RpcMessage>::Error {
         gftp::Error::InternalError(format!("WS request failed: {}", err))
     }
 }

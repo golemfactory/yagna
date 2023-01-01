@@ -29,15 +29,16 @@ async fn post_services(
     log::debug!("POST /services Body: {:?}", body);
     if let Some(listen) = &body.listen {
         let components = listen.components.clone();
-        let path = listen.on.clone();
+        let listen_on = listen.on.clone();
         let mut services = services.lock()?;
-        let _ = services.bind(components.iter().map(String::as_str).collect(), &path)?;
+        let _ = services.bind(components.iter().map(String::as_str).collect(), &listen_on)?;
+        let listen_on_encoded = base64::encode(&listen_on);
         let services = ServicesBody {
             listen: Some(ServicesListenBody {
-                on: path.clone(),
+                on: listen_on,
                 components: components,
                 links: Some(ServicesLinksBody {
-                    messages: format!("gsb-api/v1/services/{path}"),
+                    messages: format!("gsb-api/v1/services/{listen_on_encoded}"),
                 }),
             }),
         };
@@ -66,11 +67,15 @@ async fn get_service_messages(
     services: Data<Arc<Mutex<GsbServices>>>,
 ) -> Result<impl Responder, GsbApiError> {
     let mut services = services.lock()?;
-    let responders = services.ws_responders_map(&path.key);
+    //TODO handle decode error
+    let key = base64::decode(&path.key).unwrap();
+    let responders = services.ws_responses_dst(&String::from_utf8_lossy(&key));
     let responders = responders.clone();
     let handler = WsMessagesHandler { responders };
-    let (_addr, resp) = ws::WsResponseBuilder::new(handler, &req, stream).start_with_addr()?;
-    // services.ws_requests_dst.insert(path.key.clone(), Arc::new(addr));
+    let (addr, resp) = ws::WsResponseBuilder::new(handler, &req, stream).start_with_addr()?;
+    let ws_request_dst = services.ws_request_dst(&path.key);
+    let mut ws_request_dst = ws_request_dst.write().unwrap();
+    *ws_request_dst = Some(addr);
     Ok(resp)
 }
 
