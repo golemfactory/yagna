@@ -1,7 +1,6 @@
 use structopt::StructOpt;
 
 use crate::market::negotiator::factory::NegotiatorsConfig;
-use ya_manifest_utils::Keystore;
 
 /// Configuration for ProviderMarket actor.
 #[derive(StructOpt, Clone)]
@@ -20,6 +19,4 @@ pub struct MarketConfig {
     pub session_id: String,
     #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "20s")]
     pub process_market_events_timeout: std::time::Duration,
-    #[structopt(skip)]
-    pub keystore: Keystore,
 }

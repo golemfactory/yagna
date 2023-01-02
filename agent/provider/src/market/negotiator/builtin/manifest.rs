@@ -6,7 +6,6 @@ use ya_agreement_utils::{Error, OfferDefinition};
 use ya_manifest_utils::matching::domain::SharedDomainMatchers;
 use ya_manifest_utils::matching::Matcher;
 use ya_manifest_utils::policy::{CertPermissions, Keystore, Match, Policy, PolicyConfig};
-use ya_manifest_utils::rules::RuleStore;
 use ya_manifest_utils::{
     decode_manifest, AppManifest, Feature, CAPABILITIES_PROPERTY,
     DEMAND_MANIFEST_CERT_PERMISSIONS_PROPERTY, DEMAND_MANIFEST_CERT_PROPERTY,
@@ -14,6 +13,8 @@ use ya_manifest_utils::{
 };
 
 use crate::market::negotiator::*;
+use crate::provider_agent::AgentNegotiatorsConfig;
+use crate::rules::RuleStore;
 
 pub struct ManifestSignature {
     enabled: bool,
@@ -82,8 +83,8 @@ impl NegotiatorComponent for ManifestSignature {
     }
 }
 
-impl From<PolicyConfig> for ManifestSignature {
-    fn from(config: PolicyConfig) -> Self {
+impl ManifestSignature {
+    pub fn new(config: &PolicyConfig, agent_negotiators_cfg: AgentNegotiatorsConfig) -> Self {
         let policies = config.policy_set();
         let properties = config.trusted_property_map();
 
@@ -100,15 +101,11 @@ impl From<PolicyConfig> for ManifestSignature {
             }
         };
 
-        let whitelist_matcher = config.domain_patterns.matchers.clone();
-        //TODO Nones should be errors or config should not wrap stores inside Option
-        let keystore = config.trusted_keys.unwrap_or_default();
-        let rulestore = config.rules_config.unwrap_or_default();
         ManifestSignature {
             enabled,
-            keystore,
-            rulestore,
-            whitelist_matcher,
+            keystore: agent_negotiators_cfg.trusted_keys,
+            rulestore: agent_negotiators_cfg.rules_config,
+            whitelist_matcher: agent_negotiators_cfg.domain_patterns.matchers,
         }
     }
 }
@@ -225,7 +222,14 @@ mod tests {
 
     fn build_policy<S: AsRef<str>>(args: S) -> ManifestSignature {
         let arguments = shlex::split(args.as_ref()).expect("failed to parse arguments");
-        PolicyConfig::from_iter(arguments).into()
+        ManifestSignature::new(
+            &PolicyConfig::from_iter(arguments),
+            AgentNegotiatorsConfig {
+                trusted_keys: Default::default(),
+                domain_patterns: Default::default(),
+                rules_config: Default::default(),
+            },
+        )
     }
 
     #[test]
