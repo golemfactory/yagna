@@ -340,12 +340,12 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
     let rulestore = RuleStore::load_or_create(&rules_file).expect("Can't load RuleStore");
 
     let config = create_manifest_signature_validating_policy_config();
-    let x = AgentNegotiatorsConfig {
+    let negotiator_cfg = AgentNegotiatorsConfig {
         trusted_keys: keystore,
         domain_patterns: whitelist_state,
         rules_config: rulestore,
     };
-    let mut manifest_negotiator = ManifestSignature::new(&config, x);
+    let mut manifest_negotiator = ManifestSignature::new(&config, negotiator_cfg);
     // Current implementation does not verify content of certificate permissions incoming in demand.
 
     let demand = create_demand_json(
