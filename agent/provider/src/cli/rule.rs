@@ -16,6 +16,8 @@ pub enum RuleCommand {
 
 #[derive(StructOpt, Clone, Debug)]
 pub enum SetRule {
+    Disable,
+    Enable,
     Everyone {
         #[structopt(subcommand)]
         mode: Mode,
@@ -46,6 +48,8 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
             Some(_) => todo!("Setting rule for specific certificate isn't implemented yet"),
             None => rules.set_default_audited_payload_mode(mode),
         },
+        SetRule::Disable => rules.set_enabled(false),
+        SetRule::Enable => rules.set_enabled(true),
     }
 }
 

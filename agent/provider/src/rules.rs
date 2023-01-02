@@ -63,6 +63,13 @@ impl RuleStore {
         *self.config.write().unwrap() = store;
     }
 
+    pub fn set_enabled(&self, enabled: bool) -> Result<()> {
+        log::debug!("Setting outbound enabled: {enabled}");
+        self.config.write().unwrap().outbound.enabled = enabled;
+
+        self.save()
+    }
+
     pub fn set_everyone_mode(&self, mode: Mode) -> Result<()> {
         log::debug!("Setting outbound everyone mode: {mode}");
         self.config.write().unwrap().outbound.everyone = mode;
