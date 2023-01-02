@@ -105,7 +105,7 @@ impl ManifestSignature {
             enabled,
             keystore: agent_negotiators_cfg.trusted_keys,
             rulestore: agent_negotiators_cfg.rules_config,
-            whitelist_matcher: agent_negotiators_cfg.domain_patterns.matchers.clone(),
+            whitelist_matcher: agent_negotiators_cfg.domain_patterns.matchers,
         }
     }
 }
