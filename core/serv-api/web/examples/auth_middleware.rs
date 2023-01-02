@@ -81,6 +81,7 @@ async fn main() -> anyhow::Result<()> {
                         name,
                         role: model::DEFAULT_ROLE.to_string(),
                         identity,
+                        allow_origin: None,
                     };
 
                     let app_key = bus::service(model::BUS_ID)

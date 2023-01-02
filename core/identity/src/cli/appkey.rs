@@ -17,6 +17,9 @@ pub enum AppKeyCommand {
         role: String,
         #[structopt(long)]
         id: Option<String>,
+        /// Set cors policy for request made using this app-key.
+        #[structopt(long)]
+        allow_origin: Option<String>,
     },
     Drop {
         name: String,
@@ -45,7 +48,7 @@ impl AppKeyCommand {
 
     pub async fn run_command(&self, _ctx: &CliCtx) -> Result<CommandOutput> {
         match &self {
-            AppKeyCommand::Create { name, role, id } => {
+            AppKeyCommand::Create { name, role, id, allow_origin } => {
                 let identity = match id {
                     Some(id) => {
                         if id.starts_with("0x") {
@@ -62,6 +65,7 @@ impl AppKeyCommand {
                     name: name.clone(),
                     role: role.clone(),
                     identity,
+                    allow_origin: allow_origin.clone(),
                 };
                 let key = bus::service(model::BUS_ID).send(create).await??;
                 Ok(CommandOutput::Object(serde_json::to_value(key)?))

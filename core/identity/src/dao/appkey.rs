@@ -47,6 +47,7 @@ impl<'c> AppKeyDao<'c> {
         name: String,
         role: String,
         identity: NodeId,
+        cors_allow_origin: Option<String>
     ) -> Result<()> {
         use crate::db::schema::app_key as app_key_dsl;
         use crate::db::schema::role as role_dsl;
@@ -63,6 +64,7 @@ impl<'c> AppKeyDao<'c> {
                     app_key_dsl::key.eq(key),
                     app_key_dsl::identity_id.eq(identity),
                     app_key_dsl::created_date.eq(Utc::now().naive_utc()),
+                    app_key_dsl::allow_origin.eq(cors_allow_origin),
                 ))
                 .execute(conn)?;
 

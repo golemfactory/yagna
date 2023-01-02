@@ -84,7 +84,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                     }
                 }
                 Err(crate::dao::Error::Dao(diesel::result::Error::NotFound)) => dao
-                    .create(key.clone(), create.name, create.role, create.identity)
+                    .create(key.clone(), create.name, create.role, create.identity, create.allow_origin)
                     .await
                     .map_err(model::Error::internal)
                     .map(|_| key),
@@ -97,16 +97,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                 .await
                 .map_err(|e| model::Error::internal(e.to_string()))?;
 
-            let appkey = model::AppKey {
-                name: appkey.name,
-                key: appkey.key,
-                role: role.name,
-                identity: appkey.identity_id,
-                created_date: appkey.created_date,
-                allow_origin: appkey.allow_origin,
-            };
-
-            let _ = create_tx.send(model::event::Event::NewKey(appkey)).await;
+            let _ = create_tx.send(model::event::Event::NewKey(appkey.to_core_model(role))).await;
             Ok(result)
         }
     });
@@ -148,14 +139,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                     .await
                     .map_err(|e| model::Error::internal(e.to_string()))?;
 
-                Ok(model::AppKey {
-                    name: appkey.name,
-                    key: appkey.key,
-                    role: role.name,
-                    identity: appkey.identity_id,
-                    created_date: appkey.created_date,
-                    allow_origin: appkey.allow_origin,
-                })
+                Ok(appkey.to_core_model(role))
             }
         }
     });
@@ -174,14 +158,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
             let keys = result
                 .0
                 .into_iter()
-                .map(|(app_key, role)| model::AppKey {
-                    name: app_key.name,
-                    key: app_key.key,
-                    role: role.name,
-                    identity: app_key.identity_id,
-                    created_date: app_key.created_date,
-                    allow_origin: app_key.allow_origin,
-                })
+                .map(|(app_key, role)| app_key.to_core_model(role))
                 .collect();
 
             Ok((keys, result.1))

@@ -38,3 +38,16 @@ pub struct Role {
     pub id: i32,
     pub name: String,
 }
+
+impl AppKey {
+    pub fn to_core_model(self, role: Role) -> ya_core_model::appkey::AppKey {
+        ya_core_model::appkey::AppKey {
+            name: self.name,
+            key: self.key,
+            role: role.name,
+            identity: self.identity_id,
+            created_date: self.created_date,
+            allow_origin: self.allow_origin,
+        }
+    }
+}

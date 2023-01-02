@@ -39,6 +39,7 @@ pub struct Create {
     pub name: String,
     pub role: String,
     pub identity: NodeId,
+    pub allow_origin: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

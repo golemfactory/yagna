@@ -3,18 +3,18 @@ use actix_web::dev::RequestHead;
 use actix_web::http::header::HeaderValue;
 use actix_web_httpauth::headers::authorization::{Bearer, Scheme};
 
+use actix_web::http::{header, Method};
 use anyhow::anyhow;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use actix_web::http::header;
 use structopt::StructOpt;
 
 use crate::middleware::auth::resolver::AppKeyResolver;
 
 use ya_core_model::appkey as model;
 use ya_service_api_cache::AutoResolveCache;
-use ya_service_bus::typed as bus;
 use ya_service_bus::RpcEndpoint;
+use ya_service_bus::{actix_rpc, typed as bus};
 
 pub const BUS_ID: &str = "/local/middleware/cors";
 
@@ -22,7 +22,7 @@ pub type Cache = AutoResolveCache<AppKeyResolver>;
 
 #[derive(Clone, StructOpt, Debug)]
 pub struct CorsConfig {
-    #[structopt(long)]
+    #[structopt(long = "api-allow-origin")]
     allowed_origin: Option<String>,
     /// Set a maximum time (in seconds) for which this CORS request may be cached.
     #[structopt(long, default_value = "3600")]
@@ -38,8 +38,37 @@ pub struct AppKeyCors {
 
 impl AppKeyCors {
     pub async fn new(config: &CorsConfig) -> anyhow::Result<AppKeyCors> {
+        let mut page = 1;
+        let mut appkeys = vec![];
+
+        loop {
+            let (mut keys, pages) = actix_rpc::service(model::BUS_ID)
+                .send(model::List {
+                    identity: None,
+                    page,
+                    per_page: 20,
+                })
+                .await
+                .map_err(|e| anyhow!("Failed to query app-keys: {e}"))??;
+            appkeys.append(&mut keys);
+
+            if page == pages {
+                break;
+            } else {
+                page = page + 1;
+            }
+        }
+
+        let mapping = appkeys
+            .into_iter()
+            .filter_map(|appkey| match appkey.allow_origin {
+                Some(origin) => Some((appkey.key, origin)),
+                None => None,
+            })
+            .collect::<HashMap<_, _>>();
+
         let appkey_cache = AppKeyCors {
-            cors: Arc::new(Default::default()),
+            cors: Arc::new(RwLock::new(mapping)),
             config: Arc::new(config.clone()),
         };
         appkey_cache
@@ -96,13 +125,17 @@ impl AppKeyCors {
             async move {
                 match event {
                     model::event::Event::NewKey(appkey) => {
-                        log::debug!("Updating CORS for app-key: {}, origin: ", appkey.name);
+                        log::debug!(
+                            "Updating CORS for app-key: {}, origin: {:?}",
+                            appkey.name,
+                            appkey.allow_origin
+                        );
                         this.update(&appkey.key, None)
-                    },
+                    }
                     model::event::Event::DroppedKey(appkey) => {
                         log::debug!("Removing CORS for app-key: {}", appkey.name);
                         this.update(&appkey.key, None)
-                    },
+                    }
                 };
                 Ok(())
             }
@@ -113,26 +146,47 @@ impl AppKeyCors {
         Ok(())
     }
 
-    fn verify_origin(&self, header: &HeaderValue, request: &RequestHead) -> bool {
-        let key = Bearer::parse(header).ok().map(|b| b.token().to_string());
+    fn verify_origin(&self, origin: &HeaderValue, request: &RequestHead) -> bool {
+        // Most browsers don't include authorization token in OPTIONS request.
+        if request.method == Method::OPTIONS {
+            // TODO: We should check if origin domain has chance of being allowed.
+            //       That's why we check if origin exists in any of domains lists.
+            //       Later calls will be checked against token.
+            return true;
+        }
+
+        let key = request
+            .headers()
+            .get(header::AUTHORIZATION)
+            .map(|header| Bearer::parse(header).ok())
+            .flatten()
+            .map(|bearer| bearer.token().to_string());
+
+        log::debug!("Checking cors");
         match key {
             Some(key) => match self.get(&key) {
-                None => false,
+                None => {
+                    log::debug!("Origin for appkey {key} not found");
+                    false
+                }
                 Some(domain) => {
-                    if let Some(origin) = request.headers().get(header::ORIGIN) {
-                        if let Ok(origin) = origin.to_str() {
-                            if origin == "*" {
-                                return true;
-                            }
-                            if domain == origin {
-                                return true;
-                            }
+                    log::debug!("Checking cors policy for appkey: {key}");
+                    if let Ok(origin) = origin.to_str() {
+                        log::debug!("Cors: checking request origin ({origin}) with appkey allowed list: {domain}");
+                        if origin == "*" {
+                            return true;
+                        }
+                        if domain == origin {
+                            return true;
                         }
                     }
                     false
                 }
             },
-            None => false,
+            None => {
+                log::debug!("App-key token not found in request");
+                false
+            }
         }
     }
 }
