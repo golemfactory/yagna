@@ -1,6 +1,7 @@
 use std::{
     fs::OpenOptions,
     io::BufReader,
+    ops::Not,
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
@@ -91,7 +92,7 @@ impl RuleStore {
     }
 
     pub fn always_reject_outbound(&self) -> bool {
-        self.config.read().unwrap().outbound.enabled == false
+        self.config.read().unwrap().outbound.enabled.not()
     }
 
     pub fn always_accept_outbound(&self) -> bool {
