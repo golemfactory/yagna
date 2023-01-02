@@ -90,6 +90,10 @@ impl RuleStore {
         self.save()
     }
 
+    pub fn always_reject_outbound(&self) -> bool {
+        self.config.read().unwrap().outbound.enabled == false
+    }
+
     pub fn always_accept_outbound(&self) -> bool {
         self.config.read().unwrap().outbound.everyone == Mode::All
     }
