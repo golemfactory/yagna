@@ -23,7 +23,7 @@ pub type Cache = AutoResolveCache<AppKeyResolver>;
 #[derive(Clone, StructOpt, Debug)]
 pub struct CorsConfig {
     #[structopt(long = "api-allow-origin")]
-    allowed_origin: Option<String>,
+    allowed_origins: Vec<String>,
     /// Set a maximum time (in seconds) for which this CORS request may be cached.
     #[structopt(long, default_value = "3600")]
     max_age: usize,
@@ -32,7 +32,7 @@ pub struct CorsConfig {
 #[derive(Clone)]
 pub struct AppKeyCors {
     /// Holds AppKey and Allowed Origins pairs.
-    cors: Arc<RwLock<HashMap<String, String>>>,
+    cors: Arc<RwLock<HashMap<String, Vec<String>>>>,
     config: Arc<CorsConfig>,
 }
 
@@ -61,9 +61,14 @@ impl AppKeyCors {
 
         let mapping = appkeys
             .into_iter()
-            .filter_map(|appkey| match appkey.allow_origin {
-                Some(origin) => Some((appkey.key, origin)),
-                None => None,
+            .map(|appkey| {
+                let key = appkey.key.clone();
+                let origins = appkey
+                    .allow_origins
+                    .into_iter()
+                    .map(move |origin| origin)
+                    .collect::<Vec<_>>();
+                (key, origins)
             })
             .collect::<HashMap<_, _>>();
 
@@ -89,28 +94,29 @@ impl AppKeyCors {
             .block_on_origin_mismatch(false)
             .max_age(config.max_age);
 
-        if let Some(allowed_origin) = config.allowed_origin.clone() {
+        for allowed_origin in &config.allowed_origins {
             if allowed_origin == "*" {
                 cors = cors.send_wildcard()
             } else {
                 cors = cors.allowed_origin(&allowed_origin);
             }
         }
+
         cors
     }
 
-    fn get(&self, key: &str) -> Option<String> {
+    fn get(&self, key: &str) -> Vec<String> {
         match self.cors.read() {
-            Ok(cors) => cors.get(key).cloned(),
-            Err(_) => None,
+            Ok(cors) => cors.get(key).cloned().unwrap_or(vec![]),
+            Err(_) => vec![],
         }
     }
 
-    fn update(&self, key: &str, origins: Option<String>) {
+    fn update(&self, key: &str, origins: Vec<String>) {
         if let Ok(mut cors) = self.cors.write() {
-            match origins {
-                None => cors.remove(key),
-                Some(origins) => cors.insert(key.to_string(), origins.to_string()),
+            match origins.is_empty() {
+                true => cors.remove(key),
+                false => cors.insert(key.to_string(), origins),
             };
         }
     }
@@ -128,13 +134,13 @@ impl AppKeyCors {
                         log::debug!(
                             "Updating CORS for app-key: {}, origin: {:?}",
                             appkey.name,
-                            appkey.allow_origin
+                            appkey.allow_origins
                         );
-                        this.update(&appkey.key, None)
+                        this.update(&appkey.key, appkey.allow_origins)
                     }
                     model::event::Event::DroppedKey(appkey) => {
                         log::debug!("Removing CORS for app-key: {}", appkey.name);
-                        this.update(&appkey.key, None)
+                        this.update(&appkey.key, vec![])
                     }
                 };
                 Ok(())
@@ -162,27 +168,18 @@ impl AppKeyCors {
             .flatten()
             .map(|bearer| bearer.token().to_string());
 
-        log::debug!("Checking cors");
         match key {
-            Some(key) => match self.get(&key) {
-                None => {
-                    log::debug!("Origin for appkey {key} not found");
-                    false
-                }
-                Some(domain) => {
-                    log::debug!("Checking cors policy for appkey: {key}");
-                    if let Ok(origin) = origin.to_str() {
-                        log::debug!("Cors: checking request origin ({origin}) with appkey allowed list: {domain}");
-                        if origin == "*" {
-                            return true;
-                        }
-                        if domain == origin {
-                            return true;
-                        }
+            Some(key) => self.get(&key).into_iter().any(|allowed| {
+                if let Ok(origin) = origin.to_str() {
+                    if origin == "*" {
+                        return true;
                     }
-                    false
+                    if origin == allowed {
+                        return true;
+                    }
                 }
-            },
+                return false;
+            }),
             None => {
                 log::debug!("App-key token not found in request");
                 false

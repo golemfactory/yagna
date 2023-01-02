@@ -48,7 +48,12 @@ impl AppKeyCommand {
 
     pub async fn run_command(&self, _ctx: &CliCtx) -> Result<CommandOutput> {
         match &self {
-            AppKeyCommand::Create { name, role, id, allow_origin } => {
+            AppKeyCommand::Create {
+                name,
+                role,
+                id,
+                allow_origin,
+            } => {
                 let identity = match id {
                     Some(id) => {
                         if id.starts_with("0x") {
@@ -109,7 +114,7 @@ impl AppKeyCommand {
                         .map(|app_key| {
                             serde_json::json! {[
                                 app_key.name, app_key.key, app_key.identity,
-                                app_key.role, app_key.created_date, app_key.allow_origin.unwrap_or("".to_string()),
+                                app_key.role, app_key.created_date, app_key.allow_origins,
                             ]}
                         })
                         .collect(),

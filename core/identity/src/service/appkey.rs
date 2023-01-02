@@ -84,7 +84,13 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                     }
                 }
                 Err(crate::dao::Error::Dao(diesel::result::Error::NotFound)) => dao
-                    .create(key.clone(), create.name, create.role, create.identity, create.allow_origin)
+                    .create(
+                        key.clone(),
+                        create.name,
+                        create.role,
+                        create.identity,
+                        create.allow_origin,
+                    )
                     .await
                     .map_err(model::Error::internal)
                     .map(|_| key),
@@ -97,7 +103,9 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                 .await
                 .map_err(|e| model::Error::internal(e.to_string()))?;
 
-            let _ = create_tx.send(model::event::Event::NewKey(appkey.to_core_model(role))).await;
+            let _ = create_tx
+                .send(model::event::Event::NewKey(appkey.to_core_model(role)))
+                .await;
             Ok(result)
         }
     });
@@ -130,7 +138,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                     role: model::DEFAULT_ROLE.to_string(),
                     identity: node_id,
                     created_date: start_datetime,
-                    allow_origin: None,
+                    allow_origins: vec![],
                 })
             } else {
                 let (appkey, role) = db

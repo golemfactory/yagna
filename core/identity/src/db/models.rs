@@ -47,7 +47,10 @@ impl AppKey {
             role: role.name,
             identity: self.identity_id,
             created_date: self.created_date,
-            allow_origin: self.allow_origin,
+            allow_origins: self
+                .allow_origin
+                .map(|origin| vec![origin])
+                .unwrap_or(vec![]),
         }
     }
 }

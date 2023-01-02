@@ -87,7 +87,7 @@ pub struct AppKey {
     pub role: String,
     pub identity: NodeId,
     pub created_date: NaiveDateTime,
-    pub allow_origin: Option<String>,
+    pub allow_origins: Vec<String>,
 }
 
 impl RpcMessage for Create {
