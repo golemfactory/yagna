@@ -19,7 +19,7 @@ pub enum AppKeyCommand {
         id: Option<String>,
         /// Set cors policy for request made using this app-key.
         #[structopt(long)]
-        allow_origin: Option<String>,
+        allow_origins: Vec<String>,
     },
     Drop {
         name: String,
@@ -52,7 +52,7 @@ impl AppKeyCommand {
                 name,
                 role,
                 id,
-                allow_origin,
+                allow_origins: allow_origin,
             } => {
                 let identity = match id {
                     Some(id) => {
@@ -70,7 +70,7 @@ impl AppKeyCommand {
                     name: name.clone(),
                     role: role.clone(),
                     identity,
-                    allow_origin: allow_origin.clone(),
+                    allow_origins: allow_origin.clone(),
                 };
                 let key = bus::service(model::BUS_ID).send(create).await??;
                 Ok(CommandOutput::Object(serde_json::to_value(key)?))

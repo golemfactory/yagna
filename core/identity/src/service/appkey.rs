@@ -89,7 +89,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
                         create.name,
                         create.role,
                         create.identity,
-                        create.allow_origin,
+                        create.allow_origins,
                     )
                     .await
                     .map_err(model::Error::internal)

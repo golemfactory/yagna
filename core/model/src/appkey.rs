@@ -39,7 +39,7 @@ pub struct Create {
     pub name: String,
     pub role: String,
     pub identity: NodeId,
-    pub allow_origin: Option<String>,
+    pub allow_origins: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

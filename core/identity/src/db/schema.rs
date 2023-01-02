@@ -8,7 +8,7 @@ diesel::table! {
         key -> Text,
         identity_id -> Text,
         created_date -> Timestamp,
-        allow_origin -> Nullable<Text>,
+        allow_origins -> Nullable<Text>,
     }
 }
 

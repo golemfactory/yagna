@@ -29,7 +29,7 @@ pub struct AppKey {
     pub key: String,
     pub identity_id: NodeId,
     pub created_date: NaiveDateTime,
-    pub allow_origin: Option<String>,
+    pub allow_origins: Option<String>,
 }
 
 #[derive(Queryable, Debug, Identifiable)]
@@ -48,8 +48,8 @@ impl AppKey {
             identity: self.identity_id,
             created_date: self.created_date,
             allow_origins: self
-                .allow_origin
-                .map(|origin| vec![origin])
+                .allow_origins
+                .map(|allowed| serde_json::from_str(&allowed).unwrap_or(vec![]))
                 .unwrap_or(vec![]),
         }
     }

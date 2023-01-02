@@ -9,7 +9,7 @@ CREATE TABLE "app_key"(
 	"key" VARCHAR(255) NOT NULL,
 	"identity_id" VARCHAR(255) NOT NULL,
 	"created_date" DATETIME NOT NULL,
-	"allow_origin" VARCHAR(255),
+	"allow_origins" TEXT NULL,
     FOREIGN KEY("role_id") REFERENCES "role" ("id"),
     FOREIGN KEY (identity_id) REFERENCES identity(identity_id),
     UNIQUE("name")

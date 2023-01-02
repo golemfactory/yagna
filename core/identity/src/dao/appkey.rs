@@ -47,10 +47,13 @@ impl<'c> AppKeyDao<'c> {
         name: String,
         role: String,
         identity: NodeId,
-        cors_allow_origin: Option<String>
+        cors_allow_origin: Vec<String>,
     ) -> Result<()> {
         use crate::db::schema::app_key as app_key_dsl;
         use crate::db::schema::role as role_dsl;
+
+        let cors_allow_origin =
+            Some(serde_json::to_string(&cors_allow_origin).unwrap_or("[]".to_string()));
 
         do_with_transaction(self.pool, move |conn| {
             let role: Role = role_dsl::table
@@ -64,7 +67,7 @@ impl<'c> AppKeyDao<'c> {
                     app_key_dsl::key.eq(key),
                     app_key_dsl::identity_id.eq(identity),
                     app_key_dsl::created_date.eq(Utc::now().naive_utc()),
-                    app_key_dsl::allow_origin.eq(cors_allow_origin),
+                    app_key_dsl::allow_origins.eq(cors_allow_origin),
                 ))
                 .execute(conn)?;
 
