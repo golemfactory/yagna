@@ -33,7 +33,7 @@ impl AppKeyCache {
             if page == pages {
                 break;
             } else {
-                page = page + 1;
+                page += 1;
             }
         }
 
@@ -54,7 +54,7 @@ impl AppKeyCache {
 
     pub fn get_appkey(&self, key: &str) -> Option<AppKey> {
         match self.appkeys.read() {
-            Ok(keymap) => keymap.get(key).map(|appkey| appkey.clone()),
+            Ok(keymap) => keymap.get(key).cloned(),
             Err(_) => None,
         }
     }
@@ -64,7 +64,7 @@ impl AppKeyCache {
             Ok(keymap) => keymap
                 .get(key)
                 .map(|appkey| appkey.allow_origins.clone())
-                .unwrap_or(vec![]),
+                .unwrap_or_default(),
             Err(_) => vec![],
         }
     }

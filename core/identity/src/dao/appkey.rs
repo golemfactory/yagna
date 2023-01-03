@@ -53,7 +53,7 @@ impl<'c> AppKeyDao<'c> {
         use crate::db::schema::role as role_dsl;
 
         let cors_allow_origin =
-            Some(serde_json::to_string(&cors_allow_origin).unwrap_or("[]".to_string()));
+            Some(serde_json::to_string(&cors_allow_origin).unwrap_or_else(|_| "[]".to_string()));
 
         do_with_transaction(self.pool, move |conn| {
             let role: Role = role_dsl::table

@@ -53,7 +53,7 @@ impl AppKeyCors {
             if allowed_origin == "*" {
                 cors = cors.send_wildcard()
             } else {
-                cors = cors.allowed_origin(&allowed_origin);
+                cors = cors.allowed_origin(allowed_origin);
             }
         }
 
@@ -72,8 +72,7 @@ impl AppKeyCors {
         let key = request
             .headers()
             .get(header::AUTHORIZATION)
-            .map(|header| Bearer::parse(header).ok())
-            .flatten()
+            .and_then(|header| Bearer::parse(header).ok())
             .map(|bearer| bearer.token().to_string());
 
         match key {
@@ -90,7 +89,7 @@ impl AppKeyCors {
                             return true;
                         }
                     }
-                    return false;
+                    false
                 }),
             None => {
                 log::debug!("App-key token not found in request");
