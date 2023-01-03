@@ -386,11 +386,7 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
 #[test]
 #[serial]
 fn offer_should_be_rejected_when_outbound_is_disabled() {
-    let domain_patterns =
-        create_whitelist(r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#);
     let (_, test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
-
-    let trusted_keys = Keystore::load(&test_cert_dir).expect("Can load test certificates");
 
     let rules_file = test_cert_dir.join("rules.json");
     let rules_config = RuleStore::load_or_create(&rules_file).expect("Can't load RuleStore");
@@ -398,15 +394,22 @@ fn offer_should_be_rejected_when_outbound_is_disabled() {
 
     let config = create_manifest_signature_validating_policy_config();
     let negotiator_cfg = AgentNegotiatorsConfig {
-        trusted_keys,
-        domain_patterns,
+        trusted_keys: Keystore::load(&test_cert_dir).expect("Can load test certificates"),
+        domain_patterns: create_whitelist(
+            r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#,
+        ),
         rules_config,
     };
     let mut manifest_negotiator = ManifestSignature::new(&config, negotiator_cfg);
 
-    let comp_manifest_b64 = create_comp_manifest_b64(r#"["https://domain.com"]"#);
     let demand = AgreementView {
-        json: create_demand_json(&comp_manifest_b64, None, None, None, None),
+        json: create_demand_json(
+            &create_comp_manifest_b64(r#"["https://domain.com"]"#),
+            None,
+            None,
+            None,
+            None,
+        ),
         agreement_id: "id".into(),
     };
     let offer = AgreementView {
