@@ -407,11 +407,11 @@ fn offer_should_be_rejected_when_outbound_is_disabled() {
     let comp_manifest_b64 = create_comp_manifest_b64(r#"["https://domain.com"]"#);
     let demand = AgreementView {
         json: create_demand_json(&comp_manifest_b64, None, None, None, None),
-        agreement_id: "id".to_string(),
+        agreement_id: "id".into(),
     };
     let offer = AgreementView {
         json: serde_json::from_str(r#"{ "any": "thing" }"#).unwrap(),
-        agreement_id: "id".to_string(),
+        agreement_id: "id".into(),
     };
 
     let result = manifest_negotiator.negotiate_step(&demand, offer).unwrap();
