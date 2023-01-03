@@ -7768,6 +7768,7 @@ dependencies = [
  "actix-web-actors",
  "anyhow",
  "base64 0.11.0",
+ "flexbuffers",
  "futures 0.3.25",
  "lazy_static",
  "log",
