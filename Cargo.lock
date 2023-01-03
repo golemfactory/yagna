@@ -8375,14 +8375,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ya-service-api-cache"
-version = "0.1.0"
-dependencies = [
- "futures 0.3.25",
- "log",
-]
-
-[[package]]
 name = "ya-service-api-derive"
 version = "0.2.0"
 dependencies = [
@@ -8434,7 +8426,6 @@ dependencies = [
  "ya-persistence",
  "ya-sb-router",
  "ya-service-api",
- "ya-service-api-cache",
  "ya-service-api-derive",
  "ya-service-api-interfaces",
  "ya-service-bus",
