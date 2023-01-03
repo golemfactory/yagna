@@ -152,6 +152,20 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
         }
     });
 
+    let db_ = db.clone();
+    let _ = bus::bind(model::BUS_ID, move |get: model::GetByName| {
+        let db = db_.clone();
+        async move {
+            let (appkey, role) = db
+                .as_dao::<AppKeyDao>()
+                .get_for_name(get.name)
+                .await
+                .map_err(|e| model::Error::internal(e.to_string()))?;
+
+            Ok(appkey.to_core_model(role))
+        }
+    });
+
     let dbx = db.clone();
     let _ = bus::bind(model::BUS_ID, move |list: model::List| {
         let db = dbx.clone();

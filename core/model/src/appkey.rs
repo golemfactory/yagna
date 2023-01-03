@@ -48,6 +48,12 @@ pub struct Get {
     pub key: String,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetByName {
+    pub name: String,
+}
+
 impl Get {
     pub fn with_key(key: String) -> Self {
         Get { key }
@@ -98,6 +104,12 @@ impl RpcMessage for Create {
 
 impl RpcMessage for Get {
     const ID: &'static str = "Get";
+    type Item = AppKey;
+    type Error = Error;
+}
+
+impl RpcMessage for GetByName {
+    const ID: &'static str = "GetByName";
     type Item = AppKey;
     type Error = Error;
 }

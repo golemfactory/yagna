@@ -34,6 +34,9 @@ pub enum AppKeyCommand {
         #[structopt(default_value = "10", long)]
         per_page: u32,
     },
+    Show {
+        name: String,
+    },
 }
 
 impl AppKeyCommand {
@@ -87,6 +90,14 @@ impl AppKeyCommand {
                     .unwrap();
                 Ok(CommandOutput::NoOutput)
             }
+            AppKeyCommand::Show { name } => {
+                let appkey = bus::service(model::BUS_ID)
+                    .send(model::GetByName { name: name.clone() })
+                    .await
+                    .map_err(anyhow::Error::msg)?
+                    .unwrap();
+                Ok(CommandOutput::Object(serde_json::to_value(appkey)?))
+            }
             AppKeyCommand::List { id, page, per_page } => {
                 let list = model::List {
                     identity: id.clone(),
@@ -106,7 +117,6 @@ impl AppKeyCommand {
                         "id".into(),
                         "role".into(),
                         "created".into(),
-                        "allowOrigin".into(),
                     ],
                     values: result
                         .0
@@ -114,7 +124,7 @@ impl AppKeyCommand {
                         .map(|app_key| {
                             serde_json::json! {[
                                 app_key.name, app_key.key, app_key.identity,
-                                app_key.role, app_key.created_date, app_key.allow_origins,
+                                app_key.role, app_key.created_date,
                             ]}
                         })
                         .collect(),
