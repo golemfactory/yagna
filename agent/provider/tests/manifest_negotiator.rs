@@ -355,7 +355,6 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
         cert_b64,
         cert_permissions_b64,
     );
-    let demand: Value = serde_json::from_str(&demand).unwrap();
     let demand = AgreementView {
         json: demand,
         agreement_id: "id".to_string(),
@@ -407,14 +406,7 @@ fn offer_should_be_rejected_when_outbound_is_disabled() {
 
     let comp_manifest_b64 = create_comp_manifest_b64(r#"["https://domain.com"]"#);
     let demand = AgreementView {
-        json: serde_json::from_str(&create_demand_json(
-            &comp_manifest_b64,
-            None,
-            None,
-            None,
-            None,
-        ))
-        .unwrap(),
+        json: create_demand_json(&comp_manifest_b64, None, None, None, None),
         agreement_id: "id".to_string(),
     };
     let offer = AgreementView {
@@ -472,7 +464,7 @@ fn create_demand_json(
     signature_alg_b64: Option<&str>,
     cert_b64: Option<String>,
     cert_permissions_b64: Option<&str>,
-) -> String {
+) -> serde_json::Value {
     let mut payload = HashMap::new();
     payload.insert("@tag", json!(comp_manifest_b64));
     if signature_b64.is_some() && signature_alg_b64.is_some() {
@@ -514,9 +506,11 @@ fn create_demand_json(
             }
         },
     });
-    let demand = serde_json::to_string_pretty(&manifest).unwrap();
-    println!("Tested demand:\n{demand}");
-    demand
+    println!(
+        "Tested demand:\n{}",
+        serde_json::to_string_pretty(&manifest).unwrap()
+    );
+    manifest
 }
 
 fn create_manifest_signature_validating_policy_config() -> PolicyConfig {
