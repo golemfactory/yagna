@@ -1,10 +1,8 @@
-//! Provider side operations
 use crate::{GsbApiError, WsMessagesHandler, WsRequest, WsResponse, WsResult};
 use actix::Addr;
 use futures::channel::oneshot::{self, Canceled};
 use lazy_static::lazy_static;
 use std::{
-    borrow::Borrow,
     collections::{HashMap, HashSet},
     convert::{TryFrom, TryInto},
     future::Future,
@@ -119,7 +117,9 @@ where
                 let request_dst = request_dst.read().unwrap();
                 match &*request_dst {
                     Some(request_dst) => {
-                        request_dst.send(ws_request).await.unwrap();
+                        if let Err(err) = request_dst.send(ws_request).await {
+                            log::error!("Failed to handle msg: {}", err);
+                        }
                     }
                     None => {
                         //TODO handle it
@@ -147,10 +147,11 @@ impl TryInto<WsRequest> for (String, GetMetadata) {
     type Error = <GetMetadata as RpcMessage>::Error;
 
     fn try_into(self) -> Result<WsRequest, Self::Error> {
-        let payload = serde_json::to_vec(&self)
+        // let payload = flexbuffers::to_vec(self.1)
+        let payload = serde_json::to_vec(&self.1)
             .map_err(|err| ya_core_model::gftp::Error::InternalError(err.to_string()))?;
-        let component = self.0;
-        let id = GetMetadata::ID.to_string();
+        let id = self.0;
+        let component = GetMetadata::ID.to_string();
         Ok(WsRequest {
             id,
             component,
@@ -165,6 +166,7 @@ impl TryFrom<WsResult> for GftpMetadata {
     fn try_from(res: WsResult) -> Result<Self, Self::Error> {
         match res.0 {
             Ok(ws_response) => {
+                //  let response = flexbuffers::from_slice(&ws_response.payload)
                 let response = serde_json::from_slice(&ws_response.payload)
                     .map_err(|err| ya_core_model::gftp::Error::InternalError(err.to_string()))?;
                 Ok(response)
@@ -184,6 +186,7 @@ impl TryInto<WsRequest> for (String, GetChunk) {
     type Error = <GetChunk as RpcMessage>::Error;
 
     fn try_into(self) -> Result<WsRequest, Self::Error> {
+        // let payload = flexbuffers::to_vec(self.1)
         let payload = serde_json::to_vec(&self)
             .map_err(|err| ya_core_model::gftp::Error::InternalError(err.to_string()))?;
         let component = self.0;
@@ -202,6 +205,7 @@ impl TryFrom<WsResult> for GftpChunk {
     fn try_from(res: WsResult) -> Result<Self, Self::Error> {
         match res.0 {
             Ok(ws_response) => {
+                // let response = flexbuffers::from_slice(&ws_response.payload)
                 let response = serde_json::from_slice(&ws_response.payload)
                     .map_err(|err| ya_core_model::gftp::Error::InternalError(err.to_string()))?;
                 Ok(response)

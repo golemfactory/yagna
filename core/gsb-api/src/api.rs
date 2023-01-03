@@ -1,5 +1,6 @@
 use crate::services::GsbServices;
 use crate::{GsbApiError, WsMessagesHandler};
+use actix_http::ws::Codec;
 use actix_http::StatusCode;
 use actix_web::web::Data;
 use actix_web::Scope;
@@ -69,11 +70,12 @@ async fn get_service_messages(
     let mut services = services.lock()?;
     //TODO handle decode error
     let key = base64::decode(&path.key).unwrap();
-    let responders = services.ws_responses_dst(&String::from_utf8_lossy(&key));
+    let key = String::from_utf8_lossy(&key);
+    let responders = services.ws_responses_dst(&key);
     let responders = responders.clone();
     let handler = WsMessagesHandler { responders };
     let (addr, resp) = ws::WsResponseBuilder::new(handler, &req, stream).start_with_addr()?;
-    let ws_request_dst = services.ws_request_dst(&path.key);
+    let ws_request_dst = services.ws_request_dst(&key);
     let mut ws_request_dst = ws_request_dst.write().unwrap();
     *ws_request_dst = Some(addr);
     Ok(resp)

@@ -3,7 +3,7 @@ mod services;
 
 use actix::{dev::MessageResponse, Actor, Handler, StreamHandler};
 use actix_http::{
-    ws::{CloseReason, ProtocolError},
+    ws::{CloseCode, CloseReason, ProtocolError},
     StatusCode,
 };
 use actix_web::ResponseError;
@@ -103,15 +103,41 @@ struct WsResult(Result<WsResponse, anyhow::Error>);
 impl MessageResponse<WsMessagesHandler, WsRequest> for Result<(), WsApiError> {
     fn handle(
         self,
-        _ctx: &mut <WsMessagesHandler as Actor>::Context,
-        _tx: Option<actix::dev::OneshotSender<<WsRequest as actix::Message>::Result>>,
+        ctx: &mut <WsMessagesHandler as Actor>::Context,
+        tx: Option<actix::dev::OneshotSender<<WsRequest as actix::Message>::Result>>,
     ) {
-        todo!()
+        match self {
+            Ok(()) => {}
+            Err(err) => ctx.close(Some(CloseReason {
+                code: CloseCode::Error,
+                description: Some(err.to_string()),
+            })),
+        }
     }
 }
 
 pub(crate) struct WsMessagesHandler {
     pub responders: Arc<RwLock<HashMap<String, Sender<WsResult>>>>,
+}
+
+impl WsMessagesHandler {
+    fn handle<'MSG>(&mut self, msg: &'MSG [u8]) {
+        match flexbuffers::from_slice::<WsResponse>(msg) {
+            Ok(response) => {
+                log::info!("WsRequest: {response:?}");
+                let mut responders = self.responders.write().unwrap();
+                match responders.remove(&response.id) {
+                    Some(responder) => {
+                        if let Err(err) = responder.send(WsResult(Ok(response))) {
+                            log::error!("Failde to handle msg");
+                        }
+                    }
+                    None => {}
+                }
+            }
+            Err(err) => todo!("Expected response: Error {err:?}"),
+        }
+    }
 }
 
 impl Actor for WsMessagesHandler {
@@ -122,10 +148,9 @@ impl Handler<WsRequest> for WsMessagesHandler {
     type Result = Result<(), WsApiError>;
 
     fn handle(&mut self, msg: WsRequest, ctx: &mut Self::Context) -> Self::Result {
-        ctx.text(
-            serde_json::to_string(&msg)
-                .map_err(|err| anyhow::anyhow!("Failed to serialize msg: {}", err))?,
-        );
+        let msg = flexbuffers::to_vec(&msg)
+            .map_err(|err| anyhow::anyhow!("Failed to serialize msg: {}", err))?;
+        ctx.binary(msg);
         Ok(())
     }
 }
@@ -137,47 +162,26 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
         ctx: &mut Self::Context,
     ) {
         match item {
-            Ok(msg) => {
-                match msg {
-                    ws::Message::Text(msg) => {
-                        log::info!("Text: {:?}", msg);
-                        match serde_json::from_slice::<WsResponse>(msg.as_bytes()) {
-                            Ok(response) => {
-                                log::info!("WsRequest: {response:?}");
-                                let mut responders = self.responders.write().unwrap();
-                                match responders.remove(&response.id) {
-                                    Some(responder) => {
-                                        responder.send(WsResult(Ok(response)));
-                                    }
-                                    None => {}
-                                }
-                            }
-                            Err(err) => todo!("Expected response: Error {err:?}"),
-                        }
-                    }
-                    ws::Message::Binary(msg) => {
-                        todo!("NYI Binary: {:?}", msg);
-                    }
-                    ws::Message::Continuation(msg) => {
-                        todo!("NYI Continuation: {:?}", msg);
-                    }
-                    ws::Message::Close(msg) => {
-                        log::info!("Close: {:?}", msg);
-                    }
-                    ws::Message::Ping(msg) => {
-                        log::info!("Ping: {:?}", msg);
-                    }
-                    any => todo!("NYI support of: {:?}", any),
+            Ok(msg) => match msg {
+                ws::Message::Text(msg) => {
+                    log::info!("Text: {:?}", msg);
+                    self.handle(msg.as_bytes());
                 }
-                ctx.text(
-                    json!({
-                      "id": "myId",
-                      "component": "GetMetadata",
-                      "payload": "payload",
-                    })
-                    .to_string(),
-                )
-            }
+                ws::Message::Binary(msg) => {
+                    log::info!("Binary: {:?}", msg);
+                    self.handle(&msg);
+                }
+                ws::Message::Continuation(msg) => {
+                    todo!("NYI Continuation: {:?}", msg);
+                }
+                ws::Message::Close(msg) => {
+                    log::info!("Close: {:?}", msg);
+                }
+                ws::Message::Ping(msg) => {
+                    log::info!("Ping: {:?}", msg);
+                }
+                any => todo!("NYI support of: {:?}", any),
+            },
             Err(cause) => ctx.close(Some(CloseReason {
                 code: ws::CloseCode::Error,
                 description: Some(
