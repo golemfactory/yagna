@@ -8,9 +8,11 @@ use actix_http::{
 };
 use actix_web::ResponseError;
 use actix_web_actors::ws;
+use bytes::Bytes;
+use flexbuffers::Reader;
 use futures::channel::oneshot::Sender;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use services::GsbServices;
 use std::{
     collections::HashMap,
@@ -85,17 +87,17 @@ impl ResponseError for GsbApiError {
 struct WsRequest {
     id: String,
     component: String,
-    payload: Vec<u8>,
+    payload: Value,
 }
 
 impl actix::Message for WsRequest {
     type Result = WsResult;
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug)]
 struct WsResponse {
     id: String,
-    payload: Vec<u8>,
+    msg: Bytes,
 }
 
 struct WsResult(Result<WsResponse, anyhow::Error>);
@@ -121,21 +123,29 @@ pub(crate) struct WsMessagesHandler {
 }
 
 impl WsMessagesHandler {
-    fn handle<'MSG>(&mut self, msg: &'MSG [u8]) {
-        match flexbuffers::from_slice::<WsResponse>(msg) {
-            Ok(response) => {
-                log::info!("WsRequest: {response:?}");
+    fn handle(&mut self, msg: bytes::Bytes) {
+        match Reader::get_root(&*msg) {
+            Ok(buffer) => {
+                let response = buffer.as_map();
+                //TODO handle errors
+                let id = response.index("id").unwrap().as_str().to_string();
+                let response = WsResponse { id, msg };
+                log::info!("WsResponse: {response:?}");
                 let mut responders = self.responders.write().unwrap();
                 match responders.remove(&response.id) {
                     Some(responder) => {
                         if let Err(err) = responder.send(WsResult(Ok(response))) {
-                            log::error!("Failde to handle msg");
+                            log::error!("Failed to handle msg");
                         }
                     }
-                    None => {}
+                    None => {
+                        log::error!("No matching response id");
+                    }
                 }
             }
-            Err(err) => todo!("Expected response: Error {err:?}"),
+            Err(err) => {
+                log::error!("Failed to deserialize msg: {}", err);
+            }
         }
     }
 }
@@ -165,11 +175,11 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
             Ok(msg) => match msg {
                 ws::Message::Text(msg) => {
                     log::info!("Text: {:?}", msg);
-                    self.handle(msg.as_bytes());
+                    self.handle(msg.into_bytes());
                 }
                 ws::Message::Binary(msg) => {
                     log::info!("Binary: {:?}", msg);
-                    self.handle(&msg);
+                    self.handle(msg);
                 }
                 ws::Message::Continuation(msg) => {
                     todo!("NYI Continuation: {:?}", msg);
