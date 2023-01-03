@@ -48,7 +48,7 @@ use crate::extension::Extension;
 use autocomplete::CompleteCommand;
 
 use ya_activity::TrackerRef;
-use ya_service_api_web::middleware::cors;
+use ya_service_api_web::middleware::cors::AppKeyCors;
 
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
@@ -557,7 +557,7 @@ impl ServiceCommand {
 
                 let api_host_port = rest_api_host_port(api_url.clone());
                 let rest_address = api_host_port.clone();
-                let cors = cors::AppKeyCors::new(cors).await?;
+                let cors = AppKeyCors::new(cors).await?;
 
                 tokio::task::spawn_local(async move {
                     ya_net::hybrid::send_bcast_new_neighbour().await
@@ -566,7 +566,7 @@ impl ServiceCommand {
                 let server = HttpServer::new(move || {
                     let app = App::new()
                         .wrap(middleware::Logger::default())
-                        .wrap(auth::Auth::default())
+                        .wrap(auth::Auth::new(cors.cache()))
                         .wrap(cors.cors())
                         .route("/me", web::get().to(me))
                         .service(forward_gsb);

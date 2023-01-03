@@ -4,23 +4,12 @@ use actix_web::http::header::HeaderValue;
 use actix_web_httpauth::headers::authorization::{Bearer, Scheme};
 
 use actix_web::http::{header, Method};
-use anyhow::anyhow;
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use structopt::StructOpt;
 
-use crate::middleware::auth::resolver::AppKeyResolver;
+use crate::middleware::auth::resolver::AppKeyCache;
 
-use ya_core_model::appkey as model;
-use ya_service_api_cache::AutoResolveCache;
-use ya_service_bus::RpcEndpoint;
-use ya_service_bus::{actix_rpc, typed as bus};
-
-pub const BUS_ID: &str = "/local/middleware/cors";
-
-pub type Cache = AutoResolveCache<AppKeyResolver>;
-
-#[derive(Clone, StructOpt, Debug)]
+#[derive(Default, Clone, StructOpt, Debug)]
 pub struct CorsConfig {
     #[structopt(long = "api-allow-origin", env = "YAGNA_API_ALLOW_ORIGIN")]
     allowed_origins: Vec<String>,
@@ -31,56 +20,22 @@ pub struct CorsConfig {
 
 #[derive(Clone)]
 pub struct AppKeyCors {
-    /// Holds AppKey and Allowed Origins pairs.
-    cors: Arc<RwLock<HashMap<String, Vec<String>>>>,
+    /// Holds AppKey and Allowed Origins list.
+    cache: AppKeyCache,
     config: Arc<CorsConfig>,
 }
 
 impl AppKeyCors {
     pub async fn new(config: &CorsConfig) -> anyhow::Result<AppKeyCors> {
-        let mut page = 1;
-        let mut appkeys = vec![];
-
-        loop {
-            let (mut keys, pages) = actix_rpc::service(model::BUS_ID)
-                .send(model::List {
-                    identity: None,
-                    page,
-                    per_page: 20,
-                })
-                .await
-                .map_err(|e| anyhow!("Failed to query app-keys: {e}"))??;
-            appkeys.append(&mut keys);
-
-            if page == pages {
-                break;
-            } else {
-                page = page + 1;
-            }
-        }
-
-        let mapping = appkeys
-            .into_iter()
-            .map(|appkey| {
-                let key = appkey.key.clone();
-                let origins = appkey
-                    .allow_origins
-                    .into_iter()
-                    .map(move |origin| origin)
-                    .collect::<Vec<_>>();
-                (key, origins)
-            })
-            .collect::<HashMap<_, _>>();
-
-        let appkey_cache = AppKeyCors {
-            cors: Arc::new(RwLock::new(mapping)),
+        let cache = AppKeyCache::new().await?;
+        Ok(AppKeyCors {
+            cache,
             config: Arc::new(config.clone()),
-        };
-        appkey_cache
-            .listen_events()
-            .await
-            .map_err(|e| anyhow!("Can't build cors middleware: {e}"))?;
-        Ok(appkey_cache)
+        })
+    }
+
+    pub fn cache(&self) -> AppKeyCache {
+        self.cache.clone()
     }
 
     pub fn cors(&self) -> Cors {
@@ -105,53 +60,6 @@ impl AppKeyCors {
         cors
     }
 
-    fn get(&self, key: &str) -> Vec<String> {
-        match self.cors.read() {
-            Ok(cors) => cors.get(key).cloned().unwrap_or(vec![]),
-            Err(_) => vec![],
-        }
-    }
-
-    fn update(&self, key: &str, origins: Vec<String>) {
-        if let Ok(mut cors) = self.cors.write() {
-            match origins.is_empty() {
-                true => cors.remove(key),
-                false => cors.insert(key.to_string(), origins),
-            };
-        }
-    }
-
-    pub async fn listen_events(&self) -> anyhow::Result<()> {
-        let this = self.clone();
-        let endpoint = BUS_ID.to_string();
-
-        let _ = bus::bind(&endpoint, move |event: model::event::Event| {
-            let this = this.clone();
-
-            async move {
-                match event {
-                    model::event::Event::NewKey(appkey) => {
-                        log::debug!(
-                            "Updating CORS for app-key: {}, origin: {:?}",
-                            appkey.name,
-                            appkey.allow_origins
-                        );
-                        this.update(&appkey.key, appkey.allow_origins)
-                    }
-                    model::event::Event::DroppedKey(appkey) => {
-                        log::debug!("Removing CORS for app-key: {}", appkey.name);
-                        this.update(&appkey.key, vec![])
-                    }
-                };
-                Ok(())
-            }
-        });
-        bus::service(model::BUS_ID)
-            .send(model::Subscribe { endpoint })
-            .await??;
-        Ok(())
-    }
-
     fn verify_origin(&self, origin: &HeaderValue, request: &RequestHead) -> bool {
         // Most browsers don't include authorization token in OPTIONS request.
         if request.method == Method::OPTIONS {
@@ -169,17 +77,21 @@ impl AppKeyCors {
             .map(|bearer| bearer.token().to_string());
 
         match key {
-            Some(key) => self.get(&key).into_iter().any(|allowed| {
-                if let Ok(origin) = origin.to_str() {
-                    if origin == "*" {
-                        return true;
+            Some(key) => self
+                .cache
+                .get_allowed_origins(&key)
+                .into_iter()
+                .any(|allowed| {
+                    if let Ok(origin) = origin.to_str() {
+                        if origin == "*" {
+                            return true;
+                        }
+                        if origin == allowed {
+                            return true;
+                        }
                     }
-                    if origin == allowed {
-                        return true;
-                    }
-                }
-                return false;
-            }),
+                    return false;
+                }),
             None => {
                 log::debug!("App-key token not found in request");
                 false

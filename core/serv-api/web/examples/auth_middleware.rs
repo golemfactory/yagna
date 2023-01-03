@@ -9,6 +9,7 @@ use ya_core_model::identity as idm;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api::{CliCtx, CommandOutput};
 use ya_service_api_derive::services;
+use ya_service_api_web::middleware::cors::{AppKeyCors, CorsConfig};
 use ya_service_api_web::{middleware::auth, rest_api_addr, rest_api_url};
 use ya_service_bus::RpcEndpoint;
 
@@ -28,10 +29,11 @@ async fn server() -> anyhow::Result<()> {
     ya_sb_router::bind_gsb_router(None).await?;
     Service::gsb(&db).await?;
 
+    let cors = AppKeyCors::new(&CorsConfig::default()).await?;
     HttpServer::new(move || {
         App::new()
             .wrap(middleware::Logger::default())
-            .wrap(auth::Auth::default())
+            .wrap(auth::Auth::new(cors.cache()))
             .service(web::resource("/").route(web::get().to(response)))
     })
     .bind(rest_api_addr())?
@@ -81,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
                         name,
                         role: model::DEFAULT_ROLE.to_string(),
                         identity,
-                        allow_origins: None,
+                        allow_origins: vec![],
                     };
 
                     let app_key = bus::service(model::BUS_ID)
