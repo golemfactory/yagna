@@ -1,6 +1,7 @@
 use std::{
     fs::OpenOptions,
     io::BufReader,
+    ops::Not,
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
@@ -63,6 +64,13 @@ impl RuleStore {
         *self.config.write().unwrap() = store;
     }
 
+    pub fn set_enabled(&self, enabled: bool) -> Result<()> {
+        log::debug!("Setting outbound enabled: {enabled}");
+        self.config.write().unwrap().outbound.enabled = enabled;
+
+        self.save()
+    }
+
     pub fn set_everyone_mode(&self, mode: Mode) -> Result<()> {
         log::debug!("Setting outbound everyone mode: {mode}");
         self.config.write().unwrap().outbound.everyone = mode;
@@ -81,6 +89,10 @@ impl RuleStore {
             .mode = mode;
 
         self.save()
+    }
+
+    pub fn always_reject_outbound(&self) -> bool {
+        self.config.read().unwrap().outbound.enabled.not()
     }
 
     pub fn always_accept_outbound(&self) -> bool {
