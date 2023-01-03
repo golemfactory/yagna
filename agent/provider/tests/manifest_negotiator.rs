@@ -384,6 +384,55 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
     }
 }
 
+#[test]
+#[serial]
+fn offer_should_be_rejected_when_outbound_is_disabled() {
+    let domain_patterns =
+        create_whitelist(r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#);
+    let (_, test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
+
+    let trusted_keys = Keystore::load(&test_cert_dir).expect("Can load test certificates");
+
+    let rules_file = test_cert_dir.join("rules.json");
+    let rules_config = RuleStore::load_or_create(&rules_file).expect("Can't load RuleStore");
+    rules_config.set_enabled(false).unwrap();
+
+    let config = create_manifest_signature_validating_policy_config();
+    let negotiator_cfg = AgentNegotiatorsConfig {
+        trusted_keys,
+        domain_patterns,
+        rules_config,
+    };
+    let mut manifest_negotiator = ManifestSignature::new(&config, negotiator_cfg);
+
+    let comp_manifest_b64 = create_comp_manifest_b64(r#"["https://domain.com"]"#);
+    let demand = AgreementView {
+        json: serde_json::from_str(&create_demand_json(
+            &comp_manifest_b64,
+            None,
+            None,
+            None,
+            None,
+        ))
+        .unwrap(),
+        agreement_id: "id".to_string(),
+    };
+    let offer = AgreementView {
+        json: serde_json::from_str(r#"{ "any": "thing" }"#).unwrap(),
+        agreement_id: "id".to_string(),
+    };
+
+    let result = manifest_negotiator.negotiate_step(&demand, offer).unwrap();
+
+    assert_eq!(
+        result,
+        NegotiationResult::Reject {
+            message: "outbound is disabled".into(),
+            is_final: true
+        }
+    )
+}
+
 fn cert_file_to_cert_b64(cert_file: &str) -> String {
     let (resource_cert_dir, _) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
     let mut cert_path = resource_cert_dir;
