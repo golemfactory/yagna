@@ -63,7 +63,7 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
         future::ok(id)
     });
 
-    let create_tx = tx;
+    let create_tx = tx.clone();
     // Create a new application key entry
     let _ = bus::bind(model::BUS_ID, move |create: model::Create| {
         let key = Uuid::new_v4().to_simple().to_string();
@@ -187,14 +187,26 @@ pub async fn activate(db: &DbExecutor) -> anyhow::Result<()> {
         }
     });
 
+    let create_tx = tx;
     let dbx = db.clone();
     let _ = bus::bind(model::BUS_ID, move |rm: model::Remove| {
         let db = dbx.clone();
+        let mut create_tx = create_tx.clone();
         async move {
+            let (appkey, role) = db
+                .as_dao::<AppKeyDao>()
+                .get_for_name(rm.name.clone())
+                .await
+                .map_err(|e| model::Error::internal(e.to_string()))?;
+
             db.as_dao::<AppKeyDao>()
                 .remove(rm.name, rm.identity)
                 .await
                 .map_err(Into::<model::Error>::into)?;
+
+            let _ = create_tx
+                .send(model::event::Event::DroppedKey(appkey.to_core_model(role)))
+                .await;
             Ok(())
         }
     });
