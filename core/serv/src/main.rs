@@ -283,13 +283,6 @@ async fn start_payment_drivers(data_dir: &Path) -> anyhow::Result<Vec<String>> {
         PaymentDriverService::gsb(&db_executor).await?;
         drivers.push(DRIVER_NAME.to_owned());
     }
-    #[cfg(feature = "zksync-driver")]
-    {
-        use ya_zksync_driver::{PaymentDriverService, DRIVER_NAME};
-        let db_executor = DbExecutor::from_data_dir(data_dir, "zksync-driver")?;
-        PaymentDriverService::gsb(&db_executor).await?;
-        drivers.push(DRIVER_NAME.to_owned());
-    }
     Ok(drivers)
 }
 

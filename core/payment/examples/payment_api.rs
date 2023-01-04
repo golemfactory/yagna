@@ -35,7 +35,6 @@ use ya_service_bus::typed as bus;
 enum Driver {
     Dummy,
     Erc20,
-    Zksync,
 }
 
 impl FromStr for Driver {

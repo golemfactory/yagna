@@ -477,7 +477,6 @@ pub mod local {
     #[serde(rename_all = "lowercase")]
     #[non_exhaustive]
     pub enum DriverName {
-        ZkSync,
         Erc20,
     }
 
