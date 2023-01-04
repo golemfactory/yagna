@@ -69,6 +69,15 @@ impl AppKeyCache {
         }
     }
 
+    pub fn list_all_potential_origins(&self) -> Vec<String> {
+        self.appkeys
+            .read()
+            .unwrap()
+            .values()
+            .flat_map(|appkey| appkey.allow_origins.iter().cloned())
+            .collect()
+    }
+
     fn update(&self, key: &str, appkey: Option<AppKey>) {
         if let Ok(mut keymap) = self.appkeys.write() {
             match appkey {

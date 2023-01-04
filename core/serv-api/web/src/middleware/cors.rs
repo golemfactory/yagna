@@ -50,20 +50,29 @@ impl AppKeyCors {
             .max_age(config.max_age)
     }
 
+    fn list_all_potential_origins(&self) -> Vec<String> {
+        self.config
+            .allowed_origins
+            .iter()
+            .cloned()
+            .chain(self.cache.list_all_potential_origins().iter().cloned())
+            .collect()
+    }
+
     fn verify_origin(&self, origin: &HeaderValue, request: &RequestHead) -> bool {
         // Most browsers don't include authorization token in OPTIONS request.
         if request.method == Method::OPTIONS {
-            // TODO: We should check if origin domain has chance of being allowed.
-            //       That's why we check if origin exists in any of domains lists.
-            //       Later calls will be checked against token.
-            return true;
+            // We should check if origin domain has chance of being allowed.
+            // That's why we check if origin exists in any of domains lists.
+            // Later calls will be checked against token.
+            if origin_match_list(origin, &self.list_all_potential_origins()) {
+                return true;
+            }
         }
 
         // First check default origins
-        for allowed_origin in &self.config.allowed_origins {
-            if origin_match(origin, &allowed_origin) {
-                return true;
-            }
+        if origin_match_list(origin, &self.config.allowed_origins) {
+            return true;
         }
 
         // If non of default origins matches, we try with per app-key origins.
@@ -93,6 +102,15 @@ fn origin_match(origin: &HeaderValue, allowed: &str) -> bool {
             return true;
         }
         if origin == allowed {
+            return true;
+        }
+    }
+    false
+}
+
+fn origin_match_list(origin: &HeaderValue, allowed_list: &Vec<String>) -> bool {
+    for allowed_origin in allowed_list {
+        if origin_match(origin, allowed_origin) {
             return true;
         }
     }
