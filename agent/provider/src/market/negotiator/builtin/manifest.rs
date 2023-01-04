@@ -13,11 +13,13 @@ use ya_manifest_utils::{
 };
 
 use crate::market::negotiator::*;
+use crate::provider_agent::AgentNegotiatorsConfig;
+use crate::rules::RuleStore;
 
-#[derive(Default)]
 pub struct ManifestSignature {
     enabled: bool,
     keystore: Keystore,
+    rulestore: RuleStore,
     whitelist_matcher: SharedDomainMatchers,
 }
 
@@ -27,7 +29,12 @@ impl NegotiatorComponent for ManifestSignature {
         demand: &ProposalView,
         offer: ProposalView,
     ) -> anyhow::Result<NegotiationResult> {
-        if self.enabled.not() {
+        if self.rulestore.always_reject_outbound() {
+            log::trace!("Outbound is disabled.");
+            return rejection("outbound is disabled".into());
+        }
+
+        if self.enabled.not() || self.rulestore.always_accept_outbound() {
             log::trace!("Manifest signature verification disabled.");
             return acceptance(offer);
         }
@@ -81,8 +88,8 @@ impl NegotiatorComponent for ManifestSignature {
     }
 }
 
-impl From<PolicyConfig> for ManifestSignature {
-    fn from(config: PolicyConfig) -> Self {
+impl ManifestSignature {
+    pub fn new(config: &PolicyConfig, agent_negotiators_cfg: AgentNegotiatorsConfig) -> Self {
         let policies = config.policy_set();
         let properties = config.trusted_property_map();
 
@@ -99,12 +106,11 @@ impl From<PolicyConfig> for ManifestSignature {
             }
         };
 
-        let whitelist_matcher = config.domain_patterns.matchers.clone();
-        let keystore = config.trusted_keys.unwrap_or_default();
         ManifestSignature {
             enabled,
-            keystore,
-            whitelist_matcher,
+            keystore: agent_negotiators_cfg.trusted_keys,
+            rulestore: agent_negotiators_cfg.rules_config,
+            whitelist_matcher: agent_negotiators_cfg.domain_patterns.matchers,
         }
     }
 }
@@ -221,7 +227,14 @@ mod tests {
 
     fn build_policy<S: AsRef<str>>(args: S) -> ManifestSignature {
         let arguments = shlex::split(args.as_ref()).expect("failed to parse arguments");
-        PolicyConfig::from_iter(arguments).into()
+        ManifestSignature::new(
+            &PolicyConfig::from_iter(arguments),
+            AgentNegotiatorsConfig {
+                trusted_keys: Default::default(),
+                domain_patterns: Default::default(),
+                rules_config: Default::default(),
+            },
+        )
     }
 
     #[test]

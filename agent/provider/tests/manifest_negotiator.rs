@@ -16,6 +16,8 @@ use ya_manifest_utils::policy::CertPermissions;
 use ya_manifest_utils::{Keystore, Policy, PolicyConfig};
 use ya_provider::market::negotiator::builtin::ManifestSignature;
 use ya_provider::market::negotiator::*;
+use ya_provider::provider_agent::AgentNegotiatorsConfig;
+use ya_provider::rules::RuleStore;
 
 static MANIFEST_TEST_RESOURCES: TestResources = TestResources {
     temp_dir: env!("CARGO_TARGET_TMPDIR"),
@@ -331,12 +333,19 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
             provider_certs_permissions,
         );
     }
+
     let keystore = Keystore::load(&test_cert_dir).expect("Can load test certificates");
 
-    let mut config = create_manifest_signature_validating_policy_config();
-    config.domain_patterns = whitelist_state;
-    config.trusted_keys = Some(keystore);
-    let mut manifest_negotiator = ManifestSignature::from(config);
+    let rules_file = test_cert_dir.join("rules.json");
+    let rulestore = RuleStore::load_or_create(&rules_file).expect("Can't load RuleStore");
+
+    let config = create_manifest_signature_validating_policy_config();
+    let negotiator_cfg = AgentNegotiatorsConfig {
+        trusted_keys: keystore,
+        domain_patterns: whitelist_state,
+        rules_config: rulestore,
+    };
+    let mut manifest_negotiator = ManifestSignature::new(&config, negotiator_cfg);
     // Current implementation does not verify content of certificate permissions incoming in demand.
 
     let demand = create_demand_json(
@@ -346,7 +355,6 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
         cert_b64,
         cert_permissions_b64,
     );
-    let demand: Value = serde_json::from_str(&demand).unwrap();
     let demand = AgreementView {
         json: demand,
         agreement_id: "id".to_string(),
@@ -373,6 +381,51 @@ fn manifest_negotiator_test_encoded_manifest_sign_and_cert_and_cert_dir_files(
     } else {
         assert_eq!(negotiation_result, NegotiationResult::Ready { offer });
     }
+}
+
+#[test]
+#[serial]
+fn offer_should_be_rejected_when_outbound_is_disabled() {
+    let (_, test_cert_dir) = MANIFEST_TEST_RESOURCES.init_cert_dirs();
+
+    let rules_file = test_cert_dir.join("rules.json");
+    let rules_config = RuleStore::load_or_create(&rules_file).expect("Can't load RuleStore");
+    rules_config.set_enabled(false).unwrap();
+
+    let config = create_manifest_signature_validating_policy_config();
+    let negotiator_cfg = AgentNegotiatorsConfig {
+        trusted_keys: Keystore::load(&test_cert_dir).expect("Can load test certificates"),
+        domain_patterns: create_whitelist(
+            r#"{ "patterns": [{ "domain": "domain.com", "type": "strict" }] }"#,
+        ),
+        rules_config,
+    };
+    let mut manifest_negotiator = ManifestSignature::new(&config, negotiator_cfg);
+
+    let demand = AgreementView {
+        json: create_demand_json(
+            &create_comp_manifest_b64(r#"["https://domain.com"]"#),
+            None,
+            None,
+            None,
+            None,
+        ),
+        agreement_id: "id".into(),
+    };
+    let offer = AgreementView {
+        json: serde_json::from_str(r#"{ "any": "thing" }"#).unwrap(),
+        agreement_id: "id".into(),
+    };
+
+    let result = manifest_negotiator.negotiate_step(&demand, offer).unwrap();
+
+    assert_eq!(
+        result,
+        NegotiationResult::Reject {
+            message: "outbound is disabled".into(),
+            is_final: true
+        }
+    )
 }
 
 fn cert_file_to_cert_b64(cert_file: &str) -> String {
@@ -414,7 +467,7 @@ fn create_demand_json(
     signature_alg_b64: Option<&str>,
     cert_b64: Option<String>,
     cert_permissions_b64: Option<&str>,
-) -> String {
+) -> serde_json::Value {
     let mut payload = HashMap::new();
     payload.insert("@tag", json!(comp_manifest_b64));
     if signature_b64.is_some() && signature_alg_b64.is_some() {
@@ -456,9 +509,11 @@ fn create_demand_json(
             }
         },
     });
-    let demand = serde_json::to_string_pretty(&manifest).unwrap();
-    println!("Tested demand:\n{demand}");
-    demand
+    println!(
+        "Tested demand:\n{}",
+        serde_json::to_string_pretty(&manifest).unwrap()
+    );
+    manifest
 }
 
 fn create_manifest_signature_validating_policy_config() -> PolicyConfig {

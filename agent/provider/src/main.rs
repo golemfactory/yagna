@@ -26,6 +26,7 @@ async fn main() -> anyhow::Result<()> {
     config.globals_file = data_dir.join(config.globals_file);
     config.presets_file = data_dir.join(config.presets_file);
     config.hardware_file = data_dir.join(config.hardware_file);
+    config.rules_file = data_dir.join(config.rules_file);
 
     match cli_args.commands {
         Commands::Run(args) => {
@@ -46,5 +47,6 @@ async fn main() -> anyhow::Result<()> {
         Commands::Keystore(keystore_cmd) => keystore_cmd.run(config),
         Commands::Whitelist(whitelist_cmd) => whitelist_cmd.run(config),
         Commands::Clean(clean_cmd) => clean_cmd.run(config),
+        Commands::Rule(outbound_cmd) => outbound_cmd.run(config),
     }
 }

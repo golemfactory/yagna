@@ -32,6 +32,7 @@ use super::Preset;
 use crate::display::EnableDisplay;
 use crate::market::config::MarketConfig;
 use crate::market::termination_reason::GolemReason;
+use crate::provider_agent::AgentNegotiatorsConfig;
 use crate::tasks::task_manager::ClosingCause;
 use crate::tasks::{AgreementBroken, AgreementClosed, CloseAgreement};
 
@@ -115,6 +116,7 @@ pub struct ProviderMarket {
     subscriptions: HashMap<String, Subscription>,
     postponed_demands: Vec<SubscriptionProposal>,
     config: Arc<MarketConfig>,
+    agent_negotiators_cfg: Arc<AgentNegotiatorsConfig>,
 
     /// External actors can listen on this signal.
     pub agreement_signed_signal: SignalSlot<NewAgreement>,
@@ -137,13 +139,18 @@ impl ProviderMarket {
     // Initialization
     // =========================================== //
 
-    pub fn new(api: MarketProviderApi, config: MarketConfig) -> ProviderMarket {
+    pub fn new(
+        api: MarketProviderApi,
+        config: MarketConfig,
+        agent_negotiators_cfg: AgentNegotiatorsConfig,
+    ) -> ProviderMarket {
         ProviderMarket {
-            api: Arc::new(api),
             negotiator: Arc::new(NegotiatorAddr::default()),
-            config: Arc::new(config),
+            api: Arc::new(api),
             subscriptions: HashMap::new(),
             postponed_demands: Vec::new(),
+            config: Arc::new(config),
+            agent_negotiators_cfg: Arc::new(agent_negotiators_cfg),
             agreement_signed_signal: SignalSlot::<NewAgreement>::default(),
             agreement_terminated_signal: SignalSlot::<CloseAgreement>::default(),
             handles: HashMap::new(),
@@ -592,7 +599,8 @@ impl Actor for ProviderMarket {
             ctx.spawn(collect_agreement_events(actx).into_actor(self)),
         );
 
-        self.negotiator = factory::create_negotiator(ctx.address(), &self.config);
+        self.negotiator =
+            factory::create_negotiator(ctx.address(), &self.config, &self.agent_negotiators_cfg);
     }
 }
 
