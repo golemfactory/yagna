@@ -42,22 +42,12 @@ impl AppKeyCors {
         let this = self.clone();
         let config = self.config.clone();
 
-        let mut cors = Cors::default()
+        Cors::default()
             .allowed_origin_fn(move |header, request| this.verify_origin(header, request))
             .allow_any_method()
             .allow_any_header()
             .block_on_origin_mismatch(false)
-            .max_age(config.max_age);
-
-        for allowed_origin in &config.allowed_origins {
-            if allowed_origin == "*" {
-                cors = cors.send_wildcard()
-            } else {
-                cors = cors.allowed_origin(allowed_origin);
-            }
-        }
-
-        cors
+            .max_age(config.max_age)
     }
 
     fn verify_origin(&self, origin: &HeaderValue, request: &RequestHead) -> bool {
@@ -69,6 +59,14 @@ impl AppKeyCors {
             return true;
         }
 
+        // First check default origins
+        for allowed_origin in &self.config.allowed_origins {
+            if origin_match(origin, &allowed_origin) {
+                return true;
+            }
+        }
+
+        // If non of default origins matches, we try with per app-key origins.
         let key = request
             .headers()
             .get(header::AUTHORIZATION)
@@ -80,21 +78,23 @@ impl AppKeyCors {
                 .cache
                 .get_allowed_origins(&key)
                 .into_iter()
-                .any(|allowed| {
-                    if let Ok(origin) = origin.to_str() {
-                        if origin == "*" {
-                            return true;
-                        }
-                        if origin == allowed {
-                            return true;
-                        }
-                    }
-                    false
-                }),
+                .any(|allowed| origin_match(origin, &allowed)),
             None => {
                 log::debug!("App-key token not found in request");
                 false
             }
         }
     }
+}
+
+fn origin_match(origin: &HeaderValue, allowed: &str) -> bool {
+    if let Ok(origin) = origin.to_str() {
+        if allowed == "*" {
+            return true;
+        }
+        if origin == allowed {
+            return true;
+        }
+    }
+    false
 }
