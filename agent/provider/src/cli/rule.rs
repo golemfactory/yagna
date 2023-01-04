@@ -33,7 +33,7 @@ pub enum SetRule {
 }
 
 impl RuleCommand {
-    pub fn run(self, config: ProviderConfig) -> anyhow::Result<()> {
+    pub fn run(self, config: ProviderConfig) -> Result<()> {
         match self {
             RuleCommand::Set(set_rule) => set(set_rule, config),
             RuleCommand::List => list(config),
@@ -49,10 +49,10 @@ struct RulesTable {
 impl RulesTable {
     fn new() -> Self {
         let columns = vec![
-            "Rule".to_string(),
-            "Mode".to_string(),
-            "Certificate".to_string(),
-            "Description".to_string(),
+            "rule".to_string(),
+            "mode".to_string(),
+            "certificate".to_string(),
+            "description".to_string(),
         ];
         let values = vec![];
         let table = ResponseTable { columns, values };
@@ -84,14 +84,15 @@ impl RulesTable {
         self.table.values.push(row);
     }
 
-    pub fn print(self, config: &ProviderConfig) -> Result<()> {
+    pub fn print(self) -> Result<()> {
         let output = CommandOutput::Table {
             columns: self.table.columns,
             values: self.table.values,
             summary: vec![],
             header: self.header,
         };
-        output.print(config.json)?;
+
+        output.print(false)?;
 
         Ok(())
     }
@@ -126,7 +127,13 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
 
 fn list(config: ProviderConfig) -> Result<()> {
     let rules = RuleStore::load_or_create(&config.rules_file)?;
-    let table = RulesTable::from(rules);
+    let table = RulesTable::from(rules.clone());
 
-    table.print(&config)
+    if config.json {
+        rules.print()?
+    } else {
+        table.print()?
+    };
+
+    Ok(())
 }
